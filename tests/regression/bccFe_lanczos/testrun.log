@@ -1,0 +1,50 @@
+ Running with           1 MPI processes.
+ Each MPI process is using           8 OpenMP threads.
+  OpenMP in play with            8  cores.
+        2974          16
+[Oct 11 2023 10:23:27.012] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:649] [1m[32m<info> [0m[0mPerform recursion at step 1
+[Oct 11 2023 10:23:28.034] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:691] [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 11 2023 10:23:28.099] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/bands.f90:218] [1m[32m<info> [0m[0mValence is:  8.000000
+[Oct 11 2023 10:23:28.110] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/bands.f90:245] [1m[32m<info> [0m[0mFree Fermi energy: -0.071618
+[Oct 11 2023 10:23:28.111] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/bands.f90:503] [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.145860
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:715] [1m[32m<info> [0m[0mMixtype is linear
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:401] [1m[32m<info> [0m[0mValence at atom   1 is   8.000000
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:402] [1m[32m<info> [0m[0mCharge transfer at atom    1
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:403] [1m[32m<info> [0m[0m  0.000000   0.000000  -0.000000
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:408] [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.011184
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:800] [1m[32m<info> [0m[0mFe
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:876] [1m[32m<info> [0m[0mXC functional: B-H 11.3628040930264786E-004
+[Oct 11 2023 10:23:28.112] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:907] [1m[32m<info> [0m[0mF core chek:0 0.0000000000000000
+[Oct 11 2023 10:23:28.294] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:745] [1m[32m<info> [0m[0mAtomic SFC done for atom Fe
+[Oct 11 2023 10:23:28.294] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:751] [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Fe
+[Oct 11 2023 10:23:28.294] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:763] [1m[32m<info> [0m[0mNot converged! Diff= 0.0111843243
+[Oct 11 2023 10:23:28.294] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:649] [1m[32m<info> [0m[0mPerform recursion at step 2
+[Oct 11 2023 10:23:29.382] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:691] [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 11 2023 10:23:29.447] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/bands.f90:218] [1m[32m<info> [0m[0mValence is:  8.000000
+[Oct 11 2023 10:23:29.467] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/bands.f90:245] [1m[32m<info> [0m[0mFree Fermi energy: -0.070394
+[Oct 11 2023 10:23:29.468] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/bands.f90:503] [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.133439
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:715] [1m[32m<info> [0m[0mMixtype is linear
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:401] [1m[32m<info> [0m[0mValence at atom   1 is   8.000000
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:402] [1m[32m<info> [0m[0mCharge transfer at atom    1
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:403] [1m[32m<info> [0m[0m -0.000000   0.000000  -0.000000
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/mix.f90:408] [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.002563
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:800] [1m[32m<info> [0m[0mFe
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:876] [1m[32m<info> [0m[0mXC functional: B-H 11.3628040930264786E-004
+[Oct 11 2023 10:23:29.470] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:907] [1m[32m<info> [0m[0mF core chek:0 0.0000000000000000
+[Oct 11 2023 10:23:29.630] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:745] [1m[32m<info> [0m[0mAtomic SFC done for atom Fe
+[Oct 11 2023 10:23:29.630] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:751] [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Fe
+[Oct 11 2023 10:23:29.630] [/Users/ramoncardias/rs-lmto-asa-new/rslmto_refac/new_source/self.f90:763] [1m[32m<info> [0m[0mNot converged! Diff= 0.0025634536
+------------------------------------------------------------- TIMER REPORT --------------------------------------------------------------
+  CATEGORY                              MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                    -              -              -         3.8611          100.0              1              9   
+  └─ Calculation                           -              -              -         3.8611          100.0              1              8   
+     ├─ Calculation*                       -              -              -         0.6177           16.0              -              1   
+     ├─ pre-processing                     -              -              -         0.6244           16.2              1              1   
+     └─ self-consistency                   -              -              -         2.6190           67.8              1              6   
+        ├─ self-consistency*               -              -              -         0.0072            0.2              -              1   
+        ├─ recursion                  1.0521         1.0876         1.0166         2.1043           54.5              2              2   
+        ├─ calculation-of-DOS         0.0828         0.0879         0.0777         0.1656            4.3              2              2   
+        └─ atomic-sfc                 0.1710         0.1818         0.1602         0.3420            8.9              2              2   
+----------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+----------------------------------------------------------------------------------------------------------------------------------------
