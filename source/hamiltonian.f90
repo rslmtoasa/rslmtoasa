@@ -69,6 +69,8 @@ module hamiltonian_mod
     logical :: hoh
     !> Rotate Hamiltonian to local spin axis
     logical :: local_axis
+    !> Add orbital polarization to Hamiltonian
+    logical :: orb_pol
     !> Bulk Hamiltonian (backup for rotation)
     complex(rp), dimension(:, :, :, :), allocatable :: ee_glob, eeo_glob
     !> Local Hamiltonian (backup for rotation)
@@ -176,6 +178,7 @@ contains
 
     hoh = this%hoh
     local_axis = this%local_axis
+    orb_pol = this%orb_pol
 
     ! Reading
     open(newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -192,6 +195,7 @@ contains
 
     this%hoh = hoh
     this%local_axis = local_axis
+    this%orb_pol = orb_pol
 
   end subroutine build_from_file
 
@@ -273,6 +277,7 @@ contains
     end if 
     this%hoh = .false.
     this%local_axis = .false.
+    this%orb_pol = .false.
   end subroutine restore_to_default
 
   !---------------------------------------------------------------------------
@@ -284,8 +289,11 @@ contains
     class(hamiltonian), intent(inout) :: this
     ! Local variables
     integer :: i, j, k
-    complex(rp) :: prefac, sg, soc_p, soc_d
+    complex(rp) :: prefac, sg
+    real(rp) :: soc_p, soc_d
+    complex(rp), dimension(2) :: rac
     complex(rp), dimension(9, 9) :: Lx, Ly, Lz
+    real(rp) :: lz_loc
     !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
     Lx(:, :) = L_x(:, :)
     Ly(:, :) = L_y(:, :)
@@ -302,15 +310,24 @@ contains
       sg = cmplx(0.5d0,0.0d0) 
       soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
       soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2)) 
-      prefac = 0.0d0
+      ! Check if orbital polarization is enabled
+      if (this%orb_pol) then
+        rac = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%rac)
+        lz_loc = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%lmom(3))
+      else
+        rac = 0.0_rp
+        lz_loc = 0.0_rp
+      end if
+
+      prefac = 0.0_rp
       do i=1, 9
         do j=1, 9
           if(i>=2.and.i<=4.and.j>=2.and.j<=4) prefac = sg*soc_p
           if(i>=5.and.i<=9.and.j>=5.and.j<=9) prefac = sg*soc_d
-          this%lsham(j  , i  , k)=this%lsham(j  , i  , k)+prefac*Lz(j, i) ! H11
+          this%lsham(j  , i  , k)=this%lsham(j  , i  , k)+prefac*Lz(j, i)+ Lz(j,i)*rac(1)*lz_loc ! H11
           this%lsham(j  , i+9, k)=this%lsham(j  , i+9, k)+prefac*(Lx(j, i)-i_unit*Ly(j, i)) ! H12
           this%lsham(j+9, i  , k)=this%lsham(j+9, i  , k)+prefac*(Lx(j, i)+i_unit*Ly(j, i)) ! H21
-          this%lsham(j+9, i+9, k)=this%lsham(j+9, i+9, k)-prefac*Lz(j, i) ! H22
+          this%lsham(j+9, i+9, k)=this%lsham(j+9, i+9, k)-prefac*Lz(j, i)- Lz(j,i)*rac(2)*lz_loc ! H22
           !write(50,*) 'ntype=', k
           !write(51,*) 'ntype=', k
           !write(50,'(18f10.6)') real(this%lsham(:,:,k))

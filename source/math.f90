@@ -89,7 +89,7 @@ module math_mod
   !> \f$ Rydberg to eV \f$
   real(rp), parameter :: ry2ev  = 13.605703976_rp
   !> \f$ Rydberg to Tesla \f$ 
-  real(rp), parameter :: ry2tesla = 2.35051754997E+05_rp
+  real(rp), parameter :: ry2tesla = 2.35051754997e5_rp
   !> \f$ Gyromagnetic ratio in rad/(s·T) \f$ 
   real(rp), parameter :: gama = 1.76e11_rp
 

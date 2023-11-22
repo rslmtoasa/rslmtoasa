@@ -297,10 +297,8 @@ contains
       this%beff(:,i) = - field_in(:,i) ! Check units
     end do
 
-    write(*,*) this%emom, this%b2eff
     call   depondt_evolve_first(na_in,1, [this%alpha], this%beff, this%b2eff, [0.0d0,0.0d0,0.0d0], this%emom, this%emom2, this%emomM, this%mmom, &
                                 this%dt, [this%sd_temp],dummy,'N',thermal_field,'N',[0.0d0,0.0d0,0.0d0])
-    write(*,*) this%emom, this%b2eff
     do i=1,na_in
       nplusbulk = i + this%lattice%nbulk
       !if(.not.this%mix%is_induced(i)) then
@@ -338,9 +336,7 @@ contains
       this%emomM(:,i) = mom_in(:,i)
       this%beff(:,i) = - field_in(:,i) ! Check units
     end do
-    write(*,*) this%emom, this%b2eff
     call   depondt_evolve_second(na_in,1, [this%alpha], this%beff, this%b2eff, [0.0d0,0.0d0,0.0d0], this%emom, this%emom2, this%dt, 'N','N',[0.0d0,0.0d0,0.0d0])
-    write(*,*) this%emom2, this%b2eff
     do i=1,na_in
       nplusbulk = i + this%lattice%nbulk
       mnorm = norm2(mom_in(:,i))

@@ -1,3 +1,4 @@
+
 !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
@@ -79,6 +80,10 @@ module potential_mod
     real(rp), dimension(:), allocatable :: mom1
     !> Magnetic moments
     real(rp) :: mx, my, mz, mtot
+    !> Orbital moments (non-normalized)
+    real(rp), dimension(:), allocatable :: lmom
+    !> Orbital moments (not used)
+    real(rp) :: lx, ly, lz, ltot
     !> Band variables
     real(rp), dimension(:), allocatable :: cshi, dw_l
     !> Wignzer Seitz Radius
@@ -87,8 +92,8 @@ module potential_mod
     real(rp) :: sumec, sumev, etot, utot, ekin, rhoeps
     ! Madelung potential
     real(rp) :: vmad
-    ! Spin-orbit coupling coefficients
-    real(rp), dimension(2) :: xi_p, xi_d
+    ! Spin-orbit coupling coefficients and Racah parameters
+    real(rp), dimension(2) :: xi_p, xi_d, rac
     ! Hyperfine fields
     real(rp), dimension(2) :: hyper_field(2)
   contains
@@ -214,12 +219,14 @@ contains
     vmad = this%vmad
     xi_p = this%xi_p
     xi_d = this%xi_d
+    rac  = this%rac
 
     ! Normalize the magnetic moments
     this%mom(:) = this%mom(:)/norm2(this%mom(:)) 
 
     call move_alloc(this%ql, ql)
     call move_alloc(this%mom, mom)
+    call move_alloc(this%lmom, lmom)
     call move_alloc(this%pl, pl)
 
     call move_alloc(this%center_band, center_band)
@@ -264,6 +271,7 @@ contains
     this%vmad = vmad
     this%xi_p = xi_p
     this%xi_d = xi_d
+    this%rac  = rac
 
     call move_alloc(center_band, this%center_band)
     call move_alloc(width_band, this%width_band)
@@ -274,6 +282,7 @@ contains
     mom(:) = mom(:)/norm2(mom(:))
 
     call move_alloc(mom, this%mom)
+    call move_alloc(lmom, this%lmom)
     call move_alloc(pl, this%pl)
     call move_alloc(ql, this%ql)
 
@@ -317,6 +326,7 @@ contains
     call g_safe_alloc%allocate('potential.obx0', this%obx0, (/(this%lmax+1)**2/))
     call g_safe_alloc%allocate('potential.obx1', this%obx1, (/(this%lmax+1)**2/))
     call g_safe_alloc%allocate('potential.mom', this%mom, (/3/))
+    call g_safe_alloc%allocate('potential.lmom', this%lmom, (/3/))
     call g_safe_alloc%allocate('potential.mom0', this%mom0, (/3/))
     call g_safe_alloc%allocate('potential.mom1', this%mom1, (/3/))
     call g_safe_alloc%allocate('potential.cshi', this%cshi, (/(2*(this%lmax+1))**2/))
@@ -343,7 +353,7 @@ contains
     allocate(this%cex((this%lmax+1)**2, 2), this%obx((this%lmax+1)**2, 2), this%cx0((this%lmax+1)**2))
     allocate(this%cx1((this%lmax+1)**2), this%wx0((this%lmax+1)**2), this%wx1((this%lmax+1)**2))
     allocate(this%cex0((this%lmax+1)**2), this%cex1((this%lmax+1)**2), this%obx0((this%lmax+1)**2),this%obx1((this%lmax+1)**2))
-    allocate(this%mom(3), this%cshi((2*(this%lmax+1))**2), this%dw_l((2*(this%lmax+1))**2))
+    allocate(this%mom(3), this%lmom(3), this%cshi((2*(this%lmax+1))**2), this%dw_l((2*(this%lmax+1))**2))
     allocate(this%mom0(3), this%mom1(3))
     allocate(this%c(0:this%lmax, 2), this%enu(0:this%lmax, 2), this%ppar(0:this%lmax, 2), this%qpar(0:this%lmax, 2), &
               this%srdel(0:this%lmax, 2), this%vl(0:this%lmax, 2), this%pnu(0:this%lmax, 2),this%qi(0:this%lmax,2),this%dele(0:this%lmax,2))
@@ -352,6 +362,7 @@ contains
 
     this%xi_p(:) = 0.0d0 
     this%xi_d(:) = 0.0d0
+    this%rac(:) = 0.0d0
     this%ws_r = 0.0d0
     this%center_band(:, :) = 0.0d0
     this%width_band(:, :) = 0.0d0
@@ -375,6 +386,7 @@ contains
     this%wx0(:) = 0.0d0
     this%wx1(:) = 0.0d0
     this%mom(:) = [0.0d0, 0.0d0, 1.0d0]
+    this%lmom(:) = [0.0d0, 0.0d0, 0.0d0]
     this%mom0(:) = [0.0d0, 0.0d0, 0.0d0]
     this%mom1(:) = [0.0d0, 0.0d0, 0.0d0]
     this%cshi(:) = 0.0d0
@@ -410,6 +422,7 @@ contains
     include 'include_codes/namelists/potential.f90'
 
     mom = this%mom
+    lmom = this%lmom
     !mom0 = this%mom0
     !mom1 = this%mom1
     pl = this%pl
@@ -481,6 +494,7 @@ contains
       width_band_d_dw = this%width_band(3, 2)
 
       mom = this%mom
+      lmom = this%lmom
       !mom0 = this%mom0
       !mom1 = this%mom1
 
@@ -551,12 +565,14 @@ contains
       call nml%add('vl', this%vl)
       call nml%add('pl', this%pl)
       call nml%add('mom', this%mom)
+      call nml%add('lmom', this%lmom)
       call nml%add('ws_r', this%ws_r)
       call nml%add('ql', this%ql)
       call nml%add('lmax', this%lmax)
       call nml%add('vmad', this%vmad)
       call nml%add('xi_p', this%xi_p)
       call nml%add('xi_d', this%xi_d)
+      call nml%add('rac', this%rac)
 
       if(present(unit) .and. present(file)) then
         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -630,7 +646,8 @@ contains
                     pack(this%pl, .true.), pack(this%ql,.true.), pack(this%c, .true.), &
                     pack(this%enu,.true.), pack(this%ppar,.true.), pack(this%qpar,.true.), &
                     pack(this%srdel, .true.), pack(this%vl,.true.), pack(this%pnu,.true.), &
-                    pack(this%qi, .true.), pack(this%dele,.true.), pack(this%mom, .true.), this%mtot /)
+                    pack(this%qi, .true.), pack(this%dele,.true.), pack(this%mom, .true.), &
+                    pack(this%lmom, .true.), this%mtot /)
     return 
 
   end subroutine flatten_potential
@@ -674,8 +691,10 @@ contains
                               pack(this%qi, .true.), &
                               pack(this%dele,.true.), &
                               pack(this%mom, .true.), &
+                              pack(this%lmom, .true.), &
                               pack(this%xi_p, .true.), &
                               pack(this%xi_d, .true.), &
+                              pack(this%rac , .true.), &
                               this%sumec, &
                               this%sumev, &
                               this%etot, &
@@ -709,7 +728,7 @@ contains
                  size(this%shifted_band) + size(this%pl) + size(this%ql) + size(this%c) + &
                  size(this%enu) + size(this%ppar) + size(this%qpar) + size(this%srdel) + &
                  size(this%vl) + size(this%pnu) + size(this%qi) + size(this%dele) + &
-                 size(this%mom) + 1 !mtot
+                 size(this%mom) + size(this%lmom) + 1 !mtot
 
   end function sizeof_potential
 
@@ -740,8 +759,10 @@ contains
                 + size(this%qi) &
                 + size(this%dele) &
                 + size(this%mom) &
+                + size(this%lmom) &
                 + size(this%xi_p) &
                 + size(this%xi_d) &
+                + size(this%rac ) &
                 + 1 & ! sumec
                 + 1 & ! sumev
                 + 1 & ! etot
@@ -871,6 +892,10 @@ contains
     d_size = size(this%mom)
     this%mom = reshape(flat_array(d_pos:d_pos+d_size), shape(this%mom))
     d_pos = d_pos + d_size
+    ! lmom
+    d_size = size(this%lmom)
+    this%lmom = reshape(flat_array(d_pos:d_pos+d_size), shape(this%lmom))
+    d_pos = d_pos + d_size
     ! mtot
     d_size = 1
     this%mtot = flat_array(d_pos)
@@ -991,6 +1016,10 @@ contains
     d_size = size(this%mom)
     this%mom = reshape(flat_array(d_pos:d_pos+d_size), shape(this%mom))
     d_pos = d_pos + d_size
+    ! lmom
+    d_size = size(this%lmom)
+    this%lmom = reshape(flat_array(d_pos:d_pos+d_size), shape(this%lmom))
+    d_pos = d_pos + d_size
     ! xi_p
     d_size = size(this%xi_p)
     this%xi_p = reshape(flat_array(d_pos:d_pos+d_size), shape(this%xi_p))
@@ -998,6 +1027,10 @@ contains
     ! xi_d
     d_size = size(this%xi_d)
     this%xi_d = reshape(flat_array(d_pos:d_pos+d_size), shape(this%xi_d))
+    d_pos = d_pos + d_size
+    ! xi_d
+    d_size = size(this%rac)
+    this%rac = reshape(flat_array(d_pos:d_pos+d_size), shape(this%rac))
     d_pos = d_pos + d_size
     ! sumec
     d_size = 1
@@ -1060,6 +1093,10 @@ contains
     this%mx = this%mom(1)
     this%my = this%mom(2)
     this%mz = this%mom(3)
+
+    this%lx = this%lmom(1)
+    this%ly = this%lmom(2)
+    this%lz = this%lmom(3)
 
   end subroutine copy_mom_to_scal
 

@@ -2679,6 +2679,7 @@ contains
         end do
         atom%potential%xi_p(:) = [qsl(1),qsl(4)]
         atom%potential%xi_d(:) = [qsl(2),qsl(5)]
+        atom%potential%rac(:) = [qsl(3),qsl(6)]
         ! WRITE(17, 56)FAK2, FAK4
         ! WRITE(17, *)RCH
       end do

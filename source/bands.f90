@@ -71,6 +71,7 @@ module bands_mod
     real(rp), dimension(:), allocatable :: dtot, dtotcheb
     !> Projected DOS
     real(rp), dimension(:, :), allocatable :: dx, dy, dz, dnmag, dup, ddw
+    real(rp), dimension(:, :, :, :, :), allocatable :: d_orb
     !> Projected Green Function
     complex(rp), dimension(:, :, :, :), allocatable :: g0_x, g0_y, g0_z
     !> Energy bands (?)
@@ -80,11 +81,13 @@ module bands_mod
   contains
     procedure :: calculate_projected_green
     procedure :: calculate_projected_dos
+    procedure :: calculate_orbital_dos
     procedure :: calculate_moments
     procedure :: calculate_pl
     procedure :: calculate_moments_gauss_legendre
     procedure :: calculate_moments_chebgauss
     procedure :: calculate_magnetic_moments
+    procedure :: calculate_orbital_moments
     procedure :: calculate_magnetic_torques
     procedure :: calculate_fermi
     procedure :: calculate_fermi_gauss
@@ -143,6 +146,7 @@ contains
       if(allocated(this%g0_y)) call g_safe_alloc%deallocate('bands.g0_y', this%g0_y)
       if(allocated(this%g0_z)) call g_safe_alloc%deallocate('bands.g0_z', this%g0_z)
       if(allocated(this%dspd)) call g_safe_alloc%deallocate('bands.dspd', this%dspd)
+      if(allocated(this%d_orb)) call g_safe_alloc%deallocate('bands.ddw', this%d_orb)
       if(allocated(this%mag_for)) call g_safe_alloc%deallocate('bands.mag_for', this%mag_for)
 #else
       if(allocated(this%dtot)) deallocate(this%dtot)
@@ -157,6 +161,7 @@ contains
       if(allocated(this%g0_y)) deallocate(this%g0_y)
       if(allocated(this%g0_z)) deallocate(this%g0_z)
       if(allocated(this%dspd)) deallocate(this%dspd)
+      if(allocated(this%d_orb)) deallocate(this%d_orb)
       if(allocated(this%mag_for)) deallocate(this%mag_for)
 #endif
   end subroutine destructor
@@ -180,6 +185,7 @@ contains
       call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/9, 9, this%en%channels_ldos+10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/9, 9, this%en%channels_ldos+10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.dspd', this%dspd, (/6, this%en%channels_ldos+10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/9, 9, 3, this%en%channels_ldos+10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.mag_for', this%mag_for, (/3, atoms_per_process/))
 #else
       allocate(this%dtot(this%en%channels_ldos+10))
@@ -191,6 +197,7 @@ contains
       allocate(this%g0_y(9, 9, this%en%channels_ldos+10, atoms_per_process))
       allocate(this%g0_z(9, 9, this%en%channels_ldos+10, atoms_per_process))
       allocate(this%dspd(6, this%en%channels_ldos+10, atoms_per_process))
+      allocate(this%d_orb(9, 9, 3, this%en%channels_ldos+10, atoms_per_process))
       allocate(this%mag_for(3, atoms_per_process))
 #endif
 
@@ -203,6 +210,7 @@ contains
     this%g0_y(:, :, :, :) = 0.0d0
     this%g0_z(:, :, :, :) = 0.0d0
     this%dspd(:, :, :) = 0.0d0
+    this%d_orb(:, :, :, :, :) = 0.0d0
     this%mag_for(:, :) = 0.0d0
   end subroutine restore_to_default
 
@@ -365,6 +373,7 @@ contains
     end do
 
     call this%calculate_magnetic_moments()
+    if (this%control%nsp==2 .or. this%control%nsp==4) call this%calculate_orbital_moments()
 
 
     this%dspd(:, :, :) = 0.0d0
@@ -776,6 +785,61 @@ contains
     end do
   end subroutine calculate_magnetic_moments
 
+  !---------------------------------------------------------------------------
+  ! DESCRIPTION:
+  !> @brief
+  !> Calculates the orbital moments lx, ly, lz and ltot
+  !---------------------------------------------------------------------------
+  subroutine calculate_orbital_moments(this)
+    use mpi_mod
+    class(bands) :: this
+    ! Local variables
+    real(rp) :: lx, ly, lz
+    integer :: i, j ! Orbital index
+    integer :: mdir ! Magnetic index
+    integer :: na ! Atom index
+    integer :: ie ! Energy channel index
+    real(rp), dimension(9,9,3) :: l_orb
+    complex(rp), dimension(9,9) :: mLx, mLy, mLz
+    !
+
+    integer :: na_loc
+
+    !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+    mLx(:, :) = L_x(:, :)
+    mLy(:, :) = L_y(:, :)
+    mLz(:, :) = L_z(:, :)
+
+    ! Transforming them into the spherical harmonics coordinates
+    call hcpx(mLx, 'cart2sph')
+    call hcpx(mLy, 'cart2sph')
+    call hcpx(mLz, 'cart2sph')
+
+    call this%calculate_orbital_dos()
+
+    !do na=1, this%lattice%nrec
+    do na=start_atom, end_atom
+      na_loc = g2l_map(na)
+
+      do mdir = 1,3
+        do i=1,9
+          do j=1,9
+            call simpson_m(l_orb(i,j,mdir),this%en%edel, this%en%fermi, this%nv1, this%d_orb(j,i,mdir,:,na_loc), this%e1, 0, this%en%ene)
+          end do
+        end do
+      end do
+      lx = 0.0_rp !-0.5_rp * rtrace9(matmul(mLx,l_orb(:,:,1)))
+      ly = 0.0_rp !-0.5_rp * rtrace9(matmul(mLy,l_orb(:,:,2)))
+      lz = -0.5_rp * rtrace9(matmul(mLz,l_orb(:,:,3)))
+      call g_logger%info('Orbital moment of atom'//fmt('i4',na)//' is '//fmt('f10.6',lz),__FILE__,__LINE__)
+      this%symbolic_atom(this%lattice%nbulk+na)%potential%lmom(1) = lx
+      this%symbolic_atom(this%lattice%nbulk+na)%potential%lmom(2) = ly
+      this%symbolic_atom(this%lattice%nbulk+na)%potential%lmom(3) = lz
+
+
+    end do
+  end subroutine calculate_orbital_moments
+
   subroutine calculate_projected_dos(this)
     use mpi_mod
     class(bands) :: this
@@ -800,6 +864,38 @@ contains
       end do
     end do
   end subroutine calculate_projected_dos
+
+  subroutine calculate_orbital_dos(this)
+    use mpi_mod
+    class(bands) :: this
+    ! Local variables
+    integer :: i, j ! Orbital index
+    integer :: na ! Atom index
+    integer :: ie ! Energy channel index
+
+    integer :: na_glob
+
+    call this%calculate_projected_green()
+
+    this%d_orb = 0.0_rp
+
+    !do na = 1, this%lattice%nrec
+    do na_glob = start_atom, end_atom
+      na = g2l_map(na_glob)
+      do ie = 1, this%en%channels_ldos+10
+        do i=1, 9
+          do j=1, 9
+            this%d_orb(j, i, 1, ie, na) =  this%d_orb(j, i, 1, ie, na)  &
+                  - aimag(this%green%g0(j+9, i, ie, na)+this%green%g0(j, i+9, ie, na))/pi
+            this%d_orb(j, i, 2, ie, na) =  this%d_orb(j, i, 1, ie, na)  &
+                  - aimag(i_unit*this%green%g0(j+9, i, ie, na)-i_unit*this%green%g0(j, i+9, ie, na))/pi
+            this%d_orb(j, i, 3, ie, na) =  this%d_orb(j, i, 1, ie, na)  &
+                  - aimag(this%green%g0(j, i, ie, na)-this%green%g0(j+9, i+9, ie, na))/pi
+          end do
+        end do
+      end do
+    end do
+  end subroutine calculate_orbital_dos
 
   subroutine calculate_projected_green(this)
     class(bands) :: this
@@ -897,6 +993,8 @@ contains
       tau_loc = cross_product(this%symbolic_atom(plusbulk)%potential%mom, I_loc)*ry2tesla
 
       this%mag_for(:,na_loc) = I_loc(:)*ry2tesla
+
+      !this%mag_for(1:2,na_loc) = 0.0d0
 
       fx = this%mag_for(1,na_loc)
       fy = this%mag_for(2,na_loc)

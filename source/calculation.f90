@@ -233,7 +233,7 @@ contains
     call g_timer%start('pre-processing')
     call lattice_obj%build_data()
     call lattice_obj%bravais()
-    !call lattice_obj%newclu()
+    call lattice_obj%newclu()
     call lattice_obj%structb()
 
     ! Creating the symbolic_atom object
@@ -244,9 +244,8 @@ contains
 
     ! Constructing the charge object
     charge_obj = charge(lattice_obj)
-    call charge_obj%bulkmat()
-!    call charge_obj%impmad()
-!    call charge_obj%get_charge_transf
+    call charge_obj%impmad()
+    call charge_obj%get_charge_transf
     call g_timer%stop('pre-processing')
 
     ! Constructing mixing object

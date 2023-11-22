@@ -957,9 +957,10 @@ contains
       !  write(400+n, *) i, sum(this%recursion%mu_n(n, i, 1:18, 1:18))
       !end do
 
-      write(*,*) 'atom', n
+
       ! Calculate the Chebyshev polynomials
       call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
+
       ! Calculate the density of states
       !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
       do ie=1, this%en%channels_ldos+10
