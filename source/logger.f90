@@ -64,7 +64,7 @@ contains
       integer, intent(in), optional :: verbose
       character(len=*), intent(in), optional :: i_fmt, r4_fmt, r8_fmt
       ! Variables
-      integer :: i
+      
 
       ! default
       this%verbose = 0
@@ -203,7 +203,7 @@ contains
       character(len=*), intent(in) :: file
       integer, intent(in) :: line
       ! variables
-      integer :: i
+      
 
       call this%message(print("log")//trim(varname)//" = "//trim(varval), .false., file, line)
    end subroutine logger_log_var

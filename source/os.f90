@@ -65,7 +65,7 @@ contains
       logical :: has_provided_output = .false.
       character(len=sl) :: nml, file
       character(len=sl) :: code
-      logical :: checkpoint_exists
+      
       ! iterable variables
       integer :: i, j
 

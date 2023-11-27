@@ -587,7 +587,7 @@ contains
       real(rp), dimension(3, 3) :: rb, qb
       integer :: nsize, nbmx, nkrmx, nkdmx, j7rlat, j7dlat, j7work, j7amad, lmxst, nkr, nkd
       logical :: isopen
-      integer :: j
+      
       inquire (unit=10, opened=isopen)
       if (isopen) then
          call g_logger%fatal('charge%bulkmat, file ves.out: Unit 10 is already open', __FILE__, __LINE__)
@@ -2762,7 +2762,7 @@ contains
 
                                                                                           integer, intent(in), optional :: unit
                                                                                           character(len=*), intent(in), optional :: file
-                                                                                          integer :: newunit
+                                                                                          
 
                                                                                           type(namelist_generator) :: nml
 

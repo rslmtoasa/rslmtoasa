@@ -203,7 +203,7 @@ contains
       integer :: iostatus, funit
 
       ! Local variables
-      integer :: i
+      
 
       include 'include_codes/namelists/potential.f90'
 
@@ -539,7 +539,7 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
+      
 
       type(namelist_generator) :: nml
 
@@ -774,8 +774,8 @@ contains
       class(potential), intent(inout) :: this
       real(rp), dimension(*), intent(in) :: flat_array
       integer :: d_pos, d_size
-      integer, dimension(2) :: d_shape
-      integer, dimension(3) :: t_shape
+      
+      
 
       ! Determine the total size needed for the flat array
       integer :: total_size
@@ -808,8 +808,8 @@ contains
       class(potential), intent(inout) :: this
       real(rp), dimension(*), intent(in) :: flat_array
       integer :: d_pos, d_size
-      integer, dimension(2) :: d_shape
-      integer, dimension(3) :: t_shape
+      
+      
 
       ! Determine the total size needed for the flat array
       integer :: total_size
@@ -902,8 +902,8 @@ contains
       class(potential), intent(inout) :: this
       real(rp), dimension(*), intent(in) :: flat_array
       integer :: d_pos, d_size
-      integer, dimension(2) :: d_shape
-      integer, dimension(3) :: t_shape
+      
+      
 
       ! Determine the total size needed for the flat array
       integer :: total_size

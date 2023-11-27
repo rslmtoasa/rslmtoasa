@@ -281,11 +281,11 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
+      
 
-      character(len=10) :: symbol
-      integer :: num_quant_d
-      real(rp) :: valence
+      
+      
+      
 
       type(namelist_generator) :: nml
 

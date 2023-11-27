@@ -420,7 +420,7 @@ contains
       integer, intent(in) :: len
       real(dblprec), dimension(len), intent(out) :: out  !< Random number in the interval [0,1)
       real(dblprec), intent(in) :: sigma
-      integer :: i
+      
 !!!#ifdef VSL
 !!!      integer :: errcode
 !!!#endif

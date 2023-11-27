@@ -664,7 +664,7 @@ contains
       complex(rp), dimension(18, 18) :: dum, b, b_i, u, lam, lam_i
       complex(rp), dimension(18, 18, this%lattice%kk) :: psi_t
       real(rp), dimension(18) :: ev
-      complex(rp), dimension(18) :: zev
+      
       real(rp), dimension(3*18 - 2) ::rwork
       complex(rp), dimension(3*18 - 2) ::zwork
 
@@ -820,19 +820,19 @@ contains
       !.. Local Scalars ..
       integer :: icode, l, ll1, nbp1, nl, ifail
       real(rp) :: eps, err
-      complex(rp) :: g_e
+      
       !
       !.. Local Arrays ..
-      integer, dimension(np) :: nb2
-      integer, dimension(nw) :: jc
-      integer, dimension(nw) :: iwk
+      
+      
+      
       real(rp), dimension(ll) :: aa, am, bb, bm
       real(rp), dimension(10) :: edge, weight, width
-      real(rp), dimension(200, 10) :: bwk
+      
       ! real(rp), dimension(np,ll) :: am2,bm2
-      real(rp), dimension(np, 10) :: weight2
-      real(rp), dimension(nw, 2, 5) :: work
-      real(rp), dimension(2) :: bandedges
+      
+      
+      
 
       !
       !.. External Calls ..
@@ -924,7 +924,7 @@ contains
    subroutine cheb_0th_mom(this, psiref)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(18, 18, this%lattice%kk), intent(in) :: psiref
-      complex(rp), dimension(18, 18) :: dum
+      
       integer :: nat, hblocksize, nlimplus1, k
 
       hblocksize = 18
@@ -1605,11 +1605,11 @@ contains
       class(recursion), intent(inout) :: this
       ! Local variables
       integer :: i, j, ll, l, hblocksize, nat, nlimplus1, llcheb
-      integer, dimension(0:this%lattice%kk) :: idumll
+      
       !complex(rp) :: cone = (1.0d0, 0.0d0)
-      complex(rp), dimension(18, 18) :: dum2
-      complex(rp), dimension(18, this%lattice%kk) :: v
-      complex(rp), dimension(:, :, :, :), allocatable :: hcheb
+      
+      
+      
       real(rp) :: a, b
       ! External functions
       complex(rp), external :: zdotc
@@ -1693,7 +1693,7 @@ contains
       integer, dimension(0:this%lattice%kk) :: idumll
       complex(rp) :: cone = (1.0D0, 0.0D0)
       complex(rp), dimension(18, 18) :: dum, dum1
-      complex(rp), dimension(18, this%lattice%kk) :: v
+      
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
       complex(rp), dimension(:, :, :), allocatable :: psiref
       real(rp) :: a, b, start, finish
@@ -1980,8 +1980,8 @@ contains
       real(rp) :: s, summ
       complex(rp) :: ajc
       complex(rp), dimension(18, this%lattice%kk) :: thpsi
-      character(len=1) :: transa
-      character, dimension(6) :: matdescra
+      
+      
       ! External functions
       complex(rp), external :: zdotc
 

@@ -580,7 +580,7 @@ contains
       integer :: jj, max_orbital, n_atoms
       integer :: ntype, iostatus
       real(rp), dimension(3) :: idx
-      real(rp), dimension(3, 3) :: a_inv
+      
       n_atoms = this%charge%lattice%ntype
       max_orbital = 9
 
@@ -648,7 +648,7 @@ contains
       integer :: jj
       integer :: ntype, iostat1, iostatus, n_atoms, max_orbital, numLines
       real(rp), dimension(3) :: vet, vetpao
-      real(rp) :: dumcmplx
+      
       integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idx
       type(hamData) :: ham
       type(hamData), allocatable :: hamArray(:)
@@ -1074,7 +1074,7 @@ contains
       real(rp), dimension(3), intent(in) :: m_loc
 
       ! Local variables
-      integer :: sdim
+      
       ! Rotate Hamiltonian to local axis if wanted
       if (this%local_axis) then
          this%hall = this%hall_glob
