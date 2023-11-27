@@ -1080,7 +1080,7 @@ contains
       integer, dimension(18) :: ipiv
       real(rp) :: etop, ebot, ea, eb
       
-      complex(rp), dimension(18, 18) :: Q, Qp, Q2p, Z, one, W, B2z, Qt, P
+      complex(rp), dimension(18, 18) :: Q, Z, one, W, B2z, P
       complex(rp) :: zoff, cone, czero, ze, det, im
       complex(rp) :: coff
       complex(rp), dimension(18*18) :: work
