@@ -744,7 +744,7 @@ contains
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
       real(rp), dimension(6) :: QSL
-      integer :: i, ia
+      integer :: ia
 
       ! Constructing control object
       control_obj = control(this%fname)

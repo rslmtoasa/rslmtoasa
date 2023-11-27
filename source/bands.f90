@@ -223,7 +223,7 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail
+      integer :: i, j, ia, ik1_mag, ik1, nv1, ifail
       real(rp) :: e1_mag, ef_mag, e1
       integer :: ia_glob
       !real(rp), dimension(this%lattice%nrec,this%en%channels_ldos+10) :: dosia
@@ -351,10 +351,10 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      integer :: i, j, l, m, o ! Orbital index
+      integer :: i, l, m, o ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
-      integer :: isp, soff, jo, nsp, plusbulk
+      integer :: isp, soff, nsp, plusbulk
       real(rp) :: sgef, pmef, smef, isgn, sums, sump, sumd, mnorm
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(18) :: chebmom(18), chebmom1(18), chebmom2(18)
@@ -468,15 +468,15 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      integer :: i, j, l, m, o ! Orbital index
+      integer :: i, j, m, o ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
-      integer :: isp, soff, jo, nsp
+      integer :: nsp
       integer :: fermi_point
       !complex(rp), dimension(18,18,this%lattice%nrec) :: g0_ef
       complex(rp), dimension(18, 18, atoms_per_process) :: g0_ef
       complex(rp) :: eta
-      real(rp) :: sgef, pmef, smef, isgn, sumocc
+      real(rp) :: sumocc
       !real(rp), dimension(64,18,18,this%lattice%nrec) :: y
       real(rp), dimension(64, 18, 18, atoms_per_process) :: y
       real(rp), dimension(64) :: x, w
@@ -549,13 +549,13 @@ contains
       ! Local variables
       real(rp), intent(in)  :: fermi_energy
       real(rp), intent(out) :: sumocc_out
-      integer :: i, j, l, m, o ! Orbital index
+      integer :: i, j, m, o ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
       integer :: fermi_point
       complex(rp), dimension(18, 18, this%lattice%nrec) :: g0_ef
       complex(rp) :: eta
-      real(rp) :: sgef, pmef, smef, isgn, sumocc
+      real(rp) :: sumocc
       real(rp), dimension(64, 18, 18, this%lattice%nrec) :: y
       real(rp), dimension(64) :: x, w
       real(rp) :: res, t
@@ -667,12 +667,12 @@ contains
       class(bands), intent(inout) :: this
       ! Local variables
       real(rp), dimension(this%control%lld) :: x_i, w_i, q_i
-      real(rp), dimension(this%control%lld) :: w, wscale
+      real(rp), dimension(this%control%lld) :: wscale
       real(rp), dimension(this%control%lld, 0:(this%control%lld)) :: polycheb
       real(rp), dimension(18, this%control%lld, this%lattice%ntype) :: doscheb_i
       real(rp), dimension(18, this%lattice%ntype) :: q0l, q1l, q2l
-      real(rp) :: a, b, mom0, mom1, mom2, occ
-      integer :: i, l, llplusone, n, ll
+      real(rp) :: a, b, occ
+      integer :: i, l, n, ll
 
       ll = this%control%lld
       x_i(:) = 0.0D0
@@ -734,7 +734,7 @@ contains
       class(bands) :: this
       ! Local variables
       real(rp) :: mx, my, mz
-      integer :: i, j ! Orbital index
+      integer :: j ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
 

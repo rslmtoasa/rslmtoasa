@@ -345,7 +345,7 @@ contains
       real(rp), dimension(4, 9) :: angles ! For the definition of xx, xy, xz, yx, yy, ... components
       real(rp), dimension(3) :: disp_direction, uni_disp
       real(rp) :: ws_radius ! The WS radius
-      integer :: i, j, k, p, s, lll, lmaxi, lmaxj, lmaxk, njijk, nv
+      integer :: i, j, k, p, lmaxi, lmaxj, lmaxk, njijk, nv
 
       ! Definition of each of the angles
       do p = 1, 9
@@ -600,9 +600,9 @@ contains
 
       ! Local Variables
       integer :: i, j, k, l, m, njij, nv, lmaxi, lmaxj, ief
-      real(rp) :: spin_i, orbital_i, gfac, diff
+      real(rp) :: spin_i, orbital_i, diff
       real(rp), allocatable, dimension(:, :) :: dtott, dtottim, total_damping
-      real(rp), dimension(3, 3) :: damping_tensor, damping_tensor_im
+      real(rp), dimension(3, 3) :: damping_tensor_im
 
       if (this%control%nsp .eq. 2) then ! check if spin-orbit (l.s) is enabled
 
@@ -819,13 +819,13 @@ contains
    subroutine calculate_exchange(this)
       use mpi_mod
       class(exchange) :: this
-      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4, smat
+      complex(rp), dimension(9, 9) :: dmat1, dmat2, smat
       complex(rp), dimension(this%en%channels_ldos + 10) :: jtot, jcomp
       complex(rp), dimension(this%en%channels_ldos + 10, 3) :: jjtot
       complex(rp), dimension(this%en%channels_ldos + 10, 3, 3) :: itot
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(3, 3) :: jtens
-      integer :: nv, i, j, k, l, njij, funit, iostatus
+      integer :: nv, i, j, k, l, njij, iostatus
       logical :: isopen
 
       integer :: njij_glob
@@ -998,7 +998,7 @@ contains
    subroutine calculate_exchange_rs2pao(this)
       use mpi_mod
       class(exchange) :: this
-      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4, smat
+      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, smat
       complex(rp), dimension(this%en%channels_ldos + 10) :: jtot
       complex(rp), dimension(this%en%channels_ldos + 10, 3) :: jjtot
       real(rp), dimension(this%en%channels_ldos + 10) :: y
@@ -1137,11 +1137,11 @@ contains
    subroutine calculate_exchange_gauss_legendre(this)
       use mpi_mod
       class(exchange) :: this
-      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4, smat
+      complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, smat
       complex(rp), dimension(64) :: jtot, jcomp
       complex(rp), dimension(this%en%channels_ldos + 10, 3) :: jjtot
       real(rp), dimension(this%en%channels_ldos + 10) :: y
-      integer :: nv, i, j, k, njij, orbj, orbm, l
+      integer :: nv, i, j, k, njij, l
       real(rp), dimension(64) :: x, w
       logical :: isopen
 

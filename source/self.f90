@@ -416,7 +416,7 @@ contains
    subroutine restore_to_default(this, full)
       class(self), intent(inout):: this
       logical, intent(in), optional :: full
-      integer :: lmax, nsp
+      integer :: nsp
 
       ! Control variables
       ! if false force to read the original self file

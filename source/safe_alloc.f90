@@ -214,14 +214,14 @@ contains
 
    function get_remaining_total(this) result(result)
       class(safe_alloc) :: this
-      integer :: i, result, size_allocs_historic
+      integer :: result, size_allocs_historic
       size_allocs_historic = size(this%allocs_historic)
       result = this%get_allocations_total() - this%get_deallocations_total()
    end function get_remaining_total
    function get_remaining_memory(this, unit) result(result)
       class(safe_alloc), intent(in) :: this
       character(len=2), intent(in), optional :: unit
-      integer :: i, result, size_allocs_historic
+      integer :: result, size_allocs_historic
       size_allocs_historic = size(this%allocs_historic)
       result = this%get_allocations_memory(unit) - this%get_deallocations_memory(unit)
    end function get_remaining_memory

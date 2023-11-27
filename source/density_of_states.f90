@@ -103,8 +103,8 @@ contains
       real(rp), dimension(this%control%lld*2 + 2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
-      integer :: i, j, k, l, m, n
+      real(rp) :: eps, a, b
+      integer :: i, l, n
       eps = 0.0001D0
       ! Defining rescaling coeficients
       a = (this%en%energy_max - this%en%energy_min) / (2 - 0.3)
@@ -175,10 +175,10 @@ contains
       real(rp), dimension(this%control%lld) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: eps, a, b
       real(rp), dimension(this%control%lld*2 + 2, 5) :: mu_dum
       complex(rp), dimension(this%lattice%nrec, 18, 18, this%en%channels_ldos + 10) :: green
-      integer :: i, j, k, l, m, n
+      integer :: i, l, m, n
       eps = 0.0001D0
 
       ! Defining rescaling coeficients
@@ -254,8 +254,8 @@ contains
       ! Output
       real(rp), dimension(18, this%en%channels_ldos + 10), intent(out) :: tdens
       ! Local variables
-      integer :: icode, iii, k, l, ll1, nb, nbp1, nl, nt, eidx, ne, nq, ll_in, ifail, npts, nw
-      real(rp) :: a1, a2, dens, emax, emin, eps, err, e_shift, e_canon, prefac
+      integer :: k, l, ll1, nb, nbp1, nl, eidx, ll_in, ifail, npts, nw
+      real(rp) :: a1, a2, dens, emax, emin, eps, err, e_shift, prefac
       complex(rp) :: dens_i
 
       integer, dimension(18) :: nb2

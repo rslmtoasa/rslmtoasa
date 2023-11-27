@@ -405,7 +405,7 @@ contains
       integer, intent(in) :: Mensemble !< Number of ensembles
       integer, intent(in) :: flag !< Allocate or deallocate (1/-1)
 
-      integer :: i_all, i_stat
+      integer :: i_stat
 
       if (flag > 0) then
          allocate (bloc(3, Natom, Mensemble), stat=i_stat)

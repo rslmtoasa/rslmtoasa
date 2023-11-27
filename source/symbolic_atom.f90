@@ -241,7 +241,7 @@ contains
       !
       real(rp), intent(in) :: e
       complex(rp), dimension(9, 9), intent(inout) :: mat
-      integer :: k, l, m, ml
+      integer :: l, m, ml
       complex(rp):: cu, cd, wu, wd, de, wuwd
 
       mat = 0.0D0

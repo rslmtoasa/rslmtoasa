@@ -1415,8 +1415,8 @@ contains
       character(len=*), intent(in) :: transformation
       complex(rp), dimension(9, 9), intent(inout) :: ham
       ! local variables
-      integer :: i, ii, j, jj, k, l
-      complex(rp) :: const, del, dum, pim, cone
+      integer :: ii, jj, l
+      complex(rp) :: const, cone
       complex(rp), dimension(9, 9) :: hesf, hcart, v, vc, htmp
       cone = (1.0D0, 0.0D0)
       const = cmplx(1.0D0 / sqrt(2.0D0), KIND=kind(.0D0))
@@ -1821,7 +1821,7 @@ contains
       complex(rp), dimension(18, 18, sdim), intent(inout) :: MAT
 
       ! Local Scalars
-      integer :: i, j, k, m, ndim
+      integer :: i, k, m, ndim
       real(rp) :: alpha, beta, gamma, pi
 
       ! Local Arrays
@@ -1885,7 +1885,7 @@ contains
       !
       !.. Local Scalars ..
       integer :: I, J, K, M, ndim
-      real(selected_real_kind(15)) :: ALFA, BETA, GAMA, n1, x1, y1, x2, z2, th, phi
+      real(selected_real_kind(15)) :: ALFA, BETA, GAMA, phi
       !
       !.. Local Arrays ..
       real(selected_real_kind(15)), dimension(3) :: v, sv
@@ -2121,7 +2121,7 @@ contains
       real(selected_real_kind(15)) :: alfa, beta, theta
       !
       !.. Local Arrays ..
-      real(selected_real_kind(15)), dimension(3) :: v, vout, sv, vrod, mz
+      real(selected_real_kind(15)), dimension(3) :: v, vout, sv, mz
       real(selected_real_kind(15)), dimension(3, 3) :: B, Rx, Ry, Rz, Rrod
       !complex(selected_real_kind(15)), dimension(3,3) :: Rz,Ry,R
       !

@@ -279,7 +279,7 @@ contains
       real(rp), intent(in)                     :: temp_in
       integer, intent(in)                      :: na_in
       ! Local variables
-      integer                                  :: i, j, natom, nplusbulk
+      integer                                  :: i, nplusbulk
       real(rp)                                 :: mnorm, dummy
       real(rp), dimension(3)                   :: thermal_field
 
@@ -325,7 +325,7 @@ contains
       real(rp), intent(in)                     :: temp_in
       integer, intent(in)                      :: na_in
       ! Local variables
-      integer                                  :: i, j, natom, nplusbulk
+      integer                                  :: i, nplusbulk
       real(rp)                                 :: mnorm
 
       do i = 1, na_in

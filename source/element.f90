@@ -284,8 +284,8 @@ contains
       integer :: newunit
 
       character(len=10) :: symbol
-      integer :: f_core, num_quant_s, num_quant_p, num_quant_d
-      real(rp) :: atomic_number, core, valence
+      integer :: num_quant_d
+      real(rp) :: valence
 
       type(namelist_generator) :: nml
 

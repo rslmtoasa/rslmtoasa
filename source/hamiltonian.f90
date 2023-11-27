@@ -470,7 +470,7 @@ contains
    subroutine build_bulkham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
+      integer :: i, j, m, ino, ja, ji, nr, ia
       integer :: ntype
 
       do ntype = 1, this%charge%lattice%ntype
@@ -526,7 +526,7 @@ contains
    subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji
+      integer :: ino, nr, nlim, m, i, j, ja, ji
 
       do nlim = 1, this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
@@ -576,10 +576,10 @@ contains
       class(hamiltonian), intent(inout) :: this
       ! Local variables
       real(rp), dimension(3) :: rij, rijtest
-      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
-      integer :: jj, jt, max_orbital, n_atoms
-      integer :: ntype, iostat1, iostat2, iostatus
-      real(rp), dimension(3) :: vet, vetpao, idx
+      integer :: i, j, k, idxi, idxj, idxk, ino, nr, ia, ipao, jpao
+      integer :: jj, max_orbital, n_atoms
+      integer :: ntype, iostatus
+      real(rp), dimension(3) :: idx
       real(rp), dimension(3, 3) :: a_inv
       n_atoms = this%charge%lattice%ntype
       max_orbital = 9
@@ -644,12 +644,12 @@ contains
       end type hamData
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia, iia, jja
-      integer :: jj, jt, orbl, orbm, idxi, idxj, idxk
-      integer :: ntype, iostat1, iostat2, iostatus, n_atoms, max_orbital, numLines
+      integer :: i, j, k, l, ino, nr, ia, iia, jja
+      integer :: jj, idxk
+      integer :: ntype, iostat1, iostatus, n_atoms, max_orbital, numLines
       real(rp), dimension(3) :: vet, vetpao
-      real(rp) :: dumre, dumcmplx
-      integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idxup, idxdw, idx
+      real(rp) :: dumcmplx
+      integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idx
       type(hamData) :: ham
       type(hamData), allocatable :: hamArray(:)
 
@@ -719,11 +719,11 @@ contains
    subroutine build_from_paoflow(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia, iia, jja
-      integer :: jj, jt, orbl, orbm, idxi, idxj, idxk
-      integer :: ntype, iostat1, iostat2, iostatus, n_atoms, max_orbital
-      real(rp), dimension(3) :: vet, vetpao, cri_dir, crj_dir, cri_cart, crj_cart
-      integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idxup, idxdw, idx
+      integer :: i, j, k, ino, nr, ia, iia, jja
+      integer :: jj, orbl, orbm, idxi, idxj, idxk
+      integer :: ntype, iostat1, iostatus, n_atoms, max_orbital
+      real(rp), dimension(3) :: vet, vetpao, crj_cart
+      integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idx
       real(rp) :: dumre, dumcmplx
 
       n_atoms = this%charge%lattice%ntype
@@ -922,7 +922,7 @@ contains
       real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
       real(rp), dimension(3) :: vet
       real(rp), dimension(9, 9) :: hhh
-      integer :: i, j, k, l, m, n, it, jt, jj, dummy
+      integer :: m, it, jt, jj, dummy
       integer :: ni, mdir
       integer :: kk ! Clust size number
 

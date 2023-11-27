@@ -196,7 +196,7 @@ contains
    subroutine hop_b_hoh(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, nr, nnmap, nlimplus1
+      integer :: i, j, nr, nnmap, nlimplus1
       integer :: ll ! Recursion step
       integer :: ino ! Atom type
       integer :: ih ! Atom number in the clust
@@ -343,7 +343,7 @@ contains
    subroutine hop_b(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, nr, nnmap, nlimplus1
+      integer :: i, j, nr, nnmap, nlimplus1
       integer :: ll ! Recursion step
       integer :: ino ! Atom type
       integer :: ih ! Atom number in the clust
@@ -439,7 +439,7 @@ contains
       use mpi_mod
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, ij, j, l, ll, kk, m, reci
+      integer :: i, ij, j, l, ll, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
 
@@ -591,7 +591,7 @@ contains
       use mpi_mod
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, l, ll, kk, m
+      integer :: i, j, l, ll, m
       integer :: llmax ! Recursion steps
 
       ! Determine how many atoms each process should handle
@@ -655,13 +655,13 @@ contains
    subroutine crecal_b(this)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, info, lwork
+      integer :: i, info, lwork
       integer :: ll, llmax ! Recursion step
       integer :: nm1 ! LL-1
       integer :: nat ! Clust size
       integer :: hblocksize ! Hamiltonian size (18)
       complex(rp), dimension(18, 18) :: sum_b, sum_a
-      complex(rp), dimension(18, 18) :: dum, b, b_i, u, lam, lam_i, u_ls, u_rs
+      complex(rp), dimension(18, 18) :: dum, b, b_i, u, lam, lam_i, u_rs
       complex(rp), dimension(18, 18, this%lattice%kk) :: psi_t
       real(rp), dimension(18) :: ev
       complex(rp), dimension(18) :: zev
@@ -818,8 +818,8 @@ contains
       real(rp), dimension(np), intent(out) :: beta_inf
       !
       !.. Local Scalars ..
-      integer :: icode, iii, k, l, ll1, nb, nbp1, nl, nt, eidx, ne, nq, ifail
-      real(rp) :: a1, a2, emax, emin, eps, err, e_shift, pi
+      integer :: icode, l, ll1, nbp1, nl, ifail
+      real(rp) :: eps, err, pi
       complex(rp) :: g_e
       !
       !.. Local Arrays ..
@@ -830,7 +830,7 @@ contains
       real(rp), dimension(10) :: edge, weight, width
       real(rp), dimension(200, 10) :: bwk
       ! real(rp), dimension(np,ll) :: am2,bm2
-      real(rp), dimension(np, 10) :: edge2, width2, weight2
+      real(rp), dimension(np, 10) :: weight2
       real(rp), dimension(nw, 2, 5) :: work
       real(rp), dimension(2) :: bandedges
 
@@ -1157,7 +1157,7 @@ contains
       class(recursion), intent(inout) :: this
       ! Local variables
       real(rp) :: a, b
-      integer :: i, ij, j, l, ll, kk, m, reci
+      integer :: i, ij, j, l, ll, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
       complex(rp), dimension(18, 18, this%lattice%kk) :: psiref
@@ -1267,7 +1267,7 @@ contains
       integer, intent(in) :: i, ll
       real(rp), intent(in) :: a, b
       ! Local variables
-      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      integer :: nb, ih, k, nr, n, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
 
       hblocksize = 18
@@ -1377,7 +1377,7 @@ contains
       integer, intent(in) :: i, ll
       real(rp), intent(in) :: a, b
       ! Local variables
-      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      integer :: nb, ih, k, nr, n, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
 
       hblocksize = 18
@@ -1541,7 +1541,7 @@ contains
       real(rp), intent(in) :: a, b
       complex(rp), dimension(18, 18, this%lattice%kk), intent(in) :: psiref
       ! Local variables
-      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      integer :: nb, ih, k, nr, n, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2
       real(rp) :: inv_a
 
@@ -1604,13 +1604,13 @@ contains
       use mpi_mod
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, nlimplus1, llcheb
+      integer :: i, j, ll, l, hblocksize, nat, nlimplus1, llcheb
       integer, dimension(0:this%lattice%kk) :: idumll
       !complex(rp) :: cone = (1.0d0, 0.0d0)
-      complex(rp), dimension(18, 18) :: dum, dum1, dum2
+      complex(rp), dimension(18, 18) :: dum2
       complex(rp), dimension(18, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
-      real(rp) :: a, b, start, finish
+      real(rp) :: a, b, finish
       ! External functions
       complex(rp), external :: zdotc
 
@@ -1689,7 +1689,7 @@ contains
    subroutine chebyshev_recur_full(this)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      integer :: nb, ih, i, j, k, nr, ll, n, l, hblocksize, nat, nnmap, nlimplus1
       integer, dimension(0:this%lattice%kk) :: idumll
       complex(rp) :: cone = (1.0D0, 0.0D0)
       complex(rp), dimension(18, 18) :: dum, dum1, dum2
@@ -1826,7 +1826,7 @@ contains
    subroutine create_ll_map(this)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, nr, nnmap, ll
+      integer :: i, j, nr, nnmap, ll
       integer, dimension(0:this%lattice%kk) :: idumll
 
       idumll(:) = 0
@@ -1859,13 +1859,13 @@ contains
    subroutine hop(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, nr, nnmap, nlimplus1
+      integer :: i, j, l, m, nr, nnmap, nlimplus1
       integer :: ll ! Recursion step
       integer :: ino ! Atom type
       integer :: ih ! Atom number in the clust
       integer, dimension(0:this%lattice%kk) :: idum
       complex(rp), dimension(18) :: dum
-      real(rp) :: summ, start, finish
+      real(rp) :: summ, finish
 
       summ = 0.0D0
       idum(:) = 0
@@ -1972,13 +1972,13 @@ contains
    subroutine crecal(this)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m
+      integer :: i, k, m
       integer :: ll, llmax ! Recursion step
       integer :: nm1 ! LL-1
       integer :: nat ! Clust size
       integer :: hblocksize ! Hamiltonian size (18)
-      real(rp) :: s, summ, start, finish
-      complex(rp) :: dum, ajc
+      real(rp) :: s, summ, finish
+      complex(rp) :: ajc
       complex(rp), dimension(18, this%lattice%kk) :: thpsi
       character(len=1) :: transa
       character, dimension(6) :: matdescra

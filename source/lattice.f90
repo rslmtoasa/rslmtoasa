@@ -672,7 +672,7 @@ contains
       class(lattice), intent(inout) :: this
       !> Local variables
       real(rp), dimension(3, 3) :: a
-      integer :: i, j
+      integer :: j
 
       select case (this%crystal_sym)
       case ('bcc')
@@ -1130,13 +1130,13 @@ contains
       class(lattice), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, natoms, nsurf, currentType, newType, newCrystalType
-      integer :: nTypesTotal, nUnique, atomIdx, nTypesInLayer, ichoice, ichoicetype
+      integer :: nTypesTotal, nUnique, atomIdx, nTypesInLayer, ichoicetype
       real(rp), dimension(:, :), allocatable :: crsurf
       real(rp), dimension(:), allocatable :: crh, crhd, z
       integer, dimension(:), allocatable :: atomType, crystalType, typesurf, crystalsurf, uniqueTypes, ichoicen, ichoicetypen
       integer, dimension(:), allocatable :: nTypesForCurrentLayer
-      real(rp) :: dx, dy, dz, new, one, ds, ds2, disi, disi_min
-      real(rp) :: zstep, zmin, zmax
+      real(rp) :: new, ds, ds2, disi, disi_min
+      real(rp) :: zmax
       integer :: n, atomCount, maxType, nlay
       logical :: isUnique, isopen
       character(20) :: header
@@ -1662,7 +1662,7 @@ contains
       class(lattice), intent(inout) :: this
       logical, intent(in), optional :: do_str
       ! Local variables
-      integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
+      integer :: i, ia, nr, ii, j, nm, nomx, ncut, kk, nnmx
       integer, dimension(:, :), allocatable :: nn
       integer, dimension(:), allocatable :: idnn
       logical :: do_str_
@@ -1789,7 +1789,7 @@ contains
       real(rp), intent(in) :: r2, wav
       real(rp), dimension(3, ndi), intent(in) :: crd
       ! Local Scalars
-      integer :: i, j, k, m, na, nrl, nt
+      integer :: i, j, m, na, nrl, nt
       real(rp), dimension(:), allocatable :: bet, wk
       real(rp), dimension(:), allocatable :: a
       real(rp), dimension(:, :), allocatable :: cr
@@ -2042,7 +2042,7 @@ contains
       real(rp), dimension(nrl, nrl), intent(inout) :: s
       real(rp), dimension(nlm, nlm, nr), intent(inout) :: sbar
       ! Local variables
-      integer :: i, ia, ilm, ir, irl, irl0, isb, j, jlm, jsb, l, l2, lmax, m, ndef, hitc, info
+      integer :: i, ilm, ir, irl, irl0, isb, jlm, jsb, l, lmax, m, ndef, hitc, info
       real(rp), dimension(:, :), allocatable :: s_temp
       ! External Calls
       !external chlr2f, chlr2s

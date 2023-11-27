@@ -56,7 +56,7 @@ contains
       character(len=*) :: str
       character(len=len(str)) :: strin
       character(len=len(str)) :: strout
-      integer :: i, stringlen
+      integer :: stringlen
       integer :: last, actual
 
       strin = str

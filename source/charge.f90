@@ -334,7 +334,7 @@ contains
    subroutine bulkpot(this)
       class(charge), intent(inout) :: this
       ! Local variables
-      integer :: I, IBAS, ICLAS, IM, JBAS, j, i_all, i_stat
+      integer :: I, IBAS, ICLAS, IM, JBAS, j, i_stat
       real(rp) :: DIF, VADD, VERR, VMADI
       real(rp), dimension(this%lattice%nrec) :: TDQ, RMAX
       real(rp), dimension(:, :), allocatable :: AMAD
@@ -493,7 +493,7 @@ contains
    subroutine surfpot(this)
       class(charge), intent(inout) :: this
       ! Local variables
-      integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX, i_all, i_stat
+      integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX, i_stat
       real(rp) :: DIF, SUM1, SUMM, SUMN, VBULK, VM1, VMAD1, VMARD, VMN, wsm, twooverwsm, wsms
       real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TDQ, VM, qst
       real(rp), dimension(:, :), allocatable :: DSS
@@ -587,7 +587,7 @@ contains
       real(rp), dimension(3, 3) :: rb, qb
       integer :: nsize, nbmx, nkrmx, nkdmx, j7rlat, j7dlat, j7work, j7amad, lmxst, nkr, nkd
       logical :: isopen
-      integer :: i, j
+      integer :: j
       inquire (unit=10, opened=isopen)
       if (isopen) then
          call g_logger%fatal('charge%bulkmat, file ves.out: Unit 10 is already open', __FILE__, __LINE__)
@@ -949,7 +949,7 @@ contains
       !> Local variables
       real(rp), dimension(3) :: ddum
       real(rp) :: r2, dd
-      integer :: i, j, jj, ii, l, kk
+      integer :: i, j, ii, l, kk
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('charge.wsimp', this%wsimp, this%lattice%nbas)
       call g_safe_alloc%allocate('charge.amad', this%amad, (/this%lattice%nbas, this%lattice%nbas/))
