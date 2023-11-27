@@ -485,7 +485,7 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
-      
+
 
       ! Constructing control object
       control_obj = control(this%fname)
@@ -566,7 +566,7 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
-      
+
 
       ! Constructing control object
       control_obj = control(this%fname)
@@ -651,7 +651,7 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
-      
+
 
       ! Constructing control object
       control_obj = control(this%fname)
@@ -743,8 +743,8 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
-      
-      
+
+
 
       ! Constructing control object
       control_obj = control(this%fname)
@@ -835,7 +835,7 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
-      
+
       integer :: i
 
       ! Constructing control object

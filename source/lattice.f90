@@ -672,7 +672,7 @@ contains
       class(lattice), intent(inout) :: this
       !> Local variables
       real(rp), dimension(3, 3) :: a
-      
+
 
       select case (this%crystal_sym)
       case ('bcc')
@@ -940,7 +940,7 @@ contains
       real(rp), dimension(:, :), allocatable :: cr, crbravais
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
-      
+
 
       inquire (unit=10, opened=isopen)
       if (isopen) then
@@ -1026,7 +1026,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_clusup(this)
       class(lattice), intent(inout) :: this
-      
+
       ! Local variables
       real(rp), dimension(:), allocatable :: z
       integer, dimension(:), allocatable :: izpsurf
@@ -1136,10 +1136,10 @@ contains
       integer, dimension(:), allocatable :: atomType, crystalType, typesurf, crystalsurf, uniqueTypes, ichoicen, ichoicetypen
       integer, dimension(:), allocatable :: nTypesForCurrentLayer
       real(rp) :: new, ds, ds2, disi, disi_min
-      
+
       integer :: n, atomCount, maxType
       logical :: isUnique, isopen
-      
+
 
       ! Initial definitions
       natoms = this%kk
@@ -2841,7 +2841,7 @@ contains
    subroutine calculate_nbas(this)
       implicit none
       class(lattice) :: this
-      
+
       integer, dimension(:) :: atype(this%nbas), amount(this%nbas)
       integer :: i, j
 
@@ -3167,7 +3167,7 @@ contains
       character(len=*), intent(in), optional :: file
 
       type(namelist_generator) :: nml
-      
+
 
       nml = namelist_generator('lattice')
 

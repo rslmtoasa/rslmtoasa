@@ -360,7 +360,7 @@ contains
       real(rp), dimension(18) :: chebmom(18), chebmom1(18), chebmom2(18)
       real(rp), dimension(this%lattice%nrec, 6) :: occ
 
-      
+
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
       real(rp), dimension(3, atoms_per_process) :: mom_prev
@@ -471,7 +471,7 @@ contains
       integer :: i, j, m, o ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
-      
+
       integer :: fermi_point
       !complex(rp), dimension(18,18,this%lattice%nrec) :: g0_ef
       complex(rp), dimension(18, 18, atoms_per_process) :: g0_ef
@@ -555,7 +555,7 @@ contains
       integer :: fermi_point
       complex(rp), dimension(18, 18, this%lattice%nrec) :: g0_ef
       complex(rp) :: eta
-      
+
       real(rp), dimension(64, 18, 18, this%lattice%nrec) :: y
       real(rp), dimension(64) :: x, w
       real(rp) :: res

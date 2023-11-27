@@ -281,11 +281,11 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      
 
-      
-      
-      
+
+
+
+
 
       type(namelist_generator) :: nml
 

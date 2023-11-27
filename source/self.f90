@@ -416,7 +416,7 @@ contains
    subroutine restore_to_default(this, full)
       class(self), intent(inout):: this
       logical, intent(in), optional :: full
-      
+
 
       ! Control variables
       ! if false force to read the original self file
@@ -639,7 +639,7 @@ contains
       integer :: i, ia, niter
       real(rp), dimension(6) :: QSL
 
-      
+
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
 

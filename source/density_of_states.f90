@@ -176,7 +176,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp) :: eps, a, b
-      
+
       complex(rp), dimension(this%lattice%nrec, 18, 18, this%en%channels_ldos + 10) :: green
       integer :: i, l, m, n
       eps = 0.0001D0
@@ -256,18 +256,18 @@ contains
       ! Local variables
       integer :: k, l, ll1, nb, nbp1, nl, eidx, ll_in, ifail, npts, nw
       real(rp) :: a1, a2, dens, emax, emin, eps, err, e_shift, prefac
-      
+
 
       integer, dimension(18) :: nb2
-      
-      
+
+
       integer, dimension(18) :: ll_fail
       real(rp), dimension(this%control%lld) :: aa, am, bb, bm, sqbb
       real(rp), dimension(10) :: edge, weight, width
-      
+
       real(rp), dimension(18, this%control%lld) :: am2, bm2
       real(rp), dimension(18, 10) :: edge2, width2, weight2
-      
+
       real(rp), dimension(2) :: bandedges
       real(rp), dimension(18) :: alpha_inf, beta_inf
 

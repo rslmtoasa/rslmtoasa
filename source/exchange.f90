@@ -602,7 +602,7 @@ contains
       integer :: i, j, k, l, m, njij, nv, lmaxi, lmaxj, ief
       real(rp) :: spin_i, orbital_i, diff
       real(rp), allocatable, dimension(:, :) :: dtott, dtottim, total_damping
-      
+
 
       if (this%control%nsp .eq. 2) then ! check if spin-orbit (l.s) is enabled
 
@@ -1140,7 +1140,7 @@ contains
       complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, smat
       complex(rp), dimension(64) :: jtot
       complex(rp), dimension(this%en%channels_ldos + 10, 3) :: jjtot
-      
+
       integer :: nv, i, j, k, njij, l
       real(rp), dimension(64) :: x, w
       logical :: isopen

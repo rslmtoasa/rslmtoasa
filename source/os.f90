@@ -65,7 +65,7 @@ contains
       logical :: has_provided_output = .false.
       character(len=sl) :: nml, file
       character(len=sl) :: code
-      
+
       ! iterable variables
       integer :: i, j
 
@@ -116,8 +116,8 @@ contains
       end if
 
       ! (2) create output directory
-      call system("mkdir -p "//trim(obj%output)); 
-      call system("cp "//trim(obj%input_origin)//" "//trim(output_input)); 
+      call system("mkdir -p "//trim(obj%output));
+      call system("cp "//trim(obj%input_origin)//" "//trim(output_input));
       ! (3) create processed input and save to output directory
       do i = 1, size(obj%namelists(:, 1))
          nml = obj%namelists(i, 1)

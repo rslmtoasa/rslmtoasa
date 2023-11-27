@@ -515,15 +515,15 @@ contains
       integer :: ia, mdir, nw, ll_t, ie, j
       real(rp), dimension(this%en%channels_ldos + 10, this%lattice%ntype) :: dx, dy, dz
       real(rp), dimension(18, this%en%channels_ldos + 10) :: doso
-      
+
       complex(rp) :: dfac, impi
-      
+
       complex(rp), dimension(3) :: gmask, lmask
       complex(rp), dimension(2, 3) :: gfac
       integer, dimension(4, 3) :: goff
-      
-      
-      
+
+
+
 
       integer :: ia_glob
 
@@ -1079,18 +1079,18 @@ contains
       integer :: i, j, l, ei, info, ln, lwork
       integer, dimension(18) :: ipiv
       real(rp) :: etop, ebot, ea, eb
-      
+
       complex(rp), dimension(18, 18) :: Q, Z, one, W, B2z, P
       complex(rp) :: zoff, cone, czero, ze, det, im
       complex(rp) :: coff
       complex(rp), dimension(18*18) :: work
-      
+
       complex(rp), dimension(18, 18) :: Dfac_mat, Cshi_mat
       real(rp) :: a_diag, b_diag
       !
       integer, dimension(18) :: m_tab
       !
-      
+
       !
       g_out = (0.0D0, 0.0D0)
       !

@@ -895,7 +895,7 @@ contains
       integer, optional, intent(in) :: depth
       real(rp), optional, intent(in) :: tottot  !< Optional value used to calculate total percentages
       real(rp) :: val, total_val
-      
+
       type(report), pointer :: child, parent
       logical :: children_
 
@@ -1060,7 +1060,7 @@ contains
       logical, optional, intent(in) :: root, children
       integer, optional, intent(in) :: depth
       integer :: val
-      
+
       type(report), pointer :: child
       logical :: children_
       type(report) :: this_copy
