@@ -2122,7 +2122,7 @@ contains
       !
       !.. Local Arrays ..
       real(selected_real_kind(15)), dimension(3) :: v, vout, sv, mz
-      real(selected_real_kind(15)), dimension(3, 3) :: B, Rx, Ry, Rz, Rrod
+      real(selected_real_kind(15)), dimension(3, 3) :: B, Rx, Ry, Rz
       !complex(selected_real_kind(15)), dimension(3,3) :: Rz,Ry,R
       !
       !.. Intrinsic Functions ..

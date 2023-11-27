@@ -880,7 +880,7 @@ contains
       real(rp), dimension(na), intent(out) ::  a_inf0, b_inf0
       !
       integer :: n, i, j, ll_t
-      complex(rp), dimension(ldim, ldim) :: MatIn, MatOut
+      complex(rp), dimension(ldim, ldim) :: MatIn
       real(rp), dimension(ldim, ldim, ll) :: Acoef_r, B2coef_r
       !
       a_inf = 0.0D0; b_inf = 0.0D0

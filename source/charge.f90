@@ -423,7 +423,7 @@ contains
       integer :: I, IBAS, ICLAS, IEX, II, INEQ, J, JBAS, JJ, KK, LB, LC, N, NBULK, NRX, NSUM
       real(rp) :: DIF, SS, VERR
       integer, dimension(this%lattice%nbas + 1) :: IBU
-      real(rp), dimension(this%lattice%nbas + 1) :: BUC, BUV, CTB, TDQ, VEB
+      real(rp), dimension(this%lattice%nbas + 1) :: BUC, BUV, CTB, TDQ
       real(rp), dimension(this%lattice%nbas + 1) :: TOTQ
       real(rp), dimension(this%lattice%nrec + 1) :: VMAD0
 

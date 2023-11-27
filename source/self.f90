@@ -913,7 +913,7 @@ contains
 
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
       real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
-      integer :: ISP, ncore, nval, l, nsp, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
+      integer :: ISP, ncore, nval, l, nsp, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1
       logical :: LAST
 
       real(rp), dimension(NCMX) :: EC
