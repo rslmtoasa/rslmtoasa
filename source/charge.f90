@@ -493,7 +493,7 @@ contains
    subroutine surfpot(this)
       class(charge), intent(inout) :: this
       ! Local variables
-      integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX, i_stat
+      integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX
       real(rp) :: DIF, SUM1, SUMM, SUMN, VBULK, VM1, VMAD1, VMARD, VMN, wsm, twooverwsm, wsms
       real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TDQ, VM, qst
       real(rp), dimension(:, :), allocatable :: DSS
@@ -949,7 +949,7 @@ contains
       !> Local variables
       real(rp), dimension(3) :: ddum
       real(rp) :: r2, dd
-      integer :: i, j, ii, l, kk
+      integer :: i, j, ii, l
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('charge.wsimp', this%wsimp, this%lattice%nbas)
       call g_safe_alloc%allocate('charge.amad', this%amad, (/this%lattice%nbas, this%lattice%nbas/))
@@ -1585,7 +1585,7 @@ contains
       real(rp) :: bx, by, bz, dperp
       real(rp), dimension(this%lattice%nbas*this%nq3) :: pz, uqx, uqy, uqz
       integer, dimension(this%lattice%nbas*this%nq3) :: index
-      integer :: i, ib, inx, iq, isrf, n, nlam, nlama, nlamb, nq
+      integer :: i, ib, inx, iq, isrf, n, nlam, nlama, nlamb
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('charge.qx', this%qx, this%lattice%nbas)

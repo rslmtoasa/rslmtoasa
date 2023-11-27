@@ -351,7 +351,7 @@ contains
       complex(rp), dimension(18, 18, 4) :: g0_ef
       complex(rp) :: eta
       complex(rp), dimension(64, 18, 18, 4) :: y
-      real(rp) :: res, t
+      real(rp) :: res
       real(rp), dimension(64) :: x, w
 
       integer :: ia_glob
@@ -512,7 +512,7 @@ contains
       !complex(rp), dimension(nv, ldim, ldim, na), intent(out) :: g0
       !real(rp), dimension(na, 3), intent(inout) :: mom
       ! Local variables
-      integer :: ia, mdir, nw, ll_t, ie, j, i
+      integer :: ia, mdir, nw, ll_t, ie, j
       real(rp), dimension(this%en%channels_ldos + 10, this%lattice%ntype) :: dx, dy, dz
       real(rp), dimension(18, this%en%channels_ldos + 10) :: doso
       real(rp), dimension(18, this%en%channels_ldos + 10) :: dnmag

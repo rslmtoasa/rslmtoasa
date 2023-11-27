@@ -1130,14 +1130,14 @@ contains
       class(lattice), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, natoms, nsurf, currentType, newType, newCrystalType
-      integer :: nTypesTotal, nUnique, atomIdx, nTypesInLayer, ichoicetype
+      integer :: nTypesTotal, nUnique, atomIdx, nTypesInLayer
       real(rp), dimension(:, :), allocatable :: crsurf
       real(rp), dimension(:), allocatable :: crh, crhd, z
       integer, dimension(:), allocatable :: atomType, crystalType, typesurf, crystalsurf, uniqueTypes, ichoicen, ichoicetypen
       integer, dimension(:), allocatable :: nTypesForCurrentLayer
       real(rp) :: new, ds, ds2, disi, disi_min
       real(rp) :: zmax
-      integer :: n, atomCount, maxType, nlay
+      integer :: n, atomCount, maxType
       logical :: isUnique, isopen
       character(20) :: header
 

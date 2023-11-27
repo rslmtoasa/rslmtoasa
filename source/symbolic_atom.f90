@@ -634,7 +634,7 @@ contains
       type(symbolic_atom), dimension(:), allocatable :: array_of_symbolic_atoms_from_memory
       character(len=*), dimension(:), intent(in) :: symbolic_atoms
       character(len=*), intent(in), optional :: database
-      integer :: i, j
+      integer :: i
       allocate (array_of_symbolic_atoms_from_memory(size(symbolic_atoms)))
       if (present(database)) then
          do i = 1, size(symbolic_atoms)

@@ -480,7 +480,7 @@ contains
       !real(rp), dimension(64,18,18,this%lattice%nrec) :: y
       real(rp), dimension(64, 18, 18, atoms_per_process) :: y
       real(rp), dimension(64) :: x, w
-      real(rp) :: res, t
+      real(rp) :: res
       real(rp), dimension(this%lattice%nrec, 18) :: occ
 
       integer :: m_glob
@@ -558,7 +558,7 @@ contains
       real(rp) :: sumocc
       real(rp), dimension(64, 18, 18, this%lattice%nrec) :: y
       real(rp), dimension(64) :: x, w
-      real(rp) :: res, t
+      real(rp) :: res
       real(rp), dimension(this%lattice%nrec, 18) :: occ
 
       ! Find the Gauss Legendre roots and weights

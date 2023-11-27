@@ -270,7 +270,7 @@ contains
       integer, intent(in) :: flag !< Allocate or deallocate (1/-1)
       character(len=1) :: do_ld !< Do lattice dynamics ('Y'/'N')
 
-      integer :: i_stat, i_all
+      integer :: i_stat
 
       if (flag > 0) then
          allocate (ranv(3, Natom, Mensemble), stat=i_stat)

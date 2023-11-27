@@ -171,7 +171,7 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -645,7 +645,7 @@ contains
       class(hamiltonian), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, l, ino, nr, ia, iia, jja
-      integer :: jj, idxk
+      integer :: jj
       integer :: ntype, iostat1, iostatus, n_atoms, max_orbital, numLines
       real(rp), dimension(3) :: vet, vetpao
       real(rp) :: dumcmplx
@@ -722,7 +722,7 @@ contains
       integer :: i, j, k, ino, nr, ia, iia, jja
       integer :: jj, orbl, orbm, idxi, idxj, idxk
       integer :: ntype, iostat1, iostatus, n_atoms, max_orbital
-      real(rp), dimension(3) :: vet, vetpao, crj_cart
+      real(rp), dimension(3) :: vet, vetpao
       integer, dimension(maxval(this%charge%lattice%nn(:, 1)) + 1, 3) :: idx
       real(rp) :: dumre, dumcmplx
 

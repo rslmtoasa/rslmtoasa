@@ -291,7 +291,7 @@ contains
       class(self), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit
 
       include 'include_codes/namelists/self.f90'
 

@@ -179,7 +179,7 @@ contains
       class(spin_dynamics), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit
 
       include 'include_codes/namelists/spin_dynamics.f90'
 

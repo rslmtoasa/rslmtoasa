@@ -596,7 +596,7 @@ contains
       type(potential), dimension(:), allocatable :: array_of_potentials
       character(len=*), dimension(:), intent(in) :: potentials
       character(len=*), intent(in), optional :: database
-      integer :: i, j
+      integer :: i
       allocate (array_of_potentials(size(potentials)))
       if (present(database)) then
          do i = 1, size(potentials)

@@ -110,7 +110,7 @@ contains
       class(energy), intent(inout) :: this
 
       ! Reading process variables
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit
 
       include 'include_codes/namelists/energy.f90'
 

@@ -819,13 +819,13 @@ contains
    subroutine calculate_exchange(this)
       use mpi_mod
       class(exchange) :: this
-      complex(rp), dimension(9, 9) :: dmat1, dmat2, smat
+      complex(rp), dimension(9, 9) :: dmat1, dmat2
       complex(rp), dimension(this%en%channels_ldos + 10) :: jtot, jcomp
       complex(rp), dimension(this%en%channels_ldos + 10, 3) :: jjtot
       complex(rp), dimension(this%en%channels_ldos + 10, 3, 3) :: itot
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(3, 3) :: jtens
-      integer :: nv, i, j, k, l, njij, iostatus
+      integer :: nv, i, j, k, l, njij
       logical :: isopen
 
       integer :: njij_glob
@@ -1138,7 +1138,7 @@ contains
       use mpi_mod
       class(exchange) :: this
       complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, smat
-      complex(rp), dimension(64) :: jtot, jcomp
+      complex(rp), dimension(64) :: jtot
       complex(rp), dimension(this%en%channels_ldos + 10, 3) :: jjtot
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       integer :: nv, i, j, k, njij, l
