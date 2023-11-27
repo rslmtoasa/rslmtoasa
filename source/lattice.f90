@@ -1129,8 +1129,8 @@ contains
    subroutine build_surf_full(this)
       class(lattice), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, natoms, nsurf, currentType, newType
-      integer :: nTypesTotal, nUnique, atomIdx
+      integer :: i, j, k, natoms, nsurf, currentType
+      integer :: nTypesTotal, nUnique
       real(rp), dimension(:, :), allocatable :: crsurf
       real(rp), dimension(:), allocatable :: crh, crhd, z
       integer, dimension(:), allocatable :: atomType, crystalType, typesurf, crystalsurf, uniqueTypes, ichoicen, ichoicetypen

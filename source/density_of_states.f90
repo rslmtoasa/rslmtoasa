@@ -380,7 +380,7 @@ contains
       real(rp), intent(in) :: E
       real(rp), intent(in) :: A(LL), B2(LL)
       real(rp), intent(in) :: ei(2)
-      real(rp) :: DISC, BI2, AIT, RT, T1
+      real(rp) :: DISC, BI2, AIT, RT
       complex(rp) :: etop, ebot, ea, eb, emid
       complex(rp) :: det, zoff, Qt
       integer :: l
