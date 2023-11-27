@@ -422,7 +422,7 @@ contains
       ! Local variables
       integer :: I, IBAS, ICLAS, IEX, II, INEQ, J, JBAS, JJ, KK, LB, LC, N, NBULK, NRX, NSUM
       real(rp) :: DIF, SS, VERR
-      integer, dimension(this%lattice%nbas + 1) :: IBU
+      
       real(rp), dimension(this%lattice%nbas + 1) :: BUC, BUV, CTB, TDQ
       real(rp), dimension(this%lattice%nbas + 1) :: TOTQ
       real(rp), dimension(this%lattice%nrec + 1) :: VMAD0
@@ -496,7 +496,7 @@ contains
       integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX
       real(rp) :: DIF, SUM1, SUMM, SUMN, VBULK, VM1, VMAD1, VMARD, VMN, wsm, twooverwsm, wsms
       real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TDQ, VM, qst
-      real(rp), dimension(:, :), allocatable :: DSS
+      
       integer, parameter :: npot = 5000
       integer :: init, atomrec, k
 

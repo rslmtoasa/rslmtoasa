@@ -743,7 +743,7 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
-      real(rp), dimension(6) :: QSL
+      
       
 
       ! Constructing control object
@@ -835,7 +835,7 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
-      real(rp), dimension(6) :: QSL
+      
       integer :: i
 
       ! Constructing control object

@@ -521,7 +521,7 @@ contains
       complex(rp), dimension(3) :: gmask, lmask
       complex(rp), dimension(2, 3) :: gfac
       integer, dimension(4, 3) :: goff
-      real(rp), dimension(this%control%lld, this%control%lld)  :: Sm
+      
       
       
 
