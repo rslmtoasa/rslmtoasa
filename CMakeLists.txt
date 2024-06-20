@@ -202,11 +202,13 @@ endif (RUN_REG_TESTS)
 ## ADD Cpack
 ##############################################################################################
 # Include CPack
+include(CPack)
 INCLUDE(${LOCAL_MODULE_PATH}/git-watcher.cmake)
 message(STATUS "Git version info : ${gitversion}.")
 # Set package properties
 set(CPACK_PACKAGE_NAME "rslmto")
-set(CPACK_PACKAGE_VERSION "${gitversion}")
+set(CPACK_PACKAGE_VERSION "0.9.0")
+#set(CPACK_PACKAGE_VERSION "${gitversion}")
 message(STATUS "CPACK_PACKAGE_VERSION: ${CPACK_PACKAGE_VERSION}")
 set(CPACK_PACKAGE_CONTACT "ramond@rslmto.org")
 set(CPACK_PACKAGE_VENDOR "The RS-LMTO-ASA collective")
