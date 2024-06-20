@@ -71,7 +71,7 @@ jobs:
       - name: Install python packages for testing
         run: |
             python -m ensurepip 
-            python -m pip install pyyaml
+            python -m pip install pyyaml pytest 
 
       - name: Test binaries ${{ matrix.icon}}
         if: runner.os != 'Windows'

@@ -197,3 +197,58 @@ add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKI
 set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 endif (RUN_REG_TESTS)
+ 
+##############################################################################################
+## ADD Cpack
+##############################################################################################
+# Include CPack
+INCLUDE(${LOCAL_MODULE_PATH}/git-watcher.cmake)
+message(STATUS "Git version info : ${gitversion}.")
+# Set package properties
+set(CPACK_PACKAGE_NAME "rslmto")
+set(CPACK_PACKAGE_VERSION "${gitversion}")
+message(STATUS "CPACK_PACKAGE_VERSION: ${CPACK_PACKAGE_VERSION}")
+set(CPACK_PACKAGE_CONTACT "ramond@rslmto.org")
+set(CPACK_PACKAGE_VENDOR "The RS-LMTO-ASA collective")
+set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/cpack/icon.jpg")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_SOURCE_DIR}/cpack/WELCOME.txt")
+set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/cpack/README.txt")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "RS-LMTO-ASA is a real-space linearized muffin-tin orbital method for electronic structure calculations.")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/rslmto/rslmto")
+#set(CPACK_GENERATOR "STGZ;DEB;RPM")
+# DEB specifics
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
+set (CPACK_DEBIAN_PACKAGE_RELEASE ${GIT_HASH})
+set (CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS ON)
+set (CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set (CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "${CMAKE_PROJECT_NAME} - ${CMAKE_PROJECT_DESCRIPTION}")
+set (CPACK_DEBIAN_PACKAGE_DEBUG ON)
+
+if(WIN32)
+   include(InstallRequiredSystemLibraries)
+
+    # Include NSIS for creating Windows installers
+    set(CPACK_GENERATOR "NSIS64")
+
+    # Include the custom NSIS script
+    # set(CPACK_NSIS_INCLUDE "${CMAKE_SOURCE_DIR}/cpack/CustomInstallNSIS.nsh")
+
+    # Additional NSIS settings if needed
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "Call AddToPath")
+
+    # WIX installer
+    # set(CPACK_WIX_UPGRADE_GUID "E25F58C1-EC45-422A-9700-7254DB19547B")
+    # WIX installer
+    set(CPACK_WIX_LICENSE_RTF "${CMAKE_SOURCE_DIR}/cpack/LICENSE.rtf")
+    set(CPACK_WIX_UI_BANNER "${CMAKE_SOURCE_DIR}/cpack/banner.jpg")
+    set(CPACK_WIX_UI_DIALOG "${CMAKE_SOURCE_DIR}/cpack/dialog.jpg")
+    set(CPACK_WIX_UPGRADE_GUID "02cf4cf7-fa5b-43de-a8ff-b39098d35db3")
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cpack/wixpath.xml")
+    # set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_SOURCE_DIR}/PathEnvironment.wxs")
+   set(CPACK_WIX_VERSION "4")
+   endif()
