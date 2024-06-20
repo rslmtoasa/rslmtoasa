@@ -63,7 +63,7 @@ jobs:
 
       - name: Build binaries ${{ matrix.icon}}
         run: |
-             cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release
+             cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON
              cmake --build build --parallel 
              mkdir ./dist
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
