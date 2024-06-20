@@ -36,32 +36,32 @@
 !  DyNaMol
 module precision_mod
 
-   use iso_fortran_env
+  use iso_fortran_env
 
-   implicit none
-   !> Working precision of integer variables
-   integer, parameter :: ip = 4
-   !> Maximum integer length in decimal system
-   integer, parameter :: il = 12 ! for ip=4
-   !integer, parameter :: il = 21 ! for ip=8
+  implicit none
+  !> Working precision of integer variables
+  integer, parameter :: ip = 4
+  !> Maximum integer length in decimal system
+  integer, parameter :: il = 12 ! for ip=4
+  !integer, parameter :: il = 21 ! for ip=8
 
-   !> Working precision of real variables (4: single precision,
-   ! 8: double precision)
-   !integer, parameter :: rp = 8
-   integer, parameter :: rp = selected_real_kind(15, 307)
-   !> Maximum real length in decimal system
-   !integer, parameter :: rl = 17 ! for rp=4
-   integer, parameter :: rl = 26 ! for rp=8
+  !> Working precision of real variables (4: single precision,
+  ! 8: double precision)
+  !integer, parameter :: rp = 8
+  integer, parameter :: rp = selected_real_kind(15, 307)
+  !> Maximum real length in decimal system
+  !integer, parameter :: rl = 17 ! for rp=4
+  integer, parameter :: rl = 26 ! for rp=8
 
-   !> Working precision for long integers (int*8)
-   integer, parameter :: longint = selected_real_kind(15)
+  !> Working precision for long integers (int*8)
+  integer, parameter :: longint = selected_real_kind(15)
 
-   ! Definition that guarantees to have at least 15 significant digits of
-   ! precision and an exponent range of at least 307 (Lemmon and Schafer, 2005,
-   ! p. 20–22)
-   !integer, parameter :: wp = selected_real_kind(15, 307)
-   ! In Fortran 95, the following constants are available:
-   !integer, parameter :: sp = selected_real_kind(6, 37)
-   !integer, parameter :: dp = selected_real_kind(15, 307)
-   !integer, parameter :: qp = selected_real_kind(33, 4931)
+  ! Definition that guarantees to have at least 15 significant digits of
+  ! precision and an exponent range of at least 307 (Lemmon and Schafer, 2005,
+  ! p. 20–22)
+  !integer, parameter :: wp = selected_real_kind(15, 307)
+  ! In Fortran 95, the following constants are available:
+  !integer, parameter :: sp = selected_real_kind(6, 37)
+  !integer, parameter :: dp = selected_real_kind(15, 307)
+  !integer, parameter :: qp = selected_real_kind(33, 4931)
 end module precision_mod

@@ -26,4 +26,4 @@ namelist /par/ &
     width_band_p_up, width_band_p_dw, &
     width_band_d_up, width_band_d_dw, &
     cx, wx, cx0, wx0, cx1, wx1,  &
-    cshi, dw_l, cex, obx, xi_p, xi_d
+    cshi, dw_l, cex, obx, xi_p, xi_d, rac
