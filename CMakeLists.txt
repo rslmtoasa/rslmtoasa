@@ -43,6 +43,8 @@ option(ENABLE_OPENMP "Use OpenMP for parallelization" ON)
 option(ENABLE_MPI "Use MPI for parallelization" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
+option(RUN_REG_TESTS "Run regression tests" OFF)
+
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
@@ -175,4 +177,23 @@ message(STATUS "| Compiler ID : ${CMAKE_Fortran_COMPILER_ID}")
 message(STATUS "| OpenMP      : ${ENABLE_OPENMP}")
 message(STATUS "| MPI         : ${ENABLE_MPI}")
 message(STATUS "--------------------------------------------")
+
 ##############################################################################################
+# Tests
+##############################################################################################
+include(CTest)
+#CMAKE_DEPENDENT_OPTION(RUN_REGRESSION_TESTS "Run regression tests"  OFF "BUILD_TESTING" OFF)
+###############################################################################################
+## Add tests directory
+###############################################################################################
+set(TestBinary ${CMAKE_BINARY_DIR}/bin/${PROJECT_BINARY})
+set(TestDIR ${CMAKE_SOURCE_DIR}/tests)
+
+if (RUN_REG_TESTS)
+set(ThisTestDIR ${TestDIR}/regression/bccFe_lanczos)
+add_test(NAME Lanczos   COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+set(ThisTestDIR ${TestDIR}/regression/bccFe_block)
+add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
+add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+endif (RUN_REG_TESTS)
