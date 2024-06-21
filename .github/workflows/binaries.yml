@@ -20,18 +20,17 @@ jobs:
     continue-on-error: true
 
     steps:
-      - name: Provide fftw, ninja on macOS ${{ matrix.icon}}
+      - name: Provide ninja and MPI on macOS ${{ matrix.icon}}
         if: runner.os == 'macOS'
         run: |
           # fftw3 
-          brew install fftw ninja meson
-          fftw-wisdom -V
+          brew install ninja meson openmpi
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
 
-      - name: Provide ninja on Linux ${{ matrix.icon}}
+      - name: Provide ninja and MPI on Linux ${{ matrix.icon}}
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get -y install ninja-build meson libopenblas-dev liblapack-dev
+          sudo apt-get -y install ninja-build meson libopenblas-dev liblapack-dev openmpi-bin openmpi-common libopenmpi-dev 
 
       - name: Provide gfortran on Windows ${{ matrix.icon}}
         if: runner.os == 'Windows'
@@ -43,6 +42,7 @@ jobs:
           install: >-
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-gcc-fortran
+            mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-blas
             mingw-w64-x86_64-openblas
             mingw-w64-x86_64-lapack
@@ -59,11 +59,11 @@ jobs:
       # Used to host cibuildwheel
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
       - name: Build binaries ${{ matrix.icon}}
         run: |
-             cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON
+             cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON
              cmake --build build --parallel 
              mkdir ./dist
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
