@@ -161,12 +161,12 @@ jobs:
       #     name: rslmto.${{runner.os}}.${{matrix.arch}}.installer.exe
       #     path: ./build/rslmto*.exe
 
-      - name: Upload Windows WIX installer
-        uses: actions/upload-artifact@v4
-        if: runner.os == 'Windows'
-        with:
-          name: rslmto.${{runner.os}}.${{matrix.arch}}.msi
-          path: ./build/rslmto*.msi
+      # - name: Upload Windows WIX installer
+      #   uses: actions/upload-artifact@v4
+      #   if: runner.os == 'Windows'
+      #   with:
+      #     name: rslmto.${{runner.os}}.${{matrix.arch}}.msi
+      #     path: ./build/rslmto*.msi
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
