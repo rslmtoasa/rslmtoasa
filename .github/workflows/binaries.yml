@@ -4,7 +4,7 @@ name: Build binaries on all platforms (beta)
 on: [release, push, pull_request]
 
 jobs:
-  build_wheels:
+  build_binaries:
     name: Build binaries on ${{ matrix.os }} ${{ matrix.icon}}
     strategy:
       matrix:
@@ -129,7 +129,7 @@ jobs:
       - name: Upload self-extracting package
         uses: actions/upload-artifact@v4
         with:
-          name: rslmto.${{runner.os}}.${{matrix.arch}}
+          name: rslmto.${{runner.os}}.${{matrix.arch}}.sh
           path: ./build/rslmto*.sh
 
       - name: Upload .deb package
