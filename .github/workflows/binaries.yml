@@ -79,7 +79,7 @@ jobs:
       - name: Install python packages for testing
         run: |
             python -m ensurepip 
-            python -m pip -r requirements.txt
+            python -m pip install -r requirements.txt
 
       - name: Test binaries ${{ matrix.icon}}
         if: runner.os != 'Windows'
