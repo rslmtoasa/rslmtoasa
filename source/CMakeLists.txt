@@ -11,7 +11,7 @@ add_library(${PROJECT_NAME} STATIC
     element.f90
     energy.f90
     exchange.f90
-    face.f90
+    face.F90
     globals.f90
     green.f90
     hamiltonian.f90

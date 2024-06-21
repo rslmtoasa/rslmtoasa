@@ -29,10 +29,10 @@ enable_language(Fortran)
 message(STATUS "Using Fortran compiler ${CMAKE_Fortran_COMPILER_ID} Fortran ${CMAKE_Fortran_COMPILER_VERSION}")
 
 # Fortran module and output directories
-set(fortran_module_directory "${CMAKE_BINARY_DIR}/modules" CACHE PATH "directory for fortran module files")
+set(fortran_module_directory "${CMAKE_BINARY_DIR}/modules" CACHE PATH "Directory for fortran module files")
 file(MAKE_DIRECTORY ${fortran_module_directory})
 set(CMAKE_Fortran_MODULE_DIRECTORY ${fortran_module_directory})
-set(fortran_output_directory "${CMAKE_BINARY_DIR}/bin" CACHE PATH "directory for executable file")
+set(fortran_output_directory "${CMAKE_BINARY_DIR}/bin" CACHE PATH "Directory for executable file")
 file(MAKE_DIRECTORY ${fortran_output_directory})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${fortran_output_directory})
 
@@ -44,11 +44,11 @@ option(ENABLE_MPI "Use MPI for parallelization" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
-
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
 endif(APPLE)
+
 ##############################################################################################
 # Determine and set compiler-dependent flags
 ##############################################################################################
@@ -151,6 +151,9 @@ if (BLAS_FOUND AND BLAS95_FOUND)
   endif()
 endif()
 
+##############################################################################################
+# Determine and set compiler-dependent flags
+##############################################################################################
 # Add main executable
 set(PROJECT_BINARY ${PROJECT_NAME}.x)
 add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
@@ -179,6 +182,21 @@ message(STATUS "| MPI         : ${ENABLE_MPI}")
 message(STATUS "--------------------------------------------")
 
 ##############################################################################################
+# Tell where to install the executable
+##############################################################################################
+IF(WIN32)
+   SET(CMAKE_INSTALL_PREFIX "C:/Program Files")
+ELSE()
+   SET(CMAKE_INSTALL_PREFIX /usr/local)
+ENDIF(WIN32)
+# Convert to native path (optional, but useful if you do further path manipulations)
+file(TO_NATIVE_PATH "${CMAKE_INSTALL_PREFIX}" CMAKE_INSTALL_PREFIX_NATIVE)
+message(STATUS "Install prefix (native): ${CMAKE_INSTALL_PREFIX_NATIVE}")
+
+SET_TARGET_PROPERTIES(${PROJECT_BINARY} PROPERTIES LINKER_LANGUAGE "Fortran")
+INSTALL(TARGETS ${PROJECT_BINARY} RUNTIME DESTINATION bin)
+
+##############################################################################################
 # Tests
 ##############################################################################################
 include(CTest)
@@ -197,3 +215,60 @@ add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKI
 set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 endif (RUN_REG_TESTS)
+ 
+##############################################################################################
+## ADD Cpack
+##############################################################################################
+# Include CPack
+INCLUDE(${LOCAL_MODULE_PATH}/git-watcher.cmake)
+message(STATUS "Git version info : ${gitversion}.")
+# Set package properties
+set(CPACK_PACKAGE_NAME "rslmto")
+set(CPACK_PACKAGE_VERSION "0.9.0")
+#set(CPACK_PACKAGE_VERSION "${gitversion}")
+message(STATUS "CPACK_PACKAGE_VERSION: ${CPACK_PACKAGE_VERSION}")
+set(CPACK_PACKAGE_CONTACT "ramon@rslmto.org")
+set(CPACK_PACKAGE_VENDOR "The RS-LMTO-ASA collective")
+set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/cpack/icon.jpg")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_SOURCE_DIR}/cpack/WELCOME.txt")
+set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/cpack/README.txt")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "RS-LMTO-ASA is a real-space linearized muffin-tin orbital method for electronic structure calculations.")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/rslmto/rslmto")
+#set(CPACK_GENERATOR "STGZ;DEB;RPM")
+# DEB specifics
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
+set (CPACK_DEBIAN_PACKAGE_RELEASE ${GIT_HASH})
+set (CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS ON)
+set (CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set (CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "${CMAKE_PROJECT_NAME} - ${CMAKE_PROJECT_DESCRIPTION}")
+set (CPACK_DEBIAN_PACKAGE_DEBUG ON)
+
+if(WIN32)
+   include(InstallRequiredSystemLibraries)
+
+    # Include NSIS for creating Windows installers
+    set(CPACK_GENERATOR "NSIS64")
+
+    # Include the custom NSIS script
+    # set(CPACK_NSIS_INCLUDE "${CMAKE_SOURCE_DIR}/cpack/CustomInstallNSIS.nsh")
+
+    # Additional NSIS settings if needed
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "Call AddToPath")
+
+    # WIX installer
+    # set(CPACK_WIX_UPGRADE_GUID "E25F58C1-EC45-422A-9700-7254DB19547B")
+    # WIX installer
+    set(CPACK_WIX_LICENSE_RTF "${CMAKE_SOURCE_DIR}/cpack/LICENSE.rtf")
+    set(CPACK_WIX_UI_BANNER "${CMAKE_SOURCE_DIR}/cpack/banner.jpg")
+    set(CPACK_WIX_UI_DIALOG "${CMAKE_SOURCE_DIR}/cpack/dialog.jpg")
+    set(CPACK_WIX_UPGRADE_GUID "02cf4cf7-fa5b-43de-a8ff-b39098d35db3")
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cpack/wixpath.xml")
+    # set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_SOURCE_DIR}/PathEnvironment.wxs")
+   set(CPACK_WIX_VERSION "4")
+   endif()
+include(CPack)

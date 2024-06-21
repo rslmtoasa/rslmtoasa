@@ -402,7 +402,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine add_matrix_integer_variable(this, name, value)
       integer, dimension(:, :), intent(in) :: value
-      include 'include_codes/namelist_generator/add_matrix_*_variable.f90'
+      include 'include_codes/namelist_generator/add_matrix_X_variable.f90'
    end subroutine add_matrix_integer_variable
 
    !---------------------------------------------------------------------------
@@ -412,7 +412,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine add_matrix_real4_variable(this, name, value)
       real(4), dimension(:, :), intent(in) :: value
-      include 'include_codes/namelist_generator/add_matrix_*_variable.f90'
+      include 'include_codes/namelist_generator/add_matrix_X_variable.f90'
    end subroutine add_matrix_real4_variable
 
    !---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine add_matrix_real8_variable(this, name, value)
       real(8), dimension(:, :), intent(in) :: value
-      include 'include_codes/namelist_generator/add_matrix_*_variable.f90'
+      include 'include_codes/namelist_generator/add_matrix_X_variable.f90'
    end subroutine add_matrix_real8_variable
 
    !---------------------------------------------------------------------------
@@ -432,7 +432,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine add_tensor3_integer_variable(this, name, value)
       integer, dimension(:, :, :), intent(in) :: value
-      include 'include_codes/namelist_generator/add_tensor3_*_variable.f90'
+      include 'include_codes/namelist_generator/add_tensor3_X_variable.f90'
    end subroutine add_tensor3_integer_variable
 
    !---------------------------------------------------------------------------
@@ -442,7 +442,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine add_tensor3_real4_variable(this, name, value)
       real(4), dimension(:, :, :), intent(in) :: value
-      include 'include_codes/namelist_generator/add_tensor3_*_variable.f90'
+      include 'include_codes/namelist_generator/add_tensor3_X_variable.f90'
    end subroutine add_tensor3_real4_variable
 
    !---------------------------------------------------------------------------
@@ -452,7 +452,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine add_tensor3_real8_variable(this, name, value)
       real(8), dimension(:, :, :), intent(in) :: value
-      include 'include_codes/namelist_generator/add_tensor3_*_variable.f90'
+      include 'include_codes/namelist_generator/add_tensor3_X_variable.f90'
    end subroutine add_tensor3_real8_variable
 
    !---------------------------------------------------------------------------
