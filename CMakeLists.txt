@@ -29,10 +29,10 @@ enable_language(Fortran)
 message(STATUS "Using Fortran compiler ${CMAKE_Fortran_COMPILER_ID} Fortran ${CMAKE_Fortran_COMPILER_VERSION}")
 
 # Fortran module and output directories
-set(fortran_module_directory "${CMAKE_BINARY_DIR}/modules" CACHE PATH "directory for fortran module files")
+set(fortran_module_directory "${CMAKE_BINARY_DIR}/modules" CACHE PATH "Directory for fortran module files")
 file(MAKE_DIRECTORY ${fortran_module_directory})
 set(CMAKE_Fortran_MODULE_DIRECTORY ${fortran_module_directory})
-set(fortran_output_directory "${CMAKE_BINARY_DIR}/bin" CACHE PATH "directory for executable file")
+set(fortran_output_directory "${CMAKE_BINARY_DIR}/bin" CACHE PATH "Directory for executable file")
 file(MAKE_DIRECTORY ${fortran_output_directory})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${fortran_output_directory})
 
@@ -44,11 +44,11 @@ option(ENABLE_MPI "Use MPI for parallelization" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
-
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
 endif(APPLE)
+
 ##############################################################################################
 # Determine and set compiler-dependent flags
 ##############################################################################################
@@ -151,6 +151,9 @@ if (BLAS_FOUND AND BLAS95_FOUND)
   endif()
 endif()
 
+##############################################################################################
+# Determine and set compiler-dependent flags
+##############################################################################################
 # Add main executable
 set(PROJECT_BINARY ${PROJECT_NAME}.x)
 add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
@@ -179,6 +182,19 @@ message(STATUS "| MPI         : ${ENABLE_MPI}")
 message(STATUS "--------------------------------------------")
 
 ##############################################################################################
+# Tell where to install the executable
+##############################################################################################
+IF(WIN32)
+   SET(CMAKE_INSTALL_PREFIX "C:/Program Files")
+ELSE()
+   SET(CMAKE_INSTALL_PREFIX /usr/local)
+ENDIF(WIN32)
+
+
+SET_TARGET_PROPERTIES(${PROJECT_BINARY} PROPERTIES LINKER_LANGUAGE "Fortran")
+INSTALL(TARGETS ${PROJECT_BINARY} RUNTIME DESTINATION bin)
+
+##############################################################################################
 # Tests
 ##############################################################################################
 include(CTest)
@@ -202,7 +218,6 @@ endif (RUN_REG_TESTS)
 ## ADD Cpack
 ##############################################################################################
 # Include CPack
-include(CPack)
 INCLUDE(${LOCAL_MODULE_PATH}/git-watcher.cmake)
 message(STATUS "Git version info : ${gitversion}.")
 # Set package properties
@@ -210,7 +225,7 @@ set(CPACK_PACKAGE_NAME "rslmto")
 set(CPACK_PACKAGE_VERSION "0.9.0")
 #set(CPACK_PACKAGE_VERSION "${gitversion}")
 message(STATUS "CPACK_PACKAGE_VERSION: ${CPACK_PACKAGE_VERSION}")
-set(CPACK_PACKAGE_CONTACT "ramond@rslmto.org")
+set(CPACK_PACKAGE_CONTACT "ramon@rslmto.org")
 set(CPACK_PACKAGE_VENDOR "The RS-LMTO-ASA collective")
 set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/cpack/icon.jpg")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
@@ -254,3 +269,4 @@ if(WIN32)
     # set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_SOURCE_DIR}/PathEnvironment.wxs")
    set(CPACK_WIX_VERSION "4")
    endif()
+include(CPack)
