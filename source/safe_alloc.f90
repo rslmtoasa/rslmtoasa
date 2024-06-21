@@ -161,7 +161,7 @@ contains
       do i = 1, size_allocs_historic
          if (this%allocs_historic(i)%size > 0) result = result + this%allocs_historic(i)%size*get_size(this%allocs_historic(i)%type)
       end do
-      !unit_ = merge(lower(unit), 'mb', present(unit))
+      !unit_ = merge(lower(unit), ´mb´, present(unit))
       if (present(unit)) then
          unit_ = lower(unit)
       else
@@ -196,7 +196,7 @@ contains
       do i = 1, size_allocs_historic
          if (this%allocs_historic(i)%size < 0) result = result - this%allocs_historic(i)%size*get_size(this%allocs_historic(i)%type)
       end do
-      !unit_ = merge(lower(unit), 'mb', present(unit))
+      !unit_ = merge(lower(unit), ´mb´, present(unit))
       if (present(unit)) then
          unit_ = lower(unit)
       else

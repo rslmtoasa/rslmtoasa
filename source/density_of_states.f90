@@ -35,7 +35,7 @@ module density_of_states_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: dos
       ! General variables
       real(rp), dimension(:, :, :), allocatable :: doscheb
@@ -158,7 +158,7 @@ contains
             write (200 + n, '(8f16.4)') this%en%ene(i), (this%doscheb(1, i, n)), sum(this%doscheb(2:4, i, n)), sum(this%doscheb(5:9, i, n)), &
                (this%doscheb(10, i, n)), sum(this%doscheb(11:13, i, n)), sum(this%doscheb(14:18, i, n)), &
                sum(this%doscheb(1:18, i, n))
-            !write(125+n, '(10f10.6)') this%self%ene(i), real(green(n, 1, 1, i)), real(green(n, 2, 2, i)), real(green(n, 3, 3, i)), real(green(n, 4, 4, i)), real(green(n, 5, 5, i)), &
+            !write(125+n, ´(10f10.6)´) this%self%ene(i), real(green(n, 1, 1, i)), real(green(n, 2, 2, i)), real(green(n, 3, 3, i)), real(green(n, 4, 4, i)), real(green(n, 5, 5, i)), &
             !                                           &real(green(n, 6, 6, i)), real(green(n, 7, 7, i)), real(green(n, 8, 8, i)), real(green(n, 9, 9, i))
          end do
       end do  ! End loop on self-consistent atoms

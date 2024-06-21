@@ -52,7 +52,7 @@ program main
    g_safe_alloc = safe_alloc()
 #endif
    g_timer = timer()
-   !call g_logger%debug('Initializing with DEBUG=ON', __FILE__, __LINE__)
+   !call g_logger%debug(´Initializing with DEBUG=ON´, __FILE__, __LINE__)
 
    ! Input
    args = argument_parser()

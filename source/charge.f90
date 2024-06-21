@@ -16,7 +16,7 @@
 !> H. M. Petrilli
 !
 ! DESCRIPTION:
-!> Module to handle system's potential charge and energy
+!> Module to handle system´s potential charge and energy
 !------------------------------------------------------------------------------
 
 module charge_mod
@@ -36,7 +36,7 @@ module charge_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: charge
       !> Lattice
       class(lattice), pointer :: lattice
@@ -129,7 +129,7 @@ contains
    !> @brief
    !> Constructor
    !
-   !> @param[in] lattice_obj Pointer to system's lattice
+   !> @param[in] lattice_obj Pointer to system´s lattice
    !> @return type(calculation)
    !---------------------------------------------------------------------------
    function constructor(lattice_obj) result(obj)
@@ -345,7 +345,7 @@ contains
          rmax(i) = this%symbolic_atom(this%lattice%nbulk + i)%potential%ws_r
       end do
       !write (*, *) " NBAS=", NBAS, " NCLAS=", NCLAS
-      !print *, ' Sum of electrons from recursion: ', sum(DQ)
+      !print *, ´ Sum of electrons from recursion: ´, sum(DQ)
       do im = 1, this%lattice%nrec
          VMAD0(IM) = this%symbolic_atom(this%lattice%nbulk + im)%potential%vmad
       end do
@@ -577,7 +577,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculates the matrix elements for the electrostatic potential from
-   !> information in 'clust' and 'self'.
+   !> information in ´clust´ and ´self´.
    !---------------------------------------------------------------------------
    subroutine bulkmat(this)
       class(charge), intent(inout) :: this
@@ -639,7 +639,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculates the matrix elements for the electrostatic potential from
-   !> information in 'alelay.dat' and 'sizelay'
+   !> information in ´alelay.dat´ and ´sizelay´
    !---------------------------------------------------------------------------
    subroutine surfmat(this)
       class(charge), intent(inout) :: this
@@ -812,7 +812,7 @@ contains
       bsyat(:) = -1; bsyat2(:) = -1
 
       ! First, try to find if there are nearest neighbors with the same
-      ! minimum distance (as bsx), which is 'dmin0' in the code
+      ! minimum distance (as bsx), which is ´dmin0´ in the code
 
       do i = 1, this%lattice%kk
       if (this%lattice%num(i) == this%lattice%num(at)) then
@@ -854,7 +854,7 @@ contains
          end do
 
          ! If not, then the atoms should be in the second minor distance,
-         ! which is 'dmin3' in the code
+         ! which is ´dmin3´ in the code
 
       else if ((bsyat2(1) .gt. 0) .and. (bsyat(1) .lt. 0)) then
          do j = 1, idx2
@@ -925,7 +925,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculates the matrix elements for the electrostatic potential from
-   !> information in 'clust', 'size' and 'self'.
+   !> information in ´clust´, ´size´ and ´self´.
    !---------------------------------------------------------------------------
    subroutine impmad(this)
       implicit none
@@ -952,7 +952,7 @@ contains
 !    END DO
 !    NRX=J
 !    if (self_obj%nbas>this%lattice%nrec) then
-!      write(*, *) "Too many shells in 'self'"
+!      write(*, *) "Too many shells in ´self´"
 !      STOP
 !    end if
 !    if (NRX>NRLX) then
@@ -990,7 +990,7 @@ contains
                   r2 = ddum(l)*ddum(l) + r2
                end do
                r2 = r2*(ang2au**2)
-!         print '(a, 2i4, f10.3, 3f10.6, 2x, 3f10.6)', 'II, I', J, I, R2,
+!         print ´(a, 2i4, f10.3, 3f10.6, 2x, 3f10.6)´, ´II, I´, J, I, R2,
 !    .        this%lattice%crd(:, J)/ALAT, this%lattice%crd(:, I)/ALAT
                dd = 1_rp/(dsqrt(r2))
                this%amad(ii + 1, i) = 2_rp*dd
@@ -1011,7 +1011,7 @@ contains
    !> of 2D layers of point charges and dipoles. This is used to
    !> set up the Madelung potential in the surface program INF.
    !>
-   !> Matrix    (l', l)
+   !> Matrix    (l´, l)
    !>
    !> DSS       (s, s)
    !> DSZ       (s, z)
@@ -1082,11 +1082,11 @@ contains
       FACG2 = 2.5*PI/this%AR2D
       FACZZ = -6.d0/SQRT(5.d0)
 
-!    write(100, '(18f10.4)') twos, twolam, facbet, facgau, facqua, facqur, facerf, facdif, &
+!    write(100, ´(18f10.4)´) twos, twolam, facbet, facgau, facqua, facqur, facerf, facdif, &
 !               facp, facdk, facdr, facq1, facq2, facq3, facq4, facg1, facg2, faczz
 
       !
-      !     Layer-diagonal terms (R=R')
+      !     Layer-diagonal terms (R=R´)
       !
       SUMM = 0.d0
       SUMQ0 = -FACQ1

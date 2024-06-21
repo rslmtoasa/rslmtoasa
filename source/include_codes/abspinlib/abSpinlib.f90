@@ -51,7 +51,7 @@ contains
       !
       integer :: i_stat, i_all
       if (flag > 0) then
-         !print *,'Allocating for ASD', na
+         !print *,´Allocating for ASD´, na
          allocate (bxc(na), stat=i_stat)
          allocate (mmom(na), stat=i_stat)
          allocate (temp_array(na), stat=i_stat)
@@ -138,22 +138,22 @@ contains
       delta_t = indt
       asd_damp_array = asd_damp
       !
-      !!! print *,'-> beff',beff
-      !!! print *,'-> b2eff',b2eff
-      !!! print *,'-> btorque',btorque
-      !!! print *,'-> emom',emom
-      !!! print *,'-> emom2',emom2
-      !!! print *,'-> emomM',emomM
-      !!! print *,'-> mmom',mmom
+      !!! print *,´-> beff´,beff
+      !!! print *,´-> b2eff´,b2eff
+      !!! print *,´-> btorque´,btorque
+      !!! print *,´-> emom´,emom
+      !!! print *,´-> emom2´,emom2
+      !!! print *,´-> emomM´,emomM
+      !!! print *,´-> mmom´,mmom
       call depondt_evolve_first(Natom, 1, asd_damp_array, beff, b2eff, btorque, emom, emom2, emomM, mmom, delta_t, Temp_array, &
                                 temprescale, do_stt, thermal_field, do_she, she_btorque)
-      !!! print *,'---> beff',beff
-      !!! print *,'---> b2eff',b2eff
-      !!! print *,'---> btorque',btorque
-      !!! print *,'---> emom',emom
-      !!! print *,'---> emom2',emom2
-      !!! print *,'---> emomM',emomM
-      !!! print *,'---> mmom',mmom
+      !!! print *,´---> beff´,beff
+      !!! print *,´---> b2eff´,b2eff
+      !!! print *,´---> btorque´,btorque
+      !!! print *,´---> emom´,emom
+      !!! print *,´---> emom2´,emom2
+      !!! print *,´---> emomM´,emomM
+      !!! print *,´---> mmom´,mmom
       !
       do_asd_pred = .false.
       do_asd_corr = .true.
@@ -222,18 +222,18 @@ contains
       delta_t = indt
       asd_damp_array = asd_damp
       !
-      !!! print *,'=> beff',beff
-      !!! print *,'=> b2eff',b2eff
-      !!! print *,'=> btorque',btorque
-      !!! print *,'=> emom',emom
-      !!! print *,'=> emom2',emom2
+      !!! print *,´=> beff´,beff
+      !!! print *,´=> b2eff´,b2eff
+      !!! print *,´=> btorque´,btorque
+      !!! print *,´=> emom´,emom
+      !!! print *,´=> emom2´,emom2
       call depondt_evolve_second(Natom, 1, asd_damp_array, beff, b2eff, btorque, emom, emom2, delta_t, do_stt, do_she, she_btorque)
-      !!! print *,'===> beff',beff
-      !!! print *,'===> b2eff',b2eff
-      !!! print *,'===> btorque',btorque
-      !!! print *,'===> emom',emom
-      !!! print *,'===> emom2',emom2
-      !!! print *,'asd_corr',natom
+      !!! print *,´===> beff´,beff
+      !!! print *,´===> b2eff´,b2eff
+      !!! print *,´===> btorque´,btorque
+      !!! print *,´===> emom´,emom
+      !!! print *,´===> emom2´,emom2
+      !!! print *,´asd_corr´,natom
       do i = 1, natom
          mnorm = sqrt(sum(inmom(:, i)*inmom(:, i)))
          if (.not. is_induced(i)) then
@@ -287,10 +287,10 @@ contains
 100   continue
       asd_alpha_org = asd_alpha
       close (20)
-      !open(30,file='asd.out',status='replace')
-      !write(30,'(a)') '---------------------------------------------------------------------------'
-      !open(35,file='asd.log',position='append')
-      !write(35,'(a)') '#  Iter.    Magnetization    Total_{energy}  Band_{energy}   RMS_{moments}   RMS_{energy}    RMS_{eband} [Ry]'
+      !open(30,file=´asd.out´,status=´replace´)
+      !write(30,´(a)´) ´---------------------------------------------------------------------------´
+      !open(35,file=´asd.log´,position=´append´)
+      !write(35,´(a)´) ´#  Iter.    Magnetization    Total_{energy}  Band_{energy}   RMS_{moments}   RMS_{energy}    RMS_{eband} [Ry]´
    end subroutine read_asd_input
 
 end module abSpinlib

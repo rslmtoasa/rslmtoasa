@@ -70,7 +70,7 @@ module namelist_generator_mod
       procedure :: to_string => array_real_variable_to_string
    end type array_real_variable
 
-   !> Module's main structure
+   !> Module´s main structure
    type :: namelist_generator
       !> Name of namelist
       !>
@@ -111,7 +111,7 @@ contains
    !> @brief
    !> Constructor
    !
-   !> @param[in] fname Input file with 'namelist_generator' namelist
+   !> @param[in] fname Input file with ´namelist_generator´ namelist
    !> @return type(namelist_generator)
    !---------------------------------------------------------------------------
    function constructor(name) result(obj)

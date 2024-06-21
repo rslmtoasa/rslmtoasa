@@ -50,7 +50,7 @@ module self_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: self
       !> Lattice
       class(lattice), pointer :: lattice
@@ -92,21 +92,21 @@ module self_mod
 
       !> Use same value of @ref ws for all atoms. Default: true.
       !>
-      !> Use same value of @ref ws for all atoms. If true, @ref ws's size is one slot of memory, else it is @ref lattice.nrec
+      !> Use same value of @ref ws for all atoms. If true, @ref ws´s size is one slot of memory, else it is @ref lattice.nrec
       !>
       !> Default: true.
       logical :: ws_all
 
       !> Wigner Seitz Radius
       !>
-      !> Wigner Seitz Radius. If @ref ws_all is true, @ref ws's size is one slot of memory, else it is @ref lattice.nrec
+      !> Wigner Seitz Radius. If @ref ws_all is true, @ref ws´s size is one slot of memory, else it is @ref lattice.nrec
       real(rp), dimension(:), allocatable :: ws
 
       ! Mixing parameters
 
       !> Use same value of @ref mix for all atoms. Default: true.
       !>
-      !> Use same value of @ref mix for all atoms. If true, @ref mix's size is one slot of memory, else it is @ref lattice.nrec
+      !> Use same value of @ref mix for all atoms. If true, @ref mix´s size is one slot of memory, else it is @ref lattice.nrec
       !>
       !> Default: true.
       logical :: mix_all
@@ -122,7 +122,7 @@ module self_mod
 
       !> Use same value of @ref mixmag for all atoms. Default: true.
       !>
-      !> Use same value of @ref mixmag for all atoms. If true, @ref mixmag's size is one slot of memory, else it is @ref lattice.nrec
+      !> Use same value of @ref mixmag for all atoms. If true, @ref mixmag´s size is one slot of memory, else it is @ref lattice.nrec
       !>
       !> Default: true.
       logical :: mixmag_all
@@ -235,7 +235,7 @@ contains
    !> Constructor
    !
    !> @param[in] fname Namelist file
-   !> @param[in] lattice_obj Pointer to system's lattice
+   !> @param[in] lattice_obj Pointer to system´s lattice
    !> @return type(self)
    !---------------------------------------------------------------------------
    function constructor(bands_obj, mix_obj) result(obj)
@@ -738,14 +738,14 @@ contains
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
          !=========================================================================
-         !call g_timer%start('mixing')
+         !call g_timer%start(´mixing´)
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
          call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix mix%qia_new with mix%qia_old and save into mix%qia
-         !call g_timer%stop('mixing')
+         !call g_timer%stop(´mixing´)
          !=========================================================================
          !         CALCULATE THE MADELUNG POTENTIAL (BULK ONLY IMPLEMENTED)
          !=========================================================================
-         !call g_timer%start('madelung-potential')
+         !call g_timer%start(´madelung-potential´)
          select case (this%control%calctype)
          case ('B')
             call this%charge%bulkpot()
@@ -754,7 +754,7 @@ contains
          case ('I')
             call this%charge%imppot()
          end select
-         !call g_timer%stop('madelung-potential')
+         !call g_timer%stop(´madelung-potential´)
          !=========================================================================
          !                        SAVE MIXED PARAMETERS
          !=========================================================================
@@ -1035,7 +1035,7 @@ contains
       IFCORE = atom%element%f_core
       DFCORE = REAL(IFCORE)
       call g_logger%info('F core check:'//int2str(ifcore), __FILE__, __LINE__)
-      !write (9, *) 'F-core check:', IFCORE, DFCORE
+      !write (9, *) ´F-core check:´, IFCORE, DFCORE
       if (IFCORE /= 0) then
          LCORE = 3
          DEG = (2*(2*LCORE + 1))/NSP
@@ -1348,7 +1348,7 @@ contains
                            rofi, NR, NRE, 0)
                EV(IVAL) = EVAL
                SUMEV(ISP) = SUMEV(ISP) + EVAL*Q0 + Q1
-               !write(*, *) 'atorb: EVAL, Q0, Q1', EVAL, Q0, Q1
+               !write(*, *) ´atorb: EVAL, Q0, Q1´, EVAL, Q0, Q1
                RO = G(NR)**2
                if (.not. FREE .and. RO < ROCRIT) then
                   !         write (6, 10000) L, NN, NRE, E, RO
@@ -1412,7 +1412,7 @@ contains
                   HYP = 52.42_rp*(SH(1) - SH(2))
                   if (ISP == 2) then
                      !write(8, *) SH(1), SH(2), HYP
-                     !write(8, '(a7, f10.6)') "Hval:", HYP
+                     !write(8, ´(a7, f10.6)´) "Hval:", HYP
                      atom%potential%hyper_field(2) = hyp
                   end if
                end if
@@ -1571,7 +1571,7 @@ contains
                END DO
                HCORE = 52.42_rp*HCORE
                atom%potential%hyper_field(1) = HCORE
-               !WRITE(8,'(a7,3f12.6)')"Hcore: ",HCORE,(SH(1,1)-SH(1,2)) &
+               !WRITE(8,´(a7,3f12.6)´)"Hcore: ",HCORE,(SH(1,1)-SH(1,2)) &
                !,(SH(1,1)-SH(1,2))*914.7744
             END IF
          end if
@@ -1653,7 +1653,7 @@ contains
 
    subroutine RSEQSR(EB1, EB2, E, TOL, Z, L, NOD, VAL, SLO, V, G, Q, A, B, rofi, NR, NRE, IPR)
       !  SOLVES RADIAL SCALAR RELATIVISTIC EQ. TO GIVEN BCS AND NODES.
-      !  VAL, SLO ARE BC'S FOR LARGE COMPONENT U(R) WITH PSI=(U/R)*YLM.
+      !  VAL, SLO ARE BC´S FOR LARGE COMPONENT U(R) WITH PSI=(U/R)*YLM.
       !  OUTPUT WAVEFCT IS NORMALIZED TO 1.    (M.METHFESSEL 2/87)
       !
       !.. Implicit Declarations ..
@@ -2012,7 +2012,7 @@ contains
          FNTRY = LOG(RTRY/B + 1.d0)/A + 1.d0
          NTRY = FNTRY + .5d0
          !|    WRITE(6, 810) IREP, N1, NCTP, N2, FNTRY, NTRY
-         !|810 FORMAT(I6, '   N1, NCTP, N2=', 3I5, '   NTRY=', F8.3, I6)
+         !|810 FORMAT(I6, ´   N1, NCTP, N2=´, 3I5, ´   NTRY=´, F8.3, I6)
          if (NLAST == NCTP) exit
          if (FOFR > 0.d0) then
             N2 = NCTP
@@ -2262,7 +2262,7 @@ contains
    subroutine POISS0(Z, A, B, rofi, RHO, NR, VHRMAX, V, RHOVH, VSUM, NSP)
       !  HARTREE POTENTIAL FOR SPHERICAL RHO. VHRMAX=VALUE AT RMAX.
       !  RETURNS VSUM = INTEGRAL OVER THAT POT WHICH IS ZERO AT RMAX.
-      !  RHO = 'SPHERICAL CHDEN' = 4PI*R*R*RHOTRUE. V=VTRUE.
+      !  RHO = ´SPHERICAL CHDEN´ = 4PI*R*R*RHOTRUE. V=VTRUE.
       !
       !.. Implicit Declarations ..
       implicit none
@@ -2565,8 +2565,8 @@ contains
          ! RHOEPS=RHOEPS/4.0d0
          ! AB comment
       !!! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
-         !print *, 'B_XC', Bxc_tot, rhomu(1)-rhomu(2)
-         !print *, 'b_XC', 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
+         !print *, ´B_XC´, Bxc_tot, rhomu(1)-rhomu(2)
+         !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
       end if
    end subroutine VXC0SP
 
@@ -2602,17 +2602,17 @@ contains
       gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
                   - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
       !
-      ! --- Five points' formula  (25.3.6)
+      ! --- Five points´ formula  (25.3.6)
       do i = 3, nm2
          gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
       end do
-      ! --- Five points' formula  (25.3.6)
+      ! --- Five points´ formula  (25.3.6)
       gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
                        + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
       gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
                    - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
       !
-      ! --- Three points' formula  (25.3.4)
+      ! --- Three points´ formula  (25.3.4)
       !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
       !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
       do i = 1, nr
@@ -2825,9 +2825,9 @@ contains
             VAL = VAL/SQRT(SUMM)
             SLO = SLO/SQRT(SUMM)
             call PHDFSR(atom%element%atomic_number, L, V(:, I), E, atom%A, B, ROFI, NR, G, VAL, SLO, GP, GPP, PHI, DPHI, PHIP, DPHIP, P, TOL, NN)
-        !!write(876, '(f18.8)') G(1:NR*2)
-            !print '(a, 6f12.6)', 'PHI', PHI, DPHI, PHIP, DPHIP, val
-            !print '(1x, a, 2i5, 3f12.6)', 'ENU old, new', L, I, ENU(L, I), E, RMAX
+        !!write(876, ´(f18.8)´) G(1:NR*2)
+            !print ´(a, 6f12.6)´, ´PHI´, PHI, DPHI, PHIP, DPHIP, val
+            !print ´(1x, a, 2i5, 3f12.6)´, ´ENU old, new´, L, I, ENU(L, I), E, RMAX
             atom%potential%ENU(L, I) = E
             DLPHI = RMAX*DPHI/PHI
             DLPHIP = RMAX*DPHIP/PHIP
@@ -2842,10 +2842,10 @@ contains
             ! Vl =V for canonical scaling
             atom%potential%SRDEL(L, I) = PHMINS*SQRT(0.5d0*RMAX)
             !if(L==0) SRDEL(L, I)=-1.0d0*SRDEL(L, I)
-            !print '(2x, a, 8f12.6)', 'potpars:', E, omegam, rmax*phi*phi, phmins/phplus, 1.0d0/abs(phip), E+OMEGAM, E+omegap
-            !print *, 'rmax', rmax
-            !print *, '1/phmi', 1.0d0/phmins
-            !print *, 'srdel', SRDEL(L, I)
+            !print ´(2x, a, 8f12.6)´, ´potpars:´, E, omegam, rmax*phi*phi, phmins/phplus, 1.0d0/abs(phip), E+OMEGAM, E+omegap
+            !print *, ´rmax´, rmax
+            !print *, ´1/phmi´, 1.0d0/phmins
+            !print *, ´srdel´, SRDEL(L, I)
         !! phmins= phi + omegam*phip = phi - (phi/phip)*(-L-1-DLPHI)/(-L-1-DLPHIP)
         !! phmins= phi + omegam*phip = phi - (phi/phip)*(-L-1-DLPHI)/-L-1-DLPHIP)
         !! wkdot= ((dphidt-l)*gi(l) +    (l+l+1)*gi(l+1))*phidt

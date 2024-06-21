@@ -42,7 +42,7 @@ module exchange_mod
    implicit none
 
    private
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: exchange
       !> Green
       class(green), pointer :: green
@@ -66,9 +66,9 @@ module exchange_mod
       !> General variables
       !> Heisenberg exchange
       real(rp) :: jij
-      !> Heisenberg exchange tensor (obtained with auxiliary GF's)
+      !> Heisenberg exchange tensor (obtained with auxiliary GF´s)
       real(rp), dimension(9) :: jij_aux
-      !> Total Heisenberg exchange J0 = sum_j J0j (obtained with auxiliary GF's)
+      !> Total Heisenberg exchange J0 = sum_j J0j (obtained with auxiliary GF´s)
       real(rp) :: jij00_aux
       !> Spin-lattice couplings tensor
       real(rp), dimension(9) :: jijk
@@ -258,7 +258,7 @@ contains
          ! Now calculate the potential functions P for atoms i and j
          call this%symbolic_atom(this%lattice%iz(i))%p_matrix(pmatrix_i, lmaxi, this%en%ene)
          call this%symbolic_atom(this%lattice%iz(j))%p_matrix(pmatrix_j, lmaxj, this%en%ene)
-         ! Now obtain the auxiliar Green's function for atoms i and j (and vice-versa)
+         ! Now obtain the auxiliar Green´s function for atoms i and j (and vice-versa)
          call this%green%auxiliary_gij(this%green%gij(:, :, :, njij), aux_gij, i, j)
          call this%green%auxiliary_gij(this%green%gji(:, :, :, njij), aux_gji, j, i)
          ! Now transform the pmatrices in DeltaP = P_up - P_dw
@@ -459,7 +459,7 @@ contains
          allocate (temp10((lmaxi + 1)**2, (lmaxi + 1)**2, size(this%en%ene)))
          allocate (int_all((lmaxi + 1)**2, (lmaxi + 1)**2, size(this%en%ene), 9))
          allocate (jijk_tot(size(this%en%ene), 9))
-         ! Screening constants for the orthogonal representation are the qpar (or gamma, in Turek's notation)
+         ! Screening constants for the orthogonal representation are the qpar (or gamma, in Turek´s notation)
          screening_ort_i(:, :) = this%symbolic_atom(this%lattice%iz(i))%potential%qpar(:, :)
          screening_ort_j(:, :) = this%symbolic_atom(this%lattice%iz(j))%potential%qpar(:, :)
          screening_ort_k(:, :) = this%symbolic_atom(this%lattice%iz(k))%potential%qpar(:, :)
@@ -497,14 +497,14 @@ contains
          call this%symbolic_atom(this%lattice%iz(k))%transform_pmatrix(pmatrix_k, pmatrix0_k, screening_ort_k, screening_can)
          ! Calculate the displacement matrix U for atom k, with the canonical representation
          call this%symbolic_atom(this%lattice%iz(k))%udisp_matrix(umatrix_k, pmatrix0_k, uni_disp, lmaxk, ws_radius, size(this%en%ene))
-         ! Now obtain the auxiliary Green's function for atoms i, j and k (and vice-versa), in the orthogonal representation
+         ! Now obtain the auxiliary Green´s function for atoms i, j and k (and vice-versa), in the orthogonal representation
          call this%green%auxiliary_gij(this%green%gij(:, :, :, 3*(njijk - 1) + 1), aux_gij, i, j)
          call this%green%auxiliary_gij(this%green%gji(:, :, :, 3*(njijk - 1) + 1), aux_gji, j, i)
          call this%green%auxiliary_gij(this%green%gij(:, :, :, 3*(njijk - 1) + 2), aux_gik, i, k)
          call this%green%auxiliary_gij(this%green%gji(:, :, :, 3*(njijk - 1) + 2), aux_gki, k, i)
          call this%green%auxiliary_gij(this%green%gij(:, :, :, 3*(njijk - 1) + 3), aux_gjk, j, k)
          call this%green%auxiliary_gij(this%green%gji(:, :, :, 3*(njijk - 1) + 3), aux_gkj, k, j)
-         ! Transform those auxiliary GF's to the canonical representation
+         ! Transform those auxiliary GF´s to the canonical representation
          call this%green%transform_auxiliary_gij(pmatrix_i, pmatrix0_i, pmatrix_j, pmatrix0_j, aux_gij, aux0_gij, screening_ort_i, screening_can, i, j)
          call this%green%transform_auxiliary_gij(pmatrix_j, pmatrix0_j, pmatrix_i, pmatrix0_i, aux_gji, aux0_gji, screening_ort_j, screening_can, j, i)
          call this%green%transform_auxiliary_gij(pmatrix_i, pmatrix0_i, pmatrix_k, pmatrix0_k, aux_gik, aux0_gik, screening_ort_i, screening_can, i, k)
@@ -669,7 +669,7 @@ contains
             end do
             ! Now calculate the damping value
             do nv = 1, size(this%en%ene)
-               ! Calculate the anti-Hermitian parts of the GF's Aij and Aji
+               ! Calculate the anti-Hermitian parts of the GF´s Aij and Aji
                Aij(:, :, nv) = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
                Aji(:, :, nv) = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
                m = 0
@@ -832,10 +832,10 @@ contains
                !end do
             end do
             do nv = 1, size(this%en%ene)
-               ! Calculate the anti-Hermitian parts of the GF's Aij and Aji
+               ! Calculate the anti-Hermitian parts of the GF´s Aij and Aji
                Aij(:, :, nv) = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
                Aji(:, :, nv) = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
-               ! Calculate the Hermitian parts of the GF's Bij and Bji
+               ! Calculate the Hermitian parts of the GF´s Bij and Bji
                Bij(:, :, nv) = this%green%gij(:, :, nv, njij) + transpose(conjg(this%green%gji(:, :, nv, njij)))
                Bji(:, :, nv) = this%green%gji(:, :, nv, njij) + transpose(conjg(this%green%gij(:, :, nv, njij)))
             end do
@@ -1299,8 +1299,8 @@ contains
             i = this%lattice%ijpair(njij_glob, 1) ! Atom number in the clust file, atom i
             j = this%lattice%ijpair(njij_glob, 2) ! Atom number in the clust file, atom j
 
-            !write(*,*) 'Atom', i, 'coordinates:', this%lattice%cr(:,i)
-            !write(*,*) 'Atom', j, 'coordinates:', this%lattice%cr(:,j)
+            !write(*,*) ´Atom´, i, ´coordinates:´, this%lattice%cr(:,i)
+            !write(*,*) ´Atom´, j, ´coordinates:´, this%lattice%cr(:,j)
 
             ! Jij second order
             this%jij = T_comm_xcso(1, njij_glob)
