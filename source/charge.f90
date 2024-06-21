@@ -569,7 +569,7 @@ contains
       end do
       do iclas = 1, this%lattice%nrec
          if (rank == 0) call g_logger%info('Class '//fmt('i4', iclas)//' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))//' VMAD= '&
-         &//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+                             &//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
       end do
    end subroutine surfpot
 
@@ -582,7 +582,7 @@ contains
    subroutine bulkmat(this)
       class(charge), intent(inout) :: this
       real(rp) :: alatbulkmat, tol, alat0, vol, awald0, awald
-      real(rp), dimension(3, this%lattice%ndim) ::  tau
+      real(rp), dimension(3, this%lattice%ndim) :: tau
       real(rp), dimension(3, 3) :: rb, qb
       integer :: nsize, nbmx, nkrmx, nkdmx, j7rlat, j7dlat, j7work, j7amad, lmxst, nkr, nkd
       logical :: isopen
@@ -1741,1092 +1741,1123 @@ contains
       real(rp), dimension(3) :: dtau
       real(rp) :: dl
       integer :: ibas, jbas, m, i, j
-      DO 13 IBAS = 1, NBAS
-      DO 10 JBAS = 1, NBAS
-      DO 12 M = 1, 3
-12       DTAU(M) = TAU(M, IBAS) - TAU(M, JBAS)
+      DO IBAS = 1, NBAS
+         DO JBAS = 1, NBAS
+         DO M = 1, 3
+            DTAU(M) = TAU(M, IBAS) - TAU(M, JBAS)
+         END DO
          CALL SHORTN(DTAU, DTAU, DLAT, NKD)
          CALL STRX00(DTAU, A, ALAT, VOL, RLAT, NKR, DLAT, NKD, DL)
          WRITE (10, 995) IBAS, JBAS, DL
-995      FORMAT(' IBAS, JBAS= ', 2I5, '  AMAD=', F12.6)
-10       AMAD(JBAS, IBAS) = DL
-13    END DO
+         AMAD(JBAS, IBAS) = DL
+         END DO
+      END DO
       DO I = 1, NBAS
          WRITE (11) (AMAD(I, J), J=1, NBAS)
       END DO
       CLOSE (11)
       RETURN
-      end subroutine madmat
+995   FORMAT(' IBAS, JBAS= ', 2I5, '  AMAD=', F12.6)
+   end subroutine madmat
 
-      !---------------------------------------------------------------------------
-      ! DESCRIPTION:
-      !> @brief
-      !> Sets up the real and reciprocal space lattice vectors
-      !
-      !> @param[inout] AS
-      !> @param[inout] TOL
-      !> @param[inout] ALAT
-      !> @param[inout] ALAT0
-      !> @param[inout] RB0
-      !> @param[inout] G1
-      !> @param[inout] G2
-      !> @param[inout] G3
-      !> @param[inout] GT
-      !> @param[inout] RB
-      !> @param[inout] QB
-      !> @param[inout] LMAX
-      !> @param[inout] VOL
-      !> @param[inout] AWALD
-      !> @param[inout] DLAT
-      !> @param[inout] NKD
-      !> @param[inout] RLAT
-      !> @param[inout] NKR
-      !> @param[inout] NKDMX
-      !> @param[inout] NKRMX
-      !> @param[inout] WORK
-      !> @return type(calculation)
-      !---------------------------------------------------------------------------
-      subroutine lattc(AS, TOL, ALAT, ALAT0, RB0, G1, G2, G3, GT, RB, QB, &
-                       LMAX, VOL, AWALD, DLAT, NKD, RLAT, NKR, NKDMX, NKRMX, WORK)
-         ! Input and output
-         integer, intent(inout) :: lmax, nkd, nkr, nkdmx, nkrmx
-         real(rp), dimension(3, nkrmx), intent(inout) :: rlat, dlat
-         real(rp), dimension(3, 3), intent(inout) :: rb0, rb, qb
-         real(rp), dimension(1), intent(inout) :: work
-         real(rp) :: tol, alat, alat0, g1, g2, g3, gt, vol, as, awald
-         ! Local variables
-         real(rp), dimension(3, 3) :: qb0
-         real(rp) :: tpiba, vol0, dstx, rdist0, qdist0, radd, qadd, alat1, a0, tol1, q0, r0
-         integer :: nkdest, nkrest, iv, k, m
-         TPIBA = 8.D0*DATAN(1.D0)/ALAT
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Sets up the real and reciprocal space lattice vectors
+   !
+   !> @param[inout] AS
+   !> @param[inout] TOL
+   !> @param[inout] ALAT
+   !> @param[inout] ALAT0
+   !> @param[inout] RB0
+   !> @param[inout] G1
+   !> @param[inout] G2
+   !> @param[inout] G3
+   !> @param[inout] GT
+   !> @param[inout] RB
+   !> @param[inout] QB
+   !> @param[inout] LMAX
+   !> @param[inout] VOL
+   !> @param[inout] AWALD
+   !> @param[inout] DLAT
+   !> @param[inout] NKD
+   !> @param[inout] RLAT
+   !> @param[inout] NKR
+   !> @param[inout] NKDMX
+   !> @param[inout] NKRMX
+   !> @param[inout] WORK
+   !> @return type(calculation)
+   !---------------------------------------------------------------------------
+   subroutine lattc(AS, TOL, ALAT, ALAT0, RB0, G1, G2, G3, GT, RB, QB, &
+                    LMAX, VOL, AWALD, DLAT, NKD, RLAT, NKR, NKDMX, NKRMX, WORK)
+      ! Input and output
+      integer, intent(inout) :: lmax, nkd, nkr, nkdmx, nkrmx
+      real(rp), dimension(3, nkrmx), intent(inout) :: rlat, dlat
+      real(rp), dimension(3, 3), intent(inout) :: rb0, rb, qb
+      real(rp), dimension(1), intent(inout) :: work
+      real(rp) :: tol, alat, alat0, g1, g2, g3, gt, vol, as, awald
+      ! Local variables
+      real(rp), dimension(3, 3) :: qb0
+      real(rp) :: tpiba, vol0, dstx, rdist0, qdist0, radd, qadd, alat1, a0, tol1, q0, r0
+      integer :: nkdest, nkrest, iv, k, m
+      TPIBA = 8.D0*DATAN(1.D0)/ALAT
 
-         qb0(1, :) = cross_product(rb0(2, :), rb0(3, :))
-         qb0(2, :) = cross_product(rb0(3, :), rb0(1, :))
-         qb0(3, :) = cross_product(rb0(1, :), rb0(2, :))
+      qb0(1, :) = cross_product(rb0(2, :), rb0(3, :))
+      qb0(2, :) = cross_product(rb0(3, :), rb0(1, :))
+      qb0(3, :) = cross_product(rb0(1, :), rb0(2, :))
 
-         VOL0 = DABS(TRIPL(RB0(:, 1), RB0(:, 2), RB0(:, 3)))
-         DO 34 M = 1, 3
-         DO 34 K = 1, 3
-34          QB0(M, K) = QB0(M, K)*(1.D0/VOL0)
-            DO 11 K = 1, 3
-               CALL RDIST(RB0(1, K), RB(1, K), G1, G2, G3, GT)
-11             CALL QDIST(QB0(1, K), QB(1, K), G1, G2, G3, GT)
-               VOL = TRIPL(RB(:, 1), RB(:, 2), RB(:, 3))
-               VOL = DABS(VOL)*(ALAT**3)
-               WRITE (10, 351)
-351            FORMAT(/15X, 'RB0', 30X, 'QB0')
-               WRITE (10, 350) ((RB0(M, K), M=1, 3), (QB0(M, K), M=1, 3), K=1, 3)
-350            FORMAT(3F10.5, 5X, 3F10.5)
-               DSTX = DMAX1(DABS(G1 - 1D0), DABS(G2 - 1D0), DABS(G3 - 1D0), DABS(GT - 1D0))
-               IF (DSTX .GT. 1D-5) THEN
-                  WRITE (10, 451) G1, G2, G3, GT
-451               FORMAT(' DISTORTED WITH ', 4F12.7, ':')
-                  WRITE (10, 350) ((RB(M, K), M=1, 3), (QB(M, K), M=1, 3), K=1, 3)
-                  CALL STRAIN(G1, G2, G3, GT)
-               END IF
-               WRITE (10, 998) VOL, VOL0*(ALAT**3)
-998            FORMAT(' CELL VOLUME=', F12.6, '     VOL0=', F12.6)
+      VOL0 = DABS(TRIPL(RB0(:, 1), RB0(:, 2), RB0(:, 3)))
+      DO M = 1, 3
+         DO K = 1, 3
+            QB0(M, K) = QB0(M, K)*(1.D0/VOL0)
+         END DO
+      END DO
+      DO K = 1, 3
+         CALL RDIST(RB0(:, K), RB(:, K), G1, G2, G3, GT)
+         CALL QDIST(QB0(:, K), QB(:, K), G1, G2, G3, GT)
+      END DO
+      VOL = TRIPL(RB(:, 1), RB(:, 2), RB(:, 3))
+      VOL = DABS(VOL)*(ALAT**3)
+      WRITE (10, 351)
+351   FORMAT(/15X, 'RB0', 30X, 'QB0')
+      WRITE (10, 350) ((RB0(M, K), M=1, 3), (QB0(M, K), M=1, 3), K=1, 3)
+350   FORMAT(3F10.5, 5X, 3F10.5)
+      DSTX = DMAX1(DABS(G1 - 1D0), DABS(G2 - 1D0), DABS(G3 - 1D0), DABS(GT - 1D0))
+      IF (DSTX .GT. 1D-5) THEN
+         WRITE (10, 451) G1, G2, G3, GT
+451      FORMAT(' DISTORTED WITH ', 4F12.7, ':')
+         WRITE (10, 350) ((RB(M, K), M=1, 3), (QB(M, K), M=1, 3), K=1, 3)
+         CALL STRAIN(G1, G2, G3, GT)
+      END IF
+      WRITE (10, 998) VOL, VOL0*(ALAT**3)
+998   FORMAT(' CELL VOLUME=', F12.6, '     VOL0=', F12.6)
 ! ------ SET UP REAL AND RECIP VECTORS ----
-               RDIST0 = VOL0**(1.D0/3.D0)
-               QDIST0 = 1.D0/RDIST0
-               RADD = .7*RDIST0
-               QADD = .7*QDIST0
-               A0 = AS/RDIST0
-               AWALD = A0/ALAT
-               ALAT1 = ALAT0
-               IF (ALAT1 .LE. 0.5D0) ALAT1 = ALAT
-               IF (DABS(ALAT1/ALAT - 1.D0) .GT. 0.04D0) WRITE (10, 560)
-560            FORMAT(/' *** WARNING: ALAT AND ALAT0 DEVIATE BY MORE THAN 4 %'/)
-               TOL1 = TOL*ALAT1**(LMAX + 1)
-               CALL LCTOFF(A0, VOL0, LMAX, TOL1, R0, Q0)
-               NKDEST = 4.18879*(R0 + RADD)**3/VOL0 + .5
-               NKREST = 4.18879*(Q0 + QADD)**3*VOL0 + .5
-               !write(*, *)radd, r0
-               WRITE (10, 340) AS, TOL, LMAX, AWALD, VOL0, ALAT1, NKDEST, NKREST
-340            FORMAT(/' LATTC:  AS=', F6.3, '   TOL=', 1P, E8.2, '   LMAX=', I1,      &
-                         &  '   AWALD=', 0P, F7.4, '   V0=', F8.5/' ALAT1=', F9.5,               &
-                         &  '   ESTIMATES:   NKD', I6, '   NKD', I6)
-               CALL LGEN(RB0, R0 + RADD, NKD, NKDMX, DLAT, WORK)
-               WRITE (10, 342) R0, R0*ALAT, RADD, NKD
-342            FORMAT('  R0=', F9.4, '   RC=', F9.4, '   RADD=', F9.4, '   NKD=', I7)
-               CALL LGEN(QB0, Q0 + QADD, NKR, NKRMX, RLAT, WORK)
-               WRITE (10, 341) Q0, Q0*TPIBA, QADD, NKR
-341            FORMAT('  Q0=', F9.4, '   QC=', F9.4, '   QADD=', F9.4, '   NKD=', I7)
-               DO 50 IV = 1, NKD
-50                CALL RDIST(DLAT(1, IV), DLAT(1, IV), G1, G2, G3, GT)
-                  DO 52 IV = 1, NKR
-52                   CALL QDIST(RLAT(1, IV), RLAT(1, IV), G1, G2, G3, GT)
-                     RETURN
-                     end subroutine lattc
+      RDIST0 = VOL0**(1.D0/3.D0)
+      QDIST0 = 1.D0/RDIST0
+      RADD = .7*RDIST0
+      QADD = .7*QDIST0
+      A0 = AS/RDIST0
+      AWALD = A0/ALAT
+      ALAT1 = ALAT0
+      IF (ALAT1 .LE. 0.5D0) ALAT1 = ALAT
+      IF (DABS(ALAT1/ALAT - 1.D0) .GT. 0.04D0) WRITE (10, 560)
+560   FORMAT(/' *** WARNING: ALAT AND ALAT0 DEVIATE BY MORE THAN 4 %'/)
+      TOL1 = TOL*ALAT1**(LMAX + 1)
+      CALL LCTOFF(A0, VOL0, LMAX, TOL1, R0, Q0)
+      NKDEST = 4.18879*(R0 + RADD)**3/VOL0 + .5
+      NKREST = 4.18879*(Q0 + QADD)**3*VOL0 + .5
+      !write(*, *)radd, r0
+      WRITE (10, 340) AS, TOL, LMAX, AWALD, VOL0, ALAT1, NKDEST, NKREST
+340   FORMAT(/' LATTC:  AS=', F6.3, '   TOL=', 1P, E8.2, '   LMAX=', I1,      &
+                                                           &  '   AWALD=', 0P, F7.4, '   V0=', F8.5/' ALAT1=', F9.5,               &
+                                                                   &  '   ESTIMATES:   NKD', I6, '   NKD', I6)
+      CALL LGEN(RB0, R0 + RADD, NKD, NKDMX, DLAT, WORK)
+      WRITE (10, 342) R0, R0*ALAT, RADD, NKD
+342   FORMAT('  R0=', F9.4, '   RC=', F9.4, '   RADD=', F9.4, '   NKD=', I7)
+      CALL LGEN(QB0, Q0 + QADD, NKR, NKRMX, RLAT, WORK)
+      WRITE (10, 341) Q0, Q0*TPIBA, QADD, NKR
+      DO IV = 1, NKD
+         CALL RDIST(DLAT(1, IV), DLAT(1, IV), G1, G2, G3, GT)
+      END DO
+      DO IV = 1, NKR
+         CALL QDIST(RLAT(1, IV), RLAT(1, IV), G1, G2, G3, GT)
+      END DO
+      RETURN
+341   FORMAT('  Q0=', F9.4, '   QC=', F9.4, '   QADD=', F9.4, '   NKD=', I7)
+   end subroutine lattc
 
-                     !---------------------------------------------------------------------------
-                     ! DESCRIPTION:
-                     !> @brief
-                     !> Widget to make structure constant dl for L=0, E=0, K=0.
-                     !
-                     !> @param[inout] TAU
-                     !> @param[inout] A
-                     !> @param[inout] ALAT
-                     !> @param[inout] VOL
-                     !> @param[inout] RLAT
-                     !> @param[inout] NKR
-                     !> @param[inout] DLAT
-                     !> @param[inout] NKD
-                     !> @param[inout] DL
-                     !---------------------------------------------------------------------------
-                     subroutine strx00(TAU, A, ALAT, VOL, RLAT, NKR, DLAT, NKD, DL)
-                        ! Input and output
-                        integer, intent(inout) :: nkr, nkd
-                        real(rp), dimension(3), intent(inout) :: tau
-                        real(rp), intent(inout) :: a, alat, vol, dl
-                        real(rp), dimension(3, nkr), intent(inout) :: rlat
-                        real(rp), dimension(3, nkd), intent(inout) :: dlat
-                        ! Local variables
-                        real(rp) :: tpi, tpiba, gamma, r2, scalp, r1
-                        integer :: ir, ir1
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Widget to make structure constant dl for L=0, E=0, K=0.
+   !
+   !> @param[inout] TAU
+   !> @param[inout] A
+   !> @param[inout] ALAT
+   !> @param[inout] VOL
+   !> @param[inout] RLAT
+   !> @param[inout] NKR
+   !> @param[inout] DLAT
+   !> @param[inout] NKD
+   !> @param[inout] DL
+   !---------------------------------------------------------------------------
+   subroutine strx00(TAU, A, ALAT, VOL, RLAT, NKR, DLAT, NKD, DL)
+      ! Input and output
+      integer, intent(inout) :: nkr, nkd
+      real(rp), dimension(3), intent(inout) :: tau
+      real(rp), intent(inout) :: a, alat, vol, dl
+      real(rp), dimension(3, nkr), intent(inout) :: rlat
+      real(rp), dimension(3, nkd), intent(inout) :: dlat
+      ! Local variables
+      real(rp) :: tpi, tpiba, gamma, r2, scalp, r1
+      integer :: ir, ir1
 
-                        TPI = 2.D0*PI
-                        GAMMA = 0.25D0/(A*A)
-                        TPIBA = TPI/ALAT
-                        DL = -GAMMA
-                        DO 26 IR = 2, NKR
-                           R2 = TPIBA*TPIBA*(RLAT(1, IR)**2 + RLAT(2, IR)**2 + RLAT(3, IR)**2)
-                           SCALP = TPI*(RLAT(1, IR)*TAU(1) + RLAT(2, IR)*TAU(2) + RLAT(3, IR)*TAU(3))
-26                         DL = DL + DCOS(SCALP)*DEXP(-GAMMA*R2)/R2
-                           DL = DL*4.D0*PI/VOL
-                           IR1 = 2
-                           IF (TAU(1)**2 + TAU(2)**2 + TAU(3)**2 .GT. 1D-6) IR1 = 1
-                           DO 20 IR = IR1, NKD
-                              R1 = ALAT*DSQRT((TAU(1) - DLAT(1, IR))**2 + (TAU(2) - DLAT(2, IR))**2      &
-                             &   + (TAU(3) - DLAT(3, IR))**2)
-20                            DL = DL + DERFC(A*R1)/R1
-                              IF (IR1 .EQ. 2) DL = DL - 2.D0*A/DSQRT(PI)
-                              RETURN
-                              end subroutine strx00
+      TPI = 2.D0*PI
+      GAMMA = 0.25D0/(A*A)
+      TPIBA = TPI/ALAT
+      DL = -GAMMA
+      DO IR = 2, NKR
+         R2 = TPIBA*TPIBA*(RLAT(1, IR)**2 + RLAT(2, IR)**2 + RLAT(3, IR)**2)
+         SCALP = TPI*(RLAT(1, IR)*TAU(1) + RLAT(2, IR)*TAU(2) + RLAT(3, IR)*TAU(3))
+         DL = DL + DCOS(SCALP)*DEXP(-GAMMA*R2)/R2
+      END DO
+      DL = DL*4.D0*PI/VOL
+      IR1 = 2
+      IF (TAU(1)**2 + TAU(2)**2 + TAU(3)**2 .GT. 1D-6) IR1 = 1
+      DO IR = IR1, NKD
+         R1 = ALAT*DSQRT((TAU(1) - DLAT(1, IR))**2 + (TAU(2) - DLAT(2, IR))**2      &
+         &   + (TAU(3) - DLAT(3, IR))**2)
+         DL = DL + DERFC(A*R1)/R1
+      END DO
+      IF (IR1 .EQ. 2) DL = DL - 2.D0*A/DSQRT(PI)
+      RETURN
+   end subroutine strx00
 
-                              !---------------------------------------------------------------------------
-                              ! DESCRIPTION:
-                              !> @brief
-                              !> Returns P1 = shortest vector such that P1-P is a lattice vector.
-                              !> a slightly skewed norm is used to make result unique.
-                              !> the first vector in the list must be the zero vector.
-                              !
-                              !> @param[inout] P
-                              !> @param[inout] P1
-                              !> @param[inout] DLAT
-                              !> @param[inout] NKD
-                              !---------------------------------------------------------------------------
-                              subroutine shortn(P, P1, DLAT, NKD)
-                                 ! Input and output
-                                 integer, intent(inout) :: nkd
-                                 real(rp), dimension(3), intent(inout) :: p, p1
-                                 real(rp), dimension(3, nkd), intent(inout) :: dlat
-                                 ! Local variables
-                                 real(rp) :: x, y, z, p2, critk0, dd, crit, anrm2
-                                 integer :: irep, k0, k
-                                 ANRM2(X, Y, Z) = X*X*1.00001D0 + Y*Y*1.00002D0 + Z*Z*1.00003D0            &
-                                &  - X*0.000004D0 - Y*0.000003D0 - Z*0.000002D0
-                                 P1(1) = P(1)
-                                 P1(2) = P(2)
-                                 P1(3) = P(3)
-                                 DO 88 IREP = 1, 20
-                                    P2 = ANRM2(P1(1), P1(2), P1(3))
-                                    K0 = 1
-                                    CRITK0 = 1.D20
-                                    DO 52 K = 1, NKD
-                                       DD = DLAT(1, K)**2 + DLAT(2, K)**2 + DLAT(3, K)**2
-                                       IF (DD .GT. P2*4.D0) GOTO 53
-                                       CRIT = ANRM2(P1(1) + DLAT(1, K), P1(2) + DLAT(2, K), P1(3) + DLAT(3, K))
-                                       IF (CRIT .LT. CRITK0) THEN
-                                          K0 = K
-                                          CRITK0 = CRIT
-                                       END IF
-52                                  END DO
-53                                  IF (K0 .EQ. 1) RETURN
-                                    P1(1) = P1(1) + DLAT(1, K0)
-                                    P1(2) = P1(2) + DLAT(2, K0)
-                                    P1(3) = P1(3) + DLAT(3, K0)
-88                               END DO
-                                 WRITE (10, *) '*** SHORTN: SHORTEST VECTOR NOT FOUND'
-                                 RETURN
-                              end subroutine shortn
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Returns P1 = shortest vector such that P1-P is a lattice vector.
+   !> a slightly skewed norm is used to make result unique.
+   !> the first vector in the list must be the zero vector.
+   !
+   !> @param[inout] P
+   !> @param[inout] P1
+   !> @param[inout] DLAT
+   !> @param[inout] NKD
+   !---------------------------------------------------------------------------
+   subroutine shortn(P, P1, DLAT, NKD)
+      ! Input and output
+      integer, intent(inout) :: nkd
+      real(rp), dimension(3), intent(inout) :: p, p1
+      real(rp), dimension(3, nkd), intent(inout) :: dlat
+      ! Local variables
+      real(rp) :: x, y, z, p2, critk0, dd, crit, anrm2
+      integer :: irep, k0, k
+      ANRM2(X, Y, Z) = X*X*1.00001D0 + Y*Y*1.00002D0 + Z*Z*1.00003D0            &
+     &  - X*0.000004D0 - Y*0.000003D0 - Z*0.000002D0
+      P1(1) = P(1)
+      P1(2) = P(2)
+      P1(3) = P(3)
+      do irep = 1, 20
+         p2 = anrm2(p1(1), p1(2), p1(3))
+         k0 = 1
+         critk0 = 1.d20
+         do k = 1, nkd
+            dd = dlat(1, k)**2 + dlat(2, k)**2 + dlat(3, k)**2
+            if (dd > p2*4.d0) exit
+            crit = anrm2(p1(1) + dlat(1, k), p1(2) + dlat(2, k), p1(3) + dlat(3, k))
+            if (crit < critk0) then
+               k0 = k
+               critk0 = crit
+            end if
+         end do
+         if (k0 == 1) exit
+         p1(1) = p1(1) + dlat(1, k0)
+         p1(2) = p1(2) + dlat(2, k0)
+         p1(3) = p1(3) + dlat(3, k0)
+      end do
+      WRITE (10, *) '*** SHORTN: SHORTEST VECTOR NOT FOUND'
+      RETURN
+   end subroutine shortn
 
-                              !---------------------------------------------------------------------------
-                              ! DESCRIPTION:
-                              !> @brief
-                              !> Makes limits R0, Q0 for sums in real and recip space for a lattice
-                              !> with lattice constant 1.
-                              !
-                              !> @param[inout] A0
-                              !> @param[inout] V0
-                              !> @param[inout] LMAX
-                              !> @param[inout] TOL
-                              !> @param[inout] R0
-                              !> @param[inout] Q0
-                              !---------------------------------------------------------------------------
-                              subroutine lctoff(A0, V0, LMAX, TOL, R0, Q0)
-                                 ! Input and output
-                                 real(rp), intent(inout) :: a0, v0, tol, r0, q0
-                                 integer, intent(inout) :: lmax
-                                 ! Local variables
-                                 real(rp), dimension(0:10) :: f, g
-                                 real(rp) :: pi, q1, q2, gq0, gq1, r1, r2, try
-                                 integer :: i
-                                 PI = 4.D0*DATAN(1.D0)
-                                 Q1 = 0.001D0
-                                 IF (LMAX .GT. 2) Q1 = DSQRT(.5D0*(LMAX - 2))*A0/PI
-                                 GQ1 = (2D0*PI*Q1)**(LMAX - 2)*DEXP(-(PI*Q1/A0)**2)*4D0*PI/V0
-                                 IF (TOL .GT. GQ1) WRITE (10, *) '**** LCTOFF: TOL GT GQ1'
-                                 Q2 = 50.D0
-                                 Q0 = 5.D0
-                                 DO 33 I = 1, 25
-                                    GQ0 = (2D0*PI*Q0)**(LMAX - 2)*DEXP(-(PI*Q0/A0)**2)*4D0*PI/V0
-                                    IF (GQ0 .GT. TOL) Q1 = Q0
-                                    IF (GQ0 .LT. TOL) Q2 = Q0
-33                                  Q0 = .5D0*(Q1 + Q2)
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Makes limits R0, Q0 for sums in real and recip space for a lattice
+   !> with lattice constant 1.
+   !
+   !> @param[inout] A0
+   !> @param[inout] V0
+   !> @param[inout] LMAX
+   !> @param[inout] TOL
+   !> @param[inout] R0
+   !> @param[inout] Q0
+   !---------------------------------------------------------------------------
+   subroutine lctoff(A0, V0, LMAX, TOL, R0, Q0)
+      ! Input and output
+      real(rp), intent(inout) :: a0, v0, tol, r0, q0
+      integer, intent(inout) :: lmax
+      ! Local variables
+      real(rp), dimension(0:10) :: f, g
+      real(rp) :: pi, q1, q2, gq0, gq1, r1, r2, try
+      integer :: i
+      PI = 4.D0*DATAN(1.D0)
+      Q1 = 0.001D0
+      IF (LMAX .GT. 2) Q1 = DSQRT(.5D0*(LMAX - 2))*A0/PI
+      GQ1 = (2D0*PI*Q1)**(LMAX - 2)*DEXP(-(PI*Q1/A0)**2)*4D0*PI/V0
+      IF (TOL .GT. GQ1) WRITE (10, *) '**** LCTOFF: TOL GT GQ1'
+      Q2 = 50.D0
+      Q0 = 5.D0
+      DO I = 1, 25
+         GQ0 = (2D0*PI*Q0)**(LMAX - 2)*DEXP(-(PI*Q0/A0)**2)*4D0*PI/V0
+         IF (GQ0 .GT. TOL) THEN
+            Q1 = Q0
+         ELSE
+            Q2 = Q0
+         END IF
+         Q0 = .5D0*(Q1 + Q2)
+      END DO
 ! ---------------------------------------
-                                    R1 = 0.1D0
-                                    R2 = 50.D0
-                                    R0 = 5.D0
-                                    DO 15 I = 1, 25
-                                       CALL DLMTOR(R0, A0, LMAX, F, G)
-                                       IF (F(LMAX) .GT. TOL) R1 = R0
-                                       IF (F(LMAX) .LE. TOL) R2 = R0
-15                                     R0 = .5D0*(R1 + R2)
-                                       TRY = (2D0*PI*Q0)**(LMAX - 2)*DEXP(-(PI*Q0/A0)**2)*4D0*PI/V0
-                                       WRITE (10, 957) Q0, TRY, R0, F(LMAX)
-957                                    FORMAT(' LCUT: Q0=', F12.6, '   TRY=', F12.6, '   R0=', F12.6,         &
-                                                                           &  '   F=', F12.6)
-                                       end subroutine lctoff
+      R1 = 0.1D0
+      R2 = 50.D0
+      R0 = 5.D0
+      DO I = 1, 25
+         CALL DLMTOR(R0, A0, LMAX, F, G)
+         IF (F(LMAX) > TOL) R1 = R0
+         IF (F(LMAX) <= TOL) R2 = R0
+         R0 = 0.5D0*(R1 + R2)
+      END DO
+      TRY = (2D0*PI*Q0)**(LMAX - 2)*DEXP(-(PI*Q0/A0)**2)*4D0*PI/V0
+      WRITE (10, 957) Q0, TRY, R0, F(LMAX)
+957   FORMAT(' LCUT: Q0=', F12.6, '   TRY=', F12.6, '   R0=', F12.6,         &
+                                                                                                                  &  '   F=', F12.6)
+   end subroutine lctoff
 
-                                       !---------------------------------------------------------------------------
-                                       ! DESCRIPTION:
-                                       !> @brief
-                                       !> Radial part of damped lmtos F and FBAR, L=0 TO LMAX
-                                       !
-                                       !> @param[inout] R
-                                       !> @param[inout] A
-                                       !> @param[inout] LMAX
-                                       !> @param[inout] F
-                                       !> @param[inout] FBAR
-                                       !---------------------------------------------------------------------------
-                                       subroutine dlmtor(R, A, LMAX, F, FBAR)
-                                          ! Input and output
-                                          real(rp), intent(inout) :: r, a
-                                          integer, intent(inout) :: lmax
-                                          real(rp), dimension(0:lmax), intent(inout) :: f, fbar
-                                          ! Local variables
-                                          real(rp) :: obsrpi, obsqpi, z, emz2, erfc0, erfc1, erfc2, g, flm2, ta2r
-                                          integer :: l
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Radial part of damped lmtos F and FBAR, L=0 TO LMAX
+   !
+   !> @param[inout] R
+   !> @param[inout] A
+   !> @param[inout] LMAX
+   !> @param[inout] F
+   !> @param[inout] FBAR
+   !---------------------------------------------------------------------------
+   subroutine dlmtor(R, A, LMAX, F, FBAR)
+      ! Input and output
+      real(rp), intent(inout) :: r, a
+      integer, intent(inout) :: lmax
+      real(rp), dimension(0:lmax), intent(inout) :: f, fbar
+      ! Local variables
+      real(rp) :: obsrpi, obsqpi, z, emz2, erfc0, erfc1, erfc2, g, flm2, ta2r
+      integer :: l
 
-                                          OBSRPI = 0.564189835D0
-                                          OBSQPI = 1.D0/DSQRT(PI)
-                                          Z = A*R
-                                          EMZ2 = DEXP(-Z*Z)
-                                          ERFC0 = DERFC(Z)
-                                          ERFC1 = -Z*ERFC0 + OBSRPI*EMZ2
-                                          ERFC2 = -0.5D0*Z*ERFC1 + 0.25D0*ERFC0
-                                          F(0) = ERFC0/R
-                                          FBAR(0) = -ERFC2/(A*A*R)
-                                          TA2R = 2.D0*A*A*R
-                                          G = 2.D0*A*EMZ2*OBSRPI/R
-                                          FLM2 = OBSRPI*EMZ2/Z - ERFC0
-                                          DO 10 L = 1, LMAX
-                                             F(L) = ((L + L - 1)/R)*F(L - 1) + G
-                                             FBAR(L) = ((L + L - 1)/R)*FBAR(L - 1) - FLM2
-                                             FLM2 = F(L - 1)
-10                                           G = G*TA2R
-                                             RETURN
-                                             end subroutine dlmtor
+      OBSRPI = 0.564189835D0
+      OBSQPI = 1.D0/DSQRT(PI)
+      Z = A*R
+      EMZ2 = DEXP(-Z*Z)
+      ERFC0 = DERFC(Z)
+      ERFC1 = -Z*ERFC0 + OBSRPI*EMZ2
+      ERFC2 = -0.5D0*Z*ERFC1 + 0.25D0*ERFC0
+      F(0) = ERFC0/R
+      FBAR(0) = -ERFC2/(A*A*R)
+      TA2R = 2.D0*A*A*R
+      G = 2.D0*A*EMZ2*OBSRPI/R
+      FLM2 = OBSRPI*EMZ2/Z - ERFC0
+      DO L = 1, LMAX
+         F(L) = ((L + L - 1)/R)*F(L - 1) + G
+         FBAR(L) = ((L + L - 1)/R)*FBAR(L - 1) - FLM2
+         FLM2 = F(L - 1)
+         G = G*TA2R
+      END DO
+      RETURN
+   end subroutine dlmtor
 
-                                             !---------------------------------------------------------------------------
-                                             ! DESCRIPTION:
-                                             !> @brief
-                                             !>  Printout of strains E1...E6
-                                             !
-                                             !> @param[inout] GX
-                                             !> @param[inout] GY
-                                             !> @param[inout] GZ
-                                             !> @param[inout] GT
-                                             !---------------------------------------------------------------------------
-                                             subroutine strain(GX, GY, GZ, GT)
-                                                ! Input and output
-                                                real(rp), intent(inout) :: gx, gy, gz, gt
-                                                ! Local variables
-                                                real(rp), dimension(3, 3) :: e, eps
-                                                integer :: ixyz, m
-                                                DATA E/1D0, 0D0, 0D0, 0D0, 1D0, 0D0, 0D0, 0D0, 1D0/
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !>  Printout of strains E1...E6
+   !
+   !> @param[inout] GX
+   !> @param[inout] GY
+   !> @param[inout] GZ
+   !> @param[inout] GT
+   !---------------------------------------------------------------------------
+   subroutine strain(GX, GY, GZ, GT)
+      ! Input and output
+      real(rp), intent(inout) :: gx, gy, gz, gt
+      ! Local variables
+      real(rp), dimension(3, 3) :: e, eps
+      integer :: ixyz, m
+      DATA E/1D0, 0D0, 0D0, 0D0, 1D0, 0D0, 0D0, 0D0, 1D0/
 
-                                                DO 10 IXYZ = 1, 3
-                                                   CALL RDIST(E(1, IXYZ), EPS(1, IXYZ), GX, GY, GZ, GT)
-                                                   DO 10 M = 1, 3
-10                                                    EPS(M, IXYZ) = EPS(M, IXYZ) - E(M, IXYZ)
-                                                      WRITE (10, 230) EPS(1, 1), EPS(2, 2), EPS(3, 3), EPS(2, 3) + EPS(3, 2),        &
-                                                       &  EPS(1, 3) + EPS(3, 1), EPS(1, 2) + EPS(2, 1)
-230                                                   FORMAT(/' STRAINS E1..E6:', 6F10.6)
-                                                      RETURN
-                                                      end subroutine strain
+      DO IXYZ = 1, 3
+         CALL RDIST(E(1, IXYZ), EPS(1, IXYZ), GX, GY, GZ, GT)
+         DO M = 1, 3
+            EPS(M, IXYZ) = EPS(M, IXYZ) - E(M, IXYZ)
+         END DO
+      END DO
+      WRITE (10, 230) EPS(1, 1), EPS(2, 2), EPS(3, 3), EPS(2, 3) + EPS(3, 2),        &
+         &  EPS(1, 3) + EPS(3, 1), EPS(1, 2) + EPS(2, 1)
+230   FORMAT(/' STRAINS E1..E6:', 6F10.6)
+      RETURN
+   end subroutine strain
 
-                                                      !---------------------------------------------------------------------------
-                                                      ! DESCRIPTION:
-                                                      !> @brief
-                                                      !>  Generates lattice vectors.
-                                                      !
-                                                      !> @param[inout] BAS
-                                                      !> @param[in] BMAX
-                                                      !> @param[inout] NV
-                                                      !> @param[inout] NVMAX
-                                                      !> @param[inout] VECS
-                                                      !> @param[inout] WORK
-                                                      !> @return type(calculation)
-                                                      !---------------------------------------------------------------------------
-                                                      subroutine lgen(BAS, BMAX, NV, NVMAX, VECS, WORK)
-                                                         ! Input and output
-                                                         integer, intent(inout) ::  nv, nvmax
-                                                         real(rp), dimension(3, 3), intent(inout) :: bas
-                                                         real(rp), dimension(3, nvmax), intent(inout) :: vecs
-                                                         real(rp), dimension(nvmax), intent(inout) :: work
-                                                         real(rp), intent(in) :: bmax
-                                                         ! Local variables
-                                                         real(rp), dimension(3) :: v
-                                                         real(rp) :: bmax2, v2, vsm, alow, xx, ddd
-                                                         integer :: i, j, k, m, iv, ilow, jv, imax, jmax, kmax
-                                                         !write(*, *)nvmax
-                                                         CALL LATLIM(BAS, BMAX, IMAX, JMAX, KMAX)
-                                                         BMAX2 = BMAX*BMAX
-                                                         !write(*, *)nvmax
-                                                         NV = 0
-                                                         DO 20 I = -IMAX, IMAX
-                                                         DO 20 J = -JMAX, JMAX
-                                                         DO 20 K = -KMAX, KMAX
-                                                         DO 21 M = 1, 3
-21                                                          V(M) = I*BAS(M, 1) + J*BAS(M, 2) + K*BAS(M, 3)
-                                                            V2 = V(1)*V(1) + V(2)*V(2) + V(3)*V(3)
-                                                            IF (V2 .GT. BMAX2) GOTO 20
-                                                            NV = NV + 1
-                                                            IF (NV .GT. NVMAX) WRITE (10, 633) NVMAX, I, IMAX
-                                                            IF (NV .GT. NVMAX) STOP '*** ERROR IN LGEN ***'
-633                                                         FORMAT(/' NV=', I6, '  EXCEEDED,   I=', I3, '  IMAX=', I3)
-                                                            DO 22 M = 1, 3
-22                                                             VECS(M, NV) = V(M)
-                                                               VSM = DABS(V(1)) + DABS(V(2)) + DABS(V(3))
-                                                               WORK(NV) = V2 + VSM/1000.
-20                                                             CONTINUE
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !>  Generates lattice vectors.
+   !
+   !> @param[inout] BAS
+   !> @param[in] BMAX
+   !> @param[inout] NV
+   !> @param[inout] NVMAX
+   !> @param[inout] VECS
+   !> @param[inout] WORK
+   !> @return type(calculation)
+   !---------------------------------------------------------------------------
+   subroutine lgen(BAS, BMAX, NV, NVMAX, VECS, WORK)
+      ! Input and output
+      integer, intent(inout) :: nv, nvmax
+      real(rp), dimension(3, 3), intent(inout) :: bas
+      real(rp), dimension(3, nvmax), intent(inout) :: vecs
+      real(rp), dimension(nvmax), intent(inout) :: work
+      real(rp), intent(in) :: bmax
+      ! Local variables
+      real(rp), dimension(3) :: v
+      real(rp) :: bmax2, v2, vsm, alow, xx, ddd
+      integer :: i, j, k, m, iv, ilow, jv, imax, jmax, kmax
+      !write(*, *)nvmax
+      CALL LATLIM(BAS, BMAX, IMAX, JMAX, KMAX)
+      BMAX2 = BMAX*BMAX
+      !write(*, *)nvmax
+      NV = 0
+      DO I = -IMAX, IMAX
+         DO J = -JMAX, JMAX
+            DO K = -KMAX, KMAX
+               DO M = 1, 3
+                  V(M) = I*BAS(M, 1) + J*BAS(M, 2) + K*BAS(M, 3)
+               END DO
+               V2 = V(1)*V(1) + V(2)*V(2) + V(3)*V(3)
+               IF (V2 .GT. BMAX2) CYCLE
+               NV = NV + 1
+               IF (NV .GT. NVMAX) THEN
+                  WRITE (10, 633) NVMAX, I, IMAX
+                  STOP '*** ERROR IN LGEN ***'
+               END IF
+               DO M = 1, 3
+                  VECS(M, NV) = V(M)
+               END DO
+               VSM = DABS(V(1)) + DABS(V(2)) + DABS(V(3))
+               WORK(NV) = V2 + VSM/1000.
+            END DO
+         END DO
+      END DO
 ! --- SORT BY LENGTH -----------
-                                                               DO 30 IV = 1, NV
-                                                                  ILOW = IV
-                                                                  ALOW = WORK(IV)
-                                                                  DO 31 JV = IV, NV
-                                                                  IF (WORK(JV) .LT. ALOW) THEN
-                                                                     ALOW = WORK(JV)
-                                                                     ILOW = JV
-                                                                  END IF
-31                                                                END DO
-                                                                  IF (ILOW .EQ. IV) GOTO 30
-                                                                  DO 32 M = 1, 3
-                                                                     XX = VECS(M, IV)
-                                                                     VECS(M, IV) = VECS(M, ILOW)
-32                                                                   VECS(M, ILOW) = XX
-                                                                     WORK(ILOW) = WORK(IV)
-                                                                     XX = WORK(ILOW)
-!|      WRITE(6, 300) IV, (VECS(M, IV), M=1, 3), XX
-!|300   FORMAT(I6, 3X, 3F9.4, F12.4)
-30                                                                END DO
+      DO IV = 1, NV
+         ILOW = IV
+         ALOW = WORK(IV)
+         DO JV = IV, NV
+            IF (WORK(JV) < ALOW) THEN
+               ALOW = WORK(JV)
+               ILOW = JV
+            END IF
+         END DO
+         IF (ILOW == IV) CYCLE
+         DO M = 1, 3
+            XX = VECS(M, IV)
+            VECS(M, IV) = VECS(M, ILOW)
+            VECS(M, ILOW) = XX
+         END DO
+         WORK(ILOW) = WORK(IV)
+         XX = WORK(ILOW)
+         !|      WRITE(6, 300) IV, (VECS(M, IV), M=1, 3), XX
+         !|300   FORMAT(I6, 3X, 3F9.4, F12.4)
+      END DO
 ! ---- PRINT A WARNING IF A BASIS VEC IS NOT IN VECTOR LIST ----
-                                                                  DO 40 K = 1, 3
-                                                                  DO 41 IV = 1, NV
-                                                                     DDD = (BAS(1, K) - VECS(1, IV))**2 + (BAS(2, K) - VECS(2, IV))**2             &
-                                                                                    &   + (BAS(3, K) - VECS(3, IV))**2
+      DO 40 K = 1, 3
+      DO 41 IV = 1, NV
+         DDD = (BAS(1, K) - VECS(1, IV))**2 + (BAS(2, K) - VECS(2, IV))**2             &
+                                                      &   + (BAS(3, K) - VECS(3, IV))**2
 !     write(*, *)vecs(1, IV), vecs(2, IV), vecs(3, IV)
-                                                                     IF (DDD .LT. 1.D-8) GOTO 42
-41                                                                END DO
-                                                                  WRITE (10, 650) K
-650                                                               FORMAT(//' **** WARNING FROM LGEN **** BASIS VECTOR', I3,          &
-                                                                                                                               & '  NOT IN LIST'/' **** SUBROUTINE SHORTN MIGHT NOT WORK')
-42                                                                CONTINUE
-40                                                                END DO
-                                                                  RETURN
-                                                                  end subroutine lgen
+         IF (DDD .LT. 1.D-8) GOTO 42
+41    END DO
+      WRITE (10, 650) K
+650   FORMAT(//' **** WARNING FROM LGEN **** BASIS VECTOR', I3,          &
+                                                                         & '  NOT IN LIST'/' **** SUBROUTINE SHORTN MIGHT NOT WORK')
+42    CONTINUE
+40    END DO
+      RETURN
+633   FORMAT(/' NV=', I6, '  EXCEEDED,   I=', I3, '  IMAX=', I3)
+   end subroutine lgen
 
-                                                                  !---------------------------------------------------------------------------
-                                                                  ! DESCRIPTION:
-                                                                  !> @brief
-                                                                  !> Limits in x y z direction, also initialize matrix
-                                                                  !
-                                                                  !> @param[in] BAS
-                                                                  !> @param[in] VMAX
-                                                                  !> @param[out] I1
-                                                                  !> @param[out] I2
-                                                                  !> @param[out] I3
-                                                                  !---------------------------------------------------------------------------
-                                                                  subroutine latlim(BAS, VMAX, I1, I2, I3)
-                                                                     ! Input
-                                                                     real(rp), dimension(3, 3), intent(in) :: bas
-                                                                     real(rp), intent(in) :: vmax
-                                                                     ! Output
-                                                                     integer, intent(out) :: i1, i2, i3
-                                                                     ! Local variables
-                                                                     real(rp), dimension(3, 3) :: a
-                                                                     real(rp) :: det, A11, A22, A33, A12, A13, A23
-                                                                     integer :: i, j
-                                                                     DO 6 I = 1, 3
-                                                                     DO 6 J = I, 3
-6                                                                       A(I, J) = BAS(1, I)*BAS(1, J) + BAS(2, I)*BAS(2, J) + BAS(3, I)*BAS(3, J)
-                                                                        A11 = A(1, 1)
-                                                                        A12 = A(1, 2)
-                                                                        A13 = A(1, 3)
-                                                                        A22 = A(2, 2)
-                                                                        A23 = A(2, 3)
-                                                                        A33 = A(3, 3)
-                                                                        DET = A11*A22*A33 + A12*A23*A13                                       &
-                                                                        &   + A12*A23*A13 - A13*A22*A13                                       &
-                                                                                  &   - A23*A23*A11 - A12*A12*A33
-                                                                        I1 = VMAX*DSQRT((A22*A33 - A23**2)/DET)
-                                                                        I2 = VMAX*DSQRT((A11*A33 - A13**2)/DET)
-                                                                        I3 = VMAX*DSQRT((A11*A22 - A12**2)/DET)
-                                                                        RETURN
-                                                                        end subroutine latlim
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Limits in x y z direction, also initialize matrix
+   !
+   !> @param[in] BAS
+   !> @param[in] VMAX
+   !> @param[out] I1
+   !> @param[out] I2
+   !> @param[out] I3
+   !---------------------------------------------------------------------------
+   subroutine latlim(BAS, VMAX, I1, I2, I3)
+      ! Input
+      real(rp), dimension(3, 3), intent(in) :: bas
+      real(rp), intent(in) :: vmax
+      ! Output
+      integer, intent(out) :: i1, i2, i3
+      ! Local variables
+      real(rp), dimension(3, 3) :: a
+      real(rp) :: det, A11, A22, A33, A12, A13, A23
+      integer :: i, j
+      DO I = 1, 3
+         DO J = I, 3
+            A(I, J) = BAS(1, I)*BAS(1, J) + BAS(2, I)*BAS(2, J) + BAS(3, I)*BAS(3, J)
+         END DO
+      END DO
+      A11 = A(1, 1)
+      A12 = A(1, 2)
+      A13 = A(1, 3)
+      A22 = A(2, 2)
+      A23 = A(2, 3)
+      A33 = A(3, 3)
+      DET = A11*A22*A33 + A12*A23*A13                                       &
+      &   + A12*A23*A13 - A13*A22*A13                                       &
+                                      &   - A23*A23*A11 - A12*A12*A33
+      I1 = VMAX*DSQRT((A22*A33 - A23**2)/DET)
+      I2 = VMAX*DSQRT((A11*A33 - A13**2)/DET)
+      I3 = VMAX*DSQRT((A11*A22 - A12**2)/DET)
+      RETURN
+   end subroutine latlim
 !# QDIST FORTRAN *
 
-                                                                        !---------------------------------------------------------------------------
-                                                                        ! DESCRIPTION:
-                                                                        !> @brief
-                                                                        !> Distorts a vector in recip space
-                                                                        !
-                                                                        !> @param[in] Q
-                                                                        !> @param[inout] QOUT
-                                                                        !> @param[in] GAMX
-                                                                        !> @param[in] GAMY
-                                                                        !> @param[in] GAMZ
-                                                                        !> @param[in] GAMT
-                                                                        !> @return type(calculation)
-                                                                        !---------------------------------------------------------------------------
-                                                                        subroutine qdist(Q, QOUT, GAMX, GAMY, GAMZ, GAMT)
-                                                                           ! Input
-                                                                           real(rp), intent(in) :: gamx, gamy, gamz, gamt
-                                                                           real(rp), dimension(3), intent(in) :: q
-                                                                           ! Output
-                                                                           real(rp), dimension(3), intent(inout) :: qout
-                                                                           ! Local variables
-                                                                           real(rp) :: add
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Distorts a vector in recip space
+   !
+   !> @param[in] Q
+   !> @param[inout] QOUT
+   !> @param[in] GAMX
+   !> @param[in] GAMY
+   !> @param[in] GAMZ
+   !> @param[in] GAMT
+   !> @return type(calculation)
+   !---------------------------------------------------------------------------
+   subroutine qdist(Q, QOUT, GAMX, GAMY, GAMZ, GAMT)
+      ! Input
+      real(rp), intent(in) :: gamx, gamy, gamz, gamt
+      real(rp), dimension(3), intent(in) :: q
+      ! Output
+      real(rp), dimension(3), intent(inout) :: qout
+      ! Local variables
+      real(rp) :: add
 
-                                                                           ADD = -(Q(1) + Q(2) + Q(3))*(GAMT - 1.D0)/GAMT/3.D0
-                                                                           QOUT(1) = (Q(1) + ADD)/GAMX
-                                                                           QOUT(2) = (Q(2) + ADD)/GAMY
-                                                                           QOUT(3) = (Q(3) + ADD)/GAMZ
-                                                                           RETURN
-                                                                        end subroutine qdist
+      ADD = -(Q(1) + Q(2) + Q(3))*(GAMT - 1.D0)/GAMT/3.D0
+      QOUT(1) = (Q(1) + ADD)/GAMX
+      QOUT(2) = (Q(2) + ADD)/GAMY
+      QOUT(3) = (Q(3) + ADD)/GAMZ
+      RETURN
+   end subroutine qdist
 !# RDIST FORTRAN *
 
-                                                                        !---------------------------------------------------------------------------
-                                                                        ! DESCRIPTION:
-                                                                        !> @brief
-                                                                        !> Distorts a vector in real space
-                                                                        !
-                                                                        !> @param[in] R
-                                                                        !> @param[inout] ROUT
-                                                                        !> @param[in] GAMX
-                                                                        !> @param[in] GAMY
-                                                                        !> @param[in] GAMZ
-                                                                        !> @param[in] GAMT
-                                                                        !> @return type(calculation)
-                                                                        !---------------------------------------------------------------------------
-                                                                        subroutine rdist(R, ROUT, GAMX, GAMY, GAMZ, GAMT)
-                                                                           ! Input
-                                                                           real(rp), intent(in) :: gamx, gamy, gamz, gamt
-                                                                           real(rp), dimension(3), intent(in) :: r
-                                                                           ! Output
-                                                                           real(rp), dimension(3), intent(inout) :: rout
-                                                                           ! Local variables
-                                                                           real(rp) :: add, rx, ry, rz
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Distorts a vector in real space
+   !
+   !> @param[in] R
+   !> @param[inout] ROUT
+   !> @param[in] GAMX
+   !> @param[in] GAMY
+   !> @param[in] GAMZ
+   !> @param[in] GAMT
+   !> @return type(calculation)
+   !---------------------------------------------------------------------------
+   subroutine rdist(R, ROUT, GAMX, GAMY, GAMZ, GAMT)
+      ! Input
+      real(rp), intent(in) :: gamx, gamy, gamz, gamt
+      real(rp), dimension(3), intent(in) :: r
+      ! Output
+      real(rp), dimension(3), intent(inout) :: rout
+      ! Local variables
+      real(rp) :: add, rx, ry, rz
 
-                                                                           RX = R(1)*GAMX
-                                                                           RY = R(2)*GAMY
-                                                                           RZ = R(3)*GAMZ
-                                                                           ADD = (RX + RY + RZ)*(GAMT - 1.D0)/3.D0
-                                                                           ROUT(1) = RX + ADD
-                                                                           ROUT(2) = RY + ADD
-                                                                           ROUT(3) = RZ + ADD
-                                                                           RETURN
-                                                                        end subroutine rdist
+      RX = R(1)*GAMX
+      RY = R(2)*GAMY
+      RZ = R(3)*GAMZ
+      ADD = (RX + RY + RZ)*(GAMT - 1.D0)/3.D0
+      ROUT(1) = RX + ADD
+      ROUT(2) = RY + ADD
+      ROUT(3) = RZ + ADD
+      RETURN
+   end subroutine rdist
 
-                                                                        !---------------------------------------------------------------------------
-                                                                        ! DESCRIPTION:
-                                                                        !> @brief
-                                                                        !> Distort NA real-space vectors in array A1 into array A2
-                                                                        !
-                                                                        !> @param[in] A1
-                                                                        !> @param[out] A2
-                                                                        !> @param[in] NA
-                                                                        !> @param[in] GX
-                                                                        !> @param[in] GY
-                                                                        !> @param[in] GZ
-                                                                        !> @param[in] GT
-                                                                        !---------------------------------------------------------------------------
-                                                                        subroutine rdistn(A1, A2, NA, GX, GY, GZ, GT)
-                                                                           ! Input
-                                                                           integer, intent(in) :: na
-                                                                           real(rp), intent(in) :: gx, gy, gz, gt
-                                                                           real(rp), dimension(3, na), intent(in) :: a1
-                                                                           ! Output
-                                                                           real(rp), dimension(3, na), intent(out) :: a2
-                                                                           ! Local variables
-                                                                           integer :: ia
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Distort NA real-space vectors in array A1 into array A2
+   !
+   !> @param[in] A1
+   !> @param[out] A2
+   !> @param[in] NA
+   !> @param[in] GX
+   !> @param[in] GY
+   !> @param[in] GZ
+   !> @param[in] GT
+   !---------------------------------------------------------------------------
+   subroutine rdistn(A1, A2, NA, GX, GY, GZ, GT)
+      ! Input
+      integer, intent(in) :: na
+      real(rp), intent(in) :: gx, gy, gz, gt
+      real(rp), dimension(3, na), intent(in) :: a1
+      ! Output
+      real(rp), dimension(3, na), intent(out) :: a2
+      ! Local variables
+      integer :: ia
 
-                                                                           DO 10 IA = 1, NA
-10                                                                            CALL RDIST(A1(1, IA), A2(1, IA), GX, GY, GZ, GT)
+      DO IA = 1, NA
+         CALL RDIST(A1(:, IA), A2(:, IA), GX, GY, GZ, GT)
+      END DO
 
-                                                                              RETURN
-                                                                              end subroutine rdistn
+      RETURN
+   end subroutine rdistn
 
-                                                                              !---------------------------------------------------------------------------
-                                                                              ! DESCRIPTION:
-                                                                              !> @brief
-                                                                              !> TODO
-                                                                              !---------------------------------------------------------------------------
-                                                                              subroutine wkinit(this)
-                                                                                 class(charge), intent(inout) :: this
-                                                                                 character(len=1), dimension(60) :: string, str
-                                                                                 integer :: j70, ndefmx, j7max, ndfdmx, dfdsum, ipr, j7free, itot, limit, nsize, &
-                                                                                            iprint, length, leng, j7name, imod, ndefd, lrest, idfd, iumx, iunw, &
-                                                                                            j7x, j7y, i, j7ploc, nstr
-                                                                                 save
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> TODO
+   !---------------------------------------------------------------------------
+   subroutine wkinit(this)
+      class(charge), intent(inout) :: this
+      character(len=1), dimension(60) :: string, str
+      integer :: j70, ndefmx, j7max, ndfdmx, dfdsum, ipr, j7free, itot, limit, nsize, &
+                 iprint, length, leng, j7name, imod, ndefd, lrest, idfd, iumx, iunw, &
+                 j7x, j7y, i, j7ploc, nstr
+      save
 ! ----- DEFINE STORAGE SIZE ------
 !  START OF FIRST ARRAY AND MAX NUMBER TO BE DEFINED:
-                                                                                 nsize = 3000000
-                                                                                 J70 = 5
-                                                                                 NDEFMX = 100
-                                                                                 LIMIT = NSIZE
-                                                                                 J7MAX = 0
-                                                                                 NDFDMX = 0
-                                                                                 DFDSUM = 0.
-                                                                                 IPR = 0
-                                                                                 J7FREE = 5
-                                                                                 this%W(J7FREE - 1) = J7FREE
-                                                                                 ITOT = LIMIT*0.001 + 0.5
-                                                                                 WRITE (10, 399) ITOT
-399                                                                              FORMAT(/' WKINIT:   size=', I8, ' K')
-                                                                                 RETURN
+      nsize = 3000000
+      J70 = 5
+      NDEFMX = 100
+      LIMIT = NSIZE
+      J7MAX = 0
+      NDFDMX = 0
+      DFDSUM = 0.
+      IPR = 0
+      J7FREE = 5
+      this%W(J7FREE - 1) = J7FREE
+      ITOT = LIMIT*0.001 + 0.5
+      WRITE (10, 399) ITOT
+399   FORMAT(/' WKINIT:   size=', I8, ' K')
+      RETURN
 ! ------ SUB TO SWITCH OUTPUT OF ARRAY DEF INFO ----
-                                                                                 ENTRY WKPRNT(IPRINT)
-                                                                                 IPR = IPRINT
-                                                                                 RETURN
+      ENTRY WKPRNT(IPRINT)
+      IPR = IPRINT
+      RETURN
 ! ------ SUBROUTINES TO DEFINE ARRAYS OF VARIOUS TYPES -----
-                                                                                 ENTRY DEFI(J7NAME, LENG)
-                                                                                 LENGTH = LENG
-                                                                                 GOTO 10
-                                                                                 ENTRY DEFR(J7NAME, LENG)
-                                                                                 LENGTH = LENG
-                                                                                 GOTO 10
-                                                                                 ENTRY DEFC(J7NAME, LENG)
-                                                                                 LENGTH = LENG*2
-                                                                                 GOTO 10
-                                                                                 ENTRY DEFRR(this, J7NAME, LENG)
-                                                                                 LENGTH = LENG*2
-                                                                                 GOTO 10
-                                                                                 ENTRY DEFCC(J7NAME, LENG)
-                                                                                 LENGTH = LENG*4
-10                                                                               IF (LENGTH .LT. 0) STOP '**** LENGTH OF ARRAY NEGATIVE'
-                                                                                 IF (LENGTH .EQ. 0) LENGTH = 1
-                                                                                 IMOD = 1
-                                                                                 GOTO 83
-84                                                                               J7NAME = J7FREE
-                                                                                 J7FREE = J7FREE + LENGTH + 1
-                                                                                 J7FREE = 4*((J7FREE + 2)/4) + 1
-                                                                                 J7MAX = MAX0(J7MAX, J7FREE)
-                                                                                 this%W(J7NAME - 1) = J7FREE
-                                                                                 NDEFD = NDEFD + 1
-                                                                                 NDFDMX = MAX0(NDFDMX, NDEFD)
-                                                                                 DFDSUM = DFDSUM + LENGTH*0.001
-                                                                                 IF (IPR .GT. 0) WRITE (10, 100) NDEFD, LENG, LENGTH, J7NAME, J7FREE - 1
-100                                                                              FORMAT(' define array', I4, ':   els=', I8, '   length=', I8, ', ',      &
-                                                                                                                                                             &   I8, '  to', I8)
-                                                                                 IF (J7FREE .LE. LIMIT) RETURN
-                                                                                 WRITE (10, 101) J7FREE
-101                                                                              FORMAT(' **** WORKSPACE OVERFLOW,  NEED AT LEAST', I8)
-                                                                                 STOP
+      ENTRY DEFI(J7NAME, LENG)
+      LENGTH = LENG
+      GOTO 10
+      ENTRY DEFR(J7NAME, LENG)
+      LENGTH = LENG
+      GOTO 10
+      ENTRY DEFC(J7NAME, LENG)
+      LENGTH = LENG*2
+      GOTO 10
+      ENTRY DEFRR(this, J7NAME, LENG)
+      LENGTH = LENG*2
+      GOTO 10
+      ENTRY DEFCC(J7NAME, LENG)
+      LENGTH = LENG*4
+10    IF (LENGTH .LT. 0) STOP '**** LENGTH OF ARRAY NEGATIVE'
+      IF (LENGTH .EQ. 0) LENGTH = 1
+      IMOD = 1
+      GOTO 83
+84    J7NAME = J7FREE
+      J7FREE = J7FREE + LENGTH + 1
+      J7FREE = 4*((J7FREE + 2)/4) + 1
+      J7MAX = MAX0(J7MAX, J7FREE)
+      this%W(J7NAME - 1) = J7FREE
+      NDEFD = NDEFD + 1
+      NDFDMX = MAX0(NDFDMX, NDEFD)
+      DFDSUM = DFDSUM + LENGTH*0.001
+      IF (IPR .GT. 0) WRITE (10, 100) NDEFD, LENG, LENGTH, J7NAME, J7FREE - 1
+100   FORMAT(' define array', I4, ':   els=', I8, '   length=', I8, ', ',      &
+                                                                                                                 &   I8, '  to', I8)
+      IF (J7FREE .LE. LIMIT) RETURN
+      WRITE (10, 101) J7FREE
+101   FORMAT(' **** WORKSPACE OVERFLOW,  NEED AT LEAST', I8)
+      STOP
 ! ------- RETURN NUMBER OF WORDS LEFT ------
-                                                                                 ENTRY DEFASK(LREST)
-                                                                                 LREST = LIMIT - J7FREE - 2
-                                                                                 IF (IPR .GT. 0) WRITE (10, *) 'SPACE LEFT=', LREST, '  SINGLE WORDS'
-                                                                                 RETURN
+      ENTRY DEFASK(LREST)
+      LREST = LIMIT - J7FREE - 2
+      IF (IPR .GT. 0) WRITE (10, *) 'SPACE LEFT=', LREST, '  SINGLE WORDS'
+      RETURN
 ! ------ RELEASE ---------------
-                                                                                 ENTRY RLSE(this, J7NAME)
-                                                                                 IF (J7NAME .GT. LIMIT) STOP '**** RESET POINTER GT LIMIT'
-                                                                                 IF (J7NAME .LT. 3) STOP '**** RESET POINTER LT 3'
-                                                                                 J7FREE = J7NAME
-                                                                                 IF (IPR .GT. 0) WRITE (10, *) 'J7FREE reset to', J7FREE
-                                                                                 RETURN
+      ENTRY RLSE(this, J7NAME)
+      IF (J7NAME .GT. LIMIT) STOP '**** RESET POINTER GT LIMIT'
+      IF (J7NAME .LT. 3) STOP '**** RESET POINTER LT 3'
+      J7FREE = J7NAME
+      IF (IPR .GT. 0) WRITE (10, *) 'J7FREE reset to', J7FREE
+      RETURN
 ! ----- OUTPUT WORKSPACE INFO -----
-                                                                                 ENTRY WKINFO
-                                                                                 IMOD = 2
-                                                                                 GOTO 83
-81                                                                               ITOT = LIMIT*0.001 + 0.5
-                                                                                 IDFD = DFDSUM + 0.5
-                                                                                 IUMX = (J7MAX - 1)*0.001 + 0.5
-                                                                                 IUNW = (J7FREE - 1)*0.001 + 0.5
-                                                                                 WRITE (10, 601) ITOT, IDFD, IUMX, IUNW, NDFDMX, NDEFD
-601                                                                              FORMAT(/'  total workspace size=', I6, ' K'                         &
-                                                                                                                                           &  /'  total space defined =', I6, ' K'                              &
-                                                                                                                                         &  /'  workspace used:   max', I6, ' K   now', I6, ' K'                &
-                                                                                                                                                             &  /'  arrays defined:   max', I8, '   now', I8)
-                                                                                 IF (J7FREE .EQ. J70) RETURN
-                                                                                 WRITE (10, 602)
-602                                                                              FORMAT(/'  array', 6X, 'begin', 10X, 'end', 7X, 'length')
-                                                                                 J7X = J70
-                                                                                 DO 30 I = 1, NDEFMX
-                                                                                    J7Y = this%W(J7X - 1)
-                                                                                    IF (J7X .EQ. J7FREE) RETURN
-                                                                                    WRITE (10, 540) I, J7X, J7Y - 1, J7Y - J7X
-540                                                                                 FORMAT(I5, 3I13)
-                                                                                    IF (J7Y .LT. J70 .OR. J7Y .GT. LIMIT) WRITE (10, *) '   . . . . . '
-                                                                                    IF (J7Y .LT. J70 .OR. J7Y .GT. LIMIT) RETURN
-30                                                                                  J7X = J7Y
-                                                                                    RETURN
-                                                                                    ENTRY WKCHK(STRING)
-                                                                                    IMOD = 0
-                                                                                    DO 88 I = 1, 60
-                                                                                       STR(I) = STRING(I)
-                                                                                       NSTR = I
-88                                                                                     IF (STRING(I) .EQ. 'J7') GOTO 89
-89                                                                                     STR(NSTR) = '>'
-                                                                                       WRITE (10, 891) (STR(I), I=1, NSTR)
-891                                                                                    FORMAT('     WKCHK   <', 60A1)
-83                                                                                     NDEFD = 0
-                                                                                       J7X = J70
-                                                                                       J7PLOC = -999
-                                                                                       DO 35 I = 1, NDEFMX
-                                                                                       IF (J7X .LT. J70 .OR. J7X .GT. LIMIT) THEN
-                                                                                          WRITE (10, 888) NDEFD, J7X, J7PLOC
-888                                                                                       FORMAT(' *** LINK DESTROYED AT START OF ARRAY', I3,             &
-                                                                                                                                                                               &     ',  PTR=', I8, ' AT', I8)
-                                                                                          STOP
-                                                                                       END IF
-                                                                                       IF (J7X .EQ. J7FREE) GOTO 86
-                                                                                       NDEFD = NDEFD + 1
-                                                                                       J7PLOC = J7X - 1
-35                                                                                     J7X = this%W(J7PLOC)
-86                                                                                     CONTINUE
-                                                                                       IF (IMOD .EQ. 1) GOTO 84
-                                                                                       IF (IMOD .EQ. 2) GOTO 81
-                                                                                       WRITE (10, 360) NDEFD, J7FREE - 1
-360                                                                                    FORMAT('     LINKS OK   NDEFD=', I3, '   SPACE USED=', I7)
-                                                                                       RETURN
-                                                                                       end subroutine wkinit
+      ENTRY WKINFO
+      IMOD = 2
+      GOTO 83
+81    ITOT = LIMIT*0.001 + 0.5
+      IDFD = DFDSUM + 0.5
+      IUMX = (J7MAX - 1)*0.001 + 0.5
+      IUNW = (J7FREE - 1)*0.001 + 0.5
+      WRITE (10, 601) ITOT, IDFD, IUMX, IUNW, NDFDMX, NDEFD
+601   FORMAT(/'  total workspace size=', I6, ' K'                         &
+                                                              &  /'  total space defined =', I6, ' K'                              &
+                                                            &  /'  workspace used:   max', I6, ' K   now', I6, ' K'                &
+                                                                                    &  /'  arrays defined:   max', I8, '   now', I8)
+      IF (J7FREE .EQ. J70) RETURN
+      WRITE (10, 602)
+602   FORMAT(/'  array', 6X, 'begin', 10X, 'end', 7X, 'length')
+      J7X = J70
+      DO I = 1, NDEFMX
+         J7Y = this%W(J7X - 1)
+         IF (J7X .EQ. J7FREE) RETURN
+         WRITE (10, 540) I, J7X, J7Y - 1, J7Y - J7X
+540      FORMAT(I5, 3I13)
+         IF (J7Y .LT. J70 .OR. J7Y .GT. LIMIT) WRITE (10, *) '   . . . . . '
+         IF (J7Y .LT. J70 .OR. J7Y .GT. LIMIT) RETURN
+         J7X = J7Y
+      END DO
+      RETURN
+      ENTRY WKCHK(STRING)
+      IMOD = 0
+      DO I = 1, 60
+         STR(I) = STRING(I)
+         NSTR = I
+         IF (STRING(I) == 'J7') THEN
+            EXIT
+         END IF
+      END DO
+89    STR(NSTR) = '>'
+      WRITE (10, 891) (STR(I), I=1, NSTR)
+891   FORMAT('     WKCHK   <', 60A1)
+83    NDEFD = 0
+      J7X = J70
+      J7PLOC = -999
+      DO I = 1, NDEFMX
+         IF (J7X < J70 .OR. J7X > LIMIT) THEN
+            WRITE (10, 888) NDEFD, J7X, J7PLOC
+888         FORMAT(' *** LINK DESTROYED AT START OF ARRAY', I3,             &
+                                                                                                   &     ',  PTR=', I8, ' AT', I8)
+            STOP
+         END IF
+         IF (J7X == J7FREE) GOTO 86
+         NDEFD = NDEFD + 1
+         J7PLOC = J7X - 1
+         J7X = this%W(J7PLOC)
+86    END DO
+      IF (IMOD .EQ. 1) GOTO 84
+      IF (IMOD .EQ. 2) GOTO 81
+      WRITE (10, 360) NDEFD, J7FREE - 1
+360   FORMAT('     LINKS OK   NDEFD=', I3, '   SPACE USED=', I7)
+      RETURN
+   end subroutine wkinit
 
-                                                                                       !---------------------------------------------------------------------------
-                                                                                       ! DESCRIPTION:
-                                                                                       !> @brief
-                                                                                       !> Print class members values in namelist format
-                                                                                       !>
-                                                                                       !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
-                                                                                       !> @param[in] unit File unit used to write namelist
-                                                                                       !> @param[in] file File name used to write namelist
-                                                                                       !---------------------------------------------------------------------------
-                                                                                       subroutine print_state_full(this, unit, file)
-                                                                                          implicit none
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Print class members values in namelist format
+   !>
+   !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
+   !> @param[in] unit File unit used to write namelist
+   !> @param[in] file File name used to write namelist
+   !---------------------------------------------------------------------------
+   subroutine print_state_full(this, unit, file)
+      implicit none
 
-                                                                                          class(charge), intent(in) :: this
+      class(charge), intent(in) :: this
 
-                                                                                          integer, intent(in), optional :: unit
-                                                                                          character(len=*), intent(in), optional :: file
-                                                                                          integer :: newunit
+      integer, intent(in), optional :: unit
+      character(len=*), intent(in), optional :: file
+      integer :: newunit
 
-                                                                                          include 'include_codes/namelists/charge.f90'
+      include 'include_codes/namelists/charge.f90'
 
-                                                                                          ! scalar
+      ! scalar
 
-                                                                                          gx = this%gx
-                                                                                          gy = this%gy
-                                                                                          gz = this%gz
-                                                                                          gt = this%gt
-                                                                                          a = this%a
-                                                                                          b = this%b
-                                                                                          c = this%c
-                                                                                          amax = this%amax
-                                                                                          bmax = this%bmax
-                                                                                          alamda = this%alamda
-                                                                                          rmax = this%rmax
-                                                                                          gmax = this%gmax
-                                                                                          ar2d = this%ar2d
-                                                                                          sws = this%sws
-                                                                                          vol = this%vol
-                                                                                          nq3 = this%nq3
-                                                                                          nr0 = this%nr0
-                                                                                          numr = this%numr
-                                                                                          numg = this%numg
-                                                                                          numvr = this%numvr
-                                                                                          numvg = this%numvg
+      gx = this%gx
+      gy = this%gy
+      gz = this%gz
+      gt = this%gt
+      a = this%a
+      b = this%b
+      c = this%c
+      amax = this%amax
+      bmax = this%bmax
+      alamda = this%alamda
+      rmax = this%rmax
+      gmax = this%gmax
+      ar2d = this%ar2d
+      sws = this%sws
+      vol = this%vol
+      nq3 = this%nq3
+      nr0 = this%nr0
+      numr = this%numr
+      numg = this%numg
+      numvr = this%numvr
+      numvg = this%numvg
 
-                                                                                          ! 1d allocatable
+      ! 1d allocatable
 
-                                                                                          if (allocated(this%w)) then
-                                                                                             allocate (w, mold=this%w)
-                                                                                             w = this%w
-                                                                                          else
-                                                                                             allocate (w(0))
-                                                                                          end if
-                                                                                          if (allocated(this%wssurf)) then
-                                                                                             allocate (wssurf, mold=this%wssurf)
-                                                                                             wssurf = this%wssurf
-                                                                                          else
-                                                                                             allocate (wssurf(0))
-                                                                                          end if
-                                                                                          if (allocated(this%bsx)) then
-                                                                                             allocate (bsx, mold=this%bsx)
-                                                                                             bsx = this%bsx
-                                                                                          else
-                                                                                             allocate (bsx(0))
-                                                                                          end if
-                                                                                          if (allocated(this%bsy)) then
-                                                                                             allocate (bsy, mold=this%bsy)
-                                                                                             bsy = this%bsy
-                                                                                          else
-                                                                                             allocate (bsy(0))
-                                                                                          end if
-                                                                                          if (allocated(this%bsz)) then
-                                                                                             allocate (bsz, mold=this%bsz)
-                                                                                             bsz = this%bsz
-                                                                                          else
-                                                                                             allocate (bsz(0))
-                                                                                          end if
-                                                                                          if (allocated(this%bkx)) then
-                                                                                             allocate (bkx, mold=this%bkx)
-                                                                                             bkx = this%bkx
-                                                                                          else
-                                                                                             allocate (bkx(0))
-                                                                                          end if
-                                                                                          if (allocated(this%bky)) then
-                                                                                             allocate (bky, mold=this%bky)
-                                                                                             bky = this%bky
-                                                                                          else
-                                                                                             allocate (bky(0))
-                                                                                          end if
-                                                                                          if (allocated(this%bkz)) then
-                                                                                             allocate (bkz, mold=this%bkz)
-                                                                                             bkz = this%bkz
-                                                                                          else
-                                                                                             allocate (bkz(0))
-                                                                                          end if
-                                                                                          if (allocated(this%qx3)) then
-                                                                                             allocate (qx3, mold=this%qx3)
-                                                                                             qx3 = this%qx3
-                                                                                          else
-                                                                                             allocate (qx3(0))
-                                                                                          end if
-                                                                                          if (allocated(this%qy3)) then
-                                                                                             allocate (qy3, mold=this%qy3)
-                                                                                             qy3 = this%qy3
-                                                                                          else
-                                                                                             allocate (qy3(0))
-                                                                                          end if
-                                                                                          if (allocated(this%qz3)) then
-                                                                                             allocate (qz3, mold=this%qz3)
-                                                                                             qz3 = this%qz3
-                                                                                          else
-                                                                                             allocate (qz3(0))
-                                                                                          end if
-                                                                                          if (allocated(this%qx)) then
-                                                                                             allocate (qx, mold=this%qx)
-                                                                                             qx = this%qx
-                                                                                          else
-                                                                                             allocate (qx(0))
-                                                                                          end if
-                                                                                          if (allocated(this%qy)) then
-                                                                                             allocate (qy, mold=this%qy)
-                                                                                             qy = this%qy
-                                                                                          else
-                                                                                             allocate (qy(0))
-                                                                                          end if
-                                                                                          if (allocated(this%qz)) then
-                                                                                             allocate (qz, mold=this%qz)
-                                                                                             qz = this%qz
-                                                                                          else
-                                                                                             allocate (qz(0))
-                                                                                          end if
-                                                                                          if (allocated(this%asx)) then
-                                                                                             allocate (asx, mold=this%asx)
-                                                                                             asx = this%asx
-                                                                                          else
-                                                                                             allocate (asx(0))
-                                                                                          end if
-                                                                                          if (allocated(this%asy)) then
-                                                                                             allocate (asy, mold=this%asy)
-                                                                                             asy = this%asy
-                                                                                          else
-                                                                                             allocate (asy(0))
-                                                                                          end if
-                                                                                          if (allocated(this%asz)) then
-                                                                                             allocate (asz, mold=this%asz)
-                                                                                             asz = this%asz
-                                                                                          else
-                                                                                             allocate (asz(0))
-                                                                                          end if
-                                                                                          if (allocated(this%akx)) then
-                                                                                             allocate (akx, mold=this%akx)
-                                                                                             akx = this%akx
-                                                                                          else
-                                                                                             allocate (akx(0))
-                                                                                          end if
-                                                                                          if (allocated(this%aky)) then
-                                                                                             allocate (aky, mold=this%aky)
-                                                                                             aky = this%aky
-                                                                                          else
-                                                                                             allocate (aky(0))
-                                                                                          end if
-                                                                                          if (allocated(this%akz)) then
-                                                                                             allocate (akz, mold=this%akz)
-                                                                                             akz = this%akz
-                                                                                          else
-                                                                                             allocate (akz(0))
-                                                                                          end if
-                                                                                          if (allocated(this%dr)) then
-                                                                                             allocate (dr, mold=this%dr)
-                                                                                             dr = this%dr
-                                                                                          else
-                                                                                             allocate (dr(0))
-                                                                                          end if
-                                                                                          if (allocated(this%dg)) then
-                                                                                             allocate (dg, mold=this%dg)
-                                                                                             dg = this%dg
-                                                                                          else
-                                                                                             allocate (dg(0))
-                                                                                          end if
-                                                                                          if (allocated(this%wsimp)) then
-                                                                                             allocate (wsimp, mold=this%wsimp)
-                                                                                             wsimp = this%wsimp
-                                                                                          else
-                                                                                             allocate (wsimp(0))
-                                                                                          end if
+      if (allocated(this%w)) then
+         allocate (w, mold=this%w)
+         w = this%w
+      else
+         allocate (w(0))
+      end if
+      if (allocated(this%wssurf)) then
+         allocate (wssurf, mold=this%wssurf)
+         wssurf = this%wssurf
+      else
+         allocate (wssurf(0))
+      end if
+      if (allocated(this%bsx)) then
+         allocate (bsx, mold=this%bsx)
+         bsx = this%bsx
+      else
+         allocate (bsx(0))
+      end if
+      if (allocated(this%bsy)) then
+         allocate (bsy, mold=this%bsy)
+         bsy = this%bsy
+      else
+         allocate (bsy(0))
+      end if
+      if (allocated(this%bsz)) then
+         allocate (bsz, mold=this%bsz)
+         bsz = this%bsz
+      else
+         allocate (bsz(0))
+      end if
+      if (allocated(this%bkx)) then
+         allocate (bkx, mold=this%bkx)
+         bkx = this%bkx
+      else
+         allocate (bkx(0))
+      end if
+      if (allocated(this%bky)) then
+         allocate (bky, mold=this%bky)
+         bky = this%bky
+      else
+         allocate (bky(0))
+      end if
+      if (allocated(this%bkz)) then
+         allocate (bkz, mold=this%bkz)
+         bkz = this%bkz
+      else
+         allocate (bkz(0))
+      end if
+      if (allocated(this%qx3)) then
+         allocate (qx3, mold=this%qx3)
+         qx3 = this%qx3
+      else
+         allocate (qx3(0))
+      end if
+      if (allocated(this%qy3)) then
+         allocate (qy3, mold=this%qy3)
+         qy3 = this%qy3
+      else
+         allocate (qy3(0))
+      end if
+      if (allocated(this%qz3)) then
+         allocate (qz3, mold=this%qz3)
+         qz3 = this%qz3
+      else
+         allocate (qz3(0))
+      end if
+      if (allocated(this%qx)) then
+         allocate (qx, mold=this%qx)
+         qx = this%qx
+      else
+         allocate (qx(0))
+      end if
+      if (allocated(this%qy)) then
+         allocate (qy, mold=this%qy)
+         qy = this%qy
+      else
+         allocate (qy(0))
+      end if
+      if (allocated(this%qz)) then
+         allocate (qz, mold=this%qz)
+         qz = this%qz
+      else
+         allocate (qz(0))
+      end if
+      if (allocated(this%asx)) then
+         allocate (asx, mold=this%asx)
+         asx = this%asx
+      else
+         allocate (asx(0))
+      end if
+      if (allocated(this%asy)) then
+         allocate (asy, mold=this%asy)
+         asy = this%asy
+      else
+         allocate (asy(0))
+      end if
+      if (allocated(this%asz)) then
+         allocate (asz, mold=this%asz)
+         asz = this%asz
+      else
+         allocate (asz(0))
+      end if
+      if (allocated(this%akx)) then
+         allocate (akx, mold=this%akx)
+         akx = this%akx
+      else
+         allocate (akx(0))
+      end if
+      if (allocated(this%aky)) then
+         allocate (aky, mold=this%aky)
+         aky = this%aky
+      else
+         allocate (aky(0))
+      end if
+      if (allocated(this%akz)) then
+         allocate (akz, mold=this%akz)
+         akz = this%akz
+      else
+         allocate (akz(0))
+      end if
+      if (allocated(this%dr)) then
+         allocate (dr, mold=this%dr)
+         dr = this%dr
+      else
+         allocate (dr(0))
+      end if
+      if (allocated(this%dg)) then
+         allocate (dg, mold=this%dg)
+         dg = this%dg
+      else
+         allocate (dg(0))
+      end if
+      if (allocated(this%wsimp)) then
+         allocate (wsimp, mold=this%wsimp)
+         wsimp = this%wsimp
+      else
+         allocate (wsimp(0))
+      end if
 
-                                                                                          if (allocated(this%dss)) then
-                                                                                             allocate (dss, mold=this%dss)
-                                                                                             dss = this%dss
-                                                                                          else
-                                                                                             allocate (dss(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%dsz)) then
-                                                                                             allocate (dsz, mold=this%dsz)
-                                                                                             dsz = this%dsz
-                                                                                          else
-                                                                                             allocate (dsz(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%ds3z2)) then
-                                                                                             allocate (ds3z2, mold=this%ds3z2)
-                                                                                             ds3z2 = this%ds3z2
-                                                                                          else
-                                                                                             allocate (ds3z2(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%dsx2y2)) then
-                                                                                             allocate (dsx2y2, mold=this%dsx2y2)
-                                                                                             dsx2y2 = this%dsx2y2
-                                                                                          else
-                                                                                             allocate (dsx2y2(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%dsxy)) then
-                                                                                             allocate (dsxy, mold=this%dsxy)
-                                                                                             dsxy = this%dsxy
-                                                                                          else
-                                                                                             allocate (dsxy(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%dzz)) then
-                                                                                             allocate (dzz, mold=this%dzz)
-                                                                                             dzz = this%dzz
-                                                                                          else
-                                                                                             allocate (dzz(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%dz3z2)) then
-                                                                                             allocate (dz3z2, mold=this%dz3z2)
-                                                                                             dz3z2 = this%dz3z2
-                                                                                          else
-                                                                                             allocate (dz3z2(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%am)) then
-                                                                                             allocate (am, mold=this%am)
-                                                                                             am = this%am
-                                                                                          else
-                                                                                             allocate (am(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%bm)) then
-                                                                                             allocate (bm, mold=this%bm)
-                                                                                             bm = this%bm
-                                                                                          else
-                                                                                             allocate (bm(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%pm)) then
-                                                                                             allocate (pm, mold=this%pm)
-                                                                                             pm = this%pm
-                                                                                          else
-                                                                                             allocate (pm(0, 0))
-                                                                                          end if
-                                                                                          if (allocated(this%amad)) then
-                                                                                             allocate (amad, mold=this%amad)
-                                                                                             amad = this%amad
-                                                                                          else
-                                                                                             allocate (amad(0, 0))
-                                                                                          end if
+      if (allocated(this%dss)) then
+         allocate (dss, mold=this%dss)
+         dss = this%dss
+      else
+         allocate (dss(0, 0))
+      end if
+      if (allocated(this%dsz)) then
+         allocate (dsz, mold=this%dsz)
+         dsz = this%dsz
+      else
+         allocate (dsz(0, 0))
+      end if
+      if (allocated(this%ds3z2)) then
+         allocate (ds3z2, mold=this%ds3z2)
+         ds3z2 = this%ds3z2
+      else
+         allocate (ds3z2(0, 0))
+      end if
+      if (allocated(this%dsx2y2)) then
+         allocate (dsx2y2, mold=this%dsx2y2)
+         dsx2y2 = this%dsx2y2
+      else
+         allocate (dsx2y2(0, 0))
+      end if
+      if (allocated(this%dsxy)) then
+         allocate (dsxy, mold=this%dsxy)
+         dsxy = this%dsxy
+      else
+         allocate (dsxy(0, 0))
+      end if
+      if (allocated(this%dzz)) then
+         allocate (dzz, mold=this%dzz)
+         dzz = this%dzz
+      else
+         allocate (dzz(0, 0))
+      end if
+      if (allocated(this%dz3z2)) then
+         allocate (dz3z2, mold=this%dz3z2)
+         dz3z2 = this%dz3z2
+      else
+         allocate (dz3z2(0, 0))
+      end if
+      if (allocated(this%am)) then
+         allocate (am, mold=this%am)
+         am = this%am
+      else
+         allocate (am(0, 0))
+      end if
+      if (allocated(this%bm)) then
+         allocate (bm, mold=this%bm)
+         bm = this%bm
+      else
+         allocate (bm(0, 0))
+      end if
+      if (allocated(this%pm)) then
+         allocate (pm, mold=this%pm)
+         pm = this%pm
+      else
+         allocate (pm(0, 0))
+      end if
+      if (allocated(this%amad)) then
+         allocate (amad, mold=this%amad)
+         amad = this%amad
+      else
+         allocate (amad(0, 0))
+      end if
 
-                                                                                          if (present(unit) .and. present(file)) then
-                                                                                             call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
-                                                                                          else if (present(unit)) then
-                                                                                             write (unit, nml=charge)
-                                                                                          else if (present(file)) then
-                                                                                             open (unit=newunit, file=file)
-                                                                                             write (newunit, nml=charge)
-                                                                                             close (newunit)
-                                                                                          else
-                                                                                             write (*, nml=charge)
-                                                                                          end if
+      if (present(unit) .and. present(file)) then
+         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
+      else if (present(unit)) then
+         write (unit, nml=charge)
+      else if (present(file)) then
+         open (unit=newunit, file=file)
+         write (newunit, nml=charge)
+         close (newunit)
+      else
+         write (*, nml=charge)
+      end if
 
-                                                                                       end subroutine print_state_full
+   end subroutine print_state_full
 
-                                                                                       !---------------------------------------------------------------------------
-                                                                                       ! DESCRIPTION:
-                                                                                       !> @brief
-                                                                                       !> Print class members values in namelist format
-                                                                                       !>
-                                                                                       !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
-                                                                                       !> @param[in] unit File unit used to write namelist
-                                                                                       !> @param[in] file File name used to write namelist
-                                                                                       !---------------------------------------------------------------------------
-                                                                                       subroutine print_state(this, unit, file)
-                                                                                          implicit none
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Print class members values in namelist format
+   !>
+   !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
+   !> @param[in] unit File unit used to write namelist
+   !> @param[in] file File name used to write namelist
+   !---------------------------------------------------------------------------
+   subroutine print_state(this, unit, file)
+      implicit none
 
-                                                                                          class(charge), intent(in) :: this
+      class(charge), intent(in) :: this
 
-                                                                                          integer, intent(in), optional :: unit
-                                                                                          character(len=*), intent(in), optional :: file
-                                                                                          integer :: newunit
+      integer, intent(in), optional :: unit
+      character(len=*), intent(in), optional :: file
+      integer :: newunit
 
-                                                                                          include 'include_codes/namelists/charge.f90'
+      include 'include_codes/namelists/charge.f90'
 
-                                                                                          ! scalar
+      ! scalar
 
-                                                                                          gx = this%gx
-                                                                                          gy = this%gy
-                                                                                          gz = this%gz
-                                                                                          gt = this%gt
+      gx = this%gx
+      gy = this%gy
+      gz = this%gz
+      gt = this%gt
 
-                                                                                          ! 1d allocatable
+      ! 1d allocatable
 
-                                                                                          if (allocated(this%wssurf)) then
-                                                                                             allocate (wssurf, mold=this%wssurf)
-                                                                                             wssurf = this%wssurf
-                                                                                          else
-                                                                                             allocate (wssurf(0))
-                                                                                          end if
+      if (allocated(this%wssurf)) then
+         allocate (wssurf, mold=this%wssurf)
+         wssurf = this%wssurf
+      else
+         allocate (wssurf(0))
+      end if
 
-                                                                                          if (present(unit) .and. present(file)) then
-                                                                                             call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
-                                                                                          else if (present(unit)) then
-                                                                                             write (unit, nml=charge)
-                                                                                          else if (present(file)) then
-                                                                                             open (unit=newunit, file=file)
-                                                                                             write (newunit, nml=charge)
-                                                                                             close (newunit)
-                                                                                          else
-                                                                                             write (*, nml=charge)
-                                                                                          end if
+      if (present(unit) .and. present(file)) then
+         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
+      else if (present(unit)) then
+         write (unit, nml=charge)
+      else if (present(file)) then
+         open (unit=newunit, file=file)
+         write (newunit, nml=charge)
+         close (newunit)
+      else
+         write (*, nml=charge)
+      end if
 
-                                                                                       end subroutine print_state
+   end subroutine print_state
 
-                                                                                       !---------------------------------------------------------------------------
-                                                                                       ! DESCRIPTION:
-                                                                                       !> @brief
-                                                                                       !> Print class members values in namelist format
-                                                                                       !>
-                                                                                       !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
-                                                                                       !> @param[in] unit File unit used to write namelist
-                                                                                       !> @param[in] file File name used to write namelist
-                                                                                       !---------------------------------------------------------------------------
-                                                                                       subroutine print_state_formatted(this, unit, file)
-                                                                                          implicit none
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Print class members values in namelist format
+   !>
+   !> Print class members values in namelist format. Either unit or file should be provided. If none of them are provided, then the program will write to standart output.
+   !> @param[in] unit File unit used to write namelist
+   !> @param[in] file File name used to write namelist
+   !---------------------------------------------------------------------------
+   subroutine print_state_formatted(this, unit, file)
+      implicit none
 
-                                                                                          class(charge), intent(in) :: this
+      class(charge), intent(in) :: this
 
-                                                                                          integer, intent(in), optional :: unit
-                                                                                          character(len=*), intent(in), optional :: file
-                                                                                          integer :: newunit
+      integer, intent(in), optional :: unit
+      character(len=*), intent(in), optional :: file
+      integer :: newunit
 
-                                                                                          type(namelist_generator) :: nml
+      type(namelist_generator) :: nml
 
-                                                                                          include 'include_codes/namelists/charge.f90'
+      include 'include_codes/namelists/charge.f90'
 
-                                                                                          ! scalar
+      ! scalar
 
-                                                                                          nml = namelist_generator('charge')
+      nml = namelist_generator('charge')
 
-                                                                                          call nml%add('gx', this%gx)
-                                                                                          call nml%add('gy', this%gy)
-                                                                                          call nml%add('gz', this%gz)
-                                                                                          call nml%add('gt', this%gt)
-                                                                                          call nml%add('a', this%a)
-                                                                                          call nml%add('b', this%b)
-                                                                                          call nml%add('c', this%c)
-                                                                                          call nml%add('amax', this%amax)
-                                                                                          call nml%add('bmax', this%bmax)
-                                                                                          call nml%add('alamda', this%alamda)
-                                                                                          call nml%add('rmax', this%rmax)
-                                                                                          call nml%add('gmax', this%gmax)
-                                                                                          call nml%add('ar2d', this%ar2d)
-                                                                                          call nml%add('sws', this%sws)
-                                                                                          call nml%add('vol', this%vol)
-                                                                                          call nml%add('nq3', this%nq3)
-                                                                                          call nml%add('nr0', this%nr0)
-                                                                                          call nml%add('numr', this%numr)
-                                                                                          call nml%add('numg', this%numg)
-                                                                                          call nml%add('numvr', this%numvr)
-                                                                                          call nml%add('numvg', this%numvg)
+      call nml%add('gx', this%gx)
+      call nml%add('gy', this%gy)
+      call nml%add('gz', this%gz)
+      call nml%add('gt', this%gt)
+      call nml%add('a', this%a)
+      call nml%add('b', this%b)
+      call nml%add('c', this%c)
+      call nml%add('amax', this%amax)
+      call nml%add('bmax', this%bmax)
+      call nml%add('alamda', this%alamda)
+      call nml%add('rmax', this%rmax)
+      call nml%add('gmax', this%gmax)
+      call nml%add('ar2d', this%ar2d)
+      call nml%add('sws', this%sws)
+      call nml%add('vol', this%vol)
+      call nml%add('nq3', this%nq3)
+      call nml%add('nr0', this%nr0)
+      call nml%add('numr', this%numr)
+      call nml%add('numg', this%numg)
+      call nml%add('numvr', this%numvr)
+      call nml%add('numvg', this%numvg)
 
-                                                                                          ! 1d allocatable
-                                                                                          ! TODO: implement test inside namelist_generator
-                                                                                          if (allocated(this%w)) call nml%add('w', this%w)
-                                                                                          if (allocated(this%wssurf)) call nml%add('wssurf', this%wssurf)
-                                                                                          if (allocated(this%bsx)) call nml%add('bsx', this%bsx)
-                                                                                          if (allocated(this%bsy)) call nml%add('bsy', this%bsy)
-                                                                                          if (allocated(this%bsz)) call nml%add('bsz', this%bsz)
-                                                                                          if (allocated(this%bkx)) call nml%add('bkx', this%bkx)
-                                                                                          if (allocated(this%bky)) call nml%add('bky', this%bky)
-                                                                                          if (allocated(this%bkz)) call nml%add('bkz', this%bkz)
-                                                                                          if (allocated(this%qx3)) call nml%add('qx3', this%qx3)
-                                                                                          if (allocated(this%qy3)) call nml%add('qy3', this%qy3)
-                                                                                          if (allocated(this%qz3)) call nml%add('qz3', this%qz3)
-                                                                                          if (allocated(this%qx)) call nml%add('qx', this%qx)
-                                                                                          if (allocated(this%qy)) call nml%add('qy', this%qy)
-                                                                                          if (allocated(this%qz)) call nml%add('qz', this%qz)
-                                                                                          if (allocated(this%asx)) call nml%add('asx', this%asx)
-                                                                                          if (allocated(this%asy)) call nml%add('asy', this%asy)
-                                                                                          if (allocated(this%asz)) call nml%add('asz', this%asz)
-                                                                                          if (allocated(this%akx)) call nml%add('akx', this%akx)
-                                                                                          if (allocated(this%aky)) call nml%add('aky', this%aky)
-                                                                                          if (allocated(this%akz)) call nml%add('akz', this%akz)
-                                                                                          if (allocated(this%dr)) call nml%add('dr', this%dr)
-                                                                                          if (allocated(this%dg)) call nml%add('dg', this%dg)
-                                                                                          if (allocated(this%wsimp)) call nml%add('wsimp', this%wsimp)
+      ! 1d allocatable
+      ! TODO: implement test inside namelist_generator
+      if (allocated(this%w)) call nml%add('w', this%w)
+      if (allocated(this%wssurf)) call nml%add('wssurf', this%wssurf)
+      if (allocated(this%bsx)) call nml%add('bsx', this%bsx)
+      if (allocated(this%bsy)) call nml%add('bsy', this%bsy)
+      if (allocated(this%bsz)) call nml%add('bsz', this%bsz)
+      if (allocated(this%bkx)) call nml%add('bkx', this%bkx)
+      if (allocated(this%bky)) call nml%add('bky', this%bky)
+      if (allocated(this%bkz)) call nml%add('bkz', this%bkz)
+      if (allocated(this%qx3)) call nml%add('qx3', this%qx3)
+      if (allocated(this%qy3)) call nml%add('qy3', this%qy3)
+      if (allocated(this%qz3)) call nml%add('qz3', this%qz3)
+      if (allocated(this%qx)) call nml%add('qx', this%qx)
+      if (allocated(this%qy)) call nml%add('qy', this%qy)
+      if (allocated(this%qz)) call nml%add('qz', this%qz)
+      if (allocated(this%asx)) call nml%add('asx', this%asx)
+      if (allocated(this%asy)) call nml%add('asy', this%asy)
+      if (allocated(this%asz)) call nml%add('asz', this%asz)
+      if (allocated(this%akx)) call nml%add('akx', this%akx)
+      if (allocated(this%aky)) call nml%add('aky', this%aky)
+      if (allocated(this%akz)) call nml%add('akz', this%akz)
+      if (allocated(this%dr)) call nml%add('dr', this%dr)
+      if (allocated(this%dg)) call nml%add('dg', this%dg)
+      if (allocated(this%wsimp)) call nml%add('wsimp', this%wsimp)
 
-                                                                                          ! 2d allocatable
-                                                                                          ! TODO: implement test inside namelist_generator
-                                                                                          if (allocated(this%dss)) call nml%add('dss', this%dss)
-                                                                                          if (allocated(this%dsz)) call nml%add('dsz', this%dsz)
-                                                                                          if (allocated(this%ds3z2)) call nml%add('ds3z2', this%ds3z2)
-                                                                                          if (allocated(this%dsx2y2)) call nml%add('dsx2y2', this%dsx2y2)
-                                                                                          if (allocated(this%dsxy)) call nml%add('dsxy', this%dsxy)
-                                                                                          if (allocated(this%dzz)) call nml%add('dzz', this%dzz)
-                                                                                          if (allocated(this%dz3z2)) call nml%add('dz3z2', this%dz3z2)
-                                                                                          if (allocated(this%am)) call nml%add('am', this%am)
-                                                                                          if (allocated(this%bm)) call nml%add('bm', this%bm)
-                                                                                          if (allocated(this%pm)) call nml%add('pm', this%pm)
-                                                                                          if (allocated(this%amad)) call nml%add('amad', this%amad)
+      ! 2d allocatable
+      ! TODO: implement test inside namelist_generator
+      if (allocated(this%dss)) call nml%add('dss', this%dss)
+      if (allocated(this%dsz)) call nml%add('dsz', this%dsz)
+      if (allocated(this%ds3z2)) call nml%add('ds3z2', this%ds3z2)
+      if (allocated(this%dsx2y2)) call nml%add('dsx2y2', this%dsx2y2)
+      if (allocated(this%dsxy)) call nml%add('dsxy', this%dsxy)
+      if (allocated(this%dzz)) call nml%add('dzz', this%dzz)
+      if (allocated(this%dz3z2)) call nml%add('dz3z2', this%dz3z2)
+      if (allocated(this%am)) call nml%add('am', this%am)
+      if (allocated(this%bm)) call nml%add('bm', this%bm)
+      if (allocated(this%pm)) call nml%add('pm', this%pm)
+      if (allocated(this%amad)) call nml%add('amad', this%amad)
 
-                                                                                          if (present(unit) .and. present(file)) then
-                                                                                             call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
-                                                                                          else if (present(unit)) then
-                                                                                             call nml%generate_namelist(unit=unit)
-                                                                                          else if (present(file)) then
-                                                                                             call nml%generate_namelist(file=file)
-                                                                                          else
-                                                                                             call nml%generate_namelist()
-                                                                                          end if
-                                                                                       end subroutine print_state_formatted
+      if (present(unit) .and. present(file)) then
+         call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
+      else if (present(unit)) then
+         call nml%generate_namelist(unit=unit)
+      else if (present(file)) then
+         call nml%generate_namelist(file=file)
+      else
+         call nml%generate_namelist()
+      end if
+   end subroutine print_state_formatted
 
-                                                                                       end module charge_mod
+end module charge_mod
