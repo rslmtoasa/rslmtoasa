@@ -324,11 +324,11 @@ contains
       mat(((l_max + 1)**2 + 1):(2*(l_max + 1)**2), 1:(l_max + 1)**2) = czero
       mat_b(:, :) = czero ! define the initial element as imaginary zero
 
-      do i = 0, l_max ! quantum angular momentum index (l')
+      do i = 0, l_max ! quantum angular momentum index (l´)
          do j = 0, l_max ! quantum angular momentum index (l)
-            do k = -i, i, 1 ! magnetic quantum number index (m')
+            do k = -i, i, 1 ! magnetic quantum number index (m´)
                do n = -j, j, 1 ! magnetic quantum number index (m)
-                  do m = -1, 1, 1 ! magnetic quantum number index (m'')
+                  do m = -1, 1, 1 ! magnetic quantum number index (m´´)
                      if (i .gt. j) then
                         mat_b(order(i + 1, k + i + 1), order(j + 1, n + j + 1)) = czero
                      else

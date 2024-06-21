@@ -1961,8 +1961,8 @@ contains
             this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA
-!!    in DBAR1."
+!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
+!!    "in DBAR1."
       end do
       n = ii
    end subroutine clusba

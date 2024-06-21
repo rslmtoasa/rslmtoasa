@@ -166,12 +166,12 @@ contains
       !
       complex(rp), allocatable, dimension(:, :, :) :: pmatrix_i, pmatrix_j ! P matrices (potential functions) for atoms i and j
       complex(rp), allocatable, dimension(:, :, :) :: deltap_i, deltap_j ! P_up - P_dw (half of the size, as it does not consider the spin index)
-      complex(rp), allocatable, dimension(:, :, :) :: aux_gij, aux_gji ! Auxiliary Green's functions
+      complex(rp), allocatable, dimension(:, :, :) :: aux_gij, aux_gji ! Auxiliary Green´s functions
       complex(rp), allocatable, dimension(:, :, :, :) :: int_all ! Result for the components of the Jij tensor (when i != j)
       complex(rp), allocatable, dimension(:, :, :) :: int_j00 ! Result for J00 (when i = j)
       complex(rp), allocatable, dimension(:, :, :) :: temp1, temp2, temp3, temp4 ! Temporary matrices to store
-      real(rp), allocatable, dimension(:, :) :: jtot_aux ! Jij total from the auxiliary GF's formalism (when i != j)
-      real(rp), allocatable, dimension(:) :: jtot_00 ! J00 total from the auxiliary GF's formalism (when i = j)
+      real(rp), allocatable, dimension(:, :) :: jtot_aux ! Jij total from the auxiliary GF´s formalism (when i != j)
+      real(rp), allocatable, dimension(:) :: jtot_00 ! J00 total from the auxiliary GF´s formalism (when i = j)
       real(rp), dimension(4, 9) :: angles ! For the definition of xx, xy, xz, yx, yy, ... components
       integer :: nv, i, j, k, njij, lmaxi, lmaxj ! Internal (local) variables
 
@@ -179,49 +179,49 @@ contains
       do k = 1, 9
          if (k .eq. 1) then ! xx
             angles(1, k) = 0.5_rp*pi ! theta
-            angles(2, k) = 0.5_rp*pi ! theta'
+            angles(2, k) = 0.5_rp*pi ! theta´
             angles(3, k) = 0.0_rp ! phi
-            angles(4, k) = 0.0_rp ! phi'
+            angles(4, k) = 0.0_rp ! phi´
          else if (k .eq. 2) then ! xy
             angles(1, k) = 0.5_rp*pi ! theta
-            angles(2, k) = 0.5_rp*pi ! theta'
+            angles(2, k) = 0.5_rp*pi ! theta´
             angles(3, k) = 0.0_rp ! phi
-            angles(4, k) = 0.5_rp*pi ! phi'
+            angles(4, k) = 0.5_rp*pi ! phi´
          else if (k .eq. 3) then ! xz
             angles(1, k) = 0.5_rp*pi ! theta
-            angles(2, k) = 0.0_rp ! theta'
+            angles(2, k) = 0.0_rp ! theta´
             angles(3, k) = 0.0_rp ! phi
-            angles(4, k) = 0.0_rp ! phi'
+            angles(4, k) = 0.0_rp ! phi´
          else if (k .eq. 4) then ! yx
             angles(1, k) = 0.5_rp*pi ! theta
-            angles(2, k) = 0.5_rp*pi ! theta'
+            angles(2, k) = 0.5_rp*pi ! theta´
             angles(3, k) = 0.5_rp*pi ! phi
-            angles(4, k) = 0.0_rp ! phi'
+            angles(4, k) = 0.0_rp ! phi´
          else if (k .eq. 5) then ! yy
             angles(1, k) = 0.5_rp*pi ! theta
-            angles(2, k) = 0.5_rp*pi ! theta'
+            angles(2, k) = 0.5_rp*pi ! theta´
             angles(3, k) = 0.5_rp*pi ! phi
-            angles(4, k) = 0.5_rp*pi ! phi'
+            angles(4, k) = 0.5_rp*pi ! phi´
          else if (k .eq. 6) then ! yz
             angles(1, k) = 0.5_rp*pi ! theta
-            angles(2, k) = 0.0_rp ! theta'
+            angles(2, k) = 0.0_rp ! theta´
             angles(3, k) = 0.5_rp*pi ! phi
-            angles(4, k) = 0.0_rp ! phi'
+            angles(4, k) = 0.0_rp ! phi´
          else if (k .eq. 7) then ! zx
             angles(1, k) = 0.0_rp ! theta
-            angles(2, k) = 0.5_rp*pi ! theta'
+            angles(2, k) = 0.5_rp*pi ! theta´
             angles(3, k) = 0.0_rp ! phi
-            angles(4, k) = 0.0_rp ! phi'
+            angles(4, k) = 0.0_rp ! phi´
          else if (k .eq. 8) then ! zy
             angles(1, k) = 0.0_rp ! theta
-            angles(2, k) = 0.5_rp*pi ! theta'
+            angles(2, k) = 0.5_rp*pi ! theta´
             angles(3, k) = 0.0_rp ! phi
-            angles(4, k) = 0.5_rp*pi ! phi'
+            angles(4, k) = 0.5_rp*pi ! phi´
          else ! zz
             angles(1, k) = 0.0_rp ! theta
-            angles(2, k) = 0.0_rp ! theta'
+            angles(2, k) = 0.0_rp ! theta´
             angles(3, k) = 0.0_rp ! phi
-            angles(4, k) = 0.0_rp ! phi'
+            angles(4, k) = 0.0_rp ! phi´
          end if
       end do
 
@@ -331,7 +331,7 @@ contains
       !
       class(exchange) :: this
       !
-      complex(rp), allocatable, dimension(:, :, :) :: aux_gij, aux_gji, aux_gik, aux_gki, aux_gjk, aux_gkj ! Auxiliary GF's (in the orthogonal representaton)
+      complex(rp), allocatable, dimension(:, :, :) :: aux_gij, aux_gji, aux_gik, aux_gki, aux_gjk, aux_gkj ! Auxiliary GF´s (in the orthogonal representaton)
       complex(rp), allocatable, dimension(:, :, :) :: aux0_gij, aux0_gji, aux0_gik, aux0_gki, aux0_gjk, aux0_gkj ! Same as above, but in the canonical representation
       complex(rp), allocatable, dimension(:, :, :) :: pmatrix_i, pmatrix_j, pmatrix_k ! P matrices (potential function) for atoms i, j, k (orthogonal representation)
       complex(rp), allocatable, dimension(:, :, :) :: pmatrix0_i, pmatrix0_j, pmatrix0_k ! P matrix (potential function) of atom k in the canonical representation
@@ -353,49 +353,49 @@ contains
       do p = 1, 9
          if (p .eq. 1) then ! xx
             angles(1, p) = 0.5_rp*pi ! theta
-            angles(2, p) = 0.5_rp*pi ! theta'
+            angles(2, p) = 0.5_rp*pi ! theta´
             angles(3, p) = 0.0_rp ! phi
-            angles(4, p) = 0.0_rp ! phi'
+            angles(4, p) = 0.0_rp ! phi´
          else if (p .eq. 2) then ! xy
             angles(1, p) = 0.5_rp*pi ! theta
-            angles(2, p) = 0.5_rp*pi ! theta'
+            angles(2, p) = 0.5_rp*pi ! theta´
             angles(3, p) = 0.0_rp ! phi
-            angles(4, p) = 0.5_rp*pi ! phi'
+            angles(4, p) = 0.5_rp*pi ! phi´
          else if (p .eq. 3) then ! xz
             angles(1, p) = 0.5_rp*pi ! theta
-            angles(2, p) = 0.0_rp ! theta'
+            angles(2, p) = 0.0_rp ! theta´
             angles(3, p) = 0.0_rp ! phi
-            angles(4, p) = 0.0_rp ! phi'
+            angles(4, p) = 0.0_rp ! phi´
          else if (p .eq. 4) then ! yx
             angles(1, p) = 0.5_rp*pi ! theta
-            angles(2, p) = 0.5_rp*pi ! theta'
+            angles(2, p) = 0.5_rp*pi ! theta´
             angles(3, p) = 0.5_rp*pi ! phi
-            angles(4, p) = 0.0_rp ! phi'
+            angles(4, p) = 0.0_rp ! phi´
          else if (p .eq. 5) then ! yy
             angles(1, p) = 0.5_rp*pi ! theta
-            angles(2, p) = 0.5_rp*pi ! theta'
+            angles(2, p) = 0.5_rp*pi ! theta´
             angles(3, p) = 0.5_rp*pi ! phi
-            angles(4, p) = 0.5_rp*pi ! phi'
+            angles(4, p) = 0.5_rp*pi ! phi´
          else if (p .eq. 6) then ! yz
             angles(1, p) = 0.5_rp*pi ! theta
-            angles(2, p) = 0.0_rp ! theta'
+            angles(2, p) = 0.0_rp ! theta´
             angles(3, p) = 0.5_rp*pi ! phi
-            angles(4, p) = 0.0_rp ! phi'
+            angles(4, p) = 0.0_rp ! phi´
          else if (p .eq. 7) then ! zx
             angles(1, p) = 0.0_rp ! theta
-            angles(2, p) = 0.5_rp*pi ! theta'
+            angles(2, p) = 0.5_rp*pi ! theta´
             angles(3, p) = 0.0_rp ! phi
-            angles(4, p) = 0.0_rp ! phi'
+            angles(4, p) = 0.0_rp ! phi´
          else if (p .eq. 8) then ! zy
             angles(1, p) = 0.0_rp ! theta
-            angles(2, p) = 0.5_rp*pi ! theta'
+            angles(2, p) = 0.5_rp*pi ! theta´
             angles(3, p) = 0.0_rp ! phi
-            angles(4, p) = 0.5_rp*pi ! phi'
+            angles(4, p) = 0.5_rp*pi ! phi´
          else ! zz
             angles(1, p) = 0.0_rp ! theta
-            angles(2, p) = 0.0_rp ! theta'
+            angles(2, p) = 0.0_rp ! theta´
             angles(3, p) = 0.0_rp ! phi
-            angles(4, p) = 0.0_rp ! phi'
+            angles(4, p) = 0.0_rp ! phi´
          end if
       end do
 
@@ -753,7 +753,7 @@ contains
       class(exchange) :: this
       !
       complex(rp), allocatable, dimension(:, :, :) :: Aij, Aji ! Spectral functions (non-Hermitian)
-      complex(rp), allocatable, dimension(:, :, :) :: Bij, Bji ! Hermitian part of the Green's functions
+      complex(rp), allocatable, dimension(:, :, :) :: Bij, Bji ! Hermitian part of the Green´s functions
       complex(rp), allocatable, dimension(:, :, :) :: sBij, sBji ! Second derivative w.r.t. energy of Bij and Bji
       complex(rp), allocatable, dimension(:, :, :) :: temp1, temp2, temp3 ! Temporary matrices to store
       complex(rp), allocatable, dimension(:, :, :) :: temp4, temp5, temp6 ! Temporary matrices to store
