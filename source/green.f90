@@ -826,7 +826,7 @@ contains
       integer, intent(in) :: atom_i, atom_j ! Input atoms i and j
       complex(rp), intent(in) :: aux_gij_in(:, :, :) ! Auxiliary GF´s (in)
       complex(rp), intent(inout) :: aux_gij_out(:, :, :) ! Auxiliary GF´s (out), in another representation
-      complex(rp), intent(in) :: pmat_in_atom_i(:, :, :) ! Potential P matrix (in) - in the same representation as GF's (in) for the atom i
+      complex(rp), intent(in) :: pmat_in_atom_i(:, :, :) ! Potential P matrix (in) - in the same representation as GF¨s (in) for the atom i
       complex(rp), intent(in) :: pmat_out_atom_i(:, :, :) ! Potential P matrix (out) - in the same representation as GF´s (out) for the atom i
       complex(rp), intent(in) :: pmat_in_atom_j(:, :, :) ! Potential P matrix (in) - in the same representation as GF´s (in) for the atom j
       complex(rp), intent(in) :: pmat_out_atom_j(:, :, :) ! Potential P matrix (out) - in the same representation as GF´s (out) for the atom j
