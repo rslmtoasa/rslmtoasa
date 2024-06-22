@@ -35,7 +35,7 @@ module mix_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: mix
       ! Lattice
       class(lattice), pointer :: lattice
@@ -388,7 +388,7 @@ contains
       case ('linear')
          this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
       case ('broyden')
-         ! call g_logger%fatal('Broyden mixing not implemented yet!', __FILE__, __LINE__)
+         ! call g_logger%fatal(´Broyden mixing not implemented yet!´, __FILE__, __LINE__)
          reset = .false.
          qi_to(:, :) = this%qia_old(:, :)
          qi_tn(:, :) = this%qia_new(:, :)
@@ -407,8 +407,8 @@ contains
          if (rank == 0) call g_logger%info('Charge transfer at atom '//fmt('i4', (ia))//': '// &
                                            fmt('f10.6', this%charge%cht)//' '//fmt('f10.6', this%charge%trq)//' '//fmt('f10.6', this%charge%cht - this%charge%trq) &
                                            , __FILE__, __LINE__)
-         !if(rank==0) call g_logger%info('Charge transfer at atom '//fmt('i4',(ia)), __FILE__, __LINE__)
-         !if(rank==0) call g_logger%info(fmt('f10.6',this%charge%cht)//' '//fmt('f10.6',this%charge%trq)//' '//fmt('f10.6',this%charge%cht-this%charge%trq), __FILE__, __LINE__)
+         !if(rank==0) call g_logger%info(´Charge transfer at atom ´//fmt(´i4´,(ia)), __FILE__, __LINE__)
+         !if(rank==0) call g_logger%info(fmt(´f10.6´,this%charge%cht)//´ ´//fmt(´f10.6´,this%charge%trq)//´ ´//fmt(´f10.6´,this%charge%cht-this%charge%trq), __FILE__, __LINE__)
       end do
 
       do ia = 1, this%lattice%nrec
@@ -471,8 +471,8 @@ contains
          f(i) = f(i) - mu(i)
       end do
       fsq = ddot(n, f, 1, f, 1)/n
-      !print *, 'BROYDN:', fsq, fsqo, fsq>fsqo
-      !print *, 'BROYDN:', itr, nmix, reset
+      !print *, ´BROYDN:´, fsq, fsqo, fsq>fsqo
+      !print *, ´BROYDN:´, itr, nmix, reset
       if (.not. reset) then
          if (itr == 0 .or. fsq > fsqo) then
             ! if (itr==0 .or. itr>nmix .or. fsq>fsqo) then
@@ -489,7 +489,7 @@ contains
          itr = 0
          ierr = 1
       end if
-      !print *, 'Bmix mid', itr, reset, diverg
+      !print *, ´Bmix mid´, itr, reset, diverg
       ! do i = 1, nvs
       !     pmix(i) = amix
       !     rmix(i) = pmix(i)
@@ -525,7 +525,7 @@ contains
       !     end do
       ! end do
       !
-      !print *, 'BROYDEN', itr, itrn, n, nmix
+      !print *, ´BROYDEN´, itr, itrn, n, nmix
       if (itr == 0) then
          do i = 1, n
             ! mu(i) = mu(i) + mixv(i)*f(i)
@@ -590,14 +590,14 @@ contains
          !
          do i = 1, n
             ! mu(i) = mu(i) + mixv(i)*f(i) - w1(i)
-            !write(877, '(i4, 3f12.6)') i, mu(i), amix*f(i), w1(i)
+            !write(877, ´(i4, 3f12.6)´) i, mu(i), amix*f(i), w1(i)
             mu(i) = mu(i) + amix*f(i) - w1(i)
          end do
       end if
       itr = itrn
       fsqo = fsq
       if (itr > nmix) itr = 1
-      !print *, 'Bmix done', itr, fsq
+      !print *, ´Bmix done´, itr, fsq
    end subroutine broydn
 end module mix_mod
 

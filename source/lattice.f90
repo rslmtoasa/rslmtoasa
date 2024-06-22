@@ -40,7 +40,7 @@ module lattice_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: lattice
       !> Charge
       class(control), pointer :: control
@@ -245,9 +245,9 @@ module lattice_mod
       integer :: ndim, npe
 
       !> TODO
-      !> Crystal symmetry. Options are 'bcc', 'fcc', 'hcp' and 'nsy'
+      !> Crystal symmetry. Options are ´bcc´, ´fcc´, ´hcp´ and ´nsy´
       !>
-      !> Crystal symmetry. Options are 'bcc', 'fcc', 'hcp' and 'nsy'
+      !> Crystal symmetry. Options are ´bcc´, ´fcc´, ´hcp´ and ´nsy´
       character(len=4) :: crystal_sym
 
       ! Variables to build clust for surface calculation
@@ -260,9 +260,9 @@ module lattice_mod
       real(rp), dimension(:), allocatable :: z
 
       !> TODO
-      !> Surface symmetry. Options are '111', '110' and '001'.
+      !> Surface symmetry. Options are ´111´, ´110´ and ´001´.
       !>
-      !> Surface symmetry. Options are '111', '110' and '001'.
+      !> Surface symmetry. Options are ´111´, ´110´ and ´001´.
       character(len=10) :: surftype
 
       !> TODO
@@ -1332,7 +1332,7 @@ contains
 
       !axis = axis / norm
 
-    !! Setup the rotation matrix using Rodrigues' formula
+    !! Setup the rotation matrix using Rodrigues´ formula
       !call setup_rotation_matrix(rotation_matrix, axis, theta)
 
       !do i = 1, nsurf
@@ -1479,7 +1479,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Adds the cluster/impurity atoms in 'inclu' to 'clu0' and outputs to 'clust'
+   !> Adds the cluster/impurity atoms in ´inclu´ to ´clu0´ and outputs to ´clust´
    !---------------------------------------------------------------------------
    subroutine newclu(this)
       class(lattice), intent(inout) :: this
@@ -1524,7 +1524,7 @@ contains
       allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))
       ! Setting ct values for impurity
       this%ct(:) = 4.0 !this%alat+0.1d0
-      ! Identify impurity atoms from 'inclu'
+      ! Identify impurity atoms from ´inclu´
       do i = 1, kk
          izpo(i) = this%iz(i)
       end do
@@ -1725,7 +1725,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculates the tight-binding structure constant matrix elements from
-   !> information in 'control' and 'clust.
+   !> information in ´control´ and ´clust.
    !---------------------------------------------------------------------------
    subroutine structb(this, do_str)
       class(lattice), intent(inout) :: this
@@ -1896,7 +1896,7 @@ contains
       !do m=1, nt
       !  write(*, *) ia, m
       !  do i=1, 9
-      !    write(*, '(9f10.4)')((real(this%sbar(i, j, m, ia))), j=1, 9)
+      !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
       deallocate (a, bet, cr, wk, s, sbar)
@@ -1961,8 +1961,8 @@ contains
             this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA
-!!    in DBAR1."
+!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
+!!    "in DBAR1."
       end do
       n = ii
    end subroutine clusba
@@ -2158,7 +2158,7 @@ contains
       ! --------------------------------
       ir = 0
       hitc = 0
-      !print *, ' nr = ', nr
+      !print *, ´ nr = ´, nr
       do ir = 1, nr
          if (abs(R(1, IR)**2 + R(2, IR)**2 + R(3, IR)**2 - &
                  R(1, 1)**2 + R(2, 1)**2 + R(3, 1)**2) <= (R2/ncut)) then
@@ -2170,7 +2170,7 @@ contains
                   sbar(ilm, jlm, hitc) = 2.*s(ilm + irl0, jlm)
                end do
             end do
-          !!! Changed for 'symmetrizing' Sbar
+          !!! Changed for ´symmetrizing´ Sbar
           !! NOT NEEDED SINCE WITH LARGER CUTOFF
           !! SBAR IS CALCULATED PROPERLY
             ! do l = 2, 9
@@ -2197,7 +2197,7 @@ contains
             end do
          end if
       end do
-      !print *, ' hitc = ', hitc
+      !print *, ´ hitc = ´, hitc
       return
       !
       ! ... Format Declarations ...
@@ -2425,7 +2425,7 @@ contains
    !> @param[in] NA
    !> @param[inout] V
    !> @param[in] N
-   !> @param[in] M Number of RHS's
+   !> @param[in] M Number of RHS´s
    !---------------------------------------------------------------------------
    subroutine chlr2s(c, na, v, n, m)
       implicit none
@@ -2775,7 +2775,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Subrotina que ordena um determinado vetor 'M' em ordem decrescente
+   !> Subrotina que ordena um determinado vetor ´M´ em ordem decrescente
    !>     segundo o metodo da bolha (BUBBLE)
    !> ...M(1) >= M(2)...  ; onde:
    !>     NL, ndim   -  input

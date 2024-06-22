@@ -43,7 +43,7 @@ module bands_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: bands
       !> Green
       class(green), pointer :: green
@@ -259,7 +259,7 @@ contains
                dosial(ia_glob, j + 9, i) = -aimag(this%green%g0(j + 9, j + 9, i, ia))/pi
             end do
             !write(250+ia,*) this%en%ene(i), dosia(ia,i)
-            !write(450+ia,'(19f10.6)') this%en%ene(i), dosial(ia,1,i), &
+            !write(450+ia,´(19f10.6)´) this%en%ene(i), dosial(ia,1,i), &
             !dosial(ia,2,i), dosial(ia,3,i), dosial(ia,4,i), &
             !dosial(ia,5,i), dosial(ia,6,i), dosial(ia,7,i), dosial(ia,8,i), dosial(ia,9,i), &
             !dosial(ia,10,i), &
@@ -361,7 +361,7 @@ contains
       end do
       return
 1000  IFAIL = 0
-      !print '(3x, a, 2f12.6)', 'Fermil', QQV, AINT
+      !print ´(3x, a, 2f12.6)´, ´Fermil´, QQV, AINT
       if (AINT == QQV) then
          IK1 = I + 1
          EF = AINF + H*I
@@ -372,7 +372,7 @@ contains
          E1 = AINF + H*(I - 2)
          EF = ((QQV - AINT0)/ALPHA) + E1
       end if
-      !print '(3x, a, 4f12.6)', 'Fermil', QQV, AINT, EF, E1
+      !print ´(3x, a, 4f12.6)´, ´Fermil´, QQV, AINT, EF, E1
    end subroutine fermi
 
    !---------------------------------------------------------------------------
@@ -488,13 +488,13 @@ contains
 #endif
 
       !do na=1,this%lattice%nrec
-      !write(*,*) 'Magnetic Moment for atom ', na,': ', sum(occ(na,1:3)) - sum(occ(na,4:6))
-      !write(*,*) 'Total Charge for atom ',na, ': ', sum(occ(na,1:6)), 's = ', occ(na,1)+occ(na,4), 'p = ', (occ(na,2))+(occ(na,5)), 'd = ', (occ(na,3))+(occ(na,6))
+      !write(*,*) ´Magnetic Moment for atom ´, na,´: ´, sum(occ(na,1:3)) - sum(occ(na,4:6))
+      !write(*,*) ´Total Charge for atom ´,na, ´: ´, sum(occ(na,1:6)), ´s = ´, occ(na,1)+occ(na,4), ´p = ´, (occ(na,2))+(occ(na,5)), ´d = ´, (occ(na,3))+(occ(na,6))
       !sums = sums + occ(na,1)+occ(na,4)
       !sump = sump + occ(na,2)+occ(na,5)
       !sumd = sumd + occ(na,3)+occ(na,6)
       !end do
-      !write(*,*) 'Total electrons s, p and d:', sums, sump, sumd
+      !write(*,*) ´Total electrons s, p and d:´, sums, sump, sumd
    end subroutine calculate_moments
 
    subroutine calculate_moments_gauss_legendre(this)
@@ -797,12 +797,12 @@ contains
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(3) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
 
-         !if(rank==0) call g_logger%info('Spin moment of atom'//fmt('i4',na)//' is '//fmt('f10.6',this%symbolic_atom(this%lattice%nbulk+na)%potential%mtot),__FILE__,__LINE__)
+         !if(rank==0) call g_logger%info(´Spin moment of atom´//fmt(´i4´,na)//´ is ´//fmt(´f10.6´,this%symbolic_atom(this%lattice%nbulk+na)%potential%mtot),__FILE__,__LINE__)
          call g_logger%info('Spin moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot), __FILE__, __LINE__)
          mx = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
          my = this%symbolic_atom(this%lattice%nbulk + na)%potential%my
          mz = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz
-         !if(rank==0) call g_logger%info('Spin moment projections of atom'//fmt('i4',na)//' is '//fmt('f10.6',mx)//' '//fmt('f10.6',my)//' '//fmt('f10.6',mz),__FILE__,__LINE__)
+         !if(rank==0) call g_logger%info(´Spin moment projections of atom´//fmt(´i4´,na)//´ is ´//fmt(´f10.6´,mx)//´ ´//fmt(´f10.6´,my)//´ ´//fmt(´f10.6´,mz),__FILE__,__LINE__)
 
          if (this%recursion%hamiltonian%local_axis) then
             call g_logger%info('Local spin moment projections of atom'//fmt('i4', na)//' is '//fmt('f10.6', mx)//' '//fmt('f10.6', my)//' '//fmt('f10.6', mz), __FILE__, __LINE__)
@@ -1036,13 +1036,13 @@ contains
          call g_logger%info('Magnetic field on atom'//fmt('i4', na)//' is '//fmt('f16.6', fx)//' '//fmt('f16.6', fy)//' '//fmt('f16.6', fz), __FILE__, __LINE__)
          call g_logger%info('Magnetic torque on atom'//fmt('i4', na)//' is '//fmt('f16.6', tx)//' '//fmt('f16.6', ty)//' '//fmt('f16.6', tz), __FILE__, __LINE__)
 
-         !print '(a,i4,a, 3f12.6)' , "Magnetic mom0 for atom ", na, "=",this%symbolic_atom(plusbulk)%potential%mom0
-         !print '(a,i4,a, 3f12.6)' , "Magnetic mom1 for atom ", na, "=", this%symbolic_atom(plusbulk)%potential%mom1
-         !print '(a,i4,a, 3f12.6)' , "Field prefactors for atom ", na, "=", pref_0, pref_1
-         !print '(a,i4,a, 3f12.6)' , "Magnetic force for atom ", na, "=", I_loc
-         !print '(a,i4,a, 3f12.6)' , "Magnetic torque for atom ", na, "=", tau_loc
-         !print '(a,i4,a, 3f12.6)' , "Field prefactors for atom ", na, "=", pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
-         !print '(a,i4,a, 3f12.6)' , "Field prefactors for atom ", na, "=", pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom0 for atom ", na, "=",this%symbolic_atom(plusbulk)%potential%mom0
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom1 for atom ", na, "=", this%symbolic_atom(plusbulk)%potential%mom1
+         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_0, pref_1
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic force for atom ", na, "=", I_loc
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic torque for atom ", na, "=", tau_loc
+         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
+         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
       end do
    end subroutine calculate_magnetic_torques
 end module bands_mod

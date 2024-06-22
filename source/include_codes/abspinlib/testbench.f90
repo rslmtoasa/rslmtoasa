@@ -70,7 +70,7 @@ program test_abSpinlib
          if (y_plus > ldimy) y_plus = y_plus - ldimy
          y_min = y - 1
          if (y_min < 1) y_min = y_min + ldimy
-         !print '(a,3i4,a,4i4)','Atom: ',i,x,y,' Neighbours: ',x_plus,x_min,y_plus,y_min
+         !print ´(a,3i4,a,4i4)´,´Atom: ´,i,x,y,´ Neighbours: ´,x_plus,x_min,y_plus,y_min
          nnlist(1, i) = atomgrid(x_plus, y)
          nnlist(2, i) = atomgrid(x_min, y)
          nnlist(3, i) = atomgrid(x, y_plus)
@@ -101,7 +101,7 @@ program test_abSpinlib
       call asd_corr(moments, fields, temp, dt, na)
       print *, 'Step', iiter, " finished", sum(moments(3, :))/na
       !do i=1,na
-      !   print '(2x,i4,3f12.6)', i,moments(:,i)
+      !   print ´(2x,i4,3f12.6)´, i,moments(:,i)
       !end do
    end do
    !

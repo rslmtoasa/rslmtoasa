@@ -38,7 +38,7 @@ module green_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: green
       ! General variables
       !> Recursion
@@ -751,8 +751,8 @@ contains
    !> Given an input Gij (physical site-resolved GF in the LMTO), the function
    !> returns the correspondent auxiliary GFs, considering here the
    !> orthogonal representation. Takes into account all njij pairs directly.
-   !> It uses the fact that the phyisical GF's are invariant with respect to
-   !> screening constants (Turek's book, page 72-73).
+   !> It uses the fact that the phyisical GF´s are invariant with respect to
+   !> screening constants (Turek´s book, page 72-73).
    !> Implemented by Ivan Miranda on 29.09.2023
    !---------------------------------------------------------------------------
    subroutine auxiliary_gij(this, green_ij, aux_gij, atom_i, atom_j)
@@ -810,12 +810,12 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Given an auxiliary GF's (in the LMTO language), the function
-   !> returns the correspondent auxiliary GF's transformed from
+   !> Given an auxiliary GF´s (in the LMTO language), the function
+   !> returns the correspondent auxiliary GF´s transformed from
    !> one representation (alpha - in) to another (beta - out).
    !> The different representations are here denoted by their
    !> set of screening constants.
-   !> See Turek's book, Eq. (3.57)
+   !> See Turek´s book, Eq. (3.57)
    !> Implemented by Ivan Miranda on 25.10.2023
    !---------------------------------------------------------------------------
    subroutine transform_auxiliary_gij(this, pmat_in_atom_i, pmat_out_atom_i, pmat_in_atom_j, pmat_out_atom_j, &
@@ -824,14 +824,14 @@ contains
       class(green) :: this
       !
       integer, intent(in) :: atom_i, atom_j ! Input atoms i and j
-      complex(rp), intent(in) :: aux_gij_in(:, :, :) ! Auxiliary GF's (in)
-      complex(rp), intent(inout) :: aux_gij_out(:, :, :) ! Auxiliary GF's (out), in another representation
-      complex(rp), intent(in) :: pmat_in_atom_i(:, :, :) ! Potential P matrix (in) - in the same representation as GF's (in) for the atom i
-      complex(rp), intent(in) :: pmat_out_atom_i(:, :, :) ! Potential P matrix (out) - in the same representation as GF's (out) for the atom i
-      complex(rp), intent(in) :: pmat_in_atom_j(:, :, :) ! Potential P matrix (in) - in the same representation as GF's (in) for the atom j
-      complex(rp), intent(in) :: pmat_out_atom_j(:, :, :) ! Potential P matrix (out) - in the same representation as GF's (out) for the atom j
-      real(rp), intent(in) :: screening_in(0:, :) ! Screening constants relative to the GF's (in)
-      real(rp), intent(in) :: screening_out(0:, :) ! Screening constants relative to the GF's (out)
+      complex(rp), intent(in) :: aux_gij_in(:, :, :) ! Auxiliary GF´s (in)
+      complex(rp), intent(inout) :: aux_gij_out(:, :, :) ! Auxiliary GF´s (out), in another representation
+      complex(rp), intent(in) :: pmat_in_atom_i(:, :, :) ! Potential P matrix (in) - in the same representation as GF¨s (in) for the atom i
+      complex(rp), intent(in) :: pmat_out_atom_i(:, :, :) ! Potential P matrix (out) - in the same representation as GF´s (out) for the atom i
+      complex(rp), intent(in) :: pmat_in_atom_j(:, :, :) ! Potential P matrix (in) - in the same representation as GF´s (in) for the atom j
+      complex(rp), intent(in) :: pmat_out_atom_j(:, :, :) ! Potential P matrix (out) - in the same representation as GF´s (out) for the atom j
+      real(rp), intent(in) :: screening_in(0:, :) ! Screening constants relative to the GF´s (in)
+      real(rp), intent(in) :: screening_out(0:, :) ! Screening constants relative to the GF´s (out)
       !
       ! Local Variables
       integer :: l, s, m, mls, ie
@@ -862,7 +862,7 @@ contains
                   pmat_resc1(mls, mls, ie) = pmat_in_atom_i(mls, mls, ie)/pmat_out_atom_i(mls, mls, ie)
                   pmat_resc2(mls, mls, ie) = pmat_in_atom_j(mls, mls, ie)/pmat_out_atom_j(mls, mls, ie)
                   ! For the pmat_resc3 matrix, does not matter to consider the P potential function
-                  ! for atom i or j, because it's only acting when i = j
+                  ! for atom i or j, because it´s only acting when i = j
                   if (atom_i .eq. atom_j) then
                      pmat_resc3(mls, mls, ie) = (temp2 - temp1)*(pmat_in_atom_i(mls, mls, ie)/pmat_out_atom_i(mls, mls, ie))
                   end if
@@ -871,7 +871,7 @@ contains
          end do
       end do
 
-      ! Now do the rescaling of the auxiliary GF's (in)
+      ! Now do the rescaling of the auxiliary GF´s (in)
 
       do ie = 1, size(aux_gij_in, 3) ! Energy channel
          aux_gij_out(:, :, ie) = matmul(pmat_resc1(:, :, ie), matmul(aux_gij_in(:, :, ie), pmat_resc2(:, :, ie))) + &
@@ -1100,10 +1100,10 @@ contains
       end do  ! End loop on self-consistent atoms
 !!! ! MPI moved to moment section
 !!! #ifdef USE_MPI
-!!!     call g_timer%start('MPI DOS communication')
+!!!     call g_timer%start(´MPI DOS communication´)
 !!!     call MPI_Allgather(this%g0(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*nv*18*18, MPI_DOUBLE_COMPLEX, &
 !!!                        this%g0, (end_atom-start_atom+1)*nv*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
-!!!     call g_timer%stop('MPI DOS communication')
+!!!     call g_timer%stop(´MPI DOS communication´)
 !!! #endif
    end subroutine chebyshev_green
 
@@ -1255,11 +1255,11 @@ contains
          b_diag = (b_inf(1, 1) + b_inf(10, 10))*0.5d0
       end do
       ! Standard semi-circle construction of Greens functions
-      !write(12334,'(18f8.4)') a_inf
-      !write(12335,'(18f8.4)') b_inf
-      !write(12336,'(18f8.4)') a_inf
-      !write(12337,'(18f8.4)') this%recursion%a_b(:,:,2,i_site)
-      !write(12337,'(18f8.4)') this%recursion%b2_b(:,:,2,i_site)
+      !write(12334,´(18f8.4)´) a_inf
+      !write(12335,´(18f8.4)´) b_inf
+      !write(12336,´(18f8.4)´) a_inf
+      !write(12337,´(18f8.4)´) this%recursion%a_b(:,:,2,i_site)
+      !write(12337,´(18f8.4)´) this%recursion%b2_b(:,:,2,i_site)
     !!!$omp parallel do default(shared) private(ei, Z, Ze, Q, B2z, i, ea, eb, det, zoff, l, ln, j, P , ipiv, info, work, lwork, W)
       !$omp parallel do default(shared) private(ei, Z, Ze, Q, B2z, i, etop, ebot, ea, eb, det, zoff, l, ln, j, P , ipiv, info, work, lwork, W)
       do ei = ie_start, ie_start + ie_len - 1
@@ -1332,7 +1332,7 @@ contains
                end if
             end do
          end do
-         !write(12333,'(19f8.4)') e(ei), (real(g_out(i,i,ei)),i=1,18)
+         !write(12333,´(19f8.4)´) e(ei), (real(g_out(i,i,ei)),i=1,18)
       end do
       !$omp end parallel do
 

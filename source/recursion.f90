@@ -37,7 +37,7 @@ module recursion_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: recursion
       !> Hamiltonian
       class(hamiltonian), pointer :: hamiltonian
@@ -364,8 +364,8 @@ contains
             if (this%izero(i) /= 0) then
                locham = this%hamiltonian%hall(:, :, 1, i) + this%hamiltonian%lsham(:, :, ino)
                call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, this%psi_b(:, :, i), 18, cone, this%hpsi(:, :, i), 18)
-               !call zgemm('n','n',18,18,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-               !call zgemm('n','n',18,18,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
+               !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
+               !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
             end if
             if (nr >= 2) then
                do j = 2, nr ! Loop on the neighbouring
@@ -390,8 +390,8 @@ contains
          if (this%izero(i) /= 0) then
             locham = this%hamiltonian%ee(:, :, 1, ih) + this%hamiltonian%lsham(:, :, ih)
             call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, this%psi_b(:, :, i), 18, cone, this%hpsi(:, :, i), 18)
-            !call zgemm('n','n',18,18,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-            !call zgemm('n','n',18,18,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
+            !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
+            !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
          end if
          if (nr >= 2) then
             do j = 2, nr ! Loop on the neighbouring
@@ -423,7 +423,7 @@ contains
          !do i=1, this%lattice%kk
          this%pmn_b(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%pmn_b(:, :, this%irlist(i))
          call zgemm('c', 'n', 18, 18, 18, cone, this%psi_b(:, :, this%irlist(i)), 18, this%hpsi(:, :, this%irlist(i)), 18, cone, summ, 18)
-         !call zgemm('c','n',18,18,18,cone,PSI_B(1,1,irlist(I)),18,Hpsi(1,1,irlist(I)),18,cone,SUMM,18)
+         !call zgemm(´c´,´n´,18,18,18,cone,PSI_B(1,1,irlist(I)),18,Hpsi(1,1,irlist(I)),18,cone,SUMM,18)
       end do
       !$omp end parallel do
 
@@ -511,7 +511,7 @@ contains
       ! For debug purposes
       !do i=1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
       !  do l=1, 18  ! Loop on the orbital l
-      !    write(122, *) 'orbital', l
+      !    write(122, *) ´orbital´, l
       !    do ll=1, llmax ! Loop on the recursion steps
       !      write(122, *) this%a(ll, l, i,1), this%b2(ll,l,i,1)
       !    end do
@@ -540,7 +540,7 @@ contains
 !!!     do i=start_atom, end_atom
 !!!         j = this%lattice%irec(i) ! Atom number in the clust file
 !!!         ! Clear list of atoms in hopping region
-!!!         call g_logger%info('Block recursion in progress for atom '//int2str(j),__FILE__,__LINE__)
+!!!         call g_logger%info(´Block recursion in progress for atom ´//int2str(j),__FILE__,__LINE__)
 !!!         this%izero(:) = 0
 !!!         ! Initializing wave functions
 !!!         this%psi_b(:,:,:) = (0.0d0, 0.0d0)
@@ -569,7 +569,7 @@ contains
 !!!     end do ! End of the loop on the nrec
 !!!     ! Gather results to ensure all processes have the complete arrays
 !!! #ifdef USE_MPI
-!!!     call g_timer%start('MPI recursion communication')
+!!!     call g_timer%start(´MPI recursion communication´)
 !!!     call MPI_Allgather(this%a_b(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, &
 !!!                        this%a_b, (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
 !!!     call MPI_Allgather(this%b2_b(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, &
@@ -578,7 +578,7 @@ contains
 !!!     !!!                    this%a_b, (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
 !!!     !!! call MPI_Allgather(this%b2_b(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, &
 !!!     !!!                    this%b2_b, (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
-!!!     call g_timer%stop('MPI recursion communication')
+!!!     call g_timer%stop(´MPI recursion communication´)
 !!! #endif
 !!!   end subroutine recur_b_par
 
@@ -640,7 +640,7 @@ contains
             write (1000*(1 + rank) + 122, *) 'orbital', l, 'atom', i
             do ll = 1, llmax ! Loop on the recursion steps
                write (1000*(1 + rank) + 122, '(2f12.8,4x,2f12.8)') this%a(ll, l, i - start_atom + 1, 1), this%b2(ll, l, i - start_atom + 1, 1)
-               !write(1000*(1+rank)+122, '(2f12.8,4x,2f12.8)') this%a_b(l,l,ll,i-start_atom+1), this%b2_b(l,l,ll,i-start_atom+1)
+               !write(1000*(1+rank)+122, ´(2f12.8,4x,2f12.8)´) this%a_b(l,l,ll,i-start_atom+1), this%b2_b(l,l,ll,i-start_atom+1)
           !!!write(1000*(1+rank)+122, *) this%a(ll, l, i,1-start_atom+1), this%b2(ll,l,i,1)
             end do
          end do
@@ -707,11 +707,11 @@ contains
             !  ( H|Psi_n>-A_n|Psi_n>-B_n-1|Psi_n-1> = PMN-A_n|Psi_n> )
          !! H Wn - Wn An  - Wn-1 Bn-1 in Inoue syntax
             call zgemm('n', 'n', 18, 18, 18, cmone, this%psi_b(:, :, this%irlist(i)), 18, this%atemp_b(:, :, ll), 18, cone, this%pmn_b(:, :, this%irlist(i)), 18)
-            !call zgemm('n','n',18,18,18,cmone,this%psi_b(:,:,i),18,this%atemp_b(:,:,ll),18,cone,this%pmn_b(:,:,i), 18)
-            ! B^2_n+1 = ( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )'*( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )
-         !! (H Wn - An Wn  - Wn-1 Bn-1)*(H Wn - An Wn - Wn-1 Bn-1)' -in Inoue syntax
+            !call zgemm(´n´,´n´,18,18,18,cmone,this%psi_b(:,:,i),18,this%atemp_b(:,:,ll),18,cone,this%pmn_b(:,:,i), 18)
+            ! B^2_n+1 = ( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )´*( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )
+         !! (H Wn - An Wn  - Wn-1 Bn-1)*(H Wn - An Wn - Wn-1 Bn-1)´ -in Inoue syntax
             call zgemm('c', 'n', 18, 18, 18, cone, this%pmn_b(:, :, this%irlist(i)), 18, this%pmn_b(:, :, this%irlist(i)), 18, cone, sum_b, 18)
-            !call zgemm('c','n',18,18,18,cone,this%pmn_b(:,:,i),18,this%pmn_b(:,:,i),18,cone,sum_b,18)
+            !call zgemm(´c´,´n´,18,18,18,cone,this%pmn_b(:,:,i),18,this%pmn_b(:,:,i),18,cone,sum_b,18)
          end do
          !$omp end parallel do
          call g_timer%stop('H|Psi_n-A_n|Psi_n-B_n|Psi_n-1')
@@ -719,7 +719,7 @@ contains
          ! Calculate B_n+1
          u(:, :) = sum_b(:, :)
          ! Replace sqrt with eigen solver to get lamda^2 and U
-         ! get lamda^2 and U in lamda=U*BB'*U*
+         ! get lamda^2 and U in lamda=U*BB´*U*
          call zheev('v', 'u', 18, u, 18, ev, dum, 18*18, rwork, info)
          if (info /= 0) call g_logger%fatal('Diagonalization error', __FILE__, __LINE__)
          !
@@ -733,10 +733,10 @@ contains
             lam_i(i, i) = 1.0d0/lam(i, i) ! 1/B_n
          end do
          !
-         !  Calc. U*lamda*U'= B
+         !  Calc. U*lamda*U´= B
          call zgemm('n', 'n', 18, 18, 18, cone, u, 18, lam, 18, czero, dum, 18)
          call zgemm('n', 'c', 18, 18, 18, cone, dum, 18, u, 18, czero, b, 18)
-         !  B^-1=U*lamda^-1*U'
+         !  B^-1=U*lamda^-1*U´
          call zgemm('n', 'n', 18, 18, 18, cone, u, 18, lam_i, 18, czero, dum, 18)
          call zgemm('n', 'c', 18, 18, 18, cone, dum, 18, u, 18, czero, b_i, 18)
          call g_timer%stop('B_n+1')
@@ -789,7 +789,7 @@ contains
                end do
             end do
             ! replace sqrt with eigen solver to get lamda^2 and U
-            ! get lamda^2 and U in lamda=U*BB'*U*
+            ! get lamda^2 and U in lamda=U*BB´*U*
             call zheev('V', 'U', LDIM, U, LDIM, ev, zwork, LDIM*LDIM, rwork, info)
             !
             if (info /= 0) print *, 'diag', info
@@ -797,7 +797,7 @@ contains
             do I = 1, LDIM
                lam(I, I) = sqrt(ev(i))
             end do
-            ! calc. U*lamda*U'= B
+            ! calc. U*lamda*U´= B
             call zgemm('n', 'n', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), U, LDIM, lam, LDIM, (0.0d0, 0.0d0), DUM, LDIM)
             call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), this%B2_b(1, 1, L, N), LDIM)
          end do
@@ -1686,7 +1686,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Recursion method using to find the Chebyshev moments for diagonal and
-   !off-diagonal terms. Here, one cannot use the 'double-trick'. See
+   !off-diagonal terms. Here, one cannot use the ´double-trick´. See
    ! Rev. Mod. Phys. 78, 275.
    ! OBSOLETE! DO NOT USE
    !---------------------------------------------------------------------------
@@ -1924,7 +1924,7 @@ contains
             dum(:) = (0.0d0, 0.0d0)
             nr = this%lattice%nn(i, 1) ! Number of neighbours
             if (this%izero(i) /= 0) then
-               !write(125, *) 'i is ', i
+               !write(125, *) ´i is ´, i
                do m = 1, 9 ! Loop on the orbital m
                   do l = 1, 9 ! Loop on the orbital l
                      dum(l) = dum(l) + this%hamiltonian%ee(l, m, 1, ih)*this%psi(m, i)
@@ -1997,9 +1997,9 @@ contains
       nm1 = this%lattice%control%lld - 1
       llmax = this%lattice%control%lld
       do ll = 1, nm1
-!     call g_timer%start('hop')
+!     call g_timer%start(´hop´)
          call this%hop(ll)
-!     call g_timer%stop('hop')
+!     call g_timer%stop(´hop´)
          this%b2temp(ll) = summ
          ajc = -this%atemp(ll)
 
@@ -2063,7 +2063,7 @@ contains
 
             this%b2temp(1) = 1.0d0
             this%atemp(llmax) = 0.0d0
-            !write(125, *) 'orbital ', l
+            !write(125, *) ´orbital ´, l
             call this%crecal()
 
             do ll = 1, llmax ! Loop on the recursion steps
@@ -2076,7 +2076,7 @@ contains
     !!!! For debug purposes
     !!!do i=1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
     !!!  do l=1, 18  ! Loop on the orbital l
-    !!!    write(123, *) 'orbital', l
+    !!!    write(123, *) ´orbital´, l
     !!!    do ll=1, llmax ! Loop on the recursion steps
     !!!      write(123, *) this%a(ll, l, i_loc, 1), this%b2(ll, l, i_loc, 1)
     !!!    end do
@@ -2087,7 +2087,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Obtain the optmal values of the terminators ainf and binf by Pettifor's
+   !> Obtain the optmal values of the terminators ainf and binf by Pettifor´s
    !termination
    !---------------------------------------------------------------------------
    subroutine bpopt(this, ll, a, rb, n, ainf, rbinf, ifail)

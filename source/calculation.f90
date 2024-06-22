@@ -47,19 +47,19 @@ module calculation_mod
 
    type, public :: calculation
       !> Pre-processing. Options are:
-      !> 'none' (default)
-      !> 'bravais' : Builds the bulk clust
-      !> 'buildsurf' : Builds the surface clust
-      !> 'newclubulk' : Builds the imputiry clust from the bluk clust
-      !> 'newclusurf' : Builds the impurity clust from the surface clust
+      !> ´none´ (default)
+      !> ´bravais´ : Builds the bulk clust
+      !> ´buildsurf´ : Builds the surface clust
+      !> ´newclubulk´ : Builds the imputiry clust from the bluk clust
+      !> ´newclusurf´ : Builds the impurity clust from the surface clust
       character(len=sl) :: pre_processing
 
       !> Processing. Options are
-      !> 'none' (default)
+      !> ´none´ (default)
       character(len=sl) :: processing
 
       !> Post-processing. Options are
-      !> 'none' (default)
+      !> ´none´ (default)
       character(len=sl) :: post_processing
 
       !> Controller for preprocessing verbosity.
@@ -121,7 +121,7 @@ contains
    !> @brief
    !> Read parameters from input file
    !
-   !> @param[in] fname Namelist file with '&calculation' table
+   !> @param[in] fname Namelist file with ´&calculation´ table
    !---------------------------------------------------------------------------
    subroutine build_from_file(this, fname)
       class(calculation), intent(inout) :: this
@@ -937,7 +937,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Reset all members to default ('none') value
+   !> Reset all members to default (´none´) value
    !---------------------------------------------------------------------------
    subroutine restore_to_default(this)
       class(calculation) :: this
@@ -951,7 +951,7 @@ contains
    !> @brief
    !> Check availability for post-processing
    !
-   !> @param post_processing Type of processing. Allowed values: 'none'
+   !> @param post_processing Type of processing. Allowed values: ´none´
    !---------------------------------------------------------------------------
    subroutine check_post_processing(post_processing)
       character(len=*), intent(in) :: post_processing
@@ -970,7 +970,7 @@ contains
    !> Check availability for pre-processing
    !
    !> @param[in] pre_processing Type of pre-processing. Allowed values:
-   !> 'bravais', 'buildsurf', 'newclubulk', 'newclusurf', 'none'
+   !> ´bravais´, ´buildsurf´, ´newclubulk´, ´newclusurf´, ´none´
    !---------------------------------------------------------------------------
    subroutine check_pre_processing(pre_processing)
       character(len=*), intent(in) :: pre_processing
@@ -990,7 +990,7 @@ contains
    !> @brief
    !> Check availability for processing
    !
-   !> @param[in] processing Type of processing. Allowed values: 'none'
+   !> @param[in] processing Type of processing. Allowed values: ´none´
    !---------------------------------------------------------------------------
    subroutine check_processing(processing)
       character(len=*), intent(in) :: processing

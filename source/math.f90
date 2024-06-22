@@ -14,17 +14,17 @@
 !
 ! As a counterpart to the access to the source code and rights to copy,
 ! modify and redistribute granted by the license, users are provided only
-! with a limited warranty and the software's author, the holder of the
+! with a limited warranty and the software´s author, the holder of the
 ! economic rights, and the successive licensors have only limited
 ! liability.
 !
-! In this respect, the user's attention is drawn to the risks associated
+! In this respect, the user´s attention is drawn to the risks associated
 ! with loading, using, modifying and/or developing or reproducing the
 ! software by the user in light of its specific status of free software,
 ! that may mean that it is complicated to manipulate, and that also
 ! therefore means that it is reserved for developers and experienced
 ! professionals having in-depth computer knowledge. Users are therefore
-! encouraged to load and test the software's suitability as regards their
+! encouraged to load and test the software´s suitability as regards their
 ! requirements in conditions enabling the security of their systems and/or
 ! data to be ensured and, more generally, to use and operate it in the
 ! same conditions as regards security.
@@ -1103,14 +1103,14 @@ contains
       !     This function computes the approximate theta function for the
       !     given order n, at the point x.
       !
-      ! --> 'fd': Fermi-Dirac smearing.
+      ! --> ´fd´: Fermi-Dirac smearing.
       !       1.0/(1.0+exp(-x))
       !
-      ! --> 'g':  Gaussian smearing (n=0).
+      ! --> ´g´:  Gaussian smearing (n=0).
       !
-      ! --> 'mp': Methfessel-Paxton smearing (n=1). See PRB 40, 3616 (1989).
+      ! --> ´mp´: Methfessel-Paxton smearing (n=1). See PRB 40, 3616 (1989).
       !
-      ! --> 'mv': Marzari-Vanderbilt (cold) smearing. See PRL 82, 3296 (1999).
+      ! --> ´mv´: Marzari-Vanderbilt (cold) smearing. See PRL 82, 3296 (1999).
       !       1/2*erf(x-1/sqrt(2)) + 1/sqrt(2*pi)*exp(-(x-1/sqrt(2))**2) + 1/2
       !
       real(rp), intent(in) :: x
@@ -1180,14 +1180,14 @@ contains
       !
       !     The derivative of wgauss: an approximation to the delta function
       !
-      ! --> 'fd': derivative of the Fermi-Dirac smearing.
+      ! --> ´fd´: derivative of the Fermi-Dirac smearing.
       !       0.5/(1.0+cosh(x))
       !
-      ! --> 'g':  derivative of the Gaussian smearing (n=0).
+      ! --> ´g´:  derivative of the Gaussian smearing (n=0).
       !
-      ! --> 'mp': derivative of the Methfessel-Paxton smearing.
+      ! --> ´mp´: derivative of the Methfessel-Paxton smearing.
       !
-      ! --> 'mv': derivative of the Marzari-Vanderbilt (cold) smearing.
+      ! --> ´mv´: derivative of the Marzari-Vanderbilt (cold) smearing.
       !       1/sqrt(pi)*exp(-(x-1/sqrt(2))**2)*(2-sqrt(2)*x)
       !
       real(rp), intent(in) :: x
@@ -1254,12 +1254,12 @@ contains
       !    where delta(x) is the current approximation for the delta function,
       !    as obtained from w0gauss(x, n)
       !
-      ! --> 'fd.: Fermi-Dirac smearing (n=-99). In this case w1gauss corresponds
+      ! --> ´fd.: Fermi-Dirac smearing (n=-99). In this case w1gauss corresponds
       !     to the negative of the electronic entropy.
       !
-      ! --> 'mp': Methfessel-Paxton smearing (n>=0).
+      ! --> ´mp´: Methfessel-Paxton smearing (n>=0).
       !
-      ! --> 'mv': Marzari-Vanderbilt (cold) smearing (n=-1).
+      ! --> ´mv´: Marzari-Vanderbilt (cold) smearing (n=-1).
       !       1/sqrt(2*pi)*(x-1/sqrt(2))*exp(-(x-1/sqrt(2))**2)
       !
       real(rp), intent(in) :: x
@@ -1334,7 +1334,7 @@ contains
    !
    ! Copyright (C) 2002-2009 Quantum ESPRESSO group
    ! This file is distributed under the terms of the
-   ! GNU General Public License. See the file `License'
+   ! GNU General Public License. See the file `License´
    ! in the root directory of the present distribution,
    ! or http://www.gnu.org/copyleft/gpl.txt .
    !
@@ -1870,7 +1870,7 @@ contains
          ! Apply the rotation: h * Ux
          call zgemm("N", "C", ndim, ndim, ndim, cone, MATs, ndim, RMAT, ndim, czero, tmpMAT, ndim)
 
-         ! Apply the rotation: Ux' * (h * Ux)
+         ! Apply the rotation: Ux´ * (h * Ux)
          call zgemm("N", "N", ndim, ndim, ndim, cone, RMAT, ndim, tmpMAT, ndim, czero, MATs, ndim)
 
          ! Copy MATs back to MAT
@@ -1942,7 +1942,7 @@ contains
          !  h*Ux
          call zgemm("N", "N", ndim, ndim, ndim, cone, MATs, ndim, RMAT, ndim, czero, tmpMAT, &
                     ndim)
-         !  Ux'*(h*Ux)
+         !  Ux´*(h*Ux)
          call zgemm("C", "N", ndim, ndim, ndim, cone, RMAT, ndim, tmpMAT, ndim, czero, MATs, &
                     ndim)
          !
@@ -2207,7 +2207,7 @@ contains
 
    !----------------------------------------------------
    ! Set up the rotation matrix around a given axis
-   ! based on Rodrigues' rotation formula
+   ! based on Rodrigues´ rotation formula
    !----------------------------------------------------
    subroutine setup_rotation_matrix(matrix, axis, theta)
       ! Declarations
@@ -2222,7 +2222,7 @@ contains
       cosTheta = cos(theta)
       sinTheta = sin(theta)
 
-      ! Define the rotation matrix using Rodrigues' formula
+      ! Define the rotation matrix using Rodrigues´ formula
       matrix(1, 1) = cosTheta + ux*ux*(1.0 - cosTheta)
       matrix(1, 2) = ux*uy*(1.0 - cosTheta) - uz*sinTheta
       matrix(1, 3) = ux*uz*(1.0 - cosTheta) + uy*sinTheta

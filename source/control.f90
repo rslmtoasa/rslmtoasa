@@ -28,7 +28,7 @@ module control_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: control
       !> Recursion cutoff LL for d electrons
       !>
@@ -152,7 +152,7 @@ module control_mod
       !>
       !> Description.
       !>
-      !> Allowed values: 'lanczos', 'chebyshev'
+      !> Allowed values: ´lanczos´, ´chebyshev´
       character(len=9) :: recur
 
       integer :: txc ! xcdata
@@ -186,7 +186,7 @@ contains
    !> @brief
    !> Constructor
    !
-   !> @param[in] fname Input file with 'control' namelist
+   !> @param[in] fname Input file with ´control´ namelist
    !> @return type(control)
    !---------------------------------------------------------------------------
    function constructor(fname) result(obj)

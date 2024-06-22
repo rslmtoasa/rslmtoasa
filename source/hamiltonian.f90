@@ -39,7 +39,7 @@ module hamiltonian_mod
 
    private
 
-   !> Module's main procedure
+   !> Module´s main procedure
    type, public :: hamiltonian
       !> Charge
       class(charge), pointer :: charge
@@ -333,10 +333,10 @@ contains
                this%lsham(j, i + 9, k) = this%lsham(j, i + 9, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i)) ! H12
                this%lsham(j + 9, i, k) = this%lsham(j + 9, i, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i)) ! H21
                this%lsham(j + 9, i + 9, k) = this%lsham(j + 9, i + 9, k) - prefac*Lz(j, i) - Lz(j, i)*rac(2)*lz_loc ! H22
-               !write(50,*) 'ntype=', k
-               !write(51,*) 'ntype=', k
-               !write(50,'(18f10.6)') real(this%lsham(:,:,k))
-               !write(51,'(18f10.6)') aimag(this%lsham(:,:,k))
+               !write(50,*) ´ntype=´, k
+               !write(51,*) ´ntype=´, k
+               !write(50,´(18f10.6)´) real(this%lsham(:,:,k))
+               !write(51,´(18f10.6)´) aimag(this%lsham(:,:,k))
             end do
          end do
       end do
@@ -483,7 +483,7 @@ contains
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-         !write(123, *)'bulkham'
+         !write(123, *)´bulkham´
          call this%chbar_nc(ia, nr, ino, ntype)
          do m = 1, nr
             do i = 1, 9
@@ -494,8 +494,8 @@ contains
                   this%ee(j + 9, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            !write(128, *) 'm=', m, 'ntype= ', ntype
-            !write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
+            !write(128, *) ´m=´, m, ´ntype= ´, ntype
+            !write(128, ´(18f10.6)´) real(this%ee(:, :, m, ntype))
          end do ! end of neighbour number
          if (this%hoh) then
             call this%build_obarm()
@@ -510,17 +510,17 @@ contains
                else
                   ji = this%charge%lattice%iz(ia)
                end if
-               ! Check if neighbour 'm' exists for atom 'ntype', otherwise fill HoH Hamiltonian with zeros.
+               ! Check if neighbour ´m´ exists for atom ´ntype´, otherwise fill HoH Hamiltonian with zeros.
                if (ji > 0) then
                   call zgemm('n', 'n', 18, 18, 18, cone, this%ee(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%eeo(:, :, m, ntype), 18)
                   call zgemm('n', 'c', 18, 18, 18, cone, this%eeo(:, :, m, ntype), 18, this%ee(:, :, m, ntype), 18, czero, this%eeoee(:, :, m, ntype), 18)
                else
                   this%eeo(:, :, m, ntype) = 0.0d0
                end if
-               !write(*,*) 'm=', m
-               !write(*,'(18f10.6)') real(this%eeo(:,:,m,ntype))
-               !write(*,*) 'ee', m
-               !write(*,'(18f10.6)') real(this%ee(:,:,m,ntype))
+               !write(*,*) ´m=´, m
+               !write(*,´(18f10.6)´) real(this%eeo(:,:,m,ntype))
+               !write(*,*) ´ee´, m
+               !write(*,´(18f10.6)´) real(this%ee(:,:,m,ntype))
             end do
          end if
       end do ! end of atom type number
@@ -565,7 +565,7 @@ contains
                else
                   ji = this%charge%lattice%iz(nlim)
                end if
-               ! Check if neighbour 'm' exists for atom 'nlim', otherwise fill HoH Hamiltonian with zeros.
+               ! Check if neighbour ´m´ exists for atom ´nlim´, otherwise fill HoH Hamiltonian with zeros.
                if (ji > 0) then
                   call zgemm('n', 'n', 18, 18, 18, cone, this%hall(1, 1, m, nlim), 18, this%obarm(1, 1, ji), 18, czero, this%hallo(1, 1, m, nlim), 18)
                else
@@ -603,7 +603,7 @@ contains
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          do k = 1, nr
             jj = this%charge%lattice%nn(ia, k)
-            !write(123, *)'ia, ii', ia, m, this%charge%lattice%nn(ia, m)
+            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
             if (k == 1) then
                jj = ia
             end if
@@ -625,15 +625,15 @@ contains
                !a_inv(:,:) = inverse_3x3(this%charge%lattice%a)
                !idx(:) = matmul(a_inv(:,:),b(:))
 
-               !write(*,*) b(:), 'b'
+               !write(*,*) b(:), ´b´
                !write(*,*) matmul(this%charge%lattice%a(:,:),idx(:))
 
-               !call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
-               !call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
-               !call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
-               !call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
+               !call hcpx(this%ee(1:9,1:9,k,ntype), ´sph2cart´)
+               !call hcpx(this%ee(1:9,10:18,k,ntype), ´sph2cart´)
+               !call hcpx(this%ee(10:18,1:9,k,ntype), ´sph2cart´)
+               !call hcpx(this%ee(10:18,10:18,k,ntype), ´sph2cart´)
                !if(this%hoh)then
-               !  !call zgemm('n','c',18,18,18,cone,this%eeo(:,:,k,ntype),18,this%ee(:,:,k,ntype),18,cone,dum(:,:),18)
+               !  !call zgemm(´n´,´c´,18,18,18,cone,this%eeo(:,:,k,ntype),18,this%ee(:,:,k,ntype),18,cone,dum(:,:),18)
                !  dum(:,:) = 0.0d0
                !  do i=1,nr
                !    dum(:,:) = dum(:,:) + this%eeoee(:,:,i,ntype)
@@ -764,7 +764,7 @@ contains
          write (*, *) ia, nr, n_atoms, max_orbital
          do k = 1, nr
             jj = this%charge%lattice%nn(ia, k)
-            !write(123, *)'ia, ii', ia, m, this%charge%lattice%nn(ia, m)
+            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
             if (k == 1) then
                jj = ia
             end if
@@ -842,8 +842,8 @@ contains
             write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
             write (128, '(18f10.6)') real(this%EE(1:18, 1:18, k, ntype))!*13.605703976
             write (128, *) sum(real(this%ee(:, :, k, ntype)))
-            !write(129,*)'m=',k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=',ntype, 'Index=', idx(k,:)
-            !write(129,'(9f10.6)') real(this%EE(10:18,1:9,k,ntype))*13.605703976
+            !write(129,*)´m=´,k, ´Atom=´, jj, ´Coordinates=´, this%charge%lattice%cr(:, jj), ´Ntype=´,ntype, ´Index=´, idx(k,:)
+            !write(129,´(9f10.6)´) real(this%EE(10:18,1:9,k,ntype))*13.605703976
             !write(129,*) sum(real(this%ee(:,:,k,ntype)))
             rewind (90)
             rewind (91)
@@ -889,7 +889,7 @@ contains
       end do
 
 !    do ilm=1, 9
-!      write(123, '(9f10.6)') (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
+!      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
 !    end do
 
       if (vv <= 0.01d0) then
@@ -925,9 +925,9 @@ contains
       end do
 
       !do m=1, 3
-      !  write(123, *)'m=', m
+      !  write(123, *)´m=´, m
       !  do ilm=1, 9
-      !    write(123, '(9f10.6)') (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
+      !    write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
       !  end do
       !end do
    end subroutine ham0m_nc
@@ -957,21 +957,21 @@ contains
       call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, dummy)
 
       !do m=1, nr
-      !  print '(9f10.6)', real(this%charge%lattice%sbar(:, :, m, ino))
+      !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
       !end do
       it = this%charge%lattice%iz(ia)
       do m = 1, nr
          jj = this%charge%lattice%nn(ia, m)
-         !write(123, *)'ia, ii', ia, m, this%charge%lattice%nn(ia, m)
+         !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
          if (m == 1) then
             jj = ia
          end if
          if (jj /= 0) then
             jt = this%charge%lattice%iz(jj)
             vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-            !write(123, '(3f10.6)') vet(:)
-            !write(123, '(3f10.6)') this%charge%lattice%sbarvec(:, m)
-            !write(123, '(a, 3i4, 3f10.6)') 'nn ', IA, m, JJ, VET(:)
+            !write(123, ´(3f10.6)´) vet(:)
+            !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
+            !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
             call this%hmfind(vet, nr, hhh, m, ia, m, ni, ntype)
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
@@ -984,11 +984,11 @@ contains
          end if
       end do
       !do m=1, nr
-      !  write(123, *)'m=', m
+      !  write(123, *)´m=´, m
       !  do mdir=1, 4
-      !    write(123, *)'mdir=', mdir
+      !    write(123, *)´mdir=´, mdir
       !    do i=1, 9
-      !      write(123, '(9f10.4)')(real(this%hmag(i, j, m, mdir)), j=1, 9)
+      !      write(123, ´(9f10.4)´)(real(this%hmag(i, j, m, mdir)), j=1, 9)
       !    end do
       !  end do
       !end do
@@ -1017,7 +1017,7 @@ contains
       a3 = 0.0d0
       aaa = 0.0d0
       do i = 1, nr
-         !write(123, '(a, i4, 3f10.4)')'i', i, this%charge%lattice%sbarvec(:, i)
+         !write(123, ´(a, i4, 3f10.4)´)´i´, i, this%charge%lattice%sbarvec(:, i)
          a1 = (vet(1) - this%charge%lattice%sbarvec(1, i))
          a2 = (vet(2) - this%charge%lattice%sbarvec(2, i))
          a3 = (vet(3) - this%charge%lattice%sbarvec(3, i))
@@ -1036,7 +1036,7 @@ contains
       end do
 
       !do ilm = 1, 9
-      !    write(123, '(9f10.6)')(hhh(ilm, jlm), jlm=1, 9)
+      !    write(123, ´(9f10.6)´)(hhh(ilm, jlm), jlm=1, 9)
       !end do
    end subroutine hmfind
 

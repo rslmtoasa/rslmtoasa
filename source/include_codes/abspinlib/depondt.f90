@@ -111,20 +111,20 @@ contains
             sigma = sqrt(Dp*temprescale*Temp_array(i)/mmom(i, k))
             btherm(:, i, k) = btherm(:, i, k)*sigma
 
-            !print '(a,3f12.6)','btherm', btherm(:,i,k)
+            !print ´(a,3f12.6)´,´btherm´, btherm(:,i,k)
             ! Construct local field
             bloc(:, i, k) = beff(:, i, k) + btherm(:, i, k)
-            !print '(2x,a,i4,3g18.6)','beff  ' ,i,bloc(1:3,i,k)
+            !print ´(2x,a,i4,3g18.6)´,´beff  ´ ,i,bloc(1:3,i,k)
             thermal_field(:, i, k) = btherm(:, i, k)
 
-            !print '(a,3f12.6)','b_loc ', bloc(:,i,k)
+            !print ´(a,3f12.6)´,´b_loc ´, bloc(:,i,k)
 
             ! Construct effective field (including damping term)
             bdup(1, i, k) = bdup(1, i, k) + bloc(1, i, k) + lambda1_array(i)*emom(2, i, k)*bloc(3, i, k) - lambda1_array(i)*emom(3, i, k)*bloc(2, i, k)
             bdup(2, i, k) = bdup(2, i, k) + bloc(2, i, k) + lambda1_array(i)*emom(3, i, k)*bloc(1, i, k) - lambda1_array(i)*emom(1, i, k)*bloc(3, i, k)
             bdup(3, i, k) = bdup(3, i, k) + bloc(3, i, k) + lambda1_array(i)*emom(1, i, k)*bloc(2, i, k) - lambda1_array(i)*emom(2, i, k)*bloc(1, i, k)
 
-            !print '(a,3f12.6)','b_bdup', bdup(:,i,k)
+            !print ´(a,3f12.6)´,´b_bdup´, bdup(:,i,k)
 
             ! Set up rotation matrices and perform rotations
             lldamp = 1.0D0/(1.0D0 + lambda1_array(i)**2)
@@ -144,7 +144,7 @@ contains
             mrod(3, i, k) = hx*hz*u*emom(1, i, k) - hy*sinv*emom(1, i, k) + hz*hy*u*emom(2, i, k) + hx*sinv*emom(2, i, k) + &
                             hz*hz*u*emom(3, i, k) + cosv*emom(3, i, k)
 
-            !print '(a,3f12.6)','m_rod ', mrod(:,i,k)
+            !print ´(a,3f12.6)´,´m_rod ´, mrod(:,i,k)
 
             ! copy m(t) to emom2 and m(t+dt) to emom for heisge, save b(t)
             emom2(:, i, k) = emom(:, i, k)
@@ -257,7 +257,7 @@ contains
 
             ! Final update
             emom2(:, i, k) = mrod(:, i, k)
-            !print '(a,3f16.4)' ,'emom2 ', emom2(:,i,k)
+            !print ´(a,3f16.4)´ ,´emom2 ´, emom2(:,i,k)
          end do
       end do
       !$omp end parallel do
@@ -449,13 +449,13 @@ contains
 !!!
 !!!    ! Dupont recipe J. Phys.: Condens. Matter 21 (2009) 336005
 !!!    ! Calculate stochastic field
-!!!    call timing(0,'Evolution     ','OF')
-!!!    call timing(0,'RNG           ','ON')
+!!!    call timing(0,´Evolution     ´,´OF´)
+!!!    call timing(0,´RNG           ´,´ON´)
 !!!
 !!!    call thermfield(Natom, Mensemble, lambda1_array, mmom, delta_t, Temp_array,temprescale)
 !!!
-!!!    call timing(0,'RNG           ','OF')
-!!!    call timing(0,'Evolution     ','ON')
+!!!    call timing(0,´RNG           ´,´OF´)
+!!!    call timing(0,´Evolution     ´,´ON´)
 !!!    ! Construct local field
 !!!    !!!$omp parallel do default(shared) private(ik,i,k) schedule(static)
 !!!    !!do ik=1,Natom*Mensemble
@@ -464,7 +464,7 @@ contains
 !!!    !$omp parallel do default(shared) private(ik,i,k) schedule(static) collapse(2)
 !!!    do k=1,Mensemble
 !!!    do i=1,Natom
-!!!       !write(2630,'(1x,3f18.10,5x,4f18.10)') beff(1:3,i,k),btherm(1:3,i,k), sum(btherm(1:3,i,k)*btherm(1:3,i,k))**0.5d0
+!!!       !write(2630,´(1x,3f18.10,5x,4f18.10)´) beff(1:3,i,k),btherm(1:3,i,k), sum(btherm(1:3,i,k)*btherm(1:3,i,k))**0.5d0
 !!!       bloc(:,i,k)=beff(:,i,k)+btherm(:,i,k)
 !!!       thermal_field(:,i,k)=btherm(:,i,k)
 !!!    end do

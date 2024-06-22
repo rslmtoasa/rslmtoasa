@@ -86,7 +86,7 @@ contains
       ix = ieor(ix, ishft(ix, 13))
       ix = ieor(ix, ishft(ix, -17))
       ix = ieor(ix, ishft(ix, 5))
-      !Park-Miller sequence by Schrage's method,
+      !Park-Miller sequence by Schrage´s method,
       k = iy/IQ
       !period 231 - 2.
       iy = IA*(iy - k*IQ) - IR*k
@@ -135,7 +135,7 @@ contains
       ix = ieor(ix, ishft(ix, 13))
       ix = ieor(ix, ishft(ix, -17))
       ix = ieor(ix, ishft(ix, 5))
-      !Park-Miller sequence by Schrage's method,
+      !Park-Miller sequence by Schrage´s method,
       k = iy/IQ
       !period 231 - 2.
       iy = IA*(iy - k*IQ) - IR*k
@@ -184,7 +184,7 @@ contains
       ix = ieor(ix, ishft(ix, 13))
       ix = ieor(ix, ishft(ix, -17))
       ix = ieor(ix, ishft(ix, 5))
-      !Park-Miller sequence by Schrage's method,
+      !Park-Miller sequence by Schrage´s method,
       k = iy/IQ
       !period 231 - 2.
       iy = IA*(iy - k*IQ) - IR*k
@@ -233,7 +233,7 @@ contains
          gaus_stored = .false.
          gasdev = g
       else
-         !We don't have an extra deviate handy, so
+         !We don´t have an extra deviate handy, so
          !pick two uniform numbers in the square ex-
          !tending from -1 to +1 in each direction,
          do

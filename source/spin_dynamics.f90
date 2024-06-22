@@ -123,7 +123,7 @@ contains
    !> @brief
    !> Constructor
    !
-   !> @param[in] self_obj Pointer to system's self object
+   !> @param[in] self_obj Pointer to system´s self object
    !> @return type(spin_dynamics)
    !---------------------------------------------------------------------------
    function constructor(self_obj) result(obj)

@@ -429,8 +429,8 @@ contains
       !   *                                                                *
       !   *   *On entry:                                                   *
       !   *       n(r)   = the charge density per spin (N) ;               *
-      !   *       n'(r)  = dn/dr (ND) ;                                    *'
-      !   *       n''(r) = d^2n/dr^2 (NDD) .                               *
+      !   *       n´(r)  = dn/dr (ND) ;                                    *´
+      !   *       n´´(r) = d^2n/dr^2 (NDD) .                               *
       !   *       LGGA = 0 LDA (local density approximation) ;             *
       !   *            = 1 GGA (generalized gradient approximation) .      *
       !   *   *On exit:                                                    *
@@ -539,7 +539,7 @@ contains
       !  INPUT V: (LAPLACIAN rho)/(rho*(2*KF)**2)
       !   (for U, V, see PW86(24))
       !  input lgga:  (=0=>dont put in gradient corrections, just LDA)
-      !  input lpot:  (=0=>don't get potential and don't need U and V)
+      !  input lpot:  (=0=>don´t get potential and don´t need U and V)
       !  OUTPUT:  EXCHANGE ENERGY PER ELECTRON (EX) AND POTENTIAL (VX)
       !----------------------------------------------------------------------
       !----------------------------------------------------------------------
@@ -782,8 +782,8 @@ contains
       !   *                                                                *
       !   *   *On entry:                                                   *
       !   *       n(r)   = the charge density per spin (N) ;               *
-      !   *       n'(r)  = dn/dr (ND) ;                                    *'
-      !   *       n''(r) = d^2n/dr^2 (NDD) .                               *
+      !   *       n´(r)  = dn/dr (ND) ;                                    *´
+      !   *       n´´(r) = d^2n/dr^2 (NDD) .                               *
       !   *       LGGA = 0 LDA (local density approximation) ;             *
       !   *            = 1 GGA (generalized gradient approximation) .      *
       !   *   *On exit:                                                    *
@@ -1048,7 +1048,7 @@ contains
       RHOPP(N) = ((2.d0*RHO(N) + 4.d0*RHO(N - 2)) - (5.d0*RHO(N - 1) + RHO(N - 3)))/H2
       RHOPP(N - 1) = ((2.d0*RHO(N - 1) + 4.d0*RHO(N - 3)) - (5.d0*RHO(N - 2) + RHO(N - 4)))/H2
       !do i=1, n
-      !  write(808, '(i6, 3g20.8)') i, RHO(i), RHOP(i), RHOPP(i)
+      !  write(808, ´(i6, 3g20.8)´) i, RHO(i), RHOP(i), RHOPP(i)
       !end do
    end subroutine DIFFN
 end module xc_mod

@@ -125,7 +125,7 @@ contains
             !gs
             !m_delta=-(e_out-norm2(e_out*e_i)*e_i)
             !
-            ! Check to don't mix first iteration
+            ! Check to don´t mix first iteration
             if (norm2(d_delta(:, na)) > 1e-15) dd_delta(:, na) = m_delta - d_delta(:, na)
             !
             write (stdout, '(4x,a,i4,3f15.8)') " | Output moments     for atom ", na, mom_in(1:3, na)
@@ -133,7 +133,7 @@ contains
             write (stdout, '(4x,a,i4,3f15.8)') " | Outut direction    for atom ", na, e_out
             write (stdout, '(4x,a,i4,3f15.8)') " | Input field        for atom ", na, bfield(1:3, na)
             !
-            ! Check to don't mix first iteration
+            ! Check to don´t mix first iteration
             if (norm2(d_delta(:, na)) > 1e-15) s_delta(:, na) = s_delta(:, na) + m_delta
 
             !bfield(:,na)=lambda_t*(1.20_dblprec*m_delta+0.35_dblprec*s_delta(:,na)+0.10_dblprec*dd_delta(:,na))
@@ -186,7 +186,7 @@ contains
                ! calculate zeeman-like constraining energy cost
                etcon = etcon + lambda_t*(sqrt(sum(mom_in(1:3, na)*mom_in(:, na))) - sum(mom_in(1:3, na)*e_i/ma))
                constrained_mom_err = constrained_mom_err + sum(e_out - e_i)**2
-               ! write (stdout,'(4x,a,i4,3f15.8)' ) " | new field          for atom ",na,bfield_new
+               ! write (stdout,´(4x,a,i4,3f15.8)´ ) " | new field          for atom ",na,bfield_new
                write (stdout, '(4x,a,i4,4f15.8)') " | Output field       for atom ", na, bfield(1:3, na), &
                   sum(bfield(:, na)*e_i)
                write (stdout, '(4x,a,i4,4f15.8)') " | Output field (t)   for atom ", na, &
