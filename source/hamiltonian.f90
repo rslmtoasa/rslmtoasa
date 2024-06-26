@@ -78,6 +78,9 @@ module hamiltonian_mod
       !complex(rp), dimension(:, :, :), allocatable :: lsham
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
+
+      !> Hubbard U for LDA+U implementation
+      real(rp) :: hubbard_u
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -181,6 +184,8 @@ contains
       hoh = this%hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
+      hubbard_u = this%hubbard_u
+
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -198,6 +203,7 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%orb_pol = orb_pol
+      this%hubbard_u = hubbard_u
 
    end subroutine build_from_file
 
@@ -283,6 +289,7 @@ contains
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
+      this%hubbard_u = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
