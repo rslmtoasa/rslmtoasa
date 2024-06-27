@@ -80,7 +80,9 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
 
       !> Hubbard U for LDA+U implementation
-      real(rp) :: hubbard_u
+      real(rp), dimension(:), allocatable :: hubbard_u
+      !> Orbitals for Hubbard U
+      character(len=9), dimension(:), allocatable :: hubbard_orb
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -165,6 +167,8 @@ contains
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
 #endif
+      if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
+      if (allocated(this%hubbard_orb)) deallocate (this%hubbard_orb)
    end subroutine destructor
 
    ! Member functions
@@ -184,7 +188,8 @@ contains
       hoh = this%hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
-      hubbard_u = this%hubbard_u
+      call move_alloc(this%hubbard_u, hubbard_u)
+      call move_alloc(this%hubbard_orb, hubbard_orb)
 
 
       ! Reading
@@ -203,7 +208,8 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%orb_pol = orb_pol
-      this%hubbard_u = hubbard_u
+      call move_alloc(hubbard_u, this%hubbard_u)
+      call move_alloc(hubbard_orb, this%hubbard_orb)
 
    end subroutine build_from_file
 
@@ -263,6 +269,8 @@ contains
       !end if
       !end if
 #endif
+      allocate (this%hubbard_u(this%lattice%nrec))
+      allocate (this%hubbard_orb(this%lattice%nrec))
 
       this%lsham(:, :, :) = 0.0d0
       this%tmat(:, :, :, :) = 0.0d0
@@ -289,7 +297,8 @@ contains
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
-      this%hubbard_u = 0.0d0
+      this%hubbard_u(:) = 0.0d0
+      this%hubbard_orb(:) = ''
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

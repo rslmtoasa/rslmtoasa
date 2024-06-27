@@ -650,6 +650,7 @@ contains
       niter = 0
       do i = 1, this%nstep
          print *, 'Hubbard U = ', this%hamiltonian%hubbard_u
+         print *, 'Hubbard orbitals = ', this%hamiltonian%hubbard_orb
          !=========================================================================
          !                        PERFORM THE RECURSION
          !=========================================================================
