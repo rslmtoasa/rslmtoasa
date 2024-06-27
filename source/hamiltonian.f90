@@ -80,9 +80,11 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
 
       !> Hubbard U for LDA+U implementation
-      real(rp), dimension(:), allocatable :: hubbard_u
+      real(rp), dimension(:,:), allocatable :: hubbard_u
       !> Orbitals for Hubbard U
-      character(len=9), dimension(:), allocatable :: hubbard_orb
+      character(len=3), dimension(:), allocatable :: hubbard_orb
+      !> Logical variable to include Hubbard U
+      logical :: hubbard_check = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -181,15 +183,19 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit, i, j, max_orbs, length
 
       include 'include_codes/namelists/hamiltonian.f90'
 
       hoh = this%hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
-      call move_alloc(this%hubbard_u, hubbard_u)
-      call move_alloc(this%hubbard_orb, hubbard_orb)
+
+
+      allocate (hubbard_u(this%lattice%nrec, 3))
+      allocate (hubbard_orb(this%lattice%nrec))
+      hubbard_u(:,:) = 0.0d0
+      hubbard_orb(:) = ''
 
 
       ! Reading
@@ -208,8 +214,35 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%orb_pol = orb_pol
-      call move_alloc(hubbard_u, this%hubbard_u)
+
+      max_orbs = 1
+      do i = 1, this%lattice%nrec
+         max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
+      end do
+
+      allocate (this%hubbard_u(this%lattice%nrec, max_orbs))
+      this%hubbard_u(:,:) = 0.0d0
+
+      do i = 1, max_orbs
+         this%hubbard_u(:,i) = hubbard_u(:,i)
+      end do
+
+      deallocate (hubbard_u)
       call move_alloc(hubbard_orb, this%hubbard_orb)
+      !> Print Hubbard U info
+      print *, '----------------------------------------------------------------------------------------'
+      print *, 'Stored input values for LDA+U'
+      print *, '----------------------------------------------------------------------------------------'
+      do i = 1, this%lattice%nrec
+         print *, 'Atom ', i, ':'
+         length = len_trim(this%hubbard_orb(i))
+         do j = 1, length
+            print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV'
+         end do
+      end do
+      print *, '----------------------------------------------------------------------------------------'
+
+
 
    end subroutine build_from_file
 
@@ -269,8 +302,6 @@ contains
       !end if
       !end if
 #endif
-      allocate (this%hubbard_u(this%lattice%nrec))
-      allocate (this%hubbard_orb(this%lattice%nrec))
 
       this%lsham(:, :, :) = 0.0d0
       this%tmat(:, :, :, :) = 0.0d0
@@ -297,8 +328,6 @@ contains
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
-      this%hubbard_u(:) = 0.0d0
-      this%hubbard_orb(:) = ''
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
