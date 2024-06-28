@@ -168,9 +168,9 @@ contains
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
-#endif
       if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
       if (allocated(this%hubbard_orb)) deallocate (this%hubbard_orb)
+#endif
    end subroutine destructor
 
    ! Member functions
@@ -191,12 +191,8 @@ contains
       local_axis = this%local_axis
       orb_pol = this%orb_pol
 
-
-      allocate (hubbard_u(this%lattice%nrec, 3))
-      allocate (hubbard_orb(this%lattice%nrec))
-      hubbard_u(:,:) = 0.0d0
-      hubbard_orb(:) = ''
-
+      call move_alloc(this%hubbard_u, hubbard_u)
+      call move_alloc(this%hubbard_orb, hubbard_orb)
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -204,6 +200,20 @@ contains
          call g_logger%fatal('file '//trim(this%control%fname)//' not found', __FILE__, __LINE__)
       end if
 
+      !> Trick Ramon talked about
+      read (funit, nml=hamiltonian, iostat=iostatus)
+
+      max_orbs = 1
+      do i = 1, this%lattice%nrec
+         max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
+      end do
+
+      if (size(hubbard_u,2) .ne. max_orbs) then
+         deallocate (hubbard_u)
+         allocate (hubbard_u(this%lattice%nrec, max_orbs))
+      end if
+
+      rewind (funit)
       read (funit, nml=hamiltonian, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
@@ -215,20 +225,9 @@ contains
       this%local_axis = local_axis
       this%orb_pol = orb_pol
 
-      max_orbs = 1
-      do i = 1, this%lattice%nrec
-         max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
-      end do
-
-      allocate (this%hubbard_u(this%lattice%nrec, max_orbs))
-      this%hubbard_u(:,:) = 0.0d0
-
-      do i = 1, max_orbs
-         this%hubbard_u(:,i) = hubbard_u(:,i)
-      end do
-
-      deallocate (hubbard_u)
+      call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_orb, this%hubbard_orb)
+
       !> Print Hubbard U info
       print *, '----------------------------------------------------------------------------------------'
       print *, 'Stored input values for LDA+U'
@@ -299,6 +298,8 @@ contains
       allocate (this%eeo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
+      allocate (this%hubbard_u(this%lattice%nrec, 1))
+      allocate (this%hubbard_orb(this%lattice%nrec))
       !end if
       !end if
 #endif
@@ -328,6 +329,8 @@ contains
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
+      this%hubbard_u(:,:) = 0.0d0
+      this%hubbard_orb(:) = ''
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
