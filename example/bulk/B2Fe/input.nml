@@ -36,9 +36,9 @@ beta = 0.2
 mixtype = 'broyden'
 /
 &hamiltonian
-hubbard_u(1,:) = 4.20, 2.222, 6.9
-hubbard_u(2,:) = 69, -1.01
-
 hubbard_orb(1) = 'spd'
-hubbard_orb(2) = 'pd'
+hubbard_orb(2) = 'spd'
+
+hubbard_u(1,:) = 4.20, 2.222, 0.123
+hubbard_u(2,:) = 69, 1, 1.2333
 /
