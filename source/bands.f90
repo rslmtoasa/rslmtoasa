@@ -1026,10 +1026,11 @@ contains
          if (this%recursion%hamiltonian%hubbard_orb_config(na) == 7) then
             ! Manually calculate orbital moment
             do ispin = 1, 2
-               ang_mom = ang_mom + this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
+               ang_mom = ang_mom + (2*(2-ispin)-1)*(this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
                                  + 2*(this%ld_matrix(na,3,ispin,5,5) - this%ld_matrix(na,3,ispin,1,1)) &
-                                 + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2))
+                                 + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2)))
             end do
+            ang_mom = -0.5_rp*ang_mom
             print *, 'Orbital angular momentum calculated manually: ', ang_mom
 
             ! Calculate orbital moment as done in the code
@@ -1041,16 +1042,14 @@ contains
             do l = 1, 3
                do i = 1, (l-1)*2 + 1
                   do j = 1, (l-1)*2 + 1
-                     do ispin = 1, 2
-                        l_orb((l-1)**2 + i, (l-1)**2 + j) = l_orb((l-1)**2 + i, (l-1)**2 + j) + this%ld_matrix(na,l,ispin,i,j)
-                     end do
+                     l_orb((l-1)**2 + i, (l-1)**2 + j) = l_orb((l-1)**2 + i, (l-1)**2 + j) + this%ld_matrix(na,l,1,i,j) - this%ld_matrix(na,l,2,i,j)
                   end do
                end do
             end do
             ! This is what is in the code
             ! lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
             ! Testing without multiplying with -0.5
-            lz = rtrace9(matmul(mLz, l_orb(:, :)))
+            lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
             print *, 'Orbital angular momentum calculated with angular momentum operator: ', lz
          end if
          print *, 'Spin moment: ', spin_mom
