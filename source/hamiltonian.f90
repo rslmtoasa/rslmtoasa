@@ -19,6 +19,8 @@
 !> Module to handle procedures related to the Hamiltonian
 !------------------------------------------------------------------------------
 
+! VIKTOR
+
 module hamiltonian_mod
 
    use control_mod
@@ -79,26 +81,22 @@ module hamiltonian_mod
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
 
-      !> Hubbard U and J for LDA+U implementation
+      !> Hubbard U for LDA+U implementation
       real(rp), dimension(:,:), allocatable :: hubbard_u
       real(rp), dimension(:,:), allocatable :: hubbard_j
       !> Orbitals for Hubbard U
       character(len=3), dimension(:), allocatable :: hubbard_orb
-<<<<<<< HEAD
-
       ! Slater integral arrays
       real(rp), dimension(:,:), allocatable :: F0, F2, F4
-
-=======
       !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
       integer, dimension(:), allocatable :: hubbard_orb_config
       !> Maximum orbital number to create arrays of appropriate sizes. 0=s, 1=p, 2=d
       integer :: hubbard_orb_max
       !> Maximum number of orbitals over the atoms (1 = s or p or d. 3 = spd)
       integer :: hubbard_nmb_orb
-      !> Logical variable to include Hubbard U
-      logical :: hubbard_check = .false.
->>>>>>> 851218f10da091d41212687029623f7a01854506
+      !> Logical variable to include Hubbard U and check implementation data
+      logical :: hubbard_check = .true.
+      logical :: implem_check = .true.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -185,14 +183,11 @@ contains
       if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
       if (allocated(this%hubbard_j)) deallocate (this%hubbard_j)
       if (allocated(this%hubbard_orb)) deallocate (this%hubbard_orb)
-<<<<<<< HEAD
       if (allocated(this%F0)) deallocate (this%F0)
       if (allocated(this%F2)) deallocate (this%F2)
       if (allocated(this%F4)) deallocate (this%F4)
-=======
       if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
 #endif
->>>>>>> 851218f10da091d41212687029623f7a01854506
    end subroutine destructor
 
    ! Member functions
@@ -207,28 +202,15 @@ contains
       ! variables associated with the reading processes
       integer :: iostatus, funit, i, j, max_orbs, length
 
-      !> Logical variable to include Hubbard U
-      logical :: implem_check = .true.    
-
       include 'include_codes/namelists/hamiltonian.f90'
 
       hoh = this%hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
 
-<<<<<<< HEAD
-
-      allocate (hubbard_u(this%lattice%nrec, 3))
-      allocate (hubbard_j(this%lattice%nrec, 3))
-      allocate (hubbard_orb(this%lattice%nrec))
-      hubbard_u(:,:) = 0.0d0
-      hubbard_j(:,:) = 0.0d0
-      hubbard_orb(:) = ''
-
-=======
       call move_alloc(this%hubbard_u, hubbard_u)
+      call move_alloc(this%hubbard_j, hubbard_j)
       call move_alloc(this%hubbard_orb, hubbard_orb)
->>>>>>> 851218f10da091d41212687029623f7a01854506
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -246,7 +228,15 @@ contains
 
       if (size(hubbard_u,2) .ne. max_orbs) then
          deallocate (hubbard_u)
+         deallocate(hubbard_j)
+         deallocate(this%F0)
+         deallocate(this%F2)
+         deallocate(this%F4)
          allocate (hubbard_u(this%lattice%nrec, max_orbs))
+         allocate(hubbard_j(this%lattice%nrec, max_orbs))
+         allocate(this%F0(this%lattice%nrec, max_orbs))
+         allocate(this%F2(this%lattice%nrec, max_orbs))
+         allocate(this%F4(this%lattice%nrec, max_orbs))
       end if
 
       rewind (funit)
@@ -261,36 +251,10 @@ contains
       this%local_axis = local_axis
       this%orb_pol = orb_pol
 
-<<<<<<< HEAD
-      max_orbs = 1
-      do i = 1, this%lattice%nrec
-         max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
-      end do
-
-      allocate (this%hubbard_u(this%lattice%nrec, max_orbs))
-      allocate (this%hubbard_j(this%lattice%nrec, max_orbs))
-      allocate(this%F0(this%lattice%nrec, max_orbs))
-      allocate(this%F2(this%lattice%nrec, max_orbs))
-      allocate(this%F4(this%lattice%nrec, max_orbs))
-      this%hubbard_u(:,:) = 0.0d0
-      this%hubbard_j(:,:) = 0.0d0
-      this%F0(:,:) = 0.0d0
-      this%F2(:,:) = 0.0d0
-      this%F4(:,:) = 0.0d0
-
-      do i = 1, max_orbs
-         this%hubbard_u(:,i) = hubbard_u(:,i)
-         this%hubbard_j(:,i) = hubbard_j(:,i)
-      end do
-
-      deallocate (hubbard_u)
-      deallocate (hubbard_j)
-      call move_alloc(hubbard_orb, this%hubbard_orb)
-      print *,''
-      print *,''
-=======
       call move_alloc(hubbard_u, this%hubbard_u)
+      call move_alloc(hubbard_j, this%hubbard_j)
       call move_alloc(hubbard_orb, this%hubbard_orb)
+
 
       !Saves the Hubbard U orbital configuration in a variable
       do i = 1, this%lattice%nrec
@@ -327,31 +291,45 @@ contains
       end do
       
       !> Print Hubbard U info
->>>>>>> 851218f10da091d41212687029623f7a01854506
-      print *, '----------------------------------------------------------------------------------------'
-      print *, 'Stored input values for LDA+U+J'
-      print *, '----------------------------------------------------------------------------------------'
       outer: do i = 1, this%lattice%nrec   ! Steps through the atoms
          length = len_trim(this%hubbard_orb(i)) ! Kills unwanted zeros in the number of orbitals
          if (length >= 1) then ! Only step through the orbitals if they are specified
             do j = 1, length ! Steps through the orbitals
                if (this%hubbard_u(i,j) /= 0 .AND. this%hubbard_orb(i) == '') then   ! If Hubbard U value is given without orbital
-                  implem_check = .false.
+                  this%implem_check = .false.
                   exit outer
                else if (this%hubbard_u(i,j) == 0 .AND. this%hubbard_orb(i) /= '') then ! If orbital value given without Hubbard U
-                  implem_check = .false.
+                  this%implem_check = .false.
                   exit outer
                else ! If both (none) are given, the code can successfully implement (will go to self cons without) Hubbard U 
-                  implem_check = .true. 
+                  this%implem_check = .true. 
                end if
             end do
+         else if (size(this%hubbard_u(:,:)) == 0) then
+            this%hubbard_check = .false.
          else ! If no orbitals are specified, raise error
-            implem_check = .false.
+            this%implem_check = .false.
             exit outer 
          end if
       end do outer
 
-      if (implem_check) then
+      ! do i = 1, this%lattice%nrec
+      !    if (size(this%hubbard_u(i,:)) <= 1 .AND. this%hubbard_u(i,1) == 0) then
+      !       this%hubbard_check = .true.
+      !       exit
+      !    else 
+      !       this%hubbard_check = .false.
+      !    end if
+      ! end do
+
+      ! PROBLEM MED OM INGET SPECIFICERAS
+      ! if (this%hubbard_check) then
+      print *,''
+      print *,''
+      print *, '----------------------------------------------------------------------------------------'
+      print *, 'Stored input values for LDA+U+J'
+      print *, '----------------------------------------------------------------------------------------'
+      if (this%implem_check) then
          do i = 1, this%lattice%nrec
             print *, 'Atom ', i, ':'
             length = len_trim(this%hubbard_orb(i))
@@ -360,13 +338,13 @@ contains
             end do
          end do
          print *, ''
-         print *, 'Hubbard U and J input data implemented successfully, proceeding...'
+         print *, 'Hubbard U+J input data implemented successfully, proceeding...'
       else
-         print *, 'Imposed error: both the Hubbard U parameters and the corresponding orbitals need to'
+         print *, 'Imposed error: both the Hubbard U+J parameters and the corresponding orbitals need to'
          print *, 'be specified.'
       end if
       print *, '----------------------------------------------------------------------------------------'
-      
+
       ! For 3d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~0.625
       print *,''
       print *,''
@@ -387,6 +365,12 @@ contains
       end do
       ! F4 = 0.625*F2
       print *, '----------------------------------------------------------------------------------------'
+      ! else 
+      !    print *, ''
+      !    print *, '----------------------------------------------------------------------------------------'
+      !    print *, 'No Hubbard U+J data was given as input, proceeding without.'
+      !    print *, '----------------------------------------------------------------------------------------'
+      ! end if
 
    end subroutine build_from_file
 
@@ -444,6 +428,10 @@ contains
       allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
       allocate (this%hubbard_u(this%lattice%nrec, 1))
+      allocate(this%hubbard_j(this%lattice%nrec, 1))
+      allocate(this%F0(this%lattice%nrec, 1))
+      allocate(this%F2(this%lattice%nrec, 1))
+      allocate(this%F4(this%lattice%nrec, 1))
       allocate (this%hubbard_orb(this%lattice%nrec))
       allocate (this%hubbard_orb_config(this%lattice%nrec))
       !end if
@@ -476,10 +464,16 @@ contains
       this%local_axis = .false.
       this%orb_pol = .false.
       this%hubbard_u(:,:) = 0.0d0
+      this%hubbard_j(:,:) = 0.0d0
       this%hubbard_orb(:) = ''
+      this%F0(:,:) = 0.0d0
+      this%F2(:,:) = 0.0d0
+      this%F4(:,:) = 0.0d0
       this%hubbard_orb_config = 0
       this%hubbard_orb_max = 0
       this%hubbard_nmb_orb = 0
+      this%hubbard_check = .true.
+      this%implem_check = .true.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
