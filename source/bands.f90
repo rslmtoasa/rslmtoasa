@@ -889,9 +889,10 @@ contains
       integer :: ie ! Energy channel index
       integer :: ispin ! Spin intex
       integer :: l ! Orbital number (0,1,2 = s,p,d)
-      real(rp) :: result, spin_mom, ang_mom
+      real(rp) :: result, result2, spin_mom, ang_mom, lz
       real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
-      ! real(rp), dimension(:,:,:,:,:), allocatable :: local_density_matrix
+      real(rp), dimension(9, 9) :: l_orb, full_ld_matrix_test
+      complex(rp), dimension(9, 9) :: mLz
 
       this%ld_matrix(:,:,:,:,:) = 0.0d0
       im_g0(:,:,:,:) = 0.0d0
@@ -1010,7 +1011,9 @@ contains
                end do
          end select
       end do
-      print *, 'Total orbital moments'
+
+      ! Prints to compare with the values from code
+      print *, 'Total moments'
       do na = 1, this%lattice%nrec
          print *, 'Atom ', na, ':'
          spin_mom = 0.0d0
@@ -1021,15 +1024,58 @@ contains
             end do
          end do
          if (this%recursion%hamiltonian%hubbard_orb_config(na) == 7) then
+            ! Manually calculate orbital moment
             do ispin = 1, 2
                ang_mom = ang_mom + this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
                                  + 2*(this%ld_matrix(na,3,ispin,5,5) - this%ld_matrix(na,3,ispin,1,1)) &
                                  + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2))
             end do
-            print *, 'Orbital angular momentum: ', ang_mom
+            print *, 'Orbital angular momentum calculated manually: ', ang_mom
+
+            ! Calculate orbital moment as done in the code
+            ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+            mLz(:, :) = L_z(:, :)
+            ! Transforming them into the spherical harmonics coordinates
+            call hcpx(mLz, 'cart2sph')
+            l_orb(:,:) = 0.0d0
+            do l = 1, 3
+               do i = 1, (l-1)*2 + 1
+                  do j = 1, (l-1)*2 + 1
+                     do ispin = 1, 2
+                        l_orb((l-1)**2 + i, (l-1)**2 + j) = l_orb((l-1)**2 + i, (l-1)**2 + j) + this%ld_matrix(na,l,ispin,i,j)
+                     end do
+                  end do
+               end do
+            end do
+            ! This is what is in the code
+            ! lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
+            ! Testing without multiplying with -0.5
+            lz = rtrace9(matmul(mLz, l_orb(:, :)))
+            print *, 'Orbital angular momentum calculated with angular momentum operator: ', lz
          end if
          print *, 'Spin moment: ', spin_mom
       end do
+
+      !Calculate full density matrix to compare with the code (still something that is missing)
+      do na = 1, this%lattice%nrec
+         print *, 'Atom ', na, ':'
+         full_ld_matrix_test(:,:) = 0.0d0
+         do i = 1, 9
+            do j = 1, 9
+               call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(i, j, :, na), this%e1, 0, this%en%ene)
+               call simpson_m(result2, this%en%edel, this%en%fermi, this%nv1, im_g0(i + 9, j + 9, :, na), this%e1, 0, this%en%ene)
+               full_ld_matrix_test(i,j) = result + result2
+            end do
+         end do
+         ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+         mLz(:, :) = L_z(:, :)
+         ! Transforming them into the spherical harmonics coordinates
+         call hcpx(mLz, 'cart2sph')
+         lz = rtrace9(matmul(mLz, full_ld_matrix_test(:, :)))
+         print *, 'Orb. ang. mom. from full_ld_matrix_test: ', lz
+      end do
+
+
    end subroutine calculate_local_density_matrix
 
 
