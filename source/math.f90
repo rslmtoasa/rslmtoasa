@@ -295,6 +295,24 @@ contains
 
    end function wigner3j
 
+   !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U method
+   !> Implemented by Viktor Frilén 28.06.2024
+   function a_k(k,l,m1,m2,m3,m4) result(res)
+      implicit none
+      integer, intent(in) :: k, l, m1, m2, m3, m4
+      integer :: q
+      real(rp) :: res, temp1, temp2, temp3
+
+      res = 0.0_rp
+
+      do q = -k, k
+         temp1 = wigner3j(l,k,l,0,0,0)
+         temp2 = wigner3j(l,k,l,-m1,q,m2)
+         temp3 = wigner3j(l,k,l,-m3,-q,m4)
+         res = res + (2.0_rp*real(l))**2*(-1.0_rp)**(m1+q+m2)*temp1**2*temp2*temp3
+      end do
+   end function a_k
+   
    !> Computes the Gaunt coefficients using the Cruzan-Racah expression
    !> More about: Didier Sébilleau 1998 J. Phys. A: Math. Gen. 31 7157
    !> Implemented by Ivan Miranda on 17.09.2023

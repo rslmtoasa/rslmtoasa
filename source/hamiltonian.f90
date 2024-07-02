@@ -83,6 +83,12 @@ module hamiltonian_mod
       real(rp), dimension(:,:), allocatable :: hubbard_u
       !> Orbitals for Hubbard U
       character(len=3), dimension(:), allocatable :: hubbard_orb
+      !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
+      integer, dimension(:), allocatable :: hubbard_orb_config
+      !> Maximum orbital number to create arrays of appropriate sizes. 0=s, 1=p, 2=d
+      integer :: hubbard_orb_max
+      !> Maximum number of orbitals over the atoms (1 = s or p or d. 3 = spd)
+      integer :: hubbard_nmb_orb
       !> Logical variable to include Hubbard U
       logical :: hubbard_check = .false.
    contains
@@ -170,6 +176,7 @@ contains
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
       if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
       if (allocated(this%hubbard_orb)) deallocate (this%hubbard_orb)
+      if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
 #endif
    end subroutine destructor
 
@@ -228,6 +235,40 @@ contains
       call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_orb, this%hubbard_orb)
 
+      !Saves the Hubbard U orbital configuration in a variable
+      do i = 1, this%lattice%nrec
+         if (adjustl(this%hubbard_orb(i)) == 's') then
+            this%hubbard_orb_config(i) = 1
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'p') then
+            this%hubbard_orb_config(i) = 2
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 1)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'd') then
+            this%hubbard_orb_config(i) = 3
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'sp') then
+            this%hubbard_orb_config(i) = 4
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 1)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'sd') then
+            this%hubbard_orb_config(i) = 5
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'pd') then
+            this%hubbard_orb_config(i) = 6
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'spd') then
+            this%hubbard_orb_config(i) = 7
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 3)
+         else
+            this%hubbard_orb_config(i) = 0
+         end if
+      end do
+      
       !> Print Hubbard U info
       print *, '----------------------------------------------------------------------------------------'
       print *, 'Stored input values for LDA+U'
@@ -300,6 +341,7 @@ contains
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
       allocate (this%hubbard_u(this%lattice%nrec, 1))
       allocate (this%hubbard_orb(this%lattice%nrec))
+      allocate (this%hubbard_orb_config(this%lattice%nrec))
       !end if
       !end if
 #endif
@@ -331,6 +373,9 @@ contains
       this%orb_pol = .false.
       this%hubbard_u(:,:) = 0.0d0
       this%hubbard_orb(:) = ''
+      this%hubbard_orb_config = 0
+      this%hubbard_orb_max = 0
+      this%hubbard_nmb_orb = 0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
