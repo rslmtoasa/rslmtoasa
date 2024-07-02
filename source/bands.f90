@@ -889,7 +889,7 @@ contains
       integer :: ie ! Energy channel index
       integer :: ispin ! Spin intex
       integer :: l ! Orbital number (0,1,2 = s,p,d)
-      real(rp) :: result, result2, spin_mom, ang_mom, lz
+      real(rp) :: result, result2, result3, result4, spin_mom, ang_mom, lz
       real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
       real(rp), dimension(9, 9) :: l_orb, full_ld_matrix_test
       complex(rp), dimension(9, 9) :: mLz
@@ -1064,14 +1064,14 @@ contains
             do j = 1, 9
                call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(i, j, :, na), this%e1, 0, this%en%ene)
                call simpson_m(result2, this%en%edel, this%en%fermi, this%nv1, im_g0(i + 9, j + 9, :, na), this%e1, 0, this%en%ene)
-               full_ld_matrix_test(i,j) = result + result2
+               full_ld_matrix_test(i,j) = result - result2
             end do
          end do
          ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
          mLz(:, :) = L_z(:, :)
          ! Transforming them into the spherical harmonics coordinates
          call hcpx(mLz, 'cart2sph')
-         lz = rtrace9(matmul(mLz, full_ld_matrix_test(:, :)))
+         lz = -0.5_rp*rtrace9(matmul(mLz, full_ld_matrix_test(:, :)))
          print *, 'Orb. ang. mom. from full_ld_matrix_test: ', lz
       end do
 
