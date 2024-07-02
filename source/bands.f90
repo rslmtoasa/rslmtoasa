@@ -79,6 +79,8 @@ module bands_mod
       real(rp) :: eband
       !> Magnetic force
       real(rp), dimension(:, :), allocatable :: mag_for
+      !> Local density matrix (implemented for Hubbard U project)
+      real(rp), dimension(:,:,:,:,:), allocatable :: ld_matrix
    contains
       procedure :: calculate_projected_green
       procedure :: calculate_projected_dos
@@ -94,6 +96,7 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
+      procedure :: calculate_local_density_matrix
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -165,6 +168,7 @@ contains
       if (allocated(this%dspd)) deallocate (this%dspd)
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
+      if (allocated(this%ld_matrix)) deallocate (this%ld_matrix)
 #endif
    end subroutine destructor
 
@@ -201,6 +205,8 @@ contains
       allocate (this%dspd(6, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%d_orb(9, 9, 3, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%mag_for(3, atoms_per_process))
+      !Add if to check if hubbard_check = True when emil has implemented this
+      allocate (this%ld_matrix(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
 #endif
 
       this%dtot(:) = 0.0d0
@@ -214,6 +220,7 @@ contains
       this%dspd(:, :, :) = 0.0d0
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
+      this%ld_matrix(:,:,:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -868,6 +875,163 @@ contains
 
       end do
    end subroutine calculate_orbital_moments
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculates the local density matrix used in Hubbard U correction.
+   !---------------------------------------------------------------------------
+   subroutine calculate_local_density_matrix(this)
+      class(bands) :: this
+      ! Local variables
+      integer :: i, j ! Orbital index
+      integer :: na ! Atom index
+      integer :: ie ! Energy channel index
+      integer :: ispin ! Spin intex
+      integer :: l ! Orbital number (0,1,2 = s,p,d)
+      real(rp) :: result, spin_mom, ang_mom
+      real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
+      ! real(rp), dimension(:,:,:,:,:), allocatable :: local_density_matrix
+
+      this%ld_matrix(:,:,:,:,:) = 0.0d0
+      im_g0(:,:,:,:) = 0.0d0
+      do na = 1, this%lattice%nrec
+         do i = 1, 18
+            do j = 1,18
+               do ie  = 1, this%en%channels_ldos + 10
+                  im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
+               end do
+            end do
+         end do
+      end do
+
+      do na = 1, this%lattice%nrec
+         print *, 'Atom ', na, ':'
+         select case(this%recursion%hamiltonian%hubbard_orb_config(na))
+            case (0)
+               ! No Hubbard U on this atom
+            case (1) ! s - orbital
+               print *, 'Calculate ld matrix for s-orbital:'
+               do ispin = 1, 2                
+                  call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + (ispin-1)*9, 1 + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                  this%ld_matrix(na, 1, ispin, 1, 1) = result
+                  print *, result
+               end do
+               l = 0
+            case (2) ! p - orbital
+               l = 1
+               print *, 'Calculate ld matrix for p-orbital:'
+               do ispin = 1, 2
+                  do i = 1, 3
+                     do j = 1, 3
+                        call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + i + (ispin-1)*9, 1 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                        this%ld_matrix(na, 1, ispin, i, j) = result
+                        print *, result
+                     end do
+                  end do
+               end do
+            case (3) ! d - orbital
+               l = 2
+               print *, 'Calculate ld matrix for d-orbital:'
+               do ispin = 1, 2
+                  do i = 1, 5
+                     do j = 1, 5
+                        call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(4 + i + (ispin-1)*9, 4 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                        this%ld_matrix(na, 1, ispin, i, j) = result
+                        if (i == j) then
+                           print *, result
+                        end if
+                     end do
+                  end do
+               end do
+            case (4) ! sp - orbital
+               print *, 'Calculate ld matrix for sp-orbitals:'
+               do l = 0, 1
+                  print *, 'l = ', l
+                  do ispin = 1, 2
+                     do i = 1, 2*l + 1
+                        do j = 1, 2*l + 1
+                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l + i + (ispin-1)*9, l + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                           this%ld_matrix(na, l + 1, ispin, i, j) = result
+                           if (i == j) then
+                              print *, result
+                           end if
+                        end do
+                     end do
+                  end do
+               end do
+            case (5) ! sd - orbital
+               print *, 'Calculate ld matrix for sd-orbitals:'
+               do l = 0, 1
+                  print *, 'l = ', l*2
+                  do ispin = 1, 2
+                     do i = 1, 2*l*2 + 1
+                        do j = 1, 2*l*2 + 1
+                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l + i + (ispin-1)*9, l + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                           this%ld_matrix(na, l + 1, ispin, i, j) = result
+                           if (i == j) then
+                              print *, result
+                           end if
+                        end do
+                     end do
+                  end do
+               end do
+            case (6) ! pd - orbital
+               print *, 'Calculate ld matrix for pd-orbitals:'
+               do l = 0, 1
+                  print *, 'l = ', 1 + l
+                  do ispin = 1, 2
+                     do i = 1, 2*(l+1) + 1
+                        do j = 1, 2*(l+1) + 1
+                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + l*3 + i + (ispin-1)*9, 1 + l*3 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                           this%ld_matrix(na, l + 1, ispin, i, j) = result
+                           if (i == j) then
+                              print *, result
+                           end if
+                        end do
+                     end do
+                  end do
+               end do
+            case (7) ! spd - orbital
+               print *, 'Calculate ld matrix for spd-orbitals:'
+               do l = 0, 2
+                  print *, 'l = ', l
+                  do ispin = 1, 2
+                     do i = 1, 2*l + 1
+                        do j = 1, 2*l + 1
+                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                           this%ld_matrix(na, l + 1, ispin, i, j) = result
+                           if (i == j) then
+                              print *, result
+                           end if
+                        end do
+                     end do
+                  end do
+               end do
+         end select
+      end do
+      print *, 'Total orbital moments'
+      do na = 1, this%lattice%nrec
+         print *, 'Atom ', na, ':'
+         spin_mom = 0.0d0
+         ang_mom = 0.0d0
+         do l = 1, size(this%ld_matrix, 2)
+            do i = 1, size(this%ld_matrix, 4)
+               spin_mom = spin_mom + this%ld_matrix(na,l,1,i,i) - this%ld_matrix(na,l,2,i,i)
+            end do
+         end do
+         if (this%recursion%hamiltonian%hubbard_orb_config(na) == 7) then
+            do ispin = 1, 2
+               ang_mom = ang_mom + this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
+                                 + 2*(this%ld_matrix(na,3,ispin,5,5) - this%ld_matrix(na,3,ispin,1,1)) &
+                                 + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2))
+            end do
+            print *, 'Orbital angular momentum: ', ang_mom
+         end if
+         print *, 'Spin moment: ', spin_mom
+      end do
+   end subroutine calculate_local_density_matrix
+
 
    subroutine calculate_projected_dos(this)
       use mpi_mod

@@ -84,10 +84,21 @@ module hamiltonian_mod
       real(rp), dimension(:,:), allocatable :: hubbard_j
       !> Orbitals for Hubbard U
       character(len=3), dimension(:), allocatable :: hubbard_orb
+<<<<<<< HEAD
 
       ! Slater integral arrays
       real(rp), dimension(:,:), allocatable :: F0, F2, F4
 
+=======
+      !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
+      integer, dimension(:), allocatable :: hubbard_orb_config
+      !> Maximum orbital number to create arrays of appropriate sizes. 0=s, 1=p, 2=d
+      integer :: hubbard_orb_max
+      !> Maximum number of orbitals over the atoms (1 = s or p or d. 3 = spd)
+      integer :: hubbard_nmb_orb
+      !> Logical variable to include Hubbard U
+      logical :: hubbard_check = .false.
+>>>>>>> 851218f10da091d41212687029623f7a01854506
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -171,13 +182,17 @@ contains
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
-#endif
       if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
       if (allocated(this%hubbard_j)) deallocate (this%hubbard_j)
       if (allocated(this%hubbard_orb)) deallocate (this%hubbard_orb)
+<<<<<<< HEAD
       if (allocated(this%F0)) deallocate (this%F0)
       if (allocated(this%F2)) deallocate (this%F2)
       if (allocated(this%F4)) deallocate (this%F4)
+=======
+      if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
+#endif
+>>>>>>> 851218f10da091d41212687029623f7a01854506
    end subroutine destructor
 
    ! Member functions
@@ -201,6 +216,7 @@ contains
       local_axis = this%local_axis
       orb_pol = this%orb_pol
 
+<<<<<<< HEAD
 
       allocate (hubbard_u(this%lattice%nrec, 3))
       allocate (hubbard_j(this%lattice%nrec, 3))
@@ -209,6 +225,10 @@ contains
       hubbard_j(:,:) = 0.0d0
       hubbard_orb(:) = ''
 
+=======
+      call move_alloc(this%hubbard_u, hubbard_u)
+      call move_alloc(this%hubbard_orb, hubbard_orb)
+>>>>>>> 851218f10da091d41212687029623f7a01854506
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -216,6 +236,20 @@ contains
          call g_logger%fatal('file '//trim(this%control%fname)//' not found', __FILE__, __LINE__)
       end if
 
+      !> Trick Ramon talked about
+      read (funit, nml=hamiltonian, iostat=iostatus)
+
+      max_orbs = 1
+      do i = 1, this%lattice%nrec
+         max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
+      end do
+
+      if (size(hubbard_u,2) .ne. max_orbs) then
+         deallocate (hubbard_u)
+         allocate (hubbard_u(this%lattice%nrec, max_orbs))
+      end if
+
+      rewind (funit)
       read (funit, nml=hamiltonian, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
@@ -227,6 +261,7 @@ contains
       this%local_axis = local_axis
       this%orb_pol = orb_pol
 
+<<<<<<< HEAD
       max_orbs = 1
       do i = 1, this%lattice%nrec
          max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
@@ -253,6 +288,46 @@ contains
       call move_alloc(hubbard_orb, this%hubbard_orb)
       print *,''
       print *,''
+=======
+      call move_alloc(hubbard_u, this%hubbard_u)
+      call move_alloc(hubbard_orb, this%hubbard_orb)
+
+      !Saves the Hubbard U orbital configuration in a variable
+      do i = 1, this%lattice%nrec
+         if (adjustl(this%hubbard_orb(i)) == 's') then
+            this%hubbard_orb_config(i) = 1
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'p') then
+            this%hubbard_orb_config(i) = 2
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 1)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'd') then
+            this%hubbard_orb_config(i) = 3
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'sp') then
+            this%hubbard_orb_config(i) = 4
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 1)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'sd') then
+            this%hubbard_orb_config(i) = 5
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'pd') then
+            this%hubbard_orb_config(i) = 6
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'spd') then
+            this%hubbard_orb_config(i) = 7
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 3)
+         else
+            this%hubbard_orb_config(i) = 0
+         end if
+      end do
+      
+      !> Print Hubbard U info
+>>>>>>> 851218f10da091d41212687029623f7a01854506
       print *, '----------------------------------------------------------------------------------------'
       print *, 'Stored input values for LDA+U+J'
       print *, '----------------------------------------------------------------------------------------'
@@ -368,6 +443,9 @@ contains
       allocate (this%eeo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
+      allocate (this%hubbard_u(this%lattice%nrec, 1))
+      allocate (this%hubbard_orb(this%lattice%nrec))
+      allocate (this%hubbard_orb_config(this%lattice%nrec))
       !end if
       !end if
 #endif
@@ -397,6 +475,11 @@ contains
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
+      this%hubbard_u(:,:) = 0.0d0
+      this%hubbard_orb(:) = ''
+      this%hubbard_orb_config = 0
+      this%hubbard_orb_max = 0
+      this%hubbard_nmb_orb = 0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
