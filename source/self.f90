@@ -650,7 +650,7 @@ contains
       if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
          print *, 'Initialize Hubbard U module'
          hubbard_u_obj = hubbard_u(this%green)
-         ! call hubbard_u_obj%calc_test()
+         call hubbard_u_obj%calc_test()
       end if
 
       !===========================================================================
@@ -815,6 +815,10 @@ contains
          this%converged = this%is_converged(this%mix%delta)
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
+            !Save local density matrix to file
+            if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
+               call hubbard_u_obj%save_density_matrix_to_file(this%bands%ld_matrix(1,:,:,:,:), this%en%channels_ldos)
+            end if
             exit
          else
             if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)

@@ -46,6 +46,7 @@ module hubbard_u_mod
    contains
       procedure :: restore_to_default
       procedure :: calc_test
+      procedure :: save_density_matrix_to_file
       final :: destructor
    end type
 
@@ -83,66 +84,95 @@ contains
    subroutine calc_test(this)
       class(hubbard_u) :: this
       real(rp) :: ak_test
-      integer :: k, l, m1, m2, m3, m4
+      integer :: k, l, m1, m2, m3, m4, count
 
-      do k = 0, 4
-         do l = 0, 2
+      do l = 0, 10
+         print *, '-----------------------------------------------------------------------------------------------------'
+         print *, 'l = ', l
+         print *, '-----------------------------------------------------------------------------------------------------'
+         do k = 0, 50
+            print *, 'k = ', k
+            count = 0
             do m1 = -l, l
                do m2 = -l, l
                   do m3 = -l, l
                      do m4 = -l, l
                         ak_test = a_k(k,l,m1,m2,m3,m4)
-                        print *, 'k = ', k, ' l = ', l, ' m1 = ', m1, ' m2 = ', m2, ' m3 = ', m3, ' m4 = ', m4
-                        print *, 'a_k = ', ak_test
+                        if (ak_test .ne. 0.0d0) then
+                           count = count + 1
+                        end if
+                        ! print *, 'k = ', k, ' l = ', l, ' m1 = ', m1, ' m2 = ', m2, ' m3 = ', m3, ' m4 = ', m4
+                        ! print *, 'a_k = ', ak_test
                      end do
                   end do
                end do
             end do
+            print *, 'Nmb of non-zero aks: ', count
+            print *, '-----------------------------------------------------------------------------------------------------'
          end do
+         
       end do
-                     
+
       stop
    end subroutine
 
-   subroutine calc_density_matrix(this)
+   !> Implemented for single atom (i.e choose na) and hubbard_orb = spd
+   subroutine save_density_matrix_to_file(this, matrix, channels_ldos)
       class(hubbard_u) :: this
-      real(rp), dimension(:,:,:,:,:), allocatable :: density_mat
-      integer :: i, j, max_nmb_orb, nrec, m_max
-      character(len=1) :: orb
-
-      nrec = this%hamiltonian%lattice%nrec
-      ! max_nmb_orb = size(this%hamiltonian%hubbard_u,2)
-      m_max = 0
-      orb = ''
-
-      do i = 1, nrec
-         
+      real(rp), intent(in) :: matrix(:,:,:,:)
+      integer, intent(in) :: channels_ldos
+      character(len=30) :: filename
+      integer :: i, j, l
+      integer :: n, m, lsize, ssize
+      
+      write(filename, '(A,I0)') 'ld_matrix_ch_ldos_', channels_ldos 
+      
+      lsize = size(matrix, 1)
+      ssize = size(matrix, 2)
+      n = size(matrix, 3)
+      m = size(matrix, 4)
+      
+      ! Save the matrix to a file
+      ! s-orbital
+      open(unit=10, file=trim(filename) // '_orb_s_spin_u', status='replace')
+      do i = 1, n
+         write(10, *) (matrix(1, 1, i, j), j = 1, m)
       end do
-      ! Test
-      ! do i = 1, nrec
-      !    do j = 1, max_nmb_orb
-      !       print *, this%hamiltonian%hubbard_orb(i)
-      !       print *, this%hamiltonian%hubbard_orb(i)(j,j)
-      !       orb = this%hamiltonian%hubbard_orb(i)(j,j)
-      !       if (orb == '') then
-      !          !nothing
-      !          print *, 'No hubbard u!!'
-      !       else if (orb == 's') then
-      !          print *, 's'
-      !       else if (orb == 'p') then
-      !          print *, 'p'
-      !          if (m_max == 0) then
-      !             m_max = 1
-      !          end if
-      !       else if (orb == 'd') then
-      !          print *, 'd'
-      !          m_max = 2
-      !       end if
-      !    end do
-      ! end do
-      print *, 'Total m = ', 2*m_max + 1
-      allocate (density_mat(size(this%hamiltonian%hubbard_u, 1), size(this%hamiltonian%hubbard_u, 2), 2, 2*m_max + 1, 2*m_max + 1))
+      close(10)
 
-   end subroutine
+      open(unit=10, file=trim(filename) // '_orb_s_spin_d', status='replace')
+      do i = 1, n
+         write(10, *) (matrix(1, 2, i, j), j = 1, m)
+      end do
+      close(10)
+      !-------------------------------------------------------------------------
+      ! p-orbital
+      open(unit=10, file=trim(filename) // '_orb_p_spin_u', status='replace')
+      do i = 1, n
+         write(10, *) (matrix(2, 1, i, j), j = 1, m)
+      end do
+      close(10)
+
+      open(unit=10, file=trim(filename) // '_orb_p_spin_d', status='replace')
+      do i = 1, n
+         write(10, *) (matrix(2, 2, i, j), j = 1, m)
+      end do
+      close(10)
+      !-------------------------------------------------------------------------
+      ! d-orbital
+      open(unit=10, file=trim(filename) // '_orb_d_spin_u', status='replace')
+      do i = 1, n
+         write(10, *) (matrix(3, 1, i, j), j = 1, m)
+      end do
+      close(10)
+
+      open(unit=10, file=trim(filename) // '_orb_d_spin_d', status='replace')
+      do i = 1, n
+         write(10, *) (matrix(3, 2, i, j), j = 1, m)
+      end do
+      close(10)
+  
+      print *, 'Matrix data saved to ', trim(filename)
+  end subroutine save_density_matrix_to_file
 
 end module hubbard_u_mod
