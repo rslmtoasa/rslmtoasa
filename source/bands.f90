@@ -237,7 +237,7 @@ contains
       integer :: ia_glob
       real(rp), dimension(this%lattice%nrec, this%en%channels_ldos + 10) :: dosia
       real(rp), dimension(this%lattice%nrec, 18, this%en%channels_ldos + 10) :: dosial
-
+      
       e1_mag = 0.0d0
       ef_mag = 0.0d0
       ik1_mag = 0
