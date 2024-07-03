@@ -15,6 +15,7 @@ add_library(${PROJECT_NAME} STATIC
     globals.f90
     green.f90
     hamiltonian.f90
+    hubbard_u.f90
     lattice.f90
     # lists.f90
     logger.f90
