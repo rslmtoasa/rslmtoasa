@@ -1145,10 +1145,10 @@ contains
             tmat4 = tmat1 + tmat2 + tmat3
             jsc(nv) = imtrace9(tmat4)
             ! Combining and calculating the first order and second order Jij(E)
-            ! Second order J = CD - SD - CC - SC
-            jtotso(nv) = jcd(nv) - jsd(nv) - jcc(nv) - jsc(nv)
-            ! First order J = CD - SD + CC - SC
-            jtotfo(nv) = jcd(nv) - jsd(nv) + jcc(nv) - jsc(nv)
+            ! Second order J = CD - SD + CC - SC
+            jtotso(nv) = jcd(nv) - jsd(nv) + jcc(nv) - jsc(nv)
+            ! First order J = CD + SD - CC - SC
+            jtotfo(nv) = jcd(nv) + jsd(nv) - jcc(nv) - jsc(nv)
             ! DMI
             do k = 1, 3
                select case (k)

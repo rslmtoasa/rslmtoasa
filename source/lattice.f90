@@ -1304,7 +1304,7 @@ contains
          allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot), this%ct(this%ntype))
          allocate (this%chargetrf_type(this%nbas))
 
-         this%ct(:) = this%alat + 0.1d0
+         this%ct(:) = 4.0d0 !this%alat + 0.1d0
          this%r2 = this%ct(1)**2
 
          do i = 1, this%nrec
