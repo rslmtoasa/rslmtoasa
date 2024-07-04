@@ -47,6 +47,7 @@ module hubbard_u_mod
       procedure :: restore_to_default
       procedure :: calc_test
       procedure :: save_density_matrix_to_file
+      procedure :: save_hubbard_int_mat_to_file
       final :: destructor
    end type
 
@@ -174,5 +175,58 @@ contains
   
       print *, 'Matrix data saved to ', trim(filename)
   end subroutine save_density_matrix_to_file
+
+  !> Calculates and save the screened onsite interaction matrix for d-orbitals to a file.
+  subroutine save_hubbard_int_mat_to_file(this)
+   class(hubbard_u) :: this
+   character(len=25) :: filename
+   integer :: i, j, l
+   integer :: n, m, lsize, ssize
+   real(rp), dimension(5,5,5,5) :: hubbard_int_mat
+   real(rp) :: f0, f2, f4
+
+   if (this%hamiltonian%hubbard_orb_config(1) .ne. 3) then
+      print *, 'Tries to save hubbard_int_matrix_3d but orbital d is not chosen.'
+      print *, 'Stops program'
+      stop
+   end if
+
+   f0 = this%hamiltonian%F0(1,1)
+   f2 = this%hamiltonian%F2(1,1)
+   f4 = this%hamiltonian%F4(1,1)
+
+   filename = 'hubbard_int_matrix_3d.txt'
+   
+   hubbard_int_mat(:,:,:,:) = 0.0d0
+
+   !Construct matrix
+   do i = 1, 5
+      do j = 1, 5
+         do n = 1, 5
+            do m = 1, 5
+               hubbard_int_mat(i,j,n,m) = hubbard_int_matrix_3d(i,j,n,m,f0,f2,f4)
+            end do
+         end do
+      end do
+   end do
+
+   ! Save the matrix to a file
+   open(unit=10, file=filename, form='formatted', status='replace')
+   do i = 1, 5
+      write(10, *)
+      write(10, *)
+      do j = 1, 5
+         write(10, *)
+         do n = 1, 5
+            write(10, *) (hubbard_int_mat(i, n, j, m), m = 1, 5)
+         end do
+      end do
+   end do
+   close(10)
+
+   print *, 'Hubbard interaction matrix 3d saved to ', trim(filename)
+   print *, 'Stop program'
+   stop
+end subroutine save_hubbard_int_mat_to_file
 
 end module hubbard_u_mod

@@ -650,7 +650,8 @@ contains
       if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
          print *, 'Initialize Hubbard U module'
          hubbard_u_obj = hubbard_u(this%green)
-         call hubbard_u_obj%calc_test()
+         ! call hubbard_u_obj%save_hubbard_int_mat_to_file()
+         ! call hubbard_u_obj%calc_test()
       end if
 
       !===========================================================================
@@ -732,7 +733,7 @@ contains
          call this%bands%calculate_magnetic_moments() ! Calculate the magnetic moments
          !Test Hubbard U
          call this%bands%calculate_local_density_matrix()
-         print *, 'Calculation of density matrix succeeded'
+         call this%bands%build_hubbard_pot()
          do ia = 1, this%lattice%nrec
             this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
@@ -817,7 +818,7 @@ contains
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
             !Save local density matrix to file
             if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
-               call hubbard_u_obj%save_density_matrix_to_file(this%bands%ld_matrix(1,:,:,:,:), this%en%channels_ldos)
+               ! call hubbard_u_obj%save_density_matrix_to_file(this%bands%ld_matrix(1,:,:,:,:), this%en%channels_ldos)
             end if
             exit
          else

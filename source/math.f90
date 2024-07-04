@@ -296,7 +296,7 @@ contains
    end function wigner3j
 
    !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U method
-   !> Implemented by Viktor Frilén 28.06.2024
+   !> Implemented by Viktor Frilén on 28.06.2024
    function a_k(k,l,m1,m2,m3,m4) result(res)
       implicit none
       integer, intent(in) :: k, l, m1, m2, m3, m4
@@ -312,7 +312,19 @@ contains
          res = res + (2.0_rp*real(l))**2*(-1.0_rp)**(m1+q+m2)*temp1**2*temp2*temp3
       end do
    end function a_k
-   
+
+   !> Calculates the matrix elements for the screened on-site Coulomb interaction used in the LDA+U method.
+   !> Implemented by Viktor Frilén on 03.07.2024
+   function hubbard_int_matrix_3d(m1,m2,m3,m4,f0,f2,f4) result(res)
+      implicit none
+      integer, intent(in) :: m1, m2, m3, m4 !lz quantum number
+      real(rp), intent(in) :: f0, f2, f4 !Slater integrals
+      real(rp) :: res
+
+      res = 0.0_rp
+      res = res + a_k(0,2,m1,m2,m3,m4)*f0 + a_k(2,2,m1,m2,m3,m4)*f2 + a_k(4,2,m1,m2,m3,m4)*f4
+   end function hubbard_int_matrix_3d
+
    !> Computes the Gaunt coefficients using the Cruzan-Racah expression
    !> More about: Didier Sébilleau 1998 J. Phys. A: Math. Gen. 31 7157
    !> Implemented by Ivan Miranda on 17.09.2023
@@ -1775,6 +1787,25 @@ contains
       end do
 
    end function rtrace
+
+   !> Calculated the trace of a real square matrix of any dimension.
+   !> Implemented by Viktor Frilén on 03.07.2024
+   function trace(mat) result(rres)
+      !
+      implicit none
+      !
+      real(rp), intent(in) :: mat(:, :)
+      real(rp) :: rres
+      !
+      ! Local Variables
+      integer :: i
+
+      rres = 0.0_rp
+      do i = 1, size(mat, 1)
+         rres = rres + mat(i, i)
+      end do
+
+   end function trace
 
    !> Calculates the multiplication of a matrix
    !> by a scalar number (both complex).

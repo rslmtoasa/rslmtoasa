@@ -81,6 +81,8 @@ module bands_mod
       real(rp), dimension(:, :), allocatable :: mag_for
       !> Local density matrix (implemented for Hubbard U project)
       real(rp), dimension(:,:,:,:,:), allocatable :: ld_matrix
+      !> Additional potential for LDA+U
+      real(rp), dimension(:,:,:,:,:), allocatable :: hubbard_pot 
    contains
       procedure :: calculate_projected_green
       procedure :: calculate_projected_dos
@@ -96,7 +98,8 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
-      procedure :: calculate_local_density_matrix
+      procedure :: calculate_local_density_matrix ! LDA+U method
+      procedure :: build_hubbard_pot ! LDA+U method
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -169,6 +172,7 @@ contains
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
       if (allocated(this%ld_matrix)) deallocate (this%ld_matrix)
+      if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
 #endif
    end subroutine destructor
 
@@ -207,6 +211,7 @@ contains
       allocate (this%mag_for(3, atoms_per_process))
       !Add if to check if hubbard_check = True when emil has implemented this
       allocate (this%ld_matrix(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
+      allocate (this%hubbard_pot(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
 #endif
 
       this%dtot(:) = 0.0d0
@@ -221,6 +226,7 @@ contains
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
       this%ld_matrix(:,:,:,:,:) = 0.0d0
+      this%hubbard_pot(:,:,:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -880,6 +886,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculates the local density matrix used in Hubbard U correction.
+   !> Implemented by Viktor Frilén 03.07.2024
    !---------------------------------------------------------------------------
    subroutine calculate_local_density_matrix(this)
       class(bands) :: this
@@ -916,7 +923,6 @@ contains
                do ispin = 1, 2                
                   call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + (ispin-1)*9, 1 + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                   this%ld_matrix(na, 1, ispin, 1, 1) = result
-                  print *, result
                end do
                l = 0
             case (2) ! p - orbital
@@ -927,7 +933,6 @@ contains
                      do j = 1, 3
                         call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + i + (ispin-1)*9, 1 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                         this%ld_matrix(na, 1, ispin, i, j) = result
-                        print *, result
                      end do
                   end do
                end do
@@ -939,9 +944,6 @@ contains
                      do j = 1, 5
                         call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(4 + i + (ispin-1)*9, 4 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                         this%ld_matrix(na, 1, ispin, i, j) = result
-                        if (i == j) then
-                           print *, result
-                        end if
                      end do
                   end do
                end do
@@ -954,9 +956,6 @@ contains
                         do j = 1, 2*l + 1
                            call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l + i + (ispin-1)*9, l + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                            this%ld_matrix(na, l + 1, ispin, i, j) = result
-                           if (i == j) then
-                              print *, result
-                           end if
                         end do
                      end do
                   end do
@@ -970,9 +969,6 @@ contains
                         do j = 1, 2*l*2 + 1
                            call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l + i + (ispin-1)*9, l + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                            this%ld_matrix(na, l + 1, ispin, i, j) = result
-                           if (i == j) then
-                              print *, result
-                           end if
                         end do
                      end do
                   end do
@@ -986,9 +982,6 @@ contains
                         do j = 1, 2*(l+1) + 1
                            call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + l*3 + i + (ispin-1)*9, 1 + l*3 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                            this%ld_matrix(na, l + 1, ispin, i, j) = result
-                           if (i == j) then
-                              print *, result
-                           end if
                         end do
                      end do
                   end do
@@ -1002,9 +995,6 @@ contains
                         do j = 1, 2*l + 1
                            call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                            this%ld_matrix(na, l + 1, ispin, i, j) = result
-                           if (i == j) then
-                              print *, result
-                           end if
                         end do
                      end do
                   end do
@@ -1012,70 +1002,115 @@ contains
          end select
       end do
 
-      ! Prints to compare with the values from code
-      print *, 'Total moments'
-      do na = 1, this%lattice%nrec
-         print *, 'Atom ', na, ':'
-         spin_mom = 0.0d0
-         ang_mom = 0.0d0
-         do l = 1, size(this%ld_matrix, 2)
-            do i = 1, size(this%ld_matrix, 4)
-               spin_mom = spin_mom + this%ld_matrix(na,l,1,i,i) - this%ld_matrix(na,l,2,i,i)
-            end do
-         end do
-         if (this%recursion%hamiltonian%hubbard_orb_config(na) == 7) then
-            ! Manually calculate orbital moment
-            do ispin = 1, 2
-               ang_mom = ang_mom + (2*(2-ispin)-1)*(this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
-                                 + 2*(this%ld_matrix(na,3,ispin,5,5) - this%ld_matrix(na,3,ispin,1,1)) &
-                                 + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2)))
-            end do
-            ang_mom = -0.5_rp*ang_mom
-            print *, 'Orbital angular momentum calculated manually: ', ang_mom
+      ! ! Prints to compare with the values from code
+      ! print *, 'Total moments'
+      ! do na = 1, this%lattice%nrec
+      !    print *, 'Atom ', na, ':'
+      !    spin_mom = 0.0d0
+      !    ang_mom = 0.0d0
+      !    do l = 1, size(this%ld_matrix, 2)
+      !       do i = 1, size(this%ld_matrix, 4)
+      !          spin_mom = spin_mom + this%ld_matrix(na,l,1,i,i) - this%ld_matrix(na,l,2,i,i)
+      !       end do
+      !    end do
+      !    if (this%recursion%hamiltonian%hubbard_orb_config(na) == 7) then
+      !       ! Manually calculate orbital moment
+      !       do ispin = 1, 2
+      !          ang_mom = ang_mom + (2*(2-ispin)-1)*(this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
+      !                            + 2*(this%ld_matrix(na,3,ispin,5,5) - this%ld_matrix(na,3,ispin,1,1)) &
+      !                            + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2)))
+      !       end do
+      !       ang_mom = -0.5_rp*ang_mom
+      !       print *, 'Orbital angular momentum calculated manually: ', ang_mom
 
-            ! Calculate orbital moment as done in the code
-            ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-            mLz(:, :) = L_z(:, :)
-            ! Transforming them into the spherical harmonics coordinates
-            call hcpx(mLz, 'cart2sph')
-            l_orb(:,:) = 0.0d0
-            do l = 1, 3
-               do i = 1, (l-1)*2 + 1
-                  do j = 1, (l-1)*2 + 1
-                     l_orb((l-1)**2 + i, (l-1)**2 + j) = l_orb((l-1)**2 + i, (l-1)**2 + j) + this%ld_matrix(na,l,1,i,j) - this%ld_matrix(na,l,2,i,j)
-                  end do
-               end do
-            end do
-            ! This is what is in the code
-            ! lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
-            ! Testing without multiplying with -0.5
-            lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
-            print *, 'Orbital angular momentum calculated with angular momentum operator: ', lz
-         end if
-         print *, 'Spin moment: ', spin_mom
-      end do
+      !       ! Calculate orbital moment as done in the code
+      !       ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+      !       mLz(:, :) = L_z(:, :)
+      !       ! Transforming them into the spherical harmonics coordinates
+      !       call hcpx(mLz, 'cart2sph')
+      !       l_orb(:,:) = 0.0d0
+      !       do l = 1, 3
+      !          do i = 1, (l-1)*2 + 1
+      !             do j = 1, (l-1)*2 + 1
+      !                l_orb((l-1)**2 + i, (l-1)**2 + j) = l_orb((l-1)**2 + i, (l-1)**2 + j) + this%ld_matrix(na,l,1,i,j) - this%ld_matrix(na,l,2,i,j)
+      !             end do
+      !          end do
+      !       end do
+      !       ! This is what is in the code
+      !       ! lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
+      !       ! Testing without multiplying with -0.5
+      !       lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
+      !       print *, 'Orbital angular momentum calculated with angular momentum operator: ', lz
+      !    end if
+      !    print *, 'Spin moment: ', spin_mom
+      ! end do
 
-      !Calculate full density matrix to compare with the code (still something that is missing)
-      do na = 1, this%lattice%nrec
-         print *, 'Atom ', na, ':'
-         full_ld_matrix_test(:,:) = 0.0d0
-         do i = 1, 9
-            do j = 1, 9
-               call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(i, j, :, na), this%e1, 0, this%en%ene)
-               call simpson_m(result2, this%en%edel, this%en%fermi, this%nv1, im_g0(i + 9, j + 9, :, na), this%e1, 0, this%en%ene)
-               full_ld_matrix_test(i,j) = result - result2
-            end do
-         end do
-         ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-         mLz(:, :) = L_z(:, :)
-         ! Transforming them into the spherical harmonics coordinates
-         call hcpx(mLz, 'cart2sph')
-         lz = -0.5_rp*rtrace9(matmul(mLz, full_ld_matrix_test(:, :)))
-         print *, 'Orb. ang. mom. from full_ld_matrix_test: ', lz
-      end do
+      ! !Calculate full density matrix to compare with the code
+      ! do na = 1, this%lattice%nrec
+      !    print *, 'Atom ', na, ':'
+      !    full_ld_matrix_test(:,:) = 0.0d0
+      !    do i = 1, 9
+      !       do j = 1, 9
+      !          call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(i, j, :, na), this%e1, 0, this%en%ene)
+      !          call simpson_m(result2, this%en%edel, this%en%fermi, this%nv1, im_g0(i + 9, j + 9, :, na), this%e1, 0, this%en%ene)
+      !          full_ld_matrix_test(i,j) = result - result2
+      !       end do
+      !    end do
+      !    ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+      !    mLz(:, :) = L_z(:, :)
+      !    ! Transforming them into the spherical harmonics coordinates
+      !    call hcpx(mLz, 'cart2sph')
+      !    lz = -0.5_rp*rtrace9(matmul(mLz, full_ld_matrix_test(:, :)))
+      !    print *, 'Orb. ang. mom. from full_ld_matrix_test: ', lz
+      ! end do
 
 
    end subroutine calculate_local_density_matrix
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Builds the effective single-particle potentials for the LDA+U correction. 
+   !> (Only implemented for d-orbitals!! Since only the slater integrals J0, J2 and J4 are defined)
+   !> Implemented by Viktor Frilén 03.07.2024
+   !---------------------------------------------------------------------------
+   subroutine build_hubbard_pot(this)
+      class(bands) :: this
+      integer :: i, j, na, ispin, n, m
+      real(rp) :: f0, f2, f4 ! Slater integrals
+      ! real(rp), dimension(size(this%ld_matrix, 1), size(this%ld_matrix, 2), size(this%ld_matrix, 3), size(this%ld_matrix, 4), size(this%ld_matrix, 5)) :: hubbard_pot
+
+      this%hubbard_pot = 0.0d0
+      
+      do na = 1, this%lattice%nrec
+         !Only implemented for d-orbital. Checks if this is the case.
+         if (this%recursion%hamiltonian%hubbard_orb_config(na) .ne. 3) then
+            print *, 'build_hubbard_pot subroutine only implemented for d-orbitals.'
+            print *, 'Stops program!!'
+            stop
+         else
+            print *, 'Atom ' , na, ' has Hubbard U for d-orbital. Continue to calculate Hubbard potential.' 
+         end if
+         f0 = this%recursion%hamiltonian%F0(na, 1)
+         f2 = this%recursion%hamiltonian%F2(na, 1)
+         f4 = this%recursion%hamiltonian%F4(na, 1)
+         do ispin = 1, 2
+            do i = 1, 5
+               do j = 1, 5
+                  do n = 1, 5
+                     do m = 1, 5
+                        this%hubbard_pot(na, 1, ispin, i, j) = this%hubbard_pot(na, 1, ispin, i, j) + hubbard_int_matrix_3d(i,n,j,m,f0,f2,f4)*this%ld_matrix(na,1,3-ispin,n,m) &
+                                                         + (hubbard_int_matrix_3d(i,n,j,m,f0,f2,f4) - hubbard_int_matrix_3d(i,n,m,j,f0,f2,f4))*this%ld_matrix(na,1,ispin,n,m)
+                     end do
+                  end do
+                  print *, 'Before dc: ', this%hubbard_pot(na, 1, ispin, i, j)
+                  this%hubbard_pot(na, 1, ispin, i, j) = this%hubbard_pot(na, 1, ispin, i, j) - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) &
+                                             + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) + this%recursion%hamiltonian%hubbard_j(na,1)*(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
+                  print *, 'hubbard_pot(na,d,', ispin, ',', i, ',', j, ') = ', this%hubbard_pot(na, 1, ispin, i, j)
+               end do
+            end do
+         end do
+      end do
+   end subroutine build_hubbard_pot
 
 
    subroutine calculate_projected_dos(this)
