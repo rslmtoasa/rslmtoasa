@@ -1114,11 +1114,11 @@ contains
                end do
             end do
          end do
-         ! Put hubbard_pot_temp into global hubbard_pot
+         ! Put hubbard_pot_temp into global hubbard_pot and convert from eV to Rydberg
          do i = 1, 5
             do j = 1, 5
-               this%recursion%hamiltonian%hubbard_pot(4+i, 4+j, na) = hubbard_pot_temp(na, 1, 1, i, j)
-               this%recursion%hamiltonian%hubbard_pot(4+i+9, 4+j+9, na) = hubbard_pot_temp(na, 1, 2, i, j)
+               this%recursion%hamiltonian%hubbard_pot(4+i, 4+j, na) = hubbard_pot_temp(na, 1, 1, i, j)/ry2ev
+               this%recursion%hamiltonian%hubbard_pot(4+i+9, 4+j+9, na) = hubbard_pot_temp(na, 1, 2, i, j)/ry2ev
             end do
          end do
       end do
