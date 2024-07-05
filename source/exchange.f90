@@ -65,7 +65,7 @@ module exchange_mod
 
       !> General variables
       !> Heisenberg exchange
-      real(rp) :: jij
+      real(rp) :: jij, jijcd, jijsd, jijcc, jijsc
       !> Heisenberg exchange tensor (obtained with auxiliary GF´s)
       real(rp), dimension(9) :: jij_aux
       !> Total Heisenberg exchange J0 = sum_j J0j (obtained with auxiliary GF´s)
@@ -73,9 +73,9 @@ module exchange_mod
       !> Spin-lattice couplings tensor
       real(rp), dimension(9) :: jijk
       !> Dzyaloshinskii-Moriya interaction
-      real(rp), dimension(3) :: dmi
+      real(rp), dimension(3) :: dmi, dmisc, dmicc
       !> Anisotropy
-      real(rp), dimension(3, 3) :: aij
+      real(rp), dimension(3, 3) :: aij, aijsd, aijsc
    contains
       procedure :: calculate_jij
       procedure :: calculate_dij
@@ -122,11 +122,19 @@ contains
       class(exchange) :: this
 
       this%jij = 0.0d0
+      this%jijcd = 0.0d0
+      this%jijsd = 0.0d0
+      this%jijcc = 0.0d0
+      this%jijsc = 0.0d0
       this%jij_aux(:) = 0.0_rp
       this%jij00_aux = 0.0_rp
       this%jijk(:) = 0.0_rp
       this%dmi(:) = 0.0d0
+      this%dmisc(:) = 0.0d0
+      this%dmicc(:) = 0.0d0
       this%aij(:, :) = 0.0d0
+      this%aijsd(:, :) = 0.0d0
+      this%aijsc(:, :) = 0.0d0
    end subroutine restore_to_default
 
    subroutine calculate_jij(this)
@@ -1042,11 +1050,13 @@ contains
       complex(rp), dimension(9, 9, 3) :: dmmats
       complex(rp), dimension(9, 9, 3, 3) :: amats
 
-      real(rp), dimension(:, :), allocatable :: T_comm_xcso, T_comm_xcfo
+      real(rp), dimension(:, :), allocatable :: T_comm_xcso, T_comm_xcfo, T_comm_xcparts
 
       ! Communications array for MPI
       ! row = [ jij dij aij]
       allocate (T_comm_xcso(13, this%lattice%njij), T_comm_xcfo(13, this%lattice%njij))
+      ! row = [jcd, jsd, jcc, jsc, dcc(3), dsc(3), isd(9), isc(9)]
+      allocate (T_comm_xcparts(28, this%lattice%njij)) 
       T_comm_xcso = 0.0_rp; T_comm_xcfo = 0.0_rp
       inquire (unit=20, opened=isopen)
       if (isopen) then
@@ -1103,6 +1113,28 @@ contains
       else
          open (unit=65, file='jtensso.out')
       end if
+
+      inquire (unit=70, opened=isopen)
+      if (isopen) then
+         call g_logger%fatal('exchange%calculate_exchange, file jijparts.out: Unit 70 is already open', __FILE__, __LINE__)
+      else
+         open (unit=70, file='jijparts.out')
+      end if
+
+      inquire (unit=75, opened=isopen)
+      if (isopen) then
+         call g_logger%fatal('exchange%calculate_exchange, file dijparts.out: Unit 75 is already open', __FILE__, __LINE__)
+      else
+         open (unit=75, file='dijparts.out')
+      end if
+
+      inquire (unit=80, opened=isopen)
+      if (isopen) then
+         call g_logger%fatal('exchange%calculate_exchange, file aijparts.out: Unit 80 is already open', __FILE__, __LINE__)
+      else
+         open (unit=80, file='aijparts.out')
+      end if
+
 
       ! First calculate exchange interactions in parallel, without printing
       jtotso = 0.0d0; jtotfo = 0.0d0; jjtotso = 0.0d0; jjtotfo = 0.0d0; itotso = 0.0d0; itotfo = 0.0d0
@@ -1247,6 +1279,15 @@ contains
          this%jij = 0.0d0
          call simpson_f(this%jij, this%en%ene, this%en%fermi, this%en%nv1, real(jtotfo), .true., .false., 0.0d0)
          T_comm_xcfo(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
+         this%jijcd = 0.0d0 ; this%jijsd = 0.0d0 ; this%jijcc = 0.0d0 ; this%jijsc = 0.0d0 
+         call simpson_f(this%jijcd, this%en%ene, this%en%fermi, this%en%nv1, real(jcd), .true., .false., 0.0d0)
+         T_comm_xcparts(1, njij_glob) = this%jijcd*1.0d3/4.0d0/pi
+         call simpson_f(this%jijsd, this%en%ene, this%en%fermi, this%en%nv1, real(jsd), .true., .false., 0.0d0)
+         T_comm_xcparts(2, njij_glob) = this%jijsd*1.0d3/4.0d0/pi
+         call simpson_f(this%jijcc, this%en%ene, this%en%fermi, this%en%nv1, real(jcc), .true., .false., 0.0d0)
+         T_comm_xcparts(3, njij_glob) = this%jijcc*1.0d3/4.0d0/pi
+         call simpson_f(this%jijsc, this%en%ene, this%en%fermi, this%en%nv1, real(jsc), .true., .false., 0.0d0)
+         T_comm_xcparts(4, njij_glob) = this%jijsc*1.0d3/4.0d0/pi
 
          ! Dij integration
          this%dmi = 0.0d0
@@ -1263,6 +1304,17 @@ contains
             call simpson_f(this%dmi(k), this%en%ene, this%en%fermi, this%en%nv1, y(:), .true., .false., 0.0d0)
          end do
          T_comm_xcfo(2:4, njij_glob) = this%dmi*1.0d3/4.0d0/pi
+         this%dmicc = 0.0d0 ; this%dmisc = 0.0d0
+         do k = 1, 3
+            y(:) = 0.0d0
+            y(:) = real(dsc(:, k))
+            call simpson_f(this%dmisc(k), this%en%ene, this%en%fermi, this%en%nv1, y(:), .true., .false., 0.0d0)
+            y(:) = 0.0d0
+            y(:) = real(dcc(:, k))
+            call simpson_f(this%dmicc(k), this%en%ene, this%en%fermi, this%en%nv1, y(:), .true., .false., 0.0d0)
+         end do
+         T_comm_xcparts(5:7, njij_glob) = this%dmicc*1.0d3/4.0d0/pi
+         T_comm_xcparts(8:10, njij_glob) = this%dmisc*1.0d3/4.0d0/pi
 
          ! I tensor integration
          this%aij = 0.0d0
@@ -1283,11 +1335,28 @@ contains
             end do
          end do
          T_comm_xcfo(5:13, njij_glob) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
+         this%aijsd = 0.0d0 ; this%aijsc = 0.0d0  
+         do k = 1, 3
+            do l = 1, 3
+               y(:) = 0.0d0
+               y(:) = real(isd(:, k, l))
+               call simpson_f(this%aijsd(k, l), this%en%ene, this%en%fermi, this%en%nv1, y(:), .true., .false., 0.0d0)
+               y(:) = 0.0d0
+               y(:) = real(isc(:, k, l))
+               call simpson_f(this%aijsc(k, l), this%en%ene, this%en%fermi, this%en%nv1, y(:), .true., .false., 0.0d0)
+            end do
+         end do
+         T_comm_xcparts(11:19, njij_glob) = reshape(this%aijsd*1.0d3/4.0d0/pi, [9])
+         T_comm_xcparts(20:28, njij_glob) = reshape(this%aijsc*1.0d3/4.0d0/pi, [9])
       end do
+
+      
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm_xcso, product(shape(T_comm_xcso)), &
                          MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm_xcfo, product(shape(T_comm_xcfo)), &
+                         MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm_xcparts, product(shape(T_comm_xcparts)), &
                          MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
@@ -1310,6 +1379,12 @@ contains
             this%jij = T_comm_xcfo(1, njij_glob)
             write (25, '(2i8,2x,3f12.6,2x,1f12.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
+            !  Jij parts
+            this%jijcd = T_comm_xcparts(1, njij_glob) ; this%jijsd = T_comm_xcparts(2, njij_glob)    
+            this%jijcc = T_comm_xcparts(3, njij_glob) ; this%jijsc = T_comm_xcparts(4, njij_glob) 
+            write (70, '(2i8,2x,3f12.6,2x,4f12.6,1x,f12.6)') &
+      & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jijcd, this%jijsd, this%jijcc, this%jijsc, &
+      & norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij second order
             this%dmi = T_comm_xcso(2:4, njij_glob)
             write (30, '(2i8,2x,3f12.6,2x,3f12.6,1x,f12.6)') &
@@ -1318,6 +1393,10 @@ contains
             this%dmi = T_comm_xcfo(2:4, njij_glob)
             write (35, '(2i8,2x,3f12.6,2x,3f12.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmi, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
+            ! Dij parts
+            this%dmicc = T_comm_xcparts(5:7, njij_glob) ; this%dmisc = T_comm_xcparts(8:10, njij_glob)
+            write (75, '(2i8,2x,3f12.6,2x,6f12.6,1x,f12.6)') &
+      & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmicc, this%dmisc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij second order
             this%aij = reshape(T_comm_xcso(5:13, njij_glob), [3, 3])
             write (40, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
@@ -1326,6 +1405,10 @@ contains
             this%aij = reshape(T_comm_xcfo(5:13, njij_glob), [3, 3])
             write (45, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
+            ! Aij parts
+            this%aijsd = reshape(T_comm_xcparts(11:19, njij_glob), [3, 3]); this%aijsc = reshape(T_comm_xcparts(20:28, njij_glob), [3, 3])
+            write (45, '(2i8,2x,3f12.6,2x,18f12.6,1x,f12.6)') &
+      & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aijsd, this%aijsc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
          end do
       end if
 
@@ -1337,9 +1420,13 @@ contains
       close (45)
       close (60)
       close (65)
+      close (70)
+      close (75) 
+      close (80)
 
       deallocate (T_comm_xcso)
       deallocate (T_comm_xcfo)
+      deallocate (T_comm_xcparts)
 #ifdef USE_MPI
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
