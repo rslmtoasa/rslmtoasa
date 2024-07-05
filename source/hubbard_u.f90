@@ -99,7 +99,7 @@ contains
                   do m3 = -l, l
                      do m4 = -l, l
                         ak_test = a_k(k,l,m1,m2,m3,m4)
-                        if (ak_test .ne. 0.0d0) then
+                        if (abs(ak_test) .ge. 1e-6) then
                            count = count + 1
                         end if
                         ! print *, 'k = ', k, ' l = ', l, ' m1 = ', m1, ' m2 = ', m2, ' m3 = ', m3, ' m4 = ', m4
@@ -184,6 +184,7 @@ contains
    integer :: n, m, lsize, ssize
    real(rp), dimension(5,5,5,5) :: hubbard_int_mat
    real(rp) :: f0, f2, f4
+   integer, dimension(5) :: ms_d = [-2, -1, 1, 2, 0]
 
    if (this%hamiltonian%hubbard_orb_config(1) .ne. 3) then
       print *, 'Tries to save hubbard_int_matrix_3d but orbital d is not chosen.'
@@ -194,6 +195,9 @@ contains
    f0 = this%hamiltonian%F0(1,1)
    f2 = this%hamiltonian%F2(1,1)
    f4 = this%hamiltonian%F4(1,1)
+   print *, 'F0 = ', f0
+   print *, 'F2 = ', f2
+   print *, 'F4 = ', f4
 
    filename = 'hubbard_int_matrix_3d.txt'
    
@@ -204,7 +208,7 @@ contains
       do j = 1, 5
          do n = 1, 5
             do m = 1, 5
-               hubbard_int_mat(i,j,n,m) = hubbard_int_matrix_3d(i,j,n,m,f0,f2,f4)
+               hubbard_int_mat(i,j,n,m) = hubbard_int_matrix_3d(ms_d(i),ms_d(j),ms_d(n),ms_d(m),f0,f2,f4)
             end do
          end do
       end do

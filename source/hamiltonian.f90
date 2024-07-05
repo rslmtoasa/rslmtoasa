@@ -81,12 +81,14 @@ module hamiltonian_mod
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
 
+      !> On-site potential for LDA+U correction
+      real(rp), dimension(:,:,:), allocatable :: hubbard_pot
       !> Hubbard U for LDA+U implementation
       real(rp), dimension(:,:), allocatable :: hubbard_u
       real(rp), dimension(:,:), allocatable :: hubbard_j
       !> Orbitals for Hubbard U
       character(len=3), dimension(:), allocatable :: hubbard_orb
-      ! Slater integral arrays
+      !> Slater integral arrays
       real(rp), dimension(:,:), allocatable :: F0, F2, F4
       !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
       integer, dimension(:), allocatable :: hubbard_orb_config
@@ -187,6 +189,7 @@ contains
       if (allocated(this%F2)) deallocate (this%F2)
       if (allocated(this%F4)) deallocate (this%F4)
       if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
+      if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
 #endif
    end subroutine destructor
 
@@ -434,6 +437,7 @@ contains
       allocate(this%F4(this%lattice%nrec, 1))
       allocate (this%hubbard_orb(this%lattice%nrec))
       allocate (this%hubbard_orb_config(this%lattice%nrec))
+      allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
       !end if
       !end if
 #endif
@@ -474,6 +478,7 @@ contains
       this%hubbard_nmb_orb = 0
       this%hubbard_check = .true.
       this%implem_check = .true.
+      this%hubbard_pot(:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -688,6 +693,17 @@ contains
             !write(128, *) ´m=´, m, ´ntype= ´, ntype
             !write(128, ´(18f10.6)´) real(this%ee(:, :, m, ntype))
          end do ! end of neighbour number
+         ! Hubbard U correction.
+         ! Only implemented for d-orbitals but easily generalized by including more cases in bands%build_hubbard_pot()
+         if (this%hubbard_orb_config(ntype) == 3) then
+            print *, 'Add Hubbard U correction onto on-site Hamiltonian for d-orbital'
+            do i = 1, 9
+               do j = 1, 9
+                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_pot(i, j, ntype)
+                  this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) + this%hubbard_pot(i + 9, j + 9, ntype)
+               end do
+            end do
+         end if
          if (this%hoh) then
             call this%build_obarm()
             call this%build_enim()

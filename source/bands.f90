@@ -80,9 +80,7 @@ module bands_mod
       !> Magnetic force
       real(rp), dimension(:, :), allocatable :: mag_for
       !> Local density matrix (implemented for Hubbard U project)
-      real(rp), dimension(:,:,:,:,:), allocatable :: ld_matrix
-      !> Additional potential for LDA+U
-      real(rp), dimension(:,:,:,:,:), allocatable :: hubbard_pot 
+      real(rp), dimension(:,:,:,:,:), allocatable :: ld_matrix 
    contains
       procedure :: calculate_projected_green
       procedure :: calculate_projected_dos
@@ -172,7 +170,6 @@ contains
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
       if (allocated(this%ld_matrix)) deallocate (this%ld_matrix)
-      if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
 #endif
    end subroutine destructor
 
@@ -211,7 +208,6 @@ contains
       allocate (this%mag_for(3, atoms_per_process))
       !Add if to check if hubbard_check = True when emil has implemented this
       allocate (this%ld_matrix(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
-      allocate (this%hubbard_pot(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
 #endif
 
       this%dtot(:) = 0.0d0
@@ -226,7 +222,6 @@ contains
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
       this%ld_matrix(:,:,:,:,:) = 0.0d0
-      this%hubbard_pot(:,:,:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1077,9 +1072,14 @@ contains
       class(bands) :: this
       integer :: i, j, na, ispin, n, m
       real(rp) :: f0, f2, f4 ! Slater integrals
-      ! real(rp), dimension(size(this%ld_matrix, 1), size(this%ld_matrix, 2), size(this%ld_matrix, 3), size(this%ld_matrix, 4), size(this%ld_matrix, 5)) :: hubbard_pot
+      integer, dimension(5) :: ms_d = [-2, -1, 1, 2, 0]
+      ! Temporary potential that will be put into this%hubbard_pot
+      real(rp), dimension(size(this%ld_matrix, 1), size(this%ld_matrix, 2), size(this%ld_matrix, 3), size(this%ld_matrix, 4), size(this%ld_matrix, 5)) :: hubbard_pot_temp
+      
+      call this%calculate_local_density_matrix()
 
-      this%hubbard_pot = 0.0d0
+      this%recursion%hamiltonian%hubbard_pot = 0.0d0
+      hubbard_pot_temp = 0.0d0
       
       do na = 1, this%lattice%nrec
          !Only implemented for d-orbital. Checks if this is the case.
@@ -1098,15 +1098,27 @@ contains
                do j = 1, 5
                   do n = 1, 5
                      do m = 1, 5
-                        this%hubbard_pot(na, 1, ispin, i, j) = this%hubbard_pot(na, 1, ispin, i, j) + hubbard_int_matrix_3d(i,n,j,m,f0,f2,f4)*this%ld_matrix(na,1,3-ispin,n,m) &
-                                                         + (hubbard_int_matrix_3d(i,n,j,m,f0,f2,f4) - hubbard_int_matrix_3d(i,n,m,j,f0,f2,f4))*this%ld_matrix(na,1,ispin,n,m)
+                        hubbard_pot_temp(na, 1, ispin, i, j) = hubbard_pot_temp(na, 1, ispin, i, j) &
+                        + hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4)*this%ld_matrix(na,1,3-ispin,n,m) &
+                        + (hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4) &
+                        - hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(m),ms_d(j),f0,f2,f4))*this%ld_matrix(na,1,ispin,n,m)
                      end do
                   end do
-                  print *, 'Before dc: ', this%hubbard_pot(na, 1, ispin, i, j)
-                  this%hubbard_pot(na, 1, ispin, i, j) = this%hubbard_pot(na, 1, ispin, i, j) - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) &
-                                             + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) + this%recursion%hamiltonian%hubbard_j(na,1)*(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
-                  print *, 'hubbard_pot(na,d,', ispin, ',', i, ',', j, ') = ', this%hubbard_pot(na, 1, ispin, i, j)
+                  ! print *, 'Before dc: ', hubbard_pot_temp(na, 1, ispin, i, j)
+                  ! Add double counting term
+                  hubbard_pot_temp(na, 1, ispin, i, j) = hubbard_pot_temp(na, 1, ispin, i, j) &
+                                                      - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) &
+                                                      + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) + this%recursion%hamiltonian%hubbard_j(na,1) &
+                                                      *(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
+                  ! print *, 'hubbard_pot(na,d,', ispin, ',', i, ',', j, ') = ', hubbard_pot_temp(na, 1, ispin, i, j)
                end do
+            end do
+         end do
+         ! Put hubbard_pot_temp into global hubbard_pot
+         do i = 1, 5
+            do j = 1, 5
+               this%recursion%hamiltonian%hubbard_pot(4+i, 4+j, na) = hubbard_pot_temp(na, 1, 1, i, j)
+               this%recursion%hamiltonian%hubbard_pot(4+i+9, 4+j+9, na) = hubbard_pot_temp(na, 1, 2, i, j)
             end do
          end do
       end do

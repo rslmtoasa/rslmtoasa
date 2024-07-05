@@ -647,6 +647,12 @@ contains
       !> Hubbard U object used in summer project. Many implementations might be written here
       type(hubbard_u) :: hubbard_u_obj
 
+      if (this%hamiltonian%hubbard_check) then
+         print *, 'Hubbard check trueeeeeeeeeeeeeeeeeeeeee'
+      else
+         print *, 'Hubbard check faaaaaaaaaaaaaaaaaalse'
+      end if
+
       if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
          print *, 'Initialize Hubbard U module'
          hubbard_u_obj = hubbard_u(this%green)
@@ -671,6 +677,10 @@ contains
             do ia = 1, this%lattice%nrec
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
+            if (this%hamiltonian%hubbard_orb_config(1) == 3 .and. i .gt. 1) then
+               ! Initiate the LDA+U method
+               call this%bands%build_hubbard_pot() ! Build the Hubbard U potential matrix
+            end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
          case ('S')
@@ -731,9 +741,6 @@ contains
          !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
          !=========================================================================
          call this%bands%calculate_magnetic_moments() ! Calculate the magnetic moments
-         !Test Hubbard U
-         call this%bands%calculate_local_density_matrix()
-         call this%bands%build_hubbard_pot()
          do ia = 1, this%lattice%nrec
             this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
