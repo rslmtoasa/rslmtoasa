@@ -1072,7 +1072,11 @@ contains
       class(bands) :: this
       integer :: i, j, na, ispin, n, m
       real(rp) :: f0, f2, f4 ! Slater integrals
+      real(rp) :: dc ! Double counting term
+      real(rp) :: test1, test2, test3, U_energy, dc_energy, n_up, n_down, n_tot
       integer, dimension(5) :: ms_d = [-2, -1, 1, 2, 0]
+      !Test other basis
+      ! integer, dimension(5) :: ms_d = [-2, -1, 0, 1, 2]
       ! Temporary potential that will be put into this%hubbard_pot
       real(rp), dimension(size(this%ld_matrix, 1), size(this%ld_matrix, 2), size(this%ld_matrix, 3), size(this%ld_matrix, 4), size(this%ld_matrix, 5)) :: hubbard_pot_temp
       
@@ -1081,6 +1085,11 @@ contains
       this%recursion%hamiltonian%hubbard_pot = 0.0d0
       hubbard_pot_temp = 0.0d0
       
+      n_up = trace(this%ld_matrix(1, 1, 1, :, :))
+      n_down = trace(this%ld_matrix(1, 1, 2, :, :))
+      n_tot = n_up + n_down
+      U_energy = 0.0d0
+
       do na = 1, this%lattice%nrec
          !Only implemented for d-orbital. Checks if this is the case.
          if (this%recursion%hamiltonian%hubbard_orb_config(na) .ne. 3) then
@@ -1093,27 +1102,52 @@ contains
          f0 = this%recursion%hamiltonian%F0(na, 1)
          f2 = this%recursion%hamiltonian%F2(na, 1)
          f4 = this%recursion%hamiltonian%F4(na, 1)
+         print *, 'F0 = ', f0
+         print *, 'F2 = ', f2
+         print *, 'F4 = ', f4
          do ispin = 1, 2
             do i = 1, 5
                do j = 1, 5
+                  test1 = 0.0d0
+                  test2 = 0.0d0
                   do n = 1, 5
                      do m = 1, 5
                         hubbard_pot_temp(na, 1, ispin, i, j) = hubbard_pot_temp(na, 1, ispin, i, j) &
                         + hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4)*this%ld_matrix(na,1,3-ispin,n,m) &
                         + (hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4) &
                         - hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(m),ms_d(j),f0,f2,f4))*this%ld_matrix(na,1,ispin,n,m)
+
+                        U_energy = U_energy + hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4)*this%ld_matrix(na,1,ispin,i,j)*this%ld_matrix(na,1,3-ispin,n,m) &
+                        + (hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4) &
+                        - hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(m),ms_d(j),f0,f2,f4))*this%ld_matrix(na,1,ispin,i,j)*this%ld_matrix(na,1,ispin,n,m)
+
+                        ! test3 = test3 + hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4)*this%ld_matrix(na,1,3-ispin,n,m)
+                        ! test1 = test1 + hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(j),ms_d(m),f0,f2,f4)*this%ld_matrix(na,1,ispin,n,m)
+                        ! test2 = test2 + hubbard_int_matrix_3d(ms_d(i),ms_d(n),ms_d(m),ms_d(j),f0,f2,f4)*this%ld_matrix(na,1,ispin,n,m)
                      end do
                   end do
+
+                  dc = - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) &
+                      + this%recursion%hamiltonian%hubbard_j(na,1)*(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
+
+                  print *, 'Hubbard energies (U, dc, n, n^sigma) ', hubbard_pot_temp(na, 1, ispin, i, j), -dc, &
+                           trace(this%ld_matrix(na,1,1,:,:)) + trace(this%ld_matrix(na,1,2,:,:)), trace(this%ld_matrix(na,1,ispin,:,:))
+                  ! print *, 'First term (-sigma) = ', test3
+                  ! print *, 'Second term = ', test1
+                  ! print *, 'Third term (exchange) = ', test2
+
                   ! print *, 'Before dc: ', hubbard_pot_temp(na, 1, ispin, i, j)
                   ! Add double counting term
-                  hubbard_pot_temp(na, 1, ispin, i, j) = hubbard_pot_temp(na, 1, ispin, i, j) &
-                                                      - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) &
-                                                      + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) + this%recursion%hamiltonian%hubbard_j(na,1) &
-                                                      *(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
+                  ! hubbard_pot_temp(na, 1, ispin, i, j) = hubbard_pot_temp(na, 1, ispin, i, j) &
+                  !                                     - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) &
+                  !                                     + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) + this%recursion%hamiltonian%hubbard_j(na,1) &
+                  !                                     *(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
                   ! print *, 'hubbard_pot(na,d,', ispin, ',', i, ',', j, ') = ', hubbard_pot_temp(na, 1, ispin, i, j)
                end do
             end do
          end do
+         print *, 'Trace of hubbard_pot (spin up) without U = ', trace(hubbard_pot_temp(na, 1, 1, :, :))
+         print *, 'Trace of hubbard_pot (spin down) without U = ', trace(hubbard_pot_temp(na, 1, 2, :, :))
          ! Put hubbard_pot_temp into global hubbard_pot and convert from eV to Rydberg
          do i = 1, 5
             do j = 1, 5
@@ -1122,6 +1156,10 @@ contains
             end do
          end do
       end do
+      dc_energy = 0.5_rp*(this%recursion%hamiltonian%hubbard_u(1,1)*n_tot*(n_tot - 1.0_rp) &
+         - this%recursion%hamiltonian%hubbard_j(1,1)*(n_up*(n_up - 1.0_rp) + n_down*(n_down - 1.0_rp)))
+
+      print *, '(U, dc) = ', U_energy, dc_energy
    end subroutine build_hubbard_pot
 
 
