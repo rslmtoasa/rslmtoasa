@@ -1313,8 +1313,8 @@ contains
             y(:) = real(dcc(:, k))
             call simpson_f(this%dmicc(k), this%en%ene, this%en%fermi, this%en%nv1, y(:), .true., .false., 0.0d0)
          end do
-         T_comm_xcparts(5:7, njij_glob) = this%dmicc*1.0d3/4.0d0/pi
-         T_comm_xcparts(8:10, njij_glob) = this%dmisc*1.0d3/4.0d0/pi
+         T_comm_xcparts(5:7, njij_glob) = this%dmicc*2.0d3/4.0d0/pi
+         T_comm_xcparts(8:10, njij_glob) = this%dmisc*2.0d3/4.0d0/pi
 
          ! I tensor integration
          this%aij = 0.0d0
