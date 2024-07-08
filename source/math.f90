@@ -301,21 +301,35 @@ contains
       implicit none
       integer, intent(in) :: k, l, m1, m2, m3, m4
       integer :: q
-      real(rp) :: res, temp1, temp2, temp3
+      real(rp) :: res
+     res = 0.0_rp
 
-      res = 0.0_rp
-
-      do q = -k, k
-         temp1 = wigner3j(l,k,l,0,0,0)
-         temp2 = wigner3j(l,k,l,-m1,q,m2)
-         temp3 = wigner3j(l,k,l,-m3,-q,m4)
-         res = res + (2.0_rp*real(l))**2*(-1.0_rp)**(m1+q+m2)*temp1**2*temp2*temp3
-      end do
+     do q = -k, k
+         res = res + (4*pi/(2.0d0*real(k) + 1.0d0))*realgaunt(l, k, l, m1, q, m2)*realgaunt(l, k, l, m3, q, m4)
+     end do
    end function a_k
 
+   ! function a_k(k,l,m1,m2,m3,m4) result(res)
+   !    implicit none
+   !    integer, intent(in) :: k, l, m1, m2, m3, m4
+   !    integer :: q
+   !    real(rp) :: res, temp1, temp2, temp3
+
+   !    res = 0.0_rp
+
+   !    do q = -k, k
+   !       temp1 = wigner3j(l,k,l,0,0,0)
+   !       temp2 = wigner3j(l,k,l,-m1,q,m2)
+   !       temp3 = wigner3j(l,k,l,-m3,-q,m4)
+   !       res = res + (2.0_rp*real(l)+1.0_rp)**2*(-1.0_rp)**(m1+q+m2)*temp1**2*temp2*temp3
+   !    end do
+   ! end function a_k
+
    !> Calculates the matrix elements for the screened on-site Coulomb interaction used in the LDA+U method.
+   !> The ordering looks weird but is now right! 
    !> Implemented by Viktor Frilén on 03.07.2024
-   function hubbard_int_matrix_3d(m1,m2,m3,m4,f0,f2,f4) result(res)
+
+   function hubbard_int_matrix_3d(m1,m3,m2,m4,f0,f2,f4) result(res)
       implicit none
       integer, intent(in) :: m1, m2, m3, m4 !lz quantum number
       real(rp), intent(in) :: f0, f2, f4 !Slater integrals
@@ -324,6 +338,7 @@ contains
       res = 0.0_rp
       res = res + a_k(0,2,m1,m2,m3,m4)*f0 + a_k(2,2,m1,m2,m3,m4)*f2 + a_k(4,2,m1,m2,m3,m4)*f4
    end function hubbard_int_matrix_3d
+
 
    !> Computes the Gaunt coefficients using the Cruzan-Racah expression
    !> More about: Didier Sébilleau 1998 J. Phys. A: Math. Gen. 31 7157
