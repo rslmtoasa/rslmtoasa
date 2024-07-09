@@ -184,7 +184,7 @@ contains
    integer :: n, m, lsize, ssize
    real(rp), dimension(5,5,5,5) :: hubbard_int_mat
    real(rp) :: f0, f2, f4
-   integer, dimension(5) :: ms_d = [-2, -1, 1, 2, 0]
+   integer, dimension(5) :: ms_d = [-2, -1, 0, 1, 2]
 
    if (this%hamiltonian%hubbard_orb_config(1) .ne. 3) then
       print *, 'Tries to save hubbard_int_matrix_3d but orbital d is not chosen.'
