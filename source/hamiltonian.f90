@@ -19,8 +19,6 @@
 !> Module to handle procedures related to the Hamiltonian
 !------------------------------------------------------------------------------
 
-! VIKTOR
-
 module hamiltonian_mod
 
    use control_mod
@@ -89,16 +87,16 @@ module hamiltonian_mod
       !> Orbitals for Hubbard U
       character(len=3), dimension(:), allocatable :: hubbard_orb
       !> Slater integral arrays
-      real(rp), dimension(:,:), allocatable :: F0, F2, F4
+      real(rp), dimension(:,:), allocatable :: F0, F2, F4, F6
       !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
       integer, dimension(:), allocatable :: hubbard_orb_config
       !> Maximum orbital number to create arrays of appropriate sizes. 0=s, 1=p, 2=d
       integer :: hubbard_orb_max
       !> Maximum number of orbitals over the atoms (1 = s or p or d. 3 = spd)
       integer :: hubbard_nmb_orb
-      !> Logical variable to include Hubbard U and check implementation data
-      logical :: hubbard_check = .true.
-      logical :: implem_check = .true.
+      !> Logical variables to include Hubbard U & J
+      logical :: hubbardU_check = .false.
+      logical :: hubbardJ_check = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -188,6 +186,7 @@ contains
       if (allocated(this%F0)) deallocate (this%F0)
       if (allocated(this%F2)) deallocate (this%F2)
       if (allocated(this%F4)) deallocate (this%F4)
+      if (allocated(this%F6)) deallocate (this%F6)
       if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
       if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
 #endif
@@ -204,6 +203,9 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit, i, j, max_orbs, length
+
+      ! Logical variable to check if input data is good
+      logical :: implem_check = .true.
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -225,21 +227,23 @@ contains
       read (funit, nml=hamiltonian, iostat=iostatus)
 
       max_orbs = 1
-      do i = 1, this%lattice%nrec
+      do i = 1, this%lattice%nrec   
          max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
       end do
-
+      
       if (size(hubbard_u,2) .ne. max_orbs) then
          deallocate (hubbard_u)
          deallocate(hubbard_j)
          deallocate(this%F0)
          deallocate(this%F2)
          deallocate(this%F4)
+         deallocate(this%F6)
          allocate (hubbard_u(this%lattice%nrec, max_orbs))
          allocate(hubbard_j(this%lattice%nrec, max_orbs))
          allocate(this%F0(this%lattice%nrec, max_orbs))
          allocate(this%F2(this%lattice%nrec, max_orbs))
          allocate(this%F4(this%lattice%nrec, max_orbs))
+         allocate(this%F6(this%lattice%nrec, max_orbs))
       end if
 
       rewind (funit)
@@ -292,91 +296,201 @@ contains
             this%hubbard_orb_config(i) = 0
          end if
       end do
-      
-      !> Print Hubbard U info
-      outer: do i = 1, this%lattice%nrec   ! Steps through the atoms
-         length = len_trim(this%hubbard_orb(i)) ! Kills unwanted zeros in the number of orbitals
-         if (length >= 1) then ! Only step through the orbitals if they are specified
-            do j = 1, length ! Steps through the orbitals
-               if (this%hubbard_u(i,j) /= 0 .AND. this%hubbard_orb(i) == '') then   ! If Hubbard U value is given without orbital
-                  this%implem_check = .false.
-                  exit outer
-               else if (this%hubbard_u(i,j) == 0 .AND. this%hubbard_orb(i) /= '') then ! If orbital value given without Hubbard U
-                  this%implem_check = .false.
-                  exit outer
-               else ! If both (none) are given, the code can successfully implement (will go to self cons without) Hubbard U 
-                  this%implem_check = .true. 
-               end if
-            end do
-         else if (size(this%hubbard_u(:,:)) == 0) then
-            this%hubbard_check = .false.
-         else ! If no orbitals are specified, raise error
-            this%implem_check = .false.
-            exit outer 
+
+
+      ! ---------------------------------------------------------------------------------------------------------------------
+      ! Error flags that checks if Hubbard U and/or J should be implemented, along with checking if the input data is correct 
+      ! Written by Emil Beiersdorf 09-07-2024
+
+      ! Establishes if Hubbard U should be implemented by checking if any Hubbard U is specified
+      outer2 : do i = 1, this%lattice%nrec 
+         do j = 1, len_trim(this%hubbard_orb(i)) 
+            if (this%hubbard_u(i,j) > 1.0E-10) then ! If a nonzero Hubbard U parameter is specified, Hubbard U is initiated
+               this%hubbardU_check = .true.
+               exit outer2
+            end if
+         end do
+      end do outer2
+
+      ! Establishes if Hubbard J should be implemented by checking if any Hubbard J is specified
+      outer3 : do i = 1, this%lattice%nrec 
+         do j = 1, len_trim(this%hubbard_orb(i)) 
+            if (this%hubbard_j(i,j) > 1.0E-10) then ! If a nonzero Hubbard J parameter is specified, Hubbard J is initiated
+               this%hubbardJ_check = .true.
+               exit outer3
+            end if
+         end do
+      end do outer3
+
+      outer : do i = 1, this%lattice%nrec ! Steps through the atoms
+
+         ! ----------------------------- FOR DEBUGGING ---------------------------------
+         ! print *, 'U(i) len for i = ', i, ' is ', count(this%hubbard_u(i,:) > 1.0E-10)
+         ! print *, 'J(i) len for i = ', i, 'is ', count(this%hubbard_j(i,:) > 1.0E-10), ' while Orb(i) len is', len_trim(this%hubbard_orb(i))
+         ! -----------------------------------------------------------------------------
+
+         ! If no input values are given for some atom(s), default values is set given that Hubbard U and or J should be included
+         if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check .and. this%hubbardJ_check) then
+            print *, ''
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'No input values for Hubbard U+J found on atom ', i, ', setting default values.'
+            print *, '----------------------------------------------------------------------------------------'
+         else if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
+            print *, ''
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'No input values for Hubbard U found on atom ', i, ', setting default values.'
+            print *, '----------------------------------------------------------------------------------------'
+         else if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardJ_check) then
+            print *, ''
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'No input values for Hubbard J found on atom ', i, ', setting default values.'
+            print *, '----------------------------------------------------------------------------------------'
+         else
+            ! Checks if number of orbitals are more than the maximum allowed 
+            if (len_trim(this%hubbard_orb(i)) > max_orbs) then
+               implem_check = .false. ! Too many orbs
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Error, too many orbitals.'
+               print *, '----------------------------------------------------------------------------------------'
+
+            ! If the number of orbitals and Hubbard U parameters per atom in input file disagree, then a raised error is prompted
+            else if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%hubbard_orb(i))) then
+               implem_check = .false.
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Number of orbitals and Hubbard U parameters for atom', i, ' disagrees.'
+               print *, '----------------------------------------------------------------------------------------'
+
+            ! If the number of orbitals and Hubbard J parameters per atom in input file disagree, then a raised error is prompted 
+            else if (count(this%hubbard_j(i,:) > 1.0E-10) /= len_trim(this%hubbard_orb(i))) then 
+               implem_check = .false.
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Number of orbitals and Hubbard J parameters for atom', i, ' disagrees.'
+               print *, '----------------------------------------------------------------------------------------'
+
+            ! Checks if for each Hubbard U there is a Hubbard J if Hubbard U+J is in use
+            else if (count(this%hubbard_u(i,:) > 1.0E-10) /= count(this%hubbard_j(i,:) > 1.0E-10)) then 
+               implem_check = .false.
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Not as many Hubbard U as J parameters are specified.'
+               print *, '----------------------------------------------------------------------------------------'
+            end if
          end if
       end do outer
 
-      ! do i = 1, this%lattice%nrec
-      !    if (size(this%hubbard_u(i,:)) <= 1 .AND. this%hubbard_u(i,1) == 0) then
-      !       this%hubbard_check = .true.
-      !       exit
-      !    else 
-      !       this%hubbard_check = .false.
-      !    end if
-      ! end do
-
-      ! PROBLEM MED OM INGET SPECIFICERAS
-      ! if (this%hubbard_check) then
-      print *,''
-      print *,''
-      print *, '----------------------------------------------------------------------------------------'
-      print *, 'Stored input values for LDA+U+J'
-      print *, '----------------------------------------------------------------------------------------'
-      if (this%implem_check) then
-         do i = 1, this%lattice%nrec
-            print *, 'Atom ', i, ':'
-            length = len_trim(this%hubbard_orb(i))
-            do j = 1, length
-               print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
-            end do
-         end do
-         print *, ''
-         print *, 'Hubbard U+J input data implemented successfully, proceeding...'
-      else
-         print *, 'Imposed error: both the Hubbard U+J parameters and the corresponding orbitals need to'
-         print *, 'be specified.'
-      end if
-      print *, '----------------------------------------------------------------------------------------'
-
-      ! For 3d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~0.625
-      print *,''
-      print *,''
-      print *, '----------------------------------------------------------------------------------------'
-      print *, 'Slater Integrals (as of now, only for 3d orbitals)'
-      print *, '----------------------------------------------------------------------------------------'
+      ! Forces too small entries to zero
       do i = 1, this%lattice%nrec
-         length = len_trim(this%hubbard_orb(i))
-         print *, 'Atom ', i, ':'
-         do j = 1, length
-            this%F0(i,j) = this%hubbard_u(i,j)
-            this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
-            this%F4(i,j) = 0.625*this%F2(i,j) 
-            print *, '  Orbital ', this%hubbard_orb(i), ': F0 = ', this%F0(i,j)
-            print *, '  Orbital ', this%hubbard_orb(i), ': F2 = ', this%F2(i,j)
-            print *, '  Orbital ', this%hubbard_orb(i), ': F4 = ', this%F4(i,j)
+         do j = 1, size(this%hubbard_u(i,:))
+            if (this%hubbard_u(i,j) < 1.0E-10) then
+               this%hubbard_u(i,j) = 0.0d0
+            end if
+            if (this%hubbard_j(i,j) < 1.0E-10) then
+               this%hubbard_j(i,j) = 0.0d0
+            end if
          end do
       end do
-      ! F4 = 0.625*F2
-      print *, '----------------------------------------------------------------------------------------'
-      ! else 
-      !    print *, ''
-      !    print *, '----------------------------------------------------------------------------------------'
-      !    print *, 'No Hubbard U+J data was given as input, proceeding without.'
-      !    print *, '----------------------------------------------------------------------------------------'
-      ! end if
+
+      ! !> Print Hubbard U+J info
+         if (this%hubbardU_check .and. this%hubbardJ_check) then 
+            if (implem_check) then
+               print *,''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Stored input values for LDA+U+J'
+               print *, '----------------------------------------------------------------------------------------'
+               do i = 1, this%lattice%nrec
+                  print *, 'Atom ', i, ':'
+                  do j = 1, max_orbs
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
+                  end do
+               end do
+               print *, ''
+               print *, 'Hubbard U+J input data implemented successfully, proceeding...'
+               print *, '----------------------------------------------------------------------------------------'
+
+               ! For d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~ 0.625
+               print *,''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Slater Integrals (implemented for d and f orbitals).'
+               print *, '----------------------------------------------------------------------------------------'
+               do i = 1, this%lattice%nrec
+                  print *, 'Atom ', i, ':'
+                  do j = 1, max_orbs
+                     ! if (this%hubbard_orb(i)(j:j) == 'd') then
+                     this%F0(i,j) = this%hubbard_u(i,j)
+                     this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
+                     this%F4(i,j) = 0.625*this%F2(i,j) 
+                     ! else if (this%hubbard_orb(i)(j:j) == 'f') then
+                     !    this%F0(i,j) = this%hubbard_u(i,j)
+                     !    this%F2(i,j) = 1.0
+                     !    this%F4(i,j) = 1.0
+                     ! end if
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
+                  end do
+               end do
+               print *, '----------------------------------------------------------------------------------------'
+            else 
+               call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
+               error stop
+            end if      
+            
+         else if (this%hubbardU_check) then
+            if (implem_check) then
+               print *,''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Stored input values for LDA+U'
+               print *, '----------------------------------------------------------------------------------------'
+                  do i = 1, this%lattice%nrec
+                     print *, 'Atom ', i, ':'
+                     do j = 1, max_orbs
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.'
+                     end do
+                  end do
+                  print *, ''
+                  print *, 'Hubbard U (no J) input data implemented successfully, proceeding...'
+                  print *, '----------------------------------------------------------------------------------------'
+            else 
+               call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
+                  error stop
+            end if       
+
+         else if (this%hubbardJ_check) then 
+            if (implem_check) then
+               print *,''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Stored input values for LDA+J'
+               print *, '----------------------------------------------------------------------------------------'
+                  do i = 1, this%lattice%nrec
+                     print *, 'Atom ', i, ':'
+                     do j = 1, max_orbs
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
+                     end do
+                  end do
+                  print *, ''
+                  print *, 'Hubbard J (no U) input data implemented successfully, proceeding...'
+               print *, '----------------------------------------------------------------------------------------'
+            else 
+               call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
+               error stop
+            end if
+
+         else
+            print *, ''
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'No Hubbard U+J data was given as input, proceeding without.'
+            print *, '----------------------------------------------------------------------------------------'
+         end if
+      ! ---------------------------------------------------------------------------------------------------------------------
 
    end subroutine build_from_file
-
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -435,6 +549,7 @@ contains
       allocate(this%F0(this%lattice%nrec, 1))
       allocate(this%F2(this%lattice%nrec, 1))
       allocate(this%F4(this%lattice%nrec, 1))
+      allocate(this%F6(this%lattice%nrec, 1))
       allocate (this%hubbard_orb(this%lattice%nrec))
       allocate (this%hubbard_orb_config(this%lattice%nrec))
       allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
@@ -473,11 +588,12 @@ contains
       this%F0(:,:) = 0.0d0
       this%F2(:,:) = 0.0d0
       this%F4(:,:) = 0.0d0
+      this%F6(:,:) = 0.0d0
       this%hubbard_orb_config = 0
       this%hubbard_orb_max = 0
       this%hubbard_nmb_orb = 0
-      this%hubbard_check = .true.
-      this%implem_check = .true.
+      this%hubbardU_check = .false.
+      this%hubbardJ_check = .false.
       this%hubbard_pot(:,:,:) = 0.0d0
    end subroutine restore_to_default
 
