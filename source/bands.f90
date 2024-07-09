@@ -907,14 +907,15 @@ contains
             end do
          end do
       end do
-
+      print *, 'Calculate ld matrix for: '
       do na = 1, this%lattice%nrec
          print *, 'Atom ', na, ':'
          select case(this%recursion%hamiltonian%hubbard_orb_config(na))
             case (0)
                ! No Hubbard U on this atom
+               print *, 'No hubbard U correction'
             case (1) ! s - orbital
-               print *, 'Calculate ld matrix for s-orbital:'
+               print *, 's-orbital:'
                do ispin = 1, 2                
                   call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + (ispin-1)*9, 1 + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
                   this%ld_matrix(na, 1, ispin, 1, 1) = result
@@ -922,7 +923,7 @@ contains
                l = 0
             case (2) ! p - orbital
                l = 1
-               print *, 'Calculate ld matrix for p-orbital:'
+               print *, 'p-orbital:'
                do ispin = 1, 2
                   do i = 1, 3
                      do j = 1, 3
@@ -933,7 +934,7 @@ contains
                end do
             case (3) ! d - orbital
                l = 2
-               print *, 'Calculate ld matrix for d-orbital:'
+               print *, 'd-orbital:'
                do ispin = 1, 2
                   do i = 1, 5
                      do j = 1, 5
@@ -943,7 +944,7 @@ contains
                   end do
                end do
             case (4) ! sp - orbital
-               print *, 'Calculate ld matrix for sp-orbitals:'
+               print *, 'sp-orbitals:'
                do l = 0, 1
                   print *, 'l = ', l
                   do ispin = 1, 2
@@ -956,7 +957,7 @@ contains
                   end do
                end do
             case (5) ! sd - orbital
-               print *, 'Calculate ld matrix for sd-orbitals:'
+               print *, 'sd-orbitals:'
                do l = 0, 1
                   print *, 'l = ', l*2
                   do ispin = 1, 2
@@ -969,7 +970,7 @@ contains
                   end do
                end do
             case (6) ! pd - orbital
-               print *, 'Calculate ld matrix for pd-orbitals:'
+               print *, 'pd-orbitals:'
                do l = 0, 1
                   print *, 'l = ', 1 + l
                   do ispin = 1, 2
@@ -982,7 +983,7 @@ contains
                   end do
                end do
             case (7) ! spd - orbital
-               print *, 'Calculate ld matrix for spd-orbitals:'
+               print *, 'spd-orbitals:'
                do l = 0, 2
                   print *, 'l = ', l
                   do ispin = 1, 2
@@ -1083,25 +1084,23 @@ contains
       this%recursion%hamiltonian%hubbard_pot = 0.0d0
       hubbard_pot_temp = 0.0d0
       
-
+      print *, 'Calculate Hubbard U potential for:'
       do na = 1, this%lattice%nrec
+         print *, 'Atom ', na
          ! Checks which orbital to add U onto. Only works for no U correction or for d-orbitals
          if (this%recursion%hamiltonian%hubbard_orb_config(na) == 0) then
-            print *, 'Atom ', na, 'has no Hubbard U correction.'
+            print *, 'No Hubbard U correction.'
          else if (this%recursion%hamiltonian%hubbard_orb_config(na) == 3) then
-            print *, 'Atom ' , na, ' has Hubbard U for d-orbital. Calculate Hubbard potential.' 
+            print *, 'd-orbital' 
 
-            n_up = trace(this%ld_matrix(1, 1, 1, :, :))
-            n_down = trace(this%ld_matrix(1, 1, 2, :, :))
+            n_up = trace(this%ld_matrix(na, 1, 1, :, :))
+            n_down = trace(this%ld_matrix(na, 1, 2, :, :))
             n_tot = n_up + n_down
             U_energy = 0.0d0
 
             f0 = this%recursion%hamiltonian%F0(na, 1)
             f2 = this%recursion%hamiltonian%F2(na, 1)
             f4 = this%recursion%hamiltonian%F4(na, 1)
-            print *, 'F0 = ', f0
-            print *, 'F2 = ', f2
-            print *, 'F4 = ', f4
             do ispin = 1, 2
                do m1 = 1, 5
                   do m2 = 1, 5
@@ -1137,12 +1136,11 @@ contains
                   this%recursion%hamiltonian%hubbard_pot(4+i+9, 4+j+9, na) = hubbard_pot_temp(na, 1, 2, i, j)/ry2ev
                end do
             end do
-            dc_energy = 0.5_rp*(this%recursion%hamiltonian%hubbard_u(1,1)*n_tot*(n_tot - 1.0_rp) &
-            - this%recursion%hamiltonian%hubbard_j(1,1)*(n_up*(n_up - 1.0_rp) + n_down*(n_down - 1.0_rp)))
+            dc_energy = 0.5_rp*(this%recursion%hamiltonian%hubbard_u(na,1)*n_tot*(n_tot - 1.0_rp) &
+            - this%recursion%hamiltonian%hubbard_j(na,1)*(n_up*(n_up - 1.0_rp) + n_down*(n_down - 1.0_rp)))
 
             print *, '(U, dc) = ', U_energy*0.5_rp, dc_energy
-         else:
-            
+         else
             print *, 'build_hubbard_pot subroutine only implemented for d-orbitals or no orbitals.'
             print *, 'Stops program!!'
             stop

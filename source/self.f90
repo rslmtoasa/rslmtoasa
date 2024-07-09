@@ -666,8 +666,6 @@ contains
       !===========================================================================
       niter = 0
       do i = 1, this%nstep
-         print *, 'Hubbard U = ', this%hamiltonian%hubbard_u
-         print *, 'Hubbard orbitals = ', this%hamiltonian%hubbard_orb
          !=========================================================================
          !                        PERFORM THE RECURSION
          !=========================================================================
@@ -678,7 +676,7 @@ contains
             do ia = 1, this%lattice%nrec
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
-            if (this%hamiltonian%hubbard_orb_config(1) == 3 .and. i .gt. 1) then
+            if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i .gt. 1) then
                ! Initiate the LDA+U method
                call this%bands%build_hubbard_pot() ! Build the Hubbard U potential matrix
             end if
@@ -824,11 +822,13 @@ contains
          this%converged = this%is_converged(this%mix%delta)
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
-            !Save local density matrix to file
-            if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
-               ! call hubbard_u_obj%save_density_matrix_to_file(this%bands%ld_matrix(1,:,:,:,:), this%en%channels_ldos)
+
+            if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i == 1) then
+               call g_logger%info('LDA+U module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
+               niter = niter + 1
+            else
+               exit
             end if
-            exit
          else
             if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
             niter = niter + 1
