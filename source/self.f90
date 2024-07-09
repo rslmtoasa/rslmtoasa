@@ -647,11 +647,12 @@ contains
       !> Hubbard U object used in summer project. Many implementations might be written here
       type(hubbard_u) :: hubbard_u_obj
 
-      if (this%hamiltonian%hubbard_check) then
-         print *, 'Hubbard check trueeeeeeeeeeeeeeeeeeeeee'
-      else
-         print *, 'Hubbard check faaaaaaaaaaaaaaaaaalse'
-      end if
+      ! EMIL UNCOMMENT THIS WHEN DONE!
+      ! if (this%hamiltonian%hubbard_check) then
+      !    print *, 'Hubbard check trueeeeeeeeeeeeeeeeeeeeee'
+      ! else
+      !    print *, 'Hubbard check faaaaaaaaaaaaaaaaaalse'
+      ! end if
 
       if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
          print *, 'Initialize Hubbard U module'
