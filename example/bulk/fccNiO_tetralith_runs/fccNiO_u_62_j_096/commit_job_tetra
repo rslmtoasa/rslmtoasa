@@ -1,0 +1,11 @@
+#!/bin/bash
+#SBATCH -o control.out
+#SBATCH -J NiO_u
+#SBATCH -N 1
+#SBATCH -t 01:00:00
+#SBATCH -A naiss2024-1-6
+#SBATCH --mail-type=END
+#SBATCH --mail-user=viktor.frilen@gmail.com
+
+module load buildenv-intel/2023a-eb
+/home/x_vikfr/rslmtoasa/build/bin/rslmto.x >> job.out

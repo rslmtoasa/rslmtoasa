@@ -1,0 +1,1383 @@
+MPI startup(): PMI server not found. Please set I_MPI_PMI_LIBRARY variable if it is not a singleton case.
+ Running with           1 MPI processes.
+ Each MPI process is using          32 OpenMP threads.
+  OpenMP in play with           32  cores.
+[Jul 10 2024 11:18:43.434] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni_out.nml
+[Jul 10 2024 11:18:43.435] [potential.f90:161]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni_out.nml
+[Jul 10 2024 11:18:43.435] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./O_out.nml
+[Jul 10 2024 11:18:43.436] [potential.f90:161]         [1m[32m<info> [0m[0mReading potential from previous result ./O_out.nml
+ 
+ 
+ -------------------------------------------------------------------------------
+ ---------
+ No input values for Hubbard U+J found on atom            2 
+ , setting default values.
+ -------------------------------------------------------------------------------
+ ---------
+ 
+ -------------------------------------------------------------------------------
+ ---------
+ Stored input values for LDA+U+J
+ -------------------------------------------------------------------------------
+ ---------
+ Atom            1 :
+   Orbital d: Hubbard U =    6.20000000000000       eV. Hubbard J = 
+  0.950000000000000      eV
+ Atom            2 :
+   Orbital  : Hubbard U =   0.000000000000000E+000  eV. Hubbard J = 
+  0.000000000000000E+000 eV
+ 
+ Hubbard U+J input data implemented successfully, proceeding...
+ -------------------------------------------------------------------------------
+ ---------
+ 
+ -------------------------------------------------------------------------------
+ ---------
+ Slater Integrals (implemented for d and f orbitals).
+ -------------------------------------------------------------------------------
+ ---------
+ Atom            1 :
+   Orbital d: F0 =    6.20000000000000     
+   Orbital d: F2 =    8.18461538461538     
+   Orbital d: F4 =    5.11538461538461     
+ Atom            2 :
+   Orbital  : F0 =   0.000000000000000E+000
+   Orbital  : F2 =   0.000000000000000E+000
+   Orbital  : F4 =   0.000000000000000E+000
+ -------------------------------------------------------------------------------
+ ---------
+ Initialize Hubbard U module
+ orbital_test
+[Jul 10 2024 11:18:44.477] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 1
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:18:44.586] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:19:24.821] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:20:04.838] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:20:04.909] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:20:04.995] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.143899
+[Jul 10 2024 11:20:04.997] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:20:04.997] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:20:04.997] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:20:04.997] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is  -0.000000  -0.000000   0.000000
+[Jul 10 2024 11:20:04.997] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:20:04.997] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:20:05.017] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.079409
+[Jul 10 2024 11:20:05.020] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.002867
+[Jul 10 2024 11:20:05.023] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:20:05.023] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:20:05.023] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -1.007710  -1.007710  -0.000000
+[Jul 10 2024 11:20:05.023] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:20:05.023] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   1.007710   1.007710   0.000000
+[Jul 10 2024 11:20:05.024] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Jul 10 2024 11:20:05.024] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Jul 10 2024 11:20:05.024] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:20:05.024] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:20:05.024] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:20:05.102] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:20:05.102] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:20:05.102] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:20:05.102] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:20:05.135] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:20:05.135] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:20:05.135] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:20:05.135] [self.f90:824]              [1m[32m<info> [0m[0mConverged!0.0000000008
+[Jul 10 2024 11:20:05.135] [self.f90:827]              [1m[32m<info> [0m[0mLDA+U module initiates at iteration 2. Continuing calculation...
+[Jul 10 2024 11:20:05.135] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 2
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    175.978891358760        172.961521742103     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:20:05.315] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:20:45.605] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:21:25.949] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:21:26.020] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:21:26.128] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.172767
+[Jul 10 2024 11:21:26.130] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:21:26.130] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000  -0.000000  -0.000000
+[Jul 10 2024 11:21:26.130] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:21:26.130] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000  -0.000000   0.000000
+[Jul 10 2024 11:21:26.130] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:21:26.130] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:21:26.150] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.071898
+[Jul 10 2024 11:21:26.151] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.003203
+[Jul 10 2024 11:21:26.155] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:21:26.155] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:21:26.155] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.903139  -0.986796   0.083657
+[Jul 10 2024 11:21:26.155] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:21:26.155] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.903139   0.986796  -0.083657
+[Jul 10 2024 11:21:26.155] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.014107
+[Jul 10 2024 11:21:26.155] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.009710
+[Jul 10 2024 11:21:26.155] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:21:26.155] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:21:26.155] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:21:26.228] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:21:26.228] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:21:26.228] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:21:26.228] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:21:26.261] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:21:26.261] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:21:26.261] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:21:26.261] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0085628810
+[Jul 10 2024 11:21:26.261] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 3
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    180.990625772196        178.206577268459     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:21:26.441] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:22:06.364] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:22:46.409] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:22:46.479] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:22:46.586] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.245140
+[Jul 10 2024 11:22:46.589] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:22:46.589] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is  -0.000000   0.000000  -0.000000
+[Jul 10 2024 11:22:46.589] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:22:46.589] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000  -0.000000  -0.000000
+[Jul 10 2024 11:22:46.589] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:22:46.589] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:22:46.608] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.049620
+[Jul 10 2024 11:22:46.610] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.002559
+[Jul 10 2024 11:22:46.613] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:22:46.613] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:22:46.613] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.599545  -0.909346   0.309801
+[Jul 10 2024 11:22:46.613] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:22:46.613] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.599545   0.909346  -0.309801
+[Jul 10 2024 11:22:46.613] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.046061
+[Jul 10 2024 11:22:46.613] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.038110
+[Jul 10 2024 11:22:46.613] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:22:46.613] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:22:46.613] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:22:46.685] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:22:46.685] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:22:46.685] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:22:46.685] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:22:46.718] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:22:46.718] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:22:46.718] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:22:46.718] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0298914721
+[Jul 10 2024 11:22:46.718] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 4
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    194.427374677671        191.912739451095     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:22:46.898] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:23:26.819] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:24:07.130] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:24:07.201] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:24:07.298] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.286573
+[Jul 10 2024 11:24:07.301] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:24:07.301] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:24:07.301] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:24:07.301] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is  -0.000000   0.000000  -0.000000
+[Jul 10 2024 11:24:07.301] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:24:07.301] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:24:07.320] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.036890
+[Jul 10 2024 11:24:07.322] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001802
+[Jul 10 2024 11:24:07.325] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:24:07.325] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:24:07.325] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.485854  -0.824648   0.338794
+[Jul 10 2024 11:24:07.325] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:24:07.325] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.485854   0.824648  -0.338794
+[Jul 10 2024 11:24:07.325] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.052645
+[Jul 10 2024 11:24:07.325] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.042502
+[Jul 10 2024 11:24:07.326] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:24:07.326] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:24:07.326] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:24:07.399] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:24:07.399] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:24:07.399] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:24:07.399] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:24:07.431] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:24:07.431] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:24:07.431] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:24:07.432] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0338303731
+[Jul 10 2024 11:24:07.432] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 5
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.601868291138        198.235831694026     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:24:07.612] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:24:47.413] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:25:27.522] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:25:27.592] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:25:27.690] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.311224
+[Jul 10 2024 11:25:27.693] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:25:27.693] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:25:27.693] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:25:27.693] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:25:27.693] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:25:27.693] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:25:27.712] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.032523
+[Jul 10 2024 11:25:27.714] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001450
+[Jul 10 2024 11:25:27.717] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:25:27.717] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:25:27.717] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.484630  -0.443036  -0.041594
+[Jul 10 2024 11:25:27.717] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:25:27.717] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.484630   0.443036   0.041594
+[Jul 10 2024 11:25:27.717] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.045060
+[Jul 10 2024 11:25:27.717] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.033944
+[Jul 10 2024 11:25:27.717] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:25:27.717] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:25:27.717] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:25:27.790] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:25:27.790] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:25:27.790] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:25:27.790] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:25:27.823] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:25:27.823] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:25:27.823] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:25:27.824] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0282073292
+[Jul 10 2024 11:25:27.824] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 6
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    201.715176060989        199.378454825122     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:25:28.004] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:26:08.253] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:26:47.921] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:26:47.990] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:26:48.087] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.401799
+[Jul 10 2024 11:26:48.089] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:26:48.089] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:26:48.089] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:26:48.089] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is  -0.000000   0.000000  -0.000000
+[Jul 10 2024 11:26:48.089] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:26:48.089] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:26:48.106] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.035840
+[Jul 10 2024 11:26:48.107] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001478
+[Jul 10 2024 11:26:48.110] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:26:48.111] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:26:48.111] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.698149  -0.568620  -0.129529
+[Jul 10 2024 11:26:48.111] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:26:48.111] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.698149   0.568620   0.129529
+[Jul 10 2024 11:26:48.111] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.020818
+[Jul 10 2024 11:26:48.111] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.022972
+[Jul 10 2024 11:26:48.111] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:26:48.111] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:26:48.111] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:26:48.186] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:26:48.186] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:26:48.186] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:26:48.186] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:26:48.219] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:26:48.219] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:26:48.219] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:26:48.219] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0155008943
+[Jul 10 2024 11:26:48.219] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 7
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    196.260214960830        193.798259169141     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:26:48.398] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:27:27.988] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:28:07.784] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:28:07.855] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:28:07.951] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.368734
+[Jul 10 2024 11:28:07.954] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:28:07.954] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:28:07.954] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:28:07.954] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is  -0.000000   0.000000  -0.000000
+[Jul 10 2024 11:28:07.954] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:28:07.954] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:28:07.973] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.033853
+[Jul 10 2024 11:28:07.975] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001399
+[Jul 10 2024 11:28:07.978] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:28:07.978] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:28:07.978] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.601971  -0.576261  -0.025709
+[Jul 10 2024 11:28:07.978] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:28:07.978] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.601971   0.576261   0.025709
+[Jul 10 2024 11:28:07.978] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.004997
+[Jul 10 2024 11:28:07.978] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.004027
+[Jul 10 2024 11:28:07.978] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:28:07.979] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:28:07.979] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:28:08.053] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:28:08.053] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:28:08.053] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:28:08.053] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:28:08.086] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:28:08.086] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:28:08.086] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:28:08.086] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0032086451
+[Jul 10 2024 11:28:08.086] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 8
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    199.012108679905        196.616364542476     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:28:08.266] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:28:48.084] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:29:28.116] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:29:28.186] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:29:28.282] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.370229
+[Jul 10 2024 11:29:28.285] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:29:28.285] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:29:28.285] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:29:28.285] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:29:28.285] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:29:28.285] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:29:28.304] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.032004
+[Jul 10 2024 11:29:28.305] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001261
+[Jul 10 2024 11:29:28.309] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:29:28.309] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:29:28.309] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.565426  -0.574094   0.008668
+[Jul 10 2024 11:29:28.309] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:29:28.309] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.565426   0.574094  -0.008668
+[Jul 10 2024 11:29:28.309] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.006711
+[Jul 10 2024 11:29:28.309] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.001490
+[Jul 10 2024 11:29:28.309] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:29:28.309] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:29:28.309] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:29:28.384] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:29:28.384] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:29:28.384] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:29:28.384] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:29:28.417] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:29:28.417] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:29:28.417] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:29:28.417] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0034370256
+[Jul 10 2024 11:29:28.417] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 9
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.552036803515        198.193227830033     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:29:28.596] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:30:08.246] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:30:48.125] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:30:48.195] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:30:48.302] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.371712
+[Jul 10 2024 11:30:48.305] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:30:48.305] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:30:48.305] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:30:48.305] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:30:48.305] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:30:48.305] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:30:48.324] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.031064
+[Jul 10 2024 11:30:48.326] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001174
+[Jul 10 2024 11:30:48.329] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:30:48.329] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:30:48.329] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.554684  -0.568822   0.014138
+[Jul 10 2024 11:30:48.329] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:30:48.329] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.554684   0.568822  -0.014138
+[Jul 10 2024 11:30:48.329] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.006494
+[Jul 10 2024 11:30:48.329] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.002337
+[Jul 10 2024 11:30:48.329] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:30:48.329] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:30:48.329] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:30:48.400] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:30:48.400] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:30:48.400] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:30:48.400] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:30:48.433] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:30:48.433] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:30:48.433] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:30:48.434] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0034509282
+[Jul 10 2024 11:30:48.434] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 10
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    201.048021376987        198.700740290384     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:30:48.614] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:31:29.913] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:32:11.252] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:32:11.322] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:32:11.429] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.372814
+[Jul 10 2024 11:32:11.432] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:32:11.432] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:32:11.432] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:32:11.432] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:32:11.432] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:32:11.432] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:32:11.451] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030714
+[Jul 10 2024 11:32:11.452] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001127
+[Jul 10 2024 11:32:11.456] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:32:11.456] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:32:11.456] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.554785  -0.555653   0.000869
+[Jul 10 2024 11:32:11.456] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:32:11.456] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.554785   0.555653  -0.000869
+[Jul 10 2024 11:32:11.456] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.004822
+[Jul 10 2024 11:32:11.456] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.001982
+[Jul 10 2024 11:32:11.456] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:32:11.456] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:32:11.456] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:32:11.527] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:32:11.527] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:32:11.527] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:32:11.527] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:32:11.560] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:32:11.560] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:32:11.560] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:32:11.560] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0026066755
+[Jul 10 2024 11:32:11.560] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 11
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    201.075806569801        198.728436968751     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:32:11.741] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:32:53.479] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:33:33.779] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:33:33.849] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:33:33.952] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375131
+[Jul 10 2024 11:33:33.954] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:33:33.954] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:33:33.954] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:33:33.954] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:33:33.954] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:33:33.954] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:33:33.970] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030655
+[Jul 10 2024 11:33:33.972] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001070
+[Jul 10 2024 11:33:33.975] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:33:33.975] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:33:33.975] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.562523  -0.557283  -0.005240
+[Jul 10 2024 11:33:33.975] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:33:33.975] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.562523   0.557283   0.005240
+[Jul 10 2024 11:33:33.975] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000519
+[Jul 10 2024 11:33:33.975] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000767
+[Jul 10 2024 11:33:33.976] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:33:33.976] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:33:33.976] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:33:34.049] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:33:34.049] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:33:34.049] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:33:34.049] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:33:34.082] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:33:34.082] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:33:34.082] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:33:34.082] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0004630580
+[Jul 10 2024 11:33:34.082] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 12
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.797556664617        198.441383141621     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:33:34.261] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:34:13.275] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:34:52.379] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:34:52.449] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:34:52.546] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375004
+[Jul 10 2024 11:34:52.549] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:34:52.549] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:34:52.549] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:34:52.549] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:34:52.549] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:34:52.549] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:34:52.568] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030598
+[Jul 10 2024 11:34:52.569] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001064
+[Jul 10 2024 11:34:52.573] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:34:52.573] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:34:52.573] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.561828  -0.559807  -0.002022
+[Jul 10 2024 11:34:52.573] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:34:52.573] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.561828   0.559807   0.002022
+[Jul 10 2024 11:34:52.573] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000329
+[Jul 10 2024 11:34:52.573] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000639
+[Jul 10 2024 11:34:52.573] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:34:52.573] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:34:52.573] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:34:52.647] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:34:52.647] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:34:52.647] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:34:52.647] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:34:52.680] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:34:52.680] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:34:52.680] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:34:52.681] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0003594054
+[Jul 10 2024 11:34:52.681] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 13
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.815630324429        198.460024406945     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:34:52.861] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:35:31.932] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:36:10.885] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:36:11.016] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:36:11.119] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375156
+[Jul 10 2024 11:36:11.121] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:36:11.121] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:36:11.122] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:36:11.122] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:36:11.122] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:36:11.122] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:36:11.141] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030490
+[Jul 10 2024 11:36:11.142] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001053
+[Jul 10 2024 11:36:11.145] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:36:11.145] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:36:11.145] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559405  -0.559637   0.000232
+[Jul 10 2024 11:36:11.145] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:36:11.145] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559405   0.559637  -0.000232
+[Jul 10 2024 11:36:11.146] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000200
+[Jul 10 2024 11:36:11.146] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000481
+[Jul 10 2024 11:36:11.146] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:36:11.146] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:36:11.146] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:36:11.209] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:36:11.209] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:36:11.209] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:36:11.209] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:36:11.242] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:36:11.242] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:36:11.242] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:36:11.242] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0002604685
+[Jul 10 2024 11:36:11.242] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 14
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.912796813983        198.559596177636     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:36:11.423] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:36:50.674] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:37:29.928] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:37:29.998] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:37:30.095] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375291
+[Jul 10 2024 11:37:30.098] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:37:30.098] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:37:30.098] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:37:30.098] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:37:30.098] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:37:30.098] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:37:30.117] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030464
+[Jul 10 2024 11:37:30.119] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001051
+[Jul 10 2024 11:37:30.122] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:37:30.122] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:37:30.122] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559524  -0.559424  -0.000100
+[Jul 10 2024 11:37:30.122] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:37:30.122] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559524   0.559424   0.000100
+[Jul 10 2024 11:37:30.122] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000170
+[Jul 10 2024 11:37:30.123] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000401
+[Jul 10 2024 11:37:30.123] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:37:30.123] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:37:30.123] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:37:30.197] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:37:30.197] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:37:30.197] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:37:30.197] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:37:30.230] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:37:30.230] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:37:30.230] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:37:30.230] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0002176897
+[Jul 10 2024 11:37:30.230] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 15
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.913727206748        198.560482385440     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:37:30.411] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:38:10.356] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:38:50.445] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:38:50.515] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:38:50.612] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375643
+[Jul 10 2024 11:38:50.614] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:38:50.614] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:38:50.615] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:38:50.615] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:38:50.615] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:38:50.615] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:38:50.633] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030508
+[Jul 10 2024 11:38:50.635] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001052
+[Jul 10 2024 11:38:50.638] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:38:50.638] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:38:50.638] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.561263  -0.559741  -0.001523
+[Jul 10 2024 11:38:50.638] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:38:50.638] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.561263   0.559741   0.001523
+[Jul 10 2024 11:38:50.638] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000170
+[Jul 10 2024 11:38:50.638] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000150
+[Jul 10 2024 11:38:50.638] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:38:50.638] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:38:50.638] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:38:50.713] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:38:50.713] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:38:50.713] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:38:50.713] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:38:50.746] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:38:50.746] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:38:50.746] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:38:50.746] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0001132725
+[Jul 10 2024 11:38:50.746] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 16
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.851070938914        198.496127910624     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:38:50.926] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:39:31.421] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:40:12.009] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:40:12.079] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:40:12.176] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375515
+[Jul 10 2024 11:40:12.179] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:40:12.179] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:40:12.179] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:40:12.179] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:40:12.179] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:40:12.179] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:40:12.198] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030496
+[Jul 10 2024 11:40:12.199] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001051
+[Jul 10 2024 11:40:12.203] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:40:12.203] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:40:12.203] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.560564  -0.559919  -0.000645
+[Jul 10 2024 11:40:12.203] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:40:12.203] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.560564   0.559919   0.000645
+[Jul 10 2024 11:40:12.203] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000061
+[Jul 10 2024 11:40:12.203] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000083
+[Jul 10 2024 11:40:12.203] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:40:12.203] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:40:12.203] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:40:12.277] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:40:12.277] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:40:12.277] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:40:12.277] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:40:12.310] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:40:12.310] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:40:12.310] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:40:12.311] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000514912
+[Jul 10 2024 11:40:12.311] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 17
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.874447753737        198.520163753600     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:40:12.491] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:40:52.791] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:41:33.860] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:41:33.931] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:41:34.027] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375549
+[Jul 10 2024 11:41:34.030] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:41:34.030] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:41:34.030] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:41:34.030] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:41:34.030] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:41:34.030] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:41:34.049] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030480
+[Jul 10 2024 11:41:34.051] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001050
+[Jul 10 2024 11:41:34.054] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:41:34.054] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:41:34.054] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.560181  -0.559983  -0.000198
+[Jul 10 2024 11:41:34.054] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:41:34.054] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.560181   0.559983   0.000198
+[Jul 10 2024 11:41:34.054] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000024
+[Jul 10 2024 11:41:34.054] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000070
+[Jul 10 2024 11:41:34.054] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:41:34.054] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:41:34.054] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:41:34.129] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:41:34.129] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:41:34.129] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:41:34.129] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:41:34.162] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:41:34.162] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:41:34.162] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:41:34.162] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000372337
+[Jul 10 2024 11:41:34.162] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 18
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.890701530097        198.536827740554     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:41:34.341] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:42:14.664] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:42:55.138] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:42:55.208] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:42:55.305] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375577
+[Jul 10 2024 11:42:55.308] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:42:55.308] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:42:55.308] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:42:55.308] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:42:55.308] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:42:55.308] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:42:55.327] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030470
+[Jul 10 2024 11:42:55.329] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001049
+[Jul 10 2024 11:42:55.332] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:42:55.332] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:42:55.332] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.560004  -0.559970  -0.000034
+[Jul 10 2024 11:42:55.332] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:42:55.332] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.560004   0.559970   0.000034
+[Jul 10 2024 11:42:55.332] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000027
+[Jul 10 2024 11:42:55.332] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000064
+[Jul 10 2024 11:42:55.332] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:42:55.332] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:42:55.332] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:42:55.406] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:42:55.406] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:42:55.406] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:42:55.406] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:42:55.439] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:42:55.439] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:42:55.439] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:42:55.439] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000347792
+[Jul 10 2024 11:42:55.439] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 19
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.898598643455        198.544920310318     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:42:55.619] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:43:35.298] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:44:15.089] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:44:15.159] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:44:15.266] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375592
+[Jul 10 2024 11:44:15.269] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:44:15.269] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:44:15.269] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:44:15.269] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:44:15.269] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:44:15.269] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:44:15.288] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030466
+[Jul 10 2024 11:44:15.290] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001049
+[Jul 10 2024 11:44:15.293] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:44:15.293] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:44:15.293] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559983  -0.559836  -0.000147
+[Jul 10 2024 11:44:15.293] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:44:15.293] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559983   0.559836   0.000147
+[Jul 10 2024 11:44:15.293] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000025
+[Jul 10 2024 11:44:15.293] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000058
+[Jul 10 2024 11:44:15.293] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:44:15.293] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:44:15.293] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:44:15.364] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:44:15.364] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:44:15.364] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:44:15.364] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:44:15.397] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:44:15.397] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:44:15.397] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:44:15.397] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000314927
+[Jul 10 2024 11:44:15.397] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 20
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.899950539080        198.546303166385     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:44:15.577] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:44:55.490] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:45:35.436] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:45:35.506] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:45:35.613] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375685
+[Jul 10 2024 11:45:35.615] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:45:35.615] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:45:35.615] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:45:35.615] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:45:35.615] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:45:35.615] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:45:35.635] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030470
+[Jul 10 2024 11:45:35.636] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001049
+[Jul 10 2024 11:45:35.640] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:45:35.640] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:45:35.640] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.560155  -0.559909  -0.000246
+[Jul 10 2024 11:45:35.640] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:45:35.640] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.560155   0.559909   0.000246
+[Jul 10 2024 11:45:35.640] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000035
+[Jul 10 2024 11:45:35.640] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000038
+[Jul 10 2024 11:45:35.640] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:45:35.640] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:45:35.640] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:45:35.711] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:45:35.711] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:45:35.711] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:45:35.711] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:45:35.744] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:45:35.744] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:45:35.744] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:45:35.744] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000255080
+[Jul 10 2024 11:45:35.744] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 21
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.894523634433        198.540734935212     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:45:35.924] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:46:15.435] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:46:54.936] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:46:55.005] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:46:55.112] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375656
+[Jul 10 2024 11:46:55.115] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:46:55.115] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:46:55.115] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:46:55.115] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:46:55.115] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:46:55.115] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:46:55.131] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030468
+[Jul 10 2024 11:46:55.133] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001049
+[Jul 10 2024 11:46:55.136] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:46:55.136] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:46:55.136] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.560060  -0.559953  -0.000107
+[Jul 10 2024 11:46:55.136] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:46:55.136] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.560060   0.559953   0.000107
+[Jul 10 2024 11:46:55.136] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000014
+[Jul 10 2024 11:46:55.136] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000011
+[Jul 10 2024 11:46:55.136] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:46:55.136] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:46:55.136] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:46:55.208] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:46:55.208] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:46:55.208] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:46:55.208] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:46:55.241] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:46:55.241] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:46:55.241] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:46:55.241] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000086746
+[Jul 10 2024 11:46:55.241] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 22
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.897651339731        198.543946761117     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:46:55.421] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:47:35.041] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:48:14.615] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:48:14.684] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:48:14.781] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375650
+[Jul 10 2024 11:48:14.784] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:48:14.784] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:48:14.784] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:48:14.784] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:48:14.784] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:48:14.784] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:48:14.803] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030464
+[Jul 10 2024 11:48:14.805] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001049
+[Jul 10 2024 11:48:14.808] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:48:14.808] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:48:14.808] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559973  -0.559950  -0.000023
+[Jul 10 2024 11:48:14.808] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:48:14.808] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559973   0.559950   0.000023
+[Jul 10 2024 11:48:14.808] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000003
+[Jul 10 2024 11:48:14.808] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000009
+[Jul 10 2024 11:48:14.808] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:48:14.808] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:48:14.808] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:48:14.883] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:48:14.883] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:48:14.883] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:48:14.883] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:48:14.916] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:48:14.916] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:48:14.916] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:48:14.916] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000049146
+[Jul 10 2024 11:48:14.916] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 23
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.901055313270        198.547437193145     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:48:15.095] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:48:55.059] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:49:35.025] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:49:35.094] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:49:35.190] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375656
+[Jul 10 2024 11:49:35.193] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:49:35.193] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:49:35.193] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:49:35.193] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:49:35.193] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:49:35.193] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:49:35.209] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030463
+[Jul 10 2024 11:49:35.211] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001049
+[Jul 10 2024 11:49:35.214] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:49:35.214] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:49:35.214] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559960  -0.559939  -0.000021
+[Jul 10 2024 11:49:35.214] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:49:35.214] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559960   0.559939   0.000021
+[Jul 10 2024 11:49:35.214] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000003
+[Jul 10 2024 11:49:35.214] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000007
+[Jul 10 2024 11:49:35.214] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:49:35.214] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:49:35.214] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:49:35.290] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:49:35.290] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:49:35.290] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:49:35.290] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:49:35.323] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:49:35.323] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:49:35.323] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:49:35.323] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000036129
+[Jul 10 2024 11:49:35.323] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 24
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.901780643603        198.548179411111     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:49:35.501] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:50:15.252] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:50:55.727] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:50:55.797] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:50:55.894] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375667
+[Jul 10 2024 11:50:55.896] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:50:55.896] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:50:55.896] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:50:55.896] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:50:55.896] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:50:55.896] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:50:55.915] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030463
+[Jul 10 2024 11:50:55.916] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:50:55.920] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:50:55.920] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:50:55.920] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559971  -0.559945  -0.000026
+[Jul 10 2024 11:50:55.920] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:50:55.920] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559971   0.559945   0.000026
+[Jul 10 2024 11:50:55.920] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000004
+[Jul 10 2024 11:50:55.920] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000004
+[Jul 10 2024 11:50:55.920] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:50:55.920] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:50:55.920] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:50:55.994] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:50:55.995] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:50:55.995] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:50:55.995] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:50:56.028] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:50:56.028] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:50:56.028] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:50:56.028] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000025941
+[Jul 10 2024 11:50:56.028] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 25
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.901509699218        198.547900449422     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:50:56.207] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:51:36.924] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:52:17.323] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:52:17.392] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:52:17.488] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375665
+[Jul 10 2024 11:52:17.491] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:52:17.491] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:52:17.491] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:52:17.491] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:52:17.491] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:52:17.491] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:52:17.507] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030463
+[Jul 10 2024 11:52:17.509] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:52:17.512] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:52:17.512] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:52:17.512] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559962  -0.559951  -0.000012
+[Jul 10 2024 11:52:17.512] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:52:17.512] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559962   0.559951   0.000012
+[Jul 10 2024 11:52:17.512] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000002
+[Jul 10 2024 11:52:17.512] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000001
+[Jul 10 2024 11:52:17.512] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:52:17.512] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:52:17.512] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:52:17.588] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:52:17.588] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:52:17.588] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:52:17.588] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:52:17.621] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:52:17.621] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:52:17.621] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:52:17.621] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000011539
+[Jul 10 2024 11:52:17.621] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 26
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.901800883545        198.548199326723     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:52:17.799] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:52:58.771] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:53:39.256] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:53:39.326] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:53:39.422] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375664
+[Jul 10 2024 11:53:39.425] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:53:39.425] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:53:39.425] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:53:39.425] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:53:39.425] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:53:39.425] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:53:39.443] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030462
+[Jul 10 2024 11:53:39.445] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:53:39.448] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:53:39.448] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:53:39.449] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559953  -0.559951  -0.000003
+[Jul 10 2024 11:53:39.449] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:53:39.449] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559953   0.559951   0.000003
+[Jul 10 2024 11:53:39.449] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Jul 10 2024 11:53:39.449] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000001
+[Jul 10 2024 11:53:39.449] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:53:39.449] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:53:39.449] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:53:39.523] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:53:39.524] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:53:39.524] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:53:39.524] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:53:39.557] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:53:39.557] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:53:39.557] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:53:39.557] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000004514
+[Jul 10 2024 11:53:39.557] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 27
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.902136637094        198.548543445031     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:53:39.736] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:54:20.029] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:55:00.476] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:55:00.545] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:55:00.642] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375664
+[Jul 10 2024 11:55:00.645] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:55:00.645] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:55:00.645] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:55:00.645] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:55:00.645] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:55:00.645] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:55:00.663] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030462
+[Jul 10 2024 11:55:00.665] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:55:00.668] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:55:00.668] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:55:00.668] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559952  -0.559950  -0.000002
+[Jul 10 2024 11:55:00.668] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:55:00.668] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559952   0.559950   0.000002
+[Jul 10 2024 11:55:00.668] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Jul 10 2024 11:55:00.668] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000001
+[Jul 10 2024 11:55:00.668] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:55:00.668] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:55:00.668] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:55:00.743] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:55:00.743] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:55:00.743] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:55:00.743] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:55:00.776] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:55:00.776] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:55:00.776] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:55:00.776] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000003476
+[Jul 10 2024 11:55:00.776] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 28
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.902194628228        198.548602669599     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:55:00.956] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:55:41.487] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:56:22.122] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:56:22.191] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:56:22.287] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375665
+[Jul 10 2024 11:56:22.289] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:56:22.289] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:56:22.289] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:56:22.289] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:56:22.289] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:56:22.289] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:56:22.306] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030462
+[Jul 10 2024 11:56:22.307] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:56:22.311] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:56:22.311] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:56:22.311] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559955  -0.559951  -0.000004
+[Jul 10 2024 11:56:22.311] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:56:22.311] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559955   0.559951   0.000004
+[Jul 10 2024 11:56:22.311] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000001
+[Jul 10 2024 11:56:22.311] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Jul 10 2024 11:56:22.311] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:56:22.311] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:56:22.311] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:56:22.386] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:56:22.386] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:56:22.387] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:56:22.387] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:56:22.420] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:56:22.420] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:56:22.420] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:56:22.420] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000003356
+[Jul 10 2024 11:56:22.420] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 29
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.902101946073        198.548507235475     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:56:22.598] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:57:03.299] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:57:43.707] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:57:43.777] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:57:43.873] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375665
+[Jul 10 2024 11:57:43.876] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:57:43.876] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:57:43.876] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:57:43.876] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:57:43.876] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:57:43.876] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:57:43.894] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030462
+[Jul 10 2024 11:57:43.896] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:57:43.899] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:57:43.899] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:57:43.899] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559954  -0.559953  -0.000001
+[Jul 10 2024 11:57:43.899] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:57:43.899] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559954   0.559953   0.000001
+[Jul 10 2024 11:57:43.899] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Jul 10 2024 11:57:43.899] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Jul 10 2024 11:57:43.899] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:57:43.899] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:57:43.899] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:57:43.974] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:57:43.974] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:57:43.974] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:57:43.974] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:57:44.007] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:57:44.007] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:57:44.007] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:57:44.007] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000003033
+[Jul 10 2024 11:57:44.007] [self.f90:672]              [1m[32m<info> [0m[0mPerform recursion at step 30
+ Calculate ld matrix for: 
+ Atom            1 :
+ d-orbital:
+ Atom            2 :
+ No hubbard U correction
+ Calculate Hubbard U potential for:
+ Atom            1
+ d-orbital
+ (U, dc) =    200.902103396686        198.548508747839     
+ Atom            2
+ No Hubbard U correction.
+ Add Hubbard U correction onto on-site Hamiltonian for d-orbital
+[Jul 10 2024 11:57:44.187] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Jul 10 2024 11:58:24.698] [recursion.f90:1637]        [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Jul 10 2024 11:59:05.016] [self.f90:726]              [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Jul 10 2024 11:59:05.085] [bands.f90:255]             [1m[32m<info> [0m[0mValence is:       14.000000
+[Jul 10 2024 11:59:05.182] [bands.f90:321]             [1m[32m<info> [0m[0mFree Fermi energy: -0.375664
+[Jul 10 2024 11:59:05.184] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Jul 10 2024 11:59:05.184] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:59:05.184] [bands.f90:809]             [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Jul 10 2024 11:59:05.184] [bands.f90:818]             [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Jul 10 2024 11:59:05.184] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    1 is being considered induced
+[Jul 10 2024 11:59:05.184] [mix.f90:361]               [1m[32m<info> [0m[0mSpin moment at atom    2 is being considered induced
+[Jul 10 2024 11:59:05.203] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.030462
+[Jul 10 2024 11:59:05.204] [bands.f90:872]             [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.001048
+[Jul 10 2024 11:59:05.208] [self.f90:763]              [1m[32m<info> [0m[0mMixtype is broyden
+[Jul 10 2024 11:59:05.208] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   1 is  10.000000
+[Jul 10 2024 11:59:05.208] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.559951  -0.559952   0.000001
+[Jul 10 2024 11:59:05.208] [mix.f90:406]               [1m[32m<info> [0m[0mValence at atom   2 is   4.000000
+[Jul 10 2024 11:59:05.208] [mix.f90:409]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.559951   0.559952  -0.000001
+[Jul 10 2024 11:59:05.208] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Jul 10 2024 11:59:05.208] [mix.f90:416]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Jul 10 2024 11:59:05.208] [self.f90:959]              [1m[32m<info> [0m[0mNi
+[Jul 10 2024 11:59:05.208] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.250743150832967E-004
+[Jul 10 2024 11:59:05.208] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:59:05.283] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom Ni
+[Jul 10 2024 11:59:05.283] [self.f90:959]              [1m[32m<info> [0m[0mO
+[Jul 10 2024 11:59:05.283] [self.f90:1034]             [1m[32m<info> [0m[0mXC functional: B-H 11.379424011969312E-003
+[Jul 10 2024 11:59:05.283] [self.f90:1064]             [1m[32m<info> [0m[0mF core check:0
+[Jul 10 2024 11:59:05.316] [self.f90:790]              [1m[32m<info> [0m[0mAtomic SFC done for atom O
+[Jul 10 2024 11:59:05.316] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni
+[Jul 10 2024 11:59:05.316] [self.f90:815]              [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom O
+[Jul 10 2024 11:59:05.316] [self.f90:833]              [1m[32m<info> [0m[0mNot converged! Diff= 0.0000001037
+[Jul 10 2024 11:59:05.320] [bands.f90:1319]            [1m[32m<info> [0m[0mMagnetic field on atom   1 is         0.000000         0.000000        -0.000000
+[Jul 10 2024 11:59:05.320] [bands.f90:1320]            [1m[32m<info> [0m[0mMagnetic torque on atom   1 is        -0.000000         0.000000         0.000000
+[Jul 10 2024 11:59:05.320] [bands.f90:1319]            [1m[32m<info> [0m[0mMagnetic field on atom   2 is         0.000000         0.000000        -0.000000
+[Jul 10 2024 11:59:05.320] [bands.f90:1320]            [1m[32m<info> [0m[0mMagnetic torque on atom   2 is        -0.000000         0.000000         0.000000
+[Jul 10 2024 11:59:05.320] [self.f90:873]              [1m[32m<info> [0m[0mCalculation finished. Report printed in report.out
+------------------------------------------------------------- TIMER REPORT --------------------------------------------------------------
+  CATEGORY                              MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                    -              -              -      2424.3946          100.0              1           9213   
+  └─ Calculation                           -              -              -      2424.3946          100.0              1           9212   
+     ├─ Calculation*                       -              -              -         1.2401            0.1              -              1   
+     ├─ pre-processing                     -              -              -         2.3137            0.1              1              1   
+     └─ self-consistency                   -              -              -      2420.8408           99.9              1           9210   
+        ├─ self-consistency*               -              -              -         0.0251            0.0              -              1   
+        ├─ recursion                       -              -              -      2411.7085           99.5              1           9120   
+        │  ├─ recursion*                   -              -              -        13.5710            0.6              -             30   
+        │  ├─ <PSI_0|PSI_0>           0.0001         0.0002         0.0001         0.0056            0.0             60             60   
+        │  ├─ <PSI_0|PSI_1>           0.1254         0.1413         0.1156         7.5266            0.3             60             60   
+        │  └─ <PSI_0|PSI_n>           0.2656         0.4959         0.1335      2390.6053           98.6           9000           9000   
+        ├─ calculation-of-DOS         0.1970         0.2601         0.1850         5.9108            0.2             30             30   
+        └─ atomic-sfc                 0.1065         0.1111         0.0962         3.1964            0.1             30             30   
+----------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+----------------------------------------------------------------------------------------------------------------------------------------
