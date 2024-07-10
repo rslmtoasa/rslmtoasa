@@ -334,19 +334,32 @@ contains
             print *, ''
             print *,''
             print *, '----------------------------------------------------------------------------------------'
-            print *, 'No input values for Hubbard U+J found on atom ', i, ', setting default values.'
+            print *, 'No input values for Hubbard U+J specified for atom ', i, ', setting default values.'
             print *, '----------------------------------------------------------------------------------------'
          else if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
             print *, ''
             print *,''
             print *, '----------------------------------------------------------------------------------------'
-            print *, 'No input values for Hubbard U found on atom ', i, ', setting default values.'
+            print *, 'No input values for Hubbard U specified for atom ', i, ', setting default values of zero.'
             print *, '----------------------------------------------------------------------------------------'
+         ! Also if only U or J value is unspecified when orbital and J or U is, default value is set.
          else if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardJ_check) then
             print *, ''
             print *,''
             print *, '----------------------------------------------------------------------------------------'
-            print *, 'No input values for Hubbard J found on atom ', i, ', setting default values.'
+            print *, 'No input values for Hubbard J specified for atom ', i, ', setting default values of zero.'
+            print *, '----------------------------------------------------------------------------------------'
+         else if (len_trim(this%hubbard_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) /= 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0) then
+            print *, ''
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'No J parameter specified for atom ', i, ', setting default value of zero.'
+            print *, '----------------------------------------------------------------------------------------'
+         else if (len_trim(this%hubbard_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) /= 0) then
+            print *, ''
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'No U parameter specified for atom ', i, ', setting default value of zero'
             print *, '----------------------------------------------------------------------------------------'
          else
             ! Checks if number of orbitals are more than the maximum allowed 
