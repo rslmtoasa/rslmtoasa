@@ -397,107 +397,112 @@ contains
       end do
 
       ! !> Print Hubbard U+J info
-         if (this%hubbardU_check .and. this%hubbardJ_check) then 
-            if (implem_check) then
-               print *,''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Stored input values for LDA+U+J'
-               print *, '----------------------------------------------------------------------------------------'
+      if (this%hubbardU_check .and. this%hubbardJ_check) then 
+         if (implem_check) then
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'Stored input values for LDA+U+J'
+            print *, '----------------------------------------------------------------------------------------'
+            do i = 1, this%lattice%nrec
+               print *, 'Atom ', i, ':'
+               do j = 1, max_orbs
+                  print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
+               end do
+            end do
+            print *, ''
+            print *, 'Hubbard U+J input data implemented successfully, proceeding...'
+            print *, '----------------------------------------------------------------------------------------'
+
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'Slater Integrals (implemented for d and f orbitals).'
+            print *, '----------------------------------------------------------------------------------------'
+            do i = 1, this%lattice%nrec
+               print *, 'Atom ', i, ':'
+               do j = 1, max_orbs
+                  ! For d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~ 0.625
+                  if (this%hubbard_orb(i)(j:j) == 'd') then
+                     this%F0(i,j) = this%hubbard_u(i,j)
+                     this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
+                     this%F4(i,j) = 0.625*this%F2(i,j) 
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
+                  ! For f orbitals, the Stoner J is J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
+                  else if (this%hubbard_orb(i)(j:j) == 'f') then
+                     this%F0(i,j) = this%hubbard_u(i,j)
+                     this%F2(i,j) = 6435*this%hubbard_j(i,j) /(286 + 195*0.67 + 250*0.49)
+                     this%F4(i,j) = 0.67*this%F2(i,j)
+                     this%F6(i,j) = 0.49*this%F2(i,j)
+                     call g_logger%error('f orbitals need their corresponding orbital basis.', __FILE__, __LINE__)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F6 = ', this%F6(i,j)
+                  else if (len_trim(this%hubbard_orb(i)) /= 0) then
+                     call g_logger%error('Only d and f orbitals have implemented Slater integrals.', __FILE__, __LINE__)
+                     error stop
+                  end if
+               end do
+            end do
+            print *, '----------------------------------------------------------------------------------------'
+         else 
+            call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
+            error stop
+         end if      
+         
+      else if (this%hubbardU_check) then
+         if (implem_check) then
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'Stored input values for LDA+U'
+            print *, '----------------------------------------------------------------------------------------'
                do i = 1, this%lattice%nrec
                   print *, 'Atom ', i, ':'
                   do j = 1, max_orbs
-                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.'
                   end do
                end do
                print *, ''
-               print *, 'Hubbard U+J input data implemented successfully, proceeding...'
+               print *, 'Hubbard U (no J) input data implemented successfully, proceeding...'
                print *, '----------------------------------------------------------------------------------------'
+         else 
+            call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
+               error stop
+         end if       
 
-               print *,''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Slater Integrals (implemented for d and f orbitals).'
-               print *, '----------------------------------------------------------------------------------------'
+      else if (this%hubbardJ_check) then 
+         if (implem_check) then
+            print *,''
+            print *, '----------------------------------------------------------------------------------------'
+            print *, 'Stored input values for LDA+J'
+            print *, '----------------------------------------------------------------------------------------'
                do i = 1, this%lattice%nrec
                   print *, 'Atom ', i, ':'
                   do j = 1, max_orbs
-                     ! For d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~ 0.625
-                     if (this%hubbard_orb(i)(j:j) == 'd') then
-                        this%F0(i,j) = this%hubbard_u(i,j)
-                        this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
-                        this%F4(i,j) = 0.625*this%F2(i,j) 
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
-                     ! For f orbitals, the Stoner J is J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
-                     else if (this%hubbard_orb(i)(j:j) == 'f') then
-                        this%F0(i,j) = this%hubbard_u(i,j)
-                        this%F2(i,j) = 6435*this%hubbard_j(i,j) /(286 + 195*0.67 + 250*0.49)
-                        this%F4(i,j) = 0.67*this%F2(i,j)
-                        this%F6(i,j) = 0.49*this%F2(i,j)
-                        call g_logger%error('f orbitals need its corresponding orbital basis.', __FILE__, __LINE__)
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F6 = ', this%F6(i,j)
-                     else if (len_trim(this%hubbard_orb(i)) /= 0) then
-                        call g_logger%error('Only d and f orbitals have implemented Slater integrals.', __FILE__, __LINE__)
-                        error stop
-                     end if
+                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
                   end do
                end do
-               print *, '----------------------------------------------------------------------------------------'
-            else 
-               call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-               error stop
-            end if      
-            
-         else if (this%hubbardU_check) then
-            if (implem_check) then
-               print *,''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Stored input values for LDA+U'
-               print *, '----------------------------------------------------------------------------------------'
-                  do i = 1, this%lattice%nrec
-                     print *, 'Atom ', i, ':'
-                     do j = 1, max_orbs
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.'
-                     end do
-                  end do
-                  print *, ''
-                  print *, 'Hubbard U (no J) input data implemented successfully, proceeding...'
-                  print *, '----------------------------------------------------------------------------------------'
-            else 
-               call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-                  error stop
-            end if       
-
-         else if (this%hubbardJ_check) then 
-            if (implem_check) then
-               print *,''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Stored input values for LDA+J'
-               print *, '----------------------------------------------------------------------------------------'
-                  do i = 1, this%lattice%nrec
-                     print *, 'Atom ', i, ':'
-                     do j = 1, max_orbs
-                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
-                     end do
-                  end do
-                  print *, ''
-                  print *, 'Hubbard J (no U) input data implemented successfully, proceeding...'
-               print *, '----------------------------------------------------------------------------------------'
-            else 
-               call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-               error stop
-            end if
-
-         else
-            print *, ''
-            print *,''
+               print *, ''
+               print *, 'Hubbard J (no U) input data implemented successfully, proceeding...'
             print *, '----------------------------------------------------------------------------------------'
-            print *, 'No Hubbard U+J data was given as input, proceeding without.'
-            print *, '----------------------------------------------------------------------------------------'
+         else 
+            call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
+            error stop
          end if
+
+      else
+         print *, ''
+         print *,''
+         print *, '----------------------------------------------------------------------------------------'
+         print *, 'No Hubbard U+J data was given as input, proceeding without.'
+         print *, '----------------------------------------------------------------------------------------'
+      end if
+
+      ! Converting the Hubbard U and J values to Ry from eV
+      this%hubbard_u = this%hubbard_u/ry2ev
+      this%hubbard_j = this%hubbard_j/ry2ev
+      
       ! ---------------------------------------------------------------------------------------------------------------------
 
    end subroutine build_from_file
