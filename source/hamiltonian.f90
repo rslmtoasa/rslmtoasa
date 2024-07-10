@@ -413,7 +413,6 @@ contains
                print *, 'Hubbard U+J input data implemented successfully, proceeding...'
                print *, '----------------------------------------------------------------------------------------'
 
-               ! For d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~ 0.625
                print *,''
                print *, '----------------------------------------------------------------------------------------'
                print *, 'Slater Integrals (implemented for d and f orbitals).'
@@ -421,18 +420,29 @@ contains
                do i = 1, this%lattice%nrec
                   print *, 'Atom ', i, ':'
                   do j = 1, max_orbs
-                     ! if (this%hubbard_orb(i)(j:j) == 'd') then
-                     this%F0(i,j) = this%hubbard_u(i,j)
-                     this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
-                     this%F4(i,j) = 0.625*this%F2(i,j) 
-                     ! else if (this%hubbard_orb(i)(j:j) == 'f') then
-                     !    this%F0(i,j) = this%hubbard_u(i,j)
-                     !    this%F2(i,j) = 1.0
-                     !    this%F4(i,j) = 1.0
-                     ! end if
-                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
-                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
-                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
+                     ! For d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~ 0.625
+                     if (this%hubbard_orb(i)(j:j) == 'd') then
+                        this%F0(i,j) = this%hubbard_u(i,j)
+                        this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
+                        this%F4(i,j) = 0.625*this%F2(i,j) 
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
+                     ! For f orbitals, the Stoner J is J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
+                     else if (this%hubbard_orb(i)(j:j) == 'f') then
+                        this%F0(i,j) = this%hubbard_u(i,j)
+                        this%F2(i,j) = 6435*this%hubbard_j(i,j) /(286 + 195*0.67 + 250*0.49)
+                        this%F4(i,j) = 0.67*this%F2(i,j)
+                        this%F6(i,j) = 0.49*this%F2(i,j)
+                        call g_logger%error('f orbitals need its corresponding orbital basis.', __FILE__, __LINE__)
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
+                        print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F6 = ', this%F6(i,j)
+                     else if (len_trim(this%hubbard_orb(i)) /= 0) then
+                        call g_logger%error('Only d and f orbitals have implemented Slater integrals.', __FILE__, __LINE__)
+                        error stop
+                     end if
                   end do
                end do
                print *, '----------------------------------------------------------------------------------------'
