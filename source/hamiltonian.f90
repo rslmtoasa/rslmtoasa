@@ -85,7 +85,7 @@ module hamiltonian_mod
       real(rp), dimension(:,:), allocatable :: hubbard_u
       real(rp), dimension(:,:), allocatable :: hubbard_j
       !> Orbitals for Hubbard U
-      character(len=3), dimension(:), allocatable :: hubbard_orb
+      character(len=10), dimension(:), allocatable :: hubbard_orb
       !> Slater integral arrays
       real(rp), dimension(:,:), allocatable :: F0, F2, F4, F6
       !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
@@ -244,6 +244,12 @@ contains
          allocate(this%F2(this%lattice%nrec, max_orbs))
          allocate(this%F4(this%lattice%nrec, max_orbs))
          allocate(this%F6(this%lattice%nrec, max_orbs))
+         hubbard_u(:,:) = 0.0d0
+         hubbard_j(:,:) = 0.0d0
+         this%F0(:,:) = 0.0d0
+         this%F2(:,:) = 0.0d0
+         this%F4(:,:) = 0.0d0
+         this%F6(:,:) = 0.0d0
       end if
 
       rewind (funit)
@@ -261,7 +267,6 @@ contains
       call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_j, this%hubbard_j)
       call move_alloc(hubbard_orb, this%hubbard_orb)
-
 
       !Saves the Hubbard U orbital configuration in a variable
       do i = 1, this%lattice%nrec
@@ -349,18 +354,34 @@ contains
             print *, '----------------------------------------------------------------------------------------'
             print *, 'No input values for Hubbard J specified for atom ', i, ', setting default values of zero.'
             print *, '----------------------------------------------------------------------------------------'
-         else if (len_trim(this%hubbard_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) /= 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0) then
-            print *, ''
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'No J parameter specified for atom ', i, ', setting default value of zero.'
-            print *, '----------------------------------------------------------------------------------------'
-         else if (len_trim(this%hubbard_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) /= 0) then
-            print *, ''
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'No U parameter specified for atom ', i, ', setting default value of zero'
-            print *, '----------------------------------------------------------------------------------------'
+         else if (len_trim(this%hubbard_orb(i)) /= 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) /= 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
+            if (len_trim(this%hubbard_orb(i)) == count(this%hubbard_u(i,:) > 1.0E-10)) then
+               print *, ''
+               print *,''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'No J parameter specified for atom ', i, ', setting default value of zero.'
+               print *, '----------------------------------------------------------------------------------------'
+            else 
+               implem_check = .false.
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Number of orbitals and Hubbard U parameters for atom', i, ' disagrees.'
+               print *, '----------------------------------------------------------------------------------------'
+            end if
+         else if (len_trim(this%hubbard_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) /= 0 .and. this%hubbardJ_check) then
+            if (len_trim(this%hubbard_orb(i)) == count(this%hubbard_j(i,:) > 1.0E-10)) then
+               print *, ''
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'No U parameter specified for atom ', i, ', setting default value of zero'
+               print *, '----------------------------------------------------------------------------------------'
+            else 
+               implem_check = .false.
+               print *, ''
+               print *, '----------------------------------------------------------------------------------------'
+               print *, 'Number of orbitals and Hubbard J parameters for atom', i, ' disagrees.'
+               print *, '----------------------------------------------------------------------------------------'
+            end if
          else
             ! Checks if number of orbitals are more than the maximum allowed 
             if (len_trim(this%hubbard_orb(i)) > max_orbs) then
@@ -396,18 +417,6 @@ contains
             end if
          end if
       end do outer
-
-      ! Forces too small entries to zero
-      do i = 1, this%lattice%nrec
-         do j = 1, size(this%hubbard_u(i,:))
-            if (this%hubbard_u(i,j) < 1.0E-10) then
-               this%hubbard_u(i,j) = 0.0d0
-            end if
-            if (this%hubbard_j(i,j) < 1.0E-10) then
-               this%hubbard_j(i,j) = 0.0d0
-            end if
-         end do
-      end do
 
       ! !> Print Hubbard U+J info
       if (this%hubbardU_check .and. this%hubbardJ_check) then 
