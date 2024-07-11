@@ -383,16 +383,8 @@ contains
                print *, '----------------------------------------------------------------------------------------'
             end if
          else
-            ! Checks if number of orbitals are more than the maximum allowed 
-            if (len_trim(this%hubbard_orb(i)) > max_orbs) then
-               implem_check = .false. ! Too many orbs
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Error, too many orbitals.'
-               print *, '----------------------------------------------------------------------------------------'
-
             ! If the number of orbitals and Hubbard U parameters per atom in input file disagree, then a raised error is prompted
-            else if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%hubbard_orb(i))) then
+            if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%hubbard_orb(i))) then
                implem_check = .false.
                print *, ''
                print *, '----------------------------------------------------------------------------------------'
@@ -406,19 +398,11 @@ contains
                print *, '----------------------------------------------------------------------------------------'
                print *, 'Number of orbitals and Hubbard J parameters for atom', i, ' disagrees.'
                print *, '----------------------------------------------------------------------------------------'
-
-            ! Checks if for each Hubbard U there is a Hubbard J if Hubbard U+J is in use
-            else if (count(this%hubbard_u(i,:) > 1.0E-10) /= count(this%hubbard_j(i,:) > 1.0E-10)) then 
-               implem_check = .false.
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Not as many Hubbard U as J parameters are specified.'
-               print *, '----------------------------------------------------------------------------------------'
             end if
          end if
       end do outer
 
-      ! !> Print Hubbard U+J info
+      !> Print Hubbard U+J info
       if (this%hubbardU_check .and. this%hubbardJ_check) then 
          if (implem_check) then
             print *,''
@@ -515,7 +499,7 @@ contains
 
       else
          print *, ''
-         print *,''
+         print *, ''
          print *, '----------------------------------------------------------------------------------------'
          print *, 'No Hubbard U+J data was given as input, proceeding without.'
          print *, '----------------------------------------------------------------------------------------'
