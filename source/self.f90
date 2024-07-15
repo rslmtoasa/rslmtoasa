@@ -677,7 +677,7 @@ contains
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
             if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i .gt. 1) then
-               ! Initiate the LDA+U method
+               ! Initiate the LDA+U+J method
                call this%bands%build_hubbard_pot() ! Build the Hubbard U potential matrix
             end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
@@ -824,7 +824,7 @@ contains
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
 
             if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i == 1) then
-               call g_logger%info('LDA+U module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
+               call g_logger%info('LDA+U+J module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
                niter = niter + 1
             else
                exit

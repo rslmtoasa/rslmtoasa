@@ -96,8 +96,10 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
-      procedure :: calculate_local_density_matrix ! LDA+U method
-      procedure :: build_hubbard_pot ! LDA+U method
+      procedure :: calculate_local_density_matrix ! LDA+U+J method
+      ! procedure :: calculate_local_density_matrix_4f ! LDA+U+J method
+      procedure :: build_hubbard_pot ! LDA+U+J
+      ! procedure :: build_hubbard_pot_4f ! LDA+U+J method
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -209,7 +211,6 @@ contains
       !Add if to check if hubbard_check = True when emil has implemented this
       allocate (this%ld_matrix(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
 #endif
-
       this%dtot(:) = 0.0d0
       this%dtotcheb(:) = 0.0d0
       this%dx(:, :) = 0.0d0
@@ -882,6 +883,7 @@ contains
    !> @brief
    !> Calculates the local density matrix used in Hubbard U correction.
    !> Implemented by Viktor Frilén 03.07.2024
+   !> For f orbitals implemented by Emil Beiersdorf on 12.07.2024
    !---------------------------------------------------------------------------
    subroutine calculate_local_density_matrix(this)
       class(bands) :: this
@@ -1062,12 +1064,15 @@ contains
 
 
    end subroutine calculate_local_density_matrix
+   
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Builds the effective single-particle potentials for the LDA+U correction. 
-   !> (Only implemented for d-orbitals!! Since only the slater integrals J0, J2 and J4 are defined)
-   !> Implemented by Viktor Frilén 03.07.2024
+   !> Builds the effective single-particle potentials for the LDA+U+J correction. 
+   !> (Only implemented for d orbitals! Only the slater integrals F0, F2, F4 and F6 are defined. 
+   !> Machinery works for f orbitals too, but the corresponding basis needs implementation.)
+   !> d orbitals implemented by Viktor Frilén 03.07.2024
+   !> f orbitals implemented by Emil Beiersdorf 15.07.2024
    !---------------------------------------------------------------------------
    subroutine build_hubbard_pot(this)
       class(bands) :: this
@@ -1129,7 +1134,7 @@ contains
                   end do
                end do
             end do
-            ! Put hubbard_pot_temp into global hubbard_pot and convert from eV to Rydberg
+            ! Put hubbard_pot_temp into global hubbard_pot
             do i = 1, 5
                do j = 1, 5
                   this%recursion%hamiltonian%hubbard_pot(4+i, 4+j, na) = hubbard_pot_temp(na, 1, 1, i, j)
@@ -1141,9 +1146,9 @@ contains
 
             print *, '(U, dc) = ', U_energy*0.5_rp, dc_energy
          else
-            print *, 'build_hubbard_pot subroutine only implemented for d-orbitals or no orbitals.'
-            print *, 'Stops program!!'
-            stop
+            print *, ''
+            call g_logger%error('build_hubbard_pot subroutine only implemented for d-orbitals or no orbitals.', __FILE__, __LINE__)
+            error stop
          end if
 
             

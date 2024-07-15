@@ -295,7 +295,7 @@ contains
 
    end function wigner3j
 
-   !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U method
+   !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U+J method
    !> Implemented by Viktor Frilén on 28.06.2024
    function a_k(k,l,m1,m2,m3,m4) result(res)
       implicit none
@@ -325,9 +325,10 @@ contains
    !    end do
    ! end function a_k
 
-   !> Calculates the matrix elements for the screened on-site Coulomb interaction used in the LDA+U method.
+   !> Calculates the matrix elements for the on-site screened Coulomb interaction and spin exchange used in the LDA+U+J method.
    !> The ordering looks weird but is now right! 
-   !> Implemented by Viktor Frilén on 03.07.2024
+   !> 3d orbitals implemented by Viktor Frilén on 03.07.2024
+   !> 4f orbitals implemented by Emil Beiersdorf on 12.07.2024
 
    function hubbard_int_matrix_3d(m1,m3,m2,m4,f0,f2,f4) result(res)
       implicit none
@@ -337,6 +338,7 @@ contains
 
       res = 0.0_rp
       res = res + a_k(0,2,m1,m2,m3,m4)*f0 + a_k(2,2,m1,m2,m3,m4)*f2 + a_k(4,2,m1,m2,m3,m4)*f4
+
    end function hubbard_int_matrix_3d
 
 

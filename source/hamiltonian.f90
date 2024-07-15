@@ -79,20 +79,21 @@ module hamiltonian_mod
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
 
-      !> On-site potential for LDA+U correction
+      !> On-site potential for LDA+U+J correction
       real(rp), dimension(:,:,:), allocatable :: hubbard_pot
-      !> Hubbard U for LDA+U implementation
+      real(rp), dimension(:,:,:), allocatable :: hubbard_pot_4f
+      !> Hubbard parameters for LDA+U+J implementation
       real(rp), dimension(:,:), allocatable :: hubbard_u
       real(rp), dimension(:,:), allocatable :: hubbard_j
       !> Orbitals for Hubbard U
       character(len=10), dimension(:), allocatable :: hubbard_orb
       !> Slater integral arrays
       real(rp), dimension(:,:), allocatable :: F0, F2, F4, F6
-      !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd. Used for iterating purposes.
+      !> Orbital configuration for Hubbard U. 1=s, 2=p, 3=d, 4=sp, 5=sd, 6=pd, 7=spd, 8=f, 9=sf, 10=df, 11=pf. Used for iterating purposes.
       integer, dimension(:), allocatable :: hubbard_orb_config
-      !> Maximum orbital number to create arrays of appropriate sizes. 0=s, 1=p, 2=d
+      !> Maximum orbital number to create arrays of appropriate sizes. 0=s, 1=p, 2=d, 3=f
       integer :: hubbard_orb_max
-      !> Maximum number of orbitals over the atoms (1 = s or p or d. 3 = spd)
+      !> Maximum number of orbitals over the atoms (1 = s or p or d or f, 3 = spd)
       integer :: hubbard_nmb_orb
       !> Logical variables to include Hubbard U & J
       logical :: hubbardU_check = .false.
@@ -189,6 +190,7 @@ contains
       if (allocated(this%F6)) deallocate (this%F6)
       if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
       if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
+      if (allocated(this%hubbard_pot_4f)) deallocate (this%hubbard_pot_4f)
 #endif
    end subroutine destructor
 
@@ -297,6 +299,22 @@ contains
             this%hubbard_orb_config(i) = 7
             this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 3)
+         else if (adjustl(this%hubbard_orb(i)) == 'f') then
+            this%hubbard_orb_config(i) = 8
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
+         else if (adjustl(this%hubbard_orb(i)) == 'sf') then
+            this%hubbard_orb_config(i) = 9
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'df') then
+            this%hubbard_orb_config(i) = 10
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
+         else if (adjustl(this%hubbard_orb(i)) == 'pf') then
+            this%hubbard_orb_config(i) = 11
+            this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
+            this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
          else
             this%hubbard_orb_config(i) = 0
          end if
@@ -305,7 +323,7 @@ contains
 
       ! ---------------------------------------------------------------------------------------------------------------------
       ! Error flags that checks if Hubbard U and/or J should be implemented, along with checking if the input data is correct 
-      ! Written by Emil Beiersdorf 09-07-2024
+      ! Written by Emil Beiersdorf 09.07.2024
 
       ! Establishes if Hubbard U should be implemented by checking if any Hubbard U is specified
       outer2 : do i = 1, this%lattice%nrec 
@@ -429,17 +447,17 @@ contains
                   ! For d orbitals, the Stoner J is J = (F2 + F4)/14 with F4/F2 ~ 0.625
                   if (this%hubbard_orb(i)(j:j) == 'd') then
                      this%F0(i,j) = this%hubbard_u(i,j)
-                     this%F2(i,j) = 14*this%hubbard_j(i,j)/1.625
-                     this%F4(i,j) = 0.625*this%F2(i,j) 
+                     this%F2(i,j) = 14.0_rp*this%hubbard_j(i,j)/1.625_rp
+                     this%F4(i,j) = 0.625_rp*this%F2(i,j) 
                      print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
                      print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
                      print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F4 = ', this%F4(i,j)
                   ! For f orbitals, the Stoner J is J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
                   else if (this%hubbard_orb(i)(j:j) == 'f') then
                      this%F0(i,j) = this%hubbard_u(i,j)
-                     this%F2(i,j) = 6435*this%hubbard_j(i,j) /(286 + 195*0.67 + 250*0.49)
-                     this%F4(i,j) = 0.67*this%F2(i,j)
-                     this%F6(i,j) = 0.49*this%F2(i,j)
+                     this%F2(i,j) = 6435_rp*this%hubbard_j(i,j) /(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
+                     this%F4(i,j) = 0.67_rp*this%F2(i,j)
+                     this%F6(i,j) = 0.49_rp*this%F2(i,j)
                      call g_logger%error('f orbitals need their corresponding orbital basis.', __FILE__, __LINE__)
                      print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F0 = ', this%F0(i,j)
                      print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': F2 = ', this%F2(i,j)
@@ -508,6 +526,10 @@ contains
       ! Converting the Hubbard U and J values to Ry from eV
       this%hubbard_u = this%hubbard_u/ry2ev
       this%hubbard_j = this%hubbard_j/ry2ev
+      this%F0 = this%F0/ry2ev
+      this%F2 = this%F2/ry2ev
+      this%F4 = this%F4/ry2ev
+      this%F6 = this%F6/ry2ev
       
       ! ---------------------------------------------------------------------------------------------------------------------
 
@@ -574,6 +596,7 @@ contains
       allocate (this%hubbard_orb(this%lattice%nrec))
       allocate (this%hubbard_orb_config(this%lattice%nrec))
       allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
+      allocate (this%hubbard_pot_4f(32, 32, this%lattice%nrec))
       !end if
       !end if
 #endif
@@ -616,6 +639,7 @@ contains
       this%hubbardU_check = .false.
       this%hubbardJ_check = .false.
       this%hubbard_pot(:,:,:) = 0.0d0
+      this%hubbard_pot_4f(:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
