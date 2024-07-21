@@ -647,13 +647,6 @@ contains
       !> Hubbard U object used in summer project. Many implementations might be written here
       type(hubbard_u) :: hubbard_u_obj
 
-      ! EMIL UNCOMMENT THIS WHEN DONE!
-      ! if (this%hamiltonian%hubbard_check) then
-      !    print *, 'Hubbard check trueeeeeeeeeeeeeeeeeeeeee'
-      ! else
-      !    print *, 'Hubbard check faaaaaaaaaaaaaaaaaalse'
-      ! end if
-
       if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
          print *, 'Initialize Hubbard U module'
          hubbard_u_obj = hubbard_u(this%green)
@@ -677,8 +670,9 @@ contains
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
             if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i .gt. 1) then
-               ! Initiate the LDA+U+J method
-               call this%bands%build_hubbard_pot() ! Build the Hubbard U potential matrix
+               ! Initiate the LDA+U+J method by building the Hubbard U+J potential matrix
+               call this%bands%spdf_Hubbard() ! Improved code
+               ! call this%bands%build_hubbard_pot() ! Previous code
             end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian

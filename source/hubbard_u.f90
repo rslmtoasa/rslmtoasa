@@ -183,7 +183,7 @@ contains
    integer :: i, j, l
    integer :: n, m, lsize, ssize
    real(rp), dimension(5,5,5,5) :: hubbard_int_mat
-   real(rp) :: f0, f2, f4
+   ! real(rp) :: f0, f2, f4
    integer, dimension(5) :: ms_d = [-2, -1, 0, 1, 2]
 
    if (this%hamiltonian%hubbard_orb_config(1) .ne. 3) then
@@ -192,27 +192,20 @@ contains
       stop
    end if
 
-   f0 = this%hamiltonian%F0(1,1)
-   f2 = this%hamiltonian%F2(1,1)
-   f4 = this%hamiltonian%F4(1,1)
-   print *, 'F0 = ', f0
-   print *, 'F2 = ', f2
-   print *, 'F4 = ', f4
-
    filename = 'hubbard_int_matrix_3d.txt'
    
    hubbard_int_mat(:,:,:,:) = 0.0d0
 
    !Construct matrix
-   do i = 1, 5
-      do j = 1, 5
-         do n = 1, 5
-            do m = 1, 5
-               hubbard_int_mat(i,j,n,m) = hubbard_int_matrix_3d(ms_d(i),ms_d(j),ms_d(n),ms_d(m),f0,f2,f4)
-            end do
-         end do
-      end do
-   end do
+   ! do i = 1, 5
+   !    do j = 1, 5
+   !       do n = 1, 5
+   !          do m = 1, 5
+   !             hubbard_int_mat(i,j,n,m) = hubbard_int_matrix_3d(ms_d(i),ms_d(j),ms_d(n),ms_d(m),f0,f2,f4)
+   !          end do
+   !       end do
+   !    end do
+   ! end do
 
    ! Save the matrix to a file
    open(unit=10, file=filename, form='formatted', status='replace')
