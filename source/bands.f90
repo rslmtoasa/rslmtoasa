@@ -797,21 +797,18 @@ contains
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(3) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
 
-         !if(rank==0) call g_logger%info(´Spin moment of atom´//fmt(´i4´,na)//´ is ´//fmt(´f10.6´,this%symbolic_atom(this%lattice%nbulk+na)%potential%mtot),__FILE__,__LINE__)
          call g_logger%info('Spin moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot), __FILE__, __LINE__)
          mx = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
          my = this%symbolic_atom(this%lattice%nbulk + na)%potential%my
          mz = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz
-         !if(rank==0) call g_logger%info(´Spin moment projections of atom´//fmt(´i4´,na)//´ is ´//fmt(´f10.6´,mx)//´ ´//fmt(´f10.6´,my)//´ ´//fmt(´f10.6´,mz),__FILE__,__LINE__)
+
+         if (this%control%nsp < 3) this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(:) = [0.0d0, 0.0d0, 1.00d0]
 
          if (this%recursion%hamiltonian%local_axis) then
             call g_logger%info('Local spin moment projections of atom'//fmt('i4', na)//' is '//fmt('f10.6', mx)//' '//fmt('f10.6', my)//' '//fmt('f10.6', mz), __FILE__, __LINE__)
          else
             call g_logger%info('Spin moment projections of atom'//fmt('i4', na)//' is '//fmt('f10.6', mx)//' '//fmt('f10.6', my)//' '//fmt('f10.6', mz), __FILE__, __LINE__)
          end if
-
-         if (this%control%nsp < 3) this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(:) = [0.0d0, 0.0d0, 1.00d0]
-
       end do
    end subroutine calculate_magnetic_moments
 
@@ -825,12 +822,14 @@ contains
       class(bands) :: this
       ! Local variables
       real(rp) :: lx, ly, lz
+      real(rp), dimension(this%en%channels_ldos+10) :: lxi, lyi, lzi
       integer :: i, j ! Orbital index
       integer :: mdir ! Magnetic index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
       real(rp), dimension(9, 9, 3) :: l_orb
       complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
       !
 
       integer :: na_loc
@@ -845,27 +844,77 @@ contains
       call hcpx(mLy, 'cart2sph')
       call hcpx(mLz, 'cart2sph')
 
+      mLx_ext = 0.0d0
+      mLx_ext(1:9, 1:9) = mLx(:, :)
+      mLx_ext(10:18, 10:18) = mLx(:, :)
+      mLy_ext = 0.d00
+      mLy_ext(1:9, 1:9) = mLy(:, :)
+      mLy_ext(10:18, 10:18) = mLy(:, :)
+      mLz_ext = 0.0d0
+      mLz_ext(1:9, 1:9) = mLz(:, :)
+      mLz_ext(10:18, 10:18) = mLz(:, :)
+
       call this%calculate_orbital_dos()
 
       !do na=1, this%lattice%nrec
       do na = start_atom, end_atom
          na_loc = g2l_map(na)
 
-         do mdir = 1, 3
-            do i = 1, 9
-               do j = 1, 9
-                  call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(j, i, mdir, :, na_loc), this%e1, 0, this%en%ene)
-               end do
-            end do
+         l_orb = 0.0d0
+         lx = 0.0d0; ly = 0.0d0; lz = 0.d0
+
+
+         do ie = 1, this%en%channels_ldos+10
+            lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na)))
+            lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na)))
+            lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na)))
          end do
-         lx = 0.0_rp !-0.5_rp * rtrace9(matmul(mLx,l_orb(:,:,1)))
-         ly = 0.0_rp !-0.5_rp * rtrace9(matmul(mLy,l_orb(:,:,2)))
-         lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :, 3)))
-         call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lz), __FILE__, __LINE__)
+
+         call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)
+         call simpson_m(ly, this%en%edel, this%en%fermi, this%nv1, lyi, this%e1, 0, this%en%ene)
+         call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
+         !do mdir = 1, 3
+         !   do i = 1, 9
+         !      do j = 1, 9
+         !         call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(i, j, mdir, :, na_loc), this%e1, 0, this%en%ene)
+         !      end do
+         !   end do
+         !end do
+
+         ! p contribution 
+         ! lz
+         !lz = lz + (l_orb(4, 4, 3) - l_orb(2, 2, 3)) 
+         !write(*,'(2f10.6)') l_orb(4, 4, 3), l_orb(2, 2, 3)
+         ! lx
+         !lx = lx + (l_orb(4, 4, 1) - l_orb(2, 2, 1)) 
+         !write(*,'(2f10.6)') l_orb(4, 4, 1), l_orb(2, 2, 1)
+         ! ly
+         !ly = ly + (l_orb(4, 4, 2) - l_orb(2, 2, 2)) 
+         !write(*,'(2f10.6)') l_orb(4, 4, 2), l_orb(2, 2, 2)
+
+         ! d contribution (up +down)
+         ! lz
+         !lz = lz + 2_rp * (l_orb(9, 9, 3) - l_orb(5, 5, 3)) + (l_orb(8, 8, 3) - l_orb(6, 6, 3))
+         !write(*,'(4f10.6)') l_orb(9, 9, 3), l_orb(5, 5, 3), l_orb(8, 8, 3), l_orb(6, 6, 3)
+         ! lx
+         !lx = lx + 2_rp * (l_orb(9, 9, 1) - l_orb(5, 5, 1)) + (l_orb(8, 8, 1) - l_orb(6, 6, 1))
+         !write(*,'(4f10.6)') l_orb(9, 9, 1), l_orb(5, 5, 1), l_orb(8, 8, 1), l_orb(6, 6, 1)
+         ! ly
+         !ly = ly + 2_rp * (l_orb(9, 9, 2) - l_orb(5, 5, 2)) + (l_orb(8, 8, 2) - l_orb(6, 6, 2)) 
+         !write(*,'(4f10.6)') l_orb(9, 9, 2), l_orb(5, 5, 2), l_orb(8, 8, 2), l_orb(6, 6, 2)
+
+         lz =  - (lz / pi) 
+         lx =  - (lx / pi) 
+         ly =  - (ly / pi) 
+
+         !lz = -0.5_rp * rtrace9(matmul(l_orb(:, :, 3), mLz))
+         !lx = -0.5_rp * rtrace9(matmul(l_orb(:, :, 1), mLx))
+         !ly = -0.5_rp * rtrace9(matmul(l_orb(:, :, 2), mLy))
+
+         call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lx)//' '//fmt('f10.6', ly)//' '//fmt('f10.6', lz), __FILE__, __LINE__)
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(2) = ly
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(3) = lz
-
       end do
    end subroutine calculate_orbital_moments
 
@@ -915,10 +964,10 @@ contains
             do i = 1, 9
                do j = 1, 9
                   this%d_orb(j, i, 1, ie, na) = this%d_orb(j, i, 1, ie, na) &
-                                                - aimag(this%green%g0(j + 9, i, ie, na) + this%green%g0(j, i + 9, ie, na))/pi
-                  this%d_orb(j, i, 2, ie, na) = this%d_orb(j, i, 1, ie, na) &
-                                                - aimag(i_unit*this%green%g0(j + 9, i, ie, na) - i_unit*this%green%g0(j, i + 9, ie, na))/pi
-                  this%d_orb(j, i, 3, ie, na) = this%d_orb(j, i, 1, ie, na) &
+                                                - aimag(this%green%g0(j, i + 9, ie, na) + this%green%g0(j + 9, i, ie, na))/pi
+                  this%d_orb(j, i, 2, ie, na) = this%d_orb(j, i, 2, ie, na) &
+                                                - aimag(i_unit*this%green%g0(j, i + 9, ie, na) - i_unit*this%green%g0(j + 9, i, ie, na))/pi
+                  this%d_orb(j, i, 3, ie, na) = this%d_orb(j, i, 3, ie, na) &
                                                 - aimag(this%green%g0(j, i, ie, na) - this%green%g0(j + 9, i + 9, ie, na))/pi
                end do
             end do
@@ -945,7 +994,7 @@ contains
                do j = 1, 9
                   this%g0_z(i, j, ie, na) = this%g0_z(i, j, ie, na) + (this%green%g0(i, i, ie, na) - this%green%g0(i + 9, i + 9, ie, na))
                   this%g0_y(i, j, ie, na) = this%g0_y(i, j, ie, na) + (i_unit*this%green%g0(i, i + 9, ie, na) - i_unit*this%green%g0(i + 9, i, ie, na))
-                  this%g0_x(i, j, ie, na) = this%g0_z(i, j, ie, na) + (this%green%g0(i, i + 9, ie, na) + this%green%g0(i + 9, i, ie, na))
+                  this%g0_x(i, j, ie, na) = this%g0_x(i, j, ie, na) + (this%green%g0(i, i + 9, ie, na) + this%green%g0(i + 9, i, ie, na))
                end do
             end do
          end do
