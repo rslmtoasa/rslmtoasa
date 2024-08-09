@@ -48,6 +48,7 @@ module hubbard_u_mod
       procedure :: calc_test
       procedure :: save_density_matrix_to_file
       procedure :: save_hubbard_int_mat_to_file
+      procedure :: print_ak
       final :: destructor
    end type
 
@@ -232,5 +233,31 @@ contains
    print *, 'Stop program'
    stop
 end subroutine save_hubbard_int_mat_to_file
+
+subroutine print_ak(this)
+   class(hubbard_u) :: this
+   integer :: m1, m2
+   real(rp) :: f0, f2, f4
+   integer, dimension(5) :: ms_d = [-2, -1, 0, 1, 2]
+
+   f0 = this%hamiltonian%F0(1,1)
+   f2 = this%hamiltonian%F2(1,1)
+   f4 = this%hamiltonian%F4(1,1)
+   do m1 = 1, 5
+      do m2 = 1, 5
+         print *, ms_d(m1), ms_d(m2), ms_d(m1), ms_d(m2)
+         print *, hubbard_int_matrix_3d(ms_d(m1), ms_d(m2), ms_d(m1), ms_d(m2), f0, f2, f4)
+         print *, ms_d(m1), ms_d(m2), ms_d(m2), ms_d(m1)
+         print *, hubbard_int_matrix_3d(ms_d(m1),ms_d(m2),ms_d(m2),ms_d(m1),f0,f2,f4)
+      end do
+   end do
+   print *, '------------------------------------------------------------------------------'
+   do m1 = 1, 5
+      print *, 'Diagonal', ms_d(m1)
+      print *, hubbard_int_matrix_3d(ms_d(m1),ms_d(m1),ms_d(m1),ms_d(m1),f0,f2,f4)
+   end do
+
+   
+end subroutine print_ak
 
 end module hubbard_u_mod
