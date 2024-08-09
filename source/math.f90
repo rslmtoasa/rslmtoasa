@@ -341,6 +341,17 @@ contains
 
    end function hubbard_int_matrix_3d
 
+   function Coulomb_mat(l,m1,m3,m2,m4,f0,f2,f4,f6) result(res)
+      implicit none
+      integer, intent(in) :: l, m1, m2, m3, m4 !orbital and lz quantum number
+      real(rp), intent(in) :: f0, f2, f4, f6 !Slater integrals
+      real(rp) :: res
+
+      res = 0.0_rp
+      res = res + a_k(0,l,m1,m2,m3,m4)*f0 + a_k(2,l,m1,m2,m3,m4)*f2 + a_k(4,l,m1,m2,m3,m4)*f4 + a_k(6,l,m1,m2,m3,m4)*f6
+
+   end function Coulomb_mat
+
 
    !> Computes the Gaunt coefficients using the Cruzan-Racah expression
    !> More about: Didier Sébilleau 1998 J. Phys. A: Math. Gen. 31 7157
