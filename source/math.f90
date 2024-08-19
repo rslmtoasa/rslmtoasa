@@ -92,6 +92,8 @@ module math_mod
    real(rp), parameter :: ry2tesla = 2.35051754997e5_rp
    !> \f$ Gyromagnetic ratio in rad/(s·T) \f$
    real(rp), parameter :: gama = 1.76e11_rp
+   !> \f$ Mass of electron in eV \f$
+   real(rp), parameter :: m_e = 0.5109989461E6_rp
 
    ! Screening parameters
    !> Original screening (From Jepsen)
@@ -294,6 +296,21 @@ contains
       end if
 
    end function wigner3j
+
+   !> Scales the V_ij's depending on relative distance to nearest neighbours
+   !> to the inter-site Coulomb interaction in the DFT+U+V. Originally taken to scale as the screened Yukawa potential e^(-b m_e r)/r
+   !> Implemented by Emil Beiersdorf on 01.08.2024
+   function scaler(V0,r,b) result(scl)
+      implicit none
+      real(rp) :: V0 ! The unscaled V-value, one for each atom.
+      real(rp) :: r ! Distance to the nearest neighbour of interest.
+      real(rp) :: b ! The scaling constant entering the exponent.
+      real(rp) :: scl ! Scaled V
+
+      scl = V0*exp(-b*r)/r
+
+   end function scaler
+
 
    !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U+J method
    !> Implemented by Viktor Frilén on 28.06.2024

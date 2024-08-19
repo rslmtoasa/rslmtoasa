@@ -99,6 +99,7 @@ module bands_mod
       procedure :: calculate_local_density_matrix ! LDA+U+J method
       procedure :: build_hubbard_pot ! LDA+U+J
       procedure :: spdf_Hubbard ! LDA+U+J method
+      procedure :: Hubbard_V
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -284,7 +285,6 @@ contains
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosia, product(shape(dosia)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosial, product(shape(dosial)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
-
       if (rank == 0) then
          do i = 1, this%en%channels_ldos + 10
             write (125, '(2f16.5)') this%en%ene(i), this%dtot(i)
@@ -296,7 +296,7 @@ contains
             do i = 1, this%en%channels_ldos + 10
                write (250 + ia, *) this%en%ene(i), dosia(ia, i)
             end do
-            rewind (250 + ia)
+            rewind (250 + ia) 
          end do
       end if
       if (rank == 0) then
@@ -1161,9 +1161,12 @@ contains
       integer :: ie ! Energy channel index
       integer :: ispin ! Spin index
       integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
-      integer :: m, m1, m2, m3, m4 ! Magnetic quantum numbers
+      integer :: cntr ! Counts number of orbitals with a U per atom.  
       real(rp), dimension(:,:), allocatable :: hub_u, hub_j ! Hubbard U and J parameters
       real(rp) :: result
+      integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
+      integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
+      real(rp) :: f0, f2, f4, f6 ! Slater integrals
       real(rp), dimension(this%lattice%nrec,4,4) :: f ! Slater integrals
       real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
       ! Local variable array for local density matrix
@@ -1173,8 +1176,7 @@ contains
       real(rp), dimension(this%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
       real(rp), dimension(this%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
       ! Temporary potential that will be put into this%hubbard_pot
-      real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot  
-      integer :: cntr ! Counts number of orbitals with a U per atom.    
+      real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot    
       
       type :: ArrayType
          integer, allocatable :: val(:)
@@ -1201,7 +1203,7 @@ contains
          hub_u(:,:) = 0.0d0
          hub_j(:,:) = 0.0d0
          f = this%recursion%hamiltonian%f
-         hub_u = this%recursion%hamiltonian%hub_u_sort
+         hub_u = this%recursion%hamiltonian%hub_u_sort 
          hub_j = this%recursion%hamiltonian%hub_j_sort
 
          
@@ -1262,35 +1264,43 @@ contains
             U_energy = 0.0d0
 
             ! l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
-            ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2            
+            ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
             do l = 1, size(l_arr(na)%val)
-               do ispin = 1, 2  
-                  do m1 = 1, 2*l_arr(na)%val(l)-1 
-                     do m2 = 1, 2*l_arr(na)%val(l)-1
-                        do m3 = 1, 2*l_arr(na)%val(l)-1
-                           do m4 = 1, 2*l_arr(na)%val(l)-1
-                              hub_pot(na, l_arr(na)%val(l), ispin, m1, m2) = hub_pot(na, l_arr(na)%val(l), ispin, m1, m2) &
-                              + Coulomb_mat(l_arr(na)%val(l)-1,ms(l_arr(na)%val(l))%val(m1),ms(l_arr(na)%val(l))%val(m3),ms(l_arr(na)%val(l))%val(m2),ms(l_arr(na)%val(l))%val(m4),f(na,l_arr(na)%val(l),1),f(na,l_arr(na)%val(l),2),f(na,l_arr(na)%val(l),3),f(na,l_arr(na)%val(l),4))*LDM(na,l_arr(na)%val(l),3-ispin,m3,m4) &
-                              + (Coulomb_mat(l_arr(na)%val(l)-1,ms(l_arr(na)%val(l))%val(m1),ms(l_arr(na)%val(l))%val(m3),ms(l_arr(na)%val(l))%val(m2),ms(l_arr(na)%val(l))%val(m4),f(na,l_arr(na)%val(l),1),f(na,l_arr(na)%val(l),2),f(na,l_arr(na)%val(l),3),f(na,l_arr(na)%val(l),4)) &
-                              - Coulomb_mat(l_arr(na)%val(l)-1,ms(l_arr(na)%val(l))%val(m1),ms(l_arr(na)%val(l))%val(m3),ms(l_arr(na)%val(l))%val(m4),ms(l_arr(na)%val(l))%val(m2),f(na,l_arr(na)%val(l),1),f(na,l_arr(na)%val(l),2),f(na,l_arr(na)%val(l),3),f(na,l_arr(na)%val(l),4)))*LDM(na,l_arr(na)%val(l),ispin,m3,m4)
-
-                              U_energy(l_arr(na)%val(l)) = U_energy(l_arr(na)%val(l)) + 0.5_rp *( Coulomb_mat(l_arr(na)%val(l)-1,ms(l_arr(na)%val(l))%val(m1),ms(l_arr(na)%val(l))%val(m3),ms(l_arr(na)%val(l))%val(m2),ms(l_arr(na)%val(l))%val(m4),f(na,l_arr(na)%val(l),1),f(na,l_arr(na)%val(l),2),f(na,l_arr(na)%val(l),3),f(na,l_arr(na)%val(l),4)) &
-                              * LDM(na,l_arr(na)%val(l),ispin,m1,m2) * LDM(na,l_arr(na)%val(l),3-ispin,m3,m4) &
-                              + ( Coulomb_mat(l_arr(na)%val(l)-1,ms(l_arr(na)%val(l))%val(m1),ms(l_arr(na)%val(l))%val(m3),ms(l_arr(na)%val(l))%val(m2),ms(l_arr(na)%val(l))%val(m4),f(na,l_arr(na)%val(l),1),f(na,l_arr(na)%val(l),2),f(na,l_arr(na)%val(l),3),f(na,l_arr(na)%val(l),4)) &
-                              - Coulomb_mat(l_arr(na)%val(l)-1,ms(l_arr(na)%val(l))%val(m1),ms(l_arr(na)%val(l))%val(m3),ms(l_arr(na)%val(l))%val(m4),ms(l_arr(na)%val(l))%val(m2),f(na,l_arr(na)%val(l),1),f(na,l_arr(na)%val(l),2),f(na,l_arr(na)%val(l),3),f(na,l_arr(na)%val(l),4)) ) &
-                              * LDM(na,l_arr(na)%val(l),ispin,m1,m2) * LDM(na,l_arr(na)%val(l),ispin,m3,m4) )
+               l_index = l_arr(na)%val(l)
+               m_max = 2*l_index-1
+               do ispin = 1, 2
+                  do m1 = 1, m_max
+                     do m2 = 1, m_max
+                        do m3 = 1, m_max
+                           do m4 = 1, m_max
+                              m1_val = ms(l_index)%val(m1)
+                              m2_val = ms(l_index)%val(m2)
+                              m3_val = ms(l_index)%val(m3)
+                              m4_val = ms(l_index)%val(m4)
+                              f0 = f(na,l_index,1)
+                              f2 = f(na,l_index,2)
+                              f4 = f(na,l_index,3)
+                              f6 = f(na,l_index,4)
+                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                              + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
+                              + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+                              - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
+                              U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+                              * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
+                              + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+                              - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
+                              * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
                            end do
                         end do
-
                         ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
-                        if (m1 == m2) then 
-                           hub_pot(na, l_arr(na)%val(l), ispin, m1, m2) = hub_pot(na, l_arr(na)%val(l), ispin, m1, m2) &
-                           - hub_u(na,l_arr(na)%val(l))*(n_tot(na,l_arr(na)%val(l)) - 0.5_rp) + hub_j(na,l_arr(na)%val(l))*(n_spin(na,l_arr(na)%val(l),ispin) - 0.5_rp)
+                        if (m1 == m2) then
+                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                           - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
                         end if
                      end do
                   end do
                end do
-            end do
+            end do  
 
          ! Put hub_pot into global hubbard_pot (only done for spd-orbitals)
             do l = 0, 2
@@ -1316,6 +1326,168 @@ contains
       end if
 
    end subroutine spdf_Hubbard
+
+
+   subroutine Hubbard_V(this)
+      class(bands) :: this
+
+   ! Local variables
+      integer :: na
+      integer :: ie
+      integer :: nn 
+      integer :: i, j, k, l1, l2, lmax, s1, s2, m1_max, m2_max, l1_ref, l2_ref, m1, m2
+      integer :: ij, kl ! Pair index
+      integer :: atom1, atom2 ! Atom index
+      integer :: atom1_type, atom2_type ! Atom type
+      integer :: tot_l_pair ! Total number of orbital pairs to be considered for an atom pair
+      real(rp) :: result, result2
+      real(rp) :: vij ! Hubbard V correction between atom+orbital i and j
+      logical :: calc_pair
+      !this variable is calculated in lattice (1 = nearest neighbour)
+      integer, dimension(this%lattice%njij, 2) :: ij_pair ! Change this later
+      complex(rp), dimension(18,18,this%en%channels_ldos + 10,this%lattice%njij) :: gij, gji ! intersite greens, calculated elsewhere
+      real(rp), dimension(18,18,this%en%channels_ldos + 10,this%lattice%njij) :: im_gij, im_gji ! -Im(gij)/2 (temp variable)
+      real(rp), dimension(18,18,this%lattice%njij) :: nij, nji ! integrated im_gij
+      real(rp), dimension(18,18) :: nji_temp
+      real(rp), dimension(18,18,this%lattice%nrec) :: DM ! density matrix
+      real(rp), dimension(:,:,:,:), allocatable :: hub_V_pot ! +V correction potential. nn should be changed to an appropriate value
+      
+      ! Restructuring of density matrix from nij(lms,l'm's',ij) to nij(ij,s,s',l,l',m,m')
+      type :: ArrayType
+         integer, allocatable :: mn(:,:)
+      end type ArrayType
+
+      type(ArrayType), dimension(2,2,3,3) :: nji_sorted
+
+      ! --------------------------------- FELDEFINIERAT ----------------------------------------------------------
+
+      nn = size(this%lattice%ijpair_sorted,3)
+      na = this%lattice%nrec
+      if (allocated(hub_V_pot)) deallocate (hub_V_pot)
+      allocate(hub_V_pot(18,18,nn,this%lattice%nrec))
+      ! ---------------------------------------------------------------------------------------------------------- 
+
+      ! Allocate the correct size of mn for each combination
+      do s1 = 1, 2
+         do s2 = 1, 2
+            do l1 = 1, 3
+               m1_max = l1*2-1
+               do l2 = 1, 3
+                  m2_max = l2*2-1
+                  if (allocated(nji_sorted(s1,s2,l1,l2)%mn)) deallocate (nji_sorted(s1,s2,l1,l2)%mn)
+                  allocate(nji_sorted(s1,s2,l1,l2)%mn(m1_max,m2_max))
+                  nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
+               end do
+            end do
+         end do
+      end do
+      im_gij = 0.0d0
+      im_gji = 0.0d0
+      hub_V_pot(:,:,:,:) = 0.0d0
+
+      ! Calculate -im(gij)/pi
+      do ij = 1, this%lattice%njij
+         do i = 1, 18
+            do j = 1, 18
+               do ie  = 1, this%en%channels_ldos + 10
+                  im_gij(i,j,ie,ij) = im_gij(i,j,ie,ij) - aimag(this%green%gij(i,j,ie,ij))/pi
+                  im_gji(i,j,ie,ij) = im_gji(i,j,ie,ij) - aimag(this%green%gji(i,j,ie,ij))/pi
+               end do
+               call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_gij(i,j,:,ij), this%e1, 0, this%en%ene)
+               call simpson_m(result2, this%en%edel, this%en%fermi, this%nv1, im_gji(i,j,:,ij), this%e1, 0, this%en%ene)
+               nij(i,j,ij) = result
+               nji(i,j,ij) = result2
+            end do
+         end do
+      end do
+      do na = 1, this%lattice%nrec
+         ! Loop over nearest neighbours
+         do ij = 1, size(this%lattice%ijpair_sorted,3)
+            ! Assign pair
+            atom1 = this%lattice%ijpair_sorted(na,1,ij,1)
+            print *, 'atom1', atom1
+            atom1_type = this%lattice%num(atom1)
+            atom2 = this%lattice%ijpair_sorted(na,1,ij,2)
+            atom2_type = this%lattice%num(atom2)
+            ! Set correct density matrix for the given pair
+            nji_temp = 0.0d0
+            calc_pair = .false.
+            do kl = 1, this%lattice%njij
+               if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,1)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,2))) then
+                  nji_temp(:,:) = TRANSPOSE(nji(:,:,kl))
+                  calc_pair = .true.
+                  exit
+               else if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,2)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,1))) then
+                  ! Order reverse, do we need a sign change somewhere?
+                  nji_temp(:,:) = TRANSPOSE(nij(:,:,kl))
+                  calc_pair = .true.
+                  exit
+               end if
+            end do
+            ! If there is a +V correction for this pair
+            if (calc_pair) then
+               ! Sorting the density matrix nij for easier handling (vij between different orbitals)
+               ! Not needed probably
+               do s1 = 1, 2
+                  do s2 = 1, 2
+                     do l1 = 1, 3
+                        m1_max = l1*2-1
+                        do l2 = 1, 3
+                           m2_max = l2*2-1
+                           nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
+                           do m1 = 1, m1_max
+                              do m2 = 1, m2_max
+                                 nji_sorted(s1,s2,l1,l2)%mn(m1,m2) = nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s2-1)*9 + m2)
+                              end do
+                           end do
+                        end do
+                     end do
+                  end do
+               end do
+               ! Check between which orbitals there is a +V correction
+               !Number of orbital pairs between the two atoms
+               tot_l_pair = this%recursion%hamiltonian%orbs_v_num(atom1_type, atom2_type)
+               do kl = 1, tot_l_pair
+                  ! Maybe also include ...%orbs_v(atom2_type, atom1_type)%val(kl,:) to cover everything.
+                  ! Alternatively creating ...%orbs_v such that this is included automatically
+                  l1_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,1)
+                  l2_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,2)
+                  vij = this%recursion%hamiltonian%hubbard_v(atom1_type, atom2_type, l1_ref, l2_ref)
+                  do s1 = 1, 2
+                     do l1 = 1, 3
+                        do l2 = 1, 3
+                           if ((l1 == l1_ref) .and. (l2 == l2_ref)) then
+                              do m1 = 1, l1*2-1
+                                 do m2 = 1, l2*2-1
+                                    ! This could be assigned directly to the variable in hamiltonian
+                                    hub_V_pot((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2, ij, na) = &
+                                                -vij*nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2)
+                                 end do
+                              end do
+                           end if
+                        end do
+                     end do
+                  end do
+               end do
+            else
+               print *, 'No Hubbard V correction for atom pair', atom1_type, atom2_type
+            end if
+         end do
+      end do
+
+      this%recursion%hamiltonian%hubbard_v_pot = hub_V_pot
+
+      ! do i = 1, nn
+      !    do k = 1, 18
+      !       do j = 1, 18
+      !          if ( this%recursion%hamiltonian%hubbard_v_pot(k,j,i,1) > 1.0E-10) then
+      !             print *, '(+V potential, i) : ', this%recursion%hamiltonian%hubbard_v_pot(k,j,i,1), i
+      !          end if
+      !       end do
+      !    end do        
+      ! end do
+
+   end subroutine Hubbard_V
 
 
    subroutine calculate_projected_dos(this)
