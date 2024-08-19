@@ -39,6 +39,10 @@ module hamiltonian_mod
 
    private
 
+   type :: ArrayType
+      integer, allocatable :: val(:,:)
+   end type ArrayType
+
    !> Module´s main procedure
    type, public :: hamiltonian
       !> Charge
@@ -81,14 +85,20 @@ module hamiltonian_mod
 
       !> On-site potential for LDA+U+J correction
       real(rp), dimension(:,:,:), allocatable :: hubbard_pot
+      real(rp), dimension(:,:,:,:), allocatable :: hubbard_v_pot
 
       !> Hubbard parameters for LDA+U+J implementation
       real(rp), dimension(:,:), allocatable :: hubbard_u
       real(rp), dimension(:,:), allocatable :: hub_u_sort
       real(rp), dimension(:,:), allocatable :: hubbard_j
       real(rp), dimension(:,:), allocatable :: hub_j_sort
-      !> Orbitals for Hubbard U
-      character(len=10), dimension(:), allocatable :: hubbard_orb
+      real(rp), dimension(:,:,:,:), allocatable :: hubbard_v ! (atom type 1, atom type 2, l1, l2) with l = 1,2,3,4 : s,p,d,f
+      !> Orbitals for Hubbard U+J+V
+      character(len=10), dimension(:), allocatable :: uj_orb
+      !> Array that stores orbitals for +V correction
+      type(ArrayType), dimension(:,:), allocatable :: orbs_v ! (atom type 1, atom type 2, l1, l2) with l = 1,2,3,4 : s,p,d,f
+      !> Array that counts orbital pairs for +V correction
+      integer, dimension(:,:), allocatable :: orbs_v_num 
       !> Slater integral array
       real(rp), dimension(:,:,:), allocatable :: F
       ! To be able to get the character 's', 'p', 'd', 'f' from element l+1 = 1,2,3,4 for printing purposes
@@ -102,6 +112,7 @@ module hamiltonian_mod
       !> Logical variables to include Hubbard U & J
       logical :: hubbardU_check = .false.
       logical :: hubbardJ_check = .false.
+      logical :: hubbardV_check = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -125,6 +136,8 @@ module hamiltonian_mod
    interface hamiltonian
       procedure :: constructor
    end interface
+
+   
 
 contains
 
@@ -187,12 +200,16 @@ contains
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
       if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
       if (allocated(this%hubbard_j)) deallocate (this%hubbard_j)
+      if (allocated(this%hubbard_v)) deallocate (this%hubbard_v)
       if (allocated(this%hub_u_sort)) deallocate (this%hub_u_sort)
       if (allocated(this%hub_j_sort)) deallocate (this%hub_j_sort)
-      if (allocated(this%hubbard_orb)) deallocate (this%hubbard_orb)
+      if (allocated(this%uj_orb)) deallocate (this%uj_orb)
+      if (allocated(this%orbs_v)) deallocate (this%orbs_v)
+      if (allocated(this%orbs_v_num)) deallocate (this%orbs_v_num)
       if (allocated(this%F)) deallocate(this%F)
       if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
       if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
+      if (allocated(this%hubbard_v_pot)) deallocate (this%hubbard_v_pot)
 #endif
    end subroutine destructor
 
@@ -209,10 +226,11 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, j, k, max_orbs, length
-
+      integer :: iostatus, funit, i, j, li, lj, k, max_orbs, length, cntr
+      ! integer, dimension(this%lattice%nrec, this%lattice%nrec) :: orbs_v_num ! (atom1, atom2) = number of mutual orbs e.g. hubbard_v(1, 2, [p,d], [s,p]) -> orbs_v_num(1,2)=2
       ! Logical variable to check if input data is good
       logical :: implem_check = .true.
+
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -222,7 +240,8 @@ contains
 
       call move_alloc(this%hubbard_u, hubbard_u)
       call move_alloc(this%hubbard_j, hubbard_j)
-      call move_alloc(this%hubbard_orb, hubbard_orb)
+      call move_alloc(this%hubbard_v, hubbard_v) 
+      call move_alloc(this%uj_orb, uj_orb)
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -235,8 +254,9 @@ contains
 
       max_orbs = 1
       do i = 1, this%lattice%nrec   
-         max_orbs = max(max_orbs, len_trim(hubbard_orb(i)))
+         max_orbs = max(max_orbs, len_trim(uj_orb(i)))
       end do
+
       
       if (size(hubbard_u,2) .ne. max_orbs) then
          deallocate(hubbard_u)
@@ -249,7 +269,7 @@ contains
          hubbard_j(:,:) = 0.0d0
          this%F(:,:,:) = 0.0d0
       end if
-
+      
       rewind (funit)
       read (funit, nml=hamiltonian, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
@@ -264,50 +284,51 @@ contains
 
       call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_j, this%hubbard_j)
-      call move_alloc(hubbard_orb, this%hubbard_orb)
+      call move_alloc(hubbard_v, this%hubbard_v)
+      call move_alloc(uj_orb, this%uj_orb)
 
       !Saves the Hubbard U orbital configuration in a variable
       do i = 1, this%lattice%nrec
-         if (adjustl(this%hubbard_orb(i)) == 's') then
+         if (adjustl(this%uj_orb(i)) == 's') then
             this%hubbard_orb_config(i) = 1
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
-         else if (adjustl(this%hubbard_orb(i)) == 'p') then
+         else if (adjustl(this%uj_orb(i)) == 'p') then
             this%hubbard_orb_config(i) = 2
             this%hubbard_orb_max = max(this%hubbard_orb_max, 1)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
-         else if (adjustl(this%hubbard_orb(i)) == 'd') then
+         else if (adjustl(this%uj_orb(i)) == 'd') then
             this%hubbard_orb_config(i) = 3
             this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
-         else if (adjustl(this%hubbard_orb(i)) == 'sp') then
+         else if (adjustl(this%uj_orb(i)) == 'sp') then
             this%hubbard_orb_config(i) = 4
             this%hubbard_orb_max = max(this%hubbard_orb_max, 1)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
-         else if (adjustl(this%hubbard_orb(i)) == 'sd') then
+         else if (adjustl(this%uj_orb(i)) == 'sd') then
             this%hubbard_orb_config(i) = 5
             this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
-         else if (adjustl(this%hubbard_orb(i)) == 'pd') then
+         else if (adjustl(this%uj_orb(i)) == 'pd') then
             this%hubbard_orb_config(i) = 6
             this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
-         else if (adjustl(this%hubbard_orb(i)) == 'spd') then
+         else if (adjustl(this%uj_orb(i)) == 'spd') then
             this%hubbard_orb_config(i) = 7
             this%hubbard_orb_max = max(this%hubbard_orb_max, 2)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 3)
-         else if (adjustl(this%hubbard_orb(i)) == 'f') then
+         else if (adjustl(this%uj_orb(i)) == 'f') then
             this%hubbard_orb_config(i) = 8
             this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 1)
-         else if (adjustl(this%hubbard_orb(i)) == 'sf') then
+         else if (adjustl(this%uj_orb(i)) == 'sf') then
             this%hubbard_orb_config(i) = 9
             this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
-         else if (adjustl(this%hubbard_orb(i)) == 'df') then
+         else if (adjustl(this%uj_orb(i)) == 'df') then
             this%hubbard_orb_config(i) = 10
             this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
-         else if (adjustl(this%hubbard_orb(i)) == 'pf') then
+         else if (adjustl(this%uj_orb(i)) == 'pf') then
             this%hubbard_orb_config(i) = 11
             this%hubbard_orb_max = max(this%hubbard_orb_max, 3)
             this%hubbard_nmb_orb = max(this%hubbard_nmb_orb, 2)
@@ -316,56 +337,9 @@ contains
          end if
       end do
 
-      ! Organizes the orbital Hubbard U & J values into the correct position
-      do i = 1, this%lattice%nrec
-         do j = 1, count(this%hubbard_u(i,:) > 1.0E-10)
-            if (this%hubbard_orb(i)(j:j) == 's') then
-               this%hub_u_sort(i,1) = this%hubbard_u(i,j)
-               this%hub_j_sort(i,1) = this%hubbard_j(i,j)
-            else if (this%hubbard_orb(i)(j:j) == 'p') then
-               this%hub_u_sort(i,2) = this%hubbard_u(i,j)
-               this%hub_j_sort(i,2) = this%hubbard_j(i,j)
-            else if (this%hubbard_orb(i)(j:j) == 'd') then
-               this%hub_u_sort(i,3) = this%hubbard_u(i,j)
-               this%hub_j_sort(i,3) = this%hubbard_j(i,j)
-            else if (this%hubbard_orb(i)(j:j) == 'f') then
-               this%hub_u_sort(i,4) = this%hubbard_u(i,j)
-               this%hub_j_sort(i,4) = this%hubbard_j(i,j)
-            end if
-         end do
-      end do
-
-      ! Calculate the Slater integrals, F(atom, l+1, k) with k = 1,2,3,4 = l+1 indexing F^(2(k-1))
-      do i = 1, this%lattice%nrec ! For each atom
-         do j = 1, count(this%hubbard_u(i,:) > 1.0E-10) ! For each nonzero hubbard U value
-            if (this%hubbard_orb(i)(j:j) == 's') then ! If corresponding orbital is s
-            ! For s, p, d and f orbitals, F0 = U
-               this%F(i,1,1) = this%hubbard_u(i,j)
-            else if (this%hubbard_orb(i)(j:j) == 'p') then ! If corresponding orbital is p
-            ! For p orbitals, J = (1/5)*F2 
-               this%F(i,2,1) = this%hubbard_u(i,j)
-               this%F(i,2,2) = this%hubbard_j(i,j)*5.0_rp
-            else if (this%hubbard_orb(i)(j:j) == 'd') then ! If corresponding orbital is d
-            ! For d orbitals, J = (F2 + F4)/14 with F4/F2 ~ 0.625
-               this%F(i,3,1) = this%hubbard_u(i,j)
-               this%F(i,3,2) = 14.0_rp*this%hubbard_j(i,j)/1.625_rp 
-               this%F(i,3,3) = 0.625_rp*this%F(i,3,2)
-            else if (this%hubbard_orb(i)(j:j) == 'f') then ! If corresponding orbital is f
-            ! For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
-               this%F(i,4,1) = this%hubbard_u(i,j)
-               this%F(i,4,2) = 6435_rp*this%hubbard_j(i,j)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
-               this%F(i,4,3) = 0.67_rp*this%F(i,4,2)
-               this%F(i,4,4) = 0.49_rp*this%F(i,4,2)
-            else 
-               call g_logger%error('Only spdf orbitals have implemented Hubbard U+J framework.', __FILE__, __LINE__)
-               error stop
-            end if
-         end do
-      end do      
-
       ! Establishes if Hubbard U should be implemented by checking if any Hubbard U is specified
       outer2 : do i = 1, this%lattice%nrec 
-         do j = 1, len_trim(this%hubbard_orb(i)) 
+         do j = 1, len_trim(this%uj_orb(i)) 
             if (this%hubbard_u(i,j) > 1.0E-10) then ! If a nonzero Hubbard U parameter is specified, Hubbard U is initiated
                this%hubbardU_check = .true.
                exit outer2
@@ -375,7 +349,7 @@ contains
 
       ! Establishes if Hubbard J should be implemented by checking if any Hubbard J is specified
       outer3 : do i = 1, this%lattice%nrec 
-         do j = 1, len_trim(this%hubbard_orb(i)) 
+         do j = 1, len_trim(this%uj_orb(i)) 
             if (this%hubbard_j(i,j) > 1.0E-10) then ! If a nonzero Hubbard J parameter is specified, Hubbard J is initiated
                this%hubbardJ_check = .true.
                exit outer3
@@ -383,35 +357,189 @@ contains
          end do
       end do outer3
 
+      ! Establishes if Hubbard V should be implemented by checking if any Hubbard V is specified
+      outer4 : do i = 1, this%lattice%nrec 
+         do j = 1, this%lattice%nrec
+            do li = 1, size(this%hubbard_v, 3)
+               do lj = 1, size(this%hubbard_v, 4)
+                  if (this%hubbard_v(i,j,li,lj) > 1.0E-10) then
+                     this%hubbardV_check = .true.
+                  end if
+               end do
+            end do
+         end do
+      end do outer4
+
+      ! Organizes the orbital Hubbard U & J values into the correct position
+      if (this%hubbardU_check) then
+         do i = 1, this%lattice%nrec
+            do j = 1, count(this%hubbard_u(i,:) > 1.0E-10)
+               if (this%uj_orb(i)(j:j) == 's') then
+                  this%hub_u_sort(i,1) = this%hubbard_u(i,j)
+                  this%hub_j_sort(i,1) = this%hubbard_j(i,j)
+               else if (this%uj_orb(i)(j:j) == 'p') then
+                  this%hub_u_sort(i,2) = this%hubbard_u(i,j)
+                  this%hub_j_sort(i,2) = this%hubbard_j(i,j)
+               else if (this%uj_orb(i)(j:j) == 'd') then
+                  this%hub_u_sort(i,3) = this%hubbard_u(i,j)
+                  this%hub_j_sort(i,3) = this%hubbard_j(i,j)
+               else if (this%uj_orb(i)(j:j) == 'f') then
+                  this%hub_u_sort(i,4) = this%hubbard_u(i,j)
+                  this%hub_j_sort(i,4) = this%hubbard_j(i,j)
+               end if
+            end do
+         end do
+      end if
+      
+      if (this%hubbardV_check) then
+
+      !> Checks if Vij = Vji in input.
+         do i = 1, this%lattice%nrec
+            do j = 1, this%lattice%nrec
+               do li = 1, 4
+                  do lj = 1, 4
+                     if (abs(this%hubbard_v(i,j,li,lj)) > 1.0E-10 .and. abs(this%hubbard_v(j,i,lj,li)) > 1.0E-10 .and. this%hubbard_v(i,j,li,lj) /= this%hubbard_v(j,i,lj,li)) then
+                        print *, 'Incorrect +V implementation for interaction between atom type ',i , 'and ',j , '.'
+                        call g_logger%error('Value for V(i,j,li,lj) must be the same as V(j,i,lj,li). Either delete one of them, or set them equal.', __FILE__, __LINE__)
+                        stop
+                     end if
+                  end do
+               end do
+            end do
+         end do
+      end if
+
+      if (this%hubbardV_check) then
+      !> Finds and stores all orbital pairs (l+1) for each interaction in +V correction
+
+         do i = 1, this%lattice%nrec
+            !> Diagonal part
+            cntr = 0
+            do li = 1, 4
+               do lj = 1, 4
+                  if (this%hubbard_v(i,i,li,lj) > 1.0E-10) then
+                     cntr = cntr + 1
+                  end if
+               end do
+            end do
+            this%orbs_v_num(i,i) = cntr
+            allocate(this%orbs_v(i,i)%val(cntr,2))
+            cntr = 0
+            do li = 1, 4
+               do lj = 1, 4
+                  if (this%hubbard_v(i,i,li,lj) > 1.0E-10) then
+                     cntr = cntr + 1
+                     this%orbs_v(i,i)%val(cntr,:) = [li, lj]
+                  end if
+               end do
+            end do
+
+            !> Off-diagonal part
+            if (i+1 <= this%lattice%nrec) then
+               do j = i+1, this%lattice%nrec
+                  cntr = 0
+                  do li = 1, 4
+                     do lj = 1, 4
+                        if (this%hubbard_v(i,j,li,lj) > 1.0E-10 .or. this%hubbard_v(j,i,lj,li) > 1.0E-10) then
+                           cntr = cntr + 1
+                        end if
+                     end do
+                  end do
+                  this%orbs_v_num(i,j) = cntr
+                  this%orbs_v_num(j,i) = cntr
+                  allocate(this%orbs_v(i,j)%val(cntr,2))
+                  allocate(this%orbs_v(j,i)%val(cntr,2))
+                  ! this%orbs_v(i,j)%val(:,:) = 0
+                  cntr = 0
+                  do li = 1, 4
+                     do lj = 1, 4
+                        if (this%hubbard_v(i,j,li,lj) > 1.0E-10 .or. this%hubbard_v(j,i,lj,li) > 1.0E-10) then
+                           cntr = cntr + 1
+                           this%orbs_v(i,j)%val(cntr,:) = [li, lj]
+                           this%orbs_v(j,i)%val(cntr,:) = [lj, li]
+                        end if
+                     end do
+                  end do
+               end do             
+            end if
+         end do
+            
+
+      !> Sets the Vji = Vij for the +V correction based on input and raises error if Vij and Vji disagree if both are specified.
+         do i = 1, this%lattice%nrec
+            do j = 1, this%lattice%nrec
+               if (j /= i) then
+                  do li = 1, 4
+                     do lj = 1, 4
+                        if (abs(this%hubbard_v(i,j,li,lj)) > 1.0E-10 .and. abs(this%hubbard_v(j,i,lj,li)) < 1.0E-10) then
+                           this%hubbard_v(j,i,lj,li) = this%hubbard_v(i,j,li,lj)
+                        end if
+                     end do
+                  end do
+               end if
+            end do
+         end do
+      end if
+
+      if (this%hubbardU_check) then
+      ! Calculates the Slater integrals, F(atom, l+1, k) with k = 1,2,3,4 = l+1 indexing F^(2(k-1))
+         do i = 1, this%lattice%nrec ! For each atom
+            do j = 1, count(this%hubbard_u(i,:) > 1.0E-10) ! For each nonzero hubbard U value
+               if (this%uj_orb(i)(j:j) == 's') then ! If corresponding orbital is s
+               ! For s, p, d and f orbitals, F0 = U
+                  this%F(i,1,1) = this%hubbard_u(i,j)
+               else if (this%uj_orb(i)(j:j) == 'p') then ! If corresponding orbital is p
+               ! For p orbitals, J = (1/5)*F2 
+                  this%F(i,2,1) = this%hubbard_u(i,j)
+                  this%F(i,2,2) = this%hubbard_j(i,j)*5.0_rp
+               else if (this%uj_orb(i)(j:j) == 'd') then ! If corresponding orbital is d
+               ! For d orbitals, J = (F2 + F4)/14 with F4/F2 ~ 0.625
+                  this%F(i,3,1) = this%hubbard_u(i,j)
+                  this%F(i,3,2) = 14.0_rp*this%hubbard_j(i,j)/1.625_rp 
+                  this%F(i,3,3) = 0.625_rp*this%F(i,3,2)
+               else if (this%uj_orb(i)(j:j) == 'f') then ! If corresponding orbital is f
+               ! For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
+                  this%F(i,4,1) = this%hubbard_u(i,j)
+                  this%F(i,4,2) = 6435_rp*this%hubbard_j(i,j)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
+                  this%F(i,4,3) = 0.67_rp*this%F(i,4,2)
+                  this%F(i,4,4) = 0.49_rp*this%F(i,4,2)
+               else 
+                  call g_logger%error('Only spdf orbitals have implemented Hubbard U+J framework.', __FILE__, __LINE__)
+                  error stop
+               end if
+            end do
+         end do      
+      end if
+
       outer : do i = 1, this%lattice%nrec ! Steps through the atoms
 
          ! ----------------------------- FOR DEBUGGING ---------------------------------
          ! print *, 'U(i) len for i = ', i, ' is ', count(this%hubbard_u(i,:) > 1.0E-10)
-         ! print *, 'J(i) len for i = ', i, 'is ', count(this%hubbard_j(i,:) > 1.0E-10), ' while Orb(i) len is', len_trim(this%hubbard_orb(i))
+         ! print *, 'J(i) len for i = ', i, 'is ', count(this%hubbard_j(i,:) > 1.0E-10), ' while Orb(i) len is', len_trim(this%uj_orb(i))
          ! -----------------------------------------------------------------------------
 
          ! If no input values are given for some atom(s), default values is set given that Hubbard U and or J should be included
-         if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check .and. this%hubbardJ_check) then
+         if (len_trim(this%uj_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check .and. this%hubbardJ_check) then
             print *, ''
             print *,''
             print *, '----------------------------------------------------------------------------------------'
             print *, 'No input values for Hubbard U+J specified for atom ', i, ', setting default values.'
             print *, '----------------------------------------------------------------------------------------'
-         else if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
+         else if (len_trim(this%uj_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
             print *, ''
             print *,''
             print *, '----------------------------------------------------------------------------------------'
             print *, 'No input values for Hubbard U specified for atom ', i, ', setting default values of zero.'
             print *, '----------------------------------------------------------------------------------------'
          ! Also if only U or J value is unspecified when orbital and J or U is, default value is set.
-         else if (len_trim(this%hubbard_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardJ_check) then
+         else if (len_trim(this%uj_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardJ_check) then
             print *, ''
             print *,''
             print *, '----------------------------------------------------------------------------------------'
             print *, 'No input values for Hubbard J specified for atom ', i, ', setting default values of zero.'
             print *, '----------------------------------------------------------------------------------------'
-         else if (len_trim(this%hubbard_orb(i)) /= 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) /= 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
-            if (len_trim(this%hubbard_orb(i)) == count(this%hubbard_u(i,:) > 1.0E-10)) then
+         else if (len_trim(this%uj_orb(i)) /= 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) /= 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
+            if (len_trim(this%uj_orb(i)) == count(this%hubbard_u(i,:) > 1.0E-10)) then
                print *, ''
                print *,''
                print *, '----------------------------------------------------------------------------------------'
@@ -424,8 +552,8 @@ contains
                print *, 'Number of orbitals and Hubbard U parameters for atom', i, ' disagrees.'
                print *, '----------------------------------------------------------------------------------------'
             end if
-         else if (len_trim(this%hubbard_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) /= 0 .and. this%hubbardJ_check) then
-            if (len_trim(this%hubbard_orb(i)) == count(this%hubbard_j(i,:) > 1.0E-10)) then
+         else if (len_trim(this%uj_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) /= 0 .and. this%hubbardJ_check) then
+            if (len_trim(this%uj_orb(i)) == count(this%hubbard_j(i,:) > 1.0E-10)) then
                print *, ''
                print *, ''
                print *, '----------------------------------------------------------------------------------------'
@@ -440,7 +568,7 @@ contains
             end if
          else
             ! If the number of orbitals and Hubbard U parameters per atom in input file disagree, then a raised error is prompted
-            if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%hubbard_orb(i))) then
+            if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%uj_orb(i))) then
                print *, 'Im here'
                implem_check = .false.
                print *, ''
@@ -449,7 +577,7 @@ contains
                print *, '----------------------------------------------------------------------------------------'
 
             ! If the number of orbitals and Hubbard J parameters per atom in input file disagree, then a raised error is prompted 
-            else if (count(this%hubbard_j(i,:) > 1.0E-10) /= len_trim(this%hubbard_orb(i))) then 
+            else if (count(this%hubbard_j(i,:) > 1.0E-10) /= len_trim(this%uj_orb(i))) then 
                implem_check = .false.
                print *, ''
                print *, '----------------------------------------------------------------------------------------'
@@ -458,6 +586,34 @@ contains
             end if
          end if
       end do outer
+
+      !> If the +V (intersite Coulomb reaction) is added, we use the simplified +U correction which is spherically averaged.
+      !> This corresponds to setting F^2 = F^4 = J = 0.
+      if (this%hubbardV_check) then
+         print *, 'HubbardV_check is True.'
+         this%hubbard_j = 0.0d0
+         this%F(:,:,2) = 0.0d0
+         this%F(:,:,3) = 0.0d0
+         this%F(:,:,4) = 0.0d0
+         print *, 'ijpair before : ', this%lattice%ijpair
+         print *, 'ijpair_sorted before : ', this%lattice%ijpair_sorted
+         print *, 'njij before : ', this%lattice%njij
+         call this%lattice%neigh(1)
+         print *, 'ijpair after : ', this%lattice%ijpair
+         print *, 'ijpair_sorted after : ', this%lattice%ijpair_sorted !(na = num of diff atoms, nn=1 or snn=2, num of nn, atom index)
+         print *, 'size(ijpair_sorted) after : ', size(this%lattice%ijpair_sorted)
+         print *, 'size(ijpair_sorted, 1) after : ', size(this%lattice%ijpair_sorted, 1) 
+         print *, 'size(ijpair_sorted, 2) after : ', size(this%lattice%ijpair_sorted, 2)
+         print *, 'size(ijpair_sorted, 3) after : ', size(this%lattice%ijpair_sorted, 3)
+         print *, 'size(ijpair_sorted, 4) after : ', size(this%lattice%ijpair_sorted, 4)
+         print *, 'njij after : ', this%lattice%njij
+         ! stop
+      else 
+         print *, 'HubbardV_check is False.'
+         print *, 'ijpair : ', this%lattice%ijpair
+         print *, 'ijpair_sorted : ', this%lattice%ijpair_sorted
+         print *, 'njij : ', this%lattice%njij
+      end if 
 
       !> Print Hubbard U+J info
       if (this%hubbardU_check .and. this%hubbardJ_check) then 
@@ -469,11 +625,17 @@ contains
             do i = 1, this%lattice%nrec
                print *, 'Atom ', i, ':'
                do j = 1, max_orbs
-                  print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
+                  print *, '  Orbital ', this%uj_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
                end do
             end do
             print *, ''
             print *, 'Hubbard U+J input data implemented successfully, proceeding...'
+            if (this%hubbardV_check) then
+               print *, '+V (intersite Coulomb) input data implemented successfully, proceeding...'
+               print *, ''
+               print *, 'NOTE: +U correction restored to simplified version (F^2 = F^4 = J = 0) since the'
+               print *, '      +V correction is asked to be included.'
+            end if
             print *, '----------------------------------------------------------------------------------------'
 
             print *,''
@@ -519,11 +681,17 @@ contains
                do i = 1, this%lattice%nrec
                   print *, 'Atom ', i, ':'
                   do j = 1, max_orbs
-                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.'
+                     print *, '  Orbital ', this%uj_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.'
                   end do
                end do
                print *, ''
                print *, 'Hubbard U (no J) input data implemented successfully, proceeding...'
+               if (this%hubbardV_check) then
+                  print *, '+V (intersite Coulomb) input data implemented successfully, proceeding...'
+                  print *, ''
+                  print *, 'NOTE: +U correction restored to simplified version (F^2 = F^4 = J = 0) since the'
+                  print *, '      +V correction is asked to be included.'
+               end if
                print *, '----------------------------------------------------------------------------------------'
          else 
             call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
@@ -539,11 +707,15 @@ contains
                do i = 1, this%lattice%nrec
                   print *, 'Atom ', i, ':'
                   do j = 1, max_orbs
-                     print *, '  Orbital ', this%hubbard_orb(i)(j:j), ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
+                     print *, '  Orbital ', this%uj_orb(i)(j:j), ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
                   end do
                end do
                print *, ''
                print *, 'Hubbard J (no U) input data implemented successfully, proceeding...'
+               if (this%hubbardV_check) then
+                  print *, '+V (intersite Coulomb) input data implemented successfully, proceeding...'
+               end if
+               print *, 'N.B. that with +V correction, F^2 = F^4 = J = 0.'
             print *, '----------------------------------------------------------------------------------------'
          else 
             call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
@@ -558,12 +730,15 @@ contains
          print *, '----------------------------------------------------------------------------------------'
       end if      
       
-      ! Converting the Hubbard U and J values to Ry from eV
+      !> Converting the Hubbard U and J values to Ry from eV
       this%hubbard_u = this%hubbard_u/ry2ev
       this%hubbard_j = this%hubbard_j/ry2ev
+      this%hubbard_v = this%hubbard_v/ry2ev
       this%F = this%F/ry2ev
       this%hub_u_sort = this%hub_u_sort/ry2ev
       this%hub_j_sort = this%hub_j_sort/ry2ev
+
+
    end subroutine build_from_file
 
 
@@ -605,6 +780,8 @@ contains
       allocate (this%tmat(18, 18, 3, this%charge%lattice%ntype))
       allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, this%charge%lattice%kk, 4))
       allocate (this%ee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      print *, 'test : ', maxval(this%charge%lattice%nn(:, 1)) + 1
+      ! allocate (this%ee(18, 18, size(this%lattice%ijpair, 3), this%charge%lattice%ntype))
       allocate (this%hall(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       !if (this%hoh) then
       allocate (this%eeo(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
@@ -622,12 +799,16 @@ contains
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
       allocate (this%hubbard_u(this%lattice%nrec, 1))
       allocate(this%hubbard_j(this%lattice%nrec, 1))
+      allocate(this%hubbard_v(this%lattice%nrec, this%lattice%nrec, 4, 4))
       allocate (this%hub_u_sort(this%lattice%nrec, 4))
       allocate(this%hub_j_sort(this%lattice%nrec, 4))
+      allocate(this%orbs_v(this%lattice%nrec, this%lattice%nrec))
+      allocate(this%orbs_v_num(this%lattice%nrec, this%lattice%nrec))
       allocate(this%F(this%lattice%nrec, 4, 4))
-      allocate (this%hubbard_orb(this%lattice%nrec))
+      allocate (this%uj_orb(this%lattice%nrec))
       allocate (this%hubbard_orb_config(this%lattice%nrec))
       allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
+      allocate (this%hubbard_v_pot(18, 18, size(this%lattice%ijpair_sorted,3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
       !end if
       !end if
 #endif
@@ -659,16 +840,20 @@ contains
       this%orb_pol = .false.
       this%hubbard_u(:,:) = 0.0d0
       this%hubbard_j(:,:) = 0.0d0
+      this%hubbard_v(:,:,:,:) = 0.0d0
       this%hub_u_sort(:,:) = 0.0d0
       this%hub_j_sort(:,:) = 0.0d0
-      this%hubbard_orb(:) = ''
+      this%uj_orb(:) = ''
+      this%orbs_v_num(:,:) = 0
       this%F(:,:,:) = 0.0d0
       this%hubbard_orb_config = 0
       this%hubbard_orb_max = 0
       this%hubbard_nmb_orb = 0
       this%hubbardU_check = .false.
       this%hubbardJ_check = .false.
+      this%hubbardV_check = .false.
       this%hubbard_pot(:,:,:) = 0.0d0
+      this%hubbard_v_pot(:,:,:,:) = 0.0d0
       this%orb_conv(1) = 's'
       this%orb_conv(2) = 'p'
       this%orb_conv(3) = 'd'
@@ -866,7 +1051,7 @@ contains
    subroutine build_bulkham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
+      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ij, ji, nr, ia
       integer :: ntype
 
       do ntype = 1, this%charge%lattice%ntype
@@ -897,6 +1082,16 @@ contains
                   this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) + this%hubbard_pot(i + 9, j + 9, ntype)
                end do
             end do
+            ! print *, 'hub_v_pot test ', this%hubbard_v_pot
+            ! if (this%hubbardV_check) then
+            !    do i = 1, 9
+            !       do j = 1, 9
+            !          do ij = 1, size(this%lattice%ijpair_sorted,3)
+            !             this%ee(i,j,ij,ntype) = this%ee(i,j,ij,ntype) + this%hubbard_v_pot(i,j,ij,ntype)
+            !             this%ee(i+9,j+9,ij,ntype) = this%ee(i+9,j+9,ij,ntype) + this%hubbard_v_pot(i+9,j+9,ij,ntype)
+            !          end do
+            !       end do
+            !    end do
          end if
 
          if (this%hoh) then
