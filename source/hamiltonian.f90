@@ -113,6 +113,10 @@ module hamiltonian_mod
       logical :: hubbardU_check = .false.
       logical :: hubbardJ_check = .false.
       logical :: hubbardV_check = .false.
+      !> Logical variable to include self-consistent calculation of Hubbard U.
+      logical :: hubbardU_sc_check = .false.
+      !> Which atoms and orbitals to include self-consistent Hubbard U correction. (0 no correction. 1 include correction)
+      integer, dimension(:,:), allocatable :: hubbard_u_sc
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -210,6 +214,7 @@ contains
       if (allocated(this%hubbard_orb_config)) deallocate (this%hubbard_orb_config)
       if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
       if (allocated(this%hubbard_v_pot)) deallocate (this%hubbard_v_pot)
+      if (allocated(this%hubbard_u_sc)) deallocate (this%hubbard_u_sc)
 #endif
    end subroutine destructor
 
@@ -226,7 +231,7 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, j, li, lj, k, max_orbs, length, cntr
+      integer :: iostatus, funit, i, j, li, lj, k, max_orbs, length, cntr, na, l
       ! integer, dimension(this%lattice%nrec, this%lattice%nrec) :: orbs_v_num ! (atom1, atom2) = number of mutual orbs e.g. hubbard_v(1, 2, [p,d], [s,p]) -> orbs_v_num(1,2)=2
       ! Logical variable to check if input data is good
       logical :: implem_check = .true.
@@ -238,6 +243,7 @@ contains
       local_axis = this%local_axis
       orb_pol = this%orb_pol
 
+      call move_alloc(this%hubbard_u_sc, hubbard_u_sc)
       call move_alloc(this%hubbard_u, hubbard_u)
       call move_alloc(this%hubbard_j, hubbard_j)
       call move_alloc(this%hubbard_v, hubbard_v) 
@@ -282,10 +288,50 @@ contains
       this%local_axis = local_axis
       this%orb_pol = orb_pol
 
+      call move_alloc(hubbard_u_sc, this%hubbard_u_sc)
       call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_j, this%hubbard_j)
       call move_alloc(hubbard_v, this%hubbard_v)
       call move_alloc(uj_orb, this%uj_orb)
+
+      ! Checks if self-consistent 
+      do na = 1, this%lattice%nrec
+         do l = 1, 4
+            if ( this%hubbard_u_sc(na,l) == 1 ) then
+               if (l == 1) then
+                  print *, ''
+                  print *, 'Self-consistent U added for s-electrons on atom', na
+                  this%hubbardU_sc_check = .true.
+               else if (l == 2) then
+                  print *, ''
+                  print *, 'Self-consistent U added for p-electrons on atom', na
+                  this%hubbardU_sc_check = .true.
+               else if (l == 3) then
+                  print *, ''
+                  print *, 'Self-consistent U added for d-electrons on atom', na
+                  this%hubbardU_sc_check = .true.
+               else if ( l == 4 ) then
+                  print *, ''
+                  print *, 'ERROR'
+                  print *, 'Self-consistent U calculation not implemented for f-electrons'
+                  print *, 'STOPS PROGRAM'
+                  stop
+               end if
+            else if ( this%hubbard_u_sc(na,l) .gt. 1 ) then
+               print *, ''
+               print *, 'WRONG INPUT. hubbard_u_sc input was larger than 1, but only 0 and 1 is allowed.'
+               print *, 'STOPS PROGRAM'
+               stop
+            end if
+         end do
+      end do
+      ! Check if correct input is given for hubbard_u_sc
+      if ( this%hubbardU_sc_check ) then
+         print *, ''
+         print *, '----------------------------------------------------------------------------------------'
+         print *, 'Self-consistent calculation of Hubbard U initiated.'
+         print *, '----------------------------------------------------------------------------------------'
+      end if
 
       !Saves the Hubbard U orbital configuration in a variable
       do i = 1, this%lattice%nrec
@@ -738,6 +784,13 @@ contains
       this%hub_u_sort = this%hub_u_sort/ry2ev
       this%hub_j_sort = this%hub_j_sort/ry2ev
 
+      ! Checks if self-consistent U flag and input values of U and J have both been provided. They would interfer with eachother. 
+      if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check) ) then
+         print *, 'ERROR'
+         print *, 'Both input values for hubbard_u_sc and hubbard_u + hubbard_j has been provided.'
+         print *, 'Only one of them is allowed. Stops program!!'
+         stop
+      end if
 
    end subroutine build_from_file
 
@@ -809,6 +862,7 @@ contains
       allocate (this%hubbard_orb_config(this%lattice%nrec))
       allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
       allocate (this%hubbard_v_pot(18, 18, size(this%lattice%ijpair_sorted,3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
+      allocate (this%hubbard_u_sc(this%lattice%nrec,4))
       !end if
       !end if
 #endif
@@ -858,6 +912,7 @@ contains
       this%orb_conv(2) = 'p'
       this%orb_conv(3) = 'd'
       this%orb_conv(4) = 'f'
+      this%hubbard_u_sc(:,:) = 0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

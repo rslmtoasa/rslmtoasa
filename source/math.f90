@@ -311,6 +311,35 @@ contains
 
    end function scaler
 
+   !> Tabulated values of hydrogenic Slater radial integrals
+   !> Returns F^k(ab,cd) = int dr1 dr2 (r<)^k/(r>)^(k+1)*R_a(r1)*R_b(r2)*R_c(r1)*R_d(r2)*r1^2*r2^2
+   !> Only implemented for diagonal terms
+   !> Only implemented for F^k(l l, l l) where l = 4s, 3p, 3d!!
+   !> From reference:
+   !> Butler, P. H., Minchin, P. E., & Wybourne, B. G. (1971). Tables of hydrogenic Slater radial integrals. Univ. of Canterbury, Christchurch, New Zealand.
+   !> Implemented by Viktor Frilén on 16.08.2024
+   function tabulated_slater_integrals(k,l1,l2,l3,l4) result(res)
+      integer, intent(in) :: k,l1,l2,l3,l4 ! l = 1,2,3,4 (= s,p,d,f), k = 1,2,3,4 (=0,2,4,6)
+      real(rp) :: res
+      real(rp) :: au2Ry ! Atomic units to Rydberg conversion
+      real(rp), dimension(4,4,4,4,4) :: slater
+      ! A bit unsure if this is the conversion
+      au2Ry = 0.5_rp**5
+      slater = 0.0d0
+      ! 4s-electrons
+      slater(1,1,1,1,1) = 0.0372715*au2Ry
+      ! 3p-electrons
+      slater(1,2,2,2,2) = 0.0718678*au2Ry
+      slater(2,2,2,2,2) = 0.0359881*au2Ry
+      ! 3d-electrons
+      slater(1,3,3,3,3) = 0.0860460*au2Ry
+      slater(2,3,3,3,3) = 0.0454210*au2Ry
+      slater(3,3,3,3,3) = 0.0296224*au2Ry
+      
+      res = slater(k,l1,l2,l3,l4)
+      
+   end function tabulated_slater_integrals
+
 
    !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U+J method
    !> Implemented by Viktor Frilén on 28.06.2024
