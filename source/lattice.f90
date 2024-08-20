@@ -311,6 +311,8 @@ module lattice_mod
       integer, dimension(:,:,:,:), allocatable :: ijpair_sorted
       !> Number of pairs (unique and all)
       integer :: njij_all
+      !> Nearest neighbour distance for each atom (used for +V implementation)
+      real(rp), dimension(:), allocatable :: nn_dist
 
       !> Trio of atoms to calculate the spin-lattice interactions
       real(rp), dimension(:, :), allocatable :: ijktrio
@@ -425,6 +427,9 @@ contains
       if (allocated(this%ijpair)) deallocate (this%ijpair)
       if (allocated(this%ijktrio)) deallocate (this%ijktrio)
       if (allocated(this%natoms_layer)) deallocate (this%natoms_layer)
+      if (allocated(this%nn_dist)) deallocate (this%nn_dist)
+      if (allocated(this%ijpair_all)) deallocate (this%ijpair_all)
+      if (allocated(this%ijpair_sorted)) deallocate (this%ijpair_sorted)
 #endif
    end subroutine destructor
 
@@ -923,6 +928,7 @@ contains
       allocate (this%ijpair(this%njij, 2))
       allocate (this%ijktrio(this%njijk, 6))
       allocate (this%chargetrf_type(this%nbas))
+      allocate (this%nn_dist(this%nrec)) ! Storing nearest neighbour distance for later use in +V implementation
 #endif
 
       this%izp = 0.0d0
@@ -953,7 +959,7 @@ contains
       !First neighbors and their type
       integer, dimension(this%ntype, nhb_degree) :: inx_ntype_break
       integer, dimension(this%ntype, this%kk) :: nhb_inx_m
-      integer :: l,i, nhb_it, j, append_iter, max_append
+      integer :: l,i, nhb_it, j, append_iter, max_append, la
       integer, intent(in) :: nhb_degree
       integer, dimension(this%ntype, nhb_degree) :: nmb_of_nhbrs
       real(rp), dimension(2) :: min_dist_m
@@ -961,13 +967,17 @@ contains
       nhb_inx_m(:,:) = 0
       max_append = 0
       do l=1, this%ntype
+         ! Here I think l shouldnt go from 1 to ntype. 
+         ! But instead this%atlist() should be used to see what atom we actually are looking at in the cluster
+         ! Fix this!
+         la = this%atlist(l)
          append_iter = 1
          min_dist_m = 0
          min_dist_m(2) = 10000
          do j=1,nhb_degree
             nhb_it = 1
             do i=1, this%kk
-               dist = sqrt((this%cr(1,l) - this%cr(1,i))**2 + (this%cr(2,l) - this%cr(2,i))**2 + (this%cr(3,l) - this%cr(3,i))**2)
+               dist = sqrt((this%cr(1,la) - this%cr(1,i))**2 + (this%cr(2,la) - this%cr(2,i))**2 + (this%cr(3,la) - this%cr(3,i))**2)
                if ((dist - 0.001d0 > min_dist_m(1)) .and. (dist + 0.001d0 < min_dist_m(2))) then
                   min_dist_m(2) = dist
                   nhb_inx_m(l,append_iter:this%kk) = 0
@@ -978,6 +988,10 @@ contains
                   nhb_it = nhb_it + 1
                end if
             end do
+            ! Store nearest neighbour distance
+            if (j == 1) then
+               this%nn_dist(l) = min_dist_m(2)
+            end if
             min_dist_m(1) = min_dist_m(2)
             min_dist_m(2) = 10000
             ! write (*,*) 'neighbors at degree ', j, 'for atom ', l, ' is ', nhb_it
@@ -1006,16 +1020,17 @@ contains
       integer, dimension(:,:,:), allocatable :: ijpair_unique_2, ijpair_temp
       integer, dimension(this%nrec) :: counter
       integer, dimension(size(input_indices,2)*this%ntype, 2) :: temp_save
-      integer :: l,j, ij_iter, i, k, max_nhbr, ia, nn, m
+      integer :: l,j, ij_iter, i, k, max_nhbr, ia, nn, m,la 
       logical :: is_duplicate
       temp_save(:,:) = 0
       ij_iter = 1
       do l=1,size(input_indices,1)
+         la = this%atlist(l)
          do j=1,size(input_indices,2)
             if (input_indices(l,j) == 0) then
                exit
             else
-               temp_save(ij_iter,:) = [l,input_indices(l,j)]
+               temp_save(ij_iter,:) = [la,input_indices(l,j)]
                ij_iter = ij_iter + 1
             end if
          end do

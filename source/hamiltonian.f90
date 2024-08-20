@@ -641,18 +641,20 @@ contains
          this%F(:,:,2) = 0.0d0
          this%F(:,:,3) = 0.0d0
          this%F(:,:,4) = 0.0d0
-         print *, 'ijpair before : ', this%lattice%ijpair
-         print *, 'ijpair_sorted before : ', this%lattice%ijpair_sorted
-         print *, 'njij before : ', this%lattice%njij
          call this%lattice%neigh(1)
          print *, 'ijpair after : ', this%lattice%ijpair
          print *, 'ijpair_sorted after : ', this%lattice%ijpair_sorted !(na = num of diff atoms, nn=1 or snn=2, num of nn, atom index)
          print *, 'size(ijpair_sorted) after : ', size(this%lattice%ijpair_sorted)
-         print *, 'size(ijpair_sorted, 1) after : ', size(this%lattice%ijpair_sorted, 1) 
-         print *, 'size(ijpair_sorted, 2) after : ', size(this%lattice%ijpair_sorted, 2)
-         print *, 'size(ijpair_sorted, 3) after : ', size(this%lattice%ijpair_sorted, 3)
-         print *, 'size(ijpair_sorted, 4) after : ', size(this%lattice%ijpair_sorted, 4)
+         print *, 'Nmb of nn : ', size(this%lattice%ijpair_sorted, 3)
          print *, 'njij after : ', this%lattice%njij
+         print *, ''
+         print *, 'Nearest neighbours'
+         do i = 1, this%lattice%nrec
+            print *, 'Atom ', i
+            do j = 1, size(this%lattice%ijpair_sorted, 3)
+               print *, this%lattice%ijpair_sorted(i,1,j,:)
+            end do
+         end do
          ! stop
       else 
          print *, 'HubbardV_check is False.'
@@ -785,9 +787,19 @@ contains
       this%hub_j_sort = this%hub_j_sort/ry2ev
 
       ! Checks if self-consistent U flag and input values of U and J have both been provided. They would interfer with eachother. 
-      if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check) ) then
+      if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check)) then
          print *, 'ERROR'
          print *, 'Both input values for hubbard_u_sc and hubbard_u + hubbard_j has been provided.'
+         print *, 'Only one of them is allowed. Stops program!!'
+         stop
+      else if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) ) then
+         print *, 'ERROR'
+         print *, 'Both input values for hubbard_u_sc and hubbard_u has been provided.'
+         print *, 'Only one of them is allowed. Stops program!!'
+         stop
+      else if ( (this%hubbardU_sc_check) .and. (this%hubbardJ_check)) then 
+         print *, 'ERROR'
+         print *, 'Both input values for hubbard_u_sc and hubbard_j has been provided.'
          print *, 'Only one of them is allowed. Stops program!!'
          stop
       end if
@@ -861,7 +873,7 @@ contains
       allocate (this%uj_orb(this%lattice%nrec))
       allocate (this%hubbard_orb_config(this%lattice%nrec))
       allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
-      allocate (this%hubbard_v_pot(18, 18, size(this%lattice%ijpair_sorted,3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
+      allocate (this%hubbard_v_pot(18, 18, size(this%ee, 3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
       allocate (this%hubbard_u_sc(this%lattice%nrec,4))
       !end if
       !end if
@@ -1138,15 +1150,17 @@ contains
                end do
             end do
             ! print *, 'hub_v_pot test ', this%hubbard_v_pot
-            ! if (this%hubbardV_check) then
-            !    do i = 1, 9
-            !       do j = 1, 9
-            !          do ij = 1, size(this%lattice%ijpair_sorted,3)
-            !             this%ee(i,j,ij,ntype) = this%ee(i,j,ij,ntype) + this%hubbard_v_pot(i,j,ij,ntype)
-            !             this%ee(i+9,j+9,ij,ntype) = this%ee(i+9,j+9,ij,ntype) + this%hubbard_v_pot(i+9,j+9,ij,ntype)
-            !          end do
-            !       end do
-            !    end do
+            if (this%hubbardV_check) then
+               print *, 'Adding hubbard_v_pot onto hamiltonian'
+               do i = 1, 9
+                  do j = 1, 9
+                     do m = 1, nr
+                        this%ee(i,j,m,ntype) = this%ee(i,j,m,ntype) + this%hubbard_v_pot(i,j,m,ntype)
+                        this%ee(i+9,j+9,m,ntype) = this%ee(i+9,j+9,m,ntype) + this%hubbard_v_pot(i+9,j+9,m,ntype)
+                     end do
+                  end do
+               end do
+            end if
          end if
 
          if (this%hoh) then

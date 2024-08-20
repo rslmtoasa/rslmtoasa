@@ -1348,12 +1348,12 @@ contains
       integer :: na
       integer :: ie
       integer :: nn 
-      integer :: i, j, k, l1, l2, lmax, s1, s2, m1_max, m2_max, l1_ref, l2_ref, m1, m2
+      integer :: i, j, k, l1, l2, lmax, s1, s2, m1_max, m2_max, l1_ref, l2_ref, m1, m2, ia, nr
       integer :: ij, kl ! Pair index
       integer :: atom1, atom2 ! Atom index
       integer :: atom1_type, atom2_type ! Atom type
       integer :: tot_l_pair ! Total number of orbital pairs to be considered for an atom pair
-      real(rp) :: result, result2
+      real(rp) :: result, result2, nn_dist, dist
       real(rp) :: vij ! Hubbard V correction between atom+orbital i and j
       logical :: calc_pair
       !this variable is calculated in lattice (1 = nearest neighbour)
@@ -1373,29 +1373,30 @@ contains
       type(ArrayType), dimension(2,2,3,3) :: nji_sorted
 
 
-      nn = size(this%lattice%ijpair_sorted,3)
+      ! nn = size(this%lattice%ijpair_sorted,3)
+      nn = size(this%recursion%hamiltonian%ee, 3)
       na = this%lattice%nrec
       if (allocated(hub_V_pot)) deallocate (hub_V_pot)
       allocate(hub_V_pot(18,18,nn,this%lattice%nrec))
-      
-
-      ! Allocate the correct size of mn for each combination
-      do s1 = 1, 2
-         do s2 = 1, 2
-            do l1 = 1, 3
-               m1_max = l1*2-1
-               do l2 = 1, 3
-                  m2_max = l2*2-1
-                  if (allocated(nji_sorted(s1,s2,l1,l2)%mn)) deallocate (nji_sorted(s1,s2,l1,l2)%mn)
-                  allocate(nji_sorted(s1,s2,l1,l2)%mn(m1_max,m2_max))
-                  nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
-               end do
-            end do
-         end do
-      end do
       im_gij = 0.0d0
       im_gji = 0.0d0
       hub_V_pot(:,:,:,:) = 0.0d0
+
+      ! ! Allocate the correct size of mn for each combination
+      ! do s1 = 1, 2
+      !    do s2 = 1, 2
+      !       do l1 = 1, 3
+      !          m1_max = l1*2-1
+      !          do l2 = 1, 3
+      !             m2_max = l2*2-1
+      !             if (allocated(nji_sorted(s1,s2,l1,l2)%mn)) deallocate (nji_sorted(s1,s2,l1,l2)%mn)
+      !             allocate(nji_sorted(s1,s2,l1,l2)%mn(m1_max,m2_max))
+      !             nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
+      !          end do
+      !       end do
+      !    end do
+      ! end do
+      
 
       ! Calculate -im(gij)/pi
       do ij = 1, this%lattice%njij
@@ -1414,75 +1415,92 @@ contains
       end do
       do na = 1, this%lattice%nrec
          ! Loop over nearest neighbours
-         do ij = 1, size(this%lattice%ijpair_sorted,3)
-            ! Assign pair
-            atom1 = this%lattice%ijpair_sorted(na,1,ij,1)
-            print *, 'atom1', atom1
+         ia = this%lattice%atlist(na) ! Atom number in clust
+         nr = this%lattice%nn(ia, 1) ! Number of neighbours considered
+         nn_dist = this%lattice%nn_dist(na) ! Distance of nearest neighbours for atom na
+         ! do ij = 1, size(this%lattice%ijpair_sorted,3)
+         !    ! Assign pair
+         !    atom1 = this%lattice%ijpair_sorted(na,1,ij,1)
+         !    print *, 'atom1', atom1
+         !    atom1_type = this%lattice%num(atom1)
+         !    atom2 = this%lattice%ijpair_sorted(na,1,ij,2)
+         !    atom2_type = this%lattice%num(atom2)
+         do ij = 2, nr
+            atom1 = ia
             atom1_type = this%lattice%num(atom1)
-            atom2 = this%lattice%ijpair_sorted(na,1,ij,2)
+            atom2 = this%lattice%nn(atom1, ij)
             atom2_type = this%lattice%num(atom2)
-            ! Set correct density matrix for the given pair
-            nji_temp = 0.0d0
-            calc_pair = .false.
-            do kl = 1, this%lattice%njij
-               if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,1)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,2))) then
-                  nji_temp(:,:) = TRANSPOSE(nji(:,:,kl))
-                  calc_pair = .true.
-                  exit
-               else if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,2)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,1))) then
-                  ! Order reverse, do we need a sign change somewhere?
-                  nji_temp(:,:) = TRANSPOSE(nij(:,:,kl))
-                  calc_pair = .true.
-                  exit
-               end if
-            end do
-            ! If there is a +V correction for this pair
-            if (calc_pair) then
-               ! Sorting the density matrix nij for easier handling (vij between different orbitals)
-               ! Not needed probably
-               do s1 = 1, 2
-                  do s2 = 1, 2
-                     do l1 = 1, 3
-                        m1_max = l1*2-1
-                        do l2 = 1, 3
-                           m2_max = l2*2-1
-                           nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
-                           do m1 = 1, m1_max
-                              do m2 = 1, m2_max
-                                 nji_sorted(s1,s2,l1,l2)%mn(m1,m2) = nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s2-1)*9 + m2)
-                              end do
+            !Check here if atom1 and atom2 are nearest neighbours.
+            dist = sqrt((this%lattice%cr(1,atom1) - this%lattice%cr(1,atom2))**2 + (this%lattice%cr(2,atom1) &
+                  - this%lattice%cr(2,atom2))**2 + (this%lattice%cr(3,atom1) - this%lattice%cr(3,atom2))**2)
+            if ( dist - 0.001d0 > nn_dist ) then
+               print *, 'Atom ', atom1, 'and atom ', atom2, 'are not nearest neighbours. Do not add a +V correction.'
+            else
+               print *, 'Atom ', atom1, 'and atom ', atom2, 'are nearest neighbours. Check to see if +V correction should be added.'
+               ! Set correct density matrix for the given pair
+               nji_temp = 0.0d0
+               calc_pair = .false.
+               do kl = 1, this%lattice%njij
+                  if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,1)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,2))) then
+                     nji_temp(:,:) = TRANSPOSE(nji(:,:,kl))
+                     calc_pair = .true.
+                     exit
+                  else if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,2)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,1))) then
+                     ! Order reverse, do we need a sign change somewhere?
+                     nji_temp(:,:) = TRANSPOSE(nij(:,:,kl))
+                     calc_pair = .true.
+                     exit
+                  end if
+               end do
+               ! If there is a +V correction for this pair
+               if (calc_pair) then
+                  print *, 'Adding +V correction.'
+                  ! Sorting the density matrix nij for easier handling (vij between different orbitals)
+                  ! ! Not needed probably
+                  ! do s1 = 1, 2
+                  !    do s2 = 1, 2
+                  !       do l1 = 1, 3
+                  !          m1_max = l1*2-1
+                  !          do l2 = 1, 3
+                  !             m2_max = l2*2-1
+                  !             nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
+                  !             do m1 = 1, m1_max
+                  !                do m2 = 1, m2_max
+                  !                   nji_sorted(s1,s2,l1,l2)%mn(m1,m2) = nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s2-1)*9 + m2)
+                  !                end do
+                  !             end do
+                  !          end do
+                  !       end do
+                  !    end do
+                  ! end do
+                  ! Check between which orbitals there is a +V correction
+                  !Number of orbital pairs between the two atoms
+                  tot_l_pair = this%recursion%hamiltonian%orbs_v_num(atom1_type, atom2_type)
+                  do kl = 1, tot_l_pair
+                     ! Maybe also include ...%orbs_v(atom2_type, atom1_type)%val(kl,:) to cover everything.
+                     ! Alternatively creating ...%orbs_v such that this is included automatically
+                     l1_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,1)
+                     l2_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,2)
+                     vij = this%recursion%hamiltonian%hubbard_v(atom1_type, atom2_type, l1_ref, l2_ref)
+                     do s1 = 1, 2
+                        do l1 = 1, 3
+                           do l2 = 1, 3
+                              if ((l1 == l1_ref) .and. (l2 == l2_ref)) then
+                                 do m1 = 1, l1*2-1
+                                    do m2 = 1, l2*2-1
+                                       ! This could be assigned directly to the variable in hamiltonian
+                                       hub_V_pot((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2, ij, na) = &
+                                                   -vij*nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2)
+                                    end do
+                                 end do
+                              end if
                            end do
                         end do
                      end do
                   end do
-               end do
-               ! Check between which orbitals there is a +V correction
-               !Number of orbital pairs between the two atoms
-               tot_l_pair = this%recursion%hamiltonian%orbs_v_num(atom1_type, atom2_type)
-               do kl = 1, tot_l_pair
-                  ! Maybe also include ...%orbs_v(atom2_type, atom1_type)%val(kl,:) to cover everything.
-                  ! Alternatively creating ...%orbs_v such that this is included automatically
-                  l1_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,1)
-                  l2_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,2)
-                  vij = this%recursion%hamiltonian%hubbard_v(atom1_type, atom2_type, l1_ref, l2_ref)
-                  do s1 = 1, 2
-                     do l1 = 1, 3
-                        do l2 = 1, 3
-                           if ((l1 == l1_ref) .and. (l2 == l2_ref)) then
-                              do m1 = 1, l1*2-1
-                                 do m2 = 1, l2*2-1
-                                    ! This could be assigned directly to the variable in hamiltonian
-                                    hub_V_pot((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2, ij, na) = &
-                                                -vij*nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2)
-                                 end do
-                              end do
-                           end if
-                        end do
-                     end do
-                  end do
-               end do
-            else
-               print *, 'No Hubbard V correction for atom pair', atom1_type, atom2_type
+               else
+                  print *, 'No Hubbard V correction for atom pair', atom1_type, atom2_type
+               end if
             end if
          end do
       end do
@@ -1636,6 +1654,8 @@ contains
             end do
          end do
       end do
+
+      ! Calculates the renormalized (or screened local density matrix)
       do na = 1, this%lattice%nrec
          do l = 0, 2
             do ispin = 1, 2
