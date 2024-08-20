@@ -311,8 +311,6 @@ contains
 
    end function scaler
 
-<<<<<<< HEAD
-=======
    !> Tabulated values of hydrogenic Slater radial integrals
    !> Returns F^k(ab,cd) = int dr1 dr2 (r<)^k/(r>)^(k+1)*R_a(r1)*R_b(r2)*R_c(r1)*R_d(r2)*r1^2*r2^2
    !> Only implemented for diagonal terms
@@ -342,7 +340,6 @@ contains
       
    end function tabulated_slater_integrals
 
->>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
 
    !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U+J method
    !> Implemented by Viktor Frilén on 28.06.2024

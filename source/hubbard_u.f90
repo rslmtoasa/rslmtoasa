@@ -233,9 +233,13 @@ subroutine print_ak(this)
    real(rp) :: f0, f2, f4
    integer, dimension(5) :: ms_d = [-2, -1, 0, 1, 2]
 
-   f0 = this%hamiltonian%F0(1,1)
-   f2 = this%hamiltonian%F2(1,1)
-   f4 = this%hamiltonian%F4(1,1)
+   ! f0 = this%hamiltonian%F0(1,1)
+   ! f2 = this%hamiltonian%F2(1,1)
+   ! f4 = this%hamiltonian%F4(1,1)
+   
+   f0 = this%hamiltonian%F(1,1,1)
+   f2 = this%hamiltonian%F(1,1,2)
+   f4 = this%hamiltonian%F(1,1,3)
    do m1 = 1, 5
       do m2 = 1, 5
          print *, ms_d(m1), ms_d(m2), ms_d(m1), ms_d(m2)
