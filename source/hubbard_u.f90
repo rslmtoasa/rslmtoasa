@@ -79,7 +79,7 @@ contains
       this%o_type = 'orbital_test'
       this%u = 4.0d0
 
-      print *, this%o_type
+      ! print *, this%o_type
    
    end subroutine restore_to_default
 

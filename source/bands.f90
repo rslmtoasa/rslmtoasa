@@ -104,7 +104,10 @@ module bands_mod
       procedure :: build_hubbard_pot ! LDA+U+J
       procedure :: spdf_Hubbard ! LDA+U+J method
       procedure :: Hubbard_V
+<<<<<<< HEAD
+=======
       procedure :: calc_hubbard_U
+>>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -1502,6 +1505,8 @@ contains
 
    end subroutine Hubbard_V
 
+<<<<<<< HEAD
+=======
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1761,6 +1766,7 @@ contains
    end subroutine calc_hubbard_U
 
 
+>>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
 
    subroutine calculate_projected_dos(this)
       use mpi_mod
