@@ -629,6 +629,16 @@ contains
 
    end subroutine print_state
 
+
+   !> Row 425 in green.f90
+   ! subroutine intersite_gf(this)
+      ! use mpi_mod
+      ! implicit none
+      ! class(green), intent(inout) :: this
+   ! end subroutine intersite_gf
+
+
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -638,7 +648,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine run(this)
       class(self), intent(inout) :: this
-      integer :: i, ia, niter
+      integer :: i, ia, niter, ie, l1, l2
       real(rp), dimension(6) :: QSL
 
       real(rp), dimension(:), allocatable :: pot_arr
@@ -648,7 +658,7 @@ contains
       type(hubbard_u) :: hubbard_u_obj
 
       if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
-         print *, 'Initialize Hubbard U module'
+         ! print *, 'Initialize Hubbard U module'
          hubbard_u_obj = hubbard_u(this%green)
          ! call hubbard_u_obj%save_hubbard_int_mat_to_file()
          ! call hubbard_u_obj%calc_test()
@@ -666,13 +676,36 @@ contains
          call g_timer%start('recursion')
          select case (this%control%calctype)
          case ('B')
+
             do ia = 1, this%lattice%nrec
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
             if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i .gt. 1) then
-               ! Initiate the LDA+U+J method by building the Hubbard U+J potential matrix
+               !> Initiate the LDA+U+J method by building the Hubbard U+J potential matrix
                call this%bands%spdf_Hubbard() ! Improved code
-               ! call this%bands%build_hubbard_pot() ! Previous code
+               ! call this%bands%build_hubbard_pot() ! Previous code (without +V)
+
+               !> Initiate the +V intersite Coulomb correction to LDA+U+J
+               if (this%recursion%hamiltonian%hubbardV_check) then
+                  call this%recursion%recur_b_ij()
+                  call this%green%calculate_intersite_gf()
+                  call this%bands%Hubbard_V()
+                  ! do ie = 1, this%en%channels_ldos + 10
+                  !    print *, ''
+                  !    print *, 'ie : ', ie
+                     ! print *, 'gij : ', this%green%gij(:,:,ie,1)
+                     ! print *, 'gji^T : ', transpose(this%green%gji(:,:,ie,1))
+                  !    print *, ''
+                  !    print *, '---------------------------------------------------------------------------'
+                  ! end do
+                  ! print *, ''
+                  ! print *, 'gij : ', this%green%gij(1:2, 1:2 ,1000,1)
+                  ! print *, ''
+                  ! print *, 'gji^T : ', transpose(this%green%gji(1:2, 1:2 ,1000,1))
+                  ! print *, ''
+                  ! print *, 'gji : ', this%green%gji(1:2, 1:2 ,1000,1)
+      
+               end if
             end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
@@ -726,6 +759,7 @@ contains
          case ('chebyshev')
             call this%green%chebyshev_green()
          case ('block')
+            ! HERE
             call this%recursion%zsqr()
             call this%green%block_green()
          end select

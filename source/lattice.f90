@@ -305,6 +305,13 @@ module lattice_mod
       !> Number of pairs
       integer :: njij
 
+      !> Pair of atoms to calculate the exchange interactions (unique and all)
+      integer, dimension(:,:), allocatable :: ijpair_all
+      !> Pair of atoms to calculate exchange, sorted by atom
+      integer, dimension(:,:,:,:), allocatable :: ijpair_sorted
+      !> Number of pairs (unique and all)
+      integer :: njij_all
+
       !> Trio of atoms to calculate the spin-lattice interactions
       real(rp), dimension(:, :), allocatable :: ijktrio
       !> Number of trios i,j,k
@@ -315,6 +322,8 @@ module lattice_mod
       procedure :: build_from_file
       procedure :: build_from_lattice
       procedure :: restore_to_default
+      procedure :: neigh
+      procedure :: assign_ijpair
       procedure :: bravais
       procedure :: build_data
       procedure :: build_clusup
@@ -932,6 +941,250 @@ contains
 
    end subroutine restore_to_default
 
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !>Subroutine for assigning nearest neighbors, not from file but from cluster built with bravais.
+   !> Constructor
+   !---------------------------------------------------------------------------
+   subroutine neigh(this, nhb_degree)
+      class(lattice) :: this
+      !First neighbors and their type
+      integer, dimension(this%ntype, nhb_degree) :: inx_ntype_break
+      integer, dimension(this%ntype, this%kk) :: nhb_inx_m
+      integer :: l,i, nhb_it, j, append_iter, max_append
+      integer, intent(in) :: nhb_degree
+      integer, dimension(this%ntype, nhb_degree) :: nmb_of_nhbrs
+      real(rp), dimension(2) :: min_dist_m
+      real(rp) :: dist, min_dist
+      nhb_inx_m(:,:) = 0
+      max_append = 0
+      do l=1, this%ntype
+         append_iter = 1
+         min_dist_m = 0
+         min_dist_m(2) = 10000
+         do j=1,nhb_degree
+            nhb_it = 1
+            do i=1, this%kk
+               dist = sqrt((this%cr(1,l) - this%cr(1,i))**2 + (this%cr(2,l) - this%cr(2,i))**2 + (this%cr(3,l) - this%cr(3,i))**2)
+               if ((dist - 0.001d0 > min_dist_m(1)) .and. (dist + 0.001d0 < min_dist_m(2))) then
+                  min_dist_m(2) = dist
+                  nhb_inx_m(l,append_iter:this%kk) = 0
+                  nhb_inx_m(l,append_iter) = i
+                  nhb_it = 1
+               else if ((dist - 0.001d0 <= min_dist_m(2)) .and. (dist - 0.001d0 > min_dist_m(1))) then
+                  nhb_inx_m(l,append_iter + nhb_it) = i
+                  nhb_it = nhb_it + 1
+               end if
+            end do
+            min_dist_m(1) = min_dist_m(2)
+            min_dist_m(2) = 10000
+            ! write (*,*) 'neighbors at degree ', j, 'for atom ', l, ' is ', nhb_it
+            nmb_of_nhbrs(l,j) = nhb_it
+            append_iter = append_iter + nhb_it
+            inx_ntype_break(l,j) = append_iter-1
+         end do
+         if (append_iter > max_append) then
+            max_append = append_iter
+         end if
+      end do
+      max_append = max_append - 1
+      call this%assign_ijpair(nhb_inx_m(:,1:max_append), nmb_of_nhbrs)
+   end subroutine neigh
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> assigns the actual values in the correct form to the lattice object.
+   !---------------------------------------------------------------------------
+   subroutine assign_ijpair(this, input_indices, nmb_of_nhbrs)
+      class(lattice) :: this
+      integer, dimension(:,:), intent(in) :: input_indices
+      integer, dimension(:,:), intent(in) :: nmb_of_nhbrs
+      integer, dimension(:,:), allocatable :: ijpair_unique
+      integer, dimension(:,:,:,:), allocatable :: ijpair_sorted
+      integer, dimension(:,:,:), allocatable :: ijpair_unique_2, ijpair_temp
+      integer, dimension(this%nrec) :: counter
+      integer, dimension(size(input_indices,2)*this%ntype, 2) :: temp_save
+      integer :: l,j, ij_iter, i, k, max_nhbr, ia, nn, m
+      logical :: is_duplicate
+      temp_save(:,:) = 0
+      ij_iter = 1
+      do l=1,size(input_indices,1)
+         do j=1,size(input_indices,2)
+            if (input_indices(l,j) == 0) then
+               exit
+            else
+               temp_save(ij_iter,:) = [l,input_indices(l,j)]
+               ij_iter = ij_iter + 1
+            end if
+         end do
+      end do
+      if(allocated(this%ijpair)) deallocate(this%ijpair)
+      allocate(this%ijpair(ij_iter-1,2))
+      this%ijpair = temp_save(1:ij_iter-1,:)
+      do j=1,ij_iter-1
+         ! print *, this%ijpair(j,:)
+      end do
+      this%njij = size(this%ijpair, 1)
+      !--------------------------------------------------------------------------------------------------------------------------------------------------------
+      !Stores all unique pairs in ijpair with njij the number of unique pairs. All pairs and the corresponding number are stored in ijpair_all and njij_all
+      !--------------------------------------------------------------------------------------------------------------------------------------------------------
+      call move_alloc(this%ijpair, this%ijpair_all)
+      this%njij_all = ij_iter-1
+      ! print *, 'Unique pairs test'
+      !Finds all unique pairs
+      allocate(ijpair_unique(size(this%ijpair_all, 1), size(this%ijpair_all, 2)))
+      ijpair_unique(1,:) = this%ijpair_all(1,:)
+      k = 1
+      do i = 2, this%njij_all
+         is_duplicate = .false.
+         do j = 1, k
+            if ((this%num(ijpair_unique(j,1)) == this%num(this%ijpair_all(i,1))) .and. (this%num(ijpair_unique(j,2)) == this%num(this%ijpair_all(i,2)))) then
+               is_duplicate = .true.
+               exit
+            else if ((this%num(ijpair_unique(j,1)) == this%num(this%ijpair_all(i,2))) .and. (this%num(ijpair_unique(j,2)) == this%num(this%ijpair_all(i,1)))) then
+               is_duplicate = .true.
+               exit
+            end if
+         end do
+         if (.not. is_duplicate) then
+            k = k + 1
+            ijpair_unique(k, :) = this%ijpair_all(i, :)
+         end if
+      end do
+      this%njij = k
+      if(allocated(this%ijpair)) deallocate(this%ijpair)
+      allocate(this%ijpair(k,2))
+      this%ijpair(:,:) = ijpair_unique(1:k,:)
+      deallocate(ijpair_unique)
+      !Finds the maximum number of neighbours for creating improved ijpair_sorted
+      max_nhbr = 0
+      do i = 1, this%ntype
+         do j = 1, size(nmb_of_nhbrs, 2)
+            if (nmb_of_nhbrs(i,j) .gt. max_nhbr) then
+               max_nhbr = nmb_of_nhbrs(i,j)
+            end if
+         end do
+      end do
+      allocate(ijpair_sorted(this%ntype, size(nmb_of_nhbrs,2), max_nhbr, 2))
+      ijpair_sorted = 0
+      k = 1
+      do ia = 1, this%ntype
+         do nn = 1, size(nmb_of_nhbrs, 2)
+            do i = 1, nmb_of_nhbrs(ia,nn)
+               ijpair_sorted(ia, nn, i, :) = this%ijpair_all(k,:)
+               k = k + 1
+            end do
+         end do
+      end do
+      if(allocated(this%ijpair_sorted)) deallocate(this%ijpair_sorted)
+      allocate(this%ijpair_sorted(size(ijpair_sorted, 1), size(ijpair_sorted,2), size(ijpair_sorted, 3), 2))
+      this%ijpair_sorted = ijpair_sorted
+      deallocate(ijpair_sorted)
+      !Finds all unique pairs 2.0
+      !---------------------------------------------------------------------------------------
+      allocate(ijpair_unique_2(size(this%ijpair_sorted, 2), this%njij_all, 2))
+      allocate(ijpair_temp(size(this%ijpair_sorted, 2), this%njij_all, 2))
+      ijpair_unique_2 = 0
+      ijpair_temp = 0
+      do nn = 1, size(this%ijpair_sorted,2)
+         k = 1
+         do ia = 1, this%ntype
+            do i = 1, size(this%ijpair_sorted, 3)
+               ijpair_temp(nn, k, :) = this%ijpair_sorted(ia, nn, i, :)
+               k = k + 1
+            end do
+         end do
+      end do
+      do nn = 1, size(this%ijpair_sorted,2)
+         ijpair_unique_2(nn,1,:) = ijpair_temp(nn,1,:)
+      end do
+      do nn = 1, size(this%ijpair_sorted,2)
+         k = 1
+         do i = 2, this%njij_all
+            is_duplicate = .false.
+            do j = 1, k
+               if ((this%num(ijpair_unique_2(nn,j,1)) == this%num(ijpair_temp(nn,i,1))) .and. (this%num(ijpair_unique_2(nn,j,2)) == this%num(ijpair_temp(nn,i,2)))) then
+                  is_duplicate = .true.
+                  exit
+               else if ((this%num(ijpair_unique_2(nn,j,1)) == this%num(ijpair_temp(nn,i,2))) .and. (this%num(ijpair_unique_2(nn,j,2)) == this%num(ijpair_temp(nn,i,1)))) then
+                  is_duplicate = .true.
+                  exit
+               end if
+            end do
+               if (.not. is_duplicate) then
+                  k = k + 1
+                  ijpair_unique_2(nn, k, :) = ijpair_temp(nn, i, :)
+               end if
+         end do
+      end do
+      deallocate(ijpair_temp)
+      k = 0
+      do nn = 1, size(ijpair_unique_2, 1)
+         do i = 1, size(ijpair_unique_2, 2)
+            if (ijpair_unique_2(nn,i,1) /= 0) then
+               k = k + 1
+            end if
+         end do
+      end do
+      !Wrong here? Test tommorrow
+      ! print *, 'this%njij = ', this%njij
+      this%njij = k
+      ! print *, 'this%njij (after) = ', this%njij
+      if(allocated(this%ijpair)) deallocate(this%ijpair)
+      allocate(this%ijpair(k,2))
+      k = 0
+      do nn = 1, size(ijpair_unique_2, 1)
+         do i = 1, size(ijpair_unique_2, 2)
+            if (ijpair_unique_2(nn,i,1) /= 0) then
+               k = k + 1
+               this%ijpair(k,:) = ijpair_unique_2(nn,i,:)
+            end if
+         end do
+      end do
+      this%njij = k
+      ! if(allocated(this%ijpair)) deallocate(this%ijpair)
+      ! allocate(this%ijpair(k,2))
+      ! this%ijpair(:,:) = ijpair_unique(1:k,:)
+      do nn = 1, size(ijpair_unique_2, 1)
+         ! print *, 'Neighbour degree: ', nn
+         do i = 1, size(ijpair_unique_2, 2)
+            if (ijpair_unique_2(nn,i,1) /= 0 .and. ijpair_unique_2(nn,i,2) /= 0) then
+               ! print *, 'Atom index: ', ijpair_unique_2(nn,i,:), ' Atom type: ', this%num(ijpair_unique_2(nn,i,1)), this%num(ijpair_unique_2(nn,i,2))
+            end if
+            end do
+      end do
+      deallocate(ijpair_unique_2)
+      print *, ''
+      !----------------------------------------------------------------------------------------
+      ! print *, 'All pairs'
+      do j=1,this%njij_all
+         ! print *, 'Atom idex: ', this%ijpair_all(j,:), ' Atom type: ', this%num(this%ijpair_all(j,1)), this%num(this%ijpair_all(j,2))
+      end do
+      ! print *, ''
+      ! print *, 'Sorted pairs 2.0'
+      do ia = 1, size(this%ijpair_sorted, 1)
+         ! print *, 'Atom', ia
+         do nn = 1, size(this%ijpair_sorted, 2)
+            ! print *, 'Neighbours degree ', nn
+            do i = 1, size(this%ijpair_sorted, 3)
+               ! print*, 'Eleements in sorted list. Atom index: ', this%ijpair_sorted(ia,nn,i,:), 'Atom type: ', this%num(this%ijpair_sorted(ia,nn,i,1)), this%num(this%ijpair_sorted(ia,nn,i,2))
+            end do
+         end do
+      end do
+      ! print *, 'Unique pairs'
+
+      ! do j= 1, this%njij
+      !   print *, 'Atom idex: ', ijpair_unique(j,:), ' Atom type: ', this%num(ijpair_unique(j,1)), this%num(ijpair_unique(j,2))
+      ! end do
+      do j= 1, this%njij
+         ! print *, 'Atom idex: ', this%ijpair(j,:), ' Atom type: ', this%num(this%ijpair(j,1)), this%num(this%ijpair(j,2))
+      end do
+      ! this%njij = 0.0d0
+      ! this%ijpair = this%ijpair_all
+   end subroutine assign_ijpair
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1022,6 +1275,7 @@ contains
       call move_alloc(iz, this%iz)
       call move_alloc(num, this%num)
       close (10)
+
    end subroutine bravais
 
    !---------------------------------------------------------------------------

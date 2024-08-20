@@ -55,6 +55,8 @@ module recursion_mod
       !> Block recursion coefficients
       complex(rp), dimension(:, :, :, :), allocatable :: a_b, b2_b
       complex(rp), dimension(:, :, :), allocatable :: atemp_b, b2temp_b
+      ! complex(rp), dimension(:, :, :, :, :), allocatable :: a_baux, b2_baux
+      ! complex(rp), dimension(:, :, :, :), allocatable :: atemp_baux, b2temp_baux
       !> Atom list in hopping region
       integer, dimension(:), allocatable :: izero, idum, irlist
       integer :: irnum !< Atoms within recursion shells
@@ -151,6 +153,8 @@ contains
       if (allocated(this%b2temp)) call g_safe_alloc%deallocate('recursion.b2temp', this%b2temp)
       if (allocated(this%a_b)) call g_safe_alloc%deallocate('recursion.a_b', this%a_b)
       if (allocated(this%b2_b)) call g_safe_alloc%deallocate('recursion.b2_b', this%b2_b)
+      ! if (allocated(this%a_baux)) call g_safe_alloc%deallocate('recursion.a_baux', this%a_baux)
+      ! if (allocated(this%b2_baux)) call g_safe_alloc%deallocate('recursion.b2_baux', this%b2_baux)
       if (allocated(this%psi_b)) call g_safe_alloc%deallocate('recursion.psi_b', this%psi_b)
       if (allocated(this%hpsi)) call g_safe_alloc%deallocate('recursion.hpsi', this%hpsi)
       if (allocated(this%hohpsi)) call g_safe_alloc%deallocate('recursion.hohpsi', this%hohpsi)
@@ -158,6 +162,8 @@ contains
       if (allocated(this%socpsi)) call g_safe_alloc%deallocate('recursion.socpsi', this%socpsi)
       if (allocated(this%atemp_b)) call g_safe_alloc%deallocate('recursion.atemp_b', this%atemp_b)
       if (allocated(this%b2temp_b)) call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
+      ! if (allocated(this%atemp_baux)) call g_safe_alloc%deallocate('recursion.atemp_b', this%atemp_baux)
+      ! if (allocated(this%b2temp_baux)) call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_baux)
       if (allocated(this%pmn_b)) call g_safe_alloc%deallocate('recursion.pmn_b', this%pmn_b)
 #else
       if (allocated(this%a)) deallocate (this%a)
@@ -176,6 +182,8 @@ contains
       if (allocated(this%b2temp)) deallocate (this%b2temp)
       if (allocated(this%a_b)) deallocate (this%a_b)
       if (allocated(this%b2_b)) deallocate (this%b2_b)
+      ! if (allocated(this%a_b)) deallocate (this%a_baux)
+      ! if (allocated(this%b2_b)) deallocate (this%b2_baux)
       if (allocated(this%psi_b)) deallocate (this%psi_b)
       if (allocated(this%hpsi)) deallocate (this%hpsi)
       if (allocated(this%hohpsi)) deallocate (this%hohpsi)
@@ -183,6 +191,8 @@ contains
       if (allocated(this%socpsi)) deallocate (this%socpsi)
       if (allocated(this%atemp_b)) deallocate (this%atemp_b)
       if (allocated(this%b2temp_b)) deallocate (this%b2temp_b)
+      ! if (allocated(this%atemp_b)) deallocate (this%atemp_baux)
+      ! if (allocated(this%b2temp_b)) deallocate (this%b2temp_baux)
       if (allocated(this%pmn_b)) deallocate (this%pmn_b)
 #endif
    end subroutine destructor
@@ -447,7 +457,8 @@ contains
 
       llmax = this%lattice%control%lld
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
-      do ij = start_atom, end_atom
+      ! do ij = start_atom, end_atom ! SHOULD GO TO NJIJ NOT END_ATOM
+      do ij = 1, this%lattice%njij
          ij_loc = g2l_map(ij)
          i = this%lattice%ijpair(ij, 1) ! Atom number in the clust file, atom i
          j = this%lattice%ijpair(ij, 2) ! Atom number in the clust file, atom j
@@ -494,13 +505,17 @@ contains
                this%psi_b(l, l, j) = bsign
                this%atemp_b(l, l, llmax) = (0.0d0, 0.0d0)
                this%b2temp_b(l, l, 1) = (1.0d0, 0.0d0)
+               ! do i = 1, 4
+               !    this%atemp_baux(l, l, llmax, i) = (0.0d0, 0.0d0)
+               !    this%b2temp_baux(l, l, 1, i) = (1.0d0, 0.0d0)
+               ! end do
             end do
 
             call this%crecal_b()
 
             do ll = 1, llmax
                do l = 1, 18
-                  do m = 1, 18
+                  do m = 1, 18               
                      this%a_b(l, m, ll, ij_loc*4 - 4 + reci) = (this%atemp_b(l, m, ll))
                      this%b2_b(l, m, ll, ij_loc*4 - 4 + reci) = (this%b2temp_b(l, m, ll))
                   end do
@@ -2290,11 +2305,19 @@ contains
       call g_safe_alloc%allocate('recursion.psi2', this%psi2, (/18, 18, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.psi0', this%psi0, (/18, 18, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.v', this%v, (/18, this%lattice%kk/))
+      print *, 'Test of njij : ', this%lattice%njij
       if ((this%lattice%njij == 0) .and. (this%lattice%njijk == 0)) then
          call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/18, 18, this%control%lld, this%lattice%nrec/))
          call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/18, 18, this%control%lld,, this%lattice%nrec/))
          call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/18, 18, (2*this%lattice%control%lld) + 2, this%lattice%nrec/))
          call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/18, 18, (2*this%lattice%control%lld) + 2, this%lattice%nrec/))
+      else if (this%lattice%njij > 0) then
+         call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld,, this%lattice%njij*4/))
+         ! call g_safe_alloc%allocate('recursion.a_b', this%a_baux, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld, this%lattice%njij*4, 4/))
+         ! call g_safe_alloc%allocate('recursion.b2_b', this%b2_baux, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld,, this%lattice%njij*4, 4/))
+         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
       else
          call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld, this%lattice%njij*4/))
          call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld,, this%lattice%njij*4/))
@@ -2307,7 +2330,9 @@ contains
       call g_safe_alloc%allocate('recursion.enupsi', this%enupsi, (/18, 18, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.socpsi', this%socpsi, (/18, 18, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/18, 18, this%control%lld/))
-      call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
+      call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld, 4/))
+      ! call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_baux, (/18, 18, this%control%lld, 4/))
+      ! call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_baux, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
 
 #else
