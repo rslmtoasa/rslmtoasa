@@ -43,7 +43,6 @@ module self_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
    use namelist_generator_mod, only: namelist_generator
-   use hubbard_u_mod
 #ifdef USE_MPI
    use mpi
 #endif
@@ -654,15 +653,6 @@ contains
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
-      !> Hubbard U object used in summer project. Many implementations might be written here
-      type(hubbard_u) :: hubbard_u_obj
-
-      if (this%hamiltonian%hubbard_u(1,1) .ne. 0.0d0) then
-         ! print *, 'Initialize Hubbard U module'
-         hubbard_u_obj = hubbard_u(this%green)
-         ! call hubbard_u_obj%save_hubbard_int_mat_to_file()
-         ! call hubbard_u_obj%calc_test()
-      end if
 
       !===========================================================================
       !                              BEGIN SCF LOOP
