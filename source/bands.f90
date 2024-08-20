@@ -104,10 +104,7 @@ module bands_mod
       procedure :: build_hubbard_pot ! LDA+U+J
       procedure :: spdf_Hubbard ! LDA+U+J method
       procedure :: Hubbard_V
-<<<<<<< HEAD
-=======
       procedure :: calc_hubbard_U
->>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -1375,13 +1372,12 @@ contains
 
       type(ArrayType), dimension(2,2,3,3) :: nji_sorted
 
-      ! --------------------------------- FELDEFINIERAT ----------------------------------------------------------
 
       nn = size(this%lattice%ijpair_sorted,3)
       na = this%lattice%nrec
       if (allocated(hub_V_pot)) deallocate (hub_V_pot)
       allocate(hub_V_pot(18,18,nn,this%lattice%nrec))
-      ! ---------------------------------------------------------------------------------------------------------- 
+      
 
       ! Allocate the correct size of mn for each combination
       do s1 = 1, 2
@@ -1505,8 +1501,6 @@ contains
 
    end subroutine Hubbard_V
 
-<<<<<<< HEAD
-=======
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1766,7 +1760,6 @@ contains
    end subroutine calc_hubbard_U
 
 
->>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
 
    subroutine calculate_projected_dos(this)
       use mpi_mod
