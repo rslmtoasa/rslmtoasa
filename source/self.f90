@@ -854,6 +854,14 @@ contains
             if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i == 1) then
                call g_logger%info('LDA+U+J module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
                niter = niter + 1
+            else if (this%hamiltonian%hubbardU_sc_check) then
+               print *, 'Calculates U_eff'
+               call this%bands%calc_hubbard_U() ! Calculates Hubbard U
+               if ( this%bands%hubbard_u_converged ) then
+                  print *, 'The calculated Hubbard U has converged. Exit calculation.'
+                  exit
+               end if
+               niter = niter + 1
             else
                exit
             end if

@@ -81,6 +81,10 @@ module bands_mod
       real(rp), dimension(:, :), allocatable :: mag_for
       !> Local density matrix (implemented for Hubbard U project)
       real(rp), dimension(:,:,:,:,:), allocatable :: ld_matrix 
+      !> Calculated effictive Hubbard U (= U - J)
+      real(rp), dimension(:,:), allocatable :: hubbard_u_eff_old
+      !> Checks if the calculated effective Hubbard U has converged
+      logical :: hubbard_u_converged
    contains
       procedure :: calculate_projected_green
       procedure :: calculate_projected_dos
@@ -100,6 +104,10 @@ module bands_mod
       procedure :: build_hubbard_pot ! LDA+U+J
       procedure :: spdf_Hubbard ! LDA+U+J method
       procedure :: Hubbard_V
+<<<<<<< HEAD
+=======
+      procedure :: calc_hubbard_U
+>>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -172,6 +180,7 @@ contains
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
       if (allocated(this%ld_matrix)) deallocate (this%ld_matrix)
+      if (allocated(this%hubbard_u_eff_old)) deallocate (this%hubbard_u_eff_old)
 #endif
    end subroutine destructor
 
@@ -210,6 +219,9 @@ contains
       allocate (this%mag_for(3, atoms_per_process))
       !Add if to check if hubbard_check = True when emil has implemented this
       allocate (this%ld_matrix(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
+      if ( this%recursion%hamiltonian%hubbardU_sc_check ) then
+         allocate (this%hubbard_u_eff_old(this%lattice%nrec, 4))
+      end if
 #endif
       this%dtot(:) = 0.0d0
       this%dtotcheb(:) = 0.0d0
@@ -223,6 +235,10 @@ contains
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
       this%ld_matrix(:,:,:,:,:) = 0.0d0
+      if ( this%recursion%hamiltonian%hubbardU_sc_check) then
+         this%hubbard_u_eff_old(:,:) = 0.0d0
+      end if
+      this%hubbard_u_converged = .false.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1489,6 +1505,268 @@ contains
 
    end subroutine Hubbard_V
 
+<<<<<<< HEAD
+=======
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculates the Hubbard U and J parameters and creates an effective U = U - J
+   !> Based on the article
+   !> Luis A. Agapito, Stefano Curtarolo, and Marco Buongiorno Nardelli - Phys. Rev. X 5, 011006 – Published 28 January 2015
+   !> Created and improved by Viktor Frilén 16.08.2024
+   !---------------------------------------------------------------------------
+   subroutine calc_hubbard_U(this)
+      class(bands) :: this
+
+      ! Local variables
+      integer :: i, j ! Orbital indices
+      integer :: na ! Atom index
+      integer :: ie ! Energy channel index
+      integer :: ispin, ispin2 ! Spin index
+      integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
+      integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
+      integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
+      real(rp) :: f0, f2, f4, f6 ! Slater integrals
+      real(rp), dimension(this%lattice%nrec, 4) :: hub_u_temp, hub_j_temp, hub_u_eff ! Variables used for calculating U, J and U_eff ab initio
+      real(rp) :: hub_u_denominator, hub_j_denominator ! Variables to store the denominators of U and J
+      real(rp), dimension(:,:), allocatable :: hub_u, hub_j ! Hubbard U and J parameters
+      real(rp) :: result, temp, temp2
+      real(rp), dimension(this%lattice%nrec,4,4) :: f ! Slater integrals
+      real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
+      ! Local variable array for local density matrix
+      real(rp), dimension(:,:,:,:,:), allocatable :: LDM ! Local density matrix (LDM), works for spdf orbitals
+      real(rp), dimension(:,:,:,:,:), allocatable :: LDM_screened ! Local density matrix renormalized to include screening according to L. A. Agapito
+      real(rp) :: dc ! Double counting term
+      real(rp), dimension(4) :: U_energy, dc_energy 
+      real(rp), dimension(this%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
+      real(rp), dimension(this%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
+      ! Temporary potential that will be put into this%hubbard_pot
+      real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot  
+      integer :: cntr ! Counts number of orbitals with a U per atom.    
+      
+      type :: ArrayType
+         integer, allocatable :: val(:)
+      end type ArrayType
+      type(ArrayType), dimension(4) :: ms
+      type(ArrayType), dimension(this%lattice%nrec) :: l_arr
+  
+      ms(1)%val = [0]
+      ms(2)%val = [-1, 0, 1]
+      ms(3)%val = [-2, -1, 0, 1, 2]
+      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
+
+      ! Sets up the DFT+U calculation usually done in hamiltonian.f90
+      ! Only needed for the first iteration but this does not cause problems
+      this%recursion%hamiltonian%hubbardU_check = .true.
+      this%recursion%hamiltonian%hubbardJ_check = .true.
+      if (allocated(this%recursion%hamiltonian%F)) deallocate (this%recursion%hamiltonian%F)
+      allocate(this%recursion%hamiltonian%F(this%lattice%nrec, 4, 4))
+      this%recursion%hamiltonian%F = 0.0d0
+      if (allocated(this%recursion%hamiltonian%hub_u_sort)) deallocate (this%recursion%hamiltonian%hub_u_sort)
+      allocate(this%recursion%hamiltonian%hub_u_sort(this%lattice%nrec, 4))
+      this%recursion%hamiltonian%hub_u_sort = 0.0d0
+      if (allocated(this%recursion%hamiltonian%hub_j_sort)) deallocate (this%recursion%hamiltonian%hub_j_sort)
+      allocate(this%recursion%hamiltonian%hub_j_sort(this%lattice%nrec, 4))
+      this%recursion%hamiltonian%hub_j_sort = 0.0d0
+      if (allocated(this%recursion%hamiltonian%hubbard_pot)) deallocate (this%recursion%hamiltonian%hubbard_pot)
+      allocate(this%recursion%hamiltonian%hubbard_pot(18,18,this%lattice%nrec))
+      this%recursion%hamiltonian%hubbard_pot = 0.0d0
+
+      ! Reads of which atoms and orbitals should have +U correction. 
+      ! Sets an arbitrary value to %hub_u_sort for the algorithm copied from spdf_Hubbard to work
+      do na = 1, this%lattice%nrec
+         do l = 1, 4
+            if ( this%recursion%hamiltonian%hubbard_u_sc(na,l) == 1 ) then
+               this%recursion%hamiltonian%hub_u_sort(na,l) = 1.0_rp
+            end if
+         end do
+      end do
+
+      ! Checks which orbital to add U onto. Only works for spd-orbitals
+      allocate(LDM(this%lattice%nrec, 4, 2, 7, 7)) ! (number of atoms, number of orbitals (spdf), m-value indexing for spdf)
+      allocate(LDM_screened(this%lattice%nrec, 4, 2, 7, 7))
+      allocate(hub_u(this%lattice%nrec, 4))
+      allocate(hub_j(this%lattice%nrec, 4))
+      LDM(:,:,:,:,:) = 0.0d0
+      LDM_screened(:,:,:,:,:) = 0.0d0
+      im_g0(:,:,:,:) = 0.0d0
+      n_tot(:,:) = 0.0d0
+      n_spin(:,:,:) = 0.0d0
+      hub_u(:,:) = 0.0d0
+      hub_j(:,:) = 0.0d0
+      f = this%recursion%hamiltonian%f
+      hub_u = this%recursion%hamiltonian%hub_u_sort
+      hub_j = this%recursion%hamiltonian%hub_j_sort
+      hub_u_temp = 0.0d0
+      hub_j_temp = 0.0d0
+      hub_u_eff = 0.0d0
+      
+      ! Creates an array with each orbital for each atom
+      do i = 1, this%lattice%nrec
+         cntr = count(hub_u(i,:) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
+         allocate(l_arr(i)%val(cntr))
+      end do
+
+      do i = 1, this%lattice%nrec
+         cntr = 0
+         do j = 1, 4
+            if (hub_u(i,j) > 1.0E-10) then
+               cntr = cntr + 1
+               l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
+            end if
+         end do
+      end do       
+            
+      ! Sets up the imaginary Green's function (only for spd orbitals)
+      do na = 1, this%lattice%nrec
+         do i = 1, 18
+            do j = 1, 18
+               do ie  = 1, this%en%channels_ldos + 10
+                  im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
+               end do
+            end do
+         end do
+      end do
+
+      !> Calculates the local density matrix by integrating the Green's function over the energy channels.
+      !> Only implemented for spd orbitals.
+      do na = 1, this%lattice%nrec
+         do l = 0, 2
+            do ispin = 1, 2
+               do i = 1, 2*l + 1 !m3
+                  do j = 1, 2*l + 1 !m4
+                     call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                     LDM(na, l + 1, ispin, i, j) = result
+                  end do
+               end do
+            end do
+         end do
+      end do
+      do na = 1, this%lattice%nrec
+         do l = 0, 2
+            do ispin = 1, 2
+               do i = 1, 2*l + 1 !m3
+                  do j = 1, 2*l + 1 !m4
+                     LDM_screened(na,l+1,ispin,i,j) = LDM(na,l+1,ispin,i,j)*(LDM(na,l+1,ispin,i,i) + LDM(na,l+1,ispin,j,j))
+                  end do
+               end do
+            end do
+         end do
+      end do
+      
+      ! calculates U and J
+      print *, ''
+      print *, 'Calculate Hubbard U parameter for:'
+      do na = 1, this%lattice%nrec
+         print *, 'Atom ', na
+         U_energy = 0.0d0
+
+         do l = 1, size(l_arr(na)%val)
+            l_index = l_arr(na)%val(l)
+            m_max = 2*l_index-1 
+            do ispin = 1, 2  
+               do ispin2 = 1, 2
+                  do m1 = 1, m_max
+                     do m2 = 1, m_max
+                        do m3 = 1, m_max
+                           do m4 = 1, m_max
+                              m1_val = ms(l_index)%val(m1)
+                              m2_val = ms(l_index)%val(m2)
+                              m3_val = ms(l_index)%val(m3)
+                              m4_val = ms(l_index)%val(m4)
+                              
+                              f0 = tabulated_slater_integrals(1,l_index,l_index,l_index,l_index)
+                              f2 = tabulated_slater_integrals(2,l_index,l_index,l_index,l_index)
+                              f4 = tabulated_slater_integrals(3,l_index,l_index,l_index,l_index)
+                              f6 = tabulated_slater_integrals(4,l_index,l_index,l_index,l_index)
+                              
+                              ! Add onto Hubbard U
+                              hub_u_temp(na, l_index) = hub_u_temp(na, l_index) &
+                              + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM_screened(na,l_index,ispin,m1,m2) &
+                              *LDM_screened(na,l_index,ispin2,m3,m4)
+                              
+                              ! Add onto Hubbard J
+                              if (ispin == ispin2) then
+                                 hub_j_temp(na, l_index) = hub_j_temp(na, l_index) &
+                                 + Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6)*LDM_screened(na,l_index,ispin,m1,m2) &
+                                 *LDM_screened(na,l_index,ispin2,m3,m4)
+                              end if
+                           end do
+                        end do
+
+                     end do
+                  end do
+               end do
+            end do
+            ! Calculate denominator of U and J
+            hub_u_denominator = 0.0d0
+            hub_j_denominator = 0.0d0
+            do m1 = 1, m_max
+               do m2 = 1, m_max
+                  hub_u_denominator = hub_u_denominator + LDM(na,l_index,1,m1,m1)*LDM(na,l_index,2,m2,m2) &
+                  + LDM(na,l_index,2,m1,m1)*LDM(na,l_index,1,m2,m2)
+                  if (m1 /= m2) then
+                     hub_u_denominator = hub_u_denominator + LDM(na,l_index,1,m1,m1)*LDM(na,l_index,1,m2,m2) &
+                     + LDM(na,l_index,2,m1,m1)*LDM(na,l_index,2,m2,m2)
+
+                     hub_j_denominator = hub_j_denominator + LDM(na,l_index,1,m1,m1)*LDM(na,l_index,1,m2,m2) &
+                     + LDM(na,l_index,2,m1,m1)*LDM(na,l_index,2,m2,m2)
+
+                  end if   
+               end do
+            end do
+
+            temp = hub_u_temp(na,l_index)/hub_u_denominator
+            hub_u_temp(na,l_index) = temp
+            ! Check for s-electron since they don't have an exchange parameter
+            if (l_index == 1) then
+               temp = 0.0d0
+            else
+               temp = hub_j_temp(na,l_index)/hub_j_denominator
+            end if
+            hub_j_temp(na,l_index) = temp
+            hub_u_eff(na,l_index) = hub_u_temp(na,l_index) - hub_j_temp(na,l_index)
+
+            print *, '----------------------------------------------------------------------------------------------'
+            print *, 'Calculated values of U, J and U_eff (= U-J)'
+            print *, '----------------------------------------------------------------------------------------------'
+            print *, 'Atom ', na, 'Orbital (spd) = (012)', l_index-1
+            print *, 'U = ', hub_u_temp(na,l_index)
+            print *, 'J = ', hub_j_temp(na,l_index)
+            print *, 'U_eff = ', hub_u_eff(na,l_index)
+            ! Stores the new value of Hubbard U
+            this%recursion%hamiltonian%hub_u_sort(na,l_index) = hub_u_eff(na,l_index)
+            this%recursion%hamiltonian%f(na,l_index,1) = hub_u_eff(na,l_index)
+         end do
+      end do 
+
+      ! Check if calculated Hubbard U has converged
+      ! Same criteria as Luis A. Agapito et al - Phys. Rev. X 5, 011006
+      j = 0
+      do na = 1, this%lattice%nrec
+         do l = 1, 4
+            if ( abs(this%hubbard_u_eff_old(na,l) - hub_u_eff(na,l)) < 3e-5 ) then
+               j = j + 1
+            end if
+         end do
+      end do
+      if ( j == this%lattice%nrec*4 ) then
+         this%hubbard_u_converged = .true.
+      end if
+
+      ! Store Hubbard U for later check
+      this%hubbard_u_eff_old(:,:) = hub_u_eff(:,:)
+
+
+      if (allocated(LDM)) deallocate(LDM)
+      if (allocated(LDM_screened)) deallocate(LDM_screened)
+      if (allocated(hub_u)) deallocate(hub_u)
+      if (allocated(hub_j)) deallocate(hub_j)
+
+   end subroutine calc_hubbard_U
+
+
+>>>>>>> c195047d5270bc6e400671f35df933bbd16483c2
 
    subroutine calculate_projected_dos(this)
       use mpi_mod
