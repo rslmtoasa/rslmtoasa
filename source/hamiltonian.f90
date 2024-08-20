@@ -615,7 +615,6 @@ contains
          else
             ! If the number of orbitals and Hubbard U parameters per atom in input file disagree, then a raised error is prompted
             if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%uj_orb(i))) then
-               print *, 'Im here'
                implem_check = .false.
                print *, ''
                print *, '----------------------------------------------------------------------------------------'
@@ -630,6 +629,11 @@ contains
                print *, 'Number of orbitals and Hubbard J parameters for atom', i, ' disagrees.'
                print *, '----------------------------------------------------------------------------------------'
             end if
+         end if
+
+         if (.not. this%hubbardU_check .and. .not. this%hubbardJ_check .and. len_trim(this%uj_orb(i)) > 0 ) then
+            call g_logger%error('Hubbard orbitals specified without U parameters.', __FILE__, __LINE__)
+            stop
          end if
       end do outer
 
@@ -769,7 +773,6 @@ contains
             call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
             error stop
          end if
-
       else
          print *, ''
          print *, ''
@@ -845,7 +848,6 @@ contains
       allocate (this%tmat(18, 18, 3, this%charge%lattice%ntype))
       allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, this%charge%lattice%kk, 4))
       allocate (this%ee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      print *, 'test : ', maxval(this%charge%lattice%nn(:, 1)) + 1
       ! allocate (this%ee(18, 18, size(this%lattice%ijpair, 3), this%charge%lattice%ntype))
       allocate (this%hall(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       !if (this%hoh) then
