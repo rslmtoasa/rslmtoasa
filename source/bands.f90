@@ -1422,14 +1422,14 @@ contains
          !    ! Assign pair
          !    atom1 = this%lattice%ijpair_sorted(na,1,ij,1)
          !    print *, 'atom1', atom1
-         !    atom1_type = this%lattice%num(atom1)
+         !    atom1_type = this%lattice%iz(atom1)
          !    atom2 = this%lattice%ijpair_sorted(na,1,ij,2)
-         !    atom2_type = this%lattice%num(atom2)
+         !    atom2_type = this%lattice%iz(atom2)
          do ij = 2, nr
             atom1 = ia
-            atom1_type = this%lattice%num(atom1)
+            atom1_type = this%lattice%iz(atom1)
             atom2 = this%lattice%nn(atom1, ij)
-            atom2_type = this%lattice%num(atom2)
+            atom2_type = this%lattice%iz(atom2)
             !Check here if atom1 and atom2 are nearest neighbours.
             dist = sqrt((this%lattice%cr(1,atom1) - this%lattice%cr(1,atom2))**2 + (this%lattice%cr(2,atom1) &
                   - this%lattice%cr(2,atom2))**2 + (this%lattice%cr(3,atom1) - this%lattice%cr(3,atom2))**2)
@@ -1441,11 +1441,11 @@ contains
                nji_temp = 0.0d0
                calc_pair = .false.
                do kl = 1, this%lattice%njij
-                  if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,1)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,2))) then
+                  if (atom1_type == this%lattice%iz(this%lattice%ijpair(kl,1)) .and. atom2_type == this%lattice%iz(this%lattice%ijpair(kl,2))) then
                      nji_temp(:,:) = TRANSPOSE(nji(:,:,kl))
                      calc_pair = .true.
                      exit
-                  else if (atom1_type == this%lattice%num(this%lattice%ijpair(kl,2)) .and. atom2_type == this%lattice%num(this%lattice%ijpair(kl,1))) then
+                  else if (atom1_type == this%lattice%iz(this%lattice%ijpair(kl,2)) .and. atom2_type == this%lattice%iz(this%lattice%ijpair(kl,1))) then
                      ! Order reverse, do we need a sign change somewhere?
                      nji_temp(:,:) = TRANSPOSE(nij(:,:,kl))
                      calc_pair = .true.

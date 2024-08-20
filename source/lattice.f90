@@ -1055,10 +1055,10 @@ contains
       do i = 2, this%njij_all
          is_duplicate = .false.
          do j = 1, k
-            if ((this%num(ijpair_unique(j,1)) == this%num(this%ijpair_all(i,1))) .and. (this%num(ijpair_unique(j,2)) == this%num(this%ijpair_all(i,2)))) then
+            if ((this%iz(ijpair_unique(j,1)) == this%iz(this%ijpair_all(i,1))) .and. (this%iz(ijpair_unique(j,2)) == this%iz(this%ijpair_all(i,2)))) then
                is_duplicate = .true.
                exit
-            else if ((this%num(ijpair_unique(j,1)) == this%num(this%ijpair_all(i,2))) .and. (this%num(ijpair_unique(j,2)) == this%num(this%ijpair_all(i,1)))) then
+            else if ((this%iz(ijpair_unique(j,1)) == this%iz(this%ijpair_all(i,2))) .and. (this%iz(ijpair_unique(j,2)) == this%iz(this%ijpair_all(i,1)))) then
                is_duplicate = .true.
                exit
             end if
@@ -1120,10 +1120,10 @@ contains
          do i = 2, this%njij_all
             is_duplicate = .false.
             do j = 1, k
-               if ((this%num(ijpair_unique_2(nn,j,1)) == this%num(ijpair_temp(nn,i,1))) .and. (this%num(ijpair_unique_2(nn,j,2)) == this%num(ijpair_temp(nn,i,2)))) then
+               if ((this%iz(ijpair_unique_2(nn,j,1)) == this%iz(ijpair_temp(nn,i,1))) .and. (this%iz(ijpair_unique_2(nn,j,2)) == this%iz(ijpair_temp(nn,i,2)))) then
                   is_duplicate = .true.
                   exit
-               else if ((this%num(ijpair_unique_2(nn,j,1)) == this%num(ijpair_temp(nn,i,2))) .and. (this%num(ijpair_unique_2(nn,j,2)) == this%num(ijpair_temp(nn,i,1)))) then
+               else if ((this%iz(ijpair_unique_2(nn,j,1)) == this%iz(ijpair_temp(nn,i,2))) .and. (this%iz(ijpair_unique_2(nn,j,2)) == this%iz(ijpair_temp(nn,i,1)))) then
                   is_duplicate = .true.
                   exit
                end if
@@ -1166,7 +1166,7 @@ contains
          ! print *, 'Neighbour degree: ', nn
          do i = 1, size(ijpair_unique_2, 2)
             if (ijpair_unique_2(nn,i,1) /= 0 .and. ijpair_unique_2(nn,i,2) /= 0) then
-               ! print *, 'Atom index: ', ijpair_unique_2(nn,i,:), ' Atom type: ', this%num(ijpair_unique_2(nn,i,1)), this%num(ijpair_unique_2(nn,i,2))
+               ! print *, 'Atom index: ', ijpair_unique_2(nn,i,:), ' Atom type: ', this%iz(ijpair_unique_2(nn,i,1)), this%iz(ijpair_unique_2(nn,i,2))
             end if
             end do
       end do
@@ -1175,7 +1175,7 @@ contains
       !----------------------------------------------------------------------------------------
       ! print *, 'All pairs'
       do j=1,this%njij_all
-         ! print *, 'Atom idex: ', this%ijpair_all(j,:), ' Atom type: ', this%num(this%ijpair_all(j,1)), this%num(this%ijpair_all(j,2))
+         ! print *, 'Atom idex: ', this%ijpair_all(j,:), ' Atom type: ', this%iz(this%ijpair_all(j,1)), this%iz(this%ijpair_all(j,2))
       end do
       ! print *, ''
       ! print *, 'Sorted pairs 2.0'
@@ -1184,17 +1184,17 @@ contains
          do nn = 1, size(this%ijpair_sorted, 2)
             ! print *, 'Neighbours degree ', nn
             do i = 1, size(this%ijpair_sorted, 3)
-               ! print*, 'Eleements in sorted list. Atom index: ', this%ijpair_sorted(ia,nn,i,:), 'Atom type: ', this%num(this%ijpair_sorted(ia,nn,i,1)), this%num(this%ijpair_sorted(ia,nn,i,2))
+               ! print*, 'Eleements in sorted list. Atom index: ', this%ijpair_sorted(ia,nn,i,:), 'Atom type: ', this%iz(this%ijpair_sorted(ia,nn,i,1)), this%iz(this%ijpair_sorted(ia,nn,i,2))
             end do
          end do
       end do
       ! print *, 'Unique pairs'
 
       ! do j= 1, this%njij
-      !   print *, 'Atom idex: ', ijpair_unique(j,:), ' Atom type: ', this%num(ijpair_unique(j,1)), this%num(ijpair_unique(j,2))
+      !   print *, 'Atom idex: ', ijpair_unique(j,:), ' Atom type: ', this%iz(ijpair_unique(j,1)), this%iz(ijpair_unique(j,2))
       ! end do
       do j= 1, this%njij
-         ! print *, 'Atom idex: ', this%ijpair(j,:), ' Atom type: ', this%num(this%ijpair(j,1)), this%num(this%ijpair(j,2))
+         ! print *, 'Atom idex: ', this%ijpair(j,:), ' Atom type: ', this%iz(this%ijpair(j,1)), this%iz(this%ijpair(j,2))
       end do
       ! this%njij = 0.0d0
       ! this%ijpair = this%ijpair_all
