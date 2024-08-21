@@ -1143,7 +1143,7 @@ contains
          end do ! end of neighbour number
          ! Hubbard U correction.
          ! Only implemented for spd-orbitals
-         if (this%hubbardU_check .and. this%hubbardJ_check) then
+         if (this%hubbardU_check) then
             print *, 'Add Hubbard U+J correction onto on-site Hamiltonian.'
             do i = 1, 9
                do j = 1, 9

@@ -1570,7 +1570,6 @@ contains
       ! Sets up the DFT+U calculation usually done in hamiltonian.f90
       ! Only needed for the first iteration but this does not cause problems
       this%recursion%hamiltonian%hubbardU_check = .true.
-      this%recursion%hamiltonian%hubbardJ_check = .true.
       if (allocated(this%recursion%hamiltonian%F)) deallocate (this%recursion%hamiltonian%F)
       allocate(this%recursion%hamiltonian%F(this%lattice%nrec, 4, 4))
       this%recursion%hamiltonian%F = 0.0d0
