@@ -494,8 +494,8 @@ contains
                   this%ee(j + 9, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            !write(128, *) ´m=´, m, ´ntype= ´, ntype
-            !write(128, ´(18f10.6)´) real(this%ee(:, :, m, ntype))
+            write(128, *) 'm=', m, 'ntype= ', ntype
+            write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
          end do ! end of neighbour number
          if (this%hoh) then
             call this%build_obarm()

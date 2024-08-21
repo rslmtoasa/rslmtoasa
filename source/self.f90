@@ -159,6 +159,22 @@ module self_mod
       !> Default: false.
       logical :: freeze
 
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
+      !>
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
+      !>
+      !> Default: false.
+      logical :: fix_soc
+
+
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
+      !>
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
+      !>
+      !> Default: false.
+      real(rp) :: soc_scale
+       
+
       !> If true rigid band calculations will performed for each atom. Default: false.
       !>
       !> If true rigid band calculations will performed for each atom. Using this option you should specify the variable @ref rb.
@@ -308,6 +324,8 @@ contains
       init = this%init
       nstep = this%nstep
       conv_thr = this%conv_thr
+      fix_soc = this%fix_soc
+      soc_scale = this%soc_scale
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -400,7 +418,15 @@ contains
       ! static magnetic momentum (non-linar calculation)
       this%freeze = freeze
       this%rigid_band = rigid_band
+      this%fix_soc = fix_soc
+      this%soc_scale = soc_scale
 
+      ! Scaling SOC if soc_scale is defined. SOC scale default = 1.0d0
+      
+      do i = 1, this%lattice%ntype
+         this%symbolic_atom(i)%potential%xi_p(:) = this%soc_scale*this%symbolic_atom(i)%potential%xi_p(:) 
+         this%symbolic_atom(i)%potential%xi_d(:) = this%soc_scale*this%symbolic_atom(i)%potential%xi_d(:)
+      end do
       ! number of loops to use rigid bands per atom
       call move_alloc(rb, this%rb)
 
@@ -453,6 +479,8 @@ contains
       ! static magnetic momentum (non-linar calculation)
       this%freeze = .false.
       this%rigid_band = .false.
+      this%fix_soc = .false. 
+      this%soc_scale = 1.0d0
       ! number of loops to use rigid bands per atom
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('self.rb', this%rb, this%lattice%nrec)
@@ -723,14 +751,14 @@ contains
             this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
          call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot) ! Mix magnetic moments
-         do ia = 1, this%lattice%nrec
+         do ia = 1, this%lattice%nrec 
             this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
          end do
          !=========================================================================
          !                  CALCULATE THE NEW BAND MOMENTS QL
          !=========================================================================
          call this%bands%calculate_moments() ! Integrate the DOS and calculate the band momends QL
-         do ia = 1, this%lattice%nrec
+         do ia = 1, this%lattice%nrec 
             this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
          call this%mix%save_to('new') ! Save the calculated PL and QL into the mix%qia_new
@@ -820,10 +848,12 @@ contains
       class(self), intent(inout) :: this
       integer :: newunit, iostatus
       integer :: ia, ia_loc
-      real(rp), dimension(this%lattice%nrec, 3) :: magmom
+      real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
       ! Open report.out file
       open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
+      open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
+      open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
 
       ! Calculate outputs that are not calculated during the SFC run
       call this%bands%calculate_magnetic_torques()
@@ -831,15 +861,18 @@ contains
       ! Transfer values across ranks
       magmom = 0.0d0
       mag_for = 0.0d0
+      lmom = 0.0d0
       do ia = start_atom, end_atom
          ia_loc = g2l_map(ia)
          magmom(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom0(:)
-         mag_for(:, ia) = this%bands%mag_for(:, ia_loc)
+         lmom(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmom(:)
+         mag_for(:, ia) = this%bands%mag_for(:, ia_loc)        
       end do
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, magmom, product(shape(magmom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, mag_for, product(shape(mag_for)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, lmom, product(shape(lmom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
       if (rank == 0) then
@@ -863,13 +896,21 @@ contains
          !                       Magnetization
          !===========================================================================
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(A)') '|                     Magnetization                                       |'
+         write (newunit, '(A)') '|                     Spin moment                                         |'
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(a,f16.10)') 'Total magnetization: ', sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%ntype)%potential%mtot)
+         write (newunit, '(a,3f16.10)') 'Total spin moment: ', sum(magmom(1:this%lattice%nrec, 1:3), dim=1)
          do ia = 1, this%lattice%nrec
             write (newunit, '(a,i4,a,f10.6)') 'Spin moment of atom', ia, ':', norm2(magmom(ia, :))
             write (newunit, '(a,i4,a,3f10.6)') 'Spin moment projections of atom', ia, ':', magmom(ia, :)
             write (newunit, '(a,i4,a,3f16.6)') 'Magnetic force on atom', ia, ':', mag_for(:, ia)
+         end do
+         write (newunit, '(A)') '==========================================================================='
+         write (newunit, '(A)') '|                     Orbital moment                                      |'
+         write (newunit, '(A)') '==========================================================================='
+         write (newunit, '(a,3f16.10)') 'Total orbital moment: ', sum(lmom(1:this%lattice%nrec, 1:3), dim=1)
+         do ia = 1, this%lattice%nrec
+            write (newunit, '(a,i4,a,f10.6)') 'Orbital moment of atom', ia, ':', norm2(lmom(ia, :))
+            write (newunit, '(a,i4,a,3f10.6)') 'Orbital moment projections of atom', ia, ':', lmom(ia, :)
          end do
          !===========================================================================
          !                           Charge
@@ -888,6 +929,11 @@ contains
          write (newunit, '(A)') '|                       Fermi Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(a,f10.6)') 'Fermi energy: ', this%en%fermi
+         
+         do ia = 1, this%lattice%nrec
+            write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', (magmom(ia, :))/norm2(magmom(ia, :))
+            write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', (lmom(ia, :))/norm2(lmom(ia, :))
+         end do
       end if
 
       if (this%control%hyperfine) then
@@ -895,7 +941,11 @@ contains
             call this%symbolic_atom(ia)%potential%print_hyperfine(ia)
          end do
       end if
-
+      
+      close(newunit)
+      close(10)
+      close(20)
+    
    end subroutine report
 
    function is_converged(this, delta_en) result(l)
@@ -2737,9 +2787,11 @@ contains
                QSL(6) = 2.d0*(FAK2 - 5*FAK4)
             end if
          end do
-         atom%potential%xi_p(:) = [qsl(1), qsl(4)]
-         atom%potential%xi_d(:) = [qsl(2), qsl(5)]
-         atom%potential%rac(:) = [qsl(3), qsl(6)]
+         if (.not. this%fix_soc) then
+            atom%potential%xi_p(:) = [qsl(1), qsl(4)]
+            atom%potential%xi_d(:) = [qsl(2), qsl(5)]
+            atom%potential%rac(:) = [qsl(3), qsl(6)]
+         end if
          ! WRITE(17, 56)FAK2, FAK4
          ! WRITE(17, *)RCH
       end do
