@@ -297,9 +297,12 @@ contains
 
    end function wigner3j
 
-   !> Scales the V_ij's depending on relative distance to nearest neighbours
+   ! --------------------------------------------------------------------------------------
+   !> ABANDONED IDEA
+   !> Idea was to scale the V_ij's depending on relative distance to nearest neighbours
    !> to the inter-site Coulomb interaction in the DFT+U+V. Originally taken to scale as the screened Yukawa potential e^(-b m_e r)/r
    !> Implemented by Emil Beiersdorf on 01.08.2024
+   ! --------------------------------------------------------------------------------------
    function scaler(V0,r,b) result(scl)
       implicit none
       real(rp) :: V0 ! The unscaled V-value, one for each atom.
@@ -311,6 +314,7 @@ contains
 
    end function scaler
 
+   ! --------------------------------------------------------------------------------------
    !> Tabulated values of hydrogenic Slater radial integrals
    !> Returns F^k(ab,cd) = int dr1 dr2 (r<)^k/(r>)^(k+1)*R_a(r1)*R_b(r2)*R_c(r1)*R_d(r2)*r1^2*r2^2
    !> Only implemented for diagonal terms
@@ -318,6 +322,7 @@ contains
    !> From reference:
    !> Butler, P. H., Minchin, P. E., & Wybourne, B. G. (1971). Tables of hydrogenic Slater radial integrals. Univ. of Canterbury, Christchurch, New Zealand.
    !> Implemented by Viktor Frilén on 16.08.2024
+   ! --------------------------------------------------------------------------------------
    function tabulated_slater_integrals(k,l1,l2,l3,l4) result(res)
       integer, intent(in) :: k,l1,l2,l3,l4 ! l = 1,2,3,4 (= s,p,d,f), k = 1,2,3,4 (=0,2,4,6)
       real(rp) :: res
@@ -341,8 +346,10 @@ contains
    end function tabulated_slater_integrals
 
 
+   ! --------------------------------------------------------------------------------------
    !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U+J method
    !> Implemented by Viktor Frilén on 28.06.2024
+   ! --------------------------------------------------------------------------------------
    function a_k(k,l,m1,m2,m3,m4) result(res)
       implicit none
       integer, intent(in) :: k, l, m1, m2, m3, m4
@@ -355,38 +362,11 @@ contains
      end do
    end function a_k
 
-   ! function a_k(k,l,m1,m2,m3,m4) result(res)
-   !    implicit none
-   !    integer, intent(in) :: k, l, m1, m2, m3, m4
-   !    integer :: q
-   !    real(rp) :: res, temp1, temp2, temp3
-
-   !    res = 0.0_rp
-
-   !    do q = -k, k
-   !       temp1 = wigner3j(l,k,l,0,0,0)
-   !       temp2 = wigner3j(l,k,l,-m1,q,m2)
-   !       temp3 = wigner3j(l,k,l,-m3,-q,m4)
-   !       res = res + (2.0_rp*real(l)+1.0_rp)**2*(-1.0_rp)**(m1+q+m2)*temp1**2*temp2*temp3
-   !    end do
-   ! end function a_k
-
+   ! --------------------------------------------------------------------------------------
    !> Calculates the matrix elements for the on-site screened Coulomb interaction and spin exchange used in the LDA+U+J method.
    !> The ordering looks weird but is now right! 
-   !> 3d orbitals implemented by Viktor Frilén on 03.07.2024
-   !> 4f orbitals implemented by Emil Beiersdorf on 12.07.2024
-
-   function hubbard_int_matrix_3d(m1,m3,m2,m4,f0,f2,f4) result(res)
-      implicit none
-      integer, intent(in) :: m1, m2, m3, m4 !lz quantum number
-      real(rp), intent(in) :: f0, f2, f4 !Slater integrals
-      real(rp) :: res
-
-      res = 0.0_rp
-      res = res + a_k(0,2,m1,m2,m3,m4)*f0 + a_k(2,2,m1,m2,m3,m4)*f2 + a_k(4,2,m1,m2,m3,m4)*f4
-
-   end function hubbard_int_matrix_3d
-
+   !> implemented by Viktor Frilén and Emil Beiersdorf summer 2024
+   ! --------------------------------------------------------------------------------------
    function Coulomb_mat(l,m1,m3,m2,m4,f0,f2,f4,f6) result(res)
       implicit none
       integer, intent(in) :: l, m1, m2, m3, m4 !orbital and lz quantum number

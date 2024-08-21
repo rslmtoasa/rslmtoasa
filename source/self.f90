@@ -629,15 +629,6 @@ contains
    end subroutine print_state
 
 
-   !> Row 425 in green.f90
-   ! subroutine intersite_gf(this)
-      ! use mpi_mod
-      ! implicit none
-      ! class(green), intent(inout) :: this
-   ! end subroutine intersite_gf
-
-
-
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -672,29 +663,12 @@ contains
             end do
             if (this%hamiltonian%hubbardU_check .and. i .gt. 1) then
                !> Initiate the LDA+U+J method by building the Hubbard U+J potential matrix
-               call this%bands%spdf_Hubbard() ! Improved code
-               ! call this%bands%build_hubbard_pot() ! Previous code (without +V)
-
+               call this%bands%spdf_Hubbard() 
                !> Initiate the +V intersite Coulomb correction to LDA+U+J
                if (this%recursion%hamiltonian%hubbardV_check) then
                   call this%recursion%recur_b_ij()
                   call this%green%calculate_intersite_gf()
                   call this%bands%Hubbard_V()
-                  ! do ie = 1, this%en%channels_ldos + 10
-                  !    print *, ''
-                  !    print *, 'ie : ', ie
-                     ! print *, 'gij : ', this%green%gij(:,:,ie,1)
-                     ! print *, 'gji^T : ', transpose(this%green%gji(:,:,ie,1))
-                  !    print *, ''
-                  !    print *, '---------------------------------------------------------------------------'
-                  ! end do
-                  ! print *, ''
-                  ! print *, 'gij : ', this%green%gij(1:2, 1:2 ,1000,1)
-                  ! print *, ''
-                  ! print *, 'gji^T : ', transpose(this%green%gji(1:2, 1:2 ,1000,1))
-                  ! print *, ''
-                  ! print *, 'gji : ', this%green%gji(1:2, 1:2 ,1000,1)
-      
                end if
             end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
@@ -749,7 +723,6 @@ contains
          case ('chebyshev')
             call this%green%chebyshev_green()
          case ('block')
-            ! HERE
             call this%recursion%zsqr()
             call this%green%block_green()
          end select

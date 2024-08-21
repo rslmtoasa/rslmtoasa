@@ -79,8 +79,6 @@ module bands_mod
       real(rp) :: eband
       !> Magnetic force
       real(rp), dimension(:, :), allocatable :: mag_for
-      !> Local density matrix (implemented for Hubbard U project)
-      real(rp), dimension(:,:,:,:,:), allocatable :: ld_matrix 
       !> Calculated effictive Hubbard U (= U - J)
       real(rp), dimension(:,:), allocatable :: hubbard_u_eff_old
       !> Checks if the calculated effective Hubbard U has converged
@@ -100,8 +98,6 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
-      procedure :: calculate_local_density_matrix ! LDA+U+J method
-      procedure :: build_hubbard_pot ! LDA+U+J
       procedure :: spdf_Hubbard ! LDA+U+J method
       procedure :: Hubbard_V
       procedure :: calc_hubbard_U
@@ -176,7 +172,6 @@ contains
       if (allocated(this%dspd)) deallocate (this%dspd)
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
-      if (allocated(this%ld_matrix)) deallocate (this%ld_matrix)
       if (allocated(this%hubbard_u_eff_old)) deallocate (this%hubbard_u_eff_old)
 #endif
    end subroutine destructor
@@ -214,8 +209,6 @@ contains
       allocate (this%dspd(6, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%d_orb(9, 9, 3, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%mag_for(3, atoms_per_process))
-      !Add if to check if hubbard_check = True when emil has implemented this
-      allocate (this%ld_matrix(this%lattice%nrec, this%recursion%hamiltonian%hubbard_nmb_orb, 2, this%recursion%hamiltonian%hubbard_orb_max*2 + 1, this%recursion%hamiltonian%hubbard_orb_max*2 + 1))
       if ( this%recursion%hamiltonian%hubbardU_sc_check ) then
          allocate (this%hubbard_u_eff_old(this%lattice%nrec, 4))
       end if
@@ -231,7 +224,6 @@ contains
       this%dspd(:, :, :) = 0.0d0
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
-      this%ld_matrix(:,:,:,:,:) = 0.0d0
       if ( this%recursion%hamiltonian%hubbardU_sc_check) then
          this%hubbard_u_eff_old(:,:) = 0.0d0
       end if
@@ -893,278 +885,11 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Calculates the local density matrix used in Hubbard U correction.
-   !> Implemented by Viktor Frilén 03.07.2024
-   !> For f orbitals implemented by Emil Beiersdorf on 12.07.2024
-   !---------------------------------------------------------------------------
-   subroutine calculate_local_density_matrix(this)
-      class(bands) :: this
-      ! Local variables
-      integer :: i, j ! Orbital index
-      integer :: na ! Atom index
-      integer :: ie ! Energy channel index
-      integer :: ispin ! Spin intex
-      integer :: l ! Orbital number (0,1,2 = s,p,d)
-      real(rp) :: result, result2, result3, result4, spin_mom, ang_mom, lz
-      real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
-      real(rp), dimension(9, 9) :: l_orb, full_ld_matrix_test
-      complex(rp), dimension(9, 9) :: mLz
-
-      this%ld_matrix(:,:,:,:,:) = 0.0d0
-      im_g0(:,:,:,:) = 0.0d0
-      do na = 1, this%lattice%nrec
-         do i = 1, 18
-            do j = 1,18
-               do ie  = 1, this%en%channels_ldos + 10
-                  im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
-               end do
-            end do
-         end do
-      end do
-      print *, 'Calculate ld matrix for: '
-      do na = 1, this%lattice%nrec
-         print *, 'Atom ', na, ':'
-         select case(this%recursion%hamiltonian%hubbard_orb_config(na))
-            case (0)
-               ! No Hubbard U on this atom
-               print *, 'No hubbard U correction'
-            case (1) ! s - orbital
-               print *, 's-orbital:'
-               do ispin = 1, 2                
-                  call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + (ispin-1)*9, 1 + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                  this%ld_matrix(na, 1, ispin, 1, 1) = result
-               end do
-               l = 0
-            case (2) ! p - orbital
-               l = 1
-               print *, 'p-orbital:'
-               do ispin = 1, 2
-                  do i = 1, 3
-                     do j = 1, 3
-                        call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + i + (ispin-1)*9, 1 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                        this%ld_matrix(na, 1, ispin, i, j) = result
-                     end do
-                  end do
-               end do
-            case (3) ! d - orbital
-               l = 2
-               print *, 'd-orbital:'
-               do ispin = 1, 2
-                  do i = 1, 5
-                     do j = 1, 5
-                        call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(4 + i + (ispin-1)*9, 4 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                        this%ld_matrix(na, 1, ispin, i, j) = result
-                     end do
-                  end do
-               end do
-            case (4) ! sp - orbital
-               print *, 'sp-orbitals:'
-               do l = 0, 1
-                  print *, 'l = ', l
-                  do ispin = 1, 2
-                     do i = 1, 2*l + 1
-                        do j = 1, 2*l + 1
-                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l + i + (ispin-1)*9, l + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                           this%ld_matrix(na, l + 1, ispin, i, j) = result
-                        end do
-                     end do
-                  end do
-               end do
-            case (5) ! sd - orbital
-               print *, 'sd-orbitals:'
-               do l = 0, 1
-                  print *, 'l = ', l*2
-                  do ispin = 1, 2
-                     do i = 1, 2*l*2 + 1
-                        do j = 1, 2*l*2 + 1
-                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l + i + (ispin-1)*9, l + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                           this%ld_matrix(na, l + 1, ispin, i, j) = result
-                        end do
-                     end do
-                  end do
-               end do
-            case (6) ! pd - orbital
-               print *, 'pd-orbitals:'
-               do l = 0, 1
-                  print *, 'l = ', 1 + l
-                  do ispin = 1, 2
-                     do i = 1, 2*(l+1) + 1
-                        do j = 1, 2*(l+1) + 1
-                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(1 + l*3 + i + (ispin-1)*9, 1 + l*3 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                           this%ld_matrix(na, l + 1, ispin, i, j) = result
-                        end do
-                     end do
-                  end do
-               end do
-            case (7) ! spd - orbital
-               print *, 'spd-orbitals:'
-               do l = 0, 2
-                  print *, 'l = ', l
-                  do ispin = 1, 2
-                     do i = 1, 2*l + 1
-                        do j = 1, 2*l + 1
-                           call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                           this%ld_matrix(na, l + 1, ispin, i, j) = result
-                        end do
-                     end do
-                  end do
-               end do
-         end select
-      end do
-
-   !    ! ! Prints to compare with the values from code
-   !    ! print *, 'Total moments'
-   !    ! do na = 1, this%lattice%nrec
-   !    !    print *, 'Atom ', na, ':'
-   !    !    spin_mom = 0.0d0
-   !    !    ang_mom = 0.0d0
-   !    !    do l = 1, size(this%ld_matrix, 2)
-   !    !       do i = 1, size(this%ld_matrix, 4)
-   !    !          spin_mom = spin_mom + this%ld_matrix(na,l,1,i,i) - this%ld_matrix(na,l,2,i,i)
-   !    !       end do
-   !    !    end do
-   !    !    if (this%recursion%hamiltonian%hubbard_orb_config(na) == 7) then
-   !    !       ! Manually calculate orbital moment
-   !    !       do ispin = 1, 2
-   !    !          ang_mom = ang_mom + (2*(2-ispin)-1)*(this%ld_matrix(na,2,ispin,3,3) - this%ld_matrix(na,2,ispin,1,1) &
-   !    !                            + 2*(this%ld_matrix(na,3,ispin,5,5) - this%ld_matrix(na,3,ispin,1,1)) &
-   !    !                            + 1*(this%ld_matrix(na,3,ispin,4,4) - this%ld_matrix(na,3,ispin,2,2)))
-   !    !       end do
-   !    !       ang_mom = -0.5_rp*ang_mom
-   !    !       print *, 'Orbital angular momentum calculated manually: ', ang_mom
-
-   !    !       ! Calculate orbital moment as done in the code
-   !    !       ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-   !    !       mLz(:, :) = L_z(:, :)
-   !    !       ! Transforming them into the spherical harmonics coordinates
-   !    !       call hcpx(mLz, 'cart2sph')
-   !    !       l_orb(:,:) = 0.0d0
-   !    !       do l = 1, 3
-   !    !          do i = 1, (l-1)*2 + 1
-   !    !             do j = 1, (l-1)*2 + 1
-   !    !                l_orb((l-1)**2 + i, (l-1)**2 + j) = l_orb((l-1)**2 + i, (l-1)**2 + j) + this%ld_matrix(na,l,1,i,j) - this%ld_matrix(na,l,2,i,j)
-   !    !             end do
-   !    !          end do
-   !    !       end do
-   !    !       ! This is what is in the code
-   !    !       ! lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
-   !    !       ! Testing without multiplying with -0.5
-   !    !       lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :)))
-   !    !       print *, 'Orbital angular momentum calculated with angular momentum operator: ', lz
-   !    !    end if
-   !    !    print *, 'Spin moment: ', spin_mom
-   !    ! end do
-
-   !    ! !Calculate full density matrix to compare with the code
-   !    ! do na = 1, this%lattice%nrec
-   !    !    print *, 'Atom ', na, ':'
-   !    !    full_ld_matrix_test(:,:) = 0.0d0
-   !    !    do i = 1, 9
-   !    !       do j = 1, 9
-   !    !          call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(i, j, :, na), this%e1, 0, this%en%ene)
-   !    !          call simpson_m(result2, this%en%edel, this%en%fermi, this%nv1, im_g0(i + 9, j + 9, :, na), this%e1, 0, this%en%ene)
-   !    !          full_ld_matrix_test(i,j) = result - result2
-   !    !       end do
-   !    !    end do
-   !    !    ! Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-   !    !    mLz(:, :) = L_z(:, :)
-   !    !    ! Transforming them into the spherical harmonics coordinates
-   !    !    call hcpx(mLz, 'cart2sph')
-   !    !    lz = -0.5_rp*rtrace9(matmul(mLz, full_ld_matrix_test(:, :)))
-   !    !    print *, 'Orb. ang. mom. from full_ld_matrix_test: ', lz
-   !    ! end do
-   end subroutine calculate_local_density_matrix
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
    !> Builds the effective single-particle potentials for the LDA+U+J correction for s,p and d orbitals.
    !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
    !> too, but the corresponding (32x32) basis needs implementation.)
    !> Created and improved by Viktor Frilén and Emil Beiersdorf 17.07.2024
    !---------------------------------------------------------------------------
-   subroutine build_hubbard_pot(this)
-      class(bands) :: this
-      integer :: i, j, na, ispin, n, m, m1, m2, m3, m4
-      real(rp) :: f0, f2, f4 ! Slater integrals
-      real(rp) :: dc ! Double counting term
-      real(rp) :: test1, test2, test3, U_energy, dc_energy, n_up, n_down, n_tot
-      integer, dimension(5) :: ms_d = [-2, -1, 0, 1, 2]
-      ! Temporary potential that will be put into this%hubbard_pot
-      real(rp), dimension(size(this%ld_matrix, 1), size(this%ld_matrix, 2), size(this%ld_matrix, 3), size(this%ld_matrix, 4), size(this%ld_matrix, 5)) :: hubbard_pot_temp
-      
-      call this%calculate_local_density_matrix()
-
-      this%recursion%hamiltonian%hubbard_pot = 0.0d0
-      hubbard_pot_temp = 0.0d0
-      
-      print *, 'Calculate Hubbard U potential for:'
-      do na = 1, this%lattice%nrec
-         print *, 'Atom ', na
-         ! Checks which orbital to add U onto. Only works for no U correction or for d-orbitals
-         if (this%recursion%hamiltonian%hubbard_orb_config(na) == 0) then
-            print *, 'No Hubbard U correction.'
-         else if (this%recursion%hamiltonian%hubbard_orb_config(na) == 3) then
-            print *, 'd-orbital' 
-
-            n_up = trace(this%ld_matrix(na, 1, 1, :, :))
-            n_down = trace(this%ld_matrix(na, 1, 2, :, :))
-            n_tot = n_up + n_down
-            U_energy = 0.0d0
-
-            f0 = this%recursion%hamiltonian%F(na,3,1)
-            f2 = this%recursion%hamiltonian%F(na,3,2)
-            f4 = this%recursion%hamiltonian%F(na,3,3)
-            
-            do ispin = 1, 2
-               do m1 = 1, 5
-                  do m2 = 1, 5
-                     test1 = 0.0d0
-                     test2 = 0.0d0
-                     do m3 = 1, 5
-                        do m4 = 1, 5
-                           hubbard_pot_temp(na, 1, ispin, m1, m2) = hubbard_pot_temp(na, 1, ispin, m1, m2) &
-                           + hubbard_int_matrix_3d(ms_d(m1),ms_d(m3),ms_d(m2),ms_d(m4),f0,f2,f4)*this%ld_matrix(na,1,3-ispin,m3,m4) &
-                           + (hubbard_int_matrix_3d(ms_d(m1),ms_d(m3),ms_d(m2),ms_d(m4),f0,f2,f4) &
-                           - hubbard_int_matrix_3d(ms_d(m1),ms_d(m3),ms_d(m4),ms_d(m2),f0,f2,f4))*this%ld_matrix(na,1,ispin,m3,m4)
-
-                           U_energy = U_energy + hubbard_int_matrix_3d(ms_d(m1),ms_d(m3),ms_d(m2),ms_d(m4),f0,f2,f4)*this%ld_matrix(na,1,ispin,m1,m2)*this%ld_matrix(na,1,3-ispin,m3,m4) &
-                           + (hubbard_int_matrix_3d(ms_d(m1),ms_d(m3),ms_d(m2),ms_d(m4),f0,f2,f4) &
-                           - hubbard_int_matrix_3d(ms_d(m1),ms_d(m3),ms_d(m4),ms_d(m2),f0,f2,f4))*this%ld_matrix(na,1,ispin,m1,m2)*this%ld_matrix(na,1,ispin,m3,m4)
-                        end do
-                     end do
-
-                     ! Add double counting term
-                     if (m1 == m2) then
-                        hubbard_pot_temp(na, 1, ispin, m1, m2) = hubbard_pot_temp(na, 1, ispin, m1, m2) &
-                                                            - this%recursion%hamiltonian%hubbard_u(na,1)*(trace(this%ld_matrix(na,1,1,:,:)) &
-                                                            + trace(this%ld_matrix(na,1,2,:,:)) - 0.5_rp) + this%recursion%hamiltonian%hubbard_j(na,1) &
-                                                            *(trace(this%ld_matrix(na,1,ispin,:,:)) - 0.5_rp)
-                     end if
-                  end do
-               end do
-            end do
-
-            ! Put hubbard_pot_temp into global hubbard_pot
-            do i = 1, 5
-               do j = 1, 5
-                  this%recursion%hamiltonian%hubbard_pot(4+i, 4+j, na) = hubbard_pot_temp(na, 1, 1, i, j)
-                  this%recursion%hamiltonian%hubbard_pot(4+i+9, 4+j+9, na) = hubbard_pot_temp(na, 1, 2, i, j)
-               end do
-            end do
-            dc_energy = 0.5_rp*(this%recursion%hamiltonian%hubbard_u(na,1)*n_tot*(n_tot - 1.0_rp) &
-            - this%recursion%hamiltonian%hubbard_j(na,1)*(n_up*(n_up - 1.0_rp) + n_down*(n_down - 1.0_rp)))
-
-            print *, '(U, dc, tot) [eV] = ', U_energy*0.5_rp*ry2ev, dc_energy*ry2ev, U_energy*0.5_rp*ry2ev - dc_energy*ry2ev 
-         else
-            print *, ''
-            call g_logger%error('build_hubbard_pot subroutine only implemented for d-orbitals or no orbitals.', __FILE__, __LINE__)
-            error stop
-         end if
-      end do ! na (loop over atoms)
-
-   end subroutine build_hubbard_pot
-
    subroutine spdf_Hubbard(this)
       class(bands) :: this
 
@@ -1220,7 +945,7 @@ contains
          hub_j = this%recursion%hamiltonian%hub_j_sort
 
          
-         ! Creates an array with each orbital for each atom
+         !> Creates an array with each orbital for each atom
          do i = 1, this%lattice%nrec
             cntr = count(hub_u(i,:) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
             allocate(l_arr(i)%val(cntr))
@@ -1236,7 +961,7 @@ contains
             end do
          end do       
                
-         ! Sets up the imaginary Green's function (only for spd orbitals)
+         !> Sets up the imaginary Green's function (only for spd orbitals)
          do na = 1, this%lattice%nrec
             do i = 1, 18
                do j = 1, 18
@@ -1262,12 +987,14 @@ contains
             end do
          end do
          
-         ! Builds the Hubbard U+J potential 
+         !> Builds the Hubbard U+J potential 
          print *, ''
+         print *, '-----------------------------------------------------------------------------------------------------------------'
          print *, 'Calculate Hubbard U potential for:'
          do na = 1, this%lattice%nrec
-            print *, 'Atom ', na
-            ! Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
+            print *, ' Atom ', na
+            print *, ''
+            !> Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
             do l = 1, 4 !0 to 3 but indexing starts on 1
                do ispin = 1, 2
                   n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
@@ -1276,8 +1003,8 @@ contains
             end do
             U_energy = 0.0d0
 
-            ! l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
-            ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
+            !> l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
+            !> l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
             do l = 1, size(l_arr(na)%val)
                l_index = l_arr(na)%val(l)
                m_max = 2*l_index-1
@@ -1315,7 +1042,7 @@ contains
                end do
             end do  
 
-         ! Put hub_pot into global hubbard_pot (only done for spd-orbitals)
+         !> Puts hub_pot into global hubbard_pot (only done for spd-orbitals)
             do l = 0, 2
                do i = 1, 2*l + 1
                   do j = 1, 2*l + 1
@@ -1326,18 +1053,24 @@ contains
                dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
                - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
 
-               print *, ''
-               print *, ' Orbital ', this%recursion%hamiltonian%orb_conv(l+1), ' :'
-               print *, '(U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
+               do i = 1, size(l_arr(na)%val)
+                  if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
+                     print *, ' Orbital ', this%recursion%hamiltonian%orb_conv(l+1), ' :'
+                     print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
+                     print *, ''
+                  end if
+               end do
             end do
             
          end do 
+         print *, '-----------------------------------------------------------------------------------------------------------------'
+         print *,''
 
       if (allocated(LDM)) deallocate(LDM)
       if (allocated(hub_u)) deallocate(hub_u)
       if (allocated(hub_j)) deallocate(hub_j)
       end if
-
+      
    end subroutine spdf_Hubbard
 
 
@@ -1381,24 +1114,9 @@ contains
       im_gij = 0.0d0
       im_gji = 0.0d0
       hub_V_pot(:,:,:,:) = 0.0d0
-
-      ! ! Allocate the correct size of mn for each combination
-      ! do s1 = 1, 2
-      !    do s2 = 1, 2
-      !       do l1 = 1, 3
-      !          m1_max = l1*2-1
-      !          do l2 = 1, 3
-      !             m2_max = l2*2-1
-      !             if (allocated(nji_sorted(s1,s2,l1,l2)%mn)) deallocate (nji_sorted(s1,s2,l1,l2)%mn)
-      !             allocate(nji_sorted(s1,s2,l1,l2)%mn(m1_max,m2_max))
-      !             nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
-      !          end do
-      !       end do
-      !    end do
-      ! end do
       
 
-      ! Calculate -im(gij)/pi
+      !> Calculates -im(gij)/pi
       do ij = 1, this%lattice%njij
          do i = 1, 18
             do j = 1, 18
@@ -1413,31 +1131,26 @@ contains
             end do
          end do
       end do
+      print *, ''
+      print *, '-----------------------------------------------------------------------------------------------------------------'
       do na = 1, this%lattice%nrec
-         ! Loop over nearest neighbours
+         !> Loop over nearest neighbours
          ia = this%lattice%atlist(na) ! Atom number in clust
          nr = this%lattice%nn(ia, 1) ! Number of neighbours considered
          nn_dist = this%lattice%nn_dist(na) ! Distance of nearest neighbours for atom na
-         ! do ij = 1, size(this%lattice%ijpair_sorted,3)
-         !    ! Assign pair
-         !    atom1 = this%lattice%ijpair_sorted(na,1,ij,1)
-         !    print *, 'atom1', atom1
-         !    atom1_type = this%lattice%iz(atom1)
-         !    atom2 = this%lattice%ijpair_sorted(na,1,ij,2)
-         !    atom2_type = this%lattice%iz(atom2)
          do ij = 2, nr
             atom1 = ia
             atom1_type = this%lattice%iz(atom1)
             atom2 = this%lattice%nn(atom1, ij)
             atom2_type = this%lattice%iz(atom2)
-            !Check here if atom1 and atom2 are nearest neighbours.
+            !> Checks if atom1 and atom2 are nearest neighbours.
             dist = sqrt((this%lattice%cr(1,atom1) - this%lattice%cr(1,atom2))**2 + (this%lattice%cr(2,atom1) &
                   - this%lattice%cr(2,atom2))**2 + (this%lattice%cr(3,atom1) - this%lattice%cr(3,atom2))**2)
             if ( dist - 0.001d0 > nn_dist ) then
                print *, 'Atom ', atom1, 'and atom ', atom2, 'are not nearest neighbours. Do not add a +V correction.'
             else
                print *, 'Atom ', atom1, 'and atom ', atom2, 'are nearest neighbours. Check to see if +V correction should be added.'
-               ! Set correct density matrix for the given pair
+               !> Set correct density matrix for the given pair
                nji_temp = 0.0d0
                calc_pair = .false.
                do kl = 1, this%lattice%njij
@@ -1452,33 +1165,14 @@ contains
                      exit
                   end if
                end do
-               ! If there is a +V correction for this pair
+               !> If there is a +V correction for this pair
                if (calc_pair) then
                   print *, 'Adding +V correction.'
-                  ! Sorting the density matrix nij for easier handling (vij between different orbitals)
-                  ! ! Not needed probably
-                  ! do s1 = 1, 2
-                  !    do s2 = 1, 2
-                  !       do l1 = 1, 3
-                  !          m1_max = l1*2-1
-                  !          do l2 = 1, 3
-                  !             m2_max = l2*2-1
-                  !             nji_sorted(s1,s2,l1,l2)%mn(:,:) = 0.0d0
-                  !             do m1 = 1, m1_max
-                  !                do m2 = 1, m2_max
-                  !                   nji_sorted(s1,s2,l1,l2)%mn(m1,m2) = nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s2-1)*9 + m2)
-                  !                end do
-                  !             end do
-                  !          end do
-                  !       end do
-                  !    end do
-                  ! end do
-                  ! Check between which orbitals there is a +V correction
-                  !Number of orbital pairs between the two atoms
+                  print *, ''
+                  !> Check between which orbitals there is a +V correction
+                  !> Number of orbital pairs between the two atoms
                   tot_l_pair = this%recursion%hamiltonian%orbs_v_num(atom1_type, atom2_type)
                   do kl = 1, tot_l_pair
-                     ! Maybe also include ...%orbs_v(atom2_type, atom1_type)%val(kl,:) to cover everything.
-                     ! Alternatively creating ...%orbs_v such that this is included automatically
                      l1_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,1)
                      l2_ref = this%recursion%hamiltonian%orbs_v(atom1_type,atom2_type)%val(kl,2)
                      vij = this%recursion%hamiltonian%hubbard_v(atom1_type, atom2_type, l1_ref, l2_ref)
@@ -1488,7 +1182,6 @@ contains
                               if ((l1 == l1_ref) .and. (l2 == l2_ref)) then
                                  do m1 = 1, l1*2-1
                                     do m2 = 1, l2*2-1
-                                       ! This could be assigned directly to the variable in hamiltonian
                                        hub_V_pot((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2, ij, na) = &
                                                    -vij*nji_temp((l1-1)**2 + (s1-1)*9 + m1, (l2-1)**2 + (s1-1)*9 + m2)
                                     end do
@@ -1504,18 +1197,11 @@ contains
             end if
          end do
       end do
+      print *, ''
+      print *, '-----------------------------------------------------------------------------------------------------------------'
+      print *, ''
 
       this%recursion%hamiltonian%hubbard_v_pot = hub_V_pot
-
-      ! do i = 1, nn
-      !    do k = 1, 18
-      !       do j = 1, 18
-      !          if ( this%recursion%hamiltonian%hubbard_v_pot(k,j,i,1) > 1.0E-10) then
-      !             print *, '(+V potential, i) : ', this%recursion%hamiltonian%hubbard_v_pot(k,j,i,1), i
-      !          end if
-      !       end do
-      !    end do        
-      ! end do
 
    end subroutine Hubbard_V
 

@@ -953,10 +953,12 @@ contains
    !> @brief
    !>Subroutine for assigning nearest neighbors, not from file but from cluster built with bravais.
    !> Constructor
+   !> Originally written by Elis Uebel summer 2023 for improvement of greens function self recursion.
+   !> Now, reimplemented and improved by Emil Beiersdorf and Viktor Frilén summer 2024.
    !---------------------------------------------------------------------------
    subroutine neigh(this, nhb_degree)
       class(lattice) :: this
-      !First neighbors and their type
+      !> First neighbors and their type
       integer, dimension(this%ntype, nhb_degree) :: inx_ntype_break
       integer, dimension(this%ntype, this%kk) :: nhb_inx_m
       integer :: l,i, nhb_it, j, append_iter, max_append, la
@@ -967,9 +969,6 @@ contains
       nhb_inx_m(:,:) = 0
       max_append = 0
       do l=1, this%ntype
-         ! Here I think l shouldnt go from 1 to ntype. 
-         ! But instead this%atlist() should be used to see what atom we actually are looking at in the cluster
-         ! Fix this!
          la = this%atlist(l)
          append_iter = 1
          min_dist_m = 0
@@ -988,13 +987,12 @@ contains
                   nhb_it = nhb_it + 1
                end if
             end do
-            ! Store nearest neighbour distance
+            !> Store nearest neighbour distance
             if (j == 1) then
                this%nn_dist(l) = min_dist_m(2)
             end if
             min_dist_m(1) = min_dist_m(2)
             min_dist_m(2) = 10000
-            ! write (*,*) 'neighbors at degree ', j, 'for atom ', l, ' is ', nhb_it
             nmb_of_nhbrs(l,j) = nhb_it
             append_iter = append_iter + nhb_it
             inx_ntype_break(l,j) = append_iter-1
@@ -1006,10 +1004,13 @@ contains
       max_append = max_append - 1
       call this%assign_ijpair(nhb_inx_m(:,1:max_append), nmb_of_nhbrs)
    end subroutine neigh
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
    !> assigns the actual values in the correct form to the lattice object.
+   !> Originally written by Elis Uebel summer 2023 for improvement of greens function self recursion.
+   !> Now, reimplemented and improved for Hubbard U+J+V by Emil Beiersdorf and Viktor Frilén summer 2024.
    !---------------------------------------------------------------------------
    subroutine assign_ijpair(this, input_indices, nmb_of_nhbrs)
       class(lattice) :: this
@@ -1038,17 +1039,13 @@ contains
       if(allocated(this%ijpair)) deallocate(this%ijpair)
       allocate(this%ijpair(ij_iter-1,2))
       this%ijpair = temp_save(1:ij_iter-1,:)
-      do j=1,ij_iter-1
-         ! print *, this%ijpair(j,:)
-      end do
       this%njij = size(this%ijpair, 1)
       !--------------------------------------------------------------------------------------------------------------------------------------------------------
-      !Stores all unique pairs in ijpair with njij the number of unique pairs. All pairs and the corresponding number are stored in ijpair_all and njij_all
+      !> Stores all unique pairs in ijpair with njij the number of unique pairs. All pairs and the corresponding number are stored in ijpair_all and njij_all
       !--------------------------------------------------------------------------------------------------------------------------------------------------------
       call move_alloc(this%ijpair, this%ijpair_all)
       this%njij_all = ij_iter-1
-      ! print *, 'Unique pairs test'
-      !Finds all unique pairs
+      !> Finds all unique pairs
       allocate(ijpair_unique(size(this%ijpair_all, 1), size(this%ijpair_all, 2)))
       ijpair_unique(1,:) = this%ijpair_all(1,:)
       k = 1
@@ -1073,7 +1070,7 @@ contains
       allocate(this%ijpair(k,2))
       this%ijpair(:,:) = ijpair_unique(1:k,:)
       deallocate(ijpair_unique)
-      !Finds the maximum number of neighbours for creating improved ijpair_sorted
+      !> Finds the maximum number of neighbours for creating improved ijpair_sorted
       max_nhbr = 0
       do i = 1, this%ntype
          do j = 1, size(nmb_of_nhbrs, 2)
@@ -1097,7 +1094,7 @@ contains
       allocate(this%ijpair_sorted(size(ijpair_sorted, 1), size(ijpair_sorted,2), size(ijpair_sorted, 3), 2))
       this%ijpair_sorted = ijpair_sorted
       deallocate(ijpair_sorted)
-      !Finds all unique pairs 2.0
+      !> Finds all unique pairs 2.0
       !---------------------------------------------------------------------------------------
       allocate(ijpair_unique_2(size(this%ijpair_sorted, 2), this%njij_all, 2))
       allocate(ijpair_temp(size(this%ijpair_sorted, 2), this%njij_all, 2))
@@ -1143,10 +1140,7 @@ contains
             end if
          end do
       end do
-      !Wrong here? Test tommorrow
-      ! print *, 'this%njij = ', this%njij
       this%njij = k
-      ! print *, 'this%njij (after) = ', this%njij
       if(allocated(this%ijpair)) deallocate(this%ijpair)
       allocate(this%ijpair(k,2))
       k = 0
@@ -1159,45 +1153,17 @@ contains
          end do
       end do
       this%njij = k
-      ! if(allocated(this%ijpair)) deallocate(this%ijpair)
-      ! allocate(this%ijpair(k,2))
-      ! this%ijpair(:,:) = ijpair_unique(1:k,:)
       do nn = 1, size(ijpair_unique_2, 1)
-         ! print *, 'Neighbour degree: ', nn
          do i = 1, size(ijpair_unique_2, 2)
             if (ijpair_unique_2(nn,i,1) /= 0 .and. ijpair_unique_2(nn,i,2) /= 0) then
-               ! print *, 'Atom index: ', ijpair_unique_2(nn,i,:), ' Atom type: ', this%iz(ijpair_unique_2(nn,i,1)), this%iz(ijpair_unique_2(nn,i,2))
             end if
             end do
       end do
       deallocate(ijpair_unique_2)
-      print *, ''
-      !----------------------------------------------------------------------------------------
-      ! print *, 'All pairs'
       do j=1,this%njij_all
-         ! print *, 'Atom idex: ', this%ijpair_all(j,:), ' Atom type: ', this%iz(this%ijpair_all(j,1)), this%iz(this%ijpair_all(j,2))
       end do
-      ! print *, ''
-      ! print *, 'Sorted pairs 2.0'
-      do ia = 1, size(this%ijpair_sorted, 1)
-         ! print *, 'Atom', ia
-         do nn = 1, size(this%ijpair_sorted, 2)
-            ! print *, 'Neighbours degree ', nn
-            do i = 1, size(this%ijpair_sorted, 3)
-               ! print*, 'Eleements in sorted list. Atom index: ', this%ijpair_sorted(ia,nn,i,:), 'Atom type: ', this%iz(this%ijpair_sorted(ia,nn,i,1)), this%iz(this%ijpair_sorted(ia,nn,i,2))
-            end do
-         end do
-      end do
-      ! print *, 'Unique pairs'
-
-      ! do j= 1, this%njij
-      !   print *, 'Atom idex: ', ijpair_unique(j,:), ' Atom type: ', this%iz(ijpair_unique(j,1)), this%iz(ijpair_unique(j,2))
-      ! end do
       do j= 1, this%njij
-         ! print *, 'Atom idex: ', this%ijpair(j,:), ' Atom type: ', this%iz(this%ijpair(j,1)), this%iz(this%ijpair(j,2))
       end do
-      ! this%njij = 0.0d0
-      ! this%ijpair = this%ijpair_all
    end subroutine assign_ijpair
 
    !---------------------------------------------------------------------------
