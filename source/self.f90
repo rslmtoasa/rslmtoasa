@@ -670,7 +670,7 @@ contains
             do ia = 1, this%lattice%nrec
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
-            if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i .gt. 1) then
+            if (this%hamiltonian%hubbardU_check .and. i .gt. 1) then
                !> Initiate the LDA+U+J method by building the Hubbard U+J potential matrix
                call this%bands%spdf_Hubbard() ! Improved code
                ! call this%bands%build_hubbard_pot() ! Previous code (without +V)
@@ -841,7 +841,7 @@ contains
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
 
-            if (this%hamiltonian%hubbardU_check .and. this%hamiltonian%hubbardJ_check .and. i == 1) then
+            if (this%hamiltonian%hubbardU_check .and. i == 1) then
                call g_logger%info('LDA+U+J module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
                niter = niter + 1
             else if (this%hamiltonian%hubbardU_sc_check) then
