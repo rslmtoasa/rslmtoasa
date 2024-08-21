@@ -865,9 +865,9 @@ contains
 
 
          do ie = 1, this%en%channels_ldos+10
-            lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na)))
-            lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na)))
-            lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na)))
+            lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na_loc)))
+            lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na_loc)))
+            lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na_loc)))
          end do
 
          call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)
