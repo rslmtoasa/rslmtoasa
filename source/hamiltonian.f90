@@ -84,7 +84,7 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
 
       !> On-site potential for LDA+U+J correction
-      real(rp), dimension(:,:,:), allocatable :: hubbard_pot
+      real(rp), dimension(:,:,:), allocatable :: hubbard_u_pot
       real(rp), dimension(:,:,:,:), allocatable :: hubbard_v_pot
 
       !> Hubbard parameters for LDA+U+J implementation
@@ -205,7 +205,7 @@ contains
       if (allocated(this%orbs_v)) deallocate (this%orbs_v)
       if (allocated(this%orbs_v_num)) deallocate (this%orbs_v_num)
       if (allocated(this%F)) deallocate(this%F)
-      if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
+      if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
       if (allocated(this%hubbard_v_pot)) deallocate (this%hubbard_v_pot)
       if (allocated(this%hubbard_u_sc)) deallocate (this%hubbard_u_sc)
 #endif
@@ -306,12 +306,12 @@ contains
                else if ( l == 4 ) then
                   print *, ''
                   call g_logger%error('Self-consistent U calculation not implemented for f-electrons', __FILE__, __LINE__)
-                  stop
+                  error stop
                end if
             else if ( this%hubbard_u_sc(na,l) .gt. 1 ) then
                print *, ''
                call g_logger%error('WRONG INPUT. hubbard_u_sc input was larger than 1, but only 0 and 1 is allowed.', __FILE__, __LINE__)
-               stop
+               error stop
             end if
          end do
       end do
@@ -356,6 +356,16 @@ contains
          end do
       end do outer4
 
+      !> Raises an error if V correction is wanted when +U correction is not.
+      if (this%hubbardV_check .and. .not. this%hubbardU_check) then
+         print *, ''
+         print *, '----------------------------------------------------------------------------------------'
+         print *, '+V correction specified without +U correction!'
+         print *, '----------------------------------------------------------------------------------------'
+         call g_logger%error('Cannot add +V without +U!', __FILE__, __LINE__)
+         error stop
+      end if
+
       ! Organizes the orbital Hubbard U & J values into the correct position
       if (this%hubbardU_check) then
          do i = 1, this%lattice%nrec
@@ -384,10 +394,10 @@ contains
             do j = 1, this%lattice%nrec
                do li = 1, 4
                   do lj = 1, 4
-                     if (abs(this%hubbard_v(i,j,li,lj)) > 1.0E-10 .and. abs(this%hubbard_v(j,i,lj,li)) > 1.0E-10 .and. this%hubbard_v(i,j,li,lj) /= this%hubbard_v(j,i,lj,li)) then
+                     if (abs(this%hubbard_v(i,j,li,lj)) > 1.0E-10 .and. abs(this%hubbard_v(j,i,lj,li)) > 1.0E-10 .and. (this%hubbard_v(i,j,li,lj) - this%hubbard_v(j,i,lj,li) > 1.0E-10) ) then
                         print *, 'Incorrect +V implementation for interaction between atom type ',i , 'and ',j , '.'
                         call g_logger%error('Value for V(i,j,li,lj) must be the same as V(j,i,lj,li). Either delete one of them, or set them equal.', __FILE__, __LINE__)
-                        stop
+                        error stop
                      end if
                   end do
                end do
@@ -564,7 +574,7 @@ contains
          end if
          if (.not. this%hubbardU_check .and. .not. this%hubbardJ_check .and. len_trim(this%uj_orb(i)) > 0 ) then
             call g_logger%error('Hubbard orbitals specified without U parameters.', __FILE__, __LINE__)
-            stop
+            error stop
          end if
       end do outer
 
@@ -662,7 +672,7 @@ contains
                print *, ''
          else 
             call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-               error stop
+            error stop
          end if       
 
       else if (this%hubbardJ_check) then 
@@ -709,13 +719,13 @@ contains
       !> Checks if self-consistent U flag and input values of U and J have both been provided. They would interfer with eachother. 
       if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check)) then
          call g_logger%error('Both input values for hubbard_u_sc and hubbard_u + hubbard_j has been provided. Only one of them are allowed.', __FILE__, __LINE__)
-         stop
+         error stop
       else if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) ) then
          call g_logger%error('Both input values for hubbard_u_sc and hubbard_u has been provided. Only one of them are allowed.', __FILE__, __LINE__)
-         stop
+         error stop
       else if ( (this%hubbardU_sc_check) .and. (this%hubbardJ_check)) then 
          call g_logger%error('Both input values for hubbard_u_sc and hubbard_j has been provided. Only one of them is allowed.', __FILE__, __LINE__)
-         stop
+         error stop
       end if
 
    end subroutine build_from_file
@@ -784,7 +794,7 @@ contains
       allocate(this%orbs_v_num(this%lattice%nrec, this%lattice%nrec))
       allocate(this%F(this%lattice%nrec, 4, 4))
       allocate (this%uj_orb(this%lattice%nrec))
-      allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
+      allocate (this%hubbard_u_pot(18, 18, this%lattice%nrec))
       allocate (this%hubbard_v_pot(18, 18, size(this%ee, 3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
       allocate (this%hubbard_u_sc(this%lattice%nrec,4))
       !end if
@@ -827,7 +837,7 @@ contains
       this%hubbardU_check = .false.
       this%hubbardJ_check = .false.
       this%hubbardV_check = .false.
-      this%hubbard_pot(:,:,:) = 0.0d0
+      this%hubbard_u_pot(:,:,:) = 0.0d0
       this%hubbard_v_pot(:,:,:,:) = 0.0d0
       this%orb_conv(1) = 's'
       this%orb_conv(2) = 'p'
@@ -1053,8 +1063,8 @@ contains
          if (this%hubbardU_check) then
             do i = 1, 9
                do j = 1, 9
-                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_pot(i, j, ntype)
-                  this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) + this%hubbard_pot(i + 9, j + 9, ntype)
+                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
+                  this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) + this%hubbard_u_pot(i + 9, j + 9, ntype)
                end do
             end do
             ! print *, 'hub_v_pot test ', this%hubbard_v_pot
