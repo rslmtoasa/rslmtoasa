@@ -936,6 +936,10 @@ contains
          end do
       end if
 
+      ! Print angle betweens magnetic and orbital moments
+      call this%bands%calculate_angles(magmom, lmom)
+
+      ! Print hyperfine structure
       if (this%control%hyperfine) then
          do ia = 1, this%lattice%nrec
             call this%symbolic_atom(ia)%potential%print_hyperfine(ia)

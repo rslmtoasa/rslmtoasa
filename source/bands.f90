@@ -94,6 +94,7 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
+      procedure :: calculate_angles
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -1094,4 +1095,76 @@ contains
          !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
       end do
    end subroutine calculate_magnetic_torques
+
+   !**************************************************************************
+   !> @brief Calculate angles between magnetic and orbital moments for all atoms.
+   !> 
+   !> This subroutine computes the angles between the magnetic moments and
+   !> orbital moments of all atoms in a given system. The angles are calculated
+   !> using the dot product of the vectors, normalized by the magnitudes of the
+   !> vectors. The results are stored in two matrices: one for the magnetic moments
+   !> and one for the orbital moments.
+   !> 
+   !> @param[in]  this          A derived band type 
+   !> @param[in]  magmom        A 2D real array (nrec x 3) containing the magnetic moments for each atom.
+   !> @param[in]  lmom          A 2D real array (nrec x 3) containing the orbital moments for each atom.
+   !> @param[out] angles_magmom A 2D real array (nrec x nrec) to store the angles between magnetic moments of all atom pairs.
+   !> @param[out] angles_lmom   A 2D real array (nrec x nrec) to store the angles between orbital moments of all atom pairs.
+   !>
+   !> @note The angles are calculated using the following formula:
+   !>       \f$ \text{angle} = \cos^{-1} \left( \frac{\mathbf{a} \cdot \mathbf{b}}{|\mathbf{a}| |\mathbf{b}|} \right) \f$
+   !>       where \f$\mathbf{a}\f$ and \f$\mathbf{b}\f$ are the moment vectors.
+   !**************************************************************************
+   subroutine calculate_angles(this, magmom, lmom)
+      implicit none
+      ! Input
+      class(bands), intent(inout) :: this
+      real(rp), dimension(this%lattice%nrec, 3), intent(in) :: magmom, lmom
+      ! Local variables
+      integer :: i, j, cols_per_line
+      real(rp) :: dot_prod, mag_a, mag_b
+      real(rp), dimension(this%lattice%nrec, this%lattice%nrec) :: angles_magmom
+      real(rp), dimension(this%lattice%nrec, this%lattice%nrec) :: angles_lmom
+      character(len=sl) :: format_string   
+
+      ! Loop over all pairs of atoms
+      do i = 1, this%lattice%nrec
+         do j = 1, this%lattice%nrec
+            if (i /= j) then
+               ! Calculate the angle between magnetic moments
+               dot_prod = dot_product(magmom(i, :), magmom(j, :))
+               mag_a = sqrt(sum(magmom(i, :)**2))
+               mag_b = sqrt(sum(magmom(j, :)**2))
+               angles_magmom(i, j) = acos(dot_prod / (mag_a * mag_b))
+   
+               ! Calculate the angle between orbital moments
+               dot_prod = dot_product(lmom(i, :), lmom(j, :))
+               mag_a = sqrt(sum(lmom(i, :)**2))
+               mag_b = sqrt(sum(lmom(j, :)**2))
+               angles_lmom(i, j) = acos(dot_prod / (mag_a * mag_b))
+            else
+               ! Set the diagonal to zero since the angle between the same vectors is undefined
+               angles_magmom(i, j) = 0.0_rp
+               angles_lmom(i, j) = 0.0_rp
+            end if
+         end do
+      end do
+
+      ! Determine the number of columns per line
+      cols_per_line = this%lattice%nrec
+      write(format_string, '(A,I4,A)') '(', cols_per_line, 'f16.6)'
+
+      ! Write the results to output files
+      open(unit=10, file='angles_magmom.out', status='replace')
+      open(unit=20, file='angles_lmom.out', status='replace')
+
+      do i = 1, this%lattice%nrec
+         write(10, format_string) angles_magmom(i, 1:this%lattice%nrec)*rad2deg
+         write(20, format_string) angles_lmom(i, 1:this%lattice%nrec)*rad2deg
+      end do
+
+      close(10)
+      close(20)
+   end subroutine calculate_angles
+
 end module bands_mod
