@@ -26,9 +26,7 @@ jobs:
           # fftw3 
           brew install ninja meson openmpi gfortran
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          echo "gfortran-13?", $(which gfortran-13)
-          echo "gfortran-14?", $(which gfortran-14)
-          sudo ln -s "$(which gfortran-14)" /opt/homebrew/bin/gfortran
+          sudo ln -s "$(which gfortran-14)" "$(brew --prefix)/bin/gfortran"
 
       - name: Provide ninja and MPI on Linux ${{ matrix.icon}}
         if: runner.os == 'Linux'
