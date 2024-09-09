@@ -27,7 +27,7 @@ module lattice_mod
    use mpi_mod
    use globals_mod
    use control_mod
-   use string_mod, only: clean_str, sl, fmt
+   use string_mod
    use math_mod
    use precision_mod, only: rp
    use symbolic_atom_mod, only: symbolic_atom, array_of_symbolic_atoms
@@ -323,6 +323,10 @@ module lattice_mod
       procedure :: newclu
       procedure :: structb
       procedure :: atomlist
+      procedure :: check_atoms_in_volume
+      procedure :: find_unique_struct
+      procedure :: identify_unique_atoms
+      procedure :: check_within_volume
       procedure, private :: dbar1
       procedure :: clusba
       procedure :: calculate_nbas
@@ -1304,7 +1308,7 @@ contains
          allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot), this%ct(this%ntype))
          allocate (this%chargetrf_type(this%nbas))
 
-         this%ct(:) = this%alat + 0.1d0
+         this%ct(:) = 4.0d0 !this%alat + 0.1d0
          this%r2 = this%ct(1)**2
 
          do i = 1, this%nrec
@@ -1523,7 +1527,7 @@ contains
       allocate (izpo(kk), izp(kk), no(kk), nnmax(kk), izimp(kk), noimp(kk))
       allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))
       ! Setting ct values for impurity
-      this%ct(:) = 4.0 !this%alat+0.1d0
+      this%ct(:) = this%alat+0.1d0
       ! Identify impurity atoms from ´inclu´
       do i = 1, kk
          izpo(i) = this%iz(i)
@@ -1842,6 +1846,248 @@ contains
             this%cr(:, i), this%symbolic_atoms(this%iz(i))%potential%mom(:)
       end do
    end subroutine atomlist
+
+   !**************************************************************************
+   !> @brief Identifies atoms within the volume defined by vectors a1, a2, and a3.
+   !> 
+   !> This subroutine checks if atoms, relative to a central atom, are located 
+   !> within the parallelepiped volume formed by translating vectors a1, a2, and a3.
+   !> 
+   !> @param[in]  cr              A 2D real(rp) array (3 x num_atoms) containing the coordinates of all atoms.
+   !> @param[in]  num             An integer array (num_atoms) representing structure identifiers for all atoms.
+   !> @param[in]  num_atoms       An integer representing the total number of atoms.
+   !> @param[in]  central_atom    An integer representing the index of the central atom.
+   !> @param[in]  a1, a2, a3      3-element real(rp) arrays representing the primitive vectors defining the volume.
+   !> @param[in]  plane_constant  A real(rp) value representing the constant of the plane equation for the surface.
+   !> @param[out] atoms_in_volume An allocatable integer array containing the indices of atoms found within the volume.
+   !> @param[out] atom_count      An integer representing the number of atoms found within the volume.
+   !>
+   !> @note The volume is defined by the parallelepiped formed from vectors a1, a2, and a3.
+   !**************************************************************************
+   subroutine check_atoms_in_volume(this, cr, num, num_atoms, central_atom, a1, a2, a3, plane_constant, atoms_in_volume, atom_count)
+       class(lattice), intent(inout) :: this
+       real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
+       integer, intent(in) :: num(num_atoms), num_atoms, central_atom
+       real(rp), intent(in) :: plane_constant
+       integer, allocatable, intent(out) :: atoms_in_volume(:)
+       integer, intent(out) :: atom_count
+       real(rp) :: relative_pos(3)
+       logical :: inside
+       integer :: i
+   
+       ! Initialize array for atoms inside the primitive cell volume
+       allocate(atoms_in_volume(num_atoms))
+       atom_count = 0
+       atoms_in_volume = 0
+       ! Loop over all atoms to find those inside the primitive cell volume
+       do i = 1, num_atoms
+          ! Calculate the position relative to the central atom
+          relative_pos = cr(:, i) - cr(:, central_atom)
+          ! Check if the atom is within the parallelepiped defined by a1, a2, and a3
+          call this%check_within_volume(relative_pos, a1, a2, a3, inside)
+   
+          if (inside) then
+             atom_count = atom_count + 1
+             atoms_in_volume(atom_count) = i
+          end if
+       end do
+       !write(*,*) 'atoms_in_volume', atoms_in_volume
+       ! Resize atoms_in_volume array to the actual number of atoms found
+       !if (atom_count > 0) then
+       !   deallocate(atoms_in_volume); allocate(atoms_in_volume(atom_count))
+       !else
+       !   deallocate(atoms_in_volume)
+       !end if
+   
+   end subroutine check_atoms_in_volume
+
+   !**************************************************************************
+   !> @brief Checks if an atom is inside the volume defined by a1, a2, and a3.
+   !> 
+   !> This subroutine checks if an atom's position, relative to a central atom, is 
+   !> inside the parallelepiped volume formed by the vectors a1, a2, and a3.
+   !>
+   !> The atom's position, relative to the central atom, is expressed as a linear 
+   !> combination of the vectors a1, a2, and a3, i.e.:
+   !>
+   !> \f$ \mathbf{r}_{\text{rel}} = u \mathbf{a}_1 + v \mathbf{a}_2 + w \mathbf{a}_3 \f$
+   !>
+   !> Where \f$ u, v, w \f$ are the coordinates in the basis defined by \f$ \mathbf{a}_1, \mathbf{a}_2, \mathbf{a}_3 \f$.
+   !>
+   !> The atom is considered inside the volume if:
+   !> \f$ 0 \leq u \leq 1 \f$, \f$ 0 \leq v \leq 1 \f$, and \f$ 0 \leq w \leq 1 \f$
+   !>
+   !> @param[in]  relative_pos  A 3-element real(rp) array representing the atom's position relative to the central atom.
+   !> @param[in]  a1, a2, a3    3-element real(rp) arrays representing the vectors defining the volume.
+   !> @param[out] inside        A logical value indicating whether the atom is inside the parallelepiped.
+   !>
+   !> @note The coordinates \( u, v, w \) are computed by solving the linear system:
+   !>       \f[
+   !>       \begin{aligned}
+   !>       \mathbf{r}_{\text{rel}} &= u \mathbf{a}_1 + v \mathbf{a}_2 + w \mathbf{a}_3 \\
+   !>       \end{aligned}
+   !>       \f]
+   !>       The inverse of the matrix of dot products is used to calculate \( u \), \( v \), and \( w \).
+   !**************************************************************************
+   subroutine check_within_volume(this, relative_pos, a1, a2, a3, inside)
+       class(lattice), intent(inout) :: this
+       real(rp), intent(in) :: relative_pos(3), a1(3), a2(3), a3(3)
+       logical, intent(out) :: inside
+       real(rp) :: dot11, dot12, dot13, dot22, dot23, dot33
+       real(rp) :: dot1r, dot2r, dot3r, inv_denom, u, v, w
+   
+       ! Calculate dot products between the vectors
+       dot11 = dot_product(a1, a1)
+       dot12 = dot_product(a1, a2)
+       dot13 = dot_product(a1, a3)
+       dot22 = dot_product(a2, a2)
+       dot23 = dot_product(a2, a3)
+       dot33 = dot_product(a3, a3)
+       dot1r = dot_product(a1, relative_pos)
+       dot2r = dot_product(a2, relative_pos)
+       dot3r = dot_product(a3, relative_pos)
+   
+       ! Calculate inverse of the denominator for the linear combination
+       inv_denom = 1.0_rp / (dot11 * (dot22 * dot33 - dot23 * dot23) &
+                           - dot12 * (dot12 * dot33 - dot23 * dot13) &
+                           + dot13 * (dot12 * dot23 - dot22 * dot13))
+   
+       ! Calculate coordinates (u, v, w) in the basis defined by a1, a2, and a3
+       u = ((dot22 * dot33 - dot23 * dot23) * dot1r + &
+           (dot13 * dot23 - dot12 * dot33) * dot2r + &
+           (dot12 * dot23 - dot13 * dot22) * dot3r) * inv_denom
+   
+       v = ((dot13 * dot23 - dot12 * dot33) * dot1r + &
+           (dot11 * dot33 - dot13 * dot13) * dot2r + &
+           (dot12 * dot13 - dot11 * dot23) * dot3r) * inv_denom
+   
+       w = ((dot12 * dot23 - dot13 * dot22) * dot1r + &
+           (dot12 * dot13 - dot11 * dot23) * dot2r + &
+           (dot11 * dot22 - dot12 * dot12) * dot3r) * inv_denom
+   
+       ! Check if the atom is inside the parallelepiped
+       inside = (u >= 0.0_rp .and. u <= 1.0_rp .and. &
+                 v >= 0.0_rp .and. v <= 1.0_rp .and. &
+                 w >= 0.0_rp .and. w <= 1.0_rp)
+   end subroutine check_within_volume
+
+   !**************************************************************************
+   !> @brief Finds all unique structure types within a given list of atoms.
+   !> 
+   !> This subroutine identifies all unique structure types (or identifiers) present 
+   !> within a set of atoms and returns a list of these unique identifiers.
+   !> 
+   !> @param[in]  num          An integer array (num_atoms) containing structure identifiers for all atoms.
+   !> @param[in]  num_atoms    An integer representing the total number of atoms.
+   !> @param[out] unique_nums  An allocatable integer array containing the unique structure identifiers.
+   !> 
+   !> @note This subroutine loops through the structure identifiers and ensures only
+   !>       unique ones are collected.
+   !**************************************************************************
+   subroutine find_unique_struct(this, num, num_atoms, unique_nums)
+       class(lattice), intent(inout) :: this
+       integer, intent(in) :: num(:), num_atoms
+       integer, allocatable, intent(out) :: unique_nums(:)
+       integer, allocatable :: temp_nums(:)
+       integer :: i, j, num_unique
+       logical :: found
+   
+       ! Allocate temporary array for unique numbers
+       allocate(temp_nums(num_atoms))
+       num_unique = 0
+   
+       ! Loop over all atoms to find unique structure types
+       do i = 1, num_atoms
+          found = .false.
+          do j = 1, num_unique
+             if (num(i) == temp_nums(j)) then
+                found = .true.
+                exit
+             end if
+          end do
+          if (.not. found) then
+             num_unique = num_unique + 1
+             temp_nums(num_unique) = num(i)
+          end if
+       end do
+   
+       ! Resize array to the actual number of unique nums
+       allocate(unique_nums(num_unique))
+       unique_nums(:) = temp_nums(1:num_unique)
+       ! Deallocate temporary array
+       deallocate(temp_nums)
+   end subroutine find_unique_struct
+
+   !**************************************************************************
+   !> @brief Identifies unique atomic positions within the primitive cell volume.
+   !> 
+   !> This subroutine identifies which atomic positions within the primitive cell 
+   !> volume are unique. An atom is considered unique if it cannot be generated 
+   !> from another atom using a combination of translations along a1, a2, and a3.
+   !> 
+   !> @param[in]  cr                A 2D real(rp) array (3 x num_atoms) containing coordinates of all atoms.
+   !> @param[in]  num_atoms         An integer representing the total number of atoms.
+   !> @param[in]  atoms_in_volume   An integer array containing indices of atoms within the volume.
+   !> @param[in]  atom_count        An integer representing the number of atoms within the volume.
+   !> @param[in]  a1, a2, a3        3-element real(rp) arrays representing the vectors defining the volume.
+   !> @param[out] unique_atoms      An allocatable integer array containing indices of unique atoms within the volume.
+   !> @param[out] unique_atom_count An integer representing the number of unique atoms within the volume.
+   !> 
+   !> @note The uniqueness of an atom is determined by comparing its position to all
+   !>       other atoms and checking if it can be generated by a translation using 
+   !>       a1, a2, and a3.
+   !**************************************************************************
+   subroutine identify_unique_atoms(this, cr, num_atoms, atoms_in_volume, atom_count, a1, a2, a3, unique_atoms, unique_atom_count)
+       class(lattice), intent(inout) :: this
+       real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
+       integer, intent(in) :: num_atoms, atoms_in_volume(:), atom_count
+       integer, allocatable, intent(out) :: unique_atoms(:)
+       integer, intent(out) :: unique_atom_count
+       logical :: found, is_transformed
+       real(rp) :: trans_atom(3), delta(3)
+       integer :: i, j, k, n, m, p
+       integer, allocatable :: temp_unique_atoms(:)
+   
+       ! Initialize temporary array for unique atoms list
+       allocate(temp_unique_atoms(atom_count))
+       unique_atom_count = 0
+       temp_unique_atoms = -1
+       ! First pass to identify all unique atoms within the primitive cell volume
+       do i = 1, atom_count
+           found = .false.
+   
+           ! Check if this atom can be generated by translating another atom
+           do j = 1, unique_atom_count
+               ! Translate atom by all combinations of a1, a2, and a3 within the cell
+               do k = -1, 1
+                   do n = -1, 1
+                       do p = -1, 1
+                           trans_atom = cr(:, temp_unique_atoms(j)) + k * a1 + n * a2 + p * a3
+                           delta = cr(:, atoms_in_volume(i)) - trans_atom
+                           if (norm2(delta) < 1.0d-6) then
+                               found = .true.
+                               exit
+                           end if
+                       end do
+                       if (found) exit
+                   end do
+                   if (found) exit
+               end do
+           end do
+   
+           ! If the atom is not redundant, add it to the temporary list of unique atoms
+           if (.not. found) then
+               unique_atom_count = unique_atom_count + 1
+               temp_unique_atoms(unique_atom_count) = atoms_in_volume(i)
+           end if
+       end do
+   
+       ! Allocate the final unique_atoms array to the correct size
+       allocate(unique_atoms(unique_atom_count))
+       unique_atoms(:) = temp_unique_atoms(1:unique_atom_count)
+       ! Deallocate temporary array
+       deallocate(temp_unique_atoms)
+   end subroutine identify_unique_atoms
 
    ! Local library
    !---------------------------------------------------------------------------

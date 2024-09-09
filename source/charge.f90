@@ -23,7 +23,6 @@ module charge_mod
    use mpi_mod
    use lattice_mod
    use symbolic_atom_mod, only: symbolic_atom
-   use string_mod, only: sl, fmt
    use math_mod, only: pi, sqrt_pi, cross_product, ang2au, distance, angle, pos, erodrigues, normalize
    use precision_mod, only: rp
    use namelist_generator_mod, only: namelist_generator
@@ -706,9 +705,9 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_alelay(this)
       class(charge), intent(inout) :: this
-      real(rp), dimension(3) :: v1, v2, x, y, z
+      real(rp), dimension(3) :: v1, v2, x, y, z, atom_rot
       real(rp), dimension(3) :: new_bsx, new_bsy, new_bsz
-      real(rp) :: d1, dmin0, dmin2, dmin3
+      real(rp) :: d1, dmin0, dmin2, dmin3, plane_constant
       real(rp) :: amin, amin2
       real(rp) :: zst, zn
       real(rp) :: phi
@@ -716,9 +715,9 @@ contains
       real(rp), parameter :: minidiff = 1.d-8
       real(rp), parameter :: minpi = 4*atan(1.0d0) - diff
       integer, dimension(1000) :: bsyat, bsyat2 ! arrays of nearest neighbors
-      integer :: i, j, k, at, idx, idx2
+      integer :: i, j, k, at, idx, idx2, unique_atom_count, atom_count, newunit, iostatus
+      integer, allocatable :: atoms_in_volume(:), unique_nums(:), unique_atoms(:)
 
-      this%nq3 = this%lattice%nbulk_bulk
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('charge.bsx', this%bsx, 3)
       call g_safe_alloc%allocate('charge.bsy', this%bsy, 3)
@@ -732,24 +731,15 @@ contains
       call g_safe_alloc%allocate('charge.new_kx', this%new_kx, 3)
       call g_safe_alloc%allocate('charge.new_ky', this%new_ky, 3)
       call g_safe_alloc%allocate('charge.new_kz', this%new_kz, 3)
-      call g_safe_alloc%allocate('charge.qx3', this%qx3, this%nq3)
-      call g_safe_alloc%allocate('charge.qy3', this%qy3, this%nq3)
-      call g_safe_alloc%allocate('charge.qz3', this%qz3, this%nq3)
 #else
       allocate (this%bsx(3), this%bsy(3), this%bsz(3))
       allocate (this%bssx(3), this%bssy(3), this%bssz(3))
       allocate (this%new_x(3), this%new_y(3), this%new_z(3))
       allocate (this%new_kx(3), this%new_ky(3), this%new_kz(3))
-      allocate (this%qx3(this%nq3), this%qy3(this%nq3), this%qz3(this%nq3))
 #endif
 
-!     this%qx3 = 0.0d0; this%qy3 = 0.0d0; this%qz3 = 0.0d0
-
-      do i = 1, this%lattice%nbulk_bulk
-         this%qx3(i) = this%lattice%crd(1, i) - this%lattice%crd(1, 1)
-         this%qy3(i) = this%lattice%crd(2, i) - this%lattice%crd(2, 1)
-         this%qz3(i) = this%lattice%crd(3, i) - this%lattice%crd(3, 1)
-      end do
+      ! Save alelay information in alelay.out
+      open (newunit=newunit, file='alelay.out', action='write', iostat=iostatus, status='replace')
 
       this%a = 1.0d0
       this%b = 1.0d0
@@ -796,9 +786,7 @@ contains
    &        (angle(pos(v1, v2), this%bsx) .gt. diff) .and. (angle(pos(v1, v2), this%bsx) .lt. minpi)) then
             dmin3 = distance(v1, v2)
          end if
-!       if ((distance(v1, v2).le.dmin2).and.(zn.le.(zst-this%lattice%zstep+minidiff)).and. &
-! &         (zn.ge.(zst-this%lattice%zstep-minidiff)).and.(distance(v1, v2).gt.diff)) then
-         if ((distance(v1, v2) .le. dmin2) .and. (zn .ne. zst) .and. (distance(v1, v2) .gt. diff)) then
+         if ((distance(v1, v2) .lt. dmin2) .and. (zn .ne. zst) .and. (distance(v1, v2) .gt. diff)) then
             do j = 1, 3
                this%bsz(j) = this%lattice%cr(j, i) - this%lattice%cr(j, at)
             end do
@@ -873,8 +861,56 @@ contains
          end do
       end if
 
-      ! Rotates bsx and bsy to the xy plane if perp axis is diff from [001]
+      plane_constant = this%lattice%dx*this%lattice%cr(1, at) + this%lattice%dy*this%lattice%cr(2, at) + this%lattice%dz*this%lattice%cr(3, at)
 
+      write(newunit, '(a)') 'Primitive vectors found in global coordinates'
+      write(newunit,'(a,3f10.6)') 'a1:',this%bsx
+      write(newunit,'(a,3f10.6)') 'a2:',this%bsy
+      write(newunit,'(a,3f10.6)') 'a3:',this%bsz
+      write(newunit,*) 
+      ! Calculates the 2D primitive unit cell
+      ! Check the final atoms within the primitive cell volume
+      call this%lattice%check_atoms_in_volume(this%lattice%cr, this%lattice%num, this%lattice%kk, at, this%bsx, this%bsy, this%bsz, plane_constant, atoms_in_volume, atom_count)
+          
+      ! Ensure the primitive cell volume contains all unique structure types
+      call this%lattice%find_unique_struct(this%lattice%num, this%lattice%kk, unique_nums)
+          
+      ! Identify unique atomic positions within the primitive cell volume
+      call this%lattice%identify_unique_atoms(this%lattice%cr, this%lattice%kk, atoms_in_volume, atom_count, this%bsx, this%bsy, this%bsz, unique_atoms, unique_atom_count)
+
+      write(newunit,'(a,i3)') 'Number of atoms in the primitive cell:', unique_atom_count
+      write(newunit,*) 
+      ! Output the unique atoms within the primitive cell volume
+      write(newunit,'(a)') 'Atoms within the primitive cell volume in global coordinates:'
+      do i = 1, unique_atom_count
+         write(newunit,'(a,i6,a,3f10.6,a,i6)') 'Atom index: ', unique_atoms(i), ' Coordinates: ', &
+                  this%lattice%cr(1, unique_atoms(i)) - this%lattice%cr(1, unique_atoms(1)), &
+                  this%lattice%cr(2, unique_atoms(i)) - this%lattice%cr(2, unique_atoms(1)), &
+                  this%lattice%cr(3, unique_atoms(i)) - this%lattice%cr(3, unique_atoms(1)), &
+                  ' Structure: ', this%lattice%num(unique_atoms(i))
+      end do
+      write(newunit,*)
+
+      ! Properly allocate the primitive cell dimensions
+      this%nq3 = unique_atom_count
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('charge.qx3', this%qx3, this%nq3)
+      call g_safe_alloc%allocate('charge.qy3', this%qy3, this%nq3)
+      call g_safe_alloc%allocate('charge.qz3', this%qz3, this%nq3)
+#else
+      allocate (this%qx3(this%nq3), this%qy3(this%nq3), this%qz3(this%nq3))
+#endif
+
+      this%qx3 = 0.0d0; this%qy3 = 0.0d0; this%qz3 = 0.0d0
+
+      ! Setting up the primitive cell atoms before rotation
+      do i = 1, this%nq3
+           this%qx3(i) = this%lattice%cr(1, unique_atoms(i)) - this%lattice%cr(1, unique_atoms(1))
+           this%qy3(i) = this%lattice%cr(2, unique_atoms(i)) - this%lattice%cr(2, unique_atoms(1))
+           this%qz3(i) = this%lattice%cr(3, unique_atoms(i)) - this%lattice%cr(3, unique_atoms(1))
+      end do
+
+      ! Rotates bsx and bsy to the xy plane if perp axis is diff from [001]
       if ((this%lattice%dx .ne. 0) .or. (this%lattice%dy .ne. 0)) then
 
          x = [1.0d0, 0.0d0, 0.0d0]
@@ -911,6 +947,22 @@ contains
          this%bsz(2) = dot_product(new_bsz, y)
          this%bsz(3) = dot_product(new_bsz, z)
 
+         do i = 1, this%nq3
+           ! Rotate the atom's coordinates
+           atom_rot(1) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_x)
+           atom_rot(2) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_y)
+           atom_rot(3) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_z)
+
+           ! Set the rotated coordinates back into cr
+           this%qx3(i) = dot_product(atom_rot, x)
+           this%qy3(i) = dot_product(atom_rot, y)
+           this%qz3(i) = dot_product(atom_rot, z)
+         end do
+         
+         ! Shifting the atoms so the 1st atom is the reference atom
+         this%qx3(:) = this%qx3(:) - this%qx3(1)
+         this%qy3(:) = this%qy3(:) - this%qy3(1)
+         this%qz3(:) = this%qz3(:) - this%qz3(1)
       end if
 
       ! Change to old definitions
@@ -919,6 +971,22 @@ contains
       this%bsx(1) = this%bssx(1); this%bsx(2) = this%bssy(1); this%bsx(3) = this%bssz(1)
       this%bsy(1) = this%bssx(2); this%bsy(2) = this%bssy(2); this%bsy(3) = this%bssz(2)
       this%bsz(1) = this%bssx(3); this%bsz(2) = this%bssy(3); this%bsz(3) = this%bssz(3)
+
+      ! Printing output after the rotation is done
+      write(newunit, '(a)') 'Primitive vectors found in rotated coordinates:'
+      write(newunit,'(a,3f10.6)') 'a1:',this%bssx(:)
+      write(newunit,'(a,3f10.6)') 'a2:',this%bssy(:)
+      write(newunit,'(a,3f10.6)') 'a3:',this%bssz(:)
+      write(newunit,*)
+
+      write(newunit,'(a)') 'Atoms within the primitive cell volume in rotated coordinates:'
+      do i = 1, this%nq3
+         write(newunit,'(a,i6,a,3f10.6,a,i6)') 'Atom index: ', unique_atoms(i), & 
+                                               ' Coordinates: ', this%qx3(i), this%qy3(i), this%qz3(i), &
+                                               ' Structure: ', this%lattice%num(unique_atoms(i))
+      end do
+
+      close(newunit) 
    end subroutine build_alelay
 
    !---------------------------------------------------------------------------
