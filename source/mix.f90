@@ -342,6 +342,7 @@ contains
    !> @return type(symbolic_atom): new magnetic moments after mixing.
    !---------------------------------------------------------------------------
    subroutine mix_magnetic_moments(this, mag_old, mag_new, mag_mix, mtot)
+      use mpi_mod
       implicit none
       class(mix), intent(inout) :: this
       ! Input variables
@@ -354,10 +355,10 @@ contains
       integer :: ia ! Self-consistent atom index
 
       ! Calculate the mixed magnetic moments
-      do ia = 1, this%lattice%nrec
+      do ia = 1, this%lattice%nrec 
          if (mtot(ia + this%lattice%nbulk) < 0.5d0) then
             this%is_induced(ia) = .true.
-            this%magbeta(ia) = 0.0d0
+            !this%magbeta(ia) = 0.0d0
             if (rank == 0) call g_logger%info('Spin moment at atom '//fmt('i4', (ia))//' is being considered induced', __FILE__, __LINE__)
          end if
          mag_mix(ia, :) = (1.d0 - this%magbeta(ia))*mag_old(ia, :) + this%magbeta(ia)*mag_new(ia, :)
