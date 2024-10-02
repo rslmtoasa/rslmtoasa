@@ -1733,7 +1733,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine structb(this, do_str)
       class(lattice), intent(inout) :: this
-      logical, intent(in), optional :: do_str
+      logical, intent(in) :: do_str
       ! Local variables
       integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
       integer, dimension(:, :), allocatable :: nn
@@ -1741,11 +1741,6 @@ contains
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
-
-      do_str_ = .true.
-      if (present(do_str)) then
-         do_str_ = do_str
-      end if
 
       ! Open files
       open (12, file='map', form='unformatted')
@@ -1790,7 +1785,7 @@ contains
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
       write (17, 10003) kk, nm
-      if (do_str_) then
+      if (do_str) then
          do ii = 1, this%ntot
             ia = this%iu(ii)
             nr = this%nn(ia, 1)

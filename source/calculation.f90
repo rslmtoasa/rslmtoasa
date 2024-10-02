@@ -232,7 +232,7 @@ contains
       call lattice_obj%build_data()
       call lattice_obj%bravais()
       call lattice_obj%newclu()
-      call lattice_obj%structb()
+      call lattice_obj%structb(.true.)
 
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
@@ -332,7 +332,7 @@ contains
       call lattice_obj%build_data()
       call lattice_obj%bravais()
       call lattice_obj%newclu()
-      call lattice_obj%structb()
+      call lattice_obj%structb(.true.)
 
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
@@ -410,7 +410,7 @@ contains
       call lattice_obj%bravais()
       call lattice_obj%build_surf_full()
       call lattice_obj%newclu()
-      call lattice_obj%structb()
+      call lattice_obj%structb(.true.)
 
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
@@ -486,7 +486,7 @@ contains
       call lattice_obj%build_data()
       call lattice_obj%bravais()
       call lattice_obj%build_surf_full()
-      call lattice_obj%structb()
+      call lattice_obj%structb(.true.)
 
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
@@ -562,7 +562,7 @@ contains
       call g_timer%start('pre-processing')
       call lattice_obj%build_data()
       call lattice_obj%bravais()
-      call lattice_obj%structb()
+      call lattice_obj%structb(.true.)
 
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
@@ -828,18 +828,18 @@ contains
       case ('B')
          call lattice_obj%build_data()
          call lattice_obj%bravais()
-         call lattice_obj%structb()
+         call lattice_obj%structb(.true.)
       case ('S')
          call lattice_obj%build_data()
          call lattice_obj%bravais()
          call lattice_obj%build_surf_full()
-         call lattice_obj%structb()
+         call lattice_obj%structb(.true.)
       case ('I')
          call lattice_obj%build_data()
          call lattice_obj%bravais()
          call lattice_obj%build_surf_full()
          call lattice_obj%newclu()
-         call lattice_obj%structb()
+         call lattice_obj%structb(.true.)
       end select
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
