@@ -883,7 +883,7 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Total Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(:)%potential%etot)
+         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk_bulk+1:this%lattice%ntype)%potential%etot)
          !===========================================================================
          !                       Band Energy
          !===========================================================================

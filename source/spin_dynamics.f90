@@ -452,8 +452,7 @@ contains
             this%symbolic_atom(na + this%lattice%nbulk)%potential%mom(:) = this%emom(:, na) ! Save the updated magnetic moments for the next loop
             mom_prev(:, na) = this%symbolic_atom(na + this%lattice%nbulk)%potential%mom0(:)
          end do
-
-         call this%writelammpstraj(this%lattice%nrec, this%emom, this%lattice%cr(3, 1:this%lattice%nrec), timestep)
+         call this%writelammpstraj(this%lattice%nrec, this%emom, this%lattice%cr(:, 1:this%lattice%nrec), timestep)
       end do
    end subroutine sd_run
 
@@ -487,7 +486,7 @@ contains
       write (unit_num, '(A)') 'ITEM: ATOMS type x y z vx vy vz'
 
       do i = 1, num_atoms
-         write (unit_num, '(I4,6F12.6)') this%lattice%iz(this%lattice%nbulk + i), lattice(1, i), lattice(2, i), lattice(3, i), &
+         write (unit_num, '(I4,6F12.4)') this%lattice%iz(this%lattice%nbulk + i), lattice(1, i), lattice(2, i), lattice(3, i), &
             spins(1, i), spins(2, i), spins(3, i)
       end do
 

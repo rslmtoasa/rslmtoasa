@@ -319,6 +319,7 @@ contains
          this%e1 = e1
          if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
       end if
+
    end subroutine calculate_fermi
 
    !---------------------------------------------------------------------------

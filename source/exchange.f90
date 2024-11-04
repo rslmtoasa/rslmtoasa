@@ -1057,7 +1057,7 @@ contains
       allocate (T_comm_xcso(13, this%lattice%njij), T_comm_xcfo(13, this%lattice%njij))
       ! row = [jcd, jsd, jcc, jsc, dcc(3), dsc(3), isd(9), isc(9)]
       allocate (T_comm_xcparts(28, this%lattice%njij)) 
-      T_comm_xcso = 0.0_rp; T_comm_xcfo = 0.0_rp
+      T_comm_xcso = 0.0_rp; T_comm_xcfo = 0.0_rp; T_comm_xcparts = 0.0_rp
       inquire (unit=20, opened=isopen)
       if (isopen) then
          call g_logger%fatal('exchange%calculate_exchange, file jijso.out: Unit 20 is already open', __FILE__, __LINE__)
@@ -1177,9 +1177,9 @@ contains
             tmat4 = tmat1 + tmat2 + tmat3
             jsc(nv) = imtrace9(tmat4)
             ! Combining and calculating the first order and second order Jij(E)
-            ! Second order J = CD - SD - CC - SC
+            ! Second order J = CD - SD + CC - SC
             jtotso(nv) = jcd(nv) - jsd(nv) + jcc(nv) - jsc(nv)
-            ! First order J = CD - SD + CC - SC
+            ! First order J = CD + SD - CC - SC
             jtotfo(nv) = jcd(nv) + jsd(nv) - jcc(nv) - jsc(nv)
             ! DMI
             do k = 1, 3
@@ -1407,7 +1407,7 @@ contains
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij parts
             this%aijsd = reshape(T_comm_xcparts(11:19, njij_glob), [3, 3]); this%aijsc = reshape(T_comm_xcparts(20:28, njij_glob), [3, 3])
-            write (45, '(2i8,2x,3f12.6,2x,18f12.6,1x,f12.6)') &
+            write (80, '(2i8,2x,3f12.6,2x,18f12.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aijsd, this%aijsc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
          end do
       end if

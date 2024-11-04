@@ -1297,7 +1297,7 @@ contains
          this%ntype = maxType
          this%nbulk = this%nbulk_bulk
          this%nrec = this%ntype - this%nbulk
-         this%nbas = 50
+         this%nbas = 49
 
          if (allocated(this%chargetrf_type)) deallocate (this%chargetrf_type)
          if (allocated(this%ib)) deallocate (this%ib)
@@ -1359,7 +1359,7 @@ contains
       end do
 
       do i = 1, maxtype
-         write (20, *) crsurf(:, ichoicen(i)), ichoicetypen(i), crystalsurf(ichoicen(i)), &
+         write (20, '(3f12.6, 2i5, f12.6)') crsurf(:, ichoicen(i)), ichoicetypen(i), crystalsurf(ichoicen(i)), &
                     & dot_product([this%dx, this%dy, this%dz], crsurf(:, ichoicen(i)))
       end do
 
@@ -1834,10 +1834,11 @@ contains
       end do
       this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
 
+      
       write (805, *) this%kk
       write (805, *)
       do i = 1, this%kk
-         write (805, '(A6,6F16.6)') adjustl(elem_var(int(this%symbolic_atoms(this%iz(i))%element%atomic_number))), &
+            write (805, '(A6,6F16.6)') (elem_var(int(this%symbolic_atoms(this%iz(i))%element%atomic_number))), &
             this%cr(:, i), this%symbolic_atoms(this%iz(i))%potential%mom(:)
       end do
    end subroutine atomlist

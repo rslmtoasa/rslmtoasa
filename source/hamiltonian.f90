@@ -628,10 +628,10 @@ contains
                !write(*,*) b(:), ´b´
                !write(*,*) matmul(this%charge%lattice%a(:,:),idx(:))
 
-               !call hcpx(this%ee(1:9,1:9,k,ntype), ´sph2cart´)
-               !call hcpx(this%ee(1:9,10:18,k,ntype), ´sph2cart´)
-               !call hcpx(this%ee(10:18,1:9,k,ntype), ´sph2cart´)
-               !call hcpx(this%ee(10:18,10:18,k,ntype), ´sph2cart´)
+               call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
+               call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
+               call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
+               call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
                !if(this%hoh)then
                !  !call zgemm(´n´,´c´,18,18,18,cone,this%eeo(:,:,k,ntype),18,this%ee(:,:,k,ntype),18,cone,dum(:,:),18)
                !  dum(:,:) = 0.0d0

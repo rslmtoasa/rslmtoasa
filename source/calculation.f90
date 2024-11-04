@@ -231,6 +231,7 @@ contains
       call g_timer%start('pre-processing')
       call lattice_obj%build_data()
       call lattice_obj%bravais()
+      call lattice_obj%build_surf_full()
       call lattice_obj%newclu()
       call lattice_obj%structb(.true.)
 
