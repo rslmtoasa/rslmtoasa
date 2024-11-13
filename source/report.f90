@@ -107,7 +107,7 @@ contains
          call split(label, '.', lst_labels)
          obj%label = lst_labels(1)
          allocate (obj%children(1))
-         obj%children(1) = report(fjoin(lst_labels(2:), '.'))
+         obj%children(1) = report_constructor(fjoin(lst_labels(2:), '.'))
       else
          allocate (obj%children(0))
          obj%label = label
