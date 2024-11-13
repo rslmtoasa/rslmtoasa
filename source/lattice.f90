@@ -1297,7 +1297,7 @@ contains
          this%ntype = maxType
          this%nbulk = this%nbulk_bulk
          this%nrec = this%ntype - this%nbulk
-         this%nbas = 49
+         this%nbas = 51
 
          if (allocated(this%chargetrf_type)) deallocate (this%chargetrf_type)
          if (allocated(this%ib)) deallocate (this%ib)

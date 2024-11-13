@@ -693,7 +693,7 @@ contains
       end do
 
       do i = 1, this%lattice%nbas
-         write (120, '(50f10.4)') (this%dss(i, j), j=1, this%lattice%nbas)
+         write (120, '(51f10.4)') (this%dss(i, j), j=1, this%lattice%nbas)
       end do
       close (120)
    end subroutine surfmat

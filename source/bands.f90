@@ -229,8 +229,10 @@ contains
       integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail
       real(rp) :: e1_mag, ef_mag, e1
       integer :: ia_glob
-      real(rp), dimension(this%lattice%nrec, this%en%channels_ldos + 10) :: dosia
-      real(rp), dimension(this%lattice%nrec, 18, this%en%channels_ldos + 10) :: dosial
+      real(rp), dimension(:, :), allocatable :: dosia
+      real(rp), dimension(:, :, :), allocatable :: dosial
+
+      allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, 18, this%en%channels_ldos + 10))
 
       e1_mag = 0.0d0
       ef_mag = 0.0d0
@@ -320,6 +322,8 @@ contains
          if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
       end if
 
+      deallocate(dosia)
+      deallocate(dosial)
    end subroutine calculate_fermi
 
    !---------------------------------------------------------------------------
