@@ -412,7 +412,7 @@ contains
       end do
 
       !call this%calculate_magnetic_moments()
-      if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%calculate_orbital_moments()
+      call this%calculate_orbital_moments()
 
       this%dspd(:, :, :) = 0.0d0
       !do na=1, this%lattice%nrec
