@@ -1268,8 +1268,8 @@ contains
                ! Combining and calculating the first and second order A(E)
                ! Second order A = SD + SC
                itotso(nv, :, :) = isd(nv, :, :) + isc(nv, :, :)
-               ! First order A = SD - SC
-               itotfo(nv, :, :) = isd(nv, :, :) - isc(nv, :, :)
+               ! First order A = - SD + SC
+               itotfo(nv, :, :) = - isd(nv, :, :) + isc(nv, :, :)
             end do
          end do
          ! Jij integration
