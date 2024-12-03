@@ -98,7 +98,8 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
-      procedure :: spdf_Hubbard ! LDA+U+J method. Not needed anymore
+      procedure :: Hubbard_U_Potential ! LDA+U+J method
+      procedure :: Hubbard_V_Potential
       procedure :: spdf_Hubbard_impurity ! Not needed anymore
       procedure :: build_hubbard_u
       procedure :: build_hubbard_u_impurity 
@@ -106,7 +107,6 @@ module bands_mod
       procedure :: calculate_density_matrix ! Probably not needed
       procedure :: calc_hubbard_U_pot_input_LDM ! Probably not needed
       procedure :: build_hubbard_u_input_LDM ! Probably not needed
-      procedure :: Hubbard_V
       procedure :: calc_hubbard_U
       procedure :: fermi
       procedure :: restore_to_default
@@ -897,7 +897,7 @@ contains
    !> too, but the corresponding (32x32) basis needs implementation.)
    !> Created and improved by Viktor Frilén and Emil Beiersdorf 17.07.2024
    !---------------------------------------------------------------------------
-   subroutine spdf_Hubbard(this)
+   subroutine Hubbard_U_Potential(this)
       class(bands) :: this
 
       ! Local variables
@@ -920,7 +920,7 @@ contains
       real(rp), dimension(4) :: U_energy, dc_energy 
       real(rp), dimension(this%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
       real(rp), dimension(this%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_pot
+      ! Temporary potential that will be put into this%hubbard_u_pot
       real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot    
       
       type :: ArrayType
@@ -941,7 +941,7 @@ contains
          allocate(hub_j(this%lattice%nrec, 4))
          LDM(:,:,:,:,:) = 0.0d0
          im_g0(:,:,:,:) = 0.0d0
-         this%recursion%hamiltonian%hubbard_pot = 0.0d0
+         this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
          hub_pot = 0.0d0
          n_tot(:,:) = 0.0d0
          n_spin(:,:,:) = 0.0d0
@@ -1049,12 +1049,12 @@ contains
                end do
             end do  
 
-         !> Puts hub_pot into global hubbard_pot (only done for spd-orbitals)
+         !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
             do l = 0, 2
                do i = 1, 2*l + 1
                   do j = 1, 2*l + 1
-                     this%recursion%hamiltonian%hubbard_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
-                     this%recursion%hamiltonian%hubbard_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
+                     this%recursion%hamiltonian%hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
+                     this%recursion%hamiltonian%hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
                   end do
                end do
                dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
@@ -1078,7 +1078,7 @@ contains
       if (allocated(hub_j)) deallocate(hub_j)
       end if
       
-   end subroutine spdf_Hubbard
+   end subroutine Hubbard_U_Potential
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1706,7 +1706,7 @@ contains
    end subroutine calc_hubbard_U_pot_input_LDM
 
 
-   subroutine Hubbard_V(this)
+   subroutine Hubbard_V_Potential(this)
       class(bands) :: this
 
    ! Local variables
@@ -1763,6 +1763,8 @@ contains
             end do
          end do
       end do
+
+
       print *, ''
       print *, '-----------------------------------------------------------------------------------------------------------------'
       do na = 1, this%lattice%nrec
@@ -1791,7 +1793,6 @@ contains
                      calc_pair = .true.
                      exit
                   else if (atom1_type == this%lattice%iz(this%lattice%ijpair(kl,2)) .and. atom2_type == this%lattice%iz(this%lattice%ijpair(kl,1))) then
-                     ! Order reverse, do we need a sign change somewhere?
                      nji_temp(:,:) = TRANSPOSE(nij(:,:,kl))
                      calc_pair = .true.
                      exit
@@ -1835,7 +1836,7 @@ contains
 
       this%recursion%hamiltonian%hubbard_v_pot = hub_V_pot
 
-   end subroutine Hubbard_V
+   end subroutine Hubbard_V_Potential
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1870,7 +1871,7 @@ contains
       real(rp), dimension(4) :: U_energy, dc_energy 
       real(rp), dimension(this%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
       real(rp), dimension(this%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_pot
+      ! Temporary potential that will be put into this%hubbard_u_pot in hamiltonian
       real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot  
       integer :: cntr ! Counts number of orbitals with a U per atom.    
       
@@ -1885,8 +1886,8 @@ contains
       ms(3)%val = [-2, -1, 0, 1, 2]
       ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
 
-      ! Sets up the DFT+U calculation usually done in hamiltonian.f90
-      ! Only needed for the first iteration but this does not cause problems
+      !> Sets up the DFT+U calculation usually done in hamiltonian.f90
+      !> Only needed for the first iteration but this does not cause problems
       this%recursion%hamiltonian%hubbardU_check = .true.
       if (allocated(this%recursion%hamiltonian%F)) deallocate (this%recursion%hamiltonian%F)
       allocate(this%recursion%hamiltonian%F(this%lattice%nrec, 4, 4))
@@ -1897,12 +1898,12 @@ contains
       if (allocated(this%recursion%hamiltonian%hub_j_sort)) deallocate (this%recursion%hamiltonian%hub_j_sort)
       allocate(this%recursion%hamiltonian%hub_j_sort(this%lattice%nrec, 4))
       this%recursion%hamiltonian%hub_j_sort = 0.0d0
-      if (allocated(this%recursion%hamiltonian%hubbard_pot)) deallocate (this%recursion%hamiltonian%hubbard_pot)
-      allocate(this%recursion%hamiltonian%hubbard_pot(18,18,this%lattice%nrec))
-      this%recursion%hamiltonian%hubbard_pot = 0.0d0
+      if (allocated(this%recursion%hamiltonian%hubbard_u_pot)) deallocate (this%recursion%hamiltonian%hubbard_u_pot)
+      allocate(this%recursion%hamiltonian%hubbard_u_pot(18,18,this%lattice%nrec))
+      this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
 
-      ! Reads of which atoms and orbitals should have +U correction. 
-      ! Sets an arbitrary value to %hub_u_sort for the algorithm copied from spdf_Hubbard to work
+      !> Reads of which atoms and orbitals should have +U correction. 
+      !> Sets an arbitrary value to %hub_u_sort for the algorithm copied from Hubbard_U_Potential to work
       do na = 1, this%lattice%nrec
          do l = 1, 4
             if ( this%recursion%hamiltonian%hubbard_u_sc(na,l) == 1 ) then
@@ -1911,7 +1912,7 @@ contains
          end do
       end do
 
-      ! Checks which orbital to add U onto. Only works for spd-orbitals
+      !> Checks which orbital to add U onto. Only works for spd-orbitals
       allocate(LDM(this%lattice%nrec, 4, 2, 7, 7)) ! (number of atoms, number of orbitals (spdf), m-value indexing for spdf)
       allocate(LDM_screened(this%lattice%nrec, 4, 2, 7, 7))
       allocate(hub_u(this%lattice%nrec, 4))
@@ -1930,7 +1931,7 @@ contains
       hub_j_temp = 0.0d0
       hub_u_eff = 0.0d0
       
-      ! Creates an array with each orbital for each atom
+      !> Creates an array with each orbital for each atom
       do i = 1, this%lattice%nrec
          cntr = count(hub_u(i,:) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
          allocate(l_arr(i)%val(cntr))
@@ -1946,7 +1947,7 @@ contains
          end do
       end do       
             
-      ! Sets up the imaginary Green's function (only for spd orbitals)
+      !> Sets up the imaginary Green's function (only for spd orbitals)
       do na = 1, this%lattice%nrec
          do i = 1, 18
             do j = 1, 18
@@ -1972,7 +1973,7 @@ contains
          end do
       end do
 
-      ! Calculates the renormalized (or screened local density matrix)
+      !> Calculates the renormalized (or screened local density matrix)
       do na = 1, this%lattice%nrec
          do l = 0, 2
             do ispin = 1, 2
@@ -1985,7 +1986,7 @@ contains
          end do
       end do
       
-      ! calculates U and J
+      !> calculates U and J
       print *, ''
       print *, 'Calculate Hubbard U parameter for:'
       do na = 1, this%lattice%nrec
@@ -2071,8 +2072,8 @@ contains
          end do
       end do 
 
-      ! Check if calculated Hubbard U has converged
-      ! Same criteria as Luis A. Agapito et al - Phys. Rev. X 5, 011006
+      !> Check if calculated Hubbard U has converged
+      !> Same criteria as Luis A. Agapito et al - Phys. Rev. X 5, 011006
       j = 0
       do na = 1, this%lattice%nrec
          do l = 1, 4
@@ -2085,7 +2086,7 @@ contains
          this%hubbard_u_converged = .true.
       end if
 
-      ! Store Hubbard U for later check
+      !> Store Hubbard U for later check
       this%hubbard_u_eff_old(:,:) = hub_u_eff(:,:)
 
 

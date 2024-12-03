@@ -664,12 +664,12 @@ contains
             if (this%hamiltonian%hubbardU_check .and. i .gt. 1) then
                !> Initiate the LDA+U method by building the Hubbard U potential matrix
                call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
-               ! call this%bands%spdf_Hubbard() 
+               ! call this%bands%Hubbard_U_Potential()
                !> Initiate the +V intersite Coulomb correction to LDA+U+J
                if (this%recursion%hamiltonian%hubbardV_check) then
                   call this%recursion%recur_b_ij()
                   call this%green%calculate_intersite_gf()
-                  call this%bands%Hubbard_V()
+                  call this%bands%Hubbard_V_Potential()
                end if
             end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
