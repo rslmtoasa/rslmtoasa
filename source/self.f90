@@ -662,8 +662,9 @@ contains
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
             if (this%hamiltonian%hubbardU_check .and. i .gt. 1) then
-               !> Initiate the LDA+U+J method by building the Hubbard U+J potential matrix
-               call this%bands%spdf_Hubbard() 
+               !> Initiate the LDA+U method by building the Hubbard U potential matrix
+               call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
+               ! call this%bands%spdf_Hubbard() 
                !> Initiate the +V intersite Coulomb correction to LDA+U+J
                if (this%recursion%hamiltonian%hubbardV_check) then
                   call this%recursion%recur_b_ij()
@@ -683,6 +684,9 @@ contains
             do ia = 1, this%lattice%ntype
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
+            if (this%hamiltonian%hubbardU_impurity_check .and. i .gt. 1) then 
+               call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix
+            end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
             call this%hamiltonian%build_locham() ! Build the local Hamiltonian

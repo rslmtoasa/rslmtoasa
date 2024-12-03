@@ -111,6 +111,14 @@ module hamiltonian_mod
       logical :: hubbardU_sc_check = .false.
       !> Which atoms and orbitals to include self-consistent Hubbard U correction. (0 no correction. 1 include correction)
       integer, dimension(:,:), allocatable :: hubbard_u_sc
+      !> Logical variable for including Hubbard correction U on impurities
+      logical :: hubbardU_impurity_check = .false.
+      !> Hubbard parameters for impurities
+      real(rp), dimension(:,:), allocatable :: hubbard_u_impurity, hubbard_j_impurity ! (impurity type, l) with l = 1,2,3,4 : s,p,d,f orbitals
+      !> Slater integral array for impurities
+      real(rp), dimension(:,:,:), allocatable :: F_impurity
+      !> On-site potential for LDA+U correction for impurities
+      real(rp), dimension(:,:,:), allocatable :: hubbard_pot_impurity
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -208,6 +216,10 @@ contains
       if (allocated(this%hubbard_pot)) deallocate (this%hubbard_pot)
       if (allocated(this%hubbard_v_pot)) deallocate (this%hubbard_v_pot)
       if (allocated(this%hubbard_u_sc)) deallocate (this%hubbard_u_sc)
+      if (allocated(this%hubbard_u_impurity)) deallocate (this%hubbard_u_impurity)
+      if (allocated(this%hubbard_j_impurity)) deallocate (this%hubbard_j_impurity)
+      if (allocated(this%F_impurity)) deallocate (this%F_impurity)
+      if (allocated(this%hubbard_pot_impurity)) deallocate (this%hubbard_pot_impurity)
 #endif
    end subroutine destructor
 
@@ -241,6 +253,23 @@ contains
       call move_alloc(this%hubbard_j, hubbard_j)
       call move_alloc(this%hubbard_v, hubbard_v) 
       call move_alloc(this%uj_orb, uj_orb)
+
+      ! !Testing
+      ! if (allocated(this%hubbard_u_impurity)) deallocate (this%hubbard_u_impurity)
+      ! if (allocated(this%hubbard_j_impurity)) deallocate (this%hubbard_j_impurity)
+      ! if (allocated(this%F_impurity)) deallocate (this%F_impurity)
+      ! if (allocated(this%hubbard_pot_impurity)) deallocate (this%hubbard_pot_impurity)
+      ! allocate (this%hubbard_u_impurity(3,4)) ! Size is equal to the number of impurities (nclu)
+      ! allocate (this%hubbard_j_impurity(3,4))
+      ! allocate (this%F_impurity(3, 4, 4))
+      ! allocate (this%hubbard_pot_impurity(18, 18, 3))
+      ! this%hubbard_u_impurity(:,:) = 0.0d0
+      ! this%hubbard_j_impurity(:,:) = 0.0d0
+      ! this%F_impurity(:,:,:) = 0.0d0
+      ! this%hubbard_pot_impurity(:,:,:) = 0.0d0
+
+      call move_alloc(this%hubbard_u_impurity, hubbard_u_impurity)
+      call move_alloc(this%hubbard_j_impurity, hubbard_j_impurity)
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -286,6 +315,89 @@ contains
       call move_alloc(hubbard_j, this%hubbard_j)
       call move_alloc(hubbard_v, this%hubbard_v)
       call move_alloc(uj_orb, this%uj_orb)
+      call move_alloc(hubbard_u_impurity, this%hubbard_u_impurity)
+      call move_alloc(hubbard_j_impurity, this%hubbard_j_impurity)
+      
+      
+      ! Checks if Hubbard U correction for impurity should be initiated (check for j also??)
+      if ( size(this%hubbard_u_impurity, 1) > 0 ) then
+         do i = 1, size(this%hubbard_u_impurity, 1)
+            do j = 1, size(this%hubbard_u_impurity, 2)
+               if (abs(this%hubbard_u_impurity(i,j)) > 1e-8) then
+                  this%hubbardU_impurity_check = .true.
+               else if (abs(this%hubbard_j_impurity(i,j)) > 1e-8) then
+                  this%hubbardU_impurity_check = .true.
+               end if
+            end do
+         end do
+      end if
+
+      if (this%hubbardU_impurity_check) then
+         ! Print inputs
+         print *, "Size of hubbard_u_impurity: ", size(hubbard_u_impurity)
+         print *, "lattice%nclu = ", this%lattice%nclu
+         print *, "hubbard_u_impurity:"
+         do i = 1, this%lattice%nrec
+            write(*, *) 'Impurity', i, '=', this%hubbard_u_impurity(i, :)
+         end do
+         print *, "hubbard_j_impurity:"
+         do i = 1, this%lattice%nrec
+            write(*, *) 'Impurity', i, '=', this%hubbard_j_impurity(i, :)
+         end do
+
+         print *, "Hubbard U correction for impurity initiated."
+         ! Calculates the Slater integrals F_impurity for impurities
+         ! F_impurity(impurity, l+1, k) with k = 1,2,3,4 = l+1 indexing F^(2(k-1)) for impurities
+         do i = 1, this%lattice%nrec ! For each impurity (same as size(hubbard_u_impurity,1) )
+            ! For s, p, d and f orbitals, F0 = U
+            ! s-orbital
+            this%F_impurity(i,1,1) = this%hubbard_u_impurity(i,1)
+            ! p-orbital J = (1/5)*F2 
+            this%F_impurity(i,2,1) = this%hubbard_u_impurity(i,2)
+            this%F_impurity(i,2,2) = this%hubbard_j_impurity(i,2)*5.0_rp
+            ! d-orbital, J = (F2 + F4)/14 with F4/F2 ~ 0.625
+            this%F_impurity(i,3,1) = this%hubbard_u_impurity(i,3)
+            this%F_impurity(i,3,2) = 14.0_rp*this%hubbard_j_impurity(i,3)/1.625_rp 
+            this%F_impurity(i,3,3) = 0.625_rp*this%F_impurity(i,3,2)
+            !> For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
+            this%F_impurity(i,4,1) = this%hubbard_u_impurity(i,4)
+            this%F_impurity(i,4,2) = 6435_rp*this%hubbard_j_impurity(i,4)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
+            this%F_impurity(i,4,3) = 0.67_rp*this%F(i,4,2)
+            this%F_impurity(i,4,4) = 0.49_rp*this%F(i,4,2)               
+         end do 
+         ! Print the slater intergrals
+         print *,''
+         print *, '----------------------------------------------------------------------------------------'
+         print *, 'Slater Integrals.'
+         print *, '----------------------------------------------------------------------------------------'
+         do i = 1, this%lattice%nrec
+            print *, 'Impurity ', i, ':'
+            do j = 1, 4 ! Orbitals spdf have implementation
+               if (count(this%F_impurity(i,j,:) > 1.0E-10) /= 0) then
+                  print *, ' Orbital ', this%orb_conv(j), ' :'
+                  if (j == 1) then
+                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
+                  else if (j == 2) then
+                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
+                     print *, '             F2 = ', this%F_impurity(i,j,2), ' eV'
+                  else if (j == 3) then
+                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
+                     print *, '             F2 = ', this%F_impurity(i,j,2), ' eV'
+                     print *, '             F4 = ', this%F_impurity(i,j,3), ' eV'
+                  else if (j == 4) then
+                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
+                     print *, '             F2 = ', this%F_impurity(i,j,2), ' eV'
+                     print *, '             F4 = ', this%F_impurity(i,j,3), ' eV'
+                     print *, '             F6 = ', this%F_impurity(i,j,4), ' eV'
+                  end if
+               end if
+            end do
+         end do
+         print *, '----------------------------------------------------------------------------------------'  
+      end if
+            
+      ! Stop the testing
+      ! stop
 
       ! Checks if self-consistent 
       do na = 1, this%lattice%nrec
@@ -706,6 +818,10 @@ contains
       this%hub_u_sort = this%hub_u_sort/ry2ev
       this%hub_j_sort = this%hub_j_sort/ry2ev
 
+      this%hubbard_u_impurity = this%hubbard_u_impurity/ry2ev
+      this%hubbard_j_impurity = this%hubbard_j_impurity/ry2ev
+      this%F_impurity = this%F_impurity/ry2ev
+
       !> Checks if self-consistent U flag and input values of U and J have both been provided. They would interfer with eachother. 
       if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check)) then
          call g_logger%error('Both input values for hubbard_u_sc and hubbard_u + hubbard_j has been provided. Only one of them are allowed.', __FILE__, __LINE__)
@@ -787,6 +903,10 @@ contains
       allocate (this%hubbard_pot(18, 18, this%lattice%nrec))
       allocate (this%hubbard_v_pot(18, 18, size(this%ee, 3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
       allocate (this%hubbard_u_sc(this%lattice%nrec,4))
+      allocate (this%hubbard_u_impurity(this%lattice%nrec,4)) ! Size is equal to the number of impurities (nclu)
+      allocate (this%hubbard_j_impurity(this%lattice%nrec,4))
+      allocate (this%F_impurity(this%lattice%nrec, 4, 4))
+      allocate (this%hubbard_pot_impurity(18, 18, this%lattice%nrec))
       !end if
       !end if
 #endif
@@ -834,6 +954,10 @@ contains
       this%orb_conv(3) = 'd'
       this%orb_conv(4) = 'f'
       this%hubbard_u_sc(:,:) = 0
+      this%hubbard_u_impurity(:,:) = 0.0d0
+      this%hubbard_j_impurity(:,:) = 0.0d0
+      this%F_impurity(:,:,:) = 0.0d0
+      this%hubbard_pot_impurity(:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1144,6 +1268,14 @@ contains
                else
                   this%hallo(:, :, m, nlim) = 0.0d0
                end if
+            end do
+         end if
+         if (this%hubbardU_impurity_check .and. nlim <= this%lattice%nrec) then
+            do i = 1, 9
+               do j = 1, 9
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_pot_impurity(i, j, nlim)
+                  this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_pot_impurity(i + 9, j + 9, nlim)
+               end do
             end do
          end if
       end do
