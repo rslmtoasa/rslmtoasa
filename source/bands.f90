@@ -1282,9 +1282,9 @@ contains
    subroutine build_hubbard_u(this)
       class(bands) :: this
       print *, "New version of hubbard_u"
-      this%recursion%hamiltonian%hubbard_pot = 0.0d0
+      this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
       call this%calc_hubbard_U_pot(this%recursion%hamiltonian%hub_u_sort, this%recursion%hamiltonian%hub_j_sort, &
-                              this%recursion%hamiltonian%F, this%recursion%hamiltonian%hubbard_pot)
+                              this%recursion%hamiltonian%F, this%recursion%hamiltonian%hubbard_u_pot)
    end subroutine build_hubbard_u
 
    !---------------------------------------------------------------------------
@@ -1315,11 +1315,11 @@ contains
    !> too, but the corresponding (32x32) basis needs implementation.)
    !> Created by Viktor Frilén and Emil Beiersdorf 27.11.2024
    !---------------------------------------------------------------------------
-   subroutine calc_hubbard_U_pot(this, hub_u, hub_j, f, hubbard_pot)
+   subroutine calc_hubbard_U_pot(this, hub_u, hub_j, f, hubbard_u_pot)
       class(bands) :: this
       real(rp), dimension(:,:,:), intent(in) :: f
       real(rp), dimension(:,:), intent(in) :: hub_u, hub_j
-      real(rp), dimension(:,:,:), intent(out) :: hubbard_pot
+      real(rp), dimension(:,:,:), intent(out) :: hubbard_u_pot
 
       ! Local variables
       integer :: nrec ! Number of atoms to perform recursion. This is different between bulk and impurity calculation. Which makes this subroutine compatable with both.
@@ -1340,7 +1340,7 @@ contains
       real(rp), dimension(4) :: U_energy, dc_energy 
       real(rp), dimension(this%recursion%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
       real(rp), dimension(this%recursion%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_pot
+      ! Temporary potential that will be put into this%hubbard_u_pot
       real(rp), dimension(this%recursion%lattice%nrec, 4, 2, 7, 7) :: hub_pot    
 
       type :: ArrayType
@@ -1460,12 +1460,12 @@ contains
             end do
          end do  
 
-      !> Puts hub_pot into global hubbard_pot (only done for spd-orbitals)
+      !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
          do l = 0, 2
             do i = 1, 2*l + 1
                do j = 1, 2*l + 1
-                  hubbard_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
-                  hubbard_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
+                  hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
+                  hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
                end do
             end do
             dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
@@ -1495,13 +1495,13 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_hubbard_u_input_LDM(this)
       class(bands) :: this
-      real(rp), dimension(size(this%recursion%hamiltonian%hubbard_pot, 3), 4, 2, 7, 7) :: LDM ! with indices (natom, l, spin, m1, m2)
+      real(rp), dimension(size(this%recursion%hamiltonian%hubbard_u_pot, 3), 4, 2, 7, 7) :: LDM ! with indices (natom, l, spin, m1, m2)
       print *, "New version of hubbard_u that uses LDM as input"
       LDM = 0.0d0
       call this%calculate_density_matrix(this%green%g0, LDM)
-      this%recursion%hamiltonian%hubbard_pot = 0.0d0
+      this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
       call this%calc_hubbard_U_pot_input_LDM(this%recursion%hamiltonian%hub_u_sort, this%recursion%hamiltonian%hub_j_sort, &
-                              this%recursion%hamiltonian%F, LDM, this%recursion%hamiltonian%hubbard_pot)
+                              this%recursion%hamiltonian%F, LDM, this%recursion%hamiltonian%hubbard_u_pot)
    end subroutine build_hubbard_u_input_LDM
 
    !---------------------------------------------------------------------------
@@ -1562,12 +1562,12 @@ contains
    !> too, but the corresponding (32x32) basis needs implementation.)
    !> Created by Viktor Frilén 27.11.2024
    !---------------------------------------------------------------------------
-   subroutine calc_hubbard_U_pot_input_LDM(this, hub_u, hub_j, f, LDM, hubbard_pot) ! Probably should have a Greens function or LDM input. (Depending on bulk/inputity)
+   subroutine calc_hubbard_U_pot_input_LDM(this, hub_u, hub_j, f, LDM, hubbard_u_pot) ! Probably should have a Greens function or LDM input. (Depending on bulk/inputity)
       class(bands) :: this
       real(rp), dimension(:,:,:), intent(in) :: f
       real(rp), dimension(:,:), intent(in) :: hub_u, hub_j
       real(rp), dimension(:,:,:,:,:), intent(in) :: LDM
-      real(rp), dimension(:,:,:), intent(out) :: hubbard_pot
+      real(rp), dimension(:,:,:), intent(out) :: hubbard_u_pot
 
       ! Local variables
       integer :: natom ! Number of atoms, could be ntype or number of impurities (nclu)
@@ -1582,18 +1582,18 @@ contains
       real(rp) :: f0, f2, f4, f6 ! Slater integrals
       real(rp) :: dc ! Double counting term
       real(rp), dimension(4) :: U_energy, dc_energy 
-      real(rp), dimension(size(hubbard_pot, 3), 4, 2) :: n_spin ! LDM with m traced out
-      real(rp), dimension(size(hubbard_pot, 3), 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_pot
-      real(rp), dimension(size(hubbard_pot, 3), 4, 2, 7, 7) :: hub_pot    
+      real(rp), dimension(size(hubbard_u_pot, 3), 4, 2) :: n_spin ! LDM with m traced out
+      real(rp), dimension(size(hubbard_u_pot, 3), 4) :: n_tot  ! LDM with traced out spin  
+      ! Temporary potential that will be put into this%hubbard_u_pot
+      real(rp), dimension(size(hubbard_u_pot, 3), 4, 2, 7, 7) :: hub_pot    
 
       type :: ArrayType
          integer, allocatable :: val(:)
       end type ArrayType
       type(ArrayType), dimension(4) :: ms
-      type(ArrayType), dimension(size(hubbard_pot, 3)) :: l_arr
+      type(ArrayType), dimension(size(hubbard_u_pot, 3)) :: l_arr
 
-      natom = size(hubbard_pot, 3)
+      natom = size(hubbard_u_pot, 3)
   
       ms(1)%val = [0]
       ms(2)%val = [-1, 0, 1]
@@ -1678,12 +1678,12 @@ contains
             end do
          end do  
 
-      !> Puts hub_pot into global hubbard_pot (only done for spd-orbitals)
+      !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
          do l = 0, 2
             do i = 1, 2*l + 1
                do j = 1, 2*l + 1
-                  hubbard_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
-                  hubbard_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
+                  hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
+                  hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
                end do
             end do
             dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
