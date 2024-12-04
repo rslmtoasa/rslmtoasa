@@ -236,10 +236,11 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, j, li, lj, k, max_orbs, length, cntr, na, l
+      integer :: iostatus, funit, i, j, li, lj, k, max_orbs, length, cntr, na, l, ios
       ! integer, dimension(this%lattice%nrec, this%lattice%nrec) :: orbs_v_num ! (atom1, atom2) = number of mutual orbs e.g. hubbard_v(1, 2, [p,d], [s,p]) -> orbs_v_num(1,2)=2
       ! Logical variable to check if input data is good
       logical :: implem_check = .true.
+      real(rp), dimension(:,:,:), allocatable :: array
 
 
       include 'include_codes/namelists/hamiltonian.f90'
@@ -253,20 +254,6 @@ contains
       call move_alloc(this%hubbard_j, hubbard_j)
       call move_alloc(this%hubbard_v, hubbard_v) 
       call move_alloc(this%uj_orb, uj_orb)
-
-      ! !Testing
-      ! if (allocated(this%hubbard_u_impurity)) deallocate (this%hubbard_u_impurity)
-      ! if (allocated(this%hubbard_j_impurity)) deallocate (this%hubbard_j_impurity)
-      ! if (allocated(this%F_impurity)) deallocate (this%F_impurity)
-      ! if (allocated(this%hubbard_pot_impurity)) deallocate (this%hubbard_pot_impurity)
-      ! allocate (this%hubbard_u_impurity(3,4)) ! Size is equal to the number of impurities (nclu)
-      ! allocate (this%hubbard_j_impurity(3,4))
-      ! allocate (this%F_impurity(3, 4, 4))
-      ! allocate (this%hubbard_pot_impurity(18, 18, 3))
-      ! this%hubbard_u_impurity(:,:) = 0.0d0
-      ! this%hubbard_j_impurity(:,:) = 0.0d0
-      ! this%F_impurity(:,:,:) = 0.0d0
-      ! this%hubbard_pot_impurity(:,:,:) = 0.0d0
 
       call move_alloc(this%hubbard_u_impurity, hubbard_u_impurity)
       call move_alloc(this%hubbard_j_impurity, hubbard_j_impurity)
@@ -396,8 +383,6 @@ contains
          print *, '----------------------------------------------------------------------------------------'  
       end if
             
-      ! Stop the testing
-      ! stop
 
       ! Checks if self-consistent 
       do na = 1, this%lattice%nrec
@@ -468,7 +453,55 @@ contains
          end do
       end do outer4
 
-      !> Raises an error if V correction is wanted when +U correction is not.
+      ! Read Hubbard potential matrix for a +U calculation
+      if ( this%hubbardU_check ) then
+         open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
+         if (ios /= 0) then
+            print *, 'No Hubbard potential was found in input.'
+         else
+            read(10) na
+            if ( na == this%lattice%nrec ) then
+               print *, 'Reads input Hubbard potential.'
+               read(10) this%hubbard_u_pot
+            end if
+            close(10)
+         end if
+      end if
+
+      ! Read Hubbard potential matrix for a +U impurity calculation
+      if ( this%hubbardU_impurity_check ) then
+         open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
+         if (ios /= 0) then
+            print *, 'No hubbard potential was found for the bulk. Continues without.'
+            if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
+            allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
+            this%hubbard_u_pot = 0.0d0
+         else
+            read(10) na
+            if ( na /= this%lattice%nbulk ) then
+               print *, 'ERROR: Input Hubbard potential has different dimension than bulk,'
+               print *, 'Stops program'
+               stop
+            else
+               print *, 'Reads input Hubbard potential for impurity calculation.'
+               if (allocated(array)) deallocate (array)
+               allocate (array(18, 18, na))
+               read(10) array
+
+               if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
+               allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
+
+               this%hubbard_u_pot = 0.0d0
+               do k = 1, this%lattice%nbulk
+                  this%hubbard_u_pot(:, :, k) = array(:,:,k)
+               end do
+               deallocate (array)
+            end if
+            close(10)
+         end if
+      end if
+      
+      !> Raises an error if V correction is wanted when +U correction is not. Why not!?!
       if (this%hubbardV_check .and. .not. this%hubbardU_check) then
          print *, ''
          print *, '----------------------------------------------------------------------------------------'
@@ -1184,7 +1217,7 @@ contains
          end do ! end of neighbour number
          ! Hubbard U correction.
          ! Only implemented for spd-orbitals
-         if (this%hubbardU_check) then
+         if (this%hubbardU_check .or. this%hubbardU_impurity_check) then
             do i = 1, 9
                do j = 1, 9
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
@@ -1280,11 +1313,11 @@ contains
                end if
             end do
          end if
-         if (this%hubbardU_impurity_check .and. nlim <= this%lattice%nrec) then
+         if (this%hubbardU_impurity_check) then
             do i = 1, 9
                do j = 1, 9
-                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_pot_impurity(i, j, nlim)
-                  this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_pot_impurity(i + 9, j + 9, nlim)
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)
+                  this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_u_pot(i + 9, j + 9, ino)
                end do
             end do
          end if

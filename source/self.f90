@@ -661,17 +661,18 @@ contains
             do ia = 1, this%lattice%nrec
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
-            if (this%hamiltonian%hubbardU_check .and. i .gt. 1) then
-               !> Initiate the LDA+U method by building the Hubbard U potential matrix
-               call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
-               ! call this%bands%Hubbard_U_Potential()
-               !> Initiate the +V intersite Coulomb correction to LDA+U+J
-               if (this%recursion%hamiltonian%hubbardV_check) then
-                  call this%recursion%recur_b_ij()
-                  call this%green%calculate_intersite_gf()
-                  call this%bands%Hubbard_V_Potential()
-               end if
-            end if
+            ! This part is moved to a more appropriote place below
+            ! if (this%hamiltonian%hubbardU_check .and. i .gt. 1) then
+            !    !> Initiate the LDA+U method by building the Hubbard U potential matrix
+            !    call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
+            !    ! call this%bands%Hubbard_U_Potential()
+            !    !> Initiate the +V intersite Coulomb correction to LDA+U+J
+            !    if (this%recursion%hamiltonian%hubbardV_check) then
+            !       call this%recursion%recur_b_ij()
+            !       call this%green%calculate_intersite_gf()
+            !       call this%bands%Hubbard_V_Potential()
+            !    end if
+            ! end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
          case ('S')
@@ -684,9 +685,10 @@ contains
             do ia = 1, this%lattice%ntype
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
             end do
-            if (this%hamiltonian%hubbardU_impurity_check .and. i .gt. 1) then 
-               call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix
-            end if
+            ! This part is also moved to below
+            ! if (this%hamiltonian%hubbardU_impurity_check .and. i .gt. 1) then 
+            !    call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix
+            ! end if
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
             call this%hamiltonian%build_locham() ! Build the local Hamiltonian
@@ -731,6 +733,22 @@ contains
             call this%green%block_green()
          end select
          call this%bands%calculate_fermi() ! Calculate the fermi energy
+         !=========================================================================
+         !                  CALCULATE HUBBARD CORRECTION
+         !=========================================================================
+         if (this%hamiltonian%hubbardU_check) then
+            !> Initiate the LDA+U method by building the Hubbard U potential matrix
+            call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
+            !> Initiate the +V intersite Coulomb correction to LDA+U+J
+            if (this%recursion%hamiltonian%hubbardV_check) then
+               call this%recursion%recur_b_ij()
+               call this%green%calculate_intersite_gf()
+               call this%bands%Hubbard_V_Potential()
+            end if
+         end if
+         if (this%hamiltonian%hubbardU_impurity_check) then 
+            call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix for the impurity
+         end if
          !=========================================================================
          !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
          !=========================================================================
@@ -829,6 +847,7 @@ contains
                   exit
                end if
                niter = niter + 1
+               call this%bands%build_hubbard_u()
             else
                exit
             end if

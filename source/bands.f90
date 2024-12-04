@@ -1281,10 +1281,19 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_hubbard_u(this)
       class(bands) :: this
+      integer :: i,j,ia
+
       print *, "New version of hubbard_u"
       this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
       call this%calc_hubbard_U_pot(this%recursion%hamiltonian%hub_u_sort, this%recursion%hamiltonian%hub_j_sort, &
                               this%recursion%hamiltonian%F, this%recursion%hamiltonian%hubbard_u_pot)
+
+      ! Write to file
+      open(unit=10, file='hubbard_potential', form='unformatted', status='replace')
+      write(10) this%lattice%nrec
+      write(10) this%recursion%hamiltonian%hubbard_u_pot
+      close(10)
+
    end subroutine build_hubbard_u
 
    !---------------------------------------------------------------------------
@@ -1295,10 +1304,26 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_hubbard_u_impurity(this)
       class(bands) :: this
-      print *, "New version of hubbard_u"
-      this%recursion%hamiltonian%hubbard_pot_impurity = 0.0d0
+      integer :: k
+      real(rp), dimension(:,:,:), allocatable :: array
+
+      print *, "Calculate Hubbard potential matrix for impurity"
+      allocate (array(18,18,this%lattice%nrec))
+      array = 0.0d0
+      
       call this%calc_hubbard_U_pot(this%recursion%hamiltonian%hubbard_u_impurity, this%recursion%hamiltonian%hubbard_j_impurity, &
-                              this%recursion%hamiltonian%F_impurity, this%recursion%hamiltonian%hubbard_pot_impurity)
+                              this%recursion%hamiltonian%F_impurity, array)
+      
+      do k = 1, this%lattice%nrec
+         this%recursion%hamiltonian%hubbard_u_pot(:,:,this%lattice%nbulk + k) = array(:,:,k)
+      end do
+      
+      deallocate (array)
+
+      ! We don't need the impurity!
+      ! this%recursion%hamiltonian%hubbard_pot_impurity = 0.0d0
+      ! call this%calc_hubbard_U_pot(this%recursion%hamiltonian%hubbard_u_impurity, this%recursion%hamiltonian%hubbard_j_impurity, &
+      !                         this%recursion%hamiltonian%F_impurity, this%recursion%hamiltonian%hubbard_pot_impurity)
    end subroutine build_hubbard_u_impurity
 
    !---------------------------------------------------------------------------
