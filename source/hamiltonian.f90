@@ -87,6 +87,11 @@ module hamiltonian_mod
       real(rp), dimension(:,:,:), allocatable :: hubbard_u_pot
       real(rp), dimension(:,:,:,:), allocatable :: hubbard_v_pot
 
+      !> New improved Hubbard parameters that should work for both bulk and impurity
+      real(rp), dimension(:,:), allocatable :: hubbard_u_general
+      real(rp), dimension(:,:), allocatable :: hubbard_j_general
+      logical :: hubbard_u_general_check = .False.
+
       !> Hubbard parameters for LDA+U+J implementation
       real(rp), dimension(:,:), allocatable :: hubbard_u
       real(rp), dimension(:,:), allocatable :: hub_u_sort
@@ -136,6 +141,7 @@ module hamiltonian_mod
       procedure :: restore_to_default
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
+      procedure :: calculate_hubbard_u_potential_general
       final     :: destructor
    end type hamiltonian
 
@@ -220,6 +226,8 @@ contains
       if (allocated(this%hubbard_j_impurity)) deallocate (this%hubbard_j_impurity)
       if (allocated(this%F_impurity)) deallocate (this%F_impurity)
       if (allocated(this%hubbard_pot_impurity)) deallocate (this%hubbard_pot_impurity)
+      if (allocated(this%hubbard_u_general)) deallocate (this%hubbard_u_general)
+      if (allocated(this%hubbard_j_general)) deallocate (this%hubbard_j_general)
 #endif
    end subroutine destructor
 
@@ -240,6 +248,7 @@ contains
       ! integer, dimension(this%lattice%nrec, this%lattice%nrec) :: orbs_v_num ! (atom1, atom2) = number of mutual orbs e.g. hubbard_v(1, 2, [p,d], [s,p]) -> orbs_v_num(1,2)=2
       ! Logical variable to check if input data is good
       logical :: implem_check = .true.
+      logical :: check
       real(rp), dimension(:,:,:), allocatable :: array
 
 
@@ -257,6 +266,9 @@ contains
 
       call move_alloc(this%hubbard_u_impurity, hubbard_u_impurity)
       call move_alloc(this%hubbard_j_impurity, hubbard_j_impurity)
+
+      call move_alloc(this%hubbard_u_general, hubbard_u_general)
+      call move_alloc(this%hubbard_j_general, hubbard_j_general)
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -304,6 +316,18 @@ contains
       call move_alloc(uj_orb, this%uj_orb)
       call move_alloc(hubbard_u_impurity, this%hubbard_u_impurity)
       call move_alloc(hubbard_j_impurity, this%hubbard_j_impurity)
+
+      call move_alloc(hubbard_u_general, this%hubbard_u_general)
+      call move_alloc(hubbard_j_general, this%hubbard_j_general)
+
+      ! New check to see if Hubbard U correction should be initiated
+      do na = 1, this%lattice%ntype
+         do l = 1, 3
+            if (abs(this%hubbard_u_general(na, l)) > 1e-8) then
+               this%hubbard_u_general_check = .true.
+            end if
+         end do
+      end do
       
       
       ! Checks if Hubbard U correction for impurity should be initiated (check for j also??)
@@ -453,53 +477,54 @@ contains
          end do
       end do outer4
 
-      ! Read Hubbard potential matrix for a +U calculation
-      if ( this%hubbardU_check ) then
-         open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
-         if (ios /= 0) then
-            print *, 'No Hubbard potential was found in input.'
-         else
-            read(10) na
-            if ( na == this%lattice%nrec ) then
-               print *, 'Reads input Hubbard potential.'
-               read(10) this%hubbard_u_pot
-            end if
-            close(10)
-         end if
-      end if
+      ! Testing reading from atom.nml instead!
+      ! ! Read Hubbard potential matrix for a +U calculation
+      ! if ( this%hubbardU_check ) then
+      !    open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
+      !    if (ios /= 0) then
+      !       print *, 'No Hubbard potential was found in input.'
+      !    else
+      !       read(10) na
+      !       if ( na == this%lattice%nrec ) then
+      !          print *, 'Reads input Hubbard potential.'
+      !          read(10) this%hubbard_u_pot
+      !       end if
+      !       close(10)
+      !    end if
+      ! end if
 
-      ! Read Hubbard potential matrix for a +U impurity calculation
-      if ( this%hubbardU_impurity_check ) then
-         open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
-         if (ios /= 0) then
-            print *, 'No hubbard potential was found for the bulk. Continues without.'
-            if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
-            allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
-            this%hubbard_u_pot = 0.0d0
-         else
-            read(10) na
-            if ( na /= this%lattice%nbulk ) then
-               print *, 'ERROR: Input Hubbard potential has different dimension than bulk,'
-               print *, 'Stops program'
-               stop
-            else
-               print *, 'Reads input Hubbard potential for impurity calculation.'
-               if (allocated(array)) deallocate (array)
-               allocate (array(18, 18, na))
-               read(10) array
+      ! ! Read Hubbard potential matrix for a +U impurity calculation
+      ! if ( this%hubbardU_impurity_check ) then
+      !    open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
+      !    if (ios /= 0) then
+      !       print *, 'No hubbard potential was found for the bulk. Continues without.'
+      !       if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
+      !       allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
+      !       this%hubbard_u_pot = 0.0d0
+      !    else
+      !       read(10) na
+      !       if ( na /= this%lattice%nbulk ) then
+      !          print *, 'ERROR: Input Hubbard potential has different dimension than bulk,'
+      !          print *, 'Stops program'
+      !          stop
+      !       else
+      !          print *, 'Reads input Hubbard potential for impurity calculation.'
+      !          if (allocated(array)) deallocate (array)
+      !          allocate (array(18, 18, na))
+      !          read(10) array
 
-               if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
-               allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
+      !          if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
+      !          allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
 
-               this%hubbard_u_pot = 0.0d0
-               do k = 1, this%lattice%nbulk
-                  this%hubbard_u_pot(:, :, k) = array(:,:,k)
-               end do
-               deallocate (array)
-            end if
-            close(10)
-         end if
-      end if
+      !          this%hubbard_u_pot = 0.0d0
+      !          do k = 1, this%lattice%nbulk
+      !             this%hubbard_u_pot(:, :, k) = array(:,:,k)
+      !          end do
+      !          deallocate (array)
+      !       end if
+      !       close(10)
+      !    end if
+      ! end if
       
       !> Raises an error if V correction is wanted when +U correction is not. Why not!?!
       if (this%hubbardV_check .and. .not. this%hubbardU_check) then
@@ -865,6 +890,9 @@ contains
       this%hubbard_j_impurity = this%hubbard_j_impurity/ry2ev
       this%F_impurity = this%F_impurity/ry2ev
 
+      this%hubbard_u_general = this%hubbard_u_general/ry2ev
+      this%hubbard_j_general = this%hubbard_j_general/ry2ev
+
       !> Checks if self-consistent U flag and input values of U and J have both been provided. They would interfer with eachother. 
       if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check)) then
          call g_logger%error('Both input values for hubbard_u_sc and hubbard_u + hubbard_j has been provided. Only one of them are allowed.', __FILE__, __LINE__)
@@ -876,6 +904,77 @@ contains
          call g_logger%error('Both input values for hubbard_u_sc and hubbard_j has been provided. Only one of them is allowed.', __FILE__, __LINE__)
          error stop
       end if
+
+      ! Check to see if hubbard U is in atom.nml input
+      check = .False.
+      do na = 1, this%lattice%ntype
+         do l = 1, 3
+            if ( abs(this%lattice%symbolic_atoms(na)%potential%hubbard_u(l)) > 1e-8 ) then
+               check = .True.
+            end if
+         end do
+      end do
+
+      if ( check ) then
+         print *, 'Hubbard was provided in the atom.nml files. Calculates the initial Hubbard potential matrix.'
+         do na = 1, this%lattice%ntype
+            call this%lattice%symbolic_atoms(na)%potential%expand_ldm()
+         end do
+         call this%calculate_hubbard_u_potential_general()
+         if (this%hubbard_u_general_check) then
+            print *, 'Hubbard parameters was provided in input.nml. Use these for the rest of the calculation.'
+            do na = 1, this%lattice%ntype
+               do l = 1, 3
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = this%hubbard_u_general(na, l)
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = this%hubbard_j_general(na, l)
+               end do
+            end do
+         else
+            print *, 'No Hubbard parameters was provided in the input.nml.'
+            print *, 'Uses no Hubbard correction for the rest of the calculation.'
+            do na = 1, this%lattice%ntype
+               do l = 1, 3
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = this%hubbard_u_general(na, l)
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = this%hubbard_j_general(na, l)
+               end do
+            end do
+         end if
+      else
+         if ( this%hubbard_u_general_check ) then
+            print *, 'No Hubbard corrections in atom.nml, but Hubbard U provided in input.nml'
+            print *, 'Stores these values in symbolic atoms.'
+            do na = 1, this%lattice%ntype
+               do l = 1, 3
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = this%hubbard_u_general(na, l)
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = this%hubbard_j_general(na, l)
+               end do
+            end do
+         end if
+      end if
+
+      ! Check if bulk U was provided in input, but not in atom.nml for the impurity calculation
+      if (this%lattice%nrec .ne. this%lattice%ntype) then
+         do na = 1, this%lattice%nbulk
+            do l = 1, 3
+               if ( abs(this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) - this%hubbard_u_general(na,l)) > 1e-8 ) then
+                  print *, 'ERROR! Hubbard U in atom.nml is not equal to the one in input.nml for atom ', na, ' l = ', l - 1
+                  print *, 'Hubbard U in atom.nml = ', this%lattice%symbolic_atoms(na)%potential%hubbard_u(l), 'Ry'
+                  print *, 'Hubbard U in input.nml = ', this%hubbard_u_general(na,l), 'Ry'
+                  print *, 'Hubbard parameters for the bulk atoms has to be equal in an impurity calculation.'
+                  print *, 'STOP PROGRAM'
+                  stop
+               else if ( abs(this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) - this%hubbard_j_general(na,l)) > 1e-8) then
+                  print *, 'ERROR! Hubbard J in atom.nml is not equal to the one in input.nml for atom ', na, ' l = ', l - 1
+                  print *, 'Hubbard J in atom.nml = ', this%lattice%symbolic_atoms(na)%potential%hubbard_u(l), 'Ry'
+                  print *, 'Hubbard J in input.nml = ', this%hubbard_u_general(na,l), 'Ry'
+                  print *, 'Hubbard parameters for the bulk atoms has to be equal in an impurity calculation.'
+                  print *, 'STOP PROGRAM'
+                  stop
+               end if
+            end do
+         end do
+      end if
+
 
    end subroutine build_from_file
 
@@ -943,13 +1042,15 @@ contains
       allocate(this%orbs_v_num(this%lattice%nrec, this%lattice%nrec))
       allocate(this%F(this%lattice%nrec, 4, 4))
       allocate (this%uj_orb(this%lattice%nrec))
-      allocate (this%hubbard_u_pot(18, 18, this%lattice%nrec))
+      allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
       allocate (this%hubbard_v_pot(18, 18, size(this%ee, 3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
       allocate (this%hubbard_u_sc(this%lattice%nrec,4))
       allocate (this%hubbard_u_impurity(this%lattice%nrec,4)) ! Size is equal to the number of impurities (nclu)
       allocate (this%hubbard_j_impurity(this%lattice%nrec,4))
       allocate (this%F_impurity(this%lattice%nrec, 4, 4))
       allocate (this%hubbard_pot_impurity(18, 18, this%lattice%nrec))
+      allocate (this%hubbard_u_general(this%lattice%ntype, 4)) ! These should work for both impurity and bulk!
+      allocate (this%hubbard_j_general(this%lattice%ntype, 4))
       !end if
       !end if
 #endif
@@ -1001,6 +1102,8 @@ contains
       this%hubbard_j_impurity(:,:) = 0.0d0
       this%F_impurity(:,:,:) = 0.0d0
       this%hubbard_pot_impurity(:,:,:) = 0.0d0
+      this%hubbard_u_general(:,:) = 0.0d0
+      this%hubbard_j_general(:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1217,7 +1320,8 @@ contains
          end do ! end of neighbour number
          ! Hubbard U correction.
          ! Only implemented for spd-orbitals
-         if (this%hubbardU_check .or. this%hubbardU_impurity_check) then
+         ! if (this%hubbardU_check .or. this%hubbardU_impurity_check) then
+         if (this%hubbard_u_general_check) then
             do i = 1, 9
                do j = 1, 9
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
@@ -1313,7 +1417,8 @@ contains
                end if
             end do
          end if
-         if (this%hubbardU_impurity_check) then
+         ! if (this%hubbardU_impurity_check) then
+         if (this%hubbard_u_general_check) then
             do i = 1, 9
                do j = 1, 9
                   this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)
@@ -1856,4 +1961,209 @@ contains
          end if
       end if
    end subroutine rotate_from_local_axis
+
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculates the on site Hubbard U potential matrix
+   !> It used the rotationally invariant formulation bt Liechtensteins (add ref.)
+   !> If hubbard_j was set to zero or not provided in the input, then Liechteinsteins formulation reduced to Dudarevs (add ref.).
+   !> In this case the provided U becomes U_eff = U-J in Dudarevs paper.
+   !> Inputs are number of atoms "na", Slater integrals "f", Hubbard U's "hubbard_u" and Hubbard J's, "hubbard_j"
+   !> A generalization of the spdf_Hubbard subroutine that can be used for both bulk and impurity corrections
+   !> Builds the effective single-particle potentials for the LDA+U correction for s,p and d orbitals.
+   !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
+   !> too, but the corresponding (32x32) basis needs implementation.)
+   !> Created by Viktor Frilén and Emil Beiersdorf 27.11.2024
+   !> Modified by Viktor Frilén 13.12.2024
+   !---------------------------------------------------------------------------
+   subroutine calculate_hubbard_u_potential_general(this)
+      class(hamiltonian) :: this
+      
+      ! Local variables
+      integer :: nrec ! Number of atoms to perform recursion. This is different between bulk and impurity calculation. Which makes this subroutine compatable with both.
+      integer :: i, j ! Orbital indices
+      integer :: na ! Atom index
+      integer :: ie ! Energy channel index
+      integer :: ispin ! Spin index
+      integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
+      integer :: cntr ! Counts number of orbitals with a U per atom. 
+      real(rp) :: result
+      integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
+      integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
+      real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
+      real(rp), dimension(this%lattice%ntype, 4, 4) :: f
+      real(rp) :: f0, f2, f4, f6 ! Slater integrals
+      ! Local variable array for local density matrix
+      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: LDM ! Local density matrix (LDM), works for spdf orbitals
+      real(rp) :: dc ! Double counting term
+      real(rp), dimension(4) :: U_energy, dc_energy 
+      real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin ! LDM with m traced out
+      real(rp), dimension(this%lattice%ntype, 4) :: n_tot  ! LDM with traced out spin  
+      ! Temporary potential that will be put into this%hubbard_u_pot
+      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: hub_pot
+      
+      type :: ArrayType
+         integer, allocatable :: val(:)
+      end type ArrayType
+      type(ArrayType), dimension(4) :: ms
+      type(ArrayType), dimension(this%lattice%ntype) :: l_arr
+  
+      ms(1)%val = [0]
+      ms(2)%val = [-1, 0, 1]
+      ms(3)%val = [-2, -1, 0, 1, 2]
+      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
+
+      this%hubbard_u_pot(:,:,:) = 0.0d0
+
+      LDM(:,:,:,:,:) = 0.0d0
+      hub_pot(:,:,:,:,:) = 0.0d0
+      n_tot(:,:) = 0.0d0
+      n_spin(:,:,:) = 0.0d0
+      f(:,:,:) = 0.0d0
+
+      hub_u(:,:) = 0.0d0
+      hub_j(:,:) = 0.0d0
+      do na = 1, this%lattice%ntype
+         do l = 1, 3
+            hub_u(na,l) = this%lattice%symbolic_atoms(na)%potential%hubbard_u(l)
+            hub_j(na,l) = this%lattice%symbolic_atoms(na)%potential%hubbard_j(l)
+         end do
+      end do
+
+      ! Maybe do a loop similar to this one (so only the nrec hubbard_u_pot is calculated):
+      ! do k = 1, this%lattice%nrec
+      !    this%recursion%hamiltonian%hubbard_u_pot(:,:,this%lattice%nbulk + k) = array(:,:,k)
+      ! end do
+
+      ! Calculates slater integrals
+      do na = 1, this%lattice%ntype
+         ! For s, p, d and f orbitals, F0 = U
+         ! s-orbital
+         f(na,1,1) = hub_u(na,1)
+         ! p-orbital J = (1/5)*F2 
+         f(na,2,1) = hub_u(na,2)
+         f(na,2,2) = hub_j(na,2)*5.0_rp
+         ! d-orbital, J = (F2 + F4)/14 with F4/F2 ~ 0.625
+         f(na,3,1) = hub_u(na,3)
+         f(na,3,2) = 14.0_rp*hub_j(na,3)/1.625_rp 
+         f(na,3,3) = 0.625_rp*f(na,3,2)
+         !> For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
+         f(na,4,1) = hub_u(na,4)
+         f(na,4,2) = 6435_rp*hub_j(na,4)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
+         f(na,4,3) = 0.67_rp*f(na,4,2)
+         f(na,4,4) = 0.49_rp*f(na,4,2)               
+      end do 
+      
+      !> Creates an array with each orbital for each atom
+      do i = 1, this%lattice%ntype
+         cntr = count(abs(hub_u(i,:)) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
+         allocate(l_arr(i)%val(cntr))
+      end do
+
+      do i = 1, this%lattice%ntype
+         cntr = 0
+         do j = 1, 4
+            if (abs(hub_u(i,j)) > 1.0E-10) then
+               cntr = cntr + 1
+               l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
+            end if
+         end do
+      end do       
+      
+      ! Sets up the local density matrix
+      do na = 1, this%lattice%ntype
+         do l = 0, 2
+            do ispin = 1, 2
+               do i = 1, 2*l + 1 !m3
+                  do j = 1, 2*l + 1 !m4
+                     LDM(na, l + 1, ispin, i, j) = this%lattice%symbolic_atoms(na)%potential%ldm(l + 1, ispin, i, j)
+                  end do
+               end do
+            end do
+         end do
+      end do
+      
+      ! Builds the Hubbard U+J potential 
+      print *, ''
+      print *, '-----------------------------------------------------------------------------------------------------------------'
+      print *, 'Calculate Hubbard U potential for impurity and bulk:'
+      do na = 1, this%lattice%ntype
+         print *, ' Atom ', na
+         print *, ''
+         ! Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
+         do l = 1, 3 !0 to 3 but indexing starts on 1
+            do ispin = 1, 2
+               n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
+               n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
+            end do
+         end do
+         U_energy = 0.0d0
+
+         ! l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
+         ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
+         do l = 1, size(l_arr(na)%val)
+            l_index = l_arr(na)%val(l)
+            m_max = 2*l_index-1
+            do ispin = 1, 2
+               do m1 = 1, m_max
+                  do m2 = 1, m_max
+                     do m3 = 1, m_max
+                        do m4 = 1, m_max
+                           m1_val = ms(l_index)%val(m1)
+                           m2_val = ms(l_index)%val(m2)
+                           m3_val = ms(l_index)%val(m3)
+                           m4_val = ms(l_index)%val(m4)
+                           f0 = f(na,l_index,1)
+                           f2 = f(na,l_index,2)
+                           f4 = f(na,l_index,3)
+                           f6 = f(na,l_index,4)
+                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                           + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
+                           + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+                           - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
+                           U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+                           * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
+                           + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+                           - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
+                           * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
+                        end do
+                     end do
+                     ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
+                     if (m1 == m2) then
+                        hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                        - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
+                     end if
+                  end do
+               end do
+            end do
+         end do  
+
+      !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
+         do l = 0, 2
+            do i = 1, 2*l + 1
+               do j = 1, 2*l + 1
+                  this%hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
+                  this%hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
+               end do
+            end do
+            dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
+            - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
+            
+      ! This part could be modified to work for imputrities
+            do i = 1, size(l_arr(na)%val)
+               if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
+                  print *, ' Orbital ', this%orb_conv(l+1), ' :'
+                  print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
+                  print *, ''
+               end if
+            end do
+         end do
+         
+      end do 
+      print *, '-----------------------------------------------------------------------------------------------------------------'
+      print *,''
+      
+   end subroutine calculate_hubbard_u_potential_general
 end module hamiltonian_mod

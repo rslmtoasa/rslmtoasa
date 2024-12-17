@@ -736,19 +736,23 @@ contains
          !=========================================================================
          !                  CALCULATE HUBBARD CORRECTION
          !=========================================================================
-         if (this%hamiltonian%hubbardU_check) then
-            !> Initiate the LDA+U method by building the Hubbard U potential matrix
-            call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
-            !> Initiate the +V intersite Coulomb correction to LDA+U+J
-            if (this%recursion%hamiltonian%hubbardV_check) then
-               call this%recursion%recur_b_ij()
-               call this%green%calculate_intersite_gf()
-               call this%bands%Hubbard_V_Potential()
-            end if
+         if ( this%hamiltonian%hubbard_u_general_check ) then
+            call this%bands%build_hubbard_u_general()
          end if
-         if (this%hamiltonian%hubbardU_impurity_check) then 
-            call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix for the impurity
-         end if
+         ! if (this%hamiltonian%hubbardU_check) then
+         !    !> Initiate the LDA+U method by building the Hubbard U potential matrix
+         !    call this%bands%build_hubbard_u() ! Improved version. Tested for bccFe and gives exactly the same result
+         !    !> Initiate the +V intersite Coulomb correction to LDA+U+J
+         !    if (this%recursion%hamiltonian%hubbardV_check) then
+         !       call this%recursion%recur_b_ij()
+         !       call this%green%calculate_intersite_gf()
+         !       call this%bands%Hubbard_V_Potential()
+         !    end if
+         ! end if
+         ! if (this%hamiltonian%hubbardU_impurity_check) then 
+         !    call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix for the impurity
+         ! end if
+         print *, 'Here again!!'
          !=========================================================================
          !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
          !=========================================================================

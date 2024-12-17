@@ -107,6 +107,8 @@ module bands_mod
       procedure :: calculate_density_matrix ! Probably not needed
       procedure :: calc_hubbard_U_pot_input_LDM ! Probably not needed
       procedure :: build_hubbard_u_input_LDM ! Probably not needed
+      procedure :: calculate_local_density_matrix ! Used for updating symbolic_atoms
+      procedure :: build_hubbard_u_general
       procedure :: calc_hubbard_U
       procedure :: fermi
       procedure :: restore_to_default
@@ -1511,6 +1513,78 @@ contains
       print *,''
       
    end subroutine calc_hubbard_U_pot
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Builds the on-site Hubbard potential matrix, by calling to the subroutine calc_hubbard_U_pot
+   !> This is a generalization of the others. Which should work for both impurity and bulk
+   !> Created by Viktor Frilén 12.12.2024
+   !---------------------------------------------------------------------------
+   subroutine build_hubbard_u_general(this)
+      class(bands) :: this
+      integer :: i,j,ia
+
+      print *, "Generalization of build_hubbard_u"
+
+      ! Calculates the local density matrix for each nrec atom.
+      call this%calculate_local_density_matrix()
+
+      ! Calculates the Hubbard potential matrix for all atoms (ntype).
+      call this%recursion%hamiltonian%calculate_hubbard_u_potential_general()
+
+   end subroutine build_hubbard_u_general
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculated the local density matrix for each atom in symbolic_atoms from the greens function g0.
+   !> The information is stored in lattice%symbolic_atoms(:)%potential%ldm(:,:,:,:)
+   !> Created by Viktor Frilén 12.12.2024
+   !---------------------------------------------------------------------------
+   subroutine calculate_local_density_matrix(this)
+      class(bands) :: this
+      integer :: natom, i, j, ie, l, na, ispin
+      real(rp) :: result
+      real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_G
+      
+      im_G(:,:,:,:) = 0.0d0
+
+      ! Resets the ldm for each atom.
+      do na = 1, this%lattice%nrec
+         this%lattice%symbolic_atoms(this%lattice%nbulk + na)%potential%ldm(:,:,:,:) = 0.0d0
+      end do
+
+      !> Sets up the imaginary Green's function (only for spd orbitals)
+      do na = 1, this%lattice%nrec
+         do i = 1, 18
+            do j = 1, 18
+               do ie  = 1, this%en%channels_ldos + 10
+                  im_G(i,j,ie,na) = im_G(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
+               end do
+            end do
+         end do
+      end do
+
+      !> Calculates the local density matrix by integrating the Green's function over the energy channels.
+      !> Only implemented for spd orbitals.
+      do na = 1, this%lattice%nrec
+         do l = 0, 2
+            do ispin = 1, 2
+               do i = 1, 2*l + 1 !m3
+                  do j = 1, 2*l + 1 !m4
+                     call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_G(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+                     this%lattice%symbolic_atoms(this%lattice%nbulk + na)%potential%ldm(l + 1, ispin, i, j) = result
+                  end do
+               end do
+            end do
+         end do
+         ! Save a flattened copy of ldm for print to atom_out.nml
+         call this%lattice%symbolic_atoms(this%lattice%nbulk + na)%potential%flatten_ldm()
+      end do
+
+      
+   end subroutine calculate_local_density_matrix
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

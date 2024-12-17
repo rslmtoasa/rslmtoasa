@@ -14,6 +14,8 @@ real(rp) :: center_band_s_up, center_band_s_dw, &
             ws_r, sumec, sumev, etot, utot, ekin, rhoeps, vmad
 complex(rp), dimension(9, 2) :: cx, wx, cex, obx
 real(rp), dimension(2) :: xi_p, xi_d, rac
+real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
+real(rp), dimension(:,:,:), allocatable :: ldm_flatten
 namelist /par/ &
    center_band, width_band, shifted_band, obar, gravity_center, &
    sumec, sumev, etot, utot, ekin, rhoeps, vmad, &
@@ -26,4 +28,5 @@ namelist /par/ &
    width_band_p_up, width_band_p_dw, &
    width_band_d_up, width_band_d_dw, &
    cx, wx, cx0, wx0, cx1, wx1, &
-   cshi, dw_l, cex, obx, xi_p, xi_d, rac
+   cshi, dw_l, cex, obx, xi_p, xi_d, rac, &
+   hubbard_u, hubbard_j, ldm_flatten
