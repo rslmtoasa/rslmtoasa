@@ -1,0 +1,53 @@
+&calculation
+pre_processing = 'newclubulk'
+verbose = T
+/
+
+&lattice
+ndim = 50000
+rc = 60
+alat = 2.471999903202706
+crystal_sym = 'hcp'
+wav = 1.3644350065222555
+nclu = 1
+inclu(1,:) = 0.5000000000000000, 0.2886751300000000, 0.4066691200000000
+/
+
+&atoms
+database = './'
+label(1) = 'Co1-bulk'
+label(2) = 'Co2-bulk'
+label(3) = 'Fe-imp'
+/
+
+&self
+ws_all = .true.
+nstep = 100
+/
+
+&energy
+fermi = -0.033157
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+fix_fermi = .true.
+/
+
+&control
+calctype = 'I'
+nsp = 1
+lld = 21
+recur = 'block'
+/
+
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+
+!&hamiltonian
+!hubbard_u_general(1,3) = 3.8
+!hubbard_j_general(1,3) = 1.1
+!hubbard_u_general(2,3) = 3.8
+!hubbard_j_general(2,3) = 1.1
+!/
