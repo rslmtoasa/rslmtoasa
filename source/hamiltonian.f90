@@ -78,6 +78,8 @@ module hamiltonian_mod
       !complex(rp), dimension(:, :, :), allocatable :: lsham
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
+      !> Velocity operators
+      complex(rp), dimension(:, :, :, :), allocatable :: v_x, v_y, v_z
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -86,6 +88,7 @@ module hamiltonian_mod
       procedure :: build_enim
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
+      procedure :: build_realspace_velocity_operators
       procedure :: torque_operator_collinear
       procedure :: rs2pao
       procedure :: chbar_nc
@@ -146,6 +149,9 @@ contains
       if (allocated(this%ee_glob)) call g_safe_alloc%deallocate('hamiltonian.ee_glob', this%ee_glob)
       if (allocated(this%eeo_glob)) call g_safe_alloc%deallocate('hamiltonian.eeo_glob', this%eeo_glob)
       if (allocated(this%enim_glob)) call g_safe_alloc%deallocate('hamiltonian.enim_glob', this%enim_glob)
+      if (allocated(this%v_x)) call g_safe_alloc%deallocate('hamiltonian.v_x', this%v_x)
+      if (allocated(this%v_y)) call g_safe_alloc%deallocate('hamiltonian.v_y', this%v_y)
+      if (allocated(this%v_z)) call g_safe_alloc%deallocate('hamiltonian.v_z', this%v_z)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -161,6 +167,9 @@ contains
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
+      if (allocated(this%v_x)) deallocate(this%v_x)
+      if (allocated(this%v_y)) deallocate(this%v_y)
+      if (allocated(this%v_z)) deallocate(this%v_z)
 #endif
    end subroutine destructor
 
@@ -232,6 +241,9 @@ contains
       call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_x', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_y', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_z', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -254,6 +266,10 @@ contains
       allocate (this%eeo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
+      ! Velocity operators
+      allocate (this%v_x(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_y(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_z(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !end if
       !end if
 #endif
@@ -280,10 +296,73 @@ contains
       this%enim_glob(:, :, :) = 0.0d0
       !  end if
       !end if
+      this%v_x(:, :, :, :) = 0.0d0
+      this%v_y(:, :, :, :) = 0.0d0
+      this%v_z(:, :, :, :) = 0.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
    end subroutine restore_to_default
+
+   !**************************************************************************
+   !> @brief Build real-space velocity operators.
+   !>
+   !> This subroutine constructs the velocity operators (\f$v_x\f$, \f$v_y\f$, \f$v_z\f$)
+   !> in real space for a given Hamiltonian system, using the displacement vectors
+   !> between atom pairs and the intersite Hamiltonian blocks. The velocity operators
+   !> are computed based on the relationship:
+   !> \f[
+   !> v_{\alpha} = i \cdot (\mathbf{r}_i - \mathbf{r}_j)_{\alpha} \cdot H_{ij}
+   !> \f]
+   !> where \f$\mathbf{r}_i\f$ and \f$\mathbf{r}_j\f$ are the positions of atoms \f$i\f$ 
+   !> and \f$j\f$, and \f$H_{ij}\f$ is the intersite Hamiltonian block.
+   !>
+   !> @param[inout] this        A derived type representing the Hamiltonian system.
+   !>                           Contains Hamiltonian blocks, lattice structure, and
+   !>                           other system parameters.
+   !>
+   !> @warning Ensure that the lattice positions (\f$\mathbf{r}\f$) and Hamiltonian
+   !>          blocks (\f$H_{ij}\f$) are correctly initialized before calling this
+   !>          subroutine.
+   !>
+   !**************************************************************************
+   subroutine build_realspace_velocity_operators(this)
+      ! Arguments
+      class(hamiltonian), intent(inout) :: this
+   
+      ! Local variables
+      integer :: ia, ntype, nr, m, i, j              ! Atom and neighbor indices
+      integer :: atom_neighbor                       ! Neighbor atom index
+      real(rp), dimension(3) :: rij                  ! Displacement vector (x, y, z components)
+   
+      ! Initialize velocity operators to zero
+      this%v_x(:, :, :, :) = 0.0_rp
+      this%v_y(:, :, :, :) = 0.0_rp
+      this%v_z(:, :, :, :) = 0.0_rp
+   
+      ! Loop over atom types
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)  ! Atom number in the cluster
+         nr = this%charge%lattice%nn(ia, 1)     ! Number of neighbors for this atom type
+   
+         ! Loop over neighbors
+         do m = 2, nr   ! Start from 2 to exclude the onsite term
+            atom_neighbor = this%charge%lattice%nn(ia, m)  ! Neighbor atom number
+            
+            ! Compute displacement vector rij = r_i - r_j
+            rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)
+   
+            ! Compute velocity operator blocks
+            this%v_x(:, :, m, ntype) = i_unit * rij(1) * this%ee(:, :, m, ntype)  ! x-component
+            this%v_y(:, :, m, ntype) = i_unit * rij(2) * this%ee(:, :, m, ntype)  ! y-component
+            this%v_z(:, :, m, ntype) = i_unit * rij(3) * this%ee(:, :, m, ntype)  ! z-component
+            write(228, *) 'm=', m, 'ntype= ', ntype
+            write(228, '(18f10.6)') real(this%v_x(:, :, m, ntype))
+            write(229, *) 'm=', m, 'ntype= ', ntype
+            write(229, '(18f10.6)') aimag(this%v_x(:, :, m, ntype))
+         end do
+      end do
+   end subroutine build_realspace_velocity_operators
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
