@@ -71,6 +71,8 @@ module recursion_mod
       complex(rp), dimension(18, 18) :: cheb_mom_temp
       !> Variable to save H|psi>
       complex(rp), dimension(:, :), allocatable :: v
+      !> Variable to save T(H)
+      complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
    contains
       procedure :: hop
       procedure :: crecal
@@ -96,6 +98,7 @@ module recursion_mod
       procedure :: chebyshev_recur_s_ll
       procedure :: chebyshev_recur
       procedure :: chebyshev_recur_full
+      procedure :: evaluate_t_h
       procedure :: restore_to_default
       final :: destructor
    end type recursion
@@ -159,6 +162,7 @@ contains
       if (allocated(this%atemp_b)) call g_safe_alloc%deallocate('recursion.atemp_b', this%atemp_b)
       if (allocated(this%b2temp_b)) call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
       if (allocated(this%pmn_b)) call g_safe_alloc%deallocate('recursion.pmn_b', this%pmn_b)
+      if (allocated(this%t_h)) call g_safe_alloc%deallocate('recursion.t_h', this%t_h)
 #else
       if (allocated(this%a)) deallocate (this%a)
       if (allocated(this%b2)) deallocate (this%b2)
@@ -184,8 +188,94 @@ contains
       if (allocated(this%atemp_b)) deallocate (this%atemp_b)
       if (allocated(this%b2temp_b)) deallocate (this%b2temp_b)
       if (allocated(this%pmn_b)) deallocate (this%pmn_b)
+      if (allocated(this%t_h)) deallocate(this%t_h)
 #endif
    end subroutine destructor
+
+   subroutine evaluate_t_h(this, max_order)
+       !*************************************************************************
+       !> @brief Computes Chebyshev polynomials T_n(H) for a sparse Hamiltonian.
+       !>
+       !> This subroutine computes T_n(H) directly into the target storage array
+       !> `this%t_h` for each recursion level using block-wise sparse operations.
+       !>
+       !> @param[inout] this       Hamiltonian type containing block data.
+       !> @param[in]    max_order  Maximum order of Chebyshev polynomials to compute.
+       !*************************************************************************
+       class(recursion), intent(inout) :: this
+       integer, intent(in) :: max_order
+   
+       ! Local variables
+       integer :: n, i, j, k, nr, ih, nnmap
+       integer :: ijzero(0:this%lattice%kk, 0:this%lattice%kk), ijdum(0:this%lattice%kk, 0:this%lattice%kk)
+   
+       ! Initialize mappings and T matrices
+       allocate(this%t_h(max_order, 18, 18, this%lattice%kk, this%lattice%kk))
+   
+       ! Initialize T_1 (identity) and T_2 (Hamiltonian)
+       do i = 1, this%lattice%kk
+           ih = this%lattice%iz(i)
+           nr = this%lattice%nn(i, 1)
+   
+           this%t_h(1, :, :, i, i) = ceye(18)  ! Identity block
+           this%t_h(2, :, :, i, i) = this%hamiltonian%ee(:, :, 1, ih)  ! Onsite Hamiltonian
+           ijzero(i, i) = 1
+   
+           do j = 2, nr
+               nnmap = this%lattice%nn(i, j)
+               if (nnmap /= 0) then
+                   this%t_h(2, :, :, i, nnmap) = this%hamiltonian%ee(:, :, j, ih)  ! Offsite Hamiltonian
+                   ijzero(i, nnmap) = 1
+               end if
+           end do
+       end do
+       ! Compute T_n(H) for n >= 3
+       do n = 3, max_order
+           write(*,*) 'n=', n
+           ! Reset intermediate mapping
+           ijdum(:, :) = 0
+   
+           !$omp parallel do default(shared) private(i, j, k, nnmap) schedule(dynamic, 100)
+           ! Loop over all block pairs (i, j)
+           do i = 1, this%lattice%kk
+               nr = this%lattice%nn(i, 1)
+               ih = this%lattice%iz(i)
+   
+               do j = 1, this%lattice%kk
+                   ijdum(i, j) = ijzero(i, j)
+                   if (ijzero(i, j) == 0) cycle  ! Skip zero blocks
+   
+                   ! Initialize T_n(i, j) directly
+                   this%t_h(n, :, :, i, j) = 0.0_rp
+   
+                   ! Compute T_n(i, j) = 2 * H @ T_{n-1}
+                   do k = 1, nr
+                       if (k == 1) then
+                           nnmap = i  ! Onsite term
+                       else
+                           nnmap = this%lattice%nn(i, k)  ! Neighbor atom index
+                       end if
+   
+                       if (nnmap /= 0 .and. ijzero(nnmap, j) /= 0) then
+                           call zgemm('N', 'N', 18, 18, 18, 2.0_rp * cone, this%hamiltonian%ee(:, :, k, ih), 18, &
+                                      this%t_h(n - 1, :, :, nnmap, j), 18, cone, this%t_h(n, :, :, i, j), 18)
+                           ijdum(i, j) = 1
+                       end if
+                   end do
+   
+                   ! Subtract T_{n-2}(i, j)
+                   if (ijzero(i, j) /= 0) then
+                       this%t_h(n, :, :, i, j) = this%t_h(n, :, :, i, j) - this%t_h(n - 2, :, :, i, j)
+                   end if
+               end do
+           end do
+           !$omp end parallel do
+    
+           ! Update mapping for the next level
+           ijzero(:, :) = ijdum(:, :)
+       end do
+   end subroutine evaluate_t_h
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -2309,7 +2399,6 @@ contains
       call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
-
 #else
       allocate (this%a(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &18, this%lattice%nrec, 3))
@@ -2369,7 +2458,6 @@ contains
       this%b2temp_b(:, :, :) = 0.0d0
       this%pmn_b(:, :, :) = 0.0d0
       this%cheb_mom_temp(:, :) = 0.0d0
-
       if (present(full)) then
          if (full) then
             if (associated(this%hamiltonian)) call this%hamiltonian%restore_to_default()
