@@ -1758,6 +1758,24 @@ contains
 
    end function rtrace
 
+
+   function trace(mat) result(res)
+      !
+      implicit none
+      !
+      complex(rp), intent(in) :: mat(:, :)
+      real(rp) :: res
+      !
+      ! Local Variables
+      integer :: i
+
+      res = 0.0_rp
+      do i = 1, size(mat, 1)
+         res = res + (mat(i, i))
+      end do
+
+   end function trace
+
    !> Calculates the multiplication of a matrix
    !> by a scalar number (both complex).
    !> Implemented by Ivan Miranda on 16.10.2023

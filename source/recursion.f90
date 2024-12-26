@@ -100,6 +100,8 @@ module recursion_mod
       procedure :: chebyshev_recur_full
       procedure :: evaluate_t_h
       procedure :: restore_to_default
+      procedure :: compute_moments ! temporary for test purposes
+      procedure :: evaluate_chebyshev ! temporary for test purposes
       final :: destructor
    end type recursion
 
@@ -192,6 +194,73 @@ contains
 #endif
    end subroutine destructor
 
+   subroutine evaluate_chebyshev(this, mu_n, dos, shift, scale, num_moments)
+     class(recursion), intent(inout) :: this
+     ! Arguments
+     complex(rp), dimension(:), intent(in) :: mu_n     ! Chebyshev moments
+     real(rp), dimension(:), intent(out) :: dos     ! Density of States 
+     real(rp), intent(in) :: shift, scale           ! Shift and scale factors
+     integer, intent(in) :: num_moments ! Number of points and moments
+     
+     ! Local variables
+     integer :: i, n
+     real(rp) :: x, sqrt_term, Tn_minus_1, Tn, Tn_plus_1
+     real(rp), allocatable :: mu_n_scaled(:)
+     
+     ! Initialize DOS array
+     dos = 0.0_rp
+     
+     ! Scale and normalize the Chebyshev moments
+     allocate(mu_n_scaled(num_moments))
+     
+     mu_n_scaled(:) = real(mu_n(:))
+     do n = 2, num_moments
+       mu_n_scaled(n) = real(2.0_rp * mu_n(n))
+     end do
+     ! Evaluate DOS at each frequency
+     do i = 1, this%en%channels_ldos + 10
+       x = (this%en%ene(i) - shift) / scale
+       sqrt_term = sqrt(scale**2 - (this%en%ene(i) - shift)**2)
+     
+       if (sqrt_term > 0.0_rp) then
+         ! Initialize Chebyshev recurrence
+         Tn_minus_1 = 1.0_rp     ! T_0(x) = 1
+         Tn = x                  ! T_1(x) = x
+         dos(i) = mu_n_scaled(1) * Tn_minus_1 + mu_n_scaled(2) * Tn
+   
+         ! Chebyshev recurrence relation for higher orders
+         do n = 3, num_moments
+           Tn_plus_1 = 2.0_rp * x * Tn - Tn_minus_1
+           dos(i) = dos(i) + mu_n_scaled(n) * Tn_plus_1
+           Tn_minus_1 = Tn
+           Tn = Tn_plus_1
+         end do
+   
+         ! Apply the normalization
+         dos(i) = dos(i) / (sqrt_term * pi)
+       else
+         dos(i) = 0.0_rp  ! Avoid division by zero for invalid points
+       end if
+     end do
+   end subroutine
+
+   subroutine compute_moments(this, max_order, moments)
+     class(recursion), intent(inout) :: this
+     integer, intent(in) :: max_order
+     complex(rp), dimension(max_order), intent(out) :: moments
+     integer :: n, i
+     real(rp) :: restrace
+   
+     moments(:) = 0.0_rp
+     do n = 1, max_order
+       restrace = 0.0_rp
+       do i = 1, this%lattice%kk
+         restrace = restrace + trace(this%t_h(n, :, :, i, i))  ! Trace of diagonal block
+       end do
+       moments(n) = restrace / real(this%lattice%kk, rp)  ! Average over atoms
+     end do
+   end subroutine
+   
    subroutine evaluate_t_h(this, max_order)
        !*************************************************************************
        !> @brief Computes Chebyshev polynomials T_n(H) for a sparse Hamiltonian.
@@ -208,7 +277,11 @@ contains
        ! Local variables
        integer :: n, i, j, k, nr, ih, nnmap
        integer :: ijzero(0:this%lattice%kk, 0:this%lattice%kk), ijdum(0:this%lattice%kk, 0:this%lattice%kk)
-   
+       ! Temp
+       real(rp), dimension(max_order) :: kernel
+       complex(rp), dimension(max_order) :: moments, moments_g
+       real(rp), dimension(this%en%channels_ldos + 10) :: dos
+
        ! Initialize mappings and T matrices
        allocate(this%t_h(max_order, 18, 18, this%lattice%kk, this%lattice%kk))
    
@@ -235,7 +308,7 @@ contains
            ! Reset intermediate mapping
            ijdum(:, :) = 0
    
-           !$omp parallel do default(shared) private(i, j, k, nnmap) schedule(dynamic, 100)
+           !$omp parallel do default(shared) private(i, j, k, nnmap, nr, ih) schedule(dynamic, 100)
            ! Loop over all block pairs (i, j)
            do i = 1, this%lattice%kk
                nr = this%lattice%nn(i, 1)
@@ -273,6 +346,18 @@ contains
     
            ! Update mapping for the next level
            ijzero(:, :) = ijdum(:, :)
+       end do
+
+       call this%compute_moments(max_order, moments)     
+
+       call jackson_kernel(this%control%lld, kernel)
+   
+       moments_g(:) = moments(:)*kernel(:)   
+
+       call this%evaluate_chebyshev(moments_g, dos, 0.0_rp, 1.0_rp, max_order)
+
+       do i=1, this%en%channels_ldos + 10
+          write(1,*) this%en%ene(i), dos(i)
        end do
    end subroutine evaluate_t_h
 
