@@ -82,6 +82,7 @@ module calculation_mod
       procedure, private :: post_processing_paoflow2rs
       procedure, private :: post_processing_exchange
       procedure, private :: post_processing_exchange_p2rs
+      procedure, private :: post_processing_conductivity
       procedure :: process
       final :: destructor
    end type calculation
@@ -197,6 +198,8 @@ contains
          call this%post_processing_exchange()
       case ('exchange_p2rs')
          call this%post_processing_exchange_p2rs()
+      case ('conductivity')
+         call this%post_processing_conductivity()
       end select
    end subroutine
 
@@ -935,6 +938,128 @@ contains
          !  call exchange_obj%calculate_jijk()
       end if
    end subroutine
+
+
+   subroutine post_processing_conductivity(this)
+      class(calculation), intent(in) :: this
+
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(self), target :: self_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(exchange), target :: exchange_obj
+      real(rp), dimension(6) :: QSL
+      integer :: i
+
+      ! Constructing control object
+      control_obj = control(this%fname)
+
+      ! Constructing lattice object
+      lattice_obj = lattice(control_obj)
+
+      ! Running the pre-calculation
+      call g_timer%start('pre-processing')
+      select case (control_obj%calctype)
+      case ('B')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%structb(.true.)
+      case ('S')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_surf_full()
+         call lattice_obj%structb(.true.)
+      case ('I')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_surf_full()
+         call lattice_obj%newclu()
+         call lattice_obj%structb(.true.)
+      end select
+      ! Creating the symbolic_atom object
+      call lattice_obj%atomlist()
+
+      ! Initializing MPI lookup tables and info.
+      call get_mpi_variables(rank, lattice_obj%njij)
+
+      ! Constructing the charge object
+      charge_obj = charge(lattice_obj)
+
+      select case (control_obj%calctype)
+      case ('B')
+         call charge_obj%bulkmat()
+      case ('S')
+         call charge_obj%build_alelay
+         call charge_obj%surfmat
+      case ('I')
+         call charge_obj%impmad()
+      end select
+      call g_timer%stop('pre-processing')
+
+      ! Constructing mixing object
+      mix_obj = mix(lattice_obj, charge_obj)
+
+      ! Creating the energy object
+      energy_obj = energy(lattice_obj)
+      call energy_obj%e_mesh()
+
+      ! Creating hamiltonian object
+      hamiltonian_obj = hamiltonian(charge_obj)
+      select case (control_obj%calctype)
+      case ('B')
+         do i = 1, lattice_obj%nrec
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
+      case ('S')
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian for the surface
+      case ('I')
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
+         call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
+      end select
+
+      !call g_timer%start('building sparse hamiltonian')
+      !call hamiltonian_obj%block_to_sparse()
+      !call g_timer%stop('building sparse hamiltonian')
+
+      ! Creating recursion object
+      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+
+      call recursion_obj%evaluate_t_h(control_obj%lld)
+
+      ! Creating density of states object
+      dos_obj = dos(recursion_obj, energy_obj)
+
+      ! Creating Green function object
+      green_obj = green(dos_obj)
+
+      ! Creating bands object
+      bands_obj = bands(green_obj)
+
+      ! Creating the exchange object
+      exchange_obj = exchange(bands_obj)
+
+      ! Calculating the orthogonal parameters
+      do i = 1, lattice_obj%ntype
+         call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
+      end do
+   end subroutine
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -959,9 +1084,11 @@ contains
       if (post_processing /= 'none' &
           .and. post_processing /= 'paoflow2rs' &
           .and. post_processing /= 'exchange' &
-          .and. post_processing /= 'exchange_p2rs') then
+          .and. post_processing /= 'exchange_p2rs' &
+          .and. post_processing /= 'conductivity') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
-                             'calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''', __FILE__, __LINE__)
+                             'calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs'',' // &
+                              'conductivity', __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 
