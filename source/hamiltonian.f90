@@ -80,6 +80,8 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
       !> Velocity operators
       complex(rp), dimension(:, :, :, :), allocatable :: v_x, v_y, v_z
+      !> Sparse Real Space Hamiltonian
+      complex(rp), dimension(:, :), allocatable :: h_sparse
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -89,6 +91,7 @@ module hamiltonian_mod
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
       procedure :: build_realspace_velocity_operators
+      procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
       procedure :: chbar_nc
@@ -152,6 +155,7 @@ contains
       if (allocated(this%v_x)) call g_safe_alloc%deallocate('hamiltonian.v_x', this%v_x)
       if (allocated(this%v_y)) call g_safe_alloc%deallocate('hamiltonian.v_y', this%v_y)
       if (allocated(this%v_z)) call g_safe_alloc%deallocate('hamiltonian.v_z', this%v_z)
+      if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -170,6 +174,7 @@ contains
       if (allocated(this%v_x)) deallocate(this%v_x)
       if (allocated(this%v_y)) deallocate(this%v_y)
       if (allocated(this%v_z)) deallocate(this%v_z)
+      if (allocated(this%h_sparse)) deallocate(this%h_sparse)
 #endif
    end subroutine destructor
 
@@ -242,8 +247,8 @@ contains
       call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.v_x', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_y', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_z', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_y', this%v_y, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_z', this%v_z, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -304,6 +309,57 @@ contains
       this%orb_pol = .false.
    end subroutine restore_to_default
 
+   subroutine block_to_sparse(this)
+       !*************************************************************************
+       !> @brief Constructs the sparse Hamiltonian matrix for a real-space cluster.
+       !>
+       !> This subroutine loops through all cluster atoms and their neighbors to
+       !> assemble the sparse Hamiltonian matrix in a block-wise manner. The matrix
+       !> size is determined by the number of atoms in the cluster and their spd basis.
+       !>
+       !> @param[in] this       Hamiltonian type derived
+       !> @param[out] H_sparse  Sparse matrix structure to store the Hamiltonian.
+       !*************************************************************************
+       class(hamiltonian), intent(inout) :: this
+   
+       ! Local variables
+       integer :: kk, m, nr, i, j, i_start, j_start
+       integer :: neighbor  ! Neighbor atom index
+       real(rp), dimension(3) :: rij  ! Displacement vector (unused for now but available)
+  
+       if (allocated(this%h_sparse)) deallocate(this%h_sparse) 
+       allocate(this%h_sparse(this%lattice%kk*18,this%lattice%kk*18))
+
+       ! Loop over cluster atoms
+       do kk = 1, this%lattice%kk  ! Loop over all atoms in the cluster
+           ! Number of neighbors for the kk-th atom
+           nr = this%charge%lattice%nn(kk, 1)
+           ! Loop over neighbors (including onsite, m = 1)
+           do m = 1, nr
+               ! Compute block indices in the global matrix
+               i_start = 18 * (kk - 1) + 1
+               if (m == 1) then
+                   j_start = i_start  ! Onsite term: diagonal block
+               else
+                   neighbor = this%charge%lattice%nn(kk, m)  ! Neighbor atom index
+                   j_start = 18 * (neighbor - 1) + 1
+               end if
+               ! Add the block to the sparse matrix
+               if (neighbor .ne. 0) then
+                  this%h_sparse(i_start:i_start+17, j_start:j_start+17) = 0.0d0
+                  do i = 1, 18
+                      do j = 1, 18
+                         this%h_sparse(i_start + i - 1, j_start + j - 1) = this%h_sparse(i_start + i - 1, j_start + j - 1) &
+                                                                           + this%ee(i, j, m, 1)
+                      end do
+                  end do
+               end if
+           end do
+       end do
+       ! Placeholder: Incorporate atom type and neighbor type logic in future if required.
+   end subroutine block_to_sparse
+
+
    !**************************************************************************
    !> @brief Build real-space velocity operators.
    !>
@@ -356,10 +412,10 @@ contains
             this%v_x(:, :, m, ntype) = i_unit * rij(1) * this%ee(:, :, m, ntype)  ! x-component
             this%v_y(:, :, m, ntype) = i_unit * rij(2) * this%ee(:, :, m, ntype)  ! y-component
             this%v_z(:, :, m, ntype) = i_unit * rij(3) * this%ee(:, :, m, ntype)  ! z-component
-            write(228, *) 'm=', m, 'ntype= ', ntype
-            write(228, '(18f10.6)') real(this%v_x(:, :, m, ntype))
-            write(229, *) 'm=', m, 'ntype= ', ntype
-            write(229, '(18f10.6)') aimag(this%v_x(:, :, m, ntype))
+            !write(228, *) 'm=', m, 'ntype= ', ntype
+            !write(228, '(18f10.6)') real(this%v_x(:, :, m, ntype))
+            !write(229, *) 'm=', m, 'ntype= ', ntype
+            !write(229, '(18f10.6)') aimag(this%v_x(:, :, m, ntype))
          end do
       end do
    end subroutine build_realspace_velocity_operators
