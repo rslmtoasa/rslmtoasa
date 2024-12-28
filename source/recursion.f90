@@ -68,6 +68,7 @@ module recursion_mod
       complex(rp), dimension(:, :, :), allocatable :: psi0, psi1, psi2
       !> Chebyshev moments
       complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
+      complex(rp), dimension(:, :, :, :), allocatable :: mu_mn_stochastic
       complex(rp), dimension(18, 18) :: cheb_mom_temp
       !> Variable to save H|psi>
       complex(rp), dimension(:, :), allocatable :: v
@@ -95,11 +96,12 @@ module recursion_mod
       procedure :: chebyshev_recur_ij
       procedure :: chebyshev_recur_ll
       procedure :: chebyshev_recur_ll_hoh
-      procedure :: chebyshev_recur_s_ll
+      !procedure :: chebyshev_recur_s_ll obsolete
       procedure :: chebyshev_recur
-      procedure :: chebyshev_recur_full
+      !procedure :: chebyshev_recur_full obsolete 
       procedure :: evaluate_t_h
       procedure :: restore_to_default
+      procedure :: compute_moments_stochastic
       procedure :: compute_moments ! temporary for test purposes
       procedure :: evaluate_chebyshev ! temporary for test purposes
       final :: destructor
@@ -165,6 +167,7 @@ contains
       if (allocated(this%b2temp_b)) call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
       if (allocated(this%pmn_b)) call g_safe_alloc%deallocate('recursion.pmn_b', this%pmn_b)
       if (allocated(this%t_h)) call g_safe_alloc%deallocate('recursion.t_h', this%t_h)
+      if (allocated(this%mu_mn_stochastic)) call g_safe_alloc%deallocate('recursion.mu_mn_stochastic', this%mu_mn_stochastic)
 #else
       if (allocated(this%a)) deallocate (this%a)
       if (allocated(this%b2)) deallocate (this%b2)
@@ -191,8 +194,91 @@ contains
       if (allocated(this%b2temp_b)) deallocate (this%b2temp_b)
       if (allocated(this%pmn_b)) deallocate (this%pmn_b)
       if (allocated(this%t_h)) deallocate(this%t_h)
+      if (allocated(this%mu_mn_stochastic)) deallocate(this%mu_mn_stochastic)
 #endif
    end subroutine destructor
+
+   subroutine compute_moments_stochastic(this)
+      class(recursion), intent(inout) :: this
+      ! Local variables
+      integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, random_vec
+      complex(rp), dimension(18, 18) :: dum, dum1, dum2
+      complex(rp), dimension(:, :, :), allocatable :: psiref
+      complex(rp), dimension(:, :, :, :), allocatable :: stoch_temp
+      real(rp) :: a, b, norm
+      real(rp), allocatable :: real_part(:,:), imag_part(:,:) 
+
+      hblocksize = 18
+      nat = this%lattice%kk
+
+      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      b = (this%en%energy_max + this%en%energy_min)/2
+
+      allocate(real_part(hblocksize, hblocksize), imag_part(hblocksize, hblocksize))
+      allocate(psiref(hblocksize, hblocksize, this%lattice%kk), stoch_temp(hblocksize, hblocksize, (this%control%lld*2) + 2, (this%control%lld*2) + 2))
+
+      stoch_temp(:, :, :, :) = (0.0d0, 0.0d0)
+
+      do random_vec = 1, this%control%random_vec_num
+         call g_logger%info('Stochastic evaluation of trace for random vector '//int2str(random_vec), __FILE__, __LINE__)
+
+
+         this%mu_mn_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
+
+         this%izero(:) = 0
+         this%izero(:) = 1
+         ! Initializing wave functions
+         this%psi0(:, :, :) = (0.0d0, 0.0d0)
+         this%psi1(:, :, :) = (0.0d0, 0.0d0)
+         this%psi2(:, :, :) = (0.0d0, 0.0d0)
+
+         ! Initialize random vector
+         do k = 1, this%lattice%kk
+            ! Generate random real and imaginary parts
+            call random_number(real_part)
+            call random_number(imag_part)
+            
+            ! Combine into complex random matrix
+            this%psi0(:, :, k) = exp(2.0_rp * pi * i_unit * (real_part(:, :) + i_unit * imag_part(:, :)))
+         end do
+
+         ! Normalize the full matrix 
+         this%psi0(:, :, :) = this%psi0(:, :, :) / sqrt(real(this%lattice%kk))
+
+         ! Write the 0th moment
+         !call g_timer%start('<PSI_0|PSI_0>')
+         !call this%cheb_0th_mom(this%psi0)
+         !this%mu_n_stochastic(:, :, 1) = (this%cheb_mom_temp(:, :))
+         !call g_timer%stop('<PSI_0|PSI_0>')
+
+         !call g_timer%start('<PSI_0|PSI_1>')
+         !if (this%hamiltonian%hoh) then
+         !   call this%cheb_1st_mom_hoh(this%psi0, a, b)
+         !else
+         !   call this%cheb_1st_mom(this%psi0, a, b)
+         !end if
+         !this%mu_n_stochastic(:, :, 2) = (this%cheb_mom_temp(:, :))
+         !call g_timer%stop('<PSI_0|PSI_1>')
+
+         !this%izero(:) = this%idum(:)
+         ! Start the recursion
+         !do ll = 1, this%lattice%control%lld
+         !   call g_timer%start('<PSI_0|PSI_n>')
+         !   !if (this%hamiltonian%hoh) then
+         !   !   call this%chebyshev_recur_ll_hoh(i_loc, ll, a, b)
+         !   !else
+         !      call this%chebyshev_recur_ll(1, ll, a, b)
+         !   !end if
+         !   call g_timer%stop('<PSI_0|PSI_n>')
+         !end do ! End loop in the recursion steps
+         !stoch_temp(:, :, :) = stoch_temp(:, :, :) + this%mu_n_stochastic(:, :, :)
+      end do
+      !this%mu_n_stochastic(:, :, :) = stoch_temp(:, :, :) / real(this%control%random_vec_num)
+      
+      deallocate(real_part, imag_part, psiref, stoch_temp)
+
+   end subroutine compute_moments_stochastic
+
 
    subroutine evaluate_chebyshev(this, mu_n, dos, shift, scale, num_moments)
      class(recursion), intent(inout) :: this
@@ -1542,6 +1628,9 @@ contains
 
       this%mu_n(:, :, 2*ll + 1, i) = 2.0_rp*dum1(:, :) - this%mu_n(:, :, 1, i)
       this%mu_n(:, :, 2*ll + 2, i) = 2.0_rp*dum2(:, :) - this%mu_n(:, :, 2, i)
+      ! Testing
+      !this%mu_n_stochastic(:, :, 2*ll + 1) = (2.0_rp*dum1(:, :) - this%mu_n_stochastic(:, :, 1))
+      !this%mu_n_stochastic(:, :, 2*ll + 2) = (2.0_rp*dum2(:, :) - this%mu_n_stochastic(:, :, 2))
 
       if (sum(real(this%mu_n(:, :, 2*ll + 2, i))) > 1000.d0) then
          call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
@@ -2484,6 +2573,8 @@ contains
       call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
+      call g_safe_alloc%allocate('recursion.mu_mn_stochastic', this%mu_mn_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
+                                                                                       (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2/)
 #else
       allocate (this%a(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &18, this%lattice%nrec, 3))
@@ -2516,6 +2607,7 @@ contains
       allocate (this%atemp_b(18, 18, this%control%lld))
       allocate (this%b2temp_b(18, 18, this%control%lld))
       allocate (this%pmn_b(18, 18, this%lattice%kk))
+      allocate (this%mu_mn_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2))
 #endif
       this%v(:, :) = 0.0d0
       this%psi(:, :) = 0.0d0
@@ -2543,6 +2635,7 @@ contains
       this%b2temp_b(:, :, :) = 0.0d0
       this%pmn_b(:, :, :) = 0.0d0
       this%cheb_mom_temp(:, :) = 0.0d0
+      this%mu_mn_stochastic(:, :, :, :) = 0.0d0
       if (present(full)) then
          if (full) then
             if (associated(this%hamiltonian)) call this%hamiltonian%restore_to_default()

@@ -47,7 +47,8 @@ module control_mod
       !> Use \ref nlim \f$= 0\f$ (zero) forbulk and surface.
       integer :: nlim
       integer :: npold
-
+      !> Number of random vectors to be used in the stochastic evaluation of traces for the Chebyshev momennts
+      integer :: random_vec_num
       !> Set calculation collinearity and relativistic type
       !>
       !> Set calculation collinearity and relativistic type
@@ -258,6 +259,7 @@ contains
       ruban = this%ruban
       do_comom = this%do_comom
       recur = this%recur
+      random_vec_num = this%random_vec_num
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -292,6 +294,8 @@ contains
       this%ruban = ruban
       this%do_comom = do_comom
       this%recur = recur
+      this%random_vec_num = random_vec_num
+
       ! end default
 
       ! Mandatory statements
@@ -344,6 +348,7 @@ contains
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
+      this%random_vec_num = 5
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

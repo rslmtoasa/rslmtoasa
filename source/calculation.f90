@@ -987,7 +987,7 @@ contains
       call lattice_obj%atomlist()
 
       ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%njij)
+      call get_mpi_variables(rank, lattice_obj%nrec)
 
       ! Constructing the charge object
       charge_obj = charge(lattice_obj)
@@ -1041,17 +1041,19 @@ contains
       ! Creating recursion object
       recursion_obj = recursion(hamiltonian_obj, energy_obj)
 
-      call recursion_obj%evaluate_t_h(control_obj%lld)
+      call recursion_obj%compute_moments_stochastic()
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
 
       ! Creating Green function object
       green_obj = green(dos_obj)
+      call green_obj%chebyshev_green()
 
       ! Creating bands object
       bands_obj = bands(green_obj)
-
+   
+      call bands_obj%calculate_fermi()
       ! Creating the exchange object
       exchange_obj = exchange(bands_obj)
 

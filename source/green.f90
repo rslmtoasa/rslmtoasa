@@ -1073,7 +1073,7 @@ contains
          this%recursion%mu_ng(:, :, 2:size(kernel), n) = this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
 
          !do i=1, size(kernel)
-         !  write(400+n, *) i, sum(this%recursion%mu_n(n, i, 1:18, 1:18))
+         !  write(400+n, *) i, sum(this%recursion%mu_ng(1:18, 1:18, i, n)), sum(this%recursion%mu_n(1:18, 1:18, i, n))
          !end do
 
          ! Calculate the Chebyshev polynomials
