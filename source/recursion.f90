@@ -68,8 +68,10 @@ module recursion_mod
       complex(rp), dimension(:, :, :), allocatable :: psi0, psi1, psi2
       !> Chebyshev moments
       complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
-      complex(rp), dimension(:, :, :, :), allocatable :: mu_mn_stochastic
+      complex(rp), dimension(:, :, :, :), allocatable :: mu_nm_stochastic
       complex(rp), dimension(18, 18) :: cheb_mom_temp
+      !> Pre factor Gamma_nm for the conductivity tensor calculation
+      complex(rp), dimension(:, :, :), allocatable :: gamma_nm
       !> Variable to save H|psi>
       complex(rp), dimension(:, :), allocatable :: v
       !> Variable to save T(H)
@@ -100,10 +102,11 @@ module recursion_mod
       procedure :: chebyshev_recur
       !procedure :: chebyshev_recur_full obsolete 
       procedure :: evaluate_t_h
-      procedure :: restore_to_default
       procedure :: compute_moments_stochastic
       procedure :: compute_moments ! temporary for test purposes
       procedure :: evaluate_chebyshev ! temporary for test purposes
+      procedure :: calculate_gamma_nm
+      procedure :: restore_to_default
       final :: destructor
    end type recursion
 
@@ -167,7 +170,8 @@ contains
       if (allocated(this%b2temp_b)) call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
       if (allocated(this%pmn_b)) call g_safe_alloc%deallocate('recursion.pmn_b', this%pmn_b)
       if (allocated(this%t_h)) call g_safe_alloc%deallocate('recursion.t_h', this%t_h)
-      if (allocated(this%mu_mn_stochastic)) call g_safe_alloc%deallocate('recursion.mu_mn_stochastic', this%mu_mn_stochastic)
+      if (allocated(this%mu_nm_stochastic)) call g_safe_alloc%deallocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic)
+      if (allocated(this%gamma_nm)) call g_safe_alloc%deallocate('recursion.gamma_nm', this%gamma_nm)
 #else
       if (allocated(this%a)) deallocate (this%a)
       if (allocated(this%b2)) deallocate (this%b2)
@@ -194,9 +198,77 @@ contains
       if (allocated(this%b2temp_b)) deallocate (this%b2temp_b)
       if (allocated(this%pmn_b)) deallocate (this%pmn_b)
       if (allocated(this%t_h)) deallocate(this%t_h)
-      if (allocated(this%mu_mn_stochastic)) deallocate(this%mu_mn_stochastic)
+      if (allocated(this%mu_nm_stochastic)) deallocate(this%mu_nm_stochastic)
+      if (allocated(this%gamma_nm)) deallocate(this%gamma_nm)
 #endif
    end subroutine destructor
+
+   !*************************************************************************
+   !> @brief Computes the Gamma_nm function for the Chebyshev polynomial expansion.
+   !>
+   !> This subroutine calculates the Gamma_nm function used in the conductivity
+   !> formula. The function incorporates the Jackson kernel for smoothing and uses
+   !> Chebyshev polynomials up to the specified maximum order. It also incorporates
+   !> the (1 - energy**2)**2, Eq. (4) -> PRL 114, 116602 (2015).
+   !>
+   !> @param[out] gamma_nm      Gamma_nm array (dimension: energy_grid, recursion_level, recursion_level).
+   !*************************************************************************
+   subroutine calculate_gamma_nm(this)
+      implicit none
+      class(recursion), intent(inout) :: this
+
+      ! Local variables
+      integer :: num_points, n, m
+      real(rp) :: a, b 
+      real(rp), dimension(:), allocatable :: g_kernel(:)       ! Jackson kernel
+      real(rp), dimension(:), allocatable :: weights(:)        ! Weight factors
+      real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
+      real(rp), dimension(:,:), allocatable :: chebyshev_poly
+      complex(rp), dimension(:,:), allocatable :: cn, cm
+
+      ! Initialize variables
+      allocate(acos_x(this%en%channels_ldos + 10), sqrt_term(this%en%channels_ldos + 10), wscale(this%en%channels_ldos + 10))
+      allocate(chebyshev_poly(this%en%channels_ldos + 10, this%control%lld*2 + 2))
+      allocate(cn(this%en%channels_ldos + 10, this%control%lld*2 + 2), cm(this%en%channels_ldos + 10, this%control%lld*2 + 2))
+      allocate(g_kernel(this%control%lld*2 + 2), weights(this%control%lld*2 + 2))
+
+      ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
+      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      b = (this%en%energy_max + this%en%energy_min)/2
+         
+      wscale(:) = (this%en%ene(:) - b)/a
+
+      acos_x(:) = acos(wscale(:))
+      sqrt_term(:) = sqrt(1.0_rp - wscale(:)**2)
+      ! Calculating the Jackson Kernel
+      call jackson_kernel((this%control%lld)*2 + 2, g_kernel)
+      ! Compute Cn and Cm
+      do n = 1, this%control%lld*2 + 2
+         cn(:, n) = (wscale(:) - i_unit * real(n, rp) * sqrt_term(:)) * exp(i_unit * real(n, rp) * acos_x(:))
+         cm(:, n) = (wscale(:) + i_unit * real(n, rp) * sqrt_term(:)) * exp(-i_unit * real(n, rp) * acos_x(:))
+      end do
+      chebyshev_poly(:, 1) = 1.0_rp
+      chebyshev_poly(:, 2) = wscale(:)
+      do n = 3, this%control%lld*2 + 2
+         chebyshev_poly(:, n) = 2.0_rp * wscale(:) * chebyshev_poly(:, n - 1) - chebyshev_poly(:, n - 2)
+      end do
+
+      ! Initialize Gamma_nm
+      this%gamma_nm(:, :, :) = 0.0_rp
+
+      ! Compute Gamma_nm
+      do n = 1, this%control%lld*2 + 2
+         do m = 1, this%control%lld*2 + 2
+            this%gamma_nm(:, n, m) = (cn(:, n) * chebyshev_poly(:, m) + cm(:, m) * chebyshev_poly(:, n)) * &
+                                      g_kernel(n) * g_kernel(m) * weights(n) * weights(m) / (1.0_rp - wscale(:)**2)**2
+         end do
+      end do
+
+      ! Clean up
+      deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
+
+   end subroutine calculate_gamma_nm
+
 
    subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
@@ -223,7 +295,7 @@ contains
          call g_logger%info('Stochastic evaluation of trace for random vector '//int2str(random_vec), __FILE__, __LINE__)
 
 
-         this%mu_mn_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
+         this%mu_nm_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
 
          this%izero(:) = 0
          this%izero(:) = 1
@@ -2573,8 +2645,10 @@ contains
       call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
-      call g_safe_alloc%allocate('recursion.mu_mn_stochastic', this%mu_mn_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
+      call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
                                                                                        (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2/)
+      call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%gamma_nm, (/this%en%channels_ldos + 10, &
+                                                                               (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2/)
 #else
       allocate (this%a(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &18, this%lattice%nrec, 3))
@@ -2607,7 +2681,8 @@ contains
       allocate (this%atemp_b(18, 18, this%control%lld))
       allocate (this%b2temp_b(18, 18, this%control%lld))
       allocate (this%pmn_b(18, 18, this%lattice%kk))
-      allocate (this%mu_mn_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2))
+      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2))
+      allocate (this%gamma_nm(this%en%channels_ldos + 10, (2*this%lattice%control%lld) + 2, (2*this%lattice%control%lld) + 2))
 #endif
       this%v(:, :) = 0.0d0
       this%psi(:, :) = 0.0d0
@@ -2635,7 +2710,7 @@ contains
       this%b2temp_b(:, :, :) = 0.0d0
       this%pmn_b(:, :, :) = 0.0d0
       this%cheb_mom_temp(:, :) = 0.0d0
-      this%mu_mn_stochastic(:, :, :, :) = 0.0d0
+      this%mu_nm_stochastic(:, :, :, :) = 0.0d0
       if (present(full)) then
          if (full) then
             if (associated(this%hamiltonian)) call this%hamiltonian%restore_to_default()

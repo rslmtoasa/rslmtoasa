@@ -1042,6 +1042,7 @@ contains
       recursion_obj = recursion(hamiltonian_obj, energy_obj)
 
       call recursion_obj%compute_moments_stochastic()
+      call recursion_obj%calculate_gamma_nm()
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
