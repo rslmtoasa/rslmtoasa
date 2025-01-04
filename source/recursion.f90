@@ -367,14 +367,12 @@ contains
       real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
       real(rp), dimension(:, :), allocatable :: chebyshev_poly
       complex(rp), dimension(:, :), allocatable :: cn, cm
-      complex(rp), dimension(:, :, :), allocatable :: integrand
 
       ! Initialize variables
       allocate(acos_x(this%en%channels_ldos + 10), sqrt_term(this%en%channels_ldos + 10), wscale(this%en%channels_ldos + 10))
       allocate(chebyshev_poly(this%en%channels_ldos + 10, this%control%lld))
       allocate(cn(this%en%channels_ldos + 10, this%control%lld), cm(this%en%channels_ldos + 10, this%control%lld))
       allocate(g_kernel(this%control%lld), weights(this%control%lld))
-      allocate(integrand(18, 18, this%en%channels_ldos + 10))
 
       ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
@@ -414,17 +412,6 @@ contains
             this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) / ((1.0_rp - wscale(:)**2)**2)
             this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) * g_kernel(n) * g_kernel(m) * weights(n) * weights(m) 
          end do
-      end do
-
-      integrand(:, :, :) = 0.0d0
-
-      do i = 1, this%en%channels_ldos + 10
-         do n=1, this%control%lld
-            do m=1, this%control%lld
-               integrand(:, :, i) = integrand(:, :, i) + this%gamma_nm(i, n, m) * this%mu_nm_stochastic(:, :, n, m) 
-            end do
-         end do
-         write(2,*) wscale(i), trace(integrand(:, :, i))
       end do
 
       ! Clean up

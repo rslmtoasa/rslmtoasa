@@ -95,6 +95,7 @@ module bands_mod
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
       procedure :: calculate_angles
+      procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -1171,5 +1172,48 @@ contains
       close(10)
       close(20)
    end subroutine calculate_angles
+
+   subroutine calculate_conductivity_tensor(this)
+      implicit none
+      ! Input
+      class(bands), intent(inout) :: this
+      ! Local variables
+      integer :: i, m, n, l1, l2
+      complex(rp), dimension(:,:,:), allocatable :: integrand
+      real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im
+
+      allocate(integrand(18, 18, this%en%channels_ldos + 10))
+      allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
+
+      integrand(:, :, :) = (0.0d0, 0.0d0)
+
+      ! Calculate the integrand for each energy grid point
+      do i = 1, this%en%channels_ldos + 10
+         do n = 1, this%control%lld
+            do m = 1, this%control%lld
+               do l1 = 1, 18
+                  do l2 = 1, 18
+                     integrand(l1, l2, i) = integrand(l1, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l1, l2, n, m)
+                  end do
+               end do
+            end do
+         end do
+      end do
+ 
+      integrand_tot_real(:) = 0.0d0
+      integrand_tot_im(:) = 0.0d0
+
+      do l1 = 1, 18
+         do l2 = 1, 18
+            integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l1, l2, :))
+            integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l1, l2, :)) 
+         end do
+      end do
+   
+      do i = 1, this%en%channels_ldos + 10
+         write(2,*) this%en%ene(i), integrand_tot_real(i), integrand_tot_im(i), trace(integrand(:,:,i)) 
+      end do 
+
+   end subroutine calculate_conductivity_tensor
 
 end module bands_mod

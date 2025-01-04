@@ -1052,6 +1052,7 @@ contains
       ! Creating bands object
       bands_obj = bands(green_obj)
    
+      call bands_obj%calculate_conductivity_tensor()
       call bands_obj%calculate_fermi()
       ! Creating the exchange object
       exchange_obj = exchange(bands_obj)
