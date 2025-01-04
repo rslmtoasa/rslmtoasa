@@ -1034,13 +1034,11 @@ contains
          call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
       end select
 
-      !call g_timer%start('building sparse hamiltonian')
-      !call hamiltonian_obj%block_to_sparse()
-      !call g_timer%stop('building sparse hamiltonian')
+      call hamiltonian_obj%build_realspace_velocity_operators()
 
       ! Creating recursion object
       recursion_obj = recursion(hamiltonian_obj, energy_obj)
-
+      
       call recursion_obj%compute_moments_stochastic()
       call recursion_obj%calculate_gamma_nm()
 

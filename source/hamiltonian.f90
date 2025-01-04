@@ -412,10 +412,10 @@ contains
             this%v_x(:, :, m, ntype) = i_unit * rij(1) * this%ee(:, :, m, ntype)  ! x-component
             this%v_y(:, :, m, ntype) = i_unit * rij(2) * this%ee(:, :, m, ntype)  ! y-component
             this%v_z(:, :, m, ntype) = i_unit * rij(3) * this%ee(:, :, m, ntype)  ! z-component
-            !write(228, *) 'm=', m, 'ntype= ', ntype
-            !write(228, '(18f10.6)') real(this%v_x(:, :, m, ntype))
-            !write(229, *) 'm=', m, 'ntype= ', ntype
-            !write(229, '(18f10.6)') aimag(this%v_x(:, :, m, ntype))
+            write(228, *) 'm=', m, 'ntype= ', ntype
+            write(228, '(18f10.6)') real(this%v_z(:, :, m, ntype))
+            write(229, *) 'm=', m, 'ntype= ', ntype
+            write(229, '(18f10.6)') aimag(this%v_z(:, :, m, ntype))
          end do
       end do
    end subroutine build_realspace_velocity_operators
