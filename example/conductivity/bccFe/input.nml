@@ -19,14 +19,15 @@ nstep = 100
 &energy
 fermi = -0.069282
 energy_min = -1.0
-energy_max = 0.5
+energy_max = 1.2
 channels_ldos = 2500
 /
 &control
 calctype = 'B'
 nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
-lld = 200
+lld = 20  
 recur = 'block'
+random_vec_num = 1
 /
 &mix
 beta = 0.1

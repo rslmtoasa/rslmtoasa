@@ -424,7 +424,7 @@ contains
                integrand(:, :, i) = integrand(:, :, i) + this%gamma_nm(i, n, m) * this%mu_nm_stochastic(:, :, n, m) 
             end do
          end do
-         write(2,*) wscale(i), real(integrand(1, 1, i)), real(integrand(18, 18, i))
+         write(2,*) wscale(i), trace(integrand(:, :, i))
       end do
 
       ! Clean up
@@ -490,22 +490,22 @@ contains
                this%psi0(:, :, :) = this%psi1(:, :, :)
                call this%ham_vec_matmul(a, b, this%psi0, this%psi1)
             else if (n > 2) then
-               call this%ham_vec_matmul(a, b, this%psi0, this%psi1)
-               this%psi2(:, :, :) = 2 * this%psi1(:, :, :) - this%psi0(:, :, :) 
+               call this%ham_vec_matmul(a, b, this%psi1, this%psi2)
+               this%psi2(:, :, :) = 2 * this%psi2(:, :, :) - this%psi0(:, :, :)
                this%psi0(:, :, :) = this%psi1(:, :, :)
-               this%psi1(:, :, :) = this%psi2(:, :, :)              
+               this%psi1(:, :, :) = this%psi2(:, :, :)
             end if
             ! Multiply with the velocity operator v_a
             call this%velo_vec_matmul(this%hamiltonian%v_x, this%psi1, w0)
             do m=1, this%control%lld
                if (m == 1) then
-                  w1(:, :, :) = w0(:, :, :) 
+                  w1(:, :, :) = this%psi0(:, :, :) !w0(:, :, :) 
                else if (m == 2) then
                   w0(:, :, :) = w1(:, :, :)
-                  call this%ham_vec_matmul(a, b, w0, w1) 
-               else if (m > 2) then
                   call this%ham_vec_matmul(a, b, w0, w1)
-                  w2(:, :, :) = 2 * w1(:, :, :) - w0(:, :, :)
+               else if (m > 2) then
+                  call this%ham_vec_matmul(a, b, w1, w2)
+                  w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
                   w0(:, :, :) = w1(:, :, :)
                   w1(:, :, :) = w2(:, :, :)
                end if
@@ -513,9 +513,10 @@ contains
                call this%velo_vec_matmul(this%hamiltonian%v_x, w1, psifinal)
                dum(:, :) = (0.0d0, 0.0d0)
                do k=1, this%lattice%kk
-                  call zgemm('c', 'n', 18, 18, 18, cone, psiref(:, :, k), 18, psifinal(:, :, k), 18, cone, dum(:, :), 18) 
+                  call zgemm('c', 'n', 18, 18, 18, cone, psiref(:, :, k), 18, psifinal(:, :, k), 18, cone, dum(:, :), 18)
                end do
-               this%mu_nm_stochastic(:, :, n, m) = this%mu_nm_stochastic(:, :, n, m) + dum(:, :)    
+               write(*,*) m
+               this%mu_nm_stochastic(:, :, n, m) = this%mu_nm_stochastic(:, :, n, m) + dum(:, :)
             end do
          end do
       end do
