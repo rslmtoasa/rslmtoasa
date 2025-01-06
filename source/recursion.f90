@@ -428,7 +428,7 @@ contains
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, psifinal
       complex(rp), dimension(:, :, :, :), allocatable :: stoch_temp
       real(rp) :: a, b, norm
-      real(rp), allocatable :: real_part(:,:), imag_part(:,:) 
+      real(rp) :: rng
 
       hblocksize = 18
       nat = this%lattice%kk
@@ -436,16 +436,12 @@ contains
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
-      allocate(real_part(hblocksize, hblocksize), imag_part(hblocksize, hblocksize))
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), stoch_temp(hblocksize, hblocksize, this%control%lld, this%control%lld))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), psifinal(hblocksize, hblocksize, this%lattice%kk))
       allocate(w2(hblocksize, hblocksize, this%lattice%kk))
 
       do random_vec = 1, this%control%random_vec_num
          call g_logger%info('Stochastic evaluation of trace for random vector '//int2str(random_vec), __FILE__, __LINE__)
-
-
-         this%mu_nm_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
 
          this%izero(:) = 1
          ! Initializing wave functions
@@ -461,13 +457,19 @@ contains
          ! Initialize random vector
          do k = 1, this%lattice%kk
             ! Generate random real and imaginary parts
-            call random_number(real_part)
-            call random_number(imag_part)
+            call random_number(rng)
             ! Combine into complex random matrix
-            this%psi0(:, :, k) = exp(2.0_rp * pi * i_unit * (real_part(:, :) + i_unit * imag_part(:, :)))
+            do m = 1, 18
+               this%psi0(m, m, k) = exp(2.0_rp * pi * i_unit * (rng))
+            end do
          end do
-         ! Normalize the full matrix 
-         !this%psi0(:, :, :) = this%psi0(:, :, :) / sqrt(real(this%lattice%kk))
+
+         this%psi0(:, :, :) = this%psi0(:, :, :) / sqrt(real(this%lattice%kk))
+
+         do k=1, this%lattice%kk
+            call zgemm('c', 'n', 18, 18, 18, cone, this%psi0(:, :, k), 18, this%psi0(:, :, k), 18, cone, dum(:, :), 18)
+         end do
+
          psiref(:, :, :) = this%psi0(:, :, :)
 
          do n=1, this%control%lld
@@ -486,7 +488,7 @@ contains
             call this%velo_vec_matmul(this%hamiltonian%v_x, this%psi1, w0)
             do m=1, this%control%lld
                if (m == 1) then
-                  w1(:, :, :) = this%psi0(:, :, :) !w0(:, :, :) 
+                  w1(:, :, :) = w0(:, :, :) 
                else if (m == 2) then
                   w0(:, :, :) = w1(:, :, :)
                   call this%ham_vec_matmul(a, b, w0, w1)
@@ -502,15 +504,15 @@ contains
                do k=1, this%lattice%kk
                   call zgemm('c', 'n', 18, 18, 18, cone, psiref(:, :, k), 18, psifinal(:, :, k), 18, cone, dum(:, :), 18)
                end do
-               write(*,*) m
+               write(*,*) n, m
                this%mu_nm_stochastic(:, :, n, m) = this%mu_nm_stochastic(:, :, n, m) + dum(:, :)
             end do
          end do
       end do
 
-      this%mu_nm_stochastic(:, :, n, m) = this%mu_nm_stochastic(:, :, n, m) / real(this%control%random_vec_num)      
+      this%mu_nm_stochastic(:, :, :, :) = this%mu_nm_stochastic(:, :, :, :) / real(this%control%random_vec_num)      
  
-      deallocate(real_part, imag_part, psiref, stoch_temp, w0, w1, w2, psifinal)
+      deallocate(psiref, stoch_temp, w0, w1, w2, psifinal)
 
    end subroutine compute_moments_stochastic
 
