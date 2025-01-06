@@ -436,6 +436,8 @@ contains
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
+      this%mu_nm_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
+
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), stoch_temp(hblocksize, hblocksize, this%control%lld, this%control%lld))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), psifinal(hblocksize, hblocksize, this%lattice%kk))
       allocate(w2(hblocksize, hblocksize, this%lattice%kk))
