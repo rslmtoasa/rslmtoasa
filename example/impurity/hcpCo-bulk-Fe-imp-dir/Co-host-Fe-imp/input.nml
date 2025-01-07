@@ -7,7 +7,7 @@ verbose = T
 ndim = 50000
 rc = 60
 alat = 2.471999903202706
-crystal_sym = 'hcp'
+crystal_sym = 'file'
 wav = 1.3644350065222555
 nclu = 1
 inclu(1,:) = 0.5000000000000000, 0.2886751300000000, 0.4066691200000000
@@ -22,11 +22,11 @@ label(3) = 'Fe-imp'
 
 &self
 ws_all = .true.
-nstep = 100
+nstep = 1000
 /
 
 &energy
-fermi = -0.033157
+fermi = -0.034366
 energy_min = -1.0
 energy_max = 0.5
 channels_ldos = 2500
