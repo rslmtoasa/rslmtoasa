@@ -752,7 +752,6 @@ contains
          ! if (this%hamiltonian%hubbardU_impurity_check) then 
          !    call this%bands%build_hubbard_u_impurity() ! Build the hubbard potential matrix for the impurity
          ! end if
-         print *, 'Here again!!'
          !=========================================================================
          !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
          !=========================================================================
@@ -840,8 +839,8 @@ contains
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
 
-            if (this%hamiltonian%hubbardU_check .and. i == 1) then
-               call g_logger%info('LDA+U+J module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
+            if (this%hamiltonian%hubbard_u_general_check .and. i == 1) then
+               call g_logger%info('LDA+U module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
                niter = niter + 1
             else if (this%hamiltonian%hubbardU_sc_check) then
                print *, 'Calculates U_eff'

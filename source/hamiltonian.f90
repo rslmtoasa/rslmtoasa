@@ -321,6 +321,9 @@ contains
       call move_alloc(hubbard_j_general, this%hubbard_j_general)
 
       ! New check to see if Hubbard U correction should be initiated
+      ! This general check is the only check that is needed for the +U in bulk and impurity. 
+      ! It is not yet compatible with the +V implementation. Thus the other checks have not 
+      ! been removed yet.
       do na = 1, this%lattice%ntype
          do l = 1, 3
             if (abs(this%hubbard_u_general(na, l)) > 1e-8) then
@@ -328,6 +331,11 @@ contains
             end if
          end do
       end do
+      if ( this%hubbard_u_general_check ) then
+         print *, '----------------------------------------------------------------------------------------'
+         print *, 'Hubbard U correction initiated'
+         print *, '----------------------------------------------------------------------------------------'
+      end if
       
       
       ! Checks if Hubbard U correction for impurity should be initiated (check for j also??)
@@ -873,9 +881,9 @@ contains
       else
          print *, ''
          print *, ''
-         print *, '----------------------------------------------------------------------------------------'
-         print *, 'No Hubbard U+J data was given as input, proceeding without.'
-         print *, '----------------------------------------------------------------------------------------'
+         ! print *, '----------------------------------------------------------------------------------------'
+         ! print *, 'No Hubbard U+J data was given as input, proceeding without.'
+         ! print *, '----------------------------------------------------------------------------------------'
       end if      
       
       !> Converts the quantities from eV to Ry
@@ -1378,13 +1386,14 @@ contains
    subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji
+      integer :: it, ino, nr, nlim, m, i, j, ja, ji, iz
 
       call g_timer%start('build local hamiltonian')
     !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
       do nlim = 1, this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
+         iz = this%charge%lattice%iz(nlim) ! Atom type in the input.nml file
          call this%chbar_nc(nlim, nr, ino, nlim)
          do m = 1, nr
             do i = 1, 9
@@ -1421,8 +1430,8 @@ contains
          if (this%hubbard_u_general_check) then
             do i = 1, 9
                do j = 1, 9
-                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)
-                  this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_u_pot(i + 9, j + 9, ino)
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, iz)
+                  this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_u_pot(i + 9, j + 9, iz)
                end do
             end do
          end if

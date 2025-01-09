@@ -1758,7 +1758,7 @@ contains
       allocate (izpo(kk), izp(kk), no(kk), nnmax(kk), izimp(kk), noimp(kk))
       allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))
       ! Setting ct values for impurity
-      this%ct(:) = 4.0 !this%alat+0.1d0
+      this%ct(:) = 3.3 !this%alat+0.1d0
       ! Identify impurity atoms from ´inclu´
       do i = 1, kk
          izpo(i) = this%iz(i)
