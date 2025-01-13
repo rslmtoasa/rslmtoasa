@@ -56,7 +56,7 @@ module recursion_mod
       complex(rp), dimension(:, :, :, :), allocatable :: a_b, b2_b
       complex(rp), dimension(:, :, :), allocatable :: atemp_b, b2temp_b
       !> Atom list in hopping region
-      integer, dimension(:), allocatable :: izero, idum, irlist
+      integer, dimension(:), allocatable :: izero, idum, irlist, nzero, mzero, ndum, mdum
       integer :: irnum !< Atoms within recursion shells
       !> Atom list in hopping region as a function of recursion step
       integer, dimension(:, :), allocatable :: izeroll
@@ -174,6 +174,10 @@ contains
       if (allocated(this%t_h)) call g_safe_alloc%deallocate('recursion.t_h', this%t_h)
       if (allocated(this%mu_nm_stochastic)) call g_safe_alloc%deallocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic)
       if (allocated(this%gamma_nm)) call g_safe_alloc%deallocate('recursion.gamma_nm', this%gamma_nm)
+      if (allocated(this%nzero)) call g_safe_alloc%deallocate('recursion.nzero', this%nzero)
+      if (allocated(this%mzero)) call g_safe_alloc%deallocate('recursion.mzero', this%mzero)
+      if (allocated(this%ndum)) call g_safe_alloc%deallocate('recursion.ndum', this%ndum)
+      if (allocated(this%mdum)) call g_safe_alloc%deallocate('recursion.mdum', this%mdum)
 #else
       if (allocated(this%a)) deallocate (this%a)
       if (allocated(this%b2)) deallocate (this%b2)
@@ -202,13 +206,18 @@ contains
       if (allocated(this%t_h)) deallocate(this%t_h)
       if (allocated(this%mu_nm_stochastic)) deallocate(this%mu_nm_stochastic)
       if (allocated(this%gamma_nm)) deallocate(this%gamma_nm)
+      if (allocated(this%nzero)) deallocate (this%nzero)
+      if (allocated(this%mzero)) deallocate (this%mzero)
+      if (allocated(this%ndum)) deallocate (this%ndum)
+      if (allocated(this%mdum)) deallocate (this%mdum)
 #endif
    end subroutine destructor
 
-   subroutine velo_vec_matmul(this, v_op, psi_in, psi_out)
+   subroutine velo_vec_matmul(this, c_or_n, v_op, psi_in, psi_out)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :, :), intent(in) :: v_op
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
+      character :: c_or_n 
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
@@ -250,35 +259,31 @@ contains
       !end if ! End of local Hamiltonian loop
 
       ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap)
       do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         !this%idum(k) = this%izero(k)
+         this%idum(k) = this%izero(k)
          ih = this%lattice%iz(k)
          nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            !!!!! Probably useless because the onsite term is null. Here for consistency only
-            call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, 1, ih), 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18) 
-            !!!!! Probably useless because the onsite term is null. Here for consistency only
-         end if
+         !if (this%izero(k) /= 0) then
+         !   !!!!! Probably useless because the onsite term is null. Here for consistency only
+         !   call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, 1, ih), 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18) 
+         !   !!!!! Probably useless because the onsite term is null. Here for consistency only
+         !end if
          if (nr >= 2) then
             do nb = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, nb)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-                  !this%idum(k) = 1
+                  call zgemm(c_or_n, 'n', 18, 18, 18, cone, v_op(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+                  this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
          end if
-         ! Do the scaling and shifting here???? Trying it without.
-         !psi_out(:, :, k) = psi_out(:, :, k) - b*psi_in(:, :, k)
-         !psi_out(:, :, k) = psi_out(:, :, k)/a
       end do ! End loop in the clust
       !$omp end parallel do
    end subroutine velo_vec_matmul
 
-   subroutine ham_vec_matmul(this, a, b, psi_in, psi_out)
+   subroutine ham_vec_matmul(this, psi_in, psi_out)
       class(recursion), intent(inout) :: this
-      real(rp), intent(in) :: a, b
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       ! Local variables
@@ -294,7 +299,7 @@ contains
       if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
          !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
          do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            !this%idum(k) = this%izero(k)
+            this%idum(k) = this%izero(k)
             ih = this%lattice%iz(k)
             nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
             if (this%izero(k) /= 0) then
@@ -307,14 +312,11 @@ contains
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-                        !this%idum(k) = 1
+                        this%idum(k) = 1
                      end if
                   end if
                end do ! End of loop in the neighbouring
             end if
-            ! Do the scaling and shifting
-            psi_out(:, :, k) = psi_out(:, :, k) - b*psi_in(:, :, k)
-            psi_out(:, :, k) = psi_out(:, :, k)/a
          end do ! End of loop in the neighbouring
          !$omp end parallel do
       end if ! End of local Hamiltonian loop
@@ -322,7 +324,7 @@ contains
       ! Write H*|phi_1> for the bulk Hamiltonian
       !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
       do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         !this%idum(k) = this%izero(k)
+         this%idum(k) = this%izero(k)
          ih = this%lattice%iz(k)
          nr = this%lattice%nn(k, 1)
          if (this%izero(k) /= 0) then
@@ -334,13 +336,10 @@ contains
                nnmap = this%lattice%nn(k, nb)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-                  !this%idum(k) = 1
+                  this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
          end if
-         ! Do the scaling and shifting
-         psi_out(:, :, k) = psi_out(:, :, k) - b*psi_in(:, :, k)
-         psi_out(:, :, k) = psi_out(:, :, k)/a
       end do ! End loop in the clust
       !$omp end parallel do
    end subroutine ham_vec_matmul
@@ -425,8 +424,8 @@ contains
       ! Local variables
       integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, random_vec
       complex(rp), dimension(18, 18) :: dum, dum1, dum2
-      complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, psifinal
-      complex(rp), dimension(:, :, :, :), allocatable :: stoch_temp
+      complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
+      complex(rp), dimension(:, :, :, :), allocatable :: left_vec
       real(rp) :: a, b, norm
       real(rp) :: rng
 
@@ -436,85 +435,119 @@ contains
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
+      call this%hamiltonian%build_realspace_velocity_operators()
+
+      do i = 1, 18
+         this%hamiltonian%ee(i, i, 1, :) = this%hamiltonian%ee(i, i, 1, :) - b 
+      end do
+
+      this%hamiltonian%ee(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) / a
+
       this%mu_nm_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
 
-      allocate(psiref(hblocksize, hblocksize, this%lattice%kk), stoch_temp(hblocksize, hblocksize, this%control%lld, this%control%lld))
-      allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), psifinal(hblocksize, hblocksize, this%lattice%kk))
-      allocate(w2(hblocksize, hblocksize, this%lattice%kk))
+      allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%lld))
+      allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
+      allocate(w2(hblocksize, hblocksize, this%lattice%kk), v0(hblocksize, hblocksize, this%lattice%kk), v1(hblocksize, hblocksize, this%lattice%kk))
+      allocate(v2(hblocksize, hblocksize, this%lattice%kk))
 
-      do random_vec = 1, this%control%random_vec_num
-         call g_logger%info('Stochastic evaluation of trace for random vector '//int2str(random_vec), __FILE__, __LINE__)
+      do i = 1, this%lattice%ntype
+         call g_logger%info('Chebyshev moments being calculated taking atom type '//int2str(i), __FILE__, __LINE__)
 
-         this%izero(:) = 1
+         j =  this%lattice%atlist(i)
+
          ! Initializing wave functions
-         this%psi0(:, :, :) = (0.0d0, 0.0d0)
-         this%psi1(:, :, :) = (0.0d0, 0.0d0)
-         this%psi2(:, :, :) = (0.0d0, 0.0d0)
+         v0(:, :, :) = (0.0d0, 0.0d0)
+         v1(:, :, :) = (0.0d0, 0.0d0)
+         v2(:, :, :) = (0.0d0, 0.0d0)
          psiref(:, :, :) = (0.0d0, 0.0d0)
          w0(:, :, :) = (0.0d0, 0.0d0)
          w1(:, :, :) = (0.0d0, 0.0d0)
          w2(:, :, :) = (0.0d0, 0.0d0)
-         psifinal(:, :, :) = (0.0d0, 0.0d0)
+         right_vec(:, :, :) = (0.0d0, 0.0d0)
+         left_vec(:, :, :, :) = (0.0d0, 0.0d0)
+         dum(:, :) = (0.0d0, 0.0d0)
+
+         ! Initializing neighbording map
+         this%izero(:) = 0
+         this%izero(j) = 1
+
+         ! Initializing psi
+         do m = 1, 18
+            psiref(m, m, j) = (1.0d0, 0.0d0)
+         end do
 
          ! Initialize random vector
-         do k = 1, this%lattice%kk
+         !do k = 1, this%lattice%kk
             ! Generate random real and imaginary parts
-            call random_number(rng)
+            !call random_number(rng)
             ! Combine into complex random matrix
-            do m = 1, 18
-               this%psi0(m, m, k) = exp(2.0_rp * pi * i_unit * (rng))
-            end do
+            !do m = 1, 18
+               !do n = 1, 18
+               !   call random_number(rng)
+               !   psiref(m, m, 1) = 1.0d0 !exp(2.0_rp * pi * i_unit * (rng))
+               !end do
+            !end do
+         !end do
+
+         ! Computing the left vector <r|Tm(H)
+         do m=1, this%control%lld
+            write(*,*) m
+            if (m == 1) then
+               w1(:, :, :) = psiref(:, :, :)
+            else if (m == 2) then
+               w0(:, :, :) = w1(:, :, :)
+               call this%ham_vec_matmul(w0, w1)
+               this%izero(:) = this%idum(:)
+            else if (m > 2) then
+               call this%ham_vec_matmul(w1, w2)
+               this%izero(:) = this%idum(:)
+               w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
+               w0(:, :, :) = w1(:, :, :)
+               w1(:, :, :) = w2(:, :, :)
+               w2(:, :, :) = (0.0d0, 0.0d0)
+            end if
+            left_vec(:, :, :, m) = w1(:, :, :) 
          end do
 
-         this%psi0(:, :, :) = this%psi0(:, :, :) / sqrt(real(this%lattice%kk))
-
-         do k=1, this%lattice%kk
-            call zgemm('c', 'n', 18, 18, 18, cone, this%psi0(:, :, k), 18, this%psi0(:, :, k), 18, cone, dum(:, :), 18)
-         end do
-
-         psiref(:, :, :) = this%psi0(:, :, :)
-
+         ! Redifining neighboring map for the right vector v_a*Tn(H)*v_b|r>
+         this%izero(:) = 0
+         this%izero(j) = 1
+         ! Computing the right vector v_a*Tn(H)*v_b|r>
+         ! Multiply with the velocity operator v_b
+         call this%velo_vec_matmul('n',this%hamiltonian%v_x, psiref, v0)
+         this%izero(:) = this%idum(:) 
          do n=1, this%control%lld
+            write(*,*) n
             if (n == 1) then
-               this%psi1(:, :, :) = this%psi0(:, :, :)
+               v1(:, :, :) = v0(:, :, :) 
             else if (n == 2) then
-               this%psi0(:, :, :) = this%psi1(:, :, :)
-               call this%ham_vec_matmul(a, b, this%psi0, this%psi1)
+               v0(:, :, :) = v1(:, :, :)
+              call this%ham_vec_matmul(v0, v1)
+              this%izero(:) = this%idum
             else if (n > 2) then
-               call this%ham_vec_matmul(a, b, this%psi1, this%psi2)
-               this%psi2(:, :, :) = 2 * this%psi2(:, :, :) - this%psi0(:, :, :)
-               this%psi0(:, :, :) = this%psi1(:, :, :)
-               this%psi1(:, :, :) = this%psi2(:, :, :)
+               call this%ham_vec_matmul(v1, v2)
+               this%izero(:) = this%idum(:)
+               v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
+               v0(:, :, :) = v1(:, :, :)
+               v1(:, :, :) = v2(:, :, :)
+               v2(:, :, :) = (0.0d0, 0.0d0)
             end if
             ! Multiply with the velocity operator v_a
-            call this%velo_vec_matmul(this%hamiltonian%v_x, this%psi1, w0)
+            call this%velo_vec_matmul('n',this%hamiltonian%v_x, v1, right_vec)
+               this%izero(:) = this%idum(:)
             do m=1, this%control%lld
-               if (m == 1) then
-                  w1(:, :, :) = w0(:, :, :) 
-               else if (m == 2) then
-                  w0(:, :, :) = w1(:, :, :)
-                  call this%ham_vec_matmul(a, b, w0, w1)
-               else if (m > 2) then
-                  call this%ham_vec_matmul(a, b, w1, w2)
-                  w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
-                  w0(:, :, :) = w1(:, :, :)
-                  w1(:, :, :) = w2(:, :, :)
-               end if
-               ! Multiply with the velocity operator v_b
-               call this%velo_vec_matmul(this%hamiltonian%v_x, w1, psifinal)
                dum(:, :) = (0.0d0, 0.0d0)
                do k=1, this%lattice%kk
-                  call zgemm('c', 'n', 18, 18, 18, cone, psiref(:, :, k), 18, psifinal(:, :, k), 18, cone, dum(:, :), 18)
+                  call zgemm('c', 'n', 18, 18, 18, cone, left_vec(:, :, k, m), 18, right_vec(:, :, k), 18, cone, dum(:, :), 18)
                end do
-               write(*,*) n, m
                this%mu_nm_stochastic(:, :, n, m) = this%mu_nm_stochastic(:, :, n, m) + dum(:, :)
             end do
          end do
       end do
 
-      this%mu_nm_stochastic(:, :, :, :) = this%mu_nm_stochastic(:, :, :, :) / real(this%control%random_vec_num)      
+      !this%mu_nm_stochastic(:, :, :, :) = this%mu_nm_stochastic(:, :, :, :) / real(this%control%random_vec_num)      
  
-      deallocate(psiref, stoch_temp, w0, w1, w2, psifinal)
+      deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec)
 
    end subroutine compute_moments_stochastic
 

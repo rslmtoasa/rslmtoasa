@@ -1031,8 +1031,8 @@ contains
       use mpi_mod
       class(green), intent(inout) :: this
       ! Local variables
-      real(rp), dimension(this%control%lld*2 + 2) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
+      real(rp), dimension(this%control%lld*2+2) :: kernel
+      real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2+2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp) :: wstep, eps, wmin, wmax, a, b
       complex(rp) :: exp_factor

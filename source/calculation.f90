@@ -1034,8 +1034,6 @@ contains
          call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
       end select
 
-      call hamiltonian_obj%build_realspace_velocity_operators()
-
       ! Creating recursion object
       recursion_obj = recursion(hamiltonian_obj, energy_obj)
       

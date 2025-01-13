@@ -1180,14 +1180,22 @@ contains
       ! Local variables
       integer :: i, m, n, l1, l2
       complex(rp), dimension(:,:,:), allocatable :: integrand
-      real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale
+      real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
+      real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
       real(rp) :: a, b, real_part, im_part
 
-      allocate(integrand(18, 18, this%en%channels_ldos + 10))
+      allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
       allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
       allocate(wscale(this%en%channels_ldos + 10))
+      allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
 
       integrand(:, :, :) = (0.0d0, 0.0d0)
+      real_part_l(:) = 0.0d0
+      im_part_l(:) = 0.0d0
+      integrand_tot_real(:) = 0.0d0
+      integrand_tot_im(:) = 0.0d0
+      integrand_l_real(:, :) = 0.0d0
+      integrand_l_im(:, :) = 0.0d0
 
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
@@ -1198,11 +1206,11 @@ contains
       do i = 1, this%en%channels_ldos + 10
          do n = 1, this%control%lld
             do m = 1, this%control%lld
-               do l1 = 1, 18
+               !do l1 = 1, 18
                   do l2 = 1, 18
-                     integrand(l1, l2, i) = integrand(l1, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l1, l2, n, m)
+                     integrand(l2, l2, i) = integrand(l2, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l2, l2, n, m)
                   end do
-               end do
+               !end do
             end do
          end do
       end do
@@ -1210,22 +1218,42 @@ contains
       integrand_tot_real(:) = 0.0d0
       integrand_tot_im(:) = 0.0d0
 
-      do l1 = 1, 18
+      !do l1 = 1, 18
          do l2 = 1, 18
-            integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l1, l2, :))
-            integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l1, l2, :)) 
+            integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
+            integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :)) 
+            integrand_l_real(l2, :) = real(integrand(l2, l2, :))
+            integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
          end do
-      end do
-   
+      !end do
+         do m = 1, this%control%lld
+             do n = 1, this%control%lld
+                write(*,*) rtrace(this%recursion%mu_nm_stochastic(:, :, n, m)) - rtrace(this%recursion%mu_nm_stochastic(:, :, m, n)), &
+                           imtrace(this%recursion%mu_nm_stochastic(:, :, n, m)) - imtrace(this%recursion%mu_nm_stochastic(:, :, m, n))
+             end do
+          end do
+ 
       do i = 1, this%en%channels_ldos + 10
-         write(2,*) this%en%ene(i), integrand_tot_real(i) / this%control%lld, integrand_tot_im(i) / this%control%lld, trace(integrand(:,:,i)) / this%control%lld
+         write(2,*) this%en%ene(i) - this%en%fermi, integrand_tot_real(i) / this%control%lld, integrand_tot_im(i) / this%control%lld
       end do 
 
       do i = 1, this%en%channels_ldos + 10
          call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
          call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)   
-         write(3, *) wscale(i), -real_part / this%control%lld, -im_part / this%control%lld
+         write(3, *) this%en%ene(i) - this%en%fermi, real_part / this%control%lld,  im_part / this%control%lld 
       end do
+
+      do i = 1, this%en%channels_ldos + 10
+         do l2 = 1, 18
+            call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
+            call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
+         end do
+         write(32,'(19f16.10)') wscale(i), real_part_l(1:18) / this%control%lld
+         write(33,'(19f16.10)') wscale(i), im_part_l(1:18) / this%control%lld
+      end do
+      
+      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)
+
    end subroutine calculate_conductivity_tensor
 
 end module bands_mod

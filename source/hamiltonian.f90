@@ -408,14 +408,20 @@ contains
             ! Compute displacement vector rij = r_i - r_j
             rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)
    
+            !call hcpx(this%ee(1:9, 1:9, m, ntype), 'sph2cart')
+            !call hcpx(this%ee(10:18, 10:18, m, ntype), 'sph2cart')
+            !call hcpx(this%ee(1:9, 10:18, m, ntype), 'sph2cart')
+            !call hcpx(this%ee(10:18, 1:9, m, ntype), 'sph2cart')
+
             ! Compute velocity operator blocks
-            this%v_x(:, :, m, ntype) = i_unit * rij(1) * this%ee(:, :, m, ntype)  ! x-component
-            this%v_y(:, :, m, ntype) = i_unit * rij(2) * this%ee(:, :, m, ntype)  ! y-component
-            this%v_z(:, :, m, ntype) = i_unit * rij(3) * this%ee(:, :, m, ntype)  ! z-component
-            write(228, *) 'm=', m, 'ntype= ', ntype
-            write(228, '(18f10.6)') real(this%v_z(:, :, m, ntype))
-            write(229, *) 'm=', m, 'ntype= ', ntype
-            write(229, '(18f10.6)') aimag(this%v_z(:, :, m, ntype))
+            this%v_x(:, :, m, ntype) = (1 / i_unit) * rij(1) * this%ee(:, :, m, ntype)  ! x-component
+            this%v_y(:, :, m, ntype) = (1 / i_unit) * rij(2) * this%ee(:, :, m, ntype)  ! y-component
+            this%v_z(:, :, m, ntype) = (1 / i_unit) * rij(3) * this%ee(:, :, m, ntype)  ! z-component
+
+            !write(228, *) 'm=', m, 'ntype= ', ntype
+            !write(228, '(18f10.6)') real(this%v_z(:, :, m, ntype))
+            !write(229, *) 'm=', m, 'ntype= ', ntype
+            !write(229, '(18f10.6)') aimag(this%v_z(:, :, m, ntype))
          end do
       end do
    end subroutine build_realspace_velocity_operators

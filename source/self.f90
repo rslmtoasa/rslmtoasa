@@ -689,7 +689,6 @@ contains
             end do
             if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
             call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
-            call this%hamiltonian%build_realspace_velocity_operators()
          case ('S')
             do ia = 1, this%lattice%ntype
                call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
