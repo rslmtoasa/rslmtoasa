@@ -68,7 +68,7 @@ module recursion_mod
       complex(rp), dimension(:, :, :), allocatable :: psi0, psi1, psi2
       !> Chebyshev moments
       complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
-      complex(rp), dimension(:, :, :, :), allocatable :: mu_nm_stochastic
+      complex(rp), dimension(:, :, :, :, :), allocatable :: mu_nm_stochastic
       complex(rp), dimension(18, 18) :: cheb_mom_temp
       !> Pre factor Gamma_nm for the conductivity tensor calculation
       complex(rp), dimension(:, :, :), allocatable :: gamma_nm
@@ -443,7 +443,7 @@ contains
 
       this%hamiltonian%ee(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) / a
 
-      this%mu_nm_stochastic(:, :, :, :) = (0.0d0, 0.0d0)
+      this%mu_nm_stochastic(:, :, :, :, :) = (0.0d0, 0.0d0)
 
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%lld))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
@@ -451,10 +451,11 @@ contains
       allocate(v2(hblocksize, hblocksize, this%lattice%kk))
 
       do i = 1, this%lattice%ntype
-         call g_logger%info('Chebyshev moments being calculated taking atom type '//int2str(i), __FILE__, __LINE__)
 
          j =  this%lattice%atlist(i)
 
+         call g_logger%info('Chebyshev moments being calculated taking atom type '//int2str(j), __FILE__, __LINE__)
+  
          ! Initializing wave functions
          v0(:, :, :) = (0.0d0, 0.0d0)
          v1(:, :, :) = (0.0d0, 0.0d0)
@@ -522,8 +523,8 @@ contains
                v1(:, :, :) = v0(:, :, :) 
             else if (n == 2) then
                v0(:, :, :) = v1(:, :, :)
-              call this%ham_vec_matmul(v0, v1)
-              this%izero(:) = this%idum
+               call this%ham_vec_matmul(v0, v1)
+               this%izero(:) = this%idum(:)
             else if (n > 2) then
                call this%ham_vec_matmul(v1, v2)
                this%izero(:) = this%idum(:)
@@ -533,14 +534,14 @@ contains
                v2(:, :, :) = (0.0d0, 0.0d0)
             end if
             ! Multiply with the velocity operator v_a
-            call this%velo_vec_matmul('n',this%hamiltonian%v_x, v1, right_vec)
+            call this%velo_vec_matmul('n',this%hamiltonian%v_y, v1, right_vec)
                this%izero(:) = this%idum(:)
             do m=1, this%control%lld
                dum(:, :) = (0.0d0, 0.0d0)
                do k=1, this%lattice%kk
                   call zgemm('c', 'n', 18, 18, 18, cone, left_vec(:, :, k, m), 18, right_vec(:, :, k), 18, cone, dum(:, :), 18)
                end do
-               this%mu_nm_stochastic(:, :, n, m) = this%mu_nm_stochastic(:, :, n, m) + dum(:, :)
+               this%mu_nm_stochastic(:, :, n, m, i) = this%mu_nm_stochastic(:, :, n, m, i) + dum(:, :)
             end do
          end do
       end do
@@ -1900,9 +1901,6 @@ contains
 
       this%mu_n(:, :, 2*ll + 1, i) = 2.0_rp*dum1(:, :) - this%mu_n(:, :, 1, i)
       this%mu_n(:, :, 2*ll + 2, i) = 2.0_rp*dum2(:, :) - this%mu_n(:, :, 2, i)
-      ! Testing
-      !this%mu_n_stochastic(:, :, 2*ll + 1) = (2.0_rp*dum1(:, :) - this%mu_n_stochastic(:, :, 1))
-      !this%mu_n_stochastic(:, :, 2*ll + 2) = (2.0_rp*dum2(:, :) - this%mu_n_stochastic(:, :, 2))
 
       if (sum(real(this%mu_n(:, :, 2*ll + 2, i))) > 1000.d0) then
          call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
@@ -2846,7 +2844,8 @@ contains
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
-                                                                                       (this%lattice%control%lld, this%lattice%control%lld/)
+                                                                                       (this%lattice%control%lld, &
+                                                                               this%lattice%control%lld, this%lattice%ntype/)
       call g_safe_alloc%allocate('recursion.gamma_nm', this%gamma_nm, (/this%en%channels_ldos + 10, &
                                                                                (this%lattice%control%lld), (this%lattice%control%lld)/)
 #else
@@ -2881,7 +2880,7 @@ contains
       allocate (this%atemp_b(18, 18, this%control%lld))
       allocate (this%b2temp_b(18, 18, this%control%lld))
       allocate (this%pmn_b(18, 18, this%lattice%kk))
-      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%lld, this%lattice%control%lld))
+      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%lld, this%lattice%control%lld,this%lattice%ntype))
       allocate (this%gamma_nm(this%en%channels_ldos + 10, this%lattice%control%lld, this%lattice%control%lld))
 #endif
       this%v(:, :) = 0.0d0
@@ -2910,7 +2909,7 @@ contains
       this%b2temp_b(:, :, :) = 0.0d0
       this%pmn_b(:, :, :) = 0.0d0
       this%cheb_mom_temp(:, :) = 0.0d0
-      this%mu_nm_stochastic(:, :, :, :) = 0.0d0
+      this%mu_nm_stochastic(:, :, :, :, :) = 0.0d0
       if (present(full)) then
          if (full) then
             if (associated(this%hamiltonian)) call this%hamiltonian%restore_to_default()
