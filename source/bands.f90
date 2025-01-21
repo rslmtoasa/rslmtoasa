@@ -95,7 +95,7 @@ module bands_mod
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
       procedure :: calculate_angles
-      procedure :: calculate_conductivity_tensor
+      !procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -1173,84 +1173,84 @@ contains
       close(20)
    end subroutine calculate_angles
 
-   subroutine calculate_conductivity_tensor(this)
-      implicit none
-      ! Input
-      class(bands), intent(inout) :: this
-      ! Local variables
-      integer :: i, m, n, l1, l2, ntype
-      complex(rp), dimension(:,:,:), allocatable :: integrand
-      real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
-      real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
-      real(rp) :: a, b, real_part, im_part
+   !subroutine calculate_conductivity_tensor(this)
+   !   implicit none
+   !   ! Input
+   !   class(bands), intent(inout) :: this
+   !   ! Local variables
+   !   integer :: i, m, n, l1, l2, ntype
+   !   complex(rp), dimension(:,:,:), allocatable :: integrand
+   !   real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
+   !   real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
+   !   real(rp) :: a, b, real_part, im_part
 
-      allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
-      allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
-      allocate(wscale(this%en%channels_ldos + 10))
-      allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
+   !   allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
+   !   allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
+   !   allocate(wscale(this%en%channels_ldos + 10))
+   !   allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
 
-      integrand(:, :, :) = (0.0d0, 0.0d0)
-      real_part_l(:) = 0.0d0
-      im_part_l(:) = 0.0d0
-      integrand_tot_real(:) = 0.0d0
-      integrand_tot_im(:) = 0.0d0
-      integrand_l_real(:, :) = 0.0d0
-      integrand_l_im(:, :) = 0.0d0
+   !   integrand(:, :, :) = (0.0d0, 0.0d0)
+   !   real_part_l(:) = 0.0d0
+   !   im_part_l(:) = 0.0d0
+   !   integrand_tot_real(:) = 0.0d0
+   !   integrand_tot_im(:) = 0.0d0
+   !   integrand_l_real(:, :) = 0.0d0
+   !   integrand_l_im(:, :) = 0.0d0
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+   !   a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+   !   b = (this%en%energy_max + this%en%energy_min)/2
 
-      wscale(:) = (this%en%ene(:) - b)/a
+   !   wscale(:) = (this%en%ene(:) - b)/a
 
-      ! Calculate the integrand for each energy grid point
-      do ntype = 1, this%lattice%ntype
-         do i = 1, this%en%channels_ldos + 10
-            do n = 1, this%control%lld
-               do m = 1, this%control%lld
-                  !do l1 = 1, 18
-                     do l2 = 1, 18
-                        integrand(l2, l2, i) = integrand(l2, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
-                     end do
-                  !end do
-               end do
-            end do
-         end do
-      end do
+   !   ! Calculate the integrand for each energy grid point
+   !   do ntype = 1, this%lattice%ntype
+   !      do i = 1, this%en%channels_ldos + 10
+   !         do n = 1, this%control%lld
+   !            do m = 1, this%control%lld
+   !               !do l1 = 1, 18
+   !                  do l2 = 1, 18
+   !                     integrand(l2, l2, i) = integrand(l2, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
+   !                  end do
+   !               !end do
+   !            end do
+   !         end do
+   !      end do
+   !   end do
 
-      integrand_tot_real(:) = 0.0d0
-      integrand_tot_im(:) = 0.0d0
+   !   integrand_tot_real(:) = 0.0d0
+   !   integrand_tot_im(:) = 0.0d0
 
-      !do l1 = 1, 18
-         do l2 = 1, 18
-            integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
-            integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :)) 
-            integrand_l_real(l2, :) = real(integrand(l2, l2, :))
-            integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
-         end do
-      !end do
+   !   !do l1 = 1, 18
+   !      do l2 = 1, 18
+   !         integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
+   !         integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :)) 
+   !         integrand_l_real(l2, :) = real(integrand(l2, l2, :))
+   !         integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
+   !      end do
+   !   !end do
  
-      do i = 1, this%en%channels_ldos + 10
-         write(2,*) this%en%ene(i) - this%en%fermi, integrand_tot_real(i) / real(this%control%lld * this%lattice%ntype), integrand_tot_im(i) / real(this%control%lld * this%lattice%ntype) 
-      end do 
+   !   do i = 1, this%en%channels_ldos + 10
+   !      write(2,*) this%en%ene(i) - this%en%fermi, integrand_tot_real(i) / real(this%control%lld * this%lattice%ntype), integrand_tot_im(i) / real(this%control%lld * this%lattice%ntype) 
+   !   end do 
 
-      do i = 1, this%en%channels_ldos + 10
-         real_part = 0.0d0; im_part = 0.0d0
-         call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
-         call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)   
-         write(3, *) this%en%ene(i) - this%en%fermi, real_part / real(this%control%lld * this%lattice%ntype),  im_part / real(this%control%lld * this%lattice%ntype) 
-      end do
+   !   do i = 1, this%en%channels_ldos + 10
+   !      real_part = 0.0d0; im_part = 0.0d0
+   !      call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
+   !      call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)   
+   !      write(3, *) this%en%ene(i) - this%en%fermi, real_part / real(this%control%lld * this%lattice%ntype),  im_part / real(this%control%lld * this%lattice%ntype) 
+   !   end do
 
-      do i = 1, this%en%channels_ldos + 10
-         do l2 = 1, 18
-            call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
-            call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
-         end do
-         write(32,'(19f16.10)') this%en%ene(i) - this%en%fermi, real_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
-         write(33,'(19f16.10)') this%en%ene(i) - this%en%fermi, im_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
-      end do
-      
-      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)
+   !   do i = 1, this%en%channels_ldos + 10
+   !      do l2 = 1, 18
+   !         call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
+   !         call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
+   !      end do
+   !      write(32,'(19f16.10)') this%en%ene(i) - this%en%fermi, real_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
+   !      write(33,'(19f16.10)') this%en%ene(i) - this%en%fermi, im_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
+   !   end do
+   !   
+   !   deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)
 
-   end subroutine calculate_conductivity_tensor
+   !end subroutine calculate_conductivity_tensor
 
 end module bands_mod

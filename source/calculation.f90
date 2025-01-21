@@ -35,6 +35,7 @@ module calculation_mod
    use bands_mod
    use exchange_mod
    use spin_dynamics_mod
+   use conductivity_mod
    use mix_mod
    use math_mod
    use precision_mod, only: rp
@@ -955,6 +956,7 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
+      type(conductivity), target :: conductivity_obj
       real(rp), dimension(6) :: QSL
       integer :: i
 
@@ -987,7 +989,7 @@ contains
       call lattice_obj%atomlist()
 
       ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%nrec)
+      call get_mpi_variables(rank, lattice_obj%ntype)
 
       ! Constructing the charge object
       charge_obj = charge(lattice_obj)
@@ -1038,22 +1040,25 @@ contains
       recursion_obj = recursion(hamiltonian_obj, energy_obj)
       
       call recursion_obj%compute_moments_stochastic()
-      call recursion_obj%calculate_gamma_nm()
+      !call recursion_obj%calculate_gamma_nm()
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
 
       ! Creating Green function object
       green_obj = green(dos_obj)
-      call green_obj%chebyshev_green()
 
       ! Creating bands object
       bands_obj = bands(green_obj)
    
-      call bands_obj%calculate_conductivity_tensor()
-      call bands_obj%calculate_fermi()
-      ! Creating the exchange object
-      exchange_obj = exchange(bands_obj)
+      ! Creating the self object
+      self_obj = self(bands_obj, mix_obj)
+
+      ! Creating the conductivity object
+      conductivity_obj = conductivity(self_obj)
+
+      call conductivity_obj%calculate_gamma_nm()
+      call conductivity_obj%calculate_conductivity_tensor()
 
       ! Calculating the orthogonal parameters
       do i = 1, lattice_obj%ntype
