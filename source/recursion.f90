@@ -497,7 +497,7 @@ contains
          this%izero(j) = 1
          ! Computing the right vector v_a*Tn(H)*v_b|r>
          ! Multiply with the velocity operator v_b
-         call this%velo_vec_matmul('n',this%hamiltonian%v_x, psiref, v0)
+         call this%velo_vec_matmul('n',this%hamiltonian%v_b, psiref, v0)
          this%izero(:) = this%idum(:) 
          do n=1, this%control%cond_ll
             write(*,*) n
@@ -516,7 +516,7 @@ contains
                v2(:, :, :) = (0.0d0, 0.0d0)
             end if
             ! Multiply with the velocity operator v_a
-            call this%velo_vec_matmul('n',this%hamiltonian%v_y, v1, right_vec)
+            call this%velo_vec_matmul('n',this%hamiltonian%v_a, v1, right_vec)
                this%izero(:) = this%idum(:)
             do m=1, this%control%cond_ll
                dum(:, :) = (0.0d0, 0.0d0)
@@ -2824,8 +2824,8 @@ contains
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
-                                                                                       (this%lattice%control%lld, &
-                                                                               this%lattice%control%lld, this%lattice%ntype/)
+                                                                                       (this%lattice%control%cond_ll, &
+                                                                               this%lattice%control%cond_ll, this%lattice%ntype/)
 #else
       allocate (this%a(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &18, this%lattice%nrec, 3))
@@ -2858,7 +2858,7 @@ contains
       allocate (this%atemp_b(18, 18, this%control%lld))
       allocate (this%b2temp_b(18, 18, this%control%lld))
       allocate (this%pmn_b(18, 18, this%lattice%kk))
-      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%lld, this%lattice%control%lld,this%lattice%ntype))
+      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%cond_ll, this%lattice%control%cond_ll,this%lattice%ntype))
 #endif
       this%v(:, :) = 0.0d0
       this%psi(:, :) = 0.0d0

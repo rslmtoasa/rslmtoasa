@@ -15,6 +15,9 @@ label(1) = 'Fe'
 &self
 nstep = 100
 /
+&hamiltonian
+v_alpha = '0 1 0'
+v_beta = '1 0 0'
 /
 &energy
 fermi = -0.069282
@@ -25,9 +28,8 @@ channels_ldos = 2500
 &control
 calctype = 'B'
 nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
-lld = 20  
+cond_ll = 50
 recur = 'block'
-random_vec_num = 1
 /
 &mix
 beta = 0.1

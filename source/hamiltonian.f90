@@ -79,7 +79,8 @@ module hamiltonian_mod
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
       !> Velocity operators
-      complex(rp), dimension(:, :, :, :), allocatable :: v_x, v_y, v_z
+      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b
+      character(len=10) :: v_alpha, v_beta
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
    contains
@@ -152,9 +153,8 @@ contains
       if (allocated(this%ee_glob)) call g_safe_alloc%deallocate('hamiltonian.ee_glob', this%ee_glob)
       if (allocated(this%eeo_glob)) call g_safe_alloc%deallocate('hamiltonian.eeo_glob', this%eeo_glob)
       if (allocated(this%enim_glob)) call g_safe_alloc%deallocate('hamiltonian.enim_glob', this%enim_glob)
-      if (allocated(this%v_x)) call g_safe_alloc%deallocate('hamiltonian.v_x', this%v_x)
-      if (allocated(this%v_y)) call g_safe_alloc%deallocate('hamiltonian.v_y', this%v_y)
-      if (allocated(this%v_z)) call g_safe_alloc%deallocate('hamiltonian.v_z', this%v_z)
+      if (allocated(this%v_a)) call g_safe_alloc%deallocate('hamiltonian.v_a', this%v_a)
+      if (allocated(this%v_b)) call g_safe_alloc%deallocate('hamiltonian.v_b', this%v_b)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
@@ -171,9 +171,8 @@ contains
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
-      if (allocated(this%v_x)) deallocate(this%v_x)
-      if (allocated(this%v_y)) deallocate(this%v_y)
-      if (allocated(this%v_z)) deallocate(this%v_z)
+      if (allocated(this%v_a)) deallocate(this%v_a)
+      if (allocated(this%v_b)) deallocate(this%v_b)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
 #endif
    end subroutine destructor
@@ -195,6 +194,8 @@ contains
       hoh = this%hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
+      v_alpha = this%v_alpha
+      v_beta = this%v_beta
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -212,7 +213,8 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%orb_pol = orb_pol
-
+      this%v_alpha = v_alpha
+      this%v_beta = v_beta
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -246,9 +248,8 @@ contains
       call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_x', this%v_x, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_y', this%v_y, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_z', this%v_z, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -272,9 +273,8 @@ contains
       allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
       ! Velocity operators
-      allocate (this%v_x(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%v_y(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%v_z(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_b(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !end if
       !end if
 #endif
@@ -301,12 +301,13 @@ contains
       this%enim_glob(:, :, :) = 0.0d0
       !  end if
       !end if
-      this%v_x(:, :, :, :) = 0.0d0
-      this%v_y(:, :, :, :) = 0.0d0
-      this%v_z(:, :, :, :) = 0.0d0
+      this%v_a(:, :, :, :) = 0.0d0
+      this%v_b(:, :, :, :) = 0.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
+      this%v_alpha = '1 0 0'
+      this%v_beta = '1 0 0' 
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
@@ -390,12 +391,21 @@ contains
       integer :: ia, ntype, nr, m, i, j              ! Atom and neighbor indices
       integer :: atom_neighbor                       ! Neighbor atom index
       real(rp), dimension(3) :: rij                  ! Displacement vector (x, y, z components)
-   
+      real(rp), dimension(3) :: dir_a, dir_b         ! Velocity operator directions
+      real(rp) :: norm_a, norm_b, dot_a, dot_b
       ! Initialize velocity operators to zero
-      this%v_x(:, :, :, :) = 0.0_rp
-      this%v_y(:, :, :, :) = 0.0_rp
-      this%v_z(:, :, :, :) = 0.0_rp
+      this%v_a(:, :, :, :) = 0.0_rp
+      this%v_b(:, :, :, :) = 0.0_rp
    
+      read(this%v_alpha, *) dir_a(1), dir_a(2), dir_a(3)
+      read(this%v_beta, *) dir_b(1), dir_b(2), dir_b(3)
+
+      norm_a = norm2(dir_a)
+      norm_b = norm2(dir_b)
+
+      dir_a(:) = dir_a(:) / norm_a
+      dir_b(:) = dir_b(:) / norm_b
+
       ! Loop over atom types
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)  ! Atom number in the cluster
@@ -408,20 +418,11 @@ contains
             ! Compute displacement vector rij = r_i - r_j
             rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)
    
-            !call hcpx(this%ee(1:9, 1:9, m, ntype), 'sph2cart')
-            !call hcpx(this%ee(10:18, 10:18, m, ntype), 'sph2cart')
-            !call hcpx(this%ee(1:9, 10:18, m, ntype), 'sph2cart')
-            !call hcpx(this%ee(10:18, 1:9, m, ntype), 'sph2cart')
+            dot_a = dot_product(dir_a, rij); dot_b = dot_product(dir_b, rij)
 
             ! Compute velocity operator blocks
-            this%v_x(:, :, m, ntype) = (1 / i_unit) * rij(1) * this%ee(:, :, m, ntype)  ! x-component
-            this%v_y(:, :, m, ntype) = (1 / i_unit) * rij(2) * this%ee(:, :, m, ntype)  ! y-component
-            this%v_z(:, :, m, ntype) = (1 / i_unit) * rij(3) * this%ee(:, :, m, ntype)  ! z-component
-
-            !write(228, *) 'm=', m, 'ntype= ', ntype
-            !write(228, '(18f10.6)') real(this%v_z(:, :, m, ntype))
-            !write(229, *) 'm=', m, 'ntype= ', ntype
-            !write(229, '(18f10.6)') aimag(this%v_z(:, :, m, ntype))
+            this%v_a(:, :, m, ntype) = (1 / i_unit) * dot_a * this%ee(:, :, m, ntype)  
+            this%v_b(:, :, m, ntype) = (1 / i_unit) * dot_b * this%ee(:, :, m, ntype) 
          end do
       end do
    end subroutine build_realspace_velocity_operators

@@ -153,8 +153,15 @@ module control_mod
       !>
       !> Description.
       !>
-      !> Allowed values: ´lanczos´, ´chebyshev´
+      !> Allowed values: ´block´, ´chebyshev´
       character(len=9) :: recur
+
+      !> Number of recursion levels for the conductivity tensor calculation
+      !>
+      !> Number of recursion levels for the conductivity tensor calculation
+      !>
+      !> Default: 200
+      integer :: cond_ll
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -260,6 +267,7 @@ contains
       do_comom = this%do_comom
       recur = this%recur
       random_vec_num = this%random_vec_num
+      cond_ll = this%cond_ll
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -295,6 +303,7 @@ contains
       this%do_comom = do_comom
       this%recur = recur
       this%random_vec_num = random_vec_num
+      this%cond_ll = cond_ll
 
       ! end default
 
@@ -349,6 +358,7 @@ contains
       this%hyperfine = .false.
       this%sym_term = .false.
       this%random_vec_num = 5
+      this%cond_ll = 200
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
