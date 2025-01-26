@@ -281,7 +281,7 @@ contains
       !end do
 
       do i = 1, this%en%channels_ldos + 10
-         write(2,*) this%en%ene(i) - this%en%fermi, integrand_tot_real(i) / real(this%control%cond_ll * this%lattice%ntype), &
+         write(2,*) (a*wscale(i)+b) - this%en%fermi, integrand_tot_real(i) / real(this%control%cond_ll * this%lattice%ntype), &
                                                     integrand_tot_im(i) / real(this%control%cond_ll * this%lattice%ntype)
       end do
 
@@ -289,7 +289,7 @@ contains
          real_part = 0.0d0; im_part = 0.0d0
          call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
          call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
-         write(3, *) this%en%ene(i) - this%en%fermi, real_part / real(this%control%cond_ll * this%lattice%ntype),  im_part / real(this%control%cond_ll * this%lattice%ntype)
+         write(3, *) (a*wscale(i)+b) - this%en%fermi, real_part / real(this%control%cond_ll * this%lattice%ntype),  im_part / real(this%control%cond_ll * this%lattice%ntype)
       end do
 
       do i = 1, this%en%channels_ldos + 10
@@ -297,8 +297,8 @@ contains
             call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
             call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
          end do
-         write(32,'(19f16.10)') this%en%ene(i) - this%en%fermi, real_part_l(1:18) / real(this%control%cond_ll * this%lattice%ntype)
-         write(33,'(19f16.10)') this%en%ene(i) - this%en%fermi, im_part_l(1:18) / real(this%control%cond_ll * this%lattice%ntype)
+         write(32,'(19f16.10)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) / real(this%control%cond_ll * this%lattice%ntype)
+         write(33,'(19f16.10)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) / real(this%control%cond_ll * this%lattice%ntype)
       end do
 
       deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)

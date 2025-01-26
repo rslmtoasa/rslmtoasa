@@ -1110,7 +1110,11 @@ contains
          end if
          if (jj /= 0) then
             jt = this%charge%lattice%iz(jj)
-            vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+            if (this%lattice%pbc) then
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,jj,vet)
+            else
+               vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+            end if
             !write(123, ´(3f10.6)´) vet(:)
             !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
             !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)

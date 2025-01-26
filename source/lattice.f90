@@ -225,7 +225,12 @@ module lattice_mod
       !>
       !> Primitive vectors in units of lattice parameter \ref alat
       real(rp), dimension(3, 3) :: a
-
+      !> Variables to handle periodic boundary conditions
+      !> 
+      !> Variables to handle periodic boundary conditions
+      logical :: pbc
+      logical :: b1, b2, b3
+      integer :: n1, n2, n3  
       !> TODO
       !> TBD
       integer, dimension(:), allocatable :: izp
@@ -327,6 +332,9 @@ module lattice_mod
       procedure :: find_unique_struct
       procedure :: identify_unique_atoms
       procedure :: check_within_volume
+      procedure :: f_wrap_coord_diff
+      procedure :: remd
+      procedure :: nncal
       procedure, private :: dbar1
       procedure :: clusba
       procedure :: calculate_nbas
@@ -456,6 +464,13 @@ contains
       a = this%a
       wav = this%wav
       celldm = this%celldm
+      b1 = this%b1
+      b2 = this%b2
+      b3 = this%b3
+      n1 = this%n1 
+      n2 = this%n2
+      n3 = this%n3
+      pbc = this%pbc
 
       if (size(this%izp) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
@@ -560,6 +575,13 @@ contains
       this%r2 = r2
       this%alat = alat
       this%celldm = celldm
+      this%pbc = pbc
+      this%b1 = b1
+      this%b2 = b2
+      this%b3 = b3
+      this%n1 = n1
+      this%n2 = n2
+      this%n3 = n3
 
       ! Reads Wigner-Seitz radius if available
       this%wav = wav
@@ -902,7 +924,13 @@ contains
       this%celldm = 0.0d0
       this%njij = 0
       this%njijk = 0
-
+      this%b1 = .false.
+      this%b2 = .false.
+      this%b3 = .false.
+      this%pbc = .false.
+      this%n1 = 0
+      this%n2 = 0
+      this%n3 = 0
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.izp', this%izp, (/this%ndim/))
       call g_safe_alloc%allocate('lattice.no', this%no, (/this%ndim/))
@@ -944,7 +972,7 @@ contains
    subroutine bravais(this)
       class(lattice), intent(inout) :: this
       ! Local variables
-      real(rp) :: rc, rs, lc
+      real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
@@ -972,14 +1000,26 @@ contains
       npr = int((ndim/(n*1.0d0))**(1.0d0/3.0d0))
 
       crbravais(:, :) = this%crd(:, :)
-      lc = (npr + 1)/2
+      if (this%pbc) then
+         lcx = (this%n1 + 1)/2
+         lcy = (this%n2 + 1)/2
+         lcz = (this%n3 + 1)/2
+      else
+         lc = (npr + 1)/2
+         lcx = lc
+         lcy = lc
+         lcz = lc
+      end if
       l = n
-      !write(*,*) lc, l, npr, sum(this%no), sum(this%izp), sum(this%crd), sum(crbravais)
+      if (.not.this%pbc) then
+         this%n1 = npr; this%n2 = npr; this%n3 = npr
+      end if
+
       do i = 1, l
-         do nx = 1, npr
-            do ny = 1, npr
-               do nz = 1, npr
-                  if (nx .eq. lc .and. ny .eq. lc .and. nz .eq. lc) go to 13
+         do nx = 1, this%n1        
+            do ny = 1, this%n2 
+               do nz = 1, this%n3  
+                  if (nx .eq. lcx .and. ny .eq. lcy .and. nz .eq. lcz) go to 13
                   n = n + 1
 !  ...........Verifies dimension NDIM.........................
                   if (n .gt. ndim) then
@@ -987,9 +1027,9 @@ contains
                      stop
                   end if
 ! ...............................................................
-                  crbravais(1, n) = this%crd(1, i) + (nx - lc)*this%a(1, 1) + (ny - lc)*this%a(1, 2) + (nz - lc)*this%a(1, 3)
-                  crbravais(2, n) = this%crd(2, i) + (nx - lc)*this%a(2, 1) + (ny - lc)*this%a(2, 2) + (nz - lc)*this%a(2, 3)
-                  crbravais(3, n) = this%crd(3, i) + (nx - lc)*this%a(3, 1) + (ny - lc)*this%a(3, 2) + (nz - lc)*this%a(3, 3)
+                  crbravais(1, n) = this%crd(1, i) + (nx - lcx)*this%a(1, 1) + (ny - lcy)*this%a(1, 2) + (nz - lcz)*this%a(1, 3)
+                  crbravais(2, n) = this%crd(2, i) + (nx - lcx)*this%a(2, 1) + (ny - lcy)*this%a(2, 2) + (nz - lcz)*this%a(2, 3)
+                  crbravais(3, n) = this%crd(3, i) + (nx - lcx)*this%a(3, 1) + (ny - lcy)*this%a(3, 2) + (nz - lcz)*this%a(3, 3)
                   this%no(n) = this%no(i)
                   this%izp(n) = this%izp(i)
 13                continue
@@ -1002,9 +1042,17 @@ contains
       kk = 0
       if (rc == 0.0d0) rs = npr**3
 
-      do i = 1, nl
-         call cut(i, l, ndim, crbravais, cr, this%izp, iz, num, this%no, rs, kk)
-      end do
+      if (this%pbc) then
+         ndim = this%n1*this%n2*this%n3*l 
+         iz = this%izp
+         num = this%no
+         cr = crbravais
+         kk = n
+      else
+          do i = 1, nl
+             call cut(i, l, ndim, crbravais, cr, this%izp, iz, num, this%no, rs, kk)
+          end do
+      end if 
 
       if (int(kk/2) /= kk/2.d0) kk = kk - 1
 
@@ -1594,9 +1642,9 @@ contains
 
       ctnew(:) = this%ct(:)*nnscale
 
-      call nncal(ctnew, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
+      call this%nncal(ctnew, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
       nnmx = 200
-      call nncal(this%ct, crd, 3, kk, izp, nn2, ndi, nnmx, mapa, this%ntot)
+      call this%nncal(this%ct, crd, 3, kk, izp, nn2, ndi, nnmx, mapa, this%ntot)
       nnmx = 200
 
       do i = 1, kk
@@ -1642,7 +1690,7 @@ contains
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
       call leia(this%alat, kk, crd, izp, no, 10)
-      call nncal(this%ct, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
+      call this%nncal(this%ct, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
       call outmap(11, izp, nn, no, ndi, nnmx, this%nrec)
       close (10)
       nmax = 0
@@ -1763,7 +1811,7 @@ contains
       write (17, 10000) kk
       write (17, 10001)
       write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
-      call nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
+      call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.nn', this%nn, (/this%kk, nm + 1/))
@@ -1773,7 +1821,8 @@ contains
       do ii = 1, nm + 1
          this%nn(:, ii) = nn(:, ii)
       end do
-
+      write(*,*) this%nn(2,:)
+      write(*,*) maxval(this%nn(:,1)), minval(this%nn(:,1))
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/9, 9, nm, this%ntot/))
 #else
@@ -1781,7 +1830,7 @@ contains
 #endif
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
-      call remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
+      call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
       write (17, 10003) kk, nm
@@ -2736,9 +2785,10 @@ contains
    !> @param[inout] idnn
    !> @param[out] ret
    !---------------------------------------------------------------------------
-   subroutine remd(crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
+   subroutine remd(this, crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
       implicit none
       ! Inputs
+      class(lattice), intent(inout) :: this
       integer, intent(in) :: nat, ndi, nnmx, nomx, ntot
       integer, dimension(ndi), intent(in) :: no
       real(rp), dimension(3, ndi), intent(in) :: crd
@@ -2757,9 +2807,13 @@ contains
          jsz = nn(la, 1)
          do j = 2, jsz
             jj = nn(la, j)
-            do m = 1, 3
-               set(m, i, j) = crd(m, la) - crd(m, jj)
-            end do
+            if (this%pbc) then 
+               call this%f_wrap_coord_diff(nat,crd,la,jj,set(:,i,j))
+            else
+               do m = 1, 3
+                  set(m, i, j) = crd(m, la) - crd(m, jj)
+               end do
+            end if
          end do
       end do
       do i = 1, nat
@@ -2777,9 +2831,13 @@ contains
          jsz = nn(i, 1)
          do j = 2, jsz
             jj = nn(i, j)
-            do m = 1, 3
-               ret(m) = crd(m, i) - crd(m, jj)
-            end do
+            if (this%pbc) then
+               call this%f_wrap_coord_diff(nat,crd,i,jj,ret)
+            else
+               do m = 1, 3
+                  ret(m) = crd(m, i) - crd(m, jj)
+               end do
+            end if
             !----------FINDS EQUIVALENT VECTOR------------------------
             eps = .0001
             do ii = 2, imax
@@ -2879,6 +2937,50 @@ contains
       end if
    end function mapa
 
+   subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff)
+      implicit none
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: Natom
+      real(rp), dimension(3,Natom), intent(in) :: coord
+      integer, intent(in) :: i_atom
+      integer, intent(in) :: j_atom
+      real(rp), dimension(3), intent(out) :: cdiff
+      !
+      real(rp), dimension(3) :: odiff, oshift, mdiff
+      integer :: x,y,z
+      integer :: xmin,xmax,ymin,ymax,zmin,zmax
+      !
+      odiff=coord(:,j_atom) - coord(:,i_atom)
+      !
+      xmax=0;xmin=0;ymax=0;ymin=0;zmax=0;zmin=0
+      if(this%b1)then
+         xmax=1
+         xmin=-1
+      end if
+      if(this%b2)then
+         ymax=1
+         ymin=-1
+      end if
+      if(this%b3)then
+         zmax=1
+         zmin=-1
+      end if
+      
+      mdiff=odiff
+      do z=zmin,zmax
+         do y=ymin,ymax
+            do x=xmin,xmax
+               oshift = odiff + x*(this%n1)*this%a(:, 1)*this%alat& 
+                              + y*(this%n2)*this%a(:, 2)*this%alat&
+                              + z*(this%n3)*this%a(:, 3)*this%alat
+               if(norm2(oshift)<norm2(mdiff))  mdiff = oshift
+            end do
+         end do
+      end do
+      cdiff=mdiff
+      return
+      !
+   end subroutine f_wrap_coord_diff
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -2895,8 +2997,9 @@ contains
    !> @param[in] ngbr
    !> @param[in] ntot
    !---------------------------------------------------------------------------
-   subroutine nncal(ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
+   subroutine nncal(this,ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
       implicit none
+      class(lattice), intent(inout) :: this
       ! Input
       integer, intent(in) :: NAT, ND, NDIM, NTOT
       integer, dimension(NAT), intent(in) :: IZP
@@ -2944,10 +3047,15 @@ contains
                JJP = IZP(J)
                JJP = ABS(JJP)
                R2 = 0.0
-               do L = 1, 3
-                  DDUM(L) = CRD(L, I) - CRD(L, J)
-                  R2 = R2 + DDUM(L)*DDUM(L)
-               end do
+               if (this%pbc) then
+                  call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
+                  r2 = sum(ddum(:)**2)
+               else        
+                  do L = 1, 3
+                     DDUM(L) = CRD(L, I) - CRD(L, J)
+                     R2 = R2 + DDUM(L)*DDUM(L)
+                  end do
+               end if
                ID = NGBR(IIP, JJP, R2, DUM, CT)
                !       if (ID /= 0 .and. ( IZP(I) > NTOT  .or. IZP(J) > NTOT) ) then
                if (ID /= 0) then
