@@ -220,6 +220,10 @@ module self_mod
       !> Logical variable to check if the calculation is converged.
       logical :: converged
 
+      !> Logical variable to control if initial
+      ! potential parameters are calculated from moments
+      logical :: cold
+
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -326,6 +330,7 @@ contains
       conv_thr = this%conv_thr
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
+      cold = this%cold
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -433,6 +438,7 @@ contains
       ! other variables
       this%orbital_polarization = orbital_polarization
       this%init = init
+      this%cold = cold
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -493,6 +499,8 @@ contains
 
       this%ws_max = 9.99d0
 
+      this%cold = .false.
+
       if (associated(this%lattice)) then
          if (present(full)) then
             if (full) then
@@ -552,6 +560,7 @@ contains
       print *, '[Other Variables]'
       print *, 'orbital_polarization ', this%orbital_polarization
       print *, 'init                 ', this%init
+      print *, 'cold                 ', this%cold
 
    end subroutine print_state_formatted
 
@@ -580,6 +589,7 @@ contains
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
+      cold = this%cold
 
       ! 1d allocatable
 
@@ -631,6 +641,7 @@ contains
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
+      cold = this%cold
       ! 1d allocatable
 
       if (allocated(this%ws)) then
@@ -676,7 +687,7 @@ contains
       !===========================================================================
       niter = 0
       do i = 1, this%nstep
-         if (i==1) call run_scf(this)
+         if (this%cold .and. i==1) call run_scf(this)
          !=========================================================================
          !                        PERFORM THE RECURSION
          !=========================================================================
