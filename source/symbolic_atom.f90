@@ -81,6 +81,7 @@ module symbolic_atom_mod
       procedure :: predls
       procedure :: build_pot
       procedure :: d_matrix
+      procedure :: d_matrix_tb
       procedure :: disp_matrix
       procedure :: p_matrix
       procedure :: transform_pmatrix
@@ -261,6 +262,32 @@ contains
          end do
       end do
    end subroutine d_matrix
+
+   subroutine d_matrix_tb(this, mat, e)
+      class(symbolic_atom) :: this
+      !
+      real(rp), intent(in) :: e
+      complex(rp), dimension(9, 9), intent(inout) :: mat
+      integer :: k, l, m, ml
+      complex(rp):: cu, cd, wu, wd, de, wuwd
+
+      mat = 0.0d0
+      do l = 0, 2
+         ml = l*l + 1
+         cu = cmplx(this%potential%center_band(l+1, 1) + this%potential%vmad, 0.0d0)
+         cd = cmplx(this%potential%center_band(l+1, 2) + this%potential%vmad, 0.0d0)
+         wu = cmplx(this%potential%width_band(l+1, 1), 0.0d0)
+         wd = cmplx(this%potential%width_band(l+1, 2), 0.0d0)
+         wuwd = wu*wd
+         wu = wu*wu
+         wd = wd*wd
+         de = (cd*wu - cu*wd + 1.0d0*(wd - wu)*e)/(wuwd)
+         do m = 1, 2*l + 1
+            ml = l*l + m
+            mat(ml, ml) = de
+         end do
+      end do
+   end subroutine d_matrix_tb
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
