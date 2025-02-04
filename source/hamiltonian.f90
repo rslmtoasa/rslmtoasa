@@ -83,6 +83,11 @@ module hamiltonian_mod
       character(len=10) :: v_alpha, v_beta
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
+      !!! Testing Gershgorin bounds for later implementation
+      !!! !> Upper Gershgorin bound
+      !!! real(rp) :: g_max
+      !!! !> Lower Gershgorin bound
+      !!! real(rp) :: g_min
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -671,6 +676,30 @@ contains
          if (this%hoh) this%eeo_glob = this%eeo
       end if
       close (128)
+      !!! AB 270125 Testing Gershgorin circles for later implementation
+      !!! ! Quick check/hack for Gershgorin circles
+      !!! g_max = -100.0_rp
+      !!! g_min = 100.0_rp
+      !!! g_mid = 0.0_rp
+      !!! do ntype = 1, this%charge%lattice%ntype
+      !!!    nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
+      !!!    !write(123, *)´bulkham´
+      !!!    do m = 1, nr
+      !!!       do i = 1, 9
+      !!!          g_mid = this%ee(i, i, m, ntype)
+      !!!          g_rad = 0.0_rp
+      !!!          do j = 1, 9
+      !!!             if (i /= j) g_rad = g_rad + abs(this%ee(j, i, m, ntype))
+      !!!          end do ! end of orbital j loop
+      !!!          g_min = min(g_mid - g_rad, g_min)
+      !!!          g_max = max(g_mid + g_rad, g_max)
+      !!!       end do ! end of orbital i loop
+      !!!    end do ! end of neighbour number
+      !!! end do ! end of neighbour number
+      !!! print *, 'Gershgorin circles: ', g_min, g_max
+      !!! ! Additional factor for safety
+      !!! this%g_max = g_max * sqrt(2.0_rp)
+      !!! this%g_min = g_min * sqrt(2.0_rp)
    end subroutine build_bulkham
 
    subroutine build_locham(this)
