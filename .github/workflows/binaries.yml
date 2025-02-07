@@ -1,8 +1,18 @@
 name: Build binaries on all platforms (beta)
 
-#on: [release]
-on: [release, push, pull_request]
-
+# on: [release]
+# on: [release, push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - '**'
+  pull_request:
+    branches-ignore:
+      - '**'
+  release:
+    branches-ignore:
+      - '**'
+      
 jobs:
   build_binaries:
     name: Build binaries on ${{ matrix.os }} ${{ matrix.icon}}
