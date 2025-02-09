@@ -220,6 +220,10 @@ module self_mod
       !> Logical variable to check if the calculation is converged.
       logical :: converged
 
+      !> Logical variable to control if initial
+      ! potential parameters are calculated from moments
+      logical :: cold
+
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -326,6 +330,7 @@ contains
       conv_thr = this%conv_thr
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
+      cold = this%cold
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -433,6 +438,7 @@ contains
       ! other variables
       this%orbital_polarization = orbital_polarization
       this%init = init
+      this%cold = cold
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -493,6 +499,8 @@ contains
 
       this%ws_max = 9.99d0
 
+      this%cold = .false.
+
       if (associated(this%lattice)) then
          if (present(full)) then
             if (full) then
@@ -552,6 +560,7 @@ contains
       print *, '[Other Variables]'
       print *, 'orbital_polarization ', this%orbital_polarization
       print *, 'init                 ', this%init
+      print *, 'cold                 ', this%cold
 
    end subroutine print_state_formatted
 
@@ -580,6 +589,7 @@ contains
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
+      cold = this%cold
 
       ! 1d allocatable
 
@@ -631,6 +641,7 @@ contains
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
+      cold = this%cold
       ! 1d allocatable
 
       if (allocated(this%ws)) then
@@ -667,113 +678,53 @@ contains
       class(self), intent(inout) :: this
       integer :: i, ia, niter
       real(rp), dimension(6) :: QSL
-
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
-
+   
       !===========================================================================
       !                              BEGIN SCF LOOP
       !===========================================================================
       niter = 0
       do i = 1, this%nstep
+         if (this%cold .and. i==1) call run_scf(this)
          !=========================================================================
          !                        PERFORM THE RECURSION
          !=========================================================================
-         if (rank == 0) call g_logger%info('Perform recursion at step '//int2str(i), __FILE__, __LINE__)
-         call g_timer%start('recursion')
-         select case (this%control%calctype)
-         case ('B')
-            do ia = 1, this%lattice%nrec
-               call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
-            end do
-            if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-            call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
-         case ('S')
-            do ia = 1, this%lattice%ntype
-               call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
-            end do
-            if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-            call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian for the surface
-         case ('I')
-            do ia = 1, this%lattice%ntype
-               call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
-            end do
-            if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-            call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
-            call this%hamiltonian%build_locham() ! Build the local Hamiltonian
-         end select
-         select case (this%control%recur)
-         case ('lanczos')
-            call this%recursion%recur()
-         case ('chebyshev')
-            call this%recursion%chebyshev_recur()
-         case ('block')
-            call this%recursion%recur_b()
-         end select
-         call g_timer%stop('recursion')
+         call run_recursion(this, i)
+   
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
          !=========================================================================
          this%esumn = sum(this%symbolic_atom(:)%potential%etot)
          this%esum = this%esumn
+
          !=========================================================================
          !            SAVE THE PARAMETERS QL AND PL TO BE MIXED LATER
          !=========================================================================
          call this%mix%save_to('old') ! Save to qia_old to mix with qia_new.
+
          !=========================================================================
          !                      SAVE THE MAGNETIC MOMENTS
          !=========================================================================
          do ia = 1, this%lattice%nrec
             this%mix%mag_old(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
+   
          !=========================================================================
          !                  CALCULATE THE DENSITY OF STATES
          !=========================================================================
-         if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
-         call g_timer%start('calculation-of-DOS')
-         call this%en%e_mesh() ! Solve the energy mesh
-         select case (this%control%recur)
-         case ('lanczos')
-            call this%green%sgreen() ! Calculate the density of states using the continued fraction
-         case ('chebyshev')
-            call this%green%chebyshev_green()
-         case ('block')
-            call this%recursion%zsqr()
-            call this%green%block_green()
-         end select
-         call this%bands%calculate_fermi() ! Calculate the fermi energy
-         !=========================================================================
-         !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
-         !=========================================================================
-         call this%bands%calculate_magnetic_moments() ! Calculate the magnetic moments
-         do ia = 1, this%lattice%nrec
-            this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
-         end do
-         call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot) ! Mix magnetic moments
-         do ia = 1, this%lattice%nrec 
-            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
-         end do
-         !=========================================================================
-         !                  CALCULATE THE NEW BAND MOMENTS QL
-         !=========================================================================
-         call this%bands%calculate_moments() ! Integrate the DOS and calculate the band momends QL
-         do ia = 1, this%lattice%nrec 
-            this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
-         end do
-         call this%mix%save_to('new') ! Save the calculated PL and QL into the mix%qia_new
-         call g_timer%stop('calculation-of-DOS')
+         call run_dos(this)
+   
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
          !=========================================================================
-         !call g_timer%start(´mixing´)
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
-         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix mix%qia_new with mix%qia_old and save into mix%qia
-         !call g_timer%stop(´mixing´)
+         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
+   
          !=========================================================================
          !         CALCULATE THE MADELUNG POTENTIAL (BULK ONLY IMPLEMENTED)
          !=========================================================================
-         !call g_timer%start(´madelung-potential´)
          select case (this%control%calctype)
          case ('B')
             call this%charge%bulkpot()
@@ -782,47 +733,17 @@ contains
          case ('I')
             call this%charge%imppot()
          end select
-         !call g_timer%stop(´madelung-potential´)
+   
          !=========================================================================
          !                        SAVE MIXED PARAMETERS
          !=========================================================================
-         call this%mix%save_to('current') ! Save mixed parameters mix%qia into potential%pl and potential%ql
+         call this%mix%save_to('current') ! Save mixed parameters into potential%pl and potential%ql
+   
          !=========================================================================
          !                       MAKE SFC ATOMIC SPHERE
          !=========================================================================
-         call g_timer%start('atomic-sfc')
-         !do ia=1, this%lattice%nrec
-         do ia = start_atom, end_atom
-            qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia)) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
-            call g_logger%info('Atomic SFC done for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
-         end do
-
-         !=========================================================================
-         !      TRANSFER ATOMIC POTENTIAL DATA ACROSS MPI RANKS
-         !=========================================================================
-#ifdef USE_MPI
-         pot_size = this%symbolic_atom(start_atom)%potential%sizeof_potential_full()
-         allocate (T_comm(pot_size, this%lattice%nrec))
-         T_comm = 0.0_rp
-         do na_glob = start_atom, end_atom
-            call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%flatten_potential_full(T_comm(:, na_glob))
-         end do
-         call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm, product(shape(T_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         do na_glob = 1, this%lattice%nrec
-            call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%expand_potential_full(T_comm(:, na_glob))
-         end do
-         deallocate (T_comm)
-#endif
-
-         !=========================================================================
-         !      TRANSFORM POTENTIAL BASIS FROM ORTHOGONAL TO TIGHT-BINDING
-         !=========================================================================
-         do ia = 1, this%lattice%nrec
-            !do ia=1, start_atom, end_atom
-            if (rank == 0) call g_logger%info('From orthogonal to TB basis for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
-            call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au) ! Transforms the potential from orthogonal to tight-binding basis
-         end do
-         call g_timer%stop('atomic-sfc')
+         call run_scf(this)
+   
          !=========================================================================
          !                TEST IF THE CALCULATION IS CONVERGED
          !=========================================================================
@@ -836,6 +757,146 @@ contains
          end if
       end do
    end subroutine run
+   
+   !=========================================================================
+   !                   RUN RECURSION STEP
+   !=========================================================================
+   subroutine run_recursion(this, iter)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: iter
+      integer :: ia
+   
+      if (rank == 0) call g_logger%info('Perform recursion at step '//int2str(iter), __FILE__, __LINE__)
+      call g_timer%start('recursion')
+   
+      select case (this%control%calctype)
+      case ('B')
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('S')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('I')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+         call this%hamiltonian%build_locham()
+      end select
+   
+      select case (this%control%recur)
+      case ('lanczos')
+         call this%recursion%recur()
+      case ('chebyshev')
+         call this%recursion%chebyshev_recur()
+      case ('block')
+         call this%recursion%recur_b()
+      end select
+   
+      call g_timer%stop('recursion')
+   end subroutine run_recursion
+   
+   !=========================================================================
+   !                   RUN DENSITY OF STATES CALCULATION
+   !=========================================================================
+   subroutine run_dos(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+   
+      if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
+      call g_timer%start('calculation-of-DOS')
+   
+      call this%en%e_mesh()
+   
+      select case (this%control%recur)
+      case ('lanczos')
+         call this%green%sgreen()
+      case ('chebyshev')
+         call this%green%chebyshev_green()
+      case ('block')
+         call this%recursion%zsqr()
+         call this%green%block_green()
+      end select
+   
+      call this%bands%calculate_fermi() ! Calculate the Fermi energy
+      !=========================================================================
+      !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
+      !=========================================================================
+      call this%bands%calculate_magnetic_moments()
+   
+      do ia = 1, this%lattice%nrec
+         this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
+      end do
+   
+      call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+   
+      do ia = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
+      end do
+   
+      !=========================================================================
+      !                  CALCULATE THE NEW BAND MOMENTS QL
+      !=========================================================================
+      call this%bands%calculate_moments()
+      call this%mix%save_to('new')
+   
+      call g_timer%stop('calculation-of-DOS')
+   end subroutine run_dos
+   
+   !=========================================================================
+   !                   RUN SELF-CONSISTENT FIELD UPDATE
+   !=========================================================================
+   subroutine run_scf(this)
+      class(self), intent(inout) :: this
+      real(rp), dimension(6) :: QSL
+      real(rp), dimension(:, :), allocatable :: T_comm
+      integer :: ia, na_glob, pot_size
+   
+      call g_timer%start('atomic-sfc')
+   
+      !=========================================================================
+      !                       MAKE SFC ATOMIC SPHERE
+      !=========================================================================
+      do ia = start_atom, end_atom
+         qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia)) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
+         call g_logger%info('Atomic SFC done for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
+      end do
+
+      !=========================================================================
+      !      TRANSFER ATOMIC POTENTIAL DATA ACROSS MPI RANKS
+      !=========================================================================
+#ifdef USE_MPI
+      pot_size = this%symbolic_atom(start_atom)%potential%sizeof_potential_full()
+      allocate (T_comm(pot_size, this%lattice%nrec))
+      T_comm = 0.0_rp
+      do na_glob = start_atom, end_atom
+         call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%flatten_potential_full(T_comm(:, na_glob))
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm, product(shape(T_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do na_glob = 1, this%lattice%nrec
+         call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%expand_potential_full(T_comm(:, na_glob))
+      end do
+      deallocate (T_comm)
+#endif
+
+      !=========================================================================
+      !      TRANSFORM POTENTIAL BASIS FROM ORTHOGONAL TO TIGHT-BINDING
+      !=========================================================================
+      do ia = 1, this%lattice%nrec
+         if (rank == 0) call g_logger%info('From orthogonal to TB basis for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
+         call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au)
+      end do
+   
+      call g_timer%stop('atomic-sfc')
+   end subroutine run_scf
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
