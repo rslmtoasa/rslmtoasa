@@ -36,7 +36,9 @@ module symbolic_atom_mod
    public :: array_of_symbolic_atoms
    public :: print_state, print_state_full, print_state_formatted
    public :: save_state
+   public :: save_state_scf
    public :: load_state
+
 
    type, public :: symbolic_atom
       !> Mixture occupation in self-consistent calculation. Default: 0.01.
@@ -821,6 +823,19 @@ contains
          type(symbolic_atom), dimension(:), intent(in) :: array
          call print_state_formatted(array, suffix="_out")
       end subroutine save_state
+
+
+      !---------------------------------------------------------------------------
+      ! DESCRIPTION:
+      !> @brief
+      !> Shortcut for print_state_full with suffix="_scf"
+      !>
+      !> Shortcut for print_state_full with suffix="_scf"
+      !---------------------------------------------------------------------------
+      subroutine save_state_scf(array)
+         type(symbolic_atom), dimension(:), intent(in) :: array
+         call print_state_formatted(array, suffix="_scf")
+      end subroutine save_state_scf
 
       !---------------------------------------------------------------------------
       ! DESCRIPTION:

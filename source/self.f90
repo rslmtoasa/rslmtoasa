@@ -22,7 +22,7 @@
 module self_mod
 
    use mpi_mod
-   use symbolic_atom_mod, only: symbolic_atom
+   use symbolic_atom_mod, only: symbolic_atom, save_state_scf
    use logger_mod, only: g_logger
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
@@ -745,6 +745,12 @@ contains
          call run_scf(this)
    
          !=========================================================================
+         !             UPDATE FILES AND INFORMATION IN THE DIRECTORY
+         !=========================================================================
+         if (rank == 0) call update_fermi_in_input(this%en%fermi, this%control%fname)
+         if (rank == 0) call save_state_scf(this%lattice%symbolic_atoms(:))
+
+         !=========================================================================
          !                TEST IF THE CALCULATION IS CONVERGED
          !=========================================================================
          this%converged = this%is_converged(this%mix%delta)
@@ -859,7 +865,7 @@ contains
       real(rp), dimension(:, :), allocatable :: T_comm
       integer :: ia, na_glob, pot_size
    
-      call g_timer%start('atomic-sfc')
+      call g_timer%start('atomic-scf')
    
       !=========================================================================
       !                       MAKE SFC ATOMIC SPHERE
@@ -894,7 +900,7 @@ contains
          call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au)
       end do
    
-      call g_timer%stop('atomic-sfc')
+      call g_timer%stop('atomic-scf')
    end subroutine run_scf
 
 
@@ -1020,6 +1026,92 @@ contains
 
       l = delta_en < this%conv_thr
    end function is_converged
+
+   subroutine update_fermi_in_input(fermi_value, filename)
+       use iso_fortran_env, only: stderr => error_unit
+       real(rp), intent(in) :: fermi_value
+       character(len=*), intent(in) :: filename
+       character(len=256), allocatable :: lines(:)
+       integer :: i, nlines, iunit, ounit, stat, eq_pos, com_pos
+       logical :: in_energy, fermi_found
+       character(len=256) :: temp_filename, key_part, rest, comment_part, new_rest
+   
+       ! Read the entire input file into memory
+       open(newunit=iunit, file=filename, status='old', action='read', iostat=stat)
+       if (stat /= 0) then
+           write(stderr, '(a)') "Error: Failed to open input file."
+           return
+       end if
+   
+       ! Count lines
+       nlines = 0
+       do
+           read(iunit, '(a)', iostat=stat) 
+           if (stat /= 0) exit
+           nlines = nlines + 1
+       end do
+       rewind(iunit)
+   
+       ! Read lines into buffer
+       allocate(lines(nlines))
+       do i = 1, nlines
+           read(iunit, '(a)') lines(i)
+       end do
+       close(iunit)
+   
+       ! Find and update the fermi line in the &energy section
+       in_energy = .false.
+       fermi_found = .false.
+       do i = 1, nlines
+           lines(i) = adjustl(lines(i))
+           if (lines(i) == '&energy') then
+               in_energy = .true.
+           else if (lines(i) == '/') then
+               in_energy = .false.
+           else if (in_energy .and. .not. fermi_found) then
+               if (index(lines(i), 'fermi') == 1) then
+                   ! Split line into key, value, and comment
+                   eq_pos = index(lines(i), '=')
+                   if (eq_pos == 0) cycle
+                   key_part = lines(i)(1:eq_pos)
+                   rest = adjustl(lines(i)(eq_pos+1:))
+                   com_pos = index(rest, '!')
+                   if (com_pos > 0) then
+                       comment_part = rest(com_pos:)
+                       rest = rest(:com_pos-1)
+                   else
+                       comment_part = ''
+                   end if
+   
+                   ! Replace the value with the new Fermi energy
+                   write(new_rest, '(f12.6)') fermi_value  ! Format to 6 decimal places
+                   lines(i) = trim(key_part) // ' ' // trim(adjustl(new_rest)) // ' ' // trim(comment_part)
+                   fermi_found = .true.
+               end if
+           end if
+       end do
+   
+       ! Write the updated content to a temporary file
+       temp_filename = trim(filename) // '.tmp'
+       open(newunit=ounit, file=temp_filename, status='replace', action='write', iostat=stat)
+       if (stat /= 0) then
+           write(stderr, '(a)') "Error: Failed to create temporary file."
+           return
+       end if
+   
+       do i = 1, nlines
+           write(ounit, '(a)') trim(lines(i))
+       end do
+       close(ounit)
+   
+       ! Replace the original file with the temporary file
+       call rename(temp_filename, filename, status=stat)
+       if (stat /= 0) then
+           write(stderr, '(a)') "Error: Failed to update input file."
+       end if
+   
+       deallocate(lines)
+   end subroutine update_fermi_in_input
    !==============================================================================
    !----- FROM HERE WE HAVE SUBROUTINES AND FUCTIONS RAW COPIED FROM OLD CODE ----
    !==============================================================================
