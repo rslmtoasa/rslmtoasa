@@ -1,0 +1,43 @@
+&calculation
+pre_processing = 'bravais'
+!post_processing = 'exchange'
+verbose = T
+/
+&lattice
+rc = 60 
+alat = 5.677000
+crystal_sym = 'file' 
+wav = 1.5261136945
+/
+&atoms
+database = './'
+label(1) = 'Sn1'
+label(2) = 'Sn2'
+label(3) = 'Mn1'
+label(4) = 'Mn2'
+label(5) = 'Mn3'
+label(6) = 'Mn4'
+label(7) = 'Mn5'
+label(8) = 'Mn6'
+/
+&self
+nstep = 200   
+/
+&energy
+fermi = -0.091452
+energy_min = -1.2
+energy_max = 1.0
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 4 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21 
+recur = 'block'
+sym_term = .true.
+/
+&mix
+beta = 0.10
+mixtype = 'broyden'
+magbeta(1:8) = 8*0.0d0
+/

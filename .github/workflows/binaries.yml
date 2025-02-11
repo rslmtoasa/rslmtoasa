@@ -10,9 +10,9 @@ jobs:
       matrix:
         include:
           - { icon: '🐧' , os: ubuntu-latest,  shell: bash, arch: x86_64 }
-          - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
           - { icon: '🍎' , os: macos-14,       shell: bash, arch: arm64 }
           - { icon: '🍏' , os: macos-13,       shell: bash, arch: x86_64 }
+          # - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -24,8 +24,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           # fftw3 
-          brew install ninja meson openmpi
+          brew install ninja meson openmpi gfortran
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
+          sudo ln -s "$(which gfortran-14)" "$(brew --prefix)/bin/gfortran"
 
       - name: Provide ninja and MPI on Linux ${{ matrix.icon}}
         if: runner.os == 'Linux'

@@ -1,0 +1,39 @@
+&calculation
+post_processing = 'exchange'
+verbose = T
+/
+&lattice
+ndim = 50000 
+rc = 080 
+alat = 2.86120 
+crystal_sym = 'bcc' 
+wav = 1.40880
+! exchange inputs in the &lattice header
+njij = 2
+ijpair(1, :) = 1, 2634
+ijpair(2, :) = 1, 2635
+! end of exchange inputs
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 100
+/
+&energy
+fermi = -0.069291
+energy_min = -1.0
+energy_max = 1.2
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21 
+recur = 'block'
+/
+&mix
+beta = 0.5
+mixtype = 'broyden'
+/

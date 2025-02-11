@@ -91,7 +91,7 @@ program test_abSpinlib
       print *, 'Step', iiter, " finished", sum(moments(3, :))/na
       print *, 'Energy:', 2.0d0*exchange(1, 1)*sum(moments(1:3, 1)*moments(1:3, 2))/(mry/mub), exchange(1, 1)/(mry/mub)
       !do i=1,na
-      !   print '(2x,i4,3f12.6)', i,moments(:,i)
+      !   print ´(2x,i4,3f12.6)´, i,moments(:,i)
       !end do
    end do
    !

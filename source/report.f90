@@ -107,7 +107,7 @@ contains
          call split(label, '.', lst_labels)
          obj%label = lst_labels(1)
          allocate (obj%children(1))
-         obj%children(1) = report(fjoin(lst_labels(2:), '.'))
+         obj%children(1) = report_constructor(fjoin(lst_labels(2:), '.'))
       else
          allocate (obj%children(0))
          obj%label = label
@@ -521,8 +521,8 @@ contains
       call move_alloc(aux_labels, labels)
    end subroutine push_labels
 
-   !> Search for a child with 'label', if found returns .True. and fills 'values' array with child's values, otherwise returns .False.
-   !> You should enter child levels in 'label', ex: 'calc1.subcalc2.subsubcalc3' for getting the values of 'subsubcalc3'
+   !> Search for a child with ´label´, if found returns .True. and fills ´values´ array with child´s values, otherwise returns .False.
+   !> You should enter child levels in ´label´, ex: ´calc1.subcalc2.subsubcalc3´ for getting the values of ´subsubcalc3´
    subroutine report_get_values(this, values, append, root, children, depth)
       class(report), intent(in) :: this
       real(rp), dimension(:), allocatable, intent(inout) :: values

@@ -37,7 +37,7 @@ module recursion_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: recursion
       !> Hamiltonian
       class(hamiltonian), pointer :: hamiltonian
@@ -56,7 +56,7 @@ module recursion_mod
       complex(rp), dimension(:, :, :, :), allocatable :: a_b, b2_b
       complex(rp), dimension(:, :, :), allocatable :: atemp_b, b2temp_b
       !> Atom list in hopping region
-      integer, dimension(:), allocatable :: izero, idum, irlist
+      integer, dimension(:), allocatable :: izero, idum, irlist, nzero, mzero, ndum, mdum
       integer :: irnum !< Atoms within recursion shells
       !> Atom list in hopping region as a function of recursion step
       integer, dimension(:, :), allocatable :: izeroll
@@ -68,9 +68,12 @@ module recursion_mod
       complex(rp), dimension(:, :, :), allocatable :: psi0, psi1, psi2
       !> Chebyshev moments
       complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
+      complex(rp), dimension(:, :, :, :, :), allocatable :: mu_nm_stochastic
       complex(rp), dimension(18, 18) :: cheb_mom_temp
       !> Variable to save H|psi>
       complex(rp), dimension(:, :), allocatable :: v
+      !> Variable to save T(H)
+      complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
    contains
       procedure :: hop
       procedure :: crecal
@@ -93,9 +96,16 @@ module recursion_mod
       procedure :: chebyshev_recur_ij
       procedure :: chebyshev_recur_ll
       procedure :: chebyshev_recur_ll_hoh
-      procedure :: chebyshev_recur_s_ll
+      !procedure :: chebyshev_recur_s_ll obsolete
       procedure :: chebyshev_recur
-      procedure :: chebyshev_recur_full
+      !procedure :: chebyshev_recur_full obsolete 
+      !procedure :: evaluate_t_h
+      procedure :: compute_moments_stochastic
+      !procedure :: compute_moments ! temporary for test purposes
+      !procedure :: evaluate_chebyshev ! temporary for test purposes
+      !procedure :: calculate_gamma_nm
+      procedure :: ham_vec_matmul
+      procedure :: velo_vec_matmul
       procedure :: restore_to_default
       final :: destructor
    end type recursion
@@ -159,6 +169,12 @@ contains
       if (allocated(this%atemp_b)) call g_safe_alloc%deallocate('recursion.atemp_b', this%atemp_b)
       if (allocated(this%b2temp_b)) call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
       if (allocated(this%pmn_b)) call g_safe_alloc%deallocate('recursion.pmn_b', this%pmn_b)
+      if (allocated(this%t_h)) call g_safe_alloc%deallocate('recursion.t_h', this%t_h)
+      if (allocated(this%mu_nm_stochastic)) call g_safe_alloc%deallocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic)
+      if (allocated(this%nzero)) call g_safe_alloc%deallocate('recursion.nzero', this%nzero)
+      if (allocated(this%mzero)) call g_safe_alloc%deallocate('recursion.mzero', this%mzero)
+      if (allocated(this%ndum)) call g_safe_alloc%deallocate('recursion.ndum', this%ndum)
+      if (allocated(this%mdum)) call g_safe_alloc%deallocate('recursion.mdum', this%mdum)
 #else
       if (allocated(this%a)) deallocate (this%a)
       if (allocated(this%b2)) deallocate (this%b2)
@@ -184,8 +200,506 @@ contains
       if (allocated(this%atemp_b)) deallocate (this%atemp_b)
       if (allocated(this%b2temp_b)) deallocate (this%b2temp_b)
       if (allocated(this%pmn_b)) deallocate (this%pmn_b)
+      if (allocated(this%t_h)) deallocate(this%t_h)
+      if (allocated(this%mu_nm_stochastic)) deallocate(this%mu_nm_stochastic)
+      if (allocated(this%nzero)) deallocate (this%nzero)
+      if (allocated(this%mzero)) deallocate (this%mzero)
+      if (allocated(this%ndum)) deallocate (this%ndum)
+      if (allocated(this%mdum)) deallocate (this%mdum)
 #endif
    end subroutine destructor
+
+   subroutine velo_vec_matmul(this, c_or_n, v_op, psi_in, psi_out)
+      class(recursion), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(in) :: v_op
+      complex(rp), dimension(:, :, :), intent(in) :: psi_in
+      character :: c_or_n 
+      complex(rp), dimension(:, :, :), intent(out) :: psi_out
+      ! Local variables
+      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      complex(rp), dimension(18, 18) :: dum1, dum2, locham
+      hblocksize = 18
+      nat = this%lattice%kk
+
+      psi_out(:, :, :) = (0.0d0, 0.0d0)
+
+      ! NOT YET IMPLEMENTED THE VELOCITY OPERATOR FOR THE LOCAL HAMILTONIAN
+      ! Write H*|phi_1> for the local Hamiltonian
+      nlimplus1 = this%lattice%nmax + 1
+      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
+      !   !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
+      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
+      !      this%idum(k) = this%izero(k)
+      !      ih = this%lattice%iz(k)
+      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
+      !      if (this%izero(k) /= 0) then
+      !         locham = this%hamiltonian%hall(1:18, 1:18, 1, k) + this%hamiltonian%lsham(1:18, 1:18, ih)
+      !         call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
+      !      end if
+      !      if (nr >= 2) then
+      !         do nb = 2, nr ! Loop on the neighbouring
+      !            nnmap = this%lattice%nn(k, nb)
+      !            if (nnmap /= 0) then
+      !               if (this%izero(nnmap) /= 0) then
+      !                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+      !                  this%idum(k) = 1
+      !               end if
+      !            end if
+      !         end do ! End of loop in the neighbouring
+      !      end if
+      !      ! Do the scaling and shifting
+      !      psi_out(:, :, k) = psi_out(:, :, k) - b*psi_in(:, :, k)
+      !      psi_out(:, :, k) = psi_out(:, :, k)/a
+      !   end do ! End of loop in the neighbouring
+      !   !$omp end parallel do
+      !end if ! End of local Hamiltonian loop
+
+      ! Write H*|phi_1> for the bulk Hamiltonian
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap)
+      do k = nlimplus1, this%lattice%kk ! Loop in the clust
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         !if (this%izero(k) /= 0) then
+         !   !!!!! Probably useless because the onsite term is null. Here for consistency only
+         !   call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, 1, ih), 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18) 
+         !   !!!!! Probably useless because the onsite term is null. Here for consistency only
+         !end if
+         if (nr >= 2) then
+            do nb = 2, nr ! Loop in the neighbouring
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                  call zgemm(c_or_n, 'n', 18, 18, 18, cone, v_op(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+                  this%idum(k) = 1
+               end if
+            end do ! End of the loop in the neighbouring
+         end if
+      end do ! End loop in the clust
+      !$omp end parallel do
+   end subroutine velo_vec_matmul
+
+   subroutine ham_vec_matmul(this, psi_in, psi_out)
+      class(recursion), intent(inout) :: this
+      complex(rp), dimension(:, :, :), intent(in) :: psi_in
+      complex(rp), dimension(:, :, :), intent(out) :: psi_out
+      ! Local variables
+      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
+      complex(rp), dimension(18, 18) :: dum1, dum2, locham
+      hblocksize = 18
+      nat = this%lattice%kk
+
+      psi_out(:, :, :) = (0.0d0, 0.0d0)
+
+      ! Write H*|phi_1> for the local Hamiltonian
+      nlimplus1 = this%lattice%nmax + 1
+      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
+         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
+         do k = 1, this%lattice%nmax ! Loop in the neighbouring
+            this%idum(k) = this%izero(k)
+            ih = this%lattice%iz(k)
+            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
+            if (this%izero(k) /= 0) then
+               locham = this%hamiltonian%hall(1:18, 1:18, 1, k) + this%hamiltonian%lsham(1:18, 1:18, ih)
+               call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
+            end if
+            if (nr >= 2) then
+               do nb = 2, nr ! Loop on the neighbouring
+                  nnmap = this%lattice%nn(k, nb)
+                  if (nnmap /= 0) then
+                     if (this%izero(nnmap) /= 0) then
+                        call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+                        this%idum(k) = 1
+                     end if
+                  end if
+               end do ! End of loop in the neighbouring
+            end if
+         end do ! End of loop in the neighbouring
+         !$omp end parallel do
+      end if ! End of local Hamiltonian loop
+
+      ! Write H*|phi_1> for the bulk Hamiltonian
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
+      do k = nlimplus1, this%lattice%kk ! Loop in the clust
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         if (this%izero(k) /= 0) then
+            locham = this%hamiltonian%ee(1:18, 1:18, 1, ih) + this%hamiltonian%lsham(1:18, 1:18, ih)
+            call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
+         end if
+         if (nr >= 2) then
+            do nb = 2, nr ! Loop in the neighbouring
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+                  this%idum(k) = 1
+               end if
+            end do ! End of the loop in the neighbouring
+         end if
+      end do ! End loop in the clust
+      !$omp end parallel do
+   end subroutine ham_vec_matmul
+
+   !*************************************************************************
+   !> @brief Computes the Gamma_nm function for the Chebyshev polynomial expansion.
+   !>
+   !> This subroutine calculates the Gamma_nm function used in the conductivity
+   !> formula. The function incorporates the Jackson kernel for smoothing and uses
+   !> Chebyshev polynomials up to the specified maximum order. It also incorporates
+   !> the (1 - energy**2)**2, Eq. (4) -> PRL 114, 116602 (2015).
+   !>
+   !> @param[out] gamma_nm      Gamma_nm array (dimension: energy_grid, recursion_level, recursion_level).
+   !*************************************************************************
+   !subroutine calculate_gamma_nm(this)
+   !   implicit none
+   !   class(recursion), intent(inout) :: this
+
+   !   ! Local variables
+   !   integer :: i, n, m
+   !   real(rp) :: a, b 
+   !   real(rp), dimension(:), allocatable :: g_kernel(:)       ! Jackson kernel
+   !   real(rp), dimension(:), allocatable :: weights(:)        ! Weight factors
+   !   real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
+   !   real(rp), dimension(:, :), allocatable :: chebyshev_poly
+   !   complex(rp), dimension(:, :), allocatable :: cn, cm
+
+   !   ! Initialize variables
+   !   allocate(acos_x(this%en%channels_ldos + 10), sqrt_term(this%en%channels_ldos + 10), wscale(this%en%channels_ldos + 10))
+   !   allocate(chebyshev_poly(this%en%channels_ldos + 10, this%control%lld))
+   !   allocate(cn(this%en%channels_ldos + 10, this%control%lld), cm(this%en%channels_ldos + 10, this%control%lld))
+   !   allocate(g_kernel(this%control%lld), weights(this%control%lld))
+
+   !   ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
+   !   a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+   !   b = (this%en%energy_max + this%en%energy_min)/2
+   !      
+   !   wscale(:) = (this%en%ene(:) - b)/a
+
+   !   acos_x(:) = acos(wscale(:))
+   !   sqrt_term(:) = sqrt(1.0_rp - wscale(:)**2)
+
+   !   ! Calculating the Jackson Kernel
+   !   call jackson_kernel((this%control%lld), g_kernel)
+
+   !   ! Calculate weights
+   !   weights(:) = 1.0d0
+   !   weights(1) = 0.5d0
+
+   !   ! Compute Cn and Cm
+   !   do n = 1, this%control%lld
+   !      cn(:, n) = (wscale(:) - i_unit * real(n-1, rp) * sqrt_term(:)) * exp(i_unit * real(n-1, rp) * acos_x(:))
+   !      cm(:, n) = (wscale(:) + i_unit * real(n-1, rp) * sqrt_term(:)) * exp(-i_unit * real(n-1, rp) * acos_x(:))
+   !   end do
+
+   !   chebyshev_poly(:, 1) = 1.0_rp
+   !   chebyshev_poly(:, 2) = wscale(:)
+   !   do n = 3, this%control%lld
+   !      chebyshev_poly(:, n) = 2.0_rp * wscale(:) * chebyshev_poly(:, n - 1) - chebyshev_poly(:, n - 2)
+   !   end do
+
+   !   ! Initialize Gamma_nm
+   !   this%gamma_nm(:, :, :) = 0.0_rp
+
+   !   ! Compute Gamma_nm
+   !   do n = 1, this%control%lld
+   !      do m = 1, this%control%lld
+   !         this%gamma_nm(:, n, m) = (cn(:, n) * chebyshev_poly(:, m) + cm(:, m) * chebyshev_poly(:, n)) 
+   !         this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) / ((1.0_rp - wscale(:)**2)**2)
+   !         this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) * g_kernel(n) * g_kernel(m) * weights(n) * weights(m) 
+   !      end do
+   !   end do
+
+   !   ! Clean up
+   !   deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
+
+   !end subroutine calculate_gamma_nm
+
+
+   subroutine compute_moments_stochastic(this)
+      class(recursion), intent(inout) :: this
+      ! Local variables
+      integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, random_vec
+      complex(rp), dimension(18, 18) :: dum, dum1, dum2
+      complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
+      complex(rp), dimension(:, :, :, :), allocatable :: left_vec
+      real(rp) :: a, b, norm
+
+      hblocksize = 18
+      nat = this%lattice%kk
+
+      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      b = (this%en%energy_max + this%en%energy_min)/2
+
+      call this%hamiltonian%build_realspace_velocity_operators()
+
+      do i = 1, 18
+         this%hamiltonian%ee(i, i, 1, :) = this%hamiltonian%ee(i, i, 1, :) - b 
+      end do
+
+      this%hamiltonian%ee(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) / a
+
+      this%mu_nm_stochastic(:, :, :, :, :) = (0.0d0, 0.0d0)
+
+      allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
+      allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
+      allocate(w2(hblocksize, hblocksize, this%lattice%kk), v0(hblocksize, hblocksize, this%lattice%kk), v1(hblocksize, hblocksize, this%lattice%kk))
+      allocate(v2(hblocksize, hblocksize, this%lattice%kk))
+
+      do i = 1, this%lattice%ntype
+
+         j =  this%lattice%atlist(i)
+
+         call g_logger%info('Chebyshev moments being calculated taking atom type '//int2str(j), __FILE__, __LINE__)
+  
+         ! Initializing wave functions
+         v0(:, :, :) = (0.0d0, 0.0d0)
+         v1(:, :, :) = (0.0d0, 0.0d0)
+         v2(:, :, :) = (0.0d0, 0.0d0)
+         psiref(:, :, :) = (0.0d0, 0.0d0)
+         w0(:, :, :) = (0.0d0, 0.0d0)
+         w1(:, :, :) = (0.0d0, 0.0d0)
+         w2(:, :, :) = (0.0d0, 0.0d0)
+         right_vec(:, :, :) = (0.0d0, 0.0d0)
+         left_vec(:, :, :, :) = (0.0d0, 0.0d0)
+         dum(:, :) = (0.0d0, 0.0d0)
+
+         ! Initializing neighbording map
+         this%izero(:) = 0
+         this%izero(j) = 1
+
+         ! Initializing psi
+         do m = 1, 18
+            psiref(m, m, j) = (1.0d0, 0.0d0)
+         end do
+
+         ! Computing the left vector <r|Tm(H)
+         do m=1, this%control%cond_ll 
+            write(*,*) m
+            if (m == 1) then
+               w1(:, :, :) = psiref(:, :, :)
+            else if (m == 2) then
+               w0(:, :, :) = w1(:, :, :)
+               call this%ham_vec_matmul(w0, w1)
+               this%izero(:) = this%idum(:)
+            else if (m > 2) then
+               call this%ham_vec_matmul(w1, w2)
+               this%izero(:) = this%idum(:)
+               w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
+               w0(:, :, :) = w1(:, :, :)
+               w1(:, :, :) = w2(:, :, :)
+               w2(:, :, :) = (0.0d0, 0.0d0)
+            end if
+            left_vec(:, :, :, m) = w1(:, :, :) 
+         end do
+
+         ! Redifining neighboring map for the right vector v_a*Tn(H)*v_b|r>
+         this%izero(:) = 0
+         this%izero(j) = 1
+         ! Computing the right vector v_a*Tn(H)*v_b|r>
+         ! Multiply with the velocity operator v_b
+         call this%velo_vec_matmul('n',this%hamiltonian%v_b, psiref, v0)
+         this%izero(:) = this%idum(:) 
+         do n=1, this%control%cond_ll
+            write(*,*) n
+            if (n == 1) then
+               v1(:, :, :) = v0(:, :, :) 
+            else if (n == 2) then
+               v0(:, :, :) = v1(:, :, :)
+               call this%ham_vec_matmul(v0, v1)
+               this%izero(:) = this%idum(:)
+            else if (n > 2) then
+               call this%ham_vec_matmul(v1, v2)
+               this%izero(:) = this%idum(:)
+               v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
+               v0(:, :, :) = v1(:, :, :)
+               v1(:, :, :) = v2(:, :, :)
+               v2(:, :, :) = (0.0d0, 0.0d0)
+            end if
+            ! Multiply with the velocity operator v_a
+            call this%velo_vec_matmul('n',this%hamiltonian%v_a, v1, right_vec)
+               this%izero(:) = this%idum(:)
+            do m=1, this%control%cond_ll
+               dum(:, :) = (0.0d0, 0.0d0)
+               do k=1, this%lattice%kk
+                  call zgemm('c', 'n', 18, 18, 18, cone, left_vec(:, :, k, m), 18, right_vec(:, :, k), 18, cone, dum(:, :), 18)
+               end do
+               this%mu_nm_stochastic(:, :, n, m, i) = this%mu_nm_stochastic(:, :, n, m, i) + dum(:, :)
+            end do
+         end do
+      end do
+
+      deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec)
+
+   end subroutine compute_moments_stochastic
+
+
+   !subroutine evaluate_chebyshev(this, mu_n, dos, shift, scale, num_moments)
+   !  class(recursion), intent(inout) :: this
+   !  ! Arguments
+   !  complex(rp), dimension(:), intent(in) :: mu_n     ! Chebyshev moments
+   !  real(rp), dimension(:), intent(out) :: dos     ! Density of States 
+   !  real(rp), intent(in) :: shift, scale           ! Shift and scale factors
+   !  integer, intent(in) :: num_moments ! Number of points and moments
+   !  
+   !  ! Local variables
+   !  integer :: i, n
+   !  real(rp) :: x, sqrt_term, Tn_minus_1, Tn, Tn_plus_1
+   !  real(rp), allocatable :: mu_n_scaled(:)
+   !  
+   !  ! Initialize DOS array
+   !  dos = 0.0_rp
+   !  
+   !  ! Scale and normalize the Chebyshev moments
+   !  allocate(mu_n_scaled(num_moments))
+   !  
+   !  mu_n_scaled(:) = real(mu_n(:))
+   !  do n = 2, num_moments
+   !    mu_n_scaled(n) = real(2.0_rp * mu_n(n))
+   !  end do
+   !  ! Evaluate DOS at each frequency
+   !  do i = 1, this%en%channels_ldos + 10
+   !    x = (this%en%ene(i) - shift) / scale
+   !    sqrt_term = sqrt(scale**2 - (this%en%ene(i) - shift)**2)
+   !  
+   !    if (sqrt_term > 0.0_rp) then
+   !      ! Initialize Chebyshev recurrence
+   !      Tn_minus_1 = 1.0_rp     ! T_0(x) = 1
+   !      Tn = x                  ! T_1(x) = x
+   !      dos(i) = mu_n_scaled(1) * Tn_minus_1 + mu_n_scaled(2) * Tn
+   !
+   !      ! Chebyshev recurrence relation for higher orders
+   !      do n = 3, num_moments
+   !        Tn_plus_1 = 2.0_rp * x * Tn - Tn_minus_1
+   !        dos(i) = dos(i) + mu_n_scaled(n) * Tn_plus_1
+   !        Tn_minus_1 = Tn
+   !        Tn = Tn_plus_1
+   !      end do
+   !
+   !      ! Apply the normalization
+   !      dos(i) = dos(i) / (sqrt_term * pi)
+   !    else
+   !      dos(i) = 0.0_rp  ! Avoid division by zero for invalid points
+   !    end if
+   !  end do
+   !end subroutine
+
+   !subroutine compute_moments(this, max_order, moments)
+   !  class(recursion), intent(inout) :: this
+   !  integer, intent(in) :: max_order
+   !  complex(rp), dimension(max_order), intent(out) :: moments
+   !  integer :: n, i
+   !  real(rp) :: restrace
+   !
+   !  moments(:) = 0.0_rp
+   !  do n = 1, max_order
+   !    restrace = 0.0_rp
+   !    do i = 1, this%lattice%kk
+   !      restrace = restrace + trace(this%t_h(n, :, :, i, i))  ! Trace of diagonal block
+   !    end do
+   !    moments(n) = restrace / real(this%lattice%kk, rp)  ! Average over atoms
+   !  end do
+   !end subroutine
+   
+   !subroutine evaluate_t_h(this, max_order)
+   !    !*************************************************************************
+   !    !> @brief Computes Chebyshev polynomials T_n(H) for a sparse Hamiltonian.
+   !    !>
+   !    !> This subroutine computes T_n(H) directly into the target storage array
+   !    !> `this%t_h` for each recursion level using block-wise sparse operations.
+   !    !>
+   !    !> @param[inout] this       Hamiltonian type containing block data.
+   !    !> @param[in]    max_order  Maximum order of Chebyshev polynomials to compute.
+   !    !*************************************************************************
+   !    class(recursion), intent(inout) :: this
+   !    integer, intent(in) :: max_order
+   !
+   !    ! Local variables
+   !    integer :: n, i, j, k, nr, ih, nnmap
+   !    integer :: ijzero(0:this%lattice%kk, 0:this%lattice%kk), ijdum(0:this%lattice%kk, 0:this%lattice%kk)
+   !    ! Temp
+   !    real(rp), dimension(max_order) :: kernel
+   !    complex(rp), dimension(max_order) :: moments, moments_g
+   !    real(rp), dimension(this%en%channels_ldos + 10) :: dos
+
+   !    ! Initialize mappings and T matrices
+   !    allocate(this%t_h(max_order, 18, 18, this%lattice%kk, this%lattice%kk))
+   !
+   !    ! Initialize T_1 (identity) and T_2 (Hamiltonian)
+   !    do i = 1, this%lattice%kk
+   !        ih = this%lattice%iz(i)
+   !        nr = this%lattice%nn(i, 1)
+   !
+   !        this%t_h(1, :, :, i, i) = ceye(18)  ! Identity block
+   !        this%t_h(2, :, :, i, i) = this%hamiltonian%ee(:, :, 1, ih)  ! Onsite Hamiltonian
+   !        ijzero(i, i) = 1
+   !
+   !        do j = 2, nr
+   !            nnmap = this%lattice%nn(i, j)
+   !            if (nnmap /= 0) then
+   !                this%t_h(2, :, :, i, nnmap) = this%hamiltonian%ee(:, :, j, ih)  ! Offsite Hamiltonian
+   !                ijzero(i, nnmap) = 1
+   !            end if
+   !        end do
+   !    end do
+   !    ! Compute T_n(H) for n >= 3
+   !    do n = 3, max_order
+   !        write(*,*) 'n=', n
+   !        ! Reset intermediate mapping
+   !        ijdum(:, :) = 0
+   !
+   !        !$omp parallel do default(shared) private(i, j, k, nnmap, nr, ih) schedule(dynamic, 100)
+   !        ! Loop over all block pairs (i, j)
+   !        do i = 1, this%lattice%kk
+   !            nr = this%lattice%nn(i, 1)
+   !            ih = this%lattice%iz(i)
+   !
+   !            do j = 1, this%lattice%kk
+   !                ijdum(i, j) = ijzero(i, j)
+   !                if (ijzero(i, j) == 0) cycle  ! Skip zero blocks
+   !
+   !                ! Initialize T_n(i, j) directly
+   !                this%t_h(n, :, :, i, j) = 0.0_rp
+   !
+   !                ! Compute T_n(i, j) = 2 * H @ T_{n-1}
+   !                do k = 1, nr
+   !                    if (k == 1) then
+   !                        nnmap = i  ! Onsite term
+   !                    else
+   !                        nnmap = this%lattice%nn(i, k)  ! Neighbor atom index
+   !                    end if
+   !
+   !                    if (nnmap /= 0 .and. ijzero(nnmap, j) /= 0) then
+   !                        call zgemm('N', 'N', 18, 18, 18, 2.0_rp * cone, this%hamiltonian%ee(:, :, k, ih), 18, &
+   !                                   this%t_h(n - 1, :, :, nnmap, j), 18, cone, this%t_h(n, :, :, i, j), 18)
+   !                        ijdum(i, j) = 1
+   !                    end if
+   !                end do
+   !
+   !                ! Subtract T_{n-2}(i, j)
+   !                if (ijzero(i, j) /= 0) then
+   !                    this%t_h(n, :, :, i, j) = this%t_h(n, :, :, i, j) - this%t_h(n - 2, :, :, i, j)
+   !                end if
+   !            end do
+   !        end do
+   !        !$omp end parallel do
+   ! 
+   !        ! Update mapping for the next level
+   !        ijzero(:, :) = ijdum(:, :)
+   !    end do
+
+   !    call this%compute_moments(max_order, moments)     
+
+   !    call jackson_kernel(this%control%cond_ll, kernel)
+   !
+   !    moments_g(:) = moments(:)*kernel(:)   
+
+   !    call this%evaluate_chebyshev(moments_g, dos, 0.0_rp, 1.0_rp, max_order)
+
+   !    do i=1, this%en%channels_ldos + 10
+   !       write(1,*) this%en%ene(i), dos(i)
+   !    end do
+   !end subroutine evaluate_t_h
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -364,8 +878,8 @@ contains
             if (this%izero(i) /= 0) then
                locham = this%hamiltonian%hall(:, :, 1, i) + this%hamiltonian%lsham(:, :, ino)
                call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, this%psi_b(:, :, i), 18, cone, this%hpsi(:, :, i), 18)
-               !call zgemm('n','n',18,18,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-               !call zgemm('n','n',18,18,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
+               !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
+               !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
             end if
             if (nr >= 2) then
                do j = 2, nr ! Loop on the neighbouring
@@ -390,8 +904,8 @@ contains
          if (this%izero(i) /= 0) then
             locham = this%hamiltonian%ee(:, :, 1, ih) + this%hamiltonian%lsham(:, :, ih)
             call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, this%psi_b(:, :, i), 18, cone, this%hpsi(:, :, i), 18)
-            !call zgemm('n','n',18,18,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-            !call zgemm('n','n',18,18,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
+            !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
+            !call zgemm(´n´,´n´,18,18,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
          end if
          if (nr >= 2) then
             do j = 2, nr ! Loop on the neighbouring
@@ -423,7 +937,7 @@ contains
          !do i=1, this%lattice%kk
          this%pmn_b(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%pmn_b(:, :, this%irlist(i))
          call zgemm('c', 'n', 18, 18, 18, cone, this%psi_b(:, :, this%irlist(i)), 18, this%hpsi(:, :, this%irlist(i)), 18, cone, summ, 18)
-         !call zgemm('c','n',18,18,18,cone,PSI_B(1,1,irlist(I)),18,Hpsi(1,1,irlist(I)),18,cone,SUMM,18)
+         !call zgemm(´c´,´n´,18,18,18,cone,PSI_B(1,1,irlist(I)),18,Hpsi(1,1,irlist(I)),18,cone,SUMM,18)
       end do
       !$omp end parallel do
 
@@ -511,7 +1025,7 @@ contains
       ! For debug purposes
       !do i=1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
       !  do l=1, 18  ! Loop on the orbital l
-      !    write(122, *) 'orbital', l
+      !    write(122, *) ´orbital´, l
       !    do ll=1, llmax ! Loop on the recursion steps
       !      write(122, *) this%a(ll, l, i,1), this%b2(ll,l,i,1)
       !    end do
@@ -540,7 +1054,7 @@ contains
 !!!     do i=start_atom, end_atom
 !!!         j = this%lattice%irec(i) ! Atom number in the clust file
 !!!         ! Clear list of atoms in hopping region
-!!!         call g_logger%info('Block recursion in progress for atom '//int2str(j),__FILE__,__LINE__)
+!!!         call g_logger%info(´Block recursion in progress for atom ´//int2str(j),__FILE__,__LINE__)
 !!!         this%izero(:) = 0
 !!!         ! Initializing wave functions
 !!!         this%psi_b(:,:,:) = (0.0d0, 0.0d0)
@@ -569,7 +1083,7 @@ contains
 !!!     end do ! End of the loop on the nrec
 !!!     ! Gather results to ensure all processes have the complete arrays
 !!! #ifdef USE_MPI
-!!!     call g_timer%start('MPI recursion communication')
+!!!     call g_timer%start(´MPI recursion communication´)
 !!!     call MPI_Allgather(this%a_b(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, &
 !!!                        this%a_b, (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
 !!!     call MPI_Allgather(this%b2_b(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, &
@@ -578,7 +1092,7 @@ contains
 !!!     !!!                    this%a_b, (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
 !!!     !!! call MPI_Allgather(this%b2_b(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, &
 !!!     !!!                    this%b2_b, (end_atom-start_atom+1)*llmax*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
-!!!     call g_timer%stop('MPI recursion communication')
+!!!     call g_timer%stop(´MPI recursion communication´)
 !!! #endif
 !!!   end subroutine recur_b_par
 
@@ -640,7 +1154,7 @@ contains
             write (1000*(1 + rank) + 122, *) 'orbital', l, 'atom', i
             do ll = 1, llmax ! Loop on the recursion steps
                write (1000*(1 + rank) + 122, '(2f12.8,4x,2f12.8)') this%a(ll, l, i - start_atom + 1, 1), this%b2(ll, l, i - start_atom + 1, 1)
-               !write(1000*(1+rank)+122, '(2f12.8,4x,2f12.8)') this%a_b(l,l,ll,i-start_atom+1), this%b2_b(l,l,ll,i-start_atom+1)
+               !write(1000*(1+rank)+122, ´(2f12.8,4x,2f12.8)´) this%a_b(l,l,ll,i-start_atom+1), this%b2_b(l,l,ll,i-start_atom+1)
           !!!write(1000*(1+rank)+122, *) this%a(ll, l, i,1-start_atom+1), this%b2(ll,l,i,1)
             end do
          end do
@@ -707,11 +1221,11 @@ contains
             !  ( H|Psi_n>-A_n|Psi_n>-B_n-1|Psi_n-1> = PMN-A_n|Psi_n> )
          !! H Wn - Wn An  - Wn-1 Bn-1 in Inoue syntax
             call zgemm('n', 'n', 18, 18, 18, cmone, this%psi_b(:, :, this%irlist(i)), 18, this%atemp_b(:, :, ll), 18, cone, this%pmn_b(:, :, this%irlist(i)), 18)
-            !call zgemm('n','n',18,18,18,cmone,this%psi_b(:,:,i),18,this%atemp_b(:,:,ll),18,cone,this%pmn_b(:,:,i), 18)
-            ! B^2_n+1 = ( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )'*( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )
-         !! (H Wn - An Wn  - Wn-1 Bn-1)*(H Wn - An Wn - Wn-1 Bn-1)' -in Inoue syntax
+            !call zgemm(´n´,´n´,18,18,18,cmone,this%psi_b(:,:,i),18,this%atemp_b(:,:,ll),18,cone,this%pmn_b(:,:,i), 18)
+            ! B^2_n+1 = ( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )´*( H|Psi_n-A_n|Psi_n-B_n|Psi_n-1 )
+         !! (H Wn - An Wn  - Wn-1 Bn-1)*(H Wn - An Wn - Wn-1 Bn-1)´ -in Inoue syntax
             call zgemm('c', 'n', 18, 18, 18, cone, this%pmn_b(:, :, this%irlist(i)), 18, this%pmn_b(:, :, this%irlist(i)), 18, cone, sum_b, 18)
-            !call zgemm('c','n',18,18,18,cone,this%pmn_b(:,:,i),18,this%pmn_b(:,:,i),18,cone,sum_b,18)
+            !call zgemm(´c´,´n´,18,18,18,cone,this%pmn_b(:,:,i),18,this%pmn_b(:,:,i),18,cone,sum_b,18)
          end do
          !$omp end parallel do
          call g_timer%stop('H|Psi_n-A_n|Psi_n-B_n|Psi_n-1')
@@ -719,7 +1233,7 @@ contains
          ! Calculate B_n+1
          u(:, :) = sum_b(:, :)
          ! Replace sqrt with eigen solver to get lamda^2 and U
-         ! get lamda^2 and U in lamda=U*BB'*U*
+         ! get lamda^2 and U in lamda=U*BB´*U*
          call zheev('v', 'u', 18, u, 18, ev, dum, 18*18, rwork, info)
          if (info /= 0) call g_logger%fatal('Diagonalization error', __FILE__, __LINE__)
          !
@@ -733,10 +1247,10 @@ contains
             lam_i(i, i) = 1.0d0/lam(i, i) ! 1/B_n
          end do
          !
-         !  Calc. U*lamda*U'= B
+         !  Calc. U*lamda*U´= B
          call zgemm('n', 'n', 18, 18, 18, cone, u, 18, lam, 18, czero, dum, 18)
          call zgemm('n', 'c', 18, 18, 18, cone, dum, 18, u, 18, czero, b, 18)
-         !  B^-1=U*lamda^-1*U'
+         !  B^-1=U*lamda^-1*U´
          call zgemm('n', 'n', 18, 18, 18, cone, u, 18, lam_i, 18, czero, dum, 18)
          call zgemm('n', 'c', 18, 18, 18, cone, dum, 18, u, 18, czero, b_i, 18)
          call g_timer%stop('B_n+1')
@@ -789,7 +1303,7 @@ contains
                end do
             end do
             ! replace sqrt with eigen solver to get lamda^2 and U
-            ! get lamda^2 and U in lamda=U*BB'*U*
+            ! get lamda^2 and U in lamda=U*BB´*U*
             call zheev('V', 'U', LDIM, U, LDIM, ev, zwork, LDIM*LDIM, rwork, info)
             !
             if (info /= 0) print *, 'diag', info
@@ -797,7 +1311,7 @@ contains
             do I = 1, LDIM
                lam(I, I) = sqrt(ev(i))
             end do
-            ! calc. U*lamda*U'= B
+            ! calc. U*lamda*U´= B
             call zgemm('n', 'n', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), U, LDIM, lam, LDIM, (0.0d0, 0.0d0), DUM, LDIM)
             call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), this%B2_b(1, 1, L, N), LDIM)
          end do
@@ -1080,7 +1594,7 @@ contains
             do nb = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, nb)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(1, 1, nb, ih), 18, this%psi0(:, :, nnmap), 18, cone, this%psi1(:, :, k), 18)
+                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, this%psi0(:, :, nnmap), 18, cone, this%psi1(:, :, k), 18)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -1326,7 +1840,7 @@ contains
             do nb = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, nb)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(1, 1, nb, ih), 18, this%psi1(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
+                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, this%psi1(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -1439,7 +1953,7 @@ contains
             do nb = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, nb)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(1, 1, nb, ih), 18, this%psi1(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
+                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, this%psi1(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -1686,7 +2200,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Recursion method using to find the Chebyshev moments for diagonal and
-   !off-diagonal terms. Here, one cannot use the 'double-trick'. See
+   !off-diagonal terms. Here, one cannot use the ´double-trick´. See
    ! Rev. Mod. Phys. 78, 275.
    ! OBSOLETE! DO NOT USE
    !---------------------------------------------------------------------------
@@ -1924,7 +2438,7 @@ contains
             dum(:) = (0.0d0, 0.0d0)
             nr = this%lattice%nn(i, 1) ! Number of neighbours
             if (this%izero(i) /= 0) then
-               !write(125, *) 'i is ', i
+               !write(125, *) ´i is ´, i
                do m = 1, 9 ! Loop on the orbital m
                   do l = 1, 9 ! Loop on the orbital l
                      dum(l) = dum(l) + this%hamiltonian%ee(l, m, 1, ih)*this%psi(m, i)
@@ -1997,9 +2511,9 @@ contains
       nm1 = this%lattice%control%lld - 1
       llmax = this%lattice%control%lld
       do ll = 1, nm1
-!     call g_timer%start('hop')
+!     call g_timer%start(´hop´)
          call this%hop(ll)
-!     call g_timer%stop('hop')
+!     call g_timer%stop(´hop´)
          this%b2temp(ll) = summ
          ajc = -this%atemp(ll)
 
@@ -2063,7 +2577,7 @@ contains
 
             this%b2temp(1) = 1.0d0
             this%atemp(llmax) = 0.0d0
-            !write(125, *) 'orbital ', l
+            !write(125, *) ´orbital ´, l
             call this%crecal()
 
             do ll = 1, llmax ! Loop on the recursion steps
@@ -2076,7 +2590,7 @@ contains
     !!!! For debug purposes
     !!!do i=1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
     !!!  do l=1, 18  ! Loop on the orbital l
-    !!!    write(123, *) 'orbital', l
+    !!!    write(123, *) ´orbital´, l
     !!!    do ll=1, llmax ! Loop on the recursion steps
     !!!      write(123, *) this%a(ll, l, i_loc, 1), this%b2(ll, l, i_loc, 1)
     !!!    end do
@@ -2087,7 +2601,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Obtain the optmal values of the terminators ainf and binf by Pettifor's
+   !> Obtain the optmal values of the terminators ainf and binf by Pettifor´s
    !termination
    !---------------------------------------------------------------------------
    subroutine bpopt(this, ll, a, rb, n, ainf, rbinf, ifail)
@@ -2309,7 +2823,9 @@ contains
       call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
-
+      call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
+                                                                                       (this%lattice%control%cond_ll, &
+                                                                               this%lattice%control%cond_ll, this%lattice%ntype/)
 #else
       allocate (this%a(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &18, this%lattice%nrec, 3))
@@ -2342,6 +2858,7 @@ contains
       allocate (this%atemp_b(18, 18, this%control%lld))
       allocate (this%b2temp_b(18, 18, this%control%lld))
       allocate (this%pmn_b(18, 18, this%lattice%kk))
+      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%cond_ll, this%lattice%control%cond_ll,this%lattice%ntype))
 #endif
       this%v(:, :) = 0.0d0
       this%psi(:, :) = 0.0d0
@@ -2369,7 +2886,7 @@ contains
       this%b2temp_b(:, :, :) = 0.0d0
       this%pmn_b(:, :, :) = 0.0d0
       this%cheb_mom_temp(:, :) = 0.0d0
-
+      this%mu_nm_stochastic(:, :, :, :, :) = 0.0d0
       if (present(full)) then
          if (full) then
             if (associated(this%hamiltonian)) call this%hamiltonian%restore_to_default()

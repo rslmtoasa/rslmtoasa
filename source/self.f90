@@ -22,7 +22,7 @@
 module self_mod
 
    use mpi_mod
-   use symbolic_atom_mod, only: symbolic_atom
+   use symbolic_atom_mod, only: symbolic_atom, save_state_scf
    use logger_mod, only: g_logger
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
@@ -50,7 +50,7 @@ module self_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: self
       !> Lattice
       class(lattice), pointer :: lattice
@@ -92,21 +92,21 @@ module self_mod
 
       !> Use same value of @ref ws for all atoms. Default: true.
       !>
-      !> Use same value of @ref ws for all atoms. If true, @ref ws's size is one slot of memory, else it is @ref lattice.nrec
+      !> Use same value of @ref ws for all atoms. If true, @ref ws´s size is one slot of memory, else it is @ref lattice.nrec
       !>
       !> Default: true.
       logical :: ws_all
 
       !> Wigner Seitz Radius
       !>
-      !> Wigner Seitz Radius. If @ref ws_all is true, @ref ws's size is one slot of memory, else it is @ref lattice.nrec
+      !> Wigner Seitz Radius. If @ref ws_all is true, @ref ws´s size is one slot of memory, else it is @ref lattice.nrec
       real(rp), dimension(:), allocatable :: ws
 
       ! Mixing parameters
 
       !> Use same value of @ref mix for all atoms. Default: true.
       !>
-      !> Use same value of @ref mix for all atoms. If true, @ref mix's size is one slot of memory, else it is @ref lattice.nrec
+      !> Use same value of @ref mix for all atoms. If true, @ref mix´s size is one slot of memory, else it is @ref lattice.nrec
       !>
       !> Default: true.
       logical :: mix_all
@@ -122,7 +122,7 @@ module self_mod
 
       !> Use same value of @ref mixmag for all atoms. Default: true.
       !>
-      !> Use same value of @ref mixmag for all atoms. If true, @ref mixmag's size is one slot of memory, else it is @ref lattice.nrec
+      !> Use same value of @ref mixmag for all atoms. If true, @ref mixmag´s size is one slot of memory, else it is @ref lattice.nrec
       !>
       !> Default: true.
       logical :: mixmag_all
@@ -158,6 +158,22 @@ module self_mod
       !>
       !> Default: false.
       logical :: freeze
+
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
+      !>
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
+      !>
+      !> Default: false.
+      logical :: fix_soc
+
+
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
+      !>
+      !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
+      !>
+      !> Default: false.
+      real(rp) :: soc_scale
+       
 
       !> If true rigid band calculations will performed for each atom. Default: false.
       !>
@@ -204,6 +220,10 @@ module self_mod
       !> Logical variable to check if the calculation is converged.
       logical :: converged
 
+      !> Logical variable to control if initial
+      ! potential parameters are calculated from moments
+      logical :: cold
+
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -235,7 +255,7 @@ contains
    !> Constructor
    !
    !> @param[in] fname Namelist file
-   !> @param[in] lattice_obj Pointer to system's lattice
+   !> @param[in] lattice_obj Pointer to system´s lattice
    !> @return type(self)
    !---------------------------------------------------------------------------
    function constructor(bands_obj, mix_obj) result(obj)
@@ -308,6 +328,9 @@ contains
       init = this%init
       nstep = this%nstep
       conv_thr = this%conv_thr
+      fix_soc = this%fix_soc
+      soc_scale = this%soc_scale
+      cold = this%cold
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -400,13 +423,22 @@ contains
       ! static magnetic momentum (non-linar calculation)
       this%freeze = freeze
       this%rigid_band = rigid_band
+      this%fix_soc = fix_soc
+      this%soc_scale = soc_scale
 
+      ! Scaling SOC if soc_scale is defined. SOC scale default = 1.0d0
+      
+      do i = 1, this%lattice%ntype
+         this%symbolic_atom(i)%potential%xi_p(:) = this%soc_scale*this%symbolic_atom(i)%potential%xi_p(:) 
+         this%symbolic_atom(i)%potential%xi_d(:) = this%soc_scale*this%symbolic_atom(i)%potential%xi_d(:)
+      end do
       ! number of loops to use rigid bands per atom
       call move_alloc(rb, this%rb)
 
       ! other variables
       this%orbital_polarization = orbital_polarization
       this%init = init
+      this%cold = cold
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -453,6 +485,8 @@ contains
       ! static magnetic momentum (non-linar calculation)
       this%freeze = .false.
       this%rigid_band = .false.
+      this%fix_soc = .false. 
+      this%soc_scale = 1.0d0
       ! number of loops to use rigid bands per atom
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('self.rb', this%rb, this%lattice%nrec)
@@ -464,6 +498,8 @@ contains
       this%orbital_polarization = .false.
 
       this%ws_max = 9.99d0
+
+      this%cold = .false.
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -524,6 +560,7 @@ contains
       print *, '[Other Variables]'
       print *, 'orbital_polarization ', this%orbital_polarization
       print *, 'init                 ', this%init
+      print *, 'cold                 ', this%cold
 
    end subroutine print_state_formatted
 
@@ -552,6 +589,7 @@ contains
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
+      cold = this%cold
 
       ! 1d allocatable
 
@@ -603,6 +641,7 @@ contains
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
+      cold = this%cold
       ! 1d allocatable
 
       if (allocated(this%ws)) then
@@ -639,113 +678,53 @@ contains
       class(self), intent(inout) :: this
       integer :: i, ia, niter
       real(rp), dimension(6) :: QSL
-
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
-
+   
       !===========================================================================
       !                              BEGIN SCF LOOP
       !===========================================================================
       niter = 0
       do i = 1, this%nstep
+         if (this%cold .and. i==1) call run_scf(this)
          !=========================================================================
          !                        PERFORM THE RECURSION
          !=========================================================================
-         if (rank == 0) call g_logger%info('Perform recursion at step '//int2str(i), __FILE__, __LINE__)
-         call g_timer%start('recursion')
-         select case (this%control%calctype)
-         case ('B')
-            do ia = 1, this%lattice%nrec
-               call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
-            end do
-            if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-            call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
-         case ('S')
-            do ia = 1, this%lattice%ntype
-               call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
-            end do
-            if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-            call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian for the surface
-         case ('I')
-            do ia = 1, this%lattice%ntype
-               call this%symbolic_atom(ia)%build_pot() ! Build the potential matrix
-            end do
-            if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-            call this%hamiltonian%build_bulkham() ! Build the bulk Hamiltonian
-            call this%hamiltonian%build_locham() ! Build the local Hamiltonian
-         end select
-         select case (this%control%recur)
-         case ('lanczos')
-            call this%recursion%recur()
-         case ('chebyshev')
-            call this%recursion%chebyshev_recur()
-         case ('block')
-            call this%recursion%recur_b()
-         end select
-         call g_timer%stop('recursion')
+         call run_recursion(this, i)
+   
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
          !=========================================================================
          this%esumn = sum(this%symbolic_atom(:)%potential%etot)
          this%esum = this%esumn
+
          !=========================================================================
          !            SAVE THE PARAMETERS QL AND PL TO BE MIXED LATER
          !=========================================================================
          call this%mix%save_to('old') ! Save to qia_old to mix with qia_new.
+
          !=========================================================================
          !                      SAVE THE MAGNETIC MOMENTS
          !=========================================================================
          do ia = 1, this%lattice%nrec
             this%mix%mag_old(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
+   
          !=========================================================================
          !                  CALCULATE THE DENSITY OF STATES
          !=========================================================================
-         if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
-         call g_timer%start('calculation-of-DOS')
-         call this%en%e_mesh() ! Solve the energy mesh
-         select case (this%control%recur)
-         case ('lanczos')
-            call this%green%sgreen() ! Calculate the density of states using the continued fraction
-         case ('chebyshev')
-            call this%green%chebyshev_green()
-         case ('block')
-            call this%recursion%zsqr()
-            call this%green%block_green()
-         end select
-         call this%bands%calculate_fermi() ! Calculate the fermi energy
-         !=========================================================================
-         !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
-         !=========================================================================
-         call this%bands%calculate_magnetic_moments() ! Calculate the magnetic moments
-         do ia = 1, this%lattice%nrec
-            this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
-         end do
-         call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot) ! Mix magnetic moments
-         do ia = 1, this%lattice%nrec
-            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
-         end do
-         !=========================================================================
-         !                  CALCULATE THE NEW BAND MOMENTS QL
-         !=========================================================================
-         call this%bands%calculate_moments() ! Integrate the DOS and calculate the band momends QL
-         do ia = 1, this%lattice%nrec
-            this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
-         end do
-         call this%mix%save_to('new') ! Save the calculated PL and QL into the mix%qia_new
-         call g_timer%stop('calculation-of-DOS')
+         call run_dos(this)
+   
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
          !=========================================================================
-         !call g_timer%start('mixing')
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
-         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix mix%qia_new with mix%qia_old and save into mix%qia
-         !call g_timer%stop('mixing')
+         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
+   
          !=========================================================================
          !         CALCULATE THE MADELUNG POTENTIAL (BULK ONLY IMPLEMENTED)
          !=========================================================================
-         !call g_timer%start('madelung-potential')
          select case (this%control%calctype)
          case ('B')
             call this%charge%bulkpot()
@@ -754,47 +733,23 @@ contains
          case ('I')
             call this%charge%imppot()
          end select
-         !call g_timer%stop('madelung-potential')
+   
          !=========================================================================
          !                        SAVE MIXED PARAMETERS
          !=========================================================================
-         call this%mix%save_to('current') ! Save mixed parameters mix%qia into potential%pl and potential%ql
+         call this%mix%save_to('current') ! Save mixed parameters into potential%pl and potential%ql
+   
          !=========================================================================
          !                       MAKE SFC ATOMIC SPHERE
          !=========================================================================
-         call g_timer%start('atomic-sfc')
-         !do ia=1, this%lattice%nrec
-         do ia = start_atom, end_atom
-            qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia)) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
-            call g_logger%info('Atomic SFC done for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
-         end do
+         call run_scf(this)
+   
+         !=========================================================================
+         !             UPDATE FILES AND INFORMATION IN THE DIRECTORY
+         !=========================================================================
+         if (rank == 0) call update_fermi_in_input(this%en%fermi, this%control%fname)
+         if (rank == 0) call save_state_scf(this%lattice%symbolic_atoms(:))
 
-         !=========================================================================
-         !      TRANSFER ATOMIC POTENTIAL DATA ACROSS MPI RANKS
-         !=========================================================================
-#ifdef USE_MPI
-         pot_size = this%symbolic_atom(start_atom)%potential%sizeof_potential_full()
-         allocate (T_comm(pot_size, this%lattice%nrec))
-         T_comm = 0.0_rp
-         do na_glob = start_atom, end_atom
-            call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%flatten_potential_full(T_comm(:, na_glob))
-         end do
-         call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm, product(shape(T_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         do na_glob = 1, this%lattice%nrec
-            call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%expand_potential_full(T_comm(:, na_glob))
-         end do
-         deallocate (T_comm)
-#endif
-
-         !=========================================================================
-         !      TRANSFORM POTENTIAL BASIS FROM ORTHOGONAL TO TIGHT-BINDING
-         !=========================================================================
-         do ia = 1, this%lattice%nrec
-            !do ia=1, start_atom, end_atom
-            if (rank == 0) call g_logger%info('From orthogonal to TB basis for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
-            call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au) ! Transforms the potential from orthogonal to tight-binding basis
-         end do
-         call g_timer%stop('atomic-sfc')
          !=========================================================================
          !                TEST IF THE CALCULATION IS CONVERGED
          !=========================================================================
@@ -808,6 +763,146 @@ contains
          end if
       end do
    end subroutine run
+   
+   !=========================================================================
+   !                   RUN RECURSION STEP
+   !=========================================================================
+   subroutine run_recursion(this, iter)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: iter
+      integer :: ia
+   
+      if (rank == 0) call g_logger%info('Perform recursion at step '//int2str(iter), __FILE__, __LINE__)
+      call g_timer%start('recursion')
+   
+      select case (this%control%calctype)
+      case ('B')
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('S')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('I')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+         call this%hamiltonian%build_locham()
+      end select
+   
+      select case (this%control%recur)
+      case ('lanczos')
+         call this%recursion%recur()
+      case ('chebyshev')
+         call this%recursion%chebyshev_recur()
+      case ('block')
+         call this%recursion%recur_b()
+      end select
+   
+      call g_timer%stop('recursion')
+   end subroutine run_recursion
+   
+   !=========================================================================
+   !                   RUN DENSITY OF STATES CALCULATION
+   !=========================================================================
+   subroutine run_dos(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+   
+      if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
+      call g_timer%start('calculation-of-DOS')
+   
+      call this%en%e_mesh()
+   
+      select case (this%control%recur)
+      case ('lanczos')
+         call this%green%sgreen()
+      case ('chebyshev')
+         call this%green%chebyshev_green()
+      case ('block')
+         call this%recursion%zsqr()
+         call this%green%block_green()
+      end select
+   
+      call this%bands%calculate_fermi() ! Calculate the Fermi energy
+      !=========================================================================
+      !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
+      !=========================================================================
+      call this%bands%calculate_magnetic_moments()
+   
+      do ia = 1, this%lattice%nrec
+         this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
+      end do
+   
+      call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+   
+      do ia = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
+      end do
+   
+      !=========================================================================
+      !                  CALCULATE THE NEW BAND MOMENTS QL
+      !=========================================================================
+      call this%bands%calculate_moments()
+      call this%mix%save_to('new')
+   
+      call g_timer%stop('calculation-of-DOS')
+   end subroutine run_dos
+   
+   !=========================================================================
+   !                   RUN SELF-CONSISTENT FIELD UPDATE
+   !=========================================================================
+   subroutine run_scf(this)
+      class(self), intent(inout) :: this
+      real(rp), dimension(6) :: QSL
+      real(rp), dimension(:, :), allocatable :: T_comm
+      integer :: ia, na_glob, pot_size
+   
+      call g_timer%start('atomic-scf')
+   
+      !=========================================================================
+      !                       MAKE SFC ATOMIC SPHERE
+      !=========================================================================
+      do ia = start_atom, end_atom
+         qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia)) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
+         call g_logger%info('Atomic SFC done for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
+      end do
+
+      !=========================================================================
+      !      TRANSFER ATOMIC POTENTIAL DATA ACROSS MPI RANKS
+      !=========================================================================
+#ifdef USE_MPI
+      pot_size = this%symbolic_atom(start_atom)%potential%sizeof_potential_full()
+      allocate (T_comm(pot_size, this%lattice%nrec))
+      T_comm = 0.0_rp
+      do na_glob = start_atom, end_atom
+         call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%flatten_potential_full(T_comm(:, na_glob))
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, T_comm, product(shape(T_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do na_glob = 1, this%lattice%nrec
+         call this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%expand_potential_full(T_comm(:, na_glob))
+      end do
+      deallocate (T_comm)
+#endif
+
+      !=========================================================================
+      !      TRANSFORM POTENTIAL BASIS FROM ORTHOGONAL TO TIGHT-BINDING
+      !=========================================================================
+      do ia = 1, this%lattice%nrec
+         if (rank == 0) call g_logger%info('From orthogonal to TB basis for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
+         call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au)
+      end do
+   
+      call g_timer%stop('atomic-scf')
+   end subroutine run_scf
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -820,10 +915,12 @@ contains
       class(self), intent(inout) :: this
       integer :: newunit, iostatus
       integer :: ia, ia_loc
-      real(rp), dimension(this%lattice%nrec, 3) :: magmom
+      real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
       ! Open report.out file
       open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
+      open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
+      open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
 
       ! Calculate outputs that are not calculated during the SFC run
       call this%bands%calculate_magnetic_torques()
@@ -831,15 +928,18 @@ contains
       ! Transfer values across ranks
       magmom = 0.0d0
       mag_for = 0.0d0
+      lmom = 0.0d0
       do ia = start_atom, end_atom
          ia_loc = g2l_map(ia)
          magmom(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom0(:)
-         mag_for(:, ia) = this%bands%mag_for(:, ia_loc)
+         lmom(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmom(:)
+         mag_for(:, ia) = this%bands%mag_for(:, ia_loc)        
       end do
 
 #ifdef USE_MPI
       call MPI_ALLREDUCE(MPI_IN_PLACE, magmom, product(shape(magmom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, mag_for, product(shape(mag_for)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, lmom, product(shape(lmom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
       if (rank == 0) then
@@ -850,7 +950,7 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Total Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(:)%potential%etot)
+         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
          !===========================================================================
          !                       Band Energy
          !===========================================================================
@@ -863,13 +963,21 @@ contains
          !                       Magnetization
          !===========================================================================
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(A)') '|                     Magnetization                                       |'
+         write (newunit, '(A)') '|                     Spin moment                                         |'
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(a,f16.10)') 'Total magnetization: ', sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%ntype)%potential%mtot)
+         write (newunit, '(a,3f16.10)') 'Total spin moment: ', sum(magmom(1:this%lattice%nrec, 1:3), dim=1)
          do ia = 1, this%lattice%nrec
             write (newunit, '(a,i4,a,f10.6)') 'Spin moment of atom', ia, ':', norm2(magmom(ia, :))
             write (newunit, '(a,i4,a,3f10.6)') 'Spin moment projections of atom', ia, ':', magmom(ia, :)
             write (newunit, '(a,i4,a,3f16.6)') 'Magnetic force on atom', ia, ':', mag_for(:, ia)
+         end do
+         write (newunit, '(A)') '==========================================================================='
+         write (newunit, '(A)') '|                     Orbital moment                                      |'
+         write (newunit, '(A)') '==========================================================================='
+         write (newunit, '(a,3f16.10)') 'Total orbital moment: ', sum(lmom(1:this%lattice%nrec, 1:3), dim=1)
+         do ia = 1, this%lattice%nrec
+            write (newunit, '(a,i4,a,f10.6)') 'Orbital moment of atom', ia, ':', norm2(lmom(ia, :))
+            write (newunit, '(a,i4,a,3f10.6)') 'Orbital moment projections of atom', ia, ':', lmom(ia, :)
          end do
          !===========================================================================
          !                           Charge
@@ -888,14 +996,27 @@ contains
          write (newunit, '(A)') '|                       Fermi Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(a,f10.6)') 'Fermi energy: ', this%en%fermi
+         
+         do ia = 1, this%lattice%nrec
+            write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', (magmom(ia, :))/norm2(magmom(ia, :))
+            write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', (lmom(ia, :))/norm2(lmom(ia, :))
+         end do
       end if
 
+      ! Print angle betweens magnetic and orbital moments
+      call this%bands%calculate_angles(magmom, lmom)
+
+      ! Print hyperfine structure
       if (this%control%hyperfine) then
          do ia = 1, this%lattice%nrec
             call this%symbolic_atom(ia)%potential%print_hyperfine(ia)
          end do
       end if
-
+      
+      close(newunit)
+      close(10)
+      close(20)
+    
    end subroutine report
 
    function is_converged(this, delta_en) result(l)
@@ -905,6 +1026,92 @@ contains
 
       l = delta_en < this%conv_thr
    end function is_converged
+
+   subroutine update_fermi_in_input(fermi_value, filename)
+       use iso_fortran_env, only: stderr => error_unit
+       real(rp), intent(in) :: fermi_value
+       character(len=*), intent(in) :: filename
+       character(len=256), allocatable :: lines(:)
+       integer :: i, nlines, iunit, ounit, stat, eq_pos, com_pos
+       logical :: in_energy, fermi_found
+       character(len=256) :: temp_filename, key_part, rest, comment_part, new_rest
+   
+       ! Read the entire input file into memory
+       open(newunit=iunit, file=filename, status='old', action='read', iostat=stat)
+       if (stat /= 0) then
+           write(stderr, '(a)') "Error: Failed to open input file."
+           return
+       end if
+   
+       ! Count lines
+       nlines = 0
+       do
+           read(iunit, '(a)', iostat=stat) 
+           if (stat /= 0) exit
+           nlines = nlines + 1
+       end do
+       rewind(iunit)
+   
+       ! Read lines into buffer
+       allocate(lines(nlines))
+       do i = 1, nlines
+           read(iunit, '(a)') lines(i)
+       end do
+       close(iunit)
+   
+       ! Find and update the fermi line in the &energy section
+       in_energy = .false.
+       fermi_found = .false.
+       do i = 1, nlines
+           lines(i) = adjustl(lines(i))
+           if (lines(i) == '&energy') then
+               in_energy = .true.
+           else if (lines(i) == '/') then
+               in_energy = .false.
+           else if (in_energy .and. .not. fermi_found) then
+               if (index(lines(i), 'fermi') == 1) then
+                   ! Split line into key, value, and comment
+                   eq_pos = index(lines(i), '=')
+                   if (eq_pos == 0) cycle
+                   key_part = lines(i)(1:eq_pos)
+                   rest = adjustl(lines(i)(eq_pos+1:))
+                   com_pos = index(rest, '!')
+                   if (com_pos > 0) then
+                       comment_part = rest(com_pos:)
+                       rest = rest(:com_pos-1)
+                   else
+                       comment_part = ''
+                   end if
+   
+                   ! Replace the value with the new Fermi energy
+                   write(new_rest, '(f12.6)') fermi_value  ! Format to 6 decimal places
+                   lines(i) = trim(key_part) // ' ' // trim(adjustl(new_rest)) // ' ' // trim(comment_part)
+                   fermi_found = .true.
+               end if
+           end if
+       end do
+   
+       ! Write the updated content to a temporary file
+       temp_filename = trim(filename) // '.tmp'
+       open(newunit=ounit, file=temp_filename, status='replace', action='write', iostat=stat)
+       if (stat /= 0) then
+           write(stderr, '(a)') "Error: Failed to create temporary file."
+           return
+       end if
+   
+       do i = 1, nlines
+           write(ounit, '(a)') trim(lines(i))
+       end do
+       close(ounit)
+   
+       ! Replace the original file with the temporary file
+       call rename(temp_filename, filename, status=stat)
+       if (stat /= 0) then
+           write(stderr, '(a)') "Error: Failed to update input file."
+       end if
+   
+       deallocate(lines)
+   end subroutine update_fermi_in_input
    !==============================================================================
    !----- FROM HERE WE HAVE SUBROUTINES AND FUCTIONS RAW COPIED FROM OLD CODE ----
    !==============================================================================
@@ -1035,7 +1242,7 @@ contains
       IFCORE = atom%element%f_core
       DFCORE = REAL(IFCORE)
       call g_logger%info('F core check:'//int2str(ifcore), __FILE__, __LINE__)
-      !write (9, *) 'F-core check:', IFCORE, DFCORE
+      !write (9, *) ´F-core check:´, IFCORE, DFCORE
       if (IFCORE /= 0) then
          LCORE = 3
          DEG = (2*(2*LCORE + 1))/NSP
@@ -1348,7 +1555,7 @@ contains
                            rofi, NR, NRE, 0)
                EV(IVAL) = EVAL
                SUMEV(ISP) = SUMEV(ISP) + EVAL*Q0 + Q1
-               !write(*, *) 'atorb: EVAL, Q0, Q1', EVAL, Q0, Q1
+               !write(*, *) ´atorb: EVAL, Q0, Q1´, EVAL, Q0, Q1
                RO = G(NR)**2
                if (.not. FREE .and. RO < ROCRIT) then
                   !         write (6, 10000) L, NN, NRE, E, RO
@@ -1412,7 +1619,7 @@ contains
                   HYP = 52.42_rp*(SH(1) - SH(2))
                   if (ISP == 2) then
                      !write(8, *) SH(1), SH(2), HYP
-                     !write(8, '(a7, f10.6)') "Hval:", HYP
+                     !write(8, ´(a7, f10.6)´) "Hval:", HYP
                      atom%potential%hyper_field(2) = hyp
                   end if
                end if
@@ -1571,7 +1778,7 @@ contains
                END DO
                HCORE = 52.42_rp*HCORE
                atom%potential%hyper_field(1) = HCORE
-               !WRITE(8,'(a7,3f12.6)')"Hcore: ",HCORE,(SH(1,1)-SH(1,2)) &
+               !WRITE(8,´(a7,3f12.6)´)"Hcore: ",HCORE,(SH(1,1)-SH(1,2)) &
                !,(SH(1,1)-SH(1,2))*914.7744
             END IF
          end if
@@ -1653,7 +1860,7 @@ contains
 
    subroutine RSEQSR(EB1, EB2, E, TOL, Z, L, NOD, VAL, SLO, V, G, Q, A, B, rofi, NR, NRE, IPR)
       !  SOLVES RADIAL SCALAR RELATIVISTIC EQ. TO GIVEN BCS AND NODES.
-      !  VAL, SLO ARE BC'S FOR LARGE COMPONENT U(R) WITH PSI=(U/R)*YLM.
+      !  VAL, SLO ARE BC´S FOR LARGE COMPONENT U(R) WITH PSI=(U/R)*YLM.
       !  OUTPUT WAVEFCT IS NORMALIZED TO 1.    (M.METHFESSEL 2/87)
       !
       !.. Implicit Declarations ..
@@ -2012,7 +2219,7 @@ contains
          FNTRY = LOG(RTRY/B + 1.d0)/A + 1.d0
          NTRY = FNTRY + .5d0
          !|    WRITE(6, 810) IREP, N1, NCTP, N2, FNTRY, NTRY
-         !|810 FORMAT(I6, '   N1, NCTP, N2=', 3I5, '   NTRY=', F8.3, I6)
+         !|810 FORMAT(I6, ´   N1, NCTP, N2=´, 3I5, ´   NTRY=´, F8.3, I6)
          if (NLAST == NCTP) exit
          if (FOFR > 0.d0) then
             N2 = NCTP
@@ -2262,7 +2469,7 @@ contains
    subroutine POISS0(Z, A, B, rofi, RHO, NR, VHRMAX, V, RHOVH, VSUM, NSP)
       !  HARTREE POTENTIAL FOR SPHERICAL RHO. VHRMAX=VALUE AT RMAX.
       !  RETURNS VSUM = INTEGRAL OVER THAT POT WHICH IS ZERO AT RMAX.
-      !  RHO = 'SPHERICAL CHDEN' = 4PI*R*R*RHOTRUE. V=VTRUE.
+      !  RHO = ´SPHERICAL CHDEN´ = 4PI*R*R*RHOTRUE. V=VTRUE.
       !
       !.. Implicit Declarations ..
       implicit none
@@ -2565,8 +2772,8 @@ contains
          ! RHOEPS=RHOEPS/4.0d0
          ! AB comment
       !!! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
-         !print *, 'B_XC', Bxc_tot, rhomu(1)-rhomu(2)
-         !print *, 'b_XC', 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
+         !print *, ´B_XC´, Bxc_tot, rhomu(1)-rhomu(2)
+         !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
       end if
    end subroutine VXC0SP
 
@@ -2602,17 +2809,17 @@ contains
       gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
                   - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
       !
-      ! --- Five points' formula  (25.3.6)
+      ! --- Five points´ formula  (25.3.6)
       do i = 3, nm2
          gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
       end do
-      ! --- Five points' formula  (25.3.6)
+      ! --- Five points´ formula  (25.3.6)
       gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
                        + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
       gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
                    - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
       !
-      ! --- Three points' formula  (25.3.4)
+      ! --- Three points´ formula  (25.3.4)
       !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
       !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
       do i = 1, nr
@@ -2737,9 +2944,11 @@ contains
                QSL(6) = 2.d0*(FAK2 - 5*FAK4)
             end if
          end do
-         atom%potential%xi_p(:) = [qsl(1), qsl(4)]
-         atom%potential%xi_d(:) = [qsl(2), qsl(5)]
-         atom%potential%rac(:) = [qsl(3), qsl(6)]
+         if (.not. this%fix_soc) then
+            atom%potential%xi_p(:) = [qsl(1), qsl(4)]
+            atom%potential%xi_d(:) = [qsl(2), qsl(5)]
+            atom%potential%rac(:) = [qsl(3), qsl(6)]
+         end if
          ! WRITE(17, 56)FAK2, FAK4
          ! WRITE(17, *)RCH
       end do
@@ -2825,9 +3034,9 @@ contains
             VAL = VAL/SQRT(SUMM)
             SLO = SLO/SQRT(SUMM)
             call PHDFSR(atom%element%atomic_number, L, V(:, I), E, atom%A, B, ROFI, NR, G, VAL, SLO, GP, GPP, PHI, DPHI, PHIP, DPHIP, P, TOL, NN)
-        !!write(876, '(f18.8)') G(1:NR*2)
-            !print '(a, 6f12.6)', 'PHI', PHI, DPHI, PHIP, DPHIP, val
-            !print '(1x, a, 2i5, 3f12.6)', 'ENU old, new', L, I, ENU(L, I), E, RMAX
+        !!write(876, ´(f18.8)´) G(1:NR*2)
+            !print ´(a, 6f12.6)´, ´PHI´, PHI, DPHI, PHIP, DPHIP, val
+            !print ´(1x, a, 2i5, 3f12.6)´, ´ENU old, new´, L, I, ENU(L, I), E, RMAX
             atom%potential%ENU(L, I) = E
             DLPHI = RMAX*DPHI/PHI
             DLPHIP = RMAX*DPHIP/PHIP
@@ -2842,10 +3051,10 @@ contains
             ! Vl =V for canonical scaling
             atom%potential%SRDEL(L, I) = PHMINS*SQRT(0.5d0*RMAX)
             !if(L==0) SRDEL(L, I)=-1.0d0*SRDEL(L, I)
-            !print '(2x, a, 8f12.6)', 'potpars:', E, omegam, rmax*phi*phi, phmins/phplus, 1.0d0/abs(phip), E+OMEGAM, E+omegap
-            !print *, 'rmax', rmax
-            !print *, '1/phmi', 1.0d0/phmins
-            !print *, 'srdel', SRDEL(L, I)
+            !print ´(2x, a, 8f12.6)´, ´potpars:´, E, omegam, rmax*phi*phi, phmins/phplus, 1.0d0/abs(phip), E+OMEGAM, E+omegap
+            !print *, ´rmax´, rmax
+            !print *, ´1/phmi´, 1.0d0/phmins
+            !print *, ´srdel´, SRDEL(L, I)
         !! phmins= phi + omegam*phip = phi - (phi/phip)*(-L-1-DLPHI)/(-L-1-DLPHIP)
         !! phmins= phi + omegam*phip = phi - (phi/phip)*(-L-1-DLPHI)/-L-1-DLPHIP)
         !! wkdot= ((dphidt-l)*gi(l) +    (l+l+1)*gi(l+1))*phidt

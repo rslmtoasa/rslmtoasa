@@ -39,7 +39,7 @@ module hamiltonian_mod
 
    private
 
-   !> Module's main procedure
+   !> Module´s main procedure
    type, public :: hamiltonian
       !> Charge
       class(charge), pointer :: charge
@@ -78,6 +78,11 @@ module hamiltonian_mod
       !complex(rp), dimension(:, :, :), allocatable :: lsham
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
+      !> Velocity operators
+      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b
+      character(len=10) :: v_alpha, v_beta
+      !> Sparse Real Space Hamiltonian
+      complex(rp), dimension(:, :), allocatable :: h_sparse
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -86,6 +91,8 @@ module hamiltonian_mod
       procedure :: build_enim
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
+      procedure :: build_realspace_velocity_operators
+      procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
       procedure :: chbar_nc
@@ -146,6 +153,9 @@ contains
       if (allocated(this%ee_glob)) call g_safe_alloc%deallocate('hamiltonian.ee_glob', this%ee_glob)
       if (allocated(this%eeo_glob)) call g_safe_alloc%deallocate('hamiltonian.eeo_glob', this%eeo_glob)
       if (allocated(this%enim_glob)) call g_safe_alloc%deallocate('hamiltonian.enim_glob', this%enim_glob)
+      if (allocated(this%v_a)) call g_safe_alloc%deallocate('hamiltonian.v_a', this%v_a)
+      if (allocated(this%v_b)) call g_safe_alloc%deallocate('hamiltonian.v_b', this%v_b)
+      if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -161,6 +171,9 @@ contains
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
+      if (allocated(this%v_a)) deallocate(this%v_a)
+      if (allocated(this%v_b)) deallocate(this%v_b)
+      if (allocated(this%h_sparse)) deallocate(this%h_sparse)
 #endif
    end subroutine destructor
 
@@ -181,6 +194,8 @@ contains
       hoh = this%hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
+      v_alpha = this%v_alpha
+      v_beta = this%v_beta
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -198,7 +213,8 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%orb_pol = orb_pol
-
+      this%v_alpha = v_alpha
+      this%v_beta = v_beta
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -232,6 +248,8 @@ contains
       call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -254,6 +272,9 @@ contains
       allocate (this%eeo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
+      ! Velocity operators
+      allocate (this%v_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_b(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !end if
       !end if
 #endif
@@ -280,10 +301,131 @@ contains
       this%enim_glob(:, :, :) = 0.0d0
       !  end if
       !end if
+      this%v_a(:, :, :, :) = 0.0d0
+      this%v_b(:, :, :, :) = 0.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
+      this%v_alpha = '1 0 0'
+      this%v_beta = '1 0 0' 
    end subroutine restore_to_default
+
+   subroutine block_to_sparse(this)
+       !*************************************************************************
+       !> @brief Constructs the sparse Hamiltonian matrix for a real-space cluster.
+       !>
+       !> This subroutine loops through all cluster atoms and their neighbors to
+       !> assemble the sparse Hamiltonian matrix in a block-wise manner. The matrix
+       !> size is determined by the number of atoms in the cluster and their spd basis.
+       !>
+       !> @param[in] this       Hamiltonian type derived
+       !> @param[out] H_sparse  Sparse matrix structure to store the Hamiltonian.
+       !*************************************************************************
+       class(hamiltonian), intent(inout) :: this
+   
+       ! Local variables
+       integer :: kk, m, nr, i, j, i_start, j_start
+       integer :: neighbor  ! Neighbor atom index
+       real(rp), dimension(3) :: rij  ! Displacement vector (unused for now but available)
+  
+       if (allocated(this%h_sparse)) deallocate(this%h_sparse) 
+       allocate(this%h_sparse(this%lattice%kk*18,this%lattice%kk*18))
+
+       ! Loop over cluster atoms
+       do kk = 1, this%lattice%kk  ! Loop over all atoms in the cluster
+           ! Number of neighbors for the kk-th atom
+           nr = this%charge%lattice%nn(kk, 1)
+           ! Loop over neighbors (including onsite, m = 1)
+           do m = 1, nr
+               ! Compute block indices in the global matrix
+               i_start = 18 * (kk - 1) + 1
+               if (m == 1) then
+                   j_start = i_start  ! Onsite term: diagonal block
+               else
+                   neighbor = this%charge%lattice%nn(kk, m)  ! Neighbor atom index
+                   j_start = 18 * (neighbor - 1) + 1
+               end if
+               ! Add the block to the sparse matrix
+               if (neighbor .ne. 0) then
+                  this%h_sparse(i_start:i_start+17, j_start:j_start+17) = 0.0d0
+                  do i = 1, 18
+                      do j = 1, 18
+                         this%h_sparse(i_start + i - 1, j_start + j - 1) = this%h_sparse(i_start + i - 1, j_start + j - 1) &
+                                                                           + this%ee(i, j, m, 1)
+                      end do
+                  end do
+               end if
+           end do
+       end do
+       ! Placeholder: Incorporate atom type and neighbor type logic in future if required.
+   end subroutine block_to_sparse
+
+
+   !**************************************************************************
+   !> @brief Build real-space velocity operators.
+   !>
+   !> This subroutine constructs the velocity operators (\f$v_x\f$, \f$v_y\f$, \f$v_z\f$)
+   !> in real space for a given Hamiltonian system, using the displacement vectors
+   !> between atom pairs and the intersite Hamiltonian blocks. The velocity operators
+   !> are computed based on the relationship:
+   !> \f[
+   !> v_{\alpha} = i \cdot (\mathbf{r}_i - \mathbf{r}_j)_{\alpha} \cdot H_{ij}
+   !> \f]
+   !> where \f$\mathbf{r}_i\f$ and \f$\mathbf{r}_j\f$ are the positions of atoms \f$i\f$ 
+   !> and \f$j\f$, and \f$H_{ij}\f$ is the intersite Hamiltonian block.
+   !>
+   !> @param[inout] this        A derived type representing the Hamiltonian system.
+   !>                           Contains Hamiltonian blocks, lattice structure, and
+   !>                           other system parameters.
+   !>
+   !> @warning Ensure that the lattice positions (\f$\mathbf{r}\f$) and Hamiltonian
+   !>          blocks (\f$H_{ij}\f$) are correctly initialized before calling this
+   !>          subroutine.
+   !>
+   !**************************************************************************
+   subroutine build_realspace_velocity_operators(this)
+      ! Arguments
+      class(hamiltonian), intent(inout) :: this
+   
+      ! Local variables
+      integer :: ia, ntype, nr, m, i, j              ! Atom and neighbor indices
+      integer :: atom_neighbor                       ! Neighbor atom index
+      real(rp), dimension(3) :: rij                  ! Displacement vector (x, y, z components)
+      real(rp), dimension(3) :: dir_a, dir_b         ! Velocity operator directions
+      real(rp) :: norm_a, norm_b, dot_a, dot_b
+      ! Initialize velocity operators to zero
+      this%v_a(:, :, :, :) = 0.0_rp
+      this%v_b(:, :, :, :) = 0.0_rp
+   
+      read(this%v_alpha, *) dir_a(1), dir_a(2), dir_a(3)
+      read(this%v_beta, *) dir_b(1), dir_b(2), dir_b(3)
+
+      norm_a = norm2(dir_a)
+      norm_b = norm2(dir_b)
+
+      dir_a(:) = dir_a(:) / norm_a
+      dir_b(:) = dir_b(:) / norm_b
+
+      ! Loop over atom types
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)  ! Atom number in the cluster
+         nr = this%charge%lattice%nn(ia, 1)     ! Number of neighbors for this atom type
+   
+         ! Loop over neighbors
+         do m = 2, nr   ! Start from 2 to exclude the onsite term
+            atom_neighbor = this%charge%lattice%nn(ia, m)  ! Neighbor atom number
+            
+            ! Compute displacement vector rij = r_i - r_j
+            rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)
+   
+            dot_a = dot_product(dir_a, rij); dot_b = dot_product(dir_b, rij)
+
+            ! Compute velocity operator blocks
+            this%v_a(:, :, m, ntype) = (1 / i_unit) * dot_a * this%ee(:, :, m, ntype)  
+            this%v_b(:, :, m, ntype) = (1 / i_unit) * dot_b * this%ee(:, :, m, ntype) 
+         end do
+      end do
+   end subroutine build_realspace_velocity_operators
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -333,10 +475,10 @@ contains
                this%lsham(j, i + 9, k) = this%lsham(j, i + 9, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i)) ! H12
                this%lsham(j + 9, i, k) = this%lsham(j + 9, i, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i)) ! H21
                this%lsham(j + 9, i + 9, k) = this%lsham(j + 9, i + 9, k) - prefac*Lz(j, i) - Lz(j, i)*rac(2)*lz_loc ! H22
-               !write(50,*) 'ntype=', k
-               !write(51,*) 'ntype=', k
-               !write(50,'(18f10.6)') real(this%lsham(:,:,k))
-               !write(51,'(18f10.6)') aimag(this%lsham(:,:,k))
+               !write(50,*) ´ntype=´, k
+               !write(51,*) ´ntype=´, k
+               !write(50,´(18f10.6)´) real(this%lsham(:,:,k))
+               !write(51,´(18f10.6)´) aimag(this%lsham(:,:,k))
             end do
          end do
       end do
@@ -483,7 +625,7 @@ contains
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-         !write(123, *)'bulkham'
+         !write(123, *)´bulkham´
          call this%chbar_nc(ia, nr, ino, ntype)
          do m = 1, nr
             do i = 1, 9
@@ -494,8 +636,8 @@ contains
                   this%ee(j + 9, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            !write(128, *) 'm=', m, 'ntype= ', ntype
-            !write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
+            write(128, *) 'm=', m, 'ntype= ', ntype
+            write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
          end do ! end of neighbour number
          if (this%hoh) then
             call this%build_obarm()
@@ -510,17 +652,17 @@ contains
                else
                   ji = this%charge%lattice%iz(ia)
                end if
-               ! Check if neighbour 'm' exists for atom 'ntype', otherwise fill HoH Hamiltonian with zeros.
+               ! Check if neighbour ´m´ exists for atom ´ntype´, otherwise fill HoH Hamiltonian with zeros.
                if (ji > 0) then
                   call zgemm('n', 'n', 18, 18, 18, cone, this%ee(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%eeo(:, :, m, ntype), 18)
                   call zgemm('n', 'c', 18, 18, 18, cone, this%eeo(:, :, m, ntype), 18, this%ee(:, :, m, ntype), 18, czero, this%eeoee(:, :, m, ntype), 18)
                else
                   this%eeo(:, :, m, ntype) = 0.0d0
                end if
-               !write(*,*) 'm=', m
-               !write(*,'(18f10.6)') real(this%eeo(:,:,m,ntype))
-               !write(*,*) 'ee', m
-               !write(*,'(18f10.6)') real(this%ee(:,:,m,ntype))
+               !write(*,*) ´m=´, m
+               !write(*,´(18f10.6)´) real(this%eeo(:,:,m,ntype))
+               !write(*,*) ´ee´, m
+               !write(*,´(18f10.6)´) real(this%ee(:,:,m,ntype))
             end do
          end if
       end do ! end of atom type number
@@ -565,7 +707,7 @@ contains
                else
                   ji = this%charge%lattice%iz(nlim)
                end if
-               ! Check if neighbour 'm' exists for atom 'nlim', otherwise fill HoH Hamiltonian with zeros.
+               ! Check if neighbour ´m´ exists for atom ´nlim´, otherwise fill HoH Hamiltonian with zeros.
                if (ji > 0) then
                   call zgemm('n', 'n', 18, 18, 18, cone, this%hall(1, 1, m, nlim), 18, this%obarm(1, 1, ji), 18, czero, this%hallo(1, 1, m, nlim), 18)
                else
@@ -603,7 +745,7 @@ contains
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          do k = 1, nr
             jj = this%charge%lattice%nn(ia, k)
-            !write(123, *)'ia, ii', ia, m, this%charge%lattice%nn(ia, m)
+            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
             if (k == 1) then
                jj = ia
             end if
@@ -625,15 +767,15 @@ contains
                !a_inv(:,:) = inverse_3x3(this%charge%lattice%a)
                !idx(:) = matmul(a_inv(:,:),b(:))
 
-               !write(*,*) b(:), 'b'
+               !write(*,*) b(:), ´b´
                !write(*,*) matmul(this%charge%lattice%a(:,:),idx(:))
 
-               !call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
-               !call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
-               !call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
-               !call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
+               call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
+               call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
+               call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
+               call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
                !if(this%hoh)then
-               !  !call zgemm('n','c',18,18,18,cone,this%eeo(:,:,k,ntype),18,this%ee(:,:,k,ntype),18,cone,dum(:,:),18)
+               !  !call zgemm(´n´,´c´,18,18,18,cone,this%eeo(:,:,k,ntype),18,this%ee(:,:,k,ntype),18,cone,dum(:,:),18)
                !  dum(:,:) = 0.0d0
                !  do i=1,nr
                !    dum(:,:) = dum(:,:) + this%eeoee(:,:,i,ntype)
@@ -764,7 +906,7 @@ contains
          write (*, *) ia, nr, n_atoms, max_orbital
          do k = 1, nr
             jj = this%charge%lattice%nn(ia, k)
-            !write(123, *)'ia, ii', ia, m, this%charge%lattice%nn(ia, m)
+            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
             if (k == 1) then
                jj = ia
             end if
@@ -842,8 +984,8 @@ contains
             write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
             write (128, '(18f10.6)') real(this%EE(1:18, 1:18, k, ntype))!*13.605703976
             write (128, *) sum(real(this%ee(:, :, k, ntype)))
-            !write(129,*)'m=',k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=',ntype, 'Index=', idx(k,:)
-            !write(129,'(9f10.6)') real(this%EE(10:18,1:9,k,ntype))*13.605703976
+            !write(129,*)´m=´,k, ´Atom=´, jj, ´Coordinates=´, this%charge%lattice%cr(:, jj), ´Ntype=´,ntype, ´Index=´, idx(k,:)
+            !write(129,´(9f10.6)´) real(this%EE(10:18,1:9,k,ntype))*13.605703976
             !write(129,*) sum(real(this%ee(:,:,k,ntype)))
             rewind (90)
             rewind (91)
@@ -889,7 +1031,7 @@ contains
       end do
 
 !    do ilm=1, 9
-!      write(123, '(9f10.6)') (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
+!      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
 !    end do
 
       if (vv <= 0.01d0) then
@@ -925,9 +1067,9 @@ contains
       end do
 
       !do m=1, 3
-      !  write(123, *)'m=', m
+      !  write(123, *)´m=´, m
       !  do ilm=1, 9
-      !    write(123, '(9f10.6)') (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
+      !    write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
       !  end do
       !end do
    end subroutine ham0m_nc
@@ -957,21 +1099,25 @@ contains
       call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, dummy)
 
       !do m=1, nr
-      !  print '(9f10.6)', real(this%charge%lattice%sbar(:, :, m, ino))
+      !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
       !end do
       it = this%charge%lattice%iz(ia)
       do m = 1, nr
          jj = this%charge%lattice%nn(ia, m)
-         !write(123, *)'ia, ii', ia, m, this%charge%lattice%nn(ia, m)
+         !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
          if (m == 1) then
             jj = ia
          end if
          if (jj /= 0) then
             jt = this%charge%lattice%iz(jj)
-            vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-            !write(123, '(3f10.6)') vet(:)
-            !write(123, '(3f10.6)') this%charge%lattice%sbarvec(:, m)
-            !write(123, '(a, 3i4, 3f10.6)') 'nn ', IA, m, JJ, VET(:)
+            if (this%lattice%pbc) then
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,jj,vet)
+            else
+               vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+            end if
+            !write(123, ´(3f10.6)´) vet(:)
+            !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
+            !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
             call this%hmfind(vet, nr, hhh, m, ia, m, ni, ntype)
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
@@ -984,11 +1130,11 @@ contains
          end if
       end do
       !do m=1, nr
-      !  write(123, *)'m=', m
+      !  write(123, *)´m=´, m
       !  do mdir=1, 4
-      !    write(123, *)'mdir=', mdir
+      !    write(123, *)´mdir=´, mdir
       !    do i=1, 9
-      !      write(123, '(9f10.4)')(real(this%hmag(i, j, m, mdir)), j=1, 9)
+      !      write(123, ´(9f10.4)´)(real(this%hmag(i, j, m, mdir)), j=1, 9)
       !    end do
       !  end do
       !end do
@@ -1017,7 +1163,7 @@ contains
       a3 = 0.0d0
       aaa = 0.0d0
       do i = 1, nr
-         !write(123, '(a, i4, 3f10.4)')'i', i, this%charge%lattice%sbarvec(:, i)
+         !write(123, ´(a, i4, 3f10.4)´)´i´, i, this%charge%lattice%sbarvec(:, i)
          a1 = (vet(1) - this%charge%lattice%sbarvec(1, i))
          a2 = (vet(2) - this%charge%lattice%sbarvec(2, i))
          a3 = (vet(3) - this%charge%lattice%sbarvec(3, i))
@@ -1036,7 +1182,7 @@ contains
       end do
 
       !do ilm = 1, 9
-      !    write(123, '(9f10.6)')(hhh(ilm, jlm), jlm=1, 9)
+      !    write(123, ´(9f10.6)´)(hhh(ilm, jlm), jlm=1, 9)
       !end do
    end subroutine hmfind
 

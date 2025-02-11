@@ -43,7 +43,7 @@ module bands_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: bands
       !> Green
       class(green), pointer :: green
@@ -94,6 +94,8 @@ module bands_mod
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
+      procedure :: calculate_angles
+      !procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
       final :: destructor
@@ -228,8 +230,10 @@ contains
       integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail
       real(rp) :: e1_mag, ef_mag, e1
       integer :: ia_glob
-      real(rp), dimension(this%lattice%nrec, this%en%channels_ldos + 10) :: dosia
-      real(rp), dimension(this%lattice%nrec, 18, this%en%channels_ldos + 10) :: dosial
+      real(rp), dimension(:, :), allocatable :: dosia
+      real(rp), dimension(:, :, :), allocatable :: dosial
+
+      allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, 18, this%en%channels_ldos + 10))
 
       e1_mag = 0.0d0
       ef_mag = 0.0d0
@@ -259,7 +263,7 @@ contains
                dosial(ia_glob, j + 9, i) = -aimag(this%green%g0(j + 9, j + 9, i, ia))/pi
             end do
             !write(250+ia,*) this%en%ene(i), dosia(ia,i)
-            !write(450+ia,'(19f10.6)') this%en%ene(i), dosial(ia,1,i), &
+            !write(450+ia,´(19f10.6)´) this%en%ene(i), dosial(ia,1,i), &
             !dosial(ia,2,i), dosial(ia,3,i), dosial(ia,4,i), &
             !dosial(ia,5,i), dosial(ia,6,i), dosial(ia,7,i), dosial(ia,8,i), dosial(ia,9,i), &
             !dosial(ia,10,i), &
@@ -318,6 +322,9 @@ contains
          this%e1 = e1
          if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
       end if
+
+      deallocate(dosia)
+      deallocate(dosial)
    end subroutine calculate_fermi
 
    !---------------------------------------------------------------------------
@@ -361,7 +368,7 @@ contains
       end do
       return
 1000  IFAIL = 0
-      !print '(3x, a, 2f12.6)', 'Fermil', QQV, AINT
+      !print ´(3x, a, 2f12.6)´, ´Fermil´, QQV, AINT
       if (AINT == QQV) then
          IK1 = I + 1
          EF = AINF + H*I
@@ -372,7 +379,7 @@ contains
          E1 = AINF + H*(I - 2)
          EF = ((QQV - AINT0)/ALPHA) + E1
       end if
-      !print '(3x, a, 4f12.6)', 'Fermil', QQV, AINT, EF, E1
+      !print ´(3x, a, 4f12.6)´, ´Fermil´, QQV, AINT, EF, E1
    end subroutine fermi
 
    !---------------------------------------------------------------------------
@@ -406,7 +413,7 @@ contains
       end do
 
       !call this%calculate_magnetic_moments()
-      if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%calculate_orbital_moments()
+      call this%calculate_orbital_moments()
 
       this%dspd(:, :, :) = 0.0d0
       !do na=1, this%lattice%nrec
@@ -488,13 +495,13 @@ contains
 #endif
 
       !do na=1,this%lattice%nrec
-      !write(*,*) 'Magnetic Moment for atom ', na,': ', sum(occ(na,1:3)) - sum(occ(na,4:6))
-      !write(*,*) 'Total Charge for atom ',na, ': ', sum(occ(na,1:6)), 's = ', occ(na,1)+occ(na,4), 'p = ', (occ(na,2))+(occ(na,5)), 'd = ', (occ(na,3))+(occ(na,6))
+      !write(*,*) ´Magnetic Moment for atom ´, na,´: ´, sum(occ(na,1:3)) - sum(occ(na,4:6))
+      !write(*,*) ´Total Charge for atom ´,na, ´: ´, sum(occ(na,1:6)), ´s = ´, occ(na,1)+occ(na,4), ´p = ´, (occ(na,2))+(occ(na,5)), ´d = ´, (occ(na,3))+(occ(na,6))
       !sums = sums + occ(na,1)+occ(na,4)
       !sump = sump + occ(na,2)+occ(na,5)
       !sumd = sumd + occ(na,3)+occ(na,6)
       !end do
-      !write(*,*) 'Total electrons s, p and d:', sums, sump, sumd
+      !write(*,*) ´Total electrons s, p and d:´, sums, sump, sumd
    end subroutine calculate_moments
 
    subroutine calculate_moments_gauss_legendre(this)
@@ -797,21 +804,18 @@ contains
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(3) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
 
-         !if(rank==0) call g_logger%info('Spin moment of atom'//fmt('i4',na)//' is '//fmt('f10.6',this%symbolic_atom(this%lattice%nbulk+na)%potential%mtot),__FILE__,__LINE__)
          call g_logger%info('Spin moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot), __FILE__, __LINE__)
          mx = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
          my = this%symbolic_atom(this%lattice%nbulk + na)%potential%my
          mz = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz
-         !if(rank==0) call g_logger%info('Spin moment projections of atom'//fmt('i4',na)//' is '//fmt('f10.6',mx)//' '//fmt('f10.6',my)//' '//fmt('f10.6',mz),__FILE__,__LINE__)
+
+         if (this%control%nsp < 3) this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(:) = [0.0d0, 0.0d0, 1.00d0]
 
          if (this%recursion%hamiltonian%local_axis) then
             call g_logger%info('Local spin moment projections of atom'//fmt('i4', na)//' is '//fmt('f10.6', mx)//' '//fmt('f10.6', my)//' '//fmt('f10.6', mz), __FILE__, __LINE__)
          else
             call g_logger%info('Spin moment projections of atom'//fmt('i4', na)//' is '//fmt('f10.6', mx)//' '//fmt('f10.6', my)//' '//fmt('f10.6', mz), __FILE__, __LINE__)
          end if
-
-         if (this%control%nsp < 3) this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(:) = [0.0d0, 0.0d0, 1.00d0]
-
       end do
    end subroutine calculate_magnetic_moments
 
@@ -825,12 +829,14 @@ contains
       class(bands) :: this
       ! Local variables
       real(rp) :: lx, ly, lz
+      real(rp), dimension(this%en%channels_ldos+10) :: lxi, lyi, lzi
       integer :: i, j ! Orbital index
       integer :: mdir ! Magnetic index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
       real(rp), dimension(9, 9, 3) :: l_orb
       complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
       !
 
       integer :: na_loc
@@ -845,27 +851,77 @@ contains
       call hcpx(mLy, 'cart2sph')
       call hcpx(mLz, 'cart2sph')
 
+      mLx_ext = 0.0d0
+      mLx_ext(1:9, 1:9) = mLx(:, :)
+      mLx_ext(10:18, 10:18) = mLx(:, :)
+      mLy_ext = 0.d00
+      mLy_ext(1:9, 1:9) = mLy(:, :)
+      mLy_ext(10:18, 10:18) = mLy(:, :)
+      mLz_ext = 0.0d0
+      mLz_ext(1:9, 1:9) = mLz(:, :)
+      mLz_ext(10:18, 10:18) = mLz(:, :)
+
       call this%calculate_orbital_dos()
 
       !do na=1, this%lattice%nrec
       do na = start_atom, end_atom
          na_loc = g2l_map(na)
 
-         do mdir = 1, 3
-            do i = 1, 9
-               do j = 1, 9
-                  call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(j, i, mdir, :, na_loc), this%e1, 0, this%en%ene)
-               end do
-            end do
+         l_orb = 0.0d0
+         lx = 0.0d0; ly = 0.0d0; lz = 0.d0
+
+
+         do ie = 1, this%en%channels_ldos+10
+            lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na_loc)))
+            lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na_loc)))
+            lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na_loc)))
          end do
-         lx = 0.0_rp !-0.5_rp * rtrace9(matmul(mLx,l_orb(:,:,1)))
-         ly = 0.0_rp !-0.5_rp * rtrace9(matmul(mLy,l_orb(:,:,2)))
-         lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :, 3)))
-         call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lz), __FILE__, __LINE__)
+
+         call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)
+         call simpson_m(ly, this%en%edel, this%en%fermi, this%nv1, lyi, this%e1, 0, this%en%ene)
+         call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
+         !do mdir = 1, 3
+         !   do i = 1, 9
+         !      do j = 1, 9
+         !         call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(i, j, mdir, :, na_loc), this%e1, 0, this%en%ene)
+         !      end do
+         !   end do
+         !end do
+
+         ! p contribution 
+         ! lz
+         !lz = lz + (l_orb(4, 4, 3) - l_orb(2, 2, 3)) 
+         !write(*,'(2f10.6)') l_orb(4, 4, 3), l_orb(2, 2, 3)
+         ! lx
+         !lx = lx + (l_orb(4, 4, 1) - l_orb(2, 2, 1)) 
+         !write(*,'(2f10.6)') l_orb(4, 4, 1), l_orb(2, 2, 1)
+         ! ly
+         !ly = ly + (l_orb(4, 4, 2) - l_orb(2, 2, 2)) 
+         !write(*,'(2f10.6)') l_orb(4, 4, 2), l_orb(2, 2, 2)
+
+         ! d contribution (up +down)
+         ! lz
+         !lz = lz + 2_rp * (l_orb(9, 9, 3) - l_orb(5, 5, 3)) + (l_orb(8, 8, 3) - l_orb(6, 6, 3))
+         !write(*,'(4f10.6)') l_orb(9, 9, 3), l_orb(5, 5, 3), l_orb(8, 8, 3), l_orb(6, 6, 3)
+         ! lx
+         !lx = lx + 2_rp * (l_orb(9, 9, 1) - l_orb(5, 5, 1)) + (l_orb(8, 8, 1) - l_orb(6, 6, 1))
+         !write(*,'(4f10.6)') l_orb(9, 9, 1), l_orb(5, 5, 1), l_orb(8, 8, 1), l_orb(6, 6, 1)
+         ! ly
+         !ly = ly + 2_rp * (l_orb(9, 9, 2) - l_orb(5, 5, 2)) + (l_orb(8, 8, 2) - l_orb(6, 6, 2)) 
+         !write(*,'(4f10.6)') l_orb(9, 9, 2), l_orb(5, 5, 2), l_orb(8, 8, 2), l_orb(6, 6, 2)
+
+         lz =  - (lz / pi) 
+         lx =  - (lx / pi) 
+         ly =  - (ly / pi) 
+
+         !lz = -0.5_rp * rtrace9(matmul(l_orb(:, :, 3), mLz))
+         !lx = -0.5_rp * rtrace9(matmul(l_orb(:, :, 1), mLx))
+         !ly = -0.5_rp * rtrace9(matmul(l_orb(:, :, 2), mLy))
+
+         call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lx)//' '//fmt('f10.6', ly)//' '//fmt('f10.6', lz), __FILE__, __LINE__)
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(2) = ly
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(3) = lz
-
       end do
    end subroutine calculate_orbital_moments
 
@@ -915,10 +971,10 @@ contains
             do i = 1, 9
                do j = 1, 9
                   this%d_orb(j, i, 1, ie, na) = this%d_orb(j, i, 1, ie, na) &
-                                                - aimag(this%green%g0(j + 9, i, ie, na) + this%green%g0(j, i + 9, ie, na))/pi
-                  this%d_orb(j, i, 2, ie, na) = this%d_orb(j, i, 1, ie, na) &
-                                                - aimag(i_unit*this%green%g0(j + 9, i, ie, na) - i_unit*this%green%g0(j, i + 9, ie, na))/pi
-                  this%d_orb(j, i, 3, ie, na) = this%d_orb(j, i, 1, ie, na) &
+                                                - aimag(this%green%g0(j, i + 9, ie, na) + this%green%g0(j + 9, i, ie, na))/pi
+                  this%d_orb(j, i, 2, ie, na) = this%d_orb(j, i, 2, ie, na) &
+                                                - aimag(i_unit*this%green%g0(j, i + 9, ie, na) - i_unit*this%green%g0(j + 9, i, ie, na))/pi
+                  this%d_orb(j, i, 3, ie, na) = this%d_orb(j, i, 3, ie, na) &
                                                 - aimag(this%green%g0(j, i, ie, na) - this%green%g0(j + 9, i + 9, ie, na))/pi
                end do
             end do
@@ -945,7 +1001,7 @@ contains
                do j = 1, 9
                   this%g0_z(i, j, ie, na) = this%g0_z(i, j, ie, na) + (this%green%g0(i, i, ie, na) - this%green%g0(i + 9, i + 9, ie, na))
                   this%g0_y(i, j, ie, na) = this%g0_y(i, j, ie, na) + (i_unit*this%green%g0(i, i + 9, ie, na) - i_unit*this%green%g0(i + 9, i, ie, na))
-                  this%g0_x(i, j, ie, na) = this%g0_z(i, j, ie, na) + (this%green%g0(i, i + 9, ie, na) + this%green%g0(i + 9, i, ie, na))
+                  this%g0_x(i, j, ie, na) = this%g0_x(i, j, ie, na) + (this%green%g0(i, i + 9, ie, na) + this%green%g0(i + 9, i, ie, na))
                end do
             end do
          end do
@@ -1036,13 +1092,165 @@ contains
          call g_logger%info('Magnetic field on atom'//fmt('i4', na)//' is '//fmt('f16.6', fx)//' '//fmt('f16.6', fy)//' '//fmt('f16.6', fz), __FILE__, __LINE__)
          call g_logger%info('Magnetic torque on atom'//fmt('i4', na)//' is '//fmt('f16.6', tx)//' '//fmt('f16.6', ty)//' '//fmt('f16.6', tz), __FILE__, __LINE__)
 
-         !print '(a,i4,a, 3f12.6)' , "Magnetic mom0 for atom ", na, "=",this%symbolic_atom(plusbulk)%potential%mom0
-         !print '(a,i4,a, 3f12.6)' , "Magnetic mom1 for atom ", na, "=", this%symbolic_atom(plusbulk)%potential%mom1
-         !print '(a,i4,a, 3f12.6)' , "Field prefactors for atom ", na, "=", pref_0, pref_1
-         !print '(a,i4,a, 3f12.6)' , "Magnetic force for atom ", na, "=", I_loc
-         !print '(a,i4,a, 3f12.6)' , "Magnetic torque for atom ", na, "=", tau_loc
-         !print '(a,i4,a, 3f12.6)' , "Field prefactors for atom ", na, "=", pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
-         !print '(a,i4,a, 3f12.6)' , "Field prefactors for atom ", na, "=", pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom0 for atom ", na, "=",this%symbolic_atom(plusbulk)%potential%mom0
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom1 for atom ", na, "=", this%symbolic_atom(plusbulk)%potential%mom1
+         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_0, pref_1
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic force for atom ", na, "=", I_loc
+         !print ´(a,i4,a, 3f12.6)´ , "Magnetic torque for atom ", na, "=", tau_loc
+         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
+         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
       end do
    end subroutine calculate_magnetic_torques
+
+   !**************************************************************************
+   !> @brief Calculate angles between magnetic and orbital moments for all atoms.
+   !> 
+   !> This subroutine computes the angles between the magnetic moments and
+   !> orbital moments of all atoms in a given system. The angles are calculated
+   !> using the dot product of the vectors, normalized by the magnitudes of the
+   !> vectors. The results are stored in two matrices: one for the magnetic moments
+   !> and one for the orbital moments.
+   !> 
+   !> @param[in]  this          A derived band type 
+   !> @param[in]  magmom        A 2D real array (nrec x 3) containing the magnetic moments for each atom.
+   !> @param[in]  lmom          A 2D real array (nrec x 3) containing the orbital moments for each atom.
+   !> @param[out] angles_magmom A 2D real array (nrec x nrec) to store the angles between magnetic moments of all atom pairs.
+   !> @param[out] angles_lmom   A 2D real array (nrec x nrec) to store the angles between orbital moments of all atom pairs.
+   !>
+   !> @note The angles are calculated using the following formula:
+   !>       \f$ \text{angle} = \cos^{-1} \left( \frac{\mathbf{a} \cdot \mathbf{b}}{|\mathbf{a}| |\mathbf{b}|} \right) \f$
+   !>       where \f$\mathbf{a}\f$ and \f$\mathbf{b}\f$ are the moment vectors.
+   !**************************************************************************
+   subroutine calculate_angles(this, magmom, lmom)
+      implicit none
+      ! Input
+      class(bands), intent(inout) :: this
+      real(rp), dimension(this%lattice%nrec, 3), intent(in) :: magmom, lmom
+      ! Local variables
+      integer :: i, j, cols_per_line
+      real(rp) :: dot_prod, mag_a, mag_b
+      real(rp), dimension(this%lattice%nrec, this%lattice%nrec) :: angles_magmom
+      real(rp), dimension(this%lattice%nrec, this%lattice%nrec) :: angles_lmom
+      character(len=sl) :: format_string   
+
+      ! Loop over all pairs of atoms
+      do i = 1, this%lattice%nrec
+         do j = 1, this%lattice%nrec
+            if (i /= j) then
+               ! Calculate the angle between magnetic moments
+               dot_prod = dot_product(magmom(i, :), magmom(j, :))
+               mag_a = sqrt(sum(magmom(i, :)**2))
+               mag_b = sqrt(sum(magmom(j, :)**2))
+               angles_magmom(i, j) = acos(dot_prod / (mag_a * mag_b))
+   
+               ! Calculate the angle between orbital moments
+               dot_prod = dot_product(lmom(i, :), lmom(j, :))
+               mag_a = sqrt(sum(lmom(i, :)**2))
+               mag_b = sqrt(sum(lmom(j, :)**2))
+               angles_lmom(i, j) = acos(dot_prod / (mag_a * mag_b))
+            else
+               ! Set the diagonal to zero since the angle between the same vectors is undefined
+               angles_magmom(i, j) = 0.0_rp
+               angles_lmom(i, j) = 0.0_rp
+            end if
+         end do
+      end do
+
+      ! Determine the number of columns per line
+      cols_per_line = this%lattice%nrec
+      write(format_string, '(A,I4,A)') '(', cols_per_line, 'f16.6)'
+
+      ! Write the results to output files
+      open(unit=10, file='angles_magmom.out', status='replace')
+      open(unit=20, file='angles_lmom.out', status='replace')
+
+      do i = 1, this%lattice%nrec
+         write(10, format_string) angles_magmom(i, 1:this%lattice%nrec)*rad2deg
+         write(20, format_string) angles_lmom(i, 1:this%lattice%nrec)*rad2deg
+      end do
+
+      close(10)
+      close(20)
+   end subroutine calculate_angles
+
+   !subroutine calculate_conductivity_tensor(this)
+   !   implicit none
+   !   ! Input
+   !   class(bands), intent(inout) :: this
+   !   ! Local variables
+   !   integer :: i, m, n, l1, l2, ntype
+   !   complex(rp), dimension(:,:,:), allocatable :: integrand
+   !   real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
+   !   real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
+   !   real(rp) :: a, b, real_part, im_part
+
+   !   allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
+   !   allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
+   !   allocate(wscale(this%en%channels_ldos + 10))
+   !   allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
+
+   !   integrand(:, :, :) = (0.0d0, 0.0d0)
+   !   real_part_l(:) = 0.0d0
+   !   im_part_l(:) = 0.0d0
+   !   integrand_tot_real(:) = 0.0d0
+   !   integrand_tot_im(:) = 0.0d0
+   !   integrand_l_real(:, :) = 0.0d0
+   !   integrand_l_im(:, :) = 0.0d0
+
+   !   a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+   !   b = (this%en%energy_max + this%en%energy_min)/2
+
+   !   wscale(:) = (this%en%ene(:) - b)/a
+
+   !   ! Calculate the integrand for each energy grid point
+   !   do ntype = 1, this%lattice%ntype
+   !      do i = 1, this%en%channels_ldos + 10
+   !         do n = 1, this%control%lld
+   !            do m = 1, this%control%lld
+   !               !do l1 = 1, 18
+   !                  do l2 = 1, 18
+   !                     integrand(l2, l2, i) = integrand(l2, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
+   !                  end do
+   !               !end do
+   !            end do
+   !         end do
+   !      end do
+   !   end do
+
+   !   integrand_tot_real(:) = 0.0d0
+   !   integrand_tot_im(:) = 0.0d0
+
+   !   !do l1 = 1, 18
+   !      do l2 = 1, 18
+   !         integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
+   !         integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :)) 
+   !         integrand_l_real(l2, :) = real(integrand(l2, l2, :))
+   !         integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
+   !      end do
+   !   !end do
+ 
+   !   do i = 1, this%en%channels_ldos + 10
+   !      write(2,*) this%en%ene(i) - this%en%fermi, integrand_tot_real(i) / real(this%control%lld * this%lattice%ntype), integrand_tot_im(i) / real(this%control%lld * this%lattice%ntype) 
+   !   end do 
+
+   !   do i = 1, this%en%channels_ldos + 10
+   !      real_part = 0.0d0; im_part = 0.0d0
+   !      call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
+   !      call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)   
+   !      write(3, *) this%en%ene(i) - this%en%fermi, real_part / real(this%control%lld * this%lattice%ntype),  im_part / real(this%control%lld * this%lattice%ntype) 
+   !   end do
+
+   !   do i = 1, this%en%channels_ldos + 10
+   !      do l2 = 1, 18
+   !         call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
+   !         call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
+   !      end do
+   !      write(32,'(19f16.10)') this%en%ene(i) - this%en%fermi, real_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
+   !      write(33,'(19f16.10)') this%en%ene(i) - this%en%fermi, im_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
+   !   end do
+   !   
+   !   deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)
+
+   !end subroutine calculate_conductivity_tensor
+
 end module bands_mod

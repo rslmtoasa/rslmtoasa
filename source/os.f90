@@ -30,7 +30,7 @@ module os_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type :: argument_parser
       !> Name of input file with all needed namelists
       character(len=sl) :: input_origin
@@ -107,7 +107,7 @@ contains
          if (size(obj%namelists(:, 1)) .eq. 0) then
             return
          end if
-         ! add suffix '_modified' to keep original input safer
+         ! add suffix ´_modified´ to keep original input safer
          call replace(obj%input, '.nml', '_modified.nml')
          output_input = trim(obj%input)
       else
@@ -126,7 +126,7 @@ contains
             call g_logger%fatal('Namelist '//fmt('A', nml)//' not present in file '//fmt('A', file), __FILE__, __LINE__)
          end if
          dummy_temp_file1 = '.'//trim(nml)//"_namelist_cach_"//trim(code)//".tmp"
-         ! (3.a) Copy all namelist from input file but 'nml'
+         ! (3.a) Copy all namelist from input file but ´nml´
          call system("awk 'BEGIN{flag=1} /&"//trim(nml)//"/{flag=0} /^\s*\//{if(flag==0){flag=1;next;}} flag' "//trim(output_input)//" > "//trim(dummy_temp_file1)//"; mv "//trim(dummy_temp_file1)//" "//trim(output_input))
          ! (3.b) Open namelist field in file
          call system("echo '&"//trim(nml)//"' >> "//trim(output_input))
@@ -190,13 +190,13 @@ contains
    ! function path_join(path1, path2)
    !   character(len=*) :: path1, path2
    !   character(len=2*sl) :: path_join
-   !   if(path1(len(path1)) .eq. '/') path1(len(path1)) = ''
+   !   if(path1(len(path1)) .eq. ´/´) path1(len(path1)) = ´´
    ! end function path_join
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Check whether 'fname' exists
+   !> Check whether ´fname´ exists
    !
    !> @param[in] fname File to check
    !---------------------------------------------------------------------------

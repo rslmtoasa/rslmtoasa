@@ -28,7 +28,7 @@ module control_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: control
       !> Recursion cutoff LL for d electrons
       !>
@@ -47,7 +47,8 @@ module control_mod
       !> Use \ref nlim \f$= 0\f$ (zero) forbulk and surface.
       integer :: nlim
       integer :: npold
-
+      !> Number of random vectors to be used in the stochastic evaluation of traces for the Chebyshev momennts
+      integer :: random_vec_num
       !> Set calculation collinearity and relativistic type
       !>
       !> Set calculation collinearity and relativistic type
@@ -152,8 +153,15 @@ module control_mod
       !>
       !> Description.
       !>
-      !> Allowed values: 'lanczos', 'chebyshev'
+      !> Allowed values: ´block´, ´chebyshev´
       character(len=9) :: recur
+
+      !> Number of recursion levels for the conductivity tensor calculation
+      !>
+      !> Number of recursion levels for the conductivity tensor calculation
+      !>
+      !> Default: 200
+      integer :: cond_ll
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -186,7 +194,7 @@ contains
    !> @brief
    !> Constructor
    !
-   !> @param[in] fname Input file with 'control' namelist
+   !> @param[in] fname Input file with ´control´ namelist
    !> @return type(control)
    !---------------------------------------------------------------------------
    function constructor(fname) result(obj)
@@ -258,6 +266,8 @@ contains
       ruban = this%ruban
       do_comom = this%do_comom
       recur = this%recur
+      random_vec_num = this%random_vec_num
+      cond_ll = this%cond_ll
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -292,6 +302,9 @@ contains
       this%ruban = ruban
       this%do_comom = do_comom
       this%recur = recur
+      this%random_vec_num = random_vec_num
+      this%cond_ll = cond_ll
+
       ! end default
 
       ! Mandatory statements
@@ -344,6 +357,8 @@ contains
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
+      this%random_vec_num = 5
+      this%cond_ll = 200
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

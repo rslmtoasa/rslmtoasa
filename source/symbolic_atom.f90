@@ -16,7 +16,7 @@
 !> Ivan P. Miranda
 !
 ! DESCRIPTION:
-!> Module to hold symbolic_atom's parameters
+!> Module to hold symbolic_atom´s parameters
 !------------------------------------------------------------------------------
 
 module symbolic_atom_mod
@@ -36,7 +36,9 @@ module symbolic_atom_mod
    public :: array_of_symbolic_atoms
    public :: print_state, print_state_full, print_state_formatted
    public :: save_state
+   public :: save_state_scf
    public :: load_state
+
 
    type, public :: symbolic_atom
       !> Mixture occupation in self-consistent calculation. Default: 0.01.
@@ -106,7 +108,7 @@ contains
    !> Constructor
    !
    !> @param[in] symbolic_atom Namelist file in database
-   !> @param[in] database Directory to database files with 'symbolic_atom' namelist
+   !> @param[in] database Directory to database files with ´symbolic_atom´ namelist
    !> @return type(control)
    !---------------------------------------------------------------------------
    function constructor(label, database, reload) result(obj)
@@ -318,17 +320,17 @@ contains
          end if
       end do
 
-      ! In the collinear state, it's not dependent on the spin
+      ! In the collinear state, it´s not dependent on the spin
       ! so the off-diagonal blocks are zero (up-dw, dw-up)
       mat(1:(l_max + 1)**2, ((l_max + 1)**2 + 1):(2*(l_max + 1)**2)) = czero
       mat(((l_max + 1)**2 + 1):(2*(l_max + 1)**2), 1:(l_max + 1)**2) = czero
       mat_b(:, :) = czero ! define the initial element as imaginary zero
 
-      do i = 0, l_max ! quantum angular momentum index (l')
+      do i = 0, l_max ! quantum angular momentum index (l´)
          do j = 0, l_max ! quantum angular momentum index (l)
-            do k = -i, i, 1 ! magnetic quantum number index (m')
+            do k = -i, i, 1 ! magnetic quantum number index (m´)
                do n = -j, j, 1 ! magnetic quantum number index (m)
-                  do m = -1, 1, 1 ! magnetic quantum number index (m'')
+                  do m = -1, 1, 1 ! magnetic quantum number index (m´´)
                      if (i .gt. j) then
                         mat_b(order(i + 1, k + i + 1), order(j + 1, n + j + 1)) = czero
                      else
@@ -378,8 +380,8 @@ contains
 
       dmat(:, :) = czero
       call disp_matrix(this, dmat, disp_vec, l_max, ws_radius)
-      !write(*, '(9F14.9)') dmat(1:9, 1:9)
-      !write(*, *) '-------'
+      !write(*, ´(9F14.9)´) dmat(1:9, 1:9)
+      !write(*, *) ´-------´
 
       do i = 1, energy_steps
          mat(:, :, i) = matmul(dmat(:, :), pmat(:, :, i)) + matmul(pmat(:, :, i), transpose(dmat(:, :)))
@@ -434,7 +436,7 @@ contains
    !> of the potential function P.
    !> This assumes that the P matrices are diagonal - or spherically
    !> symmetrical (normal situation for ASA and equilibrium positions).
-   !> See Turek's book Eq. (3.56)
+   !> See Turek´s book Eq. (3.56)
    !> Implemented by Ivan Miranda on 24.10.2023
    !---------------------------------------------------------------------------
    subroutine transform_pmatrix(this, pmat_in, pmat_out, screening_in, screening_out)
@@ -649,9 +651,9 @@ contains
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
-   !> @brief Build an array of symbolic_atoms from namelist 'atoms' in fname
+   !> @brief Build an array of symbolic_atoms from namelist ´atoms´ in fname
    !
-   !> @param[in] fname File containg the namelist 'atoms'
+   !> @param[in] fname File containg the namelist ´atoms´
    !> @param[in] size Size (integer) or array
    !> @return type(symbolic_atom), dimension(:), allocatable
    !---------------------------------------------------------------------------
@@ -821,6 +823,19 @@ contains
          type(symbolic_atom), dimension(:), intent(in) :: array
          call print_state_formatted(array, suffix="_out")
       end subroutine save_state
+
+
+      !---------------------------------------------------------------------------
+      ! DESCRIPTION:
+      !> @brief
+      !> Shortcut for print_state_full with suffix="_scf"
+      !>
+      !> Shortcut for print_state_full with suffix="_scf"
+      !---------------------------------------------------------------------------
+      subroutine save_state_scf(array)
+         type(symbolic_atom), dimension(:), intent(in) :: array
+         call print_state_formatted(array, suffix="_scf")
+      end subroutine save_state_scf
 
       !---------------------------------------------------------------------------
       ! DESCRIPTION:

@@ -14,17 +14,17 @@
 !
 ! As a counterpart to the access to the source code and rights to copy,
 ! modify and redistribute granted by the license, users are provided only
-! with a limited warranty and the software's author, the holder of the
+! with a limited warranty and the software´s author, the holder of the
 ! economic rights, and the successive licensors have only limited
 ! liability.
 !
-! In this respect, the user's attention is drawn to the risks associated
+! In this respect, the user´s attention is drawn to the risks associated
 ! with loading, using, modifying and/or developing or reproducing the
 ! software by the user in light of its specific status of free software,
 ! that may mean that it is complicated to manipulate, and that also
 ! therefore means that it is reserved for developers and experienced
 ! professionals having in-depth computer knowledge. Users are therefore
-! encouraged to load and test the software's suitability as regards their
+! encouraged to load and test the software´s suitability as regards their
 ! requirements in conditions enabling the security of their systems and/or
 ! data to be ensured and, more generally, to use and operate it in the
 ! same conditions as regards security.
@@ -79,7 +79,7 @@ contains
       strout = trim(adjustl(strin))
 !    do i=1, len(str)
 !      if(ichar(str(i:i)) == 10) then
-!        clean_str(i:i) = ' '
+!        clean_str(i:i) = ´ ´
 !      else
 !        clean_str(i:i) = str(i:i)
 !      end if
@@ -325,7 +325,7 @@ contains
       end do
    end function upper
 
-   !> Split 'string' into array of strings separated by 'sep' argument
+   !> Split ´string´ into array of strings separated by ´sep´ argument
    subroutine split(string, sep, lstring)
       implicit none
       character(len=*), intent(in) :: string
@@ -386,7 +386,7 @@ contains
       character(len=sl) :: fjoin
       ! character(len=sl) :: sep_used
       ! integer :: i
-      ! sep_used = ''
+      ! sep_used = ´´
       ! if (present(sep)) sep_used = sep
       call join(lst_string, sep, fjoin)
    end function fjoin
@@ -403,7 +403,7 @@ contains
       end do
    end subroutine clean_string
 
-   !> replace all occurrences of 'src' in 'string' to 'dst'
+   !> replace all occurrences of ´src´ in ´string´ to ´dst´
    subroutine replace(string, src, dst)
       character(len=*), intent(inout) :: string
       character(len=*), intent(in) :: src, dst

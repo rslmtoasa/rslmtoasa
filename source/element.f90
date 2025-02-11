@@ -16,7 +16,7 @@
 !> Ivan P. Miranda
 !
 ! DESCRIPTION:
-!> Module to hold element's parameters
+!> Module to hold element´s parameters
 !------------------------------------------------------------------------------
 
 module element_mod
@@ -60,7 +60,7 @@ contains
    !> Constructor
    !
    !> @param[in] element Namelist file in database
-   !> @param[in] database Directory to database files with 'element' namelist
+   !> @param[in] database Directory to database files with ´element´ namelist
    !> @return type(control)
    !---------------------------------------------------------------------------
    function constructor(label, database, reload) result(obj)
@@ -317,7 +317,7 @@ contains
    !> @brief Build an array of elements
    !
    !> @param[in] element List of labels in database to build elements
-   !> @param[in] database Directory to database files with 'element' namelist
+   !> @param[in] database Directory to database files with ´element´ namelist
    !> @return type(element), dimension(:), allocatable
    !---------------------------------------------------------------------------
    function array_of_elements(elements, database)

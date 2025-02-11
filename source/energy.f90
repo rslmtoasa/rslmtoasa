@@ -34,7 +34,7 @@ module energy_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: energy
       !> Lattice
       class(lattice), pointer :: lattice
@@ -74,7 +74,7 @@ contains
    !> @brief
    !> Constructor
    !
-   !> @param[in] lattice_obj Pointer to system's lattice
+   !> @param[in] lattice_obj Pointer to system´s lattice
    !> @return type(energy)
    !---------------------------------------------------------------------------
    function constructor(lattice_obj) result(obj)

@@ -17,7 +17,7 @@
 !> Ivan P. Miranda
 !
 ! DESCRIPTION:
-!> Module to hold potential's parameters
+!> Module to hold potential´s parameters
 !------------------------------------------------------------------------------
 
 module potential_mod
@@ -53,7 +53,7 @@ module potential_mod
       !> cx -> center of the band
       !> wx -> width of the band
       !> cex -> center of the band - gravity center of the band
-      !> obx -> o parameter for the 'hoh' calculation
+      !> obx -> o parameter for the ´hoh´ calculation
       !> 1st index 1 = s-orbital, 2-4 = p-orbital, 5-9 = d-orbital
       !> 2nd index 1 = spin-up, 2 = spin-dw
       complex(rp), dimension(:, :), allocatable :: cx, wx, cex, obx
@@ -63,7 +63,7 @@ module potential_mod
       !> wx0 -> wx-up + wx-down
       !> wx1 -> wx-up - wx-down
       complex(rp), dimension(:), allocatable :: cx0, cx1, wx0, wx1, cex0, cex1, obx0, obx1
-      !> Potential parameters Pl's defined as \f$ P_l = 0.5 - \frac{1}{\pi}arctg(D_{l})\f$
+      !> Potential parameters Pl´s defined as \f$ P_l = 0.5 - \frac{1}{\pi}arctg(D_{l})\f$
       !> 1st index 1 = s-orbital, 2 = p-orbital, 3 = d-orbital
       !> 2nd index 1 = spin-up, 2 = spin-dw
       real(rp), dimension(:, :), allocatable :: pl
@@ -129,7 +129,7 @@ contains
    !> Constructor
    !
    !> @param[in] potential Namelist file in database
-   !> @param[in] database Directory to database files with 'potential' namelist
+   !> @param[in] database Directory to database files with ´potential´ namelist
    !> @return type(control)
    !---------------------------------------------------------------------------
    function constructor(label, database, reload) result(obj)
@@ -590,7 +590,7 @@ contains
    !> @brief Build an array of potentials
    !
    !> @param[in] potential List of labels in database to build potentials
-   !> @param[in] database Directory to database files with 'potential' namelist
+   !> @param[in] database Directory to database files with ´potential´ namelist
    !> @return type(potential), dimension(:), allocatable
    !---------------------------------------------------------------------------
    function array_of_potentials(potentials, database)

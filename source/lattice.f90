@@ -27,7 +27,7 @@ module lattice_mod
    use mpi_mod
    use globals_mod
    use control_mod
-   use string_mod, only: clean_str, sl, fmt
+   use string_mod
    use math_mod
    use precision_mod, only: rp
    use symbolic_atom_mod, only: symbolic_atom, array_of_symbolic_atoms
@@ -40,7 +40,7 @@ module lattice_mod
 
    private
 
-   !> Module's main structure
+   !> Module´s main structure
    type, public :: lattice
       !> Charge
       class(control), pointer :: control
@@ -225,7 +225,12 @@ module lattice_mod
       !>
       !> Primitive vectors in units of lattice parameter \ref alat
       real(rp), dimension(3, 3) :: a
-
+      !> Variables to handle periodic boundary conditions
+      !> 
+      !> Variables to handle periodic boundary conditions
+      logical :: pbc
+      logical :: b1, b2, b3
+      integer :: n1, n2, n3  
       !> TODO
       !> TBD
       integer, dimension(:), allocatable :: izp
@@ -245,9 +250,9 @@ module lattice_mod
       integer :: ndim, npe
 
       !> TODO
-      !> Crystal symmetry. Options are 'bcc', 'fcc', 'hcp' and 'nsy'
+      !> Crystal symmetry. Options are ´bcc´, ´fcc´, ´hcp´ and ´nsy´
       !>
-      !> Crystal symmetry. Options are 'bcc', 'fcc', 'hcp' and 'nsy'
+      !> Crystal symmetry. Options are ´bcc´, ´fcc´, ´hcp´ and ´nsy´
       character(len=4) :: crystal_sym
 
       ! Variables to build clust for surface calculation
@@ -260,9 +265,9 @@ module lattice_mod
       real(rp), dimension(:), allocatable :: z
 
       !> TODO
-      !> Surface symmetry. Options are '111', '110' and '001'.
+      !> Surface symmetry. Options are ´111´, ´110´ and ´001´.
       !>
-      !> Surface symmetry. Options are '111', '110' and '001'.
+      !> Surface symmetry. Options are ´111´, ´110´ and ´001´.
       character(len=10) :: surftype
 
       !> TODO
@@ -323,6 +328,13 @@ module lattice_mod
       procedure :: newclu
       procedure :: structb
       procedure :: atomlist
+      procedure :: check_atoms_in_volume
+      procedure :: find_unique_struct
+      procedure :: identify_unique_atoms
+      procedure :: check_within_volume
+      procedure :: f_wrap_coord_diff
+      procedure :: remd
+      procedure :: nncal
       procedure, private :: dbar1
       procedure :: clusba
       procedure :: calculate_nbas
@@ -452,6 +464,13 @@ contains
       a = this%a
       wav = this%wav
       celldm = this%celldm
+      b1 = this%b1
+      b2 = this%b2
+      b3 = this%b3
+      n1 = this%n1 
+      n2 = this%n2
+      n3 = this%n3
+      pbc = this%pbc
 
       if (size(this%izp) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
@@ -556,6 +575,13 @@ contains
       this%r2 = r2
       this%alat = alat
       this%celldm = celldm
+      this%pbc = pbc
+      this%b1 = b1
+      this%b2 = b2
+      this%b3 = b3
+      this%n1 = n1
+      this%n2 = n2
+      this%n3 = n3
 
       ! Reads Wigner-Seitz radius if available
       this%wav = wav
@@ -898,7 +924,13 @@ contains
       this%celldm = 0.0d0
       this%njij = 0
       this%njijk = 0
-
+      this%b1 = .false.
+      this%b2 = .false.
+      this%b3 = .false.
+      this%pbc = .false.
+      this%n1 = 0
+      this%n2 = 0
+      this%n3 = 0
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.izp', this%izp, (/this%ndim/))
       call g_safe_alloc%allocate('lattice.no', this%no, (/this%ndim/))
@@ -940,7 +972,7 @@ contains
    subroutine bravais(this)
       class(lattice), intent(inout) :: this
       ! Local variables
-      real(rp) :: rc, rs, lc
+      real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
@@ -968,14 +1000,26 @@ contains
       npr = int((ndim/(n*1.0d0))**(1.0d0/3.0d0))
 
       crbravais(:, :) = this%crd(:, :)
-      lc = (npr + 1)/2
+      if (this%pbc) then
+         lcx = (this%n1 + 1)/2
+         lcy = (this%n2 + 1)/2
+         lcz = (this%n3 + 1)/2
+      else
+         lc = (npr + 1)/2
+         lcx = lc
+         lcy = lc
+         lcz = lc
+      end if
       l = n
-      !write(*,*) lc, l, npr, sum(this%no), sum(this%izp), sum(this%crd), sum(crbravais)
+      if (.not.this%pbc) then
+         this%n1 = npr; this%n2 = npr; this%n3 = npr
+      end if
+
       do i = 1, l
-         do nx = 1, npr
-            do ny = 1, npr
-               do nz = 1, npr
-                  if (nx .eq. lc .and. ny .eq. lc .and. nz .eq. lc) go to 13
+         do nx = 1, this%n1        
+            do ny = 1, this%n2 
+               do nz = 1, this%n3  
+                  if (nx .eq. lcx .and. ny .eq. lcy .and. nz .eq. lcz) go to 13
                   n = n + 1
 !  ...........Verifies dimension NDIM.........................
                   if (n .gt. ndim) then
@@ -983,9 +1027,9 @@ contains
                      stop
                   end if
 ! ...............................................................
-                  crbravais(1, n) = this%crd(1, i) + (nx - lc)*this%a(1, 1) + (ny - lc)*this%a(1, 2) + (nz - lc)*this%a(1, 3)
-                  crbravais(2, n) = this%crd(2, i) + (nx - lc)*this%a(2, 1) + (ny - lc)*this%a(2, 2) + (nz - lc)*this%a(2, 3)
-                  crbravais(3, n) = this%crd(3, i) + (nx - lc)*this%a(3, 1) + (ny - lc)*this%a(3, 2) + (nz - lc)*this%a(3, 3)
+                  crbravais(1, n) = this%crd(1, i) + (nx - lcx)*this%a(1, 1) + (ny - lcy)*this%a(1, 2) + (nz - lcz)*this%a(1, 3)
+                  crbravais(2, n) = this%crd(2, i) + (nx - lcx)*this%a(2, 1) + (ny - lcy)*this%a(2, 2) + (nz - lcz)*this%a(2, 3)
+                  crbravais(3, n) = this%crd(3, i) + (nx - lcx)*this%a(3, 1) + (ny - lcy)*this%a(3, 2) + (nz - lcz)*this%a(3, 3)
                   this%no(n) = this%no(i)
                   this%izp(n) = this%izp(i)
 13                continue
@@ -998,9 +1042,17 @@ contains
       kk = 0
       if (rc == 0.0d0) rs = npr**3
 
-      do i = 1, nl
-         call cut(i, l, ndim, crbravais, cr, this%izp, iz, num, this%no, rs, kk)
-      end do
+      if (this%pbc) then
+         ndim = this%n1*this%n2*this%n3*l 
+         iz = this%izp
+         num = this%no
+         cr = crbravais
+         kk = n
+      else
+          do i = 1, nl
+             call cut(i, l, ndim, crbravais, cr, this%izp, iz, num, this%no, rs, kk)
+          end do
+      end if 
 
       if (int(kk/2) /= kk/2.d0) kk = kk - 1
 
@@ -1293,7 +1345,7 @@ contains
          this%ntype = maxType
          this%nbulk = this%nbulk_bulk
          this%nrec = this%ntype - this%nbulk
-         this%nbas = 50
+         this%nbas = 49
 
          if (allocated(this%chargetrf_type)) deallocate (this%chargetrf_type)
          if (allocated(this%ib)) deallocate (this%ib)
@@ -1304,7 +1356,7 @@ contains
          allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot), this%ct(this%ntype))
          allocate (this%chargetrf_type(this%nbas))
 
-         this%ct(:) = this%alat + 0.1d0
+         this%ct(:) = 4.0d0 !this%alat + 0.1d0
          this%r2 = this%ct(1)**2
 
          do i = 1, this%nrec
@@ -1332,7 +1384,7 @@ contains
 
       !axis = axis / norm
 
-    !! Setup the rotation matrix using Rodrigues' formula
+    !! Setup the rotation matrix using Rodrigues´ formula
       !call setup_rotation_matrix(rotation_matrix, axis, theta)
 
       !do i = 1, nsurf
@@ -1355,7 +1407,7 @@ contains
       end do
 
       do i = 1, maxtype
-         write (20, *) crsurf(:, ichoicen(i)), ichoicetypen(i), crystalsurf(ichoicen(i)), &
+         write (20, '(3f12.6, 2i5, f12.6)') crsurf(:, ichoicen(i)), ichoicetypen(i), crystalsurf(ichoicen(i)), &
                     & dot_product([this%dx, this%dy, this%dz], crsurf(:, ichoicen(i)))
       end do
 
@@ -1479,7 +1531,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Adds the cluster/impurity atoms in 'inclu' to 'clu0' and outputs to 'clust'
+   !> Adds the cluster/impurity atoms in ´inclu´ to ´clu0´ and outputs to ´clust´
    !---------------------------------------------------------------------------
    subroutine newclu(this)
       class(lattice), intent(inout) :: this
@@ -1523,8 +1575,8 @@ contains
       allocate (izpo(kk), izp(kk), no(kk), nnmax(kk), izimp(kk), noimp(kk))
       allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))
       ! Setting ct values for impurity
-      this%ct(:) = 4.0 !this%alat+0.1d0
-      ! Identify impurity atoms from 'inclu'
+      this%ct(:) = this%alat+0.1d0
+      ! Identify impurity atoms from ´inclu´
       do i = 1, kk
          izpo(i) = this%iz(i)
       end do
@@ -1590,9 +1642,9 @@ contains
 
       ctnew(:) = this%ct(:)*nnscale
 
-      call nncal(ctnew, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
+      call this%nncal(ctnew, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
       nnmx = 200
-      call nncal(this%ct, crd, 3, kk, izp, nn2, ndi, nnmx, mapa, this%ntot)
+      call this%nncal(this%ct, crd, 3, kk, izp, nn2, ndi, nnmx, mapa, this%ntot)
       nnmx = 200
 
       do i = 1, kk
@@ -1638,7 +1690,7 @@ contains
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
       call leia(this%alat, kk, crd, izp, no, 10)
-      call nncal(this%ct, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
+      call this%nncal(this%ct, crd, 3, kk, izp, nn, ndi, nnmx, mapa, this%ntot)
       call outmap(11, izp, nn, no, ndi, nnmx, this%nrec)
       close (10)
       nmax = 0
@@ -1725,11 +1777,11 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Calculates the tight-binding structure constant matrix elements from
-   !> information in 'control' and 'clust.
+   !> information in ´control´ and ´clust.
    !---------------------------------------------------------------------------
    subroutine structb(this, do_str)
       class(lattice), intent(inout) :: this
-      logical, intent(in), optional :: do_str
+      logical, intent(in) :: do_str
       ! Local variables
       integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
       integer, dimension(:, :), allocatable :: nn
@@ -1737,11 +1789,6 @@ contains
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
-
-      do_str_ = .true.
-      if (present(do_str)) then
-         do_str_ = do_str
-      end if
 
       ! Open files
       open (12, file='map', form='unformatted')
@@ -1764,7 +1811,7 @@ contains
       write (17, 10000) kk
       write (17, 10001)
       write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
-      call nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
+      call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.nn', this%nn, (/this%kk, nm + 1/))
@@ -1774,7 +1821,8 @@ contains
       do ii = 1, nm + 1
          this%nn(:, ii) = nn(:, ii)
       end do
-
+      write(*,*) this%nn(2,:)
+      write(*,*) maxval(this%nn(:,1)), minval(this%nn(:,1))
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/9, 9, nm, this%ntot/))
 #else
@@ -1782,11 +1830,11 @@ contains
 #endif
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
-      call remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
+      call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
       write (17, 10003) kk, nm
-      if (do_str_) then
+      if (do_str) then
          do ii = 1, this%ntot
             ia = this%iu(ii)
             nr = this%nn(ia, 1)
@@ -1835,13 +1883,256 @@ contains
       end do
       this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
 
+      
       write (805, *) this%kk
       write (805, *)
       do i = 1, this%kk
-         write (805, '(A6,6F16.6)') adjustl(elem_var(int(this%symbolic_atoms(this%iz(i))%element%atomic_number))), &
+            write (805, '(A6,6F16.6)') (elem_var(int(this%symbolic_atoms(this%iz(i))%element%atomic_number))), &
             this%cr(:, i), this%symbolic_atoms(this%iz(i))%potential%mom(:)
       end do
    end subroutine atomlist
+
+   !**************************************************************************
+   !> @brief Identifies atoms within the volume defined by vectors a1, a2, and a3.
+   !> 
+   !> This subroutine checks if atoms, relative to a central atom, are located 
+   !> within the parallelepiped volume formed by translating vectors a1, a2, and a3.
+   !> 
+   !> @param[in]  cr              A 2D real(rp) array (3 x num_atoms) containing the coordinates of all atoms.
+   !> @param[in]  num             An integer array (num_atoms) representing structure identifiers for all atoms.
+   !> @param[in]  num_atoms       An integer representing the total number of atoms.
+   !> @param[in]  central_atom    An integer representing the index of the central atom.
+   !> @param[in]  a1, a2, a3      3-element real(rp) arrays representing the primitive vectors defining the volume.
+   !> @param[in]  plane_constant  A real(rp) value representing the constant of the plane equation for the surface.
+   !> @param[out] atoms_in_volume An allocatable integer array containing the indices of atoms found within the volume.
+   !> @param[out] atom_count      An integer representing the number of atoms found within the volume.
+   !>
+   !> @note The volume is defined by the parallelepiped formed from vectors a1, a2, and a3.
+   !**************************************************************************
+   subroutine check_atoms_in_volume(this, cr, num, num_atoms, central_atom, a1, a2, a3, plane_constant, atoms_in_volume, atom_count)
+       class(lattice), intent(inout) :: this
+       real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
+       integer, intent(in) :: num(num_atoms), num_atoms, central_atom
+       real(rp), intent(in) :: plane_constant
+       integer, allocatable, intent(out) :: atoms_in_volume(:)
+       integer, intent(out) :: atom_count
+       real(rp) :: relative_pos(3)
+       logical :: inside
+       integer :: i
+   
+       ! Initialize array for atoms inside the primitive cell volume
+       allocate(atoms_in_volume(num_atoms))
+       atom_count = 0
+       atoms_in_volume = 0
+       ! Loop over all atoms to find those inside the primitive cell volume
+       do i = 1, num_atoms
+          ! Calculate the position relative to the central atom
+          relative_pos = cr(:, i) - cr(:, central_atom)
+          ! Check if the atom is within the parallelepiped defined by a1, a2, and a3
+          call this%check_within_volume(relative_pos, a1, a2, a3, inside)
+   
+          if (inside) then
+             atom_count = atom_count + 1
+             atoms_in_volume(atom_count) = i
+          end if
+       end do
+       !write(*,*) 'atoms_in_volume', atoms_in_volume
+       ! Resize atoms_in_volume array to the actual number of atoms found
+       !if (atom_count > 0) then
+       !   deallocate(atoms_in_volume); allocate(atoms_in_volume(atom_count))
+       !else
+       !   deallocate(atoms_in_volume)
+       !end if
+   
+   end subroutine check_atoms_in_volume
+
+   !**************************************************************************
+   !> @brief Checks if an atom is inside the volume defined by a1, a2, and a3.
+   !> 
+   !> This subroutine checks if an atom's position, relative to a central atom, is 
+   !> inside the parallelepiped volume formed by the vectors a1, a2, and a3.
+   !>
+   !> The atom's position, relative to the central atom, is expressed as a linear 
+   !> combination of the vectors a1, a2, and a3, i.e.:
+   !>
+   !> \f$ \mathbf{r}_{\text{rel}} = u \mathbf{a}_1 + v \mathbf{a}_2 + w \mathbf{a}_3 \f$
+   !>
+   !> Where \f$ u, v, w \f$ are the coordinates in the basis defined by \f$ \mathbf{a}_1, \mathbf{a}_2, \mathbf{a}_3 \f$.
+   !>
+   !> The atom is considered inside the volume if:
+   !> \f$ 0 \leq u \leq 1 \f$, \f$ 0 \leq v \leq 1 \f$, and \f$ 0 \leq w \leq 1 \f$
+   !>
+   !> @param[in]  relative_pos  A 3-element real(rp) array representing the atom's position relative to the central atom.
+   !> @param[in]  a1, a2, a3    3-element real(rp) arrays representing the vectors defining the volume.
+   !> @param[out] inside        A logical value indicating whether the atom is inside the parallelepiped.
+   !>
+   !> @note The coordinates \( u, v, w \) are computed by solving the linear system:
+   !>       \f[
+   !>       \begin{aligned}
+   !>       \mathbf{r}_{\text{rel}} &= u \mathbf{a}_1 + v \mathbf{a}_2 + w \mathbf{a}_3 \\
+   !>       \end{aligned}
+   !>       \f]
+   !>       The inverse of the matrix of dot products is used to calculate \( u \), \( v \), and \( w \).
+   !**************************************************************************
+   subroutine check_within_volume(this, relative_pos, a1, a2, a3, inside)
+       class(lattice), intent(inout) :: this
+       real(rp), intent(in) :: relative_pos(3), a1(3), a2(3), a3(3)
+       logical, intent(out) :: inside
+       real(rp) :: dot11, dot12, dot13, dot22, dot23, dot33
+       real(rp) :: dot1r, dot2r, dot3r, inv_denom, u, v, w
+   
+       ! Calculate dot products between the vectors
+       dot11 = dot_product(a1, a1)
+       dot12 = dot_product(a1, a2)
+       dot13 = dot_product(a1, a3)
+       dot22 = dot_product(a2, a2)
+       dot23 = dot_product(a2, a3)
+       dot33 = dot_product(a3, a3)
+       dot1r = dot_product(a1, relative_pos)
+       dot2r = dot_product(a2, relative_pos)
+       dot3r = dot_product(a3, relative_pos)
+   
+       ! Calculate inverse of the denominator for the linear combination
+       inv_denom = 1.0_rp / (dot11 * (dot22 * dot33 - dot23 * dot23) &
+                           - dot12 * (dot12 * dot33 - dot23 * dot13) &
+                           + dot13 * (dot12 * dot23 - dot22 * dot13))
+   
+       ! Calculate coordinates (u, v, w) in the basis defined by a1, a2, and a3
+       u = ((dot22 * dot33 - dot23 * dot23) * dot1r + &
+           (dot13 * dot23 - dot12 * dot33) * dot2r + &
+           (dot12 * dot23 - dot13 * dot22) * dot3r) * inv_denom
+   
+       v = ((dot13 * dot23 - dot12 * dot33) * dot1r + &
+           (dot11 * dot33 - dot13 * dot13) * dot2r + &
+           (dot12 * dot13 - dot11 * dot23) * dot3r) * inv_denom
+   
+       w = ((dot12 * dot23 - dot13 * dot22) * dot1r + &
+           (dot12 * dot13 - dot11 * dot23) * dot2r + &
+           (dot11 * dot22 - dot12 * dot12) * dot3r) * inv_denom
+   
+       ! Check if the atom is inside the parallelepiped
+       inside = (u >= 0.0_rp .and. u <= 1.0_rp .and. &
+                 v >= 0.0_rp .and. v <= 1.0_rp .and. &
+                 w >= 0.0_rp .and. w <= 1.0_rp)
+   end subroutine check_within_volume
+
+   !**************************************************************************
+   !> @brief Finds all unique structure types within a given list of atoms.
+   !> 
+   !> This subroutine identifies all unique structure types (or identifiers) present 
+   !> within a set of atoms and returns a list of these unique identifiers.
+   !> 
+   !> @param[in]  num          An integer array (num_atoms) containing structure identifiers for all atoms.
+   !> @param[in]  num_atoms    An integer representing the total number of atoms.
+   !> @param[out] unique_nums  An allocatable integer array containing the unique structure identifiers.
+   !> 
+   !> @note This subroutine loops through the structure identifiers and ensures only
+   !>       unique ones are collected.
+   !**************************************************************************
+   subroutine find_unique_struct(this, num, num_atoms, unique_nums)
+       class(lattice), intent(inout) :: this
+       integer, intent(in) :: num(:), num_atoms
+       integer, allocatable, intent(out) :: unique_nums(:)
+       integer, allocatable :: temp_nums(:)
+       integer :: i, j, num_unique
+       logical :: found
+   
+       ! Allocate temporary array for unique numbers
+       allocate(temp_nums(num_atoms))
+       num_unique = 0
+   
+       ! Loop over all atoms to find unique structure types
+       do i = 1, num_atoms
+          found = .false.
+          do j = 1, num_unique
+             if (num(i) == temp_nums(j)) then
+                found = .true.
+                exit
+             end if
+          end do
+          if (.not. found) then
+             num_unique = num_unique + 1
+             temp_nums(num_unique) = num(i)
+          end if
+       end do
+   
+       ! Resize array to the actual number of unique nums
+       allocate(unique_nums(num_unique))
+       unique_nums(:) = temp_nums(1:num_unique)
+       ! Deallocate temporary array
+       deallocate(temp_nums)
+   end subroutine find_unique_struct
+
+   !**************************************************************************
+   !> @brief Identifies unique atomic positions within the primitive cell volume.
+   !> 
+   !> This subroutine identifies which atomic positions within the primitive cell 
+   !> volume are unique. An atom is considered unique if it cannot be generated 
+   !> from another atom using a combination of translations along a1, a2, and a3.
+   !> 
+   !> @param[in]  cr                A 2D real(rp) array (3 x num_atoms) containing coordinates of all atoms.
+   !> @param[in]  num_atoms         An integer representing the total number of atoms.
+   !> @param[in]  atoms_in_volume   An integer array containing indices of atoms within the volume.
+   !> @param[in]  atom_count        An integer representing the number of atoms within the volume.
+   !> @param[in]  a1, a2, a3        3-element real(rp) arrays representing the vectors defining the volume.
+   !> @param[out] unique_atoms      An allocatable integer array containing indices of unique atoms within the volume.
+   !> @param[out] unique_atom_count An integer representing the number of unique atoms within the volume.
+   !> 
+   !> @note The uniqueness of an atom is determined by comparing its position to all
+   !>       other atoms and checking if it can be generated by a translation using 
+   !>       a1, a2, and a3.
+   !**************************************************************************
+   subroutine identify_unique_atoms(this, cr, num_atoms, atoms_in_volume, atom_count, a1, a2, a3, unique_atoms, unique_atom_count)
+       class(lattice), intent(inout) :: this
+       real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
+       integer, intent(in) :: num_atoms, atoms_in_volume(:), atom_count
+       integer, allocatable, intent(out) :: unique_atoms(:)
+       integer, intent(out) :: unique_atom_count
+       logical :: found, is_transformed
+       real(rp) :: trans_atom(3), delta(3)
+       integer :: i, j, k, n, m, p
+       integer, allocatable :: temp_unique_atoms(:)
+   
+       ! Initialize temporary array for unique atoms list
+       allocate(temp_unique_atoms(atom_count))
+       unique_atom_count = 0
+       temp_unique_atoms = -1
+       ! First pass to identify all unique atoms within the primitive cell volume
+       do i = 1, atom_count
+           found = .false.
+   
+           ! Check if this atom can be generated by translating another atom
+           do j = 1, unique_atom_count
+               ! Translate atom by all combinations of a1, a2, and a3 within the cell
+               do k = -1, 1
+                   do n = -1, 1
+                       do p = -1, 1
+                           trans_atom = cr(:, temp_unique_atoms(j)) + k * a1 + n * a2 + p * a3
+                           delta = cr(:, atoms_in_volume(i)) - trans_atom
+                           if (norm2(delta) < 1.0d-6) then
+                               found = .true.
+                               exit
+                           end if
+                       end do
+                       if (found) exit
+                   end do
+                   if (found) exit
+               end do
+           end do
+   
+           ! If the atom is not redundant, add it to the temporary list of unique atoms
+           if (.not. found) then
+               unique_atom_count = unique_atom_count + 1
+               temp_unique_atoms(unique_atom_count) = atoms_in_volume(i)
+           end if
+       end do
+   
+       ! Allocate the final unique_atoms array to the correct size
+       allocate(unique_atoms(unique_atom_count))
+       unique_atoms(:) = temp_unique_atoms(1:unique_atom_count)
+       ! Deallocate temporary array
+       deallocate(temp_unique_atoms)
+   end subroutine identify_unique_atoms
 
    ! Local library
    !---------------------------------------------------------------------------
@@ -1896,7 +2187,7 @@ contains
       !do m=1, nt
       !  write(*, *) ia, m
       !  do i=1, 9
-      !    write(*, '(9f10.4)')((real(this%sbar(i, j, m, ia))), j=1, 9)
+      !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
       deallocate (a, bet, cr, wk, s, sbar)
@@ -1961,8 +2252,8 @@ contains
             this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA
-!!    in DBAR1."
+!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
+!!    "in DBAR1."
       end do
       n = ii
    end subroutine clusba
@@ -2158,7 +2449,7 @@ contains
       ! --------------------------------
       ir = 0
       hitc = 0
-      !print *, ' nr = ', nr
+      !print *, ´ nr = ´, nr
       do ir = 1, nr
          if (abs(R(1, IR)**2 + R(2, IR)**2 + R(3, IR)**2 - &
                  R(1, 1)**2 + R(2, 1)**2 + R(3, 1)**2) <= (R2/ncut)) then
@@ -2170,7 +2461,7 @@ contains
                   sbar(ilm, jlm, hitc) = 2.*s(ilm + irl0, jlm)
                end do
             end do
-          !!! Changed for 'symmetrizing' Sbar
+          !!! Changed for ´symmetrizing´ Sbar
           !! NOT NEEDED SINCE WITH LARGER CUTOFF
           !! SBAR IS CALCULATED PROPERLY
             ! do l = 2, 9
@@ -2197,7 +2488,7 @@ contains
             end do
          end if
       end do
-      !print *, ' hitc = ', hitc
+      !print *, ´ hitc = ´, hitc
       return
       !
       ! ... Format Declarations ...
@@ -2425,7 +2716,7 @@ contains
    !> @param[in] NA
    !> @param[inout] V
    !> @param[in] N
-   !> @param[in] M Number of RHS's
+   !> @param[in] M Number of RHS´s
    !---------------------------------------------------------------------------
    subroutine chlr2s(c, na, v, n, m)
       implicit none
@@ -2494,9 +2785,10 @@ contains
    !> @param[inout] idnn
    !> @param[out] ret
    !---------------------------------------------------------------------------
-   subroutine remd(crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
+   subroutine remd(this, crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
       implicit none
       ! Inputs
+      class(lattice), intent(inout) :: this
       integer, intent(in) :: nat, ndi, nnmx, nomx, ntot
       integer, dimension(ndi), intent(in) :: no
       real(rp), dimension(3, ndi), intent(in) :: crd
@@ -2515,9 +2807,13 @@ contains
          jsz = nn(la, 1)
          do j = 2, jsz
             jj = nn(la, j)
-            do m = 1, 3
-               set(m, i, j) = crd(m, la) - crd(m, jj)
-            end do
+            if (this%pbc) then 
+               call this%f_wrap_coord_diff(nat,crd,la,jj,set(:,i,j))
+            else
+               do m = 1, 3
+                  set(m, i, j) = crd(m, la) - crd(m, jj)
+               end do
+            end if
          end do
       end do
       do i = 1, nat
@@ -2535,9 +2831,13 @@ contains
          jsz = nn(i, 1)
          do j = 2, jsz
             jj = nn(i, j)
-            do m = 1, 3
-               ret(m) = crd(m, i) - crd(m, jj)
-            end do
+            if (this%pbc) then
+               call this%f_wrap_coord_diff(nat,crd,i,jj,ret)
+            else
+               do m = 1, 3
+                  ret(m) = crd(m, i) - crd(m, jj)
+               end do
+            end if
             !----------FINDS EQUIVALENT VECTOR------------------------
             eps = .0001
             do ii = 2, imax
@@ -2637,6 +2937,50 @@ contains
       end if
    end function mapa
 
+   subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff)
+      implicit none
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: Natom
+      real(rp), dimension(3,Natom), intent(in) :: coord
+      integer, intent(in) :: i_atom
+      integer, intent(in) :: j_atom
+      real(rp), dimension(3), intent(out) :: cdiff
+      !
+      real(rp), dimension(3) :: odiff, oshift, mdiff
+      integer :: x,y,z
+      integer :: xmin,xmax,ymin,ymax,zmin,zmax
+      !
+      odiff=coord(:,j_atom) - coord(:,i_atom)
+      !
+      xmax=0;xmin=0;ymax=0;ymin=0;zmax=0;zmin=0
+      if(this%b1)then
+         xmax=1
+         xmin=-1
+      end if
+      if(this%b2)then
+         ymax=1
+         ymin=-1
+      end if
+      if(this%b3)then
+         zmax=1
+         zmin=-1
+      end if
+      
+      mdiff=odiff
+      do z=zmin,zmax
+         do y=ymin,ymax
+            do x=xmin,xmax
+               oshift = odiff + x*(this%n1)*this%a(:, 1)*this%alat& 
+                              + y*(this%n2)*this%a(:, 2)*this%alat&
+                              + z*(this%n3)*this%a(:, 3)*this%alat
+               if(norm2(oshift)<norm2(mdiff))  mdiff = oshift
+            end do
+         end do
+      end do
+      cdiff=mdiff
+      return
+      !
+   end subroutine f_wrap_coord_diff
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -2653,8 +2997,9 @@ contains
    !> @param[in] ngbr
    !> @param[in] ntot
    !---------------------------------------------------------------------------
-   subroutine nncal(ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
+   subroutine nncal(this,ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
       implicit none
+      class(lattice), intent(inout) :: this
       ! Input
       integer, intent(in) :: NAT, ND, NDIM, NTOT
       integer, dimension(NAT), intent(in) :: IZP
@@ -2702,10 +3047,15 @@ contains
                JJP = IZP(J)
                JJP = ABS(JJP)
                R2 = 0.0
-               do L = 1, 3
-                  DDUM(L) = CRD(L, I) - CRD(L, J)
-                  R2 = R2 + DDUM(L)*DDUM(L)
-               end do
+               if (this%pbc) then
+                  call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
+                  r2 = sum(ddum(:)**2)
+               else        
+                  do L = 1, 3
+                     DDUM(L) = CRD(L, I) - CRD(L, J)
+                     R2 = R2 + DDUM(L)*DDUM(L)
+                  end do
+               end if
                ID = NGBR(IIP, JJP, R2, DUM, CT)
                !       if (ID /= 0 .and. ( IZP(I) > NTOT  .or. IZP(J) > NTOT) ) then
                if (ID /= 0) then
@@ -2775,7 +3125,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Subrotina que ordena um determinado vetor 'M' em ordem decrescente
+   !> Subrotina que ordena um determinado vetor ´M´ em ordem decrescente
    !>     segundo o metodo da bolha (BUBBLE)
    !> ...M(1) >= M(2)...  ; onde:
    !>     NL, ndim   -  input
