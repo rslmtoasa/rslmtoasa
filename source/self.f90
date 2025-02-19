@@ -1105,10 +1105,7 @@ contains
        close(ounit)
    
        ! Replace the original file with the temporary file
-       call rename(temp_filename, filename, status=stat)
-       if (stat /= 0) then
-           write(stderr, '(a)') "Error: Failed to update input file."
-       end if
+       call rename(temp_filename, filename)
    
        deallocate(lines)
    end subroutine update_fermi_in_input
