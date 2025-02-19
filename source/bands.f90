@@ -227,11 +227,12 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail
+      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail, unitnum, unitnum2
       real(rp) :: e1_mag, ef_mag, e1
       integer :: ia_glob
       real(rp), dimension(:, :), allocatable :: dosia
       real(rp), dimension(:, :, :), allocatable :: dosial
+      character(len=256) :: fname_total, fname_dos, fname_orb_dos
 
       allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, 18, this%en%channels_ldos + 10))
 
@@ -262,16 +263,7 @@ contains
                dosial(ia_glob, j, i) = -aimag(this%green%g0(j, j, i, ia))/pi
                dosial(ia_glob, j + 9, i) = -aimag(this%green%g0(j + 9, j + 9, i, ia))/pi
             end do
-            !write(250+ia,*) this%en%ene(i), dosia(ia,i)
-            !write(450+ia,´(19f10.6)´) this%en%ene(i), dosial(ia,1,i), &
-            !dosial(ia,2,i), dosial(ia,3,i), dosial(ia,4,i), &
-            !dosial(ia,5,i), dosial(ia,6,i), dosial(ia,7,i), dosial(ia,8,i), dosial(ia,9,i), &
-            !dosial(ia,10,i), &
-            !dosial(ia,11,i), dosial(ia,12,i), dosial(ia,13,i), &
-            !dosial(ia,14,i), dosial(ia,15,i), dosial(ia,16,i), dosial(ia,17,i), dosial(ia,18,i)
          end do
-         !rewind(250+ia)
-         !rewind(450+ia)
       end do
       ! Transfer total DOS across MPI ranks for Fermi surface determination.
 #ifdef USE_MPI
@@ -281,26 +273,52 @@ contains
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosial, product(shape(dosial)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
+
+      ! Writing the total density of states
+      fname_total = "totaldos.out"
+      open(unit=125, file=fname_total, status='replace', action='write')
+      
       if (rank == 0) then
          do i = 1, this%en%channels_ldos + 10
-            write (125, '(2f16.5)') this%en%ene(i), this%dtot(i)
+            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
          end do
-         rewind (125)
+         rewind(125)
       end if
+      close(125)
+      
+      ! Writing the local density of states
       if (rank == 0) then
          do ia = 1, this%lattice%nrec
+            unitnum = 250 + ia
+            ! Construct the filename using the element symbol:
+            fname_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_dos.out"
+               
+            ! Associate that filename with the unit:
+            open(unit=unitnum, file=fname_dos, status='replace', action='write')
+      
             do i = 1, this%en%channels_ldos + 10
-               write (250 + ia, *) this%en%ene(i), dosia(ia, i)
+               write(unitnum, '(2f16.5)') this%en%ene(i) - this%en%fermi, dosia(ia, i)
             end do
-            rewind (250 + ia)
+      
+            rewind(unitnum)
+            close(unitnum)
          end do
       end if
+      
+      ! Writing the local density of states per orbital
       if (rank == 0) then
          do ia = 1, this%lattice%nrec
+            unitnum2 = 450 + ia
+            fname_orb_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_orbital_dos.out"
+      
+            open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
+      
             do i = 1, this%en%channels_ldos + 10
-               write (450 + ia, '(19f10.6)') this%en%ene(i), dosial(ia, 1:18, i)
+               write(unitnum2, '(19f16.5)') this%en%ene(i) - this%en%fermi, dosial(ia, 1:18, i)
             end do
-            rewind (450 + ia)
+      
+            rewind(unitnum2)
+            close(unitnum2)
          end do
       end if
 
