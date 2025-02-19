@@ -360,13 +360,11 @@ contains
       tdq(:) = this%dq(:)
       dif = sum(tdq(:))
       !write (*, *) "DIF IN MAD PROGRAM = ", DIF
-      if (ABS(DIF) > 5d-01) then
-         !IFAIL = 1
-         write (6, *) &
-            "******NEUTRALIDADE DE CARGA NAO OBEDECIDA - 5E-04", &
-            " PROGRAMA ABORTADO"
-         return
+
+      if (abs(dif) > 0.5) then
+         if (rank == 0) call g_logger%warning('too much charge in the external atom! Careful', __FILE__, __LINE__)
       end if
+
       allocate (AMAD(this%lattice%nbas, this%lattice%nbas), stat=i_stat)
       open (15, file="mad.mat", form="unformatted", STATUS="OLD")
       do i = 1, this%lattice%nbas
@@ -381,6 +379,7 @@ contains
          this%symbolic_atom(this%lattice%nbulk + this%lattice%iz(IBAS))%potential%VMAD = VMADI
       end do
       !write (9, 10001)
+      if (rank == 0) call g_logger%info('Excess charge '//fmt('f10.6', dif), __FILE__, __LINE__)
       do ICLAS = 1, this%lattice%nrec
          VADD = 2.d0*TDQ(ICLAS)/RMAX(ICLAS)
          !write (9, 10000) ICLAS, TDQ(ICLAS), VMAD(ICLAS), VMAD(ICLAS)+VADD
@@ -390,8 +389,8 @@ contains
          this%symbolic_atom(this%lattice%nbulk + iclas)%potential%VMAD = &
             this%symbolic_atom(this%lattice%nbulk + iclas)%potential%VMAD*this%VMIX + VMAD0(ICLAS)*(1.0 - this%VMIX)
          VERR = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%VMAD - VMAD0(ICLAS)
-         !write (*, *) this%symbolic_atom(this%lattice%nbulk+iclas)%potential%VMAD, VERR
-         !   write (42, *)
+         if (rank == 0) call g_logger%info('Class '//fmt('i4', iclas)//' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))//' VMAD= '&
+                             &//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
       end do
    end subroutine bulkpot
 
