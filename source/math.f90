@@ -92,6 +92,15 @@ module math_mod
    real(rp), parameter :: ry2tesla = 2.35051754997e5_rp
    !> \f$ Gyromagnetic ratio in rad/(s·T) \f$
    real(rp), parameter :: gama = 1.76e11_rp
+   !> Elementary charge (Coulombs)
+   real(rp), parameter :: e_const    = 1.602176634e-19_rp
+   !> Planck's constant (J·s)
+   real(rp), parameter :: h_const    = 6.62607015e-34_rp
+   !> Reduced Planck's constant h-bar (J·s)
+   real(rp), parameter :: hbar_const = 1.054571817e-34_rp
+   ! Angstrom to centimeter factor
+   !> 1 Å = 1.0e-8 cm
+   real(rp), parameter :: ang2cent   = 1.0e-8_rp
 
    ! Screening parameters
    !> Original screening (From Jepsen)
