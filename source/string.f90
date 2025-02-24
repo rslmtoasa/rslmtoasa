@@ -559,4 +559,44 @@ contains
 
       close (93)
    end function countLines
+
+   subroutine show_progress(iter, total)
+      implicit none
+   
+      integer, intent(in) :: iter, total
+      integer, parameter  :: bar_length = 50
+      integer :: percentage, filled, i
+      real(8) :: fraction
+   
+      ! Only update every 10 steps or final step
+      if (mod(iter,10) /= 0 .and. iter /= total) return
+      if (total <= 0) return
+   
+      fraction    = real(iter,kind=8)/real(total,kind=8)
+      percentage  = int(fraction*100.d0)
+      if (percentage > 100) percentage = 100
+      filled = int(bar_length*fraction)
+      if (filled > bar_length) filled = bar_length
+   
+      ! Carriage return to go back to start of the line (no newline)
+      ! That way each update overwrites the previous.
+      write(*,'(a)',  advance='no') char(13)//"Progress: ["
+   
+      do i = 1, filled
+         write(*,'(a)', advance='no') '#'
+      end do
+      do i = filled+1, bar_length
+         write(*,'(a)', advance='no') ' '
+      end do
+      write(*,'("( ",I3,"%",")]" )') percentage
+   
+      ! Force flush so user sees it right now
+      !flush(6)
+   
+      ! If we are done, print newline so next print starts on a new line
+      if (iter == total) then
+         write(*,*)
+      end if
+   end subroutine show_progress
+
 end module string_mod
