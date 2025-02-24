@@ -229,17 +229,25 @@ contains
       ! Input
       class(conductivity), intent(inout) :: this
       ! Local variables
-      integer :: i, m, n, l1, l2, ntype
-      complex(rp), dimension(:,:,:), allocatable :: integrand
+      integer :: i, m, n, l1, l2, ntype, loop_over
+      complex(rp), dimension(:, :, :), allocatable :: integrand
+      complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
-      real(rp) :: a, b, real_part, im_part
+      complex(rp), dimension(18) :: temp
+      real(rp) :: a, b, real_part, im_part, factor, volume
+      ! Printing variables
+      character(len=*), parameter :: fname_cond_total = "cond_total.out"
+      character(len=*), parameter :: fname_cond_orb_real = "cond_total_orb_real.out"
+      character(len=*), parameter :: fname_cond_orb_im   = "cond_total_orb_im.out"
+      character(len=sl) :: fname_r, fname_i, fname_orb_r, fname_orb_i, symbol
 
       allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
       allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
       allocate(wscale(this%en%channels_ldos + 10))
       allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
-
+      allocate(integrand_at(18, 18, this%en%channels_ldos + 10, this%lattice%ntype))
+      
       integrand(:, :, :) = (0.0d0, 0.0d0)
       real_part_l(:) = 0.0d0
       im_part_l(:) = 0.0d0
@@ -247,62 +255,120 @@ contains
       integrand_tot_im(:) = 0.0d0
       integrand_l_real(:, :) = 0.0d0
       integrand_l_im(:, :) = 0.0d0
-
+      integrand_at(:, :, :, :) = (0.0d0, 0.0d0)
+      temp(:) = 0.0d0
+    
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
       wscale(:) = (this%en%ene(:) - b)/a
 
-      ! Calculate the integrand for each energy grid point
-      do ntype = 1, this%lattice%ntype
+      select case(this%control%cond_calctype)
+      case('per_type')
+         loop_over = this%lattice%ntype
+      case('random_vec')
+         loop_over = this%control%random_vec_num
+      end select  
+
+      ! factor = 2 * (e / pi) * omega^-1 
+      volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3)))) * (this%lattice%alat * ang2cent) ** 3
+      factor = (e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
+
+      do ntype = 1, loop_over
+         !$omp parallel do default(shared) private(i, n, m, l2) schedule(dynamic)
          do i = 1, this%en%channels_ldos + 10
+            
+            ! Accumulate the contributions over the Chebyshev recursion indices.
             do n = 1, this%control%cond_ll
                do m = 1, this%control%cond_ll
-                  !do l1 = 1, 18
-                     do l2 = 1, 18
-                        integrand(l2, l2, i) = integrand(l2, l2, i) + this%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
-                     end do
-                  !end do
+                  do l2 = 1, 18
+                     integrand(l2, l2, i) = integrand(l2, l2, i) + factor * this%gamma_nm(i, n, m) * &
+                                this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
+                     if (this%control%cond_calctype == 'per_type') then
+                        integrand_at(l2, l2, i, ntype) = integrand_at(l2, l2, i, ntype) + factor * this%gamma_nm(i, n, m) * &
+                                this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
+                     end if
+                   end do
                end do
             end do
          end do
+         !$omp end parallel do
       end do
 
       integrand_tot_real(:) = 0.0d0
       integrand_tot_im(:) = 0.0d0
 
-      !do l1 = 1, 18
-         do l2 = 1, 18
-            integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
-            integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :))
-            integrand_l_real(l2, :) = real(integrand(l2, l2, :))
-            integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
-         end do
-      !end do
-
-      do i = 1, this%en%channels_ldos + 10
-         write(2,*) (a*wscale(i)+b) - this%en%fermi, integrand_tot_real(i) / real(this%control%cond_ll * this%lattice%ntype), &
-                                                    integrand_tot_im(i) / real(this%control%cond_ll * this%lattice%ntype)
+      do l2 = 1, 18
+         integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
+         integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :))
+         integrand_l_real(l2, :) = real(integrand(l2, l2, :))
+         integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
       end do
 
+      ! Starting writing statements
+      open(unit=3, file=fname_cond_total, status='replace', action='write')
+      open(unit=32, file=fname_cond_orb_real, status='replace', action='write')
+      open(unit=33, file=fname_cond_orb_im,   status='replace', action='write')
+
       do i = 1, this%en%channels_ldos + 10
-         real_part = 0.0d0; im_part = 0.0d0
+         real_part = 0.0d0; im_part = 0.0d0; real_part_l(:) = 0.0d0; im_part_l(:) = 0.0d0
          call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
          call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
-         write(3, *) (a*wscale(i)+b) - this%en%fermi, real_part / real(this%control%cond_ll * this%lattice%ntype),  im_part / real(this%control%cond_ll * this%lattice%ntype)
-      end do
-
-      do i = 1, this%en%channels_ldos + 10
+         write(3, '(3f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part / real(loop_over),  im_part / real(loop_over)
          do l2 = 1, 18
             call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
             call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
          end do
-         write(32,'(19f16.10)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) / real(this%control%cond_ll * this%lattice%ntype)
-         write(33,'(19f16.10)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) / real(this%control%cond_ll * this%lattice%ntype)
+         write(32,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) / real(loop_over)
+         write(33,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) / real(loop_over)
       end do
 
-      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)
 
+      if (this%control%cond_calctype == 'per_type') then
+         ! Loop over each atomic type
+         do ntype = 1, loop_over
+
+            integrand_tot_real(:) = 0.0d0
+            integrand_tot_im(:)   = 0.0d0
+            integrand_l_real(:, :) = 0.0d0
+            integrand_l_im(:, :) = 0.0d0 
+
+            do l2 = 1, 18
+               integrand_tot_real(:) = integrand_tot_real(:) + real(integrand_at(l2, l2, :, ntype))
+               integrand_tot_im(:)   = integrand_tot_im(:)   + aimag(integrand_at(l2, l2, :, ntype))
+               integrand_l_real(l2, :) = real(integrand_at(l2, l2, :, ntype))
+               integrand_l_im(l2, :) = aimag(integrand_at(l2, l2, :, ntype))
+            end do
+         
+            fname_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond.out"
+            fname_orb_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond_orb_real.out"
+            fname_orb_i = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond_orb_im.out"
+
+            open(unit=100+ntype, file=fname_r, status='replace', action='write')
+            open(unit=300+ntype, file=fname_orb_r, status='replace', action='write')
+            open(unit=400+ntype, file=fname_orb_i, status='replace', action='write')
+         
+            do i = 1, this%en%channels_ldos + 10
+               real_part = 0.0d0; im_part = 0.0d0; real_part_l(:) = 0.0d0; im_part_l(:) = 0.0d0
+               ! Integrate over wscale for real and imaginary
+               call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
+               call simpson_f(im_part,   wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
+               write(100+ntype, '(3f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part, im_part
+               do l2 = 1, 18
+                  call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
+                  call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
+               end do
+               write(300+ntype,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) 
+               write(400+ntype,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) 
+               end do
+            close(100+ntype)
+            close(300+ntype)
+            close(400+ntype)
+         end do  ! end do over ntype
+      end if
+      ! End writing statements
+
+      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at)
    end subroutine calculate_conductivity_tensor
 
 end module conductivity_mod

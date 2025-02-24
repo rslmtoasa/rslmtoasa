@@ -340,93 +340,48 @@ contains
       !$omp end parallel do
    end subroutine ham_vec_matmul
 
-   !*************************************************************************
-   !> @brief Computes the Gamma_nm function for the Chebyshev polynomial expansion.
-   !>
-   !> This subroutine calculates the Gamma_nm function used in the conductivity
-   !> formula. The function incorporates the Jackson kernel for smoothing and uses
-   !> Chebyshev polynomials up to the specified maximum order. It also incorporates
-   !> the (1 - energy**2)**2, Eq. (4) -> PRL 114, 116602 (2015).
-   !>
-   !> @param[out] gamma_nm      Gamma_nm array (dimension: energy_grid, recursion_level, recursion_level).
-   !*************************************************************************
-   !subroutine calculate_gamma_nm(this)
-   !   implicit none
-   !   class(recursion), intent(inout) :: this
-
-   !   ! Local variables
-   !   integer :: i, n, m
-   !   real(rp) :: a, b 
-   !   real(rp), dimension(:), allocatable :: g_kernel(:)       ! Jackson kernel
-   !   real(rp), dimension(:), allocatable :: weights(:)        ! Weight factors
-   !   real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
-   !   real(rp), dimension(:, :), allocatable :: chebyshev_poly
-   !   complex(rp), dimension(:, :), allocatable :: cn, cm
-
-   !   ! Initialize variables
-   !   allocate(acos_x(this%en%channels_ldos + 10), sqrt_term(this%en%channels_ldos + 10), wscale(this%en%channels_ldos + 10))
-   !   allocate(chebyshev_poly(this%en%channels_ldos + 10, this%control%lld))
-   !   allocate(cn(this%en%channels_ldos + 10, this%control%lld), cm(this%en%channels_ldos + 10, this%control%lld))
-   !   allocate(g_kernel(this%control%lld), weights(this%control%lld))
-
-   !   ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
-   !   a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-   !   b = (this%en%energy_max + this%en%energy_min)/2
-   !      
-   !   wscale(:) = (this%en%ene(:) - b)/a
-
-   !   acos_x(:) = acos(wscale(:))
-   !   sqrt_term(:) = sqrt(1.0_rp - wscale(:)**2)
-
-   !   ! Calculating the Jackson Kernel
-   !   call jackson_kernel((this%control%lld), g_kernel)
-
-   !   ! Calculate weights
-   !   weights(:) = 1.0d0
-   !   weights(1) = 0.5d0
-
-   !   ! Compute Cn and Cm
-   !   do n = 1, this%control%lld
-   !      cn(:, n) = (wscale(:) - i_unit * real(n-1, rp) * sqrt_term(:)) * exp(i_unit * real(n-1, rp) * acos_x(:))
-   !      cm(:, n) = (wscale(:) + i_unit * real(n-1, rp) * sqrt_term(:)) * exp(-i_unit * real(n-1, rp) * acos_x(:))
-   !   end do
-
-   !   chebyshev_poly(:, 1) = 1.0_rp
-   !   chebyshev_poly(:, 2) = wscale(:)
-   !   do n = 3, this%control%lld
-   !      chebyshev_poly(:, n) = 2.0_rp * wscale(:) * chebyshev_poly(:, n - 1) - chebyshev_poly(:, n - 2)
-   !   end do
-
-   !   ! Initialize Gamma_nm
-   !   this%gamma_nm(:, :, :) = 0.0_rp
-
-   !   ! Compute Gamma_nm
-   !   do n = 1, this%control%lld
-   !      do m = 1, this%control%lld
-   !         this%gamma_nm(:, n, m) = (cn(:, n) * chebyshev_poly(:, m) + cm(:, m) * chebyshev_poly(:, n)) 
-   !         this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) / ((1.0_rp - wscale(:)**2)**2)
-   !         this%gamma_nm(:, n, m) = this%gamma_nm(:, n, m) * g_kernel(n) * g_kernel(m) * weights(n) * weights(m) 
-   !      end do
-   !   end do
-
-   !   ! Clean up
-   !   deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
-
-   !end subroutine calculate_gamma_nm
-
-
    subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, random_vec
+      integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, loop_over, ie, lmax
       complex(rp), dimension(18, 18) :: dum, dum1, dum2
-      complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
+      complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2, cn
       complex(rp), dimension(:, :, :, :), allocatable :: left_vec
-      real(rp) :: a, b, norm
+      real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
+      real(rp), dimension(this%control%cond_ll) :: kernel
+      complex(rp), dimension(18, 18, this%en%channels_ldos + 10) :: g0
+      real(rp) :: a, b, rng 
+      complex(rp) :: exp_factor
 
+      lmax = 2
       hblocksize = 18
       nat = this%lattice%kk
 
+      ! Memory allocation
+#ifdef USE_SAFE_ALLOC
+      select case(this%control%cond_calctype)
+      case('per_type')
+         call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
+                                                                                       (this%lattice%control%cond_ll, &
+                                                                               this%lattice%control%cond_ll, this%lattice%ntype/)
+      case('random_vec')
+         call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
+                                                                                       (this%lattice%control%cond_ll, &
+                                                                               this%lattice%control%cond_ll, this%control%random_vec_num/)
+#else
+      select case(this%control%cond_calctype)
+      case('per_type')
+         allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%cond_ll, this%lattice%control%cond_ll,this%lattice%ntype))
+      case('random_vec')
+         allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%cond_ll,this%lattice%control%cond_ll,this%control%random_vec_num))
+      end select
+#endif
+      allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
+      allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
+      allocate(w2(hblocksize, hblocksize, this%lattice%kk), v0(hblocksize, hblocksize, this%lattice%kk), v1(hblocksize, hblocksize, this%lattice%kk))
+      allocate(v2(hblocksize, hblocksize, this%lattice%kk), cn(hblocksize, hblocksize, this%control%cond_ll))
+
+      ! General procedures
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
@@ -438,19 +393,27 @@ contains
 
       this%hamiltonian%ee(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) / a
 
-      this%mu_nm_stochastic(:, :, :, :, :) = (0.0d0, 0.0d0)
+      ! Check the type of conductivity
+      select case(this%control%cond_type)
+      case('spin')
+         call this%hamiltonian%build_realspace_spin_operators()
+         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :) 
+      case('orbital')
+         call this%hamiltonian%build_realspace_orbital_velocity_operators()
+         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
+      end select
 
-      allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
-      allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
-      allocate(w2(hblocksize, hblocksize, this%lattice%kk), v0(hblocksize, hblocksize, this%lattice%kk), v1(hblocksize, hblocksize, this%lattice%kk))
-      allocate(v2(hblocksize, hblocksize, this%lattice%kk))
+      ! Check what kind of calculation
+      select case(this%control%cond_calctype)
+      case('per_type')
+         loop_over = this%lattice%ntype
+      case('random_vec')
+         loop_over = this%control%random_vec_num
+      end select  
 
-      do i = 1, this%lattice%ntype
+      do i = 1, loop_over
+         call random_seed()
 
-         j =  this%lattice%atlist(i)
-
-         call g_logger%info('Chebyshev moments being calculated taking atom type '//int2str(j), __FILE__, __LINE__)
-  
          ! Initializing wave functions
          v0(:, :, :) = (0.0d0, 0.0d0)
          v1(:, :, :) = (0.0d0, 0.0d0)
@@ -463,18 +426,33 @@ contains
          left_vec(:, :, :, :) = (0.0d0, 0.0d0)
          dum(:, :) = (0.0d0, 0.0d0)
 
-         ! Initializing neighbording map
-         this%izero(:) = 0
-         this%izero(j) = 1
-
-         ! Initializing psi
-         do m = 1, 18
-            psiref(m, m, j) = (1.0d0, 0.0d0)
-         end do
+         select case(this%control%cond_calctype)
+         case('per_type')
+            j =  this%lattice%atlist(i)
+            call g_logger%info('Chebyshev moments being calculated taking atom type '//int2str(j), __FILE__, __LINE__)
+            ! Initializing neighbording map
+            this%izero(:) = 0
+            this%izero(j) = 1
+           ! Initializing psi
+            do m = 1, 18
+               psiref(m, m, j) = (1.0d0, 0.0d0)
+            end do
+         case('random_vec')
+            call g_logger%info('Chebyshev moments being calculated for random vector '//int2str(i), __FILE__, __LINE__)
+            this%izero(:) = 1
+            ! Initialize random vector
+            do k = 1, this%lattice%kk
+               call random_number(rng)
+               do m = 1, 18
+                  psiref(m, m, k) =  (exp(2.0_rp * pi * i_unit * (rng))) !(2.0d0 * rng - 1.0d0)*sqrt(3.0d0) !(exp(2.0_rp * pi * i_unit * (rng)))
+               end do
+            end do
+            ! Normalize the full matrix 
+            psiref(:, :, :) = psiref(:, :, :) / sqrt(real(this%lattice%kk))
+         end select
 
          ! Computing the left vector <r|Tm(H)
          do m=1, this%control%cond_ll 
-            write(*,*) m
             if (m == 1) then
                w1(:, :, :) = psiref(:, :, :)
             else if (m == 2) then
@@ -493,14 +471,20 @@ contains
          end do
 
          ! Redifining neighboring map for the right vector v_a*Tn(H)*v_b|r>
-         this%izero(:) = 0
-         this%izero(j) = 1
+         select case(this%control%cond_calctype)
+         case('per_type')
+            this%izero(:) = 0
+            this%izero(j) = 1
+         case('random_vec')
+           ! this%izero(:) = 1
+         end select
+
          ! Computing the right vector v_a*Tn(H)*v_b|r>
          ! Multiply with the velocity operator v_b
          call this%velo_vec_matmul('n',this%hamiltonian%v_b, psiref, v0)
          this%izero(:) = this%idum(:) 
          do n=1, this%control%cond_ll
-            write(*,*) n
+            call show_progress(n, this%control%cond_ll)
             if (n == 1) then
                v1(:, :, :) = v0(:, :, :) 
             else if (n == 2) then
@@ -517,14 +501,16 @@ contains
             end if
             ! Multiply with the velocity operator v_a
             call this%velo_vec_matmul('n',this%hamiltonian%v_a, v1, right_vec)
-               this%izero(:) = this%idum(:)
+            this%izero(:) = this%idum(:)
+            !$omp parallel do default(shared) private(m, dum, k) schedule(dynamic)
             do m=1, this%control%cond_ll
                dum(:, :) = (0.0d0, 0.0d0)
                do k=1, this%lattice%kk
                   call zgemm('c', 'n', 18, 18, 18, cone, left_vec(:, :, k, m), 18, right_vec(:, :, k), 18, cone, dum(:, :), 18)
                end do
-               this%mu_nm_stochastic(:, :, n, m, i) = this%mu_nm_stochastic(:, :, n, m, i) + dum(:, :)
+               this%mu_nm_stochastic(:, :, n, m, i) = dum(:, :)
             end do
+            !$omp end parallel do
          end do
       end do
 
@@ -1107,6 +1093,7 @@ contains
       ! Local variables
       integer :: i, j, l, ll, kk, m
       integer :: llmax ! Recursion steps
+      real(rp) :: rng
 
       ! Determine how many atoms each process should handle
       call get_mpi_variables(rank, this%lattice%nrec)
@@ -2823,9 +2810,6 @@ contains
       call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/18, 18, this%control%lld/))
       call g_safe_alloc%allocate('recursion.pmn_b', this%pmn_b, (/18, 18, this%lattice%kk/))
-      call g_safe_alloc%allocate('recursion.mu_nm_stochastic', this%mu_nm_stochastic, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, &
-                                                                                       (this%lattice%control%cond_ll, &
-                                                                               this%lattice%control%cond_ll, this%lattice%ntype/)
 #else
       allocate (this%a(max(this%lattice%control%llsp, this%lattice%control%lld),&
                           &18, this%lattice%nrec, 3))
@@ -2858,7 +2842,6 @@ contains
       allocate (this%atemp_b(18, 18, this%control%lld))
       allocate (this%b2temp_b(18, 18, this%control%lld))
       allocate (this%pmn_b(18, 18, this%lattice%kk))
-      allocate (this%mu_nm_stochastic(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%lattice%control%cond_ll, this%lattice%control%cond_ll,this%lattice%ntype))
 #endif
       this%v(:, :) = 0.0d0
       this%psi(:, :) = 0.0d0
@@ -2886,7 +2869,6 @@ contains
       this%b2temp_b(:, :, :) = 0.0d0
       this%pmn_b(:, :, :) = 0.0d0
       this%cheb_mom_temp(:, :) = 0.0d0
-      this%mu_nm_stochastic(:, :, :, :, :) = 0.0d0
       if (present(full)) then
          if (full) then
             if (associated(this%hamiltonian)) call this%hamiltonian%restore_to_default()

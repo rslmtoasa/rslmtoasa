@@ -986,7 +986,9 @@ contains
          write (newunit, '(A)') '|                       Charge Transfer                                   |'
          write (newunit, '(A)') '==========================================================================='
          do ia = 1, this%lattice%nrec
-            write (newunit, '(a,i4,a,f10.6)') 'Charge at atom', ia, ':', sum(this%mix%qia(ia, 1:6))
+            write (newunit, '(a,i4,a,f10.6)') 'Occupation at atom', ia, ':', sum(this%mix%qia(ia, 1:6))
+            write (newunit, '(a,i4,a,3f10.6)') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:3)
+            write (newunit, '(a,i4,a,3f10.6)') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, 4:6)
             write (newunit, '(a,i4,a,f10.6)') 'Charge transfer at atom', ia, ':', this%charge%dq(ia)
          end do
          !===========================================================================
@@ -1000,6 +1002,16 @@ contains
          do ia = 1, this%lattice%nrec
             write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', (magmom(ia, :))/norm2(magmom(ia, :))
             write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', (lmom(ia, :))/norm2(lmom(ia, :))
+         end do
+         !===========================================================================
+         !                           Log info     
+         !===========================================================================
+         write (newunit, '(A)') '==========================================================================='
+         write (newunit, '(A)') '|                             Log info                                     |'
+         write (newunit, '(A)') '==========================================================================='
+         write (newunit, '(a,f10.6)') 'Total RMS Diff: ', this%mix%delta
+         do ia = 1, this%lattice%nrec
+            write (newunit, '(a,i4,a,f10.6)') 'RMS Diff of atom', ia, ':', sqrt(sum((this%mix%qia_old(ia, 1:12) - this%mix%qia_new(ia, 1:12))**2))/6.0d0
          end do
       end if
 
