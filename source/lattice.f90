@@ -1408,7 +1408,7 @@ contains
 
       do i = 1, maxtype
          write (20, '(3f12.6, 2i5, f12.6)') crsurf(:, ichoicen(i)), ichoicetypen(i), crystalsurf(ichoicen(i)), &
-                    & dot_product([this%dx, this%dy, this%dz], crsurf(:, ichoicen(i)))
+                    & dot_product([this%dx, this%dy, this%dz], crsurf(:, ichoicen(i)))   
       end do
 
       ! Cleanup

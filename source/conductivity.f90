@@ -272,8 +272,15 @@ contains
 
       ! factor = 2 * (e / pi) * omega^-1 
       volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3)))) * (this%lattice%alat * ang2cent) ** 3
-      factor = (e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
-
+      !factor = (4 * (e_const**2) * hbar_const) / (pi * volume) 
+      !factor = factor * (4 / (this%en%energy_max - this%en%energy_min)**2)
+      !write(*,*) factor
+      !factor = factor * (hbar_const / e_const)
+      !write(*,*) factor
+      factor = 1 !(e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
+      !factor = (hbar_const / e_const) * ((4 * e_const * hbar_const) / (pi * volume))
+      !write(*,*) (hbar_const / e_const), ((4 * e_const * hbar_const) / (pi * volume)) 
+      !write(*,*) factor
       do ntype = 1, loop_over
          !$omp parallel do default(shared) private(i, n, m, l2) schedule(dynamic)
          do i = 1, this%en%channels_ldos + 10

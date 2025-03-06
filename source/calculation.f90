@@ -83,6 +83,7 @@ module calculation_mod
       procedure, private :: post_processing_paoflow2rs
       procedure, private :: post_processing_exchange
       procedure, private :: post_processing_exchange_p2rs
+      procedure, private :: post_processing_conductivity_p2rs
       procedure, private :: post_processing_conductivity
       procedure :: process
       final :: destructor
@@ -199,6 +200,8 @@ contains
          call this%post_processing_exchange()
       case ('exchange_p2rs')
          call this%post_processing_exchange_p2rs()
+      case ('conductivity_p2rs')
+         call this%post_processing_conductivity_p2rs()
       case ('conductivity')
          call this%post_processing_conductivity()
       end select
@@ -1040,7 +1043,6 @@ contains
       recursion_obj = recursion(hamiltonian_obj, energy_obj)
       
       call recursion_obj%compute_moments_stochastic()
-      !call recursion_obj%calculate_gamma_nm()
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -1059,12 +1061,92 @@ contains
 
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
+   end subroutine post_processing_conductivity
 
-      ! Calculating the orthogonal parameters
-      do i = 1, lattice_obj%ntype
-         call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
-      end do
-   end subroutine
+
+   subroutine post_processing_conductivity_p2rs(this)
+      class(calculation), intent(in) :: this
+
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(self), target :: self_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(exchange), target :: exchange_obj
+      type(conductivity), target :: conductivity_obj
+      real(rp), dimension(6) :: QSL
+      integer :: i
+
+      ! Constructing control object
+      control_obj = control(this%fname)
+
+      ! Constructing lattice object
+      lattice_obj = lattice(control_obj)
+
+      ! Running the pre-calculation
+      call g_timer%start('pre-processing')
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.false.)
+      ! Creating the symbolic_atom object
+      call lattice_obj%atomlist()
+
+      ! Initializing MPI lookup tables and info.
+      call get_mpi_variables(rank, lattice_obj%ntype)
+
+      ! Constructing the charge object
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      call g_timer%stop('pre-processing')
+
+      ! Constructing mixing object
+      mix_obj = mix(lattice_obj, charge_obj)
+
+      ! Creating the energy object
+      energy_obj = energy(lattice_obj)
+      call energy_obj%e_mesh()
+
+      ! Creating hamiltonian object
+      hamiltonian_obj = hamiltonian(charge_obj)
+      select case (control_obj%calctype)
+      case ('B')
+         call hamiltonian_obj%build_from_paoflow_opt()
+      case ('S')
+         call g_logger%fatal('Surface calculation not implemented!', __FILE__, __LINE__)
+      case ('I')
+         call g_logger%fatal('Imputiry calculation not implemented!', __FILE__, __LINE__)
+      end select
+
+      ! Creating recursion object
+      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      
+      call recursion_obj%compute_moments_stochastic()
+
+      ! Creating density of states object
+      dos_obj = dos(recursion_obj, energy_obj)
+
+      ! Creating Green function object
+      green_obj = green(dos_obj)
+
+      ! Creating bands object
+      bands_obj = bands(green_obj)
+   
+      ! Creating the self object
+      self_obj = self(bands_obj, mix_obj)
+
+      ! Creating the conductivity object
+      conductivity_obj = conductivity(self_obj)
+
+      call conductivity_obj%calculate_gamma_nm()
+      call conductivity_obj%calculate_conductivity_tensor()
+   end subroutine post_processing_conductivity_p2rs
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1090,10 +1172,11 @@ contains
           .and. post_processing /= 'paoflow2rs' &
           .and. post_processing /= 'exchange' &
           .and. post_processing /= 'exchange_p2rs' &
-          .and. post_processing /= 'conductivity') then
+          .and. post_processing /= 'conductivity' &
+          .and. post_processing /= 'conductivity_p2rs') then 
          call g_logger%fatal('[calculation.check_post_processing]: '// &
-                             'calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs'',' // &
-                              'conductivity', __FILE__, __LINE__)
+                             "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
+                             " 'conductivity', 'conductivity_p2rs'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

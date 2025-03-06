@@ -138,7 +138,7 @@ module math_mod
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*i_unit
+                                                        (/9, 9/))*(-i_unit)
    complex(rp), dimension(9, 9), parameter :: L_y &
                                               = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -149,7 +149,7 @@ module math_mod
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, sqrt_three, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*i_unit
+                                                        (/9, 9/))*(-i_unit)
    complex(rp), dimension(9, 9), parameter :: L_z &
                                               = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -160,7 +160,7 @@ module math_mod
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                                                           0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*i_unit
+                                                        (/9, 9/))*(-i_unit)
 
    complex(rp), dimension(18, 18), parameter :: S_z &
    = reshape((/1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -223,7 +223,7 @@ module math_mod
                0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-               (/18, 18/)) * (i_unit / 2)
+               (/18, 18/)) * (-i_unit / 2)
 
        
 contains
