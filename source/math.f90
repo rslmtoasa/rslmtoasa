@@ -90,6 +90,8 @@ module math_mod
    real(rp), parameter :: ry2ev = 13.605703976_rp
    !> \f$ Rydberg to Tesla \f$
    real(rp), parameter :: ry2tesla = 2.35051754997e5_rp
+   !> \f$ Rydberg to Joule \f$
+   real(rp), parameter :: ry2joule = 2.179874099e-18_rp
    !> \f$ Gyromagnetic ratio in rad/(s·T) \f$
    real(rp), parameter :: gama = 1.76e11_rp
    !> Elementary charge (Coulombs)
