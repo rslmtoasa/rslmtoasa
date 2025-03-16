@@ -639,7 +639,7 @@ contains
 
             atom_neighbor = this%charge%lattice%nn(ia, m)  ! Neighbor atom number
             ! Compute displacement vector rij = r_i - r_j
-            rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)
+            rij(:) = (this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)) * this%charge%lattice%alat
    
             dot_a = dot_product(dir_a, rij); dot_b = dot_product(dir_b, rij)
 
