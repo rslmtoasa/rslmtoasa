@@ -460,6 +460,8 @@ contains
       ndim = this%ndim
       npe = this%npe
       rc = this%rc
+      r2 = this%r2
+      ntype = this%ntype
       crystal_sym = this%crystal_sym
       a = this%a
       wav = this%wav
@@ -520,10 +522,10 @@ contains
       ! Surface initialization
       surftype = this%surftype
       nlay = this%nlay
-
+      ntype = this%ntype
+      call move_alloc(this%ct, ct)
       njij = this%njij
       call move_alloc(this%ijpair, ijpair)
-
       njijk = this%njijk
       call move_alloc(this%ijktrio, ijktrio)
 
@@ -556,6 +558,11 @@ contains
          allocate (ijpair(njij, 2))
       end if
 
+      if (size(ct) .ne. ntype) then
+         deallocate (ct)
+         allocate (ct(ntype))
+      end if
+
       if (size(ijktrio) .ne. 2*njijk) then
          deallocate (ijktrio)
          allocate (ijktrio(njijk, 6))
@@ -570,11 +577,11 @@ contains
       close (funit)
 
       ! General intialization
-      r2 = ceiling(alat)**2
 
       this%r2 = r2
       this%alat = alat
       this%celldm = celldm
+      this%ntype = ntype
       this%pbc = pbc
       this%b1 = b1
       this%b2 = b2
@@ -583,6 +590,7 @@ contains
       this%n2 = n2
       this%n3 = n3
 
+      call move_alloc(ct, this%ct)
       ! Reads Wigner-Seitz radius if available
       this%wav = wav
       ! Bulk initialization
@@ -641,13 +649,13 @@ contains
 
    subroutine build_from_lattice(this)
       class(lattice), intent(inout) :: this
-      integer :: nbulk_bulk, ntot, ntype, nbas, nrec, funit, iostatus
+      integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus
       real(rp) :: r2
       real(rp), dimension(3, 3) :: a
       real(rp), dimension(:), allocatable :: ct
       integer, dimension(:), allocatable :: izp, no, iu, ib, irec
       real(rp), dimension(:, :), allocatable :: crd
-      namelist /lattice/ r2, nbulk_bulk, ntot, ntype, nbas, nrec, &
+      namelist /lattice/ r2, nbulk_bulk, ntot, nbas, nrec, &
          a, crd, &
          ct, izp, no, iu, ib, irec, ct
 
@@ -665,9 +673,9 @@ contains
       call g_safe_alloc%allocate('lattice.ib', ib, (/ntot/))
       call g_safe_alloc%allocate('lattice.iu', iu, (/ntot/))
       call g_safe_alloc%allocate('lattice.irec', irec, (/nrec/))
-      call g_safe_alloc%allocate('lattice.ct', ct, (/ntype/))
+!      call g_safe_alloc%allocate('lattice.ct', ct, (/ntype/))
 #else
-      allocate (ib(ntot), iu(ntot), irec(nrec), ct(ntype))
+      allocate (ib(ntot), iu(ntot), irec(nrec)) !, ct(ntype))
 #endif
       rewind (funit)
       read (funit, nml=lattice, iostat=iostatus)
@@ -679,13 +687,13 @@ contains
 
       this%nbulk_bulk = nbulk_bulk
       this%ntot = ntot
-      this%ntype = ntype
+      !this%ntype = ntype
       this%nbas = nbas
       this%nrec = nrec
-      this%r2 = r2
+      !this%r2 = r2
       this%nbulk = 0
 
-      call move_alloc(ct, this%ct)
+      !call move_alloc(ct, this%ct)
       call move_alloc(izp, this%izp)
       call move_alloc(no, this%no)
       call move_alloc(ib, this%ib)
@@ -724,14 +732,14 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) ! Now ct is defined at &lattice
 #endif
             this%iu(1) = 1
             this%ib(1) = 1
             this%irec(1) = 1
-            this%ct(:) = this%alat + 0.1d0
+!            this%ct(:) = this%alat + 0.1d0
          end if
          this%a = a
       case ('b2')
@@ -755,9 +763,9 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(1) = 1
             this%iu(2) = 2
@@ -765,7 +773,7 @@ contains
             this%ib(2) = 2
             this%irec(1) = 1
             this%irec(2) = 2
-            this%ct(:) = this%alat + 0.3d0
+!            this%ct(:) = this%alat + 0.3d0
          end if
          this%a = a
       case ('fcc')
@@ -786,14 +794,14 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(1) = 1
             this%ib(1) = 1
             this%irec(1) = 1
-            this%ct(:) = this%alat + 0.1d0
+!            this%ct(:) = this%alat + 0.1d0
          end if
          this%a = a
       case ('fcc2')
@@ -815,15 +823,15 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(:) = [1, 2]
             this%ib(:) = [1, 2]
             this%irec(:) = [1, 2]
-            this%ct(:) = this%alat - 1.5d0
-            this%r2 = this%ct(1)**2
+!            this%ct(:) = this%alat - 1.5d0
+!            this%r2 = this%ct(1)**2
          end if
          this%a = a
       case ('fcc3')
@@ -847,15 +855,15 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(1:4) = [1, 2, 3, 4]
             this%ib(1:4) = [1, 2, 3, 4]
             this%irec(1:4) = [1, 2, 3, 4]
-            this%ct(1:4) = this%alat - 1.5d0
-            this%r2 = this%ct(1)**2
+!            this%ct(1:4) = this%alat - 1.5d0
+!            this%r2 = this%ct(1)**2
          end if
          this%a = a
       case ('hcp')
@@ -883,14 +891,14 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+            allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(:) = [1, 2]
             this%ib(:) = [1, 2]
             this%irec(:) = [1, 2]
-            this%ct(:) = this%alat + 0.1d0
+!            this%ct(:) = this%alat + 0.1d0
          end if
          this%a = a
       case ('file')
@@ -920,6 +928,7 @@ contains
       this%nclu = 0
       this%surftype = 'none'
       this%nlay = 0
+      this%ntype = 0
       this%wav = 0
       this%celldm = 0.0d0
       this%njij = 0
@@ -939,6 +948,7 @@ contains
       call g_safe_alloc%allocate('lattice.ijpair', this%ijpair, (/this%njij, 2/))
       call g_safe_alloc%allocate('lattice.ijktrio', this%ijktrio, (/this%njijk, 6/))
       call g_safe_alloc%allocate('lattice.chargetrf_type', this%chargetrf_type, (/this%nbas/))
+      call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
       allocate (this%izp(this%ndim), this%no(this%ndim))
       allocate (this%crd(3, this%ndim))
@@ -946,6 +956,7 @@ contains
       allocate (this%ijpair(this%njij, 2))
       allocate (this%ijktrio(this%njijk, 6))
       allocate (this%chargetrf_type(this%nbas))
+      allocate (this%ct(this%ntype))
 #endif
 
       this%izp = 0.0d0
@@ -954,6 +965,7 @@ contains
       this%ijpair = 0.0d0
       this%ijktrio = 0.0d0
       this%chargetrf_type = 0.0d0
+      this%ct = 0.0d0
       if (associated(this%control)) then
          if (present(full)) then
             if (full) then
@@ -1169,10 +1181,10 @@ contains
          call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
          call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot), this%ct(this%ntype))
+         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
-         this%ct(:) = this%alat + 0.1d0
-         this%r2 = this%ct(1)**2
+!         this%ct(:) = this%alat + 0.1d0
+!         this%r2 = this%ct(1)**2
       end if
 
       this%surftype = clean_str(this%surftype)
@@ -1351,13 +1363,13 @@ contains
          if (allocated(this%ib)) deallocate (this%ib)
          if (allocated(this%irec)) deallocate (this%irec)
          if (allocated(this%iu)) deallocate (this%iu)
-         if (allocated(this%ct)) deallocate (this%ct)
+!         if (allocated(this%ct)) deallocate (this%ct)
 
-         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot), this%ct(this%ntype))
+         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot))!, this%ct(this%ntype)) Now ct is defined at &lattice
          allocate (this%chargetrf_type(this%nbas))
 
-         this%ct(:) = 4.0d0 !this%alat + 0.1d0
-         this%r2 = this%ct(1)**2
+!         this%ct(:) = 4.0d0 !this%alat + 0.1d0
+!         this%r2 = this%ct(1)**2
 
          do i = 1, this%nrec
             this%irec(i) = ichoicen(this%nbulk + i)
@@ -1566,16 +1578,16 @@ contains
       call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%nbulk/))
       call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
       call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-      call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!      call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-      allocate (this%ib(this%nbulk), this%iu(this%ntot), this%irec(this%nrec), this%ct(this%ntype))
+      allocate (this%ib(this%nbulk), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
       allocate (ctnew(this%ntype), ibulk(this%nbulk))
       allocate (nn(ndi, nnmx), nn2(ndi, nnmx))
       allocate (izpo(kk), izp(kk), no(kk), nnmax(kk), izimp(kk), noimp(kk))
       allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))
       ! Setting ct values for impurity
-      this%ct(:) = this%alat+0.1d0
+      !this%ct(:) = this%alat+0.1d0
       ! Identify impurity atoms from ´inclu´
       do i = 1, kk
          izpo(i) = this%iz(i)
