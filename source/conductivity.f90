@@ -235,7 +235,7 @@ contains
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
       complex(rp), dimension(18) :: temp
-      real(rp) :: a, b, real_part, im_part, factor, volume
+      real(rp) :: a, b, real_part, im_part, factor, volume, de
       ! Printing variables
       character(len=*), parameter :: fname_cond_total = "cond_total.out"
       character(len=*), parameter :: fname_cond_orb_real = "cond_total_orb_real.out"
@@ -260,6 +260,7 @@ contains
     
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
+      de = this%en%energy_max - this%en%energy_min 
 
       wscale(:) = (this%en%ene(:) - b)/a
 
@@ -270,17 +271,13 @@ contains
          loop_over = this%control%random_vec_num
       end select  
 
-      ! factor = 2 * (e / pi) * omega^-1 
-      volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3)))) * (this%lattice%alat * ang2cent) ** 3
-      !factor = (4 * (e_const**2) * hbar_const) / (pi * volume) 
-      !factor = factor * (4 / (this%en%energy_max - this%en%energy_min)**2)
-      !write(*,*) factor
-      !factor = factor * (hbar_const / e_const)
-      !write(*,*) factor
-      factor = 1 !(e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
+      volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3))))
+      !factor = 1 !(e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
       !factor = (hbar_const / e_const) * ((4 * e_const * hbar_const) / (pi * volume))
       !write(*,*) (hbar_const / e_const), ((4 * e_const * hbar_const) / (pi * volume)) 
-      !write(*,*) factor
+      factor = 16 / (pi * (de**2))
+      write(*,*) factor, volume, de
+      !write(*,*) (16 * hbar_const * (e_const**2)) / (pi * volume * ((de * ry2joule)**2))
       do ntype = 1, loop_over
          !$omp parallel do default(shared) private(i, n, m, l2) schedule(dynamic)
          do i = 1, this%en%channels_ldos + 10
