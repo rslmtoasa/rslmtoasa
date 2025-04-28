@@ -1270,7 +1270,7 @@ contains
 
       this%zstep = ds
       this%zmin = ds2 - this%zstep
-      this%zmax = ds2 + 15*this%zstep
+      this%zmax = ds2 + 20*this%zstep
 
       n = int((this%zmax - this%zmin)/this%zstep) + 1
 
