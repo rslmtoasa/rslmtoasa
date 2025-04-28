@@ -79,9 +79,10 @@ module hamiltonian_mod
       !> Gravity center Hamiltonian (backup for rotation)
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
       !> Velocity operators
-      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, js_a, jl_a
+      complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, js_a, jl_a, vo_a, vo_b, jso_a, jlo_a
       character(len=10) :: js_alpha, jl_alpha
       real(rp), dimension(3) :: v_alpha, v_beta
+      real(rp), dimension(:), allocatable :: velocity_scale
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
    contains
@@ -158,7 +159,12 @@ contains
       if (allocated(this%enim_glob)) call g_safe_alloc%deallocate('hamiltonian.enim_glob', this%enim_glob)
       if (allocated(this%v_a)) call g_safe_alloc%deallocate('hamiltonian.v_a', this%v_a)
       if (allocated(this%v_b)) call g_safe_alloc%deallocate('hamiltonian.v_b', this%v_b)
+      if (allocated(this%vo_a)) call g_safe_alloc%deallocate('hamiltonian.vo_a', this%vo_a)
+      if (allocated(this%vo_b)) call g_safe_alloc%deallocate('hamiltonian.vo_b', this%vo_b)
+      if (allocated(this%jso_a)) call g_safe_alloc%deallocate('hamiltonian.jso_a', this%jso_a)
+      if (allocated(this%jlo_a)) call g_safe_alloc%deallocate('hamiltonian.jlo_a', this%jlo_a)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
+      if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -176,7 +182,12 @@ contains
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
       if (allocated(this%v_a)) deallocate(this%v_a)
       if (allocated(this%v_b)) deallocate(this%v_b)
+      if (allocated(this%vo_a)) deallocate(this%vo_a)
+      if (allocated(this%vo_b)) deallocate(this%vo_b)
+      if (allocated(this%jso_a)) deallocate(this%jso_a)
+      if (allocated(this%jlo_a)) deallocate(this%jlo_a)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
+      if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
 #endif
    end subroutine destructor
 
@@ -201,7 +212,8 @@ contains
       v_beta(:) = this%v_beta(:)
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
- 
+      call move_alloc(this%velocity_scale, velocity_scale)
+
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -222,6 +234,7 @@ contains
       this%v_beta(:) = v_beta(:)
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
+      call move_alloc(velocity_scale, this%velocity_scale)
 
    end subroutine build_from_file
 
@@ -258,8 +271,13 @@ contains
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.vo_a', this%vo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.vo_b', this%vo_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.js_a', this%js_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.jl_a', this%jl_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -285,8 +303,13 @@ contains
       ! Velocity operators
       allocate (this%v_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%v_b(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%vo_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%vo_b(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%js_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%jl_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%jso_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%jlo_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%velocity_scale(this%charge%lattice%ntype))
       !end if
       !end if
 #endif
@@ -315,8 +338,13 @@ contains
       !end if
       this%v_a(:, :, :, :) = 0.0d0
       this%v_b(:, :, :, :) = 0.0d0
+      this%vo_a(:, :, :, :) = 0.0d0
+      this%vo_b(:, :, :, :) = 0.0d0
       this%js_a(:, :, :, :) = 0.0d0
       this%jl_a(:, :, :, :) = 0.0d0
+      this%jso_a(:, :, :, :) = 0.0d0
+      this%jlo_a(:, :, :, :) = 0.0d0
+      this%velocity_scale(:) = 1.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
@@ -437,8 +465,9 @@ contains
       allocate(tmp1(hblocksize,hblocksize), tmp2(hblocksize,hblocksize), L_op(hblocksize,hblocksize))
    
       ! Initialize the orbital–velocity array
-      this%jl_a(:,:,:,:) = (0.0_rp, 0.0_rp)
-      
+      this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp) 
+
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       mLx(:, :) = L_x(:, :)
       mLy(:, :) = L_y(:, :)
@@ -478,6 +507,18 @@ contains
             ! jl_a(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
             this%jl_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
    
+            if (this%hoh) then
+               tmp1 = 0.0d0; tmp2 = 0.0d0
+               ! tmp1 = js_a * v_a(:,:,m,ntype)
+               tmp1 = matmul(L_op, this%vo_a(:, :, m, ntype))
+
+               ! tmp2 = v_a(:,:,m,ntype) * js_a
+               tmp2 = matmul(this%vo_a(:, :, m, ntype), L_op)
+
+               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+               this%jlo_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+            end if
+
             ! Optional debugging output:
             ! write(*,*) 'm=', m
             ! write(*,'(18f10.6)') real(this%jo_a(:,:,m,ntype))
@@ -536,7 +577,7 @@ contains
    subroutine build_realspace_spin_operators(this)
       class(hamiltonian), intent(inout) :: this
    
-      integer :: ntype, ia, nr, m
+      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor
       integer :: hblocksize
       complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
    
@@ -548,7 +589,8 @@ contains
    
       ! Initialize the spin–velocity array to zero
       this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-   
+      this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      
       select case(this%js_alpha)
       
       case('z')
@@ -572,7 +614,7 @@ contains
             tmp1 = matmul(S_op, this%v_a(:, :, m, ntype))
    
             ! tmp2 = v_a(:,:,m,ntype) * js_a
-            tmp1 = matmul(this%v_a(:, :, m, ntype), S_op)
+            tmp2 = matmul(this%v_a(:, :, m, ntype), S_op)
 
             ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
             this%js_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
@@ -580,6 +622,18 @@ contains
             !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
             !write(*,*)
             !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
+            if (this%hoh) then
+               tmp1 = 0.0d0; tmp2 = 0.0d0
+               ! tmp1 = js_a * v_a(:,:,m,ntype)
+               tmp1 = matmul(S_op, this%vo_a(:, :, m, ntype))
+   
+               ! tmp2 = v_a(:,:,m,ntype) * js_a
+               tmp2 = matmul(this%vo_a(:, :, m, ntype), S_op)
+   
+               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+               this%jso_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+            end if
+
          end do  ! m
       end do  ! ntype
    
@@ -613,10 +667,11 @@ contains
       class(hamiltonian), intent(inout) :: this
    
       ! Local variables
-      integer :: ia, ntype, nr, m, i, j              ! Atom and neighbor indices
-      integer :: atom_neighbor                       ! Neighbor atom index
-      real(rp), dimension(3) :: rij                  ! Displacement vector (x, y, z components)
-      real(rp), dimension(3) :: dir_a, dir_b         ! Velocity operator directions
+      integer :: ia, ntype, nr, m, i, j, velotype, ja, ji    ! Atom and neighbor indices
+      integer :: atom_neighbor                               ! Neighbor atom index
+      real(rp) :: veloscale
+      real(rp), dimension(3) :: rij                          ! Displacement vector (x, y, z components)
+      real(rp), dimension(3) :: dir_a, dir_b                 ! Velocity operator directions
       real(rp) :: norm_a, norm_b, dot_a, dot_b
       ! Initialize velocity operators to zero
       this%v_a(:, :, :, :) = 0.0_rp
@@ -638,14 +693,26 @@ contains
          do m = 2, nr   ! Start from 2 to exclude the onsite term
 
             atom_neighbor = this%charge%lattice%nn(ia, m)  ! Neighbor atom number
-            ! Compute displacement vector rij = r_i - r_j
-            rij(:) = (this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)) * this%charge%lattice%alat
+            if (atom_neighbor /= 0) then
+               ! Compute displacement vector rij = r_i - r_j
+               rij(:) = (this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, atom_neighbor)) * this%charge%lattice%alat
    
-            dot_a = dot_product(dir_a, rij); dot_b = dot_product(dir_b, rij)
+               dot_a = dot_product(dir_a, rij); dot_b = dot_product(dir_b, rij)
 
-            ! Compute velocity operator blocks
-            this%v_a(:, :, m, ntype) = (1 / i_unit) * dot_a * this%ee(:, :, m, ntype)  
-            this%v_b(:, :, m, ntype) = (1 / i_unit) * dot_b * this%ee(:, :, m, ntype) 
+               ! Compute velocity operator blocks
+               this%v_a(:, :, m, ntype) = ((1 / i_unit) * dot_a * this%ee(:, :, m, ntype)) 
+            
+               velotype = this%charge%lattice%iz(atom_neighbor)
+               veloscale = max(this%velocity_scale(ntype), this%velocity_scale(velotype))
+               write(*,*) ntype, velotype, veloscale
+               this%v_b(:, :, m, ntype) = ((1 / i_unit) * dot_b * this%ee(:, :, m, ntype)) * veloscale 
+               ! If hoh is true, multiply the velocity operator by the overlap matrix, similarly to whats done to the Hamiltonian
+               if (this%hoh) then
+                  ji = this%charge%lattice%iz(atom_neighbor) 
+                  call zgemm('n', 'n', 18, 18, 18, cone, this%v_a(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%vo_a(:, :, m, ntype), 18)
+                  call zgemm('n', 'n', 18, 18, 18, cone, this%v_b(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%vo_b(:, :, m, ntype), 18)
+               end if
+            end if
          end do
       end do
    end subroutine build_realspace_velocity_operators
@@ -987,25 +1054,13 @@ contains
                      end do
                   end do
                end do
-               !a_inv(:,:) = inverse_3x3(this%charge%lattice%a)
-               !idx(:) = matmul(a_inv(:,:),b(:))
 
-               !write(*,*) b(:), ´b´
-               !write(*,*) matmul(this%charge%lattice%a(:,:),idx(:))
+               if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
 
                call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
                call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
                call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
                call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
-               !if(this%hoh)then
-               !  !call zgemm(´n´,´c´,18,18,18,cone,this%eeo(:,:,k,ntype),18,this%ee(:,:,k,ntype),18,cone,dum(:,:),18)
-               !  dum(:,:) = 0.0d0
-               !  do i=1,nr
-               !    dum(:,:) = dum(:,:) + this%eeoee(:,:,i,ntype)
-               !  end do
-               !  this%ee(:,:,k,ntype) = this%ee(:,:,k,ntype) - dum(:,:)
-               !end if
-               if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
                do i = 1, 18
                   do j = 1, 18
                      ipao = 0; jpao = 0
