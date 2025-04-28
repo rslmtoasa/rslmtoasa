@@ -318,13 +318,13 @@ contains
          real_part = 0.0d0; im_part = 0.0d0; real_part_l(:) = 0.0d0; im_part_l(:) = 0.0d0
          call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
          call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
-         write(3, '(3f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part / real(loop_over),  im_part / real(loop_over)
+         write(3, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part / real(loop_over),  im_part / real(loop_over)
          do l2 = 1, 18
             call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
             call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
          end do
-         write(32,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) / real(loop_over)
-         write(33,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) / real(loop_over)
+         write(32,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) / real(loop_over)
+         write(33,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) / real(loop_over)
       end do
 
 
@@ -357,13 +357,13 @@ contains
                ! Integrate over wscale for real and imaginary
                call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
                call simpson_f(im_part,   wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
-               write(100+ntype, '(3f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part, im_part
+               write(100+ntype, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part, im_part
                do l2 = 1, 18
                   call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
                   call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
                end do
-               write(300+ntype,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) 
-               write(400+ntype,'(19f16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) 
+               write(300+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) 
+               write(400+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) 
                end do
             close(100+ntype)
             close(300+ntype)
