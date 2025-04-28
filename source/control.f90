@@ -168,7 +168,7 @@ module control_mod
       !> Type of conductivity to be calculated
       !>
       !> Allowed values: 'charge', 'spin' and 'orbital'. Default: 'charge'
-      character(len=9) :: cond_type
+      character(len=30) :: cond_type
 
       !> Calculation type of the conductivity tensor
       !> 
