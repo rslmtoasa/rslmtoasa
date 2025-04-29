@@ -620,7 +620,7 @@ contains
       !
       ! Local Variables
       integer :: i, j, k, l, m, njij, nv, lmaxi, lmaxj, ief
-      real(rp) :: spin_i, orbital_i, gfac, diff, factor, distance_alat, e1
+      real(rp) :: spin_i, orbital_i, gfac, diff, factor, distance_alat
       real(rp), allocatable, dimension(:, :) :: dtott, dtottim, total_damping
       real(rp), dimension(3, 3) :: damping_tensor, damping_tensor_im
 
