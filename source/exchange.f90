@@ -608,6 +608,7 @@ contains
    !> The model is the so-called torque-correlation
    !> The following calculation works better with hoh.
    !> Implemented by Ivan Miranda on 14.11.2023
+   !> Revised by Ivan Miranda on 29.04.2025
    !---------------------------------------------------------------------------
    subroutine calculate_gilbert_damping(this)
       !
@@ -619,7 +620,7 @@ contains
       !
       ! Local Variables
       integer :: i, j, k, l, m, njij, nv, lmaxi, lmaxj, ief
-      real(rp) :: spin_i, orbital_i, gfac, diff, factor, distance_alat
+      real(rp) :: spin_i, orbital_i, gfac, diff, factor, distance_alat, e1
       real(rp), allocatable, dimension(:, :) :: dtott, dtottim, total_damping
       real(rp), dimension(3, 3) :: damping_tensor, damping_tensor_im
 
@@ -633,9 +634,9 @@ contains
          open (UNIT=103, FILE='damping-energy.out', STATUS='replace', ACTION='write')
          open (UNIT=104, FILE='alldampings.out', STATUS='replace', ACTION='write')
 
-         write (104, *) '   #i     #j   #xx         #xy           #xz           '// &
+         write (104, *) '    #i     #j   #xx          #xy           #xz           '// &
             '#yx           #yy           #yz           #zx           #zy           '// &
-            '#zz          #0.5*(xx + yy)     #Dist'
+            '#zz          #0.5*(xx + yy)     #Dist           #rij = (ri - rj)'
 
          do njij = 1, this%lattice%njij
             ! Obtain which are the atoms in the current pair
@@ -655,7 +656,7 @@ contains
             allocate (tmati(2*(lmaxi + 1)**2, 2*(lmaxi + 1)**2, 3))
             allocate (tmatj(2*(lmaxj + 1)**2, 2*(lmaxj + 1)**2, 3))
             allocate (dtott(9, size(this%en%ene)))
-            allocate (dtottim(9, size(this%en%ene)))
+            allocate (dtottim(9, size(this%en%ene))) 
             ! Make all necessary values equal to zero
             Aij(:, :, :) = czero; Aji(:, :, :) = czero
             temp1(:, :, :) = czero; temp2(:, :, :) = czero; temp3(:, :, :) = czero
@@ -664,20 +665,14 @@ contains
             ! Obtain the torque matrices for the atoms i and j in the collinear mode
             tmati(:, :, :) = this%hamiltonian%tmat(:, :, :, this%lattice%iz(i))
             tmatj(:, :, :) = this%hamiltonian%tmat(:, :, :, this%lattice%iz(j))
-            ! Obtain the magnetic moment (spin and orbital) of the i-th atom
-            ! TO-DO: include orbital moment
-            spin_i = 0.0_rp; orbital_i = 0.0_rp
+            ! Calculate the spin magnetic moment of the i-th atom
             do k = 0, lmaxi ! azimuthal quantum number index
                spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
                         this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)
-               !do l = -k, k ! magnetic quantum number index
-               !  orbital_i = orbital_i + l*(this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) + &
-               !                             this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2))
-               !end do
             end do
             ! Now calculate the damping value
             do nv = 1, size(this%en%ene)
-               ! Calculate the anti-Hermitian parts of the GF´s Aij and Aji
+               ! Calculate the anti-Hermitian parts of the GF's Aij and Aji
                Aij(:, :, nv) = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
                Aji(:, :, nv) = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
                m = 0
@@ -713,8 +708,9 @@ contains
             write (*, '(A,I6,A,I6,A)') 'Imaginary part of the tensor between pair', i, ' and ', j, ' is'
             write (*, '(3F14.9)') factor*dtottim(:, ief)
             write (*, *) '----------------------'
-            write (104, '(2I6,11F14.9)') i, j, factor*dtott(:, ief), 0.5*factor*(dtott(1, ief) + dtott(5, ief)), &
-               distance_alat
+            write (104, '(2I7,11F14.9,3F10.6)') i, j, factor*dtott(:, ief), 0.5*factor*(dtott(1, ief) + dtott(5, ief)), &
+               distance_alat, this%lattice%cr(:, i) - this%lattice%cr(:, j)
+            write (*, *) 'ief = ', this%en%ene(ief), 'fermi = ', this%en%fermi
 
             ! Deallocate all
             deallocate (Aij)
