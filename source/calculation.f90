@@ -614,7 +614,8 @@ contains
 
       call save_state(lattice_obj%symbolic_atoms)
 
-      call hamiltonian_obj%rs2pao()
+      call hamiltonian_obj%rs2txt()
+      !call hamiltonian_obj%rs2pao()
       !call bands_obj%calculate_moments_gauss_legendre()
    end subroutine pre_processing_bravais
 

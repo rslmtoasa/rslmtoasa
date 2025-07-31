@@ -99,6 +99,7 @@ module hamiltonian_mod
       procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
+      procedure :: rs2txt
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
@@ -1532,4 +1533,52 @@ contains
          end if
       end if
    end subroutine rotate_from_local_axis
+
+   subroutine rs2txt(this)
+      implicit none
+      class(hamiltonian), intent(inout) :: this
+      ! Local variables
+      real(rp), dimension(3) :: rij, rijtest
+      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
+      integer :: jj, jt, max_orbital, n_atoms
+      integer :: ntype, iostat1, iostat2, iostatus
+      real(rp), dimension(3) :: vet, vetpao, idx
+      real(rp), dimension(3, 3) :: a_inv
+      complex(rp), dimension(18, 18) :: dum
+      n_atoms = this%charge%lattice%ntype
+      max_orbital = 9
+
+      open (unit=92, file='rs2txt.dat', action='write', iostat=iostatus, status='replace')
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
+         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
+         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
+         do k = 1, nr
+            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
+            if (k == 1) then
+               jj = ia
+            else
+               jj = this%charge%lattice%nn(ia, k)
+            end if
+            if (jj /= 0) then
+               rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
+
+               if (k == 1) dum = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
+
+               call hcpx(dum(1:9,1:9), 'sph2cart')
+               call hcpx(dum(1:9,10:18), 'sph2cart')
+               call hcpx(dum(10:18,1:9), 'sph2cart')
+               call hcpx(dum(10:18,10:18), 'sph2cart')
+               ! Write each matrix element as two columns: real and imaginary part
+               do i = 1, 18
+                 do j = 1, 18
+                  write (92, '(I4,I7, 3F12.8, 2F22.14)') ntype, k, rij , real(this%ee(i, j, k, ntype)), aimag(this%ee(i, j, k, ntype))
+                 end do
+               end do
+            end if
+         end do
+      end do
+      close (92)
+   end subroutine rs2txt
+
 end module hamiltonian_mod
