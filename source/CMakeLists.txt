@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME} STATIC
     report.f90
     safe_alloc.f90
     self.f90
+    spglib_interface.f90
     spin_dynamics.f90
     string.f90
     symbolic_atom.f90

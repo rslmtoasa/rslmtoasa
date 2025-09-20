@@ -9,7 +9,7 @@
 # cmake_policy(SET CMP0054 NEW)
 
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.12)
 
 set(PROJECT_NAME rslmto)
 project(${PROJECT_NAME})
@@ -44,6 +44,7 @@ option(ENABLE_MPI "Use MPI for parallelization" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
+option(ENABLE_SPGLIB "Enable spglib for symmetry operations and k-path generation" OFF)
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
@@ -85,6 +86,43 @@ if(ENABLE_MPI)
         set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DUSE_MPI")
     endif()
 endif(ENABLE_MPI)
+
+if(ENABLE_SPGLIB)
+    # Try to find spglib using pkg-config first
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(SPGLIB QUIET spglib)
+    endif()
+    
+    # If pkg-config didn't find it, try manual search
+    if(NOT SPGLIB_FOUND)
+        find_path(SPGLIB_INCLUDE_DIR
+            NAMES spglib.h
+            HINTS /usr/local/include /usr/include /opt/local/include
+            PATH_SUFFIXES spglib
+        )
+        
+        find_library(SPGLIB_LIBRARY
+            NAMES spglib symspg
+            HINTS /usr/local/lib /usr/lib /opt/local/lib
+        )
+        
+        if(SPGLIB_INCLUDE_DIR AND SPGLIB_LIBRARY)
+            set(SPGLIB_FOUND TRUE)
+            set(SPGLIB_LIBRARIES ${SPGLIB_LIBRARY})
+            set(SPGLIB_INCLUDE_DIRS ${SPGLIB_INCLUDE_DIR})
+        endif()
+    endif()
+    
+    if(SPGLIB_FOUND)
+        message(STATUS "Found spglib: ${SPGLIB_LIBRARIES}")
+        add_definitions(-DUSE_SPGLIB)
+        include_directories(${SPGLIB_INCLUDE_DIRS})
+    else()
+        message(WARNING "spglib requested but not found. Install spglib or set ENABLE_SPGLIB=OFF")
+        set(ENABLE_SPGLIB OFF)
+    endif()
+endif(ENABLE_SPGLIB)
 
 find_package(BLAS REQUIRED)
 if(BLAS_FOUND)
@@ -162,14 +200,21 @@ add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
 add_subdirectory(${SRC})
 
 # Linking with Libraries
+set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+
+# Add spglib if enabled
+if(ENABLE_SPGLIB AND SPGLIB_FOUND)
+    list(APPEND COMMON_LIBRARIES ${SPGLIB_LIBRARIES})
+endif()
+
 if(ENABLE_OPENMP AND ENABLE_MPI AND OpenMP_Fortran_FOUND AND MPI_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} ${MPI_Fortran_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} ${MPI_Fortran_LIBRARIES} OpenMP::OpenMP_Fortran)
 elseif(ENABLE_OPENMP AND OpenMP_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} OpenMP::OpenMP_Fortran)
 elseif(ENABLE_MPI AND MPI_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} ${MPI_Fortran_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} ${MPI_Fortran_LIBRARIES})
 else()
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES})
 endif()
 
 ##############################################################################################
