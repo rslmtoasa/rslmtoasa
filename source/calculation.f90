@@ -36,6 +36,7 @@ module calculation_mod
    use exchange_mod
    use spin_dynamics_mod
    use conductivity_mod
+   use reciprocal_mod
    use mix_mod
    use math_mod
    use precision_mod, only: rp
@@ -85,6 +86,7 @@ module calculation_mod
       procedure, private :: post_processing_exchange_p2rs
       procedure, private :: post_processing_conductivity_p2rs
       procedure, private :: post_processing_conductivity
+      procedure, private :: post_processing_band_structure
       procedure :: process
       final :: destructor
    end type calculation
@@ -204,6 +206,8 @@ contains
          call this%post_processing_conductivity_p2rs()
       case ('conductivity')
          call this%post_processing_conductivity()
+      case ('band_structure')
+         call this%post_processing_band_structure()
       end select
    end subroutine
 
@@ -945,6 +949,165 @@ contains
    end subroutine
 
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Post-process for band structure calculation using reciprocal space module
+   !---------------------------------------------------------------------------
+   subroutine post_processing_band_structure(this)
+      class(calculation), intent(in) :: this
+
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(self), target :: self_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(reciprocal), target :: reciprocal_obj
+      integer :: i
+
+      call g_logger%info('post_processing_band_structure: Starting band structure calculation', __FILE__, __LINE__)
+
+      ! Constructing control object
+      control_obj = control(this%fname)
+
+      ! Constructing lattice object
+      lattice_obj = lattice(control_obj)
+
+      ! Running the pre-calculation
+      call g_timer%start('pre-processing')
+      select case (control_obj%calctype)
+      case ('B')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%structb(.true.)
+      case ('S')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_surf_full()
+         call lattice_obj%structb(.true.)
+      case ('I')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_surf_full()
+         call lattice_obj%newclu()
+         call lattice_obj%structb(.true.)
+      end select
+
+      ! Creating the symbolic_atom object
+      call lattice_obj%atomlist()
+
+      ! Initializing MPI lookup tables and info.
+      call get_mpi_variables(rank, lattice_obj%nrec)
+
+      ! Constructing the charge object
+      charge_obj = charge(lattice_obj)
+
+      select case (control_obj%calctype)
+      case ('B')
+         call charge_obj%bulkmat()
+      case ('S')
+         call charge_obj%build_alelay
+         call charge_obj%surfmat
+      case ('I')
+         call charge_obj%impmad()
+      end select
+      call g_timer%stop('pre-processing')
+
+      ! Constructing mixing object
+      mix_obj = mix(lattice_obj, charge_obj)
+
+      ! Creating the energy object
+      energy_obj = energy(lattice_obj)
+      call energy_obj%e_mesh()
+
+      ! Creating hamiltonian object
+      hamiltonian_obj = hamiltonian(charge_obj)
+      select case (control_obj%calctype)
+      case ('B')
+         do i = 1, lattice_obj%nrec
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
+      case ('S')
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian for the surface
+      case ('I')
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
+         call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
+      end select
+
+      ! Check if Hamiltonian was built successfully
+      if (.not. allocated(hamiltonian_obj%ee)) then
+         call g_logger%error('post_processing_band_structure: Bulk Hamiltonian not allocated after build', __FILE__, __LINE__)
+         return
+      end if
+
+      call g_logger%info('post_processing_band_structure: Hamiltonian dimensions: ' // &
+         fmt('I0', size(hamiltonian_obj%ee, 1)) // 'x' // &
+         fmt('I0', size(hamiltonian_obj%ee, 2)) // 'x' // &
+         fmt('I0', size(hamiltonian_obj%ee, 3)) // 'x' // &
+         fmt('I0', size(hamiltonian_obj%ee, 4)), __FILE__, __LINE__)
+
+      ! Creating reciprocal space object
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+
+      call g_logger%info('post_processing_band_structure: Setting up reciprocal space', __FILE__, __LINE__)
+
+      ! Debug lattice information
+      if (allocated(lattice_obj%sbarvec)) then
+         call g_logger%info('post_processing_band_structure: Lattice sbarvec dimensions: ' // &
+            fmt('I0', size(lattice_obj%sbarvec, 1)) // 'x' // &
+            fmt('I0', size(lattice_obj%sbarvec, 2)), __FILE__, __LINE__)
+      else
+         call g_logger%error('post_processing_band_structure: Lattice sbarvec not allocated', __FILE__, __LINE__)
+         return
+      end if
+
+      ! Set k-point mesh parameters (8x8x8 mesh)
+      reciprocal_obj%nk_mesh = [8, 8, 8]
+      reciprocal_obj%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]
+      reciprocal_obj%use_time_reversal = .true.
+
+      ! Generate k-point mesh for general calculations
+      call reciprocal_obj%generate_mp_mesh()
+
+      ! Build k-space Hamiltonian
+      call reciprocal_obj%build_kspace_hamiltonian()
+
+      call g_logger%info('post_processing_band_structure: Calculating band structure along high-symmetry path', __FILE__, __LINE__)
+
+      ! Automatically determine crystal structure
+      ! In future, this could be read from input file
+      block
+         character(len=10) :: detected_crystal_type
+         detected_crystal_type = reciprocal_obj%determine_crystal_structure()
+         call g_logger%info('post_processing_band_structure: Detected crystal type: ' // trim(detected_crystal_type), __FILE__, __LINE__)
+         call reciprocal_obj%calculate_band_structure(hamiltonian_obj, detected_crystal_type, 50, 'band_structure.dat')
+      end block
+
+      call g_logger%info('post_processing_band_structure: Band structure calculation completed', __FILE__, __LINE__)
+      call g_logger%info('post_processing_band_structure: Results written to band_structure.dat and band_structure_kpath.dat', __FILE__, __LINE__)
+
+      ! Clean up
+      call reciprocal_obj%restore_to_default()
+
+   end subroutine post_processing_band_structure
+
+
    subroutine post_processing_conductivity(this)
       class(calculation), intent(in) :: this
 
@@ -1174,10 +1337,11 @@ contains
           .and. post_processing /= 'exchange' &
           .and. post_processing /= 'exchange_p2rs' &
           .and. post_processing /= 'conductivity' &
-          .and. post_processing /= 'conductivity_p2rs') then 
+          .and. post_processing /= 'conductivity_p2rs' &
+          .and. post_processing /= 'band_structure') then 
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'conductivity', 'conductivity_p2rs'", __FILE__, __LINE__)
+                             " 'conductivity', 'conductivity_p2rs', 'band_structure'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 
