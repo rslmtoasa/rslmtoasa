@@ -35,6 +35,7 @@ add_library(${PROJECT_NAME} STATIC
     spin_dynamics.f90
     string.f90
     symbolic_atom.f90
+    symmetry.f90
     timer.f90
     xc.f90
 )

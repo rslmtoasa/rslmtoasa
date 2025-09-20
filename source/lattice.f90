@@ -213,6 +213,8 @@ module lattice_mod
       complex(rp), dimension(:, :, :, :), allocatable :: sbar
       !> Vectors in the structure constant
       real(rp), dimension(:, :), allocatable :: sbarvec
+      !> Vectors in direct coordinates (fractional) for spglib compatibility
+      real(rp), dimension(:, :), allocatable :: sbarvec_direct
       ! Variables to build clust for bulk calculation
 
       !> TODO
@@ -399,6 +401,7 @@ contains
       if (allocated(this%nn)) call g_safe_alloc%deallocate('lattice.nn', this%nn)
       if (allocated(this%sbar)) call g_safe_alloc%deallocate('lattice.sbar', this%sbar)
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
+      if (allocated(this%sbarvec_direct)) call g_safe_alloc%deallocate('lattice.sbarvec_direct', this%sbarvec_direct)
       if (allocated(this%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', this%ijpair)
       if (allocated(this%ijktrio)) call g_safe_alloc%deallocate('lattice.ijktrio', this%ijktrio)
       if (allocated(this%natoms_layer)) call g_safe_alloc%deallocate('lattice.natoms_layer', this%natoms_layer)
@@ -425,6 +428,7 @@ contains
       if (allocated(this%nn)) deallocate (this%nn)
       if (allocated(this%sbar)) deallocate (this%sbar)
       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
+      if (allocated(this%sbarvec_direct)) deallocate (this%sbarvec_direct)
       if (allocated(this%ijpair)) deallocate (this%ijpair)
       if (allocated(this%ijktrio)) deallocate (this%ijktrio)
       if (allocated(this%natoms_layer)) deallocate (this%natoms_layer)
@@ -2239,12 +2243,17 @@ contains
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
+      if (allocated(this%sbarvec_direct)) call g_safe_alloc%deallocate('lattice.sbarvec_direct', this%sbarvec_direct)
+      call g_safe_alloc%allocate('lattice.sbarvec_direct', this%sbarvec_direct, (/3, this%kk/))
 #else
       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
       allocate (this%sbarvec(3, this%kk))
+      if (allocated(this%sbarvec_direct)) deallocate (this%sbarvec_direct)
+      allocate (this%sbarvec_direct(3, this%kk))
 #endif
 
       this%sbarvec(:, :) = 0.0d0
+      this%sbarvec_direct(:, :) = 0.0d0
 
       ii = 1
       do k = 1, 3
@@ -2261,6 +2270,10 @@ contains
             this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
             this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            ! Store direct coordinate version (fractional coordinates)
+            this%sbarvec_direct(1, ii) = (crd(1, nn) - crd(1, ia)) / this%alat
+            this%sbarvec_direct(2, ii) = (crd(2, nn) - crd(2, ia)) / this%alat
+            this%sbarvec_direct(3, ii) = (crd(3, nn) - crd(3, ia)) / this%alat
          end if
 !!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
 !!    "in DBAR1."

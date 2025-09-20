@@ -1094,7 +1094,7 @@ contains
       ! In future, this could be read from input file
       block
          character(len=10) :: detected_crystal_type
-         detected_crystal_type = reciprocal_obj%determine_crystal_structure()
+         detected_crystal_type = reciprocal_obj%symmetry_analysis%determine_crystal_structure()
          call g_logger%info('post_processing_band_structure: Detected crystal type: ' // trim(detected_crystal_type), __FILE__, __LINE__)
          call reciprocal_obj%calculate_band_structure(hamiltonian_obj, detected_crystal_type, 50, 'band_structure.dat')
       end block

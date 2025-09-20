@@ -41,7 +41,7 @@ module reciprocal_mod
    use string_mod, only: int2str, real2str
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
-   use spglib_interface_mod, only: spglib_interface
+   use symmetry_mod, only: symmetry
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -105,6 +105,10 @@ module reciprocal_mod
       character(len=10), dimension(:), allocatable :: k_labels
       !> K-path distances for plotting
       real(rp), dimension(:), allocatable :: k_distances
+      
+   ! Internal logging control
+   !> When .true., suppress internal debug/info prints (structure factors, per-k debug)
+   logical :: suppress_internal_logs
 
       ! Eigenvalue/eigenvector storage
       !> Eigenvalues for k-mesh [nbands, nk_total]
@@ -116,15 +120,8 @@ module reciprocal_mod
       !> Eigenvectors for k-path [max_orb_channels, nbands, nk_path]
       complex(rp), dimension(:, :, :), allocatable :: eigenvectors_path
 
-      ! Symmetry operations (spglib integration)
-      !> spglib interface for crystallographic operations
-      type(spglib_interface) :: spglib
-      !> Space group number
-      integer :: space_group_number
-      !> Space group symbol
-      character(len=20) :: space_group_symbol
-      !> Crystal system (cubic, tetragonal, etc.)
-      character(len=10) :: crystal_system
+      ! Symmetry analysis object
+      type(symmetry) :: symmetry_analysis
 
    contains
       procedure :: generate_mp_mesh
@@ -136,18 +133,11 @@ module reciprocal_mod
       procedure :: fourier_transform_hamiltonian
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
-      procedure :: determine_crystal_structure
-      procedure :: generate_kpath
-      procedure :: get_high_symmetry_points
       procedure :: diagonalize_hamiltonian
       procedure :: diagonalize_at_kpoints
       procedure :: calculate_band_structure
       procedure :: restore_to_default
-      ! Symmetry operations (spglib)
-      procedure :: initialize_symmetry
-      procedure :: get_symmetry_info
       procedure :: generate_reduced_kpoint_mesh
-      procedure :: generate_symmetry_kpath
       final     :: destructor
    end type reciprocal
 
@@ -176,7 +166,7 @@ contains
       call obj%restore_to_default()
       call obj%generate_reciprocal_vectors()
       call obj%set_basis_sizes()
-      call obj%initialize_symmetry()
+      call obj%symmetry_analysis%initialize(obj%lattice)
    end function constructor
 
    !---------------------------------------------------------------------------
@@ -234,6 +224,9 @@ contains
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orb_channels = 18  ! spd noncollinear default
+
+   ! By default suppress internal verbose prints (can be enabled by user)
+   this%suppress_internal_logs = .true.
 
       ! Initialize reciprocal lattice to zero
       this%reciprocal_vectors = 0.0_rp
@@ -399,13 +392,17 @@ contains
       integer :: ineigh, ia, nr
       real(rp) :: k_dot_r
       real(rp), dimension(3) :: r_vec
-      logical :: debug_this_k
+   logical :: debug_this_k
 
-      ia = this%lattice%atlist(ntype)
-      nr = this%lattice%nn(ia, 1)  ! Number of neighbors
+   ia = this%lattice%atlist(ntype)
+   nr = this%lattice%nn(ia, 1)  ! Number of neighbors
 
-      ! Calculate structure factors exp(i*k·R) for each neighbor
-      do ineigh = 1, min(nr, size(structure_factors))
+   ! Only enable debug_this_k when user allows internal logs and for first atom type
+   debug_this_k = .false.
+   if (.not. this%suppress_internal_logs) debug_this_k = (ntype == 1)
+
+   ! Calculate structure factors exp(i*k·R) for each neighbor
+   do ineigh = 1, min(nr, size(structure_factors))
          if (ineigh == 1) then
             ! On-site term (R = 0)
             structure_factors(ineigh) = cmplx(1.0_rp, 0.0_rp, rp)
@@ -459,22 +456,24 @@ contains
       ! Only debug near gamma point
       if (sqrt(k_vec(1)**2 + k_vec(2)**2 + k_vec(3)**2) > 0.1_rp) debug_this_k = .false.
 
-      if (debug_this_k) then
-         call g_logger%info('fourier_transform_hamiltonian: Debug output for k-vector', __FILE__, __LINE__)
-         if (allocated(this%lattice%sbarvec)) then
-            call g_logger%info('fourier_transform_hamiltonian: sbarvec is allocated', __FILE__, __LINE__)
-         else
-            call g_logger%info('fourier_transform_hamiltonian: WARNING - sbarvec is NOT allocated!', __FILE__, __LINE__)
+      if (.not. this%suppress_internal_logs) then
+         if (debug_this_k) then
+            call g_logger%info('fourier_transform_hamiltonian: Debug output for k-vector', __FILE__, __LINE__)
+            if (allocated(this%lattice%sbarvec)) then
+               call g_logger%info('fourier_transform_hamiltonian: sbarvec is allocated', __FILE__, __LINE__)
+            else
+               call g_logger%info('fourier_transform_hamiltonian: WARNING - sbarvec is NOT allocated!', __FILE__, __LINE__)
+            end if
          end if
-      end if
 
-      ! Add simple check for ANY call during band structure calculation
-      if (ntype == 1) then
-         if (allocated(this%lattice%sbarvec)) then
-            call g_logger%info('fourier_transform_hamiltonian: sbarvec allocated for band structure', __FILE__, __LINE__)
-         else
-            call g_logger%info('fourier_transform_hamiltonian: WARNING - sbarvec NOT allocated for band structure!', __FILE__, __LINE__)
-         end if
+         ! Add simple check for ANY call during band structure calculation
+         ! if (ntype == 1) then
+         !    if (allocated(this%lattice%sbarvec)) then
+         !       call g_logger%info('fourier_transform_hamiltonian: sbarvec allocated for band structure', __FILE__, __LINE__)
+         !    else
+         !       call g_logger%info('fourier_transform_hamiltonian: WARNING - sbarvec NOT allocated for band structure!', __FILE__, __LINE__)
+         !    end if
+         ! end if
       end if
 
       ! Allocate structure factors
@@ -484,13 +483,15 @@ contains
       call this%calculate_structure_factors(k_vec, ntype, structure_factors)
       
       ! Print first few structure factors for first k-point to debug
-      if (ntype == 1 .and. size(structure_factors) >= 5) then
-          write(*, '(A,2F10.6)') "First structure factor:", structure_factors(1)
-          write(*, '(A,2F10.6)') "Second structure factor:", structure_factors(2)
-          write(*, '(A,2F10.6)') "Third structure factor:", structure_factors(3)
-          write(*, '(A,2F10.6)') "Fourth structure factor:", structure_factors(4)
-          write(*, '(A,2F10.6)') "Fifth structure factor:", structure_factors(5)
-      end if
+     ! if (.not. this%suppress_internal_logs) then
+     !   if (ntype == 1 .and. size(structure_factors) >= 5) then
+     !      write(*, '(A,2F10.6)') "First structure factor:", structure_factors(1)
+     !      write(*, '(A,2F10.6)') "Second structure factor:", structure_factors(2)
+     !      write(*, '(A,2F10.6)') "Third structure factor:", structure_factors(3)
+     !      write(*, '(A,2F10.6)') "Fourth structure factor:", structure_factors(4)
+     !      write(*, '(A,2F10.6)') "Fifth structure factor:", structure_factors(5)
+     !   end if
+     ! end if
 
       ! Initialize result
       hk_result = cmplx(0.0_rp, 0.0_rp, rp)
@@ -501,9 +502,9 @@ contains
          hk_result = hk_result + h_neighbor * structure_factors(ineigh)
       end do
 
-      if (debug_this_k) then
-         call g_logger%info('fourier_transform_hamiltonian: Completed FT', __FILE__, __LINE__)
-      end if
+      ! if (debug_this_k) then
+      !    call g_logger%info('fourier_transform_hamiltonian: Completed FT', __FILE__, __LINE__)
+      ! end if
 
       deallocate(structure_factors)
       
@@ -570,10 +571,12 @@ contains
             k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
             
             ! Debug first few k-points
-            if (ik <= 3) then
-               write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
-                     ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
-               call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+            if (.not. this%suppress_internal_logs) then
+               if (ik <= 3) then
+                  write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
+                        ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
+                  call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+               end if
             end if
             
             ! Fourier transform real-space Hamiltonian
@@ -691,238 +694,11 @@ contains
       end select
    end function get_basis_type_from_size
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Determine crystal structure from lattice vectors
-   !---------------------------------------------------------------------------
-   function determine_crystal_structure(this) result(crystal_type)
-      class(reciprocal), intent(in) :: this
-      character(len=10) :: crystal_type
-      ! Local variables
-      real(rp), dimension(3, 3) :: lattice_vectors
-      real(rp) :: a, b, c, alpha, beta, gamma
-      real(rp), parameter :: tol = 1.0e-6_rp
-      
-      ! Get the lattice vectors from lattice%a
-      lattice_vectors = this%lattice%a
-      
-      ! Calculate lattice parameters
-      a = norm2(lattice_vectors(:, 1))
-      b = norm2(lattice_vectors(:, 2))
-      c = norm2(lattice_vectors(:, 3))
-      
-      ! Calculate angles
-      alpha = acos(dot_product(lattice_vectors(:, 2), lattice_vectors(:, 3)) / (b * c))
-      beta = acos(dot_product(lattice_vectors(:, 1), lattice_vectors(:, 3)) / (a * c))
-      gamma = acos(dot_product(lattice_vectors(:, 1), lattice_vectors(:, 2)) / (a * b))
-      
-      ! Convert to degrees
-      alpha = alpha * 180.0_rp / acos(-1.0_rp)
-      beta = beta * 180.0_rp / acos(-1.0_rp) 
-      gamma = gamma * 180.0_rp / acos(-1.0_rp)
-      
-      call g_logger%info('determine_crystal_structure: Lattice parameters: a=' // &
-         real2str(a) // ', b=' // real2str(b) // ', c=' // real2str(c), __FILE__, __LINE__)
-      call g_logger%info('determine_crystal_structure: Angles: alpha=' // &
-         real2str(alpha) // ', beta=' // real2str(beta) // ', gamma=' // real2str(gamma), __FILE__, __LINE__)
-      
-      ! Determine crystal system
-      if (abs(a - b) < tol .and. abs(b - c) < tol .and. &
-          abs(alpha - 90.0_rp) < tol .and. abs(beta - 90.0_rp) < tol .and. abs(gamma - 90.0_rp) < tol) then
-         ! Cubic system - now determine if it's SC, BCC, or FCC
-         ! This is a simplified approach - in practice, need to analyze the basis
-         ! For typical LMTO calculations, BCC is common for Fe, Co, Cr
-         crystal_type = 'bcc'
-         call g_logger%info('determine_crystal_structure: Detected cubic system, assuming BCC', __FILE__, __LINE__)
-      else if (abs(a - b) < tol .and. abs(alpha - 90.0_rp) < tol .and. &
-               abs(beta - 90.0_rp) < tol .and. abs(gamma - 120.0_rp) < tol) then
-         crystal_type = 'hexagonal'
-         call g_logger%info('determine_crystal_structure: Detected hexagonal system', __FILE__, __LINE__)
-      else if (abs(alpha - 90.0_rp) < tol .and. abs(beta - 90.0_rp) < tol .and. abs(gamma - 90.0_rp) < tol) then
-         crystal_type = 'orthorhombic'
-         call g_logger%info('determine_crystal_structure: Detected orthorhombic system', __FILE__, __LINE__)
-      else
-         crystal_type = 'bcc'  ! Default to BCC for LMTO
-         call g_logger%warning('determine_crystal_structure: Unknown crystal system, defaulting to BCC', __FILE__, __LINE__)
-      end if
-      
-   end function determine_crystal_structure
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Get high-symmetry points for different crystal systems
-   !---------------------------------------------------------------------------
-   subroutine get_high_symmetry_points(this, crystal_type, kpoints, labels)
-      class(reciprocal), intent(in) :: this
-      character(len=*), intent(in) :: crystal_type
-      real(rp), dimension(:, :), allocatable, intent(out) :: kpoints
-      character(len=10), dimension(:), allocatable, intent(out) :: labels
-      ! Local variables
-      integer :: npts
 
-      ! For now, implement cubic (simple cubic, FCC, BCC) high-symmetry points
-      ! This should be extended to use spglib for automatic detection
-      select case (trim(crystal_type))
-      case ('fcc', 'FCC')
-         ! FCC high-symmetry points in units of 2π/a
-         npts = 4
-         allocate(kpoints(3, npts))
-         allocate(labels(npts))
-         
-         ! Γ point
-         kpoints(:, 1) = [0.0_rp, 0.0_rp, 0.0_rp]
-         labels(1) = 'Γ'
-         
-         ! X point
-         kpoints(:, 2) = [0.5_rp, 0.0_rp, 0.5_rp]
-         labels(2) = 'X'
-         
-         ! L point  
-         kpoints(:, 3) = [0.5_rp, 0.5_rp, 0.5_rp]
-         labels(3) = 'L'
-         
-         ! W point
-         kpoints(:, 4) = [0.5_rp, 0.25_rp, 0.75_rp]
-         labels(4) = 'W'
 
-      case ('bcc', 'BCC')
-         ! BCC high-symmetry points
-         npts = 4
-         allocate(kpoints(3, npts))
-         allocate(labels(npts))
-         
-         kpoints(:, 1) = [0.0_rp, 0.0_rp, 0.0_rp]    ! Γ
-         labels(1) = 'Γ'
-         kpoints(:, 2) = [0.0_rp, 0.5_rp, 0.5_rp]    ! H
-         labels(2) = 'H'
-         kpoints(:, 3) = [0.25_rp, 0.25_rp, 0.25_rp] ! P
-         labels(3) = 'P'
-         kpoints(:, 4) = [0.5_rp, 0.5_rp, 0.0_rp]    ! N
-         labels(4) = 'N'
 
-      case ('sc', 'simple_cubic', 'cubic')
-         ! Simple cubic high-symmetry points
-         npts = 4
-         allocate(kpoints(3, npts))
-         allocate(labels(npts))
-         
-         kpoints(:, 1) = [0.0_rp, 0.0_rp, 0.0_rp]    ! Γ
-         labels(1) = 'Γ'
-         kpoints(:, 2) = [0.5_rp, 0.0_rp, 0.0_rp]    ! X
-         labels(2) = 'X'
-         kpoints(:, 3) = [0.5_rp, 0.5_rp, 0.0_rp]    ! M
-         labels(3) = 'M'
-         kpoints(:, 4) = [0.5_rp, 0.5_rp, 0.5_rp]    ! R
-         labels(4) = 'R'
 
-      case default
-         ! Default to simple cubic if unknown
-         call g_logger%warning('get_high_symmetry_points: Unknown crystal type ' // trim(crystal_type) // ', using simple cubic', __FILE__, __LINE__)
-         call get_high_symmetry_points(this, 'sc', kpoints, labels)
-      end select
-
-      call g_logger%info('get_high_symmetry_points: Generated ' // trim(int2str(npts)) // ' high-symmetry points for ' // trim(crystal_type), __FILE__, __LINE__)
-   end subroutine get_high_symmetry_points
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Generate k-path through high-symmetry points
-   !---------------------------------------------------------------------------
-   subroutine generate_kpath(this, crystal_type, npts_per_segment, path_indices)
-      class(reciprocal), intent(inout) :: this
-      character(len=*), intent(in) :: crystal_type
-      integer, intent(in) :: npts_per_segment
-      integer, dimension(:), intent(in), optional :: path_indices
-      ! Local variables
-      real(rp), dimension(:, :), allocatable :: hs_kpoints
-      character(len=10), dimension(:), allocatable :: hs_labels
-      integer :: nhs, nseg, total_pts, i, j, k, idx
-      integer, dimension(:), allocatable :: path
-      real(rp) :: segment_length, total_distance
-      real(rp), dimension(3) :: kvec_diff
-
-      call g_logger%info('generate_kpath: Generating k-path for ' // trim(crystal_type), __FILE__, __LINE__)
-
-      ! Get high-symmetry points
-      call this%get_high_symmetry_points(crystal_type, hs_kpoints, hs_labels)
-      nhs = size(hs_labels)
-
-      ! Define default path if not provided
-      if (present(path_indices)) then
-         path = path_indices
-      else
-         ! Default path: connect all high-symmetry points in order
-         allocate(path(nhs))
-         do i = 1, nhs
-            path(i) = i
-         end do
-      end if
-
-      nseg = size(path) - 1
-      total_pts = nseg * npts_per_segment + 1  ! +1 for the last point
-
-      ! Allocate k-path arrays
-      if (allocated(this%k_path)) deallocate(this%k_path)
-      if (allocated(this%k_labels)) deallocate(this%k_labels)
-      if (allocated(this%k_distances)) deallocate(this%k_distances)
-      
-      allocate(this%k_path(3, total_pts))
-      allocate(this%k_labels(total_pts))
-      allocate(this%k_distances(total_pts))
-
-      ! Generate k-path
-      idx = 1
-      total_distance = 0.0_rp
-      this%k_distances(1) = 0.0_rp
-
-      do i = 1, nseg
-         kvec_diff = hs_kpoints(:, path(i+1)) - hs_kpoints(:, path(i))
-         segment_length = sqrt(sum(kvec_diff**2))
-         
-         do j = 1, npts_per_segment
-            if (idx > total_pts) exit
-            
-            ! Linear interpolation
-            this%k_path(:, idx) = hs_kpoints(:, path(i)) + &
-                                  real(j-1, rp) / real(npts_per_segment-1, rp) * kvec_diff
-            
-            ! Set label for high-symmetry points
-            if (j == 1) then
-               this%k_labels(idx) = hs_labels(path(i))
-            else
-               this%k_labels(idx) = ''
-            end if
-            
-            ! Calculate cumulative distance
-            if (idx > 1) then
-               total_distance = total_distance + sqrt(sum((this%k_path(:, idx) - this%k_path(:, idx-1))**2))
-            end if
-            this%k_distances(idx) = total_distance
-            
-            idx = idx + 1
-         end do
-      end do
-
-      ! Add the final point
-      if (idx <= total_pts) then
-         this%k_path(:, idx) = hs_kpoints(:, path(nseg+1))
-         this%k_labels(idx) = hs_labels(path(nseg+1))
-         if (idx > 1) then
-            total_distance = total_distance + sqrt(sum((this%k_path(:, idx) - this%k_path(:, idx-1))**2))
-         end if
-         this%k_distances(idx) = total_distance
-      end if
-
-      this%nk_path = total_pts
-      
-      call g_logger%info('generate_kpath: Generated k-path with ' // trim(int2str(total_pts)) // ' points', __FILE__, __LINE__)
-      
-      ! Clean up
-      deallocate(hs_kpoints, hs_labels, path)
-   end subroutine generate_kpath
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1059,8 +835,42 @@ contains
 
       call g_logger%info('calculate_band_structure: Starting band structure calculation', __FILE__, __LINE__)
 
-      ! Generate k-path
-      call this%generate_kpath(crystal_type, npts_per_segment)
+      ! Generate k-path using spglib-based canonical path generation
+      call this%symmetry_analysis%generate_canonical_kpath(npts_per_segment)
+
+      ! Copy k-path data from symmetry analysis to reciprocal object
+      if (allocated(this%symmetry_analysis%k_path)) then
+         ! Copy k-path arrays
+         this%nk_path = this%symmetry_analysis%nk_path
+         if (allocated(this%k_path)) deallocate(this%k_path)
+         if (allocated(this%k_labels)) deallocate(this%k_labels)
+         if (allocated(this%k_distances)) deallocate(this%k_distances)
+         
+         allocate(this%k_path(3, this%nk_path))
+         allocate(this%k_labels(this%nk_path))
+         allocate(this%k_distances(this%nk_path))
+         
+         this%k_path = this%symmetry_analysis%k_path
+         this%k_labels = this%symmetry_analysis%k_labels
+         this%k_distances = this%symmetry_analysis%k_distances
+         
+         call g_logger%info('calculate_band_structure: Copied k-path with ' // &
+                           trim(int2str(this%nk_path)) // ' points from symmetry analysis', __FILE__, __LINE__)
+      else
+         call g_logger%error('calculate_band_structure: Symmetry analysis k_path not allocated!', __FILE__, __LINE__)
+         return
+      end if
+
+      ! Debug logging for k-path
+      call g_logger%info('calculate_band_structure: After k-path generation, nk_path = ' // &
+                        trim(int2str(this%nk_path)), __FILE__, __LINE__)
+      if (allocated(this%k_path)) then
+         call g_logger%info('calculate_band_structure: k_path allocated with dimensions ' // &
+                           trim(int2str(size(this%k_path,1))) // 'x' // &
+                           trim(int2str(size(this%k_path,2))), __FILE__, __LINE__)
+      else
+         call g_logger%error('calculate_band_structure: k_path not allocated after k-path generation!', __FILE__, __LINE__)
+      end if
 
       ! Diagonalize Hamiltonian along k-path using unified method
       call this%diagonalize_at_kpoints(ham, this%k_path, this%nk_path)
@@ -1121,80 +931,9 @@ contains
       call g_logger%info('calculate_band_structure: K-path information written to ' // trim(filename), __FILE__, __LINE__)
    end subroutine calculate_band_structure
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Initialize spglib interface with crystal structure information
-   !---------------------------------------------------------------------------
-   subroutine initialize_symmetry(this)
-      class(reciprocal), intent(inout) :: this
-      real(rp), dimension(3,3) :: lattice_vectors
-      real(rp), dimension(:,:), allocatable :: atomic_positions
-      integer, dimension(:), allocatable :: atomic_types
-      integer :: i
 
-      call g_logger%info('initialize_symmetry: Setting up spglib interface', __FILE__, __LINE__)
 
-      ! Check if spglib is available
-      if (.not. this%spglib%is_available()) then
-         call g_logger%warning('initialize_symmetry: spglib not available, using default symmetry', __FILE__, __LINE__)
-         this%space_group_number = 0
-         this%space_group_symbol = 'P1'
-         this%crystal_system = 'unknown'
-         return
-      end if
 
-      ! Get lattice vectors (convert from lattice object)
-      do i = 1, 3
-         lattice_vectors(i,:) = this%lattice%a(i,:)
-      end do
-
-      ! Get atomic positions and types from lattice
-      allocate(atomic_positions(3, this%lattice%nrec))
-      allocate(atomic_types(this%lattice%nrec))
-
-      do i = 1, this%lattice%nrec
-         atomic_positions(:,i) = this%lattice%cr(:,i)  ! Fractional coordinates
-         atomic_types(i) = this%lattice%iz(i)          ! Atomic number
-      end do
-
-      ! Initialize spglib with crystal structure
-      call this%spglib%initialize(lattice_vectors, atomic_positions, atomic_types)
-
-      ! Get symmetry information
-      call this%get_symmetry_info()
-
-      ! Clean up temporary arrays
-      deallocate(atomic_positions, atomic_types)
-   end subroutine initialize_symmetry
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Get space group and crystal system information from spglib
-   !---------------------------------------------------------------------------
-   subroutine get_symmetry_info(this)
-      class(reciprocal), intent(inout) :: this
-      integer :: num_symmetries
-
-      if (.not. this%spglib%is_available()) then
-         return
-      end if
-
-      ! Get space group number and symbol (already done in spglib initialize)
-      this%space_group_number = this%spglib%get_space_group_number()
-      this%space_group_symbol = this%spglib%get_space_group_symbol()
-      this%crystal_system = this%spglib%get_crystal_system_name()
-
-      ! Get number of symmetry operations
-      num_symmetries = this%spglib%get_symmetry_operations()
-
-      call g_logger%info('get_symmetry_info: Crystal system: ' // trim(this%crystal_system), __FILE__, __LINE__)
-      call g_logger%info('get_symmetry_info: Space group: ' // trim(this%space_group_symbol) // &
-                        ' (#' // trim(int2str(this%space_group_number)) // ')', __FILE__, __LINE__)
-      call g_logger%info('get_symmetry_info: Number of symmetry operations: ' // &
-                        trim(int2str(num_symmetries)), __FILE__, __LINE__)
-   end subroutine get_symmetry_info
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1218,14 +957,14 @@ contains
          shift = [0, 0, 0]  ! No offset
       end if
 
-      if (.not. this%spglib%is_available()) then
+      if (.not. this%symmetry_analysis%spglib%is_available()) then
          call g_logger%warning('generate_reduced_kpoint_mesh: spglib not available, using full mesh', __FILE__, __LINE__)
          call this%generate_mp_mesh()  ! Fall back to regular MP mesh
          return
       end if
 
       ! Get irreducible k-points using spglib
-      num_ir_kpoints = this%spglib%get_reduced_kpoint_mesh(mesh_dims, shift)
+      num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh(mesh_dims, shift)
 
       call g_logger%info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(num_ir_kpoints)) // &
                         ' irreducible k-points from ' // trim(int2str(product(mesh_dims))) // ' total points', &
@@ -1235,37 +974,5 @@ contains
       ! For now, fall back to regular MP mesh
       call this%generate_mp_mesh()
    end subroutine generate_reduced_kpoint_mesh
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Generate high-symmetry k-path using spglib crystal system information
-   !---------------------------------------------------------------------------
-   subroutine generate_symmetry_kpath(this, nk_path_in)
-      class(reciprocal), intent(inout) :: this
-      integer, intent(in), optional :: nk_path_in
-      logical :: path_available
-
-      if (.not. this%spglib%is_available()) then
-         call g_logger%warning('generate_symmetry_kpath: spglib not available, using default k-path', __FILE__, __LINE__)
-         call this%generate_kpath('cubic', 50)  ! Fall back to regular k-path
-         return
-      end if
-
-      ! Check if band path generation is available for this crystal system
-      path_available = this%spglib%get_band_path_points()
-
-      if (path_available) then
-         call g_logger%info('generate_symmetry_kpath: Using spglib-based k-path for ' // &
-                           trim(this%crystal_system) // ' crystal system', __FILE__, __LINE__)
-         
-         ! TODO: Implement actual spglib-based k-path generation
-         ! For now, fall back to regular k-path with enhanced system-specific logic
-         call this%generate_kpath(this%crystal_system, 50)
-      else
-         call g_logger%warning('generate_symmetry_kpath: spglib k-path not implemented, using default', __FILE__, __LINE__)
-         call this%generate_kpath('cubic', 50)
-      end if
-   end subroutine generate_symmetry_kpath
 
 end module reciprocal_mod
