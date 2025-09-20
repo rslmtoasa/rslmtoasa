@@ -134,7 +134,6 @@ module reciprocal_mod
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
       procedure :: diagonalize_hamiltonian
-      procedure :: diagonalize_at_kpoints
       procedure :: calculate_band_structure
       procedure :: restore_to_default
       procedure :: generate_reduced_kpoint_mesh
@@ -411,7 +410,14 @@ contains
             end if
          else
             ! Off-site terms - get neighbor vector from lattice structure
-            if (allocated(this%lattice%sbarvec) .and. ineigh <= size(this%lattice%sbarvec, 2)) then
+            if (allocated(this%lattice%sbarvec_direct) .and. ineigh <= size(this%lattice%sbarvec_direct, 2)) then
+               r_vec(1) = this%lattice%sbarvec_direct(1, ineigh)
+               r_vec(2) = this%lattice%sbarvec_direct(2, ineigh)
+               r_vec(3) = this%lattice%sbarvec_direct(3, ineigh)
+               if (debug_this_k) then
+                  call g_logger%info('fourier_transform_hamiltonian: Using sbarvec_direct neighbor vector', __FILE__, __LINE__)
+               end if
+            else if (allocated(this%lattice%sbarvec) .and. ineigh <= size(this%lattice%sbarvec, 2)) then
                r_vec(1) = this%lattice%sbarvec(1, ineigh)
                r_vec(2) = this%lattice%sbarvec(2, ineigh)
                r_vec(3) = this%lattice%sbarvec(3, ineigh)
@@ -425,7 +431,7 @@ contains
                   call g_logger%info('fourier_transform_hamiltonian: WARNING - Using zero fallback vector!', __FILE__, __LINE__)
                end if
             end if
-            k_dot_r = dot_product(k_vec, r_vec)
+            k_dot_r = 2.0_rp * 3.141592653589793_rp * dot_product(k_vec, r_vec)  ! 2π * k_frac · R_frac
             structure_factors(ineigh) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
          end if
       end do
@@ -711,7 +717,13 @@ contains
       logical, intent(in), optional :: use_kpath
       ! Local variables
       logical :: use_path
-      integer :: nk
+      integer :: nk, i, nmat, lwork, info
+      complex(rp), dimension(:, :), allocatable :: h_k, h_k_copy
+      real(rp), dimension(:), allocatable :: eigenvals
+      complex(rp), dimension(:, :), allocatable :: eigenvecs
+      complex(rp), dimension(:), allocatable :: work_complex
+      real(rp), dimension(:), allocatable :: rwork
+      character(len=100) :: info_msg
 
       use_path = .false.
       if (present(use_kpath)) use_path = use_kpath
@@ -723,7 +735,6 @@ contains
          end if
          nk = this%nk_path
          call g_logger%info('diagonalize_hamiltonian: Using k-path with ' // trim(int2str(nk)) // ' points', __FILE__, __LINE__)
-         call this%diagonalize_at_kpoints(ham, this%k_path, nk)
       else
          if (.not. allocated(this%k_points)) then
             call g_logger%error('diagonalize_hamiltonian: k-mesh not generated', __FILE__, __LINE__)
@@ -731,30 +742,9 @@ contains
          end if
          nk = this%nk_total
          call g_logger%info('diagonalize_hamiltonian: Using k-mesh with ' // trim(int2str(nk)) // ' points', __FILE__, __LINE__)
-         call this%diagonalize_at_kpoints(ham, this%k_points, nk)
       end if
-   end subroutine diagonalize_hamiltonian
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Unified diagonalization method for any set of k-points
-   !---------------------------------------------------------------------------
-   subroutine diagonalize_at_kpoints(this, ham, k_vectors, nk_points)
-      class(reciprocal), intent(inout) :: this
-      class(hamiltonian), intent(in) :: ham
-      real(rp), dimension(:, :), intent(in) :: k_vectors  ! (3, nk_points)
-      integer, intent(in) :: nk_points
-      ! Local variables
-      integer :: i, nmat, lwork, info
-      complex(rp), dimension(:, :), allocatable :: h_k, h_k_copy
-      real(rp), dimension(:), allocatable :: eigenvals
-      complex(rp), dimension(:, :), allocatable :: eigenvecs
-      complex(rp), dimension(:), allocatable :: work_complex
-      real(rp), dimension(:), allocatable :: rwork
-      character(len=100) :: info_msg
-
-      call g_logger%info('diagonalize_at_kpoints: Starting diagonalization of ' // trim(int2str(nk_points)) // ' k-points', __FILE__, __LINE__)
+      call g_logger%info('diagonalize_hamiltonian: Starting diagonalization of ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
 
       ! Get matrix size from the actual Hamiltonian
       if (allocated(ham%ee)) then
@@ -763,14 +753,14 @@ contains
          nmat = this%max_orb_channels  ! Fallback to max orbital channels
       end if
 
-      call g_logger%info('diagonalize_at_kpoints: Matrix size is ' // trim(int2str(nmat)) // 'x' // trim(int2str(nmat)), __FILE__, __LINE__)
+      call g_logger%info('diagonalize_hamiltonian: Matrix size is ' // trim(int2str(nmat)) // 'x' // trim(int2str(nmat)), __FILE__, __LINE__)
 
       ! Allocate eigenvalue and eigenvector arrays
       if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
       if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
       
-      allocate(this%eigenvalues(nmat, nk_points))
-      allocate(this%eigenvectors(nmat, nmat, nk_points))
+      allocate(this%eigenvalues(nmat, nk))
+      allocate(this%eigenvectors(nmat, nmat, nk))
 
       ! Allocate work arrays
       allocate(h_k(nmat, nmat))
@@ -789,9 +779,34 @@ contains
       allocate(work_complex(lwork))
 
       ! Loop over k-points
-      do i = 1, nk_points
+      do i = 1, nk
          ! Build Hamiltonian at this k-point using unified Fourier transform
-         call this%fourier_transform_hamiltonian(k_vectors(:, i), 1, h_k)
+         if (use_path) then
+            call this%fourier_transform_hamiltonian(this%k_path(:, i), 1, h_k)
+            
+            ! Debug: Dump H(k) matrix for Γ and H points
+            if (all(abs(this%k_path(:, i) - [0.0_rp, 0.0_rp, 0.0_rp]) < 1.0e-6_rp)) then
+               ! Γ point
+               call dump_complex_matrix(h_k, 'H_k_Gamma.dat', this%k_path(:, i))
+               call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for Γ point to H_k_Gamma.dat, k-vector: [' // &
+                                 trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
+                                 trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
+            else if (all(abs(this%k_path(:, i) - [0.5_rp, -0.5_rp, 0.5_rp]) < 1.0e-6_rp)) then
+               ! H point
+               call dump_complex_matrix(h_k, 'H_k_H.dat', this%k_path(:, i))
+               call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for H point to H_k_H.dat, k-vector: [' // &
+                                 trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
+                                 trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
+            else if (all(abs(this%k_path(:, i) - [0.25_rp, -0.25_rp, 0.25_rp]) < 1.0e-6_rp)) then
+               ! K/2 point (midpoint between Γ and H)
+               call dump_complex_matrix(h_k, 'H_k_half.dat', this%k_path(:, i))
+               call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for K/2 point to H_k_half.dat, k-vector: [' // &
+                                 trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
+                                 trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
+            end if
+         else
+            call this%fourier_transform_hamiltonian(this%k_points(:, i), 1, h_k)
+         end if
 
          ! Make a copy for diagonalization (LAPACK destroys input)
          h_k_copy = h_k
@@ -800,7 +815,7 @@ contains
          call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
          
          if (info /= 0) then
-            write(info_msg, '(A,I0,A,I0)') 'diagonalize_at_kpoints: ZHEEV failed for k-point ', i, ' with info=', info
+            write(info_msg, '(A,I0,A,I0)') 'diagonalize_hamiltonian: ZHEEV failed for k-point ', i, ' with info=', info
             call g_logger%error(trim(info_msg), __FILE__, __LINE__)
             cycle
          end if
@@ -810,12 +825,13 @@ contains
          this%eigenvectors(:, :, i) = h_k_copy
       end do
 
-      call g_logger%info('diagonalize_at_kpoints: Completed diagonalization', __FILE__, __LINE__)
+      call g_logger%info('diagonalize_hamiltonian: Completed diagonalization', __FILE__, __LINE__)
 
       ! Clean up
       deallocate(h_k, h_k_copy, eigenvals, eigenvecs)
       deallocate(work_complex, rwork)
-   end subroutine diagonalize_at_kpoints
+   end subroutine diagonalize_hamiltonian
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -873,7 +889,7 @@ contains
       end if
 
       ! Diagonalize Hamiltonian along k-path using unified method
-      call this%diagonalize_at_kpoints(ham, this%k_path, this%nk_path)
+      call this%diagonalize_hamiltonian(ham, use_kpath=.true.)
 
       ! Set output filename
       filename = 'band_structure.dat'
@@ -974,5 +990,40 @@ contains
       ! For now, fall back to regular MP mesh
       call this%generate_mp_mesh()
    end subroutine generate_reduced_kpoint_mesh
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Helper subroutine to dump a complex matrix to file for debugging
+   !---------------------------------------------------------------------------
+   subroutine dump_complex_matrix(matrix, filename, k_point)
+      complex(rp), dimension(:, :), intent(in) :: matrix
+      character(len=*), intent(in) :: filename
+      real(rp), dimension(3), intent(in) :: k_point
+      ! Local variables
+      integer :: unit, i, j, n_rows, n_cols
+      character(len=100) :: fmt_str
+
+      n_rows = size(matrix, 1)
+      n_cols = size(matrix, 2)
+
+      open(newunit=unit, file=trim(filename), status='replace', action='write')
+
+      ! Write header
+      write(unit, '(A)') '# Complex matrix dump for debugging'
+      write(unit, '(A,3F12.8)') '# k-point: ', k_point
+      write(unit, '(A,I0,A,I0)') '# Matrix dimensions: ', n_rows, ' x ', n_cols
+      write(unit, '(A)') '# Format: row, col, real_part, imag_part'
+      write(unit, '(A)') '#'
+
+      ! Write matrix elements
+      do i = 1, n_rows
+         do j = 1, n_cols
+            write(unit, '(2I6,2ES20.12E3)') i, j, real(matrix(i,j)), aimag(matrix(i,j))
+         end do
+      end do
+
+      close(unit)
+   end subroutine dump_complex_matrix
 
 end module reciprocal_mod
