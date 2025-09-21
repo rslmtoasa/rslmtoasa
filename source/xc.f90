@@ -810,7 +810,7 @@ contains
       !   ******************************************************************
       !   *                                                                *
       !   *    Calculate the exchange-correlation energy density by        *
-      !   *    Local Airy Gas approximation plus Perdew-Burke-Ernzerhof    *
+      !   *    Local Airy Gas approximation plus Perdew-Burke-Enzerhof    *
       !   *    correlation functional.                                     *
       !   *                                                                *
       !   *   *On entry:                                                   *
@@ -956,6 +956,7 @@ contains
       !
       ! ... Executable Statements ...
       !
+      !----------------------------------------------------------------------
       !----------------------------------------------------------------------
       ! construct LDA exchange energy density
       exunif = ax*(rho**thrd)
@@ -1328,7 +1329,10 @@ contains
       real(rp), dimension(2) :: vrho_libxc  ! Potentials for each spin
       real(rp), dimension(3) :: vsigma_libxc ! GGA gradient potentials
       type(xc_f03_func_t) :: temp_func  ! Temporary functional for testing
-      integer :: nspin, family
+      type(xc_f03_func_t) :: exch_func  ! Exchange functional for correlation-only functionals
+      real(rp), dimension(1) :: exc_x
+      real(rp), dimension(2) :: vrho_x
+      integer :: nspin, family, func_kind
       
       ! Initialize outputs
       V1 = 0.0d0
@@ -1340,8 +1344,6 @@ contains
          call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
          return
       endif
-      
-      ! call g_logger%info('libXC called with RHO1='//real2str(RHO1)//', RHO2='//real2str(RHO2), __FILE__, __LINE__)
       
       ! Determine spin treatment - use the same as initialization
       nspin = this%libxc_nspin
@@ -1368,20 +1370,46 @@ contains
       
       select case(family)
       case(1)  ! XC_FAMILY_LDA
-         if (nspin == 2) then
-            ! Create a local functional object for this calculation
-            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
-            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
-            call xc_f03_func_end(temp_func)
+         ! Create a local functional object for this calculation
+         call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
+         
+         ! Get functional kind to check if it's correlation-only
+         func_kind = xc_f03_func_info_get_kind(xc_f03_func_get_info(temp_func))
+         
+         if (func_kind == XC_CORRELATION) then
+            ! This is a correlation-only functional, add exchange
+            call xc_f03_func_init(exch_func, 1, nspin) ! XC_LDA_X = 1
+            call xc_f03_lda_exc_vxc(exch_func, 1_c_size_t, rho_libxc, exc_x, vrho_x)
+            call xc_f03_func_end(exch_func)
             
+            ! Get correlation part
+            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
+            
+            ! Combine exchange and correlation
+            exc_libxc(1) = exc_libxc(1) + exc_x(1)
+            if (nspin == 2) then
+               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
+               vrho_libxc(2) = vrho_libxc(2) + vrho_x(2)
+            else
+               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
+            endif
+         else
+            ! This is a full XC functional, just call it
+            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
+         endif
+         
+         call xc_f03_func_end(temp_func)
+
+         ! libXC returns energies/potentials in Hartree (atomic units).
+         ! RS-LMTO internal units use Rydberg for energies/potentials, so
+         ! convert Hartree -> Rydberg by multiplying by 2.0
+         exc_libxc(1) = 2.0d0 * exc_libxc(1)
+         vrho_libxc = 2.0d0 * vrho_libxc
+
+         if (nspin == 2) then
             V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
             V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
          else
-            ! Create a local functional object for this calculation
-            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
-            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
-            call xc_f03_func_end(temp_func)
-            
             V1 = vrho_libxc(1)  ! same potential for both spins
             V2 = vrho_libxc(1)
          endif
@@ -1400,7 +1428,12 @@ contains
             call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
                                     exc_libxc, vrho_libxc, vsigma_libxc)
             call xc_f03_func_end(temp_func)
-            
+
+            ! Convert libXC outputs from Hartree to Rydberg (internal units)
+            exc_libxc(1) = 2.0d0 * exc_libxc(1)
+            vrho_libxc = 2.0d0 * vrho_libxc
+            vsigma_libxc = 2.0d0 * vsigma_libxc
+
             ! V1 for rho_down (RHO1), V2 for rho_up (RHO2)
             V1 = vrho_libxc(2) - 2.0d0 * vsigma_libxc(3) * RHOPP(1)
             V2 = vrho_libxc(1) - 2.0d0 * vsigma_libxc(1) * RHOPP(2)
@@ -1412,7 +1445,12 @@ contains
             call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
                                     exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
             call xc_f03_func_end(temp_func)
-            
+
+            ! Convert libXC outputs from Hartree to Rydberg (internal units)
+            exc_libxc(1) = 2.0d0 * exc_libxc(1)
+            vrho_libxc(1:1) = 2.0d0 * vrho_libxc(1:1)
+            vsigma_libxc(1:1) = 2.0d0 * vsigma_libxc(1:1)
+
             V1 = vrho_libxc(1) - 2.0d0 * vsigma_libxc(1) * (RHOPP(1) + RHOPP(2))
             V2 = V1
          endif
