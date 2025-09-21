@@ -2271,9 +2271,8 @@ contains
             this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
             ! Store direct coordinate version (fractional coordinates)
-            this%sbarvec_direct(1, ii) = (crd(1, nn) - crd(1, ia)) / this%alat
-            this%sbarvec_direct(2, ii) = (crd(2, nn) - crd(2, ia)) / this%alat
-            this%sbarvec_direct(3, ii) = (crd(3, nn) - crd(3, ia)) / this%alat
+            ! Convert cartesian vector to fractional coordinates using lattice vectors
+            call cartesian_to_fractional(this%sbarvec(:, ii), this%sbarvec_direct(:, ii), this%a, this%alat)
          end if
 !!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
 !!    "in DBAR1."
@@ -3683,5 +3682,47 @@ contains
          call nml%generate_namelist()
       end if
    end subroutine print_state_formatted
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Convert cartesian coordinates to fractional coordinates
+   !---------------------------------------------------------------------------
+   subroutine cartesian_to_fractional(cart_vec, frac_vec, lattice_vectors, alat)
+      real(rp), dimension(3), intent(in) :: cart_vec
+      real(rp), dimension(3), intent(out) :: frac_vec
+      real(rp), dimension(3, 3), intent(in) :: lattice_vectors
+      real(rp), intent(in) :: alat
+      ! Local variables
+      real(rp), dimension(3, 3) :: lattice_matrix, inv_matrix
+      real(rp) :: det
+      integer :: i
+
+      ! Build lattice matrix (actual lattice vectors in cartesian coordinates)
+      do i = 1, 3
+         lattice_matrix(:, i) = lattice_vectors(:, i) * alat
+      end do
+
+      ! Calculate determinant
+      det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
+          - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
+          + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
+
+      ! Calculate inverse matrix elements
+      inv_matrix(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
+      inv_matrix(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
+      inv_matrix(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
+      inv_matrix(2, 1) = (lattice_matrix(2, 3) * lattice_matrix(3, 1) - lattice_matrix(2, 1) * lattice_matrix(3, 3)) / det
+      inv_matrix(2, 2) = (lattice_matrix(1, 1) * lattice_matrix(3, 3) - lattice_matrix(1, 3) * lattice_matrix(3, 1)) / det
+      inv_matrix(2, 3) = (lattice_matrix(1, 3) * lattice_matrix(2, 1) - lattice_matrix(1, 1) * lattice_matrix(2, 3)) / det
+      inv_matrix(3, 1) = (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1)) / det
+      inv_matrix(3, 2) = (lattice_matrix(1, 2) * lattice_matrix(3, 1) - lattice_matrix(1, 1) * lattice_matrix(3, 2)) / det
+      inv_matrix(3, 3) = (lattice_matrix(1, 1) * lattice_matrix(2, 2) - lattice_matrix(1, 2) * lattice_matrix(2, 1)) / det
+
+      ! Convert cartesian to fractional: frac_vec = inv_matrix * cart_vec
+      frac_vec(1) = inv_matrix(1, 1) * cart_vec(1) + inv_matrix(1, 2) * cart_vec(2) + inv_matrix(1, 3) * cart_vec(3)
+      frac_vec(2) = inv_matrix(2, 1) * cart_vec(1) + inv_matrix(2, 2) * cart_vec(2) + inv_matrix(2, 3) * cart_vec(3)
+      frac_vec(3) = inv_matrix(3, 1) * cart_vec(1) + inv_matrix(3, 2) * cart_vec(2) + inv_matrix(3, 3) * cart_vec(3)
+   end subroutine cartesian_to_fractional
 
 end module lattice_mod

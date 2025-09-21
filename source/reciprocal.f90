@@ -1229,7 +1229,7 @@ contains
 
       call g_logger%info('setup_dos_energy_grid: Created energy grid with ' // &
                         trim(int2str(this%n_energy_points)) // ' points from ' // &
-                        trim(real2str(energy_min)) // ' to ' // trim(real2str(energy_max)) // ' eV', &
+                        trim(real2str(energy_min, '(F 8.5)')) // ' to ' // trim(real2str(energy_max, '(F 8.5)')) // ' eV', &
                         __FILE__, __LINE__)
    end subroutine setup_dos_energy_grid
 
@@ -1816,14 +1816,14 @@ contains
       real(rp) :: kT, fermi_arg
 
       call g_logger%info('calculate_band_moments: Starting band moments calculation', __FILE__, __LINE__)
-      call g_logger%info('calculate_band_moments: Fermi level = ' // trim(real2str(this%fermi_level)) // ' eV', __FILE__, __LINE__)
+      call g_logger%info('calculate_band_moments: Fermi level = ' // trim(real2str(this%fermi_level)) // ' Ry', __FILE__, __LINE__)
       call g_logger%info('calculate_band_moments: Temperature = ' // trim(real2str(this%temperature)) // ' K', __FILE__, __LINE__)
 
       ! Automatically find Fermi level from DOS if requested
       if (this%auto_find_fermi) then
          if (this%total_electrons > 0.0_rp) then
             this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
-            call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // trim(real2str(this%fermi_level)) // ' eV', __FILE__, __LINE__)
+            call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
          else
             call g_logger%warning('calculate_band_moments: auto_find_fermi is true but total_electrons not set, using input Fermi level', __FILE__, __LINE__)
          end if
@@ -1844,7 +1844,7 @@ contains
 
       ! Calculate moments for each site, orbital type, and spin component
       do isite = 1, this%n_sites
-         do iorb = 1, this%n_orb_types
+         do iorb = 1, this%n_orb_types-1 ! Skip f orbitals if not present
             do ispin = 1, this%n_spin_components
 
                ! Initialize moment accumulators
@@ -1900,8 +1900,8 @@ contains
 
                call g_logger%info('calculate_band_moments: Site ' // trim(int2str(isite)) // &
                                  ', Orbital ' // trim(int2str(iorb)) // ', Spin ' // trim(int2str(ispin)) // &
-                                 ': m0=' // trim(real2str(m0)) // ', m1=' // trim(real2str(m1)) // &
-                                 ', m2=' // trim(real2str(m2)), __FILE__, __LINE__)
+                                 ': m0= ' // trim(real2str(m0, '(F 8.5)')) // ', m1= ' // trim(real2str(m1, '(F 8.5)')) // &
+                                 ', m2= ' // trim(real2str(m2, '(F 8.6)')), __FILE__, __LINE__)
             end do
          end do
       end do
@@ -1929,8 +1929,8 @@ contains
       real(rp) :: e_min, e_max, e_mid, electrons_at_e
 
       call g_logger%info('find_fermi_level_from_dos: Finding Fermi level for ' // &
-                        trim(real2str(total_electrons)) // ' electrons at T = ' // &
-                        trim(real2str(this%temperature)) // ' K', __FILE__, __LINE__)
+                        trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
+                        trim(real2str(this%temperature, '(F 8.5)')) // ' K', __FILE__, __LINE__)
 
       ! Check if DOS is calculated
       if (.not. allocated(this%total_dos)) then
@@ -1966,8 +1966,8 @@ contains
       ! Final check
       electrons_at_e = this%integrate_dos_up_to_energy(fermi_level, kT)
       call g_logger%info('find_fermi_level_from_dos: Found Fermi level at ' // &
-                        trim(real2str(fermi_level)) // ' eV (integrated ' // &
-                        trim(real2str(electrons_at_e)) // ' electrons)', __FILE__, __LINE__)
+                        trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
+                        trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
    end function find_fermi_level_from_dos
 
    !---------------------------------------------------------------------------
@@ -2034,7 +2034,7 @@ contains
       end if
       write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
       write(unit, '(A,2F8.3)') '# Energy range: ', this%dos_energy_range
-      write(unit, '(A)') '# Energy (eV)    Total DOS'
+      write(unit, '(A)') '# Energy (Ry)    Total DOS'
 
       ! Write DOS data
       do i_energy = 1, this%n_energy_points
@@ -2085,7 +2085,7 @@ contains
             write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
          end if
          write(unit, '(A,F8.4,A)') '# Temperature: ', this%temperature, ' K'
-         write(unit, '(A,F12.6,A)') '# Fermi level: ', this%fermi_level, ' eV'
+         write(unit, '(A,F12.6,A)') '# Fermi level: ', this%fermi_level, ' Ry'
          write(unit, '(A)') '# Format: site, orbital_type, spin, m0, m1, m2'
          write(unit, '(A)') '# Orbital types: 1=s, 2=p, 3=d, 4=f'
          write(unit, '(A)') '# Spin: 1=up, 2=down'
