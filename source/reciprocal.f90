@@ -882,26 +882,26 @@ contains
          if (use_path) then
             call this%fourier_transform_hamiltonian(this%k_path(:, i), 1, h_k)
             
-            ! Debug: Dump H(k) matrix for Γ and H points
-            if (all(abs(this%k_path(:, i) - [0.0_rp, 0.0_rp, 0.0_rp]) < 1.0e-6_rp)) then
-               ! Γ point
-               call dump_complex_matrix(h_k, 'H_k_Gamma.dat', this%k_path(:, i))
-               call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for Γ point to H_k_Gamma.dat, k-vector: [' // &
-                                 trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
-                                 trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
-            else if (all(abs(this%k_path(:, i) - [0.5_rp, -0.5_rp, 0.5_rp]) < 1.0e-6_rp)) then
-               ! H point
-               call dump_complex_matrix(h_k, 'H_k_H.dat', this%k_path(:, i))
-               call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for H point to H_k_H.dat, k-vector: [' // &
-                                 trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
-                                 trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
-            else if (all(abs(this%k_path(:, i) - [0.25_rp, -0.25_rp, 0.25_rp]) < 1.0e-6_rp)) then
-               ! K/2 point (midpoint between Γ and H)
-               call dump_complex_matrix(h_k, 'H_k_half.dat', this%k_path(:, i))
-               call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for K/2 point to H_k_half.dat, k-vector: [' // &
-                                 trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
-                                 trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
-            end if
+            !!! ! Debug: Dump H(k) matrix for Γ and H points
+            !!! if (all(abs(this%k_path(:, i) - [0.0_rp, 0.0_rp, 0.0_rp]) < 1.0e-6_rp)) then
+            !!!    ! Γ point
+            !!!    call dump_complex_matrix(h_k, 'H_k_Gamma.dat', this%k_path(:, i))
+            !!!    call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for Γ point to H_k_Gamma.dat, k-vector: [' // &
+            !!!                      trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
+            !!!                      trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
+            !!! else if (all(abs(this%k_path(:, i) - [0.5_rp, -0.5_rp, 0.5_rp]) < 1.0e-6_rp)) then
+            !!!    ! H point
+            !!!    call dump_complex_matrix(h_k, 'H_k_H.dat', this%k_path(:, i))
+            !!!    call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for H point to H_k_H.dat, k-vector: [' // &
+            !!!                      trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
+            !!!                      trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
+            !!! else if (all(abs(this%k_path(:, i) - [0.25_rp, -0.25_rp, 0.25_rp]) < 1.0e-6_rp)) then
+            !!!    ! K/2 point (midpoint between Γ and H)
+            !!!    call dump_complex_matrix(h_k, 'H_k_half.dat', this%k_path(:, i))
+            !!!    call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for K/2 point to H_k_half.dat, k-vector: [' // &
+            !!!                      trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
+            !!!                      trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
+            !!! end if
          else
             call this%fourier_transform_hamiltonian(this%k_points(:, i), 1, h_k)
          end if

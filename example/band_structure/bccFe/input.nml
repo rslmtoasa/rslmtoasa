@@ -1,0 +1,51 @@
+&calculation
+post_processing = 'band_structure'
+verbose = T
+/
+&lattice
+!ndim = 50000 ! cluster dimension to begin with. We could think about guess it from the atom density in the primitive cell and the radius cut
+rc = 080 ! radius cut. We could think about setting a default
+alat = 2.86120 ! lattice parapeter
+crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
+wav = 1.40880
+ntype = 1
+ct(:) = 4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+!ws_all = .true. ! ''
+nstep = 25
+/
+&energy
+fermi = -0.069170
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&dos
+dos_method = 'tetrahedron'  ! 'tetrahedron' or 'gaussian'
+gaussian_sigma = 0.0025     ! Gaussian smearing parameter in eV (only used for gaussian method)
+n_energy_points = 1000   ! Number of energy points for DOS
+dos_energy_min = -1.0   ! Minimum energy for DOS in eV
+dos_energy_max = 1.0    ! Maximum energy for DOS in eV
+temperature = 300.0      ! Temperature for Fermi-Dirac distribution in Kelvin
+nk1 = 12                 ! Number of k-points in first direction
+nk2 = 12                 ! Number of k-points in second direction
+nk3 = 12                 ! Number of k-points in third direction
+total_electrons = 8.0    ! Total number of valence electrons
+auto_find_fermi = T      ! Automatically find Fermi level from DOS
+/
+&control
+calctype = 'B'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
