@@ -25,6 +25,7 @@ module xc_mod
    use string_mod, only: int2str, real2str
    use precision_mod, only: rp
    use math_mod
+   use iso_c_binding, only: c_size_t
 #ifdef HAVE_LIBXC
    use xc_f03_lib_m
 #endif
@@ -42,9 +43,9 @@ module xc_mod
       ! libXC support fields
       logical :: use_libxc = .false.
       integer :: libxc_func_id = -1
-      logical :: libxc_initialized = .false.
+      integer :: libxc_family = -1
+      integer :: libxc_nspin = -1  ! Store initialization nspin for consistency
 #ifdef HAVE_LIBXC
-      type(xc_f03_func_t) :: libxc_func
       type(xc_f03_func_info_t) :: libxc_info
 #endif
    contains
@@ -54,12 +55,15 @@ module xc_mod
       procedure :: LAGGGA
       procedure :: XCPOT
       procedure :: XCPOT_hybrid
+      procedure :: xcpot_libxc_wrapper
       procedure :: exchlag
       procedure :: GCOR2
       procedure :: DIFFN
       procedure :: init_libxc
       procedure :: cleanup_libxc
       procedure :: get_libxc_functional_mapping
+      procedure :: validate_libxc_compatibility
+      procedure :: is_libxc_functional
       final :: destructor
    end type xc
 
@@ -194,7 +198,14 @@ contains
          !
          obj%TXCH = 'LAG'
       case default
-         if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** IXC = '//int2str(obj%txc)//' not implemented', __FILE__, __LINE__)
+         ! Check if this is a libXC functional (txc >= 1000)
+         if (obj%txc >= 1000) then
+            ! libXC functional - will be handled in init_libxc
+            obj%TXCH = 'LXC'  ! Mark as libXC functional
+         else
+            ! Unknown legacy functional
+            if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** IXC = '//int2str(obj%txc)//' not implemented', __FILE__, __LINE__)
+         endif
       end select
       
       ! Initialize libXC support if needed
@@ -1082,6 +1093,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Initialize libXC functional if needed based on txc value
+   !> Validates compatibility with ASA before initialization
    !>--------------------------------------------------------------------------
    subroutine init_libxc(this, ctrl)
       class(xc), intent(inout) :: this
@@ -1090,37 +1102,60 @@ contains
       integer :: libxc_id, nspin
 
 #ifdef HAVE_LIBXC
+      type(xc_f03_func_t) :: temp_func
+      character(len=256) :: func_name
+#endif
+
       ! Check if we should use libXC for this functional
       libxc_id = this%get_libxc_functional_mapping()
       
       if (libxc_id > 0) then
+         call g_logger%info('Initializing libXC functional ID: '//int2str(libxc_id), __FILE__, __LINE__)
+         ! Validate functional compatibility with ASA
+         if (.not. this%validate_libxc_compatibility(libxc_id)) then
+            call g_logger%error('Stopping due to incompatible libXC functional (txc='//int2str(this%txc)//')', __FILE__, __LINE__)
+            call g_logger%info('Valid options for ASA:', __FILE__, __LINE__)
+            call g_logger%info('  Legacy functionals: txc=1-11 (LDA-PZ, PW92, PBE, BLYP, etc.)', __FILE__, __LINE__)  
+            call g_logger%info('  libXC LDA functionals: txc=1001-1030', __FILE__, __LINE__)
+            call g_logger%info('  libXC GGA functionals: txc=1101-1167', __FILE__, __LINE__)
+            call g_logger%info('  See XC_FUNCTIONAL_GUIDE.md for complete list', __FILE__, __LINE__)
+            stop 'Incompatible XC functional for ASA'
+         endif
+         
          this%use_libxc = .true.
          this%libxc_func_id = libxc_id
          
-         ! Determine spin treatment
-         if (ctrl%nsp == 1) then
-            nspin = XC_UNPOLARIZED
+         if (this%use_libxc) then
+            call g_logger%info('libXC initialized successfully: use_libxc = true', __FILE__, __LINE__)
          else
-            nspin = XC_POLARIZED
+            call g_logger%info('libXC initialized successfully: use_libxc = false', __FILE__, __LINE__)
          endif
          
-         ! Initialize the libXC functional
-         call xc_f03_func_init(this%libxc_func, libxc_id, nspin)
-         this%libxc_info = xc_f03_func_get_info(this%libxc_func)
-         this%libxc_initialized = .true.
+         ! Determine spin treatment - RS-LMTO always uses spin-polarized calculations
+         ! (nsp=1 means non-relativistic spin-polarized in RS-LMTO convention)
+         nspin = XC_POLARIZED
+         
+#ifdef HAVE_LIBXC
+         ! Create a temporary functional to get info
+         call xc_f03_func_init(temp_func, libxc_id, nspin)
+         this%libxc_info = xc_f03_func_get_info(temp_func)
+         this%libxc_family = xc_f03_func_info_get_family(this%libxc_info)
+         this%libxc_nspin = nspin  ! Store for consistent usage
+         
+         ! Get the name before destroying the functional
+         func_name = trim(xc_f03_func_info_get_name(this%libxc_info))
+         
+         call xc_f03_func_end(temp_func)
+#endif
          
          ! Log information about the libXC functional
          call g_logger%info('Using libXC functional: '// &
-                          trim(xc_f03_func_info_get_name(this%libxc_info))// &
-                          ' (ID: '//int2str(libxc_id)//')', __FILE__, __LINE__)
+                          trim(func_name)// &
+                          ' (ID: '//int2str(libxc_id)//', Family: '//int2str(this%libxc_family)// &
+                          ', nspin: '//int2str(nspin)//')', __FILE__, __LINE__)
       else
          this%use_libxc = .false.
-         this%libxc_initialized = .false.
       endif
-#else
-      this%use_libxc = .false.
-      this%libxc_initialized = .false.
-#endif
    end subroutine init_libxc
 
    !>--------------------------------------------------------------------------
@@ -1130,13 +1165,7 @@ contains
    !>--------------------------------------------------------------------------
    subroutine cleanup_libxc(this)
       class(xc), intent(inout) :: this
-
-#ifdef HAVE_LIBXC
-      if (this%libxc_initialized) then
-         call xc_f03_func_end(this%libxc_func)
-         this%libxc_initialized = .false.
-      endif
-#endif
+      ! No cleanup needed since we use local functionals
       this%use_libxc = .false.
    end subroutine cleanup_libxc
 
@@ -1152,8 +1181,8 @@ contains
 
 #ifdef HAVE_LIBXC
       select case (this%txc)
-      case (1001)              ! Slater exchange via libXC (XC_LDA_X = 1)
-         libxc_id = 1
+      case (1001)              ! VWN via libXC (XC_LDA_XC_VWN = 17)
+         libxc_id = 17
       case (1007)              ! VWN correlation via libXC (XC_LDA_C_VWN = 7)
          libxc_id = 7
       case (1009)              ! Perdew-Zunger via libXC (XC_LDA_C_PZ = 9)
@@ -1175,6 +1204,93 @@ contains
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Validate that libXC functional is compatible with ASA (LDA/GGA only)
+   !> Returns .true. if compatible, .false. otherwise
+   !>--------------------------------------------------------------------------
+   function validate_libxc_compatibility(this, libxc_id) result(is_compatible)
+      class(xc), intent(in) :: this
+      integer, intent(in) :: libxc_id
+      logical :: is_compatible
+      
+#ifdef HAVE_LIBXC
+      integer :: family
+      character(len=256) :: family_name, func_name
+      type(xc_f03_func_t) :: temp_func
+      type(xc_f03_func_info_t) :: temp_info
+      
+      is_compatible = .false.
+      
+      if (libxc_id <= 0) then
+         call g_logger%warning('Invalid libXC functional ID: '//int2str(libxc_id), __FILE__, __LINE__)
+         return
+      endif
+      
+      ! Initialize a temporary functional to check its family
+      call xc_f03_func_init(temp_func, libxc_id, 1)  ! XC_UNPOLARIZED = 1
+      temp_info = xc_f03_func_get_info(temp_func)
+      
+      family = xc_f03_func_info_get_family(temp_info)
+      func_name = trim(xc_f03_func_info_get_name(temp_info))  ! Copy the string immediately
+      
+      select case(family)
+      case(1)  ! XC_FAMILY_LDA = 1
+         family_name = "LDA"
+         is_compatible = .true.
+      case(2)  ! XC_FAMILY_GGA = 2  
+         family_name = "GGA"
+         is_compatible = .true.
+      case(3)  ! XC_FAMILY_MGGA = 3
+         family_name = "meta-GGA"
+         is_compatible = .false.
+         call g_logger%warning('meta-GGA functional "'//trim(func_name)//'" not compatible with ASA spherical symmetry', __FILE__, __LINE__)
+         call g_logger%warning('ASA lacks kinetic energy density (τ) needed for meta-GGA functionals', __FILE__, __LINE__)
+      case(4)  ! XC_FAMILY_HYB_GGA = 4
+         family_name = "hybrid GGA"
+         is_compatible = .false.
+         call g_logger%warning('Hybrid functional "'//trim(func_name)//'" not compatible with ASA implementation', __FILE__, __LINE__)
+         call g_logger%warning('ASA lacks exact exchange implementation needed for hybrid functionals', __FILE__, __LINE__)
+      case(5)  ! XC_FAMILY_HYB_MGGA = 5
+         family_name = "hybrid meta-GGA"
+         is_compatible = .false.
+         call g_logger%warning('Hybrid meta-GGA functional "'//trim(func_name)//'" not compatible with ASA', __FILE__, __LINE__)
+         call g_logger%warning('ASA lacks both kinetic energy density and exact exchange', __FILE__, __LINE__)
+      case default
+         family_name = "unknown"
+         is_compatible = .false.
+         call g_logger%warning('Unknown functional family ('//int2str(family)//') for "'//trim(func_name)//'"', __FILE__, __LINE__)
+      end select
+      
+      if (is_compatible) then
+         call g_logger%info('libXC functional "'//trim(func_name)//'" ('//trim(family_name)//') is compatible with ASA', __FILE__, __LINE__)
+      else
+         call g_logger%error('libXC functional "'//trim(func_name)//'" ('//trim(family_name)//') is NOT compatible with ASA', __FILE__, __LINE__)
+         call g_logger%info('Please use LDA or GGA functionals only with ASA spherical symmetry', __FILE__, __LINE__)
+      endif
+      
+      ! Clean up the temporary functional
+      call xc_f03_func_end(temp_func)
+#else
+      is_compatible = .false.
+      call g_logger%error('libXC not available - cannot validate functional compatibility', __FILE__, __LINE__)
+#endif
+   end function validate_libxc_compatibility
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Check if txc value corresponds to a libXC functional  
+   !>--------------------------------------------------------------------------
+   function is_libxc_functional(this) result(is_libxc)
+      class(xc), intent(in) :: this
+      logical :: is_libxc
+      
+      ! libXC functionals use txc values >= 1000
+      is_libxc = (this%txc >= 1000)
+   end function is_libxc_functional
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Hybrid XCPOT routine that dispatches to legacy or libXC backend
    !>--------------------------------------------------------------------------
    subroutine XCPOT_hybrid(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
@@ -1183,8 +1299,8 @@ contains
       real(rp), intent(inout) :: EXC, V1, V2
       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
 
-      if (this%use_libxc .and. this%libxc_initialized) then
-         call xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      if (this%use_libxc) then
+         call this%xcpot_libxc_wrapper(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       else
          call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       endif
@@ -1193,7 +1309,7 @@ contains
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> libXC wrapper that converts between RS-LMTO and libXC data formats
+   !> Wrapper to call libXC for exchange-correlation potential calculation
    !>--------------------------------------------------------------------------
    subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       class(xc), intent(in) :: this
@@ -1202,90 +1318,123 @@ contains
       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
 
 #ifdef HAVE_LIBXC
-      ! Local variables for libXC interface
-      integer(8), parameter :: np = 1_8  ! Single point calculation (64-bit integer for libXC)
-      real(8) :: rho_libxc(2*np), exc_libxc(np), vrho_libxc(2*np)
-      real(8) :: sigma_libxc(3*np), vsigma_libxc(3*np)
-      integer :: family
       real(rp), parameter :: TOLD = 1.d-20
-
-      ! Check for small densities
-      if (RHO1 < TOLD .or. RHO2 < TOLD) then
-         V1 = 0.d0
-         V2 = 0.d0
-         EXC = 0.d0
+      real(rp), parameter :: TOLDD = 1.d-20
+      
+      ! libXC arrays - use proper dimensions for spin treatment
+      real(rp), dimension(2) :: rho_libxc  ! For spin-polarized: [rho_up, rho_down]
+      real(rp), dimension(3) :: sigma_libxc ! For GGA: [grad_up^2, grad_up*grad_down, grad_down^2]
+      real(rp), dimension(1) :: exc_libxc
+      real(rp), dimension(2) :: vrho_libxc  ! Potentials for each spin
+      real(rp), dimension(3) :: vsigma_libxc ! GGA gradient potentials
+      type(xc_f03_func_t) :: temp_func  ! Temporary functional for testing
+      integer :: nspin, family
+      
+      ! Initialize outputs
+      V1 = 0.0d0
+      V2 = 0.0d0  
+      EXC = 0.0d0
+      
+      ! Check for negligible densities
+      if (RHO1 < TOLD .or. RHO2 < TOLDD) then
+         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
          return
       endif
-
-      ! Get functional family
-      family = xc_f03_func_info_get_family(this%libxc_info)
-
-      ! Prepare density arrays for libXC
-      if (xc_f03_func_info_get_number(this%libxc_info) /= XC_UNPOLARIZED) then
-         ! Spin-polarized case
-         rho_libxc(1) = real(RHO1, 8)
-         rho_libxc(2) = real(RHO2, 8)
+      
+      ! call g_logger%info('libXC called with RHO1='//real2str(RHO1)//', RHO2='//real2str(RHO2), __FILE__, __LINE__)
+      
+      ! Determine spin treatment - use the same as initialization
+      nspin = this%libxc_nspin
+      family = this%libxc_family
+      
+      ! Set up density arrays
+      if (nspin == 2) then
+         ! Spin-polarized calculation
+         ! In RS-LMTO: RHO1 = spin-down, RHO2 = spin-up
+         ! In libXC: rho_libxc(1) = spin-up, rho_libxc(2) = spin-down
+         rho_libxc(1) = RHO2  ! spin-up density
+         rho_libxc(2) = RHO1  ! spin-down density
       else
-         ! Spin-unpolarized case
-         rho_libxc(1) = real(RHO, 8)
+         ! Unpolarized calculation  
+         rho_libxc(1) = RHO   ! total density
       endif
-
+      
+      ! Additional safety check for libXC call
+      if (rho_libxc(1) <= 0.0d0) then
+         call g_logger%info('Zero density detected, falling back to legacy', __FILE__, __LINE__)
+         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+         return
+      endif
+      
       select case(family)
-      case(1)  ! XC_FAMILY_LDA = 1
-         ! LDA functional
-         call xc_f03_lda_exc_vxc(this%libxc_func, np, rho_libxc(1), exc_libxc(1), vrho_libxc(1))
+      case(1)  ! XC_FAMILY_LDA
+         if (nspin == 2) then
+            ! Create a local functional object for this calculation
+            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
+            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
+            call xc_f03_func_end(temp_func)
+            
+            V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
+            V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
+         else
+            ! Create a local functional object for this calculation
+            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
+            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
+            call xc_f03_func_end(temp_func)
+            
+            V1 = vrho_libxc(1)  ! same potential for both spins
+            V2 = vrho_libxc(1)
+         endif
+         EXC = exc_libxc(1)
          
-         ! Convert results back to RS-LMTO format
-         EXC = real(exc_libxc(1), rp)
-         if (xc_f03_func_info_get_number(this%libxc_info) /= 1) then  ! XC_UNPOLARIZED = 1
-            V1 = real(vrho_libxc(1), rp)
-            V2 = real(vrho_libxc(2), rp)
+      case(2)  ! XC_FAMILY_GGA  
+         ! Set up gradient arrays
+         if (nspin == 2) then
+            ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
+            sigma_libxc(1) = RHOP(2)**2        ! |grad rho_up|^2
+            sigma_libxc(2) = RHOP(2)*RHOP(1)   ! grad rho_up . grad rho_down  
+            sigma_libxc(3) = RHOP(1)**2        ! |grad rho_down|^2
+            
+            ! Create local functional for GGA calculation
+            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
+            call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
+                                    exc_libxc, vrho_libxc, vsigma_libxc)
+            call xc_f03_func_end(temp_func)
+            
+            ! V1 for rho_down (RHO1), V2 for rho_up (RHO2)
+            V1 = vrho_libxc(2) - 2.0d0 * vsigma_libxc(3) * RHOPP(1)
+            V2 = vrho_libxc(1) - 2.0d0 * vsigma_libxc(1) * RHOPP(2)
          else
-            V1 = real(vrho_libxc(1), rp)
+            sigma_libxc(1) = (RHOP(1) + RHOP(2))**2  ! |grad rho_total|^2
+            
+            ! Create local functional for GGA calculation
+            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
+            call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
+                                    exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
+            call xc_f03_func_end(temp_func)
+            
+            V1 = vrho_libxc(1) - 2.0d0 * vsigma_libxc(1) * (RHOPP(1) + RHOPP(2))
             V2 = V1
          endif
-
-      case(2, 4)  ! XC_FAMILY_GGA = 2, XC_FAMILY_HYB_GGA = 4
-         ! GGA functional - need gradients
-         if (xc_f03_func_info_get_number(this%libxc_info) /= 1) then  ! XC_UNPOLARIZED = 1
-            ! Spin-polarized GGA
-            sigma_libxc(1) = real(RHOP(1)**2, 8)  ! |grad rho_up|^2
-            sigma_libxc(2) = real(RHOP(1)*RHOP(2), 8)  ! grad rho_up . grad rho_down
-            sigma_libxc(3) = real(RHOP(2)**2, 8)  ! |grad rho_down|^2
-         else
-            ! Spin-unpolarized GGA
-            sigma_libxc(1) = real(sum(RHOP)**2, 8)  ! |grad rho|^2
-         endif
-
-         call xc_f03_gga_exc_vxc(this%libxc_func, np, rho_libxc(1), sigma_libxc(1), &
-                                 exc_libxc(1), vrho_libxc(1), vsigma_libxc(1))
-
-         ! Convert results back to RS-LMTO format
-         EXC = real(exc_libxc(1), rp)
-         if (xc_f03_func_info_get_number(this%libxc_info) /= 1) then  ! XC_UNPOLARIZED = 1
-            V1 = real(vrho_libxc(1), rp)
-            V2 = real(vrho_libxc(2), rp)
-         else
-            V1 = real(vrho_libxc(1), rp)
-            V2 = V1
-         endif
-
+         EXC = exc_libxc(1)
+         
       case default
-         call g_logger%error('Unsupported libXC functional family: '//int2str(family), __FILE__, __LINE__)
+         call g_logger%error('libXC functional family '//int2str(family)//' not supported in xcpot_libxc_wrapper', __FILE__, __LINE__)
+         call g_logger%info('Supported families: 1 (LDA), 2 (GGA)', __FILE__, __LINE__)
+         call g_logger%info('Falling back to legacy implementation', __FILE__, __LINE__)
+         
          ! Fall back to legacy implementation
          call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+         return
       end select
+      
 #else
-      ! libXC not available, fall back to legacy
-      call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      call g_logger%error('libXC not available - cannot use libXC functionals', __FILE__, __LINE__)
+      stop 'libXC not available'
 #endif
    end subroutine xcpot_libxc_wrapper
 
-   !>--------------------------------------------------------------------------
    ! DESCRIPTION:
-   !> @brief
-   !> Destructor to clean up libXC resources
-   !>--------------------------------------------------------------------------
    subroutine destructor(this)
       type(xc), intent(inout) :: this
       call this%cleanup_libxc()

@@ -2690,7 +2690,7 @@ contains
             RHODD(2) = RHODD(1)
          end if
          ! CALL EVXC(RHO0(1), 0.5D0*RHO0(1), EXC, VXC)
-         call xc_obj%XCPOT(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
+         call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
          V(1, 1) = V(1, 1) + VXC1
          do IR = 2, NR
             RHO1 = 0.5*tRHO(1, 1)
@@ -2705,7 +2705,7 @@ contains
                RHOD(2) = RHOD(1)
                RHODD(2) = RHODD(1)
             end if
-            call xc_obj%XCPOT(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
             !RHOTRU = RHO(IR, 1) * OB4PI / rofi(IR)**2
         !!       Call EVXC(RHOTRU, 0.5D0*RHOTRU, EXC, VXC)
             !call EVXC(RHOTRU, 0.5*RHOTRU, EXC, VXC)
@@ -2734,7 +2734,7 @@ contains
             RHODD(2) = RHOPP(1, 1)
             RHODD(1) = RHOPP(1, 2)
          end if
-         call xc_obj%XCPOT(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+         call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
          !V(1, 1) = V(1, 1) + VXC1
          !V(1, 2) = V(1, 2) + VXC2
          V(1, 1) = V(1, 1) + VXC1 + B_fsm
@@ -2753,7 +2753,7 @@ contains
                RHODD(2) = RHOPP(IR, 1)
                RHODD(1) = RHOPP(IR, 2)
             end if
-            call xc_obj%XCPOT(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
+            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
             !
             !RHOT1 = RHO(IR, 1) * (OB4PI/rofi(IR)**2)
             !RHOT2 = RHO(IR, 2) * (OB4PI/rofi(IR)**2)
