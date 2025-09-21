@@ -123,6 +123,46 @@ module reciprocal_mod
       ! Symmetry analysis object
       type(symmetry) :: symmetry_analysis
 
+      ! Density of states variables
+      !> Energy grid for DOS calculation [n_energy_points]
+      real(rp), dimension(:), allocatable :: dos_energy_grid
+      !> Number of energy points for DOS
+      integer :: n_energy_points
+      !> Energy range for DOS [min_energy, max_energy]
+      real(rp), dimension(2) :: dos_energy_range
+      !> Total DOS [n_energy_points]
+      real(rp), dimension(:), allocatable :: total_dos
+      !> Projected DOS [n_sites, n_orb_types, n_spin, n_energy_points]
+      real(rp), dimension(:, :, :, :), allocatable :: projected_dos
+      !> Band moments [m0, m1, m2] for each projection
+      real(rp), dimension(:, :, :, :), allocatable :: band_moments
+      !> DOS calculation method ('tetrahedron' or 'gaussian')
+      character(len=20) :: dos_method
+      !> Gaussian smearing parameter (in energy units)
+      real(rp) :: gaussian_sigma
+      !> Temperature for Fermi-Dirac distribution (in Kelvin)
+      real(rp) :: temperature
+      !> Fermi level for band moments integration
+      real(rp) :: fermi_level
+      !> Total number of valence electrons for Fermi level finding
+      real(rp) :: total_electrons
+      !> Flag to automatically find Fermi level from DOS
+      logical :: auto_find_fermi
+      !> Number of sites for projections
+      integer :: n_sites
+      !> Number of orbital types (s, p, d, f)
+      integer :: n_orb_types
+      !> Number of spin components (1 for non-spin-polarized, 2 for spin-polarized)
+      integer :: n_spin_components
+
+      ! Tetrahedron method variables
+      !> Tetrahedron corners for each k-point [4, nk_total]
+      integer, dimension(:, :), allocatable :: tetrahedra
+      !> Tetrahedron volumes [nk_total]
+      real(rp), dimension(:), allocatable :: tetrahedron_volumes
+      !> Number of tetrahedra
+      integer :: n_tetrahedra
+
    contains
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
@@ -135,7 +175,23 @@ module reciprocal_mod
       procedure :: get_basis_type_from_size
       procedure :: diagonalize_hamiltonian
       procedure :: calculate_band_structure
+      procedure :: calculate_density_of_states
+      procedure :: calculate_dos_tetrahedron
+      procedure :: calculate_dos_gaussian
+      procedure :: setup_dos_energy_grid
+      procedure :: setup_tetrahedra
+      procedure :: tetrahedron_dos_contribution
+      procedure :: get_kpoint_index
+      procedure :: project_dos_orbitals
+      procedure :: project_dos_orbitals_gaussian
+      procedure :: project_dos_orbitals_tetrahedron
+      procedure :: calculate_band_moments
+      procedure :: find_fermi_level_from_dos
+      procedure :: integrate_dos_up_to_energy
+      procedure :: calculate_gaussian_weight_single
+      procedure :: write_dos_to_file
       procedure :: restore_to_default
+      procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
       final     :: destructor
    end type reciprocal
@@ -190,6 +246,13 @@ contains
       if (allocated(this%eigenvalues_path)) call g_safe_alloc%deallocate('reciprocal.eigenvalues_path', this%eigenvalues_path)
       if (allocated(this%eigenvectors)) call g_safe_alloc%deallocate('reciprocal.eigenvectors', this%eigenvectors)
       if (allocated(this%eigenvectors_path)) call g_safe_alloc%deallocate('reciprocal.eigenvectors_path', this%eigenvectors_path)
+      ! DOS arrays
+      if (allocated(this%dos_energy_grid)) call g_safe_alloc%deallocate('reciprocal.dos_energy_grid', this%dos_energy_grid)
+      if (allocated(this%total_dos)) call g_safe_alloc%deallocate('reciprocal.total_dos', this%total_dos)
+      if (allocated(this%projected_dos)) call g_safe_alloc%deallocate('reciprocal.projected_dos', this%projected_dos)
+      if (allocated(this%band_moments)) call g_safe_alloc%deallocate('reciprocal.band_moments', this%band_moments)
+      if (allocated(this%tetrahedra)) call g_safe_alloc%deallocate('reciprocal.tetrahedra', this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
 #else
       if (allocated(this%k_points)) deallocate (this%k_points)
       if (allocated(this%k_weights)) deallocate (this%k_weights)
@@ -205,6 +268,13 @@ contains
       if (allocated(this%eigenvalues_path)) deallocate (this%eigenvalues_path)
       if (allocated(this%eigenvectors)) deallocate (this%eigenvectors)
       if (allocated(this%eigenvectors_path)) deallocate (this%eigenvectors_path)
+      ! DOS arrays
+      if (allocated(this%dos_energy_grid)) deallocate (this%dos_energy_grid)
+      if (allocated(this%total_dos)) deallocate (this%total_dos)
+      if (allocated(this%projected_dos)) deallocate (this%projected_dos)
+      if (allocated(this%band_moments)) deallocate (this%band_moments)
+      if (allocated(this%tetrahedra)) deallocate (this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) deallocate (this%tetrahedron_volumes)
 #endif
    end subroutine destructor
 
@@ -230,7 +300,35 @@ contains
       ! Initialize reciprocal lattice to zero
       this%reciprocal_vectors = 0.0_rp
       this%reciprocal_volume = 0.0_rp
+
+      ! Default DOS settings
+      this%n_energy_points = 1000
+      this%dos_energy_range = [-10.0_rp, 10.0_rp]  ! Default energy range in eV
+      this%dos_method = 'tetrahedron'  ! Default to tetrahedron method
+      this%gaussian_sigma = 0.1_rp  ! Default Gaussian smearing in eV
+      this%temperature = 300.0_rp  ! Default temperature in Kelvin
+      this%fermi_level = 0.0_rp  ! Default Fermi level
+      this%total_electrons = 0.0_rp  ! Default total electrons (will be set from input)
+      this%auto_find_fermi = .false.  ! Default to using input Fermi level
+      this%n_sites = 0
+      this%n_orb_types = 4  ! s, p, d, f
+      this%n_spin_components = 1  ! Default to non-spin-polarized
+      this%n_tetrahedra = 0
    end subroutine restore_to_default
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Set k-point mesh parameters for DOS calculations
+   !---------------------------------------------------------------------------
+   subroutine set_kpoint_mesh(this, nk1, nk2, nk3)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: nk1, nk2, nk3
+
+      this%nk_mesh = [nk1, nk2, nk3]
+      call g_logger%info('reciprocal%set_kpoint_mesh: Set k-point mesh to ' // &
+         trim(int2str(nk1)) // 'x' // trim(int2str(nk2)) // 'x' // trim(int2str(nk3)), __FILE__, __LINE__)
+   end subroutine set_kpoint_mesh
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1025,5 +1123,1017 @@ contains
 
       close(unit)
    end subroutine dump_complex_matrix
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Main DOS calculation method
+   !
+   !> @param[in] ham Hamiltonian object
+   !> @param[in] n_energy_points Number of energy points (optional)
+   !> @param[in] energy_range Energy range [min, max] (optional)
+   !> @param[in] method DOS method ('tetrahedron' or 'gaussian')
+   !> @param[in] gaussian_sigma Gaussian smearing parameter (optional)
+   !> @param[in] temperature Temperature for Fermi-Dirac distribution (optional)
+   !> @param[in] fermi_level Fermi level for band moments integration (optional)
+   !> @param[in] output_file Output filename (optional)
+   !---------------------------------------------------------------------------
+   subroutine calculate_density_of_states(this, ham, n_energy_points, energy_range, method, gaussian_sigma, temperature, fermi_level, total_electrons, auto_find_fermi, output_file)
+      class(reciprocal), intent(inout) :: this
+      class(hamiltonian), intent(in) :: ham
+      integer, intent(in), optional :: n_energy_points
+      real(rp), dimension(2), intent(in), optional :: energy_range
+      character(len=*), intent(in), optional :: method
+      real(rp), intent(in), optional :: gaussian_sigma
+      real(rp), intent(in), optional :: temperature
+      real(rp), intent(in), optional :: fermi_level
+      real(rp), intent(in), optional :: total_electrons
+      logical, intent(in), optional :: auto_find_fermi
+      character(len=*), intent(in), optional :: output_file
+
+      ! Local variables
+      character(len=100) :: filename
+
+      call g_logger%info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
+
+      ! Set parameters from optional arguments
+      if (present(n_energy_points)) this%n_energy_points = n_energy_points
+      if (present(energy_range)) this%dos_energy_range = energy_range
+      if (present(method)) this%dos_method = trim(method)
+      if (present(gaussian_sigma)) this%gaussian_sigma = gaussian_sigma
+      if (present(temperature)) this%temperature = temperature
+      if (present(fermi_level)) this%fermi_level = fermi_level
+      if (present(total_electrons)) this%total_electrons = total_electrons
+      if (present(auto_find_fermi)) this%auto_find_fermi = auto_find_fermi
+
+      ! Set output filename
+      filename = 'density_of_states.dat'
+      if (present(output_file)) filename = output_file
+
+      ! Setup energy grid
+      call this%setup_dos_energy_grid()
+
+      ! Diagonalize Hamiltonian on k-mesh if not already done
+      if (.not. allocated(this%eigenvalues)) then
+         call g_logger%info('calculate_density_of_states: Diagonalizing Hamiltonian on k-mesh', __FILE__, __LINE__)
+         call this%diagonalize_hamiltonian(ham, use_kpath=.false.)
+      end if
+
+      ! Calculate DOS based on method
+      select case (trim(this%dos_method))
+      case ('tetrahedron')
+         call g_logger%info('calculate_density_of_states: Using tetrahedron method', __FILE__, __LINE__)
+         call this%calculate_dos_tetrahedron()
+      case ('gaussian')
+         call g_logger%info('calculate_density_of_states: Using Gaussian smearing method', __FILE__, __LINE__)
+         call this%calculate_dos_gaussian()
+      case default
+         call g_logger%error('calculate_density_of_states: Unknown DOS method: ' // trim(this%dos_method), __FILE__, __LINE__)
+         return
+      end select
+
+      ! Calculate orbital projections and band moments
+      call this%project_dos_orbitals()
+      call this%calculate_band_moments()
+
+      ! Write results to file
+      call this%write_dos_to_file(filename)
+
+      call g_logger%info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
+   end subroutine calculate_density_of_states
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Setup energy grid for DOS calculation
+   !---------------------------------------------------------------------------
+   subroutine setup_dos_energy_grid(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Local variables
+      integer :: i
+      real(rp) :: energy_min, energy_max, delta_energy
+
+      energy_min = this%dos_energy_range(1)
+      energy_max = this%dos_energy_range(2)
+      delta_energy = (energy_max - energy_min) / real(this%n_energy_points - 1, rp)
+
+      ! Allocate energy grid
+      if (allocated(this%dos_energy_grid)) deallocate(this%dos_energy_grid)
+      allocate(this%dos_energy_grid(this%n_energy_points))
+
+      ! Fill energy grid
+      do i = 1, this%n_energy_points
+         this%dos_energy_grid(i) = energy_min + real(i-1, rp) * delta_energy
+      end do
+
+      call g_logger%info('setup_dos_energy_grid: Created energy grid with ' // &
+                        trim(int2str(this%n_energy_points)) // ' points from ' // &
+                        trim(real2str(energy_min)) // ' to ' // trim(real2str(energy_max)) // ' eV', &
+                        __FILE__, __LINE__)
+   end subroutine setup_dos_energy_grid
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate DOS using tetrahedron method
+   !---------------------------------------------------------------------------
+   subroutine calculate_dos_tetrahedron(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Local variables
+      integer :: i_energy, i_tet, i_corner, i_band
+      real(rp) :: energy, dos_contrib
+      real(rp), dimension(4) :: e_corners, sorted_e
+      integer, dimension(4) :: sort_idx
+
+      call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
+
+      ! Setup tetrahedra if not already done
+      if (.not. allocated(this%tetrahedra)) then
+         call this%setup_tetrahedra()
+      end if
+
+      ! Allocate DOS arrays
+      if (allocated(this%total_dos)) deallocate(this%total_dos)
+      allocate(this%total_dos(this%n_energy_points))
+      this%total_dos = 0.0_rp
+
+      ! Loop over energy points
+      do i_energy = 1, this%n_energy_points
+         energy = this%dos_energy_grid(i_energy)
+
+         ! Loop over tetrahedra
+         do i_tet = 1, this%n_tetrahedra
+
+            ! Loop over bands
+            do i_band = 1, size(this%eigenvalues, 1)
+
+               ! Get eigenvalues at tetrahedron corners
+               do i_corner = 1, 4
+                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+               end do
+
+               ! Sort eigenvalues
+               call sort_real_array(e_corners, sorted_e, sort_idx)
+
+               ! Calculate DOS contribution from this tetrahedron and band
+               dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
+
+               ! Add to total DOS (weight by tetrahedron volume and k-point weight)
+               this%total_dos(i_energy) = this%total_dos(i_energy) + &
+                                        dos_contrib * this%tetrahedron_volumes(i_tet)
+            end do
+         end do
+      end do
+
+      call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
+   end subroutine calculate_dos_tetrahedron
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate DOS contribution from a single tetrahedron
+   !> Uses linear tetrahedron method (Blöchl)
+   !---------------------------------------------------------------------------
+   function tetrahedron_dos_contribution(this, energy, e_sorted) result(dos)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: energy
+      real(rp), dimension(4), intent(in) :: e_sorted
+      real(rp) :: dos
+
+      ! Local variables
+      real(rp) :: e1, e2, e3, e4, vol_factor
+      real(rp), parameter :: eps = 1.0e-12_rp
+
+      ! Tetrahedron volume factor (adjusted for correct normalization)
+      vol_factor = 0.4595_rp
+
+      e1 = e_sorted(1)
+      e2 = e_sorted(2)
+      e3 = e_sorted(3)
+      e4 = e_sorted(4)
+
+      dos = 0.0_rp
+
+      ! Handle different energy ranges
+      if (energy < e1 - eps) then
+         ! Energy below all eigenvalues
+         dos = 0.0_rp
+      else if (energy >= e1 - eps .and. energy < e2 - eps) then
+         ! Energy in [e1, e2)
+         dos = vol_factor * 3.0_rp * (energy - e1)**2 / ((e2 - e1) * (e3 - e1) * (e4 - e1))
+      else if (energy >= e2 - eps .and. energy < e3 - eps) then
+         ! Energy in [e2, e3)
+         dos = vol_factor * (3.0_rp * (energy - e1)**2 - 6.0_rp * (energy - e1) * (energy - e2) + &
+                           3.0_rp * (e3 - e1) * (energy - e2) * 2.0_rp / (e3 - e2) + &
+                           3.0_rp * (energy - e1) * (energy - e2) * 2.0_rp / (e4 - e2)) / &
+                           ((e3 - e1) * (e4 - e1))
+      else if (energy >= e3 - eps .and. energy < e4 - eps) then
+         ! Energy in [e3, e4)
+         dos = vol_factor * 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+      else
+         ! Energy above all eigenvalues
+         dos = 0.0_rp
+      end if
+
+   end function tetrahedron_dos_contribution
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Sort real array and return sorted values and indices
+   !---------------------------------------------------------------------------
+   subroutine sort_real_array(arr, sorted, indices)
+      real(rp), dimension(:), intent(in) :: arr
+      real(rp), dimension(:), intent(out) :: sorted
+      integer, dimension(:), intent(out) :: indices
+
+      ! Local variables
+      integer :: i, j, n, temp_idx
+      real(rp) :: temp_val
+
+      n = size(arr)
+      sorted = arr
+      do i = 1, n
+         indices(i) = i
+      end do
+
+      ! Simple bubble sort
+      do i = 1, n-1
+         do j = 1, n-i
+            if (sorted(j) > sorted(j+1)) then
+               temp_val = sorted(j)
+               sorted(j) = sorted(j+1)
+               sorted(j+1) = temp_val
+               temp_idx = indices(j)
+               indices(j) = indices(j+1)
+               indices(j+1) = temp_idx
+            end if
+         end do
+      end do
+   end subroutine sort_real_array
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate DOS using Gaussian smearing
+   !---------------------------------------------------------------------------
+   subroutine calculate_dos_gaussian(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Local variables
+      integer :: i_energy, i_k, i_band
+      real(rp) :: energy, weight, gaussian_factor
+      real(rp) :: sigma_squared
+
+      call g_logger%info('calculate_dos_gaussian: Calculating DOS with Gaussian smearing, sigma = ' // &
+                        trim(real2str(this%gaussian_sigma)) // ' eV', __FILE__, __LINE__)
+
+      ! Allocate DOS arrays
+      if (allocated(this%total_dos)) deallocate(this%total_dos)
+      allocate(this%total_dos(this%n_energy_points))
+      this%total_dos = 0.0_rp
+
+      sigma_squared = this%gaussian_sigma**2
+
+      ! Loop over energy points
+      do i_energy = 1, this%n_energy_points
+         energy = this%dos_energy_grid(i_energy)
+
+         ! Loop over k-points
+         do i_k = 1, this%nk_total
+            weight = this%k_weights(i_k)
+
+            ! Loop over bands
+            do i_band = 1, size(this%eigenvalues, 1)
+               gaussian_factor = exp(-((energy - this%eigenvalues(i_band, i_k))**2) / (2.0_rp * sigma_squared))
+               gaussian_factor = gaussian_factor / (this%gaussian_sigma * sqrt(2.0_rp * 3.141592653589793_rp))
+
+               this%total_dos(i_energy) = this%total_dos(i_energy) + weight * gaussian_factor
+            end do
+         end do
+      end do
+
+      call g_logger%info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
+   end subroutine calculate_dos_gaussian
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Setup tetrahedra for tetrahedron DOS method
+   !---------------------------------------------------------------------------
+   subroutine setup_tetrahedra(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Local variables
+      integer :: nk1, nk2, nk3, n_tet_per_cube, i, j, k, tet_idx
+      integer :: n1, n2, n3, idx
+      integer, dimension(4, 6) :: tetrahedra_corners
+      integer, dimension(4) :: corner_indices
+
+      call g_logger%info('setup_tetrahedra: Setting up tetrahedra for Brillouin zone integration', __FILE__, __LINE__)
+
+      ! Get mesh dimensions
+      nk1 = this%nk_mesh(1)
+      nk2 = this%nk_mesh(2)
+      nk3 = this%nk_mesh(3)
+
+      ! Number of tetrahedra per cube (6 for standard decomposition)
+      n_tet_per_cube = 6
+
+      ! Total number of tetrahedra
+      this%n_tetrahedra = n_tet_per_cube * nk1 * nk2 * nk3
+
+      ! Allocate tetrahedra array
+      if (allocated(this%tetrahedra)) deallocate(this%tetrahedra)
+      allocate(this%tetrahedra(4, this%n_tetrahedra))
+
+      ! Allocate tetrahedron volumes (all equal for uniform mesh)
+      if (allocated(this%tetrahedron_volumes)) deallocate(this%tetrahedron_volumes)
+      allocate(this%tetrahedron_volumes(this%n_tetrahedra))
+
+      ! Volume of each tetrahedron (1/6 of cube volume, times number of cubes)
+      this%tetrahedron_volumes = 1.0_rp / (6.0_rp * real(nk1 * nk2 * nk3, rp))
+
+      ! Standard tetrahedron decomposition for a cube
+      ! Each tetrahedron is defined by 4 corner indices relative to cube
+      tetrahedra_corners(:, 1) = [1, 2, 4, 5]  ! Tetrahedron 1
+      tetrahedra_corners(:, 2) = [2, 3, 4, 5]  ! Tetrahedron 2
+      tetrahedra_corners(:, 3) = [3, 4, 5, 6]  ! Tetrahedron 3
+      tetrahedra_corners(:, 4) = [4, 5, 7, 8]  ! Tetrahedron 4
+      tetrahedra_corners(:, 5) = [5, 6, 7, 8]  ! Tetrahedron 5
+      tetrahedra_corners(:, 6) = [4, 5, 6, 7]  ! Tetrahedron 6
+
+      ! Build tetrahedra
+      tet_idx = 0
+      do i = 1, nk1
+         do j = 1, nk2
+            do k = 1, nk3
+               ! For each cube in the mesh
+               do n1 = 1, n_tet_per_cube
+                  tet_idx = tet_idx + 1
+
+                  ! Get corner indices for this tetrahedron
+                  corner_indices = tetrahedra_corners(:, n1)
+
+                  ! Convert relative corner indices to absolute k-point indices
+                  do n2 = 1, 4
+                     n3 = corner_indices(n2)
+                     ! Convert corner number to i,j,k offsets
+                     select case (n3)
+                     case (1)
+                        idx = this%get_kpoint_index(i, j, k, nk1, nk2, nk3)
+                     case (2)
+                        idx = this%get_kpoint_index(i+1, j, k, nk1, nk2, nk3)
+                     case (3)
+                        idx = this%get_kpoint_index(i+1, j+1, k, nk1, nk2, nk3)
+                     case (4)
+                        idx = this%get_kpoint_index(i, j+1, k, nk1, nk2, nk3)
+                     case (5)
+                        idx = this%get_kpoint_index(i, j, k+1, nk1, nk2, nk3)
+                     case (6)
+                        idx = this%get_kpoint_index(i+1, j, k+1, nk1, nk2, nk3)
+                     case (7)
+                        idx = this%get_kpoint_index(i, j+1, k+1, nk1, nk2, nk3)
+                     case (8)
+                        idx = this%get_kpoint_index(i+1, j+1, k+1, nk1, nk2, nk3)
+                     end select
+                     this%tetrahedra(n2, tet_idx) = idx
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      call g_logger%info('setup_tetrahedra: Created ' // trim(int2str(this%n_tetrahedra)) // &
+                        ' tetrahedra from ' // trim(int2str(nk1)) // 'x' // trim(int2str(nk2)) // &
+                        'x' // trim(int2str(nk3)) // ' k-mesh', __FILE__, __LINE__)
+   end subroutine setup_tetrahedra
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Get k-point index from i,j,k coordinates (with periodic boundary conditions)
+   !---------------------------------------------------------------------------
+   function get_kpoint_index(this, i, j, k, nk1, nk2, nk3) result(idx)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: i, j, k, nk1, nk2, nk3
+      integer :: idx, ii, jj, kk
+
+      ! Apply periodic boundary conditions
+      ii = mod(i-1, nk1) + 1
+      jj = mod(j-1, nk2) + 1
+      kk = mod(k-1, nk3) + 1
+
+      ! Convert to 1D index (assuming k-points are stored as k1 varying fastest)
+      idx = ii + (jj-1)*nk1 + (kk-1)*nk1*nk2
+   end function get_kpoint_index
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Project DOS onto orbitals, sites, and spin
+   !---------------------------------------------------------------------------
+   subroutine project_dos_orbitals(this)
+      class(reciprocal), intent(inout) :: this
+
+      call g_logger%info('project_dos_orbitals: Starting orbital projection calculation', __FILE__, __LINE__)
+
+      ! Use tetrahedron or Gaussian method based on dos_method
+      if (trim(this%dos_method) == 'tetrahedron') then
+         call this%project_dos_orbitals_tetrahedron()
+      else
+         call this%project_dos_orbitals_gaussian()
+      end if
+   end subroutine project_dos_orbitals
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Project DOS onto orbitals, sites, and spin using Gaussian method
+   !---------------------------------------------------------------------------
+   subroutine project_dos_orbitals_gaussian(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: ik, ib, ie, iorb, ispin, i
+      integer :: n_orb_per_spin, orb_start
+      real(rp) :: weight, orbital_char, energy
+      complex(rp) :: psi_element
+
+      call g_logger%info('project_dos_orbitals: Starting orbital projection calculation', __FILE__, __LINE__)
+
+      ! Initialize dimensions
+      this%n_sites = 1  ! For now, single site (can be extended)
+      this%n_orb_types = 4  ! s, p, d, f
+      this%n_spin_components = 2  ! spin up/down
+
+      ! Allocate projected DOS array
+      if (allocated(this%projected_dos)) deallocate(this%projected_dos)
+      allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
+      this%projected_dos = 0.0_rp
+
+      ! Number of orbitals per spin (assuming spd basis: 9 orbitals per spin)
+      n_orb_per_spin = this%max_orb_channels / 2
+
+      ! For now, only implement Gaussian method for projections
+      if (trim(this%dos_method) /= 'gaussian') then
+         call g_logger%warning('project_dos_orbitals: Tetrahedron projections not yet implemented, using Gaussian', __FILE__, __LINE__)
+      end if
+
+      ! Loop over energy points
+      do ie = 1, this%n_energy_points
+         energy = this%dos_energy_grid(ie)
+
+         ! Loop over k-points
+         do ik = 1, this%nk_total
+            ! Loop over bands
+            do ib = 1, this%max_orb_channels
+               ! Skip if eigenvalue is far from current energy
+               if (abs(this%eigenvalues(ib, ik) - energy) > 5.0_rp * this%gaussian_sigma) cycle
+
+               ! Calculate Gaussian weight
+               weight = this%calculate_gaussian_weight_single(energy, this%eigenvalues(ib, ik))
+
+               ! Skip if weight is negligible
+               if (abs(weight) < 1.0e-10_rp) cycle
+
+               ! Apply k-point weight
+               weight = weight * this%k_weights(ik)
+
+               ! Calculate orbital character for each orbital type and spin
+               do ispin = 1, this%n_spin_components
+                  ! Orbital range for this spin
+                  orb_start = (ispin-1) * n_orb_per_spin + 1
+
+                  ! s orbital (index 1 in each spin block)
+                  iorb = 1
+                  psi_element = this%eigenvectors(orb_start, ib, ik)
+                  orbital_char = real(conjg(psi_element) * psi_element, rp)
+                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
+                                                         orbital_char * weight
+
+                  ! p orbitals (indices 2-4 in each spin block)
+                  iorb = 2
+                  orbital_char = 0.0_rp
+                  do i = 2, 4
+                     psi_element = this%eigenvectors(orb_start + i - 1, ib, ik)
+                     orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                  end do
+                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
+                                                         orbital_char * weight
+
+                  ! d orbitals (indices 5-9 in each spin block)
+                  iorb = 3
+                  orbital_char = 0.0_rp
+                  do i = 5, 9
+                     psi_element = this%eigenvectors(orb_start + i - 1, ib, ik)
+                     orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                  end do
+                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
+                                                         orbital_char * weight
+
+                  ! f orbitals (would be indices 10-16, but not present in spd basis)
+                  iorb = 4
+                  orbital_char = 0.0_rp  ! No f orbitals in current spd basis
+                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
+                                                         orbital_char * weight
+               end do
+            end do
+         end do
+      end do
+
+      call g_logger%info('project_dos_orbitals_gaussian: Gaussian orbital projection calculation completed', __FILE__, __LINE__)
+   end subroutine project_dos_orbitals_gaussian
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Project DOS onto orbitals, sites, and spin using tetrahedron method
+   !---------------------------------------------------------------------------
+   subroutine project_dos_orbitals_tetrahedron(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Local variables
+      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i
+      integer :: n_orb_per_spin, orb_start, ik
+      real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
+      real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
+      integer, dimension(4) :: sort_idx
+      complex(rp) :: psi_element
+
+      call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
+
+      ! Initialize dimensions
+      this%n_sites = 1  ! For now, single site (can be extended)
+      this%n_orb_types = 4  ! s, p, d, f
+      this%n_spin_components = 2  ! spin up/down
+
+      ! Allocate projected DOS array
+      if (allocated(this%projected_dos)) deallocate(this%projected_dos)
+      allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
+      this%projected_dos = 0.0_rp
+
+      ! Number of orbitals per spin (assuming spd basis: 9 orbitals per spin)
+      n_orb_per_spin = this%max_orb_channels / 2
+
+      ! Setup tetrahedra if not already done
+      if (.not. allocated(this%tetrahedra)) then
+         call this%setup_tetrahedra()
+      end if
+
+      ! Loop over energy points
+      do i_energy = 1, this%n_energy_points
+         energy = this%dos_energy_grid(i_energy)
+
+         ! Loop over tetrahedra
+         do i_tet = 1, this%n_tetrahedra
+
+            ! Loop over bands
+            do i_band = 1, this%max_orb_channels
+
+               ! Get eigenvalues at tetrahedron corners
+               do i_corner = 1, 4
+                  ik = this%tetrahedra(i_corner, i_tet)
+                  e_corners(i_corner) = this%eigenvalues(i_band, ik)
+               end do
+
+               ! Sort eigenvalues
+               call sort_real_array(e_corners, sorted_e, sort_idx)
+
+               ! Calculate DOS contribution from this tetrahedron and band
+               dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
+
+               ! Skip if DOS contribution is negligible
+               if (abs(dos_contrib) < 1.0e-12_rp) cycle
+
+               ! Weight by tetrahedron volume
+               dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
+
+               ! Calculate orbital character for each orbital type and spin
+               do ispin = 1, this%n_spin_components
+                  ! Orbital range for this spin
+                  orb_start = (ispin-1) * n_orb_per_spin + 1
+
+                  ! s orbital (index 1 in each spin block)
+                  iorb = 1
+                  orbital_char_avg = 0.0_rp
+                  do i_corner = 1, 4
+                     ik = this%tetrahedra(i_corner, i_tet)
+                     psi_element = this%eigenvectors(orb_start, i_band, ik)
+                     orbital_chars(i_corner) = real(conjg(psi_element) * psi_element, rp)
+                  end do
+                  orbital_char_avg = sum(orbital_chars) / 4.0_rp  ! Average over tetrahedron corners
+                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
+                                                               orbital_char_avg * dos_contrib
+
+                  ! p orbitals (indices 2-4 in each spin block)
+                  iorb = 2
+                  orbital_char_avg = 0.0_rp
+                  do i_corner = 1, 4
+                     ik = this%tetrahedra(i_corner, i_tet)
+                     orbital_char = 0.0_rp
+                     do i = 2, 4
+                        psi_element = this%eigenvectors(orb_start + i - 1, i_band, ik)
+                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                     end do
+                     orbital_chars(i_corner) = orbital_char
+                  end do
+                  orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
+                                                               orbital_char_avg * dos_contrib
+
+                  ! d orbitals (indices 5-9 in each spin block)
+                  iorb = 3
+                  orbital_char_avg = 0.0_rp
+                  do i_corner = 1, 4
+                     ik = this%tetrahedra(i_corner, i_tet)
+                     orbital_char = 0.0_rp
+                     do i = 5, 9
+                        psi_element = this%eigenvectors(orb_start + i - 1, i_band, ik)
+                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                     end do
+                     orbital_chars(i_corner) = orbital_char
+                  end do
+                  orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
+                                                               orbital_char_avg * dos_contrib
+
+                  ! f orbitals (would be indices 10-16, but not present in spd basis)
+                  iorb = 4
+                  orbital_char_avg = 0.0_rp  ! No f orbitals in current spd basis
+                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
+                                                               orbital_char_avg * dos_contrib
+               end do
+            end do
+         end do
+      end do
+
+      call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
+   end subroutine project_dos_orbitals_tetrahedron
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate trapezoidal integral of y(x) over x grid
+   !---------------------------------------------------------------------------
+   function trapezoidal_integral(x, y) result(integral)
+      real(rp), dimension(:), intent(in) :: x, y
+      real(rp) :: integral
+
+      ! Local variables
+      integer :: n, i
+      real(rp) :: dx
+
+      n = size(x)
+      if (n /= size(y)) then
+         call g_logger%error('trapezoidal_integral: x and y arrays must have same size', __FILE__, __LINE__)
+         integral = 0.0_rp
+         return
+      end if
+
+      integral = 0.0_rp
+
+      ! Trapezoidal rule: ∫ y dx ≈ Σ (y_i + y_{i+1}) * (x_{i+1} - x_i) / 2
+      do i = 1, n-1
+         dx = x(i+1) - x(i)
+         integral = integral + 0.5_rp * (y(i) + y(i+1)) * dx
+      end do
+   end function trapezoidal_integral
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate band moments from projected DOS
+   !---------------------------------------------------------------------------
+   subroutine calculate_band_moments(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Local variables
+      integer :: isite, iorb, ispin, ie, n_energy
+      real(rp) :: energy, dos_value, delta_energy, fermi_weight
+      real(rp) :: m0, m1, m2, norm_factor
+      real(rp), dimension(:), allocatable :: integrand
+      real(rp) :: kT, fermi_arg
+
+      call g_logger%info('calculate_band_moments: Starting band moments calculation', __FILE__, __LINE__)
+      call g_logger%info('calculate_band_moments: Fermi level = ' // trim(real2str(this%fermi_level)) // ' eV', __FILE__, __LINE__)
+      call g_logger%info('calculate_band_moments: Temperature = ' // trim(real2str(this%temperature)) // ' K', __FILE__, __LINE__)
+
+      ! Automatically find Fermi level from DOS if requested
+      if (this%auto_find_fermi) then
+         if (this%total_electrons > 0.0_rp) then
+            this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
+            call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // trim(real2str(this%fermi_level)) // ' eV', __FILE__, __LINE__)
+         else
+            call g_logger%warning('calculate_band_moments: auto_find_fermi is true but total_electrons not set, using input Fermi level', __FILE__, __LINE__)
+         end if
+      end if
+
+      ! Allocate band moments array if not already done
+      if (allocated(this%band_moments)) deallocate(this%band_moments)
+      allocate(this%band_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3))
+      this%band_moments = 0.0_rp
+
+      n_energy = this%n_energy_points
+
+      ! Allocate temporary array for integration
+      allocate(integrand(n_energy))
+
+      ! Boltzmann constant in eV/K
+      kT = this%temperature * 8.617333262145e-5_rp
+
+      ! Calculate moments for each site, orbital type, and spin component
+      do isite = 1, this%n_sites
+         do iorb = 1, this%n_orb_types
+            do ispin = 1, this%n_spin_components
+
+               ! Initialize moment accumulators
+               m0 = 0.0_rp
+               m1 = 0.0_rp
+               m2 = 0.0_rp
+
+               ! Calculate zeroth moment (m0) = ∫ DOS(E) * f(E) dE
+               ! where f(E) is the Fermi-Dirac distribution
+               integrand = 0.0_rp
+               do ie = 1, n_energy
+                  energy = this%dos_energy_grid(ie)
+                  fermi_arg = (energy - this%fermi_level) / kT
+                  
+                  ! Fermi-Dirac distribution: f(E) = 1 / (exp((E-Ef)/kT) + 1)
+                  if (fermi_arg > 50.0_rp) then
+                     fermi_weight = 0.0_rp  ! exp(-50) ≈ 0
+                  else if (fermi_arg < -50.0_rp) then
+                     fermi_weight = 1.0_rp  ! exp(50) ≈ very large
+                  else
+                     fermi_weight = 1.0_rp / (exp(fermi_arg) + 1.0_rp)
+                  end if
+                  
+                  integrand(ie) = this%projected_dos(isite, iorb, ispin, ie) * fermi_weight
+               end do
+               m0 = trapezoidal_integral(this%dos_energy_grid, integrand)
+
+               ! Calculate first moment (m1) = ∫ E * DOS(E) * f(E) dE / m0
+               if (abs(m0) > 1.0e-12_rp) then
+                  integrand = this%dos_energy_grid * this%projected_dos(isite, iorb, ispin, :) * &
+                             [(1.0_rp / (exp((this%dos_energy_grid(ie) - this%fermi_level) / kT) + 1.0_rp), &
+                               ie = 1, n_energy)]
+                  m1 = trapezoidal_integral(this%dos_energy_grid, integrand) / m0
+               else
+                  m1 = 0.0_rp
+               end if
+
+               ! Calculate second moment (m2) = ∫ (E - m1)^2 * DOS(E) * f(E) dE / m0
+               if (abs(m0) > 1.0e-12_rp) then
+                  integrand = (this%dos_energy_grid - m1)**2 * this%projected_dos(isite, iorb, ispin, :) * &
+                             [(1.0_rp / (exp((this%dos_energy_grid(ie) - this%fermi_level) / kT) + 1.0_rp), &
+                               ie = 1, n_energy)]
+                  m2 = trapezoidal_integral(this%dos_energy_grid, integrand) / m0
+                  m2 = sqrt(max(m2, 0.0_rp))  ! Take square root to get width
+               else
+                  m2 = 0.0_rp
+               end if
+
+               ! Store moments
+               this%band_moments(isite, iorb, ispin, 1) = m0  ! m0
+               this%band_moments(isite, iorb, ispin, 2) = m1  ! m1
+               this%band_moments(isite, iorb, ispin, 3) = m2  ! m2
+
+               call g_logger%info('calculate_band_moments: Site ' // trim(int2str(isite)) // &
+                                 ', Orbital ' // trim(int2str(iorb)) // ', Spin ' // trim(int2str(ispin)) // &
+                                 ': m0=' // trim(real2str(m0)) // ', m1=' // trim(real2str(m1)) // &
+                                 ', m2=' // trim(real2str(m2)), __FILE__, __LINE__)
+            end do
+         end do
+      end do
+
+      ! Clean up
+      deallocate(integrand)
+
+      call g_logger%info('calculate_band_moments: Band moments calculation completed', __FILE__, __LINE__)
+   end subroutine calculate_band_moments
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Find Fermi level from calculated DOS by integrating to find electron count
+   !---------------------------------------------------------------------------
+   function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: total_electrons
+      real(rp) :: fermi_level
+
+      ! Local variables
+      integer :: ie, max_iter
+      real(rp) :: integrated_dos, prev_integrated
+      real(rp) :: energy, prev_energy, kT, fermi_weight
+      real(rp) :: e_min, e_max, e_mid, electrons_at_e
+
+      call g_logger%info('find_fermi_level_from_dos: Finding Fermi level for ' // &
+                        trim(real2str(total_electrons)) // ' electrons at T = ' // &
+                        trim(real2str(this%temperature)) // ' K', __FILE__, __LINE__)
+
+      ! Check if DOS is calculated
+      if (.not. allocated(this%total_dos)) then
+         call g_logger%error('find_fermi_level_from_dos: Total DOS not calculated', __FILE__, __LINE__)
+         fermi_level = 0.0_rp
+         return
+      end if
+
+      ! Boltzmann constant in eV/K
+      kT = this%temperature * 8.617333262145e-5_rp
+
+      ! Use bisection method to find Fermi level
+      e_min = this%dos_energy_grid(1)
+      e_max = this%dos_energy_grid(this%n_energy_points)
+      max_iter = 100
+
+      do ie = 1, max_iter
+         e_mid = (e_min + e_max) / 2.0_rp
+         electrons_at_e = this%integrate_dos_up_to_energy(e_mid, kT)
+
+         if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then
+            fermi_level = e_mid
+            exit
+         else if (electrons_at_e < total_electrons) then
+            e_min = e_mid
+         else
+            e_max = e_mid
+         end if
+      end do
+
+      fermi_level = e_mid
+
+      ! Final check
+      electrons_at_e = this%integrate_dos_up_to_energy(fermi_level, kT)
+      call g_logger%info('find_fermi_level_from_dos: Found Fermi level at ' // &
+                        trim(real2str(fermi_level)) // ' eV (integrated ' // &
+                        trim(real2str(electrons_at_e)) // ' electrons)', __FILE__, __LINE__)
+   end function find_fermi_level_from_dos
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Integrate DOS up to given energy with Fermi-Dirac weighting
+   !---------------------------------------------------------------------------
+   function integrate_dos_up_to_energy(this, energy, kT) result(integral)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: energy, kT
+      real(rp) :: integral
+
+      ! Local variables
+      integer :: ie
+      real(rp) :: e, fermi_weight, delta_e
+
+      integral = 0.0_rp
+
+      do ie = 1, this%n_energy_points - 1
+         e = this%dos_energy_grid(ie)
+         delta_e = this%dos_energy_grid(ie+1) - e
+
+         ! Fermi-Dirac weight at current energy
+         if (kT > 1.0e-10_rp) then
+            fermi_weight = 1.0_rp / (exp((e - energy) / kT) + 1.0_rp)
+         else
+            ! T=0 limit
+            if (e <= energy) then
+               fermi_weight = 1.0_rp
+            else
+               fermi_weight = 0.0_rp
+            end if
+         end if
+
+         ! Trapezoidal integration
+         integral = integral + 0.5_rp * delta_e * (this%total_dos(ie) * fermi_weight + &
+                                                  this%total_dos(ie+1) * (1.0_rp / (exp((this%dos_energy_grid(ie+1) - energy) / kT) + 1.0_rp)))
+      end do
+   end function integrate_dos_up_to_energy
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Write DOS results to file
+   !---------------------------------------------------------------------------
+   subroutine write_dos_to_file(this, filename)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: filename
+
+      ! Local variables
+      integer :: unit, i_energy, isite, iorb, ispin
+      character(len=256) :: proj_filename
+
+      call g_logger%info('write_dos_to_file: Writing DOS to ' // trim(filename), __FILE__, __LINE__)
+
+      ! Write total DOS
+      open(newunit=unit, file=trim(filename), status='replace', action='write')
+
+      ! Write header
+      write(unit, '(A)') '# Density of States'
+      write(unit, '(A,A)') '# Method: ', trim(this%dos_method)
+      if (trim(this%dos_method) == 'gaussian') then
+         write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
+      end if
+      write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
+      write(unit, '(A,2F8.3)') '# Energy range: ', this%dos_energy_range
+      write(unit, '(A)') '# Energy (eV)    Total DOS'
+
+      ! Write DOS data
+      do i_energy = 1, this%n_energy_points
+         write(unit, '(2F12.6)') this%dos_energy_grid(i_energy), this%total_dos(i_energy)
+      end do
+
+      close(unit)
+
+      ! Write projected DOS if available
+      if (allocated(this%projected_dos)) then
+         proj_filename = 'projected_dos.dat'
+         call g_logger%info('write_dos_to_file: Writing projected DOS to ' // trim(proj_filename), __FILE__, __LINE__)
+
+         open(newunit=unit, file=trim(proj_filename), status='replace', action='write')
+
+         ! Write header
+         write(unit, '(A)') '# Projected Density of States'
+         write(unit, '(A,A)') '# Method: ', trim(this%dos_method)
+         if (trim(this%dos_method) == 'gaussian') then
+            write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
+         end if
+         write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
+         write(unit, '(A,2F8.3)') '# Energy range: ', this%dos_energy_range
+         write(unit, '(A)') '# Columns: Energy, s_up, p_up, d_up, f_up, s_down, p_down, d_down, f_down'
+
+         ! Write projected DOS data
+         do i_energy = 1, this%n_energy_points
+            write(unit, '(9F12.6)') this%dos_energy_grid(i_energy), &
+                                  (this%projected_dos(1, iorb, 1, i_energy), iorb=1,4), &  ! spin up: s,p,d,f
+                                  (this%projected_dos(1, iorb, 2, i_energy), iorb=1,4)     ! spin down: s,p,d,f
+         end do
+
+         close(unit)
+         call g_logger%info('write_dos_to_file: Projected DOS written to file', __FILE__, __LINE__)
+      end if
+
+      ! Write band moments if available
+      if (allocated(this%band_moments)) then
+         proj_filename = 'band_moments.dat'
+         call g_logger%info('write_dos_to_file: Writing band moments to ' // trim(proj_filename), __FILE__, __LINE__)
+
+         open(newunit=unit, file=trim(proj_filename), status='replace', action='write')
+
+         ! Write header
+         write(unit, '(A)') '# Band Moments'
+         write(unit, '(A,A)') '# Method: ', trim(this%dos_method)
+         if (trim(this%dos_method) == 'gaussian') then
+            write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
+         end if
+         write(unit, '(A,F8.4,A)') '# Temperature: ', this%temperature, ' K'
+         write(unit, '(A,F12.6,A)') '# Fermi level: ', this%fermi_level, ' eV'
+         write(unit, '(A)') '# Format: site, orbital_type, spin, m0, m1, m2'
+         write(unit, '(A)') '# Orbital types: 1=s, 2=p, 3=d, 4=f'
+         write(unit, '(A)') '# Spin: 1=up, 2=down'
+         write(unit, '(A)') '# m0 = integrated DOS up to Fermi level with Fermi-Dirac weighting'
+         write(unit, '(A)') '# m1 = center of gravity (occupied states)'
+         write(unit, '(A)') '# m2 = width of occupied states'
+
+         ! Write band moments data
+         do isite = 1, this%n_sites
+            do iorb = 1, this%n_orb_types
+               do ispin = 1, this%n_spin_components
+                  write(unit, '(3I3,3F12.6)') isite, iorb, ispin, &
+                                             this%band_moments(isite, iorb, ispin, 1), &  ! m0
+                                             this%band_moments(isite, iorb, ispin, 2), &  ! m1
+                                             this%band_moments(isite, iorb, ispin, 3)     ! m2
+               end do
+            end do
+         end do
+
+         close(unit)
+         call g_logger%info('write_dos_to_file: Band moments written to file', __FILE__, __LINE__)
+      end if
+
+      call g_logger%info('write_dos_to_file: DOS written to file', __FILE__, __LINE__)
+   end subroutine write_dos_to_file
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate Gaussian weight for a single energy pair
+   !---------------------------------------------------------------------------
+   function calculate_gaussian_weight_single(this, grid_energy, eigenvalue) result(weight)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: grid_energy, eigenvalue
+      real(rp) :: weight
+
+      ! Gaussian smearing: weight = exp(-(E_grid - E_eigen)²/(2σ²)) / (σ√(2π))
+      real(rp) :: prefactor, exponent, delta_e
+
+      delta_e = grid_energy - eigenvalue
+      prefactor = 1.0_rp / (this%gaussian_sigma * sqrt(2.0_rp * 3.141592653589793_rp))
+      exponent = -0.5_rp * (delta_e / this%gaussian_sigma)**2
+
+      if (exponent > -20.0_rp) then  ! Avoid underflow
+         weight = prefactor * exp(exponent)
+      else
+         weight = 0.0_rp
+      end if
+   end function calculate_gaussian_weight_single
 
 end module reciprocal_mod
