@@ -547,8 +547,7 @@ contains
       complex(rp), dimension(:, :), intent(out) :: hk_result
       ! Local variables
       integer :: ineigh, ia, nr
-      complex(rp), dimension(:), allocatable :: structure_factors
-      complex(rp), dimension(18, 18) :: h_neighbor
+   complex(rp), dimension(:), allocatable, save :: structure_factors
       logical :: debug_this_k
 
       ia = this%lattice%atlist(ntype)
@@ -580,10 +579,14 @@ contains
          ! end if
       end if
 
-      ! Allocate structure factors
-      allocate(structure_factors(nr))
+      ! Allocate structure factors once and reuse across calls to avoid
+      ! repeated allocate/deallocate overhead for every k-point.
+      if (.not. allocated(structure_factors) .or. size(structure_factors) /= nr) then
+         if (allocated(structure_factors)) deallocate(structure_factors)
+         allocate(structure_factors(nr))
+      end if
 
-      ! Calculate structure factors
+      ! Calculate structure factors (fills structure_factors)
       call this%calculate_structure_factors(k_vec, ntype, structure_factors)
       
       ! Print first few structure factors for first k-point to debug
@@ -601,16 +604,18 @@ contains
       hk_result = cmplx(0.0_rp, 0.0_rp, rp)
 
       ! Sum over neighbors: H(k) = Σ_R H(R) * exp(i*k·R)
+      ! Avoid making a local copy of the neighbor Hamiltonian matrix
+      ! to reduce temporaries and memory traffic.
       do ineigh = 1, nr
-         h_neighbor = this%hamiltonian%ee(:, :, ineigh, ntype)
-         hk_result = hk_result + h_neighbor * structure_factors(ineigh)
+         hk_result = hk_result + this%hamiltonian%ee(:, :, ineigh, ntype) * structure_factors(ineigh)
       end do
 
       ! if (debug_this_k) then
       !    call g_logger%info('fourier_transform_hamiltonian: Completed FT', __FILE__, __LINE__)
       ! end if
 
-      deallocate(structure_factors)
+   ! Keep structure_factors allocated for reuse (saved local). Do not
+   ! deallocate here to avoid repeated allocate/deallocate cycles.
       
    contains
       ! Helper function to calculate trace of real matrix
@@ -669,23 +674,32 @@ contains
       do ntype = 1, this%lattice%ntype
          write(debug_msg, '(A,I0)') 'build_kspace_hamiltonian: Processing atom type ', ntype
          call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-         
+
+         ! If the user requested debug logs for first few k-points, produce them
+         ! outside the parallel region to avoid logging from multiple threads.
+         if (.not. this%suppress_internal_logs) then
+            do ik = 1, min(3, this%nk_total)
+               k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
+               write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
+                     ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
+               call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+            end do
+         end if
+
+         ! Parallelize over k-points (coarse-grained) when OpenMP is available.
+#ifdef _OPENMP
+        !$omp parallel do private(ik,k_cartesian) shared(this,ntype) default(none)
+#endif
          do ik = 1, this%nk_total
             ! Convert k-point to Cartesian coordinates
             k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
-            
-            ! Debug first few k-points
-            if (.not. this%suppress_internal_logs) then
-               if (ik <= 3) then
-                  write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
-                        ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
-                  call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-               end if
-            end if
-            
+
             ! Fourier transform real-space Hamiltonian
             call this%fourier_transform_hamiltonian(k_cartesian, ntype, this%hk_bulk(:, :, ik, ntype))
          end do
+#ifdef _OPENMP
+        !$omp end parallel do
+#endif
       end do
 
       call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space bulk Hamiltonian built', __FILE__, __LINE__)
@@ -1259,7 +1273,10 @@ contains
       allocate(this%total_dos(this%n_energy_points))
       this%total_dos = 0.0_rp
 
-      ! Loop over energy points
+      ! Parallelize over energy points: each thread works on distinct i_energy
+#ifdef _OPENMP
+     !$omp parallel do private(i_energy,energy,i_tet,i_band,i_corner,e_corners,sorted_e,dos_contrib) shared(this) default(none)
+#endif
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
 
@@ -1274,18 +1291,21 @@ contains
                   e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
                end do
 
-               ! Sort eigenvalues
-               call sort_real_array(e_corners, sorted_e, sort_idx)
+               ! Sort eigenvalues (optimized for 4 elements)
+               call sort4(e_corners, sorted_e)
 
                ! Calculate DOS contribution from this tetrahedron and band
                dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
 
-               ! Add to total DOS (weight by tetrahedron volume and k-point weight)
+               ! Add to total DOS (weight by tetrahedron volume)
                this%total_dos(i_energy) = this%total_dos(i_energy) + &
                                         dos_contrib * this%tetrahedron_volumes(i_tet)
             end do
          end do
       end do
+#ifdef _OPENMP
+     !$omp end parallel do
+#endif
 
       call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_tetrahedron
@@ -1375,6 +1395,52 @@ contains
    end subroutine sort_real_array
 
    !---------------------------------------------------------------------------
+   ! Small optimized sorter for 4 elements (inlined compare-swap network)
+   ! This replaces bubble sort for the tetrahedron eigenvalue sorting (size=4)
+   subroutine sort4(arr_in, arr_out)
+      real(rp), dimension(4), intent(in) :: arr_in
+      real(rp), dimension(4), intent(out) :: arr_out
+      real(rp) :: a1, a2, a3, a4, tmp
+
+      a1 = arr_in(1)
+      a2 = arr_in(2)
+      a3 = arr_in(3)
+      a4 = arr_in(4)
+
+      ! compare-swap sequence
+      if (a1 > a2) then
+         tmp = a1
+         a1 = a2
+         a2 = tmp
+      end if
+      if (a3 > a4) then
+         tmp = a3
+         a3 = a4
+         a4 = tmp
+      end if
+      if (a1 > a3) then
+         tmp = a1
+         a1 = a3
+         a3 = tmp
+      end if
+      if (a2 > a4) then
+         tmp = a2
+         a2 = a4
+         a4 = tmp
+      end if
+      if (a2 > a3) then
+         tmp = a2
+         a2 = a3
+         a3 = tmp
+      end if
+
+      arr_out(1) = a1
+      arr_out(2) = a2
+      arr_out(3) = a3
+      arr_out(4) = a4
+   end subroutine sort4
+
+   !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
    !> Calculate DOS using Gaussian smearing
@@ -1383,9 +1449,10 @@ contains
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_k, i_band
-      real(rp) :: energy, weight, gaussian_factor
-      real(rp) :: sigma_squared
+   integer :: i_energy, i_k, i_band
+   real(rp) :: energy, weight, gaussian_factor
+   real(rp) :: sigma_squared
+   real(rp) :: local_sum
 
       call g_logger%info('calculate_dos_gaussian: Calculating DOS with Gaussian smearing, sigma = ' // &
                         trim(real2str(this%gaussian_sigma)) // ' eV', __FILE__, __LINE__)
@@ -1402,6 +1469,12 @@ contains
          energy = this%dos_energy_grid(i_energy)
 
          ! Loop over k-points
+         ! Use a scalar reduction (local_sum) to avoid race conditions updating
+         ! the array element this%total_dos(i_energy) from multiple threads.
+         local_sum = 0.0_rp
+#ifdef _OPENMP
+        !$omp parallel do private(i_k,weight,i_band,gaussian_factor) reduction(+:local_sum) shared(this,energy,sigma_squared) default(none)
+#endif
          do i_k = 1, this%nk_total
             weight = this%k_weights(i_k)
 
@@ -1410,9 +1483,13 @@ contains
                gaussian_factor = exp(-((energy - this%eigenvalues(i_band, i_k))**2) / (2.0_rp * sigma_squared))
                gaussian_factor = gaussian_factor / (this%gaussian_sigma * sqrt(2.0_rp * 3.141592653589793_rp))
 
-               this%total_dos(i_energy) = this%total_dos(i_energy) + weight * gaussian_factor
+               local_sum = local_sum + weight * gaussian_factor
             end do
          end do
+#ifdef _OPENMP
+        !$omp end parallel do
+#endif
+         this%total_dos(i_energy) = this%total_dos(i_energy) + local_sum
       end do
 
       call g_logger%info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
@@ -1681,7 +1758,10 @@ contains
          call this%setup_tetrahedra()
       end if
 
-      ! Loop over energy points
+   ! Parallelize over energy points: each thread writes to independent i_energy
+#ifdef _OPENMP
+   !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,n_orb_per_spin,psi_element) shared(this) default(none)
+#endif
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
 
@@ -1697,8 +1777,8 @@ contains
                   e_corners(i_corner) = this%eigenvalues(i_band, ik)
                end do
 
-               ! Sort eigenvalues
-               call sort_real_array(e_corners, sorted_e, sort_idx)
+               ! Sort eigenvalues (optimized for 4 elements)
+               call sort4(e_corners, sorted_e)
 
                ! Calculate DOS contribution from this tetrahedron and band
                dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
@@ -1767,6 +1847,9 @@ contains
             end do
          end do
       end do
+#ifdef _OPENMP
+     !$omp end parallel do
+#endif
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
    end subroutine project_dos_orbitals_tetrahedron
