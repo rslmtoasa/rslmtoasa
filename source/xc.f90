@@ -1181,22 +1181,14 @@ contains
       integer :: libxc_id
 
 #ifdef HAVE_LIBXC
-      select case (this%txc)
-      case (1001)              ! VWN via libXC (XC_LDA_XC_VWN = 17)
-         libxc_id = 17
-      case (1007)              ! VWN correlation via libXC (XC_LDA_C_VWN = 7)
-         libxc_id = 7
-      case (1009)              ! Perdew-Zunger via libXC (XC_LDA_C_PZ = 9)
-         libxc_id = 9
-      case (1101)              ! PBE exchange via libXC (XC_GGA_X_PBE = 101)
-         libxc_id = 101
-      case (1130)              ! PBE correlation via libXC (XC_GGA_C_PBE = 130)
-         libxc_id = 130
-      case (1167)              ! PBE exchange-correlation via libXC (XC_GGA_XC_PBE = 167)
-         libxc_id = 167
-      case default
-         libxc_id = -1  ! No libXC mapping for this functional
-      end select
+      if (this%txc >= 1000) then
+         ! General mapping: txc = 1000 + libxc_id
+         libxc_id = this%txc - 1000
+         call g_logger%debug('General libXC mapping: txc='//int2str(this%txc)//' -> libxc_id='//int2str(libxc_id), __FILE__, __LINE__)
+      else
+         ! Legacy functionals (txc < 1000) don't use libXC
+         libxc_id = -1
+      endif
 #else
       libxc_id = -1  ! libXC not available
 #endif
