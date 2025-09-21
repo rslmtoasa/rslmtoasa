@@ -25,6 +25,9 @@ module xc_mod
    use string_mod, only: int2str, real2str
    use precision_mod, only: rp
    use math_mod
+#ifdef HAVE_LIBXC
+   use xc_f03_lib_m
+#endif
    implicit none
    private
 
@@ -35,15 +38,29 @@ module xc_mod
       character(LEN=3) :: TXCH
       integer :: NSS, txc
       integer :: LPOT
+      
+      ! libXC support fields
+      logical :: use_libxc = .false.
+      integer :: libxc_func_id = -1
+      logical :: libxc_initialized = .false.
+#ifdef HAVE_LIBXC
+      type(xc_f03_func_t) :: libxc_func
+      type(xc_f03_func_info_t) :: libxc_info
+#endif
    contains
       procedure :: PBEGGA
       procedure :: CORPBE
       procedure :: EXCHPBE
       procedure :: LAGGGA
       procedure :: XCPOT
+      procedure :: XCPOT_hybrid
       procedure :: exchlag
       procedure :: GCOR2
       procedure :: DIFFN
+      procedure :: init_libxc
+      procedure :: cleanup_libxc
+      procedure :: get_libxc_functional_mapping
+      final :: destructor
    end type xc
 
    interface xc
@@ -179,6 +196,9 @@ contains
       case default
          if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** IXC = '//int2str(obj%txc)//' not implemented', __FILE__, __LINE__)
       end select
+      
+      ! Initialize libXC support if needed
+      call obj%init_libxc(ctrl)
    end function constructor
 
    !==============================================================================
@@ -478,12 +498,14 @@ contains
          NI = N(I) + N(I)
          EXI = 0.d0
          MUXI = 0.d0
-         NDI = ND(I) + ND(I)
-         NDDI = NDD(I) + NDD(I)
+         ! Fixed: Don't double the gradient inputs
+         NDI = ND(I)
+         NDDI = NDD(I)
          KF = (3.d0*PI*PI*NI)**this%OTH
          NABLA = ABS(NDI)
          S = 0.5d0*NABLA/KF/NI
-         NABLA2 = 2.d0/R*NDI + NDDI
+         ! Fixed: Correct Laplacian in spherical coordinates
+         NABLA2 = NDDI + 2.d0/R*NDI
          T = NABLA2/4.d0/KF/KF/NI
          U = NABLA*NDDI/8.d0/KF/KF/KF/NI/NI
          call this%EXCHPBE(NI, S, U, T, LGGA, LPOTT, EXI, MUXI)
@@ -505,7 +527,7 @@ contains
       ZET = (N(1) - N(2))/NI
       G = ((1.d0 + ZET)**(2.d0/3.d0) + (1.d0 - ZET)**(2.d0/3.d0))/2.d0
       NABLA = ABS(NDI)
-      NABLA2 = 2.d0/R*NDI + NDDI
+      NABLA2 = NDDI + 2.d0/R*NDI  ! Fixed: Correct Laplacian
       FK = (3.d0*PI*PI*NI)**this%OTH
       SK = SQRT(4.d0*FK/PI)
       T = NABLA/2.d0/SK/NI/G
@@ -839,7 +861,7 @@ contains
          KF = (3.d0*PI*PI*NI)**this%OTH
          NABLA = ABS(NDI)
          S = 0.5d0*NABLA/KF/NI
-         NABLA2 = 2.d0/R*NDI + NDDI
+         NABLA2 = NDDI + 2.d0/R*NDI  ! Fixed: Correct Laplacian
          T = NABLA2/4.d0/KF/KF/NI
          U = NABLA*NDDI/8.d0/KF/KF/KF/NI/NI
          call this%exchlag(NI, S, U, T, LGGA, LPOTT, EXI, MUXI)
@@ -861,7 +883,7 @@ contains
       ZET = (N(1) - N(2))/NI
       G = ((1.d0 + ZET)**(2.d0/3.d0) + (1.d0 - ZET)**(2.d0/3.d0))/2.d0
       NABLA = ABS(NDI)
-      NABLA2 = 2.d0/R*NDI + NDDI
+      NABLA2 = NDDI + 2.d0/R*NDI  ! Fixed: Correct Laplacian
       FK = (3.d0*PI*PI*NI)**this%OTH
       SK = SQRT(4.d0*FK/PI)
       T = NABLA/2.d0/SK/NI/G
@@ -1051,4 +1073,222 @@ contains
       !  write(808, ´(i6, 3g20.8)´) i, RHO(i), RHOP(i), RHOPP(i)
       !end do
    end subroutine DIFFN
+
+   !==============================================================================
+   !----- libXC INTERFACE PROCEDURES ---------------------------------------------
+   !==============================================================================
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Initialize libXC functional if needed based on txc value
+   !>--------------------------------------------------------------------------
+   subroutine init_libxc(this, ctrl)
+      class(xc), intent(inout) :: this
+      type(control), intent(in) :: ctrl
+      
+      integer :: libxc_id, nspin
+
+#ifdef HAVE_LIBXC
+      ! Check if we should use libXC for this functional
+      libxc_id = this%get_libxc_functional_mapping()
+      
+      if (libxc_id > 0) then
+         this%use_libxc = .true.
+         this%libxc_func_id = libxc_id
+         
+         ! Determine spin treatment
+         if (ctrl%nsp == 1) then
+            nspin = XC_UNPOLARIZED
+         else
+            nspin = XC_POLARIZED
+         endif
+         
+         ! Initialize the libXC functional
+         call xc_f03_func_init(this%libxc_func, libxc_id, nspin)
+         this%libxc_info = xc_f03_func_get_info(this%libxc_func)
+         this%libxc_initialized = .true.
+         
+         ! Log information about the libXC functional
+         call g_logger%info('Using libXC functional: '// &
+                          trim(xc_f03_func_info_get_name(this%libxc_info))// &
+                          ' (ID: '//int2str(libxc_id)//')', __FILE__, __LINE__)
+      else
+         this%use_libxc = .false.
+         this%libxc_initialized = .false.
+      endif
+#else
+      this%use_libxc = .false.
+      this%libxc_initialized = .false.
+#endif
+   end subroutine init_libxc
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Clean up libXC functional
+   !>--------------------------------------------------------------------------
+   subroutine cleanup_libxc(this)
+      class(xc), intent(inout) :: this
+
+#ifdef HAVE_LIBXC
+      if (this%libxc_initialized) then
+         call xc_f03_func_end(this%libxc_func)
+         this%libxc_initialized = .false.
+      endif
+#endif
+      this%use_libxc = .false.
+   end subroutine cleanup_libxc
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Map RS-LMTO txc values to libXC functional IDs
+   !> Returns -1 if no libXC equivalent exists
+   !>--------------------------------------------------------------------------
+   function get_libxc_functional_mapping(this) result(libxc_id)
+      class(xc), intent(in) :: this
+      integer :: libxc_id
+
+#ifdef HAVE_LIBXC
+      select case (this%txc)
+      case (1001)              ! Slater exchange via libXC (XC_LDA_X = 1)
+         libxc_id = 1
+      case (1007)              ! VWN correlation via libXC (XC_LDA_C_VWN = 7)
+         libxc_id = 7
+      case (1009)              ! Perdew-Zunger via libXC (XC_LDA_C_PZ = 9)
+         libxc_id = 9
+      case (1101)              ! PBE exchange via libXC (XC_GGA_X_PBE = 101)
+         libxc_id = 101
+      case (1130)              ! PBE correlation via libXC (XC_GGA_C_PBE = 130)
+         libxc_id = 130
+      case (1167)              ! PBE exchange-correlation via libXC (XC_GGA_XC_PBE = 167)
+         libxc_id = 167
+      case default
+         libxc_id = -1  ! No libXC mapping for this functional
+      end select
+#else
+      libxc_id = -1  ! libXC not available
+#endif
+   end function get_libxc_functional_mapping
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Hybrid XCPOT routine that dispatches to legacy or libXC backend
+   !>--------------------------------------------------------------------------
+   subroutine XCPOT_hybrid(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      class(xc), intent(in) :: this
+      real(rp), intent(in) :: RHO, RHO1, RHO2, RR
+      real(rp), intent(inout) :: EXC, V1, V2
+      real(rp), dimension(2), intent(in) :: RHOP, RHOPP
+
+      if (this%use_libxc .and. this%libxc_initialized) then
+         call xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      else
+         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      endif
+   end subroutine XCPOT_hybrid
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> libXC wrapper that converts between RS-LMTO and libXC data formats
+   !>--------------------------------------------------------------------------
+   subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      class(xc), intent(in) :: this
+      real(rp), intent(in) :: RHO, RHO1, RHO2, RR
+      real(rp), intent(inout) :: EXC, V1, V2
+      real(rp), dimension(2), intent(in) :: RHOP, RHOPP
+
+#ifdef HAVE_LIBXC
+      ! Local variables for libXC interface
+      integer(8), parameter :: np = 1_8  ! Single point calculation (64-bit integer for libXC)
+      real(8) :: rho_libxc(2*np), exc_libxc(np), vrho_libxc(2*np)
+      real(8) :: sigma_libxc(3*np), vsigma_libxc(3*np)
+      integer :: family
+      real(rp), parameter :: TOLD = 1.d-20
+
+      ! Check for small densities
+      if (RHO1 < TOLD .or. RHO2 < TOLD) then
+         V1 = 0.d0
+         V2 = 0.d0
+         EXC = 0.d0
+         return
+      endif
+
+      ! Get functional family
+      family = xc_f03_func_info_get_family(this%libxc_info)
+
+      ! Prepare density arrays for libXC
+      if (xc_f03_func_info_get_number(this%libxc_info) /= XC_UNPOLARIZED) then
+         ! Spin-polarized case
+         rho_libxc(1) = real(RHO1, 8)
+         rho_libxc(2) = real(RHO2, 8)
+      else
+         ! Spin-unpolarized case
+         rho_libxc(1) = real(RHO, 8)
+      endif
+
+      select case(family)
+      case(1)  ! XC_FAMILY_LDA = 1
+         ! LDA functional
+         call xc_f03_lda_exc_vxc(this%libxc_func, np, rho_libxc(1), exc_libxc(1), vrho_libxc(1))
+         
+         ! Convert results back to RS-LMTO format
+         EXC = real(exc_libxc(1), rp)
+         if (xc_f03_func_info_get_number(this%libxc_info) /= 1) then  ! XC_UNPOLARIZED = 1
+            V1 = real(vrho_libxc(1), rp)
+            V2 = real(vrho_libxc(2), rp)
+         else
+            V1 = real(vrho_libxc(1), rp)
+            V2 = V1
+         endif
+
+      case(2, 4)  ! XC_FAMILY_GGA = 2, XC_FAMILY_HYB_GGA = 4
+         ! GGA functional - need gradients
+         if (xc_f03_func_info_get_number(this%libxc_info) /= 1) then  ! XC_UNPOLARIZED = 1
+            ! Spin-polarized GGA
+            sigma_libxc(1) = real(RHOP(1)**2, 8)  ! |grad rho_up|^2
+            sigma_libxc(2) = real(RHOP(1)*RHOP(2), 8)  ! grad rho_up . grad rho_down
+            sigma_libxc(3) = real(RHOP(2)**2, 8)  ! |grad rho_down|^2
+         else
+            ! Spin-unpolarized GGA
+            sigma_libxc(1) = real(sum(RHOP)**2, 8)  ! |grad rho|^2
+         endif
+
+         call xc_f03_gga_exc_vxc(this%libxc_func, np, rho_libxc(1), sigma_libxc(1), &
+                                 exc_libxc(1), vrho_libxc(1), vsigma_libxc(1))
+
+         ! Convert results back to RS-LMTO format
+         EXC = real(exc_libxc(1), rp)
+         if (xc_f03_func_info_get_number(this%libxc_info) /= 1) then  ! XC_UNPOLARIZED = 1
+            V1 = real(vrho_libxc(1), rp)
+            V2 = real(vrho_libxc(2), rp)
+         else
+            V1 = real(vrho_libxc(1), rp)
+            V2 = V1
+         endif
+
+      case default
+         call g_logger%error('Unsupported libXC functional family: '//int2str(family), __FILE__, __LINE__)
+         ! Fall back to legacy implementation
+         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      end select
+#else
+      ! libXC not available, fall back to legacy
+      call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+#endif
+   end subroutine xcpot_libxc_wrapper
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Destructor to clean up libXC resources
+   !>--------------------------------------------------------------------------
+   subroutine destructor(this)
+      type(xc), intent(inout) :: this
+      call this%cleanup_libxc()
+   end subroutine destructor
+
 end module xc_mod

@@ -2682,9 +2682,10 @@ contains
          R = (rofi(3) - rofi(2))
          RCE = R*R
          if (IXC == 5 .or. IXC >= 8) then
-            ! RHODD(2) = RHODD(1)
-            RHOD(1) = 0.5*RHOP(1, 1)/R
-            RHODD(1) = 0.5*(RHOPP(1, 1) - RHOP(1, 1))/RCE
+            ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
+            ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+            RHOD(1) = 0.5*RHOP(1, 1)
+            RHODD(1) = 0.5*RHOPP(1, 1)
             RHOD(2) = RHOD(1)
             RHODD(2) = RHODD(1)
          end if
@@ -2697,8 +2698,10 @@ contains
             R = (rofi(3) - rofi(2))
             RCE = R*R
             if (IXC == 5 .or. IXC >= 8) then
-               RHOD(1) = 0.5*RHOP(IR, 1)/R
-               RHODD(1) = 0.5*(RHOPP(IR, 1) - RHOP(IR, 1))/RCE
+               ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
+               ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+               RHOD(1) = 0.5*RHOP(IR, 1)
+               RHODD(1) = 0.5*RHOPP(IR, 1)
                RHOD(2) = RHOD(1)
                RHODD(2) = RHODD(1)
             end if
@@ -2723,14 +2726,13 @@ contains
          R = (rofi(3) - rofi(2))
          RCE = R*R
          if (IXC == 5 .or. IXC >= 8) then
-            ! RHOD(2) = RHOP(IR, 1) / R
-            ! RHOD(1) = RHOP(IR, 2) / R
-            ! RHODD(2) = (RHOPP(IR, 1)-RHOP(IR, 1)) / RCE
-            ! RHODD(1) = (RHOPP(IR, 2)-RHOP(IR, 2)) / RCE
-            RHOD(2) = RHOP(1, 1)/R
-            RHOD(1) = RHOP(1, 2)/R
-            RHODD(2) = (RHOPP(1, 1) - RHOP(1, 1))/RCE
-            RHODD(1) = (RHOPP(1, 2) - RHOP(1, 2))/RCE
+            ! Fixed: RHOD should be dρ/dr, not dρ/dr/r  
+            ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+            ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
+            RHOD(2) = RHOP(1, 1)
+            RHOD(1) = RHOP(1, 2)
+            RHODD(2) = RHOPP(1, 1)
+            RHODD(1) = RHOPP(1, 2)
          end if
          call xc_obj%XCPOT(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
          !V(1, 1) = V(1, 1) + VXC1
@@ -2744,10 +2746,12 @@ contains
             RHO1 = tRHO(IR, 1)
             RHO2 = tRHO(IR, 2)
             if (IXC == 5 .or. IXC >= 8) then
-               RHOD(2) = RHOP(IR, 1)/R
-               RHOD(1) = RHOP(IR, 2)/R
-               RHODD(2) = (RHOPP(IR, 1) - RHOP(IR, 1))/RCE
-               RHODD(1) = (RHOPP(IR, 2) - RHOP(IR, 2))/RCE
+               ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
+               ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+               RHOD(2) = RHOP(IR, 1)
+               RHOD(1) = RHOP(IR, 2)
+               RHODD(2) = RHOPP(IR, 1)
+               RHODD(1) = RHOPP(IR, 2)
             end if
             call xc_obj%XCPOT(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
             !
