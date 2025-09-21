@@ -1649,8 +1649,8 @@ contains
       allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       this%projected_dos = 0.0_rp
 
-      ! Number of orbitals per spin (assuming spd basis: 9 orbitals per spin)
-      n_orb_per_spin = this%max_orb_channels / 2
+   ! Number of orbitals per spin: derive from actual eigenvector dimension to match diagonalization
+   n_orb_per_spin = size(this%eigenvectors, 1) / 2
 
       ! For now, only implement Gaussian method for projections
       if (trim(this%dos_method) /= 'gaussian') then
@@ -1760,7 +1760,7 @@ contains
 
    ! Parallelize over energy points: each thread writes to independent i_energy
 #ifdef _OPENMP
-   !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,n_orb_per_spin,psi_element) shared(this) default(none)
+   !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element) firstprivate(n_orb_per_spin) shared(this) default(none)
 #endif
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
@@ -1768,8 +1768,8 @@ contains
          ! Loop over tetrahedra
          do i_tet = 1, this%n_tetrahedra
 
-            ! Loop over bands
-            do i_band = 1, this%max_orb_channels
+            ! Loop over bands (use actual number of eigenvalues/bands)
+            do i_band = 1, size(this%eigenvalues, 1)
 
                ! Get eigenvalues at tetrahedron corners
                do i_corner = 1, 4

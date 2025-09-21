@@ -227,6 +227,10 @@ module lattice_mod
       !>
       !> Primitive vectors in units of lattice parameter \ref alat
       real(rp), dimension(3, 3) :: a
+   !> Inverse of the cartesian lattice matrix (a * alat) precomputed to speed up
+   !> conversions from cartesian to fractional coordinates
+   real(rp), dimension(3, 3) :: a_cart_inv
+   logical :: a_cart_inv_ready
       !> Variables to handle periodic boundary conditions
       !> 
       !> Variables to handle periodic boundary conditions
@@ -915,6 +919,8 @@ contains
          this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
          write (*, *) 'wav', this%wav
       end if
+      ! Precompute inverse of cartesian lattice matrix (this%a * this%alat)
+      call compute_cartesian_inverse(this)
       if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
    end subroutine build_data
 
@@ -2272,7 +2278,13 @@ contains
             this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
             ! Store direct coordinate version (fractional coordinates)
             ! Convert cartesian vector to fractional coordinates using lattice vectors
-            call cartesian_to_fractional(this%sbarvec(:, ii), this%sbarvec_direct(:, ii), this%a, this%alat)
+            if (this%a_cart_inv_ready) then
+               this%sbarvec_direct(1, ii) = this%a_cart_inv(1, 1)*this%sbarvec(1, ii) + this%a_cart_inv(1, 2)*this%sbarvec(2, ii) + this%a_cart_inv(1, 3)*this%sbarvec(3, ii)
+               this%sbarvec_direct(2, ii) = this%a_cart_inv(2, 1)*this%sbarvec(1, ii) + this%a_cart_inv(2, 2)*this%sbarvec(2, ii) + this%a_cart_inv(2, 3)*this%sbarvec(3, ii)
+               this%sbarvec_direct(3, ii) = this%a_cart_inv(3, 1)*this%sbarvec(1, ii) + this%a_cart_inv(3, 2)*this%sbarvec(2, ii) + this%a_cart_inv(3, 3)*this%sbarvec(3, ii)
+            else
+               call cartesian_to_fractional(this%sbarvec(:, ii), this%sbarvec_direct(:, ii), this%a, this%alat)
+            end if
          end if
 !!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
 !!    "in DBAR1."
@@ -3693,7 +3705,10 @@ contains
       real(rp), dimension(3), intent(out) :: frac_vec
       real(rp), dimension(3, 3), intent(in) :: lattice_vectors
       real(rp), intent(in) :: alat
-      ! Local variables
+      ! Try to use precomputed inverse if available (lattice module stores it in module variable)
+      ! Note: We can't directly access 'this' here, so we expect callers that have access to the lattice
+      ! object to call compute_cartesian_inverse() once after setting the lattice. As a fallback we
+      ! compute the inverse here.
       real(rp), dimension(3, 3) :: lattice_matrix, inv_matrix
       real(rp) :: det
       integer :: i
@@ -3703,12 +3718,11 @@ contains
          lattice_matrix(:, i) = lattice_vectors(:, i) * alat
       end do
 
-      ! Calculate determinant
+      ! Compute inverse on-the-fly (fallback)
       det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
           - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
           + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
 
-      ! Calculate inverse matrix elements
       inv_matrix(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
       inv_matrix(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
       inv_matrix(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
@@ -3724,5 +3738,34 @@ contains
       frac_vec(2) = inv_matrix(2, 1) * cart_vec(1) + inv_matrix(2, 2) * cart_vec(2) + inv_matrix(2, 3) * cart_vec(3)
       frac_vec(3) = inv_matrix(3, 1) * cart_vec(1) + inv_matrix(3, 2) * cart_vec(2) + inv_matrix(3, 3) * cart_vec(3)
    end subroutine cartesian_to_fractional
+
+   !-----------------------------------------------------------------------
+   !> Compute and store inverse of cartesian lattice matrix (this%a * this%alat)
+   subroutine compute_cartesian_inverse(this)
+      class(lattice), intent(inout) :: this
+      real(rp), dimension(3,3) :: lattice_matrix
+      real(rp) :: det
+
+      integer :: i
+      do i = 1, 3
+         lattice_matrix(:, i) = this%a(:, i) * this%alat
+      end do
+
+      det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
+          - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
+          + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
+
+      this%a_cart_inv(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
+      this%a_cart_inv(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
+      this%a_cart_inv(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
+      this%a_cart_inv(2, 1) = (lattice_matrix(2, 3) * lattice_matrix(3, 1) - lattice_matrix(2, 1) * lattice_matrix(3, 3)) / det
+      this%a_cart_inv(2, 2) = (lattice_matrix(1, 1) * lattice_matrix(3, 3) - lattice_matrix(1, 3) * lattice_matrix(3, 1)) / det
+      this%a_cart_inv(2, 3) = (lattice_matrix(1, 3) * lattice_matrix(2, 1) - lattice_matrix(1, 1) * lattice_matrix(2, 3)) / det
+      this%a_cart_inv(3, 1) = (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1)) / det
+      this%a_cart_inv(3, 2) = (lattice_matrix(1, 2) * lattice_matrix(3, 1) - lattice_matrix(1, 1) * lattice_matrix(3, 2)) / det
+      this%a_cart_inv(3, 3) = (lattice_matrix(1, 1) * lattice_matrix(2, 2) - lattice_matrix(1, 2) * lattice_matrix(2, 1)) / det
+
+      this%a_cart_inv_ready = .true.
+   end subroutine compute_cartesian_inverse
 
 end module lattice_mod
