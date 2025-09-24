@@ -1320,6 +1320,8 @@ contains
       real(rp), dimension(1) :: exc_libxc
       real(rp), dimension(2) :: vrho_libxc  ! Potentials for each spin
       real(rp), dimension(3) :: vsigma_libxc ! GGA gradient potentials
+      real(rp), dimension(3) :: vsigma_x ! GGA exchange gradient potentials (spin-polarized)
+      real(rp), dimension(1) :: vsigma_x_unpol ! GGA exchange gradient potentials (unpolarized)
       type(xc_f03_func_t) :: temp_func  ! Temporary functional for testing
       type(xc_f03_func_t) :: exch_func  ! Exchange functional for correlation-only functionals
       real(rp), dimension(1) :: exc_x
@@ -1417,8 +1419,34 @@ contains
             
             ! Create local functional for GGA calculation
             call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
-            call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
-                                    exc_libxc, vrho_libxc, vsigma_libxc)
+            
+            ! Get functional kind to check if it's correlation-only
+            func_kind = xc_f03_func_info_get_kind(xc_f03_func_get_info(temp_func))
+            
+            if (func_kind == XC_CORRELATION) then
+               ! This is a correlation-only functional, add GGA exchange
+               call xc_f03_func_init(exch_func, 101, nspin) ! XC_GGA_X_PBE = 101
+               call xc_f03_gga_exc_vxc(exch_func, 1_c_size_t, rho_libxc, sigma_libxc, &
+                                       exc_x, vrho_x, vsigma_x)
+               call xc_f03_func_end(exch_func)
+               
+               ! Get correlation part
+               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
+                                       exc_libxc, vrho_libxc, vsigma_libxc)
+               
+               ! Combine exchange and correlation
+               exc_libxc(1) = exc_libxc(1) + exc_x(1)
+               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
+               vrho_libxc(2) = vrho_libxc(2) + vrho_x(2)
+               vsigma_libxc(1) = vsigma_libxc(1) + vsigma_x(1)
+               vsigma_libxc(2) = vsigma_libxc(2) + vsigma_x(2)
+               vsigma_libxc(3) = vsigma_libxc(3) + vsigma_x(3)
+            else
+               ! This is a full XC functional, just call it
+               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
+                                       exc_libxc, vrho_libxc, vsigma_libxc)
+            endif
+            
             call xc_f03_func_end(temp_func)
 
             ! Convert libXC outputs from Hartree to Rydberg (internal units)
@@ -1434,8 +1462,31 @@ contains
             
             ! Create local functional for GGA calculation
             call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
-            call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
-                                    exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
+            
+            ! Get functional kind to check if it's correlation-only
+            func_kind = xc_f03_func_info_get_kind(xc_f03_func_get_info(temp_func))
+            
+            if (func_kind == XC_CORRELATION) then
+               ! This is a correlation-only functional, add GGA exchange
+               call xc_f03_func_init(exch_func, 101, nspin) ! XC_GGA_X_PBE = 101
+               call xc_f03_gga_exc_vxc(exch_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
+                                       exc_x, vrho_x(1:1), vsigma_x_unpol)
+               call xc_f03_func_end(exch_func)
+               
+               ! Get correlation part  
+               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
+                                       exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
+               
+               ! Combine exchange and correlation
+               exc_libxc(1) = exc_libxc(1) + exc_x(1)
+               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
+               vsigma_libxc(1) = vsigma_libxc(1) + vsigma_x_unpol(1)
+            else
+               ! This is a full XC functional, just call it
+               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
+                                       exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
+            endif
+            
             call xc_f03_func_end(temp_func)
 
             ! Convert libXC outputs from Hartree to Rydberg (internal units)
