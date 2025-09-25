@@ -1,5 +1,5 @@
 &calculation
-pre_processing = 'bravais'
+post_processing = 'conductivity'
 verbose = T
 /
 &lattice

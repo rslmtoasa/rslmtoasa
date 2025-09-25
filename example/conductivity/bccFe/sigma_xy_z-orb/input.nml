@@ -1,5 +1,5 @@
 &calculation
-pre_processing = 'bravais'
+post_processing = 'conductivity'
 verbose = T
 /
 &lattice
@@ -28,7 +28,7 @@ nstep = 100
 &hamiltonian
 v_alpha = 0, 1, 0
 v_beta = 1, 0, 0
-js_alpha = 'z'
+jl_alpha = 'z'
 /
 &energy
 fermi = -0.069099
@@ -42,7 +42,7 @@ nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
 cond_ll = 300
 lld = 150
 recur = 'chebyshev'
-cond_type = 'spin'
+cond_type = 'orbial'
 cond_calctype = 'per_type'
 /
 &mix
