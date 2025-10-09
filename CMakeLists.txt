@@ -9,7 +9,7 @@
 # cmake_policy(SET CMP0054 NEW)
 
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.12)
 
 set(PROJECT_NAME rslmto)
 project(${PROJECT_NAME})
@@ -271,4 +271,6 @@ if(WIN32)
     # set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_SOURCE_DIR}/PathEnvironment.wxs")
    set(CPACK_WIX_VERSION "4")
    endif()
+
 include(CPack)
+
