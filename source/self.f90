@@ -2601,245 +2601,477 @@ contains
       end if
    end subroutine POISS0
 
-   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
-      !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
-      !
-      ! use xcdata
-      ! use common_asd, only : asd_atom, bxc
-      ! use control_mod, only : control_obj
-      !.. Implicit Declarations ..
-      implicit none
-      !
-      !.. Formal Arguments ..
-      class(self), intent(inout) :: this
-      type(xc), intent(in) :: xc_obj
-      integer, intent(in) :: NR, NSP
-      real(rp), intent(in) :: A, B
-      real(rp) :: Z
-      real(rp), dimension(2), intent(inout) :: RHO0
-      real(rp), dimension(NR), intent(in) :: rofi
-      real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
-      real(rp), dimension(NR, NSP), intent(in) :: RHO
-      real(rp), dimension(NR, NSP), intent(inout) :: V
-      real(rp), intent(in)  :: B_fsm
-      !
-      !.. Local Scalars ..
-      integer :: IR, ISP, IXC
-      real(rp) :: DRDI, EXC, EXC1, EXC2, OB4PI, PI, RHO2, RHO3, RHOT1, &
-                  RHOT2, RHOTRU, VXC, VXC1, VXC2, WGT, &
-                  RHO1, R, RCE
-      real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
-      real(rp), dimension(2) :: RHOD, RHODD
-      real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
-      !.. External Calls ..
-      ! external EVXC
-      !
-      !.. Intrinsic Functions ..
-      intrinsic ATAN, MOD
-      !
-      ! ... Executable Statements ...
-      !
-      PI = 4.d0*ATAN(1.d0)
-      OB4PI = 1.d0/(4.d0*PI)
-      IXC = xc_obj%txc
-      !
-      ! Constraining field related hacks below
-      Bxc_up = 0.0d0
-      Bxc_dw = 0.0d0
-      !
-      ! Extrapolate density to core point
-      do ISP = 1, NSP
-         RHOEPS(ISP) = 0.d0
-         RHOMU(ISP) = 0.d0
-         RHO2 = RHO(2, ISP)/rofi(2)**2
-         RHO3 = RHO(3, ISP)/rofi(3)**2
-         RHO0(ISP) = OB4PI*(RHO2*rofi(3) - RHO3*rofi(2))/(rofi(3) - rofi(2))
+subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
+   !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
+   !
+   implicit none
+   !
+   !.. Formal Arguments ..
+   class(self), intent(inout) :: this
+   type(xc), intent(in) :: xc_obj
+   integer, intent(in) :: NR, NSP
+   real(rp), intent(in) :: A, B
+   real(rp) :: Z
+   real(rp), dimension(2), intent(inout) :: RHO0
+   real(rp), dimension(NR), intent(in) :: rofi
+   real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
+   real(rp), dimension(NR, NSP), intent(in) :: RHO
+   real(rp), dimension(NR, NSP), intent(inout) :: V
+   real(rp), intent(in)  :: B_fsm
+   !
+   !.. Local Scalars ..
+   integer :: IR, ISP, IXC
+   real(rp) :: DRDI, EXC, EXC1, OB4PI, PI, RHO2, RHO3, &
+               VXC, VXC1, VXC2, WGT, RHO1, R
+   real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
+   real(rp), dimension(2) :: RHOD, RHODD
+   real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
+   !
+   !.. Intrinsic Functions ..
+   intrinsic ATAN, MOD
+   !
+   ! ... Executable Statements ...
+   !
+   PI = 4.d0*ATAN(1.d0)
+   OB4PI = 1.d0/(4.d0*PI)
+   IXC = xc_obj%txc
+   !
+   ! Constraining field related hacks below
+   Bxc_up = 0.0d0
+   Bxc_dw = 0.0d0
+   !
+   ! Extrapolate density to core point
+   do ISP = 1, NSP
+      RHOEPS(ISP) = 0.d0
+      RHOMU(ISP) = 0.d0
+      RHO2 = RHO(2, ISP)/rofi(2)**2
+      RHO3 = RHO(3, ISP)/rofi(3)**2
+      RHO0(ISP) = OB4PI*(RHO2*rofi(3) - RHO3*rofi(2))/(rofi(3) - rofi(2))
+   end do
+   
+   ! Calculate gradients in case of GGA
+   do ISP = 1, NSP
+      ! Build physical density array: ρ(r) = RHO(r)/(4πr²)
+      tRHO(1, ISP) = RHO0(ISP)
+      do IR = 2, NR
+         tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
       end do
-      ! Calculate gradients in case of GGA
-      do ISP = 1, NSP
-         tRHO(1, ISP) = RHO0(ISP)
-         do IR = 2, NR
-            tRHO(IR, 1) = RHO(IR, 1)*OB4PI/rofi(IR)**2
-            tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
-         end do
-         if (IXC == 5 .or. IXC >= 8) then
-            !subroutine radgra(a, b, nr, rofi, f, gradf)
-            !call DIFFN(tRHO(1, ISP), RHOP(1, ISP), RHOPP(1, ISP), NR, A)
-            call radgra(a, b, NR, rofi, tRHO(1, ISP), RHOP(1, ISP))
-            call radgra(a, b, NR, rofi, RHOP(1, ISP), RHOPP(1, ISP))
-            !Comment line below or not?
-            !call DIFFN(tRHO(2, ISP), RHOP(2, ISP), RHOPP(2, ISP), NR, A)
-            !call radgra(a, b, NR, rofi, tRHO(2, ISP), RHOP(2, ISP))
-            !call radgra(a, b, NR, rofi, RHOP(2, ISP), RHOPP(2, ISP))
-         else
-            RHOP = 0.0d0
-            RHOPP = 0.0d0
-         end if
-      end do
-      if (NSP == 1) then
-         RHO1 = 0.5*tRHO(1, 1)
+      
+      !if (IXC == 5 .or. IXC >= 8) then
+         ! Compute dρ/dr by differentiating physical density
+         call radgra(a, b, NR, rofi, tRHO(1, ISP), RHOP(1, ISP))
+         ! Compute d²ρ/dr² by differentiating dρ/dr
+         call radgra(a, b, NR, rofi, RHOP(1, ISP), RHOPP(1, ISP))
+      !else
+      !   RHOP = 0.0d0
+      !   RHOPP = 0.0d0
+      !end if
+   end do
+   
+   if (NSP == 1) then
+      ! Non-spin-polarized case
+      ! First point (IR=1, at or near origin)
+      RHO1 = 0.5*tRHO(1, 1)
+      RHO2 = RHO1
+      R = rofi(1)
+      if (R < 1.d-10) R = rofi(2)*0.1d0  ! Handle r=0
+      
+      !if (IXC == 5 .or. IXC >= 8) then
+         RHOD(1) = 0.5*RHOP(1, 1)
+         RHODD(1) = 0.5*RHOPP(1, 1)
+         RHOD(2) = RHOD(1)
+         RHODD(2) = RHODD(1)
+      !end if
+      
+      call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, &
+                                VXC2, VXC1, EXC)
+      V(1, 1) = V(1, 1) + VXC1
+      
+      ! Loop over remaining radial points
+      do IR = 2, NR
+         RHO1 = 0.5*tRHO(IR, 1)
          RHO2 = RHO1
-         R = (rofi(3) - rofi(2))
-         RCE = R*R
-         if (IXC == 5 .or. IXC >= 8) then
-            ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-            ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-            RHOD(1) = 0.5*RHOP(1, 1)
-            RHODD(1) = 0.5*RHOPP(1, 1)
+         R = rofi(IR)
+         
+         !if (IXC == 5 .or. IXC >= 8) then
+            RHOD(1) = 0.5*RHOP(IR, 1)
+            RHODD(1) = 0.5*RHOPP(IR, 1)
             RHOD(2) = RHOD(1)
             RHODD(2) = RHODD(1)
+         !end if
+         
+         call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(IR, 1), RHOD, RHODD, R, &
+                                   VXC2, VXC1, EXC1)
+         
+         V(IR, 1) = V(IR, 1) + VXC1
+         
+         ! Simpson's rule weights
+         WGT = 2.d0*(MOD(IR + 1, 2) + 1)/3.d0
+         if (IR == 1 .or. IR == NR) then
+            WGT = 1.d0/3.d0
          end if
-         ! CALL EVXC(RHO0(1), 0.5D0*RHO0(1), EXC, VXC)
-         call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
-         V(1, 1) = V(1, 1) + VXC1
-         do IR = 2, NR
-            RHO1 = 0.5*tRHO(1, 1)
-            RHO2 = RHO1
-            R = (rofi(3) - rofi(2))
-            RCE = R*R
-            if (IXC == 5 .or. IXC >= 8) then
-               ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-               ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-               RHOD(1) = 0.5*RHOP(IR, 1)
-               RHODD(1) = 0.5*RHOPP(IR, 1)
-               RHOD(2) = RHOD(1)
-               RHODD(2) = RHODD(1)
-            end if
-            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
-            !RHOTRU = RHO(IR, 1) * OB4PI / rofi(IR)**2
-        !!       Call EVXC(RHOTRU, 0.5D0*RHOTRU, EXC, VXC)
-            !call EVXC(RHOTRU, 0.5*RHOTRU, EXC, VXC)
-            V(IR, 1) = V(IR, 1) + VXC1
-            WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
-            if (IR == 1 .or. IR == NR) then
-               WGT = 1.d0/3.d0
-            end if
-            DRDI = A*(rofi(IR) + B)
-            RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
-            RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
-         end do
-      else
-         ! call EVXC(RHO0(1)+RHO0(2), RHO0(1), EXC1, VXC1)
-         ! call EVXC(RHO0(1)+RHO0(2), RHO0(2), EXC2, VXC2)
-         RHO1 = tRHO(1, 1)
-         RHO2 = tRHO(1, 2)
-         R = (rofi(3) - rofi(2))
-         RCE = R*R
-         if (IXC == 5 .or. IXC >= 8) then
-            ! Fixed: RHOD should be dρ/dr, not dρ/dr/r  
-            ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-            ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
-            RHOD(2) = RHOP(1, 1)
-            RHOD(1) = RHOP(1, 2)
-            RHODD(2) = RHOPP(1, 1)
-            RHODD(1) = RHOPP(1, 2)
+         
+         DRDI = A*(rofi(IR) + B)
+         RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
+         RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
+      end do
+      
+   else
+      ! Spin-polarized case (NSP=2)
+      ! First point (IR=1, at or near origin)
+      RHO1 = tRHO(1, 1)
+      RHO2 = tRHO(1, 2)
+      R = rofi(1)
+      if (R < 1.d-10) R = rofi(2)*0.1d0  ! Handle r=0
+      
+      !if (IXC == 5 .or. IXC >= 8) then
+         ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
+         RHOD(2) = RHOP(1, 1)
+         RHOD(1) = RHOP(1, 2)
+         RHODD(2) = RHOPP(1, 1)
+         RHODD(1) = RHOPP(1, 2)
+      !end if
+      
+      call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1) + tRHO(1, 2), &
+                                RHOD, RHODD, R, VXC2, VXC1, EXC1)
+      
+      V(1, 1) = V(1, 1) + VXC1 + B_fsm
+      V(1, 2) = V(1, 2) + VXC2 - B_fsm
+      
+      ! Loop over remaining radial points
+      do IR = 2, NR
+         R = rofi(IR)
+         RHO1 = tRHO(IR, 1)
+         RHO2 = tRHO(IR, 2)
+         RHO3 = RHO1 + RHO2
+         
+         !if (IXC == 5 .or. IXC >= 8) then
+            RHOD(2) = RHOP(IR, 1)
+            RHOD(1) = RHOP(IR, 2)
+            RHODD(2) = RHOPP(IR, 1)
+            RHODD(1) = RHOPP(IR, 2)
+         !end if
+         
+         call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, &
+                                   VXC2, VXC1, EXC1)
+         
+         ! Add XC potential with constraining field for FSM
+         V(IR, 1) = V(IR, 1) + VXC1 + B_fsm
+         V(IR, 2) = V(IR, 2) + VXC2 - B_fsm
+         
+         ! Simpson's rule weights
+         WGT = 2.d0*(MOD(IR + 1, 2) + 1)/3.d0
+         if (IR == 1 .or. IR == NR) then
+            WGT = 1.d0/3.d0
          end if
-         call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
-         !V(1, 1) = V(1, 1) + VXC1
-         !V(1, 2) = V(1, 2) + VXC2
-         V(1, 1) = V(1, 1) + VXC1 + B_fsm
-         V(1, 2) = V(1, 2) + VXC2 - B_fsm
-         do IR = 2, NR
-            R = rofi(IR)
-            RCE = R*R
-            RHO3 = tRHO(IR, 1) + tRHO(IR, 2)
-            RHO1 = tRHO(IR, 1)
-            RHO2 = tRHO(IR, 2)
-            if (IXC == 5 .or. IXC >= 8) then
-               ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-               ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-               RHOD(2) = RHOP(IR, 1)
-               RHOD(1) = RHOP(IR, 2)
-               RHODD(2) = RHOPP(IR, 1)
-               RHODD(1) = RHOPP(IR, 2)
-            end if
-            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
-            !
-            !RHOT1 = RHO(IR, 1) * (OB4PI/rofi(IR)**2)
-            !RHOT2 = RHO(IR, 2) * (OB4PI/rofi(IR)**2)
-            !call EVXC(RHOT1+RHOT2, RHOT1, EXC1, VXC1)
-            !call EVXC(RHOT1+RHOT2, RHOT2, EXC2, VXC2)
-            !V(IR, 1) = V(IR, 1) + VXC1
-            !V(IR, 2) = V(IR, 2) + VXC2
-            ! Insertion of constraining field for FSM
-            V(IR, 1) = V(IR, 1) + VXC1 + B_fsm
-            V(IR, 2) = V(IR, 2) + VXC2 - B_fsm
-            WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
-            if (IR == 1 .or. IR == NR) then
-               WGT = 1.d0/3.d0
-            end if
-            DRDI = A*(rofi(IR) + B)
-            RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
-            RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
-            !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
-            RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR, 2)*EXC1
-            RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
-            !RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*VXC2
-            !Bxc_up=Bxc_up + WGT*DRDI*VXC1
-            !Bxc_dw=Bxc_dw + WGT*DRDI*VXC2
-            Bxc_up = Bxc_up + WGT*DRDI*VXC1
-            Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
-         end do
-         !write(*, *)wgt, drdi, exc1, vxc1, vxc2
-         Bxc_tot = Bxc_up - Bxc_dw
-         ! RHOEPS=RHOEPS/4.0d0
-         ! AB comment
-      !!! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
-         !print *, ´B_XC´, Bxc_tot, rhomu(1)-rhomu(2)
-         !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
-      end if
-   end subroutine VXC0SP
-
-   subroutine radgra(a, b, nr, rofi, f, gradf)
-      !- radial gradient
-      !-----------------------------------------------------------------------
-      !i Inputs:
-      !i   a     :the mesh points are given by rofi(i) = b [e^(a(i-1)) -1]
-      !i   b     :                 -//-
-      !i   nr    :number of mesh points
-      !i   rofi  :radial mesh points
-      !i   f     :given function defined in a mesh rofi(i)
-      !o Outputs:
-      !o  gradf  :derivative of the function f defined in a mesh rofi(i)
-      !-----------------------------------------------------------------------
-      implicit none
-      ! Passed variables:
-      integer, intent(in) ::  nr
-      real(rp), intent(in) :: a, b
-      real(rp), dimension(nr), intent(in) :: rofi
-      real(rp), dimension(nr), intent(in) :: f
-      real(rp), dimension(nr), intent(out) :: gradf
-
-      ! Local variables:
-      integer :: nm2, i
-      !
-      nm2 = nr - 2
-      ! for the first and second point are used the Forward edifferences
-      ! (Handbook, 25.3.9 with 25.1.1)
-      gradf(1) = ((6.d0*f(2) + 20.d0/3.d0*f(4) + 1.2d0*f(6)) &
-                  - (2.45d0*f(1) + 7.5d0*f(3) + 3.75d0*f(5) + 1.d0/6.d0*f(7)))/a
-      !
-      gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
-                  - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
-      !
-      ! --- Five points´ formula  (25.3.6)
-      do i = 3, nm2
-         gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
+         
+         DRDI = A*(rofi(IR) + B)
+         RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
+         RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
+         RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR, 2)*EXC1
+         RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
+         
+         Bxc_up = Bxc_up + WGT*DRDI*VXC1
+         Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
       end do
-      ! --- Five points´ formula  (25.3.6)
-      gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
-                       + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
-      gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
-                   - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
-      !
-      ! --- Three points´ formula  (25.3.4)
-      !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
-      !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
-      do i = 1, nr
-         gradf(i) = gradf(i)/(rofi(i) + b)
-      end do
-      return
-   end subroutine radgra
+      
+      Bxc_tot = Bxc_up - Bxc_dw
+      ! Uncomment if needed:
+      ! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
+   end if
+   
+end subroutine VXC0SP
+
+
+subroutine radgra(a, b, nr, rofi, f, gradf)
+   !- radial gradient
+   !-----------------------------------------------------------------------
+   !i Inputs:
+   !i   a     :the mesh points are given by rofi(i) = b [e^(a(i-1)) -1]
+   !i   b     :                 -//-
+   !i   nr    :number of mesh points
+   !i   rofi  :radial mesh points
+   !i   f     :given function defined in a mesh rofi(i)
+   !o Outputs:
+   !o  gradf  :derivative of the function f defined in a mesh rofi(i)
+   !-----------------------------------------------------------------------
+   implicit none
+   ! Passed variables:
+   integer, intent(in) ::  nr
+   real(rp), intent(in) :: a, b
+   real(rp), dimension(nr), intent(in) :: rofi
+   real(rp), dimension(nr), intent(in) :: f
+   real(rp), dimension(nr), intent(out) :: gradf
+   ! Local variables:
+   integer :: nm2, i
+   !
+   nm2 = nr - 2
+   ! for the first and second point are used the Forward differences
+   ! (Handbook, 25.3.9 with 25.1.1)
+   gradf(1) = ((6.d0*f(2) + 20.d0/3.d0*f(4) + 1.2d0*f(6)) &
+               - (2.45d0*f(1) + 7.5d0*f(3) + 3.75d0*f(5) + 1.d0/6.d0*f(7)))/a
+   !
+   gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
+               - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
+   !
+   ! --- Five points' formula  (25.3.6)
+   do i = 3, nm2
+      gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
+   end do
+   ! --- Five points' formula  (25.3.6)
+   gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
+                    + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
+   gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
+                - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
+   !
+   ! --- Three points' formula  (25.3.4)
+   !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
+   !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
+   do i = 1, nr
+      gradf(i) = gradf(i)/(rofi(i) + b)
+   end do
+   return
+end subroutine radgra
+
+!!!    subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
+!!!       !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
+!!!       !
+!!!       ! use xcdata
+!!!       ! use common_asd, only : asd_atom, bxc
+!!!       ! use control_mod, only : control_obj
+!!!       !.. Implicit Declarations ..
+!!!       implicit none
+!!!       !
+!!!       !.. Formal Arguments ..
+!!!       class(self), intent(inout) :: this
+!!!       type(xc), intent(in) :: xc_obj
+!!!       integer, intent(in) :: NR, NSP
+!!!       real(rp), intent(in) :: A, B
+!!!       real(rp) :: Z
+!!!       real(rp), dimension(2), intent(inout) :: RHO0
+!!!       real(rp), dimension(NR), intent(in) :: rofi
+!!!       real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
+!!!       real(rp), dimension(NR, NSP), intent(in) :: RHO
+!!!       real(rp), dimension(NR, NSP), intent(inout) :: V
+!!!       real(rp), intent(in)  :: B_fsm
+!!!       !
+!!!       !.. Local Scalars ..
+!!!       integer :: IR, ISP, IXC
+!!!       real(rp) :: DRDI, EXC, EXC1, EXC2, OB4PI, PI, RHO2, RHO3, RHOT1, &
+!!!                   RHOT2, RHOTRU, VXC, VXC1, VXC2, WGT, &
+!!!                   RHO1, R, RCE
+!!!       real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
+!!!       real(rp), dimension(2) :: RHOD, RHODD
+!!!       real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
+!!!       !.. External Calls ..
+!!!       ! external EVXC
+!!!       !
+!!!       !.. Intrinsic Functions ..
+!!!       intrinsic ATAN, MOD
+!!!       !
+!!!       ! ... Executable Statements ...
+!!!       !
+!!!       PI = 4.d0*ATAN(1.d0)
+!!!       OB4PI = 1.d0/(4.d0*PI)
+!!!       IXC = xc_obj%txc
+!!!       !
+!!!       ! Constraining field related hacks below
+!!!       Bxc_up = 0.0d0
+!!!       Bxc_dw = 0.0d0
+!!!       !
+!!!       ! Extrapolate density to core point
+!!!       do ISP = 1, NSP
+!!!          RHOEPS(ISP) = 0.d0
+!!!          RHOMU(ISP) = 0.d0
+!!!          RHO2 = RHO(2, ISP)/rofi(2)**2
+!!!          RHO3 = RHO(3, ISP)/rofi(3)**2
+!!!          RHO0(ISP) = OB4PI*(RHO2*rofi(3) - RHO3*rofi(2))/(rofi(3) - rofi(2))
+!!!       end do
+!!!       ! Calculate gradients in case of GGA
+!!!       do ISP = 1, NSP
+!!!          tRHO(1, ISP) = RHO0(ISP)
+!!!          do IR = 2, NR
+!!!             tRHO(IR, 1) = RHO(IR, 1)*OB4PI/rofi(IR)**2
+!!!             tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
+!!!          end do
+!!!          if (IXC == 5 .or. IXC >= 8) then
+!!!             !subroutine radgra(a, b, nr, rofi, f, gradf)
+!!!             !call DIFFN(tRHO(1, ISP), RHOP(1, ISP), RHOPP(1, ISP), NR, A)
+!!!             call radgra(a, b, NR, rofi, tRHO(1, ISP), RHOP(1, ISP))
+!!!             call radgra(a, b, NR, rofi, RHOP(1, ISP), RHOPP(1, ISP))
+!!!             !Comment line below or not?
+!!!             !call DIFFN(tRHO(2, ISP), RHOP(2, ISP), RHOPP(2, ISP), NR, A)
+!!!             !call radgra(a, b, NR, rofi, tRHO(2, ISP), RHOP(2, ISP))
+!!!             !call radgra(a, b, NR, rofi, RHOP(2, ISP), RHOPP(2, ISP))
+!!!          else
+!!!             RHOP = 0.0d0
+!!!             RHOPP = 0.0d0
+!!!          end if
+!!!       end do
+!!!       if (NSP == 1) then
+!!!          RHO1 = 0.5*tRHO(1, 1)
+!!!          RHO2 = RHO1
+!!!          R = (rofi(3) - rofi(2))
+!!!          RCE = R*R
+!!!          if (IXC == 5 .or. IXC >= 8) then
+!!!             ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
+!!!             ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+!!!             RHOD(1) = 0.5*RHOP(1, 1)
+!!!             RHODD(1) = 0.5*RHOPP(1, 1)
+!!!             RHOD(2) = RHOD(1)
+!!!             RHODD(2) = RHODD(1)
+!!!          end if
+!!!          ! CALL EVXC(RHO0(1), 0.5D0*RHO0(1), EXC, VXC)
+!!!          call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
+!!!          V(1, 1) = V(1, 1) + VXC1
+!!!          do IR = 2, NR
+!!!             RHO1 = 0.5*tRHO(1, 1)
+!!!             RHO2 = RHO1
+!!!             R = (rofi(3) - rofi(2))
+!!!             RCE = R*R
+!!!             if (IXC == 5 .or. IXC >= 8) then
+!!!                ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
+!!!                ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+!!!                RHOD(1) = 0.5*RHOP(IR, 1)
+!!!                RHODD(1) = 0.5*RHOPP(IR, 1)
+!!!                RHOD(2) = RHOD(1)
+!!!                RHODD(2) = RHODD(1)
+!!!             end if
+!!!             call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+!!!             !RHOTRU = RHO(IR, 1) * OB4PI / rofi(IR)**2
+!!!         !!       Call EVXC(RHOTRU, 0.5D0*RHOTRU, EXC, VXC)
+!!!             !call EVXC(RHOTRU, 0.5*RHOTRU, EXC, VXC)
+!!!             V(IR, 1) = V(IR, 1) + VXC1
+!!!             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
+!!!             if (IR == 1 .or. IR == NR) then
+!!!                WGT = 1.d0/3.d0
+!!!             end if
+!!!             DRDI = A*(rofi(IR) + B)
+!!!             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
+!!!             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
+!!!          end do
+!!!       else
+!!!          ! call EVXC(RHO0(1)+RHO0(2), RHO0(1), EXC1, VXC1)
+!!!          ! call EVXC(RHO0(1)+RHO0(2), RHO0(2), EXC2, VXC2)
+!!!          RHO1 = tRHO(1, 1)
+!!!          RHO2 = tRHO(1, 2)
+!!!          R = (rofi(3) - rofi(2))
+!!!          RCE = R*R
+!!!          if (IXC == 5 .or. IXC >= 8) then
+!!!             ! Fixed: RHOD should be dρ/dr, not dρ/dr/r  
+!!!             ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+!!!             ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
+!!!             RHOD(2) = RHOP(1, 1)
+!!!             RHOD(1) = RHOP(1, 2)
+!!!             RHODD(2) = RHOPP(1, 1)
+!!!             RHODD(1) = RHOPP(1, 2)
+!!!          end if
+!!!          call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+!!!          !V(1, 1) = V(1, 1) + VXC1
+!!!          !V(1, 2) = V(1, 2) + VXC2
+!!!          V(1, 1) = V(1, 1) + VXC1 + B_fsm
+!!!          V(1, 2) = V(1, 2) + VXC2 - B_fsm
+!!!          do IR = 2, NR
+!!!             R = rofi(IR)
+!!!             RCE = R*R
+!!!             RHO3 = tRHO(IR, 1) + tRHO(IR, 2)
+!!!             RHO1 = tRHO(IR, 1)
+!!!             RHO2 = tRHO(IR, 2)
+!!!             if (IXC == 5 .or. IXC >= 8) then
+!!!                ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
+!!!                ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
+!!!                RHOD(2) = RHOP(IR, 1)
+!!!                RHOD(1) = RHOP(IR, 2)
+!!!                RHODD(2) = RHOPP(IR, 1)
+!!!                RHODD(1) = RHOPP(IR, 2)
+!!!             end if
+!!!             call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
+!!!             !
+!!!             !RHOT1 = RHO(IR, 1) * (OB4PI/rofi(IR)**2)
+!!!             !RHOT2 = RHO(IR, 2) * (OB4PI/rofi(IR)**2)
+!!!             !call EVXC(RHOT1+RHOT2, RHOT1, EXC1, VXC1)
+!!!             !call EVXC(RHOT1+RHOT2, RHOT2, EXC2, VXC2)
+!!!             !V(IR, 1) = V(IR, 1) + VXC1
+!!!             !V(IR, 2) = V(IR, 2) + VXC2
+!!!             ! Insertion of constraining field for FSM
+!!!             V(IR, 1) = V(IR, 1) + VXC1 + B_fsm
+!!!             V(IR, 2) = V(IR, 2) + VXC2 - B_fsm
+!!!             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
+!!!             if (IR == 1 .or. IR == NR) then
+!!!                WGT = 1.d0/3.d0
+!!!             end if
+!!!             DRDI = A*(rofi(IR) + B)
+!!!             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
+!!!             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
+!!!             !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
+!!!             RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR, 2)*EXC1
+!!!             RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
+!!!             !RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*VXC2
+!!!             !Bxc_up=Bxc_up + WGT*DRDI*VXC1
+!!!             !Bxc_dw=Bxc_dw + WGT*DRDI*VXC2
+!!!             Bxc_up = Bxc_up + WGT*DRDI*VXC1
+!!!             Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
+!!!          end do
+!!!          !write(*, *)wgt, drdi, exc1, vxc1, vxc2
+!!!          Bxc_tot = Bxc_up - Bxc_dw
+!!!          ! RHOEPS=RHOEPS/4.0d0
+!!!          ! AB comment
+!!!       !!! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
+!!!          !print *, ´B_XC´, Bxc_tot, rhomu(1)-rhomu(2)
+!!!          !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
+!!!       end if
+!!!    end subroutine VXC0SP
+!!! 
+!!!    subroutine radgra(a, b, nr, rofi, f, gradf)
+!!!       !- radial gradient
+!!!       !-----------------------------------------------------------------------
+!!!       !i Inputs:
+!!!       !i   a     :the mesh points are given by rofi(i) = b [e^(a(i-1)) -1]
+!!!       !i   b     :                 -//-
+!!!       !i   nr    :number of mesh points
+!!!       !i   rofi  :radial mesh points
+!!!       !i   f     :given function defined in a mesh rofi(i)
+!!!       !o Outputs:
+!!!       !o  gradf  :derivative of the function f defined in a mesh rofi(i)
+!!!       !-----------------------------------------------------------------------
+!!!       implicit none
+!!!       ! Passed variables:
+!!!       integer, intent(in) ::  nr
+!!!       real(rp), intent(in) :: a, b
+!!!       real(rp), dimension(nr), intent(in) :: rofi
+!!!       real(rp), dimension(nr), intent(in) :: f
+!!!       real(rp), dimension(nr), intent(out) :: gradf
+!!! 
+!!!       ! Local variables:
+!!!       integer :: nm2, i
+!!!       !
+!!!       nm2 = nr - 2
+!!!       ! for the first and second point are used the Forward edifferences
+!!!       ! (Handbook, 25.3.9 with 25.1.1)
+!!!       gradf(1) = ((6.d0*f(2) + 20.d0/3.d0*f(4) + 1.2d0*f(6)) &
+!!!                   - (2.45d0*f(1) + 7.5d0*f(3) + 3.75d0*f(5) + 1.d0/6.d0*f(7)))/a
+!!!       !
+!!!       gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
+!!!                   - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
+!!!       !
+!!!       ! --- Five points´ formula  (25.3.6)
+!!!       do i = 3, nm2
+!!!          gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
+!!!       end do
+!!!       ! --- Five points´ formula  (25.3.6)
+!!!       gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
+!!!                        + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
+!!!       gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
+!!!                    - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
+!!!       !
+!!!       ! --- Three points´ formula  (25.3.4)
+!!!       !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
+!!!       !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
+!!!       do i = 1, nr
+!!!          gradf(i) = gradf(i)/(rofi(i) + b)
+!!!       end do
+!!!       return
+!!!    end subroutine radgra
 
    subroutine RACSI(this, atom, ROFI, QSL)
       ! use common_pri

@@ -42,7 +42,7 @@ module xc_mod
       
       ! libXC support fields
       logical :: use_libxc = .false.
-      integer :: libxc_func_id = -1
+      integer, dimension(:), allocatable :: libxc_func_id
       integer :: libxc_family = -1
       integer :: libxc_nspin = -1  ! Store initialization nspin for consistency
 #ifdef HAVE_LIBXC
@@ -62,6 +62,7 @@ module xc_mod
       procedure :: init_libxc
       procedure :: cleanup_libxc
       procedure :: get_libxc_functional_mapping
+      procedure :: setup_libxc_functional_ids
       procedure :: validate_libxc_compatibility
       procedure :: is_libxc_functional
       final :: destructor
@@ -1107,56 +1108,52 @@ contains
       character(len=256) :: func_name
 #endif
 
-      ! Check if we should use libXC for this functional
-      libxc_id = this%get_libxc_functional_mapping()
+      ! Set up the functional ID array based on txc
+      call this%setup_libxc_functional_ids()
       
-      if (libxc_id > 0) then
-         call g_logger%info('Initializing libXC functional ID: '//int2str(libxc_id), __FILE__, __LINE__)
-         ! Validate functional compatibility with ASA
-         if (.not. this%validate_libxc_compatibility(libxc_id)) then
+      ! Check if we should use libXC
+      if (.not. allocated(this%libxc_func_id)) then
+         this%use_libxc = .false.
+         return
+      endif
+      
+      ! Validate all functionals in the array
+      this%use_libxc = .true.
+      do libxc_id = 1, size(this%libxc_func_id)
+         if (.not. this%validate_libxc_compatibility(this%libxc_func_id(libxc_id))) then
             call g_logger%error('Stopping due to incompatible libXC functional (txc='//int2str(this%txc)//')', __FILE__, __LINE__)
             call g_logger%info('Valid options for ASA:', __FILE__, __LINE__)
-            call g_logger%info('  Legacy functionals: txc=1-11 (LDA-PZ, PW92, PBE, BLYP, etc.)', __FILE__, __LINE__)  
-            call g_logger%info('  libXC LDA functionals: txc=1001-1030', __FILE__, __LINE__)
-            call g_logger%info('  libXC GGA functionals: txc=1101-1167', __FILE__, __LINE__)
+            call g_logger%info('  Legacy functionals: txc=1-9 (with libXC equivalents)', __FILE__, __LINE__)  
+            call g_logger%info('  Direct libXC: txc=1000+ID', __FILE__, __LINE__)
             call g_logger%info('  See XC_FUNCTIONAL_GUIDE.md for complete list', __FILE__, __LINE__)
             stop 'Incompatible XC functional for ASA'
          endif
-         
-         this%use_libxc = .true.
-         this%libxc_func_id = libxc_id
-         
-         if (this%use_libxc) then
-            call g_logger%info('libXC initialized successfully: use_libxc = true', __FILE__, __LINE__)
-         else
-            call g_logger%info('libXC initialized successfully: use_libxc = false', __FILE__, __LINE__)
-         endif
-         
-         ! Determine spin treatment - RS-LMTO always uses spin-polarized calculations
-         ! (nsp=1 means non-relativistic spin-polarized in RS-LMTO convention)
-         nspin = XC_POLARIZED
-         
+      enddo
+      
+      ! Determine spin treatment - RS-LMTO always uses spin-polarized calculations
+      nspin = 2  ! XC_POLARIZED
+      
 #ifdef HAVE_LIBXC
-         ! Create a temporary functional to get info
-         call xc_f03_func_init(temp_func, libxc_id, nspin)
-         this%libxc_info = xc_f03_func_get_info(temp_func)
-         this%libxc_family = xc_f03_func_info_get_family(this%libxc_info)
-         this%libxc_nspin = nspin  ! Store for consistent usage
-         
-         ! Get the name before destroying the functional
-         func_name = trim(xc_f03_func_info_get_name(this%libxc_info))
-         
-         call xc_f03_func_end(temp_func)
-#endif
-         
-         ! Log information about the libXC functional
-         call g_logger%info('Using libXC functional: '// &
-                          trim(func_name)// &
-                          ' (ID: '//int2str(libxc_id)//', Family: '//int2str(this%libxc_family)// &
-                          ', nspin: '//int2str(nspin)//')', __FILE__, __LINE__)
+      ! Create a temporary functional to get info for the first functional in array
+      call xc_f03_func_init(temp_func, this%libxc_func_id(1), nspin)
+      this%libxc_info = xc_f03_func_get_info(temp_func)
+      this%libxc_family = xc_f03_func_info_get_family(this%libxc_info)
+      this%libxc_nspin = nspin  ! Store for consistent usage
+      
+      ! Get the name before destroying the functional
+      func_name = trim(xc_f03_func_info_get_name(this%libxc_info))
+      
+      call xc_f03_func_end(temp_func)
+      
+      ! Log information about the libXC functional(s)
+      if (size(this%libxc_func_id) == 1) then
+         call g_logger%info('Using libXC functional: '//trim(func_name)// &
+                          ' (ID: '//int2str(this%libxc_func_id(1))//')', __FILE__, __LINE__)
       else
-         this%use_libxc = .false.
+         call g_logger%info('Using libXC functional combination: IDs '// &
+                          int2str(this%libxc_func_id(1))//','//int2str(this%libxc_func_id(2)), __FILE__, __LINE__)
       endif
+#endif
    end subroutine init_libxc
 
    !>--------------------------------------------------------------------------
@@ -1166,9 +1163,116 @@ contains
    !>--------------------------------------------------------------------------
    subroutine cleanup_libxc(this)
       class(xc), intent(inout) :: this
-      ! No cleanup needed since we use local functionals
+      ! Clean up allocated arrays
+      if (allocated(this%libxc_func_id)) deallocate(this%libxc_func_id)
       this%use_libxc = .false.
    end subroutine cleanup_libxc
+
+   !>--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Set up the libxc_func_id array based on the txc value
+   !> Handles legacy IXC 1-9 mapping to libXC functional combinations
+   !>--------------------------------------------------------------------------
+   subroutine setup_libxc_functional_ids(this)
+      class(xc), intent(inout) :: this
+      
+#ifdef HAVE_LIBXC
+      ! Clean up any previous allocation
+      if (allocated(this%libxc_func_id)) deallocate(this%libxc_func_id)
+      
+      ! Map txc to libXC functional ID(s)
+      select case(this%txc)
+      
+      ! ==============================================================
+      ! Legacy RS-LMTO functionals (IXC 1-9) → libXC equivalents
+      ! ==============================================================
+      case (1, 3, 11)  ! Barth-Hedin, Barth-Hedin-Janak, ASW variant
+         ! Use XC_LDA_X (1) + XC_LDA_C_VBH (11) von Barth-Hedin
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 17]
+         
+      case (2)  ! Slater X-Alpha → exchange only
+         allocate(this%libxc_func_id(1))
+         this%libxc_func_id(1) = 1  ! XC_LDA_X
+         
+      case (4)  ! Vosko-Wilk-Nusair
+         ! Use XC_LDA_X (1) + XC_LDA_C_VWN (7)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 7]
+         
+      case (5)  ! PBE 96 LDA → use PW92 correlation
+         ! Use XC_LDA_X (1) + XC_LDA_C_PW (12)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 12]
+         
+      case (6)  ! Wigner exchange → no good libXC equivalent, use legacy
+         ! Leave unallocated to signal legacy use
+         
+      case (7)  ! Perdew-Zunger
+         ! Use XC_LDA_X (1) + XC_LDA_C_PZ (9)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 9]
+         
+      case (8)  ! PBE GGA
+         ! Use XC_GGA_X_PBE (101) + XC_GGA_C_PBE (130)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [101, 130]
+         
+      case (9)  ! Local Airy gas → no libXC equivalent, use legacy
+         ! Leave unallocated to signal legacy use
+         
+      ! ==============================================================
+      ! Direct libXC functional ID: txc >= 1000 → subtract 1000
+      ! ==============================================================
+      case (1000:)
+         allocate(this%libxc_func_id(1))
+         this%libxc_func_id(1) = this%txc - 1000
+         
+      ! ==============================================================
+      ! Extended legacy mappings for explicit libXC use (100-199)
+      ! ==============================================================
+      case (101)  ! von Barth–Hedin (LDA)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 11]
+         
+      case (102)  ! Slater exchange + Gaspari correlation (use closest)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 15]  ! XC_LDA_C_GOMBAS closest to Gauss
+         
+      case (103)  ! Slater exchange only (Xα model)
+         allocate(this%libxc_func_id(1))
+         this%libxc_func_id(1) = 1  ! XC_LDA_X
+         
+      case (104)  ! Perdew–Zunger (1981) LDA
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 9]
+         
+      case (105)  ! Perdew–Wang (1992) LDA
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 12]
+         
+      case (106)  ! Vosko–Wilk–Nusair
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 7]
+         
+      case (107)  ! Gunnarsson–Lundqvist
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 5]
+         
+      case (108)  ! PBE GGA
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [101, 130]
+         
+      case (109)  ! RPBE GGA
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [117, 130]  ! XC_GGA_X_RPBE (117) + XC_GGA_C_PBE (130)
+         
+      case default
+         ! Unknown txc or legacy-only functional - leave unallocated
+      end select
+#endif
+   end subroutine setup_libxc_functional_ids
 
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1186,8 +1290,23 @@ contains
          libxc_id = this%txc - 1000
          call g_logger%debug('General libXC mapping: txc='//int2str(this%txc)//' -> libxc_id='//int2str(libxc_id), __FILE__, __LINE__)
       else
-         ! Legacy functionals (txc < 1000) don't use libXC
-         libxc_id = -1
+         ! Map legacy functionals (IXC 1-9) to libXC equivalents
+         select case(this%txc)
+         case (1, 3)  ! Barth-Hedin, Barth-Hedin-Janak → use VBH correlation
+            libxc_id = 17  ! Will need XC_LDA_X (1) + XC_LDA_C_VBH (11)
+         case (2)  ! Slater X-Alpha → exchange only
+            libxc_id = 1   ! XC_LDA_X
+         case (4)  ! Vosko-Wilk-Nusair
+            libxc_id = 7   ! Will need XC_LDA_X (1) + XC_LDA_C_VWN (7)
+         case (5)  ! PBE LDA (use PW92 correlation)
+            libxc_id = 12  ! Will need XC_LDA_X (1) + XC_LDA_C_PW (12)
+         case (7)  ! Perdew-Zunger
+            libxc_id = 9   ! Will need XC_LDA_X (1) + XC_LDA_C_PZ (9)
+         case (8)  ! PBE GGA
+            libxc_id = 130 ! Will need XC_GGA_X_PBE (101) + XC_GGA_C_PBE (130)
+         case default
+            libxc_id = -1  ! No libXC mapping (use legacy)
+         end select
       endif
 #else
       libxc_id = -1  ! libXC not available
@@ -1299,10 +1418,12 @@ contains
       endif
    end subroutine XCPOT_hybrid
 
-   !>--------------------------------------------------------------------------
+!>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
    !> Wrapper to call libXC for exchange-correlation potential calculation
+   !> Handles both single functionals and exchange+correlation combinations
+   !> Properly handles GGA potentials in spherical coordinates
    !>--------------------------------------------------------------------------
    subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       class(xc), intent(in) :: this
@@ -1317,16 +1438,12 @@ contains
       ! libXC arrays - use proper dimensions for spin treatment
       real(rp), dimension(2) :: rho_libxc  ! For spin-polarized: [rho_up, rho_down]
       real(rp), dimension(3) :: sigma_libxc ! For GGA: [grad_up^2, grad_up*grad_down, grad_down^2]
-      real(rp), dimension(1) :: exc_libxc
-      real(rp), dimension(2) :: vrho_libxc  ! Potentials for each spin
-      real(rp), dimension(3) :: vsigma_libxc ! GGA gradient potentials
-      real(rp), dimension(3) :: vsigma_x ! GGA exchange gradient potentials (spin-polarized)
-      real(rp), dimension(1) :: vsigma_x_unpol ! GGA exchange gradient potentials (unpolarized)
-      type(xc_f03_func_t) :: temp_func  ! Temporary functional for testing
-      type(xc_f03_func_t) :: exch_func  ! Exchange functional for correlation-only functionals
-      real(rp), dimension(1) :: exc_x
-      real(rp), dimension(2) :: vrho_x
-      integer :: nspin, family, func_kind
+      real(rp), dimension(1) :: exc_libxc, exc_tmp
+      real(rp), dimension(2) :: vrho_libxc, vrho_tmp  ! Potentials for each spin
+      real(rp), dimension(3) :: vsigma_libxc, vsigma_tmp ! GGA gradient potentials
+      type(xc_f03_func_t) :: temp_func
+      integer :: nspin, family, i_func
+      real(rp) :: laplacian_up, laplacian_dn, inv_r
       
       ! Initialize outputs
       V1 = 0.0d0
@@ -1334,8 +1451,10 @@ contains
       EXC = 0.0d0
       
       ! Check for negligible densities
-      if (RHO1 < TOLD .or. RHO2 < TOLDD) then
-         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+      if (RHO < TOLD) then
+         return
+      endif
+      if (RHO1 < TOLDD .and. RHO2 < TOLDD) then
          return
       endif
       
@@ -1348,172 +1467,276 @@ contains
          ! Spin-polarized calculation
          ! In RS-LMTO: RHO1 = spin-down, RHO2 = spin-up
          ! In libXC: rho_libxc(1) = spin-up, rho_libxc(2) = spin-down
-         rho_libxc(1) = RHO2  ! spin-up density
-         rho_libxc(2) = RHO1  ! spin-down density
+         rho_libxc(1) = max(RHO2, TOLDD)  ! spin-up density
+         rho_libxc(2) = max(RHO1, TOLDD)  ! spin-down density
       else
          ! Unpolarized calculation  
-         rho_libxc(1) = RHO   ! total density
+         rho_libxc(1) = max(RHO, TOLD)   ! total density
       endif
       
-      ! Additional safety check for libXC call
-      if (rho_libxc(1) <= 0.0d0) then
-         call g_logger%info('Zero density detected, falling back to legacy', __FILE__, __LINE__)
-         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
-         return
-      endif
+      ! Initialize accumulators
+      exc_libxc = 0.0d0
+      vrho_libxc = 0.0d0
+      vsigma_libxc = 0.0d0
       
-      select case(family)
-      case(1)  ! XC_FAMILY_LDA
-         ! Create a local functional object for this calculation
-         call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
+      ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
+      do i_func = 1, size(this%libxc_func_id)
+         ! Create functional
+         call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
+         family = xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func))
          
-         ! Get functional kind to check if it's correlation-only
-         func_kind = xc_f03_func_info_get_kind(xc_f03_func_get_info(temp_func))
-         
-         if (func_kind == XC_CORRELATION) then
-            ! This is a correlation-only functional, add exchange
-            call xc_f03_func_init(exch_func, 1, nspin) ! XC_LDA_X = 1
-            call xc_f03_lda_exc_vxc(exch_func, 1_c_size_t, rho_libxc, exc_x, vrho_x)
-            call xc_f03_func_end(exch_func)
+         select case(family)
+         case(1)  ! XC_FAMILY_LDA
+            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
             
-            ! Get correlation part
-            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
+            ! Accumulate contributions
+            exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
+            vrho_libxc = vrho_libxc + vrho_tmp
             
-            ! Combine exchange and correlation
-            exc_libxc(1) = exc_libxc(1) + exc_x(1)
+         case(2)  ! XC_FAMILY_GGA  
+            ! Set up gradient arrays for spherical coordinates (ASA)
+            ! In spherical coordinates with radial symmetry: sigma = (dρ/dr)^2
+            ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
             if (nspin == 2) then
-               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
-               vrho_libxc(2) = vrho_libxc(2) + vrho_x(2)
+               sigma_libxc(1) = RHOP(2)**2        ! |grad rho_up|^2
+               sigma_libxc(2) = RHOP(2)*RHOP(1)   ! grad rho_up · grad rho_down  
+               sigma_libxc(3) = RHOP(1)**2        ! |grad rho_down|^2
+               
+               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
+                                       exc_tmp, vrho_tmp, vsigma_tmp)
             else
-               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
+               ! Unpolarized: only one gradient component
+               ! RHOP contains gradient of each spin component, but for unpolarized
+               ! we treat it as gradient of total density
+               sigma_libxc(1) = RHOP(1)**2  ! |grad rho_total|^2 for unpolarized
+               
+               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
+                                       exc_tmp, vrho_tmp(1:1), vsigma_tmp(1:1))
             endif
-         else
-            ! This is a full XC functional, just call it
-            call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_libxc, vrho_libxc)
-         endif
+            
+            ! Accumulate contributions
+            exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
+            vrho_libxc = vrho_libxc + vrho_tmp
+            vsigma_libxc = vsigma_libxc + vsigma_tmp
+            
+         case default
+            call g_logger%error('libXC functional family '//int2str(family)//' not supported', __FILE__, __LINE__)
+            call xc_f03_func_end(temp_func)
+            call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+            return
+         end select
          
          call xc_f03_func_end(temp_func)
-
-         ! libXC returns energies/potentials in Hartree (atomic units).
-         ! RS-LMTO internal units use Rydberg for energies/potentials, so
-         ! convert Hartree -> Rydberg by multiplying by 2.0
-         exc_libxc(1) = 2.0d0 * exc_libxc(1)
-         vrho_libxc = 2.0d0 * vrho_libxc
-
+      enddo
+      
+      ! Convert libXC outputs from Hartree to Rydberg (internal units)
+      exc_libxc(1) = 2.0d0 * exc_libxc(1)
+      vrho_libxc = 2.0d0 * vrho_libxc
+      vsigma_libxc = 2.0d0 * vsigma_libxc
+      
+      ! Assign outputs based on family
+      if (family == 2) then
+         ! GGA: include gradient contributions using proper spherical formula
+         ! V_XC = v_rho - 2*v_sigma*∇²ρ - (4/r)*v_sigma*(dρ/dr)
+         ! where v_sigma = ∂ε_XC/∂σ and σ = |∇ρ|² = (dρ/dr)²
+         
+         ! Handle r=0 case
+         if (RR > 1.d-10) then
+            inv_r = 1.0d0 / RR
+         else
+            inv_r = 0.0d0
+         endif
+         
+         if (nspin == 2) then
+            ! Spin-polarized GGA
+            ! Laplacian in spherical coordinates: ∇²ρ = d²ρ/dr² + (2/r)*dρ/dr
+            ! But we have RHOPP which is d²ρ/dr² already
+            laplacian_dn = RHOPP(1) + 2.0d0 * inv_r * RHOP(1)  ! ∇²ρ_down
+            laplacian_up = RHOPP(2) + 2.0d0 * inv_r * RHOP(2)  ! ∇²ρ_up
+            
+            ! V_σ↓ = v_ρ↓ - 2*v_σ↓↓*∇²ρ↓ - 2*v_σ↑↓*∇²ρ↑ - (4/r)*(v_σ↓↓*dρ↓/dr + v_σ↑↓*dρ↑/dr)
+            V1 = vrho_libxc(2) &
+                 - 2.0d0 * vsigma_libxc(3) * laplacian_dn &
+                 - 2.0d0 * vsigma_libxc(2) * laplacian_up &
+                 - 4.0d0 * inv_r * (vsigma_libxc(3) * RHOP(1) + vsigma_libxc(2) * RHOP(2))
+            
+            ! V_σ↑ = v_ρ↑ - 2*v_σ↑↑*∇²ρ↑ - 2*v_σ↑↓*∇²ρ↓ - (4/r)*(v_σ↑↑*dρ↑/dr + v_σ↑↓*dρ↓/dr)
+            V2 = vrho_libxc(1) &
+                 - 2.0d0 * vsigma_libxc(1) * laplacian_up &
+                 - 2.0d0 * vsigma_libxc(2) * laplacian_dn &
+                 - 4.0d0 * inv_r * (vsigma_libxc(1) * RHOP(2) + vsigma_libxc(2) * RHOP(1))
+         else
+            ! Unpolarized GGA
+            laplacian_up = RHOPP(1) + 2.0d0 * inv_r * RHOP(1)
+            
+            V1 = vrho_libxc(1) &
+                 - 2.0d0 * vsigma_libxc(1) * laplacian_up &
+                 - 4.0d0 * inv_r * vsigma_libxc(1) * RHOP(1)
+            V2 = V1
+         endif
+      else
+         ! LDA: no gradient contributions
          if (nspin == 2) then
             V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
             V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
          else
-            V1 = vrho_libxc(1)  ! same potential for both spins
+            V1 = vrho_libxc(1)
             V2 = vrho_libxc(1)
          endif
-         EXC = exc_libxc(1)
-         
-      case(2)  ! XC_FAMILY_GGA  
-         ! Set up gradient arrays
-         if (nspin == 2) then
-            ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
-            sigma_libxc(1) = RHOP(2)**2        ! |grad rho_up|^2
-            sigma_libxc(2) = RHOP(2)*RHOP(1)   ! grad rho_up . grad rho_down  
-            sigma_libxc(3) = RHOP(1)**2        ! |grad rho_down|^2
-            
-            ! Create local functional for GGA calculation
-            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
-            
-            ! Get functional kind to check if it's correlation-only
-            func_kind = xc_f03_func_info_get_kind(xc_f03_func_get_info(temp_func))
-            
-            if (func_kind == XC_CORRELATION) then
-               ! This is a correlation-only functional, add GGA exchange
-               call xc_f03_func_init(exch_func, 101, nspin) ! XC_GGA_X_PBE = 101
-               call xc_f03_gga_exc_vxc(exch_func, 1_c_size_t, rho_libxc, sigma_libxc, &
-                                       exc_x, vrho_x, vsigma_x)
-               call xc_f03_func_end(exch_func)
-               
-               ! Get correlation part
-               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
-                                       exc_libxc, vrho_libxc, vsigma_libxc)
-               
-               ! Combine exchange and correlation
-               exc_libxc(1) = exc_libxc(1) + exc_x(1)
-               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
-               vrho_libxc(2) = vrho_libxc(2) + vrho_x(2)
-               vsigma_libxc(1) = vsigma_libxc(1) + vsigma_x(1)
-               vsigma_libxc(2) = vsigma_libxc(2) + vsigma_x(2)
-               vsigma_libxc(3) = vsigma_libxc(3) + vsigma_x(3)
-            else
-               ! This is a full XC functional, just call it
-               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
-                                       exc_libxc, vrho_libxc, vsigma_libxc)
-            endif
-            
-            call xc_f03_func_end(temp_func)
-
-            ! Convert libXC outputs from Hartree to Rydberg (internal units)
-            exc_libxc(1) = 2.0d0 * exc_libxc(1)
-            vrho_libxc = 2.0d0 * vrho_libxc
-            vsigma_libxc = 2.0d0 * vsigma_libxc
-
-            ! V1 for rho_down (RHO1), V2 for rho_up (RHO2)
-            V1 = vrho_libxc(2) - 2.0d0 * vsigma_libxc(3) * RHOPP(1)
-            V2 = vrho_libxc(1) - 2.0d0 * vsigma_libxc(1) * RHOPP(2)
-         else
-            sigma_libxc(1) = (RHOP(1) + RHOP(2))**2  ! |grad rho_total|^2
-            
-            ! Create local functional for GGA calculation
-            call xc_f03_func_init(temp_func, this%libxc_func_id, nspin)
-            
-            ! Get functional kind to check if it's correlation-only
-            func_kind = xc_f03_func_info_get_kind(xc_f03_func_get_info(temp_func))
-            
-            if (func_kind == XC_CORRELATION) then
-               ! This is a correlation-only functional, add GGA exchange
-               call xc_f03_func_init(exch_func, 101, nspin) ! XC_GGA_X_PBE = 101
-               call xc_f03_gga_exc_vxc(exch_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
-                                       exc_x, vrho_x(1:1), vsigma_x_unpol)
-               call xc_f03_func_end(exch_func)
-               
-               ! Get correlation part  
-               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
-                                       exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
-               
-               ! Combine exchange and correlation
-               exc_libxc(1) = exc_libxc(1) + exc_x(1)
-               vrho_libxc(1) = vrho_libxc(1) + vrho_x(1)
-               vsigma_libxc(1) = vsigma_libxc(1) + vsigma_x_unpol(1)
-            else
-               ! This is a full XC functional, just call it
-               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
-                                       exc_libxc, vrho_libxc(1:1), vsigma_libxc(1:1))
-            endif
-            
-            call xc_f03_func_end(temp_func)
-
-            ! Convert libXC outputs from Hartree to Rydberg (internal units)
-            exc_libxc(1) = 2.0d0 * exc_libxc(1)
-            vrho_libxc(1:1) = 2.0d0 * vrho_libxc(1:1)
-            vsigma_libxc(1:1) = 2.0d0 * vsigma_libxc(1:1)
-
-            V1 = vrho_libxc(1) - 2.0d0 * vsigma_libxc(1) * (RHOPP(1) + RHOPP(2))
-            V2 = V1
-         endif
-         EXC = exc_libxc(1)
-         
-      case default
-         call g_logger%error('libXC functional family '//int2str(family)//' not supported in xcpot_libxc_wrapper', __FILE__, __LINE__)
-         call g_logger%info('Supported families: 1 (LDA), 2 (GGA)', __FILE__, __LINE__)
-         call g_logger%info('Falling back to legacy implementation', __FILE__, __LINE__)
-         
-         ! Fall back to legacy implementation
-         call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
-         return
-      end select
+      endif
+      EXC = exc_libxc(1)
       
 #else
       call g_logger%error('libXC not available - cannot use libXC functionals', __FILE__, __LINE__)
       stop 'libXC not available'
 #endif
    end subroutine xcpot_libxc_wrapper
+
+!!!    !>--------------------------------------------------------------------------
+!!!    ! DESCRIPTION:
+!!!    !> @brief
+!!!    !> Wrapper to call libXC for exchange-correlation potential calculation
+!!!    !> Handles both single functionals and exchange+correlation combinations
+!!!    !>--------------------------------------------------------------------------
+!!!    subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+!!!       class(xc), intent(in) :: this
+!!!       real(rp), intent(in) :: RHO, RHO1, RHO2, RR
+!!!       real(rp), intent(inout) :: EXC, V1, V2
+!!!       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
+!!! 
+!!! #ifdef HAVE_LIBXC
+!!!       real(rp), parameter :: TOLD = 1.d-20
+!!!       real(rp), parameter :: TOLDD = 1.d-20
+!!!       
+!!!       ! libXC arrays - use proper dimensions for spin treatment
+!!!       real(rp), dimension(2) :: rho_libxc  ! For spin-polarized: [rho_up, rho_down]
+!!!       real(rp), dimension(3) :: sigma_libxc ! For GGA: [grad_up^2, grad_up*grad_down, grad_down^2]
+!!!       real(rp), dimension(1) :: exc_libxc, exc_tmp
+!!!       real(rp), dimension(2) :: vrho_libxc, vrho_tmp  ! Potentials for each spin
+!!!       real(rp), dimension(3) :: vsigma_libxc, vsigma_tmp ! GGA gradient potentials
+!!!       type(xc_f03_func_t) :: temp_func
+!!!       integer :: nspin, family, i_func
+!!!       
+!!!       ! Initialize outputs
+!!!       V1 = 0.0d0
+!!!       V2 = 0.0d0  
+!!!       EXC = 0.0d0
+!!!       
+!!!       ! Check for negligible densities
+!!!       if (RHO1 < TOLD .or. RHO2 < TOLDD) then
+!!!          return
+!!!       endif
+!!!       
+!!!       ! Determine spin treatment - use the same as initialization
+!!!       nspin = this%libxc_nspin
+!!!       family = this%libxc_family
+!!!       
+!!!       ! Set up density arrays
+!!!       if (nspin == 2) then
+!!!          ! Spin-polarized calculation
+!!!          ! In RS-LMTO: RHO1 = spin-down, RHO2 = spin-up
+!!!          ! In libXC: rho_libxc(1) = spin-up, rho_libxc(2) = spin-down
+!!!          rho_libxc(1) = RHO2  ! spin-up density
+!!!          rho_libxc(2) = RHO1  ! spin-down density
+!!!       else
+!!!          ! Unpolarized calculation  
+!!!          rho_libxc(1) = RHO   ! total density
+!!!       endif
+!!!       
+!!!       ! Additional safety check for libXC call
+!!!       if (rho_libxc(1) <= 0.0d0) then
+!!!          return
+!!!       endif
+!!!       
+!!!       ! Initialize accumulators
+!!!       exc_libxc = 0.0d0
+!!!       vrho_libxc = 0.0d0
+!!!       vsigma_libxc = 0.0d0
+!!!       
+!!!       ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
+!!!       do i_func = 1, size(this%libxc_func_id)
+!!!          ! Create functional
+!!!          call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
+!!!          family = xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func))
+!!!          
+!!!          select case(family)
+!!!          case(1)  ! XC_FAMILY_LDA
+!!!             call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
+!!!             
+!!!             ! Accumulate contributions
+!!!             exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
+!!!             vrho_libxc = vrho_libxc + vrho_tmp
+!!!             
+!!!          case(2)  ! XC_FAMILY_GGA  
+!!!             ! Set up gradient arrays for spherical coordinates (ASA)
+!!!             ! In ASA, gradients are purely radial, so sigma = (drho/dr)^2
+!!!             if (nspin == 2) then
+!!!                ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
+!!!                sigma_libxc(1) = RHOP(2)**2        ! |grad rho_up|^2
+!!!                sigma_libxc(2) = RHOP(2)*RHOP(1)   ! grad rho_up . grad rho_down  
+!!!                sigma_libxc(3) = RHOP(1)**2        ! |grad rho_down|^2
+!!!                
+!!!                call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
+!!!                                        exc_tmp, vrho_tmp, vsigma_tmp)
+!!!             else
+!!!                sigma_libxc(1) = (RHOP(1) + RHOP(2))**2  ! |grad rho_total|^2
+!!!                
+!!!                call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
+!!!                                        exc_tmp, vrho_tmp(1:1), vsigma_tmp(1:1))
+!!!             endif
+!!!             
+!!!             ! Accumulate contributions
+!!!             exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
+!!!             vrho_libxc = vrho_libxc + vrho_tmp
+!!!             vsigma_libxc = vsigma_libxc + vsigma_tmp
+!!!             
+!!!          case default
+!!!             call g_logger%error('libXC functional family '//int2str(family)//' not supported', __FILE__, __LINE__)
+!!!             call xc_f03_func_end(temp_func)
+!!!             call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+!!!             return
+!!!          end select
+!!!          
+!!!          call xc_f03_func_end(temp_func)
+!!!       enddo
+!!!       
+!!!       ! Convert libXC outputs from Hartree to Rydberg (internal units)
+!!!       exc_libxc(1) = 2.0d0 * exc_libxc(1)
+!!!       vrho_libxc = 2.0d0 * vrho_libxc
+!!!       vsigma_libxc = 2.0d0 * vsigma_libxc
+!!!       
+!!!       ! Assign outputs based on family (use the last functional's family)
+!!!       if (family == 2) then
+!!!          ! GGA: include gradient contributions
+!!!          ! In spherical coordinates, the potential has additional terms from chain rule
+!!!          ! V = vrho + 2 * vsigma * d(sigma)/dρ
+!!!          ! For radial gradients: sigma = (drho/dr)^2, so d(sigma)/dρ = 2 * (drho/dr) * d(drho/dr)/dρ
+!!!          if (nspin == 2) then
+!!!             ! For spin-polarized: account for cross terms in spherical coordinates
+!!!             V1 = vrho_libxc(2) + 2.0d0 * (vsigma_libxc(3) * RHOP(1) + vsigma_libxc(2) * RHOP(2))  ! spin-down potential
+!!!             V2 = vrho_libxc(1) + 2.0d0 * (vsigma_libxc(1) * RHOP(2) + vsigma_libxc(2) * RHOP(1))  ! spin-up potential
+!!!          else
+!!!             ! For unpolarized: simpler case
+!!!             V1 = vrho_libxc(1) + 2.0d0 * vsigma_libxc(1) * (RHOP(1) + RHOP(2))
+!!!             V2 = V1
+!!!          endif
+!!!       else
+!!!          ! LDA: no gradient contributions
+!!!          if (nspin == 2) then
+!!!             V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
+!!!             V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
+!!!          else
+!!!             V1 = vrho_libxc(1)
+!!!             V2 = vrho_libxc(1)
+!!!          endif
+!!!       endif
+!!!       EXC = exc_libxc(1)
+!!!       
+!!! #else
+!!!       call g_logger%error('libXC not available - cannot use libXC functionals', __FILE__, __LINE__)
+!!!       stop 'libXC not available'
+!!! #endif
+!!!    end subroutine xcpot_libxc_wrapper
 
    ! DESCRIPTION:
    subroutine destructor(this)
