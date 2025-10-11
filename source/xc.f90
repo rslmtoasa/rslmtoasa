@@ -74,6 +74,22 @@ module xc_mod
 
 contains
 
+   !> Simple helper: convert a string to lower-case (ASCII only)
+   pure function str_tolower(s) result(out)
+      character(len=*), intent(in) :: s
+      character(len=len(s)) :: out
+      integer :: i, c
+      do i = 1, len(s)
+         c = iachar(s(i:i))
+         if (c >= iachar('A') .and. c <= iachar('Z')) then
+            out(i:i) = achar(c + 32)
+         else
+            out(i:i) = s(i:i)
+         end if
+      end do
+   end function str_tolower
+
+
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1104,8 +1120,19 @@ contains
       integer :: libxc_id, nspin
 
 #ifdef HAVE_LIBXC
-      type(xc_f03_func_t) :: temp_func
-      character(len=256) :: func_name
+   type(xc_f03_func_t) :: temp_func
+   character(len=256) :: func_name
+   ! Variables used for automatic pairing heuristics
+   logical :: paired
+   integer :: cand_id, scan_id, j, ntok, itok, k, orig_len
+   character(len=256) :: orig_name_low, cand_name_low
+   character(len=256) :: token
+   character(len=32), dimension(20) :: tokens
+            logical :: orig_is_exchange, orig_is_corr
+                     logical :: cand_is_exchange, cand_is_corr
+            integer :: pos_c, pos_x, prefix_len, suffix_len
+            character(len=256) :: prefix, suffix
+               logical :: need_x
 #endif
 
       ! Set up the functional ID array based on txc
@@ -1139,16 +1166,96 @@ contains
       this%libxc_info = xc_f03_func_get_info(temp_func)
       this%libxc_family = xc_f03_func_info_get_family(this%libxc_info)
       this%libxc_nspin = nspin  ! Store for consistent usage
-      
+
       ! Get the name before destroying the functional
       func_name = trim(xc_f03_func_info_get_name(this%libxc_info))
-      
+
       call xc_f03_func_end(temp_func)
-      
-      ! Log information about the libXC functional(s)
+
+      ! If only a single functional is provided and it is a GGA, attempt to
+      ! automatically pair a correlation-only functional with a sensible
+      ! exchange partner (common case: user passed GGA_C only). Warn the user.
       if (size(this%libxc_func_id) == 1) then
          call g_logger%info('Using libXC functional: '//trim(func_name)// &
                           ' (ID: '//int2str(this%libxc_func_id(1))//')', __FILE__, __LINE__)
+         if (this%libxc_family == 1 .or. this%libxc_family == 2) then
+            ! Attempt a smarter auto-pair: if the provided functional appears to be a
+            ! correlation-only variant (name contains 'correlation' or 'corr'), try
+            ! to find a matching exchange partner (same family and matching key tokens
+            ! such as 'pbe', 'rpbe', 'pz', etc.) by scanning common libXC IDs.
+            paired = .false.
+            orig_name_low = str_tolower(func_name)
+
+            ! Simplified matching using prefix/suffix around '_c_' / '_x_'
+            pos_c = index(orig_name_low, '_c_')
+            pos_x = index(orig_name_low, '_x_')
+            if (pos_c > 0 .or. pos_x > 0) then
+               need_x = .false.
+               if (pos_c > 0) then
+                  need_x = .true.
+                  prefix_len = pos_c - 1
+                  prefix = orig_name_low(1:prefix_len)
+                  suffix_len = len_trim(orig_name_low) - (pos_c + 2)
+                  if (suffix_len > 0) then
+                     suffix = orig_name_low(pos_c + 3:pos_c + 2 + suffix_len)
+                  else
+                     suffix = ''
+                  end if
+               else
+                  prefix_len = pos_x - 1
+                  prefix = orig_name_low(1:prefix_len)
+                  suffix_len = len_trim(orig_name_low) - (pos_x + 2)
+                  if (suffix_len > 0) then
+                     suffix = orig_name_low(pos_x + 3:pos_x + 2 + suffix_len)
+                  else
+                     suffix = ''
+                  end if
+               end if
+
+               ! Scan candidates for matching opposite variant
+               do scan_id = 1, 600
+                  if (scan_id == this%libxc_func_id(1)) cycle
+                  call xc_f03_func_init(temp_func, scan_id, nspin)
+                  cand_name_low = str_tolower(trim(xc_f03_func_info_get_name(xc_f03_func_get_info(temp_func))))
+                  call xc_f03_func_end(temp_func)
+                  if (xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func)) /= this%libxc_family) cycle
+                  if (need_x) then
+                     if (index(cand_name_low, '_x_') == 0) cycle
+                  else
+                     if (index(cand_name_low, '_c_') == 0) cycle
+                  end if
+
+                  ! Check prefix
+                  if (prefix_len > 0) then
+                     if (len_trim(cand_name_low) < prefix_len) cycle
+                     if (cand_name_low(1:prefix_len) /= prefix) cycle
+                  end if
+                  ! Check suffix
+                  if (suffix_len > 0) then
+                     if (len_trim(cand_name_low) < suffix_len) cycle
+                     if (cand_name_low(len_trim(cand_name_low)-suffix_len+1:len_trim(cand_name_low)) /= suffix) cycle
+                  end if
+
+                  cand_id = scan_id
+                  paired = .true.
+                  exit
+               end do
+
+               if (paired) then
+                  allocate(this%libxc_func_id(2))
+                  if (pos_c > 0) then
+                     this%libxc_func_id = [cand_id, this%libxc_func_id(1)]
+                  else
+                     this%libxc_func_id = [this%libxc_func_id(1), cand_id]
+                  end if
+                  call g_logger%warning('Auto-paired functional IDs: '//int2str(this%libxc_func_id(1))//','//int2str(this%libxc_func_id(2))//'. Review pairing for correctness.', __FILE__, __LINE__)
+               else
+                  call g_logger%warning('Single libXC functional looks like X/C variant but no partner found. Please provide matching X/C functional.', __FILE__, __LINE__)
+               end if
+            else
+               call g_logger%warning('Single libXC functional provided; consider providing matching exchange+correlation pair for LDA/GGA.', __FILE__, __LINE__)
+            end if
+         endif
       else
          call g_logger%info('Using libXC functional combination: IDs '// &
                           int2str(this%libxc_func_id(1))//','//int2str(this%libxc_func_id(2)), __FILE__, __LINE__)
@@ -1442,7 +1549,8 @@ contains
       real(rp), dimension(2) :: vrho_libxc, vrho_tmp  ! Potentials for each spin
       real(rp), dimension(3) :: vsigma_libxc, vsigma_tmp ! GGA gradient potentials
       type(xc_f03_func_t) :: temp_func
-      integer :: nspin, family, i_func
+   integer :: nspin, family, i_func
+   logical :: any_gga
       real(rp) :: laplacian_up, laplacian_dn, inv_r
       
       ! Initialize outputs
@@ -1479,8 +1587,10 @@ contains
       vrho_libxc = 0.0d0
       vsigma_libxc = 0.0d0
       
-      ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
-      do i_func = 1, size(this%libxc_func_id)
+   ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
+   ! Track whether any functional is a GGA so we can correctly apply gradient contributions
+   ! (any_gga declared in the declaration section)
+   do i_func = 1, size(this%libxc_func_id)
          ! Create functional
          call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
          family = xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func))
@@ -1494,6 +1604,7 @@ contains
             vrho_libxc = vrho_libxc + vrho_tmp
             
          case(2)  ! XC_FAMILY_GGA  
+            any_gga = .true.
             ! Set up gradient arrays for spherical coordinates (ASA)
             ! In spherical coordinates with radial symmetry: sigma = (dρ/dr)^2
             ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
@@ -1527,15 +1638,15 @@ contains
          end select
          
          call xc_f03_func_end(temp_func)
-      enddo
+   enddo
       
       ! Convert libXC outputs from Hartree to Rydberg (internal units)
       exc_libxc(1) = 2.0d0 * exc_libxc(1)
       vrho_libxc = 2.0d0 * vrho_libxc
       vsigma_libxc = 2.0d0 * vsigma_libxc
       
-      ! Assign outputs based on family
-      if (family == 2) then
+   ! Assign outputs based on whether any GGA functional was present
+   if (any_gga) then
          ! GGA: include gradient contributions using proper spherical formula
          ! V_XC = v_rho - 2*v_sigma*∇²ρ - (4/r)*v_sigma*(dρ/dr)
          ! where v_sigma = ∂ε_XC/∂σ and σ = |∇ρ|² = (dρ/dr)²
