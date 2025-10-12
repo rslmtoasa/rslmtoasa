@@ -143,17 +143,23 @@ module lattice_mod
       !> Clust size
       integer :: kk
 
-      !> TODO
-      !> Clust coordinates
-      !>
-      !> Clust coordinates
-      real(rp), dimension(:, :), allocatable :: cr
+   !> TODO
+   !> Clust coordinates (expanded cluster)
+   !>
+   !> 'cr' holds the fully expanded cluster coordinates (cartesian coordinates)
+   !> after the Bravais/cluster build. Shape is (3, kk) where 'kk' is the
+   !> actual number of atoms in the constructed cluster. During construction
+   !> a temporary local array with capacity (3, ndim) is often used and then
+   !> moved into 'this%cr'. We shrink 'this%cr' to (3,kk) as soon as 'kk' is
+   !> known to avoid holding a large buffer unnecessarily.
+   real(rp), dimension(:, :), allocatable :: cr
 
-      !> TODO
-      !> Clust coordinates
-      !>
-      !> Clust coordinates
-      real(rp), dimension(:, :), allocatable :: crd
+   !> TODO
+   !> Clust coordinates (primitive cell / basis)
+   !>
+   !> 'crd' stores the primitive cell (basis) coordinates (3, ntot). It is
+   !> used as the starting point when expanding to the cluster (cr).
+   real(rp), dimension(:, :), allocatable :: crd
       !> Clust atom number
       integer, dimension(:), allocatable :: ham_i
       !> TODO
@@ -915,7 +921,7 @@ contains
          this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
          write (*, *) 'wav', this%wav
       end if
-      if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 000
+      if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
    end subroutine build_data
 
    !---------------------------------------------------------------------------
@@ -991,6 +997,7 @@ contains
       real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
+   real(rp), allocatable :: tmp(:, :)
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
@@ -1087,9 +1094,22 @@ contains
 
       this%kk = kk
       call move_alloc(cr, this%cr)
+      ! Shrink this%cr to the actual cluster size kk to avoid keeping the
+      ! large temporary allocation of shape (3, ndim). We copy the first kk
+      ! columns into a smaller array and move that allocation into this%cr.
+      if (allocated(this%cr)) then
+         if (size(this%cr, 2) > kk) then
+            allocate(tmp(3, kk))
+            tmp(:, :) = this%cr(:, 1:kk)
+            call move_alloc(tmp, this%cr)
+         end if
+      end if
       call move_alloc(iz, this%iz)
       call move_alloc(num, this%num)
       close (10)
+
+      ! Test to set nmax to the whole cluster
+      this%nmax = kk
    end subroutine bravais
 
    !---------------------------------------------------------------------------

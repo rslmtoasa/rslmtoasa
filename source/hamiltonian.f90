@@ -1139,13 +1139,14 @@ contains
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
       allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
+
       hmag = (0.0d0, 0.0d0)
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          !write(123, *)´bulkham´
-         call this%chbar_nc(ia, nr, ino, ntype, hmag)
+         call this%chbar_nc(ia, nr, hmag)
          do m = 1, nr
             do i = 1, 9
                do j = 1, 9
@@ -1157,6 +1158,9 @@ contains
             end do ! end of orbital i loop
             write(128, *) 'm=', m, 'ntype= ', ntype
             write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
+            ! print '(9f6.2)', real(hmag(:, :, m, 4))
+            !print '(18f6.2)', real(this%hall(:, :, m, nlim))
+            ! print *,'========================'
          end do ! end of neighbour number
          if (this%hoh) then
             call this%build_obarm()
@@ -1223,16 +1227,16 @@ contains
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
-      !print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
+      print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
       call g_timer%start('Build local hamiltonian')
-      allocate(hmag(18, 18, this%lattice%nn_max, 4))
+      allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
 
-      !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, hmag)
+      !$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, hmag)
       do nlim = 1, this%charge%lattice%nmax
-         print *, 'Building local Hamiltonian for atom ', nlim, ' of ', this%charge%lattice%nmax
+         ! print *, 'Building local Hamiltonian for atom ', nlim, ' of ', this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
-         call this%chbar_nc(nlim, nr, ino, nlim, hmag)
+         call this%chbar_nc(nlim, nr, hmag)
          do m = 1, nr
             do i = 1, 9
                do j = 1, 9
@@ -1242,6 +1246,9 @@ contains
                   this%hall(j + 9, i, m, nlim) = hmag(j, i, m, 1) + i_unit*hmag(j, i, m, 2) ! Hx+iHy
                end do
             end do
+            ! print '(9f6.2)', real(hmag(:, :, m, 4))
+            !print '(18f6.2)', real(this%hall(:, :, m, nlim))
+            ! print *,'---------------------'
          end do
          if (this%hoh) then
             call this%build_obarm()
@@ -1265,12 +1272,14 @@ contains
             end do
          end if
       end do
-      !!$omp end parallel do
+      !$omp end parallel do
       if (this%local_axis) then
          this%hall_glob = this%hall
          if (this%hoh) this%hallo_glob = this%hallo
       end if
       deallocate(hmag)
+      !print '(2g12.5)', this%hall
+      ! this%hall = (0.0d0, 0.0d0) ! Free memory
       call g_timer%stop('Build local hamiltonian')
    end subroutine build_locham
 
@@ -1620,13 +1629,11 @@ contains
       !end do
    end subroutine ham0m_nc
 
-   subroutine chbar_nc(this, ia, nr, ino, ntype, hmag)
+   subroutine chbar_nc(this, ia, nr, hmag)
       class(hamiltonian), intent(inout) :: this
       ! Input
       integer, intent(in) :: ia ! Atom number in clust
       integer, intent(in) :: nr ! Number of neighbours considered
-      integer, intent(in) :: ino ! Atom bravais type of ia
-      integer, intent(in) :: ntype ! Atom type
       complex(rp), dimension(9, 9, this%charge%lattice%nn_max, 4), intent(out) :: hmag
       ! Local variables
       real(rp) :: r2
@@ -1676,7 +1683,7 @@ contains
             !write(123, ´(3f10.6)´) vet(:)
             !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
             !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
-            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ntype, ham_vec)
+            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ham_vec)
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
             end if
@@ -1701,10 +1708,9 @@ contains
       !end do
    end subroutine chbar_nc
 
-   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ntype, ham_vec)
+   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ham_vec)
       class(hamiltonian), intent(inout) :: this
       ! Input
-      integer, intent(in) :: ntype ! Atom type
       integer, intent(in) :: m ! Number of the given neighbour
       integer, intent(in) :: ia ! Atom number in clust
       integer, intent(in) :: jn ! ?
@@ -1713,7 +1719,7 @@ contains
       ! Output
       integer, intent(out) :: ni
       real(rp), dimension(9, 9), intent(inout) :: hhh
-      real(rp), dimension(3, nr), intent(in) :: ham_vec
+      real(rp), dimension(3, this%lattice%nn_max), intent(in) :: ham_vec
       ! Local variables
       real(rp) :: a1, a2, a3, aaa, eps
       integer :: i, ilm, jlm
