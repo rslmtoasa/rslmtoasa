@@ -782,6 +782,7 @@ contains
          end do
          if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
          call this%hamiltonian%build_bulkham()
+         call this%hamiltonian%build_locham()
       case ('S')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()

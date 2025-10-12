@@ -176,6 +176,10 @@ module lattice_mod
       !> Nmax
       integer :: nmax
 
+      !> Max number of neighbours for TB interactions (calculated)
+      !> nn_max
+      integer :: nn_max
+
       !> TODO
       !> Atom number for calculation.
       !>
@@ -911,7 +915,7 @@ contains
          this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
          write (*, *) 'wav', this%wav
       end if
-      if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
+      if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 000
    end subroutine build_data
 
    !---------------------------------------------------------------------------
@@ -1646,6 +1650,7 @@ contains
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
 
+      print *,'Leia call'
       call leia(this%alat, kk, crd, izp, no, 10)
 
       close (10)
@@ -1810,7 +1815,7 @@ contains
 
       ! Clust parameters
       ncut = 9
-      nnmx = 5250
+      nnmx = 100 ! 5250
       nomx = this%ntot
       kk = this%kk
       allocate (set(3, nomx, nnmx)); set = 0.0d0
@@ -1849,6 +1854,7 @@ contains
             ia = this%iu(ii)
             nr = this%nn(ia, 1)
             write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
+            print *,'Dbar call'
             call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, this%control%npold, nr, ii)
          end do
       end if
@@ -2165,26 +2171,33 @@ contains
       real(rp), dimension(:, :), allocatable :: cr
       real(rp), dimension(:, :), allocatable :: s
       real(rp), dimension(:, :, :), allocatable :: sbar
+      real(rp), dimension(:, :), allocatable :: sbarvec
       !
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 5250 !350
-      allocate (cr(3, nt))
+      nt = 500 ! Neigbours for SBAR construction (>> TB neighbours)
+      ! allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
-      call this%clusba(r2, crd, ia, nat, ndi, nt)
+      allocate(sbarvec(3, nt))
+      call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
       write (17, 10000) nt
-      write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
+      write (17, 10001) ((sbarvec(j, i), j=1, 3), i=1, nt)
+      !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
       nrl = np*nt
       na = (nrl*(nrl + 1))/2
       allocate (a(na))
       allocate (bet(nrl))
       allocate (wk(nrl))
       allocate (s(nrl, nrl))
-      call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      call micha(wav, sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      !call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
 
       ! Saving parameters to be used in the Hamiltonian build
-      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
+      ! Call clusba again for proper number of TB neighbours
+      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
+      ! Store the number of neighbours
+      this%nn_max = nt
 
       do m = 1, nt
          do i = 1, 9
@@ -2200,7 +2213,7 @@ contains
       !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
-      deallocate (a, bet, cr, wk, s, sbar)
+      deallocate (a, bet, wk, s, sbar)
       return
 
 10000 format(i5)
@@ -2221,13 +2234,15 @@ contains
    !> @param[inout] cr
    !> @return type(calculation)
    !---------------------------------------------------------------------------
-   subroutine clusba(this, r2, crd, ia, nat, ndi, n)
+   subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec)
       implicit none
       class(lattice), intent(inout) :: this
       ! Inputs
       integer, intent(in) :: ia, nat, ndi
       real(rp), intent(in) :: r2
       real(rp), dimension(3, ndi), intent(in) :: crd
+      !real(rp), dimension(3, ndi), intent(in) :: crd
+      real(rp), dimension(3, n), intent(out) :: sbarvec
       ! Output
       integer, intent(inout) :: n
 !    real(rp), dimension(3, n), intent(inout) :: cr
@@ -2236,19 +2251,21 @@ contains
       real(rp) :: s1
       real(rp), dimension(3) :: dum
 
-#ifdef USE_SAFE_ALLOC
-      if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
-      call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
-#else
-      if (allocated(this%sbarvec)) deallocate (this%sbarvec)
-      allocate (this%sbarvec(3, this%kk))
-#endif
+! #ifdef USE_SAFE_ALLOC
+!       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
+!       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
+! #else
+!       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
+!       allocate (this%sbarvec(3, this%kk))
+! #endif
 
-      this%sbarvec(:, :) = 0.0d0
+!      this%sbarvec(:, :) = 0.0d0
+      sbarvec(:, :) = 0.0d0
 
       ii = 1
       do k = 1, 3
-         this%sbarvec(k, 1) = 0.0d0
+         sbarvec(k, 1) = 0.0d0
+         !this%sbarvec(k, 1) = 0.0d0
       end do
       do nn = 1, nat
          s1 = 0.0
@@ -2258,9 +2275,12 @@ contains
          end do
          if (s1 < r2 .and. s1 > 0.0001) then
             ii = ii + 1
-            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            ! this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
+            ! this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
+            ! this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
+            sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
+            sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
 !!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
 !!    "in DBAR1."
