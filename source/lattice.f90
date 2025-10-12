@@ -1670,7 +1670,6 @@ contains
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
 
-      print *,'Leia call'
       call leia(this%alat, kk, crd, izp, no, 10)
 
       close (10)
@@ -1747,6 +1746,8 @@ contains
       end do
       this%nbas = ncnt
       this%nmax = nmax
+      ! Temporary hack for full HALL
+      ! this%nmax = kk
       write (11, *) "--Info-for-control-----------------"
       write (11, '(a6, i4, a6, i6, a6, i6, a6, i6)') 'NTYPE=', this%ntype, 'NMAX=', this%nmax, 'NBAS=', this%nbas, 'NREC=', this%nrec
 
@@ -1874,7 +1875,6 @@ contains
             ia = this%iu(ii)
             nr = this%nn(ia, 1)
             write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
-            print *,'Dbar call'
             call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, this%control%npold, nr, ii)
          end do
       end if

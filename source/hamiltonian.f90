@@ -1139,8 +1139,13 @@ contains
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
       allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
-
       hmag = (0.0d0, 0.0d0)
+
+      if (this%hoh) then
+         call this%build_obarm()
+         call this%build_enim()
+      end if
+
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
@@ -1227,7 +1232,7 @@ contains
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
-      print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
+      ! print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
       call g_timer%start('Build local hamiltonian')
       allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
 
@@ -1251,8 +1256,6 @@ contains
             ! print *,'---------------------'
          end do
          if (this%hoh) then
-            call this%build_obarm()
-            call this%build_enim()
             do m = 1, nr
                ji = 0
                if (m > 1) then
