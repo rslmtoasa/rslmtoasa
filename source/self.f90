@@ -2609,7 +2609,8 @@ subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, 
   ! Supports LDA and GGA functionals (via libXC).
   ! In GGA case, includes correct spherical divergence term using sphdiv.
   !-----------------------------------------------------------------------
-  implicit none
+   use xc_f90_mod, only: vxc0sp_q, vxcgr2
+   implicit none
   class(self), intent(inout) :: this
   type(xc), intent(in) :: xc_obj
   integer, intent(in) :: NR, NSP
@@ -2622,16 +2623,27 @@ subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, 
 
   ! Locals
   integer :: IR, ISP, IXC
-  real(rp) :: PI, OB4PI, WGT, DRDI
+   real(rp) :: OB4PI, WGT, DRDI
   real(rp) :: RHO1, RHO2, RHO3, R, EXC, VXC1, VXC2, EXC1
   real(rp), dimension(NR, NSP) :: tRHO, RHOP
   real(rp), dimension(NR, NSP) :: divRHO   ! spherical divergence of grad rho
   real(rp), dimension(2) :: RHOD, RHODD
   real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
+   logical :: use_vxcgr2
+   real(rp), allocatable :: grh(:,:), ggrh(:,:), agrh(:,:), grgagr(:,:), exc_tmp(:), vxc_tmp(:,:)
 
-  PI    = 4.d0*atan(1.d0)
+  ! PI    = 4.d0*atan(1.d0)
   OB4PI = 1.d0/(4.d0*PI)
   IXC   = xc_obj%txc
+
+  ! If this is a libXC functional, delegate to the centralized implementation
+  ! IXC = 6619266
+  ! print *, 'Using libXC functional with IXC = ', IXC
+  ! if (abs(IXC) >= 1000) then
+  !  print *, 'Calling vxc0sp_q from VXC0SP'
+  !  call vxc0sp_q(lxcfun=IXC, rofi=rofi, rho=RHO, nr=NR, v=V, rho0=RHO0, bscal=1.0_rp, rep=RHOEPS, rmu=RHOMU, nsp=NSP)
+  !    return
+  ! end if
 
   Bxc_up = 0.0d0
   Bxc_dw = 0.0d0
@@ -2650,9 +2662,38 @@ subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, 
      do IR = 2, NR
         tRHO(IR,ISP) = RHO(IR,ISP)*OB4PI/rofi(IR)**2
      end do
-     call radgra(A,B,NR,rofi,tRHO(1,ISP),RHOP(1,ISP))
-     call sphdiv(A,B,NR,rofi,RHOP(1,ISP),divRHO(1,ISP))
   end do
+
+  ! Decide which gradient routine to use: prefer xc_f90_mod:vxcgr2 for libXC functionals
+  use_vxcgr2 = .false. ! xc_obj%is_libxc_functional()
+
+  if (use_vxcgr2) then
+   !print *, 'Using vxcgr2 for gradient and divergence calculation'
+     ! vxcgr2 expects rpr(nr, nsp) input; we have tRHO(nr,nsp)
+     allocate(grh(NR, 2), ggrh(NR, 2), agrh(NR, 4), grgagr(NR, 3))
+     allocate(exc_tmp(NR), vxc_tmp(NR, 2))
+     call vxcgr2(-1, NR, NSP, NR, rofi, tRHO, grh, ggrh, agrh, grgagr, exc_tmp, vxc_tmp)
+     ! Map outputs to RHOP (radial derivative) and divRHO (spherical divergence)
+     do ISP = 1, NSP
+        do IR = 1, NR
+           RHOP(IR, ISP) = grh(IR, ISP)
+           divRHO(IR, ISP) = ggrh(IR, ISP)
+        end do
+     end do
+     !write(333,'(f12.6)') grh(:,1)
+     !write(343,'(g12.6)') ggrh(:,1)
+     deallocate(grh, ggrh, agrh, grgagr, exc_tmp, vxc_tmp)
+  else
+   !print *, 'Using legacy radgra + sphdiv for gradient and divergence calculation'
+     ! Use legacy mesh-based gradient + spherical divergence
+     do ISP = 1, NSP
+        call radgra(A,B,NR,rofi,tRHO(1,ISP),RHOP(1,ISP))
+        call sphdiv(A,B,NR,rofi,RHOP(1,ISP),divRHO(1,ISP))
+     end do
+     !write(334,'(f12.6)') RHOP(:,1)
+     !write(344,'(g12.6)') divRHO(:,1)
+  end if
+  !stop
 
   ! =========================
   ! Non-spin-polarized case
@@ -3009,6 +3050,7 @@ subroutine sphdiv(a, b, nr, rofi, Arr, divA)
   real(rp), dimension(nr), intent(out) :: divA
   real(rp), dimension(nr) :: tmp, dtmp
   integer :: i
+        real(rp) :: r2
 
   ! Build r^2 * A(r)
   do i = 1, nr
@@ -3017,10 +3059,33 @@ subroutine sphdiv(a, b, nr, rofi, Arr, divA)
 
   ! Differentiate
   call radgra(a, b, nr, rofi, tmp, dtmp)
+  ! Divide by r^2 for i >= 2 to avoid division by zero at origin
+  if (nr >= 3) then
+     do i = 2, nr
+        divA(i) = dtmp(i) / (rofi(i)**2)
+     end do
 
-  ! Divide by r^2
+     ! Extrapolate value at origin (i=1) from nearby points to avoid division by zero
+     ! Use same extrapolation pattern used elsewhere in code
+     divA(1) = (rofi(3)*divA(2) - rofi(2)*divA(3)) / (rofi(3) - rofi(2))
+  else
+     ! Fallback: if too few points, compute naively but guard small r
+     do i = 1, nr
+        r2 = max(rofi(i)**2, 1.0e-30_rp)
+        divA(i) = dtmp(i) / r2
+     end do
+  end if
+
+  ! Clamp extremely large values and replace NaNs/Infs with a large finite value
   do i = 1, nr
-     divA(i) = dtmp(i) / (rofi(i)**2)
+     if (.not. (abs(divA(i)) < 1.0e30_rp)) then
+        call g_logger%info('sphdiv: clamping extreme divA at index='//trim(int2str(i)), __FILE__, __LINE__)
+        if (divA(i) > 0.0_rp) then
+           divA(i) = 1.0e30_rp
+        else
+           divA(i) = -1.0e30_rp
+        end if
+     end if
   end do
 end subroutine sphdiv
 
