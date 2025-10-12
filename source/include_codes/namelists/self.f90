@@ -3,8 +3,9 @@ integer :: nstep, init
 integer, dimension(:), allocatable :: rb
 real(rp) :: conv_thr, soc_scale
 real(rp), dimension(:), allocatable :: ws, mixmag
+logical :: cold !< Cold start: perform ASA to extract potential parameters.
 
 namelist /self/ ws_all, all_inequivalent, &
    mix_all, magnetic_mixing, mixmag_all, freeze, orbital_polarization, &
    rigid_band, rb, nstep, init, soc_scale, &
-   conv_thr, ws, mixmag, fix_soc
+   conv_thr, ws, mixmag, fix_soc , cold

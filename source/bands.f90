@@ -227,11 +227,12 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail
+      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail, unitnum, unitnum2
       real(rp) :: e1_mag, ef_mag, e1
       integer :: ia_glob
       real(rp), dimension(:, :), allocatable :: dosia
       real(rp), dimension(:, :, :), allocatable :: dosial
+      character(len=256) :: fname_total, fname_dos, fname_orb_dos
 
       allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, 18, this%en%channels_ldos + 10))
 
@@ -262,16 +263,7 @@ contains
                dosial(ia_glob, j, i) = -aimag(this%green%g0(j, j, i, ia))/pi
                dosial(ia_glob, j + 9, i) = -aimag(this%green%g0(j + 9, j + 9, i, ia))/pi
             end do
-            !write(250+ia,*) this%en%ene(i), dosia(ia,i)
-            !write(450+ia,´(19f10.6)´) this%en%ene(i), dosial(ia,1,i), &
-            !dosial(ia,2,i), dosial(ia,3,i), dosial(ia,4,i), &
-            !dosial(ia,5,i), dosial(ia,6,i), dosial(ia,7,i), dosial(ia,8,i), dosial(ia,9,i), &
-            !dosial(ia,10,i), &
-            !dosial(ia,11,i), dosial(ia,12,i), dosial(ia,13,i), &
-            !dosial(ia,14,i), dosial(ia,15,i), dosial(ia,16,i), dosial(ia,17,i), dosial(ia,18,i)
          end do
-         !rewind(250+ia)
-         !rewind(450+ia)
       end do
       ! Transfer total DOS across MPI ranks for Fermi surface determination.
 #ifdef USE_MPI
@@ -281,26 +273,52 @@ contains
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosial, product(shape(dosial)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
+
+      ! Writing the total density of states
+      fname_total = "totaldos.out"
+      open(unit=125, file=fname_total, status='replace', action='write')
+      
       if (rank == 0) then
          do i = 1, this%en%channels_ldos + 10
-            write (125, '(2f16.5)') this%en%ene(i), this%dtot(i)
+            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
          end do
-         rewind (125)
+         rewind(125)
       end if
+      close(125)
+      
+      ! Writing the local density of states
       if (rank == 0) then
          do ia = 1, this%lattice%nrec
+            unitnum = 250 + ia
+            ! Construct the filename using the element symbol:
+            fname_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_dos.out"
+               
+            ! Associate that filename with the unit:
+            open(unit=unitnum, file=fname_dos, status='replace', action='write')
+      
             do i = 1, this%en%channels_ldos + 10
-               write (250 + ia, *) this%en%ene(i), dosia(ia, i)
+               write(unitnum, '(2f16.5)') this%en%ene(i) - this%en%fermi, dosia(ia, i)
             end do
-            rewind (250 + ia)
+      
+            rewind(unitnum)
+            close(unitnum)
          end do
       end if
+      
+      ! Writing the local density of states per orbital
       if (rank == 0) then
          do ia = 1, this%lattice%nrec
+            unitnum2 = 450 + ia
+            fname_orb_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_orbital_dos.out"
+      
+            open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
+      
             do i = 1, this%en%channels_ldos + 10
-               write (450 + ia, '(19f10.6)') this%en%ene(i), dosial(ia, 1:18, i)
+               write(unitnum2, '(19f16.5)') this%en%ene(i) - this%en%fermi, dosial(ia, 1:18, i)
             end do
-            rewind (450 + ia)
+      
+            rewind(unitnum2)
+            close(unitnum2)
          end do
       end if
 
@@ -773,12 +791,13 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      real(rp) :: mx, my, mz
+      real(rp) :: mx, my, mz, mxe, mye, mze
       integer :: i, j ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
 
-      integer :: na_loc
+      integer :: na_loc, unitmag
+      character(len=256) :: fnamemag
 
       call this%calculate_projected_dos()
 
@@ -787,6 +806,21 @@ contains
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%mx, this%en%edel, this%en%fermi, this%nv1, this%dx(:, na_loc), this%e1, 0, this%en%ene)
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%my, this%en%edel, this%en%fermi, this%nv1, this%dy(:, na_loc), this%e1, 0, this%en%ene)
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%mz, this%en%edel, this%en%fermi, this%nv1, this%dz(:, na_loc), this%e1, 0, this%en%ene)
+
+         fnamemag = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_spinene.out"
+         unitmag = 1000 !rank * 123 + na
+         open(unit=unitmag, file=fnamemag, status='replace', action='write')
+
+         do ie = 1, this%en%channels_ldos + 10
+            mxe = 0.0d0; mye = 0.d00; mze = 0.0d0
+            call simpson_f(mxe, this%en%ene, this%en%ene(ie), this%en%nv1, this%dx(:, na_loc), .true., .false., 0.0d0) 
+            call simpson_f(mye, this%en%ene, this%en%ene(ie), this%en%nv1, this%dy(:, na_loc), .true., .false., 0.0d0) 
+            call simpson_f(mze, this%en%ene, this%en%ene(ie), this%en%nv1, this%dz(:, na_loc), .true., .false., 0.0d0) 
+            write(unitmag, '(4es16.6)') this%en%ene(ie) - this%en%fermi, mxe, mye, mze
+         end do 
+
+         rewind(unitmag)
+         close(unitmag)
 
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(1) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my
@@ -828,7 +862,7 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      real(rp) :: lx, ly, lz
+      real(rp) :: lx, ly, lz, lxe, lye, lze
       real(rp), dimension(this%en%channels_ldos+10) :: lxi, lyi, lzi
       integer :: i, j ! Orbital index
       integer :: mdir ! Magnetic index
@@ -839,7 +873,8 @@ contains
       complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
       !
 
-      integer :: na_loc
+      integer :: na_loc, unitorb
+      character(len=256) :: fnameorb
 
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       mLx(:, :) = L_x(:, :)
@@ -880,43 +915,24 @@ contains
          call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)
          call simpson_m(ly, this%en%edel, this%en%fermi, this%nv1, lyi, this%e1, 0, this%en%ene)
          call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
-         !do mdir = 1, 3
-         !   do i = 1, 9
-         !      do j = 1, 9
-         !         call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(i, j, mdir, :, na_loc), this%e1, 0, this%en%ene)
-         !      end do
-         !   end do
-         !end do
 
-         ! p contribution 
-         ! lz
-         !lz = lz + (l_orb(4, 4, 3) - l_orb(2, 2, 3)) 
-         !write(*,'(2f10.6)') l_orb(4, 4, 3), l_orb(2, 2, 3)
-         ! lx
-         !lx = lx + (l_orb(4, 4, 1) - l_orb(2, 2, 1)) 
-         !write(*,'(2f10.6)') l_orb(4, 4, 1), l_orb(2, 2, 1)
-         ! ly
-         !ly = ly + (l_orb(4, 4, 2) - l_orb(2, 2, 2)) 
-         !write(*,'(2f10.6)') l_orb(4, 4, 2), l_orb(2, 2, 2)
+         fnameorb = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbene.out"
+         unitorb = rank * 132 + na
+         open(unit=unitorb, file=fnameorb, status='replace', action='write')
 
-         ! d contribution (up +down)
-         ! lz
-         !lz = lz + 2_rp * (l_orb(9, 9, 3) - l_orb(5, 5, 3)) + (l_orb(8, 8, 3) - l_orb(6, 6, 3))
-         !write(*,'(4f10.6)') l_orb(9, 9, 3), l_orb(5, 5, 3), l_orb(8, 8, 3), l_orb(6, 6, 3)
-         ! lx
-         !lx = lx + 2_rp * (l_orb(9, 9, 1) - l_orb(5, 5, 1)) + (l_orb(8, 8, 1) - l_orb(6, 6, 1))
-         !write(*,'(4f10.6)') l_orb(9, 9, 1), l_orb(5, 5, 1), l_orb(8, 8, 1), l_orb(6, 6, 1)
-         ! ly
-         !ly = ly + 2_rp * (l_orb(9, 9, 2) - l_orb(5, 5, 2)) + (l_orb(8, 8, 2) - l_orb(6, 6, 2)) 
-         !write(*,'(4f10.6)') l_orb(9, 9, 2), l_orb(5, 5, 2), l_orb(8, 8, 2), l_orb(6, 6, 2)
+         do ie = 1, this%en%channels_ldos + 10
+            call simpson_f(lxe, this%en%ene, this%en%ene(ie), this%en%nv1, lxi, .true., .false., 0.0d0) 
+            call simpson_f(lye, this%en%ene, this%en%ene(ie), this%en%nv1, lyi, .true., .false., 0.0d0) 
+            call simpson_f(lze, this%en%ene, this%en%ene(ie), this%en%nv1, lzi, .true., .false., 0.0d0) 
+            write(unitorb, '(4es16.6)') this%en%ene(ie) - this%en%fermi, -(lxe/pi), -(lye/pi), -(lze/pi)
+         end do
+         
+         rewind(unitorb)
+         close(unitorb)
 
          lz =  - (lz / pi) 
          lx =  - (lx / pi) 
          ly =  - (ly / pi) 
-
-         !lz = -0.5_rp * rtrace9(matmul(l_orb(:, :, 3), mLz))
-         !lx = -0.5_rp * rtrace9(matmul(l_orb(:, :, 1), mLx))
-         !ly = -0.5_rp * rtrace9(matmul(l_orb(:, :, 2), mLy))
 
          call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lx)//' '//fmt('f10.6', ly)//' '//fmt('f10.6', lz), __FILE__, __LINE__)
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx
@@ -1172,85 +1188,5 @@ contains
       close(10)
       close(20)
    end subroutine calculate_angles
-
-   !subroutine calculate_conductivity_tensor(this)
-   !   implicit none
-   !   ! Input
-   !   class(bands), intent(inout) :: this
-   !   ! Local variables
-   !   integer :: i, m, n, l1, l2, ntype
-   !   complex(rp), dimension(:,:,:), allocatable :: integrand
-   !   real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
-   !   real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
-   !   real(rp) :: a, b, real_part, im_part
-
-   !   allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
-   !   allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
-   !   allocate(wscale(this%en%channels_ldos + 10))
-   !   allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
-
-   !   integrand(:, :, :) = (0.0d0, 0.0d0)
-   !   real_part_l(:) = 0.0d0
-   !   im_part_l(:) = 0.0d0
-   !   integrand_tot_real(:) = 0.0d0
-   !   integrand_tot_im(:) = 0.0d0
-   !   integrand_l_real(:, :) = 0.0d0
-   !   integrand_l_im(:, :) = 0.0d0
-
-   !   a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-   !   b = (this%en%energy_max + this%en%energy_min)/2
-
-   !   wscale(:) = (this%en%ene(:) - b)/a
-
-   !   ! Calculate the integrand for each energy grid point
-   !   do ntype = 1, this%lattice%ntype
-   !      do i = 1, this%en%channels_ldos + 10
-   !         do n = 1, this%control%lld
-   !            do m = 1, this%control%lld
-   !               !do l1 = 1, 18
-   !                  do l2 = 1, 18
-   !                     integrand(l2, l2, i) = integrand(l2, l2, i) + this%recursion%gamma_nm(i, n, m) * this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
-   !                  end do
-   !               !end do
-   !            end do
-   !         end do
-   !      end do
-   !   end do
-
-   !   integrand_tot_real(:) = 0.0d0
-   !   integrand_tot_im(:) = 0.0d0
-
-   !   !do l1 = 1, 18
-   !      do l2 = 1, 18
-   !         integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
-   !         integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :)) 
-   !         integrand_l_real(l2, :) = real(integrand(l2, l2, :))
-   !         integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
-   !      end do
-   !   !end do
- 
-   !   do i = 1, this%en%channels_ldos + 10
-   !      write(2,*) this%en%ene(i) - this%en%fermi, integrand_tot_real(i) / real(this%control%lld * this%lattice%ntype), integrand_tot_im(i) / real(this%control%lld * this%lattice%ntype) 
-   !   end do 
-
-   !   do i = 1, this%en%channels_ldos + 10
-   !      real_part = 0.0d0; im_part = 0.0d0
-   !      call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
-   !      call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)   
-   !      write(3, *) this%en%ene(i) - this%en%fermi, real_part / real(this%control%lld * this%lattice%ntype),  im_part / real(this%control%lld * this%lattice%ntype) 
-   !   end do
-
-   !   do i = 1, this%en%channels_ldos + 10
-   !      do l2 = 1, 18
-   !         call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
-   !         call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
-   !      end do
-   !      write(32,'(19f16.10)') this%en%ene(i) - this%en%fermi, real_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
-   !      write(33,'(19f16.10)') this%en%ene(i) - this%en%fermi, im_part_l(1:18) / real(this%control%lld * this%lattice%ntype) 
-   !   end do
-   !   
-   !   deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale)
-
-   !end subroutine calculate_conductivity_tensor
 
 end module bands_mod

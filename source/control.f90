@@ -163,6 +163,20 @@ module control_mod
       !> Default: 200
       integer :: cond_ll
 
+      !> Type of conductivity to be calculated
+      !>
+      !> Type of conductivity to be calculated
+      !>
+      !> Allowed values: 'charge', 'spin' and 'orbital'. Default: 'charge'
+      character(len=30) :: cond_type
+
+      !> Calculation type of the conductivity tensor
+      !> 
+      !> Calculation type of the conductivity tensor
+      !> 
+      !> Allowed values: 'random_vec', 'per_type'
+      character(len=13) :: cond_calctype
+
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
       ! 0=over orbitals, 1=over atoms
@@ -268,6 +282,8 @@ contains
       recur = this%recur
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
+      cond_type = this%cond_type
+      cond_calctype = this%cond_calctype
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -304,6 +320,8 @@ contains
       this%recur = recur
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
+      this%cond_type = cond_type
+      this%cond_calctype = cond_calctype
 
       ! end default
 
@@ -353,12 +371,14 @@ contains
       this%concb = 0.0d0
       this%ruban = 0.0d0
       this%do_comom = .false.
-      this%recur = 'lanczos'
+      this%recur = 'block'
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
-      this%random_vec_num = 5
+      this%random_vec_num = 1
       this%cond_ll = 200
+      this%cond_type = 'charge'
+      this%cond_calctype = 'per_type'
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

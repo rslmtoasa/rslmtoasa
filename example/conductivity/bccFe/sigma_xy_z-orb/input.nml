@@ -1,0 +1,51 @@
+&calculation
+post_processing = 'conductivity'
+verbose = T
+/
+&lattice
+rc = 080 ! radius cut. We could think about setting a default
+alat = 2.86120 ! lattice parapeter
+crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
+wav = 1.40880
+pbc = .true.
+b1 = .false.
+b2 = .false.
+b3 = .false.
+n1 = 20
+n2 = 20
+n3 = 20
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.0d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 100
+/
+&hamiltonian
+v_alpha = 0, 1, 0
+v_beta = 1, 0, 0
+jl_alpha = 'z'
+/
+&energy
+fermi = -0.069099
+energy_min = -1.0
+energy_max = 1.2
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
+cond_ll = 300
+lld = 150
+recur = 'chebyshev'
+cond_type = 'orbial'
+cond_calctype = 'per_type'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
