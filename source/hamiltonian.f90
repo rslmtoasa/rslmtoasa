@@ -85,6 +85,9 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: velocity_scale
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
+      !> Spin-spiral wave vector q
+      real(rp), dimension(3) :: q_ss
+      !
       !!! Testing Gershgorin bounds for later implementation
       !!! !> Upper Gershgorin bound
       !!! real(rp) :: g_max
@@ -220,6 +223,7 @@ contains
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
+      q_ss = this%q_ss
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -236,6 +240,7 @@ contains
 
       this%hoh = hoh
       this%local_axis = local_axis
+      this%q_ss = q_ss
       this%orb_pol = orb_pol
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
@@ -353,6 +358,7 @@ contains
       this%jlo_a(:, :, :, :) = 0.0d0
       this%velocity_scale(:) = 1.0d0
       this%hoh = .false.
+      this%q_ss = [0.0d0, 0.0d0, 0.0d0]
       this%local_axis = .false.
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
@@ -1168,8 +1174,8 @@ contains
             ! print *,'========================'
          end do ! end of neighbour number
          if (this%hoh) then
-            call this%build_obarm()
-            call this%build_enim()
+            ! call this%build_obarm()
+            ! call this%build_enim()
             do m = 1, nr
                ji = 0
                if (m > 1) then
@@ -1232,7 +1238,7 @@ contains
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
-      ! print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
+      print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
       call g_timer%start('Build local hamiltonian')
       allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
 
@@ -1544,17 +1550,21 @@ contains
       end do
    end subroutine build_from_paoflow
 
-   subroutine ham0m_nc(this, it, jt, vet, hhh, hhmag)
+   subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh, hhmag)
       class(hamiltonian), intent(inout) :: this
       ! Input
+      integer, intent(in) :: ia, ja ! Atom sites i and j
       integer, intent(in) :: it, jt ! Type of atom i and j
       real(rp), dimension(3), intent(in) :: vet
       real(rp), dimension(9, 9), intent(in) :: hhh
       ! Local Variables
       integer :: i, j, ilm, jlm, m
+      real(rp), dimension(3) :: mom_ia, mom_ja
+      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(9, 9) :: hhhc
-      complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
+      ! complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
+      complex(rp), dimension(3) :: momc_ia, momc_ja
       complex(rp) :: dot
       real(rp) :: vv
       complex(rp), dimension(9, 9, 4), intent(out) :: hhmag
@@ -1563,38 +1573,40 @@ contains
       !this%hhmag(:, :, :) = 0.0d0
 
       vv = norm2(vet)
-
+      mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
+      mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
+      if (norm2(this%q_ss)>0.00001_rp) then
+         !print *, 'q:', this%q_ss
+         r_ia = this%charge%lattice%cr(:, ia)
+         r_ja = this%charge%lattice%cr(:, ja)
+         mom_ia(3) = 0.0d0
+         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))
+         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))
+         mom_ja(3) = 0.0d0
+         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))
+         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))
+      end if
       ! Real to complex
-      dot = cmplx(dot_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
-      do i = 1, this%charge%lattice%ntype
-         do j = 1, 3
-            momc(i, j) = cmplx(this%charge%lattice%symbolic_atoms(i)%potential%mom(j), kind=kind(0.0d0))
-         end do
-      end do
-      cross = cmplx(cross_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
+      dot = cmplx(dot_product(mom_ia, mom_ja), kind=kind(0.0d0))
+      momc_ia = cmplx(mom_ia, kind=kind(0.0d0))
+      momc_ja = cmplx(mom_ja, kind=kind(0.0d0))
+      cross = cmplx(cross_product(mom_ia, mom_ja), kind=kind(0.0d0))
       hhhc(:, :) = cmplx(hhh(:, :), kind=kind(0.0d0))
 
       do ilm = 1, 9
          do jlm = 1, 9
-            !this%hhmag(ilm, jlm, 4) = &
             hhmag(ilm, jlm, 4) = &
                this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm) + &
                this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*dot
          end do
       end do
 
-!    do ilm=1, 9
-!      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
-!    end do
-
       if (vv <= 0.01d0) then
          do ilm = 1, 9
             if (this%hoh) then
                hhmag(ilm, ilm, 4) = hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cex0(ilm)
-               !this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cex0(ilm)
             else
                hhmag(ilm, ilm, 4) = hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cx0(ilm)
-               !this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cx0(ilm)
             end if
          end do
       end if
@@ -1602,10 +1614,9 @@ contains
       do m = 1, 3
          do jlm = 1, 9
             do ilm = 1, 9
-               !this%hhmag(ilm, jlm, m) = &
                hhmag(ilm, jlm, m) = &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc(it, m) + &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc(jt, m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc_ia(m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc_ja(m) + &
                   i_unit*this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cross(m)
             end do
          end do
@@ -1615,11 +1626,9 @@ contains
       do m = 1, 3
          do ilm = 1, 9
             if (this%hoh) then
-               hhmag(ilm, ilm, m) = hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc(it, m)
-               !this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc(it, m)
+               hhmag(ilm, ilm, m) = hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc_ia(m)
             else
-               hhmag(ilm, ilm, m) = hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc(it, m)
-               !this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc(it, m)
+               hhmag(ilm, ilm, m) = hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc_ia(m)
             end if
          end do
       end do
@@ -1644,7 +1653,7 @@ contains
       ! real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
       real(rp), dimension(3) :: vet
       real(rp), dimension(9, 9) :: hhh
-      integer :: i, j, k, l, m, n, it, jt, jj, nn_max_loc
+      integer :: i, j, k, l, m, n, it, jt, ja, nn_max_loc
       integer :: ni, mdir
       integer :: kk ! Clust size number
       real(rp), dimension(:, :), allocatable :: ham_vec
@@ -1670,18 +1679,18 @@ contains
       !end do
       it = this%charge%lattice%iz(ia)
       do m = 1, nr
-         jj = this%charge%lattice%nn(ia, m)
+         ja = this%charge%lattice%nn(ia, m)
          !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
          if (m == 1) then
-            jj = ia
+            ja = ia
          end if
          ! print *, "CR test", shape(this%charge%lattice%cr)
-         if (jj /= 0) then
-            jt = this%charge%lattice%iz(jj)
+         if (ja /= 0) then
+            jt = this%charge%lattice%iz(ja)
             if (this%lattice%pbc) then
-               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,jj,vet)
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,ja,vet)
             else
-               vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+               vet(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
             end if
             !write(123, ´(3f10.6)´) vet(:)
             !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
@@ -1690,7 +1699,7 @@ contains
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
             end if
-            call this%ham0m_nc(it, jt, vet, hhh, hhmag)
+            call this%ham0m_nc(ia, ja, it, jt, vet, hhh, hhmag)
             do mdir = 1, 4
                !call hcpx(this%hhmag(:, :, mdir), 'cart2sph')
                call hcpx(hhmag(:, :, mdir), 'cart2sph')
