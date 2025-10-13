@@ -1238,7 +1238,7 @@ contains
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
-      print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
+      ! print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
       call g_timer%start('Build local hamiltonian')
       allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
 

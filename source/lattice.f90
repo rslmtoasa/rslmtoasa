@@ -1109,7 +1109,7 @@ contains
       close (10)
 
       ! Test to set nmax to the whole cluster
-      this%nmax = kk
+      ! this%nmax = kk
    end subroutine bravais
 
    !---------------------------------------------------------------------------
@@ -2302,9 +2302,11 @@ contains
             sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
-!!    "in DBAR1."
+     !if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
+     !"in DBAR1."
       end do
+      !print *, 'Clusba says ii, n:', ii, n, shape(sbarvec)
+      ! if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA in DBAR1."
       n = ii
    end subroutine clusba
 
