@@ -163,6 +163,18 @@ module reciprocal_mod
       !> Number of tetrahedra
       integer :: n_tetrahedra
 
+      ! K-path (band structure) control variables
+      !> Automatic k-path generation enabled
+      logical :: auto_kpath
+      !> Number of k-points per segment in band structure
+      integer :: nk_per_segment
+      !> Override space group number (0 = auto-detect)
+      integer :: override_space_group
+      !> Custom k-path specification string
+      character(len=200) :: custom_kpath_spec
+      !> Use symmetry reduction for k-mesh
+      logical :: use_symmetry_reduction
+
    contains
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
@@ -192,6 +204,7 @@ module reciprocal_mod
       procedure :: calculate_gaussian_weight_single
       procedure :: write_dos_to_file
       procedure :: restore_to_default
+      procedure :: build_from_file
       procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
       final     :: destructor
@@ -220,6 +233,7 @@ contains
       obj%control => hamiltonian_obj%lattice%control
 
       call obj%restore_to_default()
+      call obj%build_from_file()  ! Read parameters from input.nml
       call obj%generate_reciprocal_vectors()
       call obj%set_basis_sizes()
       call obj%symmetry_analysis%initialize(obj%lattice)
@@ -315,7 +329,116 @@ contains
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 1  ! Default to non-spin-polarized
       this%n_tetrahedra = 0
+
+      ! Default k-path settings
+      this%auto_kpath = .true.  ! Use automatic k-path generation by default
+      this%nk_per_segment = 40  ! Default 40 k-points per segment
+      this%override_space_group = 0  ! 0 = auto-detect
+      this%custom_kpath_spec = ''  ! Empty = use automatic
+      this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
    end subroutine restore_to_default
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Read parameters from input file (namelist-based input)
+   !---------------------------------------------------------------------------
+   subroutine build_from_file(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Reading process variables
+      integer :: iostatus, funit
+
+      ! Include namelist declarations for reciprocal module
+      include 'include_codes/namelists/reciprocal.f90'
+      include 'include_codes/namelists/kpath.f90'
+
+      ! Save previous values (from defaults or previous read)
+      nk1 = this%nk_mesh(1)
+      nk2 = this%nk_mesh(2)
+      nk3 = this%nk_mesh(3)
+      k_offset_x = this%k_offset(1)
+      k_offset_y = this%k_offset(2)
+      k_offset_z = this%k_offset(3)
+      use_symmetry_reduction = this%use_symmetry_reduction
+      use_time_reversal = this%use_time_reversal
+      use_shift = .false.  ! Derived from k_offset
+      n_energy_points = this%n_energy_points
+      dos_energy_min = this%dos_energy_range(1)
+      dos_energy_max = this%dos_energy_range(2)
+      gaussian_sigma = this%gaussian_sigma
+      temperature = this%temperature
+      dos_method = this%dos_method
+      auto_find_fermi = this%auto_find_fermi
+      suppress_internal_logs = this%suppress_internal_logs
+      
+      ! K-path settings
+      auto_kpath = this%auto_kpath
+      nk_per_segment = this%nk_per_segment
+      override_space_group = this%override_space_group
+      custom_kpath_spec = this%custom_kpath_spec
+
+      ! Read reciprocal namelist
+      open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
+      if (iostatus /= 0) then
+         call g_logger%fatal('file '//trim(this%control%fname)//' not found', __FILE__, __LINE__)
+      end if
+
+      read (funit, nml=reciprocal, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+         ! Namelist not found or error - use defaults
+         call g_logger%info('reciprocal namelist not found in input file, using defaults', __FILE__, __LINE__)
+      end if
+      
+      ! Read kpath namelist
+      rewind(funit)
+      read (funit, nml=kpath, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+         ! Namelist not found or error - use defaults
+         call g_logger%info('kpath namelist not found in input file, using defaults', __FILE__, __LINE__)
+      end if
+      close (funit)
+
+      ! Assign values back to type members
+      this%nk_mesh = [nk1, nk2, nk3]
+      this%k_offset = [k_offset_x, k_offset_y, k_offset_z]
+      this%use_symmetry_reduction = use_symmetry_reduction
+      this%use_time_reversal = use_time_reversal
+      this%n_energy_points = n_energy_points
+      this%dos_energy_range = [dos_energy_min, dos_energy_max]
+      this%gaussian_sigma = gaussian_sigma
+      this%temperature = temperature
+      this%dos_method = dos_method
+      this%auto_find_fermi = auto_find_fermi
+      this%suppress_internal_logs = suppress_internal_logs
+
+      ! K-path settings
+      this%auto_kpath = auto_kpath
+      this%nk_per_segment = nk_per_segment
+      this%override_space_group = override_space_group
+      this%custom_kpath_spec = custom_kpath_spec
+
+      ! Log what was read
+      call g_logger%info('reciprocal%build_from_file: Read k-mesh = ' // &
+                        trim(int2str(nk1)) // ' x ' // trim(int2str(nk2)) // ' x ' // trim(int2str(nk3)), &
+                        __FILE__, __LINE__)
+      
+      if (sum(abs(this%k_offset)) > 1.0e-8_rp) then
+         call g_logger%info('reciprocal%build_from_file: k-offset = [' // &
+                           trim(real2str(k_offset_x, '(F8.4)')) // ', ' // &
+                           trim(real2str(k_offset_y, '(F8.4)')) // ', ' // &
+                           trim(real2str(k_offset_z, '(F8.4)')) // ']', &
+                           __FILE__, __LINE__)
+      end if
+      
+      if (this%use_symmetry_reduction) then
+         call g_logger%info('reciprocal%build_from_file: Symmetry reduction enabled', __FILE__, __LINE__)
+      end if
+      
+      if (this%auto_kpath) then
+         call g_logger%info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
+      end if
+   end subroutine build_from_file
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
