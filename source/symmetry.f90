@@ -307,7 +307,7 @@ contains
    !> @brief
    !> Get high-symmetry points for different crystal systems
    !---------------------------------------------------------------------------
-   subroutine get_high_symmetry_points(this, crystal_type, kpoints, labels)
+   recursive subroutine get_high_symmetry_points(this, crystal_type, kpoints, labels)
       class(symmetry), intent(in) :: this
       character(len=*), intent(in) :: crystal_type
       real(rp), dimension(:, :), allocatable, intent(out) :: kpoints

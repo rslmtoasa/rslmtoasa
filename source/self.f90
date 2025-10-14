@@ -159,6 +159,14 @@ module self_mod
       !> Default: false.
       logical :: freeze
 
+      !> Use k-space diagonalization instead of real-space recursion. Default: false.
+      !>
+      !> Use k-space diagonalization to calculate band moments for SCF instead of real-space recursion.
+      !> This is generally faster for small to medium systems and allows for band structure calculations.
+      !>
+      !> Default: false.
+      logical :: use_kspace
+
       !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
       !>
       !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
@@ -234,6 +242,9 @@ module self_mod
       procedure :: report
       procedure :: lmtst
       procedure :: is_converged
+      procedure :: run_kspace
+      procedure :: run_dos_kspace
+      procedure :: run_scf
       procedure, private :: atomsc
       procedure, private :: ftype
       procedure, private :: newrho
@@ -422,6 +433,7 @@ contains
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
       this%freeze = freeze
+      this%use_kspace = use_kspace
       this%rigid_band = rigid_band
       this%fix_soc = fix_soc
       this%soc_scale = soc_scale
@@ -484,6 +496,7 @@ contains
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
       this%freeze = .false.
+      this%use_kspace = .false.  ! Use recursion by default
       this%rigid_band = .false.
       this%fix_soc = .false. 
       this%soc_scale = 1.0d0
@@ -554,6 +567,7 @@ contains
       print *, ''
       print *, '[Constrain Variables]'
       print *, 'freeze     ', this%freeze
+      print *, 'use_kspace ', this%use_kspace
       print *, 'rigid_band ', this%rigid_band
       print *, 'rb         ', this%rb
       print *, ''
@@ -586,6 +600,7 @@ contains
       mix_all = this%mix_all
       magnetic_mixing = this%magnetic_mixing
       freeze = this%freeze
+      use_kspace = this%use_kspace
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
@@ -638,6 +653,7 @@ contains
       mix_all = this%mix_all
       magnetic_mixing = this%magnetic_mixing
       freeze = this%freeze
+      use_kspace = this%use_kspace
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
@@ -675,13 +691,23 @@ contains
    !> Performs the self-consistent calculation.
    !---------------------------------------------------------------------------
    subroutine run(this)
+      use reciprocal_mod
       class(self), intent(inout) :: this
       integer :: i, ia, niter
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
+      type(reciprocal) :: reciprocal_obj  ! K-space object for k-space SCF
    
+      ! Initialize reciprocal object if using k-space method
+      if (this%use_kspace) then
+         reciprocal_obj = reciprocal(this%hamiltonian)
+         if (rank == 0) call g_logger%info('Using k-space diagonalization for SCF', __FILE__, __LINE__)
+      else
+         if (rank == 0) call g_logger%info('Using real-space recursion for SCF', __FILE__, __LINE__)
+      end if
+
       !===========================================================================
       !                              BEGIN SCF LOOP
       !===========================================================================
@@ -689,9 +715,13 @@ contains
       do i = 1, this%nstep
          if (this%cold .and. i==1) call run_scf(this)
          !=========================================================================
-         !                        PERFORM THE RECURSION
+         !                PERFORM RECURSION OR K-SPACE HAMILTONIAN BUILD
          !=========================================================================
-         call run_recursion(this, i)
+         if (this%use_kspace) then
+            call run_kspace(this, i)
+         else
+            call run_recursion(this, i)
+         end if
    
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
@@ -712,9 +742,13 @@ contains
          end do
    
          !=========================================================================
-         !                  CALCULATE THE DENSITY OF STATES
+         !            CALCULATE DOS (RECURSION OR K-SPACE) AND MOMENTS
          !=========================================================================
-         call run_dos(this)
+         if (this%use_kspace) then
+            call run_dos_kspace(this, reciprocal_obj)
+         else
+            call run_dos(this)
+         end if
    
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
@@ -902,6 +936,162 @@ contains
    
       call g_timer%stop('atomic-scf')
    end subroutine run_scf
+
+   !=========================================================================
+   !                   RUN K-SPACE HAMILTONIAN BUILD
+   !=========================================================================
+   subroutine run_kspace(this, iter)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: iter
+      integer :: ia
+
+      if (rank == 0) call g_logger%info('Building k-space Hamiltonian at step '//int2str(iter), __FILE__, __LINE__)
+      call g_timer%start('kspace-hamiltonian')
+
+      ! Build potentials and Hamiltonians (same as recursion)
+      select case (this%control%calctype)
+      case ('B')
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('S')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('I')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+         call this%hamiltonian%build_locham()
+      end select
+
+      call g_timer%stop('kspace-hamiltonian')
+   end subroutine run_kspace
+
+   !=========================================================================
+   !                   RUN K-SPACE DOS AND MOMENTS CALCULATION
+   !=========================================================================
+   subroutine run_dos_kspace(this, reciprocal_obj)
+      use reciprocal_mod
+      class(self), intent(inout) :: this
+      type(reciprocal), intent(inout) :: reciprocal_obj
+      integer :: ia, isite, iorb, ispin
+      real(rp) :: vmad
+
+      if (rank == 0) call g_logger%info('Calculating k-space DOS and band moments', __FILE__, __LINE__)
+      call g_timer%start('kspace-dos-moments')
+
+      ! Check compatibility: tetrahedron method requires full k-mesh (no symmetry reduction)
+      if (reciprocal_obj%use_symmetry_reduction .and. trim(reciprocal_obj%dos_method) == 'tetrahedron') then
+         if (rank == 0) call g_logger%warning('Tetrahedron DOS method requires full k-mesh. Switching to Gaussian method.', __FILE__, __LINE__)
+         reciprocal_obj%dos_method = 'gaussian'
+      end if
+
+      ! Generate k-point mesh (with optional symmetry reduction)
+      if (reciprocal_obj%use_symmetry_reduction) then
+         ! Determine if shift is needed (any non-zero k_offset component)
+         call reciprocal_obj%generate_reduced_kpoint_mesh(reciprocal_obj%nk_mesh, &
+            any(abs(reciprocal_obj%k_offset) > 1.0e-12_rp))
+      else
+         call reciprocal_obj%generate_mp_mesh()
+      end if
+
+      ! Build k-space Hamiltonian and diagonalize
+      call reciprocal_obj%build_kspace_hamiltonian()
+      if (reciprocal_obj%include_so) then
+         call reciprocal_obj%build_kspace_hamiltonian_so()
+      end if
+      call reciprocal_obj%build_total_hamiltonian()
+      call reciprocal_obj%diagonalize_hamiltonian(this%hamiltonian, .false.)
+
+      ! Setup DOS energy grid
+      call reciprocal_obj%setup_dos_energy_grid()
+
+      ! Calculate DOS using tetrahedron or Gaussian method
+      select case (reciprocal_obj%dos_method)
+      case ('tetrahedron')
+         call reciprocal_obj%setup_tetrahedra()
+         call reciprocal_obj%calculate_dos_tetrahedron()
+         call reciprocal_obj%project_dos_orbitals_tetrahedron()
+      case ('gaussian')
+         call reciprocal_obj%calculate_dos_gaussian()
+         call reciprocal_obj%project_dos_orbitals_gaussian()
+      case default
+         if (rank == 0) call g_logger%warning('Unknown DOS method, using tetrahedron', __FILE__, __LINE__)
+         call reciprocal_obj%setup_tetrahedra()
+         call reciprocal_obj%calculate_dos_tetrahedron()
+         call reciprocal_obj%project_dos_orbitals_tetrahedron()
+      end select
+
+      ! Set Fermi level from energy object
+      reciprocal_obj%fermi_level = this%en%fermi
+
+      ! Calculate band moments (m0, m1, m2) from DOS
+      call reciprocal_obj%calculate_band_moments()
+
+      !=========================================================================
+      !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
+      !=========================================================================
+      ! NOTE: In k-space mode, we don't use bands%calculate_magnetic_moments()
+      !       which is designed for recursion. The band moments are already
+      !       calculated by reciprocal%calculate_band_moments() above.
+      !       For magnetic systems, the magnetic moments will be handled
+      !       by the band_moments transfer below.
+
+      do ia = 1, this%lattice%nrec
+         this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
+      end do
+
+      call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+
+      do ia = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
+      end do
+
+      !=========================================================================
+      !     TRANSFER BAND MOMENTS FROM RECIPROCAL TO SYMBOLIC_ATOM
+      !     Apply LMTO-ASA convention: shift m^1 to 0 (subtract Madelung)
+      !=========================================================================
+      do isite = 1, this%lattice%nrec
+         ! Get Madelung potential for this site
+         vmad = this%symbolic_atom(this%lattice%nbulk + isite)%potential%vmad
+
+         do iorb = 1, 3  ! s, p, d orbitals
+            do ispin = 1, min(this%control%nsp, 2)  ! Handle spin channels
+               ! m0: occupation
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(1, iorb - 1, ispin) = &
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 1)
+
+               ! m1: Apply LMTO-ASA convention (shift to m^1 = 0)
+               ! gravity_center = band_center - vmad
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%gravity_center(iorb, ispin) = &
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 2) - vmad
+
+               ! m2: second moment (already calculated relative to band center)
+               ! The second moment in ql(3,...) is: <(E - E_center)^2>
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(3, iorb - 1, ispin) = &
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 3)**2  ! Square of width
+
+               ! Set ql(2,...) = 0 (convention for LMTO-ASA: m^1 = 0)
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(2, iorb - 1, ispin) = 0.0_rp
+            end do
+         end do
+      end do
+
+      ! Calculate pl moments from ql
+      call this%bands%calculate_pl()
+
+      ! Save for mixing
+      call this%mix%save_to('new')
+
+      call g_timer%stop('kspace-dos-moments')
+   end subroutine run_dos_kspace
 
 
    !---------------------------------------------------------------------------

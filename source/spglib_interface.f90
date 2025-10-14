@@ -383,10 +383,11 @@ contains
       allocate(ir_kpoint_indices(num_ir_kpoints))
       
       ! Find which k-points are irreducible
+      ! Note: ir_mapping uses 0-based indexing (C convention)
       is_irreducible = .false.
       ir_idx = 0
       do i = 1, total_kpoints
-         if (ir_mapping(i) == i) then  ! This is an irreducible k-point
+         if (ir_mapping(i) == i - 1) then  ! Compare with 0-based index
             ir_idx = ir_idx + 1
             is_irreducible(i) = .true.
             ir_kpoint_indices(ir_idx) = i
@@ -410,7 +411,8 @@ contains
          if (shift(3) /= 0) kpoints(3, ir_idx) = kpoints(3, ir_idx) + 0.5_rp / real(mesh_dims(3), rp)
          
          ! Calculate weight from multiplicity (how many k-points map to this irreducible one)
-         multiplicity = count(ir_mapping == i)
+         ! Note: ir_mapping contains 0-based indices, so compare with (i-1)
+         multiplicity = count(ir_mapping == i - 1)
          weights(ir_idx) = real(multiplicity, rp) / real(total_kpoints, rp)
       end do
 
