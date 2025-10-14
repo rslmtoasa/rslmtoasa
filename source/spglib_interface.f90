@@ -131,6 +131,7 @@ module spglib_interface_mod
       procedure :: detect_space_group
       procedure :: get_symmetry_operations
       procedure :: get_reduced_kpoint_mesh
+      procedure :: get_reduced_kpoint_mesh_with_points
       procedure :: get_crystal_system
       procedure :: get_band_path_points
       procedure :: get_dataset
@@ -323,6 +324,126 @@ contains
       write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
 #endif
    end function get_reduced_kpoint_mesh
+
+   !---------------------------------------------------------------------------
+   !> @brief Get irreducible k-point mesh with k-points and weights
+   !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
+   !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]
+   !> @param[out] kpoints K-point coordinates in reciprocal lattice units [3, num_ir]
+   !> @param[out] weights K-point weights (normalized to sum to 1) [num_ir]
+   !> @return Number of irreducible k-points
+   !---------------------------------------------------------------------------
+   function get_reduced_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints, weights) result(num_ir_kpoints)
+      class(spglib_interface), intent(in) :: this
+      integer, intent(in) :: mesh_dims(3)
+      integer, intent(in), optional :: is_shift(3)
+      real(rp), allocatable, intent(out) :: kpoints(:,:)
+      real(rp), allocatable, intent(out) :: weights(:)
+      integer :: num_ir_kpoints
+
+      integer :: total_kpoints, shift(3), ir_idx, i, j, k
+      
+#ifdef USE_SPGLIB
+      integer, allocatable :: grid_address(:,:)
+      integer, allocatable :: ir_mapping(:)
+      integer :: multiplicity
+      integer, allocatable :: ir_kpoint_indices(:)
+      logical, allocatable :: is_irreducible(:)
+
+      if (.not. this%initialized) then
+         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         num_ir_kpoints = 0
+         return
+      end if
+
+      total_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)
+      
+      if (present(is_shift)) then
+         shift = is_shift
+      else
+         shift = [0, 0, 0]  ! No shift by default
+      end if
+
+      allocate(grid_address(3, total_kpoints))
+      allocate(ir_mapping(total_kpoints))
+
+      ! Get irreducible k-points from spglib
+      num_ir_kpoints = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
+                                                 mesh_dims, shift, 1, &  ! 1 = use time reversal
+                                                 this%lattice_vectors, &
+                                                 this%atomic_positions, &
+                                                 this%atomic_types, &
+                                                 this%num_atoms, &
+                                                 this%symprec)
+
+      ! Allocate output arrays
+      allocate(kpoints(3, num_ir_kpoints))
+      allocate(weights(num_ir_kpoints))
+      allocate(is_irreducible(total_kpoints))
+      allocate(ir_kpoint_indices(num_ir_kpoints))
+      
+      ! Find which k-points are irreducible
+      is_irreducible = .false.
+      ir_idx = 0
+      do i = 1, total_kpoints
+         if (ir_mapping(i) == i) then  ! This is an irreducible k-point
+            ir_idx = ir_idx + 1
+            is_irreducible(i) = .true.
+            ir_kpoint_indices(ir_idx) = i
+         end if
+      end do
+
+      ! Extract irreducible k-points and calculate weights
+      weights = 0.0_rp
+      do ir_idx = 1, num_ir_kpoints
+         i = ir_kpoint_indices(ir_idx)
+         
+         ! Convert grid address to fractional coordinates
+         ! Note: grid_address gives integers, need to convert to [0,1) range
+         kpoints(1, ir_idx) = real(grid_address(1, i), rp) / real(mesh_dims(1), rp)
+         kpoints(2, ir_idx) = real(grid_address(2, i), rp) / real(mesh_dims(2), rp)
+         kpoints(3, ir_idx) = real(grid_address(3, i), rp) / real(mesh_dims(3), rp)
+         
+         ! Add shift if needed
+         if (shift(1) /= 0) kpoints(1, ir_idx) = kpoints(1, ir_idx) + 0.5_rp / real(mesh_dims(1), rp)
+         if (shift(2) /= 0) kpoints(2, ir_idx) = kpoints(2, ir_idx) + 0.5_rp / real(mesh_dims(2), rp)
+         if (shift(3) /= 0) kpoints(3, ir_idx) = kpoints(3, ir_idx) + 0.5_rp / real(mesh_dims(3), rp)
+         
+         ! Calculate weight from multiplicity (how many k-points map to this irreducible one)
+         multiplicity = count(ir_mapping == i)
+         weights(ir_idx) = real(multiplicity, rp) / real(total_kpoints, rp)
+      end do
+
+      write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
+                 num_ir_kpoints, 'irreducible points'
+      write(*,*) 'spglib_interface: Weight sum =', sum(weights), '(should be 1.0)'
+
+      deallocate(grid_address, ir_mapping, is_irreducible, ir_kpoint_indices)
+#else
+      ! Without spglib, return full mesh with equal weights
+      total_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)
+      num_ir_kpoints = total_kpoints
+      
+      allocate(kpoints(3, num_ir_kpoints))
+      allocate(weights(num_ir_kpoints))
+      
+      ! Generate full MP mesh
+      ir_idx = 0
+      do i = 1, mesh_dims(1)
+         do j = 1, mesh_dims(2)
+            do k = 1, mesh_dims(3)
+               ir_idx = ir_idx + 1
+               kpoints(1, ir_idx) = real(i-1, rp) / real(mesh_dims(1), rp)
+               kpoints(2, ir_idx) = real(j-1, rp) / real(mesh_dims(2), rp)
+               kpoints(3, ir_idx) = real(k-1, rp) / real(mesh_dims(3), rp)
+            end do
+         end do
+      end do
+      weights = 1.0_rp / real(num_ir_kpoints, rp)
+      
+      write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
+#endif
+   end function get_reduced_kpoint_mesh_with_points
 
    !---------------------------------------------------------------------------
    !> @brief Determine crystal system from space group number

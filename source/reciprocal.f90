@@ -175,6 +175,7 @@ module reciprocal_mod
       procedure :: get_basis_type_from_size
       procedure :: diagonalize_hamiltonian
       procedure :: calculate_band_structure
+      procedure :: calculate_band_structure_auto
       procedure :: calculate_density_of_states
       procedure :: calculate_dos_tetrahedron
       procedure :: calculate_dos_gaussian
@@ -1060,6 +1061,118 @@ contains
    end subroutine calculate_band_structure
 
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate band structure with automatic k-path detection using spglib
+   !> This is a simplified interface that auto-detects crystal structure
+   !---------------------------------------------------------------------------
+   subroutine calculate_band_structure_auto(this, ham, npts_per_segment, output_file)
+      class(reciprocal), intent(inout) :: this
+      class(hamiltonian), intent(in) :: ham
+      integer, intent(in), optional :: npts_per_segment
+      character(len=*), intent(in), optional :: output_file
+      
+      ! Local variables
+      integer :: npts
+      character(len=256) :: filename
+      integer :: unit, i, j, nmat
+      character(len=100) :: fmt_str
+
+      npts = 40  ! Default
+      if (present(npts_per_segment)) npts = npts_per_segment
+
+      call g_logger%info('calculate_band_structure_auto: Starting automatic band structure calculation', __FILE__, __LINE__)
+
+      ! Generate k-path automatically using symmetry analysis
+      call this%symmetry_analysis%generate_automatic_kpath(npts)
+
+      ! Copy k-path data from symmetry analysis to reciprocal object
+      if (allocated(this%symmetry_analysis%k_path)) then
+         this%nk_path = this%symmetry_analysis%nk_path
+         
+         if (allocated(this%k_path)) deallocate(this%k_path)
+         if (allocated(this%k_labels)) deallocate(this%k_labels)
+         if (allocated(this%k_distances)) deallocate(this%k_distances)
+         
+         allocate(this%k_path(3, this%nk_path))
+         allocate(this%k_labels(this%nk_path))
+         allocate(this%k_distances(this%nk_path))
+         
+         this%k_path = this%symmetry_analysis%k_path
+         this%k_labels = this%symmetry_analysis%k_labels
+         this%k_distances = this%symmetry_analysis%k_distances
+         
+         call g_logger%info('calculate_band_structure_auto: K-path has ' // &
+                           trim(int2str(this%nk_path)) // ' points', __FILE__, __LINE__)
+      else
+         call g_logger%error('calculate_band_structure_auto: Failed to generate k-path', __FILE__, __LINE__)
+         return
+      end if
+
+      ! Diagonalize Hamiltonian along k-path
+      call this%diagonalize_hamiltonian(ham, use_kpath=.true.)
+
+      ! Set output filename
+      filename = 'band_structure.dat'
+      if (present(output_file)) filename = output_file
+
+      ! Write band structure to file
+      open(newunit=unit, file=trim(filename), status='replace', action='write')
+      
+      ! Write header with auto-detected information
+      write(unit, '(A)') '# Band structure calculation (automatic k-path)'
+      if (this%symmetry_analysis%spglib%is_available()) then
+         write(unit, '(A)') '# Space group: ' // trim(this%symmetry_analysis%spglib%get_space_group_symbol()) // &
+                           ' (#' // trim(int2str(this%symmetry_analysis%spglib%get_space_group_number())) // ')'
+         write(unit, '(A)') '# Crystal system: ' // trim(this%symmetry_analysis%spglib%get_crystal_system_name())
+      end if
+      write(unit, '(A,I0)') '# Number of k-points: ', this%nk_path
+      nmat = size(this%eigenvalues_path, 1)
+      write(unit, '(A,I0)') '# Number of bands: ', nmat
+      write(unit, '(A)') '# Format: k_distance, eigenvalue_1, eigenvalue_2, ...'
+      write(unit, '(A)') '#'
+
+      ! Write data
+      write(fmt_str, '(A,I0,A)') '(', nmat+1, '(ES16.8E3,1X))'
+      do i = 1, this%nk_path
+         write(unit, fmt_str) this%k_distances(i), (this%eigenvalues_path(j, i), j = 1, nmat)
+      end do
+
+      close(unit)
+
+      call g_logger%info('calculate_band_structure_auto: Band structure written to ' // trim(filename), __FILE__, __LINE__)
+
+      ! Write k-path information
+      filename = 'kpath_info.dat'
+      if (present(output_file)) then
+         i = index(output_file, '.', back=.true.)
+         if (i > 0) then
+            filename = output_file(1:i-1) // '_kpath.dat'
+         else
+            filename = trim(output_file) // '_kpath.dat'
+         end if
+      end if
+
+      open(newunit=unit, file=trim(filename), status='replace', action='write')
+      write(unit, '(A)') '# K-path information'
+      write(unit, '(A)') '# Format: k_distance, kx, ky, kz, label'
+      write(unit, '(A)') '#'
+      
+      do i = 1, this%nk_path
+         if (trim(this%k_labels(i)) /= '') then
+            write(unit, '(4(ES16.8E3,1X),A)') this%k_distances(i), this%k_path(:, i), ' # ' // trim(this%k_labels(i))
+         else
+            write(unit, '(4(ES16.8E3,1X))') this%k_distances(i), this%k_path(:, i)
+         end if
+      end do
+
+      close(unit)
+
+      call g_logger%info('calculate_band_structure_auto: K-path information written to ' // trim(filename), __FILE__, __LINE__)
+   end subroutine calculate_band_structure_auto
+
+
 
 
 
@@ -1075,6 +1188,8 @@ contains
       integer :: shift(3)
       integer :: num_ir_kpoints
       logical :: do_shift
+      real(rp), allocatable :: kpoints_frac(:,:), weights(:)
+      integer :: i
 
       do_shift = .false.
       if (present(use_shift)) do_shift = use_shift
@@ -1085,22 +1200,61 @@ contains
          shift = [0, 0, 0]  ! No offset
       end if
 
+      ! Store mesh dimensions
+      this%nk_mesh = mesh_dims
+
       if (.not. this%symmetry_analysis%spglib%is_available()) then
          call g_logger%warning('generate_reduced_kpoint_mesh: spglib not available, using full mesh', __FILE__, __LINE__)
          call this%generate_mp_mesh()  ! Fall back to regular MP mesh
          return
       end if
 
-      ! Get irreducible k-points using spglib
-      num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh(mesh_dims, shift)
+      ! Get irreducible k-points and weights from spglib
+      num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh_with_points( &
+                                                      mesh_dims, shift, kpoints_frac, weights)
 
-      call g_logger%info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(num_ir_kpoints)) // &
+      if (num_ir_kpoints == 0) then
+         call g_logger%error('generate_reduced_kpoint_mesh: Failed to get k-points from spglib', __FILE__, __LINE__)
+         call this%generate_mp_mesh()  ! Fall back to regular MP mesh
+         return
+      end if
+
+      ! Store k-point information
+      this%nk_total = num_ir_kpoints
+
+      ! Allocate k-point arrays
+#ifdef USE_SAFE_ALLOC
+      if (allocated(this%k_points)) call g_safe_alloc%deallocate('reciprocal.k_points', this%k_points)
+      if (allocated(this%k_weights)) call g_safe_alloc%deallocate('reciprocal.k_weights', this%k_weights)
+      call g_safe_alloc%allocate_real('reciprocal.k_points', this%k_points, (/3, this%nk_total/))
+      call g_safe_alloc%allocate_real('reciprocal.k_weights', this%k_weights, (/this%nk_total/))
+#else
+      if (allocated(this%k_points)) deallocate(this%k_points)
+      if (allocated(this%k_weights)) deallocate(this%k_weights)
+      allocate(this%k_points(3, this%nk_total))
+      allocate(this%k_weights(this%nk_total))
+#endif
+
+      ! Copy k-points and weights
+      this%k_points = kpoints_frac
+      this%k_weights = weights
+
+      ! Clean up temporary arrays
+      deallocate(kpoints_frac, weights)
+
+      call g_logger%info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(this%nk_total)) // &
                         ' irreducible k-points from ' // trim(int2str(product(mesh_dims))) // ' total points', &
                         __FILE__, __LINE__)
-
-      ! TODO: Implement actual k-point generation from spglib results
-      ! For now, fall back to regular MP mesh
-      call this%generate_mp_mesh()
+      call g_logger%info('generate_reduced_kpoint_mesh: Reduction factor: ' // &
+                        trim(real2str(real(product(mesh_dims), rp)/real(this%nk_total, rp), '(F6.2)')) // 'x', &
+                        __FILE__, __LINE__)
+      
+      ! Verify weights sum to 1
+      if (abs(sum(this%k_weights) - 1.0_rp) > 1.0e-6_rp) then
+         call g_logger%warning('generate_reduced_kpoint_mesh: K-point weights sum to ' // &
+                              trim(real2str(sum(this%k_weights), '(F12.8)')) // ' (should be 1.0)', &
+                              __FILE__, __LINE__)
+      end if
    end subroutine generate_reduced_kpoint_mesh
 
    !---------------------------------------------------------------------------
@@ -1632,30 +1786,28 @@ contains
    !---------------------------------------------------------------------------
    subroutine project_dos_orbitals_gaussian(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik, ib, ie, iorb, ispin, i
-      integer :: n_orb_per_spin, orb_start
+      integer :: ik, ib, ie, iorb, ispin, i, isite
+      integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end
       real(rp) :: weight, orbital_char, energy
       complex(rp) :: psi_element
 
-      call g_logger%info('project_dos_orbitals: Starting orbital projection calculation', __FILE__, __LINE__)
+      call g_logger%info('project_dos_orbitals_gaussian: Starting Gaussian orbital projection calculation', __FILE__, __LINE__)
 
-      ! Initialize dimensions
-      this%n_sites = 1  ! For now, single site (can be extended)
+      ! Initialize dimensions - get number of sites from lattice
+      this%n_sites = this%lattice%nrec
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 2  ! spin up/down
+
+      call g_logger%info('project_dos_orbitals_gaussian: Projecting onto ' // trim(int2str(this%n_sites)) // &
+                        ' site(s)', __FILE__, __LINE__)
 
       ! Allocate projected DOS array
       if (allocated(this%projected_dos)) deallocate(this%projected_dos)
       allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       this%projected_dos = 0.0_rp
 
-   ! Number of orbitals per spin: derive from actual eigenvector dimension to match diagonalization
-   n_orb_per_spin = size(this%eigenvectors, 1) / 2
-
-      ! For now, only implement Gaussian method for projections
-      if (trim(this%dos_method) /= 'gaussian') then
-         call g_logger%warning('project_dos_orbitals: Tetrahedron projections not yet implemented, using Gaussian', __FILE__, __LINE__)
-      end if
+      ! Number of orbitals per spin: derive from actual eigenvector dimension to match diagonalization
+      n_orb_per_spin = size(this%eigenvectors, 1) / 2
 
       ! Loop over energy points
       do ie = 1, this%n_energy_points
@@ -1677,43 +1829,57 @@ contains
                ! Apply k-point weight
                weight = weight * this%k_weights(ik)
 
-               ! Calculate orbital character for each orbital type and spin
-               do ispin = 1, this%n_spin_components
-                  ! Orbital range for this spin
-                  orb_start = (ispin-1) * n_orb_per_spin + 1
+               ! Loop over sites
+               do isite = 1, this%n_sites
+                  ! Calculate orbital range for this site
+                  ! Assuming orbitals are ordered: site1_orbs, site2_orbs, ..., for each spin
+                  site_orb_start = (isite - 1) * (n_orb_per_spin / this%n_sites) + 1
+                  site_orb_end = isite * (n_orb_per_spin / this%n_sites)
 
-                  ! s orbital (index 1 in each spin block)
-                  iorb = 1
-                  psi_element = this%eigenvectors(orb_start, ib, ik)
-                  orbital_char = real(conjg(psi_element) * psi_element, rp)
-                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
-                                                         orbital_char * weight
+                  ! Calculate orbital character for each orbital type and spin
+                  do ispin = 1, this%n_spin_components
+                     ! Orbital range for this spin
+                     orb_start = (ispin-1) * n_orb_per_spin + site_orb_start - 1
 
-                  ! p orbitals (indices 2-4 in each spin block)
-                  iorb = 2
-                  orbital_char = 0.0_rp
-                  do i = 2, 4
-                     psi_element = this%eigenvectors(orb_start + i - 1, ib, ik)
-                     orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                     ! s orbital (index 1 in each site/spin block)
+                     iorb = 1
+                     if (orb_start + 1 <= size(this%eigenvectors, 1)) then
+                        psi_element = this%eigenvectors(orb_start + 1, ib, ik)
+                        orbital_char = real(conjg(psi_element) * psi_element, rp)
+                        this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
+                                                                     orbital_char * weight
+                     end if
+
+                     ! p orbitals (indices 2-4 in each site/spin block)
+                     iorb = 2
+                     orbital_char = 0.0_rp
+                     do i = 2, 4
+                        if (orb_start + i <= size(this%eigenvectors, 1)) then
+                           psi_element = this%eigenvectors(orb_start + i, ib, ik)
+                           orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                        end if
+                     end do
+                     this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
+                                                                  orbital_char * weight
+
+                     ! d orbitals (indices 5-9 in each site/spin block)
+                     iorb = 3
+                     orbital_char = 0.0_rp
+                     do i = 5, 9
+                        if (orb_start + i <= size(this%eigenvectors, 1)) then
+                           psi_element = this%eigenvectors(orb_start + i, ib, ik)
+                           orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                        end if
+                     end do
+                     this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
+                                                                  orbital_char * weight
+
+                     ! f orbitals (would be indices 10-16, but not present in spd basis)
+                     iorb = 4
+                     orbital_char = 0.0_rp  ! No f orbitals in current spd basis
+                     this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
+                                                                  orbital_char * weight
                   end do
-                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
-                                                         orbital_char * weight
-
-                  ! d orbitals (indices 5-9 in each spin block)
-                  iorb = 3
-                  orbital_char = 0.0_rp
-                  do i = 5, 9
-                     psi_element = this%eigenvectors(orb_start + i - 1, ib, ik)
-                     orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                  end do
-                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
-                                                         orbital_char * weight
-
-                  ! f orbitals (would be indices 10-16, but not present in spd basis)
-                  iorb = 4
-                  orbital_char = 0.0_rp  ! No f orbitals in current spd basis
-                  this%projected_dos(1, iorb, ispin, ie) = this%projected_dos(1, iorb, ispin, ie) + &
-                                                         orbital_char * weight
                end do
             end do
          end do
@@ -1731,8 +1897,8 @@ contains
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i
-      integer :: n_orb_per_spin, orb_start, ik
+      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite
+      integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end, ik
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       integer, dimension(4) :: sort_idx
@@ -1740,10 +1906,13 @@ contains
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
-      ! Initialize dimensions
-      this%n_sites = 1  ! For now, single site (can be extended)
+      ! Initialize dimensions - get number of sites from lattice
+      this%n_sites = this%lattice%nrec
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 2  ! spin up/down
+
+      call g_logger%info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
+                        ' site(s)', __FILE__, __LINE__)
 
       ! Allocate projected DOS array
       if (allocated(this%projected_dos)) deallocate(this%projected_dos)
@@ -1758,9 +1927,9 @@ contains
          call this%setup_tetrahedra()
       end if
 
-   ! Parallelize over energy points: each thread writes to independent i_energy
+      ! Parallelize over energy points: each thread writes to independent i_energy
 #ifdef _OPENMP
-   !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element) firstprivate(n_orb_per_spin) shared(this) default(none)
+      !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start,site_orb_end) firstprivate(n_orb_per_spin) shared(this) default(none)
 #endif
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
@@ -1789,66 +1958,81 @@ contains
                ! Weight by tetrahedron volume
                dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
 
-               ! Calculate orbital character for each orbital type and spin
-               do ispin = 1, this%n_spin_components
-                  ! Orbital range for this spin
-                  orb_start = (ispin-1) * n_orb_per_spin + 1
+               ! Loop over sites
+               do isite = 1, this%n_sites
+                  ! Calculate orbital range for this site
+                  site_orb_start = (isite - 1) * (n_orb_per_spin / this%n_sites) + 1
+                  site_orb_end = isite * (n_orb_per_spin / this%n_sites)
 
-                  ! s orbital (index 1 in each spin block)
-                  iorb = 1
-                  orbital_char_avg = 0.0_rp
-                  do i_corner = 1, 4
-                     ik = this%tetrahedra(i_corner, i_tet)
-                     psi_element = this%eigenvectors(orb_start, i_band, ik)
-                     orbital_chars(i_corner) = real(conjg(psi_element) * psi_element, rp)
-                  end do
-                  orbital_char_avg = sum(orbital_chars) / 4.0_rp  ! Average over tetrahedron corners
-                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
-                                                               orbital_char_avg * dos_contrib
+                  ! Calculate orbital character for each orbital type and spin
+                  do ispin = 1, this%n_spin_components
+                     ! Orbital range for this spin and site
+                     orb_start = (ispin-1) * n_orb_per_spin + site_orb_start - 1
 
-                  ! p orbitals (indices 2-4 in each spin block)
-                  iorb = 2
-                  orbital_char_avg = 0.0_rp
-                  do i_corner = 1, 4
-                     ik = this%tetrahedra(i_corner, i_tet)
-                     orbital_char = 0.0_rp
-                     do i = 2, 4
-                        psi_element = this%eigenvectors(orb_start + i - 1, i_band, ik)
-                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                     ! s orbital (index 1 in each site/spin block)
+                     iorb = 1
+                     orbital_char_avg = 0.0_rp
+                     do i_corner = 1, 4
+                        ik = this%tetrahedra(i_corner, i_tet)
+                        if (orb_start + 1 <= size(this%eigenvectors, 1)) then
+                           psi_element = this%eigenvectors(orb_start + 1, i_band, ik)
+                           orbital_chars(i_corner) = real(conjg(psi_element) * psi_element, rp)
+                        else
+                           orbital_chars(i_corner) = 0.0_rp
+                        end if
                      end do
-                     orbital_chars(i_corner) = orbital_char
-                  end do
-                  orbital_char_avg = sum(orbital_chars) / 4.0_rp
-                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
-                                                               orbital_char_avg * dos_contrib
+                     orbital_char_avg = sum(orbital_chars) / 4.0_rp  ! Average over tetrahedron corners
+                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
+                                                                        orbital_char_avg * dos_contrib
 
-                  ! d orbitals (indices 5-9 in each spin block)
-                  iorb = 3
-                  orbital_char_avg = 0.0_rp
-                  do i_corner = 1, 4
-                     ik = this%tetrahedra(i_corner, i_tet)
-                     orbital_char = 0.0_rp
-                     do i = 5, 9
-                        psi_element = this%eigenvectors(orb_start + i - 1, i_band, ik)
-                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                     ! p orbitals (indices 2-4 in each site/spin block)
+                     iorb = 2
+                     orbital_char_avg = 0.0_rp
+                     do i_corner = 1, 4
+                        ik = this%tetrahedra(i_corner, i_tet)
+                        orbital_char = 0.0_rp
+                        do i = 2, 4
+                           if (orb_start + i <= size(this%eigenvectors, 1)) then
+                              psi_element = this%eigenvectors(orb_start + i, i_band, ik)
+                              orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                           end if
+                        end do
+                        orbital_chars(i_corner) = orbital_char
                      end do
-                     orbital_chars(i_corner) = orbital_char
-                  end do
-                  orbital_char_avg = sum(orbital_chars) / 4.0_rp
-                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
-                                                               orbital_char_avg * dos_contrib
+                     orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
+                                                                        orbital_char_avg * dos_contrib
 
-                  ! f orbitals (would be indices 10-16, but not present in spd basis)
-                  iorb = 4
-                  orbital_char_avg = 0.0_rp  ! No f orbitals in current spd basis
-                  this%projected_dos(1, iorb, ispin, i_energy) = this%projected_dos(1, iorb, ispin, i_energy) + &
-                                                               orbital_char_avg * dos_contrib
+                     ! d orbitals (indices 5-9 in each site/spin block)
+                     iorb = 3
+                     orbital_char_avg = 0.0_rp
+                     do i_corner = 1, 4
+                        ik = this%tetrahedra(i_corner, i_tet)
+                        orbital_char = 0.0_rp
+                        do i = 5, 9
+                           if (orb_start + i <= size(this%eigenvectors, 1)) then
+                              psi_element = this%eigenvectors(orb_start + i, i_band, ik)
+                              orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                           end if
+                        end do
+                        orbital_chars(i_corner) = orbital_char
+                     end do
+                     orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
+                                                                        orbital_char_avg * dos_contrib
+
+                     ! f orbitals (would be indices 10-16, but not present in spd basis)
+                     iorb = 4
+                     orbital_char_avg = 0.0_rp  ! No f orbitals in current spd basis
+                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
+                                                                        orbital_char_avg * dos_contrib
+                  end do
                end do
             end do
          end do
       end do
 #ifdef _OPENMP
-     !$omp end parallel do
+      !$omp end parallel do
 #endif
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)

@@ -68,6 +68,7 @@ module symmetry_mod
       procedure :: generate_symmetry_kpath
       procedure :: generate_canonical_kpath
       procedure :: get_canonical_kpath_for_spacegroup
+      procedure :: generate_automatic_kpath
       
       ! Utility procedures
       procedure :: set_lattice_reference
@@ -725,5 +726,44 @@ contains
       end select
 
    end subroutine get_canonical_kpath_for_spacegroup
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Automatically generate k-path using spglib symmetry detection
+   !> This is the high-level interface for automatic band structure calculations
+   !---------------------------------------------------------------------------
+   subroutine generate_automatic_kpath(this, npts_per_segment)
+      class(symmetry), intent(inout) :: this
+      integer, intent(in), optional :: npts_per_segment
+      
+      integer :: npts, spg_number
+      character(len=20) :: international
+      
+      npts = 40  ! Default
+      if (present(npts_per_segment)) npts = npts_per_segment
+
+#ifdef USE_SPGLIB
+      if (this%spglib%is_available()) then
+         ! Get space group information from spglib
+         spg_number = this%spglib%get_space_group_number()
+         international = this%spglib%get_space_group_symbol()
+         
+         call g_logger%info('generate_automatic_kpath: Detected space group ' // &
+                           trim(int2str(spg_number)) // ' (' // trim(international) // ')', &
+                           __FILE__, __LINE__)
+         
+         ! Generate canonical k-path for this space group
+         call this%get_canonical_kpath_for_spacegroup(spg_number, international, npts)
+      else
+#endif
+         ! Fallback: use lattice-based crystal structure determination
+         call g_logger%info('generate_automatic_kpath: Using lattice-based crystal detection', &
+                           __FILE__, __LINE__)
+         call this%generate_symmetry_kpath(npts)
+#ifdef USE_SPGLIB
+      end if
+#endif
+   end subroutine generate_automatic_kpath
 
 end module symmetry_mod
