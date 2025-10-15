@@ -69,7 +69,7 @@ module potential_mod
       real(rp), dimension(:, :), allocatable :: pl
       !> Moments as defined in Eq. 48. of Phys. Rev. B 43, 9538 (1991).
       !> 1st index 1 = s-orbital, 2 = p-orbital, 3 = d-orbital
-      !> 2nd index 1 = spin-up, 2 = spin-dw
+      !> 2nd index 1 = spin-up, 2 = spin-dw (I think the third index is spin /Viktor Frilén)
       real(rp), dimension(:, :, :), allocatable :: ql
       !> Potential parameters on the orthogonal basis
       real(rp), dimension(:, :), allocatable :: c, enu, ppar, qpar, srdel, vl, pnu, qi, dele
@@ -97,6 +97,16 @@ module potential_mod
       real(rp), dimension(2) :: xi_p, xi_d, rac
       ! Hyperfine fields
       real(rp), dimension(2) :: hyper_field(2)
+      !> Hubbard parameters
+      !> 1 = s-orbital, 2 = p-orbital, 3 = d-orbital (possible to generalize to f-orbitals)
+      real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
+      !> Local density matrix /occupation matrix (integrated -im(g0)/pi)
+      !> 1st index: 1 = s-orbital, 2 = p-orbital, 3 = d-orbital 
+      !> 2nd index: 1 = spin-up, 2= spin-dw
+      !> 3rd and 4th index: m-quantum numbers (projected angular momentum)
+      real(rp), dimension(:,:,:,:), allocatable :: ldm
+      !> Temporary variable to read and write ldm in a 3D format. 
+      real(rp), dimension(:,:,:), allocatable :: ldm_flatten
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -114,6 +124,8 @@ module potential_mod
       procedure :: expand_potential_full
       procedure :: print_hyperfine
       procedure :: copy_mom_to_scal
+      procedure :: flatten_ldm
+      procedure :: expand_ldm
       final :: destructor
    end type potential
 
@@ -243,6 +255,11 @@ contains
       call move_alloc(this%srdel, srdel)
       call move_alloc(this%vl, vl)
 
+      call move_alloc(this%hubbard_u, hubbard_u)
+      call move_alloc(this%hubbard_j, hubbard_j)
+      ! call move_alloc(this%ldm, ldm)
+      call move_alloc(this%ldm_flatten, ldm_flatten)
+
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
          call g_logger%fatal('file '//fmt('A', fname)//' not found', __FILE__, __LINE__)
@@ -292,6 +309,11 @@ contains
       call move_alloc(qpar, this%qpar)
       call move_alloc(srdel, this%srdel)
       call move_alloc(vl, this%vl)
+
+      call move_alloc(hubbard_u, this%hubbard_u)
+      call move_alloc(hubbard_j, this%hubbard_j)
+      ! call move_alloc(ldm, this%ldm)
+      call move_alloc(ldm_flatten, this%ldm_flatten)
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -358,6 +380,10 @@ contains
       allocate (this%c(0:this%lmax, 2), this%enu(0:this%lmax, 2), this%ppar(0:this%lmax, 2), this%qpar(0:this%lmax, 2), &
                 this%srdel(0:this%lmax, 2), this%vl(0:this%lmax, 2), this%pnu(0:this%lmax, 2), this%qi(0:this%lmax, 2), this%dele(0:this%lmax, 2))
       allocate (this%shifted_band(this%lmax + 1, 2), this%obar(this%lmax + 1, 2))
+      allocate (this%hubbard_u(this%lmax + 1))
+      allocate (this%hubbard_j(this%lmax + 1))
+      allocate (this%ldm(this%lmax + 1, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+      allocate (this%ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2)) ! Same as ldm but flatten
 #endif
 
       this%xi_p(:) = 0.0d0
@@ -400,6 +426,10 @@ contains
       this%pnu(:, :) = 0.0d0
       this%qi(:, :) = 0.0d0
       this%dele(:, :) = 0.0d0
+      this%hubbard_u(:) = 0.0d0
+      this%hubbard_j(:) = 0.0d0
+      this%ldm(:,:,:,:) = 0.0d0
+      this%ldm_flatten(:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -573,6 +603,10 @@ contains
       call nml%add('xi_p', this%xi_p)
       call nml%add('xi_d', this%xi_d)
       call nml%add('rac', this%rac)
+      call nml%add('hubbard_u', this%hubbard_u)
+      call nml%add('hubbard_j', this%hubbard_j)
+      ! call nml%add('ldm', this%ldm)
+      call nml%add('ldm_flatten', this%ldm_flatten)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -1092,5 +1126,42 @@ contains
       this%lz = this%lmom(3)
 
    end subroutine copy_mom_to_scal
+
+   subroutine flatten_ldm(this)
+      class(potential) :: this
+      integer :: l, i, j, ispin, k
+
+      this%ldm_flatten(:,:,:) = 0.0d0
+      do l = 1, this%lmax + 1
+         do ispin = 1, 2
+            k = 0
+            do i = 1, 2* this%lmax + 1
+               do j = 1, 2*this%lmax + 1
+                  k = k + 1
+                  this%ldm_flatten(l, ispin, k) = this%ldm(l, ispin, i, j)
+               end do
+            end do
+         end do
+      end do
+      
+   end subroutine flatten_ldm
+
+   subroutine expand_ldm(this)
+      class(potential) :: this
+      integer :: l, i, j, ispin, k
+      ! Continue
+      this%ldm(:,:,:,:) = 0.0d0
+      do l = 1, this%lmax + 1
+         do ispin = 1, 2
+            k = 0
+            do i = 1, 2* this%lmax + 1
+               do j = 1, 2*this%lmax + 1
+                  k = k + 1
+                  this%ldm(l, ispin, i, j) = this%ldm_flatten(l, ispin, k)
+               end do
+            end do
+         end do
+      end do
+   end subroutine expand_ldm
 
 end module potential_mod

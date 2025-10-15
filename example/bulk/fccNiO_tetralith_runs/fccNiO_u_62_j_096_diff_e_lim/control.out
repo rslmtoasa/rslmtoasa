@@ -1,0 +1,16 @@
+***************************************************
+You have loaded a buildenv module
+***************************************************
+The buldenv-intel module makes available:
+ - Compilers: icc, ifort, etc.
+ - Mpi library with mpi-wrapped compilers: intel mpi with mpicc, mpifort, etc.
+ - Numerical libraries: intel MKL
+
+It also makes a set of dependency library modules available via
+the regular module command. Just do:
+  module avail
+to see what is available.
+
+NOTE: You shoud never load build environments inside submitted jobs.
+(with the single exception of when using supercomputer time to compile code.)
+

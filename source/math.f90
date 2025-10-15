@@ -103,6 +103,8 @@ module math_mod
    ! Angstrom to centimeter factor
    !> 1 Å = 1.0e-8 cm
    real(rp), parameter :: ang2cent   = 1.0e-8_rp
+   !> \f$ Mass of electron in eV \f$
+   real(rp), parameter :: m_e = 0.5109989461E6_rp
 
    ! Screening parameters
    !> Original screening (From Jepsen)
@@ -369,6 +371,88 @@ contains
       end if
 
    end function wigner3j
+
+   ! --------------------------------------------------------------------------------------
+   !> ABANDONED IDEA
+   !> Idea was to scale the V_ij's depending on relative distance to nearest neighbours
+   !> to the inter-site Coulomb interaction in the DFT+U+V. Originally taken to scale as the screened Yukawa potential e^(-b m_e r)/r
+   !> Implemented by Emil Beiersdorf on 01.08.2024
+   ! --------------------------------------------------------------------------------------
+   function scaler(V0,r,b) result(scl)
+      implicit none
+      real(rp) :: V0 ! The unscaled V-value, one for each atom.
+      real(rp) :: r ! Distance to the nearest neighbour of interest.
+      real(rp) :: b ! The scaling constant entering the exponent.
+      real(rp) :: scl ! Scaled V
+
+      scl = V0*exp(-b*r)/r
+
+   end function scaler
+
+   ! --------------------------------------------------------------------------------------
+   !> Tabulated values of hydrogenic Slater radial integrals
+   !> Returns F^k(ab,cd) = int dr1 dr2 (r<)^k/(r>)^(k+1)*R_a(r1)*R_b(r2)*R_c(r1)*R_d(r2)*r1^2*r2^2
+   !> Only implemented for diagonal terms
+   !> Only implemented for F^k(l l, l l) where l = 4s, 3p, 3d!!
+   !> From reference:
+   !> Butler, P. H., Minchin, P. E., & Wybourne, B. G. (1971). Tables of hydrogenic Slater radial integrals. Univ. of Canterbury, Christchurch, New Zealand.
+   !> Implemented by Viktor Frilén on 16.08.2024
+   ! --------------------------------------------------------------------------------------
+   function tabulated_slater_integrals(k,l1,l2,l3,l4) result(res)
+      integer, intent(in) :: k,l1,l2,l3,l4 ! l = 1,2,3,4 (= s,p,d,f), k = 1,2,3,4 (=0,2,4,6)
+      real(rp) :: res
+      real(rp) :: au2Ry ! Atomic units to Rydberg conversion
+      real(rp), dimension(4,4,4,4,4) :: slater
+      ! A bit unsure if this is the conversion
+      au2Ry = 0.5_rp**5
+      slater = 0.0d0
+      ! 4s-electrons
+      slater(1,1,1,1,1) = 0.0372715*au2Ry
+      ! 3p-electrons
+      slater(1,2,2,2,2) = 0.0718678*au2Ry
+      slater(2,2,2,2,2) = 0.0359881*au2Ry
+      ! 3d-electrons
+      slater(1,3,3,3,3) = 0.0860460*au2Ry
+      slater(2,3,3,3,3) = 0.0454210*au2Ry
+      slater(3,3,3,3,3) = 0.0296224*au2Ry
+      
+      res = slater(k,l1,l2,l3,l4)
+      
+   end function tabulated_slater_integrals
+
+
+   ! --------------------------------------------------------------------------------------
+   !> Calculates a_k(m,m',m'',m''') for the matrix elements in the LDA+U+J method
+   !> Implemented by Viktor Frilén on 28.06.2024
+   ! --------------------------------------------------------------------------------------
+   function a_k(k,l,m1,m2,m3,m4) result(res)
+      implicit none
+      integer, intent(in) :: k, l, m1, m2, m3, m4
+      integer :: q
+      real(rp) :: res
+     res = 0.0_rp
+
+     do q = -k, k
+         res = res + (4*pi/(2.0d0*real(k) + 1.0d0))*realgaunt(l, k, l, m1, q, m2)*realgaunt(l, k, l, m3, q, m4)
+     end do
+   end function a_k
+
+   ! --------------------------------------------------------------------------------------
+   !> Calculates the matrix elements for the on-site screened Coulomb interaction and spin exchange used in the LDA+U+J method.
+   !> The ordering looks weird but is now right! 
+   !> implemented by Viktor Frilén and Emil Beiersdorf summer 2024
+   ! --------------------------------------------------------------------------------------
+   function Coulomb_mat(l,m1,m3,m2,m4,f0,f2,f4,f6) result(res)
+      implicit none
+      integer, intent(in) :: l, m1, m2, m3, m4 !orbital and lz quantum number
+      real(rp), intent(in) :: f0, f2, f4, f6 !Slater integrals
+      real(rp) :: res
+
+      res = 0.0_rp
+      res = res + a_k(0,l,m1,m2,m3,m4)*f0 + a_k(2,l,m1,m2,m3,m4)*f2 + a_k(4,l,m1,m2,m3,m4)*f4 + a_k(6,l,m1,m2,m3,m4)*f6
+
+   end function Coulomb_mat
+
 
    !> Computes the Gaunt coefficients using the Cruzan-Racah expression
    !> More about: Didier Sébilleau 1998 J. Phys. A: Math. Gen. 31 7157
@@ -1833,20 +1917,21 @@ contains
 
    end function rtrace
 
-
-   function trace(mat) result(res)
+   !> Calculated the trace of a real square matrix of any dimension.
+   !> Implemented by Viktor Frilén on 03.07.2024
+   function trace(mat) result(rres)
       !
       implicit none
       !
-      complex(rp), intent(in) :: mat(:, :)
-      real(rp) :: res
+      real(rp), intent(in) :: mat(:, :)
+      real(rp) :: rres
       !
       ! Local Variables
       integer :: i
 
-      res = 0.0_rp
+      rres = 0.0_rp
       do i = 1, size(mat, 1)
-         res = res + (mat(i, i))
+         rres = rres + mat(i, i)
       end do
 
    end function trace

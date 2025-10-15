@@ -54,7 +54,7 @@ module green_mod
       !> Energy
       class(energy), pointer :: en
       !> Onsite Green Function
-      complex(rp), dimension(:, :, :, :), allocatable :: g0
+      complex(rp), dimension(:, :, :, :), allocatable :: g0, g0aux
       !> Intersite Green Function
       complex(rp), dimension(:, :, :, :), allocatable :: gij, gji, ginmag, gjnmag, gix, giy, giz, gjx, gjy, gjz
       !> Intersite Green Function as a function of imaginary eta
@@ -149,6 +149,7 @@ contains
       if (allocated(this%gz1ji)) call g_safe_alloc%deallocate('green.gz1ji', this%gz1ji)
 #else
       if (allocated(this%g0)) deallocate (this%g0)
+      if (allocated(this%g0aux)) deallocate (this%g0aux)
       if (allocated(this%gij)) deallocate (this%gij)
       if (allocated(this%gji)) deallocate (this%gji)
       if (allocated(this%ginmag)) deallocate (this%ginmag)
@@ -230,8 +231,14 @@ contains
       call g_safe_alloc%allocate('green.gjy_eta', this%gjy_eta, (/64, 9, 9, atoms_per_process/))
       call g_safe_alloc%allocate('green.gjz_eta', this%gjz_eta, (/64, 9, 9, atoms_per_process/))
 #else
-      if (this%lattice%njij == 0) then
+      if (this%lattice%njij == 0 .and. .not. this%recursion%hamiltonian%hubbardV_check) then
          allocate (this%g0(18, 18, this%en%channels_ldos + 10, this%lattice%nrec))
+      else if (this%lattice%njij /= 0 .and. this%recursion%hamiltonian%hubbardV_check) then
+         allocate (this%g0(18, 18, this%en%channels_ldos + 10, this%lattice%nrec))
+         allocate (this%g0aux(18, 18, this%en%channels_ldos + 10, 4))
+      else if (this%lattice%njij == 0 .and. this%recursion%hamiltonian%hubbardV_check) then 
+         call g_logger%error('njij cannot be zero if +V correction is to be calculated!', __FILE__, __LINE__)
+         stop
       else
          allocate (this%g0(18, 18, this%en%channels_ldos + 10, 4))
       end if
@@ -274,6 +281,9 @@ contains
 #endif
 
       this%g0(:, :, :, :) = (0.0d0, 0.0d0)
+      if (allocated(this%g0aux)) then
+         this%g0aux(:, :, :, :) = (0.0d0, 0.0d0)
+      end if 
       this%gij(:, :, :, :) = (0.0d0, 0.0d0)
       this%gji(:, :, :, :) = (0.0d0, 0.0d0)
       this%ginmag(:, :, :, :) = (0.0d0, 0.0d0)
@@ -378,8 +388,11 @@ contains
          ! Initializing Shift and Scaling for rigid band shift
          !Dfac_mat=(1.0d0,0.0d0)
          !Cshi_mat=(0.0d0,0.0d0)
-         call this%bgreen(this%g0(:, :, :, n), n + istart - 1, 1, this%en%channels_ldos + 10, a_inf(:, :, n), b_inf(:, :, n), eta)
-
+         if (this%recursion%hamiltonian%hubbardV_check) then
+            call this%bgreen(this%g0aux(:, :, :, n), n + istart - 1, 1, this%en%channels_ldos + 10, a_inf(:, :, n), b_inf(:, :, n), eta)
+         else  
+            call this%bgreen(this%g0(:, :, :, n), n + istart - 1, 1, this%en%channels_ldos + 10, a_inf(:, :, n), b_inf(:, :, n), eta)
+         end if
       end do
    end subroutine block_green_ij
 
@@ -444,14 +457,25 @@ contains
             call this%chebyshev_green_ij(ja_temp)
          end select
          if (this%lattice%ijpair(ia, 1) .eq. this%lattice%ijpair(ia, 2)) then
-            this%gij(:, :, :, ia) = this%g0(:, :, :, 1)
-            this%gji(:, :, :, ia) = this%g0(:, :, :, 1)
+            if (this%recursion%hamiltonian%hubbardV_check) then
+               this%gij(:, :, :, ia) = this%g0aux(:, :, :, 1)
+               this%gji(:, :, :, ia) = this%g0aux(:, :, :, 1)
+            else 
+               this%gij(:, :, :, ia) = this%g0(:, :, :, 1)
+               this%gji(:, :, :, ia) = this%g0(:, :, :, 1)
+            end if
          else
-            this%gij(:, :, :, ia) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) + (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
-            this%gji(:, :, :, ia) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) - (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
+            if (this%recursion%hamiltonian%hubbardV_check) then
+               this%gij(:, :, :, ia) = this%g0aux(:, :, :, 1) - this%g0aux(:, :, :, 2) + (1.0d0/i_unit*this%g0aux(:, :, :, 3) - 1.0d0/i_unit*this%g0aux(:, :, :, 4))
+               this%gji(:, :, :, ia) = this%g0aux(:, :, :, 1) - this%g0aux(:, :, :, 2) - (1.0d0/i_unit*this%g0aux(:, :, :, 3) - 1.0d0/i_unit*this%g0aux(:, :, :, 4))
+            else 
+               this%gij(:, :, :, ia) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) + (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
+               this%gji(:, :, :, ia) = this%g0(:, :, :, 1) - this%g0(:, :, :, 2) - (1.0d0/i_unit*this%g0(:, :, :, 3) - 1.0d0/i_unit*this%g0(:, :, :, 4))
+            end if
             this%gij(:, :, :, ia) = this%gij(:, :, :, ia)*0.5d0
             this%gji(:, :, :, ia) = this%gji(:, :, :, ia)*0.5d0
          end if
+
          do i = 1, 9
             do j = 1, 9
                this%Ginmag(j, i, :, iA) = this%Ginmag(j, i, :, iA) + (this%gij(j, i, :, ia) + this%gij(j + 9, i + 9, :, ia))*0.5d0
@@ -935,12 +959,17 @@ contains
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
                do l = 1, 18
                   do m = 1, 18
-                     this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
+                     if (this%recursion%hamiltonian%hubbardV_check) then
+                        this%g0aux(l, m, ie, n) = this%g0aux(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
+                     else
+                        this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
+                     end if
                   end do
                end do
             end do
             do l = 1, 18
                do m = 1, 18
+                  this%g0aux(l, m, ie, n) = this%g0aux(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
                   this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
                end do
             end do
