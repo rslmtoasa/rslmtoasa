@@ -2207,7 +2207,7 @@ end subroutine calculate_dos_gaussian
    !---------------------------------------------------------------------------
 subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
-   integer :: ik, ib, ie, iorb, ispin, i, isite, ii
+   integer :: ik, ib, ie, iorb, ispin, i, isite, ii, itype
    integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end
    real(rp) :: weight, orbital_char, energy
    real(rp) :: gaussian_weight, sigma_squared, sigma_use
@@ -2217,6 +2217,8 @@ subroutine project_dos_orbitals_gaussian(this)
    ! Additional locals for projected DOS integration/normalization
    real(rp) :: proj_integral, e_low, e_high
    integer :: iei
+   ! Per-site orbital offsets for mixed atom types
+   integer, dimension(:), allocatable :: site_orb_offset
 
    call g_logger%info('project_dos_orbitals_gaussian: Starting projection', __FILE__, __LINE__)
 
@@ -2239,12 +2241,33 @@ subroutine project_dos_orbitals_gaussian(this)
 
    n_orb_per_spin = size(this%eigenvectors, 1) / 2
 
+   ! Build per-site orbital offsets
+   ! Fixed basis: each site has 9 orbitals (spd: s(1) + p(3) + d(5))
+   ! Eigenvector layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
+   allocate(site_orb_offset(this%n_sites + 1))
+   do isite = 1, this%n_sites + 1
+      site_orb_offset(isite) = (isite - 1) * 9
+   end do
+
+   ! Diagnostic logging
+   call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
+                     ', n_orb_per_spin = ' // trim(int2str(n_orb_per_spin)) // &
+                     ', nbands = ' // trim(int2str(nbands)) // &
+                     ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)) // &
+                     ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
+   call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset = [' // &
+                     trim(int2str(site_orb_offset(1))) // ', ' // &
+                     trim(int2str(site_orb_offset(2))) // ', ' // &
+                     trim(int2str(site_orb_offset(3))) // ', ' // &
+                     trim(int2str(site_orb_offset(4))) // ', ' // &
+                     trim(int2str(site_orb_offset(5))) // ']', __FILE__, __LINE__)
+
    ! Calculate projected DOS (raw) - same weights as total DOS
    do ie = 1, this%n_energy_points
       energy = this%dos_energy_grid(ie)  ! Already in Ry
 
       do ik = 1, this%nk_total
-         do ib = 1, this%max_orb_channels
+         do ib = 1, nbands  ! Loop over all bands, not just max_orb_channels
             ! Skip if eigenvalue is far from current energy
             if (abs(this%eigenvalues(ib, ik) - energy) > 5.0_rp * sigma_use) cycle
 
@@ -2258,11 +2281,14 @@ subroutine project_dos_orbitals_gaussian(this)
             weight = gaussian_weight * this%k_weights(ik)
 
             do isite = 1, this%n_sites
-               site_orb_start = (isite - 1) * (n_orb_per_spin / this%n_sites) + 1
-               site_orb_end = isite * (n_orb_per_spin / this%n_sites)
+               ! Use correct per-site orbital offset (handles fixed 9-orbital basis per site)
+               site_orb_start = site_orb_offset(isite) + 1
+               site_orb_end = site_orb_offset(isite+1)
 
                do ispin = 1, this%n_spin_components
-                  orb_start = (ispin-1) * n_orb_per_spin + site_orb_start - 1
+                  ! Orbital range for this spin and site
+                  ! Layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
+                  orb_start = (ispin-1) * n_orb_per_spin + site_orb_offset(isite)
 
                   ! s orbital
                   iorb = 1
@@ -2332,6 +2358,8 @@ subroutine project_dos_orbitals_gaussian(this)
             trim(real2str(sum(this%projected_dos(:, :, :, ie)) / this%total_dos(ie), '(F10.6)')), __FILE__, __LINE__)
       end if
    end if
+
+   deallocate(site_orb_offset)
 end subroutine project_dos_orbitals_gaussian
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -2342,12 +2370,14 @@ end subroutine project_dos_orbitals_gaussian
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite
+      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite, itype
       integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end, ik
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       integer, dimension(4) :: sort_idx
       complex(rp) :: psi_element
+      ! Per-site orbital offsets for mixed atom types
+      integer, dimension(:), allocatable :: site_orb_offset
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -2367,6 +2397,14 @@ end subroutine project_dos_orbitals_gaussian
       ! Number of orbitals per spin (assuming spd basis: 9 orbitals per spin)
       n_orb_per_spin = this%max_orb_channels / 2
 
+      ! Build per-site orbital offsets
+      ! Fixed basis: each site has 9 orbitals (spd: s(1) + p(3) + d(5))
+      ! Eigenvector layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
+      allocate(site_orb_offset(this%n_sites + 1))
+      do isite = 1, this%n_sites + 1
+         site_orb_offset(isite) = (isite - 1) * 9
+      end do
+
       ! Setup tetrahedra if not already done
       if (.not. allocated(this%tetrahedra)) then
          call this%setup_tetrahedra()
@@ -2374,7 +2412,7 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Parallelize over energy points: each thread writes to independent i_energy
 #ifdef _OPENMP
-      !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start,site_orb_end) firstprivate(n_orb_per_spin) shared(this) default(none)
+      !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start,site_orb_end) firstprivate(n_orb_per_spin) shared(this,site_orb_offset) default(none)
 #endif
       do i_energy = 1, this%n_energy_points
          ! Energy grid already in Ry (consistent with eigenvalues)
@@ -2406,14 +2444,15 @@ end subroutine project_dos_orbitals_gaussian
 
                ! Loop over sites
                do isite = 1, this%n_sites
-                  ! Calculate orbital range for this site
-                  site_orb_start = (isite - 1) * (n_orb_per_spin / this%n_sites) + 1
-                  site_orb_end = isite * (n_orb_per_spin / this%n_sites)
+                  ! Use correct per-site orbital offset (handles fixed 9-orbital basis per site)
+                  site_orb_start = site_orb_offset(isite) + 1
+                  site_orb_end = site_orb_offset(isite+1)
 
                   ! Calculate orbital character for each orbital type and spin
                   do ispin = 1, this%n_spin_components
                      ! Orbital range for this spin and site
-                     orb_start = (ispin-1) * n_orb_per_spin + site_orb_start - 1
+                     ! Layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
+                     orb_start = (ispin-1) * n_orb_per_spin + site_orb_offset(isite)
 
                      ! s orbital (index 1 in each site/spin block)
                      iorb = 1
@@ -2480,6 +2519,8 @@ end subroutine project_dos_orbitals_gaussian
 #ifdef _OPENMP
       !$omp end parallel do
 #endif
+
+      deallocate(site_orb_offset)
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
    end subroutine project_dos_orbitals_tetrahedron
@@ -2648,9 +2689,9 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
    ! Boltzmann constant in Ry/K
    kT = this%temperature * kB_Ry_per_K
 
-   ! Energy range in Ry
-   e_min = this%dos_energy_grid(1) * eV_to_Ry
-   e_max = this%dos_energy_grid(this%n_energy_points) * eV_to_Ry
+   ! Energy range in Ry (dos_energy_grid is already in Ry, no conversion needed)
+   e_min = this%dos_energy_grid(1)
+   e_max = this%dos_energy_grid(this%n_energy_points)
    max_iter = 100
 
    ! Bisection method
@@ -2695,8 +2736,9 @@ function integrate_dos_up_to_energy(this, energy, kT) result(integral)
    integral = 0.0_rp
 
    do ie = 1, this%n_energy_points - 1
-      e = this%dos_energy_grid(ie) * eV_to_Ry  ! Convert to Ry
-      delta_e = (this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie)) * eV_to_Ry
+      ! dos_energy_grid is already in Ry, no conversion needed
+      e = this%dos_energy_grid(ie)
+      delta_e = this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie)
 
       ! Fermi-Dirac weight at current energy
       if (kT > 1.0e-10_rp) then
@@ -2712,7 +2754,7 @@ function integrate_dos_up_to_energy(this, energy, kT) result(integral)
 
       ! Trapezoidal integration
       integral = integral + 0.5_rp * delta_e * (this%total_dos(ie) * fermi_weight + &
-                                               this%total_dos(ie+1) * (1.0_rp / (exp((this%dos_energy_grid(ie+1) * eV_to_Ry - energy) / kT) + 1.0_rp)))
+                                               this%total_dos(ie+1) * (1.0_rp / (exp((this%dos_energy_grid(ie+1) - energy) / kT) + 1.0_rp)))
    end do
 end function integrate_dos_up_to_energy
 
