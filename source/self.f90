@@ -989,8 +989,8 @@ contains
       call g_timer%start('kspace-dos-moments')
 
       ! Check compatibility: tetrahedron method requires full k-mesh (no symmetry reduction)
-      if (reciprocal_obj%use_symmetry_reduction .and. trim(reciprocal_obj%dos_method) == 'tetrahedron') then
-         if (rank == 0) call g_logger%warning('Tetrahedron DOS method requires full k-mesh. Switching to Gaussian method.', __FILE__, __LINE__)
+      if (reciprocal_obj%use_symmetry_reduction .and. (trim(reciprocal_obj%dos_method) == 'tetrahedron' .or. trim(reciprocal_obj%dos_method) == 'blochl')) then
+         if (rank == 0) call g_logger%warning('Tetrahedron/Blochl DOS method requires full k-mesh. Switching to Gaussian method.', __FILE__, __LINE__)
          reciprocal_obj%dos_method = 'gaussian'
       end if
 
@@ -1013,7 +1013,7 @@ contains
 
       ! Output band structure data during SCF for debugging
       ! Only output every few iterations to avoid too many files
-      if (rank == 0 .and. mod(iteration, 5) == 0) then
+      if (rank == 0 .and. mod(iteration, 1) == 0) then
          call output_scf_band_structure(reciprocal_obj, iteration)
       end if
 
@@ -1025,6 +1025,10 @@ contains
       case ('tetrahedron')
          call reciprocal_obj%setup_tetrahedra()
          call reciprocal_obj%calculate_dos_tetrahedron()
+         call reciprocal_obj%project_dos_orbitals_tetrahedron()
+      case ('blochl')
+         call reciprocal_obj%setup_tetrahedra()
+         call reciprocal_obj%calculate_dos_blochl()
          call reciprocal_obj%project_dos_orbitals_tetrahedron()
       case ('gaussian')
          call reciprocal_obj%calculate_dos_gaussian()

@@ -193,6 +193,7 @@ module reciprocal_mod
       procedure :: calculate_dos_tetrahedron_with_symmetry
       procedure :: expand_eigenvalues_to_full_mesh
       procedure :: calculate_dos_gaussian
+      procedure :: calculate_dos_blochl
       procedure :: setup_dos_energy_grid
       procedure :: setup_tetrahedra
       procedure :: tetrahedron_dos_contribution
@@ -326,10 +327,11 @@ contains
       this%reciprocal_volume = 0.0_rp
 
       ! Default DOS settings
+      ! All energy values in Ry (consistent with Hamiltonian)
       this%n_energy_points = 1000
-      this%dos_energy_range = [-10.0_rp, 10.0_rp]  ! Default energy range in eV
+      this%dos_energy_range = [-1.0_rp, 1.0_rp]  ! Default energy range in Ry
       this%dos_method = 'tetrahedron'  ! Default to tetrahedron method
-      this%gaussian_sigma = 0.1_rp  ! Default Gaussian smearing in eV
+      this%gaussian_sigma = 0.01_rp  ! Default Gaussian smearing in Ry
       this%temperature = 300.0_rp  ! Default temperature in Kelvin
       this%fermi_level = 0.0_rp  ! Default Fermi level
       this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
@@ -1507,6 +1509,9 @@ contains
       case ('tetrahedron')
          call g_logger%info('calculate_density_of_states: Using tetrahedron method', __FILE__, __LINE__)
          call this%calculate_dos_tetrahedron()
+      case ('blochl')
+         call g_logger%info('calculate_density_of_states: Using Blöchl modified tetrahedron method', __FILE__, __LINE__)
+         call this%calculate_dos_blochl()
       case ('gaussian')
          call g_logger%info('calculate_density_of_states: Using Gaussian smearing method', __FILE__, __LINE__)
          call this%calculate_dos_gaussian()
@@ -1528,7 +1533,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Setup energy grid for DOS calculation
+   !> Setup energy grid for DOS calculation (all energies in Ry)
    !---------------------------------------------------------------------------
    subroutine setup_dos_energy_grid(this)
       class(reciprocal), intent(inout) :: this
@@ -1545,14 +1550,14 @@ contains
       if (allocated(this%dos_energy_grid)) deallocate(this%dos_energy_grid)
       allocate(this%dos_energy_grid(this%n_energy_points))
 
-      ! Fill energy grid
+      ! Fill energy grid in Ry (consistent with Hamiltonian and eigenvalues)
       do i = 1, this%n_energy_points
          this%dos_energy_grid(i) = energy_min + real(i-1, rp) * delta_energy
       end do
 
       call g_logger%info('setup_dos_energy_grid: Created energy grid with ' // &
                         trim(int2str(this%n_energy_points)) // ' points from ' // &
-                        trim(real2str(energy_min, '(F 8.5)')) // ' to ' // trim(real2str(energy_max, '(F 8.5)')) // ' eV', &
+                        trim(real2str(energy_min, '(F 8.5)')) // ' to ' // trim(real2str(energy_max, '(F 8.5)')) // ' Ry', &
                         __FILE__, __LINE__)
    end subroutine setup_dos_energy_grid
 
@@ -1587,6 +1592,7 @@ contains
      !$omp parallel do private(i_energy,energy,i_tet,i_band,i_corner,e_corners,sorted_e,dos_contrib) shared(this) default(none)
 #endif
       do i_energy = 1, this%n_energy_points
+         ! Energy grid already in Ry (consistent with eigenvalues)
          energy = this%dos_energy_grid(i_energy)
 
          ! Loop over tetrahedra
@@ -1754,25 +1760,101 @@ contains
    !> @brief
    !> Calculate DOS using Gaussian smearing
    !---------------------------------------------------------------------------
-   subroutine calculate_dos_gaussian(this)
+subroutine calculate_dos_gaussian(this)
+   class(reciprocal), intent(inout) :: this
+
+   integer :: i_energy, i_k, i_band
+   real(rp) :: energy, weight, gaussian_factor
+   real(rp) :: sigma_squared, sigma_use
+   real(rp) :: local_sum, dos_integral, norm_factor
+   integer :: nbands
+
+   ! Determine sigma (already in Ry from input)
+   if (this%gaussian_sigma < 0.001_rp) then
+      sigma_use = this%calculate_adaptive_sigma()
+      call g_logger%info('calculate_dos_gaussian: Using adaptive sigma = ' // &
+                        trim(real2str(sigma_use, '(F8.5)')) // ' Ry', __FILE__, __LINE__)
+   else
+      sigma_use = this%gaussian_sigma
+      call g_logger%info('calculate_dos_gaussian: Using input sigma = ' // &
+                        trim(real2str(sigma_use, '(F8.5)')) // ' Ry', __FILE__, __LINE__)
+   end if
+
+   ! Allocate DOS arrays
+   if (allocated(this%total_dos)) deallocate(this%total_dos)
+   allocate(this%total_dos(this%n_energy_points))
+   this%total_dos = 0.0_rp
+
+   sigma_squared = sigma_use**2
+   nbands = size(this%eigenvalues, 1)
+
+   ! Calculate raw DOS
+   do i_energy = 1, this%n_energy_points
+      energy = this%dos_energy_grid(i_energy)  ! Already in Ry
+      local_sum = 0.0_rp
+
+!$OMP PARALLEL DO PRIVATE(i_k, i_band, weight, gaussian_factor) REDUCTION(+:local_sum) &
+!$OMP& SCHEDULE(STATIC) IF(this%nk_total > 100)
+      do i_k = 1, this%nk_total
+         weight = this%k_weights(i_k)
+         do i_band = 1, nbands
+            gaussian_factor = exp(-((energy - this%eigenvalues(i_band, i_k))**2) / (2.0_rp * sigma_squared))
+            gaussian_factor = gaussian_factor / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
+            local_sum = local_sum + weight * gaussian_factor
+         end do
+      end do
+!$OMP END PARALLEL DO
+      this%total_dos(i_energy) = local_sum
+   end do
+
+   ! Normalize DOS to integrate to nbands (total number of states)
+   dos_integral = 0.0_rp
+   do i_energy = 1, this%n_energy_points - 1
+      dos_integral = dos_integral + 0.5_rp * (this%total_dos(i_energy) + this%total_dos(i_energy+1)) * &
+                                   (this%dos_energy_grid(i_energy+1) - this%dos_energy_grid(i_energy))
+   end do
+   
+   if (abs(dos_integral) > 1.0e-10_rp) then
+      norm_factor = real(nbands, rp) / dos_integral
+      this%total_dos = this%total_dos * norm_factor
+      
+      call g_logger%info('calculate_dos_gaussian: DOS normalized by factor ' // &
+                        trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
+      call g_logger%info('calculate_dos_gaussian: DOS integrates to ' // &
+                        trim(real2str(dos_integral * norm_factor, '(F10.4)')) // &
+                        ' (should be ' // trim(int2str(nbands)) // ')', __FILE__, __LINE__)
+   else
+      call g_logger%error('calculate_dos_gaussian: DOS integral is zero!', __FILE__, __LINE__)
+   end if
+
+   call g_logger%info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
+end subroutine calculate_dos_gaussian
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate DOS using Blöchl modified tetrahedron method (PRB 49, 16223 (1994))
+   !> Provides improved convergence over standard tetrahedron method
+   !> All energies in Rydberg
+   !---------------------------------------------------------------------------
+   subroutine calculate_dos_blochl(this)
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_k, i_band
-      real(rp) :: energy, weight, gaussian_factor
-      real(rp) :: sigma_squared, sigma_use
-      real(rp) :: local_sum
+      integer :: i_energy, i_tet, i_corner, i_band
+      real(rp) :: energy, dos_contrib
+      real(rp), dimension(4) :: e_corners, sorted_e, weights_blochl
+      integer, dimension(4) :: sort_idx
+      integer :: nbands
+      real(rp) :: e1, e2, e3, e4, E, C
+      real(rp) :: dos_integral, norm_factor
+      real(rp), parameter :: TOL = 1.0e-10_rp
 
-      ! Use adaptive sigma if gaussian_sigma is very small (< 0.02 eV)
-      ! This indicates user wants adaptive behavior
-      if (this%gaussian_sigma < 0.02_rp) then
-         sigma_use = this%calculate_adaptive_sigma()
-         call g_logger%info('calculate_dos_gaussian: Using adaptive sigma = ' // &
-                           trim(real2str(sigma_use, '(F8.5)')) // ' eV', __FILE__, __LINE__)
-      else
-         sigma_use = this%gaussian_sigma
-         call g_logger%info('calculate_dos_gaussian: Using fixed sigma = ' // &
-                           trim(real2str(sigma_use, '(F8.5)')) // ' eV', __FILE__, __LINE__)
+      call g_logger%info('calculate_dos_blochl: Calculating DOS using Blöchl modified tetrahedron method', __FILE__, __LINE__)
+
+      ! Setup tetrahedra if not already done
+      if (.not. allocated(this%tetrahedra)) then
+         call this%setup_tetrahedra()
       end if
 
       ! Allocate DOS arrays
@@ -1780,38 +1862,94 @@ contains
       allocate(this%total_dos(this%n_energy_points))
       this%total_dos = 0.0_rp
 
-      sigma_squared = sigma_use**2
-
-      call g_logger%info('calculate_dos_gaussian: Starting DOS calculation over ' // &
-                        trim(int2str(this%n_energy_points)) // ' energy points', __FILE__, __LINE__)
+      nbands = size(this%eigenvalues, 1)
 
       ! Loop over energy points
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
 
-         ! Loop over k-points with OpenMP parallelization
-         local_sum = 0.0_rp
-!$OMP PARALLEL DO PRIVATE(i_k, i_band, weight, gaussian_factor) REDUCTION(+:local_sum) &
-!$OMP& SCHEDULE(STATIC) IF(this%nk_total > 100)
-         do i_k = 1, this%nk_total
-            weight = this%k_weights(i_k)
-
+         ! Loop over tetrahedra
+         do i_tet = 1, this%n_tetrahedra
             ! Loop over bands
-            do i_band = 1, size(this%eigenvalues, 1)
-               gaussian_factor = exp(-((energy - this%eigenvalues(i_band, i_k))**2) / (2.0_rp * sigma_squared))
-               gaussian_factor = gaussian_factor / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
+            do i_band = 1, nbands
+               ! Get eigenvalues at tetrahedron corners
+               do i_corner = 1, 4
+                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+               end do
 
-               local_sum = local_sum + weight * gaussian_factor
+               ! Sort eigenvalues
+               call sort_eigenvalues(e_corners, sorted_e, sort_idx)
+               e1 = sorted_e(1)
+               e2 = sorted_e(2)
+               e3 = sorted_e(3)
+               e4 = sorted_e(4)
+
+               ! Skip if energy outside tetrahedron range
+               if (energy < e1 - TOL .or. energy > e4 + TOL) cycle
+
+               E = energy
+
+               ! Blöchl modified tetrahedron DOS contribution
+               ! Based on PRB 49, 16223 (1994), equations (22)-(25)
+               ! Guard against degenerate tetrahedra (equal corner energies) which
+               ! would produce divisions by zero and NaNs. If denominators are too
+               ! small, skip this tetrahedron-band contribution.
+               if (abs(e2-e1) < TOL .or. abs(e3-e1) < TOL .or. abs(e4-e1) < TOL .or. &
+                  abs(e4-e2) < TOL .or. abs(e4-e3) < TOL .or. abs(e3-e2) < TOL) then
+                  cycle
+               end if
+
+               if (E <= e1) then
+                  dos_contrib = 0.0_rp
+               else if (E >= e4) then
+                  dos_contrib = 0.0_rp
+               else if (E <= e2) then
+                  ! Region I: e1 < E <= e2
+                  C = 3.0_rp * (E - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
+                  dos_contrib = C
+               else if (E <= e3) then
+                  ! Region II: e2 < E <= e3
+                  C = 3.0_rp / ((e4 - e1) * (e3 - e1))
+                  dos_contrib = C * (1.0_rp - (e4 - E)**2 / ((e4 - e2) * (e4 - e3)) - &
+                                     (e3 - E)**2 / ((e3 - e2) * (e4 - e3)))
+               else
+                  ! Region III: e3 < E < e4
+                  C = 3.0_rp * (e4 - E)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+                  dos_contrib = C
+               end if
+
+               ! Weight by tetrahedron volume (consistent with tetrahedron method)
+               this%total_dos(i_energy) = this%total_dos(i_energy) + &
+                  dos_contrib * this%tetrahedron_volumes(i_tet)
             end do
          end do
-!$OMP END PARALLEL DO
-         this%total_dos(i_energy) = local_sum
       end do
 
-      call g_logger%info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
-   end subroutine calculate_dos_gaussian
+      ! Normalize to get correct number of states
+      dos_integral = 0.0_rp
+      do i_energy = 1, this%n_energy_points - 1
+         dos_integral = dos_integral + 0.5_rp * (this%total_dos(i_energy) + this%total_dos(i_energy+1)) * &
+                                      (this%dos_energy_grid(i_energy+1) - this%dos_energy_grid(i_energy))
+      end do
 
-   !---------------------------------------------------------------------------
+      if (abs(dos_integral) > TOL) then
+         norm_factor = real(nbands, rp) / dos_integral
+         this%total_dos = this%total_dos * norm_factor
+         
+         call g_logger%info('calculate_dos_blochl: DOS normalized by factor ' // &
+                           trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
+         call g_logger%info('calculate_dos_blochl: DOS integrates to ' // &
+                           trim(real2str(dos_integral * norm_factor, '(F10.4)')) // &
+                           ' (should be ' // trim(int2str(nbands)) // ')', __FILE__, __LINE__)
+      else
+         call g_logger%warning('calculate_dos_blochl: DOS integral is zero', __FILE__, __LINE__)
+      end if
+
+      call g_logger%info('calculate_dos_blochl: Blöchl DOS calculation completed', __FILE__, __LINE__)
+   end subroutine calculate_dos_blochl
+
+
+!---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
    !> Setup tetrahedra for tetrahedron DOS method
@@ -2026,14 +2164,16 @@ contains
          ! Typical energy spacing scales as 1/k_density^(1/3)
          ! For metallic systems: ΔE ∝ E_F / N_k^(1/3)
          ! Use heuristic: sigma = C / nk^(1/3) where C is tuned for accuracy
-         typical_spacing = 10.0_rp / (real(nk_total, rp)**(1.0_rp/3.0_rp))
+      ! Use a smaller scale factor (1.0 eV) for typical spacing to avoid huge sigma
+      typical_spacing = 1.0_rp / (real(nk_total, rp)**(1.0_rp/3.0_rp))
          
          ! Adaptive sigma: smaller for denser meshes, larger for coarse meshes
          ! Factor of 0.5-1.0 gives good balance between accuracy and smoothness
          sigma = 0.7_rp * typical_spacing
          
          ! Clamp to reasonable range
-         sigma = max(0.01_rp, min(sigma, 0.5_rp))  ! Between 0.01 and 0.5 eV
+         ! Clamp sigma to a conservative range (5 meV .. 50 meV) to avoid over-broadening
+         sigma = max(0.005_rp, min(sigma, 0.05_rp))
       else
          sigma = 0.1_rp  ! Default fallback
       end if
@@ -2053,7 +2193,7 @@ contains
       call g_logger%info('project_dos_orbitals: Starting orbital projection calculation', __FILE__, __LINE__)
 
       ! Use tetrahedron or Gaussian method based on dos_method
-      if (trim(this%dos_method) == 'tetrahedron') then
+      if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
          call this%project_dos_orbitals_tetrahedron()
       else
          call this%project_dos_orbitals_gaussian()
@@ -2065,125 +2205,134 @@ contains
    !> @brief
    !> Project DOS onto orbitals, sites, and spin using Gaussian method
    !---------------------------------------------------------------------------
-   subroutine project_dos_orbitals_gaussian(this)
-      class(reciprocal), intent(inout) :: this
-      integer :: ik, ib, ie, iorb, ispin, i, isite, ii
-      integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end
-      real(rp) :: weight, orbital_char, energy, norm_check
-      complex(rp) :: psi_element, psi_elem
+subroutine project_dos_orbitals_gaussian(this)
+   class(reciprocal), intent(inout) :: this
+   integer :: ik, ib, ie, iorb, ispin, i, isite, ii
+   integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end
+   real(rp) :: weight, orbital_char, energy
+   real(rp) :: gaussian_weight, sigma_squared, sigma_use
+   complex(rp) :: psi_element
+   real(rp) :: dos_integral, norm_factor
+   integer :: nbands
+   ! Additional locals for projected DOS integration/normalization
+   real(rp) :: proj_integral, e_low, e_high
+   integer :: iei
 
-      call g_logger%info('project_dos_orbitals_gaussian: Starting Gaussian orbital projection calculation', __FILE__, __LINE__)
+   call g_logger%info('project_dos_orbitals_gaussian: Starting projection', __FILE__, __LINE__)
 
-      ! Initialize dimensions - get number of sites from lattice
-      this%n_sites = this%lattice%nrec
-      this%n_orb_types = 4  ! s, p, d, f
-      this%n_spin_components = 2  ! spin up/down
+   ! Determine sigma (same as in calculate_dos_gaussian, already in Ry)
+   if (this%gaussian_sigma < 0.001_rp) then
+      sigma_use = this%calculate_adaptive_sigma()
+   else
+      sigma_use = this%gaussian_sigma
+   end if
+   sigma_squared = sigma_use**2
 
-      call g_logger%info('project_dos_orbitals_gaussian: Projecting onto ' // trim(int2str(this%n_sites)) // &
-                        ' site(s)', __FILE__, __LINE__)
+   this%n_sites = this%lattice%nrec
+   this%n_orb_types = 4
+   this%n_spin_components = 2
+   nbands = size(this%eigenvalues, 1)
 
-      ! Allocate projected DOS array
-      if (allocated(this%projected_dos)) deallocate(this%projected_dos)
-      allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
-      this%projected_dos = 0.0_rp
+   if (allocated(this%projected_dos)) deallocate(this%projected_dos)
+   allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
+   this%projected_dos = 0.0_rp
 
-      ! Number of orbitals per spin: derive from actual eigenvector dimension to match diagonalization
-      n_orb_per_spin = size(this%eigenvectors, 1) / 2
+   n_orb_per_spin = size(this%eigenvectors, 1) / 2
 
-      ! DEBUG: Check eigenvector normalization for first k-point, first band
-      if (this%nk_total > 0) then
-         norm_check = 0.0_rp
-         do ii = 1, size(this%eigenvectors, 1)
-            psi_elem = this%eigenvectors(ii, 1, 1)
-            norm_check = norm_check + real(conjg(psi_elem) * psi_elem, rp)
-         end do
-         call g_logger%info('DEBUG project_dos_gaussian: Eigenvector norm for k=1, band=1: ' // &
-            trim(real2str(norm_check, '(F12.8)')), __FILE__, __LINE__)
-         call g_logger%info('DEBUG project_dos_gaussian: n_orb_per_spin = ' // trim(int2str(n_orb_per_spin)) // &
-            ', total basis size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
-         call g_logger%info('DEBUG project_dos_gaussian: n_bands = ' // trim(int2str(size(this%eigenvalues, 1))) // &
-            ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)), __FILE__, __LINE__)
-      end if
+   ! Calculate projected DOS (raw) - same weights as total DOS
+   do ie = 1, this%n_energy_points
+      energy = this%dos_energy_grid(ie)  ! Already in Ry
 
-      ! Loop over energy points
-      do ie = 1, this%n_energy_points
-         energy = this%dos_energy_grid(ie)
+      do ik = 1, this%nk_total
+         do ib = 1, this%max_orb_channels
+            ! Skip if eigenvalue is far from current energy
+            if (abs(this%eigenvalues(ib, ik) - energy) > 5.0_rp * sigma_use) cycle
 
-         ! Loop over k-points
-         do ik = 1, this%nk_total
-            ! Loop over bands
-            do ib = 1, this%max_orb_channels
-               ! Skip if eigenvalue is far from current energy
-               if (abs(this%eigenvalues(ib, ik) - energy) > 5.0_rp * this%gaussian_sigma) cycle
+            ! Calculate Gaussian weight (already normalized)
+            gaussian_weight = exp(-((energy - this%eigenvalues(ib, ik))**2) / (2.0_rp * sigma_squared))
+            gaussian_weight = gaussian_weight / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
+            
+            if (abs(gaussian_weight) < 1.0e-10_rp) cycle
 
-               ! Calculate Gaussian weight
-               weight = this%calculate_gaussian_weight_single(energy, this%eigenvalues(ib, ik))
+            ! Apply k-point weight
+            weight = gaussian_weight * this%k_weights(ik)
 
-               ! Skip if weight is negligible
-               if (abs(weight) < 1.0e-10_rp) cycle
+            do isite = 1, this%n_sites
+               site_orb_start = (isite - 1) * (n_orb_per_spin / this%n_sites) + 1
+               site_orb_end = isite * (n_orb_per_spin / this%n_sites)
 
-               ! Apply k-point weight
-               weight = weight * this%k_weights(ik)
+               do ispin = 1, this%n_spin_components
+                  orb_start = (ispin-1) * n_orb_per_spin + site_orb_start - 1
 
-               ! Loop over sites
-               do isite = 1, this%n_sites
-                  ! Calculate orbital range for this site
-                  ! Assuming orbitals are ordered: site1_orbs, site2_orbs, ..., for each spin
-                  site_orb_start = (isite - 1) * (n_orb_per_spin / this%n_sites) + 1
-                  site_orb_end = isite * (n_orb_per_spin / this%n_sites)
+                  ! s orbital
+                  iorb = 1
+                  if (orb_start + 1 <= size(this%eigenvectors, 1)) then
+                     psi_element = this%eigenvectors(orb_start + 1, ib, ik)
+                     orbital_char = real(conjg(psi_element) * psi_element, rp)
+                     this%projected_dos(isite, iorb, ispin, ie) = &
+                        this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
+                  end if
 
-                  ! Calculate orbital character for each orbital type and spin
-                  do ispin = 1, this%n_spin_components
-                     ! Orbital range for this spin
-                     orb_start = (ispin-1) * n_orb_per_spin + site_orb_start - 1
-
-                     ! s orbital (index 1 in each site/spin block)
-                     iorb = 1
-                     if (orb_start + 1 <= size(this%eigenvectors, 1)) then
-                        psi_element = this%eigenvectors(orb_start + 1, ib, ik)
-                        orbital_char = real(conjg(psi_element) * psi_element, rp)
-                        this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
-                                                                     orbital_char * weight
+                  ! p orbitals
+                  iorb = 2
+                  orbital_char = 0.0_rp
+                  do i = 2, 4
+                     if (orb_start + i <= size(this%eigenvectors, 1)) then
+                        psi_element = this%eigenvectors(orb_start + i, ib, ik)
+                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
                      end if
-
-                     ! p orbitals (indices 2-4 in each site/spin block)
-                     iorb = 2
-                     orbital_char = 0.0_rp
-                     do i = 2, 4
-                        if (orb_start + i <= size(this%eigenvectors, 1)) then
-                           psi_element = this%eigenvectors(orb_start + i, ib, ik)
-                           orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                        end if
-                     end do
-                     this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
-                                                                  orbital_char * weight
-
-                     ! d orbitals (indices 5-9 in each site/spin block)
-                     iorb = 3
-                     orbital_char = 0.0_rp
-                     do i = 5, 9
-                        if (orb_start + i <= size(this%eigenvectors, 1)) then
-                           psi_element = this%eigenvectors(orb_start + i, ib, ik)
-                           orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                        end if
-                     end do
-                     this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
-                                                                  orbital_char * weight
-
-                     ! f orbitals (would be indices 10-16, but not present in spd basis)
-                     iorb = 4
-                     orbital_char = 0.0_rp  ! No f orbitals in current spd basis
-                     this%projected_dos(isite, iorb, ispin, ie) = this%projected_dos(isite, iorb, ispin, ie) + &
-                                                                  orbital_char * weight
                   end do
+                  this%projected_dos(isite, iorb, ispin, ie) = &
+                     this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
+
+                  ! d orbitals
+                  iorb = 3
+                  orbital_char = 0.0_rp
+                  do i = 5, 9
+                     if (orb_start + i <= size(this%eigenvectors, 1)) then
+                        psi_element = this%eigenvectors(orb_start + i, ib, ik)
+                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                     end if
+                  end do
+                  this%projected_dos(isite, iorb, ispin, ie) = &
+                     this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
+
+                  ! f orbitals (zero for spd basis)
+                  iorb = 4
+                  this%projected_dos(isite, iorb, ispin, ie) = &
+                     this%projected_dos(isite, iorb, ispin, ie) + 0.0_rp
                end do
             end do
          end do
       end do
+   end do
 
-      call g_logger%info('project_dos_orbitals_gaussian: Gaussian orbital projection calculation completed', __FILE__, __LINE__)
-   end subroutine project_dos_orbitals_gaussian
+   ! Normalize projected DOS so integrated sum over projections equals nbands
+   call g_logger%info('project_dos_orbitals_gaussian: Projection completed (raw)', __FILE__, __LINE__)
+   if (this%n_energy_points > 2) then
+      proj_integral = 0.0_rp
+      do iei = 1, this%n_energy_points - 1
+         e_low = this%dos_energy_grid(iei)
+         e_high = this%dos_energy_grid(iei+1)
+         proj_integral = proj_integral + 0.5_rp * ( sum(this%projected_dos(:, :, :, iei)) + sum(this%projected_dos(:, :, :, iei+1)) ) * (e_high - e_low)
+      end do
 
+      if (abs(proj_integral) > 1.0e-12_rp) then
+         norm_factor = real(nbands, rp) / proj_integral
+         this%projected_dos = this%projected_dos * norm_factor
+         call g_logger%info('project_dos_orbitals_gaussian: Normalized projected DOS by factor ' // trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
+      else
+         call g_logger%warning('project_dos_orbitals_gaussian: projected DOS integral is zero, skipping normalization', __FILE__, __LINE__)
+      end if
+
+      ! Diagnostic: check mid-energy ratio after normalization
+      ie = this%n_energy_points / 2
+      if (abs(this%total_dos(ie)) > 1.0e-12_rp) then
+         call g_logger%info('project_dos_orbitals_gaussian: At mid-energy, proj/total ratio (post-norm) = ' // &
+            trim(real2str(sum(this%projected_dos(:, :, :, ie)) / this%total_dos(ie), '(F10.6)')), __FILE__, __LINE__)
+      end if
+   end if
+end subroutine project_dos_orbitals_gaussian
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -2228,6 +2377,7 @@ contains
       !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start,site_orb_end) firstprivate(n_orb_per_spin) shared(this) default(none)
 #endif
       do i_energy = 1, this%n_energy_points
+         ! Energy grid already in Ry (consistent with eigenvalues)
          energy = this%dos_energy_grid(i_energy)
 
          ! Loop over tetrahedra
@@ -2368,224 +2518,203 @@ contains
    !> @brief
    !> Calculate band moments from projected DOS
    !---------------------------------------------------------------------------
-   subroutine calculate_band_moments(this)
-      class(reciprocal), intent(inout) :: this
+subroutine calculate_band_moments(this)
+   class(reciprocal), intent(inout) :: this
 
-      ! Local variables
-      integer :: isite, iorb, ispin, ie, n_energy
-      real(rp) :: energy, dos_value, delta_energy, fermi_weight
-      real(rp) :: m0, m1, m2, norm_factor
-      real(rp), dimension(:), allocatable :: integrand
-      real(rp) :: kT, fermi_arg
-      real(rp) :: proj_sum_debug, ratio_debug
+   integer :: isite, iorb, ispin, ie, n_energy
+   real(rp) :: energy, dos_value, fermi_weight
+   real(rp) :: m0, m1, m2
+   real(rp), dimension(:), allocatable :: integrand, fermi_dist
+   real(rp) :: kT, fermi_arg
+   real(rp) :: total_occupation, expected_electrons
+      real(rp), allocatable :: energy_grid_ry(:)
+      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
-      call g_logger%info('calculate_band_moments: Starting band moments calculation', __FILE__, __LINE__)
-      call g_logger%info('calculate_band_moments: Fermi level = ' // trim(real2str(this%fermi_level)) // ' Ry', __FILE__, __LINE__)
-      call g_logger%info('calculate_band_moments: Temperature = ' // trim(real2str(this%temperature)) // ' K', __FILE__, __LINE__)
+   call g_logger%info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
 
-      ! DEBUG: Check if projected_dos sums to total_dos
-      if (allocated(this%total_dos) .and. allocated(this%projected_dos)) then
-         if (this%n_energy_points > 10) then
-            proj_sum_debug = sum(this%projected_dos(:, :, :, this%n_energy_points/2))
-            call g_logger%info('DEBUG: At mid-energy point, total_dos = ' // &
-               trim(real2str(this%total_dos(this%n_energy_points/2), '(ES15.8)')) // &
-               ', sum(projected_dos) = ' // trim(real2str(proj_sum_debug, '(ES15.8)')), __FILE__, __LINE__)
-            if (abs(this%total_dos(this%n_energy_points/2)) > 1.0e-10_rp) then
-               ratio_debug = proj_sum_debug / this%total_dos(this%n_energy_points/2)
-               call g_logger%info('DEBUG: Ratio projected/total = ' // trim(real2str(ratio_debug, '(F10.6)')), __FILE__, __LINE__)
-            end if
-         end if
+   ! Auto-find Fermi level if requested
+   if (this%auto_find_fermi .and. this%total_electrons > 0.0_rp) then
+      this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
+      call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // &
+                        trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
+   end if
+
+   if (allocated(this%band_moments)) deallocate(this%band_moments)
+   allocate(this%band_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3))
+   this%band_moments = 0.0_rp
+
+   n_energy = this%n_energy_points
+   allocate(integrand(n_energy))
+   allocate(fermi_dist(n_energy))
+   allocate(energy_grid_ry(n_energy))
+   energy_grid_ry = this%dos_energy_grid  ! Already in Ry
+
+   ! Boltzmann constant: kB = 6.3336814e-6 Ry/K
+   kT = this%temperature * 6.3336814e-6_rp  ! Ry/K
+   
+   call g_logger%info('calculate_band_moments: kT = ' // trim(real2str(kT, '(ES12.5)')) // &
+                     ' Ry at T = ' // trim(real2str(this%temperature, '(F8.2)')) // ' K', &
+                     __FILE__, __LINE__)
+
+   ! Pre-calculate Fermi-Dirac distribution
+   do ie = 1, n_energy
+      energy = energy_grid_ry(ie)
+      fermi_arg = (energy - this%fermi_level) / kT
+      
+      if (fermi_arg > 50.0_rp) then
+         fermi_dist(ie) = 0.0_rp
+      else if (fermi_arg < -50.0_rp) then
+         fermi_dist(ie) = 1.0_rp
+      else
+         fermi_dist(ie) = 1.0_rp / (exp(fermi_arg) + 1.0_rp)
       end if
+   end do
 
-      ! Automatically find Fermi level from DOS if requested
-      if (this%auto_find_fermi) then
-         if (this%total_electrons > 0.0_rp) then
-            this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
-            call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
-         else
-            call g_logger%warning('calculate_band_moments: auto_find_fermi is true but total_electrons not set, using input Fermi level', __FILE__, __LINE__)
-         end if
-      end if
+   ! Calculate total occupation to verify normalization
+   integrand = this%total_dos * fermi_dist
+   total_occupation = trapezoidal_integral(energy_grid_ry, integrand)
+   
+   call g_logger%info('calculate_band_moments: Total occupation = ' // &
+                     trim(real2str(total_occupation, '(F10.5)')) // &
+                     ', expected = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
+                     __FILE__, __LINE__)
 
-      ! Allocate band moments array if not already done
-      if (allocated(this%band_moments)) deallocate(this%band_moments)
-      allocate(this%band_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3))
-      this%band_moments = 0.0_rp
+   ! Calculate moments for each projection
+   do isite = 1, this%n_sites
+      do iorb = 1, this%n_orb_types
+         do ispin = 1, this%n_spin_components
 
-      n_energy = this%n_energy_points
+            ! m0: occupation = ∫ DOS(E) * f(E) dE
+            integrand = this%projected_dos(isite, iorb, ispin, :) * fermi_dist
+            m0 = trapezoidal_integral(energy_grid_ry, integrand)
 
-      ! Allocate temporary array for integration
-      allocate(integrand(n_energy))
-
-      ! Boltzmann constant in eV/K
-      kT = this%temperature * 8.617333262145e-5_rp
-
-      ! Calculate moments for each site, orbital type, and spin component
-      do isite = 1, this%n_sites
-         do iorb = 1, this%n_orb_types-1 ! Skip f orbitals if not present
-            do ispin = 1, this%n_spin_components
-
-               ! Initialize moment accumulators
-               m0 = 0.0_rp
+            ! m1: band center = ∫ E * DOS(E) * f(E) dE / m0
+            if (abs(m0) > 1.0e-12_rp) then
+               integrand = energy_grid_ry * this%projected_dos(isite, iorb, ispin, :) * fermi_dist
+               m1 = trapezoidal_integral(energy_grid_ry, integrand) / m0
+            else
                m1 = 0.0_rp
+            end if
+
+            ! m2: band width = sqrt(∫ (E - m1)² * DOS(E) * f(E) dE / m0)
+            if (abs(m0) > 1.0e-12_rp) then
+               ! Use energy grid in Ry for the variance integral (units must match projected_dos which
+               ! was integrated/normalized in Ry). Previously we accidentally passed the eV grid here.
+               integrand = (energy_grid_ry - m1)**2 * &
+                          this%projected_dos(isite, iorb, ispin, :) * fermi_dist
+               m2 = trapezoidal_integral(energy_grid_ry, integrand) / m0
+               m2 = sqrt(max(m2, 0.0_rp))
+            else
                m2 = 0.0_rp
+            end if
 
-               ! Calculate zeroth moment (m0) = ∫ DOS(E) * f(E) dE
-               ! where f(E) is the Fermi-Dirac distribution
-               integrand = 0.0_rp
-               do ie = 1, n_energy
-                  energy = this%dos_energy_grid(ie)
-                  fermi_arg = (energy - this%fermi_level) / kT
-                  
-                  ! Fermi-Dirac distribution: f(E) = 1 / (exp((E-Ef)/kT) + 1)
-                  if (fermi_arg > 50.0_rp) then
-                     fermi_weight = 0.0_rp  ! exp(-50) ≈ 0
-                  else if (fermi_arg < -50.0_rp) then
-                     fermi_weight = 1.0_rp  ! exp(50) ≈ very large
-                  else
-                     fermi_weight = 1.0_rp / (exp(fermi_arg) + 1.0_rp)
-                  end if
-                  
-                  integrand(ie) = this%projected_dos(isite, iorb, ispin, ie) * fermi_weight
-               end do
-               m0 = trapezoidal_integral(this%dos_energy_grid, integrand)
-
-               ! Calculate first moment (m1) = ∫ E * DOS(E) * f(E) dE / m0
-               if (abs(m0) > 1.0e-12_rp) then
-                  integrand = this%dos_energy_grid * this%projected_dos(isite, iorb, ispin, :) * &
-                             [(1.0_rp / (exp((this%dos_energy_grid(ie) - this%fermi_level) / kT) + 1.0_rp), &
-                               ie = 1, n_energy)]
-                  m1 = trapezoidal_integral(this%dos_energy_grid, integrand) / m0
-               else
-                  m1 = 0.0_rp
-               end if
-
-               ! Calculate second moment (m2) = ∫ (E - m1)^2 * DOS(E) * f(E) dE / m0
-               if (abs(m0) > 1.0e-12_rp) then
-                  integrand = (this%dos_energy_grid - m1)**2 * this%projected_dos(isite, iorb, ispin, :) * &
-                             [(1.0_rp / (exp((this%dos_energy_grid(ie) - this%fermi_level) / kT) + 1.0_rp), &
-                               ie = 1, n_energy)]
-                  m2 = trapezoidal_integral(this%dos_energy_grid, integrand) / m0
-                  m2 = sqrt(max(m2, 0.0_rp))  ! Take square root to get width
-               else
-                  m2 = 0.0_rp
-               end if
-
-               ! Store moments
-               this%band_moments(isite, iorb, ispin, 1) = m0  ! m0
-               this%band_moments(isite, iorb, ispin, 2) = m1  ! m1
-               this%band_moments(isite, iorb, ispin, 3) = m2  ! m2
-
-               call g_logger%info('calculate_band_moments: Site ' // trim(int2str(isite)) // &
-                                 ', Orbital ' // trim(int2str(iorb)) // ', Spin ' // trim(int2str(ispin)) // &
-                                 ': m0= ' // trim(real2str(m0, '(F 8.5)')) // ', m1= ' // trim(real2str(m1, '(F 8.5)')) // &
-                                 ', m2= ' // trim(real2str(m2, '(F 8.6)')), __FILE__, __LINE__)
-            end do
+            this%band_moments(isite, iorb, ispin, 1) = m0
+            this%band_moments(isite, iorb, ispin, 2) = m1
+            this%band_moments(isite, iorb, ispin, 3) = m2
          end do
       end do
+   end do
 
-      ! Clean up
-      deallocate(integrand)
+   deallocate(integrand, fermi_dist)
 
-      call g_logger%info('calculate_band_moments: Band moments calculation completed', __FILE__, __LINE__)
-   end subroutine calculate_band_moments
-
+   call g_logger%info('calculate_band_moments: Completed', __FILE__, __LINE__)
+end subroutine calculate_band_moments
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
    !> Find Fermi level from calculated DOS by integrating to find electron count
    !---------------------------------------------------------------------------
-   function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
-      class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: total_electrons
-      real(rp) :: fermi_level
+function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
+   class(reciprocal), intent(in) :: this
+   real(rp), intent(in) :: total_electrons
+   real(rp) :: fermi_level
 
-      ! Local variables
-      integer :: ie, max_iter
-      real(rp) :: integrated_dos, prev_integrated
-      real(rp) :: energy, prev_energy, kT, fermi_weight
-      real(rp) :: e_min, e_max, e_mid, electrons_at_e
+   integer :: ie, max_iter
+   real(rp) :: energy, kT
+   real(rp) :: e_min, e_max, e_mid, electrons_at_e
+   real(rp), parameter :: eV_to_Ry = 0.073498618_rp
+   real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
-      call g_logger%info('find_fermi_level_from_dos: Finding Fermi level for ' // &
-                        trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
-                        trim(real2str(this%temperature, '(F 8.5)')) // ' K', __FILE__, __LINE__)
+   call g_logger%info('find_fermi_level_from_dos: Finding Fermi level for ' // &
+                     trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
+                     trim(real2str(this%temperature, '(F 8.5)')) // ' K', __FILE__, __LINE__)
 
-      ! Check if DOS is calculated
-      if (.not. allocated(this%total_dos)) then
-         call g_logger%error('find_fermi_level_from_dos: Total DOS not calculated', __FILE__, __LINE__)
-         fermi_level = 0.0_rp
-         return
+   if (.not. allocated(this%total_dos)) then
+      call g_logger%error('find_fermi_level_from_dos: Total DOS not calculated', __FILE__, __LINE__)
+      fermi_level = 0.0_rp
+      return
+   end if
+
+   ! Boltzmann constant in Ry/K
+   kT = this%temperature * kB_Ry_per_K
+
+   ! Energy range in Ry
+   e_min = this%dos_energy_grid(1) * eV_to_Ry
+   e_max = this%dos_energy_grid(this%n_energy_points) * eV_to_Ry
+   max_iter = 100
+
+   ! Bisection method
+   do ie = 1, max_iter
+      e_mid = (e_min + e_max) / 2.0_rp
+      electrons_at_e = this%integrate_dos_up_to_energy(e_mid, kT)
+
+      if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then
+         fermi_level = e_mid
+         exit
+      else if (electrons_at_e < total_electrons) then
+         e_min = e_mid
+      else
+         e_max = e_mid
       end if
+   end do
 
-      ! Boltzmann constant in eV/K
-      kT = this%temperature * 8.617333262145e-5_rp
-      print *,' Temperature: ', this%temperature, ' K, kT = ', kT, ' eV'
+   fermi_level = e_mid
 
-      ! Use bisection method to find Fermi level
-      e_min = this%dos_energy_grid(1)
-      e_max = this%dos_energy_grid(this%n_energy_points)
-      max_iter = 100
+   ! Final check
+   electrons_at_e = this%integrate_dos_up_to_energy(fermi_level, kT)
+   call g_logger%info('find_fermi_level_from_dos: Found Fermi level at ' // &
+                     trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
+                     trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
+end function find_fermi_level_from_dos
 
-      do ie = 1, max_iter
-         e_mid = (e_min + e_max) / 2.0_rp
-         electrons_at_e = this%integrate_dos_up_to_energy(e_mid, kT)
 
-         if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then
-            fermi_level = e_mid
-            exit
-         else if (electrons_at_e < total_electrons) then
-            e_min = e_mid
-         else
-            e_max = e_mid
-         end if
-      end do
-
-      fermi_level = e_mid
-
-      ! Final check
-      electrons_at_e = this%integrate_dos_up_to_energy(fermi_level, kT)
-      call g_logger%info('find_fermi_level_from_dos: Found Fermi level at ' // &
-                        trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
-                        trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
-   end function find_fermi_level_from_dos
-
-   !---------------------------------------------------------------------------
+!---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
    !> Integrate DOS up to given energy with Fermi-Dirac weighting
    !---------------------------------------------------------------------------
-   function integrate_dos_up_to_energy(this, energy, kT) result(integral)
-      class(reciprocal), intent(in) :: this
-      real(rp), intent(in) :: energy, kT
-      real(rp) :: integral
+function integrate_dos_up_to_energy(this, energy, kT) result(integral)
+   class(reciprocal), intent(in) :: this
+   real(rp), intent(in) :: energy, kT
+   real(rp) :: integral
 
-      ! Local variables
-      integer :: ie
-      real(rp) :: e, fermi_weight, delta_e
+   integer :: ie
+   real(rp) :: e, fermi_weight, delta_e
+   real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
-      integral = 0.0_rp
+   integral = 0.0_rp
 
-      do ie = 1, this%n_energy_points - 1
-         e = this%dos_energy_grid(ie)
-         delta_e = this%dos_energy_grid(ie+1) - e
+   do ie = 1, this%n_energy_points - 1
+      e = this%dos_energy_grid(ie) * eV_to_Ry  ! Convert to Ry
+      delta_e = (this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie)) * eV_to_Ry
 
-         ! Fermi-Dirac weight at current energy
-         if (kT > 1.0e-10_rp) then
-            fermi_weight = 1.0_rp / (exp((e - energy) / kT) + 1.0_rp)
+      ! Fermi-Dirac weight at current energy
+      if (kT > 1.0e-10_rp) then
+         fermi_weight = 1.0_rp / (exp((e - energy) / kT) + 1.0_rp)
+      else
+         ! T=0 limit
+         if (e <= energy) then
+            fermi_weight = 1.0_rp
          else
-            ! T=0 limit
-            if (e <= energy) then
-               fermi_weight = 1.0_rp
-            else
-               fermi_weight = 0.0_rp
-            end if
+            fermi_weight = 0.0_rp
          end if
+      end if
 
-         ! Trapezoidal integration
-         integral = integral + 0.5_rp * delta_e * (this%total_dos(ie) * fermi_weight + &
-                                                  this%total_dos(ie+1) * (1.0_rp / (exp((this%dos_energy_grid(ie+1) - energy) / kT) + 1.0_rp)))
-      end do
-   end function integrate_dos_up_to_energy
+      ! Trapezoidal integration
+      integral = integral + 0.5_rp * delta_e * (this%total_dos(ie) * fermi_weight + &
+                                               this%total_dos(ie+1) * (1.0_rp / (exp((this%dos_energy_grid(ie+1) * eV_to_Ry - energy) / kT) + 1.0_rp)))
+   end do
+end function integrate_dos_up_to_energy
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -2599,6 +2728,7 @@ contains
       ! Local variables
       integer :: unit, i_energy, isite, iorb, ispin
       character(len=256) :: proj_filename
+      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
       call g_logger%info('write_dos_to_file: Writing DOS to ' // trim(filename), __FILE__, __LINE__)
 
@@ -2609,13 +2739,14 @@ contains
       write(unit, '(A)') '# Density of States'
       write(unit, '(A,A)') '# Method: ', trim(this%dos_method)
       if (trim(this%dos_method) == 'gaussian') then
-         write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
+         write(unit, '(A,F8.5,A)') '# Gaussian sigma: ', this%gaussian_sigma, ' Ry'
       end if
       write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
-      write(unit, '(A,2F8.3)') '# Energy range: ', this%dos_energy_range
+      write(unit, '(A,2F10.6,A)') '# Energy range: ', this%dos_energy_range(1), &
+                                   this%dos_energy_range(2), ' Ry'
       write(unit, '(A)') '# Energy (Ry)    Total DOS'
 
-      ! Write DOS data
+      ! Write DOS data (energy grid already in Ry)
       do i_energy = 1, this%n_energy_points
          write(unit, '(2F12.6)') this%dos_energy_grid(i_energy), this%total_dos(i_energy)
       end do
@@ -2633,13 +2764,14 @@ contains
          write(unit, '(A)') '# Projected Density of States'
          write(unit, '(A,A)') '# Method: ', trim(this%dos_method)
          if (trim(this%dos_method) == 'gaussian') then
-            write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
+            write(unit, '(A,F8.5,A)') '# Gaussian sigma: ', this%gaussian_sigma, ' Ry'
          end if
          write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
-         write(unit, '(A,2F8.3)') '# Energy range: ', this%dos_energy_range
-         write(unit, '(A)') '# Columns: Energy, s_up, p_up, d_up, f_up, s_down, p_down, d_down, f_down'
+         write(unit, '(A,2F10.6,A)') '# Energy range: ', this%dos_energy_range(1), &
+                                      this%dos_energy_range(2), ' Ry'
+         write(unit, '(A)') '# Columns: Energy(Ry), s_up, p_up, d_up, f_up, s_down, p_down, d_down, f_down'
 
-         ! Write projected DOS data
+         ! Write projected DOS data (energy grid already in Ry)
          do i_energy = 1, this%n_energy_points
             write(unit, '(9F12.6)') this%dos_energy_grid(i_energy), &
                                   (this%projected_dos(1, iorb, 1, i_energy), iorb=1,4), &  ! spin up: s,p,d,f
@@ -2661,7 +2793,7 @@ contains
          write(unit, '(A)') '# Band Moments'
          write(unit, '(A,A)') '# Method: ', trim(this%dos_method)
          if (trim(this%dos_method) == 'gaussian') then
-            write(unit, '(A,F8.4)') '# Gaussian sigma: ', this%gaussian_sigma
+            write(unit, '(A,F8.5,A)') '# Gaussian sigma: ', this%gaussian_sigma, ' Ry'
          end if
          write(unit, '(A,F8.4,A)') '# Temperature: ', this%temperature, ' K'
          write(unit, '(A,F12.6,A)') '# Fermi level: ', this%fermi_level, ' Ry'
@@ -2743,5 +2875,50 @@ contains
          weight = 0.0_rp
       end if
    end function calculate_gaussian_weight_single
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Sort eigenvalues and return sorted values with sort indices
+   !> Helper subroutine for tetrahedron methods
+   !---------------------------------------------------------------------------
+   pure subroutine sort_eigenvalues(e_in, e_sorted, sort_idx)
+      real(rp), dimension(4), intent(in) :: e_in
+      real(rp), dimension(4), intent(out) :: e_sorted
+      integer, dimension(4), intent(out) :: sort_idx
+      
+      ! Local variables
+      integer :: i, j, min_idx
+      real(rp) :: temp_e
+      integer :: temp_idx
+      
+      ! Initialize
+      e_sorted = e_in
+      do i = 1, 4
+         sort_idx(i) = i
+      end do
+      
+      ! Simple selection sort
+      do i = 1, 3
+         min_idx = i
+         do j = i + 1, 4
+            if (e_sorted(j) < e_sorted(min_idx)) then
+               min_idx = j
+            end if
+         end do
+         
+         if (min_idx /= i) then
+            ! Swap energies
+            temp_e = e_sorted(i)
+            e_sorted(i) = e_sorted(min_idx)
+            e_sorted(min_idx) = temp_e
+            
+            ! Swap indices
+            temp_idx = sort_idx(i)
+            sort_idx(i) = sort_idx(min_idx)
+            sort_idx(min_idx) = temp_idx
+         end if
+      end do
+   end subroutine sort_eigenvalues
 
 end module reciprocal_mod

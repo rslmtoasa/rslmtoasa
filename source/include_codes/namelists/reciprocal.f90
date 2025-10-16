@@ -4,9 +4,14 @@ real :: k_offset_x, k_offset_y, k_offset_z
 logical :: use_symmetry_reduction, use_time_reversal, use_shift
 
 ! Density of states settings
+! NOTE: All energy values in Rydberg (Ry) for consistency with Hamiltonian
+!       dos_energy_min, dos_energy_max: Energy window in Ry (e.g., -1.0, 1.0)
+!       gaussian_sigma: Gaussian smearing width in Ry (e.g., 0.01)
+!       temperature: Temperature in Kelvin for Fermi-Dirac distribution
+!       Example for BCC Fe: dos_energy_min = -0.8, dos_energy_max = 0.9 (Ry)
 integer :: n_energy_points
-real :: dos_energy_min, dos_energy_max
-real :: gaussian_sigma
+real :: dos_energy_min, dos_energy_max    ! Energy range in Ry
+real :: gaussian_sigma                     ! Gaussian smearing in Ry
 real :: temperature
 real :: total_electrons
 character(len=20) :: dos_method
