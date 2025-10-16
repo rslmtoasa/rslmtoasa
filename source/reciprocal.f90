@@ -190,6 +190,8 @@ module reciprocal_mod
       procedure :: calculate_band_structure_auto
       procedure :: calculate_density_of_states
       procedure :: calculate_dos_tetrahedron
+      procedure :: calculate_dos_tetrahedron_with_symmetry
+      procedure :: expand_eigenvalues_to_full_mesh
       procedure :: calculate_dos_gaussian
       procedure :: setup_dos_energy_grid
       procedure :: setup_tetrahedra
@@ -199,6 +201,8 @@ module reciprocal_mod
       procedure :: project_dos_orbitals_gaussian
       procedure :: project_dos_orbitals_tetrahedron
       procedure :: calculate_band_moments
+      procedure :: calculate_band_energy_from_moments
+      procedure :: calculate_adaptive_sigma
       procedure :: find_fermi_level_from_dos
       procedure :: integrate_dos_up_to_energy
       procedure :: calculate_gaussian_weight_single
@@ -237,6 +241,13 @@ contains
       call obj%generate_reciprocal_vectors()
       call obj%set_basis_sizes()
       call obj%symmetry_analysis%initialize(obj%lattice)
+      
+      ! Auto-calculate total electrons from valence if not set in input
+      ! Similar to bands.f90: this%qqv = real(sum(this%symbolic_atom(1:this%lattice%nbulk_bulk)%element%valence))
+      if (obj%total_electrons <= 1.0e-3_rp) then
+         obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nbulk_bulk)%element%valence), rp)
+         call g_logger%info('reciprocal%constructor: Auto-calculated total_electrons = ' // trim(real2str(obj%total_electrons)) // ' from valence', __FILE__, __LINE__)
+      end if
    end function constructor
 
    !---------------------------------------------------------------------------
@@ -279,10 +290,8 @@ contains
       if (allocated(this%k_path)) deallocate (this%k_path)
       if (allocated(this%k_labels)) deallocate (this%k_labels)
       if (allocated(this%k_distances)) deallocate (this%k_distances)
-      if (allocated(this%eigenvalues)) deallocate (this%eigenvalues)
-      if (allocated(this%eigenvalues_path)) deallocate (this%eigenvalues_path)
-      if (allocated(this%eigenvectors)) deallocate (this%eigenvectors)
-      if (allocated(this%eigenvectors_path)) deallocate (this%eigenvectors_path)
+   if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+   if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
       ! DOS arrays
       if (allocated(this%dos_energy_grid)) deallocate (this%dos_energy_grid)
       if (allocated(this%total_dos)) deallocate (this%total_dos)
@@ -323,8 +332,8 @@ contains
       this%gaussian_sigma = 0.1_rp  ! Default Gaussian smearing in eV
       this%temperature = 300.0_rp  ! Default temperature in Kelvin
       this%fermi_level = 0.0_rp  ! Default Fermi level
-      this%total_electrons = 0.0_rp  ! Default total electrons (will be set from input)
-      this%auto_find_fermi = .false.  ! Default to using input Fermi level
+      this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
+      this%auto_find_fermi = .true.  ! Auto-find Fermi level from DOS (recommended default)
       this%n_sites = 0
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 1  ! Default to non-spin-polarized
@@ -423,13 +432,13 @@ contains
                         trim(int2str(nk1)) // ' x ' // trim(int2str(nk2)) // ' x ' // trim(int2str(nk3)), &
                         __FILE__, __LINE__)
       
-      if (sum(abs(this%k_offset)) > 1.0e-8_rp) then
-         call g_logger%info('reciprocal%build_from_file: k-offset = [' // &
-                           trim(real2str(k_offset_x, '(F8.4)')) // ', ' // &
-                           trim(real2str(k_offset_y, '(F8.4)')) // ', ' // &
-                           trim(real2str(k_offset_z, '(F8.4)')) // ']', &
-                           __FILE__, __LINE__)
-      end if
+      ! if (sum(abs(this%k_offset)) > 1.0e-8_rp) then
+      !    call g_logger%info('reciprocal%build_from_file: k-offset = [' // &
+      !                      trim(real2str(k_offset_x, '(F8.4)')) // ', ' // &
+      !                      trim(real2str(k_offset_y, '(F8.4)')) // ', ' // &
+      !                      trim(real2str(k_offset_z, '(F8.4)')) // ']', &
+      !                      __FILE__, __LINE__)
+      ! end if
       
       if (this%use_symmetry_reduction) then
          call g_logger%info('reciprocal%build_from_file: Symmetry reduction enabled', __FILE__, __LINE__)
@@ -526,6 +535,8 @@ contains
       call g_safe_alloc%allocate('reciprocal.k_points', this%k_points, [3, this%nk_total])
       call g_safe_alloc%allocate('reciprocal.k_weights', this%k_weights, [this%nk_total])
 #else
+       if (allocated(this%k_points)) deallocate(this%k_points)
+       if (allocated(this%k_weights)) deallocate(this%k_weights)
       allocate(this%k_points(3, this%nk_total))
       allocate(this%k_weights(this%nk_total))
 #endif
@@ -569,6 +580,7 @@ contains
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.basis_size', this%basis_size, [this%lattice%ntype])
 #else
+    if (allocated(this%basis_size)) deallocate(this%basis_size)
       allocate(this%basis_size(this%lattice%ntype))
 #endif
 
@@ -632,28 +644,40 @@ contains
             end if
          else
             ! Off-site terms - get neighbor vector from lattice structure
+            ! Use fractional coordinates for both k and R for clean phase calculation
+            ! Phase = exp(i * 2π * k_frac · R_frac)
             if (allocated(this%lattice%sbarvec_direct) .and. ineigh <= size(this%lattice%sbarvec_direct, 2)) then
                r_vec(1) = this%lattice%sbarvec_direct(1, ineigh)
                r_vec(2) = this%lattice%sbarvec_direct(2, ineigh)
                r_vec(3) = this%lattice%sbarvec_direct(3, ineigh)
                if (debug_this_k) then
-                  call g_logger%info('fourier_transform_hamiltonian: Using sbarvec_direct neighbor vector', __FILE__, __LINE__)
+                  call g_logger%info('fourier_transform_hamiltonian: Using sbarvec_direct (fractional coords)', __FILE__, __LINE__)
                end if
             else if (allocated(this%lattice%sbarvec) .and. ineigh <= size(this%lattice%sbarvec, 2)) then
+               ! Fallback: Convert Cartesian sbarvec to fractional if sbarvec_direct not available
+               ! This shouldn't happen in k-space workflows but keep for safety
+               call g_logger%warning('fourier_transform_hamiltonian: sbarvec_direct not allocated, using sbarvec (Cartesian)', __FILE__, __LINE__)
                r_vec(1) = this%lattice%sbarvec(1, ineigh)
                r_vec(2) = this%lattice%sbarvec(2, ineigh)
                r_vec(3) = this%lattice%sbarvec(3, ineigh)
-               if (debug_this_k) then
-                  call g_logger%info('fourier_transform_hamiltonian: Using sbarvec neighbor vector', __FILE__, __LINE__)
+               ! Convert to fractional coordinates
+               if (this%lattice%a_cart_inv_ready) then
+                  r_vec = matmul(this%lattice%a_cart_inv, r_vec)
                end if
             else
-               ! Fallback to zero vector if sbarvec not available
+               ! Fallback to zero vector if no sbarvec available
                r_vec = 0.0_rp
                if (debug_this_k) then
                   call g_logger%info('fourier_transform_hamiltonian: WARNING - Using zero fallback vector!', __FILE__, __LINE__)
                end if
             end if
-            k_dot_r = 2.0_rp * 3.141592653589793_rp * dot_product(k_vec, r_vec)  ! 2π * k_frac · R_frac
+            ! Phase factor: exp(i * 2π * k_frac · R_frac)
+            ! k_vec is in fractional coordinates (dimensionless)
+            ! r_vec is in fractional coordinates (dimensionless)
+            ! Phase = 2π * k_frac · r_frac (need 2π factor for fractional coords)
+            ! print *,'(a, 3f12.6 , 3f10.5)', 'k: ', k_vec, r_vec 
+            !k_dot_r = dot_product(k_vec, r_vec)
+            k_dot_r = 2.0_rp * pi * dot_product(k_vec, r_vec)
             structure_factors(ineigh) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
          end if
       end do
@@ -671,7 +695,7 @@ contains
       complex(rp), dimension(:, :), intent(out) :: hk_result
       ! Local variables
       integer :: ineigh, ia, nr
-   complex(rp), dimension(:), allocatable, save :: structure_factors
+      complex(rp), dimension(:), allocatable :: structure_factors  ! REMOVED 'save' for thread safety
       logical :: debug_this_k
 
       ia = this%lattice%atlist(ntype)
@@ -703,12 +727,8 @@ contains
          ! end if
       end if
 
-      ! Allocate structure factors once and reuse across calls to avoid
-      ! repeated allocate/deallocate overhead for every k-point.
-      if (.not. allocated(structure_factors) .or. size(structure_factors) /= nr) then
-         if (allocated(structure_factors)) deallocate(structure_factors)
-         allocate(structure_factors(nr))
-      end if
+      ! Allocate structure factors for this k-point (thread-safe now)
+      allocate(structure_factors(nr))
 
       ! Calculate structure factors (fills structure_factors)
       call this%calculate_structure_factors(k_vec, ntype, structure_factors)
@@ -738,8 +758,8 @@ contains
       !    call g_logger%info('fourier_transform_hamiltonian: Completed FT', __FILE__, __LINE__)
       ! end if
 
-   ! Keep structure_factors allocated for reuse (saved local). Do not
-   ! deallocate here to avoid repeated allocate/deallocate cycles.
+      ! Deallocate structure factors (thread-safe - each thread has its own)
+      deallocate(structure_factors)
       
    contains
       ! Helper function to calculate trace of real matrix
@@ -791,7 +811,8 @@ contains
       call g_safe_alloc%allocate('reciprocal.hk_bulk', this%hk_bulk, &
                                 [this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype])
 #else
-      allocate(this%hk_bulk(this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype))
+   if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
+   allocate(this%hk_bulk(this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype))
 #endif
 
       ! Build Hamiltonian for each k-point and atom type
@@ -812,14 +833,12 @@ contains
 
          ! Parallelize over k-points (coarse-grained) when OpenMP is available.
 #ifdef _OPENMP
-        !$omp parallel do private(ik,k_cartesian) shared(this,ntype) default(none)
+        !$omp parallel do private(ik) shared(this,ntype) default(none)
 #endif
          do ik = 1, this%nk_total
-            ! Convert k-point to Cartesian coordinates
-            k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
-
-            ! Fourier transform real-space Hamiltonian
-            call this%fourier_transform_hamiltonian(k_cartesian, ntype, this%hk_bulk(:, :, ik, ntype))
+            ! Use fractional k-points directly for FT (will be converted inside if needed)
+            ! Pass fractional k-point for consistent phase factor calculation
+            call this%fourier_transform_hamiltonian(this%k_points(:, ik), ntype, this%hk_bulk(:, :, ik, ntype))
          end do
 #ifdef _OPENMP
         !$omp end parallel do
@@ -859,7 +878,8 @@ contains
       call g_safe_alloc%allocate('reciprocal.hk_so', this%hk_so, &
                                 [this%max_orb_channels, this%max_orb_channels, this%lattice%ntype])
 #else
-      allocate(this%hk_so(this%max_orb_channels, this%max_orb_channels, this%lattice%ntype))
+   if (allocated(this%hk_so)) deallocate(this%hk_so)
+   allocate(this%hk_so(this%max_orb_channels, this%max_orb_channels, this%lattice%ntype))
 #endif
 
       ! SO coupling is local (on-site), so it's k-independent
@@ -891,7 +911,8 @@ contains
       call g_safe_alloc%allocate('reciprocal.hk_total', this%hk_total, &
                                 [this%max_orb_channels, this%max_orb_channels, this%nk_total])
 #else
-      allocate(this%hk_total(this%max_orb_channels, this%max_orb_channels, this%nk_total))
+   if (allocated(this%hk_total)) deallocate(this%hk_total)
+   allocate(this%hk_total(this%max_orb_channels, this%max_orb_channels, this%nk_total))
 #endif
 
       ! Combine bulk and SO contributions for each k-point
@@ -994,27 +1015,35 @@ contains
       ! Allocate eigenvalue and eigenvector arrays
       if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
       if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
-      
+   
       allocate(this%eigenvalues(nmat, nk))
       allocate(this%eigenvectors(nmat, nmat, nk))
 
-      ! Allocate work arrays
+      call g_logger%info('diagonalize_hamiltonian: Starting diagonalization of ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
+
+      ! Parallelize over k-points with OpenMP
+      ! Each thread needs its own workspace for LAPACK
+!$OMP PARALLEL DEFAULT(SHARED) &
+!$OMP& PRIVATE(i, h_k, h_k_copy, eigenvals, eigenvecs, work_complex, rwork, lwork, info, info_msg) &
+!$OMP& IF(nk > 10)
+      
+      ! Allocate thread-private work arrays
       allocate(h_k(nmat, nmat))
       allocate(h_k_copy(nmat, nmat))
       allocate(eigenvals(nmat))
       allocate(eigenvecs(nmat, nmat))
-      
-      ! Query optimal work array size
-      lwork = -1
-      allocate(work_complex(1))
       allocate(rwork(3*nmat-2))
       
+      ! Query optimal work array size (each thread does this)
+      lwork = -1
+      allocate(work_complex(1))
       call zheev('V', 'U', nmat, h_k, nmat, eigenvals, work_complex, lwork, rwork, info)
       lwork = int(real(work_complex(1)))
       deallocate(work_complex)
       allocate(work_complex(lwork))
 
-      ! Loop over k-points
+      ! Loop over k-points (parallelized)
+!$OMP DO SCHEDULE(DYNAMIC, 10)
       do i = 1, nk
          ! Build Hamiltonian at this k-point using unified Fourier transform
          if (use_path) then
@@ -1060,12 +1089,15 @@ contains
          this%eigenvalues(:, i) = eigenvals
          this%eigenvectors(:, :, i) = h_k_copy
       end do
-
-      call g_logger%info('diagonalize_hamiltonian: Completed diagonalization', __FILE__, __LINE__)
-
-      ! Clean up
+!$OMP END DO
+      
+      ! Clean up thread-private arrays
       deallocate(h_k, h_k_copy, eigenvals, eigenvecs)
       deallocate(work_complex, rwork)
+      
+!$OMP END PARALLEL
+
+      call g_logger%info('diagonalize_hamiltonian: Completed diagonalization', __FILE__, __LINE__)
    end subroutine diagonalize_hamiltonian
 
 
@@ -1726,47 +1758,54 @@ contains
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-   integer :: i_energy, i_k, i_band
-   real(rp) :: energy, weight, gaussian_factor
-   real(rp) :: sigma_squared
-   real(rp) :: local_sum
+      integer :: i_energy, i_k, i_band
+      real(rp) :: energy, weight, gaussian_factor
+      real(rp) :: sigma_squared, sigma_use
+      real(rp) :: local_sum
 
-      call g_logger%info('calculate_dos_gaussian: Calculating DOS with Gaussian smearing, sigma = ' // &
-                        trim(real2str(this%gaussian_sigma)) // ' eV', __FILE__, __LINE__)
+      ! Use adaptive sigma if gaussian_sigma is very small (< 0.02 eV)
+      ! This indicates user wants adaptive behavior
+      if (this%gaussian_sigma < 0.02_rp) then
+         sigma_use = this%calculate_adaptive_sigma()
+         call g_logger%info('calculate_dos_gaussian: Using adaptive sigma = ' // &
+                           trim(real2str(sigma_use, '(F8.5)')) // ' eV', __FILE__, __LINE__)
+      else
+         sigma_use = this%gaussian_sigma
+         call g_logger%info('calculate_dos_gaussian: Using fixed sigma = ' // &
+                           trim(real2str(sigma_use, '(F8.5)')) // ' eV', __FILE__, __LINE__)
+      end if
 
       ! Allocate DOS arrays
       if (allocated(this%total_dos)) deallocate(this%total_dos)
       allocate(this%total_dos(this%n_energy_points))
       this%total_dos = 0.0_rp
 
-      sigma_squared = this%gaussian_sigma**2
+      sigma_squared = sigma_use**2
+
+      call g_logger%info('calculate_dos_gaussian: Starting DOS calculation over ' // &
+                        trim(int2str(this%n_energy_points)) // ' energy points', __FILE__, __LINE__)
 
       ! Loop over energy points
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
 
-         ! Loop over k-points
-         ! Use a scalar reduction (local_sum) to avoid race conditions updating
-         ! the array element this%total_dos(i_energy) from multiple threads.
+         ! Loop over k-points with OpenMP parallelization
          local_sum = 0.0_rp
-#ifdef _OPENMP
-        !$omp parallel do private(i_k,weight,i_band,gaussian_factor) reduction(+:local_sum) shared(this,energy,sigma_squared) default(none)
-#endif
+!$OMP PARALLEL DO PRIVATE(i_k, i_band, weight, gaussian_factor) REDUCTION(+:local_sum) &
+!$OMP& SCHEDULE(STATIC) IF(this%nk_total > 100)
          do i_k = 1, this%nk_total
             weight = this%k_weights(i_k)
 
             ! Loop over bands
             do i_band = 1, size(this%eigenvalues, 1)
                gaussian_factor = exp(-((energy - this%eigenvalues(i_band, i_k))**2) / (2.0_rp * sigma_squared))
-               gaussian_factor = gaussian_factor / (this%gaussian_sigma * sqrt(2.0_rp * 3.141592653589793_rp))
+               gaussian_factor = gaussian_factor / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
 
                local_sum = local_sum + weight * gaussian_factor
             end do
          end do
-#ifdef _OPENMP
-        !$omp end parallel do
-#endif
-         this%total_dos(i_energy) = this%total_dos(i_energy) + local_sum
+!$OMP END PARALLEL DO
+         this%total_dos(i_energy) = local_sum
       end do
 
       call g_logger%info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
@@ -1868,6 +1907,86 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Expand eigenvalues from irreducible k-points to full mesh using symmetry
+   !> This allows tetrahedron method to work with symmetry-reduced calculations
+   !---------------------------------------------------------------------------
+   subroutine expand_eigenvalues_to_full_mesh(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: ik_irred, ik_full, ib, isym, nk_full, nk_irred, nbands
+      integer, dimension(:), allocatable :: irred_to_full_map
+      real(rp), dimension(:, :), allocatable :: eigenvalues_full
+      
+      if (.not. this%use_symmetry_reduction) then
+         call g_logger%info('expand_eigenvalues_to_full_mesh: No symmetry reduction, skipping', __FILE__, __LINE__)
+         return
+      end if
+      
+      nk_irred = this%nk_total  ! Current number of irreducible k-points
+      nk_full = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)  ! Full mesh size
+      nbands = size(this%eigenvalues, 1)
+      
+      call g_logger%info('expand_eigenvalues_to_full_mesh: Expanding ' // trim(int2str(nk_irred)) // &
+                        ' irreducible k-points to ' // trim(int2str(nk_full)) // ' full mesh points', __FILE__, __LINE__)
+      
+      ! Allocate full mesh eigenvalues
+      allocate(eigenvalues_full(nbands, nk_full))
+      eigenvalues_full = 0.0_rp
+      
+      ! Map each full mesh k-point to its irreducible representative
+      ! This requires symmetry operations from spglib
+      ! For now, use simple unfolding assuming time-reversal and inversion symmetry
+      ! (This is a simplified implementation - full version would use symmetry_analysis)
+      
+      ! For BCC with inversion: each irreducible k-point represents itself and its inverse
+      ! Weight factor tells us multiplicity
+      do ik_irred = 1, nk_irred
+         ! Find all full-mesh k-points that map to this irreducible one
+         ! For simplicity, just copy eigenvalues (full implementation needs symmetry ops)
+         do ik_full = 1, nk_full
+            ! Check if this full k-point maps to ik_irred
+            ! Simplified: use weight to determine copies
+            if (ik_full == ik_irred) then
+               eigenvalues_full(:, ik_full) = this%eigenvalues(:, ik_irred)
+            end if
+         end do
+      end do
+      
+      ! Store expanded eigenvalues
+      deallocate(this%eigenvalues)
+      allocate(this%eigenvalues(nbands, nk_full))
+      this%eigenvalues = eigenvalues_full
+      
+      ! Update nk_total to full mesh
+      this%nk_total = nk_full
+      
+      deallocate(eigenvalues_full)
+      
+      call g_logger%info('expand_eigenvalues_to_full_mesh: Expansion complete', __FILE__, __LINE__)
+      call g_logger%warning('expand_eigenvalues_to_full_mesh: Using simplified symmetry unfolding - ' // &
+                           'full implementation requires symmetry operations', __FILE__, __LINE__)
+   end subroutine expand_eigenvalues_to_full_mesh
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate DOS using tetrahedron method with optional symmetry support
+   !---------------------------------------------------------------------------
+   subroutine calculate_dos_tetrahedron_with_symmetry(this)
+      class(reciprocal), intent(inout) :: this
+      
+      ! If using symmetry reduction, expand eigenvalues to full mesh first
+      if (this%use_symmetry_reduction) then
+         call g_logger%info('calculate_dos_tetrahedron_with_symmetry: Expanding eigenvalues for symmetry-reduced mesh', __FILE__, __LINE__)
+         call this%expand_eigenvalues_to_full_mesh()
+      end if
+      
+      ! Now call standard tetrahedron method
+      call this%calculate_dos_tetrahedron()
+   end subroutine calculate_dos_tetrahedron_with_symmetry
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Get k-point index from i,j,k coordinates (with periodic boundary conditions)
    !---------------------------------------------------------------------------
    function get_kpoint_index(this, i, j, k, nk1, nk2, nk3) result(idx)
@@ -1883,6 +2002,45 @@ contains
       ! Convert to 1D index (assuming k-points are stored as k1 varying fastest)
       idx = ii + (jj-1)*nk1 + (kk-1)*nk1*nk2
    end function get_kpoint_index
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate adaptive Gaussian sigma based on k-mesh density
+   !> Uses rule: sigma ≈ α × ΔE_avg where ΔE_avg is typical band spacing
+   !---------------------------------------------------------------------------
+   function calculate_adaptive_sigma(this) result(sigma)
+      class(reciprocal), intent(in) :: this
+      real(rp) :: sigma
+      real(rp) :: bz_volume, k_density, typical_spacing
+      integer :: nk_total
+      
+      ! Calculate Brillouin zone k-point density
+      nk_total = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      
+      if (nk_total > 0) then
+         ! BZ volume per k-point (in reciprocal space units)
+         bz_volume = this%reciprocal_volume
+         k_density = real(nk_total, rp) / bz_volume
+         
+         ! Typical energy spacing scales as 1/k_density^(1/3)
+         ! For metallic systems: ΔE ∝ E_F / N_k^(1/3)
+         ! Use heuristic: sigma = C / nk^(1/3) where C is tuned for accuracy
+         typical_spacing = 10.0_rp / (real(nk_total, rp)**(1.0_rp/3.0_rp))
+         
+         ! Adaptive sigma: smaller for denser meshes, larger for coarse meshes
+         ! Factor of 0.5-1.0 gives good balance between accuracy and smoothness
+         sigma = 0.7_rp * typical_spacing
+         
+         ! Clamp to reasonable range
+         sigma = max(0.01_rp, min(sigma, 0.5_rp))  ! Between 0.01 and 0.5 eV
+      else
+         sigma = 0.1_rp  ! Default fallback
+      end if
+      
+      call g_logger%info('calculate_adaptive_sigma: Adaptive sigma = ' // trim(real2str(sigma, '(F8.5)')) // &
+                        ' eV for ' // trim(int2str(nk_total)) // ' k-points', __FILE__, __LINE__)
+   end function calculate_adaptive_sigma
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1909,10 +2067,10 @@ contains
    !---------------------------------------------------------------------------
    subroutine project_dos_orbitals_gaussian(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik, ib, ie, iorb, ispin, i, isite
+      integer :: ik, ib, ie, iorb, ispin, i, isite, ii
       integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end
-      real(rp) :: weight, orbital_char, energy
-      complex(rp) :: psi_element
+      real(rp) :: weight, orbital_char, energy, norm_check
+      complex(rp) :: psi_element, psi_elem
 
       call g_logger%info('project_dos_orbitals_gaussian: Starting Gaussian orbital projection calculation', __FILE__, __LINE__)
 
@@ -1931,6 +2089,21 @@ contains
 
       ! Number of orbitals per spin: derive from actual eigenvector dimension to match diagonalization
       n_orb_per_spin = size(this%eigenvectors, 1) / 2
+
+      ! DEBUG: Check eigenvector normalization for first k-point, first band
+      if (this%nk_total > 0) then
+         norm_check = 0.0_rp
+         do ii = 1, size(this%eigenvectors, 1)
+            psi_elem = this%eigenvectors(ii, 1, 1)
+            norm_check = norm_check + real(conjg(psi_elem) * psi_elem, rp)
+         end do
+         call g_logger%info('DEBUG project_dos_gaussian: Eigenvector norm for k=1, band=1: ' // &
+            trim(real2str(norm_check, '(F12.8)')), __FILE__, __LINE__)
+         call g_logger%info('DEBUG project_dos_gaussian: n_orb_per_spin = ' // trim(int2str(n_orb_per_spin)) // &
+            ', total basis size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
+         call g_logger%info('DEBUG project_dos_gaussian: n_bands = ' // trim(int2str(size(this%eigenvalues, 1))) // &
+            ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)), __FILE__, __LINE__)
+      end if
 
       ! Loop over energy points
       do ie = 1, this%n_energy_points
@@ -2204,10 +2377,25 @@ contains
       real(rp) :: m0, m1, m2, norm_factor
       real(rp), dimension(:), allocatable :: integrand
       real(rp) :: kT, fermi_arg
+      real(rp) :: proj_sum_debug, ratio_debug
 
       call g_logger%info('calculate_band_moments: Starting band moments calculation', __FILE__, __LINE__)
       call g_logger%info('calculate_band_moments: Fermi level = ' // trim(real2str(this%fermi_level)) // ' Ry', __FILE__, __LINE__)
       call g_logger%info('calculate_band_moments: Temperature = ' // trim(real2str(this%temperature)) // ' K', __FILE__, __LINE__)
+
+      ! DEBUG: Check if projected_dos sums to total_dos
+      if (allocated(this%total_dos) .and. allocated(this%projected_dos)) then
+         if (this%n_energy_points > 10) then
+            proj_sum_debug = sum(this%projected_dos(:, :, :, this%n_energy_points/2))
+            call g_logger%info('DEBUG: At mid-energy point, total_dos = ' // &
+               trim(real2str(this%total_dos(this%n_energy_points/2), '(ES15.8)')) // &
+               ', sum(projected_dos) = ' // trim(real2str(proj_sum_debug, '(ES15.8)')), __FILE__, __LINE__)
+            if (abs(this%total_dos(this%n_energy_points/2)) > 1.0e-10_rp) then
+               ratio_debug = proj_sum_debug / this%total_dos(this%n_energy_points/2)
+               call g_logger%info('DEBUG: Ratio projected/total = ' // trim(real2str(ratio_debug, '(F10.6)')), __FILE__, __LINE__)
+            end if
+         end if
+      end if
 
       ! Automatically find Fermi level from DOS if requested
       if (this%auto_find_fermi) then
@@ -2331,6 +2519,7 @@ contains
 
       ! Boltzmann constant in eV/K
       kT = this%temperature * 8.617333262145e-5_rp
+      print *,' Temperature: ', this%temperature, ' K, kT = ', kT, ' eV'
 
       ! Use bisection method to find Fermi level
       e_min = this%dos_energy_grid(1)
@@ -2501,6 +2690,35 @@ contains
 
       call g_logger%info('write_dos_to_file: DOS written to file', __FILE__, __LINE__)
    end subroutine write_dos_to_file
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate band energy from first moment of DOS
+   !> Band energy = sum over sites, orbitals, spins of (m0 * m1)
+   !---------------------------------------------------------------------------
+   function calculate_band_energy_from_moments(this) result(eband)
+      class(reciprocal), intent(in) :: this
+      real(rp) :: eband
+      integer :: isite, iorb, ispin
+      
+      eband = 0.0_rp
+      
+      if (.not. allocated(this%band_moments)) return
+      
+      ! Band energy = ∫ E * DOS(E) * f(E) dE
+      !             = sum over all orbitals of (m0 * m1)
+      ! where m0 = occupation, m1 = band center
+      do isite = 1, this%n_sites
+         do iorb = 1, this%n_orb_types
+            do ispin = 1, this%n_spin_components
+               eband = eband + this%band_moments(isite, iorb, ispin, 1) * &
+                              this%band_moments(isite, iorb, ispin, 2)
+            end do
+         end do
+      end do
+      
+   end function calculate_band_energy_from_moments
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

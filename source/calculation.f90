@@ -74,16 +74,23 @@ module calculation_mod
       !> name list input file
       character(len=sl) :: fname
 
-      !> DOS calculation parameters
+      !> K-space and DOS calculation parameters (using &reciprocal namelist for consistency)
+      ! K-point mesh settings
+      integer :: nk1, nk2, nk3
+      real(rp) :: k_offset_x, k_offset_y, k_offset_z
+      logical :: use_symmetry_reduction
+      logical :: use_time_reversal
+      logical :: use_shift
+      ! DOS settings
       character(len=sl) :: dos_method
       real(rp) :: gaussian_sigma
       integer :: n_energy_points
       real(rp) :: dos_energy_min
       real(rp) :: dos_energy_max
       real(rp) :: temperature
-      integer :: nk1, nk2, nk3
       real(rp) :: total_electrons
       logical :: auto_find_fermi
+      logical :: suppress_internal_logs
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -147,23 +154,32 @@ contains
       integer :: iostatus, funit
 
       include 'include_codes/namelists/calculation.f90'
-      include 'include_codes/namelists/dos.f90'
+      include 'include_codes/namelists/reciprocal.f90'
 
       verbose = this%verbose
       pre_processing = this%pre_processing
       processing = this%processing
       post_processing = this%post_processing
+      ! K-space parameters
+      nk1 = this%nk1
+      nk2 = this%nk2
+      nk3 = this%nk3
+      k_offset_x = this%k_offset_x
+      k_offset_y = this%k_offset_y
+      k_offset_z = this%k_offset_z
+      use_symmetry_reduction = this%use_symmetry_reduction
+      use_time_reversal = this%use_time_reversal
+      use_shift = this%use_shift
+      ! DOS parameters
       dos_method = this%dos_method
       gaussian_sigma = this%gaussian_sigma
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_min
       dos_energy_max = this%dos_energy_max
       temperature = this%temperature
-      nk1 = this%nk1
-      nk2 = this%nk2
-      nk3 = this%nk3
       total_electrons = this%total_electrons
       auto_find_fermi = this%auto_find_fermi
+      suppress_internal_logs = this%suppress_internal_logs
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -176,10 +192,10 @@ contains
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
 
-      ! Try to read DOS namelist (optional)
-      read (funit, nml=dos, iostat=iostatus)
+      ! Read reciprocal space namelist (used by k-space SCF and post-processing)
+      read (funit, nml=reciprocal, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%info('DOS namelist not found or error reading it, using defaults', __FILE__, __LINE__)
+         call g_logger%info('Reciprocal namelist not found or error reading it, using defaults', __FILE__, __LINE__)
       end if
 
       ! Pre-processing
@@ -194,19 +210,26 @@ contains
       this%pre_processing = pre_processing
       this%processing = processing
       this%post_processing = post_processing
+      ! K-space parameters
+      this%nk1 = nk1
+      this%nk2 = nk2
+      this%nk3 = nk3
+      this%k_offset_x = k_offset_x
+      this%k_offset_y = k_offset_y
+      this%k_offset_z = k_offset_z
+      this%use_symmetry_reduction = use_symmetry_reduction
+      this%use_time_reversal = use_time_reversal
+      this%use_shift = use_shift
+      ! DOS parameters
       this%dos_method = dos_method
       this%gaussian_sigma = gaussian_sigma
       this%n_energy_points = n_energy_points
       this%dos_energy_min = dos_energy_min
       this%dos_energy_max = dos_energy_max
       this%temperature = temperature
-      this%nk1 = nk1
-      this%nk2 = nk2
-      this%nk3 = nk3
       this%total_electrons = total_electrons
       this%auto_find_fermi = auto_find_fermi
-      this%total_electrons = total_electrons
-      this%auto_find_fermi = auto_find_fermi
+      this%suppress_internal_logs = suppress_internal_logs
 
       close (funit)
    end subroutine build_from_file
@@ -1122,10 +1145,14 @@ contains
          return
       end if
 
-      ! Set k-point mesh parameters (8x8x8 mesh)
-      reciprocal_obj%nk_mesh = [8, 8, 8]
-      reciprocal_obj%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]
-      reciprocal_obj%use_time_reversal = .true.
+      ! Set k-point mesh parameters (use &reciprocal namelist values)
+      reciprocal_obj%nk_mesh = [this%nk1, this%nk2, this%nk3]
+      reciprocal_obj%k_offset = [this%k_offset_x, this%k_offset_y, this%k_offset_z]
+      reciprocal_obj%use_time_reversal = this%use_time_reversal
+      reciprocal_obj%use_symmetry_reduction = this%use_symmetry_reduction
+
+      call g_logger%info('post_processing_band_structure: K-mesh = ' // &
+         fmt('I0', this%nk1) // 'x' // fmt('I0', this%nk2) // 'x' // fmt('I0', this%nk3), __FILE__, __LINE__)
 
       ! Generate k-point mesh for general calculations
       call reciprocal_obj%generate_mp_mesh()
@@ -1280,10 +1307,25 @@ contains
          return
       end if
 
-      ! Set k-point mesh parameters from DOS namelist
-      call reciprocal_obj%set_kpoint_mesh(this%nk1, this%nk2, this%nk3)
-      reciprocal_obj%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]
-      reciprocal_obj%use_time_reversal = .true.
+      ! Set k-point mesh parameters from &reciprocal namelist
+      reciprocal_obj%nk_mesh = [this%nk1, this%nk2, this%nk3]
+      reciprocal_obj%k_offset = [this%k_offset_x, this%k_offset_y, this%k_offset_z]
+      reciprocal_obj%use_time_reversal = this%use_time_reversal
+      reciprocal_obj%use_symmetry_reduction = this%use_symmetry_reduction
+      
+      ! Set DOS parameters from &reciprocal namelist
+      reciprocal_obj%dos_method = this%dos_method
+      reciprocal_obj%gaussian_sigma = this%gaussian_sigma
+      reciprocal_obj%n_energy_points = this%n_energy_points
+      reciprocal_obj%dos_energy_range = [this%dos_energy_min, this%dos_energy_max]
+      reciprocal_obj%temperature = this%temperature
+      reciprocal_obj%auto_find_fermi = this%auto_find_fermi
+      reciprocal_obj%total_electrons = this%total_electrons
+      reciprocal_obj%suppress_internal_logs = this%suppress_internal_logs
+
+      call g_logger%info('post_processing_density_of_states: K-mesh = ' // &
+         fmt('I0', this%nk1) // 'x' // fmt('I0', this%nk2) // 'x' // fmt('I0', this%nk3), __FILE__, __LINE__)
+      call g_logger%info('post_processing_density_of_states: DOS method = ' // trim(this%dos_method), __FILE__, __LINE__)
 
       ! Generate k-point mesh for DOS calculations
       call reciprocal_obj%generate_mp_mesh()
@@ -1293,16 +1335,9 @@ contains
 
       call g_logger%info('post_processing_density_of_states: Calculating density of states', __FILE__, __LINE__)
 
-      ! Calculate DOS using default parameters (tetrahedron method)
+      ! Calculate DOS - parameters already set on reciprocal_obj above
       call reciprocal_obj%calculate_density_of_states(hamiltonian_obj, &
-                                                     n_energy_points=this%n_energy_points, &
-                                                     energy_range=[this%dos_energy_min, this%dos_energy_max], &
-                                                     method=trim(this%dos_method), &
-                                                     gaussian_sigma=this%gaussian_sigma, &
-                                                     temperature=this%temperature, &
                                                      fermi_level=energy_obj%fermi, &
-                                                     total_electrons=this%total_electrons, &
-                                                     auto_find_fermi=this%auto_find_fermi, &
                                                      output_file='density_of_states.dat')
 
       call g_logger%info('post_processing_density_of_states: DOS calculation completed', __FILE__, __LINE__)
@@ -1527,18 +1562,26 @@ contains
       this%pre_processing = 'none'
       this%processing = 'none'
       this%post_processing = 'none'
-      ! DOS defaults
+      ! K-space defaults (matching reciprocal module defaults)
+      this%nk1 = 8
+      this%nk2 = 8
+      this%nk3 = 8
+      this%k_offset_x = 0.0_rp
+      this%k_offset_y = 0.0_rp
+      this%k_offset_z = 0.0_rp
+      this%use_symmetry_reduction = .false.
+      this%use_time_reversal = .true.
+      this%use_shift = .false.
+      ! DOS defaults (matching reciprocal module defaults)
       this%dos_method = 'gaussian'
       this%gaussian_sigma = 0.1_rp
       this%n_energy_points = 1000
       this%dos_energy_min = -10.0_rp
       this%dos_energy_max = 10.0_rp
       this%temperature = 300.0_rp
-      this%nk1 = 8
-      this%nk2 = 8
-      this%nk3 = 8
-      this%total_electrons = 8.0_rp  ! Default for Fe (6 valence + 2 from magnetic moment)
-      this%auto_find_fermi = .false.
+      this%total_electrons = 0.0_rp  ! 0 = auto-detect from valence
+      this%auto_find_fermi = .true.
+      this%suppress_internal_logs = .false.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
