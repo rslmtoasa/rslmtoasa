@@ -95,7 +95,9 @@ module hamiltonian_mod
       procedure :: build_from_paoflow_opt
       procedure :: build_realspace_velocity_operators
       procedure :: build_realspace_spin_operators
+      procedure :: build_realspace_spin_torque_operators
       procedure :: build_realspace_orbital_velocity_operators
+      procedure :: build_realspace_orbital_torque_operators
       procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
@@ -609,7 +611,8 @@ contains
    
          ! For each neighbor block 
          do m = 2, nr
-   
+
+            tmp1 = 0.0d0; tmp2 = 0.0d0
             ! tmp1 = js_a * v_a(:,:,m,ntype)
             tmp1 = matmul(S_op, this%v_a(:, :, m, ntype))
    
@@ -639,6 +642,224 @@ contains
    
       deallocate(tmp1, tmp2)
    end subroutine build_realspace_spin_operators
+
+   !**************************************************************************
+   !> @brief Build **spin-torque operators** (\f$\boldsymbol{\tau}\f$) by taking the
+   !>        commutator of the spin operator (\f$S_\beta\f$) with the Hamiltonian.
+   !>
+   !> This subroutine constructs layer- or orbital-resolved spin-torque operators
+   !> that couple a spin operator (\f$S_\beta\f$) to the system Hamiltonian
+   !> (\f$H\f$) within the same spin–orbital basis.  For torkance calculations one
+   !> uses the commutator
+   !>
+   !> \f[
+   !>   \boxed{\;
+   !>     \tau_\beta
+   !>        = \frac{1}{i\hbar}\bigl[\,S_\beta,\,H\,\bigr]
+   !>        = \frac{1}{i\hbar}
+   !>          \Bigl(
+   !>            S_\beta\,H \;-\; H\,S_\beta
+   !>          \Bigr)
+   !>   \;}
+   !> \f]
+   !>
+   !> The resulting blocks are stored in \f$\tau_\beta\f$.  These operators enter
+   !> linear-response formulas for the (field-like / damping-like) torkance
+   !> tensor.
+   !>
+   !> @param[inout] this
+   !>   A derived type representing the Hamiltonian system.  It contains:
+   !>   - The Hamiltonian blocks \f$\hat{H}\f$ (e.g.\ \f$this\%\text{H}\f$),
+   !>   - The spin operator(s) \f$S_x, S_y, S_z\f$,
+   !>   - The data structure to hold the new spin-torque operator \f$\tau_\beta\f$.
+   !>
+   !> @details
+   !> - The subroutine loops over the same blocks (\f$\mathrm{dim}\!\times\!\mathrm{dim}\f$)
+   !>   used for the Hamiltonian.  For each block it evaluates
+   !>   \f$S_\beta H - H S_\beta\f$ and multiplies by \f$(i/\hbar)\f$.
+   !> - One repeats this for every spin component (\f$S_x, S_y, S_z\f$) to build
+   !>   the full set of spin-torque arrays required by Chebyshev or Kubo routines.
+   !>
+   !> @warning
+   !>   - The spin operators \f$S_\beta\f$ and Hamiltonian blocks \f$H\f$ must share
+   !>     the **same** spin–orbital dimension and ordering; any mismatch yields an
+   !>     incorrect commutator.
+   !>   - Check that the factor \f$1/\hbar\f$ is consistent with units used
+   !>     elsewhere (set \f$\hbar\!\equiv\!1\f$ if that is your convention).
+   !>
+   !**************************************************************************
+   subroutine build_realspace_spin_torque_operators(this)
+      class(hamiltonian), intent(inout) :: this
+
+      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
+      integer :: hblocksize
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
+      complex(rp), dimension(18, 18) :: locham
+
+      ! Derive dimension from your velocity array:
+      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+
+      ! Allocate temporary matrices for local block multiplication
+      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
+
+      ! Initialize the spin–velocity array to zero
+      this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      select case(this%js_alpha)
+
+      case('z')
+         S_op = S_z
+      case('x')
+         S_op = S_x
+      case('y')
+         S_op = S_y
+      end select
+
+      !write(*,'(18f10.6)') real(S_op)
+      ! Loop over each atom type
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+          
+         ! For each neighbor block 
+         do m = 1, nr
+
+            if (m==1) then
+              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
+            else
+              locham(:,:) = this%ee(:, :, m, ntype)
+            end if
+
+            tmp1 = 0.0d0; tmp2 = 0.0d0
+            ! tmp1 = js_a * ee(:,:,m,ntype)
+            tmp1 = matmul(S_op, locham(:, :))
+
+            ! tmp2 = ee(:,:,m,ntype) * js_a
+            tmp2 = matmul(locham(:, :), S_op)
+
+            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+            this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+            !write(*,*) 'm=', m
+            !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
+            !write(*,*)
+            !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
+            if (this%hoh) then
+
+               if (m==1) then
+                 locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
+               else
+                 locham(:,:) = this%eeo(:, :, m, ntype)
+               end if
+
+               tmp1 = 0.0d0; tmp2 = 0.0d0
+               ! tmp1 = js_a * eeo(:,:,m,ntype)
+               tmp1 = matmul(S_op, locham(:, :))
+
+               ! tmp2 = ee(:,:,m,ntype) * js_a
+               tmp2 = matmul(locham(:, :), S_op)
+
+               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+               this%jso_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+            end if
+
+         end do  ! m
+      end do  ! ntype
+
+      deallocate(tmp1, tmp2)
+   end subroutine build_realspace_spin_torque_operators
+
+
+   subroutine build_realspace_orbital_torque_operators(this)
+      class(hamiltonian), intent(inout) :: this
+
+      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
+      integer :: hblocksize
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)  ! Temp matrices for partial products
+      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(18, 18) :: locham
+
+      ! Derive dimension from your velocity array:
+      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+
+      ! Allocate temporary matrices for local block multiplication
+      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
+
+      ! Initialize the spin–velocity array to zero
+      this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      ! Transforming them into the spherical harmonics coordinates
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
+      select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
+      case ('x')
+         L_op(1:9, 1:9) = mLx(:, :)
+         L_op(10:18, 10:18) = mLx(:, :)
+      case ('y')
+         L_op(1:9, 1:9) = mLy(:, :)
+         L_op(10:18, 10:18) = mLy(:, :)
+      case ('z')
+         L_op(1:9, 1:9) = mLz(:, :)
+         L_op(10:18, 10:18) = mLz(:, :)
+      end select
+
+      ! Loop over each atom type
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+
+         ! For each neighbor block 
+         do m = 1, nr
+
+            if (m==1) then
+              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype)
+            else
+              locham(:,:) = this%ee(:, :, m, ntype)
+            end if
+
+            tmp1 = 0.0d0; tmp2 = 0.0d0
+            ! tmp1 = jl_a * ee(:,:,m,ntype)
+            tmp1 = matmul(L_op, locham(:, :))
+
+            ! tmp2 = ee(:,:,m,ntype) * jl_a
+            tmp2 = matmul(locham(:, :), L_op)
+
+            ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+            this%jl_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+            if (this%hoh) then
+
+               if (m==1) then
+                 locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
+               else
+                 locham(:,:) = this%eeo(:, :, m, ntype)
+               end if
+
+               tmp1 = 0.0d0; tmp2 = 0.0d0
+               ! tmp1 = jl_a * eeo(:,:,m,ntype)
+               tmp1 = matmul(L_op, locham(:, :))
+
+               ! tmp2 = ee(:,:,m,ntype) * jl_a
+               tmp2 = matmul(locham(:, :), L_op)
+
+               ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+               this%jlo_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+            end if
+
+         end do  ! m
+      end do  ! ntype
+
+      deallocate(tmp1, tmp2)
+   end subroutine build_realspace_orbital_torque_operators
+
 
    !**************************************************************************
    !> @brief Build real-space velocity operators.
