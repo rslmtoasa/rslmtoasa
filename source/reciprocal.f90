@@ -175,12 +175,21 @@ module reciprocal_mod
       !> Use symmetry reduction for k-mesh
       logical :: use_symmetry_reduction
 
+      ! Real-space neighbor vectors per atom type (for multi-site H_k)
+      !> Neighbor vectors for each atom type [3, nn_max, ntype]
+      !> These are the R vectors for Fourier transform H(k) = Σ_R H(R) e^(ik·R)
+      !> Indexed properly for multi-site systems: ham_vec_type(coord, neighbor, atom_type)
+      real(rp), dimension(:, :, :), allocatable :: ham_vec_type
+      !> Neighbor vectors in fractional coordinates [3, nn_max, ntype]
+      real(rp), dimension(:, :, :), allocatable :: ham_vec_type_direct
+
    contains
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
       procedure :: build_kspace_hamiltonian
       procedure :: build_kspace_hamiltonian_so
       procedure :: build_total_hamiltonian
+      procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
       procedure :: set_basis_sizes
@@ -281,6 +290,8 @@ contains
       if (allocated(this%band_moments)) call g_safe_alloc%deallocate('reciprocal.band_moments', this%band_moments)
       if (allocated(this%tetrahedra)) call g_safe_alloc%deallocate('reciprocal.tetrahedra', this%tetrahedra)
       if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
+      if (allocated(this%ham_vec_type)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type', this%ham_vec_type)
+      if (allocated(this%ham_vec_type_direct)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct)
 #else
       if (allocated(this%k_points)) deallocate (this%k_points)
       if (allocated(this%k_weights)) deallocate (this%k_weights)
@@ -301,6 +312,8 @@ contains
       if (allocated(this%band_moments)) deallocate (this%band_moments)
       if (allocated(this%tetrahedra)) deallocate (this%tetrahedra)
       if (allocated(this%tetrahedron_volumes)) deallocate (this%tetrahedron_volumes)
+      if (allocated(this%ham_vec_type)) deallocate (this%ham_vec_type)
+      if (allocated(this%ham_vec_type_direct)) deallocate (this%ham_vec_type_direct)
 #endif
    end subroutine destructor
 
@@ -617,6 +630,108 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Build neighbor vectors for each atom type using clusba
+   !> This provides proper per-atom neighbor vectors for multi-site H_k generation
+   !> Following the pattern from hamiltonian.f90 chbar_nc routine
+   !---------------------------------------------------------------------------
+   subroutine build_neighbor_vectors(this)
+      class(reciprocal), intent(inout) :: this
+      ! Local variables
+      integer :: ntype, ia, nr, nn_max_loc, kk, i
+      real(rp) :: r2
+      real(rp), dimension(3, this%lattice%kk) :: cralat
+      real(rp), dimension(:, :), allocatable :: ham_vec
+
+      call g_logger%info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
+
+      r2 = this%lattice%r2
+      kk = this%lattice%kk
+      cralat(1:3, 1:kk) = this%lattice%cr(1:3, 1:kk) * this%lattice%alat
+
+      ! Allocate storage for all atom types
+      ! Use nn_max as maximum neighbors
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('reciprocal.ham_vec_type', this%ham_vec_type, &
+                                 [3, this%lattice%nn_max, this%lattice%ntype])
+      call g_safe_alloc%allocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct, &
+                                 [3, this%lattice%nn_max, this%lattice%ntype])
+#else
+      if (allocated(this%ham_vec_type)) deallocate(this%ham_vec_type)
+      allocate(this%ham_vec_type(3, this%lattice%nn_max, this%lattice%ntype))
+      if (allocated(this%ham_vec_type_direct)) deallocate(this%ham_vec_type_direct)
+      allocate(this%ham_vec_type_direct(3, this%lattice%nn_max, this%lattice%ntype))
+#endif
+
+      this%ham_vec_type = 0.0_rp
+      this%ham_vec_type_direct = 0.0_rp
+
+      ! Build neighbor vectors for each atom type
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)
+         nn_max_loc = nr
+
+         ! Allocate temporary ham_vec for this atom type
+         allocate(ham_vec(3, nr))
+         ham_vec = 0.0_rp
+
+         ! Call clusba to get neighbor vectors for this atom
+         call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
+
+         ! Debug: Check what clusba returned
+         if (.not. this%suppress_internal_logs .and. ntype == 1) then
+            write(*, '(A,I0,A,I0)') 'DEBUG: After clusba for type ', ntype, ', got nn_max_loc = ', nn_max_loc
+            write(*, '(A)') 'DEBUG: First 5 ham_vec from clusba output:'
+            do i = 1, min(5, nn_max_loc)
+               write(*, '(A,I3,A,3F12.6)') '  ham_vec[', i, '] = ', ham_vec(1:3, i)
+            end do
+         end if
+
+         ! Store in type-indexed array
+         this%ham_vec_type(1:3, 1:nr, ntype) = ham_vec(1:3, 1:nr)
+
+         ! Convert to fractional coordinates
+         if (this%lattice%a_cart_inv_ready) then
+            ! Use pre-computed inverse
+            do nn_max_loc = 1, nr
+               this%ham_vec_type_direct(1:3, nn_max_loc, ntype) = &
+                  matmul(this%lattice%a_cart_inv, this%ham_vec_type(1:3, nn_max_loc, ntype))
+            end do
+         else
+            ! Use helper function
+            do nn_max_loc = 1, nr
+               call cartesian_to_fractional(this%ham_vec_type(1:3, nn_max_loc, ntype), &
+                                          this%ham_vec_type_direct(1:3, nn_max_loc, ntype), &
+                                          this%lattice%a, this%lattice%alat)
+            end do
+         end if
+
+         deallocate(ham_vec)
+
+         call g_logger%info('reciprocal%build_neighbor_vectors: Built ' // trim(int2str(nr)) // &
+                          ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
+         
+         ! Debug: print first few neighbor vectors for verification
+         if (.not. this%suppress_internal_logs .and. ntype == 1) then
+            write(*, '(A)') '=== Neighbor vectors for type 1 (Cartesian) ==='
+            do nn_max_loc = 1, min(5, nr)
+               write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
+                  this%ham_vec_type(1:3, nn_max_loc, ntype)
+            end do
+            write(*, '(A)') '=== Neighbor vectors for type 1 (Fractional) ==='
+            do nn_max_loc = 1, min(5, nr)
+               write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
+                  this%ham_vec_type_direct(1:3, nn_max_loc, ntype)
+            end do
+         end if
+      end do
+
+      call g_logger%info('reciprocal%build_neighbor_vectors: Completed neighbor vector build for all types', __FILE__, __LINE__)
+   end subroutine build_neighbor_vectors
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Calculate structure factors for Fourier transform
    !---------------------------------------------------------------------------
    subroutine calculate_structure_factors(this, k_vec, ntype, structure_factors)
@@ -628,17 +743,17 @@ contains
       integer :: ineigh, ia, nr
       real(rp) :: k_dot_r
       real(rp), dimension(3) :: r_vec
-   logical :: debug_this_k
+      logical :: debug_this_k
 
-   ia = this%lattice%atlist(ntype)
-   nr = this%lattice%nn(ia, 1)  ! Number of neighbors
+      ia = this%lattice%atlist(ntype)
+      nr = this%lattice%nn(ia, 1)  ! Number of neighbors
 
-   ! Only enable debug_this_k when user allows internal logs and for first atom type
-   debug_this_k = .false.
-   if (.not. this%suppress_internal_logs) debug_this_k = (ntype == 1)
+      ! Only enable debug_this_k when user allows internal logs and for first atom type
+      debug_this_k = .false.
+      if (.not. this%suppress_internal_logs) debug_this_k = (ntype == 1)
 
-   ! Calculate structure factors exp(i*k·R) for each neighbor
-   do ineigh = 1, min(nr, size(structure_factors))
+      ! Calculate structure factors exp(i*k·R) for each neighbor
+      do ineigh = 1, min(nr, size(structure_factors))
          if (ineigh == 1) then
             ! On-site term (R = 0)
             structure_factors(ineigh) = cmplx(1.0_rp, 0.0_rp, rp)
@@ -646,40 +761,37 @@ contains
                call g_logger%info('fourier_transform_hamiltonian: On-site term (R=0)', __FILE__, __LINE__)
             end if
          else
-            ! Off-site terms - get neighbor vector from lattice structure
+            ! Off-site terms - get neighbor vector from type-indexed arrays
             ! Use fractional coordinates for both k and R for clean phase calculation
             ! Phase = exp(i * 2π * k_frac · R_frac)
-            if (allocated(this%lattice%sbarvec_direct) .and. ineigh <= size(this%lattice%sbarvec_direct, 2)) then
-               r_vec(1) = this%lattice%sbarvec_direct(1, ineigh)
-               r_vec(2) = this%lattice%sbarvec_direct(2, ineigh)
-               r_vec(3) = this%lattice%sbarvec_direct(3, ineigh)
+            if (allocated(this%ham_vec_type_direct)) then
+               ! Use the proper per-atom-type neighbor vectors (fractional)
+               r_vec(1:3) = this%ham_vec_type_direct(1:3, ineigh, ntype)
                if (debug_this_k) then
-                  call g_logger%info('fourier_transform_hamiltonian: Using sbarvec_direct (fractional coords)', __FILE__, __LINE__)
+                  call g_logger%info('fourier_transform_hamiltonian: Using ham_vec_type_direct (fractional, type-indexed)', __FILE__, __LINE__)
                end if
-            else if (allocated(this%lattice%sbarvec) .and. ineigh <= size(this%lattice%sbarvec, 2)) then
-               ! Fallback: Convert Cartesian sbarvec to fractional if sbarvec_direct not available
-               ! This shouldn't happen in k-space workflows but keep for safety
-               call g_logger%warning('fourier_transform_hamiltonian: sbarvec_direct not allocated, using sbarvec (Cartesian)', __FILE__, __LINE__)
-               r_vec(1) = this%lattice%sbarvec(1, ineigh)
-               r_vec(2) = this%lattice%sbarvec(2, ineigh)
-               r_vec(3) = this%lattice%sbarvec(3, ineigh)
+            else if (allocated(this%ham_vec_type)) then
+               ! Fallback: Use Cartesian and convert
+               r_vec(1:3) = this%ham_vec_type(1:3, ineigh, ntype)
                ! Convert to fractional coordinates
                if (this%lattice%a_cart_inv_ready) then
                   r_vec = matmul(this%lattice%a_cart_inv, r_vec)
+               else
+                  call cartesian_to_fractional(r_vec, r_vec, this%lattice%a, this%lattice%alat)
+               end if
+               if (debug_this_k) then
+                  call g_logger%warning('fourier_transform_hamiltonian: Using ham_vec_type (Cartesian, type-indexed)', __FILE__, __LINE__)
                end if
             else
-               ! Fallback to zero vector if no sbarvec available
+               ! ERROR: neighbor vectors not built!
+               call g_logger%error('fourier_transform_hamiltonian: ham_vec_type not allocated! Call build_neighbor_vectors first.', __FILE__, __LINE__)
                r_vec = 0.0_rp
-               if (debug_this_k) then
-                  call g_logger%info('fourier_transform_hamiltonian: WARNING - Using zero fallback vector!', __FILE__, __LINE__)
-               end if
             end if
+
             ! Phase factor: exp(i * 2π * k_frac · R_frac)
             ! k_vec is in fractional coordinates (dimensionless)
             ! r_vec is in fractional coordinates (dimensionless)
             ! Phase = 2π * k_frac · r_frac (need 2π factor for fractional coords)
-            ! print *,'(a, 3f12.6 , 3f10.5)', 'k: ', k_vec, r_vec 
-            !k_dot_r = dot_product(k_vec, r_vec)
             k_dot_r = 2.0_rp * pi * dot_product(k_vec, r_vec)
             structure_factors(ineigh) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
          end if
@@ -713,21 +825,12 @@ contains
       if (.not. this%suppress_internal_logs) then
          if (debug_this_k) then
             call g_logger%info('fourier_transform_hamiltonian: Debug output for k-vector', __FILE__, __LINE__)
-            if (allocated(this%lattice%sbarvec)) then
-               call g_logger%info('fourier_transform_hamiltonian: sbarvec is allocated', __FILE__, __LINE__)
+            if (allocated(this%ham_vec_type)) then
+               call g_logger%info('fourier_transform_hamiltonian: ham_vec_type is allocated (type-indexed neighbors)', __FILE__, __LINE__)
             else
-               call g_logger%info('fourier_transform_hamiltonian: WARNING - sbarvec is NOT allocated!', __FILE__, __LINE__)
+               call g_logger%warning('fourier_transform_hamiltonian: WARNING - ham_vec_type is NOT allocated!', __FILE__, __LINE__)
             end if
          end if
-
-         ! Add simple check for ANY call during band structure calculation
-         ! if (ntype == 1) then
-         !    if (allocated(this%lattice%sbarvec)) then
-         !       call g_logger%info('fourier_transform_hamiltonian: sbarvec allocated for band structure', __FILE__, __LINE__)
-         !    else
-         !       call g_logger%info('fourier_transform_hamiltonian: WARNING - sbarvec NOT allocated for band structure!', __FILE__, __LINE__)
-         !    end if
-         ! end if
       end if
 
       ! Allocate structure factors for this k-point (thread-safe now)
@@ -808,6 +911,9 @@ contains
       call g_logger%info('reciprocal%build_kspace_hamiltonian: Starting Fourier transform of real-space Hamiltonian', __FILE__, __LINE__)
       write(debug_msg, '(A,I0,A,I0,A)') 'build_kspace_hamiltonian: Building for ', this%nk_total, ' k-points and ', this%lattice%ntype, ' atom types'
       call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+
+      ! Build neighbor vectors for each atom type (required for multi-site H_k)
+      call this%build_neighbor_vectors()
 
       ! Allocate k-space Hamiltonian
 #ifdef USE_SAFE_ALLOC

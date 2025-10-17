@@ -40,6 +40,9 @@ module lattice_mod
 
    private
 
+   ! Public procedures
+   public :: cartesian_to_fractional
+
    !> Module´s main structure
    type, public :: lattice
       !> Charge
@@ -2328,6 +2331,12 @@ contains
       !print *, 'Clusba says ii, n:', ii, n, shape(sbarvec)
       ! if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA in DBAR1."
       n = ii
+      
+      ! Copy computed neighbor vectors to output parameter
+      ! sbarvec should contain the Cartesian neighbor vectors
+      do i = 1, min(ii, size(sbarvec, 2))
+         sbarvec(1:3, i) = this%sbarvec(1:3, i)
+      end do
    end subroutine clusba
 
    !---------------------------------------------------------------------------
