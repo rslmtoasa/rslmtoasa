@@ -41,6 +41,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${fortran_output_directory})
 ##############################################################################################
 option(ENABLE_OPENMP "Use OpenMP for parallelization" ON)
 option(ENABLE_MPI "Use MPI for parallelization" OFF)
+option(ENABLE_LIBXC "Use libXC for exchange-correlation functionals" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
@@ -85,6 +86,31 @@ if(ENABLE_MPI)
         set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DUSE_MPI")
     endif()
 endif(ENABLE_MPI)
+
+if(ENABLE_LIBXC)
+    # Find libXC using pkg-config (preferred method for portability)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBXC REQUIRED IMPORTED_TARGET libxc>=5.0)
+    pkg_check_modules(LIBXCF03 REQUIRED IMPORTED_TARGET libxcf03>=5.0)
+    
+    if(LIBXC_FOUND AND LIBXCF03_FOUND)
+        message(STATUS "libXC found via pkg-config")
+        message(STATUS "libXC version: ${LIBXC_VERSION}")
+        message(STATUS "libXC includes: ${LIBXC_INCLUDE_DIRS}")
+        message(STATUS "libXC libraries: ${LIBXC_LIBRARIES}")
+        message(STATUS "libXC library paths: ${LIBXC_LIBRARY_DIRS}")
+        message(STATUS "libXCF03 libraries: ${LIBXCF03_LIBRARIES}")
+        
+        # Set up compiler flags
+        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DHAVE_LIBXC")
+        
+        # Create aliases for cleaner linking
+        add_library(LibXC::LibXC ALIAS PkgConfig::LIBXC)
+        add_library(LibXC::LibXCF03 ALIAS PkgConfig::LIBXCF03)
+    else()
+        message(FATAL_ERROR "libXC or libXCF03 not found via pkg-config. Please install libXC or set PKG_CONFIG_PATH.")
+    endif()
+endif(ENABLE_LIBXC)
 
 find_package(BLAS REQUIRED)
 if(BLAS_FOUND)
@@ -162,14 +188,23 @@ add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
 add_subdirectory(${SRC})
 
 # Linking with Libraries
+set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+
+# Add libXC libraries if enabled
+if(ENABLE_LIBXC AND LIBXC_FOUND)
+    list(APPEND COMMON_LIBRARIES PkgConfig::LIBXC PkgConfig::LIBXCF03)
+    # Add include directories to the library target for Fortran modules
+    target_include_directories(${PROJECT_NAME} PRIVATE ${LIBXC_INCLUDE_DIRS})
+endif()
+
 if(ENABLE_OPENMP AND ENABLE_MPI AND OpenMP_Fortran_FOUND AND MPI_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} ${MPI_Fortran_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} ${MPI_Fortran_LIBRARIES} OpenMP::OpenMP_Fortran)
 elseif(ENABLE_OPENMP AND OpenMP_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} OpenMP::OpenMP_Fortran)
 elseif(ENABLE_MPI AND MPI_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} ${MPI_Fortran_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES} ${MPI_Fortran_LIBRARIES})
 else()
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${COMMON_LIBRARIES})
 endif()
 
 ##############################################################################################
@@ -179,6 +214,7 @@ message(STATUS "--------Summary of compiler options---------")
 message(STATUS "| Compiler ID : ${CMAKE_Fortran_COMPILER_ID}")
 message(STATUS "| OpenMP      : ${ENABLE_OPENMP}")
 message(STATUS "| MPI         : ${ENABLE_MPI}")
+message(STATUS "| libXC       : ${ENABLE_LIBXC}")
 message(STATUS "--------------------------------------------")
 
 ##############################################################################################
@@ -273,4 +309,3 @@ if(WIN32)
    endif()
 
 include(CPack)
-
