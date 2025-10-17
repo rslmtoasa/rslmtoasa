@@ -223,6 +223,8 @@ module lattice_mod
       complex(rp), dimension(:, :, :, :), allocatable :: sbar
       !> Vectors in the structure constant
       real(rp), dimension(:, :), allocatable :: sbarvec
+      !> Vectors in direct coordinates (fractional) for spglib compatibility
+      real(rp), dimension(:, :), allocatable :: sbarvec_direct
       ! Variables to build clust for bulk calculation
 
       !> TODO
@@ -235,6 +237,10 @@ module lattice_mod
       !>
       !> Primitive vectors in units of lattice parameter \ref alat
       real(rp), dimension(3, 3) :: a
+   !> Inverse of the cartesian lattice matrix (a * alat) precomputed to speed up
+   !> conversions from cartesian to fractional coordinates
+   real(rp), dimension(3, 3) :: a_cart_inv
+   logical :: a_cart_inv_ready
       !> Variables to handle periodic boundary conditions
       !> 
       !> Variables to handle periodic boundary conditions
@@ -409,6 +415,7 @@ contains
       if (allocated(this%nn)) call g_safe_alloc%deallocate('lattice.nn', this%nn)
       if (allocated(this%sbar)) call g_safe_alloc%deallocate('lattice.sbar', this%sbar)
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
+      if (allocated(this%sbarvec_direct)) call g_safe_alloc%deallocate('lattice.sbarvec_direct', this%sbarvec_direct)
       if (allocated(this%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', this%ijpair)
       if (allocated(this%ijktrio)) call g_safe_alloc%deallocate('lattice.ijktrio', this%ijktrio)
       if (allocated(this%natoms_layer)) call g_safe_alloc%deallocate('lattice.natoms_layer', this%natoms_layer)
@@ -435,6 +442,7 @@ contains
       if (allocated(this%nn)) deallocate (this%nn)
       if (allocated(this%sbar)) deallocate (this%sbar)
       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
+      if (allocated(this%sbarvec_direct)) deallocate (this%sbarvec_direct)
       if (allocated(this%ijpair)) deallocate (this%ijpair)
       if (allocated(this%ijktrio)) deallocate (this%ijktrio)
       if (allocated(this%natoms_layer)) deallocate (this%natoms_layer)
@@ -921,6 +929,8 @@ contains
          this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
          write (*, *) 'wav', this%wav
       end if
+      ! Precompute inverse of cartesian lattice matrix (this%a * this%alat)
+      call compute_cartesian_inverse(this)
       if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
    end subroutine build_data
 
@@ -2271,16 +2281,20 @@ contains
       real(rp) :: s1
       real(rp), dimension(3) :: dum
 
-! #ifdef USE_SAFE_ALLOC
-!       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
-!       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
-! #else
-!       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
-!       allocate (this%sbarvec(3, this%kk))
-! #endif
+#ifdef USE_SAFE_ALLOC
+      if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
+      call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
+      if (allocated(this%sbarvec_direct)) call g_safe_alloc%deallocate('lattice.sbarvec_direct', this%sbarvec_direct)
+      call g_safe_alloc%allocate('lattice.sbarvec_direct', this%sbarvec_direct, (/3, this%kk/))
+#else
+      if (allocated(this%sbarvec)) deallocate (this%sbarvec)
+      allocate (this%sbarvec(3, this%kk))
+      if (allocated(this%sbarvec_direct)) deallocate (this%sbarvec_direct)
+      allocate (this%sbarvec_direct(3, this%kk))
+#endif
 
-!      this%sbarvec(:, :) = 0.0d0
-      sbarvec(:, :) = 0.0d0
+      this%sbarvec(:, :) = 0.0d0
+      this%sbarvec_direct(:, :) = 0.0d0
 
       ii = 1
       do k = 1, 3
@@ -2295,12 +2309,18 @@ contains
          end do
          if (s1 < r2 .and. s1 > 0.0001) then
             ii = ii + 1
-            ! this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            ! this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            ! this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
-            sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
+            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
+            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            ! Store direct coordinate version (fractional coordinates)
+            ! Convert cartesian vector to fractional coordinates using lattice vectors
+            if (this%a_cart_inv_ready) then
+               this%sbarvec_direct(1, ii) = this%a_cart_inv(1, 1)*this%sbarvec(1, ii) + this%a_cart_inv(1, 2)*this%sbarvec(2, ii) + this%a_cart_inv(1, 3)*this%sbarvec(3, ii)
+               this%sbarvec_direct(2, ii) = this%a_cart_inv(2, 1)*this%sbarvec(1, ii) + this%a_cart_inv(2, 2)*this%sbarvec(2, ii) + this%a_cart_inv(2, 3)*this%sbarvec(3, ii)
+               this%sbarvec_direct(3, ii) = this%a_cart_inv(3, 1)*this%sbarvec(1, ii) + this%a_cart_inv(3, 2)*this%sbarvec(2, ii) + this%a_cart_inv(3, 3)*this%sbarvec(3, ii)
+            else
+               call cartesian_to_fractional(this%sbarvec(:, ii), this%sbarvec_direct(:, ii), this%a, this%alat)
+            end if
          end if
      !if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
      !"in DBAR1."
@@ -3712,5 +3732,78 @@ contains
          call nml%generate_namelist()
       end if
    end subroutine print_state_formatted
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Convert cartesian coordinates to fractional coordinates
+   !---------------------------------------------------------------------------
+   subroutine cartesian_to_fractional(cart_vec, frac_vec, lattice_vectors, alat)
+      real(rp), dimension(3), intent(in) :: cart_vec
+      real(rp), dimension(3), intent(out) :: frac_vec
+      real(rp), dimension(3, 3), intent(in) :: lattice_vectors
+      real(rp), intent(in) :: alat
+      ! Try to use precomputed inverse if available (lattice module stores it in module variable)
+      ! Note: We can't directly access 'this' here, so we expect callers that have access to the lattice
+      ! object to call compute_cartesian_inverse() once after setting the lattice. As a fallback we
+      ! compute the inverse here.
+      real(rp), dimension(3, 3) :: lattice_matrix, inv_matrix
+      real(rp) :: det
+      integer :: i
+
+      ! Build lattice matrix (actual lattice vectors in cartesian coordinates)
+      do i = 1, 3
+         lattice_matrix(:, i) = lattice_vectors(:, i) * alat
+      end do
+
+      ! Compute inverse on-the-fly (fallback)
+      det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
+          - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
+          + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
+
+      inv_matrix(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
+      inv_matrix(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
+      inv_matrix(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
+      inv_matrix(2, 1) = (lattice_matrix(2, 3) * lattice_matrix(3, 1) - lattice_matrix(2, 1) * lattice_matrix(3, 3)) / det
+      inv_matrix(2, 2) = (lattice_matrix(1, 1) * lattice_matrix(3, 3) - lattice_matrix(1, 3) * lattice_matrix(3, 1)) / det
+      inv_matrix(2, 3) = (lattice_matrix(1, 3) * lattice_matrix(2, 1) - lattice_matrix(1, 1) * lattice_matrix(2, 3)) / det
+      inv_matrix(3, 1) = (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1)) / det
+      inv_matrix(3, 2) = (lattice_matrix(1, 2) * lattice_matrix(3, 1) - lattice_matrix(1, 1) * lattice_matrix(3, 2)) / det
+      inv_matrix(3, 3) = (lattice_matrix(1, 1) * lattice_matrix(2, 2) - lattice_matrix(1, 2) * lattice_matrix(2, 1)) / det
+
+      ! Convert cartesian to fractional: frac_vec = inv_matrix * cart_vec
+      frac_vec(1) = inv_matrix(1, 1) * cart_vec(1) + inv_matrix(1, 2) * cart_vec(2) + inv_matrix(1, 3) * cart_vec(3)
+      frac_vec(2) = inv_matrix(2, 1) * cart_vec(1) + inv_matrix(2, 2) * cart_vec(2) + inv_matrix(2, 3) * cart_vec(3)
+      frac_vec(3) = inv_matrix(3, 1) * cart_vec(1) + inv_matrix(3, 2) * cart_vec(2) + inv_matrix(3, 3) * cart_vec(3)
+   end subroutine cartesian_to_fractional
+
+   !-----------------------------------------------------------------------
+   !> Compute and store inverse of cartesian lattice matrix (this%a * this%alat)
+   subroutine compute_cartesian_inverse(this)
+      class(lattice), intent(inout) :: this
+      real(rp), dimension(3,3) :: lattice_matrix
+      real(rp) :: det
+
+      integer :: i
+      do i = 1, 3
+         lattice_matrix(:, i) = this%a(:, i) * this%alat
+      end do
+
+      det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
+          - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
+          + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
+
+      this%a_cart_inv(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
+      this%a_cart_inv(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
+      this%a_cart_inv(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
+      this%a_cart_inv(2, 1) = (lattice_matrix(2, 3) * lattice_matrix(3, 1) - lattice_matrix(2, 1) * lattice_matrix(3, 3)) / det
+      this%a_cart_inv(2, 2) = (lattice_matrix(1, 1) * lattice_matrix(3, 3) - lattice_matrix(1, 3) * lattice_matrix(3, 1)) / det
+      this%a_cart_inv(2, 3) = (lattice_matrix(1, 3) * lattice_matrix(2, 1) - lattice_matrix(1, 1) * lattice_matrix(2, 3)) / det
+      this%a_cart_inv(3, 1) = (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1)) / det
+      this%a_cart_inv(3, 2) = (lattice_matrix(1, 2) * lattice_matrix(3, 1) - lattice_matrix(1, 1) * lattice_matrix(3, 2)) / det
+      this%a_cart_inv(3, 3) = (lattice_matrix(1, 1) * lattice_matrix(2, 2) - lattice_matrix(1, 2) * lattice_matrix(2, 1)) / det
+
+      this%a_cart_inv_ready = .true.
+   end subroutine compute_cartesian_inverse
 
 end module lattice_mod

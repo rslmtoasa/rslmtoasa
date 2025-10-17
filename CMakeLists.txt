@@ -45,6 +45,7 @@ option(ENABLE_LIBXC "Use libXC for exchange-correlation functionals" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
+option(ENABLE_SPGLIB "Enable spglib for symmetry operations and k-path generation" ON)
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
@@ -86,6 +87,63 @@ if(ENABLE_MPI)
         set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DUSE_MPI")
     endif()
 endif(ENABLE_MPI)
+
+if(ENABLE_SPGLIB)
+    # Try to find spglib using pkg-config first
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(SPGLIB QUIET spglib)
+    endif()
+    
+    # If pkg-config didn't find it, try manual search
+    if(NOT SPGLIB_FOUND)
+        find_path(SPGLIB_INCLUDE_DIR
+            NAMES spglib.h
+            HINTS /usr/local/include /usr/include /opt/local/include
+            PATH_SUFFIXES spglib
+        )
+        
+        find_library(SPGLIB_LIBRARY
+            NAMES spglib symspg
+            HINTS /usr/local/lib /usr/lib /opt/local/lib
+        )
+        
+        if(SPGLIB_INCLUDE_DIR AND SPGLIB_LIBRARY)
+            set(SPGLIB_FOUND TRUE)
+            set(SPGLIB_LIBRARIES ${SPGLIB_LIBRARY})
+            set(SPGLIB_INCLUDE_DIRS ${SPGLIB_INCLUDE_DIR})
+        endif()
+    endif()
+    
+    if(SPGLIB_FOUND)
+    # If pkg-config reported specific library file variables (pkgcfg_lib_*), prefer those
+    # They typically contain full paths like /usr/local/lib/libsymspg.dylib
+    if(DEFINED pkgcfg_lib_SPGLIB_symspg)
+      set(SPGLIB_LIBRARIES ${pkgcfg_lib_SPGLIB_symspg})
+    endif()
+
+    # If SPGLIB_LDFLAGS contains -L flags, add them to the link directories so the linker finds the library
+    if(DEFINED SPGLIB_LDFLAGS)
+      string(REGEX MATCHALL "-L[^; ]+" _spglib_ldflags_list "${SPGLIB_LDFLAGS}")
+      foreach(_lf ${_spglib_ldflags_list})
+        string(SUBSTRING ${_lf} 2 -1 _libdir)
+        if(EXISTS ${_libdir})
+          list(APPEND SPGLIB_LIBRARY_DIRS ${_libdir})
+        endif()
+      endforeach()
+    endif()
+
+    message(STATUS "Found spglib: ${SPGLIB_LIBRARIES}")
+    add_definitions(-DUSE_SPGLIB)
+    include_directories(${SPGLIB_INCLUDE_DIRS})
+    if(SPGLIB_LIBRARY_DIRS)
+      link_directories(${SPGLIB_LIBRARY_DIRS})
+    endif()
+    else()
+        message(WARNING "spglib requested but not found. Install spglib or set ENABLE_SPGLIB=OFF")
+        set(ENABLE_SPGLIB OFF)
+    endif()
+endif(ENABLE_SPGLIB)
 
 if(ENABLE_LIBXC)
     # Find libXC using pkg-config (preferred method for portability)
@@ -188,6 +246,13 @@ add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
 add_subdirectory(${SRC})
 
 # Linking with Libraries
+set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+
+# Add spglib if enabled
+if(ENABLE_SPGLIB AND SPGLIB_FOUND)
+    list(APPEND COMMON_LIBRARIES ${SPGLIB_LIBRARIES})
+endif()
+
 set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 
 # Add libXC libraries if enabled

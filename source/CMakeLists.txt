@@ -26,13 +26,16 @@ add_library(${PROJECT_NAME} STATIC
     os.f90
     potential.f90
     precision.f90
+    reciprocal.f90
     recursion.f90
     report.f90
     safe_alloc.f90
     self.f90
+    spglib_interface.f90
     spin_dynamics.f90
     string.f90
     symbolic_atom.f90
+    symmetry.f90
     timer.f90
     xc.f90
 )

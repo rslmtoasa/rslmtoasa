@@ -159,6 +159,14 @@ module self_mod
       !> Default: false.
       logical :: freeze
 
+      !> Use k-space diagonalization instead of real-space recursion. Default: false.
+      !>
+      !> Use k-space diagonalization to calculate band moments for SCF instead of real-space recursion.
+      !> This is generally faster for small to medium systems and allows for band structure calculations.
+      !>
+      !> Default: false.
+      logical :: use_kspace
+
       !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
       !>
       !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
@@ -234,6 +242,9 @@ module self_mod
       procedure :: report
       procedure :: lmtst
       procedure :: is_converged
+      procedure :: run_kspace
+      procedure :: run_dos_kspace
+      procedure :: run_scf
       procedure, private :: atomsc
       procedure, private :: ftype
       procedure, private :: newrho
@@ -422,6 +433,7 @@ contains
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
       this%freeze = freeze
+      this%use_kspace = use_kspace
       this%rigid_band = rigid_band
       this%fix_soc = fix_soc
       this%soc_scale = soc_scale
@@ -484,6 +496,7 @@ contains
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
       this%freeze = .false.
+      this%use_kspace = .false.  ! Use recursion by default
       this%rigid_band = .false.
       this%fix_soc = .false. 
       this%soc_scale = 1.0d0
@@ -554,6 +567,7 @@ contains
       print *, ''
       print *, '[Constrain Variables]'
       print *, 'freeze     ', this%freeze
+      print *, 'use_kspace ', this%use_kspace
       print *, 'rigid_band ', this%rigid_band
       print *, 'rb         ', this%rb
       print *, ''
@@ -586,6 +600,7 @@ contains
       mix_all = this%mix_all
       magnetic_mixing = this%magnetic_mixing
       freeze = this%freeze
+      use_kspace = this%use_kspace
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
@@ -638,6 +653,7 @@ contains
       mix_all = this%mix_all
       magnetic_mixing = this%magnetic_mixing
       freeze = this%freeze
+      use_kspace = this%use_kspace
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
@@ -675,13 +691,23 @@ contains
    !> Performs the self-consistent calculation.
    !---------------------------------------------------------------------------
    subroutine run(this)
+      use reciprocal_mod
       class(self), intent(inout) :: this
       integer :: i, ia, niter
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
+      type(reciprocal) :: reciprocal_obj  ! K-space object for k-space SCF
    
+      ! Initialize reciprocal object if using k-space method
+      if (this%use_kspace) then
+         reciprocal_obj = reciprocal(this%hamiltonian)
+         if (rank == 0) call g_logger%info('Using k-space diagonalization for SCF', __FILE__, __LINE__)
+      else
+         if (rank == 0) call g_logger%info('Using real-space recursion for SCF', __FILE__, __LINE__)
+      end if
+
       !===========================================================================
       !                              BEGIN SCF LOOP
       !===========================================================================
@@ -689,9 +715,13 @@ contains
       do i = 1, this%nstep
          if (this%cold .and. i==1) call run_scf(this)
          !=========================================================================
-         !                        PERFORM THE RECURSION
+         !                PERFORM RECURSION OR K-SPACE HAMILTONIAN BUILD
          !=========================================================================
-         call run_recursion(this, i)
+         if (this%use_kspace) then
+            call run_kspace(this, i)
+         else
+            call run_recursion(this, i)
+         end if
    
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
@@ -712,9 +742,13 @@ contains
          end do
    
          !=========================================================================
-         !                  CALCULATE THE DENSITY OF STATES
+         !            CALCULATE DOS (RECURSION OR K-SPACE) AND MOMENTS
          !=========================================================================
-         call run_dos(this)
+         if (this%use_kspace) then
+            call run_dos_kspace(this, reciprocal_obj, i)
+         else
+            call run_dos(this)
+         end if
    
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
@@ -904,6 +938,232 @@ contains
       call g_timer%stop('atomic-scf')
    end subroutine run_scf
 
+   !=========================================================================
+   !                   RUN K-SPACE HAMILTONIAN BUILD
+   !=========================================================================
+   subroutine run_kspace(this, iter)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: iter
+      integer :: ia
+
+      if (rank == 0) call g_logger%info('Building k-space Hamiltonian at step '//int2str(iter), __FILE__, __LINE__)
+      call g_timer%start('kspace-hamiltonian')
+
+      ! Build potentials and Hamiltonians (same as recursion)
+      select case (this%control%calctype)
+      case ('B')
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('S')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+      case ('I')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         call this%hamiltonian%build_bulkham()
+         call this%hamiltonian%build_locham()
+      end select
+
+      call g_timer%stop('kspace-hamiltonian')
+   end subroutine run_kspace
+
+   !=========================================================================
+   !                   RUN K-SPACE DOS AND MOMENTS CALCULATION
+   !=========================================================================
+   subroutine run_dos_kspace(this, reciprocal_obj, iteration)
+      use reciprocal_mod
+      class(self), intent(inout) :: this
+      type(reciprocal), intent(inout) :: reciprocal_obj
+      integer, intent(in) :: iteration
+      integer :: ia, isite, iorb, ispin
+      real(rp) :: vmad
+
+      if (rank == 0) call g_logger%info('Calculating k-space DOS and band moments', __FILE__, __LINE__)
+      call g_timer%start('kspace-dos-moments')
+
+      ! Check compatibility: tetrahedron method requires full k-mesh (no symmetry reduction)
+      if (reciprocal_obj%use_symmetry_reduction .and. (trim(reciprocal_obj%dos_method) == 'tetrahedron' .or. trim(reciprocal_obj%dos_method) == 'blochl')) then
+         if (rank == 0) call g_logger%warning('Tetrahedron/Blochl DOS method requires full k-mesh. Switching to Gaussian method.', __FILE__, __LINE__)
+         reciprocal_obj%dos_method = 'gaussian'
+      end if
+
+      ! Generate k-point mesh (with optional symmetry reduction)
+      if (reciprocal_obj%use_symmetry_reduction) then
+         ! Determine if shift is needed (any non-zero k_offset component)
+         call reciprocal_obj%generate_reduced_kpoint_mesh(reciprocal_obj%nk_mesh, &
+            any(abs(reciprocal_obj%k_offset) > 1.0e-12_rp))
+      else
+         call reciprocal_obj%generate_mp_mesh()
+      end if
+
+      ! Build k-space Hamiltonian and diagonalize
+      call reciprocal_obj%build_kspace_hamiltonian()
+      if (reciprocal_obj%include_so) then
+         call reciprocal_obj%build_kspace_hamiltonian_so()
+      end if
+      call reciprocal_obj%build_total_hamiltonian()
+      call reciprocal_obj%diagonalize_hamiltonian(this%hamiltonian, .false.)
+
+      ! Output band structure data during SCF for debugging
+      ! Only output every few iterations to avoid too many files
+      if (rank == 0 .and. mod(iteration, 1) == 0) then
+         call output_scf_band_structure(reciprocal_obj, iteration)
+      end if
+
+      ! Setup DOS energy grid
+      call reciprocal_obj%setup_dos_energy_grid()
+
+      ! Calculate DOS using tetrahedron or Gaussian method
+      select case (reciprocal_obj%dos_method)
+      case ('tetrahedron')
+         call reciprocal_obj%setup_tetrahedra()
+         call reciprocal_obj%calculate_dos_tetrahedron()
+         call reciprocal_obj%project_dos_orbitals_tetrahedron()
+      case ('blochl')
+         call reciprocal_obj%setup_tetrahedra()
+         call reciprocal_obj%calculate_dos_blochl()
+         call reciprocal_obj%project_dos_orbitals_tetrahedron()
+      case ('gaussian')
+         call reciprocal_obj%calculate_dos_gaussian()
+         call reciprocal_obj%project_dos_orbitals_gaussian()
+      case default
+         if (rank == 0) call g_logger%warning('Unknown DOS method, using tetrahedron', __FILE__, __LINE__)
+         call reciprocal_obj%setup_tetrahedra()
+         call reciprocal_obj%calculate_dos_tetrahedron()
+         call reciprocal_obj%project_dos_orbitals_tetrahedron()
+      end select
+
+      ! Set Fermi level from energy object (initial guess)
+      reciprocal_obj%fermi_level = this%en%fermi
+
+      ! Calculate band moments (m0, m1, m2) from DOS
+      ! This will auto-find Fermi level if auto_find_fermi = .true.
+      call reciprocal_obj%calculate_band_moments()
+
+      ! Update Fermi energy in energy object from k-space calculation
+      ! This is CRITICAL for SCF convergence!
+      this%en%fermi = reciprocal_obj%fermi_level
+      if (rank == 0) call g_logger%info('K-space Fermi level = ' // trim(real2str(this%en%fermi, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
+
+      ! Print DOS summary (total and spin-resolved) for diagnostics each SCF iteration
+      if (rank == 0) then
+         call reciprocal_obj%print_total_and_spin_dos()
+      end if
+
+      !=========================================================================
+      !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
+      !=========================================================================
+      ! NOTE: In k-space mode, we don't use bands%calculate_magnetic_moments()
+      !       which is designed for recursion. The band moments are already
+      !       calculated by reciprocal%calculate_band_moments() above.
+      !       For magnetic systems, the magnetic moments will be handled
+      !       by the band_moments transfer below.
+
+      do ia = 1, this%lattice%nrec
+         this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
+      end do
+
+      call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+
+      do ia = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
+      end do
+
+      !=========================================================================
+      !     TRANSFER BAND MOMENTS FROM RECIPROCAL TO SYMBOLIC_ATOM
+      !     Apply LMTO-ASA convention: shift m^1 to 0 (subtract Madelung)
+      !     Match the transformation done in bands.f90 lines 491-494
+      !=========================================================================
+      
+      ! First, initialize ALL ql and gravity_center to zero for all sites
+      ! (This is important for unused orbitals like f-orbitals)
+      do isite = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql = 0.0_rp
+         this%symbolic_atom(this%lattice%nbulk + isite)%potential%gravity_center = 0.0_rp
+      end do
+      
+      ! Now fill in the calculated moments for s, p, d orbitals
+      do isite = 1, this%lattice%nrec
+         ! Get Madelung potential for this site
+         vmad = this%symbolic_atom(this%lattice%nbulk + isite)%potential%vmad
+
+         do iorb = 1, 3  ! s, p, d orbitals
+            ! K-space always calculates spin-resolved moments (2 spin channels)
+            ! even if control%nsp=1, so we must copy both spin channels
+            do ispin = 1, 2  ! Handle spin channels
+               ! Extract moments from reciprocal object
+               ! m0 = occupation (zeroth moment)
+               ! m1 = band center (first moment, normalized)
+               ! m2 = width (sqrt of variance, already relative to m1)
+               
+               ! Store occupation in ql(1)
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(1, iorb - 1, ispin) = &
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 1)
+
+               ! Store gravity center = band_center - vmad
+               ! This shifts m^1 to zero (LMTO-ASA convention)
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%gravity_center(iorb, ispin) = &
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 2) - vmad
+
+               ! Set ql(2,...) = 0 (convention for LMTO-ASA: m^1 = 0)
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(2, iorb - 1, ispin) = 0.0_rp
+               
+               ! Store second moment (variance relative to gravity center)
+               ! In bands.f90:494, recursion stores: smef - m1_raw^2/m0
+               ! which is the UNNORMALIZED variance: Var_unnorm = m0 * Var_norm
+               ! In reciprocal%band_moments(3) we store WIDTH = sqrt(Var_norm)
+               ! So: ql(3) = m0 * width^2 = m0 * band_moments(3)^2
+               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(3, iorb - 1, ispin) = &
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 1) * &  ! m0
+                  reciprocal_obj%band_moments(isite, iorb, ispin, 3)**2   ! width^2
+            end do
+         end do
+      end do
+
+      ! Debug: Check ql values before mixing
+      if (rank == 0) then
+         do isite = 1, this%lattice%nrec
+            call g_logger%info('DEBUG ql for site ' // trim(int2str(isite)) // ':', __FILE__, __LINE__)
+            do ispin = 1, 2
+               do iorb = 1, 3  ! s, p, d
+                  call g_logger%info('  ql(1,' // trim(int2str(iorb-1)) // ',' // trim(int2str(ispin)) // &
+                     ') = ' // trim(real2str(this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(1, iorb-1, ispin), '(ES15.8)')), &
+                     __FILE__, __LINE__)
+               end do
+            end do
+         end do
+      end if
+
+      ! Calculate pl moments from ql (same as recursion workflow)
+      call this%bands%calculate_pl()
+
+      ! Save for mixing
+      call this%mix%save_to('new')
+
+      !=========================================================================
+      !         CALCULATE BAND ENERGY FROM FIRST MOMENT OF DOS
+      !=========================================================================
+      this%ebsum = reciprocal_obj%calculate_band_energy_from_moments()
+      if (rank == 0) call g_logger%info('K-space band energy = ' // trim(real2str(this%ebsum, '(F16.10)')) // ' Ry', __FILE__, __LINE__)
+
+      !=========================================================================
+      !              WRITE DOS TO FILE (similar to recursion workflow)
+      !=========================================================================
+      if (rank == 0) then
+         call write_kspace_dos_to_file(reciprocal_obj, this%lattice, this%symbolic_atom, this%en%fermi)
+      end if
+
+      call g_timer%stop('kspace-dos-moments')
+   end subroutine run_dos_kspace
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -958,8 +1218,13 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Band Energy                                       |'
          write (newunit, '(A)') '==========================================================================='
-         call this%bands%calculate_band_energy()
-         write (newunit, '(a,f16.10)') 'Band energy of system: ', this%bands%eband
+         ! For k-space: band energy already calculated in run_dos_kspace and stored in this%ebsum
+         ! For recursion: calculate it now and copy to this%ebsum
+         if (.not. this%use_kspace) then
+            call this%bands%calculate_band_energy()
+            this%ebsum = this%bands%eband
+         end if
+         write (newunit, '(a,f16.10)') 'Band energy of system: ', this%ebsum
          !===========================================================================
          !                       Magnetization
          !===========================================================================
@@ -3815,5 +4080,149 @@ end subroutine sphdiv
       ! 10002 format (i3, 4f12.5, 2f12.4)
       ! 10003 format (/"  L", 7x, "ENU", 9x, "V", 11x, "C", 10x, "SRDEL", 8x, "1/Q", 9x, "1/SRP")
    end subroutine POTPAR
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Write k-space DOS to files (similar to recursion workflow)
+   !>
+   !> Writes total and orbital-projected DOS for each atom to separate files
+   !---------------------------------------------------------------------------
+   subroutine write_kspace_dos_to_file(reciprocal_obj, lattice_obj, symbolic_atoms, fermi)
+      use reciprocal_mod
+      use lattice_mod
+      use symbolic_atom_mod
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lattice), intent(in) :: lattice_obj
+      type(symbolic_atom), dimension(:), intent(in) :: symbolic_atoms
+      real(rp), intent(in) :: fermi
+      integer :: ia, ie, unitnum, unitnum2, unitnum3, iorb, ispin
+      character(len=256) :: fname_dos, fname_orb_dos, fname_spin_dos
+      real(rp) :: energy_val, dos_up, dos_dn
+      
+      if (.not. allocated(reciprocal_obj%dos_energy_grid)) return
+      if (.not. allocated(reciprocal_obj%total_dos)) return
+      
+      ! Write total DOS for each atom (summed over orbitals and spins)
+      do ia = 1, lattice_obj%nrec
+         unitnum = 250 + ia
+         fname_dos = trim(symbolic_atoms(lattice_obj%nbulk + ia)%element%symbol) // "_dos.out"
+         
+         open(unit=unitnum, file=fname_dos, status='replace', action='write')
+         
+         do ie = 1, reciprocal_obj%n_energy_points
+            energy_val = reciprocal_obj%dos_energy_grid(ie) - fermi
+            ! Sum projected DOS over all orbitals and spins for this site
+            write(unitnum, '(2f16.5)') energy_val, sum(reciprocal_obj%projected_dos(ia, :, :, ie))
+         end do
+         
+         close(unitnum)
+      end do
+      
+      ! Write orbital-projected DOS for each atom
+      if (allocated(reciprocal_obj%projected_dos)) then
+         do ia = 1, lattice_obj%nrec
+            unitnum2 = 450 + ia
+            fname_orb_dos = trim(symbolic_atoms(lattice_obj%nbulk + ia)%element%symbol) // "_orbital_dos.out"
+            
+            open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
+            
+            do ie = 1, reciprocal_obj%n_energy_points
+               energy_val = reciprocal_obj%dos_energy_grid(ie) - fermi
+               ! Write: energy, s_up, p_up, d_up, f_up, s_dn, p_dn, d_dn, f_dn (if spin-polarized)
+               write(unitnum2, '(20f16.5)') energy_val, &
+                  ((reciprocal_obj%projected_dos(ia, iorb, ispin, ie), iorb=1, reciprocal_obj%n_orb_types), &
+                   ispin=1, min(reciprocal_obj%n_spin_components, 2))
+            end do
+            
+            close(unitnum2)
+         end do
+      end if
+      
+      ! Write spin-resolved total DOS for each atom (if spin-polarized)
+      if (reciprocal_obj%n_spin_components >= 2) then
+         do ia = 1, lattice_obj%nrec
+            unitnum3 = 550 + ia
+            fname_spin_dos = trim(symbolic_atoms(lattice_obj%nbulk + ia)%element%symbol) // "_spin_dos.out"
+            
+            open(unit=unitnum3, file=fname_spin_dos, status='replace', action='write')
+            
+            do ie = 1, reciprocal_obj%n_energy_points
+               energy_val = reciprocal_obj%dos_energy_grid(ie) - fermi
+               ! Sum over all orbitals for each spin component
+               dos_up = sum(reciprocal_obj%projected_dos(ia, :, 1, ie))
+               dos_dn = sum(reciprocal_obj%projected_dos(ia, :, 2, ie))
+               ! Write: energy, total_dos_up, total_dos_down
+               write(unitnum3, '(3f16.5)') energy_val, dos_up, dos_dn
+            end do
+            
+            close(unitnum3)
+         end do
+      end if
+      
+      call g_logger%info('K-space DOS written to *_dos.out and *_orbital_dos.out files', __FILE__, __LINE__)
+      if (reciprocal_obj%n_spin_components >= 2) then
+         call g_logger%info('K-space spin-resolved DOS written to *_spin_dos.out files', __FILE__, __LINE__)
+      end if
+   end subroutine write_kspace_dos_to_file
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Output band structure (k-points and eigenvalues) during SCF for debugging
+   !>
+   !> @details
+   !> Writes k-points and eigenvalues to a file during SCF iterations.
+   !> Format: k_x k_y k_z e(band1) e(band2) ... e(bandN)
+   !> This helps diagnose band discontinuities and convergence issues.
+   !---------------------------------------------------------------------------
+   subroutine output_scf_band_structure(reciprocal_obj, iteration)
+      use reciprocal_mod
+      use string_mod
+      type(reciprocal), intent(in) :: reciprocal_obj
+      integer, intent(in) :: iteration
+      
+      integer :: ik, ib, unit_num
+      real(rp), dimension(3) :: k_cart
+      character(len=256) :: filename
+      
+      ! Only output if eigenvalues are allocated
+      if (.not. allocated(reciprocal_obj%eigenvalues)) return
+      
+      ! Create filename with iteration number
+      write(filename, '(A,I3.3,A)') 'scf_bands_iter_', iteration, '.dat'
+      
+      unit_num = 900
+      open(unit=unit_num, file=trim(filename), status='replace', action='write')
+      
+      ! Write header
+      write(unit_num, '(A)') '# SCF Band Structure Output'
+      write(unit_num, '(A,I0)') '# Iteration: ', iteration
+      write(unit_num, '(A,I0)') '# Number of k-points: ', reciprocal_obj%nk_total
+      write(unit_num, '(A,I0)') '# Number of bands: ', size(reciprocal_obj%eigenvalues, 1)
+      write(unit_num, '(A)') '# Format: k_x(frac) k_y(frac) k_z(frac) k_x(cart) k_y(cart) k_z(cart) e(band1) e(band2) ...'
+      write(unit_num, '(A)') '# Energy in Ry relative to Fermi level'
+      
+      ! Write k-points and eigenvalues
+      do ik = 1, reciprocal_obj%nk_total
+         ! Convert to Cartesian for reference
+         k_cart = matmul(reciprocal_obj%reciprocal_vectors, reciprocal_obj%k_points(:, ik))
+         
+         ! Write fractional and Cartesian k-point
+         write(unit_num, '(6F12.6)', advance='no') &
+            reciprocal_obj%k_points(1:3, ik), k_cart(1:3)
+         
+         ! Write eigenvalues (relative to Fermi level)
+         ! eigenvalues is (nbands, nk_total)
+         do ib = 1, size(reciprocal_obj%eigenvalues, 1)
+            write(unit_num, '(F12.6)', advance='no') &
+               reciprocal_obj%eigenvalues(ib, ik) - reciprocal_obj%fermi_level
+         end do
+         write(unit_num, *)  ! New line
+      end do
+      
+      close(unit_num)
+      call g_logger%info('SCF band structure written to ' // trim(filename), __FILE__, __LINE__)
+   end subroutine output_scf_band_structure
 
 end module self_mod

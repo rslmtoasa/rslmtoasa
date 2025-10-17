@@ -227,12 +227,12 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail, unitnum, unitnum2
-      real(rp) :: e1_mag, ef_mag, e1
+      integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail, unitnum, unitnum2, unitnum3
+      real(rp) :: e1_mag, ef_mag, e1, dos_up, dos_dn
       integer :: ia_glob
       real(rp), dimension(:, :), allocatable :: dosia
       real(rp), dimension(:, :, :), allocatable :: dosial
-      character(len=256) :: fname_total, fname_dos, fname_orb_dos
+      character(len=256) :: fname_total, fname_dos, fname_orb_dos, fname_spin_dos
 
       allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, 18, this%en%channels_ldos + 10))
 
@@ -319,6 +319,26 @@ contains
       
             rewind(unitnum2)
             close(unitnum2)
+         end do
+      end if
+      
+      ! Writing spin-resolved total DOS for each atom (if spin-polarized)
+      if (rank == 0 .and. this%control%nsp >= 2) then
+         do ia = 1, this%lattice%nrec
+            unitnum3 = 550 + ia
+            fname_spin_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_spin_dos.out"
+            
+            open(unit=unitnum3, file=fname_spin_dos, status='replace', action='write')
+            
+            do i = 1, this%en%channels_ldos + 10
+               ! Sum orbitals 1-9 for spin-up, 10-18 for spin-down
+               dos_up = sum(dosial(ia, 1:9, i))
+               dos_dn = sum(dosial(ia, 10:18, i))
+               write(unitnum3, '(3f16.5)') this%en%ene(i) - this%en%fermi, dos_up, dos_dn
+            end do
+            
+            rewind(unitnum3)
+            close(unitnum3)
          end do
       end if
 
