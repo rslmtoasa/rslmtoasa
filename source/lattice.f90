@@ -143,17 +143,23 @@ module lattice_mod
       !> Clust size
       integer :: kk
 
-      !> TODO
-      !> Clust coordinates
-      !>
-      !> Clust coordinates
-      real(rp), dimension(:, :), allocatable :: cr
+   !> TODO
+   !> Clust coordinates (expanded cluster)
+   !>
+   !> 'cr' holds the fully expanded cluster coordinates (cartesian coordinates)
+   !> after the Bravais/cluster build. Shape is (3, kk) where 'kk' is the
+   !> actual number of atoms in the constructed cluster. During construction
+   !> a temporary local array with capacity (3, ndim) is often used and then
+   !> moved into 'this%cr'. We shrink 'this%cr' to (3,kk) as soon as 'kk' is
+   !> known to avoid holding a large buffer unnecessarily.
+   real(rp), dimension(:, :), allocatable :: cr
 
-      !> TODO
-      !> Clust coordinates
-      !>
-      !> Clust coordinates
-      real(rp), dimension(:, :), allocatable :: crd
+   !> TODO
+   !> Clust coordinates (primitive cell / basis)
+   !>
+   !> 'crd' stores the primitive cell (basis) coordinates (3, ntot). It is
+   !> used as the starting point when expanding to the cluster (cr).
+   real(rp), dimension(:, :), allocatable :: crd
       !> Clust atom number
       integer, dimension(:), allocatable :: ham_i
       !> TODO
@@ -175,6 +181,10 @@ module lattice_mod
       !>TODO
       !> Nmax
       integer :: nmax
+
+      !> Max number of neighbours for TB interactions (calculated)
+      !> nn_max
+      integer :: nn_max
 
       !> TODO
       !> Atom number for calculation.
@@ -987,6 +997,7 @@ contains
       real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
+   real(rp), allocatable :: tmp(:, :)
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
@@ -1083,9 +1094,22 @@ contains
 
       this%kk = kk
       call move_alloc(cr, this%cr)
+      ! Shrink this%cr to the actual cluster size kk to avoid keeping the
+      ! large temporary allocation of shape (3, ndim). We copy the first kk
+      ! columns into a smaller array and move that allocation into this%cr.
+      if (allocated(this%cr)) then
+         if (size(this%cr, 2) > kk) then
+            allocate(tmp(3, kk))
+            tmp(:, :) = this%cr(:, 1:kk)
+            call move_alloc(tmp, this%cr)
+         end if
+      end if
       call move_alloc(iz, this%iz)
       call move_alloc(num, this%num)
       close (10)
+
+      ! Test to set nmax to the whole cluster
+      ! this%nmax = kk
    end subroutine bravais
 
    !---------------------------------------------------------------------------
@@ -1722,6 +1746,8 @@ contains
       end do
       this%nbas = ncnt
       this%nmax = nmax
+      ! Temporary hack for full HALL
+      ! this%nmax = kk
       write (11, *) "--Info-for-control-----------------"
       write (11, '(a6, i4, a6, i6, a6, i6, a6, i6)') 'NTYPE=', this%ntype, 'NMAX=', this%nmax, 'NBAS=', this%nbas, 'NREC=', this%nrec
 
@@ -1810,7 +1836,7 @@ contains
 
       ! Clust parameters
       ncut = 9
-      nnmx = 5250
+      nnmx = 100 ! 5250
       nomx = this%ntot
       kk = this%kk
       allocate (set(3, nomx, nnmx)); set = 0.0d0
@@ -2165,26 +2191,33 @@ contains
       real(rp), dimension(:, :), allocatable :: cr
       real(rp), dimension(:, :), allocatable :: s
       real(rp), dimension(:, :, :), allocatable :: sbar
+      real(rp), dimension(:, :), allocatable :: sbarvec
       !
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 5250 !350
-      allocate (cr(3, nt))
+      nt = 500 ! Neigbours for SBAR construction (>> TB neighbours)
+      ! allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
-      call this%clusba(r2, crd, ia, nat, ndi, nt)
+      allocate(sbarvec(3, nt))
+      call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
       write (17, 10000) nt
-      write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
+      write (17, 10001) ((sbarvec(j, i), j=1, 3), i=1, nt)
+      !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
       nrl = np*nt
       na = (nrl*(nrl + 1))/2
       allocate (a(na))
       allocate (bet(nrl))
       allocate (wk(nrl))
       allocate (s(nrl, nrl))
-      call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      call micha(wav, sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      !call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
 
       ! Saving parameters to be used in the Hamiltonian build
-      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
+      ! Call clusba again for proper number of TB neighbours
+      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
+      ! Store the number of neighbours
+      this%nn_max = nt
 
       do m = 1, nt
          do i = 1, 9
@@ -2200,7 +2233,7 @@ contains
       !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
-      deallocate (a, bet, cr, wk, s, sbar)
+      deallocate (a, bet, wk, s, sbar)
       return
 
 10000 format(i5)
@@ -2221,13 +2254,15 @@ contains
    !> @param[inout] cr
    !> @return type(calculation)
    !---------------------------------------------------------------------------
-   subroutine clusba(this, r2, crd, ia, nat, ndi, n)
+   subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec)
       implicit none
       class(lattice), intent(inout) :: this
       ! Inputs
       integer, intent(in) :: ia, nat, ndi
       real(rp), intent(in) :: r2
       real(rp), dimension(3, ndi), intent(in) :: crd
+      !real(rp), dimension(3, ndi), intent(in) :: crd
+      real(rp), dimension(3, n), intent(out) :: sbarvec
       ! Output
       integer, intent(inout) :: n
 !    real(rp), dimension(3, n), intent(inout) :: cr
@@ -2236,19 +2271,21 @@ contains
       real(rp) :: s1
       real(rp), dimension(3) :: dum
 
-#ifdef USE_SAFE_ALLOC
-      if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
-      call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
-#else
-      if (allocated(this%sbarvec)) deallocate (this%sbarvec)
-      allocate (this%sbarvec(3, this%kk))
-#endif
+! #ifdef USE_SAFE_ALLOC
+!       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
+!       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
+! #else
+!       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
+!       allocate (this%sbarvec(3, this%kk))
+! #endif
 
-      this%sbarvec(:, :) = 0.0d0
+!      this%sbarvec(:, :) = 0.0d0
+      sbarvec(:, :) = 0.0d0
 
       ii = 1
       do k = 1, 3
-         this%sbarvec(k, 1) = 0.0d0
+         sbarvec(k, 1) = 0.0d0
+         !this%sbarvec(k, 1) = 0.0d0
       end do
       do nn = 1, nat
          s1 = 0.0
@@ -2258,13 +2295,18 @@ contains
          end do
          if (s1 < r2 .and. s1 > 0.0001) then
             ii = ii + 1
-            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            ! this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
+            ! this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
+            ! this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
+            sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
+            sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
-!!    "in DBAR1."
+     !if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
+     !"in DBAR1."
       end do
+      !print *, 'Clusba says ii, n:', ii, n, shape(sbarvec)
+      ! if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA in DBAR1."
       n = ii
    end subroutine clusba
 

@@ -431,10 +431,12 @@ contains
       end do
 
       !call this%calculate_magnetic_moments()
+      ! print *, 'Calculating orbital moments'
       call this%calculate_orbital_moments()
 
       this%dspd(:, :, :) = 0.0d0
       !do na=1, this%lattice%nrec
+      ! print *,'Rotating spins to local frame if needed'
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
          plusbulk = this%lattice%nbulk + na_glob
@@ -469,6 +471,7 @@ contains
       this%dspd(:, :, :) = this%dspd(:, :, :)*0.5d0/pi
 
       occ = 0.0d0; sums = 0.0d0; sump = 0.0d0; sumd = 0.0d0
+      ! print *, 'Calculating moments'
       !do na=1, this%lattice%nrec
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
@@ -495,6 +498,7 @@ contains
          end do
       end do
 
+      ! print *, 'Calculating potential parameters'
       call this%calculate_pl()
 
       ! Transfer calculated moments across MPI ranks
@@ -512,6 +516,7 @@ contains
       deallocate (T_comm)
 #endif
 
+      ! print *, 'Moments calculated'
       !do na=1,this%lattice%nrec
       !write(*,*) ´Magnetic Moment for atom ´, na,´: ´, sum(occ(na,1:3)) - sum(occ(na,4:6))
       !write(*,*) ´Total Charge for atom ´,na, ´: ´, sum(occ(na,1:6)), ´s = ´, occ(na,1)+occ(na,4), ´p = ´, (occ(na,2))+(occ(na,5)), ´d = ´, (occ(na,3))+(occ(na,6))
@@ -896,11 +901,13 @@ contains
       mLz_ext(1:9, 1:9) = mLz(:, :)
       mLz_ext(10:18, 10:18) = mLz(:, :)
 
+      ! print *, 'Calculating orbital moments'
       call this%calculate_orbital_dos()
 
       !do na=1, this%lattice%nrec
       do na = start_atom, end_atom
          na_loc = g2l_map(na)
+         !print *, 'Calculating orbital moment for atom', na, na_loc
 
          l_orb = 0.0d0
          lx = 0.0d0; ly = 0.0d0; lz = 0.d0
