@@ -202,6 +202,7 @@ module reciprocal_mod
       procedure :: project_dos_orbitals_gaussian
       procedure :: project_dos_orbitals_tetrahedron
       procedure :: calculate_band_moments
+   procedure :: print_total_and_spin_dos
       procedure :: calculate_band_energy_from_moments
       procedure :: calculate_adaptive_sigma
       procedure :: find_fermi_level_from_dos
@@ -893,44 +894,246 @@ contains
       call g_logger%info('reciprocal%build_kspace_hamiltonian_so: K-space SO Hamiltonian built', __FILE__, __LINE__)
    end subroutine build_kspace_hamiltonian_so
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Build total k-space Hamiltonian (bulk + SO contributions)
-   !---------------------------------------------------------------------------
-   subroutine build_total_hamiltonian(this)
-      class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ik, ntype
+!---------------------------------------------------------------------------
+! DESCRIPTION:
+!> @brief
+!> Build total k-space Hamiltonian for multi-atom unit cell
+!> Properly handles intra-cell and inter-cell hopping
+!---------------------------------------------------------------------------
+subroutine build_total_hamiltonian(this)
+   class(reciprocal), intent(inout) :: this
+   
+   integer :: ik, isite, jsite, ntype_i
+   integer :: ineigh, ia, ja, nr
+   integer :: n_sites, n_orb_per_site, total_orb
+   integer :: i_start, i_end, j_start, j_end
+   real(rp), dimension(3) :: k_vec, r_ij_direct
+   real(rp) :: phase_kr
+   complex(rp) :: phase_factor
+   character(len=200) :: debug_msg
 
-      if (.not. allocated(this%hk_bulk)) then
-         call g_logger%error('reciprocal%build_total_hamiltonian: Bulk k-space Hamiltonian not built. Call build_kspace_hamiltonian first.', __FILE__, __LINE__)
-         return
-      end if
+   if (.not. allocated(this%hamiltonian%ee)) then
+      call g_logger%error('build_total_hamiltonian: Real-space Hamiltonian not built', __FILE__, __LINE__)
+      return
+   end if
 
-      ! Allocate total Hamiltonian
+   ! Get system dimensions
+   n_sites = this%lattice%nrec
+   n_orb_per_site = 18
+   total_orb = n_sites * n_orb_per_site
+
+   call g_logger%info('build_total_hamiltonian: Building ' // trim(int2str(total_orb)) // &
+                     'x' // trim(int2str(total_orb)) // ' Hamiltonian for ' // &
+                     trim(int2str(n_sites)) // ' sites', __FILE__, __LINE__)
+
+   ! Allocate total Hamiltonian
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('reciprocal.hk_total', this%hk_total, &
-                                [this%max_orb_channels, this%max_orb_channels, this%nk_total])
+   call g_safe_alloc%allocate('reciprocal.hk_total', this%hk_total, &
+                             [total_orb, total_orb, this%nk_total])
 #else
    if (allocated(this%hk_total)) deallocate(this%hk_total)
-   allocate(this%hk_total(this%max_orb_channels, this%max_orb_channels, this%nk_total))
+   allocate(this%hk_total(total_orb, total_orb, this%nk_total))
 #endif
 
-      ! Combine bulk and SO contributions for each k-point
-      do ik = 1, this%nk_total
-         ! For now, use first atom type - should be generalized for multi-component systems
-         ntype = 1
-         this%hk_total(:, :, ik) = this%hk_bulk(:, :, ik, ntype)
-         
-         ! Add spin-orbit coupling if available
+   ! Build H(k) = Σ_R H(R) exp(ik·R)
+   ! CRITICAL: In RS-LMTO-ASA, sbarvec already contains the full vector (R + τ_J - τ_I)
+   ! from site I to site J, including basis position differences within the unit cell.
+   do ik = 1, this%nk_total
+      k_vec = this%k_points(:, ik)  ! k in fractional coordinates
+      this%hk_total(:, :, ik) = cmplx(0.0_rp, 0.0_rp, kind=rp)
+
+      ! Loop over all central sites i in unit cell
+      do isite = 1, n_sites
+         ! Get atom type and cluster index for site i
+         ntype_i = this%lattice%ib(isite)
+         ia = this%lattice%atlist(ntype_i)
+         nr = this%lattice%nn(ia, 1)
+
+         ! Orbital block for site i (rows)
+         i_start = (isite - 1) * n_orb_per_site + 1
+         i_end = isite * n_orb_per_site
+
+         ! Diagnostic for first k-point only
+         if (ik == 1 .and. isite == 1) then
+            call g_logger%info('build_total_hamiltonian: Site ' // trim(int2str(isite)) // &
+                              ' (ntype=' // trim(int2str(ntype_i)) // ', ia=' // trim(int2str(ia)) // &
+                              ') has ' // trim(int2str(nr)) // ' neighbors', __FILE__, __LINE__)
+         end if
+
+         ! Loop over all neighbors of site i
+         do ineigh = 1, nr
+            ! Get neighbor information
+            if (ineigh == 1) then
+               ! On-site term (m=1)
+               jsite = isite
+               ja = ia
+               r_ij_direct = [0.0_rp, 0.0_rp, 0.0_rp]
+            else
+               ! Off-site neighbor
+               ja = this%lattice%nn(ia, ineigh)
+               if (ja == 0) cycle
+               
+               ! Map cluster atom to unit cell site
+               jsite = this%lattice%izp(ja)
+               
+               if (jsite < 1 .or. jsite > n_sites) then
+                  call g_logger%warning('build_total_hamiltonian: Invalid jsite = ' // &
+                                       trim(int2str(jsite)) // ' for neighbor ' // &
+                                       trim(int2str(ineigh)), __FILE__, __LINE__)
+                  cycle
+               end if
+               
+               ! Get position vector in FRACTIONAL (direct) coordinates
+               ! sbarvec_direct should contain the fractional coordinates of the neighbor vector
+               if (allocated(this%lattice%sbarvec_direct)) then
+                  r_ij_direct(1) = this%lattice%sbarvec_direct(1, ineigh)
+                  r_ij_direct(2) = this%lattice%sbarvec_direct(2, ineigh)
+                  r_ij_direct(3) = this%lattice%sbarvec_direct(3, ineigh)
+               else
+                  ! Fallback: convert Cartesian to fractional
+                  if (this%lattice%a_cart_inv_ready) then
+                     r_ij_direct = matmul(this%lattice%a_cart_inv, this%lattice%sbarvec(:, ineigh))
+                  else
+                     call g_logger%error('build_total_hamiltonian: Cannot convert sbarvec to fractional', &
+                                        __FILE__, __LINE__)
+                     cycle
+                  end if
+               end if
+
+               ! Diagnostic: print first few neighbor vectors for verification
+               if (ik == 1 .and. isite == 1 .and. ineigh <= 5) then
+                  call g_logger%info('  Neighbor ' // trim(int2str(ineigh)) // ': ja=' // &
+                                    trim(int2str(ja)) // ' → jsite=' // trim(int2str(jsite)) // &
+                                    ', r_ij(frac)=[' // trim(real2str(r_ij_direct(1), '(F8.4)')) // ',' // &
+                                    trim(real2str(r_ij_direct(2), '(F8.4)')) // ',' // &
+                                    trim(real2str(r_ij_direct(3), '(F8.4)')) // ']', __FILE__, __LINE__)
+               end if
+            end if
+
+            ! Orbital block for site j (columns)
+            j_start = (jsite - 1) * n_orb_per_site + 1
+            j_end = jsite * n_orb_per_site
+
+            ! Calculate phase factor: exp(i·2π·k·r_ij)
+            ! k_vec is in fractional coordinates (from k_points)
+            ! r_ij_direct is in fractional coordinates
+            ! NOTE: sbarvec already includes basis position differences (τ_J - τ_I)
+            phase_kr = two_pi * dot_product(k_vec, r_ij_direct)
+            phase_factor = cmplx(cos(phase_kr), sin(phase_kr), kind=rp)
+
+            ! Add contribution: H(k)_ij += H_ij(r) × exp(i·k·r)
+            this%hk_total(i_start:i_end, j_start:j_end, ik) = &
+               this%hk_total(i_start:i_end, j_start:j_end, ik) + &
+               this%hamiltonian%ee(:, :, ineigh, ntype_i) * phase_factor
+         end do
+
+         ! Add spin-orbit coupling (on-site only, diagonal blocks)
          if (this%include_so .and. allocated(this%hk_so)) then
-            this%hk_total(:, :, ik) = this%hk_total(:, :, ik) + this%hk_so(:, :, ntype)
+            this%hk_total(i_start:i_end, i_start:i_end, ik) = &
+               this%hk_total(i_start:i_end, i_start:i_end, ik) + &
+               this%hk_so(:, :, ntype_i)
          end if
       end do
+   end do
 
-      call g_logger%info('reciprocal%build_total_hamiltonian: Total k-space Hamiltonian built', __FILE__, __LINE__)
-   end subroutine build_total_hamiltonian
+   call g_logger%info('build_total_hamiltonian: Multi-site Hamiltonian completed', __FILE__, __LINE__)
+   
+   ! Diagnostic: Check Hermiticity at Gamma point (first k-point should be near Gamma)
+   call check_hamiltonian_hermiticity(this, 1)
+   
+   ! Diagnostic: Print matrix structure for first k-point
+   if (this%nk_total > 0) then
+      call print_hamiltonian_structure(this, 1)
+   end if
+   
+end subroutine build_total_hamiltonian
+
+!---------------------------------------------------------------------------
+! DESCRIPTION:
+!> @brief
+!> Check Hermiticity of H(k) for debugging multi-site assembly
+!---------------------------------------------------------------------------
+subroutine check_hamiltonian_hermiticity(this, ik)
+   class(reciprocal), intent(in) :: this
+   integer, intent(in) :: ik
+   
+   integer :: i, j, n
+   real(rp) :: max_diff, diff
+   complex(rp) :: h_ij, h_ji_conj
+   
+   if (.not. allocated(this%hk_total)) return
+   
+   n = size(this%hk_total, 1)
+   max_diff = 0.0_rp
+   
+   do i = 1, n
+      do j = 1, n
+         h_ij = this%hk_total(i, j, ik)
+         h_ji_conj = conjg(this%hk_total(j, i, ik))
+         diff = abs(h_ij - h_ji_conj)
+         max_diff = max(max_diff, diff)
+      end do
+   end do
+   
+   if (max_diff > 1.0e-8_rp) then
+      call g_logger%warning('Hermiticity check: max violation = ' // &
+                           trim(real2str(max_diff, '(ES12.4)')) // ' at k-point ' // &
+                           trim(int2str(ik)), __FILE__, __LINE__)
+   else
+      call g_logger%info('Hermiticity check: H(k) is Hermitian (max diff = ' // &
+                        trim(real2str(max_diff, '(ES12.4)')) // ')', __FILE__, __LINE__)
+   end if
+end subroutine check_hamiltonian_hermiticity
+
+!---------------------------------------------------------------------------
+! DESCRIPTION:
+!> @brief
+!> Print structure of H(k) to diagnose multi-site assembly
+!---------------------------------------------------------------------------
+subroutine print_hamiltonian_structure(this, ik)
+   class(reciprocal), intent(in) :: this
+   integer, intent(in) :: ik
+   
+   integer :: i, j, n_sites, block_size
+   integer :: iblock, jblock, i_start, j_start
+   real(rp) :: block_norm
+   character(len=500) :: msg
+   
+   if (.not. allocated(this%hk_total)) return
+   
+   n_sites = this%lattice%nrec
+   block_size = 18
+   
+   call g_logger%info('=== H(k) Block Structure at k-point ' // trim(int2str(ik)) // ' ===', &
+                     __FILE__, __LINE__)
+   
+   ! Print block-wise norms to see coupling structure
+   do iblock = 1, n_sites
+      msg = 'Site ' // trim(int2str(iblock)) // ' couples to: '
+      do jblock = 1, n_sites
+         i_start = (iblock-1)*block_size + 1
+         j_start = (jblock-1)*block_size + 1
+         
+         ! Calculate Frobenius norm of this block
+         block_norm = 0.0_rp
+         do i = 0, block_size-1
+            do j = 0, block_size-1
+               block_norm = block_norm + abs(this%hk_total(i_start+i, j_start+j, ik))**2
+            end do
+         end do
+         block_norm = sqrt(block_norm)
+         
+         if (block_norm > 1.0e-6_rp) then
+            msg = trim(msg) // ' site' // trim(int2str(jblock)) // &
+                  '(' // trim(real2str(block_norm, '(F8.4)')) // ')'
+         end if
+      end do
+      call g_logger%info(trim(msg), __FILE__, __LINE__)
+   end do
+   
+   call g_logger%info('=== End H(k) Structure ===', __FILE__, __LINE__)
+   
+end subroutine print_hamiltonian_structure
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1005,11 +1208,16 @@ contains
 
       call g_logger%info('diagonalize_hamiltonian: Starting diagonalization of ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
 
-      ! Get matrix size from the actual Hamiltonian
-      if (allocated(ham%ee)) then
-         nmat = size(ham%ee, 1)  ! Use actual Hamiltonian dimension
+      ! Get matrix size from the total Hamiltonian (multi-site)
+      if (allocated(this%hk_total)) then
+         nmat = size(this%hk_total, 1)  ! Use actual total Hamiltonian dimension (n_sites × 18)
+         call g_logger%info('diagonalize_hamiltonian: Using hk_total with dimension ' // trim(int2str(nmat)), __FILE__, __LINE__)
+      else if (allocated(ham%ee)) then
+         nmat = size(ham%ee, 1)  ! Fallback to Hamiltonian dimension
+         call g_logger%info('diagonalize_hamiltonian: Using ham%ee with dimension ' // trim(int2str(nmat)), __FILE__, __LINE__)
       else
-         nmat = this%max_orb_channels  ! Fallback to max orbital channels
+         nmat = this%max_orb_channels  ! Last resort fallback
+         call g_logger%info('diagonalize_hamiltonian: Using max_orb_channels = ' // trim(int2str(nmat)), __FILE__, __LINE__)
       end if
 
       call g_logger%info('diagonalize_hamiltonian: Matrix size is ' // trim(int2str(nmat)) // 'x' // trim(int2str(nmat)), __FILE__, __LINE__)
@@ -1047,32 +1255,18 @@ contains
       ! Loop over k-points (parallelized)
 !$OMP DO SCHEDULE(DYNAMIC, 10)
       do i = 1, nk
-         ! Build Hamiltonian at this k-point using unified Fourier transform
+         ! Build Hamiltonian at this k-point
          if (use_path) then
+            ! For band structure path, use Fourier transform (may need multi-site support later)
             call this%fourier_transform_hamiltonian(this%k_path(:, i), 1, h_k)
-            
-            !!! ! Debug: Dump H(k) matrix for Γ and H points
-            !!! if (all(abs(this%k_path(:, i) - [0.0_rp, 0.0_rp, 0.0_rp]) < 1.0e-6_rp)) then
-            !!!    ! Γ point
-            !!!    call dump_complex_matrix(h_k, 'H_k_Gamma.dat', this%k_path(:, i))
-            !!!    call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for Γ point to H_k_Gamma.dat, k-vector: [' // &
-            !!!                      trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
-            !!!                      trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
-            !!! else if (all(abs(this%k_path(:, i) - [0.5_rp, -0.5_rp, 0.5_rp]) < 1.0e-6_rp)) then
-            !!!    ! H point
-            !!!    call dump_complex_matrix(h_k, 'H_k_H.dat', this%k_path(:, i))
-            !!!    call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for H point to H_k_H.dat, k-vector: [' // &
-            !!!                      trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
-            !!!                      trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
-            !!! else if (all(abs(this%k_path(:, i) - [0.25_rp, -0.25_rp, 0.25_rp]) < 1.0e-6_rp)) then
-            !!!    ! K/2 point (midpoint between Γ and H)
-            !!!    call dump_complex_matrix(h_k, 'H_k_half.dat', this%k_path(:, i))
-            !!!    call g_logger%info('diagonalize_hamiltonian: Dumped H(k) matrix for K/2 point to H_k_half.dat, k-vector: [' // &
-            !!!                      trim(real2str(this%k_path(1,i))) // ', ' // trim(real2str(this%k_path(2,i))) // ', ' // &
-            !!!                      trim(real2str(this%k_path(3,i))) // ']', __FILE__, __LINE__)
-            !!! end if
          else
-            call this%fourier_transform_hamiltonian(this%k_points(:, i), 1, h_k)
+            ! For k-mesh DOS calculations, use pre-built hk_total if available
+            if (allocated(this%hk_total)) then
+               h_k = this%hk_total(:, :, i)
+            else
+               ! Fallback to Fourier transform (single atom type)
+               call this%fourier_transform_hamiltonian(this%k_points(:, i), 1, h_k)
+            end if
          end if
 
          ! Make a copy for diagonalization (LAPACK destroys input)
@@ -2239,19 +2433,18 @@ subroutine project_dos_orbitals_gaussian(this)
    allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
    this%projected_dos = 0.0_rp
 
-   n_orb_per_spin = size(this%eigenvectors, 1) / 2
-
    ! Build per-site orbital offsets
-   ! Fixed basis: each site has 9 orbitals (spd: s(1) + p(3) + d(5))
-   ! Eigenvector layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
+   ! CRITICAL: Eigenvector layout matches Hamiltonian (site-blocked):
+   !   [site1(18), site2(18), ..., siteN(18)]
+   ! where each site block is [s_up, px_up, py_up, pz_up, d_up(5), s_dn, px_dn, py_dn, pz_dn, d_dn(5)]
+   ! Each site has 18 orbitals total (9 per spin, both spins together)
    allocate(site_orb_offset(this%n_sites + 1))
    do isite = 1, this%n_sites + 1
-      site_orb_offset(isite) = (isite - 1) * 9
+      site_orb_offset(isite) = (isite - 1) * 18
    end do
 
    ! Diagnostic logging
    call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
-                     ', n_orb_per_spin = ' // trim(int2str(n_orb_per_spin)) // &
                      ', nbands = ' // trim(int2str(nbands)) // &
                      ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)) // &
                      ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
@@ -2281,16 +2474,19 @@ subroutine project_dos_orbitals_gaussian(this)
             weight = gaussian_weight * this%k_weights(ik)
 
             do isite = 1, this%n_sites
-               ! Use correct per-site orbital offset (handles fixed 9-orbital basis per site)
-               site_orb_start = site_orb_offset(isite) + 1
-               site_orb_end = site_orb_offset(isite+1)
+               ! Site-blocked layout: eigenvectors are [site1(18), site2(18), ...]
+               ! where each site block contains [orb1_up...orb9_up, orb1_dn...orb9_dn]
+               site_orb_start = site_orb_offset(isite)
 
                do ispin = 1, this%n_spin_components
-                  ! Orbital range for this spin and site
-                  ! Layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
-                  orb_start = (ispin-1) * n_orb_per_spin + site_orb_offset(isite)
+                  ! Within each site's 18-orbital block:
+                  !   spin-up orbitals: indices 1-9
+                  !   spin-down orbitals: indices 10-18
+                  ! So for spin-up (ispin=1): orb_start = site_orb_start + 0
+                  !    for spin-down (ispin=2): orb_start = site_orb_start + 9
+                  orb_start = site_orb_start + (ispin - 1) * 9
 
-                  ! s orbital
+                  ! s orbital (index 1 within the 9-orbital spin block)
                   iorb = 1
                   if (orb_start + 1 <= size(this%eigenvectors, 1)) then
                      psi_element = this%eigenvectors(orb_start + 1, ib, ik)
@@ -2299,7 +2495,7 @@ subroutine project_dos_orbitals_gaussian(this)
                         this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
                   end if
 
-                  ! p orbitals
+                  ! p orbitals (indices 2, 3, 4 within the 9-orbital spin block)
                   iorb = 2
                   orbital_char = 0.0_rp
                   do i = 2, 4
@@ -2311,7 +2507,7 @@ subroutine project_dos_orbitals_gaussian(this)
                   this%projected_dos(isite, iorb, ispin, ie) = &
                      this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
 
-                  ! d orbitals
+                  ! d orbitals (indices 5-9 within the 9-orbital spin block)
                   iorb = 3
                   orbital_char = 0.0_rp
                   do i = 5, 9
@@ -2394,15 +2590,14 @@ end subroutine project_dos_orbitals_gaussian
       allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       this%projected_dos = 0.0_rp
 
-      ! Number of orbitals per spin (assuming spd basis: 9 orbitals per spin)
-      n_orb_per_spin = this%max_orb_channels / 2
-
       ! Build per-site orbital offsets
-      ! Fixed basis: each site has 9 orbitals (spd: s(1) + p(3) + d(5))
-      ! Eigenvector layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
+      ! CRITICAL: Eigenvector layout matches Hamiltonian (site-blocked):
+      !   [site1(18), site2(18), ..., siteN(18)]
+      ! where each site block is [s_up, px_up, py_up, pz_up, d_up(5), s_dn, px_dn, py_dn, pz_dn, d_dn(5)]
+      ! Each site has 18 orbitals total (9 per spin, both spins together)
       allocate(site_orb_offset(this%n_sites + 1))
       do isite = 1, this%n_sites + 1
-         site_orb_offset(isite) = (isite - 1) * 9
+         site_orb_offset(isite) = (isite - 1) * 18
       end do
 
       ! Setup tetrahedra if not already done
@@ -2444,15 +2639,18 @@ end subroutine project_dos_orbitals_gaussian
 
                ! Loop over sites
                do isite = 1, this%n_sites
-                  ! Use correct per-site orbital offset (handles fixed 9-orbital basis per site)
-                  site_orb_start = site_orb_offset(isite) + 1
-                  site_orb_end = site_orb_offset(isite+1)
+                  ! Site-blocked layout: eigenvectors are [site1(18), site2(18), ...]
+                  ! where each site block contains [orb1_up...orb9_up, orb1_dn...orb9_dn]
+                  site_orb_start = site_orb_offset(isite)
 
                   ! Calculate orbital character for each orbital type and spin
                   do ispin = 1, this%n_spin_components
-                     ! Orbital range for this spin and site
-                     ! Layout: [site1_up(9), site2_up(9), ..., siteN_up(9), site1_dn(9), ..., siteN_dn(9)]
-                     orb_start = (ispin-1) * n_orb_per_spin + site_orb_offset(isite)
+                     ! Within each site's 18-orbital block:
+                     !   spin-up orbitals: indices 1-9
+                     !   spin-down orbitals: indices 10-18
+                     ! So for spin-up (ispin=1): orb_start = site_orb_start + 0
+                     !    for spin-down (ispin=2): orb_start = site_orb_start + 9
+                     orb_start = site_orb_start + (ispin - 1) * 9
 
                      ! s orbital (index 1 in each site/spin block)
                      iorb = 1
@@ -2660,6 +2858,103 @@ subroutine calculate_band_moments(this)
 
    call g_logger%info('calculate_band_moments: Completed', __FILE__, __LINE__)
 end subroutine calculate_band_moments
+
+   !--------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Print total and spin-polarized electron counts (DOS integrated) using
+   !> the current DOS and Fermi level. Intended to be called each SCF
+   !> iteration for diagnostics.
+   !--------------------------------------------------------------------------
+   subroutine print_total_and_spin_dos(this)
+      class(reciprocal), intent(in) :: this
+
+      integer :: ie, n_energy, isite, iorb, ispin
+      real(rp), allocatable :: fermi_dist(:)
+      real(rp), allocatable :: energy_grid(:)
+      real(rp), allocatable :: integrand_up(:), integrand_dn(:)
+      real(rp) :: kT, fermi_arg
+      real(rp) :: electrons_up, electrons_dn, electrons_total
+      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
+
+      if (.not. allocated(this%total_dos) .or. .not. allocated(this%dos_energy_grid)) then
+         call g_logger%warning('print_total_and_spin_dos: DOS not available to print', __FILE__, __LINE__)
+         return
+      end if
+
+      n_energy = this%n_energy_points
+      allocate(fermi_dist(n_energy))
+      allocate(energy_grid(n_energy))
+      energy_grid = this%dos_energy_grid
+
+      ! Boltzmann factor (Ry)
+      kT = this%temperature * kB_Ry_per_K
+
+      ! Pre-calc fermi distribution on energy grid
+      do ie = 1, n_energy
+         fermi_arg = (energy_grid(ie) - this%fermi_level)
+         if (kT > 1.0e-10_rp) then
+            fermi_dist(ie) = 1.0_rp / (exp(fermi_arg / kT) + 1.0_rp)
+         else
+            if (energy_grid(ie) <= this%fermi_level) then
+               fermi_dist(ie) = 1.0_rp
+            else
+               fermi_dist(ie) = 0.0_rp
+            end if
+         end if
+      end do
+
+      ! Initialize integrands
+      allocate(integrand_up(n_energy))
+      allocate(integrand_dn(n_energy))
+      integrand_up = 0.0_rp
+      integrand_dn = 0.0_rp
+
+      if (allocated(this%projected_dos)) then
+         ! Sum projected DOS across sites and orbitals for each spin
+         do isite = 1, this%n_sites
+            do iorb = 1, this%n_orb_types
+               if (this%n_spin_components >= 1) then
+                  integrand_up = integrand_up + this%projected_dos(isite, iorb, 1, :)
+               end if
+               if (this%n_spin_components >= 2) then
+                  integrand_dn = integrand_dn + this%projected_dos(isite, iorb, 2, :)
+               end if
+            end do
+         end do
+      else
+         ! No projected DOS available: fall back to total DOS split by spin if possible
+         if (this%n_spin_components == 2) then
+            ! If no projection but spin resolved, attempt to split total DOS equally
+            integrand_up = 0.5_rp * this%total_dos
+            integrand_dn = 0.5_rp * this%total_dos
+         else
+            integrand_up = this%total_dos
+            integrand_dn = 0.0_rp
+         end if
+      end if
+
+      ! Apply Fermi weighting and integrate
+      integrand_up = integrand_up * fermi_dist
+      integrand_dn = integrand_dn * fermi_dist
+
+      electrons_up = trapezoidal_integral(energy_grid, integrand_up)
+      electrons_dn = trapezoidal_integral(energy_grid, integrand_dn)
+      electrons_total = electrons_up + electrons_dn
+
+      ! Log results
+      if (this%n_spin_components >= 2) then
+         call g_logger%info('DOS summary: Total electrons (from DOS) = ' // trim(real2str(electrons_total, '(F10.6)')) // &
+                           ', Up = ' // trim(real2str(electrons_up, '(F10.6)')) // &
+                           ', Down = ' // trim(real2str(electrons_dn, '(F10.6)')) // &
+                           ', M = ' // trim(real2str(electrons_up - electrons_dn, '(F10.6)')), __FILE__, __LINE__)
+      else
+         call g_logger%info('DOS summary: Total electrons (from DOS) = ' // trim(real2str(electrons_total, '(F10.6)')), __FILE__, __LINE__)
+      end if
+
+      deallocate(fermi_dist, energy_grid, integrand_up, integrand_dn)
+   end subroutine print_total_and_spin_dos
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief

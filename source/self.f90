@@ -1052,6 +1052,11 @@ contains
       this%en%fermi = reciprocal_obj%fermi_level
       if (rank == 0) call g_logger%info('K-space Fermi level = ' // trim(real2str(this%en%fermi, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
 
+      ! Print DOS summary (total and spin-resolved) for diagnostics each SCF iteration
+      if (rank == 0) then
+         call reciprocal_obj%print_total_and_spin_dos()
+      end if
+
       !=========================================================================
       !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
       !=========================================================================
