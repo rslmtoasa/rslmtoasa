@@ -8,8 +8,8 @@ alat = 2.86120 ! lattice parapeter
 crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
 wav = 1.40880
 ntype = 1
-ct(:) = 4.0
-r2 = 16.0
+ct(1) = 3.0d0
+r2 = 9.00d0
 /
 &atoms
 database = './'
@@ -17,7 +17,6 @@ label(1) = 'Fe'
 /
 &self
 nstep = 100
-/
 /
 &energy
 fermi = -0.069282
@@ -32,6 +31,6 @@ lld = 21
 recur = 'block'
 /
 &mix
-beta = 0.1
+beta = 0.01
 mixtype = 'broyden'
 /

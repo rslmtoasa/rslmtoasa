@@ -811,12 +811,13 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      real(rp) :: mx, my, mz
+      real(rp) :: mx, my, mz, mxe, mye, mze
       integer :: i, j ! Orbital index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
 
-      integer :: na_loc
+      integer :: na_loc, unitmag
+      character(len=256) :: fnamemag
 
       call this%calculate_projected_dos()
 
@@ -825,6 +826,21 @@ contains
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%mx, this%en%edel, this%en%fermi, this%nv1, this%dx(:, na_loc), this%e1, 0, this%en%ene)
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%my, this%en%edel, this%en%fermi, this%nv1, this%dy(:, na_loc), this%e1, 0, this%en%ene)
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%mz, this%en%edel, this%en%fermi, this%nv1, this%dz(:, na_loc), this%e1, 0, this%en%ene)
+
+         fnamemag = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_spinene.out"
+         unitmag = 1000 !rank * 123 + na
+         open(unit=unitmag, file=fnamemag, status='replace', action='write')
+
+         do ie = 1, this%en%channels_ldos + 10
+            mxe = 0.0d0; mye = 0.d00; mze = 0.0d0
+            call simpson_f(mxe, this%en%ene, this%en%ene(ie), this%en%nv1, this%dx(:, na_loc), .true., .false., 0.0d0) 
+            call simpson_f(mye, this%en%ene, this%en%ene(ie), this%en%nv1, this%dy(:, na_loc), .true., .false., 0.0d0) 
+            call simpson_f(mze, this%en%ene, this%en%ene(ie), this%en%nv1, this%dz(:, na_loc), .true., .false., 0.0d0) 
+            write(unitmag, '(4es16.6)') this%en%ene(ie) - this%en%fermi, mxe, mye, mze
+         end do 
+
+         rewind(unitmag)
+         close(unitmag)
 
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(1) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my
@@ -866,7 +882,7 @@ contains
       use mpi_mod
       class(bands) :: this
       ! Local variables
-      real(rp) :: lx, ly, lz
+      real(rp) :: lx, ly, lz, lxe, lye, lze
       real(rp), dimension(this%en%channels_ldos+10) :: lxi, lyi, lzi
       integer :: i, j ! Orbital index
       integer :: mdir ! Magnetic index
@@ -877,7 +893,8 @@ contains
       complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
       !
 
-      integer :: na_loc
+      integer :: na_loc, unitorb
+      character(len=256) :: fnameorb
 
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       mLx(:, :) = L_x(:, :)
@@ -918,43 +935,24 @@ contains
          call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)
          call simpson_m(ly, this%en%edel, this%en%fermi, this%nv1, lyi, this%e1, 0, this%en%ene)
          call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
-         !do mdir = 1, 3
-         !   do i = 1, 9
-         !      do j = 1, 9
-         !         call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(i, j, mdir, :, na_loc), this%e1, 0, this%en%ene)
-         !      end do
-         !   end do
-         !end do
 
-         ! p contribution 
-         ! lz
-         !lz = lz + (l_orb(4, 4, 3) - l_orb(2, 2, 3)) 
-         !write(*,'(2f10.6)') l_orb(4, 4, 3), l_orb(2, 2, 3)
-         ! lx
-         !lx = lx + (l_orb(4, 4, 1) - l_orb(2, 2, 1)) 
-         !write(*,'(2f10.6)') l_orb(4, 4, 1), l_orb(2, 2, 1)
-         ! ly
-         !ly = ly + (l_orb(4, 4, 2) - l_orb(2, 2, 2)) 
-         !write(*,'(2f10.6)') l_orb(4, 4, 2), l_orb(2, 2, 2)
+         fnameorb = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbene.out"
+         unitorb = rank * 132 + na
+         open(unit=unitorb, file=fnameorb, status='replace', action='write')
 
-         ! d contribution (up +down)
-         ! lz
-         !lz = lz + 2_rp * (l_orb(9, 9, 3) - l_orb(5, 5, 3)) + (l_orb(8, 8, 3) - l_orb(6, 6, 3))
-         !write(*,'(4f10.6)') l_orb(9, 9, 3), l_orb(5, 5, 3), l_orb(8, 8, 3), l_orb(6, 6, 3)
-         ! lx
-         !lx = lx + 2_rp * (l_orb(9, 9, 1) - l_orb(5, 5, 1)) + (l_orb(8, 8, 1) - l_orb(6, 6, 1))
-         !write(*,'(4f10.6)') l_orb(9, 9, 1), l_orb(5, 5, 1), l_orb(8, 8, 1), l_orb(6, 6, 1)
-         ! ly
-         !ly = ly + 2_rp * (l_orb(9, 9, 2) - l_orb(5, 5, 2)) + (l_orb(8, 8, 2) - l_orb(6, 6, 2)) 
-         !write(*,'(4f10.6)') l_orb(9, 9, 2), l_orb(5, 5, 2), l_orb(8, 8, 2), l_orb(6, 6, 2)
+         do ie = 1, this%en%channels_ldos + 10
+            call simpson_f(lxe, this%en%ene, this%en%ene(ie), this%en%nv1, lxi, .true., .false., 0.0d0) 
+            call simpson_f(lye, this%en%ene, this%en%ene(ie), this%en%nv1, lyi, .true., .false., 0.0d0) 
+            call simpson_f(lze, this%en%ene, this%en%ene(ie), this%en%nv1, lzi, .true., .false., 0.0d0) 
+            write(unitorb, '(4es16.6)') this%en%ene(ie) - this%en%fermi, -(lxe/pi), -(lye/pi), -(lze/pi)
+         end do
+         
+         rewind(unitorb)
+         close(unitorb)
 
          lz =  - (lz / pi) 
          lx =  - (lx / pi) 
          ly =  - (ly / pi) 
-
-         !lz = -0.5_rp * rtrace9(matmul(l_orb(:, :, 3), mLz))
-         !lx = -0.5_rp * rtrace9(matmul(l_orb(:, :, 1), mLx))
-         !ly = -0.5_rp * rtrace9(matmul(l_orb(:, :, 2), mLy))
 
          call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lx)//' '//fmt('f10.6', ly)//' '//fmt('f10.6', lz), __FILE__, __LINE__)
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx

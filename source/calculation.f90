@@ -104,6 +104,7 @@ module calculation_mod
       procedure, private :: post_processing_exchange_p2rs
       procedure, private :: post_processing_conductivity_p2rs
       procedure, private :: post_processing_conductivity
+      procedure, private :: post_processing_orbital_modern
       procedure, private :: post_processing_band_structure
       procedure, private :: post_processing_density_of_states
       procedure :: process
@@ -272,6 +273,8 @@ contains
          call this%post_processing_conductivity_p2rs()
       case ('conductivity')
          call this%post_processing_conductivity()
+      case ('orbital_modern')
+         call this%post_processing_orbital_modern()
       case ('band_structure')
          call this%post_processing_band_structure()
       case ('density_of_states')
@@ -785,6 +788,9 @@ contains
       !energy_obj%fermi = 0.0001d0
       !call energy_obj%e_mesh()
       call bands_obj%calculate_moments_gauss_legendre()
+
+      call self_obj%report()
+
    end subroutine post_processing_paoflow2rs
 
    subroutine post_processing_exchange_p2rs(this)
@@ -1552,6 +1558,122 @@ contains
       call conductivity_obj%calculate_conductivity_tensor()
    end subroutine post_processing_conductivity_p2rs
 
+
+   subroutine post_processing_orbital_modern(this)
+      class(calculation), intent(in) :: this
+
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(self), target :: self_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(exchange), target :: exchange_obj
+      type(conductivity), target :: conductivity_obj
+      real(rp), dimension(6) :: QSL
+      integer :: i
+
+      ! Constructing control object
+      control_obj = control(this%fname)
+
+      ! Constructing lattice object
+      lattice_obj = lattice(control_obj)
+
+      ! Running the pre-calculation
+      call g_timer%start('pre-processing')
+      select case (control_obj%calctype)
+      case ('B')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%structb(.true.)
+      case ('S')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_surf_full()
+         call lattice_obj%structb(.true.)
+      case ('I')
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_surf_full()
+         call lattice_obj%newclu()
+         call lattice_obj%structb(.true.)
+      end select
+      ! Creating the symbolic_atom object
+      call lattice_obj%atomlist()
+
+      ! Initializing MPI lookup tables and info.
+      call get_mpi_variables(rank, lattice_obj%ntype)
+
+      ! Constructing the charge object
+      charge_obj = charge(lattice_obj)
+
+      select case (control_obj%calctype)
+      case ('B')
+         call charge_obj%bulkmat()
+      case ('S')
+         call charge_obj%build_alelay
+         call charge_obj%surfmat
+      case ('I')
+         call charge_obj%impmad()
+      end select
+      call g_timer%stop('pre-processing')
+
+      ! Constructing mixing object
+      mix_obj = mix(lattice_obj, charge_obj)
+
+      ! Creating the energy object
+      energy_obj = energy(lattice_obj)
+      call energy_obj%e_mesh()
+
+      ! Creating hamiltonian object
+      hamiltonian_obj = hamiltonian(charge_obj)
+      select case (control_obj%calctype)
+      case ('B')
+         do i = 1, lattice_obj%nrec
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
+      case ('S')
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian for the surface
+      case ('I')
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
+         call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
+      end select
+
+      ! Creating recursion object
+      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      
+      call recursion_obj%chebyshev_orbital_mod()
+
+      ! Creating density of states object
+      dos_obj = dos(recursion_obj, energy_obj)
+
+      ! Creating Green function object
+      green_obj = green(dos_obj)
+
+      ! Creating bands object
+      bands_obj = bands(green_obj)
+   
+      ! Creating the self object
+      self_obj = self(bands_obj, mix_obj)
+   end subroutine post_processing_orbital_modern
+
+
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1599,11 +1721,12 @@ contains
           .and. post_processing /= 'exchange_p2rs' &
           .and. post_processing /= 'conductivity' &
           .and. post_processing /= 'conductivity_p2rs' &
+          .and. post_processing /= 'orbital_modern' &
           .and. post_processing /= 'band_structure' &
           .and. post_processing /= 'density_of_states') then 
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'conductivity', 'conductivity_p2rs', 'band_structure', 'density_of_states'", __FILE__, __LINE__)
+                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'density_of_states'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

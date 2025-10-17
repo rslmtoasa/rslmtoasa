@@ -1662,7 +1662,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine lorentz_kernel(n, k, lambda)
       integer, intent(in) :: n
-      real(rp), dimension(2*n + 2), intent(inout) :: k
+      real(rp), dimension(n), intent(inout) :: k
       real(rp), intent(in) :: lambda
       ! Local variables
       integer ::  ll, bign

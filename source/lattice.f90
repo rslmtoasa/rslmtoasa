@@ -1582,7 +1582,7 @@ contains
       if (allocated(this%ib)) deallocate (this%ib)
       if (allocated(this%irec)) deallocate (this%irec)
       if (allocated(this%iu)) deallocate (this%iu)
-      if (allocated(this%ct)) deallocate (this%ct)
+      !if (allocated(this%ct)) deallocate (this%ct)
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%nbulk/))

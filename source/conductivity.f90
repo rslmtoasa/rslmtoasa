@@ -160,7 +160,7 @@ contains
 
       ! Local variables
       integer :: i, n, m
-      real(rp) :: a, b  
+      real(rp) :: a, b
       real(rp), dimension(:), allocatable :: g_kernel(:)       ! Jackson kernel
       real(rp), dimension(:), allocatable :: weights(:)        ! Weight factors
       real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
@@ -185,13 +185,12 @@ contains
       b = (this%en%energy_max + this%en%energy_min)/2
 
       wscale(:) = (this%en%ene(:) - b)/a
-
       acos_x(:) = acos(wscale(:))
       sqrt_term(:) = sqrt(1.0_rp - wscale(:)**2)
 
       ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%cond_ll), g_kernel)
-
+      !call jackson_kernel((this%control%cond_ll), g_kernel)
+      call lorentz_kernel(this%control%cond_ll, g_kernel, 6.0d0)
       ! Calculate weights
       weights(:) = 1.0d0
       weights(1) = 0.5d0
@@ -316,6 +315,7 @@ contains
 
       do i = 1, this%en%channels_ldos + 10
          real_part = 0.0d0; im_part = 0.0d0; real_part_l(:) = 0.0d0; im_part_l(:) = 0.0d0
+         write(123,'(3es16.6)') (a*wscale(i)+b) - this%en%fermi, integrand_tot_real(i), integrand_tot_im(i) 
          call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
          call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
          write(3, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part / real(loop_over),  im_part / real(loop_over)
