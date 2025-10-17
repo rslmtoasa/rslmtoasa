@@ -1472,12 +1472,14 @@ end subroutine print_hamiltonian_structure
       open(newunit=unit, file=trim(filename), status='replace', action='write')
       
       ! Write header with auto-detected information
-      write(unit, '(A)') '# Band structure calculation (automatic k-path)'
-      if (this%symmetry_analysis%spglib%is_available()) then
-         write(unit, '(A)') '# Space group: ' // trim(this%symmetry_analysis%spglib%get_space_group_symbol()) // &
-                           ' (#' // trim(int2str(this%symmetry_analysis%spglib%get_space_group_number())) // ')'
-         write(unit, '(A)') '# Crystal system: ' // trim(this%symmetry_analysis%spglib%get_crystal_system_name())
-      end if
+   write(unit, '(A)') '# Band structure calculation (automatic k-path)'
+#ifdef USE_SPGLIB
+   if (this%symmetry_analysis%spglib%is_available()) then
+      write(unit, '(A)') '# Space group: ' // trim(this%symmetry_analysis%spglib%get_space_group_symbol()) // &
+               ' (#' // trim(int2str(this%symmetry_analysis%spglib%get_space_group_number())) // ')'
+      write(unit, '(A)') '# Crystal system: ' // trim(this%symmetry_analysis%spglib%get_crystal_system_name())
+   end if
+#endif
       write(unit, '(A,I0)') '# Number of k-points: ', this%nk_path
       nmat = size(this%eigenvalues_path, 1)
       write(unit, '(A,I0)') '# Number of bands: ', nmat
@@ -1554,15 +1556,22 @@ end subroutine print_hamiltonian_structure
       ! Store mesh dimensions
       this%nk_mesh = mesh_dims
 
-      if (.not. this%symmetry_analysis%spglib%is_available()) then
-         call g_logger%warning('generate_reduced_kpoint_mesh: spglib not available, using full mesh', __FILE__, __LINE__)
-         call this%generate_mp_mesh()  ! Fall back to regular MP mesh
-         return
-      end if
+#ifdef USE_SPGLIB
+   if (.not. this%symmetry_analysis%spglib%is_available()) then
+      call g_logger%warning('generate_reduced_kpoint_mesh: spglib not available, using full mesh', __FILE__, __LINE__)
+      call this%generate_mp_mesh()  ! Fall back to regular MP mesh
+      return
+   end if
 
-      ! Get irreducible k-points and weights from spglib
-      num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh_with_points( &
-                                                      mesh_dims, shift, kpoints_frac, weights)
+   ! Get irreducible k-points and weights from spglib
+   num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh_with_points( &
+                           mesh_dims, shift, kpoints_frac, weights)
+#else
+   ! SPGLIB not enabled at compile time: fall back to full mesh
+   call g_logger%warning('generate_reduced_kpoint_mesh: spglib support was not compiled in, using full mesh', __FILE__, __LINE__)
+   call this%generate_mp_mesh()
+   return
+#endif
 
       if (num_ir_kpoints == 0) then
          call g_logger%error('generate_reduced_kpoint_mesh: Failed to get k-points from spglib', __FILE__, __LINE__)
