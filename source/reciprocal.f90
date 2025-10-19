@@ -2937,7 +2937,7 @@ subroutine calculate_band_moments(this)
    real(rp) :: m0, m1, m2
    real(rp), dimension(:), allocatable :: integrand, fermi_dist
    real(rp) :: kT, fermi_arg
-   real(rp) :: total_occupation, expected_electrons
+   real(rp) :: total_occupation, expected_electrons, total_occupation_alt
       real(rp), allocatable :: energy_grid_ry(:)
       real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
@@ -2985,8 +2985,12 @@ subroutine calculate_band_moments(this)
    integrand = this%total_dos * fermi_dist
    total_occupation = trapezoidal_integral(energy_grid_ry, integrand)
    
-   call g_logger%info('calculate_band_moments: Total occupation = ' // &
+   ! Also calculate using the same method as find_fermi_level_from_dos for comparison
+   total_occupation_alt = this%integrate_dos_up_to_energy(this%fermi_level, kT)
+   
+   call g_logger%info('calculate_band_moments: Total occupation (method 1) = ' // &
                      trim(real2str(total_occupation, '(F10.5)')) // &
+                     ', (method 2) = ' // trim(real2str(total_occupation_alt, '(F10.5)')) // &
                      ', expected = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
                      __FILE__, __LINE__)
 
@@ -3025,6 +3029,21 @@ subroutine calculate_band_moments(this)
          end do
       end do
    end do
+
+   ! Calculate sum of all m0 moments (should equal total occupation)
+   m0 = 0.0_rp
+   do isite = 1, this%n_sites
+      do iorb = 1, this%n_orb_types
+         do ispin = 1, this%n_spin_components
+            m0 = m0 + this%band_moments(isite, iorb, ispin, 1)
+         end do
+      end do
+   end do
+   
+   call g_logger%info('calculate_band_moments: Sum of all m0 moments = ' // &
+                     trim(real2str(m0, '(F10.5)')) // &
+                     ', total occupation = ' // trim(real2str(total_occupation, '(F10.5)')), &
+                     __FILE__, __LINE__)
 
    deallocate(integrand, fermi_dist)
 
