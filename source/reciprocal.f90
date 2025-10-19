@@ -206,6 +206,7 @@ module reciprocal_mod
       procedure :: setup_dos_energy_grid
       procedure :: setup_tetrahedra
       procedure :: tetrahedron_dos_contribution
+      procedure :: blochl_dos_contribution
       procedure :: get_kpoint_index
       procedure :: project_dos_orbitals
       procedure :: project_dos_orbitals_gaussian
@@ -2015,6 +2016,60 @@ end subroutine print_hamiltonian_structure
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Calculate DOS contribution from a single tetrahedron using Blöchl method
+   !> Uses Blöchl improved tetrahedron method (PRB 49, 16223 (1994))
+   !---------------------------------------------------------------------------
+   function blochl_dos_contribution(this, energy, e_sorted) result(dos)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: energy
+      real(rp), dimension(4), intent(in) :: e_sorted
+      real(rp) :: dos
+
+      ! Local variables
+      real(rp) :: e1, e2, e3, e4, C
+      real(rp), parameter :: TOL = 1.0e-10_rp
+
+      e1 = e_sorted(1)
+      e2 = e_sorted(2)
+      e3 = e_sorted(3)
+      e4 = e_sorted(4)
+
+      dos = 0.0_rp
+
+      ! Skip if degenerate (would cause division by zero)
+      if (abs(e2-e1) < TOL .or. abs(e3-e1) < TOL .or. abs(e4-e1) < TOL .or. &
+          abs(e4-e2) < TOL .or. abs(e4-e3) < TOL .or. abs(e3-e2) < TOL) then
+         return
+      end if
+
+      ! Blöchl modified tetrahedron DOS contribution
+      if (energy <= e1) then
+         dos = 0.0_rp
+      else if (energy >= e4) then
+         dos = 0.0_rp
+      else if (energy <= e2) then
+         ! Region I: e1 < E <= e2
+         ! Blöchl Eq. (23): D(E) = 3(E-e1)²/[(e4-e1)(e3-e1)(e2-e1)]
+         dos = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
+      else if (energy <= e3) then
+         ! Region II: e2 < E <= e3
+         ! Blöchl Eq. (24): D(E) = 1/[(e4-e1)(e3-e1)] * 
+         !   [3(e2-e1) + 6(E-e2) - 3(e3+e4-e1-e2)(E-e2)²/[(e3-e2)(e4-e2)]]
+         C = 1.0_rp / ((e4 - e1) * (e3 - e1))
+         dos = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
+                   3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
+                   ((e3 - e2) * (e4 - e2)))
+      else
+         ! Region III: e3 < E < e4
+         ! Blöchl Eq. (25): D(E) = 3(e4-E)²/[(e4-e1)(e4-e2)(e4-e3)]
+         dos = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+      end if
+
+   end function blochl_dos_contribution
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Sort real array and return sorted values and indices
    !---------------------------------------------------------------------------
    subroutine sort_real_array(arr, sorted, indices)
@@ -2199,7 +2254,8 @@ end subroutine calculate_dos_gaussian
       integer, dimension(4) :: sort_idx
       integer :: nbands
       real(rp) :: e1, e2, e3, e4, E, C
-      real(rp) :: dos_integral, norm_factor
+   real(rp) :: dos_integral, norm_factor
+   integer :: skipped_degenerate
       real(rp), parameter :: TOL = 1.0e-10_rp
 
       call g_logger%info('calculate_dos_blochl: Calculating DOS using Blöchl modified tetrahedron method', __FILE__, __LINE__)
@@ -2230,7 +2286,8 @@ end subroutine calculate_dos_gaussian
 
       nbands = size(this%eigenvalues, 1)
 
-      ! Loop over energy points
+   skipped_degenerate = 0
+   ! Loop over energy points
       do i_energy = 1, this%n_energy_points
          energy = this%dos_energy_grid(i_energy)
 
@@ -2262,6 +2319,7 @@ end subroutine calculate_dos_gaussian
                ! small, skip this tetrahedron-band contribution.
                if (abs(e2-e1) < TOL .or. abs(e3-e1) < TOL .or. abs(e4-e1) < TOL .or. &
                   abs(e4-e2) < TOL .or. abs(e4-e3) < TOL .or. abs(e3-e2) < TOL) then
+                  skipped_degenerate = skipped_degenerate + 1
                   cycle
                end if
 
@@ -2271,25 +2329,38 @@ end subroutine calculate_dos_gaussian
                   dos_contrib = 0.0_rp
                else if (E <= e2) then
                   ! Region I: e1 < E <= e2
-                  C = 3.0_rp * (E - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
-                  dos_contrib = C
+                  ! Blöchl Eq. (23): D(E) = 3(E-e1)²/[(e4-e1)(e3-e1)(e2-e1)]
+                  dos_contrib = 3.0_rp * (E - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
                else if (E <= e3) then
                   ! Region II: e2 < E <= e3
-                  C = 3.0_rp / ((e4 - e1) * (e3 - e1))
-                  dos_contrib = C * (1.0_rp - (e4 - E)**2 / ((e4 - e2) * (e4 - e3)) - &
-                                     (e3 - E)**2 / ((e3 - e2) * (e4 - e3)))
+                  ! Blöchl Eq. (24): D(E) = 1/[(e4-e1)(e3-e1)] * 
+                  !   [3(e2-e1) + 6(E-e2) - 3(e3+e4-e1-e2)(E-e2)²/[(e3-e2)(e4-e2)]]
+                  C = 1.0_rp / ((e4 - e1) * (e3 - e1))
+                  dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (E - e2) - &
+                                    3.0_rp * (e3 + e4 - e1 - e2) * (E - e2)**2 / &
+                                    ((e3 - e2) * (e4 - e2)))
                else
                   ! Region III: e3 < E < e4
-                  C = 3.0_rp * (e4 - E)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
-                  dos_contrib = C
+                  ! Blöchl Eq. (25): D(E) = 3(e4-E)²/[(e4-e1)(e4-e2)(e4-e3)]
+                  dos_contrib = 3.0_rp * (e4 - E)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
                end if
 
                ! Weight by tetrahedron volume (consistent with tetrahedron method)
                this%total_dos(i_energy) = this%total_dos(i_energy) + &
                   dos_contrib * this%tetrahedron_volumes(i_tet)
+               ! Guard against numerical issues accumulating NaN/Inf
+               if (.not. (this%total_dos(i_energy) == this%total_dos(i_energy))) then
+                  call g_logger%warning('calculate_dos_blochl: NaN detected in total_dos at energy index ' // trim(int2str(i_energy)), __FILE__, __LINE__)
+                  this%total_dos(i_energy) = 0.0_rp
+               end if
             end do
          end do
       end do
+
+      if (skipped_degenerate > 0) then
+         call g_logger%info('calculate_dos_blochl: Skipped ' // trim(int2str(skipped_degenerate)) // &
+                           ' degenerate tetrahedron contributions', __FILE__, __LINE__)
+      end if
 
       ! Normalize to get correct number of states
       dos_integral = 0.0_rp
@@ -2544,8 +2615,8 @@ end subroutine calculate_dos_gaussian
          sigma = 0.1_rp  ! Default fallback
       end if
       
-      call g_logger%info('calculate_adaptive_sigma: Adaptive sigma = ' // trim(real2str(sigma, '(F8.5)')) // &
-                        ' eV for ' // trim(int2str(nk_total)) // ' k-points', __FILE__, __LINE__)
+   call g_logger%info('calculate_adaptive_sigma: Adaptive sigma = ' // trim(real2str(sigma, '(F8.5)')) // &
+            ' Ry for ' // trim(int2str(nk_total)) // ' k-points', __FILE__, __LINE__)
    end function calculate_adaptive_sigma
 
    !---------------------------------------------------------------------------
@@ -2740,7 +2811,9 @@ end subroutine project_dos_orbitals_gaussian
       ! Local variables
       integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite, itype
       integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end, ik
+      integer :: ie, nbands
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
+      real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       integer, dimension(4) :: sort_idx
       complex(rp) :: psi_element
@@ -2801,7 +2874,12 @@ end subroutine project_dos_orbitals_gaussian
                call sort4(e_corners, sorted_e)
 
                ! Calculate DOS contribution from this tetrahedron and band
-               dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
+               ! Use Blöchl formula if dos_method is 'blochl', otherwise standard tetrahedron
+               if (trim(this%dos_method) == 'blochl') then
+                  dos_contrib = this%blochl_dos_contribution(energy, sorted_e)
+               else
+                  dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
+               end if
 
                ! Skip if DOS contribution is negligible
                if (abs(dos_contrib) < 1.0e-12_rp) cycle
@@ -2891,6 +2969,38 @@ end subroutine project_dos_orbitals_gaussian
 #endif
 
       deallocate(site_orb_offset)
+
+      ! Normalize projected DOS to match total DOS normalization
+      ! When using Blöchl or standard tetrahedron method, the raw DOS needs normalization
+      ! to integrate to the correct number of states. We must apply the same normalization
+      ! to projected DOS for consistency.
+      if (allocated(this%total_dos) .and. this%n_energy_points > 2) then
+         nbands = size(this%eigenvalues, 1)
+         total_dos_integral = 0.0_rp
+         do ie = 1, this%n_energy_points - 1
+            total_dos_integral = total_dos_integral + &
+               0.5_rp * (this%total_dos(ie) + this%total_dos(ie+1)) * &
+               (this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie))
+         end do
+         
+         ! The total_dos is already normalized, so total_dos_integral ≈ nbands
+         ! Calculate integral of projected DOS (raw, unnormalized)
+         proj_dos_integral = 0.0_rp
+         do ie = 1, this%n_energy_points - 1
+            ! Sum over all sites, orbitals, and spins
+            proj_dos_integral = proj_dos_integral + &
+               0.5_rp * (sum(this%projected_dos(:,:,:,ie)) + sum(this%projected_dos(:,:,:,ie+1))) * &
+               (this%dos_energy_grid(ie+1) - this%dos_energy_grid(ie))
+         end do
+         
+         ! Normalize projected DOS by the same factor
+         if (abs(proj_dos_integral) > 1.0e-10_rp) then
+            norm_factor = real(nbands, rp) / proj_dos_integral
+            this%projected_dos = this%projected_dos * norm_factor
+            call g_logger%info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
+                              trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
+         end if
+      end if
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
    end subroutine project_dos_orbitals_tetrahedron
