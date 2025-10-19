@@ -1,3 +1,13 @@
+! ============================================================================
+! DEPRECATED NAMELIST - DO NOT USE
+! ============================================================================
+! This &dos namelist is NO LONGER READ by the code!
+! Use &reciprocal namelist instead for all k-space post-processing tasks.
+!
+! Migration: All parameters from &dos have been moved to &reciprocal.
+! See NAMELIST_HOMOGENIZATION.md for migration guide.
+! ============================================================================
+
 character(len=30) :: dos_method
 real :: gaussian_sigma
 integer :: n_energy_points

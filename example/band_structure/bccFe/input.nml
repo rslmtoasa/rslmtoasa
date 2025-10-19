@@ -26,19 +26,54 @@ energy_min = -1.0
 energy_max = 0.5
 channels_ldos = 2500
 /
-&dos
-dos_method = 'tetrahedron'  ! 'tetrahedron' or 'gaussian'
-gaussian_sigma = 0.0025     ! Gaussian smearing parameter in eV (only used for gaussian method)
-n_energy_points = 1000   ! Number of energy points for DOS
-dos_energy_min = -1.0   ! Minimum energy for DOS in eV
-dos_energy_max = 1.0    ! Maximum energy for DOS in eV
-temperature = 300.0      ! Temperature for Fermi-Dirac distribution in Kelvin
-nk1 = 12                 ! Number of k-points in first direction
-nk2 = 12                 ! Number of k-points in second direction
-nk3 = 12                 ! Number of k-points in third direction
-total_electrons = 8.0    ! Total number of valence electrons
-auto_find_fermi = T      ! Automatically find Fermi level from DOS
+&reciprocal
+   ! K-point mesh for SCF (12x12x12 = 1728 k-points before symmetry)
+   nk1 = 12
+   nk2 = 12
+   nk3 = 12
+   
+   ! K-point mesh offset (0,0,0 = Gamma-centered mesh)
+   k_offset_x = 0.0
+   k_offset_y = 0.0
+   k_offset_z = 0.0
+   
+   ! Symmetry reduction (highly recommended)
+   use_symmetry_reduction = .true. ! Use crystal symmetry
+   use_time_reversal = .true.      ! Use time-reversal symmetry
+   use_shift = .false.             ! Don't apply additional Monkhorst-Pack shift
+   
+   ! DOS calculation settings
+   dos_method = 'tetrahedron'      ! Use tetrahedron method (more accurate)
+                                   ! Alternative: 'gaussian' for smoother DOS
+   
+   gaussian_sigma = 0.1            ! Gaussian broadening (eV) - only for gaussian method
+   temperature = 300.0             ! Temperature for Fermi-Dirac smearing (K)
+   
+   ! Energy grid for DOS
+   n_energy_points = 2000          ! Number of points in DOS energy grid
+   dos_energy_min = -15.0          ! Minimum energy relative to Fermi (eV)
+   dos_energy_max = 10.0           ! Maximum energy relative to Fermi (eV)
+   
+   ! Fermi level determination
+   auto_find_fermi = .false.       ! Use Fermi level from &energy namelist
+                                   ! Set to .true. to find from charge conservation
+   
+   ! Verbosity
+   suppress_internal_logs = .true. ! Suppress detailed k-point info (recommended)
 /
+! &dos
+! dos_method = 'tetrahedron'  ! 'tetrahedron' or 'gaussian'
+! gaussian_sigma = 0.0025     ! Gaussian smearing parameter in eV (only used for gaussian method)
+! n_energy_points = 1000   ! Number of energy points for DOS
+! dos_energy_min = -1.0   ! Minimum energy for DOS in eV
+! dos_energy_max = 1.0    ! Maximum energy for DOS in eV
+! temperature = 300.0      ! Temperature for Fermi-Dirac distribution in Kelvin
+! nk1 = 12                 ! Number of k-points in first direction
+! nk2 = 12                 ! Number of k-points in second direction
+! nk3 = 12                 ! Number of k-points in third direction
+! total_electrons = 8.0    ! Total number of valence electrons
+! auto_find_fermi = T      ! Automatically find Fermi level from DOS
+! /
 &control
 calctype = 'B'
 nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4

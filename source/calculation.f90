@@ -1703,7 +1703,7 @@ contains
       this%temperature = 300.0_rp
       this%total_electrons = 0.0_rp  ! 0 = auto-detect from valence
       this%auto_find_fermi = .true.
-      this%suppress_internal_logs = .false.
+      this%suppress_internal_logs = .true.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

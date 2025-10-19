@@ -678,19 +678,23 @@ contains
          ! Call clusba to get neighbor vectors for this atom
          call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
 
+         ! print *, 'DEBUG: After clusba for type ', ntype, ', got nn_max_loc = ', nn_max_loc
+         ! print '(3f12.6)', ham_vec(:, 1:nn_max_loc)
          ! Debug: Check what clusba returned
-         if (.not. this%suppress_internal_logs .and. ntype == 1) then
-            write(*, '(A,I0,A,I0)') 'DEBUG: After clusba for type ', ntype, ', got nn_max_loc = ', nn_max_loc
-            write(*, '(A)') 'DEBUG: First 5 ham_vec from clusba output:'
-            do i = 1, min(5, nn_max_loc)
-               write(*, '(A,I3,A,3F12.6)') '  ham_vec[', i, '] = ', ham_vec(1:3, i)
-            end do
-         end if
+         ! if (.not. this%suppress_internal_logs .and. ntype == 1) then
+         !    write(*, '(A,I0,A,I0)') 'DEBUG: After clusba for type ', ntype, ', got nn_max_loc = ', nn_max_loc
+         !    write(*, '(A)') 'DEBUG: First 5 ham_vec from clusba output:'
+         !    do i = 1, min(5, nn_max_loc)
+         !       write(*, '(A,I3,A,3F12.6)') '  ham_vec[', i, '] = ', ham_vec(1:3, i)
+         !    end do
+         ! end if
 
          ! Store in type-indexed array
-         this%ham_vec_type(1:3, 1:nr, ntype) = ham_vec(1:3, 1:nr)
+         ! ham_vec from clusba is in absolute units (same as cralat), need to store in lattice units
+         this%ham_vec_type(1:3, 1:nr, ntype) = ham_vec(1:3, 1:nr) !* this%lattice%alat
 
          ! Convert to fractional coordinates
+         ! ham_vec_type is now in Cartesian coordinates in units of alat
          if (this%lattice%a_cart_inv_ready) then
             ! Use pre-computed inverse
             do nn_max_loc = 1, nr
@@ -698,7 +702,7 @@ contains
                   matmul(this%lattice%a_cart_inv, this%ham_vec_type(1:3, nn_max_loc, ntype))
             end do
          else
-            ! Use helper function
+            ! Use helper function (which expects Cartesian in units of alat)
             do nn_max_loc = 1, nr
                call cartesian_to_fractional(this%ham_vec_type(1:3, nn_max_loc, ntype), &
                                           this%ham_vec_type_direct(1:3, nn_max_loc, ntype), &
@@ -712,18 +716,18 @@ contains
                           ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
          
          ! Debug: print first few neighbor vectors for verification
-         if (.not. this%suppress_internal_logs .and. ntype == 1) then
-            write(*, '(A)') '=== Neighbor vectors for type 1 (Cartesian) ==='
-            do nn_max_loc = 1, min(5, nr)
-               write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
-                  this%ham_vec_type(1:3, nn_max_loc, ntype)
-            end do
-            write(*, '(A)') '=== Neighbor vectors for type 1 (Fractional) ==='
-            do nn_max_loc = 1, min(5, nr)
-               write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
-                  this%ham_vec_type_direct(1:3, nn_max_loc, ntype)
-            end do
-         end if
+         ! if (.not. this%suppress_internal_logs .and. ntype == 1) then
+         !    write(*, '(A)') '=== Neighbor vectors for type 1 (Cartesian) ==='
+         !    do nn_max_loc = 1, min(5, nr)
+         !       write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
+         !          this%ham_vec_type(1:3, nn_max_loc, ntype)
+         !    end do
+         !    write(*, '(A)') '=== Neighbor vectors for type 1 (Fractional) ==='
+         !    do nn_max_loc = 1, min(5, nr)
+         !       write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
+         !          this%ham_vec_type_direct(1:3, nn_max_loc, ntype)
+         !    end do
+         ! end if
       end do
 
       call g_logger%info('reciprocal%build_neighbor_vectors: Completed neighbor vector build for all types', __FILE__, __LINE__)
@@ -757,9 +761,9 @@ contains
          if (ineigh == 1) then
             ! On-site term (R = 0)
             structure_factors(ineigh) = cmplx(1.0_rp, 0.0_rp, rp)
-            if (debug_this_k) then
-               call g_logger%info('fourier_transform_hamiltonian: On-site term (R=0)', __FILE__, __LINE__)
-            end if
+            ! if (debug_this_k) then
+            !    call g_logger%info('fourier_transform_hamiltonian: On-site term (R=0)', __FILE__, __LINE__)
+            ! end if
          else
             ! Off-site terms - get neighbor vector from type-indexed arrays
             ! Use fractional coordinates for both k and R for clean phase calculation
@@ -767,9 +771,9 @@ contains
             if (allocated(this%ham_vec_type_direct)) then
                ! Use the proper per-atom-type neighbor vectors (fractional)
                r_vec(1:3) = this%ham_vec_type_direct(1:3, ineigh, ntype)
-               if (debug_this_k) then
-                  call g_logger%info('fourier_transform_hamiltonian: Using ham_vec_type_direct (fractional, type-indexed)', __FILE__, __LINE__)
-               end if
+               ! if (debug_this_k) then
+               !    call g_logger%info('fourier_transform_hamiltonian: Using ham_vec_type_direct (fractional, type-indexed)', __FILE__, __LINE__)
+               ! end if
             else if (allocated(this%ham_vec_type)) then
                ! Fallback: Use Cartesian and convert
                r_vec(1:3) = this%ham_vec_type(1:3, ineigh, ntype)
@@ -794,6 +798,8 @@ contains
             ! Phase = 2π * k_frac · r_frac (need 2π factor for fractional coords)
             k_dot_r = 2.0_rp * pi * dot_product(k_vec, r_vec)
             structure_factors(ineigh) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
+            ! print '(a, 3f10.6, a, 3f10.6)', 'DEBUG: k_vec=', k_vec, ' R_vec=', r_vec
+            ! print *,'DEBUG: ineigh=', ineigh, ' k_dot_r=', k_dot_r, ' structure_factor=', structure_factors(ineigh)
          end if
       end do
    end subroutine calculate_structure_factors
@@ -817,7 +823,7 @@ contains
       nr = this%lattice%nn(ia, 1)  ! Number of neighbors
 
       ! Debug only for first k-point and first atom type to avoid spam
-      debug_this_k = (ntype == 1)
+      debug_this_k = .false. !(ntype == 1)
       
       ! Only debug near gamma point
       if (sqrt(k_vec(1)**2 + k_vec(2)**2 + k_vec(3)**2) > 0.1_rp) debug_this_k = .false.
@@ -839,16 +845,32 @@ contains
       ! Calculate structure factors (fills structure_factors)
       call this%calculate_structure_factors(k_vec, ntype, structure_factors)
       
-      ! Print first few structure factors for first k-point to debug
-     ! if (.not. this%suppress_internal_logs) then
-     !   if (ntype == 1 .and. size(structure_factors) >= 5) then
-     !      write(*, '(A,2F10.6)') "First structure factor:", structure_factors(1)
-     !      write(*, '(A,2F10.6)') "Second structure factor:", structure_factors(2)
-     !      write(*, '(A,2F10.6)') "Third structure factor:", structure_factors(3)
-     !      write(*, '(A,2F10.6)') "Fourth structure factor:", structure_factors(4)
-     !      write(*, '(A,2F10.6)') "Fifth structure factor:", structure_factors(5)
-     !   end if
-     ! end if
+      ! Debug: Print structure factors for first k-point
+      if (.not. this%suppress_internal_logs .and. debug_this_k) then
+         write(*, '(A,3F10.6)') 'DEBUG FT: k_vec (fractional) = ', k_vec
+         write(*, '(A)') 'DEBUG FT: Structure factors:'
+         do ineigh = 1, min(5, nr)
+            write(*, '(A,I3,A,2F12.6,A,F10.6)') '  SF[', ineigh, '] = ', &
+               structure_factors(ineigh), '  |SF| = ', abs(structure_factors(ineigh))
+         end do
+         write(*, '(A)') 'DEBUG FT: Hamiltonian ee array dimensions:'
+         write(*, '(A,4I5)') '  shape(ee) = ', shape(this%hamiltonian%ee)
+         write(*, '(A,I5,A,I5)') '  Checking ineigh up to nr=', nr, ', ntype=', ntype
+         write(*, '(A)') 'DEBUG FT: Sample H(R) diagonal elements (real part):'
+         do ineigh = 1, min(3, nr)
+            write(*, '(A,I3,A,3ES12.3)') '  H_R[', ineigh, '][1,1], [10,10], [18,18] = ', &
+               real(this%hamiltonian%ee(1,1,ineigh,ntype)), &
+               real(this%hamiltonian%ee(10,10,ineigh,ntype)), &
+               real(this%hamiltonian%ee(18,18,ineigh,ntype))
+         end do
+         ! Check for NaN or extreme values
+         if (any(abs(real(this%hamiltonian%ee(:,:,1,ntype))) > 1.0e10_rp)) then
+            write(*, '(A)') 'WARNING: Hamiltonian contains extreme values (>1e10)!'
+         end if
+         if (any(real(this%hamiltonian%ee(:,:,1,ntype)) /= real(this%hamiltonian%ee(:,:,1,ntype)))) then
+            write(*, '(A)') 'ERROR: Hamiltonian contains NaN values!'
+         end if
+      end if
 
       ! Initialize result
       hk_result = cmplx(0.0_rp, 0.0_rp, rp)
@@ -860,9 +882,16 @@ contains
          hk_result = hk_result + this%hamiltonian%ee(:, :, ineigh, ntype) * structure_factors(ineigh)
       end do
 
-      ! if (debug_this_k) then
-      !    call g_logger%info('fourier_transform_hamiltonian: Completed FT', __FILE__, __LINE__)
-      ! end if
+      ! Debug: Print resulting H(k) diagonal elements
+      if (.not. this%suppress_internal_logs .and. debug_this_k) then
+         write(*, '(A)') 'DEBUG FT: Resulting H(k) diagonal elements (real part):'
+         write(*, '(A,3F10.5)') '  H_k[1,1], [10,10], [18,18] = ', &
+            real(hk_result(1,1)), real(hk_result(10,10)), real(hk_result(18,18))
+         write(*, '(A)') 'DEBUG FT: Resulting H(k) diagonal elements (imag part):'
+         write(*, '(A,3F10.5)') '  H_k[1,1], [10,10], [18,18] = ', &
+            aimag(hk_result(1,1)), aimag(hk_result(10,10)), aimag(hk_result(18,18))
+         write(*, '(A,F12.5)') 'DEBUG FT: Trace of H(k) (real) = ', real(trace_complex_matrix(hk_result))
+      end if
 
       ! Deallocate structure factors (thread-safe - each thread has its own)
       deallocate(structure_factors)
@@ -931,14 +960,14 @@ contains
 
          ! If the user requested debug logs for first few k-points, produce them
          ! outside the parallel region to avoid logging from multiple threads.
-         if (.not. this%suppress_internal_logs) then
-            do ik = 1, min(3, this%nk_total)
-               k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
-               write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
-                     ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
-               call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-            end do
-         end if
+         ! if (.not. this%suppress_internal_logs) then
+         !    do ik = 1, min(3, this%nk_total)
+         !       k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
+         !       write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
+         !             ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
+         !       call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+         !    end do
+         ! end if
 
          ! Parallelize over k-points (coarse-grained) when OpenMP is available.
 #ifdef _OPENMP
@@ -1106,14 +1135,14 @@ subroutine build_total_hamiltonian(this)
                   end if
                end if
 
-               ! Diagnostic: print first few neighbor vectors for verification
-               if (ik == 1 .and. isite == 1 .and. ineigh <= 5) then
-                  call g_logger%info('  Neighbor ' // trim(int2str(ineigh)) // ': ja=' // &
-                                    trim(int2str(ja)) // ' → jsite=' // trim(int2str(jsite)) // &
-                                    ', r_ij(frac)=[' // trim(real2str(r_ij_direct(1), '(F8.4)')) // ',' // &
-                                    trim(real2str(r_ij_direct(2), '(F8.4)')) // ',' // &
-                                    trim(real2str(r_ij_direct(3), '(F8.4)')) // ']', __FILE__, __LINE__)
-               end if
+               ! ! Diagnostic: print first few neighbor vectors for verification
+               ! if (ik == 1 .and. isite == 1 .and. ineigh <= 5) then
+               !    call g_logger%info('  Neighbor ' // trim(int2str(ineigh)) // ': ja=' // &
+               !                      trim(int2str(ja)) // ' → jsite=' // trim(int2str(jsite)) // &
+               !                      ', r_ij(frac)=[' // trim(real2str(r_ij_direct(1), '(F8.4)')) // ',' // &
+               !                      trim(real2str(r_ij_direct(2), '(F8.4)')) // ',' // &
+               !                      trim(real2str(r_ij_direct(3), '(F8.4)')) // ']', __FILE__, __LINE__)
+               ! end if
             end if
 
             ! Orbital block for site j (columns)
@@ -2078,6 +2107,20 @@ subroutine calculate_dos_gaussian(this)
    real(rp) :: local_sum, dos_integral, norm_factor
    integer :: nbands
 
+   ! Debug: Check eigenvalue range
+   if (.not. this%suppress_internal_logs) then
+      call g_logger%info('calculate_dos_gaussian: Eigenvalue range = [' // &
+         trim(real2str(minval(this%eigenvalues), '(F12.6)')) // ', ' // &
+         trim(real2str(maxval(this%eigenvalues), '(F12.6)')) // '] Ry', __FILE__, __LINE__)
+      call g_logger%info('calculate_dos_gaussian: DOS energy range = [' // &
+         trim(real2str(this%dos_energy_range(1), '(F12.6)')) // ', ' // &
+         trim(real2str(this%dos_energy_range(2), '(F12.6)')) // '] Ry', __FILE__, __LINE__)
+      call g_logger%info('calculate_dos_gaussian: Number of k-points = ' // &
+         trim(int2str(this%nk_total)), __FILE__, __LINE__)
+      call g_logger%info('calculate_dos_gaussian: K-point weight = ' // &
+         trim(real2str(this%k_weights(1), '(ES12.4)')), __FILE__, __LINE__)
+   end if
+
    ! Determine sigma (already in Ry from input)
    if (this%gaussian_sigma < 0.001_rp) then
       sigma_use = this%calculate_adaptive_sigma()
@@ -2164,6 +2207,20 @@ end subroutine calculate_dos_gaussian
       ! Setup tetrahedra if not already done
       if (.not. allocated(this%tetrahedra)) then
          call this%setup_tetrahedra()
+      end if
+
+      ! Debug: Check eigenvalue range
+      if (.not. this%suppress_internal_logs) then
+         call g_logger%info('calculate_dos_blochl: Eigenvalue range = [' // &
+            trim(real2str(minval(this%eigenvalues), '(F12.6)')) // ', ' // &
+            trim(real2str(maxval(this%eigenvalues), '(F12.6)')) // '] Ry', __FILE__, __LINE__)
+         call g_logger%info('calculate_dos_blochl: DOS energy range = [' // &
+            trim(real2str(this%dos_energy_range(1), '(F12.6)')) // ', ' // &
+            trim(real2str(this%dos_energy_range(2), '(F12.6)')) // '] Ry', __FILE__, __LINE__)
+         call g_logger%info('calculate_dos_blochl: Number of tetrahedra = ' // &
+            trim(int2str(this%n_tetrahedra)), __FILE__, __LINE__)
+         call g_logger%info('calculate_dos_blochl: Tetrahedron volume = ' // &
+            trim(real2str(this%tetrahedron_volumes(1), '(ES12.4)')), __FILE__, __LINE__)
       end if
 
       ! Allocate DOS arrays
@@ -2563,12 +2620,12 @@ subroutine project_dos_orbitals_gaussian(this)
                      ', nbands = ' // trim(int2str(nbands)) // &
                      ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)) // &
                      ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
-   call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset = [' // &
-                     trim(int2str(site_orb_offset(1))) // ', ' // &
-                     trim(int2str(site_orb_offset(2))) // ', ' // &
-                     trim(int2str(site_orb_offset(3))) // ', ' // &
-                     trim(int2str(site_orb_offset(4))) // ', ' // &
-                     trim(int2str(site_orb_offset(5))) // ']', __FILE__, __LINE__)
+   ! call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset = [' // &
+   !                   trim(int2str(site_orb_offset(1))) // ', ' // &
+   !                   trim(int2str(site_orb_offset(2))) // ', ' // &
+   !                   trim(int2str(site_orb_offset(3))) // ', ' // &
+   !                   trim(int2str(site_orb_offset(4))) // ', ' // &
+   !                   trim(int2str(site_orb_offset(5))) // ']', __FILE__, __LINE__)
 
    ! Calculate projected DOS (raw) - same weights as total DOS
    do ie = 1, this%n_energy_points

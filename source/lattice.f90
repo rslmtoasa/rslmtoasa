@@ -2209,11 +2209,12 @@ contains
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 500 ! Neigbours for SBAR construction (>> TB neighbours)
+      nt = 1000 ! Neigbours for SBAR construction (>> TB neighbours)
       ! allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
       allocate(sbarvec(3, nt))
       call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
+      print *, 'Number of neighbours for sbar:', nt
       write (17, 10000) nt
       write (17, 10001) ((sbarvec(j, i), j=1, 3), i=1, nt)
       !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)

@@ -120,6 +120,17 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                           "/traceback"   # Intel Windows
                 )
 
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                 Fortran "-traceback"   # Intel/Portland Group
+                         "-fbacktrace -g"  # GNU (gfortran)
+                         "-ftrace=full" # GNU (g95)
+                          "/traceback"   # Intel Windows
+                )
+
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                 Fortran "-g"
+                )
+
 # Check array bounds
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                  Fortran "-check bounds"  # Intel
