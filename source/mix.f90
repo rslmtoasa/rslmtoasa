@@ -305,20 +305,20 @@ contains
          end do
 
          ! Debug: Check qia_new values after saving from ql
-         call g_logger%info('DEBUG qia_new after save_to(new):', __FILE__, __LINE__)
-         do it = 1, this%lattice%nrec
-            call g_logger%info('  Site ' // trim(int2str(it)) // ':', __FILE__, __LINE__)
-            call g_logger%info('    qia_new(1:3) s,p,d up: ' // &
-               trim(real2str(this%qia_new(it, 1), '(ES15.8)')) // ' ' // &
-               trim(real2str(this%qia_new(it, 2), '(ES15.8)')) // ' ' // &
-               trim(real2str(this%qia_new(it, 3), '(ES15.8)')), __FILE__, __LINE__)
-            call g_logger%info('    qia_new(4:6) s,p,d dn: ' // &
-               trim(real2str(this%qia_new(it, 4), '(ES15.8)')) // ' ' // &
-               trim(real2str(this%qia_new(it, 5), '(ES15.8)')) // ' ' // &
-               trim(real2str(this%qia_new(it, 6), '(ES15.8)')), __FILE__, __LINE__)
-            call g_logger%info('    Sum qia_new(1:6) = ' // &
-               trim(real2str(sum(this%qia_new(it, 1:6)), '(F16.10)')), __FILE__, __LINE__)
-         end do
+         ! call g_logger%info('DEBUG qia_new after save_to(new):', __FILE__, __LINE__)
+         ! do it = 1, this%lattice%nrec
+         !    call g_logger%info('  Site ' // trim(int2str(it)) // ':', __FILE__, __LINE__)
+         !    call g_logger%info('    qia_new(1:3) s,p,d up: ' // &
+         !       trim(real2str(this%qia_new(it, 1), '(ES15.8)')) // ' ' // &
+         !       trim(real2str(this%qia_new(it, 2), '(ES15.8)')) // ' ' // &
+         !       trim(real2str(this%qia_new(it, 3), '(ES15.8)')), __FILE__, __LINE__)
+         !    call g_logger%info('    qia_new(4:6) s,p,d dn: ' // &
+         !       trim(real2str(this%qia_new(it, 4), '(ES15.8)')) // ' ' // &
+         !       trim(real2str(this%qia_new(it, 5), '(ES15.8)')) // ' ' // &
+         !       trim(real2str(this%qia_new(it, 6), '(ES15.8)')), __FILE__, __LINE__)
+         !    call g_logger%info('    Sum qia_new(1:6) = ' // &
+         !       trim(real2str(sum(this%qia_new(it, 1:6)), '(F16.10)')), __FILE__, __LINE__)
+         ! end do
 
       case ('prev')
          do it = 1, this%lattice%nrec

@@ -2096,7 +2096,7 @@ contains
    subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji
+      integer :: it, ino, nr, nlim, m, i, j, ja, ji, iz
       complex(rp), dimension(:,:,:,:), allocatable :: hmag
 
       ! print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
@@ -2108,6 +2108,7 @@ contains
          ! print *, 'Building local Hamiltonian for atom ', nlim, ' of ', this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
+         iz = this%charge%lattice%iz(nlim) ! Atom type in the input.nml file
          call this%chbar_nc(nlim, nr, hmag)
          do m = 1, nr
             do i = 1, 9
@@ -2143,6 +2144,7 @@ contains
          end if
          ! if (this%hubbardU_impurity_check) then
          if (this%hubbard_u_general_check) then
+            do i = 1, 9
                do j = 1, 9
                   this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, iz)
                   this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_u_pot(i + 9, j + 9, iz)

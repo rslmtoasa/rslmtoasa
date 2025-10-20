@@ -334,6 +334,7 @@ contains
       magnetic_mixing = this%magnetic_mixing
       mixmag_all = this%mixmag_all
       freeze = this%freeze
+      use_kspace = this%use_kspace
       rigid_band = this%rigid_band
       orbital_polarization = this%orbital_polarization
       init = this%init

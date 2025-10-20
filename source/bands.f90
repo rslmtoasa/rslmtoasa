@@ -296,12 +296,6 @@ contains
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosial, product(shape(dosial)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
-
-      ! Writing the total density of states
-      ! fname_total = "totaldos.out"
-      ! open(unit=125, file=fname_total, status='replace', action='write')
-      
-
       ! Calculate the Fermi enery
       ef_mag = this%en%fermi
       this%en%chebfermi = this%en%fermi
