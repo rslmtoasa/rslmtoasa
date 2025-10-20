@@ -1,0 +1,40 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 080 ! radius cut. We could think about setting a default
+alat = 4.1684002458
+crystal_sym = 'file' ! options are bcc, fcc and hcp so far.
+wav = 1.2929345694
+/
+&atoms
+database = './'
+label(1) = 'Ni'
+label(2) = 'O'
+/
+&hamiltonian
+hoh = .true.
+hubbard_orb(1) = 'd'
+hubbard_u(1,:) = 6.2
+hubbard_j(1,:) = 0.95
+/
+&self
+nstep = 30 
+/
+&energy
+fermi = -0.143899
+energy_min = -2.5
+energy_max = 2.5
+channels_ldos = 6000
+/
+&control
+calctype = 'B'
+nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.2
+mixtype = 'broyden'
+/

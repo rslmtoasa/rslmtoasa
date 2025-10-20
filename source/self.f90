@@ -683,6 +683,7 @@ contains
 
    end subroutine print_state
 
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -693,7 +694,7 @@ contains
    subroutine run(this)
       use reciprocal_mod
       class(self), intent(inout) :: this
-      integer :: i, ia, niter
+      integer :: i, ia, niter, ie, l1, l2
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
@@ -790,11 +791,33 @@ contains
          this%converged = this%is_converged(this%mix%delta)
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
-            exit
+
+            if (this%hamiltonian%hubbard_u_general_check .and. i == 1) then
+               call g_logger%info('LDA+U module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
+               niter = niter + 1
+            else if (this%hamiltonian%hubbardU_sc_check) then
+               print *, 'Calculates U_eff'
+               call this%bands%calc_hubbard_U() ! Calculates Hubbard U
+               if ( this%bands%hubbard_u_converged ) then
+                  print *, 'The calculated Hubbard U has converged. Exit calculation.'
+                  exit
+               end if
+               niter = niter + 1
+               call this%bands%build_hubbard_u()
+            else
+               exit
+            end if
          else
             if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
             niter = niter + 1
          end if
+         ! if (this%converged) then
+         !    if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
+         !    exit
+         ! else
+         !    if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
+         !    niter = niter + 1
+         ! end if
       end do
    end subroutine run
    
@@ -867,6 +890,14 @@ contains
       end select
    
       call this%bands%calculate_fermi() ! Calculate the Fermi energy
+
+      !=========================================================================
+      !                  CALCULATE HUBBARD CORRECTION
+      !=========================================================================
+      if ( this%hamiltonian%hubbard_u_general_check ) then
+         call this%bands%build_hubbard_u_general()
+      end if
+
       !=========================================================================
       !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
       !=========================================================================

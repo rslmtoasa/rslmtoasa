@@ -1,0 +1,35 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+ndim = 50000 ! cluster dimension to begin with. We could think about guess it from the atom density in the primitive cell and the radius cut
+rc = 060 ! radius cut. We could think about setting a default
+alat = 2.4720000458
+crystal_sym = 'hcp' ! options are bcc, fcc and hcp so far.
+wav = 1.3644350858
+/
+&atoms
+database = './'
+label(1) = 'Co1'
+label(2) = 'Co2'
+/
+&self
+ws_all = .true. ! ''
+nstep = 100
+/
+&energy
+fermi = -0.033276
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
