@@ -286,6 +286,9 @@ contains
       obj%hamiltonian => bands_obj%recursion%hamiltonian
       obj%green => bands_obj%green
 
+      ! Set hamiltonian pointer in mix for LDA+U density matrix mixing
+      call obj%mix%set_hamiltonian_pointer(obj%hamiltonian)
+
       call obj%restore_to_default()
       call obj%build_from_file()
    end function constructor

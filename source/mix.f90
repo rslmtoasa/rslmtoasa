@@ -24,6 +24,7 @@ module mix_mod
    use lattice_mod
    use charge_mod
    use symbolic_atom_mod, only: symbolic_atom
+   use hamiltonian_mod, only: hamiltonian
    use precision_mod, only: rp
    use mpi_mod
    use string_mod
@@ -43,6 +44,8 @@ module mix_mod
       class(charge), pointer :: charge
       ! Symbolic atom
       class(symbolic_atom), dimension(:), pointer :: symbolic_atom
+      !> Hamiltonian (for accessing LDA+U flags)
+      class(hamiltonian), pointer :: hamiltonian
       !> Description
       !>
       !> Description
@@ -51,10 +54,15 @@ module mix_mod
       real(rp), dimension(:, :), allocatable :: qia, qia_new, qia_old, qiaprev
       !> Variables to save magnetic moments for mixing
       real(rp), dimension(:, :), allocatable :: mag_old, mag_new, mag_mix
+      !> Variables to save local density matrices for LDA+U mixing
+      !> Dimensions: (atom, orbital l, spin, m1, m2)
+      real(rp), dimension(:, :, :, :, :), allocatable :: ldm_old, ldm_new
       !> Mixing parameter
       real(rp) :: beta
       !> Magnetic mixing parameter
       real(rp), dimension(:), allocatable :: magbeta
+      !> LDA+U density matrix mixing parameter
+      real(rp) :: ldm_beta
       !> Difference between interactions
       real(rp) :: delta
       !> Type of mixing. Can be linear or broyden
@@ -72,6 +80,8 @@ module mix_mod
       procedure :: save_to
       procedure :: mixpq
       procedure :: mix_magnetic_moments
+      procedure :: mix_ldm
+      procedure :: set_hamiltonian_pointer
       final :: destructor
    end type mix
 
@@ -123,6 +133,8 @@ contains
       if (allocated(this%mag_new)) call g_safe_alloc%deallocate('mix.mag_new', this%mag_new)
       if (allocated(this%mag_old)) call g_safe_alloc%deallocate('mix.mag_old', this%mag_old)
       if (allocated(this%mag_mix)) call g_safe_alloc%deallocate('mix.mag_mix', this%mag_mix)
+      if (allocated(this%ldm_old)) call g_safe_alloc%deallocate('mix.ldm_old', this%ldm_old)
+      if (allocated(this%ldm_new)) call g_safe_alloc%deallocate('mix.ldm_new', this%ldm_new)
       if (allocated(this%is_induced)) call g_safe_alloc%deallocate('mix.is_induced', this%is_induced)
 #else
       if (allocated(this%qia)) deallocate (this%qia)
@@ -137,6 +149,8 @@ contains
       if (allocated(this%mag_new)) deallocate (this%mag_new)
       if (allocated(this%mag_old)) deallocate (this%mag_old)
       if (allocated(this%mag_mix)) deallocate (this%mag_mix)
+      if (allocated(this%ldm_old)) deallocate (this%ldm_old)
+      if (allocated(this%ldm_new)) deallocate (this%ldm_new)
       if (allocated(this%is_induced)) deallocate (this%is_induced)
 #endif
    end subroutine destructor
@@ -203,12 +217,19 @@ contains
       call g_safe_alloc%allocate('mix.mag_old', this%mag_old, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_new', this%mag_new, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_mix', this%mag_mix, (/this%lattice%nrec, 3/))
+      ! Allocate LDM arrays: (atom, l+1, spin, 2*lmax+1, 2*lmax+1)
+      ! Using lmax=2 (d-orbitals) -> dimensions are (nrec, 3, 2, 5, 5)
+      call g_safe_alloc%allocate('mix.ldm_old', this%ldm_old, (/this%lattice%nrec, 3, 2, 5, 5/))
+      call g_safe_alloc%allocate('mix.ldm_new', this%ldm_new, (/this%lattice%nrec, 3, 2, 5, 5/))
       call g_safe_alloc%allocate('mix.is_induced', this%is_induced, (/this%lattice%nrec/))
 #else
       allocate (this%qia(this%lattice%nrec, 18), this%qia_new(this%lattice%nrec, 18), this%qia_old(this%lattice%nrec, 18))
       allocate (this%qiaprev(this%lattice%nrec, 18))
       allocate (this%v_broy(this%lattice%nrec*18), this%u_broy(this%lattice%nrec*18), this%fo_broy(this%lattice%nrec*18), this%muo_broy(this%lattice%nrec*18))
       allocate (this%magbeta(this%lattice%nrec), this%mag_old(this%lattice%nrec, 3), this%mag_new(this%lattice%nrec, 3), this%mag_mix(this%lattice%nrec, 3))
+      ! Allocate LDM arrays: (atom, l+1, spin, 2*lmax+1, 2*lmax+1)
+      ! Using lmax=2 (d-orbitals) -> dimensions are (nrec, 3, 2, 5, 5)
+      allocate (this%ldm_old(this%lattice%nrec, 3, 2, 5, 5), this%ldm_new(this%lattice%nrec, 3, 2, 5, 5))
       allocate (this%is_induced(this%lattice%nrec))
 #endif
 
@@ -221,6 +242,9 @@ contains
       this%var = 0
       this%beta = 0.1d0
       this%magbeta(:) = 1.0d0
+      this%ldm_beta = 0.1d0  ! LDA+U density matrix mixing parameter (same as beta by default)
+      this%ldm_old(:,:,:,:,:) = 0.0d0
+      this%ldm_new(:,:,:,:,:) = 0.0d0
       this%nmix = 2
       this%mixtype = 'linear'
       this%is_induced = .false.
@@ -289,6 +313,8 @@ contains
                this%qia_old(IT, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
                !QI_OLD(IT, I+15) = ENU(I, 2)
             end do
+            ! Save LDM for LDA+U (only s, p, d orbitals supported here: l=0,1,2 -> indices 1,2,3)
+            this%ldm_old(it, :, :, :, :) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm(1:3, :, 1:5, 1:5)
          end do
       case ('new')
          do it = 1, this%lattice%nrec
@@ -302,6 +328,8 @@ contains
                this%qia_new(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
                !QI_OLD(IT, I+15) = ENU(I, 2)
             end do
+            ! Save LDM for LDA+U (only s, p, d orbitals supported here: l=0,1,2 -> indices 1,2,3)
+            this%ldm_new(it, :, :, :, :) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm(1:3, :, 1:5, 1:5)
          end do
 
          ! Debug: Check qia_new values after saving from ql
@@ -433,6 +461,9 @@ contains
          if (rank == 0) call g_logger%info('Moment diff for atom:'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', delta_atom), __FILE__, __LINE__)
       end do
       this%delta = sqrt(sum((this%qia_old(:, 1:12) - this%qia_new(:, 1:12))**2))/6.0d0/this%lattice%nrec
+      
+      ! Mix local density matrices for LDA+U
+      call this%mix_ldm()
    end subroutine mixpq
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
@@ -616,5 +647,80 @@ contains
       if (itr > nmix) itr = 1
       !print *, ´Bmix done´, itr, fsq
    end subroutine broydn
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Mix the local density matrices for LDA+U
+   !>
+   !> This subroutine mixes the local density matrix (LDM) for atoms/orbitals
+   !> where LDA+U is active. It performs linear mixing of the LDM and writes
+   !> the mixed values back to the symbolic_atom potentials.
+   !---------------------------------------------------------------------------
+   subroutine mix_ldm(this)
+      use mpi_mod
+      class(mix), intent(inout) :: this
+      integer :: ia, l, ispin, m1, m2, atom_type
+      real(rp) :: ldm_mixed
+      logical :: has_ldau
+      
+      ! Check if LDA+U is active at all
+      if (.not. associated(this%hamiltonian)) return
+      if (.not. this%hamiltonian%hubbard_u_general_check) return
+      
+      ! Mix LDM for each atom
+      do ia = 1, this%lattice%nrec
+         atom_type = this%lattice%nbulk + ia
+         has_ldau = .false.
+         
+         ! Check if this atom has any Hubbard U defined by checking the potential directly
+         do l = 1, 3  ! s, p, d orbitals (indices 1, 2, 3)
+            if (this%symbolic_atom(atom_type)%potential%hubbard_u(l) > 1.0d-6) then
+               has_ldau = .true.
+               exit
+            end if
+         end do
+         
+         ! If this atom has LDA+U, mix its density matrix
+         if (has_ldau) then
+            do l = 1, 3  ! s, p, d orbitals
+               ! Only mix if U is defined for this orbital
+               if (this%symbolic_atom(atom_type)%potential%hubbard_u(l) > 1.0d-6) then
+                  do ispin = 1, 2
+                     do m1 = 1, 2*l - 1  ! m quantum numbers for this l
+                        do m2 = 1, 2*l - 1
+                           ! Linear mixing of density matrix elements
+                           ldm_mixed = (1.0d0 - this%ldm_beta) * this%ldm_old(ia, l, ispin, m1, m2) + &
+                                       this%ldm_beta * this%ldm_new(ia, l, ispin, m1, m2)
+                           
+                           ! Write mixed value back to potential
+                           this%symbolic_atom(atom_type)%potential%ldm(l, ispin, m1, m2) = ldm_mixed
+                        end do
+                     end do
+                  end do
+                  
+                  if (rank == 0) then
+                     call g_logger%info('Mixed LDM for atom '//fmt('i4', ia)//' orbital '//&
+                                       this%hamiltonian%orb_conv(l), __FILE__, __LINE__)
+                                       print *, ' ldm_beta = ', this%ldm_beta
+                  end if
+               end if
+            end do
+         end if
+      end do
+   end subroutine mix_ldm
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Set the hamiltonian pointer (needed for LDA+U mixing)
+   !---------------------------------------------------------------------------
+   subroutine set_hamiltonian_pointer(this, hamiltonian_obj)
+      class(mix), intent(inout) :: this
+      class(hamiltonian), target, intent(in) :: hamiltonian_obj
+      
+      this%hamiltonian => hamiltonian_obj
+   end subroutine set_hamiltonian_pointer
+
 end module mix_mod
 
