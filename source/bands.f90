@@ -100,9 +100,9 @@ module bands_mod
       procedure :: calculate_occupation_gauss_legendre
       procedure :: calculate_angles
       !procedure :: calculate_conductivity_tensor
-      procedure :: Hubbard_U_Potential ! LDA+U+J method
+      !procedure :: Hubbard_U_Potential ! LDA+U+J method
       procedure :: Hubbard_V_Potential
-      procedure :: spdf_Hubbard_impurity ! Not needed anymore
+      !procedure :: spdf_Hubbard_impurity ! Not needed anymore
       procedure :: build_hubbard_u
       procedure :: build_hubbard_u_impurity 
       procedure :: calc_hubbard_U_pot
@@ -298,17 +298,41 @@ contains
 
 
       ! Writing the total density of states
+      ! fname_total = "totaldos.out"
+      ! open(unit=125, file=fname_total, status='replace', action='write')
+      
+
+      ! Calculate the Fermi enery
+      ef_mag = this%en%fermi
+      this%en%chebfermi = this%en%fermi
+      if (.not. (this%en%fix_fermi) .and. this%control%calctype == 'B') then
+         e1_mag = ef_mag
+         call this%fermi(ef_mag, this%en%edel, ik1_mag, this%en%energy_min, this%en%channels_ldos + 10, this%dtot, ifail, this%qqv, e1_mag)
+         e1 = this%en%fermi
+         call this%fermi(this%en%fermi, this%en%edel, ik1, this%en%energy_min, this%en%channels_ldos + 10, this%dtot, ifail, this%qqv, e1_mag)
+         this%nv1 = ik1
+         this%e1 = e1_mag
+         if (rank == 0) call g_logger%info('Free Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
+      else if (this%en%fix_fermi) then
+         ik1 = nint((this%en%fermi - this%en%energy_min)/this%en%edel)
+         e1 = this%en%energy_min + (ik1 - 1)*this%en%edel
+         this%nv1 = ik1
+         this%e1 = e1
+         if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
+      end if
+
+      ! Writing the total density of states
       fname_total = "totaldos.out"
-      open(unit=125, file=fname_total, status='replace', action='write')
       
       if (rank == 0) then
-         do i = 1, this%en%channels_ldos + 10
-            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
-         end do
-         rewind(125)
+         open(unit=125, file=fname_total, status='replace', action='write')
+            do i = 1, this%en%channels_ldos + 10
+               write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
+            end do
+            rewind(125)
+         close(125)
       end if
-      close(125)
-      
+
       ! Writing the local density of states
       if (rank == 0) then
          do ia = 1, this%lattice%nrec
@@ -343,25 +367,6 @@ contains
             rewind(unitnum2)
             close(unitnum2)
          end do
-      end if
-
-      ! Calculate the Fermi enery
-      ef_mag = this%en%fermi
-      this%en%chebfermi = this%en%fermi
-      if (.not. (this%en%fix_fermi) .and. this%control%calctype == 'B') then
-         e1_mag = ef_mag
-         call this%fermi(ef_mag, this%en%edel, ik1_mag, this%en%energy_min, this%en%channels_ldos + 10, this%dtot, ifail, this%qqv, e1_mag)
-         e1 = this%en%fermi
-         call this%fermi(this%en%fermi, this%en%edel, ik1, this%en%energy_min, this%en%channels_ldos + 10, this%dtot, ifail, this%qqv, e1_mag)
-         this%nv1 = ik1
-         this%e1 = e1_mag
-         if (rank == 0) call g_logger%info('Free Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
-      else if (this%en%fix_fermi) then
-         ik1 = nint((this%en%fermi - this%en%energy_min)/this%en%edel)
-         e1 = this%en%energy_min + (ik1 - 1)*this%en%edel
-         this%nv1 = ik1
-         this%e1 = e1
-         if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
       end if
 
       deallocate(dosia)
@@ -925,428 +930,407 @@ contains
       do na = start_atom, end_atom
          na_loc = g2l_map(na)
 
-         l_orb = 0.0d0
-         lx = 0.0d0; ly = 0.0d0; lz = 0.d0
-
-
-         do ie = 1, this%en%channels_ldos+10
-            lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na_loc)))
-            lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na_loc)))
-            lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na_loc)))
+         do mdir = 1, 3
+            do i = 1, 9
+               do j = 1, 9
+                  call simpson_m(l_orb(i, j, mdir), this%en%edel, this%en%fermi, this%nv1, this%d_orb(j, i, mdir, :, na_loc), this%e1, 0, this%en%ene)
+               end do
+            end do
          end do
-
-         call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)
-         call simpson_m(ly, this%en%edel, this%en%fermi, this%nv1, lyi, this%e1, 0, this%en%ene)
-         call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
-
-         fnameorb = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbene.out"
-         unitorb = rank * 132 + na
-         open(unit=unitorb, file=fnameorb, status='replace', action='write')
-
-         do ie = 1, this%en%channels_ldos + 10
-            call simpson_f(lxe, this%en%ene, this%en%ene(ie), this%en%nv1, lxi, .true., .false., 0.0d0) 
-            call simpson_f(lye, this%en%ene, this%en%ene(ie), this%en%nv1, lyi, .true., .false., 0.0d0) 
-            call simpson_f(lze, this%en%ene, this%en%ene(ie), this%en%nv1, lzi, .true., .false., 0.0d0) 
-            write(unitorb, '(4es16.6)') this%en%ene(ie) - this%en%fermi, -(lxe/pi), -(lye/pi), -(lze/pi)
-         end do
-         
-         rewind(unitorb)
-         close(unitorb)
-
-         lz =  - (lz / pi) 
-         lx =  - (lx / pi) 
-         ly =  - (ly / pi) 
-
-         call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lx)//' '//fmt('f10.6', ly)//' '//fmt('f10.6', lz), __FILE__, __LINE__)
+         lx = 0.0_rp !-0.5_rp * rtrace9(matmul(mLx,l_orb(:,:,1)))
+         ly = 0.0_rp !-0.5_rp * rtrace9(matmul(mLy,l_orb(:,:,2)))
+         lz = -0.5_rp*rtrace9(matmul(mLz, l_orb(:, :, 3)))
+         call g_logger%info('Orbital moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', lz), __FILE__, __LINE__)
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(2) = ly
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(3) = lz
+
       end do
    end subroutine calculate_orbital_moments
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Builds the effective single-particle potentials for the LDA+U+J correction for s,p and d orbitals.
-   !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
-   !> too, but the corresponding (32x32) basis needs implementation.)
-   !> Created and improved by Viktor Frilén and Emil Beiersdorf 17.07.2024
-   !---------------------------------------------------------------------------
-   subroutine Hubbard_U_Potential(this)
-      class(bands) :: this
+   ! !---------------------------------------------------------------------------
+   ! ! DESCRIPTION:
+   ! !> @brief
+   ! !> Builds the effective single-particle potentials for the LDA+U+J correction for s,p and d orbitals.
+   ! !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
+   ! !> too, but the corresponding (32x32) basis needs implementation.)
+   ! !> Created and improved by Viktor Frilén and Emil Beiersdorf 17.07.2024
+   ! !---------------------------------------------------------------------------
+   ! subroutine Hubbard_U_Potential(this)
+   !    class(bands) :: this
 
-      ! Local variables
-      integer :: i, j ! Orbital indices
-      integer :: na ! Atom index
-      integer :: ie ! Energy channel index
-      integer :: ispin ! Spin index
-      integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
-      integer :: cntr ! Counts number of orbitals with a U per atom.  
-      real(rp), dimension(:,:), allocatable :: hub_u, hub_j ! Hubbard U and J parameters
-      real(rp) :: result
-      integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
-      integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
-      real(rp) :: f0, f2, f4, f6 ! Slater integrals
-      real(rp), dimension(this%lattice%nrec,4,4) :: f ! Slater integrals
-      real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
-      ! Local variable array for local density matrix
-      real(rp), dimension(:,:,:,:,:), allocatable :: LDM ! Local density matrix (LDM), works for spdf orbitals
-      real(rp) :: dc ! Double counting term
-      real(rp), dimension(4) :: U_energy, dc_energy 
-      real(rp), dimension(this%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
-      real(rp), dimension(this%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_u_pot
-      real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot    
-      
-      type :: ArrayType
-         integer, allocatable :: val(:)
-      end type ArrayType
-      type(ArrayType), dimension(4) :: ms
-      type(ArrayType), dimension(this%lattice%nrec) :: l_arr
+   !    ! Local variables
+   !    integer :: i, j ! Orbital indices
+   !    integer :: na ! Atom index
+   !    integer :: ie ! Energy channel index
+   !    integer :: ispin ! Spin index
+   !    integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
+   !    integer :: cntr ! Counts number of orbitals with a U per atom.  
+   !    real(rp), dimension(:,:), allocatable :: hub_u, hub_j ! Hubbard U and J parameters
+   !    real(rp) :: result
+   !    integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
+   !    integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
+   !    real(rp) :: f0, f2, f4, f6 ! Slater integrals
+   !    real(rp), dimension(this%lattice%nrec,4,4) :: f ! Slater integrals
+   !    real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nrec) :: im_g0
+   !    ! Local variable array for local density matrix
+   !    real(rp), dimension(:,:,:,:,:), allocatable :: LDM ! Local density matrix (LDM), works for spdf orbitals
+   !    real(rp) :: dc ! Double counting term
+   !    real(rp), dimension(4) :: U_energy, dc_energy 
+   !    real(rp), dimension(this%lattice%nrec, 4, 2) :: n_spin ! LDM with m traced out
+   !    real(rp), dimension(this%lattice%nrec, 4) :: n_tot  ! LDM with traced out spin  
+   !    ! Temporary potential that will be put into this%hubbard_u_pot
+   !    real(rp), dimension(this%lattice%nrec, 4, 2, 7, 7) :: hub_pot    
+   !    
+   !    type :: ArrayType
+   !       integer, allocatable :: val(:)
+   !    end type ArrayType
+   !    type(ArrayType), dimension(4) :: ms
+   !    type(ArrayType), dimension(this%lattice%nrec) :: l_arr
   
-      ms(1)%val = [0]
-      ms(2)%val = [-1, 0, 1]
-      ms(3)%val = [-2, -1, 0, 1, 2]
-      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
+   !    ms(1)%val = [0]
+   !    ms(2)%val = [-1, 0, 1]
+   !    ms(3)%val = [-2, -1, 0, 1, 2]
+   !    ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
 
-      ! Checks which orbital to add U onto. Only works for spd-orbitals
-      if (this%recursion%hamiltonian%hubbardU_check) then
-         allocate(LDM(this%lattice%nrec, 4, 2, 7, 7)) ! (number of atoms, number of orbitals (spdf), m-value indexing for spdf)
-         allocate(hub_u(this%lattice%nrec, 4))
-         allocate(hub_j(this%lattice%nrec, 4))
-         LDM(:,:,:,:,:) = 0.0d0
-         im_g0(:,:,:,:) = 0.0d0
-         this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
-         hub_pot = 0.0d0
-         n_tot(:,:) = 0.0d0
-         n_spin(:,:,:) = 0.0d0
-         hub_u(:,:) = 0.0d0
-         hub_j(:,:) = 0.0d0
-         f = this%recursion%hamiltonian%f
-         hub_u = this%recursion%hamiltonian%hub_u_sort 
-         hub_j = this%recursion%hamiltonian%hub_j_sort
+   !    ! Checks which orbital to add U onto. Only works for spd-orbitals
+   !    if (this%recursion%hamiltonian%hubbardU_check) then
+   !       allocate(LDM(this%lattice%nrec, 4, 2, 7, 7)) ! (number of atoms, number of orbitals (spdf), m-value indexing for spdf)
+   !       allocate(hub_u(this%lattice%nrec, 4))
+   !       allocate(hub_j(this%lattice%nrec, 4))
+   !       LDM(:,:,:,:,:) = 0.0d0
+   !       im_g0(:,:,:,:) = 0.0d0
+   !       this%recursion%hamiltonian%hubbard_u_pot = 0.0d0
+   !       hub_pot = 0.0d0
+   !       n_tot(:,:) = 0.0d0
+   !       n_spin(:,:,:) = 0.0d0
+   !       hub_u(:,:) = 0.0d0
+   !       hub_j(:,:) = 0.0d0
+   !       f = this%recursion%hamiltonian%f
+   !       hub_u = this%recursion%hamiltonian%hub_u_sort 
+   !       hub_j = this%recursion%hamiltonian%hub_j_sort
 
-         
-         !> Creates an array with each orbital for each atom
-         do i = 1, this%lattice%nrec
-            cntr = count(hub_u(i,:) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
-            allocate(l_arr(i)%val(cntr))
-         end do
+   !       
+   !       !> Creates an array with each orbital for each atom
+   !       do i = 1, this%lattice%nrec
+   !          cntr = count(hub_u(i,:) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
+   !          allocate(l_arr(i)%val(cntr))
+   !       end do
 
-         do i = 1, this%lattice%nrec
-            cntr = 0
-            do j = 1, 4
-               if (hub_u(i,j) > 1.0E-10) then
-                  cntr = cntr + 1
-                  l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
-               end if
-            end do
-         end do       
-               
-         !> Sets up the imaginary Green's function (only for spd orbitals)
-         do na = 1, this%lattice%nrec
-            do i = 1, 18
-               do j = 1, 18
-                  do ie  = 1, this%en%channels_ldos + 10
-                     im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
-                  end do
-               end do
-            end do
-         end do
+   !      do i = 1, this%lattice%nrec
+   !         cntr = 0
+   !         do j = 1, 4
+   !            if (hub_u(i,j) > 1.0E-10) then
+   !               cntr = cntr + 1
+   !               l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
+   !            end if
+   !         end do
+   !      end do       
+   !            
+   !      !> Sets up the imaginary Green's function (only for spd orbitals)
+   !      do na = 1, this%lattice%nrec
+   !         do i = 1, 18
+   !            do j = 1, 18
+   !               do ie  = 1, this%en%channels_ldos + 10
+   !                  im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
+   !               end do
+   !            end do
+   !         end do
+   !      end do
 
-         !> Calculates the local density matrix by integrating the Green's function over the energy channels.
-         !> Only implemented for spd orbitals.
-         do na = 1, this%lattice%nrec
-            do l = 0, 2
-               do ispin = 1, 2
-                  do i = 1, 2*l + 1 !m3
-                     do j = 1, 2*l + 1 !m4
-                        call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                        LDM(na, l + 1, ispin, i, j) = result
-                     end do
-                  end do
-               end do
-            end do
-         end do
-         
-         !> Builds the Hubbard U+J potential 
-         print *, ''
-         print *, '-----------------------------------------------------------------------------------------------------------------'
-         print *, 'Calculate Hubbard U potential for:'
-         do na = 1, this%lattice%nrec
-            print *, ' Atom ', na
-            print *, ''
-            !> Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
-            do l = 1, 4 !0 to 3 but indexing starts on 1
-               do ispin = 1, 2
-                  n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
-                  n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
-               end do
-            end do
-            U_energy = 0.0d0
+   !      !> Calculates the local density matrix by integrating the Green's function over the energy channels.
+   !      !> Only implemented for spd orbitals.
+   !      do na = 1, this%lattice%nrec
+   !         do l = 0, 2
+   !            do ispin = 1, 2
+   !               do i = 1, 2*l + 1 !m3
+   !                  do j = 1, 2*l + 1 !m4
+   !                     call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+   !                     LDM(na, l + 1, ispin, i, j) = result
+   !                  end do
+   !               end do
+   !            end do
+   !         end do
+   !      end do
+   !      
+   !      !> Builds the Hubbard U+J potential 
+   !      print *, ''
+   !      print *, '-----------------------------------------------------------------------------------------------------------------'
+   !      print *, 'Calculate Hubbard U potential for:'
+   !      do na = 1, this%lattice%nrec
+   !         print *, ' Atom ', na
+   !         print *, ''
+   !         !> Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
+   !         do l = 1, 4 !0 to 3 but indexing starts on 1
+   !            do ispin = 1, 2
+   !               n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
+   !               n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
+   !            end do
+   !         end do
+   !         U_energy = 0.0d0
 
-            !> l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
-            !> l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
-            do l = 1, size(l_arr(na)%val)
-               l_index = l_arr(na)%val(l)
-               m_max = 2*l_index-1
-               do ispin = 1, 2
-                  do m1 = 1, m_max
-                     do m2 = 1, m_max
-                        do m3 = 1, m_max
-                           do m4 = 1, m_max
-                              m1_val = ms(l_index)%val(m1)
-                              m2_val = ms(l_index)%val(m2)
-                              m3_val = ms(l_index)%val(m3)
-                              m4_val = ms(l_index)%val(m4)
-                              f0 = f(na,l_index,1)
-                              f2 = f(na,l_index,2)
-                              f4 = f(na,l_index,3)
-                              f6 = f(na,l_index,4)
-                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                              + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
-                              + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                              - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
-                              U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                              * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
-                              + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                              - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
-                              * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
-                           end do
-                        end do
-                        ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
-                        if (m1 == m2) then
-                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                           - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
-                        end if
-                     end do
-                  end do
-               end do
-            end do  
+   !          !> l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
+   !          !> l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
+   !          do l = 1, size(l_arr(na)%val)
+   !             l_index = l_arr(na)%val(l)
+   !             m_max = 2*l_index-1
+   !             do ispin = 1, 2
+   !                do m1 = 1, m_max
+   !                   do m2 = 1, m_max
+   !                      do m3 = 1, m_max
+   !                         do m4 = 1, m_max
+   !                            m1_val = ms(l_index)%val(m1)
+   !                            m2_val = ms(l_index)%val(m2)
+   !                            m3_val = ms(l_index)%val(m3)
+   !                            m4_val = ms(l_index)%val(m4)
+   !                            f0 = f(na,l_index,1)
+   !                            f2 = f(na,l_index,2)
+   !                            f4 = f(na,l_index,3)
+   !                            f6 = f(na,l_index,4)
+   !                            hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+   !                            + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
+   !                            + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+   !                            - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
+   !                            U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+   !                            * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
+   !                            + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+   !                            - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
+   !                            * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
+   !                         end do
+   !                      end do
+   !                      ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
+   !                      if (m1 == m2) then
+   !                         hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+   !                         - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
+   !                      end if
+   !                   end do
+   !                end do
+   !             end do
+   !          end do  
 
-         !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
-            do l = 0, 2
-               do i = 1, 2*l + 1
-                  do j = 1, 2*l + 1
-                     this%recursion%hamiltonian%hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
-                     this%recursion%hamiltonian%hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
-                  end do
-               end do
-               dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
-               - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
+   !       !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
+   !          do l = 0, 2
+   !             do i = 1, 2*l + 1
+   !                do j = 1, 2*l + 1
+   !                   this%recursion%hamiltonian%hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
+   !                   this%recursion%hamiltonian%hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
+   !                end do
+   !             end do
+   !             dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
+   !             - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
 
-               do i = 1, size(l_arr(na)%val)
-                  if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
-                     print *, ' Orbital ', this%recursion%hamiltonian%orb_conv(l+1), ' :'
-                     print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
-                     print *, ''
-                  end if
-               end do
-            end do
-            
-         end do 
-         print *, '-----------------------------------------------------------------------------------------------------------------'
-         print *,''
+   !             do i = 1, size(l_arr(na)%val)
+   !                if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
+   !                   print *, ' Orbital ', this%recursion%hamiltonian%orb_conv(l+1), ' :'
+   !                   print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
+   !                   print *, ''
+   !                end if
+   !             end do
+   !          end do
+   !          
+   !       end do 
+   !       print *, '-----------------------------------------------------------------------------------------------------------------'
+   !       print *,''
 
-      if (allocated(LDM)) deallocate(LDM)
-      if (allocated(hub_u)) deallocate(hub_u)
-      if (allocated(hub_j)) deallocate(hub_j)
-      end if
-      
-   end subroutine Hubbard_U_Potential
+   !    if (allocated(LDM)) deallocate(LDM)
+   !    if (allocated(hub_u)) deallocate(hub_u)
+   !    if (allocated(hub_j)) deallocate(hub_j)
+   !    end if
+   !    
+   ! end subroutine Hubbard_U_Potential
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Basically a copy from the above subroutine with slight modifications to instead work for impurities
-   !> Builds the effective single-particle potentials for the LDA+U+J correction for s,p and d orbitals.
-   !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
-   !> too, but the corresponding (32x32) basis needs implementation.)
-   !> Created by Viktor Frilén 21.11.2024
-   !---------------------------------------------------------------------------
-   subroutine spdf_Hubbard_impurity(this)
-      class(bands) :: this
+   ! !---------------------------------------------------------------------------
+   ! ! DESCRIPTION:
+   ! !> @brief
+   ! !> Basically a copy from the above subroutine with slight modifications to instead work for impurities
+   ! !> Builds the effective single-particle potentials for the LDA+U+J correction for s,p and d orbitals.
+   ! !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
+   ! !> too, but the corresponding (32x32) basis needs implementation.)
+   ! !> Created by Viktor Frilén 21.11.2024
+   ! !---------------------------------------------------------------------------
+   ! subroutine spdf_Hubbard_impurity(this)
+   !    class(bands) :: this
 
-      ! Local variables
-      integer :: i, j ! Orbital indices
-      integer :: na ! Atom index
-      integer :: ie ! Energy channel index
-      integer :: ispin ! Spin index
-      integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
-      integer :: cntr ! Counts number of orbitals with a U per atom.  
-      real(rp), dimension(:,:), allocatable :: hub_u, hub_j ! Hubbard U and J parameters
-      real(rp) :: result
-      integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
-      integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
-      real(rp) :: f0, f2, f4, f6 ! Slater integrals
-      real(rp), dimension(this%lattice%nclu,4,4) :: f ! Slater integrals
-      real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nclu) :: im_g0
-      ! Local variable array for local density matrix
-      real(rp), dimension(:,:,:,:,:), allocatable :: LDM ! Local density matrix (LDM), works for spdf orbitals
-      real(rp) :: dc ! Double counting term
-      real(rp), dimension(4) :: U_energy, dc_energy 
-      real(rp), dimension(this%lattice%nclu, 4, 2) :: n_spin ! LDM with m traced out
-      real(rp), dimension(this%lattice%nclu, 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_pot
-      real(rp), dimension(this%lattice%nclu, 4, 2, 7, 7) :: hub_pot    
-      
-      type :: ArrayType
-         integer, allocatable :: val(:)
-      end type ArrayType
-      type(ArrayType), dimension(4) :: ms
-      type(ArrayType), dimension(this%lattice%nclu) :: l_arr
+   !    ! Local variables
+   !    integer :: i, j ! Orbital indices
+   !    integer :: na ! Atom index
+   !    integer :: ie ! Energy channel index
+   !    integer :: ispin ! Spin index
+   !    integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
+   !    integer :: cntr ! Counts number of orbitals with a U per atom.  
+   !    real(rp), dimension(:,:), allocatable :: hub_u, hub_j ! Hubbard U and J parameters
+   !    real(rp) :: result
+   !    integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
+   !    integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
+   !    real(rp) :: f0, f2, f4, f6 ! Slater integrals
+   !    real(rp), dimension(this%lattice%nclu,4,4) :: f ! Slater integrals
+   !    real(rp), dimension(18, 18, this%en%channels_ldos + 10, this%lattice%nclu) :: im_g0
+   !    ! Local variable array for local density matrix
+   !    real(rp), dimension(:,:,:,:,:), allocatable :: LDM ! Local density matrix (LDM), works for spdf orbitals
+   !    real(rp) :: dc ! Double counting term
+   !    real(rp), dimension(4) :: U_energy, dc_energy 
+   !    real(rp), dimension(this%lattice%nclu, 4, 2) :: n_spin ! LDM with m traced out
+   !    real(rp), dimension(this%lattice%nclu, 4) :: n_tot  ! LDM with traced out spin  
+   !    ! Temporary potential that will be put into this%hubbard_pot
+   !    real(rp), dimension(this%lattice%nclu, 4, 2, 7, 7) :: hub_pot    
+   !    
+   !    type :: ArrayType
+   !       integer, allocatable :: val(:)
+   !    end type ArrayType
+   !    type(ArrayType), dimension(4) :: ms
+   !    type(ArrayType), dimension(this%lattice%nclu) :: l_arr
   
-      ms(1)%val = [0]
-      ms(2)%val = [-1, 0, 1]
-      ms(3)%val = [-2, -1, 0, 1, 2]
-      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
+   !    ms(1)%val = [0]
+   !    ms(2)%val = [-1, 0, 1]
+   !    ms(3)%val = [-2, -1, 0, 1, 2]
+   !    ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
 
-      ! Checks which orbital to add U onto. Only works for spd-orbitals
-      if (this%recursion%hamiltonian%hubbardU_impurity_check) then
-         allocate(LDM(this%lattice%nclu, 4, 2, 7, 7)) ! (number of atoms, number of orbitals (spdf), m-value indexing for spdf)
-         allocate(hub_u(this%lattice%nclu, 4))
-         allocate(hub_j(this%lattice%nclu, 4))
-         LDM(:,:,:,:,:) = 0.0d0
-         im_g0(:,:,:,:) = 0.0d0
-         this%recursion%hamiltonian%hubbard_pot_impurity = 0.0d0
-         hub_pot = 0.0d0
-         n_tot(:,:) = 0.0d0
-         n_spin(:,:,:) = 0.0d0
-         hub_u(:,:) = 0.0d0
-         hub_j(:,:) = 0.0d0
-         ! These together with lattice%nrec -> lattice%nclu are the main changes in this subroutine
-         f = this%recursion%hamiltonian%F_impurity
-         hub_u = this%recursion%hamiltonian%hubbard_u_impurity
-         hub_j = this%recursion%hamiltonian%hubbard_j_impurity
+   !    ! Checks which orbital to add U onto. Only works for spd-orbitals
+   !    if (this%recursion%hamiltonian%hubbardU_impurity_check) then
+   !       allocate(LDM(this%lattice%nclu, 4, 2, 7, 7)) ! (number of atoms, number of orbitals (spdf), m-value indexing for spdf)
+   !       allocate(hub_u(this%lattice%nclu, 4))
+   !       allocate(hub_j(this%lattice%nclu, 4))
+   !       LDM(:,:,:,:,:) = 0.0d0
+   !       im_g0(:,:,:,:) = 0.0d0
+   !       this%recursion%hamiltonian%hubbard_pot_impurity = 0.0d0
+   !       hub_pot = 0.0d0
+   !       n_tot(:,:) = 0.0d0
+   !       n_spin(:,:,:) = 0.0d0
+   !       hub_u(:,:) = 0.0d0
+   !       hub_j(:,:) = 0.0d0
+   !       ! These together with lattice%nrec -> lattice%nclu are the main changes in this subroutine
+   !       f = this%recursion%hamiltonian%F_impurity
+   !       hub_u = this%recursion%hamiltonian%hubbard_u_impurity
+   !       hub_j = this%recursion%hamiltonian%hubbard_j_impurity
 
-         
-         !> Creates an array with each orbital for each atom
-         do i = 1, this%lattice%nclu
-            cntr = count(abs(hub_u(i,:)) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
-            allocate(l_arr(i)%val(cntr))
-         end do
+   !       
+   !       !> Creates an array with each orbital for each atom
+   !       do i = 1, this%lattice%nclu
+   !          cntr = count(abs(hub_u(i,:)) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
+   !          allocate(l_arr(i)%val(cntr))
+   !       end do
 
-         do i = 1, this%lattice%nclu
-            cntr = 0
-            do j = 1, 4
-               if (abs(hub_u(i,j)) > 1.0E-10) then
-                  cntr = cntr + 1
-                  l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
-               end if
-            end do
-         end do       
-               
-         !> Sets up the imaginary Green's function (only for spd orbitals)
-         do na = 1, this%lattice%nclu
-            do i = 1, 18
-               do j = 1, 18
-                  do ie  = 1, this%en%channels_ldos + 10
-                     im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
-                  end do
-               end do
-            end do
-         end do
+   !       do i = 1, this%lattice%nclu
+   !          cntr = 0
+   !          do j = 1, 4
+   !             if (abs(hub_u(i,j)) > 1.0E-10) then
+   !                cntr = cntr + 1
+   !                l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
+   !             end if
+   !          end do
+   !       end do       
+   !             
+   !       !> Sets up the imaginary Green's function (only for spd orbitals)
+   !       do na = 1, this%lattice%nclu
+   !          do i = 1, 18
+   !             do j = 1, 18
+   !                do ie  = 1, this%en%channels_ldos + 10
+   !                   im_g0(i,j,ie,na) = im_g0(i,j,ie,na) - aimag(this%green%g0(i,j,ie,na))/pi
+   !                end do
+   !             end do
+   !          end do
+   !       end do
 
-         !> Calculates the local density matrix by integrating the Green's function over the energy channels.
-         !> Only implemented for spd orbitals.
-         do na = 1, this%lattice%nclu
-            do l = 0, 2
-               do ispin = 1, 2
-                  do i = 1, 2*l + 1 !m3
-                     do j = 1, 2*l + 1 !m4
-                        call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
-                        LDM(na, l + 1, ispin, i, j) = result
-                     end do
-                  end do
-               end do
-            end do
-         end do
-         
-         ! Builds the Hubbard U+J potential 
-         print *, ''
-         print *, '-----------------------------------------------------------------------------------------------------------------'
-         print *, 'Calculate Hubbard U potential for impurity:'
-         do na = 1, this%lattice%nclu
-            print *, ' Atom ', na
-            print *, ''
-            ! Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
-            do l = 1, 4 !0 to 3 but indexing starts on 1
-               do ispin = 1, 2
-                  n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
-                  n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
-               end do
-            end do
-            U_energy = 0.0d0
+   !       !> Calculates the local density matrix by integrating the Green's function over the energy channels.
+   !       !> Only implemented for spd orbitals.
+   !       do na = 1, this%lattice%nclu
+   !          do l = 0, 2
+   !             do ispin = 1, 2
+   !                do i = 1, 2*l + 1 !m3
+   !                   do j = 1, 2*l + 1 !m4
+   !                      call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, im_g0(l**2 + i + (ispin-1)*9, l**2 + j + (ispin-1)*9, :, na), this%e1, 0, this%en%ene)
+   !                      LDM(na, l + 1, ispin, i, j) = result
+   !                   end do
+   !                end do
+   !             end do
+   !          end do
+   !       end do
+   !       
+   !       ! Builds the Hubbard U+J potential 
+   !       print *, ''
+   !       print *, '-----------------------------------------------------------------------------------------------------------------'
+   !       print *, 'Calculate Hubbard U potential for impurity:'
+   !       do na = 1, this%lattice%nclu
+   !          print *, ' Atom ', na
+   !          print *, ''
+   !          ! Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
+   !          do l = 1, 4 !0 to 3 but indexing starts on 1
+   !             do ispin = 1, 2
+   !                n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
+   !                n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
+   !             end do
+   !          end do
+   !          U_energy = 0.0d0
 
-            ! l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
-            ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
-            do l = 1, size(l_arr(na)%val)
-               l_index = l_arr(na)%val(l)
-               m_max = 2*l_index-1
-               do ispin = 1, 2
-                  do m1 = 1, m_max
-                     do m2 = 1, m_max
-                        do m3 = 1, m_max
-                           do m4 = 1, m_max
-                              m1_val = ms(l_index)%val(m1)
-                              m2_val = ms(l_index)%val(m2)
-                              m3_val = ms(l_index)%val(m3)
-                              m4_val = ms(l_index)%val(m4)
-                              f0 = f(na,l_index,1)
-                              f2 = f(na,l_index,2)
-                              f4 = f(na,l_index,3)
-                              f6 = f(na,l_index,4)
-                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                              + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
-                              + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                              - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
-                              U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                              * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
-                              + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                              - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
-                              * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
-                           end do
-                        end do
-                        ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
-                        if (m1 == m2) then
-                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                           - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
-                        end if
-                     end do
-                  end do
-               end do
-            end do  
+   !          ! l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
+   !          ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
+   !          do l = 1, size(l_arr(na)%val)
+   !             l_index = l_arr(na)%val(l)
+   !             m_max = 2*l_index-1
+   !             do ispin = 1, 2
+   !                do m1 = 1, m_max
+   !                   do m2 = 1, m_max
+   !                      do m3 = 1, m_max
+   !                         do m4 = 1, m_max
+   !                            m1_val = ms(l_index)%val(m1)
+   !                            m2_val = ms(l_index)%val(m2)
+   !                            m3_val = ms(l_index)%val(m3)
+   !                            m4_val = ms(l_index)%val(m4)
+   !                            f0 = f(na,l_index,1)
+   !                            f2 = f(na,l_index,2)
+   !                            f4 = f(na,l_index,3)
+   !                            f6 = f(na,l_index,4)
+   !                            hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+   !                            + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
+   !                            + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+   !                            - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
+   !                            U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+   !                            * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
+   !                            + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
+   !                            - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
+   !                            * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
+   !                         end do
+   !                      end do
+   !                      ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
+   !                      if (m1 == m2) then
+   !                         hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+   !                         - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
+   !                      end if
+   !                   end do
+   !                end do
+   !             end do
+   !          end do  
 
-         !> Puts hub_pot into global hubbard_pot (only done for spd-orbitals)
-            do l = 0, 2
-               do i = 1, 2*l + 1
-                  do j = 1, 2*l + 1
-                     this%recursion%hamiltonian%hubbard_pot_impurity(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
-                     this%recursion%hamiltonian%hubbard_pot_impurity(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
-                  end do
-               end do
-               dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
-               - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
+   !       !> Puts hub_pot into global hubbard_pot (only done for spd-orbitals)
+   !          do l = 0, 2
+   !             do i = 1, 2*l + 1
+   !                do j = 1, 2*l + 1
+   !                   this%recursion%hamiltonian%hubbard_pot_impurity(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
+   !                   this%recursion%hamiltonian%hubbard_pot_impurity(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
+   !                end do
+   !             end do
+   !             dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
+   !             - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
 
-               do i = 1, size(l_arr(na)%val)
-                  if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
-                     print *, ' Orbital ', this%recursion%hamiltonian%orb_conv(l+1), ' :'
-                     print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
-                     print *, ''
-                  end if
-               end do
-            end do
-            
-         end do 
-         print *, '-----------------------------------------------------------------------------------------------------------------'
-         print *,''
+   !             do i = 1, size(l_arr(na)%val)
+   !                if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
+   !                   print *, ' Orbital ', this%recursion%hamiltonian%orb_conv(l+1), ' :'
+   !                   print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
+   !                   print *, ''
+   !                end if
+   !             end do
+   !          end do
+   !          
+   !       end do 
+   !       print *, '-----------------------------------------------------------------------------------------------------------------'
+   !       print *,''
 
-         if (allocated(LDM)) deallocate(LDM)
-         if (allocated(hub_u)) deallocate(hub_u)
-         if (allocated(hub_j)) deallocate(hub_j)
-      end if
-      
-   end subroutine spdf_Hubbard_impurity
+   !       if (allocated(LDM)) deallocate(LDM)
+   !       if (allocated(hub_u)) deallocate(hub_u)
+   !       if (allocated(hub_j)) deallocate(hub_j)
+   !    end if
+   !    
+   ! end subroutine spdf_Hubbard_impurity
    
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1597,12 +1581,35 @@ contains
    subroutine build_hubbard_u_general(this)
       class(bands) :: this
       integer :: i,j,ia
+      integer :: t, l, ispin, m1, m2, row, col
+      real(rp), dimension(18,18) :: ldm_mat
 
       print *, "Generalization of build_hubbard_u"
 
       ! Calculates the local density matrix for each nrec atom.
       call this%calculate_local_density_matrix()
 
+      ! Pretty print LDM as 18x18 for each ntype
+      do t = 1, this%lattice%ntype
+         ldm_mat = 0.0_rp
+         do l = 0, 2
+         do ispin = 1, 2
+            do m1 = 1, 2*l + 1
+            row = l**2 + m1 + (ispin - 1)*9
+            do m2 = 1, 2*l + 1
+               col = l**2 + m2 + (ispin - 1)*9
+               ldm_mat(row, col) = this%lattice%symbolic_atoms(t)%potential%ldm(l + 1, ispin, m1, m2)
+            end do
+            end do
+         end do
+         end do
+
+         write(2020+t,'(A,I4)') 'Local density matrix (18x18) for ntype = ', t
+         do row = 1, 18
+         write(2020+t,'(18(1X,F8.4))') (ldm_mat(row, col), col = 1, 18)
+         end do
+         write(2020+t,*)
+      end do
       ! Calculates the Hubbard potential matrix for all atoms (ntype).
       call this%recursion%hamiltonian%calculate_hubbard_u_potential_general()
 

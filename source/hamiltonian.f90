@@ -1991,9 +1991,12 @@ contains
             do i = 1, 9
                do j = 1, 9
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
+                  !this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) - this%hubbard_u_pot(i + 9, j + 9, ntype)
                   this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) + this%hubbard_u_pot(i + 9, j + 9, ntype)
                end do
             end do
+            print '(i3, a, 9f8.4)', ino, ' Up', (this%hubbard_u_pot(i, i, ntype), i=1,9)
+            print '(i3, a, 9f8.4)', ino, ' Dw', (this%hubbard_u_pot(i, i, ntype), i=10,18)
             ! print *, 'hub_v_pot test ', this%hubbard_v_pot
             if (this%hubbardV_check) then
                do i = 1, 9
@@ -2790,13 +2793,32 @@ contains
                         end do
                      end do
                      ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
+                     ! 
+                     ! AMF (Around Mean Field) double counting:
+                     ! E_DC^AMF = (1/2)*U*n^2 - (1/2)*J*(n_up^2 + n_down^2)
+                     ! V_DC^AMF = dE_DC/dn_sigma = U*n - J*n_sigma
+                     !  if (m1 == m2) then
+                     !     hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                     !     - hub_u(na,l_index)*n_tot(na,l_index) + hub_j(na,l_index)*n_spin(na,l_index,ispin)
+                     !  end if
+                     ! 
+                     ! FLL (Fully Localized Limit) double counting:
+                     ! E_DC^FLL = (1/2)*U*n*(n-1) - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)]
+                     ! V_DC^FLL = dE_DC/dn_sigma = U*(n - 1/2) - J*(n_sigma - 1/2)
                      if (m1 == m2) then
-                        hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                        - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)
-                     end if
+                        hub_pot(na,l_index,ispin,m1,m2) = hub_pot(na,l_index,ispin,m1,m2) &
+                              - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) &
+                              + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)  ! Corrected: minus sign for J term
+                      end if
                   end do
                end do
             end do
+            print *, 'n_tot for atom', na, ':', n_tot(na, :)
+            print *, 'n_spin up:', n_spin(na, :, 1)
+            print *, 'n_spin down:', n_spin(na, :, 2)
+            print *, 'Sample diagonal V_U:', hub_pot(na, 3, 1, 3, 3)
+            print *, 'V_U diagonal spin-up (m=0):', hub_pot(na, 3, 1, 3, 3)
+            print *, 'V_U diagonal spin-down (m=0):', hub_pot(na, 3, 2, 3, 3)
          end do  
 
       !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
@@ -2807,8 +2829,22 @@ contains
                   this%hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
                end do
             end do
-            dc_energy(l+1) = 0.5_rp*(hub_u(na,l+1)*n_tot(na,l+1)*(n_tot(na,l+1) - 1.0_rp) &
-            - hub_j(na,l+1)*(n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp)))
+            ! Double counting energy correction
+            ! 
+            ! AMF (Around Mean Field):
+            ! E_DC^AMF = (1/2)*U*n^2 - (1/2)*J*(n_up^2 + n_down^2)
+            ! Simplifies to: E_DC^AMF = (1/2)*U*n*(n-1) + (1/2)*U*n - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)] - (1/2)*J*(n_up + n_down)
+            !                         = (1/2)*U*n*(n-1) - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)] + (1/2)*(U - J)*n
+            !  dc_energy(l+1) = 0.5_rp*hub_u(na,l+1)*n_tot(na,l+1)**2 &
+            !                 - 0.5_rp*hub_j(na,l+1)*(n_spin(na,l+1,1)**2 + n_spin(na,l+1,2)**2)
+            ! 
+            ! FLL (Fully Localized Limit):
+            ! E_DC^FLL = (1/2)*U*n*(n-1) - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)]
+             dc_energy(l+1) = 0.5_rp * ( &
+               hub_u(na,l+1) * n_tot(na,l+1) * (n_tot(na,l+1) - 1.0_rp) &
+             - hub_j(na,l+1) * ( n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) &
+                               + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp) ) )
+
             
       ! This part could be modified to work for imputrities
             do i = 1, size(l_arr(na)%val)

@@ -229,7 +229,7 @@ module math_mod
                0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
                (/18, 18/)) * (-i_unit / 2)
 
-       
+      public 
 contains
    !> Create vector of all zeros
    function zeros1(n) result(v)
@@ -404,7 +404,9 @@ contains
       real(rp) :: au2Ry ! Atomic units to Rydberg conversion
       real(rp), dimension(4,4,4,4,4) :: slater
       ! A bit unsure if this is the conversion
-      au2Ry = 0.5_rp**5
+      !au2Ry = 0.5_rp**5
+      ! Should probably be this one:
+      au2Ry = 2.0_rp
       slater = 0.0d0
       ! 4s-electrons
       slater(1,1,1,1,1) = 0.0372715*au2Ry
@@ -417,6 +419,7 @@ contains
       slater(3,3,3,3,3) = 0.0296224*au2Ry
       
       res = slater(k,l1,l2,l3,l4)
+      print *, 'Slater integral F^', k, ' (', l1, l2, l3, l4, ') = ', res, ' Ry'
       
    end function tabulated_slater_integrals
 
@@ -449,6 +452,9 @@ contains
       real(rp) :: res
 
       res = 0.0_rp
+      ! print *, 'Calculating Coulomb matrix element for l=', l, ' m1=', m1, ' m2=', m2, ' m3=', m3, ' m4=', m4
+      ! print *, 'Using Slater integrals F0=', f0, ' F2=', f2, ' F4=', f4, ' F6=', f6
+      ! print *, 'a0=', a_k(0,l,m1,m2,m3,m4), ' a2=', a_k(2,l,m1,m2,m3,m4), ' a4=', a_k(4,l,m1,m2,m3,m4), ' a6=', a_k(6,l,m1,m2,m3,m4)
       res = res + a_k(0,l,m1,m2,m3,m4)*f0 + a_k(2,l,m1,m2,m3,m4)*f2 + a_k(4,l,m1,m2,m3,m4)*f4 + a_k(6,l,m1,m2,m3,m4)*f6
 
    end function Coulomb_mat
