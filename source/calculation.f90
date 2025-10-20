@@ -1141,14 +1141,12 @@ contains
 
       call g_logger%info('post_processing_band_structure: Setting up reciprocal space', __FILE__, __LINE__)
 
-      ! Debug lattice information
+      ! Debug lattice information (sbarvec is populated on-demand, not a requirement here)
       if (allocated(lattice_obj%sbarvec)) then
-         call g_logger%info('post_processing_band_structure: Lattice sbarvec dimensions: ' // &
-            fmt('I0', size(lattice_obj%sbarvec, 1)) // 'x' // &
-            fmt('I0', size(lattice_obj%sbarvec, 2)), __FILE__, __LINE__)
+         call g_logger%info('post_processing_band_structure: Lattice sbarvec already populated with ' // &
+            fmt('I0', size(lattice_obj%sbarvec, 2)) // ' neighbors', __FILE__, __LINE__)
       else
-         call g_logger%error('post_processing_band_structure: Lattice sbarvec not allocated', __FILE__, __LINE__)
-         return
+         call g_logger%info('post_processing_band_structure: Lattice sbarvec not yet allocated (will be populated if needed)', __FILE__, __LINE__)
       end if
 
       ! Set k-point mesh parameters (use &reciprocal namelist values)
@@ -1304,13 +1302,12 @@ contains
       call g_logger%info('post_processing_density_of_states: Setting up reciprocal space', __FILE__, __LINE__)
 
       ! Debug lattice information
+      ! Debug lattice information (sbarvec is populated on-demand, not a requirement here)
       if (allocated(lattice_obj%sbarvec)) then
-         call g_logger%info('post_processing_density_of_states: Lattice sbarvec dimensions: ' // &
-            fmt('I0', size(lattice_obj%sbarvec, 1)) // 'x' // &
-            fmt('I0', size(lattice_obj%sbarvec, 2)), __FILE__, __LINE__)
+         call g_logger%info('post_processing_density_of_states: Lattice sbarvec already populated with ' // &
+            fmt('I0', size(lattice_obj%sbarvec, 2)) // ' neighbors', __FILE__, __LINE__)
       else
-         call g_logger%error('post_processing_density_of_states: Lattice sbarvec not allocated', __FILE__, __LINE__)
-         return
+         call g_logger%info('post_processing_density_of_states: Lattice sbarvec not yet allocated (will be populated if needed)', __FILE__, __LINE__)
       end if
 
       ! Set k-point mesh parameters from &reciprocal namelist

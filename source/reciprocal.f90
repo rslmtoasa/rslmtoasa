@@ -38,7 +38,7 @@ module reciprocal_mod
    use charge_mod
    use precision_mod, only: rp
    use math_mod
-   use string_mod, only: int2str, real2str
+   use string_mod, only: int2str, real2str, fmt
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
@@ -638,10 +638,9 @@ contains
    subroutine build_neighbor_vectors(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ntype, ia, nr, nn_max_loc, kk, i
+      integer :: ntype, ia, nr, nn_max_loc, kk
       real(rp) :: r2
       real(rp), dimension(3, this%lattice%kk) :: cralat
-      real(rp), dimension(:, :), allocatable :: ham_vec
 
       call g_logger%info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
 
@@ -672,49 +671,79 @@ contains
          nr = this%lattice%nn(ia, 1)
          nn_max_loc = nr
 
-         ! Allocate temporary ham_vec for this atom type
-         allocate(ham_vec(3, nr))
-         ham_vec = 0.0_rp
+         ! Use clusba directly - no need for lattice%sbarvec storage here
+         ! We're building type-specific ham_vec_type arrays instead
+         call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, &
+                                  this%ham_vec_type(:, 1:nr, ntype))
 
-         ! Call clusba to get neighbor vectors for this atom
-         call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
+         ! Update nr with actual number of neighbors found
+         nr = nn_max_loc
 
-         ! print *, 'DEBUG: After clusba for type ', ntype, ', got nn_max_loc = ', nn_max_loc
-         ! print '(3f12.6)', ham_vec(:, 1:nn_max_loc)
-         ! Debug: Check what clusba returned
-         ! if (.not. this%suppress_internal_logs .and. ntype == 1) then
-         !    write(*, '(A,I0,A,I0)') 'DEBUG: After clusba for type ', ntype, ', got nn_max_loc = ', nn_max_loc
-         !    write(*, '(A)') 'DEBUG: First 5 ham_vec from clusba output:'
-         !    do i = 1, min(5, nn_max_loc)
-         !       write(*, '(A,I3,A,3F12.6)') '  ham_vec[', i, '] = ', ham_vec(1:3, i)
-         !    end do
-         ! end if
-
-         ! Store in type-indexed array
-         ! ham_vec from clusba is in absolute units (same as cralat), need to store in lattice units
-         this%ham_vec_type(1:3, 1:nr, ntype) = ham_vec(1:3, 1:nr) !* this%lattice%alat
-
-         ! Convert to fractional coordinates
-         ! ham_vec_type is now in Cartesian coordinates in units of alat
-         if (this%lattice%a_cart_inv_ready) then
-            ! Use pre-computed inverse
-            do nn_max_loc = 1, nr
-               this%ham_vec_type_direct(1:3, nn_max_loc, ntype) = &
-                  matmul(this%lattice%a_cart_inv, this%ham_vec_type(1:3, nn_max_loc, ntype))
-            end do
-         else
-            ! Use helper function (which expects Cartesian in units of alat)
-            do nn_max_loc = 1, nr
-               call cartesian_to_fractional(this%ham_vec_type(1:3, nn_max_loc, ntype), &
-                                          this%ham_vec_type_direct(1:3, nn_max_loc, ntype), &
-                                          this%lattice%a, this%lattice%alat)
-            end do
-         end if
-
-         deallocate(ham_vec)
+         ! Convert to fractional coordinates for ham_vec_type_direct
+         ! Note: ham_vec_type from clusba is already in absolute Cartesian units (cralat = cr * alat)
+         do nn_max_loc = 1, nr
+            if (this%lattice%a_cart_inv_ready) then
+               ! a_cart_inv expects input in units of alat, so divide by alat
+               this%ham_vec_type_direct(:, nn_max_loc, ntype) = &
+                  matmul(this%lattice%a_cart_inv, this%ham_vec_type(:, nn_max_loc, ntype) ) !/ this%lattice%alat
+            else
+               ! cartesian_to_fractional expects Cartesian in units of alat as first arg
+               call cartesian_to_fractional(this%ham_vec_type(:, nn_max_loc, ntype) / this%lattice%alat, &
+                                          this%ham_vec_type_direct(:, nn_max_loc, ntype), &
+                                          this%lattice%a, 1.0_rp)
+            end if
+         end do
 
          call g_logger%info('reciprocal%build_neighbor_vectors: Built ' // trim(int2str(nr)) // &
                           ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
+         
+         ! ALWAYS print neighbor count for first atom type to debug workflow differences
+         if (ntype == 1) then
+            call g_logger%info('=== DEBUG: build_neighbor_vectors for atom type 1 ===', __FILE__, __LINE__)
+            call g_logger%info('  Total neighbors found: nr = ' // trim(int2str(nr)), __FILE__, __LINE__)
+            if (allocated(this%hamiltonian%ee)) then
+               call g_logger%info('  Hamiltonian ee allocated, shape = ' // &
+                  trim(int2str(size(this%hamiltonian%ee,1))) // ' x ' // &
+                  trim(int2str(size(this%hamiltonian%ee,2))) // ' x ' // &
+                  trim(int2str(size(this%hamiltonian%ee,3))) // ' x ' // &
+                  trim(int2str(size(this%hamiltonian%ee,4))), __FILE__, __LINE__)
+               ! Print H(R) diagonal for first few neighbors
+               call g_logger%info('  H(R) diagonal elements [1,1] for first neighbors:', __FILE__, __LINE__)
+               do nn_max_loc = 1, min(5, nr)
+                  call g_logger%info('    H(R=' // trim(int2str(nn_max_loc)) // ')[1,1] = ' // &
+                     fmt('F12.6', real(this%hamiltonian%ee(1,1,nn_max_loc,ntype))) // ' + i*' // &
+                     fmt('F12.6', aimag(this%hamiltonian%ee(1,1,nn_max_loc,ntype))), __FILE__, __LINE__)
+               end do
+               ! Print neighbor vectors to compare with Hamiltonian indexing
+               call g_logger%info('  Neighbor vectors (Cartesian) from build_neighbor_vectors:', __FILE__, __LINE__)
+               do nn_max_loc = 1, min(5, nr)
+                  call g_logger%info('    R[' // trim(int2str(nn_max_loc)) // '] = (' // &
+                     fmt('F10.6', this%ham_vec_type(1,nn_max_loc,ntype)) // ', ' // &
+                     fmt('F10.6', this%ham_vec_type(2,nn_max_loc,ntype)) // ', ' // &
+                     fmt('F10.6', this%ham_vec_type(3,nn_max_loc,ntype)) // ')', __FILE__, __LINE__)
+               end do
+            else
+               call g_logger%warning('  WARNING: Hamiltonian ee NOT allocated!', __FILE__, __LINE__)
+            end if
+         end if
+         
+         ! Debug output for first atom type
+         if (.not. this%suppress_internal_logs .and. ntype == 1 .and. nr >= 2) then
+            call g_logger%info('reciprocal%build_neighbor_vectors: First 2 neighbors (Cartesian, abs units):', __FILE__, __LINE__)
+            call g_logger%info('  R[1] = ' // fmt('F12.6', this%ham_vec_type(1, 1, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type(2, 1, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type(3, 1, ntype)), __FILE__, __LINE__)
+            call g_logger%info('  R[2] = ' // fmt('F12.6', this%ham_vec_type(1, 2, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type(2, 2, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type(3, 2, ntype)), __FILE__, __LINE__)
+            call g_logger%info('reciprocal%build_neighbor_vectors: First 2 neighbors (Fractional):', __FILE__, __LINE__)
+            call g_logger%info('  R[1] = ' // fmt('F12.6', this%ham_vec_type_direct(1, 1, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type_direct(2, 1, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type_direct(3, 1, ntype)), __FILE__, __LINE__)
+            call g_logger%info('  R[2] = ' // fmt('F12.6', this%ham_vec_type_direct(1, 2, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type_direct(2, 2, ntype)) // ', ' // &
+                              fmt('F12.6', this%ham_vec_type_direct(3, 2, ntype)), __FILE__, __LINE__)
+         end if
          
          ! Debug: print first few neighbor vectors for verification
          ! if (.not. this%suppress_internal_logs .and. ntype == 1) then
@@ -1040,10 +1069,12 @@ subroutine build_total_hamiltonian(this)
    class(reciprocal), intent(inout) :: this
    
    integer :: ik, isite, jsite, ntype_i
-   integer :: ineigh, ia, ja, nr
-   integer :: n_sites, n_orb_per_site, total_orb
+   integer :: ineigh, ia, ja, nr, nn_max
+   integer :: n_sites, n_orb_per_site, total_orb, kk, ndi
    integer :: i_start, i_end, j_start, j_end
+   real(rp) :: r2
    real(rp), dimension(3) :: k_vec, r_ij_direct
+   real(rp), dimension(:, :), allocatable :: cralat
    real(rp) :: phase_kr
    complex(rp) :: phase_factor
    character(len=200) :: debug_msg
@@ -1051,6 +1082,33 @@ subroutine build_total_hamiltonian(this)
    if (.not. allocated(this%hamiltonian%ee)) then
       call g_logger%error('build_total_hamiltonian: Real-space Hamiltonian not built', __FILE__, __LINE__)
       return
+   end if
+
+   ! Populate lattice%sbarvec if needed for neighbor vector lookup
+   ! This is required for multi-site Hamiltonian assembly
+   if (.not. allocated(this%lattice%sbarvec) .or. .not. allocated(this%lattice%sbarvec_direct)) then
+      call g_logger%info('build_total_hamiltonian: Populating lattice%sbarvec for neighbor vectors', &
+                        __FILE__, __LINE__)
+      
+      r2 = this%lattice%r2
+      kk = this%lattice%kk
+      ndi = kk
+      allocate(cralat(3, kk))
+      cralat(1:3, 1:kk) = this%lattice%cr(1:3, 1:kk) * this%lattice%alat
+      
+      ! Use first atom type as reference (typically ia=1)
+      ia = 1
+      if (this%lattice%ntype > 0) ia = this%lattice%atlist(1)
+      nr = this%lattice%nn(ia, 1)
+      nn_max = nr
+      
+      ! Populate lattice%sbarvec and sbarvec_direct for TB-ranged neighbors
+      call this%lattice%get_neighbor_vectors(r2/9.0_rp, cralat, ia, kk, ndi, nn_max)
+      
+      deallocate(cralat)
+      
+      call g_logger%info('build_total_hamiltonian: Populated ' // trim(int2str(nn_max)) // &
+                        ' neighbor vectors in lattice%sbarvec', __FILE__, __LINE__)
    end if
 
    ! Get system dimensions
@@ -2159,7 +2217,7 @@ subroutine calculate_dos_gaussian(this)
    integer :: i_energy, i_k, i_band
    real(rp) :: energy, weight, gaussian_factor
    real(rp) :: sigma_squared, sigma_use
-   real(rp) :: local_sum, dos_integral, norm_factor
+   real(rp) :: local_sum, dos_integral, norm_factor, kweight_sum
    integer :: nbands
 
    ! Debug: Check eigenvalue range
@@ -2194,6 +2252,18 @@ subroutine calculate_dos_gaussian(this)
 
    sigma_squared = sigma_use**2
    nbands = size(this%eigenvalues, 1)
+   
+   ! DEBUG: Check k-point weights sum
+   kweight_sum = sum(this%k_weights)
+   
+   call g_logger%info('calculate_dos_gaussian: nbands = ' // trim(int2str(nbands)) // &
+                     ', nk_total = ' // trim(int2str(this%nk_total)) // &
+                     ', k_weights sum = ' // trim(real2str(kweight_sum, '(F12.8)')), __FILE__, __LINE__)
+   
+   ! DEBUG: Check eigenvalue array size
+   call g_logger%info('calculate_dos_gaussian: eigenvalues array size = ' // &
+                     trim(int2str(size(this%eigenvalues, 1))) // ' x ' // &
+                     trim(int2str(size(this%eigenvalues, 2))), __FILE__, __LINE__)
 
    ! Calculate raw DOS
    do i_energy = 1, this%n_energy_points
@@ -2214,15 +2284,20 @@ subroutine calculate_dos_gaussian(this)
       this%total_dos(i_energy) = local_sum
    end do
 
-   ! Normalize DOS to integrate to nbands (total number of states)
+   ! DEBUG: Check DOS integral WITHOUT normalization first
    dos_integral = 0.0_rp
    do i_energy = 1, this%n_energy_points - 1
       dos_integral = dos_integral + 0.5_rp * (this%total_dos(i_energy) + this%total_dos(i_energy+1)) * &
                                    (this%dos_energy_grid(i_energy+1) - this%dos_energy_grid(i_energy))
    end do
    
+   call g_logger%info('calculate_dos_gaussian: Raw DOS (before norm) integrates to ' // &
+                     trim(real2str(dos_integral, '(F12.6)')) // ' (should be ' // trim(int2str(nbands)) // ')', &
+                     __FILE__, __LINE__)
+   
+   ! Normalize DOS to integrate to nbands (total number of states)
    if (abs(dos_integral) > 1.0e-10_rp) then
-      norm_factor = real(nbands, rp) / dos_integral
+      norm_factor = 1.0_rp ! real(nbands, rp) / dos_integral
       this%total_dos = this%total_dos * norm_factor
       
       call g_logger%info('calculate_dos_gaussian: DOS normalized by factor ' // &
@@ -2254,8 +2329,8 @@ end subroutine calculate_dos_gaussian
       integer, dimension(4) :: sort_idx
       integer :: nbands
       real(rp) :: e1, e2, e3, e4, E, C
-   real(rp) :: dos_integral, norm_factor
-   integer :: skipped_degenerate
+      real(rp) :: dos_integral, norm_factor
+      integer :: skipped_degenerate
       real(rp), parameter :: TOL = 1.0e-10_rp
 
       call g_logger%info('calculate_dos_blochl: Calculating DOS using Blöchl modified tetrahedron method', __FILE__, __LINE__)
@@ -2370,7 +2445,7 @@ end subroutine calculate_dos_gaussian
       end do
 
       if (abs(dos_integral) > TOL) then
-         norm_factor = real(nbands, rp) / dos_integral
+         norm_factor = 1.0_rp ! real(nbands, rp) / dos_integral
          this%total_dos = this%total_dos * norm_factor
          
          call g_logger%info('calculate_dos_blochl: DOS normalized by factor ' // &
@@ -2672,6 +2747,21 @@ subroutine project_dos_orbitals_gaussian(this)
    this%n_spin_components = 2
    nbands = size(this%eigenvalues, 1)
 
+   ! CRITICAL FIX: Check if eigenvectors match multi-site or single-site layout
+   ! If hk_total was NOT built, eigenvectors are single-site (18×18), not multi-site (n_sites*18 × n_sites*18)
+   if (size(this%eigenvectors, 1) == 18 .and. this%n_sites == 1) then
+      ! Single-site mode: eigenvectors are 18-dimensional (not site-blocked)
+      call g_logger%info('project_dos_orbitals_gaussian: Single-site mode detected (eigenvector dim=18)', __FILE__, __LINE__)
+   else if (size(this%eigenvectors, 1) == this%n_sites * 18) then
+      ! Multi-site mode: eigenvectors are site-blocked  
+      call g_logger%info('project_dos_orbitals_gaussian: Multi-site mode (eigenvector dim=' // &
+         trim(int2str(size(this%eigenvectors, 1))) // ')', __FILE__, __LINE__)
+   else
+      call g_logger%warning('project_dos_orbitals_gaussian: Unexpected eigenvector dimension = ' // &
+         trim(int2str(size(this%eigenvectors, 1))) // ', expected ' // trim(int2str(this%n_sites * 18)), &
+         __FILE__, __LINE__)
+   end if
+
    if (allocated(this%projected_dos)) deallocate(this%projected_dos)
    allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
    this%projected_dos = 0.0_rp
@@ -2783,7 +2873,7 @@ subroutine project_dos_orbitals_gaussian(this)
       end do
 
       if (abs(proj_integral) > 1.0e-12_rp) then
-         norm_factor = real(nbands, rp) / proj_integral
+         norm_factor = 1.0_rp ! real(nbands, rp) / proj_integral
          this%projected_dos = this%projected_dos * norm_factor
          call g_logger%info('project_dos_orbitals_gaussian: Normalized projected DOS by factor ' // trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
       else
@@ -2995,7 +3085,7 @@ end subroutine project_dos_orbitals_gaussian
          
          ! Normalize projected DOS by the same factor
          if (abs(proj_dos_integral) > 1.0e-10_rp) then
-            norm_factor = real(nbands, rp) / proj_dos_integral
+            norm_factor = 1.0_rp ! real(nbands, rp) / proj_dos_integral
             this%projected_dos = this%projected_dos * norm_factor
             call g_logger%info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
                               trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
@@ -3052,12 +3142,22 @@ subroutine calculate_band_moments(this)
       real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
    call g_logger%info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
+   call g_logger%info('calculate_band_moments: DEBUG - this%auto_find_fermi = ' // &
+                     merge('TRUE ', 'FALSE', this%auto_find_fermi) // &
+                     ', this%total_electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
+                     __FILE__, __LINE__)
+   call g_logger%info('calculate_band_moments: DEBUG - Fermi level on entry = ' // &
+                     trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
 
    ! Auto-find Fermi level if requested
    if (this%auto_find_fermi .and. this%total_electrons > 0.0_rp) then
       this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
       call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // &
                         trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
+   else
+      call g_logger%info('calculate_band_moments: Using pre-set Fermi level = ' // &
+                        trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry (auto_find disabled)', &
+                        __FILE__, __LINE__)
    end if
 
    if (allocated(this%band_moments)) deallocate(this%band_moments)
@@ -3295,8 +3395,17 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
       e_mid = (e_min + e_max) / 2.0_rp
       electrons_at_e = this%integrate_dos_up_to_energy(e_mid, kT)
 
+      ! DEBUG: Print first few and last iterations
+      if (ie <= 5 .or. ie >= max_iter-2) then
+         call g_logger%info('  Bisection iter ' // trim(int2str(ie)) // ': E=' // &
+                           trim(real2str(e_mid, '(F10.6)')) // ' Ry, electrons=' // &
+                           trim(real2str(electrons_at_e, '(F12.8)')) // ', target=' // &
+                           trim(real2str(total_electrons, '(F12.8)')), __FILE__, __LINE__)
+      end if
+
       if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then
          fermi_level = e_mid
+         call g_logger%info('  Bisection converged at iteration ' // trim(int2str(ie)), __FILE__, __LINE__)
          exit
       else if (electrons_at_e < total_electrons) then
          e_min = e_mid
@@ -3305,6 +3414,10 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
       end if
    end do
 
+   if (ie >= max_iter) then
+      call g_logger%warning('  Bisection did NOT converge after ' // trim(int2str(max_iter)) // ' iterations!', __FILE__, __LINE__)
+   end if
+
    fermi_level = e_mid
 
    ! Final check
@@ -3312,6 +3425,14 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
    call g_logger%info('find_fermi_level_from_dos: Found Fermi level at ' // &
                      trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
                      trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
+   
+   ! DEBUG: Check total DOS integral
+   call g_logger%info('find_fermi_level_from_dos: DEBUG - Checking DOS integral...', __FILE__, __LINE__)
+   call g_logger%info('  Total electrons requested: ' // trim(real2str(total_electrons, '(F10.6)')), __FILE__, __LINE__)
+   call g_logger%info('  Total electrons found: ' // trim(real2str(electrons_at_e, '(F10.6)')), __FILE__, __LINE__)
+   call g_logger%info('  Error: ' // trim(real2str(electrons_at_e - total_electrons, '(F10.6)')) // &
+                     ' (' // trim(real2str(100.0_rp*(electrons_at_e - total_electrons)/total_electrons, '(F6.3)')) // '%)', &
+                     __FILE__, __LINE__)
 end function find_fermi_level_from_dos
 
 

@@ -2542,8 +2542,16 @@ contains
       allocate(ham_vec(3, nr))
       nn_max_loc = nr
 
-      !call this%charge%lattice%clusba(r2, this%charge%lattice%cr(:, :), ia, kk, kk, dummy)
+      ! Use clusba directly - we only need local ham_vec, no lattice%sbarvec storage
       call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
+
+      ! DEBUG: Print neighbor vectors from chbar_nc for comparison
+      if (ia == 1) then  ! Only for first atom
+         print *, '=== DEBUG chbar_nc: Neighbor vectors for ia=1, nr=', nr
+         do m = 1, min(5, nr)
+            print '(A,I3,A,3F12.6)', '  ham_vec[', m, '] = ', ham_vec(:, m)
+         end do
+      end if
 
       !do m=1, nr
       !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
@@ -2614,10 +2622,6 @@ contains
       a3 = 0.0d0
       aaa = 0.0d0
       do i = 1, nr
-         !write(123, ´(a, i4, 3f10.4)´)´i´, i, this%charge%lattice%sbarvec(:, i)
-         ! a1 = (vet(1) - this%charge%lattice%sbarvec(1, i))
-         ! a2 = (vet(2) - this%charge%lattice%sbarvec(2, i))
-         ! a3 = (vet(3) - this%charge%lattice%sbarvec(3, i))
          a1 = (vet(1) - ham_vec(1, i))
          a2 = (vet(2) - ham_vec(2, i))
          a3 = (vet(3) - ham_vec(3, i))

@@ -367,6 +367,7 @@ module lattice_mod
       procedure :: nncal
       procedure, private :: dbar1
       procedure :: clusba
+      procedure :: get_neighbor_vectors
       procedure :: calculate_nbas
       procedure :: print_state
       procedure :: print_state_full
@@ -2457,10 +2458,10 @@ contains
       allocate (wk(nrl))
       allocate (s(nrl, nrl))
       call micha(wav, sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
-      !call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
 
       ! Saving parameters to be used in the Hamiltonian build
       ! Call clusba again for proper number of TB neighbours
+      nt = 1000  ! Reset to max size before calling clusba
       call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
       ! Store the number of neighbours
       this%nn_max = nt
@@ -2502,21 +2503,77 @@ contains
    !---------------------------------------------------------------------------
    subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec)
       implicit none
-      class(lattice), intent(inout) :: this
+      class(lattice), intent(in) :: this
       ! Inputs
       integer, intent(in) :: ia, nat, ndi
       real(rp), intent(in) :: r2
       real(rp), dimension(3, ndi), intent(in) :: crd
-      !real(rp), dimension(3, ndi), intent(in) :: crd
       real(rp), dimension(3, n), intent(out) :: sbarvec
       ! Output
       integer, intent(inout) :: n
-!    real(rp), dimension(3, n), intent(inout) :: cr
       ! Local variables
-      integer :: i, ii, k, nn
-      real(rp) :: s1
-      real(rp), dimension(3) :: dum
+      integer :: i, jatom, neighbor_count
+      real(rp) :: dist_sq
+      real(rp), dimension(3) :: delta
 
+      ! Initialize first neighbor as on-site (R=0)
+      neighbor_count = 1
+      sbarvec(:, 1) = 0.0_rp
+
+      ! Loop over all atoms to find neighbors
+      do jatom = 1, nat
+         ! Calculate distance squared
+         delta(:) = crd(:, jatom) - crd(:, ia)
+         dist_sq = sum(delta**2)
+
+         ! Check if within cutoff and not the same atom
+         if (dist_sq < r2 .and. dist_sq > 0.0001_rp) then
+            neighbor_count = neighbor_count + 1
+            
+            ! Check array bounds
+            if (neighbor_count > n) then
+               exit  ! Stop if we exceed the allocated array size
+            end if
+
+            ! Store Cartesian neighbor vector
+            sbarvec(:, neighbor_count) = delta(:)
+         end if
+      end do
+
+      ! Update n with actual count
+      n = neighbor_count
+   end subroutine clusba
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Find neighbor vectors and store them in lattice%sbarvec and lattice%sbarvec_direct.
+   !> This wrapper around clusba manages the lattice member arrays and performs
+   !> coordinate transformations. Used when we need to keep track of neighbor vectors
+   !> in the lattice object (e.g., for structure constants with TB-ranged neighbors).
+   !>
+   !> @param[in] r2_cutoff Cutoff radius squared
+   !> @param[in] atom_coords Atomic coordinates in Cartesian (absolute units)
+   !> @param[in] atom_index Index of the central atom
+   !> @param[in] n_atoms Total number of atoms in the cluster
+   !> @param[in] ndi Dimension of atom_coords array
+   !> @param[inout] n_neighbors Input: max neighbors; Output: actual neighbors found
+   !---------------------------------------------------------------------------
+   subroutine get_neighbor_vectors(this, r2_cutoff, atom_coords, atom_index, &
+                                   n_atoms, ndi, n_neighbors)
+      implicit none
+      class(lattice), intent(inout) :: this
+      ! Input parameters
+      real(rp), intent(in) :: r2_cutoff
+      integer, intent(in) :: atom_index, n_atoms, ndi
+      real(rp), dimension(3, ndi), intent(in) :: atom_coords
+      ! Output parameters
+      integer, intent(inout) :: n_neighbors  ! Input: max size, Output: actual count
+      ! Local variables
+      integer :: i, n_max
+      real(rp), dimension(3) :: delta_frac
+
+      ! Allocate lattice%sbarvec and sbarvec_direct arrays if needed
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
@@ -2529,48 +2586,28 @@ contains
       allocate (this%sbarvec_direct(3, this%kk))
 #endif
 
-      this%sbarvec(:, :) = 0.0d0
-      this%sbarvec_direct(:, :) = 0.0d0
+      this%sbarvec(:, :) = 0.0_rp
+      this%sbarvec_direct(:, :) = 0.0_rp
 
-      ii = 1
-      do k = 1, 3
-         sbarvec(k, 1) = 0.0d0
-         !this%sbarvec(k, 1) = 0.0d0
-      end do
-      do nn = 1, nat
-         s1 = 0.0
-         do i = 1, 3
-            dum(i) = (crd(i, nn) - crd(i, ia))**2
-            s1 = s1 + dum(i)
-         end do
-         if (s1 < r2 .and. s1 > 0.0001) then
-            ii = ii + 1
-            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
-            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
-            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
-            ! Store direct coordinate version (fractional coordinates)
-            ! Convert cartesian vector to fractional coordinates using lattice vectors
-            if (this%a_cart_inv_ready) then
-               this%sbarvec_direct(1, ii) = this%a_cart_inv(1, 1)*this%sbarvec(1, ii) + this%a_cart_inv(1, 2)*this%sbarvec(2, ii) + this%a_cart_inv(1, 3)*this%sbarvec(3, ii)
-               this%sbarvec_direct(2, ii) = this%a_cart_inv(2, 1)*this%sbarvec(1, ii) + this%a_cart_inv(2, 2)*this%sbarvec(2, ii) + this%a_cart_inv(2, 3)*this%sbarvec(3, ii)
-               this%sbarvec_direct(3, ii) = this%a_cart_inv(3, 1)*this%sbarvec(1, ii) + this%a_cart_inv(3, 2)*this%sbarvec(2, ii) + this%a_cart_inv(3, 3)*this%sbarvec(3, ii)
-            else
-               call cartesian_to_fractional(this%sbarvec(:, ii), this%sbarvec_direct(:, ii), this%a, this%alat)
-            end if
-         end if
-     !if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
-     !"in DBAR1."
-      end do
-      !print *, 'Clusba says ii, n:', ii, n, shape(sbarvec)
-      ! if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA in DBAR1."
-      n = ii
+      ! Use clusba to find neighbors (stores in lattice%sbarvec via output array)
+      n_max = min(n_neighbors, this%kk)
+      call this%clusba(r2_cutoff, atom_coords, atom_index, n_atoms, ndi, n_max, &
+                       this%sbarvec(:, 1:n_max))
       
-      ! Copy computed neighbor vectors to output parameter
-      ! sbarvec should contain the Cartesian neighbor vectors
-      do i = 1, min(ii, size(sbarvec, 2))
-         sbarvec(1:3, i) = this%sbarvec(1:3, i)
+      ! Update n_neighbors with the actual number found
+      n_neighbors = n_max
+      
+      ! Convert all neighbor vectors to fractional coordinates
+      do i = 1, n_neighbors
+         if (this%a_cart_inv_ready) then
+            delta_frac = matmul(this%a_cart_inv, this%sbarvec(:, i) / this%alat)
+         else
+            call cartesian_to_fractional(this%sbarvec(:, i) / this%alat, delta_frac, this%a, 1.0_rp)
+         end if
+         this%sbarvec_direct(:, i) = delta_frac
       end do
-   end subroutine clusba
+
+   end subroutine get_neighbor_vectors
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
