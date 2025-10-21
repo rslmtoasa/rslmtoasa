@@ -192,6 +192,7 @@ module reciprocal_mod
       procedure :: fourier_transform_hamiltonian
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
+      procedure :: check_multisite_hamiltonian_diagonal
       procedure :: diagonalize_hamiltonian
       procedure :: calculate_band_structure
       procedure :: calculate_density_of_states
@@ -794,7 +795,7 @@ contains
             else
                ! Off-site: determine which j_site this neighbor corresponds to
                ja = this%lattice%nn(ia, ineigh)     ! Cluster atom index
-               jsite = this%lattice%izp(ja)          ! Map to unit cell site
+               jsite = this%lattice%iz(ja)          ! Map to unit cell site
                if (jsite < 1 .or. jsite > n_sites) cycle
             end if
             
@@ -810,6 +811,14 @@ contains
          end do
       end do
 
+      if (norm2(k_vec) < 1.0e-8_rp) then
+         ! Debug: Print H(k) at Gamma point
+         call g_logger%info('fourier_transform_hamiltonian: H(k) at Gamma point:', __FILE__, __LINE__)
+         write(1000,'(18f6.2)')  abs(hk_result( 1:18, 1:18))
+         write(1010,'(18f6.2)')  abs(hk_result(19:36, 1:18))
+         write(1001,'(18f6.2)')  abs(hk_result( 1:18,19:36))
+         write(1011,'(18f6.2)')  abs(hk_result(19:36,19:36))
+      end if
       deallocate(structure_factors)
       
    end subroutine fourier_transform_hamiltonian
@@ -839,6 +848,7 @@ contains
       integer :: ik, nk, ntype
       character(len=200) :: debug_msg
       logical :: using_kpath
+      integer :: i, j
 
       ! Determine which k-point set to use
       using_kpath = .false.
@@ -863,6 +873,15 @@ contains
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
       call this%build_neighbor_vectors()
+      print *,'KSPACE neighbours'
+      do i=1, this%lattice%ntype
+         print *,'Type ', i, ' nneigh ', this%lattice%nn(this%lattice%atlist(i),1)
+         do j=2, this%lattice%nn(this%lattice%atlist(i),1)
+            print '(a,2i4, a, 3f10.6)','  Neighbour ', this%lattice%nn(i, j), this%lattice%iz(this%lattice%nn(i,j)), ': ', this%ham_vec_type(1,j,i), &
+                     this%ham_vec_type(2,j,i), this%ham_vec_type(3,j,i)
+         end do
+      end do
+      print *,'================================='
 
       ! Allocate k-space Hamiltonian for multi-site system
       ! Dimension: (n_orb * n_sites) x (n_orb * n_sites) x n_kpoints
@@ -891,7 +910,76 @@ contains
 #endif
 
       call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
+      
+      ! Diagnostic: Check H(k) at Gamma point for multi-site systems
+      if (this%lattice%nrec > 1 .and. nk > 0) then
+         call this%check_multisite_hamiltonian_diagonal()
+      end if
    end subroutine build_kspace_hamiltonian
+
+!---------------------------------------------------------------------------
+! DESCRIPTION:
+!> @brief
+!> Diagnostic: Check diagonal blocks of multi-site H(k) at Gamma point
+!---------------------------------------------------------------------------
+subroutine check_multisite_hamiltonian_diagonal(this)
+   class(reciprocal), intent(in) :: this
+   integer :: isite, iorb, ispin
+   complex(rp) :: h_avg_site1_up, h_avg_site1_dn, h_avg_site2_up, h_avg_site2_dn
+   integer :: n_sites, idx_up, idx_dn
+   character(len=256) :: msg
+   
+   n_sites = this%lattice%nrec
+   if (n_sites < 2) return
+   
+   ! Check on-site diagonal elements for first two sites at Gamma (ik=1)
+   ! For spd basis: s, p, d for spin-up (indices 1-9), then spin-down (10-18)
+   
+   ! Site 1, spin-up d-orbital average (indices 5-9 in spin block)
+   h_avg_site1_up = 0.0_rp
+   do iorb = 5, 9
+      idx_up = iorb  ! First 9 are spin-up
+      h_avg_site1_up = h_avg_site1_up + this%hk_bulk(idx_up, idx_up, 1)
+   end do
+   h_avg_site1_up = h_avg_site1_up / 5.0_rp
+   
+   ! Site 1, spin-down d-orbital average (indices 14-18 in site block)
+   h_avg_site1_dn = 0.0_rp
+   do iorb = 5, 9
+      idx_dn = iorb + 9  ! Next 9 are spin-down
+      h_avg_site1_dn = h_avg_site1_dn + this%hk_bulk(idx_dn, idx_dn, 1)
+   end do
+   h_avg_site1_dn = h_avg_site1_dn / 5.0_rp
+   
+   ! Site 2, spin-up d-orbital average (indices 18+5 to 18+9)
+   h_avg_site2_up = 0.0_rp
+   do iorb = 5, 9
+      idx_up = 18 + iorb  ! Site 2 block starts at index 19
+      h_avg_site2_up = h_avg_site2_up + this%hk_bulk(idx_up, idx_up, 1)
+   end do
+   h_avg_site2_up = h_avg_site2_up / 5.0_rp
+   
+   ! Site 2, spin-down d-orbital average
+   h_avg_site2_dn = 0.0_rp
+   do iorb = 5, 9
+      idx_dn = 18 + iorb + 9  ! Site 2, spin-down block
+      h_avg_site2_dn = h_avg_site2_dn + this%hk_bulk(idx_dn, idx_dn, 1)
+   end do
+   h_avg_site2_dn = h_avg_site2_dn / 5.0_rp
+   
+   write(msg, '(A,2F12.6)') 'H(k=0) diagonal check - Site 1 d-orbital avg (up/dn): ', &
+                             real(h_avg_site1_up), real(h_avg_site1_dn)
+   call g_logger%info(trim(msg), __FILE__, __LINE__)
+   
+   write(msg, '(A,2F12.6)') 'H(k=0) diagonal check - Site 2 d-orbital avg (up/dn): ', &
+                             real(h_avg_site2_up), real(h_avg_site2_dn)
+   call g_logger%info(trim(msg), __FILE__, __LINE__)
+   
+   write(msg, '(A,F12.6)') 'H(k=0) diagonal difference (site2-site1) up: ', &
+                            real(h_avg_site2_up - h_avg_site1_up)
+   call g_logger%info(trim(msg), __FILE__, __LINE__)
+   
+end subroutine check_multisite_hamiltonian_diagonal
 
 !---------------------------------------------------------------------------
 ! DESCRIPTION:

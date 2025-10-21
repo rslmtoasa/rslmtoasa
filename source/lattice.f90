@@ -2463,6 +2463,10 @@ contains
       ! Call clusba again for proper number of TB neighbours
       nt = 1000  ! Reset to max size before calling clusba
       call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
+      print *, 'REAL SPACE neigbours', ia
+      do i = 2, nt
+         print '(a,2i4, a, 3f10.6)', 'Neighbour ', this%nn(ia, i), this%iz(this%nn(ia, i)), ' : ', sbarvec(:, i)
+      end do
       ! Store the number of neighbours
       this%nn_max = nt
 

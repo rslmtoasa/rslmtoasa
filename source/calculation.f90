@@ -1322,8 +1322,27 @@ contains
       reciprocal_obj%n_energy_points = this%n_energy_points
       reciprocal_obj%dos_energy_range = [this%dos_energy_min, this%dos_energy_max]
       reciprocal_obj%temperature = this%temperature
-      reciprocal_obj%auto_find_fermi = this%auto_find_fermi
-      reciprocal_obj%total_electrons = this%total_electrons
+      
+      ! Enable automatic Fermi level finding by default for post-processing
+      ! If user specified total_electrons in namelist, use it; otherwise auto-calculate from valence
+      if (this%total_electrons > 0.0_rp) then
+         reciprocal_obj%total_electrons = this%total_electrons
+         call g_logger%info('post_processing_density_of_states: Using user-specified total_electrons = ' // &
+                           fmt('F10.5', this%total_electrons), __FILE__, __LINE__)
+      else
+         ! Auto-calculate from valence electrons
+         reciprocal_obj%total_electrons = real(sum(lattice_obj%symbolic_atoms(1:lattice_obj%nbulk_bulk)%element%valence), rp)
+         call g_logger%info('post_processing_density_of_states: Auto-calculated total_electrons = ' // &
+                           fmt('F10.5', reciprocal_obj%total_electrons) // ' from valence', __FILE__, __LINE__)
+      end if
+      
+      ! Enable Fermi level auto-finding unless explicitly disabled
+      reciprocal_obj%auto_find_fermi = .true.
+      if (.not. this%auto_find_fermi) then
+         reciprocal_obj%auto_find_fermi = .false.
+         call g_logger%info('post_processing_density_of_states: Fermi level auto-finding disabled by user', __FILE__, __LINE__)
+      end if
+      
       reciprocal_obj%suppress_internal_logs = this%suppress_internal_logs
 
       call g_logger%info('post_processing_density_of_states: K-mesh = ' // &
