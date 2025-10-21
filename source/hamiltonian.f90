@@ -2546,12 +2546,12 @@ contains
       call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
 
       ! DEBUG: Print neighbor vectors from chbar_nc for comparison
-      if (ia == 1) then  ! Only for first atom
-         print *, '=== DEBUG chbar_nc: Neighbor vectors for ia=1, nr=', nr
-         do m = 1, min(5, nr)
-            print '(A,I3,A,3F12.6)', '  ham_vec[', m, '] = ', ham_vec(:, m)
-         end do
-      end if
+      ! if (ia == 1) then  ! Only for first atom
+      !    print *, '=== DEBUG chbar_nc: Neighbor vectors for ia=1, nr=', nr
+      !    do m = 1, min(5, nr)
+      !       print '(A,I3,A,3F12.6)', '  ham_vec[', m, '] = ', ham_vec(:, m)
+      !    end do
+      ! end if
 
       !do m=1, nr
       !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))

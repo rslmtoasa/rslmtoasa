@@ -80,7 +80,7 @@ module reciprocal_mod
 
       ! K-space Hamiltonian
       !> Bulk Hamiltonian in k-space
-      complex(rp), dimension(:, :, :, :), allocatable :: hk_bulk
+      complex(rp), dimension(:, :, :), allocatable :: hk_bulk
       !> Spin-orbit Hamiltonian in k-space
       complex(rp), dimension(:, :, :), allocatable :: hk_so
       !> Total k-space Hamiltonian (bulk + SO)
@@ -90,7 +90,7 @@ module reciprocal_mod
 
       ! Band structure variables
       !> Maximum number of orbital channels per atom type
-      integer :: max_orb_channels
+      integer :: max_orbs
       !> Basis set type indicator (sp=4, spd=9, spdf=16)
       integer, dimension(:), allocatable :: basis_size
       !> Include spin-orbit coupling
@@ -187,8 +187,6 @@ module reciprocal_mod
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
       procedure :: build_kspace_hamiltonian
-      procedure :: build_kspace_hamiltonian_so
-      procedure :: build_total_hamiltonian
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
@@ -196,7 +194,6 @@ module reciprocal_mod
       procedure :: get_basis_type_from_size
       procedure :: diagonalize_hamiltonian
       procedure :: calculate_band_structure
-      procedure :: calculate_band_structure_auto
       procedure :: calculate_density_of_states
       procedure :: calculate_dos_tetrahedron
       procedure :: calculate_dos_tetrahedron_with_symmetry
@@ -332,7 +329,7 @@ contains
       this%use_time_reversal = .true.
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
-      this%max_orb_channels = 18  ! spd noncollinear default
+      this%max_orbs = 18  ! spd noncollinear default
 
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
@@ -614,18 +611,18 @@ contains
       end do
 
       ! Set maximum orbital channels (×2 for spin, stored as 18 for noncollinear spd)
-      this%max_orb_channels = maxval(this%basis_size) * 2
+      this%max_orbs = maxval(this%basis_size) * 2
       
       ! For current spd case: 9 orbitals × 2 = 18 for noncollinear
       if (maxval(this%basis_size) == 9) then
-         this%max_orb_channels = 18
+         this%max_orbs = 18
       else if (maxval(this%basis_size) == 4) then
-         this%max_orb_channels = 8   ! sp basis
+         this%max_orbs = 8   ! sp basis
       else if (maxval(this%basis_size) == 16) then
-         this%max_orb_channels = 32  ! spdf basis
+         this%max_orbs = 32  ! spdf basis
       end if
 
-      call g_logger%info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orb_channels)), __FILE__, __LINE__)
+      call g_logger%info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orbs)), __FILE__, __LINE__)
    end subroutine set_basis_sizes
 
    !---------------------------------------------------------------------------
@@ -697,257 +694,124 @@ contains
          call g_logger%info('reciprocal%build_neighbor_vectors: Built ' // trim(int2str(nr)) // &
                           ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
          
-         ! ALWAYS print neighbor count for first atom type to debug workflow differences
-         if (ntype == 1) then
-            call g_logger%info('=== DEBUG: build_neighbor_vectors for atom type 1 ===', __FILE__, __LINE__)
-            call g_logger%info('  Total neighbors found: nr = ' // trim(int2str(nr)), __FILE__, __LINE__)
-            if (allocated(this%hamiltonian%ee)) then
-               call g_logger%info('  Hamiltonian ee allocated, shape = ' // &
-                  trim(int2str(size(this%hamiltonian%ee,1))) // ' x ' // &
-                  trim(int2str(size(this%hamiltonian%ee,2))) // ' x ' // &
-                  trim(int2str(size(this%hamiltonian%ee,3))) // ' x ' // &
-                  trim(int2str(size(this%hamiltonian%ee,4))), __FILE__, __LINE__)
-               ! Print H(R) diagonal for first few neighbors
-               call g_logger%info('  H(R) diagonal elements [1,1] for first neighbors:', __FILE__, __LINE__)
-               do nn_max_loc = 1, min(5, nr)
-                  call g_logger%info('    H(R=' // trim(int2str(nn_max_loc)) // ')[1,1] = ' // &
-                     fmt('F12.6', real(this%hamiltonian%ee(1,1,nn_max_loc,ntype))) // ' + i*' // &
-                     fmt('F12.6', aimag(this%hamiltonian%ee(1,1,nn_max_loc,ntype))), __FILE__, __LINE__)
-               end do
-               ! Print neighbor vectors to compare with Hamiltonian indexing
-               call g_logger%info('  Neighbor vectors (Cartesian) from build_neighbor_vectors:', __FILE__, __LINE__)
-               do nn_max_loc = 1, min(5, nr)
-                  call g_logger%info('    R[' // trim(int2str(nn_max_loc)) // '] = (' // &
-                     fmt('F10.6', this%ham_vec_type(1,nn_max_loc,ntype)) // ', ' // &
-                     fmt('F10.6', this%ham_vec_type(2,nn_max_loc,ntype)) // ', ' // &
-                     fmt('F10.6', this%ham_vec_type(3,nn_max_loc,ntype)) // ')', __FILE__, __LINE__)
-               end do
-            else
-               call g_logger%warning('  WARNING: Hamiltonian ee NOT allocated!', __FILE__, __LINE__)
-            end if
-         end if
-         
-         ! Debug output for first atom type
-         if (.not. this%suppress_internal_logs .and. ntype == 1 .and. nr >= 2) then
-            call g_logger%info('reciprocal%build_neighbor_vectors: First 2 neighbors (Cartesian, abs units):', __FILE__, __LINE__)
-            call g_logger%info('  R[1] = ' // fmt('F12.6', this%ham_vec_type(1, 1, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type(2, 1, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type(3, 1, ntype)), __FILE__, __LINE__)
-            call g_logger%info('  R[2] = ' // fmt('F12.6', this%ham_vec_type(1, 2, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type(2, 2, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type(3, 2, ntype)), __FILE__, __LINE__)
-            call g_logger%info('reciprocal%build_neighbor_vectors: First 2 neighbors (Fractional):', __FILE__, __LINE__)
-            call g_logger%info('  R[1] = ' // fmt('F12.6', this%ham_vec_type_direct(1, 1, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type_direct(2, 1, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type_direct(3, 1, ntype)), __FILE__, __LINE__)
-            call g_logger%info('  R[2] = ' // fmt('F12.6', this%ham_vec_type_direct(1, 2, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type_direct(2, 2, ntype)) // ', ' // &
-                              fmt('F12.6', this%ham_vec_type_direct(3, 2, ntype)), __FILE__, __LINE__)
-         end if
-         
-         ! Debug: print first few neighbor vectors for verification
-         ! if (.not. this%suppress_internal_logs .and. ntype == 1) then
-         !    write(*, '(A)') '=== Neighbor vectors for type 1 (Cartesian) ==='
-         !    do nn_max_loc = 1, min(5, nr)
-         !       write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
-         !          this%ham_vec_type(1:3, nn_max_loc, ntype)
-         !    end do
-         !    write(*, '(A)') '=== Neighbor vectors for type 1 (Fractional) ==='
-         !    do nn_max_loc = 1, min(5, nr)
-         !       write(*, '(A,I3,A,3F12.6)') '  R[', nn_max_loc, '] = ', &
-         !          this%ham_vec_type_direct(1:3, nn_max_loc, ntype)
-         !    end do
-         ! end if
       end do
 
       call g_logger%info('reciprocal%build_neighbor_vectors: Completed neighbor vector build for all types', __FILE__, __LINE__)
+
    end subroutine build_neighbor_vectors
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Calculate structure factors for Fourier transform
+   !> Calculate structure factors for ALL atom types for Fourier transform
+   !> Fills structure_factors(ineigh, ntype) for all neighbors and types
    !---------------------------------------------------------------------------
-   subroutine calculate_structure_factors(this, k_vec, ntype, structure_factors)
+   subroutine calculate_structure_factors(this, k_vec, structure_factors)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
-      integer, intent(in) :: ntype
-      complex(rp), dimension(:), intent(out) :: structure_factors
+      complex(rp), dimension(:, :), intent(out) :: structure_factors  ! (nr_max, ntype)
       ! Local variables
-      integer :: ineigh, ia, nr
+      integer :: ntype, ineigh, ia, nr
       real(rp) :: k_dot_r
       real(rp), dimension(3) :: r_vec
-      logical :: debug_this_k
 
-      ia = this%lattice%atlist(ntype)
-      nr = this%lattice%nn(ia, 1)  ! Number of neighbors
+      ! Loop over all atom types
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)  ! Number of neighbors for this type
 
-      ! Only enable debug_this_k when user allows internal logs and for first atom type
-      debug_this_k = .false.
-      if (.not. this%suppress_internal_logs) debug_this_k = (ntype == 1)
-
-      ! Calculate structure factors exp(i*k·R) for each neighbor
-      do ineigh = 1, min(nr, size(structure_factors))
-         if (ineigh == 1) then
-            ! On-site term (R = 0)
-            structure_factors(ineigh) = cmplx(1.0_rp, 0.0_rp, rp)
-            ! if (debug_this_k) then
-            !    call g_logger%info('fourier_transform_hamiltonian: On-site term (R=0)', __FILE__, __LINE__)
-            ! end if
-         else
-            ! Off-site terms - get neighbor vector from type-indexed arrays
-            ! Use fractional coordinates for both k and R for clean phase calculation
-            ! Phase = exp(i * 2π * k_frac · R_frac)
-            if (allocated(this%ham_vec_type_direct)) then
-               ! Use the proper per-atom-type neighbor vectors (fractional)
-               r_vec(1:3) = this%ham_vec_type_direct(1:3, ineigh, ntype)
-               ! if (debug_this_k) then
-               !    call g_logger%info('fourier_transform_hamiltonian: Using ham_vec_type_direct (fractional, type-indexed)', __FILE__, __LINE__)
-               ! end if
-            else if (allocated(this%ham_vec_type)) then
-               ! Fallback: Use Cartesian and convert
-               r_vec(1:3) = this%ham_vec_type(1:3, ineigh, ntype)
-               ! Convert to fractional coordinates
-               if (this%lattice%a_cart_inv_ready) then
-                  r_vec = matmul(this%lattice%a_cart_inv, r_vec)
-               else
-                  call cartesian_to_fractional(r_vec, r_vec, this%lattice%a, this%lattice%alat)
-               end if
-               if (debug_this_k) then
-                  call g_logger%warning('fourier_transform_hamiltonian: Using ham_vec_type (Cartesian, type-indexed)', __FILE__, __LINE__)
-               end if
+         ! Calculate structure factors exp(i*k·R) for each neighbor
+         do ineigh = 1, min(nr, size(structure_factors, 1))
+            if (ineigh == 1) then
+               ! On-site term (R = 0)
+               structure_factors(ineigh, ntype) = cmplx(1.0_rp, 0.0_rp, rp)
             else
-               ! ERROR: neighbor vectors not built!
-               call g_logger%error('fourier_transform_hamiltonian: ham_vec_type not allocated! Call build_neighbor_vectors first.', __FILE__, __LINE__)
-               r_vec = 0.0_rp
-            end if
+               ! Off-site terms - get neighbor vector in fractional coordinates
+               ! Use ham_vec_type_direct which is populated by build_neighbor_vectors
+               if (allocated(this%ham_vec_type_direct)) then
+                  r_vec(1:3) = this%ham_vec_type_direct(1:3, ineigh, ntype)
+               else
+                  call g_logger%error('calculate_structure_factors: ham_vec_type_direct not allocated!', __FILE__, __LINE__)
+                  r_vec = 0.0_rp
+               end if
 
-            ! Phase factor: exp(i * 2π * k_frac · R_frac)
-            ! k_vec is in fractional coordinates (dimensionless)
-            ! r_vec is in fractional coordinates (dimensionless)
-            ! Phase = 2π * k_frac · r_frac (need 2π factor for fractional coords)
-            k_dot_r = 2.0_rp * pi * dot_product(k_vec, r_vec)
-            structure_factors(ineigh) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
-            ! print '(a, 3f10.6, a, 3f10.6)', 'DEBUG: k_vec=', k_vec, ' R_vec=', r_vec
-            ! print *,'DEBUG: ineigh=', ineigh, ' k_dot_r=', k_dot_r, ' structure_factor=', structure_factors(ineigh)
-         end if
+               ! Phase factor: exp(i * 2π * k_frac · R_frac)
+               ! k_vec is in fractional coordinates (dimensionless)
+               ! r_vec is in fractional coordinates (dimensionless)
+               k_dot_r = 2.0_rp * pi * dot_product(k_vec, r_vec)
+               structure_factors(ineigh, ntype) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
+            end if
+         end do
       end do
    end subroutine calculate_structure_factors
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Fourier transform real-space Hamiltonian to k-space
+   !> Fourier transform real-space Hamiltonian to k-space for multi-site system
+   !> H(k) = Σ_{i,j sites} Σ_R H_ij(R) * exp(i*k·R_ij)
+   !> where R_ij = R + r_j - r_i (lattice vector + basis positions)
    !---------------------------------------------------------------------------
-   subroutine fourier_transform_hamiltonian(this, k_vec, ntype, hk_result)
+   subroutine fourier_transform_hamiltonian(this, k_vec, hk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
-      integer, intent(in) :: ntype
-      complex(rp), dimension(:, :), intent(out) :: hk_result
+      complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
       ! Local variables
-      integer :: ineigh, ia, nr
-      complex(rp), dimension(:), allocatable :: structure_factors  ! REMOVED 'save' for thread safety
-      logical :: debug_this_k
-
-      ia = this%lattice%atlist(ntype)
-      nr = this%lattice%nn(ia, 1)  ! Number of neighbors
-
-      ! Debug only for first k-point and first atom type to avoid spam
-      debug_this_k = .false. !(ntype == 1)
+      integer :: isite, jsite, ntype_i, ntype_j, ineigh, ia, ja, nr
+      integer :: i_start, i_end, j_start, j_end
+      integer :: n_orb, n_sites
+      complex(rp), dimension(:, :), allocatable :: structure_factors  ! (nr_max, ntype)
       
-      ! Only debug near gamma point
-      if (sqrt(k_vec(1)**2 + k_vec(2)**2 + k_vec(3)**2) > 0.1_rp) debug_this_k = .false.
-
-      if (.not. this%suppress_internal_logs) then
-         if (debug_this_k) then
-            call g_logger%info('fourier_transform_hamiltonian: Debug output for k-vector', __FILE__, __LINE__)
-            if (allocated(this%ham_vec_type)) then
-               call g_logger%info('fourier_transform_hamiltonian: ham_vec_type is allocated (type-indexed neighbors)', __FILE__, __LINE__)
-            else
-               call g_logger%warning('fourier_transform_hamiltonian: WARNING - ham_vec_type is NOT allocated!', __FILE__, __LINE__)
-            end if
-         end if
-      end if
-
-      ! Allocate structure factors for this k-point (thread-safe now)
-      allocate(structure_factors(nr))
-
-      ! Calculate structure factors (fills structure_factors)
-      call this%calculate_structure_factors(k_vec, ntype, structure_factors)
+      ! Get dimensions
+      n_orb = 18  ! spd (9 orbitals) * spinor (2)
+      n_sites = this%lattice%nrec
       
-      ! Debug: Print structure factors for first k-point
-      if (.not. this%suppress_internal_logs .and. debug_this_k) then
-         write(*, '(A,3F10.6)') 'DEBUG FT: k_vec (fractional) = ', k_vec
-         write(*, '(A)') 'DEBUG FT: Structure factors:'
-         do ineigh = 1, min(5, nr)
-            write(*, '(A,I3,A,2F12.6,A,F10.6)') '  SF[', ineigh, '] = ', &
-               structure_factors(ineigh), '  |SF| = ', abs(structure_factors(ineigh))
-         end do
-         write(*, '(A)') 'DEBUG FT: Hamiltonian ee array dimensions:'
-         write(*, '(A,4I5)') '  shape(ee) = ', shape(this%hamiltonian%ee)
-         write(*, '(A,I5,A,I5)') '  Checking ineigh up to nr=', nr, ', ntype=', ntype
-         write(*, '(A)') 'DEBUG FT: Sample H(R) diagonal elements (real part):'
-         do ineigh = 1, min(3, nr)
-            write(*, '(A,I3,A,3ES12.3)') '  H_R[', ineigh, '][1,1], [10,10], [18,18] = ', &
-               real(this%hamiltonian%ee(1,1,ineigh,ntype)), &
-               real(this%hamiltonian%ee(10,10,ineigh,ntype)), &
-               real(this%hamiltonian%ee(18,18,ineigh,ntype))
-         end do
-         ! Check for NaN or extreme values
-         if (any(abs(real(this%hamiltonian%ee(:,:,1,ntype))) > 1.0e10_rp)) then
-            write(*, '(A)') 'WARNING: Hamiltonian contains extreme values (>1e10)!'
-         end if
-         if (any(real(this%hamiltonian%ee(:,:,1,ntype)) /= real(this%hamiltonian%ee(:,:,1,ntype)))) then
-            write(*, '(A)') 'ERROR: Hamiltonian contains NaN values!'
-         end if
-      end if
-
+      ! Allocate structure factors for all types
+      allocate(structure_factors(this%lattice%nn_max, this%lattice%ntype))
+      
+      ! Calculate structure factors for all atom types at this k-point
+      call this%calculate_structure_factors(k_vec, structure_factors)
+      
       ! Initialize result
       hk_result = cmplx(0.0_rp, 0.0_rp, rp)
 
-      ! Sum over neighbors: H(k) = Σ_R H(R) * exp(i*k·R)
-      ! Avoid making a local copy of the neighbor Hamiltonian matrix
-      ! to reduce temporaries and memory traffic.
-      do ineigh = 1, nr
-         hk_result = hk_result + this%hamiltonian%ee(:, :, ineigh, ntype) * structure_factors(ineigh)
+      ! Loop over all sites in the unit cell
+      ! For each i_site → j_site pair, sum over lattice vectors R
+      do isite = 1, n_sites
+         ntype_i = this%lattice%ib(isite)  ! Type of site i
+         ia = this%lattice%atlist(ntype_i) ! Cluster atom for this type
+         nr = this%lattice%nn(ia, 1)       ! Number of neighbors
+         
+         ! Orbital block indices for site i (row block)
+         i_start = (isite - 1) * n_orb + 1
+         i_end = isite * n_orb
+         
+         ! Loop over neighbors (which map to j_sites in different cells)
+         do ineigh = 1, nr
+            if (ineigh == 1) then
+               ! On-site: i_site = j_site, R = 0
+               jsite = isite
+            else
+               ! Off-site: determine which j_site this neighbor corresponds to
+               ja = this%lattice%nn(ia, ineigh)     ! Cluster atom index
+               jsite = this%lattice%izp(ja)          ! Map to unit cell site
+               if (jsite < 1 .or. jsite > n_sites) cycle
+            end if
+            
+            ! Orbital block indices for site j (column block)
+            j_start = (jsite - 1) * n_orb + 1
+            j_end = jsite * n_orb
+            
+            ! Add H_ij(R) * exp(i*k·R_ij) to the appropriate block
+            ! Structure factor already contains the phase for this neighbor
+            hk_result(i_start:i_end, j_start:j_end) = &
+               hk_result(i_start:i_end, j_start:j_end) + &
+               this%hamiltonian%ee(:, :, ineigh, ntype_i) * structure_factors(ineigh, ntype_i)
+         end do
       end do
 
-      ! Debug: Print resulting H(k) diagonal elements
-      if (.not. this%suppress_internal_logs .and. debug_this_k) then
-         write(*, '(A)') 'DEBUG FT: Resulting H(k) diagonal elements (real part):'
-         write(*, '(A,3F10.5)') '  H_k[1,1], [10,10], [18,18] = ', &
-            real(hk_result(1,1)), real(hk_result(10,10)), real(hk_result(18,18))
-         write(*, '(A)') 'DEBUG FT: Resulting H(k) diagonal elements (imag part):'
-         write(*, '(A,3F10.5)') '  H_k[1,1], [10,10], [18,18] = ', &
-            aimag(hk_result(1,1)), aimag(hk_result(10,10)), aimag(hk_result(18,18))
-         write(*, '(A,F12.5)') 'DEBUG FT: Trace of H(k) (real) = ', real(trace_complex_matrix(hk_result))
-      end if
-
-      ! Deallocate structure factors (thread-safe - each thread has its own)
       deallocate(structure_factors)
       
-   contains
-      ! Helper function to calculate trace of real matrix
-      function trace_real_matrix(mat) result(tr)
-         complex(rp), dimension(:, :), intent(in) :: mat
-         real(rp) :: tr
-         integer :: i
-         tr = 0.0_rp
-         do i = 1, min(size(mat, 1), size(mat, 2))
-            tr = tr + real(mat(i, i))
-         end do
-      end function trace_real_matrix
-      
-      ! Helper function to calculate trace of complex matrix
-      function trace_complex_matrix(mat) result(tr)
-         complex(rp), dimension(:, :), intent(in) :: mat
-         complex(rp) :: tr
-         integer :: i
-         tr = cmplx(0.0_rp, 0.0_rp, rp)
-         do i = 1, min(size(mat, 1), size(mat, 2))
-            tr = tr + mat(i, i)
-         end do
-      end function trace_complex_matrix
    end subroutine fourier_transform_hamiltonian
 
    !---------------------------------------------------------------------------
@@ -955,292 +819,79 @@ contains
    !> @brief
    !> Build k-space Hamiltonian for all k-points (bulk contribution)
    !---------------------------------------------------------------------------
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build k-space Hamiltonian by Fourier transforming real-space H
+   !>
+   !> This routine builds H(k) for either:
+   !>   - k-mesh (for DOS/SCF): uses k_points array
+   !>   - k-path (for bands): uses k_path array
+   !>
+   !> Workflow:
+   !>   1. Generate k-points (generate_kmesh or set up k-path)
+   !>   2. Call build_kspace_hamiltonian() to compute hk_bulk
+   !>   3. Call diagonalize_hamiltonian() to get eigenvalues/eigenvectors
+   !---------------------------------------------------------------------------
    subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ik, ntype
-      real(rp), dimension(3) :: k_cartesian
+      integer :: ik, nk, ntype
       character(len=200) :: debug_msg
+      logical :: using_kpath
 
-      if (.not. allocated(this%k_points)) then
-         call g_logger%error('reciprocal%build_kspace_hamiltonian: K-points not generated. Call generate_mp_mesh first.', __FILE__, __LINE__)
+      ! Determine which k-point set to use
+      using_kpath = .false.
+      if (allocated(this%k_path)) then
+         ! Use k-path for band structure
+         nk = this%nk_path
+         using_kpath = .true.
+         call g_logger%info('reciprocal%build_kspace_hamiltonian: Building H(k) for k-path', __FILE__, __LINE__)
+      else if (allocated(this%k_points)) then
+         ! Use k-mesh for DOS/SCF
+         nk = this%nk_total
+         call g_logger%info('reciprocal%build_kspace_hamiltonian: Building H(k) for k-mesh', __FILE__, __LINE__)
+      else
+         call g_logger%error('reciprocal%build_kspace_hamiltonian: No k-points generated. ' // &
+                           'Call generate_mp_mesh or generate k-path first.', __FILE__, __LINE__)
          return
       end if
 
-      call g_logger%info('reciprocal%build_kspace_hamiltonian: Starting Fourier transform of real-space Hamiltonian', __FILE__, __LINE__)
-      write(debug_msg, '(A,I0,A,I0,A)') 'build_kspace_hamiltonian: Building for ', this%nk_total, ' k-points and ', this%lattice%ntype, ' atom types'
+      write(debug_msg, '(A,I0,A,I0,A)') 'build_kspace_hamiltonian: Building for ', nk, &
+                                        ' k-points and ', this%lattice%ntype, ' atom types'
       call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
       call this%build_neighbor_vectors()
 
-      ! Allocate k-space Hamiltonian
+      ! Allocate k-space Hamiltonian for multi-site system
+      ! Dimension: (n_orb * n_sites) x (n_orb * n_sites) x n_kpoints
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.hk_bulk', this%hk_bulk, &
-                                [this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype])
+                                [18*this%lattice%nrec, 18*this%lattice%nrec, nk])
 #else
    if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
-   allocate(this%hk_bulk(this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype))
+   allocate(this%hk_bulk(18*this%lattice%nrec, 18*this%lattice%nrec, nk))
 #endif
 
-      ! Build Hamiltonian for each k-point and atom type
-      do ntype = 1, this%lattice%ntype
-         write(debug_msg, '(A,I0)') 'build_kspace_hamiltonian: Processing atom type ', ntype
-         call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-
-         ! If the user requested debug logs for first few k-points, produce them
-         ! outside the parallel region to avoid logging from multiple threads.
-         ! if (.not. this%suppress_internal_logs) then
-         !    do ik = 1, min(3, this%nk_total)
-         !       k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
-         !       write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
-         !             ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
-         !       call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-         !    end do
-         ! end if
-
-         ! Parallelize over k-points (coarse-grained) when OpenMP is available.
+      ! Parallelize over k-points (coarse-grained) when OpenMP is available.
 #ifdef _OPENMP
-        !$omp parallel do private(ik) shared(this,ntype) default(none)
+      !$omp parallel do private(ik) shared(this, nk, using_kpath) default(none)
 #endif
-         do ik = 1, this%nk_total
-            ! Use fractional k-points directly for FT (will be converted inside if needed)
-            ! Pass fractional k-point for consistent phase factor calculation
-            call this%fourier_transform_hamiltonian(this%k_points(:, ik), ntype, this%hk_bulk(:, :, ik, ntype))
-         end do
-#ifdef _OPENMP
-        !$omp end parallel do
-#endif
+      do ik = 1, nk
+         ! Fourier transform: builds full multi-site H(k)
+         if (using_kpath) then
+            call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
+         else
+            call this%fourier_transform_hamiltonian(this%k_points(:, ik), this%hk_bulk(:, :, ik))
+         end if
       end do
+#ifdef _OPENMP
+      !$omp end parallel do
+#endif
 
-      call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space bulk Hamiltonian built', __FILE__, __LINE__)
+      call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
    end subroutine build_kspace_hamiltonian
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Build k-space spin-orbit Hamiltonian
-   !---------------------------------------------------------------------------
-   subroutine build_kspace_hamiltonian_so(this)
-      class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ik, ntype
-
-      if (.not. this%include_so) then
-         call g_logger%info('reciprocal%build_kspace_hamiltonian_so: Spin-orbit coupling disabled', __FILE__, __LINE__)
-         return
-      end if
-
-      if (.not. allocated(this%k_points)) then
-         call g_logger%error('reciprocal%build_kspace_hamiltonian_so: K-points not generated. Call generate_mp_mesh first.', __FILE__, __LINE__)
-         return
-      end if
-
-      if (.not. allocated(this%hamiltonian%lsham)) then
-         call g_logger%error('reciprocal%build_kspace_hamiltonian_so: Real-space SO Hamiltonian not built. Call hamiltonian%build_lsham first.', __FILE__, __LINE__)
-         return
-      end if
-
-      ! Allocate k-space SO Hamiltonian
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('reciprocal.hk_so', this%hk_so, &
-                                [this%max_orb_channels, this%max_orb_channels, this%lattice%ntype])
-#else
-   if (allocated(this%hk_so)) deallocate(this%hk_so)
-   allocate(this%hk_so(this%max_orb_channels, this%max_orb_channels, this%lattice%ntype))
-#endif
-
-      ! SO coupling is local (on-site), so it's k-independent
-      ! Copy from real-space lsham matrix
-      do ntype = 1, this%lattice%ntype
-         this%hk_so(:, :, ntype) = this%hamiltonian%lsham(:, :, ntype)
-      end do
-
-      call g_logger%info('reciprocal%build_kspace_hamiltonian_so: K-space SO Hamiltonian built', __FILE__, __LINE__)
-   end subroutine build_kspace_hamiltonian_so
-
-!---------------------------------------------------------------------------
-! DESCRIPTION:
-!> @brief
-!> Build total k-space Hamiltonian for multi-atom unit cell
-!> Properly handles intra-cell and inter-cell hopping
-!---------------------------------------------------------------------------
-subroutine build_total_hamiltonian(this)
-   class(reciprocal), intent(inout) :: this
-   
-   integer :: ik, isite, jsite, ntype_i
-   integer :: ineigh, ia, ja, nr, nn_max
-   integer :: n_sites, n_orb_per_site, total_orb, kk, ndi
-   integer :: i_start, i_end, j_start, j_end
-   real(rp) :: r2
-   real(rp), dimension(3) :: k_vec, r_ij_direct
-   real(rp), dimension(:, :), allocatable :: cralat
-   real(rp) :: phase_kr
-   complex(rp) :: phase_factor
-   character(len=200) :: debug_msg
-
-   if (.not. allocated(this%hamiltonian%ee)) then
-      call g_logger%error('build_total_hamiltonian: Real-space Hamiltonian not built', __FILE__, __LINE__)
-      return
-   end if
-
-   ! Populate lattice%sbarvec if needed for neighbor vector lookup
-   ! This is required for multi-site Hamiltonian assembly
-   if (.not. allocated(this%lattice%sbarvec) .or. .not. allocated(this%lattice%sbarvec_direct)) then
-      call g_logger%info('build_total_hamiltonian: Populating lattice%sbarvec for neighbor vectors', &
-                        __FILE__, __LINE__)
-      
-      r2 = this%lattice%r2
-      kk = this%lattice%kk
-      ndi = kk
-      allocate(cralat(3, kk))
-      cralat(1:3, 1:kk) = this%lattice%cr(1:3, 1:kk) * this%lattice%alat
-      
-      ! Use first atom type as reference (typically ia=1)
-      ia = 1
-      if (this%lattice%ntype > 0) ia = this%lattice%atlist(1)
-      nr = this%lattice%nn(ia, 1)
-      nn_max = nr
-      
-      ! Populate lattice%sbarvec and sbarvec_direct for TB-ranged neighbors
-      call this%lattice%get_neighbor_vectors(r2/9.0_rp, cralat, ia, kk, ndi, nn_max)
-      
-      deallocate(cralat)
-      
-      call g_logger%info('build_total_hamiltonian: Populated ' // trim(int2str(nn_max)) // &
-                        ' neighbor vectors in lattice%sbarvec', __FILE__, __LINE__)
-   end if
-
-   ! Get system dimensions
-   n_sites = this%lattice%nrec
-   n_orb_per_site = 18
-   total_orb = n_sites * n_orb_per_site
-
-   call g_logger%info('build_total_hamiltonian: Building ' // trim(int2str(total_orb)) // &
-                     'x' // trim(int2str(total_orb)) // ' Hamiltonian for ' // &
-                     trim(int2str(n_sites)) // ' sites', __FILE__, __LINE__)
-
-   ! Allocate total Hamiltonian
-#ifdef USE_SAFE_ALLOC
-   call g_safe_alloc%allocate('reciprocal.hk_total', this%hk_total, &
-                             [total_orb, total_orb, this%nk_total])
-#else
-   if (allocated(this%hk_total)) deallocate(this%hk_total)
-   allocate(this%hk_total(total_orb, total_orb, this%nk_total))
-#endif
-
-   ! Build H(k) = Σ_R H(R) exp(ik·R)
-   ! CRITICAL: In RS-LMTO-ASA, sbarvec already contains the full vector (R + τ_J - τ_I)
-   ! from site I to site J, including basis position differences within the unit cell.
-   do ik = 1, this%nk_total
-      k_vec = this%k_points(:, ik)  ! k in fractional coordinates
-      this%hk_total(:, :, ik) = cmplx(0.0_rp, 0.0_rp, kind=rp)
-
-      ! Loop over all central sites i in unit cell
-      do isite = 1, n_sites
-         ! Get atom type and cluster index for site i
-         ntype_i = this%lattice%ib(isite)
-         ia = this%lattice%atlist(ntype_i)
-         nr = this%lattice%nn(ia, 1)
-
-         ! Orbital block for site i (rows)
-         i_start = (isite - 1) * n_orb_per_site + 1
-         i_end = isite * n_orb_per_site
-
-         ! Diagnostic for first k-point only
-         if (ik == 1 .and. isite == 1) then
-            call g_logger%info('build_total_hamiltonian: Site ' // trim(int2str(isite)) // &
-                              ' (ntype=' // trim(int2str(ntype_i)) // ', ia=' // trim(int2str(ia)) // &
-                              ') has ' // trim(int2str(nr)) // ' neighbors', __FILE__, __LINE__)
-         end if
-
-         ! Loop over all neighbors of site i
-         do ineigh = 1, nr
-            ! Get neighbor information
-            if (ineigh == 1) then
-               ! On-site term (m=1)
-               jsite = isite
-               ja = ia
-               r_ij_direct = [0.0_rp, 0.0_rp, 0.0_rp]
-            else
-               ! Off-site neighbor
-               ja = this%lattice%nn(ia, ineigh)
-               if (ja == 0) cycle
-               
-               ! Map cluster atom to unit cell site
-               jsite = this%lattice%izp(ja)
-               
-               if (jsite < 1 .or. jsite > n_sites) then
-                  call g_logger%warning('build_total_hamiltonian: Invalid jsite = ' // &
-                                       trim(int2str(jsite)) // ' for neighbor ' // &
-                                       trim(int2str(ineigh)), __FILE__, __LINE__)
-                  cycle
-               end if
-               
-               ! Get position vector in FRACTIONAL (direct) coordinates
-               ! sbarvec_direct should contain the fractional coordinates of the neighbor vector
-               if (allocated(this%lattice%sbarvec_direct)) then
-                  r_ij_direct(1) = this%lattice%sbarvec_direct(1, ineigh)
-                  r_ij_direct(2) = this%lattice%sbarvec_direct(2, ineigh)
-                  r_ij_direct(3) = this%lattice%sbarvec_direct(3, ineigh)
-               else
-                  ! Fallback: convert Cartesian to fractional
-                  if (this%lattice%a_cart_inv_ready) then
-                     r_ij_direct = matmul(this%lattice%a_cart_inv, this%lattice%sbarvec(:, ineigh))
-                  else
-                     call g_logger%error('build_total_hamiltonian: Cannot convert sbarvec to fractional', &
-                                        __FILE__, __LINE__)
-                     cycle
-                  end if
-               end if
-
-               ! ! Diagnostic: print first few neighbor vectors for verification
-               ! if (ik == 1 .and. isite == 1 .and. ineigh <= 5) then
-               !    call g_logger%info('  Neighbor ' // trim(int2str(ineigh)) // ': ja=' // &
-               !                      trim(int2str(ja)) // ' → jsite=' // trim(int2str(jsite)) // &
-               !                      ', r_ij(frac)=[' // trim(real2str(r_ij_direct(1), '(F8.4)')) // ',' // &
-               !                      trim(real2str(r_ij_direct(2), '(F8.4)')) // ',' // &
-               !                      trim(real2str(r_ij_direct(3), '(F8.4)')) // ']', __FILE__, __LINE__)
-               ! end if
-            end if
-
-            ! Orbital block for site j (columns)
-            j_start = (jsite - 1) * n_orb_per_site + 1
-            j_end = jsite * n_orb_per_site
-
-            ! Calculate phase factor: exp(i·2π·k·r_ij)
-            ! k_vec is in fractional coordinates (from k_points)
-            ! r_ij_direct is in fractional coordinates
-            ! NOTE: sbarvec already includes basis position differences (τ_J - τ_I)
-            phase_kr = two_pi * dot_product(k_vec, r_ij_direct)
-            phase_factor = cmplx(cos(phase_kr), sin(phase_kr), kind=rp)
-
-            ! Add contribution: H(k)_ij += H_ij(r) × exp(i·k·r)
-            this%hk_total(i_start:i_end, j_start:j_end, ik) = &
-               this%hk_total(i_start:i_end, j_start:j_end, ik) + &
-               this%hamiltonian%ee(:, :, ineigh, ntype_i) * phase_factor
-         end do
-
-         ! Add spin-orbit coupling (on-site only, diagonal blocks)
-         if (this%include_so .and. allocated(this%hk_so)) then
-            this%hk_total(i_start:i_end, i_start:i_end, ik) = &
-               this%hk_total(i_start:i_end, i_start:i_end, ik) + &
-               this%hk_so(:, :, ntype_i)
-         end if
-      end do
-   end do
-
-   call g_logger%info('build_total_hamiltonian: Multi-site Hamiltonian completed', __FILE__, __LINE__)
-   
-   ! Diagnostic: Check Hermiticity at Gamma point (first k-point should be near Gamma)
-   call check_hamiltonian_hermiticity(this, 1)
-   
-   ! Diagnostic: Print matrix structure for first k-point
-   if (this%nk_total > 0) then
-      call print_hamiltonian_structure(this, 1)
-   end if
-   
-end subroutine build_total_hamiltonian
 
 !---------------------------------------------------------------------------
 ! DESCRIPTION:
@@ -1358,136 +1009,100 @@ end subroutine print_hamiltonian_structure
 
 
 
-
-
-
-
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Diagonalize Hamiltonian at k-points (wrapper for unified method)
+   !> Diagonalize the pre-built k-space Hamiltonian hk_bulk at all k-points
+   !> 
+   !> This routine uses the Hamiltonian matrices that were previously computed
+   !> by build_kspace_hamiltonian(). 
+   !>
+   !> Workflow:
+   !>   1. Generate k-points (generate_kmesh or generate k-path)
+   !>   2. Call build_kspace_hamiltonian() to compute hk_bulk
+   !>   3. Call diagonalize_hamiltonian() to get eigenvalues/eigenvectors
+   !>
+   !> Parallelized with OpenMP over k-points for efficiency.
    !---------------------------------------------------------------------------
-   subroutine diagonalize_hamiltonian(this, ham, use_kpath)
+   subroutine diagonalize_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
-      class(hamiltonian), intent(in) :: ham
-      logical, intent(in), optional :: use_kpath
+      
       ! Local variables
-      logical :: use_path
-      integer :: nk, i, nmat, lwork, info
-      complex(rp), dimension(:, :), allocatable :: h_k, h_k_copy
+      integer :: nk, ik, nmat, lwork, info
+      complex(rp), dimension(:, :), allocatable :: h_k_copy
       real(rp), dimension(:), allocatable :: eigenvals
-      complex(rp), dimension(:, :), allocatable :: eigenvecs
       complex(rp), dimension(:), allocatable :: work_complex
       real(rp), dimension(:), allocatable :: rwork
       character(len=100) :: info_msg
 
-      use_path = .false.
-      if (present(use_kpath)) use_path = use_kpath
-
-      if (use_path) then
-         if (.not. allocated(this%k_path)) then
-            call g_logger%error('diagonalize_hamiltonian: k-path not generated', __FILE__, __LINE__)
-            return
-         end if
-         nk = this%nk_path
-         call g_logger%info('diagonalize_hamiltonian: Using k-path with ' // trim(int2str(nk)) // ' points', __FILE__, __LINE__)
-      else
-         if (.not. allocated(this%k_points)) then
-            call g_logger%error('diagonalize_hamiltonian: k-mesh not generated', __FILE__, __LINE__)
-            return
-         end if
-         nk = this%nk_total
-         call g_logger%info('diagonalize_hamiltonian: Using k-mesh with ' // trim(int2str(nk)) // ' points', __FILE__, __LINE__)
+      ! Check prerequisites
+      if (.not. allocated(this%hk_bulk)) then
+         call g_logger%error('diagonalize_hamiltonian: hk_bulk not built - call build_kspace_hamiltonian first', &
+                            __FILE__, __LINE__)
+         return
       end if
 
-      call g_logger%info('diagonalize_hamiltonian: Starting diagonalization of ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
+      ! Get dimensions from hk_bulk
+      nmat = size(this%hk_bulk, 1)
+      nk = size(this%hk_bulk, 3)
+      
+      call g_logger%info('diagonalize_hamiltonian: Diagonalizing ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
+      call g_logger%info('diagonalize_hamiltonian: Matrix size = ' // &
+                        trim(int2str(nmat)) // ' x ' // trim(int2str(nmat)), __FILE__, __LINE__)
 
-      ! Get matrix size from the total Hamiltonian (multi-site)
-      if (allocated(this%hk_total)) then
-         nmat = size(this%hk_total, 1)  ! Use actual total Hamiltonian dimension (n_sites × 18)
-         call g_logger%info('diagonalize_hamiltonian: Using hk_total with dimension ' // trim(int2str(nmat)), __FILE__, __LINE__)
-      else if (allocated(ham%ee)) then
-         nmat = size(ham%ee, 1)  ! Fallback to Hamiltonian dimension
-         call g_logger%info('diagonalize_hamiltonian: Using ham%ee with dimension ' // trim(int2str(nmat)), __FILE__, __LINE__)
-      else
-         nmat = this%max_orb_channels  ! Last resort fallback
-         call g_logger%info('diagonalize_hamiltonian: Using max_orb_channels = ' // trim(int2str(nmat)), __FILE__, __LINE__)
-      end if
-
-      call g_logger%info('diagonalize_hamiltonian: Matrix size is ' // trim(int2str(nmat)) // 'x' // trim(int2str(nmat)), __FILE__, __LINE__)
-
-      ! Allocate eigenvalue and eigenvector arrays
+      ! Allocate eigenvalue and eigenvector storage
       if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
       if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
-   
       allocate(this%eigenvalues(nmat, nk))
       allocate(this%eigenvectors(nmat, nmat, nk))
 
-      call g_logger%info('diagonalize_hamiltonian: Starting diagonalization of ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
-
-      ! Parallelize over k-points with OpenMP
-      ! Each thread needs its own workspace for LAPACK
+      ! Parallel diagonalization over k-points
+      ! Each thread needs its own LAPACK workspace
 !$OMP PARALLEL DEFAULT(SHARED) &
-!$OMP& PRIVATE(i, h_k, h_k_copy, eigenvals, eigenvecs, work_complex, rwork, lwork, info, info_msg) &
+!$OMP& PRIVATE(ik, h_k_copy, eigenvals, work_complex, rwork, lwork, info, info_msg) &
 !$OMP& IF(nk > 10)
       
       ! Allocate thread-private work arrays
-      allocate(h_k(nmat, nmat))
       allocate(h_k_copy(nmat, nmat))
       allocate(eigenvals(nmat))
-      allocate(eigenvecs(nmat, nmat))
-      allocate(rwork(3*nmat-2))
+      allocate(rwork(3*nmat - 2))
       
-      ! Query optimal work array size (each thread does this)
+      ! Query optimal LAPACK workspace size
       lwork = -1
       allocate(work_complex(1))
-      call zheev('V', 'U', nmat, h_k, nmat, eigenvals, work_complex, lwork, rwork, info)
+      call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
       lwork = int(real(work_complex(1)))
       deallocate(work_complex)
       allocate(work_complex(lwork))
 
-      ! Loop over k-points (parallelized)
+      ! Loop over all k-points - use pre-computed hk_bulk
 !$OMP DO SCHEDULE(DYNAMIC, 10)
-      do i = 1, nk
-         ! Build Hamiltonian at this k-point
-         if (use_path) then
-            ! For band structure path, use Fourier transform (may need multi-site support later)
-            call this%fourier_transform_hamiltonian(this%k_path(:, i), 1, h_k)
-         else
-            ! For k-mesh DOS calculations, use pre-built hk_total if available
-            if (allocated(this%hk_total)) then
-               h_k = this%hk_total(:, :, i)
-            else
-               ! Fallback to Fourier transform (single atom type)
-               call this%fourier_transform_hamiltonian(this%k_points(:, i), 1, h_k)
-            end if
-         end if
+      do ik = 1, nk
+         ! Copy H(k) from pre-computed array
+         h_k_copy = this%hk_bulk(:, :, ik)
 
-         ! Make a copy for diagonalization (LAPACK destroys input)
-         h_k_copy = h_k
-
-         ! Diagonalize using LAPACK ZHEEV
+         ! Diagonalize H(k) using LAPACK ZHEEV
+         ! Note: ZHEEV overwrites h_k_copy with eigenvectors
          call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
          
          if (info /= 0) then
-            write(info_msg, '(A,I0,A,I0)') 'diagonalize_hamiltonian: ZHEEV failed for k-point ', i, ' with info=', info
-            call g_logger%error(trim(info_msg), __FILE__, __LINE__)
+            write(info_msg, '(A,I0,A,I0)') 'ZHEEV failed at k-point ', ik, ', info = ', info
+            call g_logger%error('diagonalize_hamiltonian: ' // trim(info_msg), __FILE__, __LINE__)
             cycle
          end if
 
-         ! Store results
-         this%eigenvalues(:, i) = eigenvals
-         this%eigenvectors(:, :, i) = h_k_copy
+         ! Store eigenvalues and eigenvectors
+         this%eigenvalues(:, ik) = eigenvals
+         this%eigenvectors(:, :, ik) = h_k_copy
       end do
 !$OMP END DO
       
-      ! Clean up thread-private arrays
-      deallocate(h_k, h_k_copy, eigenvals, eigenvecs)
-      deallocate(work_complex, rwork)
+      ! Cleanup thread-private arrays
+      deallocate(h_k_copy, eigenvals, work_complex, rwork)
       
 !$OMP END PARALLEL
 
-      call g_logger%info('diagonalize_hamiltonian: Completed diagonalization', __FILE__, __LINE__)
+      call g_logger%info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)
    end subroutine diagonalize_hamiltonian
 
 
@@ -1546,8 +1161,11 @@ end subroutine print_hamiltonian_structure
          call g_logger%error('calculate_band_structure: k_path not allocated after k-path generation!', __FILE__, __LINE__)
       end if
 
-      ! Diagonalize Hamiltonian along k-path using unified method
-      call this%diagonalize_hamiltonian(ham, use_kpath=.true.)
+      ! Build k-space Hamiltonian for the k-path
+      call this%build_kspace_hamiltonian()
+
+      ! Diagonalize Hamiltonian along k-path
+      call this%diagonalize_hamiltonian()
 
       ! Set output filename
       filename = 'band_structure.dat'
@@ -1655,8 +1273,11 @@ end subroutine print_hamiltonian_structure
          return
       end if
 
+      ! Build k-space Hamiltonian for the k-path
+      call this%build_kspace_hamiltonian()
+
       ! Diagonalize Hamiltonian along k-path
-      call this%diagonalize_hamiltonian(ham, use_kpath=.true.)
+      call this%diagonalize_hamiltonian()
 
       ! Set output filename
       filename = 'band_structure.dat'
@@ -1895,10 +1516,15 @@ end subroutine print_hamiltonian_structure
       ! Setup energy grid
       call this%setup_dos_energy_grid()
 
-      ! Diagonalize Hamiltonian on k-mesh if not already done
+      ! Build k-space Hamiltonian and diagonalize if not already done
       if (.not. allocated(this%eigenvalues)) then
-         call g_logger%info('calculate_density_of_states: Diagonalizing Hamiltonian on k-mesh', __FILE__, __LINE__)
-         call this%diagonalize_hamiltonian(ham, use_kpath=.false.)
+         call g_logger%info('calculate_density_of_states: Building and diagonalizing Hamiltonian on k-mesh', __FILE__, __LINE__)
+         
+         ! Build H(k) for all k-points in mesh
+         call this%build_kspace_hamiltonian()
+         
+         ! Diagonalize to get eigenvalues
+         call this%diagonalize_hamiltonian()
       end if
 
       ! Calculate DOS based on method
@@ -2779,7 +2405,7 @@ subroutine project_dos_orbitals_gaussian(this)
    ! Diagnostic logging
    call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
                      ', nbands = ' // trim(int2str(nbands)) // &
-                     ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)) // &
+                     ', max_orb_channels = ' // trim(int2str(this%max_orbs)) // &
                      ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
    ! call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset = [' // &
    !                   trim(int2str(site_orb_offset(1))) // ', ' // &
@@ -3395,13 +3021,13 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
       e_mid = (e_min + e_max) / 2.0_rp
       electrons_at_e = this%integrate_dos_up_to_energy(e_mid, kT)
 
-      ! DEBUG: Print first few and last iterations
-      if (ie <= 5 .or. ie >= max_iter-2) then
-         call g_logger%info('  Bisection iter ' // trim(int2str(ie)) // ': E=' // &
-                           trim(real2str(e_mid, '(F10.6)')) // ' Ry, electrons=' // &
-                           trim(real2str(electrons_at_e, '(F12.8)')) // ', target=' // &
-                           trim(real2str(total_electrons, '(F12.8)')), __FILE__, __LINE__)
-      end if
+      ! ! DEBUG: Print first few and last iterations
+      ! if (ie <= 5 .or. ie >= max_iter-2) then
+      !    call g_logger%info('  Bisection iter ' // trim(int2str(ie)) // ': E=' // &
+      !                      trim(real2str(e_mid, '(F10.6)')) // ' Ry, electrons=' // &
+      !                      trim(real2str(electrons_at_e, '(F12.8)')) // ', target=' // &
+      !                      trim(real2str(total_electrons, '(F12.8)')), __FILE__, __LINE__)
+      ! end if
 
       if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then
          fermi_level = e_mid

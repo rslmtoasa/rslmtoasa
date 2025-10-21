@@ -1048,11 +1048,8 @@ contains
 
       ! Build k-space Hamiltonian and diagonalize
       call reciprocal_obj%build_kspace_hamiltonian()
-      if (reciprocal_obj%include_so) then
-         call reciprocal_obj%build_kspace_hamiltonian_so()
-      end if
-      ! call reciprocal_obj%build_total_hamiltonian()
-      call reciprocal_obj%diagonalize_hamiltonian(this%hamiltonian, .false.)
+
+      call reciprocal_obj%diagonalize_hamiltonian()
 
       ! Output band structure data during SCF for debugging
       ! Only output every few iterations to avoid too many files
