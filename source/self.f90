@@ -992,13 +992,6 @@ contains
          end do
          if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
          call this%hamiltonian%build_bulkham()
-         ! Debug: Print first diagonal element of real-space Hamiltonian
-         if (rank == 0 .and. allocated(this%hamiltonian%ee)) then
-            call g_logger%info('SCF: H(R=1,ntype=1)_11 = ' // &
-                              trim(real2str(real(this%hamiltonian%ee(1, 1, 1, 1)), '(F12.6)')) // ' + i*' // &
-                              trim(real2str(aimag(this%hamiltonian%ee(1, 1, 1, 1)), '(F12.6)')) // ' Ry', &
-                              __FILE__, __LINE__)
-         end if
       case ('S')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()

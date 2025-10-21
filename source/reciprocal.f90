@@ -873,15 +873,15 @@ contains
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
       call this%build_neighbor_vectors()
-      print *,'KSPACE neighbours'
-      do i=1, this%lattice%ntype
-         print *,'Type ', i, ' nneigh ', this%lattice%nn(this%lattice%atlist(i),1)
-         do j=2, this%lattice%nn(this%lattice%atlist(i),1)
-            print '(a,2i4, a, 3f10.6)','  Neighbour ', this%lattice%nn(i, j), this%lattice%iz(this%lattice%nn(i,j)), ': ', this%ham_vec_type(1,j,i), &
-                     this%ham_vec_type(2,j,i), this%ham_vec_type(3,j,i)
-         end do
-      end do
-      print *,'================================='
+      !!! print *,'KSPACE neighbours'
+      !!! do i=1, this%lattice%ntype
+      !!!    print *,'Type ', i, ' nneigh ', this%lattice%nn(this%lattice%atlist(i),1)
+      !!!    do j=2, this%lattice%nn(this%lattice%atlist(i),1)
+      !!!       print '(a,2i4, a, 3f10.6)','  Neighbour ', this%lattice%nn(i, j), this%lattice%iz(this%lattice%nn(i,j)), ': ', this%ham_vec_type(1,j,i), &
+      !!!                this%ham_vec_type(2,j,i), this%ham_vec_type(3,j,i)
+      !!!    end do
+      !!! end do
+      !!! print *,'================================='
 
       ! Allocate k-space Hamiltonian for multi-site system
       ! Dimension: (n_orb * n_sites) x (n_orb * n_sites) x n_kpoints
@@ -3221,7 +3221,7 @@ end function integrate_dos_up_to_energy
 
       ! Write DOS data (energy grid already in Ry)
       do i_energy = 1, this%n_energy_points
-         write(unit, '(2F12.6)') this%dos_energy_grid(i_energy), this%total_dos(i_energy)
+         write(unit, '(2F12.6)') this%dos_energy_grid(i_energy) - this%fermi_level, this%total_dos(i_energy)
       end do
 
       close(unit)
@@ -3246,7 +3246,7 @@ end function integrate_dos_up_to_energy
 
          ! Write projected DOS data (energy grid already in Ry)
          do i_energy = 1, this%n_energy_points
-            write(unit, '(9F12.6)') this%dos_energy_grid(i_energy), &
+            write(unit, '(9F12.6)') this%dos_energy_grid(i_energy) - this%fermi_level, &
                                   (this%projected_dos(1, iorb, 1, i_energy), iorb=1,4), &  ! spin up: s,p,d,f
                                   (this%projected_dos(1, iorb, 2, i_energy), iorb=1,4)     ! spin down: s,p,d,f
          end do

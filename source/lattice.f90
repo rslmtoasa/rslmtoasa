@@ -2442,7 +2442,7 @@ contains
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 1000 ! Neigbours for SBAR construction (>> TB neighbours)
+      nt = 2000 ! Neigbours for SBAR construction (>> TB neighbours)
       ! allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
       allocate(sbarvec(3, nt))
@@ -2461,12 +2461,12 @@ contains
 
       ! Saving parameters to be used in the Hamiltonian build
       ! Call clusba again for proper number of TB neighbours
-      nt = 1000  ! Reset to max size before calling clusba
+      nt = 2000  ! Reset to max size before calling clusba
       call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
-      print *, 'REAL SPACE neigbours', ia
-      do i = 2, nt
-         print '(a,2i4, a, 3f10.6)', 'Neighbour ', this%nn(ia, i), this%iz(this%nn(ia, i)), ' : ', sbarvec(:, i)
-      end do
+      !!! print *, 'REAL SPACE neigbours', ia
+      !!! do i = 2, nt
+      !!!    print '(a,2i4, a, 3f10.6)', 'Neighbour ', this%nn(ia, i), this%iz(this%nn(ia, i)), ' : ', sbarvec(:, i)
+      !!! end do
       ! Store the number of neighbours
       this%nn_max = nt
 
@@ -2704,6 +2704,7 @@ contains
       intrinsic SQRT
 
       if (nlm > 9) stop "**** CHANGE DIMS IN STRMAT"
+      print *,' In STREZE: nr, nlm, nrl = ', nr, nlm, nrl
       do ir = 1, nr
          irl0 = (ir - 1)*nlm
          do jr = 1, nr
@@ -2766,6 +2767,7 @@ contains
       ndef = 0
       lmax = LL(nlm)
       allocate (s_temp(nrl, nrl))
+      print *, ' In SHLDCH: nr, nlm, nrl, lmax = ', nr, nlm, nrl, lmax
       write (17, 10000) lmax, q
       irl = 0
       do ir = 1, nr
@@ -2791,10 +2793,14 @@ contains
 !      end do
 !    end do
 !    call chlr2f(a, na, wk, nrl, ndef)
-      call DPOTRF('U', nrl, s_temp, nrl, info)
-      write (17, 10001) ndef
+       print *, ' Calling DPOTRF in SHLDCH', nrl
+       call DPOTRF('U', nrl, s_temp, nrl, info)
+       write (17, 10001) ndef
 !    call chlr2s(a, na, s, nrl, nlm)
-      call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
+       print *, ' Calling DPOTRS in SHLDCH', nrl
+       call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
+      !print *, ' Calling DPOSV in SHLDCH', nrl
+      !call DPOSV('U', nrl, nlm, s_temp, nrl, s, nrl, info)
       deallocate (s_temp)
       do ilm = 1, nlm
          do irl = 1, nrl
@@ -2802,6 +2808,7 @@ contains
          end do
       end do
       ! --------------------------------
+      print *, ' Making Sbar matrix in SHLDCH'
       ir = 0
       hitc = 0
       !print *, ´ nr = ´, nr
@@ -2843,6 +2850,7 @@ contains
             end do
          end if
       end do
+      print *, ' Number of hitc in SHLDCH = ', hitc
       !print *, ´ hitc = ´, hitc
       return
       !
