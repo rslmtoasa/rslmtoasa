@@ -465,6 +465,7 @@ contains
       ! Mix local density matrices for LDA+U
       call this%mix_ldm()
    end subroutine mixpq
+
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
       ! implemented by g.p.srivastava, j. phys a 17, l317(1984),

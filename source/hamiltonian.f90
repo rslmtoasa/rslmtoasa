@@ -2011,7 +2011,10 @@ contains
          ! Only implemented for spd-orbitals
          ! if (this%hubbardU_check .or. this%hubbardU_impurity_check) then
          if (this%hubbard_u_general_check) then
-            print *, 'Adding Hubbard U correction to the Hamiltonian', sum(abs(this%hubbard_u_pot))
+            print *, 'Updating Hubbard U correction in Hamiltonian', sum(abs(this%hubbard_u_pot))
+            ! Note: For k-space SCF, this%ee is rebuilt from scratch each iteration
+            ! from the LDA potential, so we don't need to subtract the old Hubbard potential.
+            ! The hubbard_u_pot is recalculated from the new LDM each iteration.
             do i = 1, 9
                do j = 1, 9
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
@@ -2021,6 +2024,8 @@ contains
             end do
             print '(i3, a, 9f8.4)', ino, ' Up', (this%hubbard_u_pot(i, i, ntype), i=1,9)
             print '(i3, a, 9f8.4)', ino, ' Dw', (this%hubbard_u_pot(i, i, ntype), i=10,18)
+            print '(a, f10.6, a)', ' DEBUG: V_Hub d-orbital diagonal (spin-up, m=3): ', this%hubbard_u_pot(7, 7, ntype), ' Ry'
+            print '(a, f10.6, a)', ' DEBUG: V_Hub d-orbital diagonal (spin-down, m=3): ', this%hubbard_u_pot(16, 16, ntype), ' Ry'
             ! print *, 'hub_v_pot test ', this%hubbard_v_pot
             if (this%hubbardV_check) then
                do i = 1, 9
@@ -2918,6 +2923,15 @@ contains
                            f2 = f(na,l_index,2)
                            f4 = f(na,l_index,3)
                            f6 = f(na,l_index,4)
+                             ! Diagnostic prints: show Slater integrals and representative Coulomb/a_k
+                             if (m1 == 1 .and. m2 == 1 .and. m3 == 1 .and. m4 == 1 .and. ispin == 1) then
+                                print *, 'DEBUG: Hubbard diagnostics for atom', na, 'l_index', l_index
+                                print *, ' DEBUG: Slater integrals (Ry): F0=', f0, ' F2=', f2, ' F4=', f4, ' F6=', f6
+                                ! show a_k contributions for the specific m-values
+                                print *, ' DEBUG: a_k (k=0,2,4) =', a_k(0,l_index-1,m1_val,m2_val,m3_val,m4_val), a_k(2,l_index-1,m1_val,m2_val,m3_val,m4_val), a_k(4,l_index-1,m1_val,m2_val,m3_val,m4_val)
+                                ! representative Coulomb matrix element for m=0 combination
+                                print *, ' DEBUG: Coulomb_mat (m=0,0,0,0) [Ry] =', Coulomb_mat(l_index-1, 0, 0, 0, 0, f0, f2, f4, f6)
+                             end if
                            hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
                            + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
                            + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &

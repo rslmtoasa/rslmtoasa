@@ -1091,6 +1091,21 @@ contains
       end if
 
       !=========================================================================
+      !                  CALCULATE HUBBARD CORRECTION (LDA+U)
+      !=========================================================================
+      if ( this%hamiltonian%hubbard_u_general_check ) then
+         if (rank == 0) call g_logger%info('Calculating LDA+U Local Density Matrix from k-space DOS', __FILE__, __LINE__)
+         
+         ! Calculate LDM from projected DOS and store in symbolic_atom potentials
+         call reciprocal_obj%calculate_ldm_from_projected_dos(this%lattice)
+         
+         ! Calculate Hubbard U potential matrix from LDM
+         call this%hamiltonian%calculate_hubbard_u_potential_general()
+         
+         if (rank == 0) call g_logger%info('LDA+U Hubbard potential calculated', __FILE__, __LINE__)
+      end if
+
+      !=========================================================================
       !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
       !=========================================================================
       ! NOTE: In k-space mode, we don't use bands%calculate_magnetic_moments()

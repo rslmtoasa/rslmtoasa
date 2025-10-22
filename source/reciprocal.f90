@@ -214,6 +214,7 @@ module reciprocal_mod
       procedure :: calculate_band_energy_from_moments
       procedure :: calculate_adaptive_sigma
       procedure :: find_fermi_level_from_dos
+      procedure :: calculate_ldm_from_projected_dos
       procedure :: integrate_dos_up_to_energy
       procedure :: calculate_gaussian_weight_single
       procedure :: write_dos_to_file
@@ -3394,4 +3395,193 @@ end function integrate_dos_up_to_energy
       end do
    end subroutine sort_eigenvalues
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculate Local Density Matrix (LDM) from k-space projected DOS
+   !> 
+   !> This subroutine calculates the local density matrix needed for LDA+U
+   !> calculations by integrating the orbital and spin-resolved projected DOS
+   !> up to the Fermi level. The LDM is stored in the symbolic_atom potentials.
+   !>
+   !> The projected DOS already contains the orbital character information, so
+   !> we can directly integrate it to get the occupations. For the off-diagonal
+   !> elements, we need to reconstruct them from the eigenvector projections.
+   !>
+   !> @param[in,out] this - Reciprocal object with projected DOS and eigenvalues
+   !> @param[in,out] lattice_obj - Lattice object to store LDM in symbolic_atoms
+   !>
+   !> Created by Anders Bergman, 2025-10-21, for k-space LDA+U implementation
+   !---------------------------------------------------------------------------
+   subroutine calculate_ldm_from_projected_dos(this, lattice_obj)
+      use lattice_mod
+      class(reciprocal), intent(inout) :: this
+      type(lattice), intent(inout) :: lattice_obj
+      
+      ! Local variables
+      integer :: isite, iorb, ispin, ie, l, m1, m2
+      integer :: ik, ib, i_orb_start, i_orb_end, norb_l
+      integer :: i_orb_m1, i_orb_m2, row, col
+      real(rp) :: energy, weight, occupation
+      real(rp) :: e_low, e_high, dos_contrib
+      complex(rp) :: overlap_contrib
+      
+      ! Orbital indexing: 
+      ! iorb = 1 (s, 1 orbital), iorb = 2 (p, 3 orbitals), iorb = 3 (d, 5 orbitals)
+      
+      call g_logger%info('calculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS', __FILE__, __LINE__)
+      
+      ! Initialize all LDM to zero
+      do isite = 1, lattice_obj%nrec
+         lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(:,:,:,:) = 0.0_rp
+      end do
+      
+      ! Method 2: Full LDM (including off-diagonal) from eigenvector projections
+      ! This properly captures orbital hybridization and is more accurate than diagonal-only
+      call calculate_ldm_from_eigenvectors(this, lattice_obj)
+      
+      ! Save flattened copy for each site
+      do isite = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%flatten_ldm()
+      end do
+      
+      ! Method 2: Full LDM (including off-diagonal) from eigenvector projections
+      ! This properly captures orbital hybridization and is more accurate than diagonal-only
+      call calculate_ldm_from_eigenvectors(this, lattice_obj)
+      
+      ! Save flattened copy for each site
+      do isite = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%flatten_ldm()
+      end do
+      
+      ! Print LDM for debugging
+      call g_logger%info('calculate_ldm_from_projected_dos: LDM calculation complete', __FILE__, __LINE__)
+      
+   end subroutine calculate_ldm_from_projected_dos
+
+! DESCRIPTION:
+   !> @brief
+   !> Calculate full LDM including off-diagonal elements from eigenvectors
+   !>
+   !> This calculates: LDM(site, l, spin, m1, m2) = Σ_{k,n} f_{k,n} ψ*_{m1} ψ_{m2} w_k
+   !> where f_{k,n} is the Fermi occupation (0 or 1 for T=0), ψ are eigenvector
+   !> projections onto atomic orbitals, and w_k are k-point weights.
+   !>
+   !> @param[in] this - Reciprocal object with eigenvalues and eigenvectors
+   !> @param[in,out] lattice_obj - Lattice object to store LDM
+   !---------------------------------------------------------------------------
+   subroutine calculate_ldm_from_eigenvectors(this, lattice_obj)
+      use lattice_mod
+      class(reciprocal), intent(inout) :: this
+      type(lattice), intent(inout) :: lattice_obj
+      
+      ! Local variables
+      integer :: ik, ib, isite, alpha, beta, iorb, norb_l
+      integer :: ispin, basis_offset, site_offset, n_orb_site, n_orb_per_spin
+      real(rp) :: kweight, fermi_occ
+      complex(rp), allocatable :: DM(:,:)
+      complex(rp) :: psi_a, psi_b
+      integer :: nbands, nsites, i
+      real(rp) :: trace_tot, trace_up, trace_dn, max_imag
+      integer :: idx_a, idx_b
+
+      call g_logger%info('calculate_ldm_from_eigenvectors: Computing full 18x18 DM per site from eigenvectors', __FILE__, __LINE__)
+
+      nbands = size(this%eigenvalues, 1)
+      n_orb_per_spin = 9
+      nsites = lattice_obj%nrec
+      n_orb_site = n_orb_per_spin * this%n_spin_components  ! typically 18
+
+      ! Allocate temporary DM (n_orb_site x n_orb_site)
+      allocate(DM(n_orb_site, n_orb_site))
+
+      ! Zero per-site LDM storage before accumulation
+      do isite = 1, nsites
+         lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(:,:,:,:) = 0.0_rp
+      end do
+
+      ! Accumulate density matrix per site
+      ! Loop order: k-points -> sites -> bands for better cache locality
+      do ik = 1, this%nk_total
+         kweight = this%k_weights(ik)
+         
+         do isite = 1, nsites
+            ! Reset DM for this site at this k-point
+            DM = (0.0_rp, 0.0_rp)
+            site_offset = (isite - 1) * n_orb_site
+            
+            ! Accumulate contributions from all occupied bands at this k-point
+            do ib = 1, nbands
+               if (this%eigenvalues(ib, ik) > this%fermi_level) cycle
+               fermi_occ = 1.0_rp
+               
+               ! Build density matrix: DM_{ab} += f * w_k * ψ*_a ψ_b
+               do alpha = 1, n_orb_site
+                  psi_a = this%eigenvectors(site_offset + alpha, ib, ik)
+                  do beta = 1, n_orb_site
+                     psi_b = this%eigenvectors(site_offset + beta, ib, ik)
+                     DM(alpha, beta) = DM(alpha, beta) + conjg(psi_a) * psi_b * fermi_occ * kweight
+                  end do
+               end do
+            end do ! bands
+            
+            ! Diagnostics: check DM properties for first k-point
+            if (ik == 1) then
+               trace_tot = 0.0_rp
+               trace_up = 0.0_rp
+               trace_dn = 0.0_rp
+               max_imag = 0.0_rp
+               
+               do i = 1, n_orb_site
+                  trace_tot = trace_tot + real(DM(i, i), rp)
+                  ! Check for large imaginary parts (should be ~0 for physical DM)
+                  max_imag = max(max_imag, abs(aimag(DM(i, i))))
+                  
+                  if (i <= n_orb_per_spin) then
+                     trace_up = trace_up + real(DM(i, i), rp)
+                  else
+                     trace_dn = trace_dn + real(DM(i, i), rp)
+                  end if
+               end do
+               
+               call g_logger%info('calculate_ldm_from_eigenvectors: DM diagnostics site=' // trim(int2str(isite)) // &
+                                 ', trace_tot=' // trim(real2str(trace_tot, '(F10.6)')) // &
+                                 ', trace_up=' // trim(real2str(trace_up, '(F10.6)')) // &
+                                 ', trace_dn=' // trim(real2str(trace_dn, '(F10.6)')) // &
+                                 ', max_imag=' // trim(real2str(max_imag, '(E10.2)')), __FILE__, __LINE__)
+               
+               if (max_imag > 1.0e-6_rp) then
+                  call g_logger%warning('calculate_ldm_from_eigenvectors: Large imaginary part in DM diagonal: ' // &
+                                       trim(real2str(max_imag, '(E10.2)')), __FILE__, __LINE__)
+               end if
+            end if
+            
+            ! Project DM into ldm structure: iterate over angular momentum channels
+            do iorb = 0, 2  ! l = 0 (s), 1 (p), 2 (d)
+               norb_l = 2*iorb + 1
+               basis_offset = iorb**2  ! 0, 1, 4 mapping
+               
+               do ispin = 1, this%n_spin_components
+                  do alpha = 1, norb_l
+                     do beta = 1, norb_l
+                        ! Map to DM indices: spin_block_offset + basis_offset + m
+                        idx_a = (ispin - 1) * n_orb_per_spin + basis_offset + alpha
+                        idx_b = (ispin - 1) * n_orb_per_spin + basis_offset + beta
+                        
+                        ! Accumulate real part (imaginary should be ~0 for proper DM)
+                        lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) = &
+                           lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) + &
+                           real(DM(idx_a, idx_b), rp)
+                     end do
+                  end do
+               end do
+            end do
+            
+         end do ! sites
+      end do ! k-points
+
+      deallocate(DM)
+      call g_logger%info('calculate_ldm_from_eigenvectors: Eigenvector-based 18x18 DM -> ldm complete', __FILE__, __LINE__)
+      
+   end subroutine calculate_ldm_from_eigenvectors
 end module reciprocal_mod
