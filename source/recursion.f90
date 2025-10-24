@@ -2128,6 +2128,8 @@ contains
    !  recursion steps.
    !---------------------------------------------------------------------------
    subroutine chebyshev_recur_ll(this, i, ll, a, b)
+      implicit none
+
       class(recursion), intent(inout) :: this
       integer, intent(in) :: i, ll
       real(rp), intent(in) :: a, b

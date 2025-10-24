@@ -32,6 +32,7 @@ module hamiltonian_mod
    use string_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
+   use spectrum_bounds_mod, only: spectrum_bounds_type, compute_spectrum_bounds
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -51,6 +52,8 @@ module hamiltonian_mod
       class(lattice), pointer :: lattice
       !> Control
       class(control), pointer :: control
+      !> Bounds
+      class(spectrum_bounds_type), pointer :: bounds
 
       !> Spin-orbit coupling Hamiltonian
       complex(rp), dimension(:, :, :), allocatable :: lsham
@@ -101,6 +104,9 @@ module hamiltonian_mod
       !> On-site potential for LDA+U+J correction
       real(rp), dimension(:,:,:), allocatable :: hubbard_u_pot
       real(rp), dimension(:,:,:,:), allocatable :: hubbard_v_pot
+   !> User-configurable spectrum bounds options (from namelist)
+   character(len=16) :: bounds_algorithm
+   real(rp) :: bounds_scaling
 
       !> New improved Hubbard parameters that should work for both bulk and impurity
       real(rp), dimension(:,:), allocatable :: hubbard_u_general
@@ -142,6 +148,7 @@ module hamiltonian_mod
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
+      
       procedure :: build_locham
       procedure :: build_obarm
       procedure :: build_enim
@@ -164,6 +171,7 @@ module hamiltonian_mod
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
       procedure :: calculate_hubbard_u_potential_general
+      procedure :: compute_hamiltonian_bounds
       final     :: destructor
    end type hamiltonian
 
@@ -190,6 +198,8 @@ contains
       obj%charge => charge_obj
       obj%lattice => charge_obj%lattice
       obj%control => charge_obj%lattice%control
+      ! Allocate bounds storage on the object so restore_to_default can initialize it
+      allocate(obj%bounds)
 
       call obj%restore_to_default()
       call obj%build_from_file()
@@ -225,6 +235,7 @@ contains
       if (allocated(this%jlo_a)) call g_safe_alloc%deallocate('hamiltonian.jlo_a', this%jlo_a)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
       if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
+      !if (associated(this%bounds)) call g_safe_alloc%deallocate('hamiltonian.bounds', this%bounds)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -248,6 +259,7 @@ contains
       if (allocated(this%jlo_a)) deallocate(this%jlo_a)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
+      !if (associated(this%bounds)) deallocate(this%bounds)
       if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
       if (allocated(this%hubbard_j)) deallocate (this%hubbard_j)
       if (allocated(this%hubbard_v)) deallocate (this%hubbard_v)
@@ -291,6 +303,11 @@ contains
 
 
       include 'include_codes/namelists/hamiltonian.f90'
+
+   ! Initialize namelist locals from object's defaults so missing keys
+   ! in the input file will preserve the object's restore_to_default values.
+      bounds_algorithm = this%bounds_algorithm
+      bounds_scaling = this%bounds_scaling
 
       hoh = this%hoh
       local_axis = this%local_axis
@@ -356,6 +373,10 @@ contains
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
       this%js_alpha = js_alpha
+      ! Store namelist-provided bounds options (use safe defaults if empty)
+      if (bounds_scaling <= 0.0_rp) bounds_scaling = 1.0_rp
+      this%bounds_algorithm = bounds_algorithm
+      this%bounds_scaling = bounds_scaling
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
 
@@ -598,8 +619,8 @@ contains
       end if
 
       ! Organizes the orbital Hubbard U & J values into the correct position
-      print *,'Hubbard U & J parameters.', this%hubbardU_check, this%hubbardJ_check
       if (this%hubbardU_check) then
+         print *,'Hubbard U & J parameters.', this%hubbardU_check, this%hubbardJ_check
          do i = 1, this%lattice%nrec
             do j = 1, count(this%hubbard_u(i,:) > 1.0E-10)
                if (this%uj_orb(i)(j:j) == 's') then
@@ -1199,6 +1220,21 @@ contains
       this%hubbard_pot_impurity(:,:,:) = 0.0d0
       this%hubbard_u_general(:,:) = 0.0d0
       this%hubbard_j_general(:,:) = 0.0d0
+      ! Default behavior for spectrum bounds: 'none' => use energy namelist values
+      this%bounds_algorithm = 'none'
+      this%bounds_scaling = 1.0_rp
+      ! Initialize object-bound spectrum info
+      this%bounds%e_min = huge(1.0_rp)
+      this%bounds%e_max = -huge(1.0_rp)
+      this%bounds%e_min_gershgorin = huge(1.0_rp)
+      this%bounds%e_max_gershgorin = -huge(1.0_rp)
+      this%bounds%e_min_sturm = huge(1.0_rp)
+      this%bounds%e_max_sturm = -huge(1.0_rp)
+      this%bounds%sturm_available = .false.
+      this%bounds%use_sturm = .false.
+      this%bounds%sturm_width = 0.0_rp
+      this%bounds%gershgorin_width = 0.0_rp
+      
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
@@ -2072,30 +2108,17 @@ contains
       end if
       close (128)
       deallocate(hmag)
-      !!! AB 270125 Testing Gershgorin circles for later implementation
-      !!! ! Quick check/hack for Gershgorin circles
-      !!! g_max = -100.0_rp
-      !!! g_min = 100.0_rp
-      !!! g_mid = 0.0_rp
-      !!! do ntype = 1, this%charge%lattice%ntype
-      !!!    nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-      !!!    !write(123, *)´bulkham´
-      !!!    do m = 1, nr
-      !!!       do i = 1, 9
-      !!!          g_mid = this%ee(i, i, m, ntype)
-      !!!          g_rad = 0.0_rp
-      !!!          do j = 1, 9
-      !!!             if (i /= j) g_rad = g_rad + abs(this%ee(j, i, m, ntype))
-      !!!          end do ! end of orbital j loop
-      !!!          g_min = min(g_mid - g_rad, g_min)
-      !!!          g_max = max(g_mid + g_rad, g_max)
-      !!!       end do ! end of orbital i loop
-      !!!    end do ! end of neighbour number
-      !!! end do ! end of neighbour number
-      !!! print *, 'Gershgorin circles: ', g_min, g_max
-      !!! ! Additional factor for safety
-      !!! this%g_max = g_max * sqrt(2.0_rp)
-      !!! this%g_min = g_min * sqrt(2.0_rp)
+
+      ! Compute spectrum bounds for KPM/Chebyshev applications
+      ! Ensure namelist defaults stored in object and call bounds routine
+      ! Defaults are set in restore_to_default and namelist locals are
+      ! initialized from object defaults in build_from_file, so we no longer
+      ! need to guard empty values here. Only ensure scaling is positive.
+      if (this%bounds_scaling <= 0.0_rp) this%bounds_scaling = 1.0_rp
+      print *, ' preHamiltonian spectrum estimated bounds: [', this%bounds%e_min, ',', this%bounds%e_max, '] Ry'
+      call this%compute_hamiltonian_bounds(verbose=.false., bounds_algorithm=this%bounds_algorithm)
+      print *, ' Hamiltonian spectrum estimated bounds: [', this%bounds%e_min, ',', this%bounds%e_max, '] Ry'
+      print *,' AB Tests: ', this%bounds%e_min - this%bounds%e_max
    end subroutine build_bulkham
 
    subroutine build_locham(this)
@@ -3012,4 +3035,216 @@ contains
       print *,''
       
    end subroutine calculate_hubbard_u_potential_general
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Compute global spectrum bounds for bulk Hamiltonian
+   !>
+   !> Computes the global (overall) spectrum bounds across all neighbor shells
+   !> and atom types. This is used for KPM/Chebyshev scaling.
+   !>
+   !> @param[in] verbose Optional flag for detailed output
+   !---------------------------------------------------------------------------
+   subroutine compute_hamiltonian_bounds(this, verbose, bounds_algorithm)
+      class(hamiltonian), intent(inout) :: this
+      logical, intent(in), optional :: verbose
+      character(len=*), intent(in), optional :: bounds_algorithm ! 'gershgorin'|'sturm'|'both'
+
+      integer :: ntype, m, nr, ia, n_atoms, n_total_blocks
+      real(rp) :: global_e_min_gershgorin, global_e_max_gershgorin
+      real(rp) :: global_e_min_sturm, global_e_max_sturm
+
+      type(spectrum_bounds_type) :: bounds_gamma
+      ! For superblock exact eigenvalue calculation
+      complex(rp), dimension(:,:), allocatable :: H_super
+      integer :: nb_blocks, sb_i, sb_j, atom_neighbor, neighbor_type
+      integer :: sb_block, sb_off_i, sb_off_j, nsize
+      real(rp) :: tmp_e_min, tmp_e_max
+      ! Temporaries used in Gershgorin loops
+      real(rp) :: center, radius
+      integer :: j, mnb
+      real(rp) :: e_min_super, e_max_super
+      real(rp) :: avg_gershgorin_width, avg_sturm_width
+      logical :: verb, sturm_available_any
+      complex(rp), dimension(:,:), allocatable :: H_block
+      character(len=256) :: msg
+      ! Optional bounds selection variables (declared here so they are available before executable statements)
+      character(len=16) :: algo
+      real(rp) :: margin
+      integer :: n_orb, n_sites, isite, jsite, i_start, i_end, j_start, j_end, ineigh, ntype_i, ia_loc, ja
+      complex(rp), dimension(:,:), allocatable :: H_gamma
+      real(rp) :: width, e_mid
+      ! Allocation status integers for allocatable temporaries
+      integer :: alloc_stat, alloc_stat2
+
+      verb = .false.
+      if (present(verbose)) verb = verbose
+
+      if (.not. allocated(this%ee)) then
+         call g_logger%warning('compute_hamiltonian_bounds: Bulk Hamiltonian ee not allocated', __FILE__, __LINE__)
+         return
+      end if
+
+      n_atoms = this%charge%lattice%ntype
+      n_total_blocks = 0
+      global_e_min_gershgorin = huge(1.0_rp)
+      global_e_max_gershgorin = -huge(1.0_rp)
+      global_e_min_sturm = huge(1.0_rp)
+      global_e_max_sturm = -huge(1.0_rp)
+      sturm_available_any = .false.
+   ! Read user options or set defaults
+   algo = 'none'
+   if (present(bounds_algorithm)) algo = trim(adjustl(bounds_algorithm))
+      ! If caller passed an empty string (present but blank), treat as 'none'
+      if (len_trim(algo) == 0) algo = 'none'
+
+      ! Use object's bounds_scaling (factor) to derive fractional margin.
+      ! bounds_scaling = 1.0 => margin = 0 (no expansion). Use a safe lower bound.
+      if (this%bounds_scaling <= 0.0_rp) then
+         margin = 0.0_rp
+      else
+         margin = max(0.0_rp, this%bounds_scaling - 1.0_rp)
+      end if
+
+      ! If user explicitly requests 'none', skip bounds computation and
+      ! leave energy/recursion modules to use their namelist-provided values.
+      if (trim(adjustl(algo)) == 'none') then
+         call g_logger%info('compute_and_compare_bounds: bounds_algorithm="none"; skipping bounds calculation and using energy namelist values', __FILE__, __LINE__)
+         return
+      end if
+
+      ! Compute Gershgorin bounds from the full real-space Hamiltonian rows
+      ! (aggregate contributions from all neighbor blocks). This produces
+      ! conservative bounds that include inter-block hoppings and local
+      ! spin-orbit shifts (lsham) and is cheap to compute.
+      do ntype = 1, n_atoms
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+
+         ! Count blocks for reporting
+         n_total_blocks = n_total_blocks + nr
+
+         ! Gershgorin: for each orbital (1..18) sum couplings across all neighbor blocks
+         do sb_block = 1, 18
+            center = 0.0_rp
+            if (allocated(this%ee)) then
+               center = real(this%ee(sb_block, sb_block, 1, ntype))
+            end if
+            if (allocated(this%lsham)) then
+               center = center + real(this%lsham(sb_block, sb_block, ntype))
+            end if
+
+            radius = 0.0_rp
+            do mnb = 1, this%charge%lattice%nn(ia, 1)
+               do j = 1, 18
+                  if (mnb == 1 .and. j == sb_block) cycle
+                  radius = radius + abs(this%ee(sb_block, j, mnb, ntype))
+               end do
+            end do
+
+            global_e_min_gershgorin = min(global_e_min_gershgorin, center - radius)
+            global_e_max_gershgorin = max(global_e_max_gershgorin, center + radius)
+         end do
+
+      end do
+
+      ! Report global bounds
+      call g_logger%info('Spectrum bounds for bulk Hamiltonian', __FILE__, __LINE__)
+      
+      ! write(msg, '(A,I0,A)') 'Analyzed ', n_total_blocks, ' Hamiltonian blocks'
+      ! call g_logger%info(msg, __FILE__, __LINE__)
+
+      write(msg, '(A,F14.8,A,F14.8)') &
+         '  Gershgorin: E_min=', global_e_min_gershgorin, ', E_max=', global_e_max_gershgorin
+      call g_logger%info(msg, __FILE__, __LINE__)
+
+   ! Build H(k=Gamma) for the full unit cell and compute its spectrum
+
+      n_orb = 18
+      n_sites = this%charge%lattice%nrec
+      allocate(H_gamma(n_orb*n_sites, n_orb*n_sites), stat=alloc_stat2)
+      if (alloc_stat2 /= 0) then
+         call g_logger%warning('  compute_and_compare_bounds: failed to allocate H_gamma, skipping H(Gamma) check', __FILE__, __LINE__)
+      else
+         H_gamma = (0.0_rp, 0.0_rp)
+
+      ! Assemble H(k=Gamma): structure factors = 1 for all neighbors
+      do isite = 1, n_sites
+         ntype_i = this%charge%lattice%ib(isite)
+         ia_loc = this%charge%lattice%atlist(ntype_i)
+         i_start = (isite - 1) * n_orb + 1
+         i_end = isite * n_orb
+         do ineigh = 1, this%charge%lattice%nn(ia_loc, 1)
+            if (ineigh == 1) then
+               jsite = isite
+            else
+               ja = this%charge%lattice%nn(ia_loc, ineigh)
+               jsite = this%charge%lattice%iz(ja)
+               if (jsite < 1 .or. jsite > n_sites) cycle
+            end if
+            j_start = (jsite - 1) * n_orb + 1
+            j_end = jsite * n_orb
+            H_gamma(i_start:i_end, j_start:j_end) = H_gamma(i_start:i_end, j_start:j_end) + this%ee(:, :, ineigh, ntype_i)
+         end do
+      end do
+
+   end if  ! end if (alloc_stat2 /= 0) then ... else ...
+
+   ! Diagonalize H_gamma using the existing spectrum routine
+      if (alloc_stat2 == 0) then
+         call compute_spectrum_bounds(H_gamma, bounds_gamma, 'sturm', verbose=.false.)
+      end if
+   if (bounds_gamma%sturm_available) then
+      write(msg, '(A,F14.8,A,F14.8)') '  H(Gamma):   E_min=', bounds_gamma%e_min_sturm, ', E_max=', bounds_gamma%e_max_sturm
+   else
+      write(msg, '(A,F14.8,A,F14.8)') '  H(Gamma) (Gershgorin fallback): E_min=', bounds_gamma%e_min_gershgorin, ', E_max=', bounds_gamma%e_max_gershgorin
+   end if
+   call g_logger%info(msg, __FILE__, __LINE__)
+
+   ! Decide final selected bounds based on user algo and margin
+   if (algo == 'gershgorin') then
+      this%bounds%e_min = global_e_min_gershgorin
+      this%bounds%e_max = global_e_max_gershgorin
+   else if (algo == 'sturm' .or. algo == 'hgamma') then
+      if (bounds_gamma%sturm_available) then
+         this%bounds%e_min = bounds_gamma%e_min_sturm
+         this%bounds%e_max = bounds_gamma%e_max_sturm
+      else
+         this%bounds%e_min = global_e_min_gershgorin
+         this%bounds%e_max = global_e_max_gershgorin
+      end if
+   end if
+
+   ! Apply fractional margin (expand bounds)
+      width = this%bounds%e_max - this%bounds%e_min
+      e_mid = 0.5_rp * (this%bounds%e_max + this%bounds%e_min)
+      this%bounds%e_min = e_mid - 0.5_rp*(1.0_rp + margin)*width
+      this%bounds%e_max = e_mid + 0.5_rp*(1.0_rp + margin)*width
+
+      if (allocated(H_gamma)) then
+         deallocate(H_gamma)
+      end if
+
+      avg_gershgorin_width = global_e_max_gershgorin - global_e_min_gershgorin
+      write(msg, '(A,F14.8)') '  Gershgorin bandwidth: ', avg_gershgorin_width
+      call g_logger%info(msg, __FILE__, __LINE__)
+
+      ! if (sturm_available_any) then
+      !    write(msg, '(A,F14.8,A,F14.8)') &
+      !       'Exact/Sturm: E_min=', global_e_min_sturm, ', E_max=', global_e_max_sturm
+      !    call g_logger%info(msg, __FILE__, __LINE__)
+
+      !    avg_sturm_width = global_e_max_sturm - global_e_min_sturm
+      !    write(msg, '(A,F14.8)') 'Exact bandwidth: ', avg_sturm_width
+      !    call g_logger%info(msg, __FILE__, __LINE__)
+
+      !    write(msg, '(A,F8.4)') 'Tightness (Exact/Gershgorin): ', avg_sturm_width / avg_gershgorin_width
+      !    call g_logger%info(msg, __FILE__, __LINE__)
+      ! else
+      !    call g_logger%warning('Exact eigenvalues not available, use Gershgorin bounds', __FILE__, __LINE__)
+      ! end if
+
+   end subroutine compute_hamiltonian_bounds
+
 end module hamiltonian_mod
