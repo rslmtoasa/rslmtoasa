@@ -299,6 +299,12 @@ contains
       ! Calculate the Fermi enery
       ef_mag = this%en%fermi
       this%en%chebfermi = this%en%fermi
+      print *,'Calculating Fermi energy...'
+      print *,'Minimum energy', minval(this%en%ene), this%en%energy_min
+      print *,'Maximum energy', maxval(this%en%ene), this%en%energy_max
+      do i = 1, this%en%channels_ldos + 10
+         write(1111,*) 'Energy:', this%en%ene(i), ' DOS:', this%dtot(i)
+      end do
       if (.not. (this%en%fix_fermi) .and. this%control%calctype == 'B') then
          e1_mag = ef_mag
          call this%fermi(ef_mag, this%en%edel, ik1_mag, this%en%energy_min, this%en%channels_ldos + 10, this%dtot, ifail, this%qqv, e1_mag)

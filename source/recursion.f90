@@ -76,6 +76,9 @@ module recursion_mod
       complex(rp), dimension(:, :), allocatable :: v
       !> Variable to save T(H)
       complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
+
+      !> Spectrum bounds info
+      real(rp) :: h_min, h_max, h_center, h_width
    contains
       procedure :: hop
       procedure :: crecal
@@ -112,6 +115,7 @@ module recursion_mod
       procedure :: velo_vec_matmul
       procedure :: velo_hoh_vec_matmul
       procedure :: restore_to_default
+      procedure :: set_hamiltonian_scaling
       final :: destructor
    end type recursion
 
@@ -140,6 +144,15 @@ contains
       obj%control => hamiltonian_obj%charge%lattice%control
 
       call obj%restore_to_default()
+
+      obj%h_center = (obj%hamiltonian%bounds%e_max + obj%hamiltonian%bounds%e_min)/2.0_rp
+      obj%h_width = (obj%hamiltonian%bounds%e_max - obj%hamiltonian%bounds%e_min)/2.0_rp
+
+      ! Replace this in all chebyshev routines
+      !a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      !b = (this%en%energy_max + this%en%energy_min)/2
+
+
    end function constructor
 
    !---------------------------------------------------------------------------
@@ -2701,7 +2714,7 @@ contains
       complex(rp), dimension(18, 18) :: dum, dum1, dum2
       complex(rp), dimension(18, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
-      real(rp) :: a, b, start, finish
+      real(rp) :: start, finish
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2712,8 +2725,9 @@ contains
       nlimplus1 = this%lattice%nmax + 1
       llcheb = (2*this%control%lld) + 2
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%set_hamiltonian_scaling()
+      ! a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      ! b = (this%en%energy_max + this%en%energy_min)/2
 
       do i = start_atom, end_atom ! Loop on the number of atoms to be treat self-consistently by this process
          i_loc = g2l_map(i)
@@ -2745,9 +2759,9 @@ contains
 
          call g_timer%start('<PSI_0|PSI_1>')
          if (this%hamiltonian%hoh) then
-            call this%cheb_1st_mom_hoh(this%psi0, a, b)
+            call this%cheb_1st_mom_hoh(this%psi0, this%h_width, this%h_center)
          else
-            call this%cheb_1st_mom(this%psi0, a, b)
+            call this%cheb_1st_mom(this%psi0, this%h_width, this%h_center)
          end if
          this%mu_n(:, :, 2, i_loc) = (this%cheb_mom_temp(:, :))
          call g_timer%stop('<PSI_0|PSI_1>')
@@ -2757,9 +2771,9 @@ contains
          do ll = 1, this%lattice%control%lld
             call g_timer%start('<PSI_0|PSI_n>')
             if (this%hamiltonian%hoh) then
-               call this%chebyshev_recur_ll_hoh(i_loc, ll, a, b)
+               call this%chebyshev_recur_ll_hoh(i_loc, ll, this%h_width, this%h_center)
             else
-               call this%chebyshev_recur_ll(i_loc, ll, a, b)
+               call this%chebyshev_recur_ll(i_loc, ll, this%h_width, this%h_center)
             end if
             call g_timer%stop('<PSI_0|PSI_n>')
          end do ! End loop in the recursion steps
@@ -3471,6 +3485,30 @@ contains
       end if
 
    end subroutine restore_to_default
+
+   subroutine set_hamiltonian_scaling(this)
+      implicit none
+      class(recursion), intent(inout) :: this
+
+      real(rp) :: a, b
+
+      ! Set the scaling factors for the Hamiltonian
+      if (this%hamiltonian%bounds%algorithm == 'none') then
+         a = (this%en%energy_max - this%en%energy_min)/2.0_rp
+         b = (this%en%energy_max + this%en%energy_min)/2.0_rp
+      else
+         a = (this%hamiltonian%bounds%e_max - this%hamiltonian%bounds%e_min)/2.0_rp
+         b = (this%hamiltonian%bounds%e_max + this%hamiltonian%bounds%e_min)/2.0_rp
+         this%en%energy_min = this%hamiltonian%bounds%e_min
+         this%en%energy_max = this%hamiltonian%bounds%e_max
+      end if
+
+      this%h_center = b
+      this%h_width = a * this%hamiltonian%bounds%scaling
+      call g_logger%info('Scaling the Hamiltonian: center = '//real2str(this%h_center)// ', width = '//real2str(this%h_width), __FILE__, __LINE__)
+      print *, 'Recursion function rescaling a,b ', a, b
+      print *, 'Energy min, max ', this%en%energy_min, this%en%energy_max
+   end subroutine set_hamiltonian_scaling
 
 end module recursion_mod
 

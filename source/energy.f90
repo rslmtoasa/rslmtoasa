@@ -178,7 +178,7 @@ contains
 
       prevfermi = this%fermi
 
-      call this%build_from_file()
+      ! call this%build_from_file()
 
       this%fermi = prevfermi
       !Make sure nv1 is odd

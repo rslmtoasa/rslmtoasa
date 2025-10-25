@@ -1072,9 +1072,10 @@ contains
       this%g0 = 0.0d0
 
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
-
+      a = this%recursion%h_width  !(this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      b = this%recursion%h_center !(this%en%energy_max + this%en%energy_min)/2
+      print *, 'Green function rescaling a,b ', a, b
+      print *, 'Energy min, max ', this%en%energy_min, this%en%energy_max  
       wscale(:) = (this%en%ene(:) - b)/a
 
       ! Number of DOS points

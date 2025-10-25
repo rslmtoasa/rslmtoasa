@@ -32,7 +32,7 @@ module hamiltonian_mod
    use string_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
-   use spectrum_bounds_mod, only: spectrum_bounds_type, compute_spectrum_bounds
+   use spectrum_bounds_mod, only: compute_spectrum_bounds, bounds, bounds_constructor
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -52,8 +52,8 @@ module hamiltonian_mod
       class(lattice), pointer :: lattice
       !> Control
       class(control), pointer :: control
-      !> Bounds
-      class(spectrum_bounds_type), pointer :: bounds
+   !> Bounds (OO wrapper from spectrum_bounds_mod)
+   class(bounds), pointer :: bounds
 
       !> Spin-orbit coupling Hamiltonian
       complex(rp), dimension(:, :, :), allocatable :: lsham
@@ -104,9 +104,7 @@ module hamiltonian_mod
       !> On-site potential for LDA+U+J correction
       real(rp), dimension(:,:,:), allocatable :: hubbard_u_pot
       real(rp), dimension(:,:,:,:), allocatable :: hubbard_v_pot
-   !> User-configurable spectrum bounds options (from namelist)
-   character(len=16) :: bounds_algorithm
-   real(rp) :: bounds_scaling
+   !> User-configurable spectrum bounds are now encapsulated in `bounds` object
 
       !> New improved Hubbard parameters that should work for both bulk and impurity
       real(rp), dimension(:,:), allocatable :: hubbard_u_general
@@ -198,8 +196,8 @@ contains
       obj%charge => charge_obj
       obj%lattice => charge_obj%lattice
       obj%control => charge_obj%lattice%control
-      ! Allocate bounds storage on the object so restore_to_default can initialize it
-      allocate(obj%bounds)
+      ! Construct bounds object and initialize defaults
+      obj%bounds => bounds_constructor()
 
       call obj%restore_to_default()
       call obj%build_from_file()
@@ -306,8 +304,8 @@ contains
 
    ! Initialize namelist locals from object's defaults so missing keys
    ! in the input file will preserve the object's restore_to_default values.
-      bounds_algorithm = this%bounds_algorithm
-      bounds_scaling = this%bounds_scaling
+      bounds_algorithm = this%bounds%algorithm
+      bounds_scaling = this%bounds%scaling
 
       hoh = this%hoh
       local_axis = this%local_axis
@@ -375,8 +373,8 @@ contains
       this%js_alpha = js_alpha
       ! Store namelist-provided bounds options (use safe defaults if empty)
       if (bounds_scaling <= 0.0_rp) bounds_scaling = 1.0_rp
-      this%bounds_algorithm = bounds_algorithm
-      this%bounds_scaling = bounds_scaling
+      this%bounds%algorithm = bounds_algorithm
+      this%bounds%scaling = bounds_scaling
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
 
@@ -1221,8 +1219,8 @@ contains
       this%hubbard_u_general(:,:) = 0.0d0
       this%hubbard_j_general(:,:) = 0.0d0
       ! Default behavior for spectrum bounds: 'none' => use energy namelist values
-      this%bounds_algorithm = 'none'
-      this%bounds_scaling = 1.0_rp
+      this%bounds%algorithm = 'none'
+      this%bounds%scaling = 1.0_rp
       ! Initialize object-bound spectrum info
       this%bounds%e_min = huge(1.0_rp)
       this%bounds%e_max = -huge(1.0_rp)
@@ -2110,15 +2108,9 @@ contains
       deallocate(hmag)
 
       ! Compute spectrum bounds for KPM/Chebyshev applications
-      ! Ensure namelist defaults stored in object and call bounds routine
-      ! Defaults are set in restore_to_default and namelist locals are
-      ! initialized from object defaults in build_from_file, so we no longer
-      ! need to guard empty values here. Only ensure scaling is positive.
-      if (this%bounds_scaling <= 0.0_rp) this%bounds_scaling = 1.0_rp
-      print *, ' preHamiltonian spectrum estimated bounds: [', this%bounds%e_min, ',', this%bounds%e_max, '] Ry'
-      call this%compute_hamiltonian_bounds(verbose=.false., bounds_algorithm=this%bounds_algorithm)
-      print *, ' Hamiltonian spectrum estimated bounds: [', this%bounds%e_min, ',', this%bounds%e_max, '] Ry'
-      print *,' AB Tests: ', this%bounds%e_min - this%bounds%e_max
+      if (this%control%recur== 'chebyshev') then
+         call this%compute_hamiltonian_bounds(verbose=.false., bounds_algorithm=this%bounds%algorithm)
+      end if
    end subroutine build_bulkham
 
    subroutine build_locham(this)
@@ -3055,7 +3047,7 @@ contains
       real(rp) :: global_e_min_gershgorin, global_e_max_gershgorin
       real(rp) :: global_e_min_sturm, global_e_max_sturm
 
-      type(spectrum_bounds_type) :: bounds_gamma
+      type(bounds) :: bounds_gamma
       ! For superblock exact eigenvalue calculation
       complex(rp), dimension(:,:), allocatable :: H_super
       integer :: nb_blocks, sb_i, sb_j, atom_neighbor, neighbor_type
@@ -3094,17 +3086,18 @@ contains
       global_e_max_sturm = -huge(1.0_rp)
       sturm_available_any = .false.
    ! Read user options or set defaults
-   algo = 'none'
+   ! Start with object's algorithm and allow caller to override
+   algo = this%bounds%algorithm
    if (present(bounds_algorithm)) algo = trim(adjustl(bounds_algorithm))
       ! If caller passed an empty string (present but blank), treat as 'none'
       if (len_trim(algo) == 0) algo = 'none'
 
-      ! Use object's bounds_scaling (factor) to derive fractional margin.
-      ! bounds_scaling = 1.0 => margin = 0 (no expansion). Use a safe lower bound.
-      if (this%bounds_scaling <= 0.0_rp) then
+      ! Use object's bounds%scaling (factor) to derive fractional margin.
+      ! scaling = 1.0 => margin = 0 (no expansion). Use a safe lower bound.
+      if (this%bounds%scaling <= 0.0_rp) then
          margin = 0.0_rp
       else
-         margin = max(0.0_rp, this%bounds_scaling - 1.0_rp)
+         margin = max(0.0_rp, this%bounds%scaling - 1.0_rp)
       end if
 
       ! If user explicitly requests 'none', skip bounds computation and
@@ -3229,21 +3222,6 @@ contains
       avg_gershgorin_width = global_e_max_gershgorin - global_e_min_gershgorin
       write(msg, '(A,F14.8)') '  Gershgorin bandwidth: ', avg_gershgorin_width
       call g_logger%info(msg, __FILE__, __LINE__)
-
-      ! if (sturm_available_any) then
-      !    write(msg, '(A,F14.8,A,F14.8)') &
-      !       'Exact/Sturm: E_min=', global_e_min_sturm, ', E_max=', global_e_max_sturm
-      !    call g_logger%info(msg, __FILE__, __LINE__)
-
-      !    avg_sturm_width = global_e_max_sturm - global_e_min_sturm
-      !    write(msg, '(A,F14.8)') 'Exact bandwidth: ', avg_sturm_width
-      !    call g_logger%info(msg, __FILE__, __LINE__)
-
-      !    write(msg, '(A,F8.4)') 'Tightness (Exact/Gershgorin): ', avg_sturm_width / avg_gershgorin_width
-      !    call g_logger%info(msg, __FILE__, __LINE__)
-      ! else
-      !    call g_logger%warning('Exact eigenvalues not available, use Gershgorin bounds', __FILE__, __LINE__)
-      ! end if
 
    end subroutine compute_hamiltonian_bounds
 
