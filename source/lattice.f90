@@ -2447,7 +2447,7 @@ contains
       allocate (sbar(np, np, nt))
       allocate(sbarvec(3, nt))
       call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
-      print *, 'Number of neighbours for sbar:', nt
+      ! print *, 'Number of neighbours for sbar:', nt
       write (17, 10000) nt
       write (17, 10001) ((sbarvec(j, i), j=1, 3), i=1, nt)
       !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
@@ -2704,7 +2704,7 @@ contains
       intrinsic SQRT
 
       if (nlm > 9) stop "**** CHANGE DIMS IN STRMAT"
-      print *,' In STREZE: nr, nlm, nrl = ', nr, nlm, nrl
+      ! print *,' In STREZE: nr, nlm, nrl = ', nr, nlm, nrl
       do ir = 1, nr
          irl0 = (ir - 1)*nlm
          do jr = 1, nr
@@ -2767,7 +2767,7 @@ contains
       ndef = 0
       lmax = LL(nlm)
       allocate (s_temp(nrl, nrl))
-      print *, ' In SHLDCH: nr, nlm, nrl, lmax = ', nr, nlm, nrl, lmax
+      ! print *, ' In SHLDCH: nr, nlm, nrl, lmax = ', nr, nlm, nrl, lmax
       write (17, 10000) lmax, q
       irl = 0
       do ir = 1, nr
@@ -2793,12 +2793,13 @@ contains
 !      end do
 !    end do
 !    call chlr2f(a, na, wk, nrl, ndef)
-       print *, ' Calling DPOTRF in SHLDCH', nrl
+       !print *, ' Calling DPOTRF in SHLDCH', nrl
        call DPOTRF('U', nrl, s_temp, nrl, info)
        write (17, 10001) ndef
 !    call chlr2s(a, na, s, nrl, nlm)
-       print *, ' Calling DPOTRS in SHLDCH', nrl
+       !print *, ' Calling DPOTRS in SHLDCH', nrl
        call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
+      ! Potential speedup by using DPOSV
       !print *, ' Calling DPOSV in SHLDCH', nrl
       !call DPOSV('U', nrl, nlm, s_temp, nrl, s, nrl, info)
       deallocate (s_temp)
@@ -2808,7 +2809,7 @@ contains
          end do
       end do
       ! --------------------------------
-      print *, ' Making Sbar matrix in SHLDCH'
+      !print *, ' Making Sbar matrix in SHLDCH'
       ir = 0
       hitc = 0
       !print *, ´ nr = ´, nr
@@ -2850,7 +2851,7 @@ contains
             end do
          end if
       end do
-      print *, ' Number of hitc in SHLDCH = ', hitc
+      !print *, ' Number of hitc in SHLDCH = ', hitc
       !print *, ´ hitc = ´, hitc
       return
       !

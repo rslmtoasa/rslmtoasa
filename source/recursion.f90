@@ -433,11 +433,11 @@ contains
 
    end subroutine velo_hoh_vec_matmul
 
-   subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
+   subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, h_width, h_center)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      real(rp), intent(in) :: a, b
+      real(rp), intent(in) :: h_width, h_center
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
@@ -555,17 +555,17 @@ contains
       psi_out(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
 
       ! Do the scaling and shifting
-      psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
-      psi_out(:, :, :) = psi_out(:, :, :)/a
+      psi_out(:, :, :) = psi_out(:, :, :) - h_center*psi_in(:, :, :)
+      psi_out(:, :, :) = psi_out(:, :, :)/h_width
      
       this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
    end subroutine ham_hoh_vec_matmul
 
-   subroutine ham_vec_matmul(this, psi_in, psi_out, a, b)
+   subroutine ham_vec_matmul(this, psi_in, psi_out, h_width, h_center)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      real(rp), intent(in) :: a, b
+      real(rp), intent(in) :: h_width, h_center
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
@@ -623,8 +623,8 @@ contains
       end do ! End loop in the clust
       !$omp end parallel do
       ! Do the scaling and shifting
-      psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
-      psi_out(:, :, :) = psi_out(:, :, :)/a 
+      psi_out(:, :, :) = psi_out(:, :, :) - h_center*psi_in(:, :, :)
+      psi_out(:, :, :) = psi_out(:, :, :)/h_width 
    end subroutine ham_vec_matmul
 
    subroutine compute_moments_stochastic(this)
@@ -639,7 +639,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp), dimension(this%control%cond_ll) :: kernel
       complex(rp), dimension(18, 18, this%en%channels_ldos + 10) :: g0
-      real(rp) :: a, b, rng 
+      real(rp) :: h_width, h_center, rng 
       complex(rp) :: exp_factor
 
       lmax = 2
@@ -671,8 +671,9 @@ contains
       allocate(v2(hblocksize, hblocksize, this%lattice%kk), S_op(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
 
       ! General procedures
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%set_hamiltonian_scaling()
+      h_width = this%h_width
+      h_center = this%h_center
 
       call this%hamiltonian%build_realspace_velocity_operators()
 
@@ -797,16 +798,16 @@ contains
             else if (m == 2) then
                w0(:, :, :) = w1(:, :, :)
                if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(w0, w1, a, b)
+                  call this%ham_hoh_vec_matmul(w0, w1, h_width, h_center)
                else
-                  call this%ham_vec_matmul(w0, w1, a, b)
+                  call this%ham_vec_matmul(w0, w1, h_width, h_center)
                end if
                this%izero(:) = this%idum(:)
             else if (m > 2) then
                if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(w1, w2, a, b)
+                  call this%ham_hoh_vec_matmul(w1, w2, h_width, h_center)
                else
-                  call this%ham_vec_matmul(w1, w2, a, b)
+                  call this%ham_vec_matmul(w1, w2, h_width, h_center)
                end if
                this%izero(:) = this%idum(:)
                w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
@@ -841,16 +842,16 @@ contains
             else if (n == 2) then
                v0(:, :, :) = v1(:, :, :)
                if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(v0, v1, a, b)
+                  call this%ham_hoh_vec_matmul(v0, v1, h_width, h_center)
                else
-                  call this%ham_vec_matmul(v0, v1, a, b)
+                  call this%ham_vec_matmul(v0, v1, h_width, h_center)
                end if
                this%izero(:) = this%idum(:)
             else if (n > 2) then
                if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(v1, v2, a, b)
+                  call this%ham_hoh_vec_matmul(v1, v2, h_width, h_center)
                else
-                  call this%ham_vec_matmul(v1, v2, a, b)
+                  call this%ham_vec_matmul(v1, v2, h_width, h_center)
                end if
                this%izero(:) = this%idum(:)
                v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
@@ -1819,9 +1820,9 @@ contains
    !> @brief
    !> Calculates the 1st Chebyshev moment
    !---------------------------------------------------------------------------
-   subroutine cheb_1st_mom(this, psiref, a, b)
+   subroutine cheb_1st_mom(this, psiref, h_width, h_center)
       class(recursion), intent(inout) :: this
-      real(rp), intent(in) :: a, b ! scale and shift
+      real(rp), intent(in) :: h_width, h_center ! scale and shift
       complex(rp), dimension(18, 18, this%lattice%kk), intent(in) :: psiref
       integer :: nat, hblocksize, nlimplus1, k, ih, nr, n, nb, nnmap, i
 
@@ -1854,8 +1855,8 @@ contains
                end do ! End of loop in the neighbouring
             end if
             ! Do the scaling and shifting
-            this%psi1(:, :, i) = this%psi1(:, :, i) - b*this%psi0(:, :, i)
-            this%psi1(:, :, i) = this%psi1(:, :, i)/a
+            this%psi1(:, :, i) = this%psi1(:, :, i) - h_center*this%psi0(:, :, i)
+            this%psi1(:, :, i) = this%psi1(:, :, i)/h_width
          end do ! End of loop in the neighbouring
       end if ! End of local Hamiltonian loop
 
@@ -1878,8 +1879,8 @@ contains
             end do ! End of the loop in the neighbouring
          end if
          ! Do the scaling and shifting
-         this%psi1(:, :, k) = this%psi1(:, :, k) - b*this%psi0(:, :, k)
-         this%psi1(:, :, k) = this%psi1(:, :, k)/a
+         this%psi1(:, :, k) = this%psi1(:, :, k) - h_center*this%psi0(:, :, k)
+         this%psi1(:, :, k) = this%psi1(:, :, k)/h_width
       end do ! End loop in the clust
 
       ! Write the 1st moment
@@ -1895,9 +1896,9 @@ contains
    !> @brief
    !> Calculates the 1st Chebyshev moment including hoh term
    !---------------------------------------------------------------------------
-   subroutine cheb_1st_mom_hoh(this, psiref, a, b)
+   subroutine cheb_1st_mom_hoh(this, psiref, h_width, h_center)
       class(recursion), intent(inout) :: this
-      real(rp), intent(in) :: a, b ! scale and shift
+      real(rp), intent(in) :: h_width, h_center ! scale and shift
       complex(rp), dimension(18, 18, this%lattice%kk), intent(in) :: psiref
       integer :: nat, hblocksize, nlimplus1, k, ih, nr, n, nb, nnmap, i
 
@@ -2010,8 +2011,8 @@ contains
       this%psi1(:, :, :) = this%psi1(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
 
       ! Do the scaling and shifting
-      this%psi1(:, :, :) = this%psi1(:, :, :) - b*this%psi0(:, :, :)
-      this%psi1(:, :, :) = this%psi1(:, :, :)/a
+      this%psi1(:, :, :) = this%psi1(:, :, :) - h_center*this%psi0(:, :, :)
+      this%psi1(:, :, :) = this%psi1(:, :, :)/h_width
 
       ! Write the 1st moment
       do n = 1, this%lattice%kk
@@ -2030,7 +2031,7 @@ contains
       use mpi_mod
       class(recursion), intent(inout) :: this
       ! Local variables
-      real(rp) :: a, b
+      real(rp) :: h_width, h_center
       integer :: i, ij, j, l, ll, kk, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
@@ -2038,8 +2039,9 @@ contains
 
       integer :: ij_loc
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%set_hamiltonian_scaling()
+      h_width = this%h_width
+      h_center = this%h_center
 
       llmax = this%lattice%control%lld
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
@@ -2109,9 +2111,9 @@ contains
             call g_timer%start('<PSI_0|PSI_1>')
             ! Write the 1st moment
             if (this%hamiltonian%hoh) then
-               call this%cheb_1st_mom_hoh(psiref, a, b)
+               call this%cheb_1st_mom_hoh(psiref, h_width, h_center)
             else
-               call this%cheb_1st_mom(psiref, a, b)
+               call this%cheb_1st_mom(psiref, h_width, h_center)
             end if
             this%mu_n(:, :, 2, ij_loc*4 - 4 + reci) = this%cheb_mom_temp(:, :)
             call g_timer%stop('<PSI_0|PSI_1>')
@@ -2121,9 +2123,9 @@ contains
             do ll = 1, this%lattice%control%lld ! Loop in the recursion steps
                call g_timer%start('<PSI_0|PSI_n>')
                if (this%hamiltonian%hoh) then
-                  call this%chebyshev_recur_ll_hoh(ij_loc*4 - 4 + reci, ll, a, b)
+                  call this%chebyshev_recur_ll_hoh(ij_loc*4 - 4 + reci, ll, h_width, h_center)
                else
-                  call this%chebyshev_recur_ll(ij_loc*4 - 4 + reci, ll, a, b)
+                  call this%chebyshev_recur_ll(ij_loc*4 - 4 + reci, ll, h_width, h_center)
                end if
                call g_timer%stop('<PSI_0|PSI_n>')
                if (real(sum(this%mu_n(:, :, ll + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
@@ -2140,12 +2142,12 @@ contains
    !> Recursion method to calculate Chebyshev moments for a given number of
    !  recursion steps.
    !---------------------------------------------------------------------------
-   subroutine chebyshev_recur_ll(this, i, ll, a, b)
+   subroutine chebyshev_recur_ll(this, i, ll, h_width, h_center)
       implicit none
 
       class(recursion), intent(inout) :: this
       integer, intent(in) :: i, ll
-      real(rp), intent(in) :: a, b
+      real(rp), intent(in) :: h_width, h_center
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
@@ -2177,8 +2179,8 @@ contains
                end do ! End of loop in the neighbouring
             end if
             ! Do the scaling and shifting
-            this%psi2(:, :, k) = this%psi2(:, :, k) - b*this%psi1(:, :, k)
-            this%psi2(:, :, k) = this%psi2(:, :, k)/a
+            this%psi2(:, :, k) = this%psi2(:, :, k) - h_center*this%psi1(:, :, k)
+            this%psi2(:, :, k) = this%psi2(:, :, k)/h_width
             ! Write 2*H*|phi_1>
             this%psi2(:, :, k) = 2*this%psi2(:, :, k)
          end do ! End of loop in the neighbouring
@@ -2205,8 +2207,8 @@ contains
             end do ! End of the loop in the neighbouring
          end if
          ! Do the scaling and shifting
-         this%psi2(:, :, k) = this%psi2(:, :, k) - b*this%psi1(:, :, k)
-         this%psi2(:, :, k) = this%psi2(:, :, k)/a
+         this%psi2(:, :, k) = this%psi2(:, :, k) - h_center*this%psi1(:, :, k)
+         this%psi2(:, :, k) = this%psi2(:, :, k)/h_width
          ! Write 2*H*|phi_1>
          this%psi2(:, :, k) = 2*this%psi2(:, :, k)
       end do ! End loop in the clust
@@ -2252,10 +2254,10 @@ contains
    !> Recursion method to calculate Chebyshev moments for a given number of
    !  recursion steps. Includes the hoh term
    !---------------------------------------------------------------------------
-   subroutine chebyshev_recur_ll_hoh(this, i, ll, a, b)
+   subroutine chebyshev_recur_ll_hoh(this, i, ll, h_width, h_center)
       class(recursion), intent(inout) :: this
       integer, intent(in) :: i, ll
-      real(rp), intent(in) :: a, b
+      real(rp), intent(in) :: h_width, h_center
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
@@ -2373,8 +2375,8 @@ contains
       this%psi2(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
 
       ! Do the scaling and shifting
-      this%psi2(:, :, :) = this%psi2(:, :, :) - b*this%psi1(:, :, :)
-      this%psi2(:, :, :) = this%psi2(:, :, :)/a
+      this%psi2(:, :, :) = this%psi2(:, :, :) - h_center*this%psi1(:, :, :)
+      this%psi2(:, :, :) = this%psi2(:, :, :)/h_width
       ! Write 2*H*|phi_1>
       this%psi2(:, :, :) = 2*this%psi2(:, :, :)
 
@@ -2415,10 +2417,10 @@ contains
   !!!!!!!!!!!!!!!!!!!!!!!
    !OBSOLETE TO NOT USE!!!
   !!!!!!!!!!!!!!!!!!!!!!!
-   subroutine chebyshev_recur_s_ll(this, psiref, ll, a, b)
+   subroutine chebyshev_recur_s_ll(this, psiref, ll, h_width, h_center)
       class(recursion), intent(inout) :: this
       integer, intent(in) :: ll
-      real(rp), intent(in) :: a, b
+      real(rp), intent(in) :: h_width, h_center
       complex(rp), dimension(18, 18, this%lattice%kk), intent(in) :: psiref
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
@@ -2428,7 +2430,7 @@ contains
       hblocksize = 18
       nat = this%lattice%kk
       nlimplus1 = this%lattice%nmax + 1
-      inv_a = 1.0_rp/a
+      inv_a = 1.0_rp/h_width
 
       this%cheb_mom_temp(:, :) = 0.0d0
       ! Write H*|phi_1>
@@ -2450,7 +2452,7 @@ contains
             end do ! End of the loop in the neighbouring
          end if
          ! Do the scaling and shifting
-         this%psi2(:, :, k) = this%psi2(:, :, k) - b*this%psi1(:, :, k)
+         this%psi2(:, :, k) = this%psi2(:, :, k) - h_center*this%psi1(:, :, k)
          this%psi2(:, :, k) = inv_a*this%psi2(:, :, k)
          ! Write 2*H*|phi_1>
          this%psi2(:, :, k) = 2.0_rp*this%psi2(:, :, k)
@@ -2500,7 +2502,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale, lzi
       real(rp), dimension(3) :: rij, crossrij
       
-      real(rp) :: a, b, start, finish, rng
+      real(rp) :: h_width, h_center, start, finish, rng
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2512,10 +2514,11 @@ contains
       lmax = 2
       nv = this%en%channels_ldos + 10
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%set_hamiltonian_scaling()
+      h_width = this%h_width
+      h_center = this%h_center
 
-      wscale(:) = (this%en%ene(:) - b)/a
+      wscale(:) = (this%en%ene(:) - h_center)/h_width
 
       ! Calculating the Jackson Kernel
       call jackson_kernel((this%control%lld), kernel)
@@ -2592,7 +2595,7 @@ contains
 !            end do
 !         end do
          !left_vec(:, :, :) =  left_vec(:, :, :) - b*psiref(:, :, :)
-         !left_vec(:, :, :) =  left_vec(:, :, :)/a
+         !left_vec(:, :, :) =  left_vec(:, :, :)/h_width
 
          ! X*|r>
          do k = 1, this%lattice%kk
@@ -2600,7 +2603,7 @@ contains
          end do
 
          ! H*X|r>
-         call this%ham_vec_matmul(left_vec1, w0, a, b)
+         call this%ham_vec_matmul(left_vec1, w0, h_width, h_center)
          
          ! Y*H*X|r>
          left_vec1(:, :, :) = (0.0d0, 0.0d0)
@@ -2616,7 +2619,7 @@ contains
          end do
          
          ! H*Y|r>
-         call this%ham_vec_matmul(left_vec2, w0, a, b)
+         call this%ham_vec_matmul(left_vec2, w0, h_width, h_center)
 
          ! X*H*Y|r>
          left_vec2(:, :, :) = (0.0d0, 0.0d0)
@@ -2633,16 +2636,16 @@ contains
             else if (n == 2) then
                v0(:, :, :) = v1(:, :, :)
                if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(v0, v1, a, b)
+                  call this%ham_hoh_vec_matmul(v0, v1, h_width, h_center)
                else
-                  call this%ham_vec_matmul(v0, v1, a, b)
+                  call this%ham_vec_matmul(v0, v1, h_width, h_center)
                end if
                this%izero(:) = this%idum(:)
             else if (n > 2) then
                if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(v1, v2, a, b)
+                  call this%ham_hoh_vec_matmul(v1, v2, h_width, h_center)
                else
-                  call this%ham_vec_matmul(v1, v2, a, b)
+                  call this%ham_vec_matmul(v1, v2, h_width, h_center)
                end if
                this%izero(:) = this%idum(:)
                v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
@@ -2684,7 +2687,7 @@ contains
          end do
          do l = 1, 18
             do m = 1, 18
-               g0(l, m, ie) = g0(l, m, ie)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
+               g0(l, m, ie) = g0(l, m, ie)/((sqrt((h_width**2) - ((this%en%ene(ie) - h_center)**2))))
             end do
          end do
       end do
@@ -2715,6 +2718,7 @@ contains
       complex(rp), dimension(18, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
       real(rp) :: start, finish
+      real(rp) :: h_width, h_center
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2726,6 +2730,8 @@ contains
       llcheb = (2*this%control%lld) + 2
 
       call this%set_hamiltonian_scaling()
+      h_width = this%h_width
+      h_center = this%h_center
       ! a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       ! b = (this%en%energy_max + this%en%energy_min)/2
 
@@ -2759,9 +2765,9 @@ contains
 
          call g_timer%start('<PSI_0|PSI_1>')
          if (this%hamiltonian%hoh) then
-            call this%cheb_1st_mom_hoh(this%psi0, this%h_width, this%h_center)
+            call this%cheb_1st_mom_hoh(this%psi0, h_width, h_center)
          else
-            call this%cheb_1st_mom(this%psi0, this%h_width, this%h_center)
+            call this%cheb_1st_mom(this%psi0, h_width, h_center)
          end if
          this%mu_n(:, :, 2, i_loc) = (this%cheb_mom_temp(:, :))
          call g_timer%stop('<PSI_0|PSI_1>')
@@ -2771,9 +2777,9 @@ contains
          do ll = 1, this%lattice%control%lld
             call g_timer%start('<PSI_0|PSI_n>')
             if (this%hamiltonian%hoh) then
-               call this%chebyshev_recur_ll_hoh(i_loc, ll, this%h_width, this%h_center)
+               call this%chebyshev_recur_ll_hoh(i_loc, ll, h_width, h_center)
             else
-               call this%chebyshev_recur_ll(i_loc, ll, this%h_width, this%h_center)
+               call this%chebyshev_recur_ll(i_loc, ll, h_width, h_center)
             end if
             call g_timer%stop('<PSI_0|PSI_n>')
          end do ! End loop in the recursion steps
@@ -2798,7 +2804,7 @@ contains
       complex(rp), dimension(18, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
       complex(rp), dimension(:, :, :), allocatable :: psiref
-      real(rp) :: a, b, start, finish
+      real(rp) :: h_width, h_center, start, finish
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2807,10 +2813,11 @@ contains
       nlimplus1 = this%lattice%nmax + 1
       allocate (hcheb(18, 18, (this%lattice%nn(1, 1) + 1), this%lattice%kk), psiref(18, 18, this%lattice%kk))
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%set_hamiltonian_scaling()
+      h_width = this%h_width
+      h_center = this%h_center
 
-      hcheb(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) !hcheb(:, :, :, :)!/cmplx(a, 0.d0)
+      hcheb(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) !hcheb(:, :, :, :)!/cmplx(h_width, 0.d0)
 
       do i = 1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
          j = this%lattice%irec(i) ! Atom number in the clust file
@@ -2855,8 +2862,8 @@ contains
                end do ! End of the loop in the neighbouring
             end if
             ! Do the scaling and shifting
-            this%psi1(:, :, k) = this%psi1(:, :, k) - b*this%psi0(:, :, k)
-            this%psi1(:, :, k) = this%psi1(:, :, k)/a
+            this%psi1(:, :, k) = this%psi1(:, :, k) - h_center*this%psi0(:, :, k)
+            this%psi1(:, :, k) = this%psi1(:, :, k)/h_width
          end do ! End loop in the clust
          !$omp end parallel do
 
@@ -2889,8 +2896,8 @@ contains
                   end do ! End of the loop in the neighbouring
                end if
                ! Do the scaling and shifting
-               this%psi2(:, :, k) = this%psi2(:, :, k) - b*this%psi1(:, :, k)
-               this%psi2(:, :, k) = this%psi2(:, :, k)/a
+               this%psi2(:, :, k) = this%psi2(:, :, k) - h_center*this%psi1(:, :, k)
+               this%psi2(:, :, k) = this%psi2(:, :, k)/h_width
                ! Write 2*H*|phi_1>
                this%psi2(:, :, k) = 2*this%psi2(:, :, k)
             end do ! End loop in the clust
@@ -3490,24 +3497,22 @@ contains
       implicit none
       class(recursion), intent(inout) :: this
 
-      real(rp) :: a, b
+      real(rp) :: h_width, h_center
 
       ! Set the scaling factors for the Hamiltonian
       if (this%hamiltonian%bounds%algorithm == 'none') then
-         a = (this%en%energy_max - this%en%energy_min)/2.0_rp
-         b = (this%en%energy_max + this%en%energy_min)/2.0_rp
+         h_width = (this%en%energy_max - this%en%energy_min)/2.0_rp
+         h_center = (this%en%energy_max + this%en%energy_min)/2.0_rp
       else
-         a = (this%hamiltonian%bounds%e_max - this%hamiltonian%bounds%e_min)/2.0_rp
-         b = (this%hamiltonian%bounds%e_max + this%hamiltonian%bounds%e_min)/2.0_rp
+         h_width = (this%hamiltonian%bounds%e_max - this%hamiltonian%bounds%e_min)/2.0_rp
+         h_center = (this%hamiltonian%bounds%e_max + this%hamiltonian%bounds%e_min)/2.0_rp
          this%en%energy_min = this%hamiltonian%bounds%e_min
          this%en%energy_max = this%hamiltonian%bounds%e_max
       end if
 
-      this%h_center = b
-      this%h_width = a * this%hamiltonian%bounds%scaling
+      this%h_center = h_center
+      this%h_width = h_width * this%hamiltonian%bounds%scaling
       call g_logger%info('Scaling the Hamiltonian: center = '//real2str(this%h_center)// ', width = '//real2str(this%h_width), __FILE__, __LINE__)
-      print *, 'Recursion function rescaling a,b ', a, b
-      print *, 'Energy min, max ', this%en%energy_min, this%en%energy_max
    end subroutine set_hamiltonian_scaling
 
 end module recursion_mod

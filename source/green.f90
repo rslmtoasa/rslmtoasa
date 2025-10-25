@@ -920,7 +920,7 @@ contains
       real(rp), dimension(:), allocatable :: kernel
       real(rp), dimension(:, :), allocatable :: polycheb
       real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, h_width, h_center
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n
 
@@ -929,10 +929,10 @@ contains
       allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
                 wscale(this%en%channels_ldos + 10))
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      h_width = this%recursion%h_width
+      h_center = this%recursion%h_center
 
-      wscale(:) = (this%en%ene(:) - b)/a
+      wscale(:) = (this%en%ene(:) - h_center)/h_width
 
       ! Calculating the Jackson Kernel
       call jackson_kernel((this%control%lld)*2 + 2, kernel)
@@ -969,8 +969,8 @@ contains
             end do
             do l = 1, 18
                do m = 1, 18
-                  this%g0aux(l, m, ie, n) = this%g0aux(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
-                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
+                  this%g0aux(l, m, ie, n) = this%g0aux(l, m, ie, n)/((sqrt((h_width**2) - ((this%en%ene(ie) - h_center)**2))))
+                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((h_width**2) - ((this%en%ene(ie) - h_center)**2))))
                end do
             end do
          end do
@@ -996,7 +996,7 @@ contains
       real(rp), dimension(:), allocatable :: kernel
       real(rp), dimension(:, :), allocatable :: polycheb
       real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, h_width, h_center
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n
 
@@ -1005,10 +1005,10 @@ contains
       allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
                 wscale(this%en%channels_ldos + 10))
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      h_width = this%recursion%h_width
+      h_center = this%recursion%h_center
 
-      wscale(:) = (this%en%ene(:) - b)/a
+      wscale(:) = (this%en%ene(:) - h_center)/h_width
 
       ! Calculating the Jackson Kernel
       call jackson_kernel((this%control%lld)*2 + 2, kernel)
@@ -1032,7 +1032,7 @@ contains
          !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
          do ie = fermi_point, fermi_point
             do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
+               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - h_center)/h_width))
                do l = 1, 18
                   do m = 1, 18
                      g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
@@ -1041,7 +1041,7 @@ contains
             end do
             do l = 1, 18
                do m = 1, 18
-                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
+                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((h_width**2) - (((this%en%ene(ie) + eta) - h_center)**2))))
                end do
             end do
          end do
@@ -1063,7 +1063,7 @@ contains
       real(rp), dimension(this%control%lld*2+2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2+2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, h_width, h_center
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n, nv
 
@@ -1072,11 +1072,11 @@ contains
       this%g0 = 0.0d0
 
       ! Defining rescaling coeficients
-      a = this%recursion%h_width  !(this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = this%recursion%h_center !(this%en%energy_max + this%en%energy_min)/2
-      print *, 'Green function rescaling a,b ', a, b
-      print *, 'Energy min, max ', this%en%energy_min, this%en%energy_max  
-      wscale(:) = (this%en%ene(:) - b)/a
+      h_width = this%recursion%h_width  !(this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      h_center = this%recursion%h_center !(this%en%energy_max + this%en%energy_min)/2
+      ! print *, 'Green function rescaling h_width, h_center ', h_width, h_center
+      ! print *, 'Energy min, max ', this%en%energy_min, this%en%energy_max  
+      wscale(:) = (this%en%ene(:) - h_center)/h_width
 
       ! Number of DOS points
       nv = this%en%channels_ldos + 10
@@ -1122,7 +1122,7 @@ contains
             end do
             do l = 1, 18
                do m = 1, 18
-                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
+                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((h_width**2) - ((this%en%ene(ie) - h_center)**2))))
                end do
             end do
          end do
@@ -1154,7 +1154,7 @@ contains
       real(rp), dimension(this%control%lld*2 + 2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, h_width, h_center
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n, nv
       integer :: n_glob
@@ -1162,10 +1162,10 @@ contains
       g_ef = 0.0d0
 
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      h_width = this%recursion%h_width
+      h_center = this%recursion%h_center
 
-      wscale(:) = (this%en%ene(:) - b)/a
+      wscale(:) = (this%en%ene(:) - h_center)/h_width
 
       ! Number of DOS points
       nv = this%en%channels_ldos + 10
@@ -1196,7 +1196,7 @@ contains
          !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
          do ie = fermi_point, fermi_point
             do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
+               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - h_center)/h_width))
                do l = 1, 18
                   do m = 1, 18
                      g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n)*exp_factor
@@ -1205,7 +1205,7 @@ contains
             end do
             do l = 1, 18
                do m = 1, 18
-                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
+                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((h_width**2) - (((this%en%ene(ie) + eta) - h_center)**2))))
                end do
             end do
          end do

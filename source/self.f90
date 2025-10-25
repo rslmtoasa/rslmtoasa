@@ -722,14 +722,12 @@ contains
          !=========================================================================
          !                PERFORM RECURSION OR K-SPACE HAMILTONIAN BUILD
          !=========================================================================
-         print *,'PRE RECURSION:', this%en%energy_min, this%en%energy_max
          if (this%use_kspace) then
             call run_kspace(this, i)
          else
             call run_recursion(this, i)
          end if
 
-         print *,'RECURSION DONE', this%en%energy_min, this%en%energy_max
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
          !=========================================================================
@@ -739,13 +737,11 @@ contains
          !=========================================================================
          !            SAVE THE PARAMETERS QL AND PL TO BE MIXED LATER
          !=========================================================================
-         print *,'MIX TIME', this%en%energy_min, this%en%energy_max
          call this%mix%save_to('old') ! Save to qia_old to mix with qia_new.
 
          !=========================================================================
          !                      SAVE THE MAGNETIC MOMENTS
          !=========================================================================
-         print *,'MOM TIME', this%en%energy_min, this%en%energy_max
          do ia = 1, this%lattice%nrec
             this%mix%mag_old(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
          end do
@@ -753,13 +749,11 @@ contains
          !=========================================================================
          !            CALCULATE DOS (RECURSION OR K-SPACE) AND MOMENTS
          !=========================================================================
-         print *,'DOS TIME', this%en%energy_min, this%en%energy_max
          if (this%use_kspace) then
             call run_dos_kspace(this, reciprocal_obj, i)
          else
             call run_dos(this)
          end if
-         print *,'DOS DONE', this%en%energy_min, this%en%energy_max
    
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL

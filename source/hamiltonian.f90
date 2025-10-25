@@ -3219,9 +3219,8 @@ contains
          deallocate(H_gamma)
       end if
 
-      avg_gershgorin_width = global_e_max_gershgorin - global_e_min_gershgorin
-      write(msg, '(A,F14.8)') '  Gershgorin bandwidth: ', avg_gershgorin_width
-      call g_logger%info(msg, __FILE__, __LINE__)
+      ! avg_gershgorin_width = global_e_max_gershgorin - global_e_min_gershgorin
+      ! call g_logger%info(msg, __FILE__, __LINE__)
 
    end subroutine compute_hamiltonian_bounds
 
