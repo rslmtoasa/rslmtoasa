@@ -8,9 +8,9 @@
 !> Module to compute tight spectrum bounds for Tight-Binding Hamiltonians
 !> Useful for KPM/Chebyshev polynomial expansion
 !> Implements Gershgorin circle theorem and Sturm/exact diagonalization
-!> Also provides an OO wrapper `bounds_type` with constructor and
-!> namelist-reading helpers so callers can attach bounds objects to other
-!> types (e.g. hamiltonian%bounds).
+!> Also provides an OO wrapper `bounds` type with constructor.
+!> Configuration is typically done via the parent object's namelist
+!> (e.g., hamiltonian reads bounds_algorithm and bounds_scaling from /hamiltonian/ namelist).
 !------------------------------------------------------------------------------
 
 module spectrum_bounds_mod
@@ -19,6 +19,7 @@ module spectrum_bounds_mod
    use logger_mod, only: g_logger
    implicit none
 
+   real(rp), parameter :: default_scaling = 1.05_rp
    private
 
    public :: bounds, compute_spectrum_bounds, bounds_constructor
@@ -37,12 +38,14 @@ module spectrum_bounds_mod
       logical :: sturm_available = .false.
       logical :: use_sturm = .false.
 
-      ! User-configurable options (previously in separate wrapper)
+      ! User-configurable options (set via parent object's namelist)
       character(len=16) :: algorithm = 'none'
-      real(rp) :: scaling = 1.0_rp
+      real(rp) :: scaling = default_scaling
 
    contains
       procedure :: restore_to_default
+      ! read_from_namelist is DEPRECATED - use parent object's namelist instead
+      ! (e.g., hamiltonian reads bounds_algorithm/bounds_scaling from /hamiltonian/)
       procedure :: read_from_namelist
    end type bounds
 
@@ -315,7 +318,7 @@ contains
    subroutine restore_to_default(this)
       class(bounds), intent(inout) :: this
       this%algorithm = 'none'
-      this%scaling = 1.0_rp
+      this%scaling = default_scaling
       this%e_min = huge(1.0_rp)
       this%e_max = -huge(1.0_rp)
       this%e_min_gershgorin = huge(1.0_rp)
@@ -328,12 +331,20 @@ contains
       this%gershgorin_width = 0.0_rp
    end subroutine restore_to_default
 
+   !> @brief Read bounds configuration from namelist (DEPRECATED)
+   !> @details This method is deprecated. Configuration should be done via
+   !>          the parent object's namelist (e.g., hamiltonian reads 
+   !>          bounds_algorithm and bounds_scaling from /hamiltonian/ namelist).
+   !>          This method is kept for backward compatibility but may be removed.
    subroutine read_from_namelist(this, fname)
       class(bounds), intent(inout) :: this
       character(len=*), intent(in) :: fname
       integer :: funit, iostat
 
    include 'include_codes/namelists/bounds.f90'
+
+      call g_logger%warning('bounds%read_from_namelist is DEPRECATED. '// &
+         'Use parent object namelist (e.g., bounds_algorithm in /hamiltonian/) instead.', __FILE__, __LINE__)
 
       open(newunit=funit, file=trim(fname), action='read', status='old', iostat=iostat)
       if (iostat /= 0) then
@@ -349,7 +360,7 @@ contains
 
       ! Transfer namelist locals into object fields
       if (len_trim(bounds_algorithm) == 0) bounds_algorithm = 'none'
-      if (bounds_scaling <= 0.0_rp) bounds_scaling = 1.0_rp
+      if (bounds_scaling <= 0.0_rp) bounds_scaling = default_scaling
       this%algorithm = bounds_algorithm
       this%scaling = bounds_scaling
 

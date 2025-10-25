@@ -371,10 +371,9 @@ contains
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
       this%js_alpha = js_alpha
-      ! Store namelist-provided bounds options (use safe defaults if empty)
-      if (bounds_scaling <= 0.0_rp) bounds_scaling = 1.0_rp
-      this%bounds%algorithm = bounds_algorithm
-      this%bounds%scaling = bounds_scaling
+      ! Store namelist-provided bounds options
+      if (len_trim(bounds_algorithm) > 0) this%bounds%algorithm = bounds_algorithm
+      if (bounds_scaling > 0.0_rp) this%bounds%scaling = bounds_scaling
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
 
@@ -1219,19 +1218,19 @@ contains
       this%hubbard_u_general(:,:) = 0.0d0
       this%hubbard_j_general(:,:) = 0.0d0
       ! Default behavior for spectrum bounds: 'none' => use energy namelist values
-      this%bounds%algorithm = 'none'
-      this%bounds%scaling = 1.0_rp
-      ! Initialize object-bound spectrum info
-      this%bounds%e_min = huge(1.0_rp)
-      this%bounds%e_max = -huge(1.0_rp)
-      this%bounds%e_min_gershgorin = huge(1.0_rp)
-      this%bounds%e_max_gershgorin = -huge(1.0_rp)
-      this%bounds%e_min_sturm = huge(1.0_rp)
-      this%bounds%e_max_sturm = -huge(1.0_rp)
-      this%bounds%sturm_available = .false.
-      this%bounds%use_sturm = .false.
-      this%bounds%sturm_width = 0.0_rp
-      this%bounds%gershgorin_width = 0.0_rp
+      ! this%bounds%algorithm = 'none'
+      ! this%bounds%scaling = 1.0_rp
+      ! ! Initialize object-bound spectrum info
+      ! this%bounds%e_min = huge(1.0_rp)
+      ! this%bounds%e_max = -huge(1.0_rp)
+      ! this%bounds%e_min_gershgorin = huge(1.0_rp)
+      ! this%bounds%e_max_gershgorin = -huge(1.0_rp)
+      ! this%bounds%e_min_sturm = huge(1.0_rp)
+      ! this%bounds%e_max_sturm = -huge(1.0_rp)
+      ! this%bounds%sturm_available = .false.
+      ! this%bounds%use_sturm = .false.
+      ! this%bounds%sturm_width = 0.0_rp
+      ! this%bounds%gershgorin_width = 0.0_rp
       
    end subroutine restore_to_default
 
@@ -3063,7 +3062,6 @@ contains
       character(len=256) :: msg
       ! Optional bounds selection variables (declared here so they are available before executable statements)
       character(len=16) :: algo
-      real(rp) :: margin
       integer :: n_orb, n_sites, isite, jsite, i_start, i_end, j_start, j_end, ineigh, ntype_i, ia_loc, ja
       complex(rp), dimension(:,:), allocatable :: H_gamma
       real(rp) :: width, e_mid
@@ -3092,18 +3090,10 @@ contains
       ! If caller passed an empty string (present but blank), treat as 'none'
       if (len_trim(algo) == 0) algo = 'none'
 
-      ! Use object's bounds%scaling (factor) to derive fractional margin.
-      ! scaling = 1.0 => margin = 0 (no expansion). Use a safe lower bound.
-      if (this%bounds%scaling <= 0.0_rp) then
-         margin = 0.0_rp
-      else
-         margin = max(0.0_rp, this%bounds%scaling - 1.0_rp)
-      end if
-
       ! If user explicitly requests 'none', skip bounds computation and
       ! leave energy/recursion modules to use their namelist-provided values.
       if (trim(adjustl(algo)) == 'none') then
-         call g_logger%info('compute_and_compare_bounds: bounds_algorithm="none"; skipping bounds calculation and using energy namelist values', __FILE__, __LINE__)
+         ! call g_logger%info('compute_and_compare_bounds: bounds_algorithm="none"; skipping bounds calculation and using energy namelist values', __FILE__, __LINE__)
          return
       end if
 
@@ -3212,8 +3202,8 @@ contains
    ! Apply fractional margin (expand bounds)
       width = this%bounds%e_max - this%bounds%e_min
       e_mid = 0.5_rp * (this%bounds%e_max + this%bounds%e_min)
-      this%bounds%e_min = e_mid - 0.5_rp*(1.0_rp + margin)*width
-      this%bounds%e_max = e_mid + 0.5_rp*(1.0_rp + margin)*width
+      this%bounds%e_min = e_mid - 0.5_rp * this%bounds%scaling * width
+      this%bounds%e_max = e_mid + 0.5_rp * this%bounds%scaling * width
 
       if (allocated(H_gamma)) then
          deallocate(H_gamma)

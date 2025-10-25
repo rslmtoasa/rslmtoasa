@@ -3501,7 +3501,7 @@ contains
 
       ! Set the scaling factors for the Hamiltonian
       if (this%hamiltonian%bounds%algorithm == 'none') then
-         h_width = (this%en%energy_max - this%en%energy_min)/2.0_rp
+         h_width = (this%en%energy_max - this%en%energy_min)/(2.0_rp - 0.3_rp)
          h_center = (this%en%energy_max + this%en%energy_min)/2.0_rp
       else
          h_width = (this%hamiltonian%bounds%e_max - this%hamiltonian%bounds%e_min)/2.0_rp
@@ -3512,7 +3512,7 @@ contains
 
       this%h_center = h_center
       this%h_width = h_width * this%hamiltonian%bounds%scaling
-      call g_logger%info('Scaling the Hamiltonian: center = '//real2str(this%h_center)// ', width = '//real2str(this%h_width), __FILE__, __LINE__)
+      call g_logger%info('Scaling the Hamiltonian: center = '//real2str(this%h_center,'(f8.4)')// ', width = '//real2str(this%h_width,'(f8.4)'), __FILE__, __LINE__)
    end subroutine set_hamiltonian_scaling
 
 end module recursion_mod
