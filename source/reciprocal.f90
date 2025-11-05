@@ -88,6 +88,12 @@ module reciprocal_mod
       !> Overlap matrix in k-space
       complex(rp), dimension(:, :, :), allocatable :: sk_overlap
 
+      ! Pre-computed structure factors in k-space
+      !> Structure factors S(k) for all k-points and neighbors [nk_total, n_neighbors, ntype]
+      complex(rp), dimension(:, :, :), allocatable :: sk_structure_factors
+      !> Flag indicating if structure factors have been pre-computed
+      logical :: sk_structure_factors_computed = .false.
+
       ! Band structure variables
       !> Maximum number of orbital channels per atom type
       integer :: max_orb_channels
@@ -179,6 +185,8 @@ module reciprocal_mod
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
       procedure :: build_kspace_hamiltonian
+      procedure :: fourier_transform_structure_constants
+      procedure :: mount_kspace_hamiltonian_from_sk
       procedure :: build_kspace_hamiltonian_so
       procedure :: build_total_hamiltonian
       procedure :: calculate_structure_factors
@@ -266,6 +274,7 @@ contains
       if (allocated(this%hk_so)) call g_safe_alloc%deallocate('reciprocal.hk_so', this%hk_so)
       if (allocated(this%hk_total)) call g_safe_alloc%deallocate('reciprocal.hk_total', this%hk_total)
       if (allocated(this%sk_overlap)) call g_safe_alloc%deallocate('reciprocal.sk_overlap', this%sk_overlap)
+      if (allocated(this%sk_structure_factors)) call g_safe_alloc%deallocate('reciprocal.sk_structure_factors', this%sk_structure_factors)
       if (allocated(this%basis_size)) call g_safe_alloc%deallocate('reciprocal.basis_size', this%basis_size)
       if (allocated(this%k_path)) call g_safe_alloc%deallocate('reciprocal.k_path', this%k_path)
       if (allocated(this%k_labels)) call g_safe_alloc%deallocate('reciprocal.k_labels', this%k_labels)
@@ -288,6 +297,7 @@ contains
       if (allocated(this%hk_so)) deallocate (this%hk_so)
       if (allocated(this%hk_total)) deallocate (this%hk_total)
       if (allocated(this%sk_overlap)) deallocate (this%sk_overlap)
+      if (allocated(this%sk_structure_factors)) deallocate (this%sk_structure_factors)
       if (allocated(this%basis_size)) deallocate (this%basis_size)
       if (allocated(this%k_path)) deallocate (this%k_path)
       if (allocated(this%k_labels)) deallocate (this%k_labels)
@@ -348,6 +358,9 @@ contains
       this%override_space_group = 0  ! 0 = auto-detect
       this%custom_kpath_spec = ''  ! Empty = use automatic
       this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
+
+      ! Initialize structure factors state
+      this%sk_structure_factors_computed = .false.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -617,6 +630,170 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Fourier transform structure constants from real-space to k-space
+   !>
+   !> This routine pre-computes all structure factors S(k) for all k-points
+   !> and neighbors in one pass, enabling separation of the FT from Hamiltonian
+   !> mounting. This allows for inserting higher-order corrections between
+   !> the two steps if needed.
+   !>
+   !> S(k) = exp(i * 2π * k·R) for each neighbor vector R and k-point k
+   !---------------------------------------------------------------------------
+   subroutine fourier_transform_structure_constants(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: ik, ntype, ineigh, ia, nr, max_neighbors
+      real(rp) :: k_dot_r
+      real(rp), dimension(3) :: r_vec, k_vec
+      character(len=200) :: debug_msg
+
+      if (.not. allocated(this%k_points)) then
+         call g_logger%error('reciprocal%fourier_transform_structure_constants: K-points not generated', __FILE__, __LINE__)
+         return
+      end if
+
+      call g_logger%info('reciprocal%fourier_transform_structure_constants: Starting pre-computation of S(k)', __FILE__, __LINE__)
+
+      ! Get maximum number of neighbors from first atom type
+      ! (Assumes consistent neighbor count across types, which is typical for uniform lattices)
+      ia = this%lattice%atlist(1)
+      max_neighbors = this%lattice%nn(ia, 1)
+
+      ! Allocate structure factors: [nk_total, max_neighbors, ntype]
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('reciprocal.sk_structure_factors', this%sk_structure_factors, &
+                                [this%nk_total, max_neighbors, this%lattice%ntype])
+#else
+      if (allocated(this%sk_structure_factors)) deallocate(this%sk_structure_factors)
+      allocate(this%sk_structure_factors(this%nk_total, max_neighbors, this%lattice%ntype))
+#endif
+
+      write(debug_msg, '(A,I0,A,I0,A,I0,A)') 'fourier_transform_structure_constants: Allocating for ', &
+            this%nk_total, ' k-points, ', max_neighbors, ' neighbors, ', this%lattice%ntype, ' types'
+      call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+
+      ! Initialize to zero
+      this%sk_structure_factors = cmplx(0.0_rp, 0.0_rp, rp)
+
+      ! Triple loop: ntype -> k-points -> neighbors
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)
+
+         ! OpenMP parallelization over k-points (coarse-grained)
+#ifdef _OPENMP
+         !$omp parallel do private(ik, k_vec, ineigh, r_vec, k_dot_r) shared(this, ntype, nr, ia) default(none)
+#endif
+         do ik = 1, this%nk_total
+            k_vec = this%k_points(:, ik)
+
+            do ineigh = 1, min(nr, size(this%sk_structure_factors, 2))
+               if (ineigh == 1) then
+                  ! On-site term (R = 0)
+                  this%sk_structure_factors(ik, ineigh, ntype) = cmplx(1.0_rp, 0.0_rp, rp)
+               else
+                  ! Off-site term: get neighbor vector in fractional coordinates
+                  if (allocated(this%lattice%sbarvec_direct) .and. ineigh <= size(this%lattice%sbarvec_direct, 2)) then
+                     r_vec(1) = this%lattice%sbarvec_direct(1, ineigh)
+                     r_vec(2) = this%lattice%sbarvec_direct(2, ineigh)
+                     r_vec(3) = this%lattice%sbarvec_direct(3, ineigh)
+                  else if (allocated(this%lattice%sbarvec) .and. ineigh <= size(this%lattice%sbarvec, 2)) then
+                     ! Fallback: Cartesian sbarvec (convert to fractional if needed)
+                     r_vec(1) = this%lattice%sbarvec(1, ineigh)
+                     r_vec(2) = this%lattice%sbarvec(2, ineigh)
+                     r_vec(3) = this%lattice%sbarvec(3, ineigh)
+                     if (this%lattice%a_cart_inv_ready) then
+                        r_vec = matmul(this%lattice%a_cart_inv, r_vec)
+                     end if
+                  else
+                     r_vec = 0.0_rp
+                  end if
+
+                  ! Phase factor: exp(i * 2π * k_frac · R_frac)
+                  k_dot_r = 2.0_rp * pi * dot_product(k_vec, r_vec)
+                  this%sk_structure_factors(ik, ineigh, ntype) = cmplx(cos(k_dot_r), sin(k_dot_r), rp)
+               end if
+            end do
+         end do
+#ifdef _OPENMP
+         !$omp end parallel do
+#endif
+      end do
+
+      this%sk_structure_factors_computed = .true.
+      call g_logger%info('reciprocal%fourier_transform_structure_constants: S(k) pre-computation complete', __FILE__, __LINE__)
+
+   end subroutine fourier_transform_structure_constants
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Mount k-space Hamiltonian from pre-computed structure factors
+   !>
+   !> This routine assembles H(k) from pre-computed S(k) and real-space
+   !> Hamiltonian matrices ee. Separating this from the FT allows for
+   !> inserting corrections between the two steps.
+   !>
+   !> H(k) = Σ_R H(R) * S(k)_R where H(R) is the real-space Hamiltonian
+   !---------------------------------------------------------------------------
+   subroutine mount_kspace_hamiltonian_from_sk(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: ik, ntype, ineigh, ia, nr
+      character(len=200) :: debug_msg
+
+      if (.not. this%sk_structure_factors_computed) then
+         call g_logger%warning('reciprocal%mount_kspace_hamiltonian_from_sk: S(k) not pre-computed, calling FT now', __FILE__, __LINE__)
+         call this%fourier_transform_structure_constants()
+      end if
+
+      if (.not. allocated(this%sk_structure_factors)) then
+         call g_logger%error('reciprocal%mount_kspace_hamiltonian_from_sk: S(k) not allocated', __FILE__, __LINE__)
+         return
+      end if
+
+      call g_logger%info('reciprocal%mount_kspace_hamiltonian_from_sk: Assembling H(k) from S(k)', __FILE__, __LINE__)
+
+      ! Allocate k-space Hamiltonian if not already done
+#ifdef USE_SAFE_ALLOC
+      if (.not. allocated(this%hk_bulk)) then
+         call g_safe_alloc%allocate('reciprocal.hk_bulk', this%hk_bulk, &
+                                   [this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype])
+      end if
+#else
+      if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
+      allocate(this%hk_bulk(this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype))
+#endif
+
+      ! Double loop: ntype -> k-points, triple inner loop: neighbors
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)
+
+         ! OpenMP parallelization over k-points
+#ifdef _OPENMP
+         !$omp parallel do private(ik, ineigh) shared(this, ntype, nr) default(none)
+#endif
+         do ik = 1, this%nk_total
+            ! Initialize this k-point to zero
+            this%hk_bulk(:, :, ik, ntype) = cmplx(0.0_rp, 0.0_rp, rp)
+
+            ! Accumulate contributions from all neighbors
+            do ineigh = 1, min(nr, size(this%sk_structure_factors, 2))
+               this%hk_bulk(:, :, ik, ntype) = this%hk_bulk(:, :, ik, ntype) + &
+                  this%hamiltonian%ee(:, :, ineigh, ntype) * this%sk_structure_factors(ik, ineigh, ntype)
+            end do
+         end do
+#ifdef _OPENMP
+         !$omp end parallel do
+#endif
+      end do
+
+      call g_logger%info('reciprocal%mount_kspace_hamiltonian_from_sk: H(k) assembly complete', __FILE__, __LINE__)
+
+   end subroutine mount_kspace_hamiltonian_from_sk
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Calculate structure factors for Fourier transform
    !---------------------------------------------------------------------------
    subroutine calculate_structure_factors(this, k_vec, ntype, structure_factors)
@@ -795,60 +972,25 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
-      ! Local variables
-      integer :: ik, ntype
-      real(rp), dimension(3) :: k_cartesian
-      character(len=200) :: debug_msg
 
       if (.not. allocated(this%k_points)) then
          call g_logger%error('reciprocal%build_kspace_hamiltonian: K-points not generated. Call generate_mp_mesh first.', __FILE__, __LINE__)
          return
       end if
 
-      call g_logger%info('reciprocal%build_kspace_hamiltonian: Starting Fourier transform of real-space Hamiltonian', __FILE__, __LINE__)
-      write(debug_msg, '(A,I0,A,I0,A)') 'build_kspace_hamiltonian: Building for ', this%nk_total, ' k-points and ', this%lattice%ntype, ' atom types'
-      call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+      call g_logger%info('reciprocal%build_kspace_hamiltonian: Using two-step approach', __FILE__, __LINE__)
+      call g_logger%info('  Step 1: Fourier transform structure constants S(r) -> S(k)', __FILE__, __LINE__)
+      call g_logger%info('  Step 2: Mount H(k) from pre-computed S(k)', __FILE__, __LINE__)
 
-      ! Allocate k-space Hamiltonian
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('reciprocal.hk_bulk', this%hk_bulk, &
-                                [this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype])
-#else
-   if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
-   allocate(this%hk_bulk(this%max_orb_channels, this%max_orb_channels, this%nk_total, this%lattice%ntype))
-#endif
+      ! Step 1: Fourier transform real-space structure constants to k-space
+      call this%fourier_transform_structure_constants()
 
-      ! Build Hamiltonian for each k-point and atom type
-      do ntype = 1, this%lattice%ntype
-         write(debug_msg, '(A,I0)') 'build_kspace_hamiltonian: Processing atom type ', ntype
-         call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-
-         ! If the user requested debug logs for first few k-points, produce them
-         ! outside the parallel region to avoid logging from multiple threads.
-         if (.not. this%suppress_internal_logs) then
-            do ik = 1, min(3, this%nk_total)
-               k_cartesian = matmul(this%reciprocal_vectors, this%k_points(:, ik))
-               write(debug_msg, '(A,I0,A,3F12.6,A,3F12.6,A)') 'build_kspace_hamiltonian: k-point ', ik, &
-                     ' fractional=(', this%k_points(:, ik), ') cartesian=(', k_cartesian, ')'
-               call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
-            end do
-         end if
-
-         ! Parallelize over k-points (coarse-grained) when OpenMP is available.
-#ifdef _OPENMP
-        !$omp parallel do private(ik) shared(this,ntype) default(none)
-#endif
-         do ik = 1, this%nk_total
-            ! Use fractional k-points directly for FT (will be converted inside if needed)
-            ! Pass fractional k-point for consistent phase factor calculation
-            call this%fourier_transform_hamiltonian(this%k_points(:, ik), ntype, this%hk_bulk(:, :, ik, ntype))
-         end do
-#ifdef _OPENMP
-        !$omp end parallel do
-#endif
-      end do
+      ! Step 2: Mount k-space Hamiltonian from pre-computed structure factors
+      ! (This allows for higher-order corrections to be inserted between steps if needed)
+      call this%mount_kspace_hamiltonian_from_sk()
 
       call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space bulk Hamiltonian built', __FILE__, __LINE__)
+
    end subroutine build_kspace_hamiltonian
 
    !---------------------------------------------------------------------------
@@ -2443,19 +2585,21 @@ subroutine project_dos_orbitals_gaussian(this)
       site_orb_offset(isite) = (isite - 1) * 18
    end do
 
-   ! Diagnostic logging
-   call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
-                     ', nbands = ' // trim(int2str(nbands)) // &
-                     ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)) // &
-                     ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
-   call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset = [' // &
-                     trim(int2str(site_orb_offset(1))) // ', ' // &
-                     trim(int2str(site_orb_offset(2))) // ', ' // &
-                     trim(int2str(site_orb_offset(3))) // ', ' // &
-                     trim(int2str(site_orb_offset(4))) // ', ' // &
-                     trim(int2str(site_orb_offset(5))) // ']', __FILE__, __LINE__)
-
-   ! Calculate projected DOS (raw) - same weights as total DOS
+      ! Diagnostic logging
+      call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
+                        ', nbands = ' // trim(int2str(nbands)) // &
+                        ', max_orb_channels = ' // trim(int2str(this%max_orb_channels)) // &
+                        ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
+      
+      ! Only print site_orb_offset for sites that exist
+      if (this%n_sites >= 1) then
+         call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset(1) = ' // &
+                           trim(int2str(site_orb_offset(1))), __FILE__, __LINE__)
+      end if
+      if (this%n_sites >= 2) then
+         call g_logger%info('project_dos_orbitals_gaussian: site_orb_offset(2) = ' // &
+                           trim(int2str(site_orb_offset(2))), __FILE__, __LINE__)
+      end if   ! Calculate projected DOS (raw) - same weights as total DOS
    do ie = 1, this%n_energy_points
       energy = this%dos_energy_grid(ie)  ! Already in Ry
 
