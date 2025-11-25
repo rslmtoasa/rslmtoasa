@@ -22,7 +22,7 @@ module spectrum_bounds_mod
    real(rp), parameter :: default_scaling = 1.05_rp
    private
 
-   public :: bounds, compute_spectrum_bounds, bounds_constructor
+   public :: compute_spectrum_bounds, bounds_constructor
 
    !> Single type to store spectrum bounds and user options
    type, public :: bounds

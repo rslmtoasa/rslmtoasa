@@ -175,6 +175,7 @@ contains
       var = this%var
       mixtype = this%mixtype
       beta = this%beta
+      ldm_beta = this%ldm_beta
       call move_alloc(this%magbeta, magbeta)
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
@@ -192,6 +193,7 @@ contains
       this%var = 0
       this%mixtype = mixtype
       this%beta = beta
+      this%ldm_beta = ldm_beta
       call move_alloc(magbeta, this%magbeta)
    end subroutine build_from_file
 
