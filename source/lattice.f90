@@ -2196,13 +2196,13 @@ contains
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 500 ! Neigbours for SBAR construction (>> TB neighbours)
+      nt = this%kk ! Use cluster size instead of fixed 500 for neighbours
       ! allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
       allocate(sbarvec(3, nt))
       call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
       write (17, 10000) nt
-      write (17, 10001) ((sbarvec(j, i), j=1, 3), i=1, nt)
+      write (17, 10002) ((sbarvec(j, i), j=1, 3), i=1, nt)
       !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
       nrl = np*nt
       na = (nrl*(nrl + 1))/2
@@ -2238,6 +2238,7 @@ contains
 
 10000 format(i5)
 10001 format(3f8.4)
+10002 format(3f8.4)
    end subroutine dbar1
 
    !---------------------------------------------------------------------------
@@ -2295,6 +2296,11 @@ contains
          end do
          if (s1 < r2 .and. s1 > 0.0001) then
             ii = ii + 1
+            if (ii > size(sbarvec, 2)) then
+               write(*,*) 'Error in CLUSBA: Too many neighbors found (', ii, ') exceeds array size (', size(sbarvec, 2), ')'
+               write(*,*) 'Increase cluster size or reduce cutoff radius'
+               stop
+            end if
             ! this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
             ! this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             ! this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
@@ -2302,8 +2308,6 @@ contains
             sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
             sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
          end if
-     !if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
-     !"in DBAR1."
       end do
       !print *, 'Clusba says ii, n:', ii, n, shape(sbarvec)
       ! if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA in DBAR1."

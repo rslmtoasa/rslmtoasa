@@ -87,6 +87,8 @@ module hamiltonian_mod
       complex(rp), dimension(:, :), allocatable :: h_sparse
       !> Spin-spiral wave vector q
       real(rp), dimension(3) :: q_ss
+      !> Spin_spiral cone angle
+      real(rp) :: theta_ss
       !
       !!! Testing Gershgorin bounds for later implementation
       !!! !> Upper Gershgorin bound
@@ -224,6 +226,7 @@ contains
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
       q_ss = this%q_ss
+      theta_ss = this%theta_ss
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -241,6 +244,7 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%q_ss = q_ss
+      this%theta_ss = theta_ss
       this%orb_pol = orb_pol
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
@@ -359,6 +363,7 @@ contains
       this%velocity_scale(:) = 1.0d0
       this%hoh = .false.
       this%q_ss = [0.0d0, 0.0d0, 0.0d0]
+      this%theta_ss = pi / 2.0_rp
       this%local_axis = .false.
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
@@ -1575,16 +1580,16 @@ contains
       vv = norm2(vet)
       mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
       mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-      if (norm2(this%q_ss)>0.00001_rp) then
+      if (norm2(this%q_ss)>0.00001_rp .or. cos(this%theta_ss)<pi/2.0_rp) then
          !print *, 'q:', this%q_ss
          r_ia = this%charge%lattice%cr(:, ia)
          r_ja = this%charge%lattice%cr(:, ja)
-         mom_ia(3) = 0.0d0
-         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))
-         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))
-         mom_ja(3) = 0.0d0
-         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))
-         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))
+         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom_ia(3) = cos(this%theta_ss)
+         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
+         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
+         mom_ja(3) = cos(this%theta_ss)
       end if
       ! Real to complex
       dot = cmplx(dot_product(mom_ia, mom_ja), kind=kind(0.0d0))
