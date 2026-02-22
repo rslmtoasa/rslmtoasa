@@ -43,6 +43,8 @@ module self_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
    use namelist_generator_mod, only: namelist_generator
+      use cfd
+      use Parameters
 #ifdef USE_MPI
    use mpi
 #endif
@@ -439,6 +441,12 @@ contains
       this%orbital_polarization = orbital_polarization
       this%init = init
       this%cold = cold
+      ! Initialize constraining facility if requested in control namelist
+      if (associated(this%control)) then
+         if (this%control%constraints_enable) then
+            call initialize_cfd(this%lattice%nrec, 1, this%control%constraints_i_cons, this%control%constraints_code_prefac)
+         end if
+      end if
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -815,6 +823,9 @@ contains
    subroutine run_dos(this)
       class(self), intent(inout) :: this
       integer :: ia
+      ! variables for constraining
+      real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
+      integer :: ia_loc
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
       call g_timer%start('calculation-of-DOS')
@@ -846,6 +857,28 @@ contains
       do ia = 1, this%lattice%nrec
          this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
       end do
+
+         ! Apply constraining field in SCF if enabled via control namelist
+         if (this%control%constraints_enable) then
+            allocate (mom_in(3, this%lattice%nrec))
+            allocate (mom_ref(3, this%lattice%nrec))
+            allocate (bfield(3, this%lattice%nrec))
+            do ia_loc = 1, this%lattice%nrec
+               mom_in(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom(:)
+               if (allocated(this%control%constraints_mom_ref)) then
+                  if (size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
+                     mom_ref(:, ia_loc) = this%control%constraints_mom_ref(:, ia_loc)
+                  else
+                     mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+                  end if
+               else
+                  mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+               end if
+               bfield(:, ia_loc) = 0.0_dblprec
+            end do
+            call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)
+            deallocate(mom_in, mom_ref, bfield)
+         end if
    
       !=========================================================================
       !                  CALCULATE THE NEW BAND MOMENTS QL

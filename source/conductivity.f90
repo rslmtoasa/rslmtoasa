@@ -41,6 +41,7 @@ module conductivity_mod
    use self_mod
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
+   use cfd
    implicit none
 
    private
@@ -97,6 +98,12 @@ contains
 
       call obj%restore_to_default()
       call obj%build_from_file()
+      ! initialize constraining if requested for transport calculations
+      if (associated(obj%control)) then
+         if (obj%control%constraints_enable) then
+            call initialize_cfd(obj%lattice%nrec, 1, obj%control%constraints_i_cons, obj%control%constraints_code_prefac)
+         end if
+      end if
    end function
 
    !---------------------------------------------------------------------------

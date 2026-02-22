@@ -188,6 +188,12 @@ module control_mod
       !real(rp), dimension(:, :), allocatable :: mom ! common_cnc
       integer :: nmdir
       character(len=sl) :: fname
+      ! Constraints configuration (filled from namelist)
+      logical :: constraints_enable
+      integer :: constraints_i_cons
+      integer :: constraints_code_prefac
+      real(rp), dimension(:, :), allocatable :: constraints_mom_ref
+      real(rp), dimension(:, :), allocatable :: constraints_bfield
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -243,9 +249,11 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
+      integer :: iostatus2, funit2
       character(len=sl) :: fname_
 
       include 'include_codes/namelists/control.f90'
+      include 'include_codes/namelists/constraints.f90'
 
       if (present(fname)) then
          fname_ = fname
@@ -284,6 +292,10 @@ contains
       cond_ll = this%cond_ll
       cond_type = this%cond_type
       cond_calctype = this%cond_calctype
+      ! Save previous constraints values
+      constraints_enable = this%constraints_enable
+      constraints_i_cons = this%constraints_i_cons
+      constraints_code_prefac = this%constraints_code_prefac
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -322,6 +334,30 @@ contains
       this%cond_ll = cond_ll
       this%cond_type = cond_type
       this%cond_calctype = cond_calctype
+
+      ! Read optional constraints namelist and move values into the control object
+      open (newunit=funit2, file=fname, action='read', iostat=iostatus2, status='old')
+      if (iostatus2 == 0) then
+         read (funit2, nml=constraints, iostat=iostatus2)
+         if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
+            call g_logger%error('Error while reading constraints namelist', __FILE__, __LINE__)
+         else
+            this%constraints_enable = constraints_enable
+            this%constraints_i_cons = constraints_i_cons
+            this%constraints_code_prefac = constraints_code_prefac
+            if (allocated(constraints_mom_ref)) then
+               if (allocated(this%constraints_mom_ref)) deallocate(this%constraints_mom_ref)
+               allocate(this%constraints_mom_ref(size(constraints_mom_ref,1), size(constraints_mom_ref,2)))
+               this%constraints_mom_ref = constraints_mom_ref
+            end if
+            if (allocated(constraints_bfield)) then
+               if (allocated(this%constraints_bfield)) deallocate(this%constraints_bfield)
+               allocate(this%constraints_bfield(size(constraints_bfield,1), size(constraints_bfield,2)))
+               this%constraints_bfield = constraints_bfield
+            end if
+         end if
+         close (funit2)
+      end if
 
       ! end default
 
@@ -379,6 +415,10 @@ contains
       this%cond_ll = 200
       this%cond_type = 'charge'
       this%cond_calctype = 'per_type'
+      ! default constraints settings
+      this%constraints_enable = .false.
+      this%constraints_i_cons = 0
+      this%constraints_code_prefac = 1
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
