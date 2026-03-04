@@ -189,12 +189,12 @@ contains
 
 #ifdef USE_SAFE_ALLOC
       if (this%lattice%njij == 0) then
-         call g_safe_alloc%allocate('green.g0', this%g0, (/18, 18, this%en%channels_ldos + 10, atoms_per_process/))
+         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
       else
-         call g_safe_alloc%allocate('green.g0', this%g0, (/18, 18, this%en%channels_ldos + 10, 4/))
+         call g_safe_alloc%allocate('green.g0', this%g0, (/nb, nb, this%en%channels_ldos + 10, 4/))
       end if
-      call g_safe_alloc%allocate('green.gij', this%gij, (/18, 18, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gji', this%gji, (/18, 18, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gij', this%gij, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gji', this%gji, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.ginmag', this%ginmag, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.gjnmag', this%gjnmag, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.gix', this%gix, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
@@ -219,8 +219,8 @@ contains
       call g_safe_alloc%allocate('green.gx1ji', this%gx1ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.gy1ji', this%gy1ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.gz1ji', this%gz1ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gij_eta', this%gij_eta, (/64, 18, 18, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gji_eta', this%gji_eta, (/64, 18, 18, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gij_eta', this%gij_eta, (/64, nb, nb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gji_eta', this%gji_eta, (/64, nb, nb, atoms_per_process/))
       call g_safe_alloc%allocate('green.ginmag_eta', this%ginmag_eta, (/64, 9, 9, atoms_per_process/))
       call g_safe_alloc%allocate('green.gjnmag_eta', this%gjnmag_eta, (/64, 9, 9, atoms_per_process/))
       call g_safe_alloc%allocate('green.gix_eta', this%gix_eta, (/64, 9, 9, atoms_per_process/))
@@ -231,38 +231,38 @@ contains
       call g_safe_alloc%allocate('green.gjz_eta', this%gjz_eta, (/64, 9, 9, atoms_per_process/))
 #else
       if (this%lattice%njij == 0) then
-         allocate (this%g0(18, 18, this%en%channels_ldos + 10, this%lattice%nrec))
+         allocate (this%g0(nb, nb, this%en%channels_ldos + 10, this%lattice%nrec))
       else
-         allocate (this%g0(18, 18, this%en%channels_ldos + 10, 4))
+         allocate (this%g0(nb, nb, this%en%channels_ldos + 10, 4))
       end if
-      allocate (this%gij(18, 18, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gji(18, 18, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%ginmag(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjnmag(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gix(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%giy(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%giz(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjx(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjy(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gjz(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g00ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g00ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g01ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g01ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx0ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy0ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz0ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx1ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy1ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz1ij(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx0ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy0ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz0ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gx1ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gy1ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gz1ji(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%gij_eta(64, 18, 18, atoms_per_process))
-      allocate (this%gji_eta(64, 18, 18, atoms_per_process))
+      allocate (this%gij(nb, nb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gji(nb, nb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%ginmag(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gjnmag(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gix(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%giy(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%giz(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gjx(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gjy(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gjz(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g00ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g00ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g01ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g01ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gx0ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gy0ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gz0ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gx1ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gy1ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gz1ij(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gx0ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gy0ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gz0ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gx1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gy1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gz1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%gij_eta(64, nb, nb, atoms_per_process))
+      allocate (this%gji_eta(64, nb, nb, atoms_per_process))
       allocate (this%ginmag_eta(64, 9, 9, atoms_per_process))
       allocate (this%gjnmag_eta(64, 9, 9, atoms_per_process))
       allocate (this%gix_eta(64, 9, 9, atoms_per_process))
@@ -323,18 +323,18 @@ contains
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
       complex(rp), intent(in) :: eta
-      complex(rp), dimension(18, 18, 4), intent(inout) :: g_ef
+      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
       integer, intent(in) :: fermi_point
       !
       integer :: ll, n, nw, ldim, na
       real(rp), dimension(4) :: a_inf0, b_inf0
-      real(rp), dimension(18, 18, 4) :: a_inf, b_inf
-      complex(rp), dimension(18, 18, this%en%channels_ldos + 10, 4) :: dum_g_ef
+      real(rp), dimension(nb, nb, 4) :: a_inf, b_inf
+      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10, 4) :: dum_g_ef
       !
       !
       ! Definitions so it is not necessary to change the code
       ll = this%control%lld
-      ldim = 18
+      ldim = nb
       na = 4
       nw = 10*ll
 
@@ -361,12 +361,12 @@ contains
       complex(rp) :: eta
       integer :: ll, n, nw, ldim, na
       real(rp), dimension(4) :: a_inf0, b_inf0
-      real(rp), dimension(18, 18, 4) :: a_inf, b_inf
+      real(rp), dimension(nb, nb, 4) :: a_inf, b_inf
       !
       !
       ! Definitions so it is not necessary to change the code
       ll = this%control%lld
-      ldim = 18
+      ldim = nb
       na = 4
       eta = (0.0d0, 0.0d0)
       nw = 10*ll
@@ -385,6 +385,7 @@ contains
 
    subroutine calculate_intersite_gf_twoindex(this)
       use mpi_mod
+   use basis_mod, only: nb, norb, spin_off
       implicit none
       class(green), intent(inout) :: this
       integer :: i, j, k, l1, l2, k0, j0, ia_glob, ia
@@ -395,8 +396,8 @@ contains
 
       do ia_glob = start_atom, end_atom
          ia = g2l_map(ia_glob)
-         do j = 1, 9
-            do k = 1, 9
+         do j = 1, norb
+            do k = 1, norb
                l1 = int((k - 0.9)**0.5)
                l2 = int((j - 0.9)**0.5)
                k0 = l1*(l1 + 1) + 1
@@ -452,17 +453,17 @@ contains
             this%gij(:, :, :, ia) = this%gij(:, :, :, ia)*0.5d0
             this%gji(:, :, :, ia) = this%gji(:, :, :, ia)*0.5d0
          end if
-         do i = 1, 9
-            do j = 1, 9
-               this%Ginmag(j, i, :, iA) = this%Ginmag(j, i, :, iA) + (this%gij(j, i, :, ia) + this%gij(j + 9, i + 9, :, ia))*0.5d0
-               this%Giz(j, i, :, iA) = this%Giz(j, i, :, iA) + 0.5d0*(this%gij(j, i, :, ia) - this%gij(j + 9, i + 9, :, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Giy(j, i, :, iA) = this%Giy(j, i, :, iA) + 0.5d0*(i_unit*this%gij(j, i + 9, :, ia) - i_unit*this%gij(j + 9, i, :, ia))  !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Gix(j, i, :, iA) = this%Gix(j, i, :, iA) + 0.5d0*(this%gij(j, i + 9, :, ia) + this%gij(j + 9, i, :, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
+         do i = 1, norb
+            do j = 1, norb
+               this%Ginmag(j, i, :, iA) = this%Ginmag(j, i, :, iA) + (this%gij(j, i, :, ia) + this%gij(j +spin_off, i +spin_off, :, ia))*0.5d0
+               this%Giz(j, i, :, iA) = this%Giz(j, i, :, iA) + 0.5d0*(this%gij(j, i, :, ia) - this%gij(j +spin_off, i +spin_off, :, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
+               this%Giy(j, i, :, iA) = this%Giy(j, i, :, iA) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, ia) - i_unit*this%gij(j +spin_off, i, :, ia))  !+Ginmag(k,j,i,iIA)*0.5d0
+               this%Gix(j, i, :, iA) = this%Gix(j, i, :, iA) + 0.5d0*(this%gij(j, i +spin_off, :, ia) + this%gij(j +spin_off, i, :, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
                !
-               this%Gjnmag(j, i, :, iA) = this%Gjnmag(j, i, :, iA) + (this%gji(j, i, :, ia) + this%gji(j + 9, i + 9, :, ia))*0.5d0
-               this%Gjz(j, i, :, iA) = this%Gjz(j, i, :, iA) + 0.5d0*(this%gji(j, i, :, ia) - this%gji(j + 9, i + 9, :, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjy(j, i, :, iA) = this%Gjy(j, i, :, iA) + 0.5d0*(i_unit*this%gji(j, i + 9, :, ia) - i_unit*this%gji(j + 9, i, :, ia))   !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjx(j, i, :, iA) = this%Gjx(j, i, :, iA) + 0.5d0*(this%gji(j, i + 9, :, ia) + this%gji(j + 9, i, :, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjnmag(j, i, :, iA) = this%Gjnmag(j, i, :, iA) + (this%gji(j, i, :, ia) + this%gji(j +spin_off, i +spin_off, :, ia))*0.5d0
+               this%Gjz(j, i, :, iA) = this%Gjz(j, i, :, iA) + 0.5d0*(this%gji(j, i, :, ia) - this%gji(j +spin_off, i +spin_off, :, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjy(j, i, :, iA) = this%Gjy(j, i, :, iA) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, ia) - i_unit*this%gji(j +spin_off, i, :, ia))   !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjx(j, i, :, iA) = this%Gjx(j, i, :, iA) + 0.5d0*(this%gji(j, i +spin_off, :, ia) + this%gji(j +spin_off, i, :, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
             end do
          end do
       end do
@@ -473,9 +474,9 @@ contains
       implicit none
       class(green), intent(inout) :: this
       integer :: ia, ja_temp, j, i, fermi_point
-      complex(rp), dimension(18, 18, 4) :: g0_ef
+      complex(rp), dimension(nb, nb, 4) :: g0_ef
       complex(rp) :: eta
-      complex(rp), dimension(64, 18, 18, 4) :: y
+      complex(rp), dimension(64, nb, nb, 4) :: y
       real(rp) :: res, t
       real(rp), dimension(64) :: x, w
 
@@ -519,17 +520,17 @@ contains
 
          this%gij_eta(:, :, :, ia) = this%gij_eta(:, :, :, ia)*0.5d0
          this%gji_eta(:, :, :, ia) = this%gji_eta(:, :, :, ia)*0.5d0
-         do i = 1, 9
-            do j = 1, 9
-               this%Ginmag_eta(:, j, i, iA) = this%Ginmag_eta(:, j, i, iA) + (this%gij_eta(:, j, i, ia) + this%gij_eta(:, j + 9, i + 9, ia))*0.5d0
-               this%Giz_eta(:, j, i, iA) = this%Giz_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i, ia) - this%gij_eta(:, j + 9, i + 9, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Giy_eta(:, j, i, iA) = this%Giy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gij_eta(:, j, i + 9, ia) - i_unit*this%gij_eta(:, j + 9, i, ia))  !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Gix_eta(:, j, i, iA) = this%Gix_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i + 9, ia) + this%gij_eta(:, j + 9, i, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
+         do i = 1, norb
+            do j = 1, norb
+               this%Ginmag_eta(:, j, i, iA) = this%Ginmag_eta(:, j, i, iA) + (this%gij_eta(:, j, i, ia) + this%gij_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
+               this%Giz_eta(:, j, i, iA) = this%Giz_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i, ia) - this%gij_eta(:, j +spin_off, i +spin_off, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
+               this%Giy_eta(:, j, i, iA) = this%Giy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gij_eta(:, j, i +spin_off, ia) - i_unit*this%gij_eta(:, j +spin_off, i, ia))  !+Ginmag(k,j,i,iIA)*0.5d0
+               this%Gix_eta(:, j, i, iA) = this%Gix_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i +spin_off, ia) + this%gij_eta(:, j +spin_off, i, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
                !
-               this%Gjnmag_eta(:, j, i, iA) = this%Gjnmag_eta(:, j, i, iA) + (this%gji_eta(:, j, i, ia) + this%gji_eta(:, j + 9, i + 9, ia))*0.5d0
-               this%Gjz_eta(:, j, i, iA) = this%Gjz_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i, ia) - this%gji_eta(:, j + 9, i + 9, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjy_eta(:, j, i, iA) = this%Gjy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gji_eta(:, j, i + 9, ia) - i_unit*this%gji_eta(:, j + 9, i, ia))   !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjx_eta(:, j, i, iA) = this%Gjx_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i + 9, ia) + this%gji_eta(:, j + 9, i, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjnmag_eta(:, j, i, iA) = this%Gjnmag_eta(:, j, i, iA) + (this%gji_eta(:, j, i, ia) + this%gji_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
+               this%Gjz_eta(:, j, i, iA) = this%Gjz_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i, ia) - this%gji_eta(:, j +spin_off, i +spin_off, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjy_eta(:, j, i, iA) = this%Gjy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gji_eta(:, j, i +spin_off, ia) - i_unit*this%gji_eta(:, j +spin_off, i, ia))   !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjx_eta(:, j, i, iA) = this%Gjx_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i +spin_off, ia) + this%gji_eta(:, j +spin_off, i, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
             end do
          end do
       end do
@@ -547,21 +548,21 @@ contains
       class(green), intent(inout) :: this
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
-      complex(rp), dimension(18, 18, atoms_per_process), intent(inout) :: g_ef
+      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout) :: g_ef
       !
       !
       integer :: nw
       integer :: ll
       integer :: ldim
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
-      real(rp), dimension(18, 18, this%lattice%nrec) :: a_inf, b_inf
-      complex(rp), dimension(18, 18, this%en%channels_ldos + 10, atoms_per_process) :: dum_g_ef
+      real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
+      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10, atoms_per_process) :: dum_g_ef
       integer :: n, n_glob
       !
       !
       ! Definitions so it is not necessary to change the code
       ll = this%control%lld
-      ldim = 18
+      ldim = nb
 
       ! Unchanged code
       nw = 10*ll
@@ -595,13 +596,13 @@ contains
       integer :: ldim
       complex(rp) :: eta
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
-      real(rp), dimension(18, 18, this%lattice%nrec) :: a_inf, b_inf
+      real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
       integer :: n, n_glob
       !
       !
       ! Definitions so it is not necessary to change the code
       ll = this%control%lld
-      ldim = 18
+      ldim = nb
       !na = this%lattice%nrec
       eta = (0.0d0, 0.0d0)
 
@@ -640,15 +641,15 @@ contains
       ! Local variables
       integer :: ia, ja, mdir, nw, ll_t, ie, j, i
       real(rp), dimension(this%en%channels_ldos + 10, this%lattice%ntype) :: dx, dy, dz
-      real(rp), dimension(18, this%en%channels_ldos + 10) :: doso
-      real(rp), dimension(18, this%en%channels_ldos + 10) :: dmag, dnmag
+      real(rp), dimension(nb, this%en%channels_ldos + 10) :: doso
+      real(rp), dimension(nb, this%en%channels_ldos + 10) :: dmag, dnmag
       complex(rp) :: dfac, sfac, impi
       complex(rp), dimension(4) :: gspinor
       complex(rp), dimension(3) :: gmask, lmask
       complex(rp), dimension(2, 3) :: gfac
       integer, dimension(4, 3) :: goff
       real(rp), dimension(this%control%lld, this%control%lld)  :: Sm
-      real(rp), dimension(18)  :: q_int
+      real(rp), dimension(nb)  :: q_int
       real(rp) :: e_start, e_stop
 
       integer :: ia_glob
@@ -680,23 +681,23 @@ contains
             call this%dos%density(doso, ia, mdir)
             if (this%control%nmdir == 1) then
                do ie = 1, this%en%channels_ldos + 10
-                  do j = 1, 18
+                  do j = 1, nb
                      this%g0(j, j, ie, ia) = -i_unit*doso(j, ie)*impi
                   end do
-                  write (300 + ia, *) this%en%ene(ie), sum(doso(1:9, ie)), sum(doso(10:18, ie))
+                  write (300 + ia, *) this%en%ene(ie), sum(doso(1:norb, ie)), sum(doso(norb+1:nb, ie))
                end do
             else
                do ie = 1, this%en%channels_ldos + 10
-                  do j = 1, 9
+                  do j = 1, norb
                      ! Charge, from main direction.. (not z-component)
-                     this%g0(j, j, ie, ia) = this%g0(j, j, ie, ia) - (doso(j, ie) + doso(j + 9, ie))*dfac*lmask(mdir)!*1.0d0 /3.0d0 !mom(ja, mdir)**2
-                     this%g0(j + 9, j + 9, ie, ia) = this%g0(j + 9, j + 9, ie, ia) - (doso(j, ie) + doso(j + 9, ie))*dfac*lmask(mdir)!*1.0d0 /3.0d0 !mom(ja, mdir)**2
+                     this%g0(j, j, ie, ia) = this%g0(j, j, ie, ia) - (doso(j, ie) + doso(j +spin_off, ie))*dfac*lmask(mdir)!*1.0d0 /3.0d0 !mom(ja, mdir)**2
+                     this%g0(j +spin_off, j +spin_off, ie, ia) = this%g0(j +spin_off, j +spin_off, ie, ia) - (doso(j, ie) + doso(j +spin_off, ie))*dfac*lmask(mdir)!*1.0d0 /3.0d0 !mom(ja, mdir)**2
                      ! Spin dependent part
                      this%g0(j + goff(1, mdir), j + goff(2, mdir), ie, ia) = &
-                        this%g0(j + goff(1, mdir), j + goff(2, mdir), ie, ia) - (doso(j, ie) - doso(j + 9, ie))*gfac(1, mdir)*dfac
+                        this%g0(j + goff(1, mdir), j + goff(2, mdir), ie, ia) - (doso(j, ie) - doso(j +spin_off, ie))*gfac(1, mdir)*dfac
 
                      this%g0(j + goff(3, mdir), j + goff(4, mdir), ie, ia) = &
-                        this%g0(j + goff(3, mdir), j + goff(4, mdir), ie, ia) - (doso(j, ie) - doso(j + 9, ie))*gfac(2, mdir)*dfac
+                        this%g0(j + goff(3, mdir), j + goff(4, mdir), ie, ia) - (doso(j, ie) - doso(j +spin_off, ie))*gfac(2, mdir)*dfac
                   end do
                end do
             end if
@@ -720,14 +721,14 @@ contains
       if (allocated(this%Giz)) deallocate (this%Giz)
       if (allocated(this%Gjz)) deallocate (this%Gjz)
 
-      allocate (this%Ginmag(9, 9, 64, atoms_per_process))
-      allocate (this%Gjnmag(9, 9, 64, atoms_per_process))
-      allocate (this%Gix(9, 9, 64, atoms_per_process))
-      allocate (this%Gjx(9, 9, 64, atoms_per_process))
-      allocate (this%Giy(9, 9, 64, atoms_per_process))
-      allocate (this%Gjy(9, 9, 64, atoms_per_process))
-      allocate (this%Giz(9, 9, 64, atoms_per_process))
-      allocate (this%Gjz(9, 9, 64, atoms_per_process))
+      allocate (this%Ginmag(norb, norb, 64, atoms_per_process))
+      allocate (this%Gjnmag(norb, norb, 64, atoms_per_process))
+      allocate (this%Gix(norb, norb, 64, atoms_per_process))
+      allocate (this%Gjx(norb, norb, 64, atoms_per_process))
+      allocate (this%Giy(norb, norb, 64, atoms_per_process))
+      allocate (this%Gjy(norb, norb, 64, atoms_per_process))
+      allocate (this%Giz(norb, norb, 64, atoms_per_process))
+      allocate (this%Gjz(norb, norb, 64, atoms_per_process))
 
       do ijij = 1, atoms_per_process
          do echan = 1, 64
@@ -918,8 +919,8 @@ contains
 
       do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
          ! Multiply the moments with the kernel
-         do l = 1, 18
-            do m = 1, 18
+         do l = 1, nb
+            do m = 1, nb
                this%recursion%mu_ng(l, m, :, n + istart - 1) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
             end do
          end do
@@ -933,14 +934,14 @@ contains
          do ie = 1, this%en%channels_ldos + 10
             do i = 1, size(kernel)
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
-               do l = 1, 18
-                  do m = 1, 18
+               do l = 1, nb
+                  do m = 1, nb
                      this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
                   end do
                end do
             end do
-            do l = 1, 18
-               do m = 1, 18
+            do l = 1, nb
+               do m = 1, nb
                   this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
                end do
             end do
@@ -960,7 +961,7 @@ contains
    subroutine chebyshev_green_ij_eta(this, istart, eta, fermi_point, g_ef)
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
-      complex(rp), dimension(18, 18, 4), intent(inout) :: g_ef
+      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
       ! Local variables
@@ -989,8 +990,8 @@ contains
 
       do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
          ! Multiply the moments with the kernel
-         do l = 1, 18
-            do m = 1, 18
+         do l = 1, nb
+            do m = 1, nb
                this%recursion%mu_ng(l, m, :, n + istart - 1) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
             end do
          end do
@@ -1004,14 +1005,14 @@ contains
          do ie = fermi_point, fermi_point
             do i = 1, size(kernel)
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
-               do l = 1, 18
-                  do m = 1, 18
+               do l = 1, nb
+                  do m = 1, nb
                      g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
                   end do
                end do
             end do
-            do l = 1, 18
-               do m = 1, 18
+            do l = 1, nb
+               do m = 1, nb
                   g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
                end do
             end do
@@ -1064,8 +1065,8 @@ contains
       do n_glob = start_atom, end_atom ! Loop on self-consistent atoms
          n = g2l_map(n_glob)
          ! Multiply the moments with the kernel
-         do l = 1, 18
-            do m = 1, 18
+         do l = 1, nb
+            do m = 1, nb
                this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
             end do
          end do
@@ -1084,14 +1085,14 @@ contains
          do ie = 1, this%en%channels_ldos + 10
             do i = 1, size(kernel)
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
-               do l = 1, 18
-                  do m = 1, 18
+               do l = 1, nb
+                  do m = 1, nb
                      this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n)*exp_factor
                   end do
                end do
             end do
-            do l = 1, 18
-               do m = 1, 18
+            do l = 1, nb
+               do m = 1, nb
                   this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
                end do
             end do
@@ -1101,8 +1102,8 @@ contains
 !!! ! MPI moved to moment section
 !!! #ifdef USE_MPI
 !!!     call g_timer%start(´MPI DOS communication´)
-!!!     call MPI_Allgather(this%g0(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*nv*18*18, MPI_DOUBLE_COMPLEX, &
-!!!                        this%g0, (end_atom-start_atom+1)*nv*18*18, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
+!!!     call MPI_Allgather(this%g0(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*nv*nb*nb, MPI_DOUBLE_COMPLEX, &
+!!!                        this%g0, (end_atom-start_atom+1)*nv*nb*nb, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
 !!!     call g_timer%stop(´MPI DOS communication´)
 !!! #endif
    end subroutine chebyshev_green
@@ -1116,8 +1117,8 @@ contains
    subroutine chebyshev_green_eta(this, eta, fermi_point, g_ef)
       use mpi_mod
       class(green), intent(inout) :: this
-      !complex(rp), dimension(18,18,this%lattice%nrec), intent(inout) :: g_ef
-      complex(rp), dimension(18, 18, atoms_per_process), intent(inout) :: g_ef
+      !complex(rp), dimension(nb, nb,this%lattice%nrec), intent(inout) :: g_ef
+      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout) :: g_ef
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
       ! Local variables
@@ -1149,7 +1150,7 @@ contains
       do n_glob = start_atom, end_atom ! Loop on self-consistent atoms
          n = g2l_map(n_glob)
          ! Multiply the moments with the kernel
-         do i = 1, 18
+         do i = 1, nb
             this%recursion%mu_ng(i, i, :, n) = this%recursion%mu_n(i, i, :, n)*kernel(:)
          end do
 
@@ -1167,14 +1168,14 @@ contains
          do ie = fermi_point, fermi_point
             do i = 1, size(kernel)
                exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
-               do l = 1, 18
-                  do m = 1, 18
+               do l = 1, nb
+                  do m = 1, nb
                      g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n)*exp_factor
                   end do
                end do
             end do
-            do l = 1, 18
-               do m = 1, 18
+            do l = 1, nb
+               do m = 1, nb
                   g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
                end do
             end do
@@ -1194,27 +1195,27 @@ contains
       integer, intent(in) :: i_site
       integer, intent(in) :: ie_start
       integer, intent(in) :: ie_len
-      complex(rp), dimension(18, 18, this%en%channels_ldos + 10), intent(inout) :: g_out
-      real(rp), dimension(18, 18), intent(in) :: a_inf
-      real(rp), dimension(18, 18), intent(in) :: b_inf
+      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10), intent(inout) :: g_out
+      real(rp), dimension(nb, nb), intent(in) :: a_inf
+      real(rp), dimension(nb, nb), intent(in) :: b_inf
       complex(rp), intent(in) :: eta
       !
       integer :: nv, ldim, ll, ll_t, llinf
       real(rp) :: factor_z
       real(rp), dimension(this%en%channels_ldos + 10) :: e
       integer :: i, j, l, ei, info, ln, lwork
-      integer, dimension(18) :: ipiv
+      integer, dimension(nb) :: ipiv
       real(rp) :: etop, ebot, ea, eb
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
-      complex(rp), dimension(18, 18) :: Q, Qp, Q2p, Z, one, W, B2z, Qt, P
+      complex(rp), dimension(nb, nb) :: Q, Qp, Q2p, Z, one, W, B2z, Qt, P
       complex(rp) :: zoff, cone, czero, ze, zterm, det, im
       complex(rp) :: coff
-      complex(rp), dimension(18*18) :: work
+      complex(rp), dimension(nb*nb) :: work
       real(rp), dimension(this%en%channels_ldos + 10) :: ene
-      complex(rp), dimension(18, 18) :: Dfac_mat, Cshi_mat
+      complex(rp), dimension(nb, nb) :: Dfac_mat, Cshi_mat
       real(rp) :: a_diag, b_diag
       !
-      integer, dimension(18) :: m_tab
+      integer, dimension(nb) :: m_tab
       !
       integer :: n_glob
       !
@@ -1223,7 +1224,7 @@ contains
       ! Definitions so it is not necessary to change the code
       ll = this%control%lld
       nv = this%en%channels_ldos
-      ldim = 18
+      ldim = nb
       e = this%en%ene
       factor_z = 1.0d0
 

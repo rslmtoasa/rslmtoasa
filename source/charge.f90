@@ -31,6 +31,7 @@ module charge_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private

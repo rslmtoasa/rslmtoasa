@@ -48,6 +48,7 @@ module self_mod
 #ifdef USE_MPI
    use mpi
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private

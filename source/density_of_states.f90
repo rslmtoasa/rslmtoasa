@@ -31,6 +31,7 @@ module density_of_states_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private
@@ -120,7 +121,7 @@ contains
 
       do n = 1, this%lattice%nrec ! Loop on self-consistent atoms
          ! Multiply the moments with the kernel
-         do i = 1, 18
+         do i = 1, nb
             this%recursion%mu_ng(i, i, :, n) = this%recursion%mu_n(i, i, :, n)*kernel(:)
          end do
 
@@ -135,20 +136,20 @@ contains
 
          ! Calculate the density of states
          do i = 1, size(kernel)
-            do l = 1, 18
+            do l = 1, nb
                this%doscheb(l, :, n) = this%doscheb(l, :, n) + this%recursion%mu_ng(l, l, i, n)*polycheb(:, i - 1)
-               !do m=1, 18
+               !do m = 1, nb
                !  green(n, l, m, :) = green(n, l, m, :) + (-i_unit*(this%recursion%mu_ng(n, i, l, m)*exp(-i_unit*(i-1)*acos(wscale(:)))))
                !end do
             end do
          end do
-         do l = 1, 18
+         do l = 1, nb
             this%doscheb(l, :, n) = this%doscheb(l, :, n)/((sqrt((a**2) - ((this%en%ene(:) - b)**2)))*pi)
-            !do m=1, 18
+            !do m = 1, nb
             !green(n, l, m, :) = green(n, l, m, :)/((sqrt((a**2)-((this%self%ene(:)-b)**2))))
             !end do
          end do
-         do l = 1, 18
+         do l = 1, nb
             do i = 1, this%en%channels_ldos + 10
                if (isnan(this%doscheb(l, i, n))) this%doscheb(l, i, n) = 0.0d0
             end do
@@ -156,8 +157,8 @@ contains
 
          do i = 1, this%en%channels_ldos + 10
             write (200 + n, '(8f16.4)') this%en%ene(i), (this%doscheb(1, i, n)), sum(this%doscheb(2:4, i, n)), sum(this%doscheb(5:9, i, n)), &
-               (this%doscheb(10, i, n)), sum(this%doscheb(11:13, i, n)), sum(this%doscheb(14:18, i, n)), &
-               sum(this%doscheb(1:18, i, n))
+               (this%doscheb(10, i, n)), sum(this%doscheb(11:13, i, n)), sum(this%doscheb(14:nb, i, n)), &
+               sum(this%doscheb(1:nb, i, n))
             !write(125+n, ´(10f10.6)´) this%self%ene(i), real(green(n, 1, 1, i)), real(green(n, 2, 2, i)), real(green(n, 3, 3, i)), real(green(n, 4, 4, i)), real(green(n, 5, 5, i)), &
             !                                           &real(green(n, 6, 6, i)), real(green(n, 7, 7, i)), real(green(n, 8, 8, i)), real(green(n, 9, 9, i))
          end do
@@ -177,7 +178,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp) :: wstep, eps, wmin, wmax, a, b
       real(rp), dimension(this%control%lld*2 + 2, 5) :: mu_dum
-      complex(rp), dimension(this%lattice%nrec, 18, 18, this%en%channels_ldos + 10) :: green
+      complex(rp), dimension(this%lattice%nrec, nb, nb, this%en%channels_ldos + 10) :: green
       integer :: i, j, k, l, m, n
       eps = 0.0001d0
 
@@ -195,7 +196,7 @@ contains
 
       do n = 1, this%lattice%nrec ! Loop on self-consistent atoms
          ! Multiply the moments with the kernel
-         do i = 1, 18
+         do i = 1, nb
             this%recursion%mu_ng(i, i, :, n) = this%recursion%mu_n(i, i, :, n)*kernel(:)
          end do
 
@@ -210,20 +211,20 @@ contains
 
          ! Calculate the density of states
          do i = 1, size(kernel)
-            do l = 1, 18
+            do l = 1, nb
                this%doscheb(l, :, n) = this%doscheb(l, :, n) + this%recursion%mu_ng(l, l, i, n)*polycheb(:, i - 1)
-               do m = 1, 18
+               do m = 1, nb
                   green(n, l, m, :) = green(n, l, m, :) + (-i_unit*(this%recursion%mu_ng(l, m, i, n)*exp(-i_unit*(i - 1)*acos(wscale(:)))))
                end do
             end do
          end do
-         do l = 1, 18
+         do l = 1, nb
             this%doscheb(l, :, n) = this%doscheb(l, :, n)/((sqrt((a**2) - ((this%en%ene(:) - b)**2)))*pi)
-            do m = 1, 18
+            do m = 1, nb
                green(n, l, m, :) = green(n, l, m, :)/((sqrt((a**2) - ((this%en%ene(:) - b)**2))))
             end do
          end do
-         do l = 1, 18
+         do l = 1, nb
             do i = 1, this%en%channels_ldos + 10
                if (isnan(this%doscheb(l, i, n))) this%doscheb(l, i, n) = 0.0d0
             end do
@@ -231,8 +232,8 @@ contains
 
          do i = 1, this%en%channels_ldos + 10
             write (200 + n, '(8f16.4)') this%en%ene(i), (this%doscheb(1, i, n)), sum(this%doscheb(2:4, i, n)), sum(this%doscheb(5:9, i, n)), &
-               (this%doscheb(10, i, n)), sum(this%doscheb(11:13, i, n)), sum(this%doscheb(14:18, i, n)), &
-               sum(this%doscheb(1:18, i, n))
+               (this%doscheb(10, i, n)), sum(this%doscheb(11:13, i, n)), sum(this%doscheb(14:nb, i, n)), &
+               sum(this%doscheb(1:nb, i, n))
             write (125 + n, '(10f10.6)') this%en%ene(i), real(green(n, 1, 1, i)), real(green(n, 2, 2, i)), real(green(n, 3, 3, i)), real(green(n, 4, 4, i)), real(green(n, 5, 5, i)), &
                                     &real(green(n, 5, 5, i)), real(green(n, 6, 6, i)), real(green(n, 8, 8, i)), aimag(green(n, 9, 9, i))
          end do
@@ -252,24 +253,24 @@ contains
       integer, intent(in) :: mdir ! Direction index
       integer, intent(in) :: ia ! Atom type
       ! Output
-      real(rp), dimension(18, this%en%channels_ldos + 10), intent(out) :: tdens
+      real(rp), dimension(nb, this%en%channels_ldos + 10), intent(out) :: tdens
       ! Local variables
-      integer :: icode, iii, k, l, ll1, nb, nbp1, nl, nt, eidx, ne, nq, ll_in, ifail, npts, nw
+      integer :: icode, iii, k, l, ll1, inb, nbp1, nl, nt, eidx, ne, nq, ll_in, ifail, npts, nw
       real(rp) :: a1, a2, dens, emax, emin, eps, err, e_shift, e_canon, prefac
       complex(rp) :: dens_i
 
-      integer, dimension(18) :: nb2
-      integer, dimension(18) :: jc
+      integer, dimension(nb) :: nb2
+      integer, dimension(nb) :: jc
       integer, dimension(10*this%lattice%ntype*this%control%lld) :: iwk
-      integer, dimension(18) :: ll_fail
+      integer, dimension(nb) :: ll_fail
       real(rp), dimension(this%control%lld) :: aa, am, bb, bm, sqbb
       real(rp), dimension(10) :: edge, weight, width
       real(rp), dimension(200, 10) :: bwk
-      real(rp), dimension(18, this%control%lld) :: am2, bm2
-      real(rp), dimension(18, 10) :: edge2, width2, weight2
+      real(rp), dimension(nb, this%control%lld) :: am2, bm2
+      real(rp), dimension(nb, 10) :: edge2, width2, weight2
       real(rp), dimension(10*this%lattice%ntype*this%control%lld, 2, 5) :: work
       real(rp), dimension(2) :: bandedges
-      real(rp), dimension(18) :: alpha_inf, beta_inf
+      real(rp), dimension(nb) :: alpha_inf, beta_inf
 
       integer :: ia_glob
 
@@ -283,7 +284,7 @@ contains
       tdens = 0.0d0
       ia_glob = l2g_map(ia)
 
-      do nl = 1, 18
+      do nl = 1, nb
          do l = 1, this%control%lld
             aa(l) = this%recursion%a(l, nl, ia, mdir)
             bb(l) = this%recursion%b2(l, nl, ia, mdir)!**2
@@ -297,14 +298,14 @@ contains
          if (nl == 1 .or. nl == 10) bm = 1.01d0*bm
          alpha_inf(nl) = am(1)
          beta_inf(nl) = bm(1)
-         nb = 1
+         inb = 1
          edge(1) = am(1) - 2.0d0*bm(1)
          width(1) = 4.0d0*bm(1)
          weight(1) = 1.0d0
-         nb2(nl) = nb
+         nb2(nl) = inb
          am = AA
          bm = BB
-         do k = 1, nb
+         do k = 1, inb
             a1 = edge(k)
             a2 = edge(k) + width(k)
             edge2(nl, k) = edge(k)
@@ -318,7 +319,7 @@ contains
             emin = MIN(emin, a1)
             emax = MAX(emax, a2)
          end if
-         if (nb > 0) then
+         if (inb > 0) then
             do l = 1, this%control%lld
                am2(nl, l) = am(l)
                bm2(nl, l) = bm(l)
@@ -335,9 +336,9 @@ contains
       tdens = 0.0d0
 
       do eidx = 1, npts
-         do nl = 1, 18
-            nb = nb2(nl)
-            if (nb > 0) then
+         do nl = 1, nb
+            inb = nb2(nl)
+            if (inb > 0) then
                do l = 1, this%control%lld
                   aa(l) = this%recursion%a(l, nl, ia, mdir)
                   bb(l) = this%recursion%b2(l, nl, ia, mdir) !*0.5d0
@@ -345,7 +346,7 @@ contains
                   bm(l) = bm2(nl, l) !*0.5d0
                end do
                edge = 0.0d0; width = 0.0d0; weight = 0.0d0
-               do k = 1, nb
+               do k = 1, inb
                   edge(k) = edge2(nl, k)
                   width(k) = width2(nl, k)
                   weight(k) = weight2(nl, k)
@@ -365,7 +366,7 @@ contains
       end do
 
       do eidx = 1, npts
-         write (300, *) this%en%ene(eidx), sum(tdens(1:9, eidx)), sum(tdens(10:18, eidx))
+         write (300, *) this%en%ene(eidx), sum(tdens(1:norb, eidx)), sum(tdens(norb+1:nb, eidx))
       end do
    end subroutine density
 
@@ -409,9 +410,9 @@ contains
    subroutine restore_to_default(this)
       class(dos), intent(inout) :: this
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('density_of_states.doscheb', this%doscheb, (/18, this%en%channels_ldos + 10, this%lattice%nrec/))
+      call g_safe_alloc%allocate('density_of_states.doscheb', this%doscheb, (/nb, this%en%channels_ldos + 10, this%lattice%nrec/))
 #else
-      allocate (this%doscheb(18, this%en%channels_ldos + 10, this%lattice%nrec))
+      allocate (this%doscheb(nb, this%en%channels_ldos + 10, this%lattice%nrec))
 #endif
 
       this%doscheb(:, :, :) = 0.0d0

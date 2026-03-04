@@ -39,6 +39,7 @@ module bands_mod
 #ifdef USE_MPI
    use mpi
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private
@@ -197,11 +198,11 @@ contains
       allocate (this%dx(this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%dy(this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%dz(this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g0_x(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g0_y(9, 9, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%g0_z(9, 9, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g0_x(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g0_y(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%g0_z(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%dspd(6, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%d_orb(9, 9, 3, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%d_orb(norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%mag_for(3, atoms_per_process))
 #endif
 
@@ -234,7 +235,7 @@ contains
       real(rp), dimension(:, :, :), allocatable :: dosial
       character(len=256) :: fname_total, fname_dos, fname_orb_dos
 
-      allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, 18, this%en%channels_ldos + 10))
+      allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, nb, this%en%channels_ldos + 10))
 
       e1_mag = 0.0d0
       ef_mag = 0.0d0
@@ -257,11 +258,11 @@ contains
          ia = g2l_map(ia_glob)
 
          do i = 1, this%en%channels_ldos + 10
-            do j = 1, 9
-               this%dtot(i) = this%dtot(i) - aimag(this%green%g0(j, j, i, ia) + this%green%g0(j + 9, j + 9, i, ia))/pi
-               dosia(ia_glob, i) = dosia(ia_glob, i) - aimag(this%green%g0(j, j, i, ia) + this%green%g0(j + 9, j + 9, i, ia))/pi
+            do j = 1, norb
+               this%dtot(i) = this%dtot(i) - aimag(this%green%g0(j, j, i, ia) + this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
+               dosia(ia_glob, i) = dosia(ia_glob, i) - aimag(this%green%g0(j, j, i, ia) + this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
                dosial(ia_glob, j, i) = -aimag(this%green%g0(j, j, i, ia))/pi
-               dosial(ia_glob, j + 9, i) = -aimag(this%green%g0(j + 9, j + 9, i, ia))/pi
+               dosial(ia_glob, j +spin_off, i) = -aimag(this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
             end do
          end do
       end do
@@ -314,7 +315,7 @@ contains
             open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
       
             do i = 1, this%en%channels_ldos + 10
-               write(unitnum2, '(19f16.5)') this%en%ene(i) - this%en%fermi, dosial(ia, 1:18, i)
+               write(unitnum2, '(19f16.5)') this%en%ene(i) - this%en%fermi, dosial(ia, 1:nb, i)
             end do
       
             rewind(unitnum2)
@@ -415,7 +416,7 @@ contains
       integer :: isp, soff, jo, nsp, plusbulk
       real(rp) :: sgef, pmef, smef, isgn, sums, sump, sumd, mnorm
       real(rp), dimension(this%en%channels_ldos + 10) :: y
-      real(rp), dimension(18) :: chebmom(18), chebmom1(18), chebmom2(18)
+      real(rp), dimension(nb) :: chebmom(nb), chebmom1(nb), chebmom2(nb)
       real(rp), dimension(this%lattice%nrec, 6) :: occ
 
       real(rp), dimension(:), allocatable :: pot_arr
@@ -445,10 +446,10 @@ contains
                do m = 1, 2*l - 1
                   o = (l - 1)**2 + m
                   do ie = 1, this%en%channels_ldos
-                     this%dspd(l + soff, ie, na) = this%dspd(l + soff, ie, na) - aimag(this%green%g0(o, o, ie, na) + this%green%g0(o + 9, o + 9, ie, na)) - &
-                                                   isgn*this%symbolic_atom(plusbulk)%potential%mom(3)*aimag(this%green%g0(o, o, ie, na) - this%green%g0(o + 9, o + 9, ie, na)) &
-                                                   - isgn*this%symbolic_atom(plusbulk)%potential%mom(2)*aimag(i_unit*this%green%g0(o, o + 9, ie, na) - i_unit*this%green%g0(o + 9, o, ie, na)) &
-                                                   - isgn*this%symbolic_atom(plusbulk)%potential%mom(1)*aimag(this%green%g0(o, o + 9, ie, na) + this%green%g0(o + 9, o, ie, na))
+                     this%dspd(l + soff, ie, na) = this%dspd(l + soff, ie, na) - aimag(this%green%g0(o, o, ie, na) + this%green%g0(o +spin_off, o +spin_off, ie, na)) - &
+                                                   isgn*this%symbolic_atom(plusbulk)%potential%mom(3)*aimag(this%green%g0(o, o, ie, na) - this%green%g0(o +spin_off, o +spin_off, ie, na)) &
+                                                   - isgn*this%symbolic_atom(plusbulk)%potential%mom(2)*aimag(i_unit*this%green%g0(o, o +spin_off, ie, na) - i_unit*this%green%g0(o +spin_off, o, ie, na)) &
+                                                   - isgn*this%symbolic_atom(plusbulk)%potential%mom(1)*aimag(this%green%g0(o, o +spin_off, ie, na) + this%green%g0(o +spin_off, o, ie, na))
                   end do
                end do
             end do
@@ -531,15 +532,15 @@ contains
       integer :: ie ! Energy channel index
       integer :: isp, soff, jo, nsp
       integer :: fermi_point
-      !complex(rp), dimension(18,18,this%lattice%nrec) :: g0_ef
-      complex(rp), dimension(18, 18, atoms_per_process) :: g0_ef
+      !complex(rp), dimension(nb, nb,this%lattice%nrec) :: g0_ef
+      complex(rp), dimension(nb, nb, atoms_per_process) :: g0_ef
       complex(rp) :: eta
       real(rp) :: sgef, pmef, smef, isgn, sumocc
-      !real(rp), dimension(64,18,18,this%lattice%nrec) :: y
-      real(rp), dimension(64, 18, 18, atoms_per_process) :: y
+      !real(rp), dimension(64, nb, nb,this%lattice%nrec) :: y
+      real(rp), dimension(64, nb, nb, atoms_per_process) :: y
       real(rp), dimension(64) :: x, w
       real(rp) :: res, t
-      real(rp), dimension(this%lattice%nrec, 18) :: occ
+      real(rp), dimension(this%lattice%nrec, nb) :: occ
 
       integer :: m_glob
 
@@ -577,7 +578,7 @@ contains
       do m_glob = start_atom, end_atom
          m = g2l_map(m_glob)
          do j = 1, 64
-            do i = 1, 18
+            do i = 1, nb
                occ(m_glob, i) = occ(m_glob, i) + (y(j, i, i, m))/pi
             end do
          end do
@@ -591,12 +592,12 @@ contains
 
       sumocc = 0.0d0
       do m = 1, this%lattice%nrec
-         if (rank == 0) call g_logger%info('Spin moment of atom'//fmt('i4', m)//' is '//fmt('f10.6', sum(occ(m, 1:9)) - sum(occ(m, 10:18))), __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('Spin moment of atom'//fmt('i4', m)//' is '//fmt('f10.6', sum(occ(m, 1:norb)) - sum(occ(m, norb+1:nb))), __FILE__, __LINE__)
          if (rank == 0) call g_logger%info('Total charge for atom'//fmt('i4', m)//' is '// &
-                                           'total= '//fmt('f10.6', sum(occ(m, 1:18)))// &
+                                           'total= '//fmt('f10.6', sum(occ(m, 1:nb)))// &
                                            ' s= '//fmt('f10.6', occ(m, 1) + occ(m, 10))// &
                                            ' p= '//fmt('f10.6', sum(occ(m, 2:4)) + sum(occ(m, 11:13)))// &
-                                           ' d= '//fmt('f10.6', sum(occ(m, 5:9)) + sum(occ(m, 14:18))), __FILE__, __LINE__)
+                                           ' d= '//fmt('f10.6', sum(occ(m, 5:9)) + sum(occ(m, 14:nb))), __FILE__, __LINE__)
          sumocc = sumocc + sum(occ(m, :))
       end do
       if (rank == 0) call g_logger%info('Total number of electrons is '//fmt('f16.6', sumocc), __FILE__, __LINE__)
@@ -611,13 +612,13 @@ contains
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
       integer :: fermi_point
-      complex(rp), dimension(18, 18, this%lattice%nrec) :: g0_ef
+      complex(rp), dimension(nb, nb, this%lattice%nrec) :: g0_ef
       complex(rp) :: eta
       real(rp) :: sgef, pmef, smef, isgn, sumocc
-      real(rp), dimension(64, 18, 18, this%lattice%nrec) :: y
+      real(rp), dimension(64, nb, nb, this%lattice%nrec) :: y
       real(rp), dimension(64) :: x, w
       real(rp) :: res, t
-      real(rp), dimension(this%lattice%nrec, 18) :: occ
+      real(rp), dimension(this%lattice%nrec, nb) :: occ
 
       ! Find the Gauss Legendre roots and weights
       call gauss_legendre(64, 0.0_rp, 1.0_rp, x, w)
@@ -640,7 +641,7 @@ contains
       occ(:, :) = 0.0d0
       do m = 1, this%lattice%nrec
          do j = 1, 64
-            do i = 1, 18
+            do i = 1, nb
                occ(m, i) = occ(m, i) + (y(j, i, i, m))/pi
             end do
          end do
@@ -727,8 +728,8 @@ contains
       real(rp), dimension(this%control%lld) :: x_i, w_i, q_i
       real(rp), dimension(this%control%lld) :: w, wscale
       real(rp), dimension(this%control%lld, 0:(this%control%lld)) :: polycheb
-      real(rp), dimension(18, this%control%lld, this%lattice%ntype) :: doscheb_i
-      real(rp), dimension(18, this%lattice%ntype) :: q0l, q1l, q2l
+      real(rp), dimension(nb, this%control%lld, this%lattice%ntype) :: doscheb_i
+      real(rp), dimension(nb, this%lattice%ntype) :: q0l, q1l, q2l
       real(rp) :: a, b, mom0, mom1, mom2, occ
       integer :: i, l, llplusone, n, ll
 
@@ -756,22 +757,22 @@ contains
       occ = 0.0d0
       do n = 1, this%lattice%nrec
          ! Calculate the density of states
-         do l = 1, 18
+         do l = 1, nb
             do i = 1, ll
                doscheb_i(l, :, n) = doscheb_i(l, :, n) + real(this%recursion%mu_ng(l, l, i, n))*polycheb(:, i - 1)
             end do
          end do
-         do l = 1, 18
+         do l = 1, nb
             doscheb_i(l, :, n) = doscheb_i(l, :, n)/((sqrt((a**2) - ((w_i(:) - b)**2)))*pi)
          end do
 
-         do l = 1, 18
+         do l = 1, nb
             do i = 1, ll
                if (isnan(doscheb_i(l, i, n))) doscheb_i(l, i, n) = 0.0d0
             end do
          end do
 
-         do l = 1, 18
+         do l = 1, nb
             q0l(n, l) = sum(doscheb_i(l, :, n)*q_i(:))
             q1l(n, l) = sum(doscheb_i(l, :, n)*w_i(:)*q_i(:))
             q2l(n, l) = sum(doscheb_i(l, :, n)*(w_i(:)**2)*q_i(:))
@@ -868,9 +869,9 @@ contains
       integer :: mdir ! Magnetic index
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
-      real(rp), dimension(9, 9, 3) :: l_orb
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-      complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
+      real(rp), dimension(norb, norb, 3) :: l_orb
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
+      complex(rp), dimension(nb, nb) :: mLx_ext, mLy_ext, mLz_ext
       !
 
       integer :: na_loc, unitorb
@@ -887,14 +888,14 @@ contains
       call hcpx(mLz, 'cart2sph')
 
       mLx_ext = 0.0d0
-      mLx_ext(1:9, 1:9) = mLx(:, :)
-      mLx_ext(10:18, 10:18) = mLx(:, :)
+      mLx_ext(1:norb, 1:norb) = mLx(:, :)
+      mLx_ext(norb+1:nb, norb+1:nb) = mLx(:, :)
       mLy_ext = 0.d00
-      mLy_ext(1:9, 1:9) = mLy(:, :)
-      mLy_ext(10:18, 10:18) = mLy(:, :)
+      mLy_ext(1:norb, 1:norb) = mLy(:, :)
+      mLy_ext(norb+1:nb, norb+1:nb) = mLy(:, :)
       mLz_ext = 0.0d0
-      mLz_ext(1:9, 1:9) = mLz(:, :)
-      mLz_ext(10:18, 10:18) = mLz(:, :)
+      mLz_ext(1:norb, 1:norb) = mLz(:, :)
+      mLz_ext(norb+1:nb, norb+1:nb) = mLz(:, :)
 
       call this%calculate_orbital_dos()
 
@@ -957,10 +958,10 @@ contains
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
          do ie = 1, this%en%channels_ldos + 10
-            do i = 1, 9
-               this%dz(ie, na) = this%dz(ie, na) - aimag(this%green%g0(i, i, ie, na) - this%green%g0(i + 9, i + 9, ie, na))/pi
-               this%dy(ie, na) = this%dy(ie, na) - aimag(i_unit*this%green%g0(i, i + 9, ie, na) - i_unit*this%green%g0(i + 9, i, ie, na))/pi
-               this%dx(ie, na) = this%dx(ie, na) - aimag(this%green%g0(i, i + 9, ie, na) + this%green%g0(i + 9, i, ie, na))/pi
+            do i = 1, norb
+               this%dz(ie, na) = this%dz(ie, na) - aimag(this%green%g0(i, i, ie, na) - this%green%g0(i +spin_off, i +spin_off, ie, na))/pi
+               this%dy(ie, na) = this%dy(ie, na) - aimag(i_unit*this%green%g0(i, i +spin_off, ie, na) - i_unit*this%green%g0(i +spin_off, i, ie, na))/pi
+               this%dx(ie, na) = this%dx(ie, na) - aimag(this%green%g0(i, i +spin_off, ie, na) + this%green%g0(i +spin_off, i, ie, na))/pi
             end do
          end do
       end do
@@ -984,14 +985,14 @@ contains
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
          do ie = 1, this%en%channels_ldos + 10
-            do i = 1, 9
-               do j = 1, 9
+            do i = 1, norb
+               do j = 1, norb
                   this%d_orb(j, i, 1, ie, na) = this%d_orb(j, i, 1, ie, na) &
-                                                - aimag(this%green%g0(j, i + 9, ie, na) + this%green%g0(j + 9, i, ie, na))/pi
+                                                - aimag(this%green%g0(j, i +spin_off, ie, na) + this%green%g0(j +spin_off, i, ie, na))/pi
                   this%d_orb(j, i, 2, ie, na) = this%d_orb(j, i, 2, ie, na) &
-                                                - aimag(i_unit*this%green%g0(j, i + 9, ie, na) - i_unit*this%green%g0(j + 9, i, ie, na))/pi
+                                                - aimag(i_unit*this%green%g0(j, i +spin_off, ie, na) - i_unit*this%green%g0(j +spin_off, i, ie, na))/pi
                   this%d_orb(j, i, 3, ie, na) = this%d_orb(j, i, 3, ie, na) &
-                                                - aimag(this%green%g0(j, i, ie, na) - this%green%g0(j + 9, i + 9, ie, na))/pi
+                                                - aimag(this%green%g0(j, i, ie, na) - this%green%g0(j +spin_off, i +spin_off, ie, na))/pi
                end do
             end do
          end do
@@ -1013,11 +1014,11 @@ contains
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
          do ie = 1, this%en%channels_ldos + 10
-            do i = 1, 9
-               do j = 1, 9
-                  this%g0_z(i, j, ie, na) = this%g0_z(i, j, ie, na) + (this%green%g0(i, i, ie, na) - this%green%g0(i + 9, i + 9, ie, na))
-                  this%g0_y(i, j, ie, na) = this%g0_y(i, j, ie, na) + (i_unit*this%green%g0(i, i + 9, ie, na) - i_unit*this%green%g0(i + 9, i, ie, na))
-                  this%g0_x(i, j, ie, na) = this%g0_x(i, j, ie, na) + (this%green%g0(i, i + 9, ie, na) + this%green%g0(i + 9, i, ie, na))
+            do i = 1, norb
+               do j = 1, norb
+                  this%g0_z(i, j, ie, na) = this%g0_z(i, j, ie, na) + (this%green%g0(i, i, ie, na) - this%green%g0(i +spin_off, i +spin_off, ie, na))
+                  this%g0_y(i, j, ie, na) = this%g0_y(i, j, ie, na) + (i_unit*this%green%g0(i, i +spin_off, ie, na) - i_unit*this%green%g0(i +spin_off, i, ie, na))
+                  this%g0_x(i, j, ie, na) = this%g0_x(i, j, ie, na) + (this%green%g0(i, i +spin_off, ie, na) + this%green%g0(i +spin_off, i, ie, na))
                end do
             end do
          end do

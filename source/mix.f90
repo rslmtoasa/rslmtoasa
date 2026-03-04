@@ -31,6 +31,7 @@ module mix_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private
@@ -191,23 +192,23 @@ contains
       class(mix), intent(inout) :: this
 
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, 18/))
-      call g_safe_alloc%allocate('mix.v_broy', this%v_broy, (/this%lattice%nrec*18/))
-      call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*18/))
-      call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*18/))
-      call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*18/))
+      call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, nb/))
+      call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, nb/))
+      call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, nb/))
+      call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, nb/))
+      call g_safe_alloc%allocate('mix.v_broy', this%v_broy, (/this%lattice%nrec*nb/))
+      call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*nb/))
+      call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*nb/))
+      call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*nb/))
       call g_safe_alloc%allocate('mix.magbeta', this%magbeta, (/this%lattice%nrec/))
       call g_safe_alloc%allocate('mix.mag_old', this%mag_old, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_new', this%mag_new, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_mix', this%mag_mix, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.is_induced', this%is_induced, (/this%lattice%nrec/))
 #else
-      allocate (this%qia(this%lattice%nrec, 18), this%qia_new(this%lattice%nrec, 18), this%qia_old(this%lattice%nrec, 18))
-      allocate (this%qiaprev(this%lattice%nrec, 18))
-      allocate (this%v_broy(this%lattice%nrec*18), this%u_broy(this%lattice%nrec*18), this%fo_broy(this%lattice%nrec*18), this%muo_broy(this%lattice%nrec*18))
+      allocate (this%qia(this%lattice%nrec, nb), this%qia_new(this%lattice%nrec, nb), this%qia_old(this%lattice%nrec, nb))
+      allocate (this%qiaprev(this%lattice%nrec, nb))
+      allocate (this%v_broy(this%lattice%nrec*nb), this%u_broy(this%lattice%nrec*nb), this%fo_broy(this%lattice%nrec*nb), this%muo_broy(this%lattice%nrec*nb))
       allocate (this%magbeta(this%lattice%nrec), this%mag_old(this%lattice%nrec, 3), this%mag_new(this%lattice%nrec, 3), this%mag_mix(this%lattice%nrec, 3))
       allocate (this%is_induced(this%lattice%nrec))
 #endif
@@ -285,7 +286,7 @@ contains
                this%qia_old(IT, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
                !QI_OLD(IT, I+12) = ENU(I, 1)
                this%qia_old(IT, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               this%qia_old(IT, I + 9) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               this%qia_old(IT, I +spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
                this%qia_old(IT, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
                !QI_OLD(IT, I+15) = ENU(I, 2)
             end do
@@ -298,7 +299,7 @@ contains
                this%qia_new(it, i + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
                !QI_OLD(IT, I+12) = ENU(I, 1)
                this%qia_new(it, i + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2)
-               this%qia_new(it, i + 9) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
+               this%qia_new(it, i +spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
                this%qia_new(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
                !QI_OLD(IT, I+15) = ENU(I, 2)
             end do
@@ -312,7 +313,7 @@ contains
                this%qiaprev(it, i + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
                !QI_OLD(IT, I+12) = ENU(I, 1)
                this%qiaprev(it, i + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2)
-               this%qiaprev(it, i + 9) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
+               this%qiaprev(it, i +spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
                this%qiaprev(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
                !QI_OLD(IT, I+15) = ENU(I, 2)
             end do
@@ -325,7 +326,7 @@ contains
                this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1) = this%qia(it, i + 6)
                this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) = this%qia(it, i + 12)
                this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2) = this%qia(it, i + 3)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2) = this%qia(it, i + 9)
+               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2) = this%qia(it, i +spin_off)
                this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) = this%qia(it, i + 15)
             end do
          end do
@@ -378,8 +379,8 @@ contains
    subroutine mixpq(this, qia_old, qia_new)
       use mpi_mod
       class(mix), intent(inout) :: this
-      real(rp), dimension(this%lattice%nrec, 18), intent(in) :: qia_old, qia_new
-      real(rp), dimension(this%lattice%nrec, 18) :: qi_to, qi_tn ! Local variables for broyden mixing
+      real(rp), dimension(this%lattice%nrec, nb), intent(in) :: qia_old, qia_new
+      real(rp), dimension(this%lattice%nrec, nb) :: qi_to, qi_tn ! Local variables for broyden mixing
       real(rp) :: delta_atom
       integer :: ia ! Atom index
       logical :: reset
@@ -393,7 +394,7 @@ contains
          reset = .false.
          qi_to(:, :) = this%qia_old(:, :)
          qi_tn(:, :) = this%qia_new(:, :)
-         call broydn(this%beta, this%beta, reset, qi_to, qi_tn, Bnorm, this%lattice%nrec*18, this%itr, this%fsqo, this%u_broy, this%v_broy, this%muo_broy, this%fo_broy, this%nmix)
+         call broydn(this%beta, this%beta, reset, qi_to, qi_tn, Bnorm, this%lattice%nrec*nb, this%itr, this%fsqo, this%u_broy, this%v_broy, this%muo_broy, this%fo_broy, this%nmix)
          this%qia(:, :) = qi_to(:, :)
          bnorm = bnorm**0.5d0
       end select

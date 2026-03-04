@@ -42,6 +42,7 @@ module math_mod
 !  use lapack95, only: getrf, getri
 #endif
    use precision_mod, only: ip, rp, longint
+   use basis_mod, only: norb, nb, spin_off, lmax_basis
    implicit none
 
    !> type for sorting routine
@@ -129,106 +130,101 @@ module math_mod
    !> Pauli matrix \f$ \sigma_z \f$
    complex(rp), dimension(2, 2), parameter :: sigma_z &
                                               = reshape((/1.0_rp, 0.0_rp, 0.0_rp, -1.0_rp/), (/2, 2/))
-   !> Angular momentum operators
-   complex(rp), dimension(9, 9), parameter :: L_x &
-                                              = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*(-i_unit)
-   complex(rp), dimension(9, 9), parameter :: L_y &
-                                              = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, sqrt_three, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*(-i_unit)
-   complex(rp), dimension(9, 9), parameter :: L_z &
-                                              = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-                                                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-                                                        (/9, 9/))*(-i_unit)
+   !> Angular momentum operators (spd basis; norb x norb).
+   !> Allocated and filled by init_math_operators().
+   complex(rp), allocatable, public, protected :: L_x(:, :)
+   complex(rp), allocatable, public, protected :: L_y(:, :)
+   complex(rp), allocatable, public, protected :: L_z(:, :)
 
-   complex(rp), dimension(18, 18), parameter :: S_z &
-   = reshape((/1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp/), &
-               (/18, 18/)) / 2 
+   !> Spin operators S_k = (1/2) * I_norb ⊗ σ_k  (nb x nb).
+   !> Allocated and filled by init_math_operators().
+   complex(rp), allocatable, public, protected :: S_x(:, :)
+   complex(rp), allocatable, public, protected :: S_y(:, :)
+   complex(rp), allocatable, public, protected :: S_z(:, :)
 
-   complex(rp), dimension(18, 18), parameter :: S_x &
-   = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, &
-               1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-               (/18, 18/)) / 2
+   public :: init_math_operators
 
-   complex(rp), dimension(18, 18), parameter :: S_y &
-   = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp,-1.0_rp, &
-               1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
-               0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
-               (/18, 18/)) * (-i_unit / 2)
-
-       
 contains
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief Allocate and fill the spin and orbital angular momentum operators.
+   !>
+   !> Must be called after basis_init().  Fills:
+   !>   L_x, L_y, L_z  (norb x norb)  – orbital angular momentum (real-harmonics
+   !>                                     spd basis; other lmax values are not yet
+   !>                                     implemented and trigger an error stop)
+   !>   S_x, S_y, S_z  (nb   x nb)    – S = (1/2) I_norb ⊗ σ  (computed for any norb)
+   !---------------------------------------------------------------------------
+   subroutine init_math_operators()
+
+      integer :: i
+
+      ! ---- Orbital angular momentum operators --------------------------------
+      if (allocated(L_x)) deallocate(L_x, L_y, L_z)
+      allocate(L_x(norb, norb), L_y(norb, norb), L_z(norb, norb))
+
+      select case (lmax_basis)
+      case (2)
+         ! spd basis: hardcoded real-harmonics matrix elements (lmax=2, norb=9)
+         L_x = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, sqrt_three, 0.0_rp, 0.0_rp, 0.0_rp/), &
+                       (/norb, norb/))*(-i_unit)
+         L_y = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, sqrt_three, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -sqrt_three, 0.0_rp, 0.0_rp/), &
+                       (/norb, norb/))*(-i_unit)
+         L_z = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                         0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
+                       (/norb, norb/))*(-i_unit)
+      case default
+         write (*, '(a,i0)') 'init_math_operators: L_x/L_y/L_z not implemented for lmax=', lmax_basis
+         error stop 'init_math_operators: only lmax=2 (spd) is implemented for L operators'
+      end select
+
+      ! ---- Spin operators: S_k = (1/2) * I_norb ⊗ σ_k -----------------------
+      if (allocated(S_x)) deallocate(S_x, S_y, S_z)
+      allocate(S_x(nb, nb), S_y(nb, nb), S_z(nb, nb))
+      S_x = czero
+      S_y = czero
+      S_z = czero
+
+      do i = 1, norb
+         ! S_z: +1/2 on spin-up diagonal, -1/2 on spin-down diagonal
+         S_z(i, i)                  = cmplx( 0.5_rp, 0.0_rp, kind=rp)
+         S_z(i + spin_off, i + spin_off) = cmplx(-0.5_rp, 0.0_rp, kind=rp)
+         ! S_x: off-diagonal (I_norb ⊗ σ_x) / 2
+         S_x(i, i + spin_off)       = cmplx(0.5_rp, 0.0_rp, kind=rp)
+         S_x(i + spin_off, i)       = cmplx(0.5_rp, 0.0_rp, kind=rp)
+         ! S_y: off-diagonal (I_norb ⊗ σ_y) / 2
+         ! σ_y = [[0,-i],[i,0]]  →  S_y(up,dn) = -i/2,  S_y(dn,up) = +i/2
+         ! (matches the original column-major parameter definition)
+         S_y(i, i + spin_off)       = cmplx(0.0_rp,  0.5_rp, kind=rp)
+         S_y(i + spin_off, i)       = cmplx(0.0_rp, -0.5_rp, kind=rp)
+      end do
+
+   end subroutine init_math_operators
+
    !> Create vector of all zeros
    function zeros1(n) result(v)
       integer, intent(in) :: n
@@ -1931,22 +1927,22 @@ contains
 
       ! Formal Arguments
       integer, intent(in) :: sdim
-      complex(rp), dimension(18, 18, sdim), intent(inout) :: MAT
+      complex(rp), dimension(nb, nb, sdim), intent(inout) :: MAT
 
       ! Local Scalars
-      integer :: i, j, k, m, ndim
-      real(rp) :: alpha, beta, gamma, pi
+      integer :: i, k, m, ndim
+      real(rp) :: alpha, beta, gamma, pi_
 
       ! Local Arrays
-      complex(rp), dimension(18, 18) :: MATs, RMAT, tmpMAT
+      complex(rp), dimension(nb, nb) :: MATs, RMAT, tmpMAT
 
       ! Define constants and initialize variables
-      pi = acos(-1.0_rp)
-      ndim = 18
-      RMAT = 0.0_rp
-      alpha = -pi/2.0_rp  ! Rotation angle in radians
-      beta = -pi/2.0_rp   ! Rotation angle in radians
-      gamma = 0.0_rp        ! Rotation angle in radians
+      pi_   = acos(-1.0_rp)
+      ndim  = nb
+      RMAT  = czero
+      alpha = -pi_/2.0_rp
+      beta  = -pi_/2.0_rp
+      gamma = 0.0_rp
 
       ! Generate the rotation matrix
       call ROTMAT(RMAT, alpha, beta, gamma)
@@ -1954,8 +1950,8 @@ contains
       ! Rotate each matrix
       do k = 1, sdim
          ! Copy MAT to MATs
-         do m = 1, 18
-            do i = 1, 18
+         do m = 1, ndim
+            do i = 1, ndim
                MATs(i, m) = MAT(i, m, k)
             end do
          end do
@@ -1963,12 +1959,12 @@ contains
          ! Apply the rotation: h * Ux
          call zgemm("N", "C", ndim, ndim, ndim, cone, MATs, ndim, RMAT, ndim, czero, tmpMAT, ndim)
 
-         ! Apply the rotation: Ux´ * (h * Ux)
+         ! Apply the rotation: Ux' * (h * Ux)
          call zgemm("N", "N", ndim, ndim, ndim, cone, RMAT, ndim, tmpMAT, ndim, czero, MATs, ndim)
 
          ! Copy MATs back to MAT
-         do m = 1, 18
-            do i = 1, 18
+         do m = 1, ndim
+            do i = 1, ndim
                MAT(i, m, k) = MATs(i, m)
             end do
          end do
@@ -1978,42 +1974,33 @@ contains
    end subroutine rotmag
 
 !
-   subroutine rotmag_loc(MATout, MATin, sdim, MOM) !
+   subroutine rotmag_loc(MATout, MATin, sdim, MOM)
       !
       !.. Implicit Declarations ..
       implicit none
       !
       !.. Parameters ..
-      complex(selected_real_kind(15)), parameter :: cone = (1.0d+0, 0.0d+0)
-      complex(selected_real_kind(15)), parameter :: czero = (0.0d+0, 0.0d+0)
+      complex(rp), parameter :: cone_  = (1.0d+0, 0.0d+0)
+      complex(rp), parameter :: czero_ = (0.0d+0, 0.0d+0)
       !
       !.. Formal Arguments ..
       integer, intent(in) :: sdim
-      complex(selected_real_kind(15)), &
-         dimension(18, 18, sdim), intent(out) :: MATout
-      complex(selected_real_kind(15)), &
-         dimension(18, 18, sdim), intent(out) :: MATin
-      real(selected_real_kind(15)), dimension(3), intent(in) :: MOM
-      !
+      complex(rp), dimension(nb, nb, sdim), intent(out) :: MATout
+      complex(rp), dimension(nb, nb, sdim), intent(out) :: MATin
+      real(rp), dimension(3), intent(in) :: MOM
       !
       !.. Local Scalars ..
-      integer :: I, J, K, M, ndim
-      real(selected_real_kind(15)) :: ALFA, BETA, GAMA, n1, x1, y1, x2, z2, th, phi
+      integer :: J, K, M, ndim
+      real(rp) :: ALFA, BETA, GAMA
       !
       !.. Local Arrays ..
-      real(selected_real_kind(15)), dimension(3) :: v, sv
-      complex(selected_real_kind(15)), dimension(18, 18) :: MATs, RMAT, tmpMAT
-      !
-    !!.. External Calls ..
-      !external ROTMAT, zgemm
-      !
-      !.. Intrinsic Functions ..
-      !intrinsic selected_real_kind
+      real(rp), dimension(3) :: v, sv
+      complex(rp), dimension(nb, nb) :: MATs, RMAT, tmpMAT
       !
       ! ... Executable Statements ...
       !
-      ndim = 18
-      RMAT = (0.0d0, 0.0d0)
+      ndim = nb
+      RMAT = czero_
       !
       v = MOM
 
@@ -2024,39 +2011,35 @@ contains
       gama = 0.0d0
 
       call ROTMAT(RMAT, alfa, beta, gama)
-      !  call ROTMAT_org(RMAT,alfa,beta,gama)
 
       do J = 1, sdim
-         do M = 1, 18
-            do K = 1, 18
+         do M = 1, ndim
+            do K = 1, ndim
                MATs(K, M) = MATin(K, M, J)
             end do
          end do
          !  h*Ux
-         call zgemm("N", "N", ndim, ndim, ndim, cone, MATs, ndim, RMAT, ndim, czero, tmpMAT, &
+         call zgemm("N", "N", ndim, ndim, ndim, cone_, MATs, ndim, RMAT, ndim, czero_, tmpMAT, &
                     ndim)
-         !  Ux´*(h*Ux)
-         call zgemm("C", "N", ndim, ndim, ndim, cone, RMAT, ndim, tmpMAT, ndim, czero, MATs, &
+         !  Ux'*(h*Ux)
+         call zgemm("C", "N", ndim, ndim, ndim, cone_, RMAT, ndim, tmpMAT, ndim, czero_, MATs, &
                     ndim)
          !
-         do M = 1, 18
-            do K = 1, 18
+         do M = 1, ndim
+            do K = 1, ndim
                MATout(K, M, J) = MATs(K, M)
             end do
          end do
       end do
       return
       !
-      ! ... Format Declarations ...
-      !
-10000 format(3x, a8, f10.4, a8, f10.4, a8, f10.4)
    end subroutine rotmag_loc
 
    subroutine ROTMAT(MAT, A, B, G)
       implicit none
 
       ! Formal Arguments
-      complex(rp), dimension(18, 18), intent(inout) :: MAT
+      complex(rp), dimension(:, :), intent(inout) :: MAT
       real(rp), intent(in) :: A, B, G
 
       ! Local Scalars
@@ -2065,41 +2048,43 @@ contains
       complex(rp) :: ALFA, GAMA, IM
 
       ! Local Arrays
-      complex(rp), dimension(2, 2) :: SM
-      complex(rp), dimension(9, 9) :: MAT9
+      complex(rp), dimension(2, 2)       :: SM
+      complex(rp), dimension(norb, norb) :: MAT9
 
       ! Initialization
-      SM = 0.0_rp
-      MAT = 0.0_rp
-      MAT9 = 0.0_rp
-      IM = CMPLX(0.0_rp, 1.0_rp)
+      SM   = czero
+      MAT  = czero
+      MAT9 = czero
+      IM   = CMPLX(0.0_rp, 1.0_rp, kind=rp)
       ALFA = CMPLX(A, KIND=KIND(0.0_rp))
       BETA = B
       GAMA = CMPLX(G, KIND=KIND(0.0_rp))
 
-      ! Generate the submatrix SM for the rotation
-      SM(1, 1) = DSs(0.5_rp, 0.5_rp, 0.5_rp, BETA)*exp(-IM*(0.5_rp*ALFA + 0.5_rp*GAMA))
-      SM(1, 2) = DSs(0.5_rp, 0.5_rp, -0.5_rp, BETA)*exp(-IM*(0.5_rp*ALFA - 0.5_rp*GAMA))
-      SM(2, 1) = DSs(0.5_rp, -0.5_rp, 0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA + 0.5_rp*GAMA))
+      ! Generate the spin-1/2 submatrix SM for the rotation
+      SM(1, 1) = DSs(0.5_rp,  0.5_rp,  0.5_rp, BETA)*exp(-IM*( 0.5_rp*ALFA + 0.5_rp*GAMA))
+      SM(1, 2) = DSs(0.5_rp,  0.5_rp, -0.5_rp, BETA)*exp(-IM*( 0.5_rp*ALFA - 0.5_rp*GAMA))
+      SM(2, 1) = DSs(0.5_rp, -0.5_rp,  0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA + 0.5_rp*GAMA))
       SM(2, 2) = DSs(0.5_rp, -0.5_rp, -0.5_rp, BETA)*exp(-IM*(-0.5_rp*ALFA - 0.5_rp*GAMA))
 
-      ! Calculate MAT9 for J=0,1,2 and corresponding M, Mprime
-      do J = 0, 2
+      ! Calculate MAT9 (orbital part) for J = 0, 1, ..., lmax_basis
+      do J = 0, lmax_basis
          S = J*J + 1 + J
          do M = -J, J
             do Mprime = -J, J
-               MAT9(S + M, S + Mprime) = DSs(J*1.0d0, M*1.0d0, Mprime*1.0d0, BETA)*exp(-IM*(M*ALFA + Mprime*GAMA))
+               MAT9(S + M, S + Mprime) = DSs(J*1.0d0, M*1.0d0, Mprime*1.0d0, BETA) &
+                                        *exp(-IM*(M*ALFA + Mprime*GAMA))
             end do
          end do
       end do
 
-      ! Populate the full matrix MAT using MAT9 and SM
-      do M = 1, 9
-         do Mprime = 1, 9
-            MAT(Mprime, M) = MAT9(Mprime, M)*SM(1, 1)
-            MAT(Mprime, M + 9) = MAT9(Mprime, M)*SM(1, 2)
-            MAT(Mprime + 9, M) = MAT9(Mprime, M)*SM(2, 1)
-            MAT(Mprime + 9, M + 9) = MAT9(Mprime, M)*SM(2, 2)
+      ! Populate the full nb×nb spinor matrix MAT using the Kronecker product
+      ! MAT = MAT9 ⊗ SM  (spin-orbit direct product)
+      do M = 1, norb
+         do Mprime = 1, norb
+            MAT(Mprime,            M           ) = MAT9(Mprime, M)*SM(1, 1)
+            MAT(Mprime,            M + spin_off) = MAT9(Mprime, M)*SM(1, 2)
+            MAT(Mprime + spin_off, M           ) = MAT9(Mprime, M)*SM(2, 1)
+            MAT(Mprime + spin_off, M + spin_off) = MAT9(Mprime, M)*SM(2, 2)
          end do
       end do
    end subroutine ROTMAT

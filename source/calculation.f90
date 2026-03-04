@@ -42,6 +42,7 @@ module calculation_mod
    use string_mod, only: sl, fmt, real2str
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
+   use basis_mod, only: basis_init
    implicit none
 
    private
@@ -248,6 +249,9 @@ contains
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
 
+      ! Initialize basis dimension parameters from lmax
+      call basis_init(lattice_obj%symbolic_atoms(1)%potential%lmax)
+
       ! Initializing MPI lookup tables and info.
       call get_mpi_variables(rank, lattice_obj%nrec)
 
@@ -348,6 +352,9 @@ contains
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
 
+      ! Initialize basis dimension parameters from lmax
+      call basis_init(lattice_obj%symbolic_atoms(1)%potential%lmax)
+
       ! Initializing MPI lookup tables and info.
       call get_mpi_variables(rank, lattice_obj%nrec)
 
@@ -426,6 +433,9 @@ contains
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
 
+      ! Initialize basis dimension parameters from lmax
+      call basis_init(lattice_obj%symbolic_atoms(1)%potential%lmax)
+
       ! Initializing MPI lookup tables and info.
       call get_mpi_variables(rank, lattice_obj%nrec)
 
@@ -501,6 +511,9 @@ contains
 
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
+
+      ! Initialize basis dimension parameters from lmax
+      call basis_init(lattice_obj%symbolic_atoms(1)%potential%lmax)
 
       ! Initializing MPI lookup tables and info.
       call get_mpi_variables(rank, lattice_obj%nrec)

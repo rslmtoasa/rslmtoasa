@@ -24,6 +24,8 @@ module control_mod
    use string_mod, only: sl, fmt
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
+   use basis_mod, only: basis_init
+   use math_mod, only: init_math_operators
    implicit none
 
    private
@@ -60,6 +62,19 @@ module control_mod
       !> - \ref nsp \f$= 3\f$: Non-collinear scalar relativistic
       !> - \ref nsp \f$= 4\f$: Non-collinear fully relativistic (l.s)-only no OP
       integer :: nsp
+
+      !> Maximum angular momentum quantum number for the orbital basis.
+      !>
+      !> Determines the block size used throughout the code:
+      !>   norb = (lmax+1)**2   (orbitals per spin channel)
+      !>   nb   = 2*norb        (full spinor block)
+      !>
+      !> Values:
+      !>
+      !> - \ref lmax \f$= 1\f$: sp  basis (norb= 4, nb= 8)
+      !> - \ref lmax \f$= 2\f$: spd basis (norb= 9, nb=18)  [default]
+      !> - \ref lmax \f$= 3\f$: spdf basis (norb=16, nb=32)
+      integer :: lmax
 
       !> Type of LDOS s, p, d output
       !>
@@ -266,6 +281,7 @@ contains
       nlim = this%nlim
       npold = this%npold
       nsp = this%nsp
+      lmax = this%lmax
       calctype = this%calctype
       hyperfine = this%hyperfine
       sym_term = this%sym_term
@@ -310,6 +326,7 @@ contains
       close (funit)
 
       ! Setting user values
+      this%lmax = lmax
       this%npold = npold
       this%llsp = llsp
       this%lld = lld
@@ -374,6 +391,11 @@ contains
       end if
       ! end reading the control file
 
+      ! Initialise basis dimensions (norb, nb, spin_off) from lmax
+      call basis_init(this%lmax)
+      ! Initialise spin and orbital angular momentum operator matrices
+      call init_math_operators()
+
       ! check input
       call this%check_all()
    end subroutine build_from_file
@@ -388,6 +410,7 @@ contains
       class(control), intent(out) :: this
 
       this%calctype = ''
+      this%lmax = 2
       this%npold = 9
       this%llsp = 16
       this%lld = 16
