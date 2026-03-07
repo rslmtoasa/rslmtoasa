@@ -9,7 +9,7 @@
 # cmake_policy(SET CMP0054 NEW)
 
 
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.19)
 
 set(PROJECT_NAME rslmto)
 project(${PROJECT_NAME})
@@ -45,7 +45,6 @@ option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
 option(RUN_EXAMPLE_TESTS "Run fast example-based SCF tests" OFF)
-option(RUN_EXAMPLE_CHEB_TESTS "Enable Chebyshev example tests in ctest runs" OFF)
 option(RUN_EXAMPLE_REF_TESTS "Enable example SCF reference comparisons" OFF)
 set(EXAMPLE_REF_KEYS "etot,ws_r,vmad" CACHE STRING "Comma-separated par keys for example reference comparisons")
 set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for example reference comparisons")
@@ -223,165 +222,67 @@ add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKI
 endif (RUN_REG_TESTS)
 
 if (RUN_EXAMPLE_TESTS)
-set(ExampleTestDriver ${TestDIR}/example_scf/run_example_scf.sh)
-set(ExampleRefDriver ${TestDIR}/example_scf/run_example_scf_with_ref.sh)
-set(ExampleDIR ${TestDIR}/example_scf/cases)
-set(ExampleScratchRoot ${CMAKE_BINARY_DIR}/Testing/example_scf)
-set(ExamplePostDIR ${TestDIR}/example_postproc/cases)
-set(ExamplePostScratchRoot ${CMAKE_BINARY_DIR}/Testing/example_postproc)
+
+# Prefer an active venv, then the system Python. Users can override via
+# -DEXAMPLE_PYTHON_EXECUTABLE=/path/to/venv/python3 without reconfiguring.
+set(Python3_FIND_VIRTUALENV FIRST)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(EXAMPLE_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH
+    "Python interpreter for example tests (must have f90nml installed)")
+
 if (RUN_EXAMPLE_REF_TESTS)
-  find_package(Python3 REQUIRED COMPONENTS Interpreter)
-  set(EXAMPLE_REF_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter for example reference comparison tests")
+  set(EXAMPLE_REF_KEYS    "etot,ws_r,vmad" CACHE STRING "Comma-separated par keys for reference comparison")
+  set(EXAMPLE_REF_ABS_TOL "1e-6"           CACHE STRING "Absolute tolerance for reference comparison")
+  set(EXAMPLE_REF_REL_TOL "1e-6"           CACHE STRING "Relative tolerance for reference comparison")
 endif()
 
-function(add_example_scf_test TEST_NAME EXAMPLE_REL NSP RECUR HOH)
-  if ("${RECUR}" STREQUAL "chebyshev")
-    set(LLD 200)
-    set(TEST_TIMEOUT 600)
-  else()
-    set(LLD 20)
-    set(TEST_TIMEOUT 240)
-  endif()
+# Read cases.json and register CTest entries for one example test suite.
+# Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
+function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
+  file(READ "${CASES_JSON}" _json)
+  string(JSON _n LENGTH "${_json}" "cases")
+  math(EXPR _last "${_n} - 1")
 
-  add_test(
-    NAME ${TEST_NAME}
-    COMMAND /bin/bash ${ExampleTestDriver}
-            ${TestBinary}
-            ${ExampleDIR}/${EXAMPLE_REL}
-            ${ExampleScratchRoot}
-            ${TEST_NAME}
-            ${NSP}
-            ${RECUR}
-            ${HOH}
-            ${LLD}
-            1
-  )
-  set_tests_properties(${TEST_NAME} PROPERTIES LABELS "example;scf;${RECUR}" TIMEOUT ${TEST_TIMEOUT})
+  foreach(_i RANGE ${_last})
+    string(JSON _name    GET "${_json}" "cases" ${_i} "name")
+    string(JSON _recur   GET "${_json}" "cases" ${_i} "namelists" "control" "recur")
+    string(JSON _timeout GET "${_json}" "cases" ${_i} "timeout")
 
-  if ("${RECUR}" STREQUAL "chebyshev" AND NOT RUN_EXAMPLE_CHEB_TESTS)
-    set_tests_properties(${TEST_NAME} PROPERTIES DISABLED TRUE)
-  endif()
-
-  if (RUN_EXAMPLE_REF_TESTS)
-    add_test(
-      NAME ${TEST_NAME}_ref
-      COMMAND /bin/bash ${ExampleRefDriver}
-              ${EXAMPLE_REF_PYTHON_EXECUTABLE}
-              ${ExampleTestDriver}
-              ${TestBinary}
-              ${ExampleDIR}/${EXAMPLE_REL}
-              ${ExampleScratchRoot}
-              ${TEST_NAME}
-              ${NSP}
-              ${RECUR}
-              ${HOH}
-              ${LLD}
-              1
-              ${TestDIR}/example_scf/cases_manifest.csv
-              ${TestDIR}/example_scf/references
-              ${EXAMPLE_REF_KEYS}
-              ${EXAMPLE_REF_ABS_TOL}
-              ${EXAMPLE_REF_REL_TOL}
+    set(_cmd
+      "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/run_test.py"
+      "--binary"       "${TestBinary}"
+      "--cases-json"   "${CASES_JSON}"
+      "--case-name"    "${_name}"
+      "--scratch-root" "${SCRATCH_ROOT}"
     )
-    set_tests_properties(${TEST_NAME}_ref PROPERTIES LABELS "example;scf;reference;${RECUR}" TIMEOUT ${TEST_TIMEOUT})
+    set(_labels "example;${SUITE};${_recur}")
 
-    if ("${RECUR}" STREQUAL "chebyshev" AND NOT RUN_EXAMPLE_CHEB_TESTS)
-      set_tests_properties(${TEST_NAME}_ref PROPERTIES DISABLED TRUE)
-    endif()
-  endif()
-endfunction()
+    add_test(NAME "${_name}" COMMAND ${_cmd})
+    set_tests_properties("${_name}" PROPERTIES LABELS "${_labels}" TIMEOUT "${_timeout}")
 
-# Bulk matrix: nsp = 2,3,4 ; recur = block,chebyshev ; hoh = true,false
-foreach(NSP_VALUE 2 3 4)
-  foreach(RECUR_VALUE block chebyshev)
-    if ("${RECUR_VALUE}" STREQUAL "chebyshev")
-      set(BULK_EXAMPLE bulk/bccFe/Cheb/Small)
-    else()
-      set(BULK_EXAMPLE bulk/bccFe)
-    endif()
-    foreach(HOH_VALUE true false)
-      add_example_scf_test(
-        Example_bulk_bccFe_nsp${NSP_VALUE}_${RECUR_VALUE}_hoh_${HOH_VALUE}
-        ${BULK_EXAMPLE}
-        ${NSP_VALUE}
-        ${RECUR_VALUE}
-        ${HOH_VALUE}
+    if (RUN_EXAMPLE_REF_TESTS)
+      add_test(NAME "${_name}_ref" COMMAND ${_cmd}
+        "--compare-ref" "${REFS_DIR}"
+        "--keys"        "${EXAMPLE_REF_KEYS}"
+        "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
+        "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
       )
-    endforeach()
-  endforeach()
-endforeach()
-
-# One surface and one impurity case
-add_example_scf_test(Example_surface_fccCu001_block_hoh_true surface/fccCu001 2 block true)
-add_example_scf_test(Example_impurity_B2FeCo_block_hoh_true impurity/B2FeCo 2 block true)
-
-# Multi-atom bulk (ntype ordering coverage)
-add_example_scf_test(Example_bulk_Pt2MnGa_block_hoh_true bulk/Pt2MnGa 2 block true)
-add_example_scf_test(Example_bulk_Pt2MnGa_block_hoh_false bulk/Pt2MnGa 2 block false)
-add_example_scf_test(Example_bulk_Pt2MnGa_chebyshev_hoh_true bulk/Pt2MnGa/NoHoH/SCF_cheb 2 chebyshev true)
-add_example_scf_test(Example_bulk_Pt2MnGa_chebyshev_hoh_false bulk/Pt2MnGa/NoHoH/SCF_cheb 2 chebyshev false)
-
-# Post-processing examples (exchange, conductivity) — keep separate tree
-function(add_example_postproc_test TEST_NAME EXAMPLE_REL NSP RECUR HOH)
-  if ("${RECUR}" STREQUAL "chebyshev")
-    set(LLD 200)
-    set(TEST_TIMEOUT 600)
-  else()
-    set(LLD 20)
-    set(TEST_TIMEOUT 240)
-  endif()
-
-  add_test(
-    NAME ${TEST_NAME}
-    COMMAND /bin/bash ${ExampleTestDriver}
-            ${TestBinary}
-            ${ExamplePostDIR}/${EXAMPLE_REL}
-            ${ExamplePostScratchRoot}
-            ${TEST_NAME}
-            ${NSP}
-            ${RECUR}
-            ${HOH}
-            ${LLD}
-            1
-  )
-  set_tests_properties(${TEST_NAME} PROPERTIES LABELS "example;postproc;${RECUR}" TIMEOUT ${TEST_TIMEOUT})
-
-  if ("${RECUR}" STREQUAL "chebyshev" AND NOT RUN_EXAMPLE_CHEB_TESTS)
-    set_tests_properties(${TEST_NAME} PROPERTIES DISABLED TRUE)
-  endif()
-
-  if (RUN_EXAMPLE_REF_TESTS)
-    add_test(
-      NAME ${TEST_NAME}_ref
-      COMMAND /bin/bash ${ExampleRefDriver}
-              ${EXAMPLE_REF_PYTHON_EXECUTABLE}
-              ${ExampleTestDriver}
-              ${TestBinary}
-              ${ExamplePostDIR}/${EXAMPLE_REL}
-              ${ExamplePostScratchRoot}
-              ${TEST_NAME}
-              ${NSP}
-              ${RECUR}
-              ${HOH}
-              ${LLD}
-              1
-              ${TestDIR}/example_postproc/cases_manifest.csv
-              ${TestDIR}/example_postproc/references
-              ${EXAMPLE_REF_KEYS}
-              ${EXAMPLE_REF_ABS_TOL}
-              ${EXAMPLE_REF_REL_TOL}
-    )
-    set_tests_properties(${TEST_NAME}_ref PROPERTIES LABELS "example;postproc;reference;${RECUR}" TIMEOUT ${TEST_TIMEOUT})
-
-    if ("${RECUR}" STREQUAL "chebyshev" AND NOT RUN_EXAMPLE_CHEB_TESTS)
-      set_tests_properties(${TEST_NAME}_ref PROPERTIES DISABLED TRUE)
+      set_tests_properties("${_name}_ref" PROPERTIES LABELS "${_labels};reference" TIMEOUT "${_timeout}")
     endif()
-  endif()
+  endforeach()
 endfunction()
 
-# Register post-processing example tests
-add_example_postproc_test(Example_exchange_bccFe exchange/bccFe 2 block true)
-add_example_postproc_test(Example_exchange_conductivity_fccPt conductivity/fccPt 2 chebyshev true)
+register_example_tests(
+  "${TestDIR}/example_scf/cases.json"     scf
+  "${CMAKE_BINARY_DIR}/Testing/example_scf"
+  "${TestDIR}/example_scf/references"
+)
+
+register_example_tests(
+  "${TestDIR}/example_postproc/cases.json"     postproc
+  "${CMAKE_BINARY_DIR}/Testing/example_postproc"
+  "${TestDIR}/example_postproc/references"
+)
 
 endif (RUN_EXAMPLE_TESTS)
  

@@ -1,0 +1,18 @@
+{
+  "name": "Example_bulk_Pt2MnGa_block_hoh_false",
+  "case": "bulk/Pt2MnGa",
+  "timeout": 240,
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 20
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  }
+}

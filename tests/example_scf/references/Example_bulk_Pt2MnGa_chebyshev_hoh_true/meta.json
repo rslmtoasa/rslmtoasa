@@ -1,0 +1,18 @@
+{
+  "name": "Example_bulk_Pt2MnGa_chebyshev_hoh_true",
+  "case": "bulk/Pt2MnGa",
+  "timeout": 600,
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 200
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": true
+    }
+  }
+}

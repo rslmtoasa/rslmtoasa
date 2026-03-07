@@ -1,0 +1,188 @@
+{
+  "_description": "Test case matrix for example SCF tests. Single source of truth — CMakeLists reads this file. The 'namelists' dict is applied verbatim as an f90nml patch on top of each case's input.nml.",
+  "cases": [
+    {
+      "name": "Example_bulk_bccFe_nsp2_block_hoh_true",
+      "case": "bulk/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp2_block_hoh_false",
+      "case": "bulk/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp2_chebyshev_hoh_true",
+      "case": "bulk/bccFe",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true },
+        "energy":      { "energy_min": -3.0, "energy_max": 1.8 }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp2_chebyshev_hoh_false",
+      "case": "bulk/bccFe",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp3_block_hoh_true",
+      "case": "bulk/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp3_block_hoh_false",
+      "case": "bulk/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp3_chebyshev_hoh_true",
+      "case": "bulk/bccFe",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 3, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true },
+        "energy":      { "energy_min": -3.0, "energy_max": 1.8 }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp3_chebyshev_hoh_false",
+      "case": "bulk/bccFe",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 3, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp4_block_hoh_true",
+      "case": "bulk/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 4, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp4_block_hoh_false",
+      "case": "bulk/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 4, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp4_chebyshev_hoh_true",
+      "case": "bulk/bccFe",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 4, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true },
+        "energy":      { "energy_min": -3.0, "energy_max": 1.8 }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp4_chebyshev_hoh_false",
+      "case": "bulk/bccFe",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 4, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_surface_fccCu001_block_hoh_true",
+      "case": "surface/fccCu001",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_impurity_B2FeCo_block_hoh_true",
+      "case": "impurity/B2FeCo",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_bulk_Pt2MnGa_block_hoh_true",
+      "case": "bulk/Pt2MnGa",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_bulk_Pt2MnGa_block_hoh_false",
+      "case": "bulk/Pt2MnGa",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_Pt2MnGa_chebyshev_hoh_true",
+      "case": "bulk/Pt2MnGa",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_bulk_Pt2MnGa_chebyshev_hoh_false",
+      "case": "bulk/Pt2MnGa",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    }
+  ]
+}

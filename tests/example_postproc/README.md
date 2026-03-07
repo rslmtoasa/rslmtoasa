@@ -1,32 +1,87 @@
-Example post-processing tests (exchange, conductivity)
-===============================================
+# Example post-processing tests
 
-- Purpose: These are fast smoke-style checks for post-processing workflows (exchange, conductivity). They run a small, deterministic input and confirm the program runs without fatal errors.
-- Location: test cases live under `tests/example_postproc/cases`.
+Fast example-based tests for post-processing workflows (exchange couplings,
+conductivity). Each case runs in an isolated scratch directory and checks
+for fatal errors. Numerical reference comparisons are optional.
 
-Smoke vs regression
--------------------
-- By default these are smoke tests: they are registered in CTest and will run quickly to detect runtime failures. They do not perform full numerical regression comparisons unless you explicitly generate and enable references.
+## Structure
 
-Generating reference data (regression)
--------------------------------------
-1. Use the included generator to create reference `data.nml` outputs from a known-good binary. From the repository root run:
+- `cases.json` — test case matrix (single source of truth for CTest and reference generation)
+- `cases/<workflow>/<system>/` — input files for each calculation
+- `references/<TestName>/ref.nml` — stored reference outputs (committed after generation)
+
+## CTest modes
+
+**Smoke** (default): runs the binary and checks for fatal errors.
+
+**Reference** (optional): re-runs each case and compares selected output keys
+against stored references. Registers additional `_ref` test variants in CTest.
+
+### Enable smoke tests
+
+Activate your Python venv (needs `f90nml`) before configuring:
 
 ```bash
-tests/example_postproc/generate_reference_data.sh /path/to/known-good/rslmto.x [--include-cheb] [--scratch-root <path>]
+source /path/to/venv/bin/activate
+cmake -S . -B build -DRUN_EXAMPLE_TESTS=ON
+ctest --test-dir build -L postproc
 ```
 
-- This will create `tests/example_postproc/references/<TestName>/ref.nml` and a `meta.txt` with the run parameters.
-
-2. Enable reference-based tests when configuring CMake by setting:
+### Enable reference comparison tests
 
 ```bash
--DRUN_EXAMPLE_TESTS=ON -DRUN_EXAMPLE_REF_TESTS=ON -DEXAMPLE_REF_PYTHON_EXECUTABLE=/path/to/python
+cmake -S . -B build \
+    -DRUN_EXAMPLE_TESTS=ON \
+    -DRUN_EXAMPLE_REF_TESTS=ON
+ctest --test-dir build -L "postproc.*reference"
 ```
 
-- The CTest entries for the postproc tests will then include `_ref` variants that run the comparator using `f90nml` (make sure `f90nml` is installed in the Python you point to).
+If CMake picked up the wrong Python interpreter, override without wiping the cache:
 
-Notes
------
-- Postproc reference outputs are separate from `tests/example_scf/references` and are stored under `tests/example_postproc/references`.
-- Chebyshev-based runs are registered but disabled by default; use `--include-cheb` when generating references and set `-DRUN_EXAMPLE_CHEB_TESTS=ON` to enable them in CTest.
+```bash
+cmake -DEXAMPLE_PYTHON_EXECUTABLE=/path/to/venv/bin/python3 build
+```
+
+## Generating reference data
+
+Run once with a known-good binary to populate `references/`.
+
+```bash
+# All post-processing cases
+python3 tests/generate_references.py \
+    --binary build/bin/rslmto.x \
+    --cases-json tests/example_postproc/cases.json \
+    --references-dir tests/example_postproc/references
+
+# Specific case only
+python3 tests/generate_references.py \
+    --binary build/bin/rslmto.x \
+    --cases-json tests/example_postproc/cases.json \
+    --references-dir tests/example_postproc/references \
+    --case Example_exchange_bccFe
+```
+
+Each reference is saved as `references/<TestName>/ref.nml` alongside a
+`meta.json` recording the parameters used.
+
+## Running a single case manually
+
+```bash
+python3 tests/run_test.py \
+    --binary build/bin/rslmto.x \
+    --cases-json tests/example_postproc/cases.json \
+    --case-name Example_exchange_bccFe \
+    --scratch-root /tmp/scratch
+
+# With reference comparison
+python3 tests/run_test.py ... \
+    --compare-ref tests/example_postproc/references
+```
+
+## Adding a new test case
+
+1. Create `cases/<workflow>/<system>/` with `input.nml` and required input files.
+2. Add an entry to `cases.json`.
+3. Generate its reference: `python3 tests/generate_references.py ... --case <TestName>`.
+4. Commit both the new case directory and `references/<TestName>/`.
+5. Re-run CMake (configure step re-reads `cases.json` automatically).

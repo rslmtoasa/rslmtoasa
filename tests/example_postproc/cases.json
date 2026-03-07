@@ -1,0 +1,45 @@
+{
+  "_description": "Test case matrix for example post-processing tests. Single source of truth — CMakeLists reads this file. The 'namelists' dict is applied verbatim as an f90nml patch on top of each case's input.nml.",
+  "cases": [
+    {
+      "name": "Example_exchange_bccFe",
+      "case": "exchange/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false}
+      }
+    },
+    {
+      "name": "Example_exchange_bccFe_hoh",
+      "case": "exchange/bccFe",
+      "timeout": 240,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    },
+    {
+      "name": "Example_exchange_conductivity_fccPt",
+      "case": "conductivity/fccPt",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_exchange_conductivity_fccPt_hoh",
+      "case": "conductivity/fccPt",
+      "timeout": 600,
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true }
+      }
+    }
+  ]
+}

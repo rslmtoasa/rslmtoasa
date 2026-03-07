@@ -19,22 +19,22 @@ label(1) = 'Fe'
 nstep = 1
 /
 &energy
-fermi = -0.042265
+fermi = -0.082364
 energy_min = -2.0
 energy_max = 0.8
 channels_ldos = 2500
 /
 &control
 calctype = 'B'
-nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
-lld = 21
+nsp = 2
+lld = 20
 recur = 'block'
 /
 &mix
 beta = 0.01
 mixtype = 'broyden'
 /
-&hamiltonian
-hoh = .false.
-/
 
+&hamiltonian
+hoh = .true.
+/

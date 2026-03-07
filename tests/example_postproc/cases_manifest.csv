@@ -1,3 +1,0 @@
-# test_name,case_rel,nsp,recur,hoh,lld,nstep
-Example_exchange_bccFe,exchange/bccFe,2,block,true,21,100
-Example_exchange_conductivity_fccPt,conductivity/fccPt,2,chebyshev,true,150,100
