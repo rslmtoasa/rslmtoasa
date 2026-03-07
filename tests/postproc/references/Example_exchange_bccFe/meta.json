@@ -1,0 +1,45 @@
+{
+  "name": "Example_exchange_bccFe",
+  "case": "exchange/bccFe",
+  "timeout": 240,
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 20
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "jij.out",
+        "rows": [
+          1,
+          2
+        ],
+        "cols": [
+          6,
+          7
+        ]
+      },
+      {
+        "file": "dij.out",
+        "rows": [
+          1,
+          2
+        ],
+        "cols": [
+          6,
+          7,
+          8
+        ]
+      }
+    ]
+  }
+}

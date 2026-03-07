@@ -11,7 +11,8 @@ jobs:
         include:
           - { icon: '🐧' , os: ubuntu-latest,  shell: bash, arch: x86_64 }
           - { icon: '🍎' , os: macos-14,       shell: bash, arch: arm64 }
-          - { icon: '🍏' , os: macos-13,       shell: bash, arch: x86_64 }
+          # macos-13 (x86_64 Intel) has been retired by GitHub
+          # - { icon: '🍏' , os: macos-13,       shell: bash, arch: x86_64 }
           # - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
     runs-on: ${{ matrix.os }}
     defaults:
@@ -23,10 +24,12 @@ jobs:
       - name: Provide ninja and MPI on macOS ${{ matrix.icon}}
         if: runner.os == 'macOS'
         run: |
-          # fftw3 
-          brew install ninja meson openmpi gfortran
+          # Install open-mpi first; it pulls in the exact gcc/gfortran version it was compiled with.
+          # We then symlink that gfortran so the project and mpi.mod are built with the same compiler.
+          brew install ninja open-mpi
+          gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
+          sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          sudo ln -s "$(which gfortran-14)" "$(brew --prefix)/bin/gfortran"
 
       - name: Provide ninja and MPI on Linux ${{ matrix.icon}}
         if: runner.os == 'Linux'
