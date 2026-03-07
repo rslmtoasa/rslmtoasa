@@ -87,12 +87,12 @@ def patch_input_nml(workdir: str, case: dict) -> None:
 # Binary invocation
 # ---------------------------------------------------------------------------
 
-def run_binary(binary: str, workdir: str) -> None:
+def run_binary(binary: str, workdir: str, mpi_procs: int = 1) -> None:
     run_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_binary.sh")
-    result = subprocess.run(
-        ["/bin/bash", run_script, binary],
-        cwd=workdir,
-    )
+    cmd = ["/bin/bash", run_script, binary]
+    if mpi_procs > 1:
+        cmd.append(str(mpi_procs))
+    result = subprocess.run(cmd, cwd=workdir)
     if result.returncode != 0:
         print(f"ERROR: binary returned non-zero exit code {result.returncode}")
         sys.exit(1)
@@ -323,7 +323,7 @@ def main() -> None:
 
     setup_scratch(case_dir, workdir)
     patch_input_nml(workdir, case)
-    run_binary(binary, workdir)
+    run_binary(binary, workdir, case.get("mpi_procs", 1))
     check_log(workdir, args.case_name)
 
     if args.compare_ref:

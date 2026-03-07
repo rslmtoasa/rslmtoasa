@@ -1,0 +1,203 @@
+name: Example tests
+
+# Triggered automatically after the build workflow completes successfully.
+# Can also be triggered manually by providing a build workflow run ID.
+on:
+  workflow_run:
+    workflows: ["Build binaries on all platforms (beta)"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID of the build workflow to pull binaries from"
+        required: true
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} ${{ matrix.icon }}
+
+    # For workflow_run: only proceed if the build succeeded.
+    # For workflow_dispatch: always run (user chose the run ID explicitly).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { icon: "🐧", os: ubuntu-latest, arch: x86_64 }
+          - { icon: "🍎", os: macos-14,      arch: arm64  }
+          - { icon: "🍏", os: macos-13,      arch: x86_64 }
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # System dependencies — mirrors the build workflow so cmake can configure
+      # -----------------------------------------------------------------------
+      - name: Install system dependencies (Linux) ${{ matrix.icon }}
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get -y install \
+            ninja-build cmake \
+            gfortran \
+            libopenblas-dev liblapack-dev \
+            openmpi-bin openmpi-common libopenmpi-dev
+
+      - name: Install system dependencies (macOS) ${{ matrix.icon }}
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja cmake openmpi gfortran
+          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
+          sudo ln -sf "$(which gfortran-14)" "$(brew --prefix)/bin/gfortran"
+
+      # -----------------------------------------------------------------------
+      # Python — needs f90nml for run_test.py
+      # -----------------------------------------------------------------------
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install f90nml
+
+      # -----------------------------------------------------------------------
+      # Download pre-built binary from the build workflow
+      # -----------------------------------------------------------------------
+      - name: Resolve build workflow run ID
+        id: run_id
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "id=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rslmto.${{ runner.os }}.${{ matrix.arch }}
+          path: dist/
+          run-id: ${{ steps.run_id.outputs.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # Configure CMake (registers tests; no build step needed)
+      # -----------------------------------------------------------------------
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DRUN_EXAMPLE_TESTS=ON \
+            -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      # Place the pre-built binary where CMake expects it
+      - name: Stage pre-built binary
+        run: |
+          mkdir -p build/bin
+          cp dist/rslmto.* build/bin/rslmto.x
+          chmod +x build/bin/rslmto.x
+
+      # -----------------------------------------------------------------------
+      # Run tests
+      # -----------------------------------------------------------------------
+      - name: Run example tests ${{ matrix.icon }}
+        id: ctest
+        run: |
+          ctest --test-dir build \
+            --label-regex example \
+            --output-on-failure \
+            --output-junit "${{ github.workspace }}/results.xml" \
+            --parallel 2 \
+            -V 2>&1 | tee ctest_output.txt
+          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        # Always proceed to summary and upload steps even on failure
+        continue-on-error: true
+
+      # -----------------------------------------------------------------------
+      # GitHub step summary — parsed from JUnit XML
+      # -----------------------------------------------------------------------
+      - name: Write job summary
+        if: always()
+        run: |
+          python3 - << 'PYEOF'
+          import os, xml.etree.ElementTree as ET
+
+          xml_path = os.path.join(os.environ["GITHUB_WORKSPACE"], "results.xml")
+          summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+
+          if not os.path.exists(xml_path):
+              with open(summary_path, "a") as f:
+                  f.write("## Example tests\n\nNo results file found.\n")
+              raise SystemExit(0)
+
+          tree = ET.parse(xml_path)
+          root = tree.getroot()
+          suite = root.find("testsuite") or root
+
+          passed, failed, skipped = [], [], []
+          for tc in suite.findall("testcase"):
+              name = tc.attrib.get("name", "?")
+              time = float(tc.attrib.get("time", 0))
+              label = f"`{name}` ({time:.1f}s)"
+              if tc.find("failure") is not None or tc.find("error") is not None:
+                  msg = (tc.find("failure") or tc.find("error")).text or ""
+                  failed.append((label, msg.strip()))
+              elif tc.find("skipped") is not None:
+                  skipped.append(label)
+              else:
+                  passed.append(label)
+
+          total = len(passed) + len(failed) + len(skipped)
+          status = "✅ All passed" if not failed else f"❌ {len(failed)} failed"
+
+          lines = [
+              f"## Example tests — {status}",
+              "",
+              f"**{len(passed)}/{total} passed**"
+              + (f", {len(failed)} failed" if failed else "")
+              + (f", {len(skipped)} skipped" if skipped else ""),
+              "",
+          ]
+
+          if failed:
+              lines += ["### ❌ Failed", "", "| Test | Output |", "|------|--------|"]
+              for label, msg in failed:
+                  # Truncate long messages for readability
+                  short = msg.replace("\n", " ").replace("|", "\\|")[:200]
+                  lines.append(f"| {label} | {short} |")
+              lines.append("")
+
+          if passed:
+              lines += ["### ✅ Passed", "", "| Test |", "|------|"]
+              lines += [f"| {t} |" for t in passed]
+              lines.append("")
+
+          with open(summary_path, "a") as f:
+              f.write("\n".join(lines) + "\n")
+          PYEOF
+
+      # -----------------------------------------------------------------------
+      # Upload artifacts for inspection
+      # -----------------------------------------------------------------------
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_logs.${{ runner.os }}.${{ matrix.arch }}
+          path: |
+            ctest_output.txt
+            results.xml
+          if-no-files-found: ignore
+
+      # -----------------------------------------------------------------------
+      # Propagate failure after summary and upload are done
+      # -----------------------------------------------------------------------
+      - name: Check test outcome
+        if: steps.ctest.outputs.ctest_exit != '0'
+        run: |
+          echo "Tests failed — see summary above for details."
+          exit 1

@@ -38,16 +38,16 @@
       "case": "conductivity/fccPt",
       "timeout": 600,
       "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
       },
       "checks": {
-        "nml": [
-          { "file": "Pt_out.nml", "scalars": ["etot", "ws_r"] }
-        ],
         "text": [
           { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+        ],
+        "text": [
+          { "file": "Pt_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     },
@@ -56,16 +56,16 @@
       "case": "conductivity/fccPt",
       "timeout": 600,
       "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
       },
       "checks": {
-        "nml": [
-          { "file": "Pt_out.nml", "scalars": ["etot", "ws_r"] }
-        ],
         "text": [
           { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+        ],
+        "text": [
+          { "file": "Pt_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     }

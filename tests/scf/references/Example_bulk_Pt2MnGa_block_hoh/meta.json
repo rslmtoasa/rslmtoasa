@@ -2,6 +2,7 @@
   "name": "Example_bulk_Pt2MnGa_block_hoh",
   "case": "bulk/Pt2MnGa",
   "timeout": 240,
+  "mpi_procs": 4,
   "namelists": {
     "control": {
       "nsp": 2,

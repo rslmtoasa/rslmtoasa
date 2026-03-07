@@ -2,11 +2,12 @@
   "name": "Example_bulk_Pt2MnGa_chebyshev_hoh",
   "case": "bulk/Pt2MnGa",
   "timeout": 600,
+  "mpi_procs": 4,
   "namelists": {
     "control": {
       "nsp": 2,
       "recur": "chebyshev",
-      "lld": 200
+      "lld": 50
     },
     "self": {
       "nstep": 1

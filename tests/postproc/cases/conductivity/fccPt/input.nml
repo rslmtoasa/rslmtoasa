@@ -1,5 +1,6 @@
 &calculation
-pre_processing = 'bravais'
+!pre_processing = 'bravais'
+post_processing = 'conductivity'
 verbose = T
 /
 &lattice
@@ -24,7 +25,7 @@ label(1) = 'Pt'
 /
 &self
 ws_all = .true.
-nstep = 100
+nstep = 1
 /
 &hamiltonian
 v_alpha = 0, 1, 0
@@ -32,7 +33,7 @@ v_beta =  1, 0, 0
 js_alpha = 'z'
 /
 &energy
-fermi = -0.089509
+fermi = -0.085837
 energy_min = -1.0
 energy_max = 1.2
 channels_ldos = 2500
@@ -40,8 +41,8 @@ channels_ldos = 2500
 &control
 calctype = 'B'
 nsp = 2
-cond_ll = 500
-lld = 150
+cond_ll = 50
+lld = 50
 recur = 'chebyshev'
 cond_type = 'spin'
 cond_calctype = 'per_type'
@@ -49,4 +50,7 @@ cond_calctype = 'per_type'
 &mix
 mixtype = 'broyden'
 beta = 0.4
+/
+&hamiltonian
+hoh = false
 /

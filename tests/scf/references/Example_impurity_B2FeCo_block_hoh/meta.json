@@ -2,6 +2,7 @@
   "name": "Example_impurity_B2FeCo_block_hoh",
   "case": "impurity/B2FeCo",
   "timeout": 240,
+  "mpi_procs": 2,
   "namelists": {
     "control": {
       "nsp": 2,

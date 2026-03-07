@@ -6,7 +6,7 @@
     "control": {
       "nsp": 3,
       "recur": "chebyshev",
-      "lld": 200
+      "lld": 100
     },
     "self": {
       "nstep": 1

@@ -1,18 +1,18 @@
 {
-  "name": "Example_exchange_conductivity_fccPt",
+  "name": "Example_exchange_conductivity_fccPt_hoh",
   "case": "conductivity/fccPt",
   "timeout": 600,
   "namelists": {
     "control": {
       "nsp": 2,
       "recur": "chebyshev",
-      "lld": 100
+      "lld": 50
     },
     "self": {
       "nstep": 1
     },
     "hamiltonian": {
-      "hoh": false
+      "hoh": true
     }
   },
   "checks": {

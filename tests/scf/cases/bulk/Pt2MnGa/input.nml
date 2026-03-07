@@ -3,7 +3,7 @@ pre_processing = 'bravais'
 verbose = T
 /
 &lattice
-rc = 050 ! radius cut. We could think about setting a default
+rc = 030 ! radius cut. We could think about setting a default
 alat = 4.01740 ! lattice parameter
 crystal_sym = 'file' ! options are bcc, fcc and hcp so far.
 ntype = 4

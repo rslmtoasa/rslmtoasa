@@ -2,6 +2,7 @@
   "name": "Example_surface_fccCu001_block_hoh",
   "case": "surface/fccCu001",
   "timeout": 240,
+  "mpi_procs": 2,
   "namelists": {
     "control": {
       "nsp": 2,
