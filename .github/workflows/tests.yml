@@ -28,7 +28,8 @@ jobs:
         include:
           - { icon: "🐧", os: ubuntu-latest, arch: x86_64 }
           - { icon: "🍎", os: macos-14,      arch: arm64  }
-          - { icon: "🍏", os: macos-13,      arch: x86_64 }
+          # macos-13 (x86_64 Intel) has been retired by GitHub
+          # - { icon: "🍏", os: macos-13,      arch: x86_64 }
 
     runs-on: ${{ matrix.os }}
 
