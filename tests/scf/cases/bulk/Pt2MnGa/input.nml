@@ -1,0 +1,46 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 030 ! radius cut. We could think about setting a default
+alat = 4.01740 ! lattice parameter
+crystal_sym = 'file' ! options are bcc, fcc and hcp so far.
+ntype = 4
+!
+ct(1) = 4.0
+ct(2) = 4.0
+ct(3) = 4.0
+ct(4) = 4.0
+!
+r2 = 16.0
+/
+&atoms
+database = './'
+label(1) = 'Mn'
+label(2) = 'Ga'
+label(3) = 'Pt1'
+label(4) = 'Pt2'
+/
+&self
+nstep = 1
+/
+&energy
+fermi = -0.065629
+energy_min = -2.0
+energy_max = 1.5
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 2 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 50
+recur = 'chebyshev'
+/
+&mix
+beta = 0.25
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+/

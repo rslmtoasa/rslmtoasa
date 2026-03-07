@@ -1,0 +1,48 @@
+{
+  "name": "Example_bulk_bccFe_nsp2_chebyshev",
+  "case": "bulk/bccFe",
+  "timeout": 600,
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 100
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Fe_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ],
+        "arrays": {
+          "mom": [
+            3
+          ]
+        }
+      }
+    ],
+    "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

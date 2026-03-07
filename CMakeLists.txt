@@ -9,7 +9,7 @@
 # cmake_policy(SET CMP0054 NEW)
 
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.19)
 
 set(PROJECT_NAME rslmto)
 project(${PROJECT_NAME})
@@ -44,6 +44,9 @@ option(ENABLE_MPI "Use MPI for parallelization" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
+option(RUN_EXAMPLE_TESTS "Run fast example-based SCF tests" OFF)
+set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for example reference comparisons")
+set(EXAMPLE_REF_REL_TOL "1e-6" CACHE STRING "Relative tolerance for example reference comparisons")
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
@@ -215,6 +218,61 @@ add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKI
 set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 endif (RUN_REG_TESTS)
+
+if (RUN_EXAMPLE_TESTS)
+
+# Prefer an active venv, then the system Python. Users can override via
+# -DEXAMPLE_PYTHON_EXECUTABLE=/path/to/venv/python3 without reconfiguring.
+set(Python3_FIND_VIRTUALENV FIRST)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(EXAMPLE_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH
+    "Python interpreter for example tests (must have f90nml installed)")
+
+# Read cases.json and register CTest entries for one example test suite.
+# Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
+function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
+  file(READ "${CASES_JSON}" _json)
+  string(JSON _n LENGTH "${_json}" "cases")
+  math(EXPR _last "${_n} - 1")
+
+  foreach(_i RANGE ${_last})
+    string(JSON _name    GET "${_json}" "cases" ${_i} "name")
+    string(JSON _recur   GET "${_json}" "cases" ${_i} "namelists" "control" "recur")
+    string(JSON _timeout GET "${_json}" "cases" ${_i} "timeout")
+
+    set(_cmd
+      "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/run_test.py"
+      "--binary"       "${TestBinary}"
+      "--cases-json"   "${CASES_JSON}"
+      "--case-name"    "${_name}"
+      "--scratch-root" "${SCRATCH_ROOT}"
+    )
+
+    list(APPEND _cmd
+      "--compare-ref" "${REFS_DIR}"
+      "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
+      "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
+    )
+
+    add_test(NAME "${_name}" COMMAND ${_cmd})
+    set_tests_properties("${_name}" PROPERTIES
+      LABELS "example;${SUITE};${_recur}" TIMEOUT "${_timeout}")
+  endforeach()
+endfunction()
+
+register_example_tests(
+  "${TestDIR}/scf/cases.json"     scf
+  "${CMAKE_BINARY_DIR}/Testing/scf"
+  "${TestDIR}/scf/references"
+)
+
+register_example_tests(
+  "${TestDIR}/postproc/cases.json"     postproc
+  "${CMAKE_BINARY_DIR}/Testing/postproc"
+  "${TestDIR}/postproc/references"
+)
+
+endif (RUN_EXAMPLE_TESTS)
  
 ##############################################################################################
 ## ADD Cpack
