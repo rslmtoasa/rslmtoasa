@@ -1,0 +1,60 @@
+# Build artifacts
+/build/
+/build_*/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/CPackConfig.cmake
+/CPackSourceConfig.cmake
+/Makefile
+
+# Binaries
+/bin/
+*.exe
+*.out
+rslmto.x
+
+# Fortran build artifacts
+*.o
+*.mod
+
+# Test generated files and logs
+**/data.nml
+**/testrun.log
+
+# CTest / Testing folders
+/Testing/
+/build/**/Testing/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+venv/
+pip-wheel-metadata/
+*.egg-info
+.python-version
+.pytest_cache/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+
+# Editors
+*~
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints
+
+# Logs
+*.log
+*.out
