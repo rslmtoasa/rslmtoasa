@@ -50,9 +50,10 @@ jobs:
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
         run: |
-          brew install ninja cmake openmpi gfortran
+          brew install ninja cmake open-mpi
+          gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
+          sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          sudo ln -sf "$(which gfortran-14)" "$(brew --prefix)/bin/gfortran"
 
       # -----------------------------------------------------------------------
       # Python — needs f90nml for run_test.py
