@@ -529,6 +529,14 @@ contains
       njijk = this%njijk
       call move_alloc(this%ijktrio, ijktrio)
 
+      ! Pre-size ct to a safe upper bound if currently empty (ntype unknown
+      ! before the first read). izp has size ndim (the large default), which
+      ! is always >= ntype. The resize check below will shrink it to ntype.
+      if (size(ct) == 0) then
+         deallocate (ct)
+         allocate (ct(size(izp)))
+      end if
+
       open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
          call g_logger%fatal('file '//fmt('A', trim(fname_))//'not found', __FILE__, __LINE__)
@@ -668,7 +676,17 @@ contains
          call g_logger%fatal('file lattice.nml not found', __FILE__, __LINE__)
       end if
 
+      ! Pre-allocate ib, iu, irec before the sizing read to avoid undefined
+      ! behaviour on compilers that write into unallocated storage when these
+      ! variables appear in the namelist file. crd was moved from this%crd and
+      ! has size (3, ntot), so its second dimension is a safe upper bound.
+      if (allocated(crd)) then
+         allocate (ib(size(crd, 2)), iu(size(crd, 2)), irec(size(crd, 2)))
+      else
+         allocate (ib(1), iu(1), irec(1))
+      end if
       read (funit, nml=lattice, iostat=iostatus)
+      deallocate (ib, iu, irec)
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.ib', ib, (/ntot/))
       call g_safe_alloc%allocate('lattice.iu', iu, (/ntot/))
