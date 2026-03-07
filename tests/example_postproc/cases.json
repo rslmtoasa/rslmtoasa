@@ -8,7 +8,13 @@
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false}
+        "hamiltonian": { "hoh": false }
+      },
+      "checks": {
+        "text": [
+          { "file": "jij.out", "rows": [1, 2], "cols": [6, 7] },
+          { "file": "dij.out", "rows": [1, 2], "cols": [6, 7, 8] }
+        ]
       }
     },
     {
@@ -19,6 +25,12 @@
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
+      },
+      "checks": {
+        "text": [
+          { "file": "jij.out", "rows": [1, 2], "cols": [6, 7] },
+          { "file": "dij.out", "rows": [1, 2], "cols": [6, 7, 8] }
+        ]
       }
     },
     {
@@ -29,6 +41,14 @@
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
+      },
+      "checks": {
+        "nml": [
+          { "file": "Pt_out.nml", "scalars": ["etot", "ws_r"] }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+        ]
       }
     },
     {
@@ -39,6 +59,14 @@
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 200 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
+      },
+      "checks": {
+        "nml": [
+          { "file": "Pt_out.nml", "scalars": ["etot", "ws_r"] }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+        ]
       }
     }
   ]

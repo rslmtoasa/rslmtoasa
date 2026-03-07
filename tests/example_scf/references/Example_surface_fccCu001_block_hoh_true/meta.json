@@ -14,5 +14,23 @@
     "hamiltonian": {
       "hoh": true
     }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Cu_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ]
+      },
+      {
+        "file": "Cu-S_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ]
+      }
+    ]
   }
 }

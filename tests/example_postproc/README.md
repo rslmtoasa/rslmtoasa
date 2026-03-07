@@ -8,14 +8,54 @@ for fatal errors. Numerical reference comparisons are optional.
 
 - `cases.json` — test case matrix (single source of truth for CTest and reference generation)
 - `cases/<workflow>/<system>/` — input files for each calculation
-- `references/<TestName>/ref.nml` — stored reference outputs (committed after generation)
+- `references/<TestName>/ref.json` — stored reference outputs (committed after generation)
+
+## Case file format (`cases.json`)
+
+Each entry defines one test. The `"namelists"` dict patches `input.nml`; the
+optional `"checks"` dict defines what to compare against stored references.
+
+```json
+{
+  "name": "Example_exchange_bccFe",
+  "case": "exchange/bccFe",
+  "timeout": 240,
+  "namelists": {
+    "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+    "self":        { "nstep": 1 },
+    "hamiltonian": { "hoh": false }
+  },
+  "checks": {
+    "nml": [
+      { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+    ],
+    "text": [
+      { "file": "jij.out", "rows": [1, 2], "cols": [6, 7] }
+    ]
+  }
+}
+```
+
+**`checks` fields:**
+
+- `nml` — list of output namelist files to check:
+  - `file` — filename in the workdir
+  - `scalars` — scalar keys to compare (searched across all namelist sections)
+  - `arrays` — array key → list of 1-based Fortran indices to compare
+- `text` — list of space-separated text files to check:
+  - `file` — filename in the workdir
+  - `rows` — 1-based line numbers to check
+  - `cols` — 1-based column indices; all columns are checked for every row
+
+Cases without a `"checks"` key run as smoke-only (log check, no value comparison).
 
 ## CTest modes
 
 **Smoke** (default): runs the binary and checks for fatal errors.
 
-**Reference** (optional): re-runs each case and compares selected output keys
-against stored references. Registers additional `_ref` test variants in CTest.
+**Reference** (optional): re-runs each case and compares the values defined in
+the case's `"checks"` dict against `references/<TestName>/ref.json`.
+Registers additional `_ref` test variants in CTest.
 
 ### Enable smoke tests
 
@@ -61,8 +101,9 @@ python3 tests/generate_references.py \
     --case Example_exchange_bccFe
 ```
 
-Each reference is saved as `references/<TestName>/ref.nml` alongside a
-`meta.json` recording the parameters used.
+Each reference is saved as `references/<TestName>/ref.json` alongside a
+`meta.json` recording the parameters used. The values extracted are those
+specified by the case's `"checks"` dict in `cases.json`.
 
 ## Running a single case manually
 

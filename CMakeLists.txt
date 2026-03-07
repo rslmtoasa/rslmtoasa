@@ -45,8 +45,7 @@ option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
 option(RUN_EXAMPLE_TESTS "Run fast example-based SCF tests" OFF)
-option(RUN_EXAMPLE_REF_TESTS "Enable example SCF reference comparisons" OFF)
-set(EXAMPLE_REF_KEYS "etot,ws_r,vmad" CACHE STRING "Comma-separated par keys for example reference comparisons")
+option(RUN_EXAMPLE_REF_TESTS "Enable example reference comparisons" OFF)
 set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for example reference comparisons")
 set(EXAMPLE_REF_REL_TOL "1e-6" CACHE STRING "Relative tolerance for example reference comparisons")
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
@@ -231,9 +230,8 @@ set(EXAMPLE_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH
     "Python interpreter for example tests (must have f90nml installed)")
 
 if (RUN_EXAMPLE_REF_TESTS)
-  set(EXAMPLE_REF_KEYS    "etot,ws_r,vmad" CACHE STRING "Comma-separated par keys for reference comparison")
-  set(EXAMPLE_REF_ABS_TOL "1e-6"           CACHE STRING "Absolute tolerance for reference comparison")
-  set(EXAMPLE_REF_REL_TOL "1e-6"           CACHE STRING "Relative tolerance for reference comparison")
+  set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for reference comparison")
+  set(EXAMPLE_REF_REL_TOL "1e-6" CACHE STRING "Relative tolerance for reference comparison")
 endif()
 
 # Read cases.json and register CTest entries for one example test suite.
@@ -263,7 +261,6 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
     if (RUN_EXAMPLE_REF_TESTS)
       add_test(NAME "${_name}_ref" COMMAND ${_cmd}
         "--compare-ref" "${REFS_DIR}"
-        "--keys"        "${EXAMPLE_REF_KEYS}"
         "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
         "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
       )
