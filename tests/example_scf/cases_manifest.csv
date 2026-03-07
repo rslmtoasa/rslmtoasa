@@ -1,0 +1,19 @@
+# test_name,case_rel,nsp,recur,hoh,lld,nstep
+Example_bulk_bccFe_nsp2_block_hoh_true,bulk/bccFe,2,block,true,20,1
+Example_bulk_bccFe_nsp2_block_hoh_false,bulk/bccFe,2,block,false,20,1
+Example_bulk_bccFe_nsp2_chebyshev_hoh_true,bulk/bccFe,2,chebyshev,true,200,1
+Example_bulk_bccFe_nsp2_chebyshev_hoh_false,bulk/bccFe,2,chebyshev,false,200,1
+Example_bulk_bccFe_nsp3_block_hoh_true,bulk/bccFe,3,block,true,20,1
+Example_bulk_bccFe_nsp3_block_hoh_false,bulk/bccFe,3,block,false,20,1
+Example_bulk_bccFe_nsp3_chebyshev_hoh_true,bulk/bccFe,3,chebyshev,true,200,1
+Example_bulk_bccFe_nsp3_chebyshev_hoh_false,bulk/bccFe,3,chebyshev,false,200,1
+Example_bulk_bccFe_nsp4_block_hoh_true,bulk/bccFe,4,block,true,20,1
+Example_bulk_bccFe_nsp4_block_hoh_false,bulk/bccFe,4,block,false,20,1
+Example_bulk_bccFe_nsp4_chebyshev_hoh_true,bulk/bccFe,4,chebyshev,true,200,1
+Example_bulk_bccFe_nsp4_chebyshev_hoh_false,bulk/bccFe,4,chebyshev,false,200,1
+Example_surface_fccCu001_block_hoh_true,surface/fccCu001,2,block,true,20,1
+Example_impurity_B2FeCo_block_hoh_true,impurity/B2FeCo,2,block,true,20,1
+Example_bulk_Pt2MnGa_block_hoh_true,bulk/Pt2MnGa,2,block,true,20,1
+Example_bulk_Pt2MnGa_block_hoh_false,bulk/Pt2MnGa,2,block,false,20,1
+Example_bulk_Pt2MnGa_chebyshev_hoh_true,bulk/Pt2MnGa,2,chebyshev,true,200,1
+Example_bulk_Pt2MnGa_chebyshev_hoh_false,bulk/Pt2MnGa,2,chebyshev,false,200,1
