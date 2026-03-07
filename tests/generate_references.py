@@ -12,8 +12,8 @@ Usage:
 Examples:
   # Generate all SCF references
   generate_references.py --binary build/bin/rslmto.x \\
-      --cases-json tests/example_scf/cases.json \\
-      --references-dir tests/example_scf/references
+      --cases-json tests/scf/cases.json \\
+      --references-dir tests/scf/references
 
   # Only specific cases
   generate_references.py ... --case Example_bulk_bccFe_nsp2_block_hoh_true

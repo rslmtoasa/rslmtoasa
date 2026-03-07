@@ -1,7 +1,0 @@
-name=Example_bulk_bccFe_nsp2_block_hoh_true
-case_rel=bulk/bccFe
-nsp=2
-recur=block
-hoh=true
-lld=20
-nstep=1

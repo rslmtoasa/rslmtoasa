@@ -1,0 +1,36 @@
+{
+  "name": "Example_surface_fccCu001_block_hoh",
+  "case": "surface/fccCu001",
+  "timeout": 240,
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 20
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": true
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Cu_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ]
+      },
+      {
+        "file": "Cu-S_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ]
+      }
+    ]
+  }
+}

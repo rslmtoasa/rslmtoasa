@@ -45,7 +45,6 @@ option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
 option(RUN_EXAMPLE_TESTS "Run fast example-based SCF tests" OFF)
-option(RUN_EXAMPLE_REF_TESTS "Enable example reference comparisons" OFF)
 set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for example reference comparisons")
 set(EXAMPLE_REF_REL_TOL "1e-6" CACHE STRING "Relative tolerance for example reference comparisons")
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
@@ -229,11 +228,6 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(EXAMPLE_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH
     "Python interpreter for example tests (must have f90nml installed)")
 
-if (RUN_EXAMPLE_REF_TESTS)
-  set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for reference comparison")
-  set(EXAMPLE_REF_REL_TOL "1e-6" CACHE STRING "Relative tolerance for reference comparison")
-endif()
-
 # Read cases.json and register CTest entries for one example test suite.
 # Args: CASES_JSON  SUITE_LABEL  SCRATCH_ROOT  REFS_DIR
 function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
@@ -253,32 +247,29 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
       "--case-name"    "${_name}"
       "--scratch-root" "${SCRATCH_ROOT}"
     )
-    set(_labels "example;${SUITE};${_recur}")
+
+    list(APPEND _cmd
+      "--compare-ref" "${REFS_DIR}"
+      "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
+      "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
+    )
 
     add_test(NAME "${_name}" COMMAND ${_cmd})
-    set_tests_properties("${_name}" PROPERTIES LABELS "${_labels}" TIMEOUT "${_timeout}")
-
-    if (RUN_EXAMPLE_REF_TESTS)
-      add_test(NAME "${_name}_ref" COMMAND ${_cmd}
-        "--compare-ref" "${REFS_DIR}"
-        "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
-        "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
-      )
-      set_tests_properties("${_name}_ref" PROPERTIES LABELS "${_labels};reference" TIMEOUT "${_timeout}")
-    endif()
+    set_tests_properties("${_name}" PROPERTIES
+      LABELS "example;${SUITE};${_recur}" TIMEOUT "${_timeout}")
   endforeach()
 endfunction()
 
 register_example_tests(
-  "${TestDIR}/example_scf/cases.json"     scf
-  "${CMAKE_BINARY_DIR}/Testing/example_scf"
-  "${TestDIR}/example_scf/references"
+  "${TestDIR}/scf/cases.json"     scf
+  "${CMAKE_BINARY_DIR}/Testing/scf"
+  "${TestDIR}/scf/references"
 )
 
 register_example_tests(
-  "${TestDIR}/example_postproc/cases.json"     postproc
-  "${CMAKE_BINARY_DIR}/Testing/example_postproc"
-  "${TestDIR}/example_postproc/references"
+  "${TestDIR}/postproc/cases.json"     postproc
+  "${CMAKE_BINARY_DIR}/Testing/postproc"
+  "${TestDIR}/postproc/references"
 )
 
 endif (RUN_EXAMPLE_TESTS)
