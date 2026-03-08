@@ -529,10 +529,13 @@ contains
       njijk = this%njijk
       call move_alloc(this%ijktrio, ijktrio)
 
-      ! Pre-size ct to a safe upper bound if currently empty (ntype unknown
-      ! before the first read). izp has size ndim (the large default), which
-      ! is always >= ntype. The resize check below will shrink it to ntype.
-      if (size(ct) == 0) then
+      ! Pre-size ct before the first read. ntype is unknown at this point
+      ! (local ntype = 0 from restore_to_default), so ct has size 0. 1000 is
+      ! a safe upper bound for atom types; the resize check below will shrink
+      ! it to the actual ntype read from the file.
+      if (.not. allocated(ct)) then
+         allocate (ct(size(izp)))
+      else if (size(ct) == 0) then
          deallocate (ct)
          allocate (ct(size(izp)))
       end if
