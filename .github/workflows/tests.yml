@@ -93,8 +93,17 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S . -B build -G Ninja \
+            -DENABLE_MPI=ON \
             -DRUN_EXAMPLE_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Select MPI launcher
+        run: |
+          if command -v mpirun.openmpi >/dev/null 2>&1; then
+            echo "RSLMTO_MPI_LAUNCHER=mpirun.openmpi" >> "$GITHUB_ENV"
+          else
+            echo "RSLMTO_MPI_LAUNCHER=mpirun" >> "$GITHUB_ENV"
+          fi
 
       # Place the pre-built binary where CMake expects it
       - name: Stage pre-built binary
