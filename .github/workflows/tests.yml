@@ -146,7 +146,8 @@ jobs:
               time = float(tc.attrib.get("time", 0))
               label = f"`{name}` ({time:.1f}s)"
               if tc.find("failure") is not None or tc.find("error") is not None:
-                  msg = (tc.find("failure") or tc.find("error")).text or ""
+                  el = tc.find("failure") if tc.find("failure") is not None else tc.find("error")
+                  msg = el.text or ""
                   failed.append((label, msg.strip()))
               elif tc.find("skipped") is not None:
                   skipped.append(label)

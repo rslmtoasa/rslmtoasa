@@ -13,8 +13,8 @@ if [ ! -x "$binary" ]; then
     exit 1
 fi
 
-if [ "$mpi_procs" -gt 1 ]; then
-    OMP_NUM_THREADS=1 mpirun -n "$mpi_procs" "$binary" > testrun.log 2>&1
+if command -v mpirun &>/dev/null; then
+    OMP_NUM_THREADS=1 mpirun --oversubscribe -n "$mpi_procs" "$binary" > testrun.log 2>&1
 else
     OMP_NUM_THREADS=1 "$binary" > testrun.log 2>&1
 fi
