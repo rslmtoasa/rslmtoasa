@@ -92,9 +92,20 @@ def run_binary(binary: str, workdir: str, mpi_procs: int = 1) -> None:
     cmd = ["/bin/bash", run_script, binary]
     if mpi_procs > 1:
         cmd.append(str(mpi_procs))
+    print(f"CMD: {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, cwd=workdir)
     if result.returncode != 0:
         print(f"ERROR: binary returned non-zero exit code {result.returncode}")
+        log_path = os.path.join(workdir, "testrun.log")
+        if os.path.exists(log_path):
+            with open(log_path) as fh:
+                content = fh.read()
+            tail = content[-3000:] if len(content) > 3000 else content
+            print("--- testrun.log (last 3000 chars) ---")
+            print(tail)
+            print("--------------------------------------")
+        else:
+            print("  (testrun.log not found)")
         sys.exit(1)
 
 
@@ -114,7 +125,6 @@ def check_log(workdir: str, case_name: str) -> None:
         lines = content.splitlines()
         print("\n".join(lines[-50:]))
         sys.exit(1)
-
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +319,7 @@ def main() -> None:
 
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--compare-ref", metavar="REF_DIR", help="Compare output against stored reference")
-    mode.add_argument("--gen-ref",     metavar="REF_DIR", help="Save output as new reference")
+    mode.add_argument("--gen-ref", metavar="REF_DIR", help="Save output as new reference")
 
     parser.add_argument("--abs-tol", type=float, default=1e-6)
     parser.add_argument("--rel-tol", type=float, default=1e-6)
