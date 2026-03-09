@@ -602,7 +602,7 @@ contains
 
       ! Defining some parameters. Need to find a way to set them automatically in
       ! the future
-      nsize = 3000000
+      nsize = 4000000
       nbmx = 5500
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('charge.w', this%w, nsize)
@@ -1799,7 +1799,7 @@ contains
    subroutine madmat(NBAS, TAU, A, ALAT, VOL, RLAT, NKR, DLAT, NKD, AMAD)
 ! ....MAKES MADELUNG MATRIX
       ! Input and output
-      integer, parameter :: nbmx = 550
+      integer, parameter :: nbmx = 2000
       integer, intent(inout) :: nkr, nkd, nbas
       real(rp), dimension(3, nbmx), intent(inout) :: tau, dlat, rlat
       real(rp), dimension(nbas, nbas), intent(inout) :: amad
@@ -2387,7 +2387,7 @@ contains
       save
 ! ----- DEFINE STORAGE SIZE ------
 !  START OF FIRST ARRAY AND MAX NUMBER TO BE DEFINED:
-      nsize = 3000000
+      nsize = 4000000
       J70 = 5
       NDEFMX = 100
       LIMIT = NSIZE

@@ -57,7 +57,7 @@ module hamiltonian_mod
       !> Local Hamiltonian
       complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo
       !> Hamiltonian built in chbar_nc (description to be improved)
-      complex(rp), dimension(:, :, :, :), allocatable :: hmag
+      complex(rp), dimension(:, :, :, :), allocatable :: hmag, hxc
       !> Hamiltonian built in ham0m_nc (description to be improved
       complex(rp), dimension(:, :, :), allocatable :: hhmag
       !> Overlap Hamiltonian
@@ -167,6 +167,7 @@ contains
       if (allocated(this%jlo_a)) call g_safe_alloc%deallocate('hamiltonian.jlo_a', this%jlo_a)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
       if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
+      if (allocated(this%hxc)) call g_safe_alloc%deallocate('hamiltonian.hxc', this%hxc)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -190,6 +191,7 @@ contains
       if (allocated(this%jlo_a)) deallocate(this%jlo_a)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
+      if (allocated(this%hxc)) deallocate(this%hxc)
 #endif
    end subroutine destructor
 
@@ -280,12 +282,14 @@ contains
       call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
       allocate (this%lsham(18, 18, this%charge%lattice%ntype))
       allocate (this%tmat(18, 18, 3, this%charge%lattice%ntype))
       allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, this%charge%lattice%kk, 4))
+      allocate (this%hxc(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%ee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hall(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       !if (this%hoh) then
@@ -321,6 +325,7 @@ contains
       this%hhmag(:, :, :) = 0.0d0
       this%hmag(:, :, :, :) = 0.0d0
       this%hall(:, :, :, :) = 0.0d0
+      this%hxc(:, :, :, :) = 0.0d0
       this%ee(:, :, :, :) = 0.0d0
       !if (this%hoh) then
       this%hallo(:, :, :, :) = 0.0d0
@@ -725,20 +730,22 @@ contains
          ! For each neighbor block 
          do m = 1, nr
 
-            if (m==1) then
-              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
-            else
-              locham(:,:) = this%ee(:, :, m, ntype)
-            end if
+            !if (m==1) then
+            !  locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
+            !else
+            !  locham(:,:) = this%ee(:, :, m, ntype)
+            !end if
+
+            locham(:,:) = this%hxc(:, :, m, ntype)
 
             tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * ee(:,:,m,ntype)
+            ! tmp1 = js_a * hxc(:,:,m,ntype)
             tmp1 = matmul(S_op, locham(:, :))
 
-            ! tmp2 = ee(:,:,m,ntype) * js_a
+            ! tmp2 = hxc(:,:,m,ntype) * js_a
             tmp2 = matmul(locham(:, :), S_op)
 
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
             this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
             !write(*,*) 'm=', m
             !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
@@ -1145,10 +1152,17 @@ contains
                   this%ee(j + 9, i + 9, m, ntype) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3)        ! H0-Hz
                   this%ee(j, i + 9, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
                   this%ee(j + 9, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
+                  ! Builds the magnetic part of the Hamiltonian only
+                  this%hxc(j, i, m, ntype) = this%hmag(j, i, m, 3)        ! Hz
+                  this%hxc(j + 9, i + 9, m, ntype) = - this%hmag(j, i, m, 3)        ! - Hz
+                  this%hxc(j, i + 9, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
+                  this%hxc(j + 9, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            write(128, *) 'm=', m, 'ntype= ', ntype
-            write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
+            write(131,*) 'm=', m
+            write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
+            write(132,*) 'm=', m
+            write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if (this%hoh) then
             call this%build_obarm()
@@ -1247,7 +1261,7 @@ contains
       real(rp), dimension(3, 3) :: a_inv
       complex(rp), dimension(18, 18) :: dum
       n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
+      max_orbital = 9 
 
       open (unit=92, file='rs2paoham.dat', action='write', iostat=iostatus, status='replace')
       do ntype = 1, this%charge%lattice%ntype
@@ -1315,7 +1329,7 @@ contains
       type(hamData), allocatable :: hamArray(:)
 
       n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
+      max_orbital = 9 
       numLines = countLines('paoham.dat')
       allocate (hamArray(numLines))
 
@@ -1693,7 +1707,7 @@ contains
          i_out = modulo(orb - 1, max_orbital) + 1
          ia_out = int((orb - 1)/max_orbital) + 1
       else
-         i_out = modulo(orb - 1, max_orbital) + 10
+         i_out = modulo(orb - 1, max_orbital) + max_orbital + 1
          ia_out = int((orb - 1 - n_atoms*max_orbital)/max_orbital) + 1
       end if
    end subroutine orb2site
