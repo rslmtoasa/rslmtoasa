@@ -13,6 +13,8 @@ if [ ! -x "$binary" ]; then
     exit 1
 fi
 
+echo "INFO: run_binary cwd=$(pwd) binary=${binary} mpi_procs=${mpi_procs}" >&2
+
 if [ "$mpi_procs" -gt 1 ]; then
     # Respect an explicitly selected launcher from CI if provided.
     mpi_launcher="${RSLMTO_MPI_LAUNCHER:-}"
@@ -31,10 +33,45 @@ if [ "$mpi_procs" -gt 1 ]; then
     fi
 
     if [ "$mpi_launcher" = "mpirun" ] || [ "$mpi_launcher" = "mpirun.openmpi" ]; then
-        OMP_NUM_THREADS=1 "$mpi_launcher" --oversubscribe -n "$mpi_procs" "$binary" > testrun.log 2>&1
+        run_cmd=("$mpi_launcher" --oversubscribe -n "$mpi_procs" "$binary")
     else
-        OMP_NUM_THREADS=1 "$mpi_launcher" -n "$mpi_procs" "$binary" > testrun.log 2>&1
+        run_cmd=("$mpi_launcher" -n "$mpi_procs" "$binary")
+    fi
+
+    echo "INFO: launcher=${mpi_launcher}" >&2
+    printf 'INFO: command=' >&2
+    printf ' %q' "${run_cmd[@]}" >&2
+    printf '\n' >&2
+
+    {
+        echo "[run_binary] cwd=$(pwd)"
+        echo "[run_binary] mpi_procs=${mpi_procs} launcher=${mpi_launcher}"
+        printf '[run_binary] command='
+        printf ' %q' "${run_cmd[@]}"
+        printf '\n'
+    } > testrun.log
+
+    set +e
+    OMP_NUM_THREADS=1 "${run_cmd[@]}" >> testrun.log 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ]; then
+        echo "ERROR: launcher command failed with exit code ${rc}" >&2
+        echo "--- testrun.log (tail -n 120) ---" >&2
+        tail -n 120 testrun.log >&2 || true
+        echo "----------------------------------" >&2
+        exit "$rc"
     fi
 else
+    set +e
     OMP_NUM_THREADS=1 "$binary" > testrun.log 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ]; then
+        echo "ERROR: serial run failed with exit code ${rc}" >&2
+        echo "--- testrun.log (tail -n 120) ---" >&2
+        tail -n 120 testrun.log >&2 || true
+        echo "----------------------------------" >&2
+        exit "$rc"
+    fi
 fi

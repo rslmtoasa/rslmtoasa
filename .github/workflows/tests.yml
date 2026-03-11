@@ -142,6 +142,21 @@ jobs:
         # Always proceed to summary and upload steps even on failure
         continue-on-error: true
 
+      - name: Dump per-case runner logs on failure
+        if: steps.ctest.outputs.ctest_exit != '0'
+        run: |
+          echo "ctest failed; printing per-case testrun.log files"
+          find build/Testing -type f -name testrun.log | sort | while read -r f; do
+            echo "===== ${f} ====="
+            tail -n 200 "$f" || true
+            echo
+          done
+
+          if [ -f build/Testing/Temporary/LastTest.log ]; then
+            echo "===== build/Testing/Temporary/LastTest.log (tail) ====="
+            tail -n 300 build/Testing/Temporary/LastTest.log || true
+          fi
+
       # -----------------------------------------------------------------------
       # GitHub step summary — parsed from JUnit XML
       # -----------------------------------------------------------------------
