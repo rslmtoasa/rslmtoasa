@@ -105,6 +105,20 @@ jobs:
             echo "RSLMTO_MPI_LAUNCHER=mpirun" >> "$GITHUB_ENV"
           fi
 
+      - name: Verify MPI runtime
+        run: |
+          if command -v "$RSLMTO_MPI_LAUNCHER" >/dev/null 2>&1; then
+            echo "Using MPI launcher: $RSLMTO_MPI_LAUNCHER"
+            "$RSLMTO_MPI_LAUNCHER" --version || true
+          elif command -v mpiexec >/dev/null 2>&1; then
+            echo "RSLMTO_MPI_LAUNCHER=mpiexec" >> "$GITHUB_ENV"
+            echo "Fallback MPI launcher: mpiexec"
+            mpiexec --version || true
+          else
+            echo "ERROR: no MPI launcher found (mpirun/mpiexec)"
+            exit 1
+          fi
+
       # Place the pre-built binary where CMake expects it
       - name: Stage pre-built binary
         run: |
