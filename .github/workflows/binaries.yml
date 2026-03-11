@@ -81,11 +81,13 @@ jobs:
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
 
       - uses: actions/setup-python@v6
+        if: runner.os != 'Windows'
         with:
           python-version: '3.10'
           cache: pip
 
       - name: Install python packages for testing
+        if: runner.os != 'Windows'
         run: |
             python -m ensurepip 
             python -m pip install -r requirements.txt
