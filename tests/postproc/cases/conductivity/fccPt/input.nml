@@ -34,7 +34,7 @@ js_alpha = 'z'
 /
 &energy
 fermi = -0.085837
-energy_min = -1.0
+energy_min = -2.5
 energy_max = 1.2
 channels_ldos = 2500
 /

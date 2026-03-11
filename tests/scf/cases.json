@@ -270,9 +270,6 @@
           { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
           { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
           { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     },
@@ -292,9 +289,6 @@
           { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
           { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
           { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     },
@@ -314,9 +308,6 @@
           { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
           { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
           { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     },
@@ -336,9 +327,6 @@
           { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
           { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
           { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     }

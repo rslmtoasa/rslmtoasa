@@ -13,7 +13,7 @@ jobs:
           - { icon: '🍎' , os: macos-14,       shell: bash, arch: arm64 }
           # macos-13 (x86_64 Intel) has been retired by GitHub
           # - { icon: '🍏' , os: macos-13,       shell: bash, arch: x86_64 }
-          # - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
+          - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -46,7 +46,6 @@ jobs:
           install: >-
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-gcc-fortran
-            mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-blas
             mingw-w64-x86_64-openblas
             mingw-w64-x86_64-lapack
@@ -55,7 +54,7 @@ jobs:
             mingw-w64-x86_64-ninja
             git 
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Fetch tags for versioning
         run: git fetch --prune --unshallow --tags
@@ -70,17 +69,25 @@ jobs:
 
       - name: Build binaries ${{ matrix.icon}}
         run: |
-             cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON
-             cmake --build build --parallel 
+             if [ "$RUNNER_OS" = "Windows" ]; then
+               # Keep Windows build conservative: enable core HCP dependencies (OpenBLAS/LAPACK/FFTW)
+               # while avoiding MPI toolchain/runtime coupling issues on MSYS2.
+               cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=OFF -DENABLE_MPI=OFF -DENABLE_MARCH_NATIVE=OFF
+             else
+               cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF
+             fi
+             cmake --build build --parallel
              mkdir ./dist
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
+        if: runner.os != 'Windows'
         with:
           python-version: '3.10'
           cache: pip
 
       - name: Install python packages for testing
+        if: runner.os != 'Windows'
         run: |
             python -m ensurepip 
             python -m pip install -r requirements.txt
@@ -139,20 +146,20 @@ jobs:
       #       echo "Binary:" rslmto.${{matrix.os}}.${{matrix.arch}}
 
       - name: Upload self-extracting package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}.sh
           path: ./build/rslmto*.sh
 
       - name: Upload .deb package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: runner.os == 'Linux'
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}.deb
           path: ./build/rslmto*.deb
 
       - name: Upload .rpm package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: runner.os == 'Linux'
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}.rpm
@@ -173,7 +180,7 @@ jobs:
       #     path: ./build/rslmto*.msi
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}
           path: ./dist/rslmto*
@@ -187,7 +194,7 @@ jobs:
 
       - name: Upload test logs
         if: runner.os != 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest_log.${{runner.os}}.${{matrix.arch}}
           path: ./build/Testing/Temporary/LastTest.log

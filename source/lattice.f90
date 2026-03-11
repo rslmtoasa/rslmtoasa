@@ -950,6 +950,7 @@ contains
       this%surftype = 'none'
       this%nlay = 0
       this%ntype = 0
+      this%nbas = 0
       this%wav = 0
       this%celldm = 0.0d0
       this%njij = 0

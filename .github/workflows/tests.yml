@@ -11,6 +11,9 @@ on:
       run_id:
         description: "Run ID of the build workflow to pull binaries from"
         required: true
+      ref:
+        description: "Git ref/SHA to test (defaults to triggering run head SHA when empty)"
+        required: false
 
 jobs:
   test:
@@ -34,7 +37,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          # workflow_run: pin to the exact commit that triggered the build workflow.
+          # workflow_dispatch: allow overriding via input.ref; if empty, use run head SHA.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
 
       # -----------------------------------------------------------------------
       # System dependencies — mirrors the build workflow so cmake can configure
@@ -51,7 +58,11 @@ jobs:
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
         run: |
-          brew install ninja cmake open-mpi
+          for pkg in ninja cmake open-mpi; do
+            if ! brew list --versions "$pkg" >/dev/null 2>&1; then
+              brew install "$pkg"
+            fi
+          done
           gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
           sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
@@ -59,7 +70,7 @@ jobs:
       # -----------------------------------------------------------------------
       # Python — needs f90nml for run_test.py
       # -----------------------------------------------------------------------
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -79,8 +90,20 @@ jobs:
             echo "id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Show workflow provenance
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "dispatch.run_id=${{ inputs.run_id || 'n/a' }}"
+          echo "dispatch.ref=${{ inputs.ref || 'n/a' }}"
+          echo "workflow_run.id=${{ github.event.workflow_run.id || 'n/a' }}"
+          echo "workflow_run.head_sha=${{ github.event.workflow_run.head_sha || 'n/a' }}"
+          echo "selected.run_id=${{ steps.run_id.outputs.id }}"
+          echo "checked_out_sha=$(git rev-parse HEAD)"
+          echo "checked_out_branch=$(git branch --show-current || true)"
+          echo "run_test_marker=$(grep -n "\[run_test\]" tests/run_test.py | head -n 1 || true)"
+
       - name: Download binary artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rslmto.${{ runner.os }}.${{ matrix.arch }}
           path: dist/
@@ -93,8 +116,31 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S . -B build -G Ninja \
+            -DENABLE_MPI=ON \
             -DRUN_EXAMPLE_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Select MPI launcher
+        run: |
+          if command -v mpirun.openmpi >/dev/null 2>&1; then
+            echo "RSLMTO_MPI_LAUNCHER=mpirun.openmpi" >> "$GITHUB_ENV"
+          else
+            echo "RSLMTO_MPI_LAUNCHER=mpirun" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify MPI runtime
+        run: |
+          if command -v "$RSLMTO_MPI_LAUNCHER" >/dev/null 2>&1; then
+            echo "Using MPI launcher: $RSLMTO_MPI_LAUNCHER"
+            "$RSLMTO_MPI_LAUNCHER" --version || true
+          elif command -v mpiexec >/dev/null 2>&1; then
+            echo "RSLMTO_MPI_LAUNCHER=mpiexec" >> "$GITHUB_ENV"
+            echo "Fallback MPI launcher: mpiexec"
+            mpiexec --version || true
+          else
+            echo "ERROR: no MPI launcher found (mpirun/mpiexec)"
+            exit 1
+          fi
 
       # Place the pre-built binary where CMake expects it
       - name: Stage pre-built binary
@@ -113,11 +159,26 @@ jobs:
             --label-regex example \
             --output-on-failure \
             --output-junit "${{ github.workspace }}/results.xml" \
-            --parallel 2 \
+            --parallel 1 \
             -V 2>&1 | tee ctest_output.txt
           echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
         # Always proceed to summary and upload steps even on failure
         continue-on-error: true
+
+      - name: Dump per-case runner logs on failure
+        if: steps.ctest.outputs.ctest_exit != '0'
+        run: |
+          echo "ctest failed; printing per-case testrun.log files"
+          find build/Testing -type f -name testrun.log | sort | while read -r f; do
+            echo "===== ${f} ====="
+            tail -n 200 "$f" || true
+            echo
+          done
+
+          if [ -f build/Testing/Temporary/LastTest.log ]; then
+            echo "===== build/Testing/Temporary/LastTest.log (tail) ====="
+            tail -n 300 build/Testing/Temporary/LastTest.log || true
+          fi
 
       # -----------------------------------------------------------------------
       # GitHub step summary — parsed from JUnit XML
@@ -188,7 +249,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Upload test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test_logs.${{ runner.os }}.${{ matrix.arch }}
           path: |
