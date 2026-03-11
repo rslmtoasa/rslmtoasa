@@ -13,8 +13,6 @@ if [ ! -x "$binary" ]; then
     exit 1
 fi
 
-echo "INFO: run_binary cwd=$(pwd) binary=${binary} mpi_procs=${mpi_procs}" >&2
-
 if [ "$mpi_procs" -gt 1 ]; then
     # Respect an explicitly selected launcher from CI if provided.
     mpi_launcher="${RSLMTO_MPI_LAUNCHER:-}"
@@ -38,21 +36,8 @@ if [ "$mpi_procs" -gt 1 ]; then
         run_cmd=("$mpi_launcher" -n "$mpi_procs" "$binary")
     fi
 
-    echo "INFO: launcher=${mpi_launcher}" >&2
-    printf 'INFO: command=' >&2
-    printf ' %q' "${run_cmd[@]}" >&2
-    printf '\n' >&2
-
-    {
-        echo "[run_binary] cwd=$(pwd)"
-        echo "[run_binary] mpi_procs=${mpi_procs} launcher=${mpi_launcher}"
-        printf '[run_binary] command='
-        printf ' %q' "${run_cmd[@]}"
-        printf '\n'
-    } > testrun.log
-
     set +e
-    OMP_NUM_THREADS=1 "${run_cmd[@]}" >> testrun.log 2>&1
+    OMP_NUM_THREADS=1 "${run_cmd[@]}" > testrun.log 2>&1
     rc=$?
     set -e
     if [ "$rc" -ne 0 ]; then

@@ -46,10 +46,6 @@ import sys
 import f90nml
 
 
-def log(msg: str) -> None:
-    print(f"[run_test] {msg}", flush=True)
-
-
 # ---------------------------------------------------------------------------
 # Case loading
 # ---------------------------------------------------------------------------
@@ -68,7 +64,6 @@ def load_case(cases_json: str, case_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def setup_scratch(case_dir: str, workdir: str) -> None:
-    log(f"setup_scratch case_dir={case_dir} workdir={workdir}")
     if os.path.exists(workdir):
         shutil.rmtree(workdir)
     shutil.copytree(case_dir, workdir)
@@ -84,8 +79,6 @@ def setup_scratch(case_dir: str, workdir: str) -> None:
 def patch_input_nml(workdir: str, case: dict) -> None:
     input_path = os.path.join(workdir, "input.nml")
     tmp_path = input_path + ".tmp"
-    nl_keys = sorted(case.get("namelists", {}).keys())
-    log(f"patch_input_nml input={input_path} sections={nl_keys}")
     f90nml.patch(input_path, case["namelists"], tmp_path)
     os.replace(tmp_path, input_path)
 
@@ -99,20 +92,9 @@ def run_binary(binary: str, workdir: str, mpi_procs: int = 1) -> None:
     cmd = ["/bin/bash", run_script, binary]
     if mpi_procs > 1:
         cmd.append(str(mpi_procs))
-    log(f"cwd={workdir}")
-    log(f"mpi_procs={mpi_procs}")
-    log(f"RSLMTO_MPI_LAUNCHER={os.environ.get('RSLMTO_MPI_LAUNCHER', '<unset>')}")
-    log(f"run_script={run_script}")
-    print(f"CMD: {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, cwd=workdir)
     if result.returncode != 0:
         print(f"ERROR: binary returned non-zero exit code {result.returncode}")
-        print(f"ERROR: failing workdir: {workdir}")
-        try:
-            entries = sorted(os.listdir(workdir))
-            print(f"ERROR: workdir files ({len(entries)}): {', '.join(entries[:40])}")
-        except Exception as exc:  # pragma: no cover - debug-only fallback
-            print(f"ERROR: failed to list workdir: {exc}")
         log_path = os.path.join(workdir, "testrun.log")
         if os.path.exists(log_path):
             with open(log_path) as fh:
@@ -347,14 +329,6 @@ def main() -> None:
     cases_dir = os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
     case_dir = os.path.join(cases_dir, case["case"])
     workdir = os.path.join(args.scratch_root, args.case_name)
-
-    log(f"case_name={args.case_name}")
-    log(f"cases_json={os.path.abspath(args.cases_json)}")
-    log(f"case_dir={case_dir}")
-    log(f"binary={binary}")
-    log(f"scratch_root={args.scratch_root}")
-    log(f"checks_enabled={'checks' in case}")
-    log(f"compare_ref={'yes' if args.compare_ref else 'no'} gen_ref={'yes' if args.gen_ref else 'no'}")
 
     setup_scratch(case_dir, workdir)
     patch_input_nml(workdir, case)

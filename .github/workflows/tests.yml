@@ -11,6 +11,9 @@ on:
       run_id:
         description: "Run ID of the build workflow to pull binaries from"
         required: true
+      ref:
+        description: "Git ref/SHA to test (defaults to triggering run head SHA when empty)"
+        required: false
 
 jobs:
   test:
@@ -35,6 +38,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # workflow_run: pin to the exact commit that triggered the build workflow.
+          # workflow_dispatch: allow overriding via input.ref; if empty, use run head SHA.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
 
       # -----------------------------------------------------------------------
       # System dependencies — mirrors the build workflow so cmake can configure
@@ -78,6 +85,18 @@ jobs:
           else
             echo "id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Show workflow provenance
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "dispatch.run_id=${{ inputs.run_id || 'n/a' }}"
+          echo "dispatch.ref=${{ inputs.ref || 'n/a' }}"
+          echo "workflow_run.id=${{ github.event.workflow_run.id || 'n/a' }}"
+          echo "workflow_run.head_sha=${{ github.event.workflow_run.head_sha || 'n/a' }}"
+          echo "selected.run_id=${{ steps.run_id.outputs.id }}"
+          echo "checked_out_sha=$(git rev-parse HEAD)"
+          echo "checked_out_branch=$(git branch --show-current || true)"
+          echo "run_test_marker=$(grep -n "\[run_test\]" tests/run_test.py | head -n 1 || true)"
 
       - name: Download binary artifact
         uses: actions/download-artifact@v4
