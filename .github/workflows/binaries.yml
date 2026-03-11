@@ -13,7 +13,7 @@ jobs:
           - { icon: '🍎' , os: macos-14,       shell: bash, arch: arm64 }
           # macos-13 (x86_64 Intel) has been retired by GitHub
           # - { icon: '🍏' , os: macos-13,       shell: bash, arch: x86_64 }
-          # - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
+          - { icon: '💻' , os: windows-latest, shell: msys2, arch: x86_64 }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -46,7 +46,6 @@ jobs:
           install: >-
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-gcc-fortran
-            mingw-w64-x86_64-msmpi
             mingw-w64-x86_64-blas
             mingw-w64-x86_64-openblas
             mingw-w64-x86_64-lapack
@@ -70,8 +69,14 @@ jobs:
 
       - name: Build binaries ${{ matrix.icon}}
         run: |
-             cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF
-             cmake --build build --parallel 
+             if [ "$RUNNER_OS" = "Windows" ]; then
+               # Keep Windows build conservative: enable core HCP dependencies (OpenBLAS/LAPACK/FFTW)
+               # while avoiding MPI toolchain/runtime coupling issues on MSYS2.
+               cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=OFF -DENABLE_MPI=OFF -DENABLE_MARCH_NATIVE=OFF
+             else
+               cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF
+             fi
+             cmake --build build --parallel
              mkdir ./dist
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
 
