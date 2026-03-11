@@ -1272,6 +1272,10 @@ contains
          this%jij = 0.0d0
          call simpson_f(this%jij, this%en%ene, this%en%fermi, this%en%nv1, real(jtotso), .true., .false., 0.0d0)
          T_comm_xcso(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
+         do nv = 1, this%en%channels_ldos + 10
+            this%jij = 0.0d0
+            call simpson_f(this%jij, this%en%ene, this%en%ene(nv), this%en%nv1, real(jtotso), .true., .false., 0.0d0)
+         end do
          this%jij = 0.0d0
          call simpson_f(this%jij, this%en%ene, this%en%fermi, this%en%nv1, real(jtotfo), .true., .false., 0.0d0)
          T_comm_xcfo(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
@@ -1369,41 +1373,41 @@ contains
 
             ! Jij second order
             this%jij = T_comm_xcso(1, njij_glob)
-            write (20, '(2i8,2x,3f12.6,2x,1f12.6,1x,f12.6)') &
+            write (20, '(2i8,2x,3f12.6,2x,1es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Jij first order
             this%jij = T_comm_xcfo(1, njij_glob)
-            write (25, '(2i8,2x,3f12.6,2x,1f12.6,1x,f12.6)') &
+            write (25, '(2i8,2x,3f12.6,2x,1es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             !  Jij parts
             this%jijcd = T_comm_xcparts(1, njij_glob) ; this%jijsd = T_comm_xcparts(2, njij_glob)    
             this%jijcc = T_comm_xcparts(3, njij_glob) ; this%jijsc = T_comm_xcparts(4, njij_glob) 
-            write (70, '(2i8,2x,3f12.6,2x,4f12.6,1x,f12.6)') &
+            write (70, '(2i8,2x,3f12.6,2x,4es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jijcd, this%jijsd, this%jijcc, this%jijsc, &
       & norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij second order
             this%dmi = T_comm_xcso(2:4, njij_glob)
-            write (30, '(2i8,2x,3f12.6,2x,3f12.6,1x,f12.6)') &
+            write (30, '(2i8,2x,3f12.6,2x,3es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmi, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij first order
             this%dmi = T_comm_xcfo(2:4, njij_glob)
-            write (35, '(2i8,2x,3f12.6,2x,3f12.6,1x,f12.6)') &
+            write (35, '(2i8,2x,3f12.6,2x,3es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmi, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij parts
             this%dmicc = T_comm_xcparts(5:7, njij_glob) ; this%dmisc = T_comm_xcparts(8:10, njij_glob)
-            write (75, '(2i8,2x,3f12.6,2x,6f12.6,1x,f12.6)') &
+            write (75, '(2i8,2x,3f12.6,2x,6es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmicc, this%dmisc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij second order
             this%aij = reshape(T_comm_xcso(5:13, njij_glob), [3, 3])
-            write (40, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
+            write (40, '(2i8,2x,3f12.6,2x,9es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij first order
             this%aij = reshape(T_comm_xcfo(5:13, njij_glob), [3, 3])
-            write (45, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
+            write (45, '(2i8,2x,3f12.6,2x,9es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij parts
             this%aijsd = reshape(T_comm_xcparts(11:19, njij_glob), [3, 3]); this%aijsc = reshape(T_comm_xcparts(20:28, njij_glob), [3, 3])
-            write (80, '(2i8,2x,3f12.6,2x,18f12.6,1x,f12.6)') &
+            write (80, '(2i8,2x,3f12.6,2x,18es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aijsd, this%aijsc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
          end do
       end if
