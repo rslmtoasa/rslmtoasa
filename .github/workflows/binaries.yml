@@ -55,7 +55,7 @@ jobs:
             mingw-w64-x86_64-ninja
             git 
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Fetch tags for versioning
         run: git fetch --prune --unshallow --tags
@@ -75,7 +75,7 @@ jobs:
              mkdir ./dist
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
           cache: pip
@@ -139,20 +139,20 @@ jobs:
       #       echo "Binary:" rslmto.${{matrix.os}}.${{matrix.arch}}
 
       - name: Upload self-extracting package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}.sh
           path: ./build/rslmto*.sh
 
       - name: Upload .deb package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: runner.os == 'Linux'
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}.deb
           path: ./build/rslmto*.deb
 
       - name: Upload .rpm package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: runner.os == 'Linux'
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}.rpm
@@ -173,7 +173,7 @@ jobs:
       #     path: ./build/rslmto*.msi
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rslmto.${{runner.os}}.${{matrix.arch}}
           path: ./dist/rslmto*
@@ -187,7 +187,7 @@ jobs:
 
       - name: Upload test logs
         if: runner.os != 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest_log.${{runner.os}}.${{matrix.arch}}
           path: ./build/Testing/Temporary/LastTest.log
