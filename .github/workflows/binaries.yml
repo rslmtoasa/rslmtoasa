@@ -80,6 +80,13 @@ jobs:
              mkdir ./dist
              cp ./build/bin/rslmto.* ./dist/rslmto.${{runner.os}}.${{matrix.arch}}.exe
 
+      - name: Show resolved compile flags ${{ matrix.icon }}
+        run: |
+          echo "ENABLE_MARCH_NATIVE from CMakeCache:"
+          grep -E '^ENABLE_MARCH_NATIVE:' build/CMakeCache.txt || true
+          echo "Resolved CMAKE_Fortran_FLAGS lines from CMakeCache:"
+          grep -E '^CMAKE_Fortran_FLAGS(:|_)' build/CMakeCache.txt || true
+
       - uses: actions/setup-python@v6
         if: runner.os != 'Windows'
         with:

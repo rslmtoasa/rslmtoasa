@@ -7,6 +7,12 @@ set -euo pipefail
 
 binary="$1"
 mpi_procs="${2:-1}"
+serial_omp_threads="${RSLMTO_OMP_THREADS_SERIAL:-1}"
+
+if ! [[ "$serial_omp_threads" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: RSLMTO_OMP_THREADS_SERIAL must be a positive integer (got '$serial_omp_threads')" >&2
+    exit 2
+fi
 
 if [ ! -x "$binary" ]; then
     echo "ERROR: binary not executable: $binary" >&2
@@ -49,7 +55,7 @@ if [ "$mpi_procs" -gt 1 ]; then
     fi
 else
     set +e
-    OMP_NUM_THREADS=1 "$binary" > testrun.log 2>&1
+    OMP_NUM_THREADS="$serial_omp_threads" "$binary" > testrun.log 2>&1
     rc=$?
     set -e
     if [ "$rc" -ne 0 ]; then
