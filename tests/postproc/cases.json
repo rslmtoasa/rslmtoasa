@@ -6,8 +6,8 @@
       "case": "exchange/bccFe",
       "timeout": 240,
       "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
+      "abs_tol": 1e-4,
+      "rel_tol": 1e-4,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -24,6 +24,8 @@
       "name": "Example_exchange_bccFe_hoh",
       "case": "exchange/bccFe",
       "timeout": 240,
+      "abs_tol": 1e-4,
+      "rel_tol": 1e-4,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },

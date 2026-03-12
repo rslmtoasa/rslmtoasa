@@ -69,6 +69,34 @@ If CMake picked up the wrong Python interpreter, override without wiping the cac
 cmake -DEXAMPLE_PYTHON_EXECUTABLE=/path/to/venv/bin/python3 build
 ```
 
+## Tuning tolerances and OpenMP threads
+
+- Set global tolerances at CMake configure time:
+
+```bash
+cmake -DEXAMPLE_REF_ABS_TOL=1e-6 -DEXAMPLE_REF_REL_TOL=1e-6
+```
+
+- Per-case overrides: a case may include `abs_tol`, `rel_tol`, and `omp_threads`
+  fields in `tests/postproc/cases.json`. Example snippet:
+
+```json
+{
+  "name": "Example_exchange_bccFe",
+  "case": "exchange/bccFe",
+  "timeout": 240,
+  "omp_threads": 2,
+  "abs_tol": 1e-6,
+  "rel_tol": 1e-6,
+  "namelists": { ... }
+}
+```
+
+- `tests/run_test.py` will prefer per-case tolerances when present; otherwise
+  it falls back to the CMake/CLI defaults. `omp_threads` is propagated into
+  the binary wrapper via the `RSLMTO_OMP_THREADS_SERIAL` env var for serial
+  runs. MPI-invoked cases keep `OMP_NUM_THREADS=1`.
+
 ## Generating reference data
 
 Run once with a known-good binary to populate `references/`.
