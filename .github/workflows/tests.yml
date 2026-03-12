@@ -154,6 +154,9 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Run example tests ${{ matrix.icon }}
         id: ctest
+        env:
+          # Apply OpenMP threading only to non-MPI runs; MPI remains pinned to 1 in run_binary.sh.
+          RSLMTO_OMP_THREADS_SERIAL: "2"
         run: |
           ctest --test-dir build \
             --label-regex example \
