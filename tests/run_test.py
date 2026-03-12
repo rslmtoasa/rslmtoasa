@@ -87,12 +87,16 @@ def patch_input_nml(workdir: str, case: dict) -> None:
 # Binary invocation
 # ---------------------------------------------------------------------------
 
-def run_binary(binary: str, workdir: str, mpi_procs: int = 1) -> None:
+def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads: int | None = None) -> None:
     run_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_binary.sh")
     cmd = ["/bin/bash", run_script, binary]
     if mpi_procs > 1:
         cmd.append(str(mpi_procs))
-    result = subprocess.run(cmd, cwd=workdir)
+    # propagate controlled serial OMP thread count to the wrapper via env
+    env = os.environ.copy()
+    if mpi_procs <= 1 and serial_omp_threads is not None:
+        env["RSLMTO_OMP_THREADS_SERIAL"] = str(serial_omp_threads)
+    result = subprocess.run(cmd, cwd=workdir, env=env)
     if result.returncode != 0:
         print(f"ERROR: binary returned non-zero exit code {result.returncode}")
         log_path = os.path.join(workdir, "testrun.log")
@@ -332,13 +336,16 @@ def main() -> None:
 
     setup_scratch(case_dir, workdir)
     patch_input_nml(workdir, case)
-    run_binary(binary, workdir, case.get("mpi_procs", 1))
+    serial_omp = case.get("omp_threads", None)
+    run_binary(binary, workdir, case.get("mpi_procs", 1), serial_omp)
     check_log(workdir, args.case_name)
 
     if args.compare_ref:
+        abs_tol = case.get("abs_tol", args.abs_tol)
+        rel_tol = case.get("rel_tol", args.rel_tol)
         compare_ref(
             workdir, args.case_name, args.compare_ref,
-            case.get("checks", {}), args.abs_tol, args.rel_tol,
+            case.get("checks", {}), abs_tol, rel_tol,
         )
     elif args.gen_ref:
         save_ref(workdir, args.case_name, args.gen_ref, case)

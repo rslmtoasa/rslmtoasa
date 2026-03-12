@@ -5,6 +5,9 @@
       "name": "Example_exchange_bccFe",
       "case": "exchange/bccFe",
       "timeout": 240,
+      "omp_threads": 2,
+      "abs_tol": 1e-6,
+      "rel_tol": 1e-6,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },

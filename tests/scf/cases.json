@@ -5,6 +5,9 @@
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
       "case": "bulk/bccFe",
       "timeout": 240,
+      "omp_threads": 2,
+      "abs_tol": 1e-6,
+      "rel_tol": 1e-6,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -23,6 +26,9 @@
       "name": "Example_bulk_bccFe_nsp2_block",
       "case": "bulk/bccFe",
       "timeout": 240,
+      "omp_threads": 2,
+      "abs_tol": 1e-6,
+      "rel_tol": 1e-6,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
