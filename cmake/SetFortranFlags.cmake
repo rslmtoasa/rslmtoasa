@@ -78,10 +78,17 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
                  Fortran "-cpp"
                          "-fpp")
 
-# There is some bug where -march=native doesn't work on Mac
+# Optimize for the host's architecture (default: native -march=native).
+# For portable/CI builds where the binary may run on a different machine,
+# pass -DENABLE_MARCH_NATIVE=OFF to use generic baseline (-mtune=generic).
+option(ENABLE_MARCH_NATIVE "Optimize for native CPU architecture (-march=native)" ON)
 IF(APPLE)
     SET(GNUNATIVE "-mtune=native")
+ELSEIF(NOT ENABLE_MARCH_NATIVE)
+    # Portable/CI: generic baseline
+    SET(GNUNATIVE "-mtune=generic")
 ELSE()
+    # Default: native optimization
     SET(GNUNATIVE "-march=native")
 ENDIF()
 # Optimize for the host's architecture
@@ -120,13 +127,12 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                           "/traceback"   # Intel Windows
                 )
 
-# Check array bounds
+# Check array bounds (and all other runtime checks for GNU)
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
-                 Fortran "-check bounds"  # Intel
-                         "-fcheck=bounds" # GNU (New style)
-                         "-fbounds-check" # GNU (Old style)
-                         "-Mbounds"       # Portland Group
-                          "/check:bounds"  # Intel Windows
+                 Fortran "-check all"   # Intel
+                         "-fcheck=all"  # GNU (bounds + do + mem + pointer + recursion)
+                         "-Mbounds"     # Portland Group
+                          "/check:all"   # Intel Windows
                 )
 
 #####################

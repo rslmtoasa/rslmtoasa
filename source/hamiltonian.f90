@@ -58,7 +58,7 @@ module hamiltonian_mod
       !> Local Hamiltonian
       complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo
       !> Hamiltonian built in chbar_nc (description to be improved)
-      complex(rp), dimension(:, :, :, :), allocatable :: hmag
+      complex(rp), dimension(:, :, :, :), allocatable :: hmag, hxc
       !> Hamiltonian built in ham0m_nc (description to be improved
       complex(rp), dimension(:, :, :), allocatable :: hhmag
       !> Overlap Hamiltonian
@@ -168,6 +168,7 @@ contains
       if (allocated(this%jlo_a)) call g_safe_alloc%deallocate('hamiltonian.jlo_a', this%jlo_a)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
       if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
+      if (allocated(this%hxc)) call g_safe_alloc%deallocate('hamiltonian.hxc', this%hxc)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -191,6 +192,7 @@ contains
       if (allocated(this%jlo_a)) deallocate(this%jlo_a)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
+      if (allocated(this%hxc)) deallocate(this%hxc)
 #endif
    end subroutine destructor
 
@@ -281,6 +283,7 @@ contains
       call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -289,6 +292,7 @@ contains
       allocate (this%hhmag(norb, norb, 4), this%hmag(norb, norb, this%charge%lattice%kk, 4))
       allocate (this%ee(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hall(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
+      allocate (this%hxc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !if (this%hoh) then
       allocate (this%eeo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%eeoee(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
@@ -322,6 +326,7 @@ contains
       this%hhmag(:, :, :) = 0.0d0
       this%hmag(:, :, :, :) = 0.0d0
       this%hall(:, :, :, :) = 0.0d0
+      this%hxc(:, :, :, :) = 0.0d0
       this%ee(:, :, :, :) = 0.0d0
       !if (this%hoh) then
       this%hallo(:, :, :, :) = 0.0d0
@@ -726,20 +731,22 @@ contains
          ! For each neighbor block 
          do m = 1, nr
 
-            if (m==1) then
-              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
-            else
-              locham(:,:) = this%ee(:, :, m, ntype)
-            end if
+            !if (m==1) then
+            !  locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
+            !else
+            !  locham(:,:) = this%ee(:, :, m, ntype)
+            !end if
+
+            locham(:,:) = this%hxc(:, :, m, ntype)
 
             tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * ee(:,:,m,ntype)
+            ! tmp1 = js_a * hxc(:,:,m,ntype)
             tmp1 = matmul(S_op, locham(:, :))
 
-            ! tmp2 = ee(:,:,m,ntype) * js_a
+            ! tmp2 = hxc(:,:,m,ntype) * js_a
             tmp2 = matmul(locham(:, :), S_op)
 
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
             this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
             !write(*,*) 'm=', m
             !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
@@ -1146,10 +1153,17 @@ contains
                   this%ee(j +spin_off, i +spin_off, m, ntype) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3)        ! H0-Hz
                   this%ee(j, i +spin_off, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
                   this%ee(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
+                  ! Builds the magnetic part of the Hamiltonian only
+                  this%hxc(j, i, m, ntype) = this%hmag(j, i, m, 3)        ! Hz
+                  this%hxc(j +spin_off, i +spin_off, m, ntype) = - this%hmag(j, i, m, 3)        ! - Hz
+                  this%hxc(j, i +spin_off, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
+                  this%hxc(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            write(128, *) 'm=', m, 'ntype= ', ntype
-            write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
+            write(131,*) 'm=', m
+            write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
+            write(132,*) 'm=', m
+            write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if (this%hoh) then
             call this%build_obarm()
@@ -1694,7 +1708,7 @@ contains
          i_out = modulo(orb - 1, max_orbital) + 1
          ia_out = int((orb - 1)/max_orbital) + 1
       else
-         i_out = modulo(orb - 1, max_orbital) + 10
+         i_out = modulo(orb - 1, max_orbital) + max_orbital + 1
          ia_out = int((orb - 1 - n_atoms*max_orbital)/max_orbital) + 1
       end if
    end subroutine orb2site

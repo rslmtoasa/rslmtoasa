@@ -157,6 +157,48 @@ cmake ... \
     -DEXAMPLE_REF_REL_TOL=1e-6
 ```
 
+## Tuning tolerances and OpenMP threads
+
+- **Global tolerances (configure-time)**: set `EXAMPLE_REF_ABS_TOL` and
+  `EXAMPLE_REF_REL_TOL` at CMake configure time (examples above). These are
+  passed to the test runner as the default comparison tolerances.
+
+- **Per-case overrides (manifest)**: a case entry in `cases.json` may include
+  the optional fields `abs_tol`, `rel_tol`, and `omp_threads` to override the
+  global defaults for that specific case. Example:
+
+```json
+{
+  "name": "Example_bulk_bccFe_nsp2_block_hoh",
+  "case": "bulk/bccFe",
+  "timeout": 240,
+  "omp_threads": 2,
+  "abs_tol": 1e-6,
+  "rel_tol": 1e-6,
+  "namelists": { ... }
+}
+```
+
+- **How it's applied**: the `tests/run_test.py` runner will use `abs_tol` and
+  `rel_tol` from the case manifest when present; otherwise it falls back to the
+  CLI/CMake defaults. For `omp_threads` the runner will propagate the value
+  into the binary wrapper which sets `OMP_NUM_THREADS` for serial runs.
+
+- **Environment override (manual runs / CI)**: the wrapper `tests/run_binary.sh`
+  reads the environment variable `RSLMTO_OMP_THREADS_SERIAL` (default `1`) and
+  uses it for serial runs. You can export a value to override globally for a
+  test session:
+
+```bash
+export RSLMTO_OMP_THREADS_SERIAL=2
+python3 tests/run_test.py --binary build/bin/rslmto.x --cases-json tests/scf/cases.json \
+    --case-name Example_bulk_bccFe_nsp2_block_hoh --scratch-root /tmp/scratch --compare-ref tests/scf/references
+```
+
+- **MPI runs**: MPI-invoked cases (those with `mpi_procs` > 1) keep `OMP_NUM_THREADS=1`
+  to avoid mixing MPI and multi-threading; per-case `omp_threads` will be ignored
+  for MPI cases.
+
 If CMake picked up the wrong Python interpreter (e.g. you activated the venv
 after a previous configure), override it without wiping the cache:
 

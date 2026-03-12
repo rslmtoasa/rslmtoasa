@@ -2011,6 +2011,8 @@ contains
 
       integer :: ij_loc
 
+      allocate(psiref(18, 18, this%lattice%kk))
+
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
@@ -2020,6 +2022,7 @@ contains
          ij_loc = g2l_map(ij)
          i = this%lattice%ijpair(ij, 1) ! Atom number in the clust file, atom i
          j = this%lattice%ijpair(ij, 2) ! Atom number in the clust file, atom j
+!         call g_logger%info('Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
          call g_logger%info(int2str(rank)//': Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
          do reci = 1, 4
             ! Clear list of atoms in hopping region
@@ -2105,6 +2108,8 @@ contains
             end do ! End loop in the recursion steps
          end do
       end do
+
+      deallocate(psiref)
    end subroutine chebyshev_recur_ij
 
    !---------------------------------------------------------------------------
