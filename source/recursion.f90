@@ -33,7 +33,7 @@ module recursion_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use timer_mod, only: g_timer
-   use basis_mod, only: nb, norb, spin_off
+   use basis_mod, only: nb, norb, spin_off, lmax_basis
    implicit none
 
    private
@@ -620,7 +620,7 @@ contains
       real(rp) :: a, b, rng 
       complex(rp) :: exp_factor
 
-      lmax = 2
+      lmax = lmax_basis
       hblocksize = nb
       nat = this%lattice%kk
 
@@ -1573,8 +1573,12 @@ contains
          lam = (0.0d0, 0.0d0)
          lam_i = (0.0d0, 0.0d0)
          do i = 1, nb
-            lam(i, i) = cmplx(sqrt(ev(i)), kind=kind(0.0d0))
-            lam_i(i, i) = 1.0d0/lam(i, i) ! 1/B_n
+            lam(i, i) = cmplx(sqrt(max(0.0_rp, ev(i))), kind=kind(0.0d0))
+            if (abs(lam(i, i)) > 0.0_rp) then
+               lam_i(i, i) = 1.0d0/lam(i, i) ! 1/B_n
+            else
+               lam_i(i, i) = (0.0d0, 0.0d0)
+            end if
          end do
          !
          !  Calc. U*lamda*U´= B
@@ -1639,7 +1643,7 @@ contains
             if (info /= 0) print *, 'diag', info
             ! lam=sqrt(lamda^2) ; lam_i=1/sqrt(lamda^2)
             do I = 1, LDIM
-               lam(I, I) = sqrt(ev(i))
+               lam(I, I) = sqrt(max(0.0_rp, ev(i)))
             end do
             ! calc. U*lamda*U´= B
             call zgemm('n', 'n', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), U, LDIM, lam, LDIM, (0.0d0, 0.0d0), DUM, LDIM)
@@ -1729,6 +1733,8 @@ contains
       integer :: n, i, j, ll_t
       complex(rp), dimension(ldim, ldim) :: MatIn, MatOut
       real(rp), dimension(ldim, ldim, ll) :: Acoef_r, B2coef_r
+      real(rp) :: maxA, maxB, maxAinf, maxBinf, tmpval
+      logical :: foundNaN_in, foundNaN_out
       !
       a_inf = 0.0d0; b_inf = 0.0d0
       do n = 1, na
@@ -1739,6 +1745,23 @@ contains
             MatIn = real(B2coef_b(:, :, i, n))
             B2coef_r(:, :, i) = MatIn
          end do
+         ! Summarize input recursion coefficients (Acoef_r, B2coef_r)
+         maxA = 0.0_rp
+         maxB = 0.0_rp
+         foundNaN_in = .false.
+         do i = 1, ldim
+            do j = 1, ldim
+               do ll_t = 1, ll
+                  tmpval = abs(Acoef_r(i, j, ll_t))
+                  if (tmpval > maxA) maxA = tmpval
+                  if (IsNaN(Acoef_r(i, j, ll_t))) foundNaN_in = .true.
+                  tmpval = abs(B2coef_r(i, j, ll_t))
+                  if (tmpval > maxB) maxB = tmpval
+                  if (IsNaN(B2coef_r(i, j, ll_t))) foundNaN_in = .true.
+               end do
+            end do
+         end do
+         write(*,*) 'DEBUG:get_terminf INPUT n=', n, ' maxA=', maxA, ' maxB=', maxB, ' NaN_in=', foundNaN_in
          call this%get_cinf(Acoef_r, B2coef_r, ll_t, ldim*ldim, nw, a_inf(:, :, n), b_inf(:, :, n))
          do j = 1, ldim
             do i = 1, ldim
@@ -1748,13 +1771,25 @@ contains
             if (a_inf(j, j, n) == 0.0d0) a_inf(j, j, n) = 0.5d0
             if (b_inf(j, j, n) == 0.0d0) b_inf(j, j, n) = 0.5d0
          end do
+         ! Summarize outputs a_inf / b_inf
+         maxAinf = maxval(abs(a_inf(:, :, n)))
+         maxBinf = maxval(abs(b_inf(:, :, n)))
+         foundNaN_out = .false.
+         do i = 1, ldim
+            do j = 1, ldim
+               if (IsNaN(a_inf(i, j, n)) .or. IsNaN(b_inf(i, j, n))) foundNaN_out = .true.
+            end do
+         end do
+         write(*,*) 'DEBUG:get_terminf OUTPUT n=', n, ' a_inf0_avg=', a_inf0(n), ' maxAinf=', maxAinf, ' maxBinf=', maxBinf, ' NaN_out=', foundNaN_out
          a_inf0(n) = 0.0d0
          do i = 1, ldim
             a_inf0(n) = a_inf0(n) + a_inf(i, i, n)
          end do
          a_inf0(n) = a_inf0(n)/ldim
          b_inf(1, 1, n) = b_inf(1, 1, n)*1.01d0
-         b_inf(10, 10, n) = b_inf(10, 10, n)*1.01d0
+         if (ldim >= 10) then
+            b_inf(10, 10, n) = b_inf(10, 10, n)*1.01d0
+         end if
          b_inf0(n) = 0.0d0
          do i = 1, ldim
             b_inf0(n) = b_inf0(n) + b_inf(i, i, n)
@@ -2011,7 +2046,8 @@ contains
 
       integer :: ij_loc
 
-      allocate(psiref(18, 18, this%lattice%kk))
+      ! Note: AB: Check how to treat psiref here. Should it come as allocated or allocatable?
+      !allocate(psiref(18, 18, this%lattice%kk))
 
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
@@ -2109,7 +2145,8 @@ contains
          end do
       end do
 
-      deallocate(psiref)
+      ! Note AB: Check if deallocation of psiref is needed here or if it should be done in the calling subroutine
+      !deallocate(psiref)
    end subroutine chebyshev_recur_ij
 
    !---------------------------------------------------------------------------
@@ -2481,11 +2518,13 @@ contains
       complex(rp), external :: zdotc
 
       integer :: i_loc
+      real(rp) :: maxg_tmp
+      integer :: ie_tmp
 
       hblocksize = nb
       nlimplus1 = this%lattice%nmax + 1
       llcheb = (2*this%control%lld) + 2
-      lmax = 2
+      lmax = lmax_basis
       nv = this%en%channels_ldos + 10
 
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
@@ -2668,6 +2707,12 @@ contains
       do ie = 1, this%en%channels_ldos + 10
          lzi(ie) = rtrace(g0(:, :, ie)) 
       end do
+      ! Log a quick diagnostic: maximum absolute value in g0
+      maxg_tmp = 0.0_rp
+      do ie_tmp = 1, this%en%channels_ldos + 10
+         maxg_tmp = max(maxg_tmp, maxval(abs(g0(:, :, ie_tmp))))
+      end do
+      call g_logger%info('chebyshev_orbital_mod: max|g0|='//fmt('e12.5', maxg_tmp), __FILE__, __LINE__)
       do ie = 1, this%en%channels_ldos + 10
          call simpson_f(lz, this%en%ene, this%en%ene(ie), this%en%nv1, lzi, .true., .false., 0.0d0)
          write(50, '(3es16.6)') this%en%ene(ie) - this%en%fermi, -(lz/pi), -(1/pi)*lzi(ie)
@@ -3341,9 +3386,7 @@ contains
       logical, intent(in), optional :: full
       integer :: lmax
 
-      ! TODO: change this hard check for lmax (assuming all atoms have the same lmax)
-      !lmax = this%symbolic_atom(this%lattice%iz(1))%potential%lmax
-      lmax = 2
+      lmax = lmax_basis
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('recursion.a', this%a, (/max(this%lattice%control%llsp, this%lattice%control%lld), nb, this%lattice%nrec, 3/))

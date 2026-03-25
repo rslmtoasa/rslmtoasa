@@ -159,12 +159,42 @@ contains
    subroutine init_math_operators()
 
       integer :: i
+      real(rp), dimension(3, 3) :: Lx_block, Ly_block, Lz_block
 
       ! ---- Orbital angular momentum operators --------------------------------
       if (allocated(L_x)) deallocate(L_x, L_y, L_z)
       allocate(L_x(norb, norb), L_y(norb, norb), L_z(norb, norb))
 
       select case (lmax_basis)
+      case (1)
+         ! sp basis: s + p_x, p_y, p_z  (lmax=1, norb=4)
+         L_x = czero
+         L_y = czero
+         L_z = czero
+
+         ! Orbital block indices for p orbitals: 2..4 (1 = s)
+         ! Real representation (p_x, p_y, p_z) — generators for l=1
+         ! L_i (in cartesian real basis) given by (-i) * J_i where
+         ! (J_x)_{jk} = [ [0,0,0],[0,0,-1],[0,1,0] ] etc.
+         Lx_block = reshape((/0.0_rp, 0.0_rp, 0.0_rp, &
+                              0.0_rp, 0.0_rp, -1.0_rp, &
+                              0.0_rp, 1.0_rp, 0.0_rp/), (/3,3/))
+         Ly_block = reshape((/0.0_rp, 0.0_rp, 1.0_rp, &
+                              0.0_rp, 0.0_rp, 0.0_rp, &
+                              -1.0_rp, 0.0_rp, 0.0_rp/), (/3,3/))
+         Lz_block = reshape((/0.0_rp, -1.0_rp, 0.0_rp, &
+                              1.0_rp, 0.0_rp, 0.0_rp, &
+                              0.0_rp, 0.0_rp, 0.0_rp/), (/3,3/))
+
+         L_x(2:4, 2:4) = Lx_block * (-i_unit)
+         L_y(2:4, 2:4) = Ly_block * (-i_unit)
+         L_z(2:4, 2:4) = Lz_block * (-i_unit)
+
+         ! s orbital (index 1) has zero orbital angular momentum
+         L_x(1, :) = czero; L_x(:, 1) = czero
+         L_y(1, :) = czero; L_y(:, 1) = czero
+         L_z(1, :) = czero; L_z(:, 1) = czero
+
       case (2)
          ! spd basis: hardcoded real-harmonics matrix elements (lmax=2, norb=9)
          L_x = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
@@ -1502,72 +1532,97 @@ contains
 
    ! Transform the spd matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
    subroutine hcpx(ham, transformation)
+      ! Transform between cartesian and spherical-harmonic representations
       ! Input
       character(len=*), intent(in) :: transformation
-      complex(rp), dimension(9, 9), intent(inout) :: ham
+      complex(rp), dimension(:, :), intent(inout) :: ham
       ! local variables
-      integer :: i, ii, j, jj, k, l
-      complex(rp) :: const, del, dum, pim, cone
-      complex(rp), dimension(9, 9) :: hesf, hcart, v, vc, htmp
+      integer :: i, ii, j, jj, n
+      complex(rp) :: const, cone
+      complex(rp), allocatable :: hesf(:, :), hcart(:, :), v(:, :), vc(:, :), htmp(:, :)
+
+      n = size(ham, 1)
       cone = (1.0d0, 0.0d0)
       const = CMPLX(1.0d0/sqrt(2.0d0), KIND=Kind(.0d0))
-      do ii = 1, 9
-         do jj = 1, 9
-            v(ii, jj) = (0.0d0, 0.0d0)
-            vc(ii, jj) = (0.0d0, 0.0d0)
-         end do
-      end do
-      !---base Y(lm) na ordem (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)---
-      ! s
-      v(1, 1) = cone
-      vc(1, 1) = cone
-      ! p
-      v(2, 4) = -const
-      vc(4, 2) = -const
-      v(2, 2) = const
-      vc(2, 2) = const
-      v(3, 4) = i_unit*const
-      vc(4, 3) = -i_unit*const
-      v(3, 2) = i_unit*const
-      vc(2, 3) = -i_unit*const
-      v(4, 3) = cone
-      vc(3, 4) = cone
-      ! d
-      v(5, 5) = i_unit*const
-      v(5, 9) = -i_unit*const
-      v(6, 6) = i_unit*const
-      v(6, 8) = i_unit*const
-      v(7, 6) = const
-      v(7, 8) = -const
-      v(8, 5) = const
-      v(8, 9) = const
-      v(9, 7) = cone
-      vc(5, 5) = -i_unit*const
-      vc(9, 5) = i_unit*const
-      vc(6, 6) = -i_unit*const
-      vc(8, 6) = -i_unit*const
-      vc(6, 7) = const
-      vc(8, 7) = -const
-      vc(5, 8) = const
-      vc(9, 8) = const
-      vc(7, 9) = cone
 
-      hesf = 0.0d0
-      hcart = 0.0d0
+      allocate(v(n, n), vc(n, n), hesf(n, n), hcart(n, n), htmp(n, n))
+      v = czero
+      vc = czero
+
+      if (n == 9) then
+         !---base Y(lm) order (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)---
+         ! s
+         v(1, 1) = cone
+         vc(1, 1) = cone
+         ! p
+         v(2, 4) = -const
+         vc(4, 2) = -const
+         v(2, 2) = const
+         vc(2, 2) = const
+         v(3, 4) = i_unit*const
+         vc(4, 3) = -i_unit*const
+         v(3, 2) = i_unit*const
+         vc(2, 3) = -i_unit*const
+         v(4, 3) = cone
+         vc(3, 4) = cone
+         ! d
+         v(5, 5) = i_unit*const
+         v(5, 9) = -i_unit*const
+         v(6, 6) = i_unit*const
+         v(6, 8) = i_unit*const
+         v(7, 6) = const
+         v(7, 8) = -const
+         v(8, 5) = const
+         v(8, 9) = const
+         v(9, 7) = cone
+         vc(5, 5) = -i_unit*const
+         vc(9, 5) = i_unit*const
+         vc(6, 6) = -i_unit*const
+         vc(8, 6) = -i_unit*const
+         vc(6, 7) = const
+         vc(8, 7) = -const
+         vc(5, 8) = const
+         vc(9, 8) = const
+         vc(7, 9) = cone
+      else if (n == 4) then
+         !---sp basis: Y(lm) order (00)(1-1)(10)(11)---
+         ! s
+         v(1, 1) = cone
+         vc(1, 1) = cone
+         ! p  (same block as in the n=9 case above)
+         v(2, 4) = -const
+         vc(4, 2) = -const
+         v(2, 2) = const
+         vc(2, 2) = const
+         v(3, 4) = i_unit*const
+         vc(4, 3) = -i_unit*const
+         v(3, 2) = i_unit*const
+         vc(2, 3) = -i_unit*const
+         v(4, 3) = cone
+         vc(3, 4) = cone
+      else
+         ! For other basis sizes, default to identity transform (no-op)
+         do ii = 1, n
+            v(ii, ii) = cone
+            vc(ii, ii) = cone
+         end do
+      end if
+
+      hesf = czero
+      hcart = czero
 
       select case (transformation)
-
       case ('cart2sph')
          htmp = matmul(ham, v)
          hesf = matmul(vc, htmp)
-
          ham(:, :) = hesf(:, :)
       case ('sph2cart')
          htmp = matmul(ham, vc)
          hcart = matmul(v, htmp)
-
          ham(:, :) = hcart(:, :)
       end select
+
+      deallocate(v, vc, hesf, hcart, htmp)
    end subroutine hcpx
 
    !> Integration of a given function Y by Simpson, modified to integrate
@@ -1870,26 +1925,41 @@ contains
 
    function imtrace9(mat)
       implicit none
-      complex(rp), dimension(9, 9), intent(in) :: mat
+      complex(rp), intent(in) :: mat(:, :)
       real(rp) :: imtrace9
+      integer :: i, n
 
-      imtrace9 = aimag(mat(1, 1) + mat(2, 2) + mat(3, 3) + mat(4, 4) + mat(5, 5) + mat(6, 6) + mat(7, 7) + mat(8, 8) + mat(9, 9))
+      n = min(size(mat, 1), size(mat, 2))
+      imtrace9 = 0.0_rp
+      do i = 1, n
+         imtrace9 = imtrace9 + aimag(mat(i, i))
+      end do
    end function imtrace9
 
    function rtrace9(mat)
       implicit none
-      complex(rp), dimension(9, 9), intent(in) :: mat
+      complex(rp), intent(in) :: mat(:, :)
       real(rp) :: rtrace9
+      integer :: i, n
 
-      rtrace9 = real(mat(1, 1) + mat(2, 2) + mat(3, 3) + mat(4, 4) + mat(5, 5) + mat(6, 6) + mat(7, 7) + mat(8, 8) + mat(9, 9))
+      n = min(size(mat, 1), size(mat, 2))
+      rtrace9 = 0.0_rp
+      do i = 1, n
+         rtrace9 = rtrace9 + real(mat(i, i))
+      end do
    end function rtrace9
 
    function trace9(mat)
       implicit none
-      complex(rp), dimension(9, 9), intent(in) :: mat
+      complex(rp), intent(in) :: mat(:, :)
       complex(rp) :: trace9
+      integer :: i, n
 
-      trace9 = (mat(1, 1) + mat(2, 2) + mat(3, 3) + mat(4, 4) + mat(5, 5) + mat(6, 6) + mat(7, 7) + mat(8, 8) + mat(9, 9))
+      n = min(size(mat, 1), size(mat, 2))
+      trace9 = czero
+      do i = 1, n
+         trace9 = trace9 + mat(i, i)
+      end do
    end function trace9
 
    function cartesian_to_direct(a, crd_car)

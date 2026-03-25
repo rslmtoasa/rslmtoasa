@@ -28,6 +28,7 @@ module lattice_mod
    use globals_mod
    use control_mod
    use string_mod
+   use basis_mod, only: norb
    use math_mod
    use precision_mod, only: rp
    use symbolic_atom_mod, only: symbolic_atom, array_of_symbolic_atoms
@@ -1818,6 +1819,7 @@ contains
       logical, intent(in) :: do_str
       ! Local variables
       integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
+      integer :: sbar_dim
       integer, dimension(:, :), allocatable :: nn
       integer, dimension(:), allocatable :: idnn
       logical :: do_str_
@@ -1855,10 +1857,11 @@ contains
       do ii = 1, nm + 1
          this%nn(:, ii) = nn(:, ii)
       end do
+      sbar_dim = max(norb, this%control%npold)
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/9, 9, nm, this%ntot/))
+   call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/sbar_dim, sbar_dim, nm, this%ntot/))
 #else
-      allocate (this%sbar(9, 9, nm, this%ntot))
+   allocate (this%sbar(sbar_dim, sbar_dim, nm, this%ntot))
 #endif
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
@@ -2209,8 +2212,8 @@ contains
       call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
 
       do m = 1, nt
-         do i = 1, 9
-            do j = 1, 9
+         do i = 1, np
+            do j = 1, np
                this%sbar(i, j, m, ii) = sbar(i, j, m)
             end do
          end do

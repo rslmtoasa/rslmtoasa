@@ -31,6 +31,7 @@ module green_mod
    use math_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
+   use string_mod, only: fmt, int2str, real2str, log2str
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -195,40 +196,40 @@ contains
       end if
       call g_safe_alloc%allocate('green.gij', this%gij, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.gji', this%gji, (/nb, nb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.ginmag', this%ginmag, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjnmag', this%gjnmag, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gix', this%gix, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.giy', this%giy, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.giz', this%giz, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjx', this%gjx, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjy', this%gjy, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjz', this%gjz, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g00ij', this%g00ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g00ji', this%g00ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g00ij', this%g01ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.g00ji', this%g01ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx0ij', this%gx0ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy0ij', this%gy0ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz0ij', this%gz0ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx1ij', this%gx1ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy1ij', this%gy1ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz1ij', this%gz1ij, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx0ji', this%gx0ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy0ji', this%gy0ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz0ji', this%gz0ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gx1ji', this%gx1ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gy1ji', this%gy1ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gz1ji', this%gz1ji, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.ginmag', this%ginmag, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjnmag', this%gjnmag, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gix', this%gix, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.giy', this%giy, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.giz', this%giz, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjx', this%gjx, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjy', this%gjy, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjz', this%gjz, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.g00ij', this%g00ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.g00ji', this%g00ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.g00ij', this%g01ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.g00ji', this%g01ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gx0ij', this%gx0ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gy0ij', this%gy0ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gz0ij', this%gz0ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gx1ij', this%gx1ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gy1ij', this%gy1ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gz1ij', this%gz1ij, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gx0ji', this%gx0ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gy0ji', this%gy0ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gz0ji', this%gz0ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gx1ji', this%gx1ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gy1ji', this%gy1ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gz1ji', this%gz1ji, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('green.gij_eta', this%gij_eta, (/64, nb, nb, atoms_per_process/))
       call g_safe_alloc%allocate('green.gji_eta', this%gji_eta, (/64, nb, nb, atoms_per_process/))
-      call g_safe_alloc%allocate('green.ginmag_eta', this%ginmag_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjnmag_eta', this%gjnmag_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gix_eta', this%gix_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.giy_eta', this%giy_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.giz_eta', this%giz_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjx_eta', this%gjx_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjy_eta', this%gjy_eta, (/64, 9, 9, atoms_per_process/))
-      call g_safe_alloc%allocate('green.gjz_eta', this%gjz_eta, (/64, 9, 9, atoms_per_process/))
+      call g_safe_alloc%allocate('green.ginmag_eta', this%ginmag_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjnmag_eta', this%gjnmag_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gix_eta', this%gix_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.giy_eta', this%giy_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.giz_eta', this%giz_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjx_eta', this%gjx_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjy_eta', this%gjy_eta, (/64, norb, norb, atoms_per_process/))
+      call g_safe_alloc%allocate('green.gjz_eta', this%gjz_eta, (/64, norb, norb, atoms_per_process/))
 #else
       if (this%lattice%njij == 0) then
          allocate (this%g0(nb, nb, this%en%channels_ldos + 10, this%lattice%nrec))
@@ -263,14 +264,14 @@ contains
       allocate (this%gz1ji(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%gij_eta(64, nb, nb, atoms_per_process))
       allocate (this%gji_eta(64, nb, nb, atoms_per_process))
-      allocate (this%ginmag_eta(64, 9, 9, atoms_per_process))
-      allocate (this%gjnmag_eta(64, 9, 9, atoms_per_process))
-      allocate (this%gix_eta(64, 9, 9, atoms_per_process))
-      allocate (this%giy_eta(64, 9, 9, atoms_per_process))
-      allocate (this%giz_eta(64, 9, 9, atoms_per_process))
-      allocate (this%gjx_eta(64, 9, 9, atoms_per_process))
-      allocate (this%gjy_eta(64, 9, 9, atoms_per_process))
-      allocate (this%gjz_eta(64, 9, 9, atoms_per_process))
+      allocate (this%ginmag_eta(64, norb, norb, atoms_per_process))
+      allocate (this%gjnmag_eta(64, norb, norb, atoms_per_process))
+      allocate (this%gix_eta(64, norb, norb, atoms_per_process))
+      allocate (this%giy_eta(64, norb, norb, atoms_per_process))
+      allocate (this%giz_eta(64, norb, norb, atoms_per_process))
+      allocate (this%gjx_eta(64, norb, norb, atoms_per_process))
+      allocate (this%gjy_eta(64, norb, norb, atoms_per_process))
+      allocate (this%gjz_eta(64, norb, norb, atoms_per_process))
 #endif
 
       this%g0(:, :, :, :) = (0.0d0, 0.0d0)
@@ -613,6 +614,7 @@ contains
       call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, atoms_per_process, &
                                       ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
 
+      print *, "AB check:", shape(this%g0)
       do n_glob = start_atom, end_atom
          n = g2l_map(n_glob)
 
@@ -1040,6 +1042,9 @@ contains
       integer :: ie, i, j, k, l, m, n, nv
 
       integer :: n_glob
+      logical, save :: dump_done = .false.
+      character(len=200) :: dump_fname
+      integer :: dump_unit, dump_iostat
 
       this%g0 = 0.0d0
 
@@ -1204,8 +1209,17 @@ contains
       real(rp) :: factor_z
       real(rp), dimension(this%en%channels_ldos + 10) :: e
       integer :: i, j, l, ei, info, ln, lwork
+      integer :: ii, jj
+      real(rp) :: recMaxA, recMaxB, valrec
+      real(rp) :: maxQ, maxB2r
+      real(rp) :: qMax, wMax, b2Max
+      real(rp) :: qval, wval, b2val
+      logical :: qHasNaN
+      logical :: recNaN
+      logical :: found_nan
+      complex(rp) :: vv
       integer, dimension(nb) :: ipiv
-      real(rp) :: etop, ebot, ea, eb
+      complex(rp) :: etop, ebot, ea, eb
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
       complex(rp), dimension(nb, nb) :: Q, Qp, Q2p, Z, one, W, B2z, Qt, P
       complex(rp) :: zoff, cone, czero, ze, zterm, det, im
@@ -1218,6 +1232,9 @@ contains
       integer, dimension(nb) :: m_tab
       !
       integer :: n_glob
+      logical, save :: dump_done = .false.
+      character(len=200) :: dump_fname
+      integer :: dump_unit, dump_iostat
       !
       g_out = (0.0d0, 0.0d0)
       !
@@ -1249,12 +1266,13 @@ contains
       do i = 1, ldim
          one(i, i) = (1.0d0, 0.0d0)
       end do
-      do i = 1, ldim
-         !a_diag= a_inf(i,i,n) !(a_inf(1,1,n) + a_inf(10,10,n))*0.5d0
-         !b_diag= b_inf(i,i,n) !(b_inf(1,1,n) + b_inf(10,10,n))*0.5d0
+      if (ldim >= 10) then
          a_diag = (a_inf(1, 1) + a_inf(10, 10))*0.5d0
          b_diag = (b_inf(1, 1) + b_inf(10, 10))*0.5d0
-      end do
+      else
+         a_diag = a_inf(1, 1)
+         b_diag = b_inf(1, 1)
+      end if
       ! Standard semi-circle construction of Greens functions
       !write(12334,´(18f8.4)´) a_inf
       !write(12335,´(18f8.4)´) b_inf
@@ -1280,7 +1298,7 @@ contains
             end do
          else
             do i = 1, ldim  ! Orbital-dependent
-               if (i == 1 .or. i == 10) then  !(now the s-bands are broadened earlier)
+               if (i == 1 .or. (ldim >= 10 .and. i == 10)) then  !(now the s-bands are broadened earlier)
                   etop = a_inf(i, i) - Cshi_mat(i, i) + 2*b_inf(i, i)*1.025d0/Dfac_mat(i, i)
                   ebot = a_inf(i, i) - Cshi_mat(i, i) - 2*b_inf(i, i)*1.025d0/Dfac_mat(i, i)
                else
@@ -1306,18 +1324,152 @@ contains
                   else
                      P(i, j) = Z(i, j)
                   end if
-                  if ((abs(real(Q(i, j))) .lt. 10**(-12)) .and. (abs(aimag(Q(i, j))) .lt. 10**(-12))) then
+                  if ((abs(real(Q(i, j))) .lt. 1.0d-12) .and. (abs(aimag(Q(i, j))) .lt. 1.0d-12)) then
                      Q(i, j) = (0.0d0, 0.0d0)
                   end if
                   Q(i, j) = P(i, j)/Dfac_mat(i, j) - Cshi_mat(i, j) - cone*this%recursion%a_b(i, j, ln, i_site) - Q(i, j)
                   B2z(i, j) = cone*this%recursion%b2_b(i, j, ln, i_site)
                end do
             end do
+            ! Check Q for NaNs before LU factorization
+            qMax = 0.0_rp
+            qHasNaN = .false.
+            do jj = 1, ldim
+               do ii = 1, ldim
+                  qval = abs(Q(ii, jj))
+                  if (qval == qval) then
+                     if (qval > qMax) qMax = qval
+                  else
+                     qHasNaN = .true.
+                  end if
+               end do
+            end do
+            if (qHasNaN) then
+               call g_logger%error('Pre-LU Q contains NaN (site='//int2str(i_site)//' ie='//int2str(ei)//' Q_max='//real2str(qMax)//')', __FILE__, __LINE__)
+               !$omp critical
+               if (.not. dump_done) then
+                  dump_done = .true.
+                  dump_fname = 'debug_bgreen_preLU_site'//int2str(i_site)//'_ie'//int2str(ei)//'.txt'
+                  dump_unit = 901
+                  open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
+                  if (dump_iostat == 0) then
+                     write(dump_unit, '(A)') 'PRE-LU DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
+                     write(dump_unit, '(A)') 'Q matrix (real imag):'
+                     do jj = 1, ldim
+                        do ii = 1, ldim
+                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Q(ii,jj)), aimag(Q(ii,jj))
+                        end do
+                     end do
+                     write(dump_unit, '(A)') 'B2z matrix (real imag):'
+                     do jj = 1, ldim
+                        do ii = 1, ldim
+                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(B2z(ii,jj)), aimag(B2z(ii,jj))
+                        end do
+                     end do
+                     close(dump_unit)
+                  end if
+               end if
+               !$omp end critical
+               found_nan = .true.
+               exit
+            end if
+
             ! LU factorization
             call zgetrf(ldim, ldim, Q, ldim, ipiv, info)
-            ! Inverse of Q from Chol. fac.
+            if (info /= 0) then
+               ! Collect diagnostics and attempt tiny regularization then retry once
+               maxQ = 0.0_rp
+               maxB2r = 0.0_rp
+               do jj = 1, ldim
+                  do ii = 1, ldim
+                     if (abs(Q(ii, jj)) > maxQ) maxQ = abs(Q(ii, jj))
+                     if (abs(B2z(ii, jj)) > maxB2r) maxB2r = abs(B2z(ii, jj))
+                  end do
+               end do
+               recMaxA = 0.0_rp
+               recMaxB = 0.0_rp
+               recNaN = .false.
+               do ln = 1, ll
+                  do ii = 1, ldim
+                     do jj = 1, ldim
+                        valrec = abs(this%recursion%a_b(ii, jj, ln, i_site))
+                        if (valrec > recMaxA) recMaxA = valrec
+                        if (IsNaN(real(this%recursion%a_b(ii, jj, ln, i_site))) .or. IsNaN(aimag(this%recursion%a_b(ii, jj, ln, i_site)))) recNaN = .true.
+                        valrec = abs(this%recursion%b2_b(ii, jj, ln, i_site))
+                        if (valrec > recMaxB) recMaxB = valrec
+                        if (IsNaN(real(this%recursion%b2_b(ii, jj, ln, i_site))) .or. IsNaN(aimag(this%recursion%b2_b(ii, jj, ln, i_site)))) recNaN = .true.
+                     end do
+                  end do
+               end do
+               call g_logger%warning('LU factorization failed (zgetrf info='//fmt('I0', info)//') site='//int2str(i_site)//' ie='//int2str(ei)//' maxQ='//real2str(maxQ)//' maxB2='//real2str(maxB2r)//' recMaxA='//real2str(recMaxA)//' recMaxB='//real2str(recMaxB), __FILE__, __LINE__)
+               ! Try tiny regularization
+               Q = Q + (1.0d-12, 0.0d0)*one
+               call zgetrf(ldim, ldim, Q, ldim, ipiv, info)
+               if (info /= 0) then
+                  call g_logger%error('zgetrf retry failed (info='//fmt('I0', info)//') skipping energy slice site='//int2str(i_site)//' ie='//int2str(ei), __FILE__, __LINE__)
+                  found_nan = .true.
+                  exit
+               end if
+            end if
+            ! Inverse of Q from LU factorization
             lwork = ldim*ldim
             call zgetri(ldim, Q, ldim, ipiv, work, lwork, info)
+            ! Check Q for NaNs after inversion
+            qMax = 0.0_rp
+            qHasNaN = .false.
+            do jj = 1, ldim
+               do ii = 1, ldim
+                  qval = abs(Q(ii, jj))
+                  if (qval == qval) then
+                     if (qval > qMax) qMax = qval
+                  else
+                     qHasNaN = .true.
+                  end if
+               end do
+            end do
+            if (qHasNaN) then
+               call g_logger%error('Post-inverse Q contains NaN (site='//int2str(i_site)//' ie='//int2str(ei)//' Q_max='//real2str(qMax)//' zgetri_info='//fmt('I0', info)//')', __FILE__, __LINE__)
+               !$omp critical
+               if (.not. dump_done) then
+                  dump_done = .true.
+                  dump_fname = 'debug_bgreen_postInv_site'//int2str(i_site)//'_ie'//int2str(ei)//'.txt'
+                  dump_unit = 902
+                  open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
+                  if (dump_iostat == 0) then
+                     write(dump_unit, '(A)') 'POST-INV DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
+                     write(dump_unit, '(A)') 'Q matrix (real imag):'
+                     do jj = 1, ldim
+                        do ii = 1, ldim
+                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Q(ii,jj)), aimag(Q(ii,jj))
+                        end do
+                     end do
+                     write(dump_unit, '(A)') 'B2z matrix (real imag):'
+                     do jj = 1, ldim
+                        do ii = 1, ldim
+                           write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(B2z(ii,jj)), aimag(B2z(ii,jj))
+                        end do
+                     end do
+                     close(dump_unit)
+                  end if
+               end if
+               !$omp end critical
+               found_nan = .true.
+               exit
+            end if
+            if (info /= 0) then
+               call g_logger%warning('zgetri (inverse) failed (info='//fmt('I0', info)//') site='//int2str(i_site)//' ie='//int2str(ei), __FILE__, __LINE__)
+               ! Attempt small regularization and retry inverse
+               Q = Q + (1.0d-12, 0.0d0)*one
+               call zgetrf(ldim, ldim, Q, ldim, ipiv, info)
+               if (info == 0) then
+                  call zgetri(ldim, Q, ldim, ipiv, work, lwork, info)
+               end if
+               if (info /= 0) then
+                  call g_logger%error('zgetri retry failed (info='//fmt('I0', info)//') skipping energy slice site='//int2str(i_site)//' ie='//int2str(ei), __FILE__, __LINE__)
+                  found_nan = .true.
+                  exit
+               end if
+            end if
             call zgemm('n', 'n', ldim, ldim, ldim, cone, Q, ldim, B2z, ldim, czero, W, ldim)
             call zgemm('c', 'n', ldim, ldim, ldim, cone, B2z, ldim, W, ldim, czero, Q, ldim)
          end do
@@ -1332,6 +1484,110 @@ contains
                   g_out(m_tab(i), m_tab(j), ei) = g_out(m_tab(i), m_tab(j), ei) + (Q(i, j)/Dfac_mat(i, j))
                end if
             end do
+         end do
+         ! Quick NaN check for this energy slice (log first occurrence)
+         found_nan = .false.
+         do j = 1, ldim
+            do i = 1, ldim
+               vv = g_out(m_tab(i), m_tab(j), ei)
+               if (real(vv) /= real(vv) .or. aimag(vv) /= aimag(vv)) then
+                  call g_logger%warning('NaN detected in g_out at site '//fmt('I0', i_site)//' ie='//fmt('I0', ei), __FILE__, __LINE__)
+                  found_nan = .true.
+                        ! Collect recursion coefficient summaries for this site
+                        recMaxA = 0.0_rp
+                        recMaxB = 0.0_rp
+                        recNaN = .false.
+                        do ln = 1, ll
+                           do ii = 1, ldim
+                              do jj = 1, ldim
+                                 valrec = abs(this%recursion%a_b(ii, jj, ln, i_site))
+                                 if (valrec > recMaxA) recMaxA = valrec
+                                 if (IsNaN(real(this%recursion%a_b(ii, jj, ln, i_site))) .or. IsNaN(aimag(this%recursion%a_b(ii, jj, ln, i_site)))) recNaN = .true.
+                                 valrec = abs(this%recursion%b2_b(ii, jj, ln, i_site))
+                                 if (valrec > recMaxB) recMaxB = valrec
+                                 if (IsNaN(real(this%recursion%b2_b(ii, jj, ln, i_site))) .or. IsNaN(aimag(this%recursion%b2_b(ii, jj, ln, i_site)))) recNaN = .true.
+                              end do
+                           end do
+                        end do
+                        call g_logger%info('DEBUG:bgreen recursion site='//int2str(i_site)//' ie='//int2str(ei)//' maxA='//real2str(recMaxA)//' maxB='//real2str(recMaxB)//' recNaN='//log2str(recNaN), __FILE__, __LINE__)
+                        ! Log diagonal of a_inf/b_inf and Dfac_mat for quick inspection
+                        do ii = 1, ldim
+                           call g_logger%info('DEBUG:bgreen a_inf('//int2str(ii)//')='//real2str(a_inf(ii,ii))//' b_inf='//real2str(b_inf(ii,ii))//' Dfac='//real2str(real(Dfac_mat(ii,ii))), __FILE__, __LINE__)
+                        end do
+                        ! Additional diagnostics: check Q, W and B2z for NaNs/large values
+                        qMax = 0.0_rp
+                        qHasNaN = .false.
+                        wMax = 0.0_rp
+                        b2Max = 0.0_rp
+                        do jj = 1, ldim
+                           do ii = 1, ldim
+                              qval = abs(Q(ii,jj))
+                              if (qval == qval) then
+                                 if (qval > qMax) qMax = qval
+                              else
+                                 qHasNaN = .true.
+                              end if
+                              wval = abs(W(ii,jj))
+                              if (wval == wval) then
+                                 if (wval > wMax) wMax = wval
+                              end if
+                              b2val = abs(B2z(ii,jj))
+                              if (b2val == b2val) then
+                                 if (b2val > b2Max) b2Max = b2val
+                              end if
+                           end do
+                        end do
+                        call g_logger%info('DEBUG:bgreen Q_max='//real2str(qMax)//' Q_hasNaN='//log2str(qHasNaN)//' W_max='//real2str(wMax)//' B2z_max='//real2str(b2Max), __FILE__, __LINE__)
+                       !$omp critical
+                       if (.not. dump_done) then
+                          dump_done = .true.
+                          dump_fname = 'debug_bgreen_site'//int2str(i_site)//'_ie'//int2str(ei)//'.txt'
+                          dump_unit = 900
+                          open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
+                          if (dump_iostat == 0) then
+                             write(dump_unit, '(A)') 'DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
+                             write(dump_unit, '(A)') 'Q matrix (real imag):'
+                             do jj = 1, ldim
+                                do ii = 1, ldim
+                                   write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Q(ii,jj)), aimag(Q(ii,jj))
+                                end do
+                             end do
+                             write(dump_unit, '(A)') 'W matrix (real imag):'
+                             do jj = 1, ldim
+                                do ii = 1, ldim
+                                   write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(W(ii,jj)), aimag(W(ii,jj))
+                                end do
+                             end do
+                             write(dump_unit, '(A)') 'B2z matrix (real imag):'
+                             do jj = 1, ldim
+                                do ii = 1, ldim
+                                   write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(B2z(ii,jj)), aimag(B2z(ii,jj))
+                                end do
+                             end do
+                             write(dump_unit, '(A)') 'recursion a_b (ln, i, j, real imag):'
+                             do ln = 1, ll
+                                do jj = 1, ldim
+                                   do ii = 1, ldim
+                                      write(dump_unit, '(I4,1X,I4,1X,I4,1X,ES24.16,1X,ES24.16)') ln, ii, jj, real(this%recursion%a_b(ii,jj,ln,i_site)), aimag(this%recursion%a_b(ii,jj,ln,i_site))
+                                   end do
+                                end do
+                             end do
+                             write(dump_unit, '(A)') 'recursion b2_b (ln, i, j, real imag):'
+                             do ln = 1, ll
+                                do jj = 1, ldim
+                                   do ii = 1, ldim
+                                      write(dump_unit, '(I4,1X,I4,1X,I4,1X,ES24.16,1X,ES24.16)') ln, ii, jj, real(this%recursion%b2_b(ii,jj,ln,i_site)), aimag(this%recursion%b2_b(ii,jj,ln,i_site))
+                                   end do
+                                end do
+                             end do
+                             close(dump_unit)
+                          end if
+                       end if
+                       !$omp end critical
+                        exit
+               end if
+            end do
+            if (found_nan) exit
          end do
          !write(12333,´(19f8.4)´) e(ei), (real(g_out(i,i,ei)),i=1,18)
       end do

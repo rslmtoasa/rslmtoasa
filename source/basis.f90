@@ -35,6 +35,8 @@
 module basis_mod
 
    use precision_mod, only: ip
+   use logger_mod, only: g_logger
+   use string_mod, only: int2str
    implicit none
 
    private
@@ -98,6 +100,27 @@ contains
          bdg_mode = .false.
       end if
 
+      call g_logger%info('Basis initialised: lmax=' // int2str(lmax_basis) // &
+         ' (' // basis_label(lmax_basis) // ')' // &
+         '  norb=' // int2str(norb) // &
+         '  nb=' // int2str(nb) // &
+         '  spin_off=' // int2str(spin_off) // &
+         '  bdg=' // merge('T', 'F', bdg_mode), __FILE__, __LINE__)
+
    end subroutine basis_init
+
+   !---------------------------------------------------------------------------
+   ! Returns a short orbital-basis label string for a given lmax.
+   !---------------------------------------------------------------------------
+   pure function basis_label(lmax) result(label)
+      integer, intent(in) :: lmax
+      character(len=4) :: label
+      select case (lmax)
+      case (1); label = 'sp  '
+      case (2); label = 'spd '
+      case (3); label = 'spdf'
+      case default; label = '?   '
+      end select
+   end function basis_label
 
 end module basis_mod

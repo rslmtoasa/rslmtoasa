@@ -39,7 +39,7 @@ module bands_mod
 #ifdef USE_MPI
    use mpi
 #endif
-   use basis_mod, only: nb, norb, spin_off
+   use basis_mod, only: nb, norb, spin_off, lmax_basis
    implicit none
 
    private
@@ -186,11 +186,11 @@ contains
       call g_safe_alloc%allocate('bands.dx', this%dx, (/this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.dy', this%dy, (/this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.dz', this%dz, (/this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.g0_x', this%g0_x, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/9, 9, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.g0_x', this%g0_x, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.dspd', this%dspd, (/6, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/9, 9, 3, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.mag_for', this%mag_for, (/3, atoms_per_process/))
 #else
       allocate (this%dtot(this%en%channels_ldos + 10))
@@ -442,7 +442,7 @@ contains
          do isp = 1, 2
             isgn = (-1.0d0)**(isp - 1)
             soff = 3*(isp - 1)
-            do l = 1, 3
+            do l = 1, min(3, lmax_basis + 1)
                do m = 1, 2*l - 1
                   o = (l - 1)**2 + m
                   do ie = 1, this%en%channels_ldos
@@ -489,10 +489,17 @@ contains
 
             occ(na_glob, i) = sgef
 
-            this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%gravity_center(i - soff, nsp) = (pmef/sgef) - this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%vmad
-            this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, i - soff - 1, nsp) = sgef
-            this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(2, i - soff - 1, nsp) = 0.0d0
-            this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = smef - 2.0d0*(pmef/sgef)*pmef + ((pmef/sgef)**2)*sgef
+            if (abs(sgef) > epsilon) then
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%gravity_center(i - soff, nsp) = (pmef/sgef) - this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%vmad
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, i - soff - 1, nsp) = sgef
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(2, i - soff - 1, nsp) = 0.0d0
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = smef - 2.0d0*(pmef/sgef)*pmef + ((pmef/sgef)**2)*sgef
+            else
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%gravity_center(i - soff, nsp) = 0.0_rp
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, i - soff - 1, nsp) = 0.0_rp
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(2, i - soff - 1, nsp) = 0.0_rp
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = 0.0_rp
+            end if
          end do
       end do
 
@@ -797,6 +804,9 @@ contains
       integer :: na ! Atom index
       integer :: ie ! Energy channel index
 
+      character(len=512) :: msg
+      integer :: nprint, k
+
       integer :: na_loc, unitmag
       character(len=256) :: fnamemag
 
@@ -807,6 +817,29 @@ contains
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%mx, this%en%edel, this%en%fermi, this%nv1, this%dx(:, na_loc), this%e1, 0, this%en%ene)
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%my, this%en%edel, this%en%fermi, this%nv1, this%dy(:, na_loc), this%e1, 0, this%en%ene)
          call simpson_m(this%symbolic_atom(this%lattice%nbulk + na)%potential%mz, this%en%edel, this%en%fermi, this%nv1, this%dz(:, na_loc), this%e1, 0, this%en%ene)
+
+         ! Diagnostics: check projected DOS arrays for NaNs or huge values
+         if (rank == 0) then
+            if (any(this%dx(:, na_loc) /= this%dx(:, na_loc)) .or. any(this%dy(:, na_loc) /= this%dy(:, na_loc)) .or. any(this%dz(:, na_loc) /= this%dz(:, na_loc))) then
+               call g_logger%warning('NaN detected in projected DOS arrays for atom '//fmt('i4', na)//' (local '//fmt('i4', na_loc)//')', __FILE__, __LINE__)
+               nprint = min(6, size(this%dx, 1))
+               msg = ''
+               do k = 1, nprint
+                  msg = msg // ' ' // fmt('f10.6', this%dx(k, na_loc))
+               end do
+               call g_logger%info('dx[1:'//fmt('i4', nprint)//']='//trim(msg), __FILE__, __LINE__)
+               msg = ''
+               do k = 1, nprint
+                  msg = msg // ' ' // fmt('f10.6', this%dy(k, na_loc))
+               end do
+               call g_logger%info('dy[1:'//fmt('i4', nprint)//']='//trim(msg), __FILE__, __LINE__)
+               msg = ''
+               do k = 1, nprint
+                  msg = msg // ' ' // fmt('f10.6', this%dz(k, na_loc))
+               end do
+               call g_logger%info('dz[1:'//fmt('i4', nprint)//']='//trim(msg), __FILE__, __LINE__)
+            end if
+         end if
 
          fnamemag = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_spinene.out"
          unitmag = 1000 !rank * 123 + na
@@ -908,9 +941,16 @@ contains
 
 
          do ie = 1, this%en%channels_ldos+10
-            lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na_loc)))
-            lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na_loc)))
-            lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na_loc)))
+               ! Detect NaNs in the Green's function slice before tracing
+               if (any(this%green%g0(:, :, ie, na_loc) /= this%green%g0(:, :, ie, na_loc))) then
+                  if (rank == 0) call g_logger%warning('NaN in g0 at atom '//fmt('i4', na)//' ie='//fmt('i6', ie), __FILE__, __LINE__)
+               end if
+               lxi(ie) = imtrace(matmul(mLx_ext, this%green%g0(:, :, ie, na_loc)))
+               lyi(ie) = imtrace(matmul(mLy_ext, this%green%g0(:, :, ie, na_loc)))
+               lzi(ie) = imtrace(matmul(mLz_ext, this%green%g0(:, :, ie, na_loc)))
+               if (rank == 0 .and. (lxi(ie) /= lxi(ie) .or. lyi(ie) /= lyi(ie) .or. lzi(ie) /= lzi(ie))) then
+                  call g_logger%warning('NaN in orbital trace at atom '//fmt('i4', na)//' ie='//fmt('i6', ie)//' lxi='//fmt('f10.6', lxi(ie)), __FILE__, __LINE__)
+               end if
          end do
 
          call simpson_m(lx, this%en%edel, this%en%fermi, this%nv1, lxi, this%e1, 0, this%en%ene)

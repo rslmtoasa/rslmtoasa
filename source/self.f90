@@ -949,6 +949,8 @@ contains
       class(self), intent(inout) :: this
       integer :: newunit, iostatus
       integer :: ia, ia_loc
+      integer :: nb_slice, ncols
+      real(rp) :: denom
       real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
       ! Open report.out file
@@ -1044,9 +1046,12 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                             Log info                                     |'
          write (newunit, '(A)') '==========================================================================='
+         ncols = size(this%mix%qia, 2)
+         nb_slice = min(12, ncols)
+         denom = max(1.0_rp, real(nb_slice)/2.0_rp)
          write (newunit, '(a,f10.6)') 'Total RMS Diff: ', this%mix%delta
          do ia = 1, this%lattice%nrec
-            write (newunit, '(a,i4,a,f10.6)') 'RMS Diff of atom', ia, ':', sqrt(sum((this%mix%qia_old(ia, 1:12) - this%mix%qia_new(ia, 1:12))**2))/6.0d0
+            write (newunit, '(a,i4,a,f10.6)') 'RMS Diff of atom', ia, ':', sqrt(sum((this%mix%qia_old(ia, 1:nb_slice) - this%mix%qia_new(ia, 1:nb_slice))**2))/denom
          end do
       end if
 

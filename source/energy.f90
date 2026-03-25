@@ -200,6 +200,10 @@ contains
 
       this%edel = (this%energy_max - this%energy_min)/this%channels_ldos
       this%enpt = nint((this%fermi - this%energy_min)/this%edel)
+      if (this%enpt == 0) then
+         call g_logger%fatal('e_mesh: fermi == energy_min causes division by zero in energy mesh. Please set fermi > energy_min.', __FILE__, __LINE__)
+         error stop
+      end if
       this%edel = (this%fermi - this%energy_min)/nint((this%fermi - this%energy_min)/this%edel)
 
       do i = 0, this%channels_ldos + 9

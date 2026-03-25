@@ -162,7 +162,6 @@ contains
       var = this%var
       mixtype = this%mixtype
       beta = this%beta
-      call move_alloc(this%magbeta, magbeta)
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -174,21 +173,17 @@ contains
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
-      close (funit)
-
-      this%var = 0
-      this%mixtype = mixtype
-      this%beta = beta
-      call move_alloc(magbeta, this%magbeta)
+      close(funit)
+      if (allocated(magbeta)) then
+         call move_alloc(magbeta, this%magbeta)
+      end if
    end subroutine build_from_file
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Reset all members to default
-   !---------------------------------------------------------------------------
-   subroutine restore_to_default(this)
-      implicit none
+      !--------------------------------------------------------------------------
+      ! DESCRIPTION:
+      !> @brief
+      !> Restore defaults and allocate mixing arrays
+      subroutine restore_to_default(this)
       class(mix), intent(inout) :: this
 
 #ifdef USE_SAFE_ALLOC
@@ -196,7 +191,6 @@ contains
       call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, nb/))
       call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, nb/))
       call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, nb/))
-      call g_safe_alloc%allocate('mix.v_broy', this%v_broy, (/this%lattice%nrec*nb/))
       call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*nb/))
       call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*nb/))
       call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*nb/))
@@ -213,6 +207,10 @@ contains
       allocate (this%is_induced(this%lattice%nrec))
 #endif
 
+      this%qia(:, :) = 0.0_rp
+      this%qia_new(:, :) = 0.0_rp
+      this%qia_old(:, :) = 0.0_rp
+      this%qiaprev(:, :) = 0.0_rp
       this%v_broy(:) = 0.0d0
       this%u_broy(:) = 0.0d0
       this%fo_broy(:) = 0.0d0
@@ -225,7 +223,7 @@ contains
       this%nmix = 2
       this%mixtype = 'linear'
       this%is_induced = .false.
-   end subroutine restore_to_default
+      end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -255,79 +253,132 @@ contains
       else if (present(file)) then
          open (unit=newunit, file=file)
          write (newunit, nml=mix)
-         close (newunit)
-      else
-         write (*, nml=mix)
+         close(newunit)
       end if
-      close (newunit)
    end subroutine print_state
 
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
+   !--------------------------------------------------------------------------
    !> @brief
-   !> Save potential parameters and band moments.
-   !>
-   !> Save potential parameters and band moments. Save the parameters read from the &par namelist into qia variables. To be used to mix later.
-   !> @param[in] dummy variable of type mix
-   !> @return type(mix)
-   !---------------------------------------------------------------------------
+   !> Save or restore QL/PL parameters to/from `this%qia` arrays.
    subroutine save_to(this, whereto)
+      use mpi_mod
       class(mix), intent(inout) :: this
       character(len=*), intent(in) :: whereto
-      integer :: i, it
+      integer :: it, I, lcount
 
-      select case (whereto)
-
-      case ('old')
-         do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%qia_old(IT, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               this%qia_old(IT, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               this%qia_old(IT, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
-               !QI_OLD(IT, I+12) = ENU(I, 1)
-               this%qia_old(IT, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               this%qia_old(IT, I +spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               this%qia_old(IT, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
-               !QI_OLD(IT, I+15) = ENU(I, 2)
-            end do
-         end do
+      select case (trim(whereto))
       case ('new')
+         this%qia_new = 0.0_rp
          do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%qia_new(it, i) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 1)
-               this%qia_new(it, i + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1)
-               this%qia_new(it, i + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
-               !QI_OLD(IT, I+12) = ENU(I, 1)
-               this%qia_new(it, i + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2)
-               this%qia_new(it, i +spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
-               this%qia_new(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
-               !QI_OLD(IT, I+15) = ENU(I, 2)
+            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            do I = 1, min(3, lcount)
+               if (I <= nb) then
+                  this%qia_new(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               end if
+               if (I + 6 <= nb .and. I <= lcount) then
+                  this%qia_new(it, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               end if
+               if (I + 12 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
+                  this%qia_new(it, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               end if
+               if (I + 3 <= nb .and. I <= lcount) then
+                  this%qia_new(it, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               end if
+               if (I + spin_off <= nb .and. I <= lcount) then
+                  this%qia_new(it, I + spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               end if
+               if (I + 15 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
+                  this%qia_new(it, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               end if
             end do
+            if (rank == 0) then
+                  if (any(this%qia_new(it, :) /= this%qia_new(it, :)) .or. maxval(abs(this%qia_new(it, :))) > 1.0e6_rp) then
+                     call g_logger%warning('Suspicious values in qia_new for atom '//fmt('i4', it), __FILE__, __LINE__)
+               end if
+            end if
          end do
-
-      case ('prev')
+      case ('old')
+         this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
-            do I = 1, 3
-               this%qiaprev(it, i) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 1)
-               this%qiaprev(it, i + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1)
-               this%qiaprev(it, i + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) !- (0.5d0 + INT(PL(I, 1)))
-               !QI_OLD(IT, I+12) = ENU(I, 1)
-               this%qiaprev(it, i + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2)
-               this%qiaprev(it, i +spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2)
-               this%qiaprev(it, i + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) !- (0.5d0 + INT(PL(I, 2)))
-               !QI_OLD(IT, I+15) = ENU(I, 2)
+            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            do I = 1, min(3, lcount)
+               if (I <= nb) then
+                  this%qia_old(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               end if
+               if (I + 6 <= nb .and. I <= lcount) then
+                  this%qia_old(it, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               end if
+               if (I + 12 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
+                  this%qia_old(it, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               end if
+               if (I + 3 <= nb .and. I <= lcount) then
+                  this%qia_old(it, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               end if
+               if (I + spin_off <= nb .and. I <= lcount) then
+                  this%qia_old(it, I + spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               end if
+               if (I + 15 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
+                  this%qia_old(it, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               end if
             end do
+            if (rank == 0) then
+               if (any(this%qia_old(it, :) /= this%qia_old(it, :)) .or. maxval(abs(this%qia_old(it, :))) > 1.0e6_rp) then
+                  call g_logger%warning('Suspicious values in qia_old for atom '//fmt('i4', it), __FILE__, __LINE__)
+               end if
+            end if
+         end do
+      case ('prev')
+         this%qiaprev = 0.0_rp
+         do it = 1, this%lattice%nrec
+            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            do I = 1, min(3, lcount)
+               if (I <= nb) then
+                  this%qiaprev(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               end if
+               if (I + 6 <= nb .and. I <= lcount) then
+                  this%qiaprev(it, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               end if
+               if (I + 12 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
+                  this%qiaprev(it, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               end if
+               if (I + 3 <= nb .and. I <= lcount) then
+                  this%qiaprev(it, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               end if
+               if (I + spin_off <= nb .and. I <= lcount) then
+                  this%qiaprev(it, I + spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               end if
+               if (I + 15 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
+                  this%qiaprev(it, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               end if
+            end do
+            if (rank == 0) then
+               if (any(this%qiaprev(it, :) /= this%qiaprev(it, :)) .or. maxval(abs(this%qiaprev(it, :))) > 1.0e6_rp) then
+                  call g_logger%warning('Suspicious values in qiaprev for atom '//fmt('i4', it), __FILE__, __LINE__)
+               end if
+            end if
          end do
 
       case ('current')
          do it = 1, this%lattice%nrec
             do I = 1, 3
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 1) = this%qia(it, i)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 1) = this%qia(it, i + 6)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 1) = this%qia(it, i + 12)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, i - 1, 2) = this%qia(it, i + 3)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, i - 1, 2) = this%qia(it, i +spin_off)
-               this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(i - 1, 2) = this%qia(it, i + 15)
+               if (I <= nb) then
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I)
+               end if
+               if (I + 6 <= nb) then
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 6)
+               end if
+               if (I + 12 <= nb) then
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1) = this%qia(it, I + 12)
+               end if
+               if (I + 3 <= nb) then
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I + 3)
+               end if
+               if (I + spin_off <= nb) then
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + spin_off)
+               end if
+               if (I + 15 <= nb) then
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2) = this%qia(it, I + 15)
+               end if
             end do
          end do
       end select
@@ -362,8 +413,34 @@ contains
             !this%magbeta(ia) = 0.0d0
             if (rank == 0) call g_logger%info('Spin moment at atom '//fmt('i4', (ia))//' is being considered induced', __FILE__, __LINE__)
          end if
+         ! Defensive checks on magbeta
+         if (.not. allocated(this%magbeta)) then
+            if (rank == 0) call g_logger%warning('magbeta not allocated — resetting to 1.0 for all atoms', __FILE__, __LINE__)
+            allocate(this%magbeta(this%lattice%nrec))
+            this%magbeta(:) = 1.0d0
+         end if
+         if (this%magbeta(ia) /= this%magbeta(ia) .or. this%magbeta(ia) < 0.0d0 .or. this%magbeta(ia) > 1.0e6_rp) then
+            if (rank == 0) call g_logger%warning('Suspicious magbeta at atom '//fmt('i4', ia)//' -> resetting to 1.0', __FILE__, __LINE__)
+            this%magbeta(ia) = 1.0d0
+         end if
+         ! Clamp to [0,1]
+         this%magbeta(ia) = min(1.0d0, max(0.0d0, this%magbeta(ia)))
+
          mag_mix(ia, :) = (1.d0 - this%magbeta(ia))*mag_old(ia, :) + this%magbeta(ia)*mag_new(ia, :)
       end do
+
+      ! Quick diagnostic printout for the first few atoms to help debug mixing
+      if (rank == 0) then
+         do ia = 1, min(3, this%lattice%nrec)
+            call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": magbeta='"//fmt('f6.3', this%magbeta(ia)) &
+                 //' mag_old='//fmt('f10.6', mag_old(ia,1))//' '//fmt('f10.6', mag_old(ia,2))//' '//fmt('f10.6', mag_old(ia,3)) &
+                 , __FILE__, __LINE__)
+            call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_new='"//fmt('f10.6', mag_new(ia,1))//' '//fmt('f10.6', mag_new(ia,2))//' '//fmt('f10.6', mag_new(ia,3)) &
+                 , __FILE__, __LINE__)
+            call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_mix='"//fmt('f10.6', mag_mix(ia,1))//' '//fmt('f10.6', mag_mix(ia,2))//' '//fmt('f10.6', mag_mix(ia,3)) &
+                 , __FILE__, __LINE__)
+         end do
+      end if
    end subroutine mix_magnetic_moments
 
    !---------------------------------------------------------------------------
@@ -385,6 +462,11 @@ contains
       integer :: ia ! Atom index
       logical :: reset
       real(rp) :: Bnorm
+      integer :: nb_slice
+      integer :: ncols
+      real(rp) :: denom
+      character(len=512) :: msg
+      integer :: nprint, k
 
       select case (trim(this%mixtype))
       case ('linear')
@@ -398,6 +480,36 @@ contains
          this%qia(:, :) = qi_to(:, :)
          bnorm = bnorm**0.5d0
       end select
+      ! Safety: detect NaNs produced by mixing (e.g., in Broyden) and fallback
+      if (any(this%qia /= this%qia)) then
+         call g_logger%error('NaN detected in mixed qia — reverting to linear mix', __FILE__, __LINE__)
+         this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
+      end if
+      ! Debug: print first atoms qia slices for inspection (up to 6 cols)
+      ! if (rank == 0) then
+      !    do ia = 1, min(3, this%lattice%nrec)
+      !       nprint = min(6, size(qia_old, 2))
+      !       msg = ''
+      !       do k = 1, nprint
+      !          msg = msg // ' ' // fmt('f10.6', qia_old(ia, k))
+      !       end do
+      !       call g_logger%info('mixpq diagnostics atom '//fmt('i4', ia)//': qia_old='//trim(msg), __FILE__, __LINE__)
+
+      !       nprint = min(6, size(qia_new, 2))
+      !       msg = ''
+      !       do k = 1, nprint
+      !          msg = msg // ' ' // fmt('f10.6', qia_new(ia, k))
+      !       end do
+      !       call g_logger%info('mixpq diagnostics atom '//fmt('i4', ia)//': qia_new='//trim(msg), __FILE__, __LINE__)
+
+      !       nprint = min(6, size(this%qia, 2))
+      !       msg = ''
+      !       do k = 1, nprint
+      !          msg = msg // ' ' // fmt('f10.6', this%qia(ia, k))
+      !       end do
+      !       call g_logger%info('mixpq diagnostics atom '//fmt('i4', ia)//': qia_mixed='//trim(msg), __FILE__, __LINE__)
+      !    end do
+      ! end if
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
          this%charge%trq = 0.0d0
@@ -413,11 +525,14 @@ contains
          !if(rank==0) call g_logger%info(fmt(´f10.6´,this%charge%cht)//´ ´//fmt(´f10.6´,this%charge%trq)//´ ´//fmt(´f10.6´,this%charge%cht-this%charge%trq), __FILE__, __LINE__)
       end do
 
+      ncols = size(qia_old, 2)
+      nb_slice = min(12, ncols)
+      denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       do ia = 1, this%lattice%nrec
-         delta_atom = sqrt(sum((this%qia_old(ia, 1:12) - this%qia_new(ia, 1:12))**2))/6.0d0
+         delta_atom = sqrt(sum((this%qia_old(ia, 1:nb_slice) - this%qia_new(ia, 1:nb_slice))**2))/denom
          if (rank == 0) call g_logger%info('Moment diff for atom:'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', delta_atom), __FILE__, __LINE__)
       end do
-      this%delta = sqrt(sum((this%qia_old(:, 1:12) - this%qia_new(:, 1:12))**2))/6.0d0/this%lattice%nrec
+      this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
