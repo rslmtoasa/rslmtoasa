@@ -227,9 +227,122 @@ contains
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
                          0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), &
                        (/norb, norb/))*(-i_unit)
+      case (3)
+         ! spdf basis: real-harmonics matrix elements (lmax=3, norb=16)
+         ! Cubic harmonics: s(1), p_x/y/z(2-4), d_xy/yz/zx/x²-y²/3z²-r²(5-9), f-orbitals(10-16)
+         ! f-orbital indices: 10=fz3, 11=fxz2, 12=fyz2, 13=fz(x²-y²), 14=fxyz, 15=fx3, 16=fy3
+
+         ! Initialize with zeros
+         L_x = czero
+         L_y = czero
+         L_z = czero
+
+         ! Copy spd blocks from lmax=2
+         ! L_x block for sp and d
+         L_x(2:4, 2:4) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, -1.0_rp, &
+                                   0.0_rp, 1.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
+         L_x(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, -1.0_rp, -sqrt_three, 0.0_rp, &
+                                   0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
+
+         ! L_y block for sp and d
+         L_y(2:4, 2:4) = reshape((/0.0_rp, 0.0_rp, 1.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, &
+                                   -1.0_rp, 0.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
+         L_y(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
+
+         ! L_z block for sp and d
+         L_z(2:4, 2:4) = reshape((/0.0_rp, -1.0_rp, 0.0_rp, &
+                                   1.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp/), (/3,3/)) * (-i_unit)
+         L_z(5:9, 5:9) = reshape((/0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, -1.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, -2.0_rp, &
+                                   0.0_rp, 0.0_rp, 0.0_rp, 2.0_rp, 0.0_rp/), (/5,5/)) * (-i_unit)
+
+         ! f-orbital diagonal elements (eigenvalues of L_z)
+         ! f-orbitals have m = -3, -2, -1, 0, 1, 2, 3
+         ! Eigenvalues of L_z: ℏm (in units where ℏ=1)
+         ! L_z(10,10) = m=-3: eigenvalue -3
+         ! L_z(11,11) = m=-2: eigenvalue -2
+         ! L_z(12,12) = m=-1: eigenvalue -1
+         ! L_z(13,13) = m=0: eigenvalue 0
+         ! L_z(14,14) = m=1: eigenvalue 1
+         ! L_z(15,15) = m=2: eigenvalue 2
+         ! L_z(16,16) = m=3: eigenvalue 3
+
+         ! f-orbital L_z matrix (diagonal in correct basis)
+         L_z(10, 10) = cmplx(-3.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(11, 11) = cmplx(-2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(12, 12) = cmplx(-1.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(14, 14) = cmplx( 1.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(15, 15) = cmplx( 2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_z(16, 16) = cmplx( 3.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! f-orbital L_+ = L_x + i*L_y and L_- = L_x - i*L_y off-diagonal elements
+         ! Using L_±|l,m⟩ = ℏ√(l(l+1) - m(m±1))|l,m±1⟩
+         ! For l=3: √(12 - m(m+1)) for L_+ and √(12 - m(m-1)) for L_-
+
+         ! L_x and L_y off-diagonal elements between f-orbitals (using raising/lowering)
+         ! These are computed from standard angular momentum algebra
+         ! L_x(i,j) = (L_+(i,j) + L_-(i,j))/2
+         ! L_y(i,j) = (L_+(i,j) - L_-(i,j))/(2i)
+
+         ! f-f raising/lowering matrix elements (representative values)
+         ! |3,-3⟩ → |3,-2⟩: √(12-(-3)(-2)) = √6
+         L_x(10, 11) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(11, 10) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,-2⟩ → |3,-1⟩: √(12-(-2)(-1)) = √10
+         L_x(11, 12) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(12, 11) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,-1⟩ → |3,0⟩: √(12-(-1)(0)) = √12
+         L_x(12, 13) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(13, 12) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,0⟩ → |3,1⟩: √(12-0(1)) = √12
+         L_x(13, 14) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(14, 13) = cmplx(sqrt(12.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,1⟩ → |3,2⟩: √(12-1(2)) = √10
+         L_x(14, 15) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(15, 14) = cmplx(sqrt(10.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! |3,2⟩ → |3,3⟩: √(12-2(3)) = √6
+         L_x(15, 16) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+         L_x(16, 15) = cmplx(sqrt(6.0_rp)/2.0_rp, 0.0_rp, kind=rp) * (-i_unit)
+
+         ! L_y: same structure but with imaginary unit
+         L_y(10, 11) = cmplx(0.0_rp, sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(11, 10) = cmplx(0.0_rp, -sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(11, 12) = cmplx(0.0_rp, sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(12, 11) = cmplx(0.0_rp, -sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(12, 13) = cmplx(0.0_rp, sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(13, 12) = cmplx(0.0_rp, -sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(13, 14) = cmplx(0.0_rp, sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(14, 13) = cmplx(0.0_rp, -sqrt(12.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(14, 15) = cmplx(0.0_rp, sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(15, 14) = cmplx(0.0_rp, -sqrt(10.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
+         L_y(15, 16) = cmplx(0.0_rp, sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+         L_y(16, 15) = cmplx(0.0_rp, -sqrt(6.0_rp)/2.0_rp, kind=rp) * (-i_unit)
+
       case default
          write (*, '(a,i0)') 'init_math_operators: L_x/L_y/L_z not implemented for lmax=', lmax_basis
-         error stop 'init_math_operators: only lmax=2 (spd) is implemented for L operators'
+         error stop 'init_math_operators: only lmax=1-3 (sp/spd/spdf) are implemented for L operators'
       end select
 
       ! ---- Spin operators: S_k = (1/2) * I_norb ⊗ σ_k -----------------------

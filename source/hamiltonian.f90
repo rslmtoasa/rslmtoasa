@@ -976,6 +976,10 @@ contains
          sg = cmplx(0.5d0, 0.0d0)
          soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
          soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
+         ! For f-orbitals, use a scaling based on d if not explicitly available
+         ! Set soc_f to small value (f-orbital spin-orbit is typically weak)
+         ! real soc_f = 0.0_rp  ! f-orbital s-o coupling (for future enhancement)
+
          ! Check if orbital polarization is enabled
          if (this%orb_pol) then
             rac = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%rac)
@@ -988,18 +992,35 @@ contains
          prefac = 0.0_rp
          do i = 1, norb
             do j = 1, norb
+               ! p-orbitals (indices 2-4)
                if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
+               ! d-orbitals (indices 5-9)
                if (i >= 5 .and. i <= 9 .and. j >= 5 .and. j <= 9) prefac = sg*soc_d
+               ! f-orbitals (indices 10-16) - currently set to zero (no f-orbital s.o. coupling yet)
+               if (i >= 10 .and. i <= 16 .and. j >= 10 .and. j <= 16) prefac = cmplx(0.0_rp, 0.0_rp)
+
                this%lsham(j, i, k) = this%lsham(j, i, k) + prefac*Lz(j, i) + Lz(j, i)*rac(1)*lz_loc ! H11
                this%lsham(j, i +spin_off, k) = this%lsham(j, i +spin_off, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i)) ! H12
                this%lsham(j +spin_off, i, k) = this%lsham(j +spin_off, i, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i)) ! H21
                this%lsham(j +spin_off, i +spin_off, k) = this%lsham(j +spin_off, i +spin_off, k) - prefac*Lz(j, i) - Lz(j, i)*rac(2)*lz_loc ! H22
-               !write(50,*) ´ntype=´, k
-               !write(51,*) ´ntype=´, k
-               !write(50,´(18f10.6)´) real(this%lsham(:,:,k))
-               !write(51,´(18f10.6)´) aimag(this%lsham(:,:,k))
             end do
          end do
+
+         ! Debug output: Print on-site Hamiltonian for lmax=3
+         if (norb == 16) then
+            open(unit=999, file='debug_hamiltonian_lsham.txt', action='write', status='replace')
+            write(999, '(A)') 'On-site Hamiltonian (lsham) for lmax=3 (SPDF basis)'
+            write(999, '(A, I0)') 'Atom type: ', k
+            write(999, '(A)') 'Real part:'
+            do i = 1, norb+spin_off
+               write(999, '(16F12.6)') (real(this%lsham(i, j, k)), j=1, norb+spin_off)
+            end do
+            write(999, '(A)') 'Imaginary part:'
+            do i = 1, norb+spin_off
+               write(999, '(16F12.6)') (aimag(this%lsham(i, j, k)), j=1, norb+spin_off)
+            end do
+            close(999)
+         end if
       end do
    end subroutine build_lsham
 

@@ -162,27 +162,45 @@ contains
 
    subroutine build_pot(this)
       class(symbolic_atom), intent(inout) :: this
-      integer :: i
+      integer :: i, lmax
 
       ! Setting the potential parameters
       ! Imaginary part is set to 0
       ! kind is rp (same as real part)
+      lmax = this%potential%lmax
+
       this%potential%cx(1, :) = cmplx(this%potential%center_band(1, :), 0, rp)
       this%potential%wx(1, :) = cmplx(this%potential%width_band(1, :), 0, rp)
       this%potential%cex(1, :) = cmplx(this%potential%shifted_band(1, :), 0, rp)
       this%potential%obx(1, :) = cmplx(this%potential%obar(1, :), 0, rp)
+
+      ! p-orbitals (indices 2-4)
       do i = 2, 4
          this%potential%cx(i, :) = cmplx(this%potential%center_band(2, :), 0, rp)
          this%potential%wx(i, :) = cmplx(this%potential%width_band(2, :), 0, rp)
          this%potential%cex(i, :) = cmplx(this%potential%shifted_band(2, :), 0, rp)
          this%potential%obx(i, :) = cmplx(this%potential%obar(2, :), 0, rp)
       end do
-      do i = 5, 9
-         this%potential%cx(i, :) = cmplx(this%potential%center_band(3, :), 0, rp)
-         this%potential%wx(i, :) = cmplx(this%potential%width_band(3, :), 0, rp)
-         this%potential%cex(i, :) = cmplx(this%potential%shifted_band(3, :), 0, rp)
-         this%potential%obx(i, :) = cmplx(this%potential%obar(3, :), 0, rp)
-      end do
+
+      ! d-orbitals (indices 5-9) - present for lmax >= 2
+      if (lmax >= 2) then
+         do i = 5, 9
+            this%potential%cx(i, :) = cmplx(this%potential%center_band(3, :), 0, rp)
+            this%potential%wx(i, :) = cmplx(this%potential%width_band(3, :), 0, rp)
+            this%potential%cex(i, :) = cmplx(this%potential%shifted_band(3, :), 0, rp)
+            this%potential%obx(i, :) = cmplx(this%potential%obar(3, :), 0, rp)
+         end do
+      end if
+
+      ! f-orbitals (indices 10-16) - present for lmax >= 3
+      if (lmax >= 3) then
+         do i = 10, 16
+            this%potential%cx(i, :) = cmplx(this%potential%center_band(4, :), 0, rp)
+            this%potential%wx(i, :) = cmplx(this%potential%width_band(4, :), 0, rp)
+            this%potential%cex(i, :) = cmplx(this%potential%shifted_band(4, :), 0, rp)
+            this%potential%obx(i, :) = cmplx(this%potential%obar(4, :), 0, rp)
+         end do
+      end if
 
       this%potential%cx0(:) = 0.5d0*(this%potential%cx(:, 1) + this%potential%cx(:, 2))
       this%potential%cx1(:) = 0.5d0*(this%potential%cx(:, 1) - this%potential%cx(:, 2))

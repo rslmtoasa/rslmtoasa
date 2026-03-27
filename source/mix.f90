@@ -271,7 +271,7 @@ contains
          this%qia_new = 0.0_rp
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
-            do I = 1, min(3, lcount)
+            do I = 1, lcount
                if (I <= nb) then
                   this%qia_new(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
                end if
@@ -301,7 +301,7 @@ contains
          this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
-            do I = 1, min(3, lcount)
+            do I = 1, lcount
                if (I <= nb) then
                   this%qia_old(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
                end if
@@ -331,7 +331,7 @@ contains
          this%qiaprev = 0.0_rp
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
-            do I = 1, min(3, lcount)
+            do I = 1, lcount
                if (I <= nb) then
                   this%qiaprev(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
                end if
@@ -360,7 +360,8 @@ contains
 
       case ('current')
          do it = 1, this%lattice%nrec
-            do I = 1, 3
+            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            do I = 1, lcount
                if (I <= nb) then
                   this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I)
                end if

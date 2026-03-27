@@ -24,7 +24,7 @@ module control_mod
    use string_mod, only: sl, fmt
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
-   use basis_mod, only: basis_init
+   use basis_mod, only: basis_init, norb
    use math_mod, only: init_math_operators
    implicit none
 
@@ -411,7 +411,7 @@ contains
 
       this%calctype = ''
       this%lmax = 2
-      this%npold = 9
+      this%npold = norb
       this%llsp = 16
       this%lld = 16
       this%idos = 0

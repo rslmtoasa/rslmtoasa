@@ -1874,7 +1874,7 @@ contains
             ia = this%iu(ii)
             nr = this%nn(ia, 1)
             write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
-            call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, this%control%npold, nr, ii)
+            call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, norb, nr, ii)
          end do
       end if
 10000 format(i5)
@@ -2326,7 +2326,7 @@ contains
       real(rp), dimension(nlm, nlm, nr), intent(inout) :: sbar
       ! Local variables
       real(rp) :: fak, pi
-      real(rp), dimension(3) :: q
+      real(rp), dimension(4) :: q
       ! External Calls
       !external SHLDCH, STREZE
       ! Intrinsic Functions
@@ -2341,6 +2341,7 @@ contains
       q(1) = 0.3485d0*fak
       q(2) = 0.05303d0*fak
       q(3) = 0.010714d0*fak
+      q(4) = 0.00337d0*fak   ! f-channel screening parameter
       ! Factors from LMTO47
       !q(1) = 0.33727d0 * fak
       !q(2) = 0.05115d0 * fak
@@ -2377,13 +2378,11 @@ contains
       integer :: ilm, ir, irl0, jlm, jr, jrl0
       real(rp) :: rr, w1
       real(rp), dimension(3) :: dr
-      real(rp), dimension(81) :: s0
+      real(rp), dimension(16, 16) :: s0
       ! External calls
       !external CANSO
       ! Intrinsic Functions
       intrinsic SQRT
-
-      if (nlm > 9) stop "**** CHANGE DIMS IN STRMAT"
       do ir = 1, nr
          irl0 = (ir - 1)*nlm
          do jr = 1, nr
@@ -2396,7 +2395,7 @@ contains
             call CANSO(w1, dr, s0)
             do jlm = 1, nlm
                do ilm = 1, nlm
-                  s(ilm + irl0, jlm + jrl0) = s0(ilm + (jlm - 1)*nlm)
+                  s(ilm + irl0, jlm + jrl0) = s0(ilm, jlm)
                end do
             end do
          end do
@@ -2429,7 +2428,7 @@ contains
       ! Input
       integer, intent(in) :: iclus, na, nlm, nr, nrl
       real(rp), intent(in) ::r2
-      real(rp), dimension(3), intent(in) :: q
+      real(rp), dimension(4), intent(in) :: q
       real(rp), dimension(3, nr), intent(in) :: r
       ! Output
       real(rp), dimension(na), intent(inout) :: a
@@ -2528,7 +2527,7 @@ contains
       !
       ! ... Format Declarations ...
       !
-10000 format(" LMAX=", i2, "   Q=", 3f10.6)
+10000 format(" LMAX=", i2, "   Q=", 4f10.6)
 10001 format(" NDEF=", i10)
 10002 format(" VECTOR=", 3f12.6, "   ICLUS=", i5)
 10003 format(9f10.4)
@@ -2550,32 +2549,28 @@ contains
       real(rp), intent(in) :: w
       real(rp), dimension(3), intent(in) :: dr
       ! Output
-      real(rp), dimension(9, 9), intent(out) :: sc
+      real(rp), dimension(16, 16), intent(out) :: sc
       ! Local variables
       integer :: i, j, l, ll
-      real(rp) :: el, el2, elem, elen, em, em2, emen, en, en2, r1, r2, r3, rr, s2, s3, s4, s5, &
-                  sbyr, sq3, sq5
-      integer, dimension(9) :: ip
-      real(rp), dimension(9, 9) :: s
+      real(rp) :: el, el2, elem, elen, em, em2, emen, en, en2, r1, r2, r3, rr, s2, s3, s4, s5, s6, s7, &
+                  sbyr, sq3, sq5, sq7
+      integer, dimension(16) :: ip
+      real(rp), dimension(16, 16) :: s
       ! Intrinsic Functions
       intrinsic SQRT
       !.. Data Declarations ..
       ! original and correct
       !     S=1, X=2, Y=3, Z=4, XY=5, YZ=6, ZX=7, X**2-Y**2=8, 3Z*Z-R*R=9
-      data ip/1, 2, 3, 4, 5, 6, 7, 8, 9/
-      !data ip/1, 2, 3, 4, 5, 7, 6, 8, 9/
-      !data ip/1, 2, 3, 4, 5, 6, 7, 9, 8/
-      ! testing (old convention)
-      !data ip /  1,  4, 2, 3,   5, 6, 8, 9, 7  /
-      ! testing reversing d-orbitals (bstr convention)
-      !data ip/1, 2, 3, 4, 9, 8, 7, 6, 5/
+      !     f-orbitals (10-16): fz3, fxz2, fyz2, fz(x2-y2), fxyz, fx3, fy3
+      data ip/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16/
       !     S=1, X=2, Y=3, Z=4, XY=5, YZ=6, ZX=7, X**2-Y**2=8, 3Z*Z-R*R=9
+      !     (10-16 reserved for f-orbitals)
       r1 = dr(1)
       r2 = dr(2)
       r3 = dr(3)
       rr = SQRT(r1*r1 + r2*r2 + r3*r3)
-      do i = 1, 9
-         do j = 1, 9
+      do i = 1, 16
+         do j = 1, 16
             sc(i, j) = 0.0d0
          end do
       end do
@@ -2585,8 +2580,11 @@ contains
       s3 = s2*sbyr
       s4 = s3*sbyr
       s5 = s4*sbyr
+      s6 = s5*sbyr
+      s7 = s6*sbyr
       sq3 = SQRT(3.d0)
       sq5 = SQRT(5.d0)
+      sq7 = SQRT(7.d0)
       el = r1/rr
       em = r2/rr
       en = r3/rr
@@ -2651,7 +2649,114 @@ contains
       !-----------------------------------------------------------------------
       sc(9, 9) = -7.5d0*s5*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
       !-----------------------------------------------------------------------
-      do l = 2, 9
+      ! F-ORBITAL BLOCK (indices 10-16)
+      ! From Methfessel, Mossner & Springborg, J. Phys. C 20, 1069 (1987), Table 1
+      ! Orbital order: ilm 10=fz3, 11=fxz2, 12=fyz2, 13=fz(x2-y2), 14=fxyz, 15=fx3, 16=fy3
+      !
+      ! s-f interactions (row 1, cols 10-16)
+      sc(1, 10) = sq7*s3*(5.d0*en2*en2 - 3.d0*en2)
+      sc(1, 11) = -2.d0*sq7*sq5*elen*s4*(1.d0 - 5.d0*en2)
+      sc(1, 12) = -2.d0*sq7*sq5*emen*s4*(1.d0 - 5.d0*en2)
+      sc(1, 13) = -2.d0*sq7*sq5*(el2 - em2)*en*s4
+      sc(1, 14) = -4.d0*sq7*sq5*elem*en*s4
+      sc(1, 15) = sq7*s4*el*(5.d0*el2 - 3.d0)
+      sc(1, 16) = sq7*s4*em*(5.d0*em2 - 3.d0)
+      !
+      ! p-f interactions (rows 2-4, cols 10-16)
+      sc(2, 10) = 6.d0*sq7*sq3*s4*el*(5.d0*en2*en2 - 1.d0)
+      sc(2, 11) = 3.d0*sq7*sq5*s5*em*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
+      sc(2, 12) = -30.d0*sq7*sq5*s5*elem*en*(en2 - 1.d0)
+      sc(2, 13) = 3.d0*sq7*sq5*s5*el*(7.d0*en2 - 1.d0)*(el2 - em2)
+      sc(2, 14) = 6.d0*sq7*sq5*s5*elem*en*(7.d0*en2 - 3.d0)
+      sc(2, 15) = 3.d0*sq7*s5*el*(35.d0*el2*em2 - 5.d0*el2 - 20.d0*em2 + 4.d0)
+      sc(2, 16) = 3.d0*sq7*s5*el2*em*(35.d0*em2 - 15.d0)
+      !
+      sc(3, 10) = 6.d0*sq7*sq3*s4*em*(5.d0*en2*en2 - 1.d0)
+      sc(3, 11) = -30.d0*sq7*sq5*s5*elem*en*(en2 - 1.d0)
+      sc(3, 12) = 3.d0*sq7*sq5*s5*el*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
+      sc(3, 13) = 3.d0*sq7*sq5*s5*em*(7.d0*en2 - 1.d0)*(el2 - em2)
+      sc(3, 14) = 6.d0*sq7*sq5*s5*emen*en*(7.d0*en2 - 3.d0)
+      sc(3, 15) = 3.d0*sq7*s5*el*em2*(35.d0*el2 - 15.d0)
+      sc(3, 16) = 3.d0*sq7*s5*em*(35.d0*em2*el2 - 20.d0*el2 - 5.d0*em2 + 4.d0)
+      !
+      sc(4, 10) = 3.d0*sq7*sq5*s4*en*(35.d0*en2 - 28.d0)
+      sc(4, 11) = 6.d0*sq7*sq5*s5*elen*en*(7.d0*en2 - 3.d0)
+      sc(4, 12) = 6.d0*sq7*sq5*s5*emen*en*(7.d0*en2 - 3.d0)
+      sc(4, 13) = -12.d0*sq7*sq5*s5*(el2 - em2)*en*(7.d0*en2 - 1.d0)
+      sc(4, 14) = -12.d0*sq7*sq5*s5*elem*en*(7.d0*en2 - 1.d0)
+      sc(4, 15) = 3.d0*sq7*s5*el*(5.d0*el2 - 1.d0)*(7.d0*en2 - 3.d0)
+      sc(4, 16) = 3.d0*sq7*s5*em*(5.d0*em2 - 1.d0)*(7.d0*en2 - 3.d0)
+      !
+      ! d-f interactions (rows 5-9, cols 10-16)
+      sc(5, 10) = -15.d0*sq7*sq5*s5*elem*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(5, 11) = -35.d0*sq7*s6*emen*elem*(1.d0 - 7.d0*en2)
+      sc(5, 12) = -35.d0*sq7*s6*el2*en*elem*(1.d0 - 7.d0*en2)
+      sc(5, 13) = -35.d0*sq7*s6*elem*(el2 - em2)*(7.d0*en2 - 1.d0)
+      sc(5, 14) = -70.d0*sq7*s6*elem*(el2*en2 - em2*(1.d0 - en2))
+      sc(5, 15) = -15.d0*sq7*s6*elem*(el2 - 3.d0*em2)*(7.d0*en2 - 1.d0)
+      sc(5, 16) = -15.d0*sq7*s6*elem*(em2 - 3.d0*el2)*(7.d0*en2 - 1.d0)
+      !
+      sc(6, 10) = -15.d0*sq7*sq5*s5*emen*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(6, 11) = -35.d0*sq7*s6*el2*en*emen*(1.d0 - 7.d0*en2)
+      sc(6, 12) = -35.d0*sq7*s6*em2*en*emen*(1.d0 - 7.d0*en2)
+      sc(6, 13) = 35.d0*sq7*s6*emen*(el2 - em2)*(7.d0*en2 - 1.d0)
+      sc(6, 14) = -70.d0*sq7*s6*emen*el2*(7.d0*en2 - 1.d0)
+      sc(6, 15) = 15.d0*sq7*s6*emen*el*(em2 - 7.d0*el2)
+      sc(6, 16) = -15.d0*sq7*s6*emen*em*(el2 - 7.d0*em2)
+      !
+      sc(7, 10) = -15.d0*sq7*sq5*s5*elen*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(7, 11) = -35.d0*sq7*s6*el2*en*elen*(1.d0 - 7.d0*en2)
+      sc(7, 12) = 35.d0*sq7*s6*em2*elen*(1.d0 - 7.d0*en2)
+      sc(7, 13) = 35.d0*sq7*s6*elen*(el2 - em2)*(7.d0*en2 - 1.d0)
+      sc(7, 14) = -70.d0*sq7*s6*elen*em2*(7.d0*en2 - 1.d0)
+      sc(7, 15) = 15.d0*sq7*s6*elen*el*(em2 - 7.d0*el2)
+      sc(7, 16) = -15.d0*sq7*s6*elen*em*(el2 - 7.d0*em2)
+      !
+      sc(8, 10) = -15.d0*sq7*sq5*s5*(el2 - em2)*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(8, 11) = 70.d0*sq7*s6*en*(el2 - em2)*elen
+      sc(8, 12) = 70.d0*sq7*s6*en*(el2 - em2)*emen
+      sc(8, 13) = -70.d0*sq7*s6*(el2 - em2)*(el2*7.d0*en2 - el2 - 7.d0*em2*en2 + em2)
+      sc(8, 14) = 140.d0*sq7*s6*elem*(el2 - em2)*(3.d0 - 7.d0*en2)
+      sc(8, 15) = 35.d0*sq7*s6*en*el*(el2 - em2)*(7.d0*el2 - 9.d0)
+      sc(8, 16) = -35.d0*sq7*s6*en*em*(el2 - em2)*(7.d0*em2 - 9.d0)
+      !
+      sc(9, 10) = 5.d0*sq7*sq5*s5*en*(21.d0*en2*en2 - 14.d0*en2 + 1.d0)
+      sc(9, 11) = 35.d0*sq7*s6*elen*(21.d0*en2 - 5.d0)
+      sc(9, 12) = 35.d0*sq7*s6*emen*(21.d0*en2 - 5.d0)
+      sc(9, 13) = -70.d0*sq7*s6*en*(el2 - em2)*(21.d0*en2 - 5.d0)
+      sc(9, 14) = -140.d0*sq7*s6*elem*en*(21.d0*en2 - 5.d0)
+      sc(9, 15) = 35.d0*sq7*s6*el*(21.d0*en2 - 3.d0)*(7.d0*en2 - 1.d0)
+      sc(9, 16) = 35.d0*sq7*s6*em*(21.d0*en2 - 3.d0)*(7.d0*en2 - 1.d0)
+      !
+      ! f-f interactions (rows 10-16, cols 10-16)
+      ! Diagonal terms
+      sc(10, 10) = -7.d0*s7*(99.d0*en2*en2*en2 - 135.d0*en2*en2 + 55.d0*en2 - 5.d0)
+      sc(11, 11) = s7*(-385.d0*en2*en2*(el2 + em2) + 70.d0*en2*(el2 + em2) + 245.d0*el2*em2 + 5.d0)
+      sc(12, 12) = sc(11, 11)  ! same for y
+      sc(13, 13) = s7*(245.d0*en2*(el2 - em2)**2 - 70.d0*(el2 - em2)**2 - 385.d0*en2*en2*(el2 - em2)**2 + 5.d0)
+      sc(14, 14) = s7*(-1225.d0*en2*en2*el2*em2 + 350.d0*en2*el2*em2 - 35.d0*el2*em2 + 5.d0)
+      sc(15, 15) = s7*(-231.d0*el2*el2*em2 - 385.d0*el2*el2*en2*en2 + 70.d0*el2*el2*en2 - 55.d0*el2*el2 + &
+                       245.d0*el2*em2*em2 + 5.d0)
+      sc(16, 16) = s7*(-231.d0*em2*em2*el2 - 385.d0*em2*em2*en2*en2 + 70.d0*em2*em2*en2 - 55.d0*em2*em2 + &
+                       245.d0*em2*el2*el2 + 5.d0)
+      ! Off-diagonal f-f terms (selected important ones)
+      sc(11, 12) = -35.d0*s7*elem*(35.d0*en2*en2 - 10.d0*en2 + 1.d0)
+      sc(11, 13) = s7*el*(-245.d0*en2*en2*el2 + 245.d0*en2*en2*em2 + 70.d0*en2*el2 - 70.d0*en2*em2 - 5.d0*el2 + 5.d0*em2)
+      sc(11, 14) = -70.d0*s7*elen*em*(35.d0*en2*en2 - 10.d0*en2 + 1.d0)
+      sc(11, 15) = s7*el*em*(245.d0*en2*(el2 - em2) - 49.d0*(el2 - em2))
+      sc(11, 16) = 70.d0*s7*em2*el*(35.d0*en2 - 5.d0)*(en2 - 1.d0)
+      sc(12, 13) = s7*em*(-245.d0*en2*en2*el2 + 245.d0*en2*en2*em2 + 70.d0*en2*el2 - 70.d0*en2*em2 - 5.d0*el2 + 5.d0*em2)
+      sc(12, 14) = -70.d0*s7*emen*el*(35.d0*en2*en2 - 10.d0*en2 + 1.d0)
+      sc(12, 15) = 70.d0*s7*el2*em*(35.d0*en2 - 5.d0)*(en2 - 1.d0)
+      sc(12, 16) = s7*el*em*(245.d0*en2*(el2 - em2) - 49.d0*(el2 - em2))
+      sc(13, 14) = -140.d0*s7*elem*(el2 - em2)*(7.d0*en2*en2 - 5.d0*en2 + 1.d0)
+      sc(13, 15) = -35.d0*s7*el*(el2 - em2)*(el2 - 7.d0*em2)*(7.d0*en2 - 1.d0)
+      sc(13, 16) = -35.d0*s7*em*(el2 - em2)*(em2 - 7.d0*el2)*(7.d0*en2 - 1.d0)
+      sc(14, 15) = -35.d0*s7*elem*em*(el2 - 3.d0*em2)*(7.d0*en2 - 1.d0)
+      sc(14, 16) = -35.d0*s7*elem*el*(em2 - 3.d0*el2)*(7.d0*en2 - 1.d0)
+      sc(15, 16) = 35.d0*s7*el*em*(el2 - em2)*(el2 + em2 - 5.d0*en2*(el2 + em2))
+      !-----------------------------------------------------------------------
+      do l = 2, 16
          ll = l - 1
          do j = 1, ll
             sc(l, j) = sc(j, l)
@@ -2665,14 +2770,19 @@ contains
             sc(l, j) = -sc(l, j)
          end do
       end do
+      do l = 10, 16
+         do j = 2, 4
+            sc(l, j) = -sc(l, j)
+         end do
+      end do
       ! ------ THIS PART CHANGES THE YLM ORDER AND MULTIPLIES BY -0.5 ----
-      do i = 1, 9
-         do j = 1, 9
+      do i = 1, 16
+         do j = 1, 16
             s(ip(j), ip(i)) = -0.5d0*sc(j, i)
          end do
       end do
-      do i = 1, 9
-         do j = 1, 9
+      do i = 1, 16
+         do j = 1, 16
             sc(j, i) = s(j, i)
          end do
       end do

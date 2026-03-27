@@ -1286,13 +1286,21 @@ contains
             ev(nval) = -0.5d0
             qval(isp) = qval(isp) + atom%potential%ql(1, l, isp)
          end do
+         ! Debug output for orbital initialization
+         if (lmax >= 3) then
+            write (6, '(A, I1, A, F8.4, F8.4, A, I2, A, 2(F10.6,2X))') &
+               "  L=", l, "  PL=", atom%potential%pl(l, 1), atom%potential%pl(l, 2), &
+               "  KONFIG=", int(atom%potential%pl(l, 1)), &
+               "  Q0(spin1,2)=", atom%potential%ql(1, l, 1), atom%potential%ql(1, l, 2)
+         end if
       end do
       !----MODIFICATIONS TO INCLUDE FRACTIONARY F OCCUPATION IN THE CORE------
       IFCORE = atom%element%f_core
       DFCORE = REAL(IFCORE)
       call g_logger%info('F core check:'//int2str(ifcore), __FILE__, __LINE__)
       !write (9, *) ´F-core check:´, IFCORE, DFCORE
-      if (IFCORE /= 0) then
+      ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
+      if (IFCORE /= 0 .and. lmax < 3) then
          LCORE = 3
          DEG = (2*(2*LCORE + 1))/NSP
          do ISP = 1, NSP
@@ -1567,7 +1575,8 @@ contains
       end do
       !======MODIFICADO PARA INCLUIR F NO CAROCO================
       IFCORE = atom%element%f_core
-      if (IFCORE /= 0) then
+      ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
+      if (IFCORE /= 0 .and. LMAX < 3) then
          KONF(LMAX + 2) = 5
       end if
       !========FIM  DAS MODIFICACOES NESTE TRECHO================
@@ -1599,6 +1608,12 @@ contains
                end if
                if (FREE) then
                   SLO = -VAL
+               end if
+               ! Debug output for orbital radial equation
+               if (L >= 2) then
+                  write (6, '(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)') &
+                     "NEWRHO: L=", L, " ISP=", ISP, " PL=", PL(LP1, ISP), &
+                     " NN=", NN, " EVAL=", EVAL, " Q0=", Q0
                end if
                call RSEQSR(EB1, EB2, EVAL, TOLVAL, Z, L, NN, VAL, SLO, V(1, ISP), G, SUM, A, B, &
                            rofi, NR, NRE, 0)
@@ -1835,7 +1850,8 @@ contains
          !====MODIFICADO PARA INCLUIR F FRACIONARIO NO CAROCO==========
          IFCORE = atom%element%f_core
          DFCORE = REAL(IFCORE)
-         if (IFCORE /= 0) then
+         ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
+         if (IFCORE /= 0 .and. LMAX < 3) then
             LP1 = LMAX + 2
             L = LP1 - 1
             !     DEG=(2*(2*L+1))/NSP

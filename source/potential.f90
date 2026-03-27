@@ -222,26 +222,47 @@ contains
       xi_d = this%xi_d
       rac = this%rac
 
-      ! Normalize the magnetic moments
-      this%mom(:) = this%mom(:)/norm2(this%mom(:))
+      ! Normalize the magnetic moments (only if allocated)
+      if (allocated(this%mom)) then
+         this%mom(:) = this%mom(:)/norm2(this%mom(:))
+         call move_alloc(this%mom, mom)
+      end if
+      if (allocated(this%lmom)) then
+         call move_alloc(this%lmom, lmom)
+      end if
 
-      call move_alloc(this%ql, ql)
-      call move_alloc(this%mom, mom)
-      call move_alloc(this%lmom, lmom)
-      call move_alloc(this%pl, pl)
+      ! CRITICAL: For lmax-dependent arrays, deallocate the object's arrays.
+      ! Then allocate LOCAL arrays to maximum possible size (lmax=3, 4 columns).
+      ! The namelist reader needs pre-allocated arrays and won't resize them.
+      if (allocated(this%ql)) deallocate(this%ql)
+      if (allocated(this%pl)) deallocate(this%pl)
+      if (allocated(this%center_band)) deallocate(this%center_band)
+      if (allocated(this%width_band)) deallocate(this%width_band)
+      if (allocated(this%gravity_center)) deallocate(this%gravity_center)
+      if (allocated(this%shifted_band)) deallocate(this%shifted_band)
+      if (allocated(this%obar)) deallocate(this%obar)
+      if (allocated(this%c)) deallocate(this%c)
+      if (allocated(this%enu)) deallocate(this%enu)
+      if (allocated(this%ppar)) deallocate(this%ppar)
+      if (allocated(this%qpar)) deallocate(this%qpar)
+      if (allocated(this%srdel)) deallocate(this%srdel)
+      if (allocated(this%vl)) deallocate(this%vl)
 
-      call move_alloc(this%center_band, center_band)
-      call move_alloc(this%width_band, width_band)
-      call move_alloc(this%gravity_center, gravity_center)
-      call move_alloc(this%shifted_band, shifted_band)
-      call move_alloc(this%obar, obar)
-
-      call move_alloc(this%c, c)
-      call move_alloc(this%enu, enu)
-      call move_alloc(this%ppar, ppar)
-      call move_alloc(this%qpar, qpar)
-      call move_alloc(this%srdel, srdel)
-      call move_alloc(this%vl, vl)
+      ! Allocate local arrays to maximum size (lmax=3: 4 channels, and 4 moment types)
+      ! These will be read by the namelist. Extra space won't hurt.
+      if (.not. allocated(pl)) allocate(pl(0:3, 2))
+      if (.not. allocated(ql)) allocate(ql(3, 0:3, 2))
+      if (.not. allocated(center_band)) allocate(center_band(4, 2))
+      if (.not. allocated(width_band)) allocate(width_band(4, 2))
+      if (.not. allocated(gravity_center)) allocate(gravity_center(4, 2))
+      if (.not. allocated(shifted_band)) allocate(shifted_band(4, 2))
+      if (.not. allocated(obar)) allocate(obar(4, 2))
+      if (.not. allocated(c)) allocate(c(4, 2))
+      if (.not. allocated(enu)) allocate(enu(4, 2))
+      if (.not. allocated(ppar)) allocate(ppar(4, 2))
+      if (.not. allocated(qpar)) allocate(qpar(4, 2))
+      if (.not. allocated(srdel)) allocate(srdel(4, 2))
+      if (.not. allocated(vl)) allocate(vl(4, 2))
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -273,25 +294,69 @@ contains
       this%xi_d = xi_d
       this%rac = rac
 
-      call move_alloc(center_band, this%center_band)
-      call move_alloc(width_band, this%width_band)
-      call move_alloc(gravity_center, this%gravity_center)
-      call move_alloc(shifted_band, this%shifted_band)
-      call move_alloc(obar, this%obar)
+      ! Now allocate object arrays with size based on the lmax that was read
+      ! Allocate only what's needed: pl(0:lmax, 2), ql(3, 0:lmax, 2), etc.
+      if (allocated(pl)) then
+         allocate(this%pl(0:lmax, 2))
+         this%pl(0:lmax, :) = pl(0:lmax, :)
+      end if
+      if (allocated(ql)) then
+         allocate(this%ql(3, 0:lmax, 2))
+         this%ql(:, 0:lmax, :) = ql(:, 0:lmax, :)
+      end if
+      if (allocated(center_band)) then
+         allocate(this%center_band(lmax+1, 2))
+         this%center_band(:, :) = center_band(1:lmax+1, :)
+      end if
+      if (allocated(width_band)) then
+         allocate(this%width_band(lmax+1, 2))
+         this%width_band(:, :) = width_band(1:lmax+1, :)
+      end if
+      if (allocated(gravity_center)) then
+         allocate(this%gravity_center(lmax+1, 2))
+         this%gravity_center(:, :) = gravity_center(1:lmax+1, :)
+      end if
+      if (allocated(shifted_band)) then
+         allocate(this%shifted_band(lmax+1, 2))
+         this%shifted_band(:, :) = shifted_band(1:lmax+1, :)
+      end if
+      if (allocated(obar)) then
+         allocate(this%obar(lmax+1, 2))
+         this%obar(:, :) = obar(1:lmax+1, :)
+      end if
 
-      mom(:) = mom(:)/norm2(mom(:))
+      ! For mom/lmom, move_alloc is still valid (they're non-lmax-dependent)
+      if (allocated(mom)) then
+         mom(:) = mom(:)/norm2(mom(:))
+         call move_alloc(mom, this%mom)
+      end if
+      if (allocated(lmom)) call move_alloc(lmom, this%lmom)
 
-      call move_alloc(mom, this%mom)
-      call move_alloc(lmom, this%lmom)
-      call move_alloc(pl, this%pl)
-      call move_alloc(ql, this%ql)
-
-      call move_alloc(c, this%c)
-      call move_alloc(enu, this%enu)
-      call move_alloc(ppar, this%ppar)
-      call move_alloc(qpar, this%qpar)
-      call move_alloc(srdel, this%srdel)
-      call move_alloc(vl, this%vl)
+      ! Remaining lmax-dependent arrays
+      if (allocated(c)) then
+         allocate(this%c(lmax+1, 2))
+         this%c(:, :) = c(1:lmax+1, :)
+      end if
+      if (allocated(enu)) then
+         allocate(this%enu(lmax+1, 2))
+         this%enu(:, :) = enu(1:lmax+1, :)
+      end if
+      if (allocated(ppar)) then
+         allocate(this%ppar(lmax+1, 2))
+         this%ppar(:, :) = ppar(1:lmax+1, :)
+      end if
+      if (allocated(qpar)) then
+         allocate(this%qpar(lmax+1, 2))
+         this%qpar(:, :) = qpar(1:lmax+1, :)
+      end if
+      if (allocated(srdel)) then
+         allocate(this%srdel(lmax+1, 2))
+         this%srdel(:, :) = srdel(1:lmax+1, :)
+      end if
+      if (allocated(vl)) then
+         allocate(this%vl(lmax+1, 2))
+         this%vl(:, :) = vl(1:lmax+1, :)
+      end if
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------

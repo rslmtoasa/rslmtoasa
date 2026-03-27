@@ -1730,7 +1730,7 @@ contains
       real(rp), dimension(ldim, ldim, na), intent(out) :: a_inf, b_inf
       real(rp), dimension(na), intent(out) ::  a_inf0, b_inf0
       !
-      integer :: n, i, j, ll_t
+      integer :: n, i, j, ll_t, k
       complex(rp), dimension(ldim, ldim) :: MatIn, MatOut
       real(rp), dimension(ldim, ldim, ll) :: Acoef_r, B2coef_r
       real(rp) :: maxA, maxB, maxAinf, maxBinf, tmpval
@@ -1751,13 +1751,13 @@ contains
          foundNaN_in = .false.
          do i = 1, ldim
             do j = 1, ldim
-               do ll_t = 1, ll
-                  tmpval = abs(Acoef_r(i, j, ll_t))
+               do k = 1, ll
+                  tmpval = abs(Acoef_r(i, j, k))
                   if (tmpval > maxA) maxA = tmpval
-                  if (IsNaN(Acoef_r(i, j, ll_t))) foundNaN_in = .true.
-                  tmpval = abs(B2coef_r(i, j, ll_t))
+                  if (IsNaN(Acoef_r(i, j, k))) foundNaN_in = .true.
+                  tmpval = abs(B2coef_r(i, j, k))
                   if (tmpval > maxB) maxB = tmpval
-                  if (IsNaN(B2coef_r(i, j, ll_t))) foundNaN_in = .true.
+                  if (IsNaN(B2coef_r(i, j, k))) foundNaN_in = .true.
                end do
             end do
          end do
