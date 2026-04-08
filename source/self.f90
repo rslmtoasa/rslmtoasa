@@ -1610,11 +1610,11 @@ contains
                   SLO = -VAL
                end if
                ! Debug output for orbital radial equation
-               if (L >= 2) then
-                  write (6, '(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)') &
-                     "NEWRHO: L=", L, " ISP=", ISP, " PL=", PL(LP1, ISP), &
-                     " NN=", NN, " EVAL=", EVAL, " Q0=", Q0
-               end if
+               ! if (L >= 2) then
+               !    write (6, '(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)') &
+               !       "NEWRHO: L=", L, " ISP=", ISP, " PL=", PL(LP1, ISP), &
+               !       " NN=", NN, " EVAL=", EVAL, " Q0=", Q0
+               ! end if
                call RSEQSR(EB1, EB2, EVAL, TOLVAL, Z, L, NN, VAL, SLO, V(1, ISP), G, SUM, A, B, &
                            rofi, NR, NRE, 0)
                EV(IVAL) = EVAL

@@ -28,6 +28,7 @@ module potential_mod
    use string_mod, only: path_join, sl, fmt, real2str, int2str
    use logger_mod, only: g_logger
    use namelist_generator_mod, only: namelist_generator
+   use basis_mod, only: lmax_basis
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -204,7 +205,8 @@ contains
       integer :: iostatus, funit
 
       ! Local variables
-      integer :: i
+      integer :: i, l, is
+      integer :: file_lmax  ! lmax as read from the file (may differ from lmax_basis)
 
       include 'include_codes/namelists/potential.f90'
 
@@ -250,19 +252,21 @@ contains
 
       ! Allocate local arrays to maximum size (lmax=3: 4 channels, and 4 moment types)
       ! These will be read by the namelist. Extra space won't hurt.
-      if (.not. allocated(pl)) allocate(pl(0:3, 2))
-      if (.not. allocated(ql)) allocate(ql(3, 0:3, 2))
-      if (.not. allocated(center_band)) allocate(center_band(4, 2))
-      if (.not. allocated(width_band)) allocate(width_band(4, 2))
-      if (.not. allocated(gravity_center)) allocate(gravity_center(4, 2))
-      if (.not. allocated(shifted_band)) allocate(shifted_band(4, 2))
-      if (.not. allocated(obar)) allocate(obar(4, 2))
-      if (.not. allocated(c)) allocate(c(4, 2))
-      if (.not. allocated(enu)) allocate(enu(4, 2))
-      if (.not. allocated(ppar)) allocate(ppar(4, 2))
-      if (.not. allocated(qpar)) allocate(qpar(4, 2))
-      if (.not. allocated(srdel)) allocate(srdel(4, 2))
-      if (.not. allocated(vl)) allocate(vl(4, 2))
+      ! They are explicitly zero-initialised so that channels absent from the file
+      ! (e.g. f-orbitals when starting from an spd potential) default to zero.
+      if (.not. allocated(pl)) allocate(pl(0:3, 2));             pl           = 0.0d0
+      if (.not. allocated(ql)) allocate(ql(3, 0:3, 2));          ql           = 0.0d0
+      if (.not. allocated(center_band)) allocate(center_band(4, 2));    center_band  = 0.0d0
+      if (.not. allocated(width_band)) allocate(width_band(4, 2));      width_band   = 0.0d0
+      if (.not. allocated(gravity_center)) allocate(gravity_center(4, 2)); gravity_center = 0.0d0
+      if (.not. allocated(shifted_band)) allocate(shifted_band(4, 2));  shifted_band = 0.0d0
+      if (.not. allocated(obar)) allocate(obar(4, 2));           obar         = 0.0d0
+      if (.not. allocated(c)) allocate(c(4, 2));                 c            = 0.0d0
+      if (.not. allocated(enu)) allocate(enu(4, 2));             enu          = 0.0d0
+      if (.not. allocated(ppar)) allocate(ppar(4, 2));           ppar         = 0.0d0
+      if (.not. allocated(qpar)) allocate(qpar(4, 2));           qpar         = 0.0d0
+      if (.not. allocated(srdel)) allocate(srdel(4, 2));         srdel        = 0.0d0
+      if (.not. allocated(vl)) allocate(vl(4, 2));               vl           = 0.0d0
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -279,6 +283,30 @@ contains
          call g_logger%fatal('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+
+      ! If the file was written for a smaller basis (e.g. spd, lmax=2) but the
+      ! current calculation uses a larger basis (e.g. spdf, lmax=3), promote lmax
+      ! to lmax_basis so the object arrays cover all required channels.  The local
+      ! arrays were zero-initialised above, so the extra channels are
+      ! automatically set to zero, which is a reasonable starting guess.
+      file_lmax = lmax
+      if (lmax < lmax_basis) then
+         call g_logger%warning( &
+            'Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
+            ' but the calculation uses lmax='//int2str(lmax_basis)// &
+            '. Promoting: missing orbital channels initialised with defaults.', &
+            __FILE__, __LINE__)
+         lmax = lmax_basis
+         ! Set physically valid pl defaults for the new channels so that POTPAR
+         ! does not evaluate TAN(pi/2).  Formula: pl_l = (l+1) + 0.5, which
+         ! gives KONFIG = INT(pl_l) = l+1 and node-count NN = 0 (lowest state).
+         ! The resulting DNU = TAN(pi*(0.5 - ((l+1)+0.5))) = TAN(-pi*(l+1)) = 0.
+         do is = 1, 2
+            do l = file_lmax + 1, lmax_basis
+               pl(l, is) = real(l + 1, rp) + 0.5d0
+            end do
+         end do
+      end if
 
       ! Setting user values
       this%ws_r = ws_r
@@ -371,7 +399,11 @@ contains
       implicit none
       class(potential), intent(out) :: this
 
-      this%lmax = 2
+      ! Use the global basis size so that all lmax-dependent arrays (pnu, qi,
+      ! dele, cx, wx, cshi, dw_l …) are allocated to the correct size from the
+      ! outset.  build_from_file may later lower this to the file's own lmax
+      ! only if that is smaller; otherwise it will keep or promote to lmax_basis.
+      this%lmax = lmax_basis
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('potential.center_band', this%center_band, (/this%lmax + 1, 2/))

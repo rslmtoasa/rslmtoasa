@@ -31,7 +31,7 @@ module mix_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
-   use basis_mod, only: nb, norb, spin_off
+   use basis_mod, only: nb
    implicit none
 
    private
@@ -272,24 +272,12 @@ contains
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
             do I = 1, lcount
-               if (I <= nb) then
-                  this%qia_new(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               end if
-               if (I + 6 <= nb .and. I <= lcount) then
-                  this%qia_new(it, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               end if
-               if (I + 12 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
-                  this%qia_new(it, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               end if
-               if (I + 3 <= nb .and. I <= lcount) then
-                  this%qia_new(it, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               end if
-               if (I + spin_off <= nb .and. I <= lcount) then
-                  this%qia_new(it, I + spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               end if
-               if (I + 15 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
-                  this%qia_new(it, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
-               end if
+               if (I              <= nb) this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               if (I +     lcount <= nb) this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               if (I + 2 * lcount <= nb) this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               if (I + 3 * lcount <= nb) this%qia_new(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               if (I + 4 * lcount <= nb) this%qia_new(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               if (I + 5 * lcount <= nb) this%qia_new(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                   if (any(this%qia_new(it, :) /= this%qia_new(it, :)) .or. maxval(abs(this%qia_new(it, :))) > 1.0e6_rp) then
@@ -302,24 +290,12 @@ contains
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
             do I = 1, lcount
-               if (I <= nb) then
-                  this%qia_old(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               end if
-               if (I + 6 <= nb .and. I <= lcount) then
-                  this%qia_old(it, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               end if
-               if (I + 12 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
-                  this%qia_old(it, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               end if
-               if (I + 3 <= nb .and. I <= lcount) then
-                  this%qia_old(it, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               end if
-               if (I + spin_off <= nb .and. I <= lcount) then
-                  this%qia_old(it, I + spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               end if
-               if (I + 15 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
-                  this%qia_old(it, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
-               end if
+               if (I              <= nb) this%qia_old(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               if (I +     lcount <= nb) this%qia_old(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               if (I + 2 * lcount <= nb) this%qia_old(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               if (I + 3 * lcount <= nb) this%qia_old(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               if (I + 4 * lcount <= nb) this%qia_old(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               if (I + 5 * lcount <= nb) this%qia_old(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                if (any(this%qia_old(it, :) /= this%qia_old(it, :)) .or. maxval(abs(this%qia_old(it, :))) > 1.0e6_rp) then
@@ -332,24 +308,12 @@ contains
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
             do I = 1, lcount
-               if (I <= nb) then
-                  this%qiaprev(it, I) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               end if
-               if (I + 6 <= nb .and. I <= lcount) then
-                  this%qiaprev(it, I + 6) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               end if
-               if (I + 12 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
-                  this%qiaprev(it, I + 12) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               end if
-               if (I + 3 <= nb .and. I <= lcount) then
-                  this%qiaprev(it, I + 3) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               end if
-               if (I + spin_off <= nb .and. I <= lcount) then
-                  this%qiaprev(it, I + spin_off) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               end if
-               if (I + 15 <= nb .and. (I - 1) <= this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax) then
-                  this%qiaprev(it, I + 15) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
-               end if
+               if (I              <= nb) this%qiaprev(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               if (I +     lcount <= nb) this%qiaprev(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               if (I + 2 * lcount <= nb) this%qiaprev(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               if (I + 3 * lcount <= nb) this%qiaprev(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               if (I + 4 * lcount <= nb) this%qiaprev(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               if (I + 5 * lcount <= nb) this%qiaprev(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                if (any(this%qiaprev(it, :) /= this%qiaprev(it, :)) .or. maxval(abs(this%qiaprev(it, :))) > 1.0e6_rp) then
@@ -362,24 +326,12 @@ contains
          do it = 1, this%lattice%nrec
             lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
             do I = 1, lcount
-               if (I <= nb) then
-                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I)
-               end if
-               if (I + 6 <= nb) then
-                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 6)
-               end if
-               if (I + 12 <= nb) then
-                  this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1) = this%qia(it, I + 12)
-               end if
-               if (I + 3 <= nb) then
-                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I + 3)
-               end if
-               if (I + spin_off <= nb) then
-                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + spin_off)
-               end if
-               if (I + 15 <= nb) then
-                  this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2) = this%qia(it, I + 15)
-               end if
+               if (I              <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I             )
+               if (I +     lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I +     lcount)
+               if (I + 2 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 2 * lcount)
+               if (I + 3 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + 3 * lcount)
+               if (I + 4 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)    = this%qia(it, I + 4 * lcount)
+               if (I + 5 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)    = this%qia(it, I + 5 * lcount)
             end do
          end do
       end select
