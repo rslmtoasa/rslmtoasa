@@ -1245,6 +1245,10 @@ contains
       e = this%en%ene
       factor_z = 1.0d0
 
+      ! Lightweight runtime shapes/logging (once per green instance call)
+      call g_logger%info('DEBUG:bgreen shapes nb='//int2str(nb)//' ldim='//int2str(ldim), __FILE__, __LINE__)
+      call g_logger%info('DEBUG:bgreen a_b dims=('//int2str(size(this%recursion%a_b,1))//','//int2str(size(this%recursion%a_b,2))//','//int2str(size(this%recursion%a_b,3))//','//int2str(size(this%recursion%a_b,4))//')', __FILE__, __LINE__)
+
       ! Unchanged code
       ll_t = ll
       llinf = ll!+ll/2!0!3*ll!/2!+30 !300
@@ -1280,12 +1284,16 @@ contains
       !write(12337,´(18f8.4)´) this%recursion%a_b(:,:,2,i_site)
       !write(12337,´(18f8.4)´) this%recursion%b2_b(:,:,2,i_site)
     !!!$omp parallel do default(shared) private(ei, Z, Ze, Q, B2z, i, ea, eb, det, zoff, l, ln, j, P , ipiv, info, work, lwork, W)
-      !$omp parallel do default(shared) private(ei, Z, Ze, Q, B2z, i, etop, ebot, ea, eb, det, zoff, l, ln, j, P , ipiv, info, work, lwork, W)
+      !$omp parallel do default(shared) &
+      !$omp          private(ei, Z, Ze, Q, B2z, i, etop, ebot, ea, eb, det, zoff, l, ln, j, P, ipiv, info, work, lwork, W, &
+      !$omp                  found_nan, qHasNaN, qMax, wMax, b2Max, qval, wval, b2val, ii, jj, &
+      !$omp                  recMaxA, recMaxB, recNaN, valrec, vv, maxQ, maxB2r)
       do ei = ie_start, ie_start + ie_len - 1
          Z = e(ei)*one
          ze = e(ei)!-zoff
          Q = (0.0d0, 0.0d0)
          B2z = 0.0d0
+         found_nan = .false.
          if (this%control%sym_term) then
             do i = 1, ldim !  Orbital-independent
                etop = a_diag + 2.0d0*b_diag
@@ -1354,6 +1362,35 @@ contains
                   open(dump_unit, file=trim(dump_fname), status='replace', action='write', iostat=dump_iostat)
                   if (dump_iostat == 0) then
                      write(dump_unit, '(A)') 'PRE-LU DEBUG DUMP: site='//int2str(i_site)//' ie='//int2str(ei)
+                        write(dump_unit, '(A)') 'SHAPES: nb='//int2str(nb)//' ldim='//int2str(ldim)//' ll='//int2str(ll)
+                        write(dump_unit, '(A)') 'Small P (real imag) first 4x4:'
+                        do jj = 1, min(4,ldim)
+                           do ii = 1, min(4,ldim)
+                              write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(P(ii,jj)), aimag(P(ii,jj))
+                           end do
+                        end do
+                        write(dump_unit, '(A)') 'Small Dfac_mat (real imag) first 4x4:'
+                        do jj = 1, min(4,ldim)
+                           do ii = 1, min(4,ldim)
+                              write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Dfac_mat(ii,jj)), aimag(Dfac_mat(ii,jj))
+                           end do
+                        end do
+                        write(dump_unit, '(A)') 'Small Cshi_mat (real imag) first 4x4:'
+                        do jj = 1, min(4,ldim)
+                           do ii = 1, min(4,ldim)
+                              write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16)') ii, jj, real(Cshi_mat(ii,jj)), aimag(Cshi_mat(ii,jj))
+                           end do
+                        end do
+                        write(dump_unit, '(A)') 'Sample recursion contributions (ln=1..min(4,ll)):'
+                        do ln = 1, min(4,ll)
+                           write(dump_unit, '(A,I0)') 'ln=', ln
+                           do jj = 1, min(4,ldim)
+                              do ii = 1, min(4,ldim)
+                                 write(dump_unit, '(I4,1X,I4,1X,ES24.16,1X,ES24.16,1X,ES24.16,1X,ES24.16)') ii, jj, real(this%recursion%a_b(ii,jj,ln,i_site)), aimag(this%recursion%a_b(ii,jj,ln,i_site)), real(this%recursion%b2_b(ii,jj,ln,i_site)), aimag(this%recursion%b2_b(ii,jj,ln,i_site))
+                              end do
+                           end do
+                        end do
+                        write(dump_unit, '(A)') '--- continuing with full Q/B2z dump below ---'
                      write(dump_unit, '(A)') 'Q matrix (real imag):'
                      do jj = 1, ldim
                         do ii = 1, ldim
@@ -1474,17 +1511,19 @@ contains
             call zgemm('c', 'n', ldim, ldim, ldim, cone, B2z, ldim, W, ldim, czero, Q, ldim)
          end do
          !
-         do j = 1, ldim
-            do i = 1, ldim
-               !bdos(ei,m_tab(i),m_tab(j),n)=bdos(ei,m_tab(i),m_tab(j),n) + abs(-aimag(Q(i,j))/3.14159265359d0)/Dfac_mat(i,j)
-               if (aimag(eta) .eq. 0) then
-                  g_out(m_tab(i), m_tab(j), ei) = g_out(m_tab(i), m_tab(j), ei) + &
-                                                  real(Q(i, j)/Dfac_mat(i, j)) + aimag(Q(i, j)/Dfac_mat(i, j))*(1.0d0)**ei*(0.0d0, 1.0d0)
-               else
-                  g_out(m_tab(i), m_tab(j), ei) = g_out(m_tab(i), m_tab(j), ei) + (Q(i, j)/Dfac_mat(i, j))
-               end if
+         if (.not. found_nan) then
+            do j = 1, ldim
+               do i = 1, ldim
+                  !bdos(ei,m_tab(i),m_tab(j),n)=bdos(ei,m_tab(i),m_tab(j),n) + abs(-aimag(Q(i,j))/3.14159265359d0)/Dfac_mat(i,j)
+                  if (aimag(eta) .eq. 0) then
+                     g_out(m_tab(i), m_tab(j), ei) = g_out(m_tab(i), m_tab(j), ei) + &
+                                                     real(Q(i, j)/Dfac_mat(i, j)) + aimag(Q(i, j)/Dfac_mat(i, j))*(1.0d0)**ei*(0.0d0, 1.0d0)
+                  else
+                     g_out(m_tab(i), m_tab(j), ei) = g_out(m_tab(i), m_tab(j), ei) + (Q(i, j)/Dfac_mat(i, j))
+                  end if
+               end do
             end do
-         end do
+         end if
          ! Quick NaN check for this energy slice (log first occurrence)
          found_nan = .false.
          do j = 1, ldim

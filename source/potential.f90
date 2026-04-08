@@ -332,30 +332,33 @@ contains
       end if
       if (allocated(lmom)) call move_alloc(lmom, this%lmom)
 
-      ! Remaining lmax-dependent arrays
+      ! Remaining lmax-dependent arrays.
+      ! Allocate with 0-based lower bound to match restore_to_default and access
+      ! patterns throughout the code (e.g. c(0:lmax,2) for l=0..lmax).
+      ! Local namelist arrays use 1-based indices, so map c(1:lmax+1) -> this%c(0:lmax).
       if (allocated(c)) then
-         allocate(this%c(lmax+1, 2))
-         this%c(:, :) = c(1:lmax+1, :)
+         allocate(this%c(0:lmax, 2))
+         this%c(0:lmax, :) = c(1:lmax+1, :)
       end if
       if (allocated(enu)) then
-         allocate(this%enu(lmax+1, 2))
-         this%enu(:, :) = enu(1:lmax+1, :)
+         allocate(this%enu(0:lmax, 2))
+         this%enu(0:lmax, :) = enu(1:lmax+1, :)
       end if
       if (allocated(ppar)) then
-         allocate(this%ppar(lmax+1, 2))
-         this%ppar(:, :) = ppar(1:lmax+1, :)
+         allocate(this%ppar(0:lmax, 2))
+         this%ppar(0:lmax, :) = ppar(1:lmax+1, :)
       end if
       if (allocated(qpar)) then
-         allocate(this%qpar(lmax+1, 2))
-         this%qpar(:, :) = qpar(1:lmax+1, :)
+         allocate(this%qpar(0:lmax, 2))
+         this%qpar(0:lmax, :) = qpar(1:lmax+1, :)
       end if
       if (allocated(srdel)) then
-         allocate(this%srdel(lmax+1, 2))
-         this%srdel(:, :) = srdel(1:lmax+1, :)
+         allocate(this%srdel(0:lmax, 2))
+         this%srdel(0:lmax, :) = srdel(1:lmax+1, :)
       end if
       if (allocated(vl)) then
-         allocate(this%vl(lmax+1, 2))
-         this%vl(:, :) = vl(1:lmax+1, :)
+         allocate(this%vl(0:lmax, 2))
+         this%vl(0:lmax, :) = vl(1:lmax+1, :)
       end if
    end subroutine build_from_file
 

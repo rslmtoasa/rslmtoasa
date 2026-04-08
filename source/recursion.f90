@@ -3412,10 +3412,10 @@ contains
          call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%nrec/))
          call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%nrec/))
       else
-         call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld,, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
-         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/2*(lmax + 1)**2, 2*(lmax + 1)**2, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.a_b', this%a_b, (/nb, nb, this%control%lld, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.b2_b', this%b2_b, (/nb, nb, this%control%lld, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.mu_n', this%mu_n, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
+         call g_safe_alloc%allocate('recursion.mu_ng', this%mu_ng, (/nb, nb, (2*this%lattice%control%lld) + 2, this%lattice%njij*4/))
       end if
       call g_safe_alloc%allocate('recursion.psi_b', this%psi_b, (/nb, nb, this%lattice%kk/))
       call g_safe_alloc%allocate('recursion.hpsi', this%hpsi, (/nb, nb, this%lattice%kk/))
