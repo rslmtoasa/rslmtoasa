@@ -189,7 +189,7 @@ contains
       call g_safe_alloc%allocate('bands.g0_x', this%g0_x, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.dspd', this%dspd, (/6, this%en%channels_ldos + 10, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.dspd', this%dspd, (/2*(lmax_basis + 1), this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.mag_for', this%mag_for, (/3, atoms_per_process/))
 #else
@@ -201,7 +201,7 @@ contains
       allocate (this%g0_x(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%g0_y(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%g0_z(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%dspd(6, this%en%channels_ldos + 10, atoms_per_process))
+      allocate (this%dspd(2*(lmax_basis + 1), this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%d_orb(norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%mag_for(3, atoms_per_process))
 #endif
@@ -315,7 +315,7 @@ contains
             open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
       
             do i = 1, this%en%channels_ldos + 10
-               write(unitnum2, '(19f16.5)') this%en%ene(i) - this%en%fermi, dosial(ia, 1:nb, i)
+               write(unitnum2, '(*(f16.5))') this%en%ene(i) - this%en%fermi, dosial(ia, 1:nb, i)
             end do
       
             rewind(unitnum2)
@@ -417,7 +417,8 @@ contains
       real(rp) :: sgef, pmef, smef, isgn, sums, sump, sumd, mnorm
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(nb) :: chebmom(nb), chebmom1(nb), chebmom2(nb)
-      real(rp), dimension(this%lattice%nrec, 6) :: occ
+      real(rp), dimension(this%lattice%nrec, 2*(lmax_basis + 1)) :: occ
+      integer :: nchan, nchan_spin
 
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
@@ -434,6 +435,9 @@ contains
       !call this%calculate_magnetic_moments()
       call this%calculate_orbital_moments()
 
+      nchan_spin = lmax_basis + 1
+      nchan = 2*nchan_spin
+
       this%dspd(:, :, :) = 0.0d0
       !do na=1, this%lattice%nrec
       do na_glob = start_atom, end_atom
@@ -441,8 +445,8 @@ contains
          plusbulk = this%lattice%nbulk + na_glob
          do isp = 1, 2
             isgn = (-1.0d0)**(isp - 1)
-            soff = 3*(isp - 1)
-            do l = 1, min(3, lmax_basis + 1)
+            soff = nchan_spin*(isp - 1)
+            do l = 1, lmax_basis + 1
                do m = 1, 2*l - 1
                   o = (l - 1)**2 + m
                   do ie = 1, this%en%channels_ldos
@@ -473,14 +477,14 @@ contains
       !do na=1, this%lattice%nrec
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
-         do i = 1, 6
+         do i = 1, nchan
             y(:) = 0.0d0
-            if (i > 3) then
+            if (i > nchan_spin) then
                nsp = 2
             else
                nsp = 1
             end if
-            soff = 3*(nsp - 1)
+            soff = nchan_spin*(nsp - 1)
             y(:) = this%dspd(i, :, na)
             sgef = 0.0d0; pmef = 0.0d0; smef = 0.0d0
             call simpson_m(sgef, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
@@ -501,6 +505,20 @@ contains
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = 0.0_rp
             end if
          end do
+         if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
+            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+                               ' ql_s_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
+                               ' ql_s_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 2)), __FILE__, __LINE__)
+            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+                               ' ql_p_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 1))// &
+                               ' ql_p_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 2)), __FILE__, __LINE__)
+            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+                               ' ql_d_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 1))// &
+                               ' ql_d_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 2)), __FILE__, __LINE__)
+            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+                               ' ql_f_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 1))// &
+                               ' ql_f_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
+         end if
       end do
 
       call this%calculate_pl()
@@ -1082,7 +1100,7 @@ contains
          !ia = g2l_map(ia_glob)
          plusbulk = this%lattice%nbulk + ia
          do is = 1, 2
-            do i = 1, 3
+            do i = 1, lmax_basis + 1
                rq = 1/this%symbolic_atom(plusbulk)%potential%qpar(i - 1, is)
                delta2 = this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)*this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)
                dnu = (i - 1.) + &

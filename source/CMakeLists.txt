@@ -38,4 +38,6 @@ add_library(${PROJECT_NAME} STATIC
     xc.f90
 )
 add_subdirectory(./include_codes/abspinlib)
+add_subdirectory(./include_codes/strux_lib)
 target_link_libraries(${PROJECT_NAME} abspinlib)
+target_link_libraries(${PROJECT_NAME} strux_lib)

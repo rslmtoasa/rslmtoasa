@@ -458,7 +458,7 @@ contains
    subroutine restore_to_default(this, full)
       class(self), intent(inout):: this
       logical, intent(in), optional :: full
-      integer :: lmax, nsp
+      integer :: lmax, nsp, nfun_l
 
       ! Control variables
       ! if false force to read the original self file
@@ -519,13 +519,15 @@ contains
       end if
 
 #ifdef USE_SAFE_ALLOC
+      nfun_l = max(3, this%control%lmax + 1)
       call g_safe_alloc%allocate('self.bxc', this%bxc, this%lattice%nrec)
       call g_safe_alloc%allocate('self.vtn', this%vtn, (/8001, 2/))
       call g_safe_alloc%allocate('self.vzt', this%vzt, (/8001, 2/))
-      call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, 3, 2/))
+      call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, nfun_l, 2/))
 #else
+      nfun_l = max(3, this%control%lmax + 1)
       allocate (this%bxc(this%lattice%nrec))
-      allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, 3, 2))
+      allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
 #endif
 
    end subroutine restore_to_default
@@ -1023,9 +1025,10 @@ contains
          write (newunit, '(A)') '|                       Charge Transfer                                   |'
          write (newunit, '(A)') '==========================================================================='
          do ia = 1, this%lattice%nrec
-            write (newunit, '(a,i4,a,f10.6)') 'Occupation at atom', ia, ':', sum(this%mix%qia(ia, 1:6))
-            write (newunit, '(a,i4,a,3f10.6)') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:3)
-            write (newunit, '(a,i4,a,3f10.6)') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, 4:6)
+            nb_slice = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax + 1
+            write (newunit, '(a,i4,a,f10.6)') 'Occupation at atom', ia, ':', sum(this%mix%qia(ia, 1:2*nb_slice))
+            write (newunit, '(a,i4,a,*(f10.6,1x))') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:nb_slice)
+            write (newunit, '(a,i4,a,*(f10.6,1x))') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, nb_slice+1:2*nb_slice)
             write (newunit, '(a,i4,a,f10.6)') 'Charge transfer at atom', ia, ':', this%charge%dq(ia)
          end do
          !===========================================================================
@@ -1215,6 +1218,14 @@ contains
             end do
          end do
          call this%POTPAR(atom, V, ROFI)
+         if (lmax >= 3) then
+            call g_logger%info('DEBUG:atomsc f-channel after POTPAR ENU='// &
+                               fmt('f10.6', atom%potential%ENU(3, 1))//' '//fmt('f10.6', atom%potential%ENU(3, 2))// &
+                               ' C='//fmt('f10.6', atom%potential%C(3, 1))//' '//fmt('f10.6', atom%potential%C(3, 2))// &
+                               ' SRDEL='//fmt('f10.6', atom%potential%SRDEL(3, 1))//' '//fmt('f10.6', atom%potential%SRDEL(3, 2))// &
+                               ' QPAR='//fmt('f10.6', atom%potential%QPAR(3, 1))//' '//fmt('f10.6', atom%potential%QPAR(3, 2))// &
+                               ' PPAR='//fmt('f10.6', atom%potential%PPAR(3, 1))//' '//fmt('f10.6', atom%potential%PPAR(3, 2)), __FILE__, __LINE__)
+         end if
          do I = 1, NSP
             do L = 0, LMAX
                ! write (660, 10002) -L, ENU(L, I), VL(L, I), C(L, I), SRDEL(L, I), QPAR(L, I), PPAR(L, I)

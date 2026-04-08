@@ -226,11 +226,31 @@ contains
 
       ! Normalize the magnetic moments (only if allocated)
       if (allocated(this%mom)) then
-         this%mom(:) = this%mom(:)/norm2(this%mom(:))
+         if (norm2(this%mom(:)) > tiny(1.0_rp)) then
+            this%mom(:) = this%mom(:)/norm2(this%mom(:))
+         else
+            this%mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         end if
          call move_alloc(this%mom, mom)
       end if
       if (allocated(this%lmom)) then
          call move_alloc(this%lmom, lmom)
+      end if
+      if (.not. allocated(mom)) then
+         allocate(mom(3))
+         mom = [0.0_rp, 0.0_rp, 1.0_rp]
+      else if (size(mom) /= 3) then
+         deallocate(mom)
+         allocate(mom(3))
+         mom = [0.0_rp, 0.0_rp, 1.0_rp]
+      end if
+      if (.not. allocated(lmom)) then
+         allocate(lmom(3))
+         lmom = 0.0_rp
+      else if (size(lmom) /= 3) then
+         deallocate(lmom)
+         allocate(lmom(3))
+         lmom = 0.0_rp
       end if
 
       ! CRITICAL: For lmax-dependent arrays, deallocate the object's arrays.
@@ -297,13 +317,16 @@ contains
             '. Promoting: missing orbital channels initialised with defaults.', &
             __FILE__, __LINE__)
          lmax = lmax_basis
-         ! Set physically valid pl defaults for the new channels so that POTPAR
-         ! does not evaluate TAN(pi/2).  Formula: pl_l = (l+1) + 0.5, which
-         ! gives KONFIG = INT(pl_l) = l+1 and node-count NN = 0 (lowest state).
-         ! The resulting DNU = TAN(pi*(0.5 - ((l+1)+0.5))) = TAN(-pi*(l+1)) = 0.
+         ! Seed promoted auxiliary channels with a small but nonzero valence
+         ! occupancy so the atomic radial solver actually builds them.  The
+         ! promoted channel is not intended to carry physical occupancy; it is
+         ! an initial guess for a larger basis than the file was written with.
          do is = 1, 2
             do l = file_lmax + 1, lmax_basis
-               pl(l, is) = real(l + 1, rp) + 0.5d0
+               pl(l, is) = real(l + 1, rp) + 0.3d0
+               ql(1, l, is) = 0.001d0
+               ql(2, l, is) = 0.0d0
+               ql(3, l, is) = 0.0d0
             end do
          end do
       end if
@@ -355,7 +378,11 @@ contains
 
       ! For mom/lmom, move_alloc is still valid (they're non-lmax-dependent)
       if (allocated(mom)) then
-         mom(:) = mom(:)/norm2(mom(:))
+         if (norm2(mom(:)) > tiny(1.0_rp)) then
+            mom(:) = mom(:)/norm2(mom(:))
+         else
+            mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         end if
          call move_alloc(mom, this%mom)
       end if
       if (allocated(lmom)) call move_alloc(lmom, this%lmom)
@@ -551,7 +578,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=par)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=par)
          close (newunit)
       else
@@ -616,7 +643,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=par)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=par)
          close (newunit)
       else

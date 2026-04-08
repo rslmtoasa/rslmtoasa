@@ -312,10 +312,24 @@ contains
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
       constraints_code_prefac = this%constraints_code_prefac
+      if (allocated(this%constraints_mom_ref)) then
+         allocate(constraints_mom_ref, mold=this%constraints_mom_ref)
+         constraints_mom_ref = this%constraints_mom_ref
+      else
+         allocate(constraints_mom_ref(1, 1))
+         constraints_mom_ref = 0.0_rp
+      end if
+      if (allocated(this%constraints_bfield)) then
+         allocate(constraints_bfield, mold=this%constraints_bfield)
+         constraints_bfield = this%constraints_bfield
+      else
+         allocate(constraints_bfield(1, 1))
+         constraints_bfield = 0.0_rp
+      end if
 
-      open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
+      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
-         call g_logger%fatal('file '//fmt('A', fname)//' not found', __FILE__, __LINE__)
+         call g_logger%fatal('file '//fmt('A', fname_)//' not found', __FILE__, __LINE__)
       end if
 
       read (funit, nml=control, iostat=iostatus)
@@ -353,7 +367,7 @@ contains
       this%cond_calctype = cond_calctype
 
       ! Read optional constraints namelist and move values into the control object
-      open (newunit=funit2, file=fname, action='read', iostat=iostatus2, status='old')
+      open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
       if (iostatus2 == 0) then
          read (funit2, nml=constraints, iostat=iostatus2)
          if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
@@ -493,7 +507,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=control)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=control)
          close (newunit)
       else
@@ -582,4 +596,3 @@ contains
    end subroutine check_all
 
 end module control_mod
-

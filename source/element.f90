@@ -224,7 +224,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=element)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=element)
          close (newunit)
       else
@@ -265,7 +265,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=element)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=element)
          close (newunit)
       else

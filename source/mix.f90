@@ -31,7 +31,7 @@ module mix_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
-   use basis_mod, only: nb
+   use basis_mod, only: nb, lmax_basis
    implicit none
 
    private
@@ -251,7 +251,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=mix)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=mix)
          close(newunit)
       end if
@@ -415,7 +415,7 @@ contains
       integer :: ia ! Atom index
       logical :: reset
       real(rp) :: Bnorm
-      integer :: nb_slice
+      integer :: nb_slice, lcount, occ_cols, packed_cols
       integer :: ncols
       real(rp) :: denom
       character(len=512) :: msg
@@ -465,10 +465,12 @@ contains
       ! end if
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
+         lcount = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax + 1
+         occ_cols = min(2*lcount, size(this%qia, 2))
          this%charge%trq = 0.0d0
          this%charge%cht = 0.0d0
-         this%charge%cht = sum(this%qia_new(ia, 1:6)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
-         this%charge%dq(ia) = sum(this%qia(ia, 1:6)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
+         this%charge%cht = sum(this%qia_new(ia, 1:occ_cols)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
+         this%charge%dq(ia) = sum(this%qia(ia, 1:occ_cols)) - this%symbolic_atom(this%lattice%nbulk + ia)%element%valence
          this%charge%trq = this%charge%dq(ia)
          if (rank == 0) call g_logger%info('Valence at atom'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', (this%symbolic_atom(this%lattice%nbulk + ia)%element%valence)), __FILE__, __LINE__)
          if (rank == 0) call g_logger%info('Charge transfer at atom '//fmt('i4', (ia))//': '// &
@@ -478,13 +480,16 @@ contains
          !if(rank==0) call g_logger%info(fmt(´f10.6´,this%charge%cht)//´ ´//fmt(´f10.6´,this%charge%trq)//´ ´//fmt(´f10.6´,this%charge%cht-this%charge%trq), __FILE__, __LINE__)
       end do
 
-      ncols = size(qia_old, 2)
-      nb_slice = min(12, ncols)
-      denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       do ia = 1, this%lattice%nrec
-         delta_atom = sqrt(sum((this%qia_old(ia, 1:nb_slice) - this%qia_new(ia, 1:nb_slice))**2))/denom
+         lcount = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax + 1
+         packed_cols = min(6*lcount, size(qia_old, 2))
+         denom = max(1.0_rp, real(packed_cols)/2.0_rp)
+         delta_atom = sqrt(sum((this%qia_old(ia, 1:packed_cols) - this%qia_new(ia, 1:packed_cols))**2))/denom
          if (rank == 0) call g_logger%info('Moment diff for atom:'//fmt('i4', (ia))//' '//'is'//' '//fmt('f10.6', delta_atom), __FILE__, __LINE__)
       end do
+      ncols = size(qia_old, 2)
+      nb_slice = min(6*(lmax_basis + 1), ncols)
+      denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
@@ -670,4 +675,3 @@ contains
       !print *, ´Bmix done´, itr, fsq
    end subroutine broydn
 end module mix_mod
-
