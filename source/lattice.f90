@@ -485,6 +485,7 @@ contains
       ! variables associated with the reading processes
       integer :: iostatus, funit, i
       character(len=sl) :: fname_
+      real(rp), allocatable :: ct_first(:), screening_alpha_first(:), screening_sigma_first(:)
 
       include 'include_codes/namelists/lattice.f90'
 
@@ -677,6 +678,19 @@ contains
 
       read (funit, nml=lattice, iostat=iostatus)
 
+      if (allocated(ct)) then
+         allocate (ct_first(size(ct)))
+         ct_first = ct
+      end if
+      if (allocated(screening_alpha)) then
+         allocate (screening_alpha_first(size(screening_alpha)))
+         screening_alpha_first = screening_alpha
+      end if
+      if (allocated(screening_sigma)) then
+         allocate (screening_sigma_first(size(screening_sigma)))
+         screening_sigma_first = screening_sigma
+      end if
+
       if (size(izp) .ne. ndim) then
          deallocate (izp)
          allocate (izp(ndim))
@@ -727,6 +741,33 @@ contains
       end if
       close (funit)
 
+      if (allocated(ct_first)) then
+         if (allocated(ct)) then
+            if (all(abs(ct) <= tiny(1.0_rp)) .and. any(abs(ct_first) > tiny(1.0_rp))) then
+               ct(1:min(size(ct), size(ct_first))) = ct_first(1:min(size(ct), size(ct_first)))
+            end if
+         end if
+         deallocate (ct_first)
+      end if
+      if (allocated(screening_alpha_first)) then
+         if (allocated(screening_alpha)) then
+            if (all(abs(screening_alpha) <= tiny(1.0_rp)) .and. any(abs(screening_alpha_first) > tiny(1.0_rp))) then
+               screening_alpha(1:min(size(screening_alpha), size(screening_alpha_first))) = &
+                  screening_alpha_first(1:min(size(screening_alpha), size(screening_alpha_first)))
+            end if
+         end if
+         deallocate (screening_alpha_first)
+      end if
+      if (allocated(screening_sigma_first)) then
+         if (allocated(screening_sigma)) then
+            if (all(abs(screening_sigma) <= tiny(1.0_rp)) .and. any(abs(screening_sigma_first) > tiny(1.0_rp))) then
+               screening_sigma(1:min(size(screening_sigma), size(screening_sigma_first))) = &
+                  screening_sigma_first(1:min(size(screening_sigma), size(screening_sigma_first)))
+            end if
+         end if
+         deallocate (screening_sigma_first)
+      end if
+
       ! General intialization
 
       this%r2 = r2
@@ -749,6 +790,13 @@ contains
       this%n3 = n3
 
       call move_alloc(ct, this%ct)
+      if (allocated(this%ct)) then
+         if (size(this%ct) > 0) then
+            if (all(abs(this%ct) <= tiny(1.0_rp)) .and. this%r2 > 0.0_rp) then
+               this%ct = sqrt(this%r2)
+            end if
+         end if
+      end if
       call move_alloc(screening_alpha, this%screening_alpha)
       call move_alloc(screening_sigma, this%screening_sigma)
       ! Reads Wigner-Seitz radius if available
@@ -813,6 +861,7 @@ contains
       real(rp) :: r2, strux_solve_scale
       real(rp), dimension(3, 3) :: a
       real(rp), dimension(:), allocatable :: ct, screening_alpha, screening_sigma
+      real(rp), dimension(:), allocatable :: ct_first, screening_alpha_first, screening_sigma_first
       integer, dimension(:), allocatable :: izp, no, iu, ib, irec
       real(rp), dimension(:, :), allocatable :: crd
       character(len=16) :: strux_backend, screening
@@ -878,6 +927,18 @@ contains
          screening_sigma = 0.7_rp
       end if
       read (funit, nml=lattice, iostat=iostatus)
+      if (allocated(ct)) then
+         allocate (ct_first(size(ct)))
+         ct_first = ct
+      end if
+      if (allocated(screening_alpha)) then
+         allocate (screening_alpha_first(size(screening_alpha)))
+         screening_alpha_first = screening_alpha
+      end if
+      if (allocated(screening_sigma)) then
+         allocate (screening_sigma_first(size(screening_sigma)))
+         screening_sigma_first = screening_sigma
+      end if
       deallocate (ib, iu, irec)
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.ib', ib, (/ntot/))
@@ -909,6 +970,26 @@ contains
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+      if (allocated(ct_first)) then
+         if (all(abs(ct) <= tiny(1.0_rp)) .and. any(abs(ct_first) > tiny(1.0_rp))) then
+            ct(1:min(size(ct), size(ct_first))) = ct_first(1:min(size(ct), size(ct_first)))
+         end if
+         deallocate (ct_first)
+      end if
+      if (allocated(screening_alpha_first)) then
+         if (all(abs(screening_alpha) <= tiny(1.0_rp)) .and. any(abs(screening_alpha_first) > tiny(1.0_rp))) then
+            screening_alpha(1:min(size(screening_alpha), size(screening_alpha_first))) = &
+               screening_alpha_first(1:min(size(screening_alpha), size(screening_alpha_first)))
+         end if
+         deallocate (screening_alpha_first)
+      end if
+      if (allocated(screening_sigma_first)) then
+         if (all(abs(screening_sigma) <= tiny(1.0_rp)) .and. any(abs(screening_sigma_first) > tiny(1.0_rp))) then
+            screening_sigma(1:min(size(screening_sigma), size(screening_sigma_first))) = &
+               screening_sigma_first(1:min(size(screening_sigma), size(screening_sigma_first)))
+         end if
+         deallocate (screening_sigma_first)
+      end if
 
       this%nbulk_bulk = nbulk_bulk
       this%ntot = ntot
@@ -926,6 +1007,13 @@ contains
       if (this%strux_solve_scale <= 0.0_rp) this%strux_solve_scale = 9.0_rp
 
       call move_alloc(ct, this%ct)
+      if (allocated(this%ct)) then
+         if (size(this%ct) > 0) then
+            if (all(abs(this%ct) <= tiny(1.0_rp)) .and. this%r2 > 0.0_rp) then
+               this%ct = sqrt(this%r2)
+            end if
+         end if
+      end if
       call move_alloc(screening_alpha, this%screening_alpha)
       call move_alloc(screening_sigma, this%screening_sigma)
       call move_alloc(izp, this%izp)
@@ -2042,12 +2130,18 @@ contains
       logical, intent(in) :: do_str
       ! Local variables
       integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
-      integer :: sbar_dim
+      integer :: sbar_dim, nm_store, nt_tmp
       integer, dimension(:, :), allocatable :: nn
       integer, dimension(:), allocatable :: idnn
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
+      real(rp) :: t_structb_start, t_cluster_ready, t_nnmap_start, t_nnmap_end
+      real(rp) :: t_remd_start, t_remd_end, t_nm_store_start, t_nm_store_end
+      real(rp) :: t_outmap_start, t_outmap_end, t_str_stage_end
+
+      call cpu_time(t_structb_start)
+      call g_logger%info('STRUCTB start: opening map/sbar outputs and preparing cluster stage', __FILE__, __LINE__)
 
       ! Open files
       open (12, file='map', form='unformatted')
@@ -2058,6 +2152,10 @@ contains
          open (15, file="view.sdot")
       end if
       open (17, file='str.out')
+
+      call cpu_time(t_cluster_ready)
+      call g_logger%info('STRUCTB cluster construction complete: clust already available; setup cpu_s='// &
+                         fmt('f12.6', t_cluster_ready - t_structb_start), __FILE__, __LINE__)
 
       ! Clust parameters
       ncut = 9
@@ -2074,7 +2172,15 @@ contains
       write (17, 10000) kk
       write (17, 10001)
       write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
+      write (*, '(a,10f10.4)') 'NNCAL ct=', this%ct(1:min(this%ntype, size(this%ct)))
+      call cpu_time(t_nnmap_start)
+      call g_logger%info('STRUCTB neighbor map start: nncal', __FILE__, __LINE__)
       call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
+      call cpu_time(t_nnmap_end)
+      call g_logger%info('STRUCTB neighbor map end: nncal cpu_s='//fmt('f12.6', t_nnmap_end - t_nnmap_start), __FILE__, __LINE__)
+      do ii = 1, min(this%ntot, 8)
+         write (*, '(a,i5,a,i5)') 'NNCAL pre-remd atom=', ii, ' count=', nn(ii, 1)
+      end do
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.nn', this%nn, (/this%kk, nm + 1/))
@@ -2084,20 +2190,47 @@ contains
       do ii = 1, nm + 1
          this%nn(:, ii) = nn(:, ii)
       end do
-      sbar_dim = max(norb, this%control%npold)
-#ifdef USE_SAFE_ALLOC
-   call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/sbar_dim, sbar_dim, nm, this%ntot/))
-#else
-   allocate (this%sbar(sbar_dim, sbar_dim, nm, this%ntot))
-#endif
-      call this%init_strux_storage(sbar_dim, nm)
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
+      call cpu_time(t_remd_start)
+      call g_logger%info('STRUCTB neighbor reorder start: remd', __FILE__, __LINE__)
       call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
+      call cpu_time(t_remd_end)
+      call g_logger%info('STRUCTB neighbor reorder end: remd cpu_s='//fmt('f12.6', t_remd_end - t_remd_start), __FILE__, __LINE__)
+      do ii = 1, min(this%ntot, 8)
+         write (*, '(a,i5,a,i5)') 'NNCAL post-remd atom=', ii, ' count=', this%nn(ii, 1)
+      end do
+      nm_store = max(1, maxval(this%nn(:, 1)))
+      call cpu_time(t_nm_store_start)
+      call g_logger%info('STRUCTB local cluster sizing start: clusba prepass', __FILE__, __LINE__)
+      do ii = 1, this%ntot
+         ia = this%iu(ii)
+         if (ia <= 0) cycle
+         nt_tmp = this%kk
+         call this%clusba(this%r2, this%cr*this%alat, ia, kk, kk, nt_tmp)
+         nm_store = max(nm_store, nt_tmp)
+      end do
+      call cpu_time(t_nm_store_end)
+      call g_logger%info('STRUCTB local cluster sizing end: clusba prepass cpu_s='//fmt('f12.6', t_nm_store_end - t_nm_store_start)// &
+                         ' nm_store='//fmt('I0', nm_store), __FILE__, __LINE__)
+      sbar_dim = max(norb, this%control%npold)
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/sbar_dim, sbar_dim, nm_store, this%ntot/))
+#else
+      allocate (this%sbar(sbar_dim, sbar_dim, nm_store, this%ntot))
+#endif
+      call this%init_strux_storage(sbar_dim, nm_store)
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
+      call cpu_time(t_outmap_start)
+      call g_logger%info('STRUCTB outmap start', __FILE__, __LINE__)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
+      call cpu_time(t_outmap_end)
+      call g_logger%info('STRUCTB outmap end cpu_s='//fmt('f12.6', t_outmap_end - t_outmap_start), __FILE__, __LINE__)
       write (17, 10003) kk, nm
+      flush(17)
       if (do_str) then
+         print *,' AB: Calculating structure constants...', this%strux_backend
+         call g_logger%info('STRUCTB structure-constants stage start backend='//trim(this%strux_backend), __FILE__, __LINE__)
          if (trim(lower(this%strux_backend)) == 'strux_lib') then
             call this%structb_strux()
          else
@@ -2108,6 +2241,10 @@ contains
                call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, norb, nr, ii)
             end do
          end if
+         call cpu_time(t_str_stage_end)
+         call g_logger%info('STRUCTB structure-constants stage end cpu_s='// &
+                            fmt('f12.6', t_str_stage_end - t_outmap_end)//' total_cpu_s='// &
+                            fmt('f12.6', t_str_stage_end - t_structb_start), __FILE__, __LINE__)
       end if
 10000 format(i5)
 10001 format(" LATTICE COORDINATES")
@@ -2185,11 +2322,25 @@ contains
       end if
    end subroutine load_symbolic_atoms_if_needed
 
-   subroutine build_rmt(this, nspec, rmt)
+   subroutine build_rmt(this, nspec, species_labels, rmt)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: nspec
+      integer, intent(in) :: species_labels(nspec)
       real(rp), intent(out) :: rmt(nspec)
-      rmt(:) = this%wav*ang2au
+      integer :: is, label
+
+      call this%load_symbolic_atoms_if_needed()
+
+      do is = 1, nspec
+         label = species_labels(is)
+         if (label < 1 .or. label > size(this%symbolic_atoms)) then
+            call g_logger%fatal('strux backend found invalid species label in lattice%no for WS radius lookup', __FILE__, __LINE__)
+         end if
+         if (this%symbolic_atoms(label)%potential%ws_r <= tiny(1.0_rp)) then
+            call g_logger%fatal('strux backend requires positive potential%ws_r for sigma/fitted screening', __FILE__, __LINE__)
+         end if
+         rmt(is) = this%symbolic_atoms(label)%potential%ws_r
+      end do
    end subroutine build_rmt
 
    subroutine build_hcr(this, nl, nspec, rmt, hcr)
@@ -2206,16 +2357,17 @@ contains
       end do
    end subroutine build_hcr
 
-   subroutine build_strux_inputs(this, nspec, nl, alpha_in, hcr, rmt)
+   subroutine build_strux_inputs(this, nspec, nl, species_labels, alpha_in, hcr, rmt)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: nspec, nl
+      integer, intent(in) :: species_labels(nspec)
       real(rp), intent(out) :: alpha_in(0:nl - 1, nspec)
       real(rp), intent(out) :: hcr(nl, nspec)
       real(rp), intent(out) :: rmt(nspec)
       integer :: is
       real(rp) :: alpha_global(nl)
 
-      call this%build_rmt(nspec, rmt)
+      call this%build_rmt(nspec, species_labels, rmt)
       call this%build_hcr(nl, nspec, rmt, hcr)
 
       select case (trim(lower(this%screening)))
@@ -2243,7 +2395,7 @@ contains
       integer :: label, species_idx
       integer, allocatable :: ips(:), lmxb(:), orb_map(:), species_labels(:)
       real(rp) :: pair_cutoff, solve_cutoff, pair_cutoff_bohr, solve_cutoff_bohr, alat_bohr, wav_bohr
-      real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end
+      real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end, t_inputs_start, t_inputs_end, t_store_start, t_store_end, t_remap_end
       real(rp) :: alpha_debug(4)
       real(rp) :: vec_target(3)
       real(rp), allocatable :: pos(:,:), cralat(:,:), rmt(:), alpha_in(:,:), hcr(:,:), alpha_site(:,:), &
@@ -2324,14 +2476,15 @@ contains
       allocate(lmxb(nspec), rmt(nspec))
       allocate(alpha_in(0:nl - 1, nspec), hcr(nl, nspec))
       lmxb(:) = this%control%lmax
-      call this%build_strux_inputs(nspec, nl, alpha_in, hcr, rmt)
+      call cpu_time(t_inputs_start)
+      call g_logger%info('STRUCTB STRUX input build start', __FILE__, __LINE__)
+      call this%build_strux_inputs(nspec, nl, species_labels(1:nspec), alpha_in, hcr, rmt)
+      call cpu_time(t_inputs_end)
+      call g_logger%info('STRUCTB STRUX input build end cpu_s='//fmt('f12.6', t_inputs_end - t_inputs_start)// &
+                         ' nbas='//fmt('I0', nbas)//' nspec='//fmt('I0', nspec), __FILE__, __LINE__)
 
-      alpha_debug = 0.0_rp
-      alpha_debug(1:min(nl, 4)) = alpha_in(0:min(nl - 1, 3), 1)
       write (*, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX periodic solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
       write (17, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX periodic solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
-      write (*, '(a, a, a, 4f12.6)') 'STRUX screening=', trim(lower(this%screening)), ' alpha=', alpha_debug
-      write (17, '(a, a, a, 4f12.6)') 'STRUX screening=', trim(lower(this%screening)), ' alpha=', alpha_debug
 
       if (trim(lower(this%screening)) == 'manual' .or. trim(lower(this%screening)) == 'default') then
          if (this%strux_want_sdot) then
@@ -2346,6 +2499,7 @@ contains
       if (allocated(result%sdot)) deallocate(result%sdot)
 
       call cpu_time(t_total_start)
+      call g_logger%info('STRUCTB STRUX compute start screening='//trim(lower(this%screening)), __FILE__, __LINE__)
       select case (trim(lower(this%screening)))
       case ('manual', 'default')
          call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, alpha_in=alpha_in)
@@ -2362,12 +2516,34 @@ contains
             alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
             screening_mode=opts%screening_mode)
       end select
+      do is = 1, nspec
+         alpha_debug = 0.0_rp
+         select case (trim(lower(this%screening)))
+         case ('manual', 'default')
+            alpha_debug(1:min(nl, 4)) = alpha_in(0:min(nl - 1, 3), is)
+         case ('sigma', 'fitted')
+            if (allocated(alpha_l_out)) then
+               alpha_debug(1:min(nl, 4)) = alpha_l_out(0:min(nl - 1, 3), is)
+            else if (allocated(result%alpha_l)) then
+               alpha_debug(1:min(nl, 4)) = result%alpha_l(0:min(nl - 1, 3), is)
+            end if
+         end select
+         write (*, '(a, a, a, i4, a, i6, a, 4f12.6)') 'STRUX screening=', trim(lower(this%screening)), &
+            ' species=', is, ' label=', species_labels(is), ' alpha=', alpha_debug
+         write (17, '(a, a, a, i4, a, i6, a, 4f12.6)') 'STRUX screening=', trim(lower(this%screening)), &
+            ' species=', is, ' label=', species_labels(is), ' alpha=', alpha_debug
+      end do
+      flush(17)
       call cpu_time(t_total_end)
+      call g_logger%info('STRUCTB STRUX compute end cpu_s='//fmt('f12.6', t_total_end - t_total_start)// &
+                         ' nttab='//fmt('I0', result%nttab), __FILE__, __LINE__)
 
       nttab = result%nttab
       write (*, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
       write (17, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
 
+      call cpu_time(t_store_start)
+      call g_logger%info('STRUCTB STRUX alpha/sbar staging start', __FILE__, __LINE__)
       do ii = 1, this%ntot
          this%alpha(:, :, ii) = 0.0_rp
          this%alpha_dot(:, :, ii) = 0.0_rp
@@ -2375,6 +2551,37 @@ contains
          this%alpha_dot(1:nl2, 1:nbas, ii) = adot_site(:, 1:nbas)
       end do
 
+      do is = 1, nspec
+         label = species_labels(is)
+         if (label < 1 .or. label > size(this%symbolic_atoms)) then
+            call g_logger%fatal('strux backend found invalid species label for screening alpha storage', __FILE__, __LINE__)
+         end if
+         if (allocated(this%symbolic_atoms(label)%potential%screening_alpha)) then
+            if (lbound(this%symbolic_atoms(label)%potential%screening_alpha, 1) /= 0 .or. &
+                ubound(this%symbolic_atoms(label)%potential%screening_alpha, 1) /= nl - 1) then
+               deallocate(this%symbolic_atoms(label)%potential%screening_alpha)
+               allocate(this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1))
+            end if
+         else
+            allocate(this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1))
+         end if
+         select case (trim(lower(this%screening)))
+         case ('manual', 'default')
+            this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1) = alpha_in(0:nl - 1, is)
+         case ('sigma', 'fitted')
+            if (allocated(alpha_l_out)) then
+               this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1) = alpha_l_out(0:nl - 1, is)
+            else if (allocated(result%alpha_l)) then
+               this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1) = result%alpha_l(0:nl - 1, is)
+            else
+               call g_logger%fatal('strux backend did not produce screening alpha data for potential transform', __FILE__, __LINE__)
+            end if
+         end select
+      end do
+      call cpu_time(t_store_end)
+      call g_logger%info('STRUCTB STRUX alpha/sbar staging end cpu_s='//fmt('f12.6', t_store_end - t_store_start), __FILE__, __LINE__)
+
+      call g_logger%info('STRUCTB STRUX remap/write stage start ntot='//fmt('I0', this%ntot), __FILE__, __LINE__)
       do ii = 1, this%ntot
          ia = representative_atom_index(this, ii)
          ib = this%num(ia)
@@ -2383,6 +2590,7 @@ contains
          call cpu_time(t_map_start)
          write (*, '(a, i5, a, i5, a, i5, a, i6)') 'STRUX map   center ', ii, ' atom ', ia, ' basis=', ib, ' nt=', nt_store
          write (17, '(a, i5, a, i5, a, i5, a, i6)') 'STRUX map   center ', ii, ' atom ', ia, ' basis=', ib, ' nt=', nt_store
+         call write_neighbor_vector_dump(17, this%sbarvec, nt_store)
 
          do m = 1, nt_store
             if (m == 1) then
@@ -2418,7 +2626,11 @@ contains
          call cpu_time(t_map_end)
          write (*, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
          write (17, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
+         flush(17)
       end do
+      call cpu_time(t_remap_end)
+      call g_logger%info('STRUCTB STRUX remap/write stage end cpu_s='//fmt('f12.6', t_remap_end - t_store_end)// &
+                         ' full_strux_path_cpu_s='//fmt('f12.6', t_remap_end - t_total_start), __FILE__, __LINE__)
 
       if (allocated(alpha_l_out)) deallocate(alpha_l_out)
       if (allocated(tral)) deallocate(tral)
@@ -2433,9 +2645,11 @@ contains
       integer, intent(in) :: nl2, m, ii, iclus
       integer :: is, js
 
-      write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5,"   ICENT=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus, ii
+      write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus, &
+         this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
+      write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus
       if (this%strux_want_sdot) then
-         write (15, '(" VECTOR=",3f12.6,"   ICLUS=",i5,"   ICENT=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus, ii
+         write (15, '(" VECTOR=",3f12.6,"   ICLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus
       end if
 
       do is = 1, nl2
@@ -2448,7 +2662,21 @@ contains
             write (15, '(*(f10.4))') (real(this%sdot(is, js, m, ii), rp), js=1, nl2)
          end if
       end do
+      flush(16)
+      flush(17)
+      if (this%strux_want_sdot) flush(15)
    end subroutine write_strux_block
+
+   subroutine write_neighbor_vector_dump(iunit, sbarvec, nt)
+      integer, intent(in) :: iunit, nt
+      real(rp), intent(in) :: sbarvec(:, :)
+      integer :: i
+
+      write (iunit, '(i5)') nt
+      do i = 1, nt
+         write (iunit, '(3f8.4)') sbarvec(1, i), sbarvec(2, i), sbarvec(3, i)
+      end do
+   end subroutine write_neighbor_vector_dump
 
    integer function representative_atom_index(this, ii)
       class(lattice), intent(in) :: this
@@ -2545,7 +2773,7 @@ contains
          j = j + 1
          this%atlist(j) = this%irec(i)
       end do
-      this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+      call this%load_symbolic_atoms_if_needed()
 
       
       write (805, *) this%kk
@@ -2825,7 +3053,7 @@ contains
       real(rp), intent(in) :: r2, wav
       real(rp), dimension(3, ndi), intent(in) :: crd
       ! Local Scalars
-      integer :: i, j, k, m, na, nrl, nt
+      integer :: i, j, k, m, na, nrl, nt, iclus_dbg
       real(rp), dimension(:), allocatable :: bet, wk
       real(rp), dimension(:), allocatable :: a
       real(rp), dimension(:, :), allocatable :: cr
@@ -2839,8 +3067,8 @@ contains
       allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
       call this%clusba(r2, crd, ia, nat, ndi, nt)
-      write (17, 10000) nt
-      write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
+      call write_neighbor_vector_dump(17, this%sbarvec, nt)
+      flush(17)
       nrl = np*nt
       na = (nrl*(nrl + 1))/2
       allocate (a(na))
@@ -2858,7 +3086,16 @@ contains
                this%sbar(i, j, m, ii) = sbar(i, j, m)
             end do
          end do
+         iclus_dbg = ia
+         if (m > 1 .and. allocated(this%nn)) then
+            if (ia >= 1 .and. ia <= size(this%nn, 1) .and. m <= size(this%nn, 2)) then
+               if (this%nn(ia, m) > 0) iclus_dbg = this%nn(ia, m)
+            end if
+         end if
+         write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus_dbg, &
+            this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
       end do
+      flush(17)
 
       !do m=1, nt
       !  write(*, *) ia, m
@@ -2868,9 +3105,6 @@ contains
       !end do
       deallocate (a, bet, cr, wk, s, sbar)
       return
-
-10000 format(i5)
-10001 format(3f8.4)
    end subroutine dbar1
 
    !---------------------------------------------------------------------------

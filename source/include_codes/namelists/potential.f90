@@ -3,6 +3,7 @@ complex(rp), dimension(16) :: cx0, cx1, wx0, wx1
 real(rp), dimension(:), allocatable :: mom
 real(rp), dimension(:), allocatable :: lmom
 real(rp), dimension(32) :: cshi, dw_l
+real(rp), dimension(:), allocatable :: screening_alpha
 real(rp), dimension(:, :), allocatable :: pl, center_band, width_band, gravity_center, shifted_band, obar, c, enu, ppar, qpar, srdel, vl
 real(rp), dimension(:, :, :), allocatable :: ql
 real(rp) :: center_band_s_up, center_band_s_dw, &
@@ -20,7 +21,7 @@ namelist /par/ &
    center_band, width_band, shifted_band, obar, gravity_center, &
    sumec, sumev, etot, utot, ekin, rhoeps, vmad, &
    c, enu, ppar, qpar, srdel, vl, &
-   pl, mom, lmom, ws_r, ql, lmax, &
+   pl, mom, lmom, ws_r, ql, lmax, screening_alpha, &
    center_band_s_up, center_band_s_dw, &
    center_band_p_up, center_band_p_dw, &
    center_band_d_up, center_band_d_dw, &

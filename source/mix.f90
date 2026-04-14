@@ -31,7 +31,7 @@ module mix_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
-   use basis_mod, only: nb, lmax_basis
+   use basis_mod, only: lmax_basis
    implicit none
 
    private
@@ -185,24 +185,27 @@ contains
       !> Restore defaults and allocate mixing arrays
       subroutine restore_to_default(this)
       class(mix), intent(inout) :: this
+      integer :: qia_width
 
+      qia_width = 6*(lmax_basis + 1)
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, nb/))
-      call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, nb/))
-      call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, nb/))
-      call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, nb/))
-      call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*nb/))
-      call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*nb/))
-      call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*nb/))
+      call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.qia_old', this%qia_old, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.qiaprev', this%qiaprev, (/this%lattice%nrec, qia_width/))
+      call g_safe_alloc%allocate('mix.v_broy', this%v_broy, (/this%lattice%nrec*qia_width/))
+      call g_safe_alloc%allocate('mix.u_broy', this%u_broy, (/this%lattice%nrec*qia_width/))
+      call g_safe_alloc%allocate('mix.fo_broy', this%fo_broy, (/this%lattice%nrec*qia_width/))
+      call g_safe_alloc%allocate('mix.muo_broy', this%muo_broy, (/this%lattice%nrec*qia_width/))
       call g_safe_alloc%allocate('mix.magbeta', this%magbeta, (/this%lattice%nrec/))
       call g_safe_alloc%allocate('mix.mag_old', this%mag_old, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_new', this%mag_new, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_mix', this%mag_mix, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.is_induced', this%is_induced, (/this%lattice%nrec/))
 #else
-      allocate (this%qia(this%lattice%nrec, nb), this%qia_new(this%lattice%nrec, nb), this%qia_old(this%lattice%nrec, nb))
-      allocate (this%qiaprev(this%lattice%nrec, nb))
-      allocate (this%v_broy(this%lattice%nrec*nb), this%u_broy(this%lattice%nrec*nb), this%fo_broy(this%lattice%nrec*nb), this%muo_broy(this%lattice%nrec*nb))
+      allocate (this%qia(this%lattice%nrec, qia_width), this%qia_new(this%lattice%nrec, qia_width), this%qia_old(this%lattice%nrec, qia_width))
+      allocate (this%qiaprev(this%lattice%nrec, qia_width))
+      allocate (this%v_broy(this%lattice%nrec*qia_width), this%u_broy(this%lattice%nrec*qia_width), this%fo_broy(this%lattice%nrec*qia_width), this%muo_broy(this%lattice%nrec*qia_width))
       allocate (this%magbeta(this%lattice%nrec), this%mag_old(this%lattice%nrec, 3), this%mag_new(this%lattice%nrec, 3), this%mag_mix(this%lattice%nrec, 3))
       allocate (this%is_induced(this%lattice%nrec))
 #endif
@@ -264,20 +267,21 @@ contains
       use mpi_mod
       class(mix), intent(inout) :: this
       character(len=*), intent(in) :: whereto
-      integer :: it, I, lcount
+      integer :: it, I, lcount, qcols
 
       select case (trim(whereto))
       case ('new')
          this%qia_new = 0.0_rp
          do it = 1, this%lattice%nrec
-            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            qcols = size(this%qia_new, 2)
             do I = 1, lcount
-               if (I              <= nb) this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               if (I +     lcount <= nb) this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               if (I + 2 * lcount <= nb) this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               if (I + 3 * lcount <= nb) this%qia_new(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               if (I + 4 * lcount <= nb) this%qia_new(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               if (I + 5 * lcount <= nb) this%qia_new(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               if (I              <= qcols) this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               if (I +     lcount <= qcols) this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               if (I + 2 * lcount <= qcols) this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               if (I + 3 * lcount <= qcols) this%qia_new(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               if (I + 4 * lcount <= qcols) this%qia_new(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               if (I + 5 * lcount <= qcols) this%qia_new(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                   if (any(this%qia_new(it, :) /= this%qia_new(it, :)) .or. maxval(abs(this%qia_new(it, :))) > 1.0e6_rp) then
@@ -288,14 +292,15 @@ contains
       case ('old')
          this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
-            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            qcols = size(this%qia_old, 2)
             do I = 1, lcount
-               if (I              <= nb) this%qia_old(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               if (I +     lcount <= nb) this%qia_old(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               if (I + 2 * lcount <= nb) this%qia_old(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               if (I + 3 * lcount <= nb) this%qia_old(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               if (I + 4 * lcount <= nb) this%qia_old(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               if (I + 5 * lcount <= nb) this%qia_old(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               if (I              <= qcols) this%qia_old(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               if (I +     lcount <= qcols) this%qia_old(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               if (I + 2 * lcount <= qcols) this%qia_old(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               if (I + 3 * lcount <= qcols) this%qia_old(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               if (I + 4 * lcount <= qcols) this%qia_old(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               if (I + 5 * lcount <= qcols) this%qia_old(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                if (any(this%qia_old(it, :) /= this%qia_old(it, :)) .or. maxval(abs(this%qia_old(it, :))) > 1.0e6_rp) then
@@ -306,14 +311,15 @@ contains
       case ('prev')
          this%qiaprev = 0.0_rp
          do it = 1, this%lattice%nrec
-            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            qcols = size(this%qiaprev, 2)
             do I = 1, lcount
-               if (I              <= nb) this%qiaprev(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
-               if (I +     lcount <= nb) this%qiaprev(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
-               if (I + 2 * lcount <= nb) this%qiaprev(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
-               if (I + 3 * lcount <= nb) this%qiaprev(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
-               if (I + 4 * lcount <= nb) this%qiaprev(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
-               if (I + 5 * lcount <= nb) this%qiaprev(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
+               if (I              <= qcols) this%qiaprev(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
+               if (I +     lcount <= qcols) this%qiaprev(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
+               if (I + 2 * lcount <= qcols) this%qiaprev(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
+               if (I + 3 * lcount <= qcols) this%qiaprev(it, I + 3 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2)
+               if (I + 4 * lcount <= qcols) this%qiaprev(it, I + 4 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)
+               if (I + 5 * lcount <= qcols) this%qiaprev(it, I + 5 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)
             end do
             if (rank == 0) then
                if (any(this%qiaprev(it, :) /= this%qiaprev(it, :)) .or. maxval(abs(this%qiaprev(it, :))) > 1.0e6_rp) then
@@ -324,14 +330,15 @@ contains
 
       case ('current')
          do it = 1, this%lattice%nrec
-            lcount = this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax + 1
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            qcols = size(this%qia, 2)
             do I = 1, lcount
-               if (I              <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I             )
-               if (I +     lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I +     lcount)
-               if (I + 2 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 2 * lcount)
-               if (I + 3 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + 3 * lcount)
-               if (I + 4 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)    = this%qia(it, I + 4 * lcount)
-               if (I + 5 * lcount <= nb) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)    = this%qia(it, I + 5 * lcount)
+               if (I              <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1) = this%qia(it, I             )
+               if (I +     lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2) = this%qia(it, I +     lcount)
+               if (I + 2 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1) = this%qia(it, I + 2 * lcount)
+               if (I + 3 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 2) = this%qia(it, I + 3 * lcount)
+               if (I + 4 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 1)    = this%qia(it, I + 4 * lcount)
+               if (I + 5 * lcount <= qcols) this%symbolic_atom(this%lattice%nbulk + it)%potential%pl(I - 1, 2)    = this%qia(it, I + 5 * lcount)
             end do
          end do
       end select
@@ -409,8 +416,8 @@ contains
    subroutine mixpq(this, qia_old, qia_new)
       use mpi_mod
       class(mix), intent(inout) :: this
-      real(rp), dimension(this%lattice%nrec, nb), intent(in) :: qia_old, qia_new
-      real(rp), dimension(this%lattice%nrec, nb) :: qi_to, qi_tn ! Local variables for broyden mixing
+      real(rp), dimension(:, :), intent(in) :: qia_old, qia_new
+      real(rp), allocatable :: qi_to(:, :), qi_tn(:, :) ! Local variables for broyden mixing
       real(rp) :: delta_atom
       integer :: ia ! Atom index
       logical :: reset
@@ -418,8 +425,15 @@ contains
       integer :: nb_slice, lcount, occ_cols, packed_cols
       integer :: ncols
       real(rp) :: denom
-      character(len=512) :: msg
-      integer :: nprint, k
+      integer :: broy_width
+
+      if (size(qia_old, 1) /= this%lattice%nrec .or. size(qia_new, 1) /= this%lattice%nrec) then
+         call g_logger%fatal('mixpq received qia arrays with inconsistent atom count', __FILE__, __LINE__)
+      end if
+      if (size(qia_old, 2) /= size(qia_new, 2) .or. size(qia_old, 2) /= size(this%qia, 2)) then
+         call g_logger%fatal('mixpq received qia arrays with inconsistent packed widths', __FILE__, __LINE__)
+      end if
+      broy_width = this%lattice%nrec*size(qia_old, 2)
 
       select case (trim(this%mixtype))
       case ('linear')
@@ -427,17 +441,21 @@ contains
       case ('broyden')
          ! call g_logger%fatal(´Broyden mixing not implemented yet!´, __FILE__, __LINE__)
          reset = .false.
+         allocate(qi_to(size(qia_old, 1), size(qia_old, 2)))
+         allocate(qi_tn(size(qia_new, 1), size(qia_new, 2)))
          qi_to(:, :) = this%qia_old(:, :)
          qi_tn(:, :) = this%qia_new(:, :)
-         call broydn(this%beta, this%beta, reset, qi_to, qi_tn, Bnorm, this%lattice%nrec*nb, this%itr, this%fsqo, this%u_broy, this%v_broy, this%muo_broy, this%fo_broy, this%nmix)
+         call broydn(this%beta, this%beta, reset, qi_to, qi_tn, Bnorm, broy_width, this%itr, this%fsqo, this%u_broy, this%v_broy, this%muo_broy, this%fo_broy, this%nmix)
          this%qia(:, :) = qi_to(:, :)
          bnorm = bnorm**0.5d0
+         deallocate(qi_to, qi_tn)
       end select
       ! Safety: detect NaNs produced by mixing (e.g., in Broyden) and fallback
       if (any(this%qia /= this%qia)) then
          call g_logger%error('NaN detected in mixed qia — reverting to linear mix', __FILE__, __LINE__)
          this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
       end if
+
       ! Debug: print first atoms qia slices for inspection (up to 6 cols)
       ! if (rank == 0) then
       !    do ia = 1, min(3, this%lattice%nrec)
@@ -465,7 +483,7 @@ contains
       ! end if
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
-         lcount = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax + 1
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
          occ_cols = min(2*lcount, size(this%qia, 2))
          this%charge%trq = 0.0d0
          this%charge%cht = 0.0d0
@@ -481,7 +499,7 @@ contains
       end do
 
       do ia = 1, this%lattice%nrec
-         lcount = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax + 1
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
          packed_cols = min(6*lcount, size(qia_old, 2))
          denom = max(1.0_rp, real(packed_cols)/2.0_rp)
          delta_atom = sqrt(sum((this%qia_old(ia, 1:packed_cols) - this%qia_new(ia, 1:packed_cols))**2))/denom

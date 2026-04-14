@@ -226,7 +226,6 @@ contains
       real(rp) :: x, y, wow, vmad
       real(rp), dimension(this%potential%lmax + 1, 2) :: dele, qi, del, q, c, enu
       real(rp), dimension(max(4, this%potential%lmax + 1)) :: qm
-      real(rp), parameter :: qm_default(4) = [0.348485_rp, 0.053030_rp, 0.010714_rp, 0.006740_rp]
       integer :: i, j, lmax
 
       wow = wsm/this%potential%ws_r
@@ -237,9 +236,8 @@ contains
       q(:, :) = this%potential%qpar(0:lmax, :)
       vmad = this%potential%vmad
       lmax = this%potential%lmax
-      qm(:) = qm_default(size(qm_default))
-      qm(1:min(size(qm_default), size(qm))) = qm_default(1:min(size(qm_default), size(qm)))
-      qm(1:min(size(qm_canonical), size(qm))) = qm_canonical(1:min(size(qm_canonical), size(qm)))
+      qm(:) = this%potential%screening_alpha(min(ubound(this%potential%screening_alpha, 1), lmax))
+      qm(1:min(size(qm), size(this%potential%screening_alpha))) = this%potential%screening_alpha(0:min(lmax, ubound(this%potential%screening_alpha, 1)))
 
       do J = 1, 2
          do I = 1, lmax + 1

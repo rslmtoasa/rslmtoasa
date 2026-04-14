@@ -39,6 +39,8 @@ module potential_mod
    ! public functions
    public :: array_of_potentials
 
+   real(rp), parameter :: default_screening_alpha_values(4) = [0.348485_rp, 0.053030_rp, 0.010714_rp, 0.006740_rp]
+
    type, public :: potential
       !> Orbital index. Determines the size of the Hamiltonian
       integer :: lmax
@@ -74,6 +76,8 @@ module potential_mod
       real(rp), dimension(:, :, :), allocatable :: ql
       !> Potential parameters on the orthogonal basis
       real(rp), dimension(:, :), allocatable :: c, enu, ppar, qpar, srdel, vl, pnu, qi, dele
+      !> Target screening alphas used by orthogonal-to-TB representation transforms.
+      real(rp), dimension(:), allocatable :: screening_alpha
       !> Normalized magnetic moments
       real(rp), dimension(:), allocatable :: mom
       !> Direction of zeroth order band moments (i.e. non-normalized mom)
@@ -207,6 +211,7 @@ contains
       ! Local variables
       integer :: i, l, is
       integer :: file_lmax  ! lmax as read from the file (may differ from lmax_basis)
+      real(rp) :: dropped_q0, active_q0, add_q0
 
       include 'include_codes/namelists/potential.f90'
 
@@ -236,6 +241,9 @@ contains
       if (allocated(this%lmom)) then
          call move_alloc(this%lmom, lmom)
       end if
+      if (allocated(this%screening_alpha)) then
+         call move_alloc(this%screening_alpha, screening_alpha)
+      end if
       if (.not. allocated(mom)) then
          allocate(mom(3))
          mom = [0.0_rp, 0.0_rp, 1.0_rp]
@@ -251,6 +259,18 @@ contains
          deallocate(lmom)
          allocate(lmom(3))
          lmom = 0.0_rp
+      end if
+      if (.not. allocated(screening_alpha)) then
+         allocate(screening_alpha(max(4, lmax_basis + 1)))
+         screening_alpha = default_screening_alpha_values(size(default_screening_alpha_values))
+         screening_alpha(1:min(size(default_screening_alpha_values), size(screening_alpha))) = &
+            default_screening_alpha_values(1:min(size(default_screening_alpha_values), size(screening_alpha)))
+      else if (size(screening_alpha) < max(4, lmax_basis + 1)) then
+         deallocate(screening_alpha)
+         allocate(screening_alpha(max(4, lmax_basis + 1)))
+         screening_alpha = default_screening_alpha_values(size(default_screening_alpha_values))
+         screening_alpha(1:min(size(default_screening_alpha_values), size(screening_alpha))) = &
+            default_screening_alpha_values(1:min(size(default_screening_alpha_values), size(screening_alpha)))
       end if
 
       ! CRITICAL: For lmax-dependent arrays, deallocate the object's arrays.
@@ -304,12 +324,19 @@ contains
       end if
       close (funit)
 
-      ! If the file was written for a smaller basis (e.g. spd, lmax=2) but the
-      ! current calculation uses a larger basis (e.g. spdf, lmax=3), promote lmax
-      ! to lmax_basis so the object arrays cover all required channels.  The local
-      ! arrays were zero-initialised above, so the extra channels are
-      ! automatically set to zero, which is a reasonable starting guess.
+      ! Match the file basis to the active calculation basis. If the file was
+      ! written for a smaller basis, promote and seed the missing channels. If
+      ! the file was written for a larger basis, truncate to the active basis.
       file_lmax = lmax
+      if (file_lmax < ubound(pl, 1) .and. &
+          all(abs(pl(0, :)) <= tiny(1.0_rp)) .and. &
+          any(abs(pl(1:file_lmax + 1, :)) > tiny(1.0_rp))) then
+         call g_logger%warning( &
+            'Potential file '//trim(fname)//' appears to contain one-based PL rows from an older formatted writer. Repairing PL lower-bound shift on read.', &
+            __FILE__, __LINE__)
+         pl(0:file_lmax, :) = pl(1:file_lmax + 1, :)
+         pl(file_lmax + 1, :) = 0.0_rp
+      end if
       if (lmax < lmax_basis) then
          call g_logger%warning( &
             'Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
@@ -329,6 +356,25 @@ contains
                ql(3, l, is) = 0.0d0
             end do
          end do
+      else if (lmax > lmax_basis) then
+         call g_logger%warning( &
+            'Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
+            ' but the calculation uses lmax='//int2str(lmax_basis)// &
+            '. Truncating higher-l channels to match the active basis.', &
+            __FILE__, __LINE__)
+         do is = 1, 2
+            dropped_q0 = sum(ql(1, lmax_basis + 1:min(file_lmax, ubound(ql, 2)), is))
+            if (abs(dropped_q0) > tiny(1.0_rp)) then
+               active_q0 = sum(ql(1, 0:lmax_basis, is))
+               if (active_q0 > tiny(1.0_rp)) then
+                  ql(1, 0:lmax_basis, is) = ql(1, 0:lmax_basis, is)*(1.0_rp + dropped_q0/active_q0)
+               else
+                  add_q0 = dropped_q0/real(lmax_basis + 1, rp)
+                  ql(1, 0:lmax_basis, is) = ql(1, 0:lmax_basis, is) + add_q0
+               end if
+            end if
+         end do
+         lmax = lmax_basis
       end if
 
       ! Setting user values
@@ -374,6 +420,10 @@ contains
       if (allocated(obar)) then
          allocate(this%obar(lmax+1, 2))
          this%obar(:, :) = obar(1:lmax+1, :)
+      end if
+      if (allocated(screening_alpha)) then
+         allocate(this%screening_alpha(0:lmax))
+         this%screening_alpha(0:lmax) = screening_alpha(1:lmax+1)
       end if
 
       ! For mom/lmom, move_alloc is still valid (they're non-lmax-dependent)
@@ -433,6 +483,8 @@ contains
       this%lmax = lmax_basis
 
 #ifdef USE_SAFE_ALLOC
+      allocate (this%screening_alpha(0:this%lmax))
+      call g_safe_alloc%report_allocate('potential.screening_alpha', this%screening_alpha)
       call g_safe_alloc%allocate('potential.center_band', this%center_band, (/this%lmax + 1, 2/))
       call g_safe_alloc%allocate('potential.width_band', this%width_band, (/this%lmax + 1, 2/))
       allocate (this%pl(0:this%lmax, 2))
@@ -475,6 +527,7 @@ contains
       call g_safe_alloc%allocate('potential.shifted_band', this%shifted_band, (/this%lmax + 1, 2/))
       call g_safe_alloc%allocate('potential.obar', this%obar, (/this%lmax + 1, 2/))
 #else
+      allocate (this%screening_alpha(0:this%lmax))
       allocate (this%center_band(this%lmax + 1, 2), this%width_band(this%lmax + 1, 2), this%pl(0:this%lmax, 2))
       allocate (this%gravity_center(this%lmax + 1, 2), this%ql(3, 0:this%lmax, 2), this%cx((this%lmax + 1)**2, 2), this%wx((this%lmax + 1)**2, 2))
       allocate (this%cex((this%lmax + 1)**2, 2), this%obx((this%lmax + 1)**2, 2), this%cx0((this%lmax + 1)**2))
@@ -502,6 +555,9 @@ contains
       this%ekin = 0.0d0
       this%rhoeps = 0.0d0
       this%vmad = 0.0d0
+      this%screening_alpha(:) = default_screening_alpha_values(size(default_screening_alpha_values))
+      this%screening_alpha(0:min(this%lmax, size(default_screening_alpha_values) - 1)) = &
+         default_screening_alpha_values(1:min(this%lmax + 1, size(default_screening_alpha_values)))
       this%pl(:, :) = 0.0d0
       this%ql(:, :, :) = 0.0d0
       this%cx(:, :) = 0.0d0
@@ -566,6 +622,7 @@ contains
       vmad = this%vmad
       lmax = this%lmax
       ws_r = this%ws_r
+      screening_alpha = this%screening_alpha + 0.0_rp
       c = this%c
       enu = this%enu
       ppar = this%ppar
@@ -633,6 +690,7 @@ contains
       wx1 = this%wx1
 
       pl = this%pl
+      screening_alpha = this%screening_alpha + 0.0_rp
       cshi = this%cshi
       dw_l = this%dw_l
       cex = this%cex
@@ -667,7 +725,7 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
+      integer :: newunit, il, isp, iq
 
       type(namelist_generator) :: nml
 
@@ -684,15 +742,24 @@ contains
       call nml%add('utot', this%utot)
       call nml%add('ekin', this%ekin)
       call nml%add('rhoeps', this%rhoeps)
-      call nml%add('c', this%c)
-      call nml%add('enu', this%enu)
-      call nml%add('ppar', this%ppar)
-      call nml%add('qpar', this%qpar)
-      call nml%add('srdel', this%srdel)
-      call nml%add('vl', this%vl)
-      call nml%add('pl', this%pl)
+      do il = lbound(this%c, 1), ubound(this%c, 1)
+         call nml%add('c('//fmt('I0', il + 1)//', :)', this%c(il, :))
+         call nml%add('enu('//fmt('I0', il + 1)//', :)', this%enu(il, :))
+         call nml%add('ppar('//fmt('I0', il + 1)//', :)', this%ppar(il, :))
+         call nml%add('qpar('//fmt('I0', il + 1)//', :)', this%qpar(il, :))
+         call nml%add('srdel('//fmt('I0', il + 1)//', :)', this%srdel(il, :))
+         call nml%add('vl('//fmt('I0', il + 1)//', :)', this%vl(il, :))
+      end do
+      do il = lbound(this%pl, 1), ubound(this%pl, 1)
+         call nml%add('pl('//fmt('I0', il)//', :)', this%pl(il, :))
+      end do
+      call nml%add('screening_alpha', this%screening_alpha)
       call nml%add('ws_r', this%ws_r)
-      call nml%add('ql', this%ql)
+      do isp = 1, size(this%ql, 3)
+         do iq = 1, size(this%ql, 1)
+            call nml%add('ql('//fmt('I0', iq)//', :, '//fmt('I0', isp)//')', this%ql(iq, :, isp))
+         end do
+      end do
       call nml%add('lmax', this%lmax)
       call nml%add('vmad', this%vmad)
       call nml%add('mom', this%mom)
@@ -770,7 +837,7 @@ contains
       ! Flatten the data using PACK
       flat_array(1:total_size) = (/pack(this%center_band, .true.), pack(this%width_band, .true.), &
                                    pack(this%gravity_center, .true.), pack(this%shifted_band, .true.), &
-                                   pack(this%pl, .true.), pack(this%ql, .true.), pack(this%c, .true.), &
+                                   pack(this%pl, .true.), pack(this%screening_alpha, .true.), pack(this%ql, .true.), pack(this%c, .true.), &
                                    pack(this%enu, .true.), pack(this%ppar, .true.), pack(this%qpar, .true.), &
                                    pack(this%srdel, .true.), pack(this%vl, .true.), pack(this%pnu, .true.), &
                                    pack(this%qi, .true.), pack(this%dele, .true.), pack(this%mom, .true.), &
@@ -807,6 +874,7 @@ contains
                               !!! pack(real(this%obx), .true.), &
                               !!! pack(aimag(this%obx), .true.), &
                                    pack(this%pl, .true.), &
+                                   pack(this%screening_alpha, .true.), &
                                    pack(this%ql, .true.), &
                                    pack(this%c, .true.), &
                                    pack(this%enu, .true.), &
@@ -850,7 +918,7 @@ contains
 
       ! Determine the total size needed for the flat array
       total_size = size(this%center_band) + size(this%width_band) + size(this%gravity_center) + &
-                   size(this%shifted_band) + size(this%pl) + size(this%ql) + size(this%c) + &
+                   size(this%shifted_band) + size(this%pl) + size(this%screening_alpha) + size(this%ql) + size(this%c) + &
                    size(this%enu) + size(this%ppar) + size(this%qpar) + size(this%srdel) + &
                    size(this%vl) + size(this%pnu) + size(this%qi) + size(this%dele) + &
                    size(this%mom) + size(this%lmom) + 1 !mtot
@@ -872,6 +940,7 @@ contains
                 !!! + size(this%cex)*2 &  !complex
                 !!! + size(this%obx)*2 &  !complex
                    + size(this%pl) &
+                   + size(this%screening_alpha) &
                    + size(this%ql) &
                    + size(this%c) &
                    + size(this%enu) &
@@ -969,6 +1038,10 @@ contains
       ! pl
       d_size = size(this%pl)
       this%pl = reshape(flat_array(d_pos:d_pos + d_size), shape(this%pl))
+      d_pos = d_pos + d_size
+      ! screening_alpha
+      d_size = size(this%screening_alpha)
+      this%screening_alpha = reshape(flat_array(d_pos:d_pos + d_size), shape(this%screening_alpha))
       d_pos = d_pos + d_size
       ! ql
       d_size = size(this%ql)
@@ -1092,6 +1165,10 @@ contains
       ! pl
       d_size = size(this%pl)
       this%pl = reshape(flat_array(d_pos:d_pos + d_size), shape(this%pl))
+      d_pos = d_pos + d_size
+      ! screening_alpha
+      d_size = size(this%screening_alpha)
+      this%screening_alpha = reshape(flat_array(d_pos:d_pos + d_size), shape(this%screening_alpha))
       d_pos = d_pos + d_size
       ! ql
       d_size = size(this%ql)

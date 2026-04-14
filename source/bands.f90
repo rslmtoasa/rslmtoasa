@@ -566,6 +566,7 @@ contains
       real(rp), dimension(64) :: x, w
       real(rp) :: res, t
       real(rp), dimension(this%lattice%nrec, nb) :: occ
+      real(rp), dimension(0:3) :: occ_l
 
       integer :: m_glob
 
@@ -617,12 +618,18 @@ contains
 
       sumocc = 0.0d0
       do m = 1, this%lattice%nrec
+         occ_l(:) = 0.0_rp
+         do l = 0, min(3, lmax_basis)
+            occ_l(l) = sum(occ(m, l*l + 1:(l + 1)*(l + 1))) + &
+                       sum(occ(m, norb + l*l + 1:norb + (l + 1)*(l + 1)))
+         end do
          if (rank == 0) call g_logger%info('Spin moment of atom'//fmt('i4', m)//' is '//fmt('f10.6', sum(occ(m, 1:norb)) - sum(occ(m, norb+1:nb))), __FILE__, __LINE__)
          if (rank == 0) call g_logger%info('Total charge for atom'//fmt('i4', m)//' is '// &
                                            'total= '//fmt('f10.6', sum(occ(m, 1:nb)))// &
-                                           ' s= '//fmt('f10.6', occ(m, 1) + occ(m, 10))// &
-                                           ' p= '//fmt('f10.6', sum(occ(m, 2:4)) + sum(occ(m, 11:13)))// &
-                                           ' d= '//fmt('f10.6', sum(occ(m, 5:9)) + sum(occ(m, 14:nb))), __FILE__, __LINE__)
+                                           ' s= '//fmt('f10.6', occ_l(0))// &
+                                           ' p= '//fmt('f10.6', merge(occ_l(1), 0.0_rp, lmax_basis >= 1))// &
+                                           ' d= '//fmt('f10.6', merge(occ_l(2), 0.0_rp, lmax_basis >= 2))// &
+                                           ' f= '//fmt('f10.6', merge(occ_l(3), 0.0_rp, lmax_basis >= 3)), __FILE__, __LINE__)
          sumocc = sumocc + sum(occ(m, :))
       end do
       if (rank == 0) call g_logger%info('Total number of electrons is '//fmt('f16.6', sumocc), __FILE__, __LINE__)
@@ -1130,7 +1137,7 @@ contains
       real(rp) :: pref_0, pref_1, fx, fy, fz, tx, ty, tz
       integer :: up = 1
       integer :: dw = 2
-      integer :: d = 2
+      integer :: d
       integer :: na_loc
       integer :: plusbulk
 
@@ -1140,12 +1147,19 @@ contains
       do na = start_atom, end_atom
          plusbulk = this%lattice%nbulk + na
          na_loc = g2l_map(na)
+         d = min(2, this%symbolic_atom(plusbulk)%potential%lmax)
 
-         pref_0 = this%symbolic_atom(plusbulk)%potential%c(d, up)*this%symbolic_atom(plusbulk)%potential%srdel(d, dw) &
-                  /this%symbolic_atom(plusbulk)%potential%srdel(d, up) - this%symbolic_atom(plusbulk)%potential%c(d, dw) &
-                  *this%symbolic_atom(plusbulk)%potential%srdel(d, up)/this%symbolic_atom(plusbulk)%potential%srdel(d, dw)
-         pref_1 = this%symbolic_atom(plusbulk)%potential%srdel(d, dw)/this%symbolic_atom(plusbulk)%potential%srdel(d, up) &
-                  - this%symbolic_atom(plusbulk)%potential%srdel(d, up)/this%symbolic_atom(plusbulk)%potential%srdel(d, dw)
+         if (abs(this%symbolic_atom(plusbulk)%potential%srdel(d, up)) > tiny(1.0_rp) .and. &
+             abs(this%symbolic_atom(plusbulk)%potential%srdel(d, dw)) > tiny(1.0_rp)) then
+            pref_0 = this%symbolic_atom(plusbulk)%potential%c(d, up)*this%symbolic_atom(plusbulk)%potential%srdel(d, dw) &
+                     /this%symbolic_atom(plusbulk)%potential%srdel(d, up) - this%symbolic_atom(plusbulk)%potential%c(d, dw) &
+                     *this%symbolic_atom(plusbulk)%potential%srdel(d, up)/this%symbolic_atom(plusbulk)%potential%srdel(d, dw)
+            pref_1 = this%symbolic_atom(plusbulk)%potential%srdel(d, dw)/this%symbolic_atom(plusbulk)%potential%srdel(d, up) &
+                     - this%symbolic_atom(plusbulk)%potential%srdel(d, up)/this%symbolic_atom(plusbulk)%potential%srdel(d, dw)
+         else
+            pref_0 = 0.0_rp
+            pref_1 = 0.0_rp
+         end if
 
          I_loc = pref_0*this%symbolic_atom(plusbulk)%potential%mom0 &
                  - pref_1*this%symbolic_atom(plusbulk)%potential%mom1

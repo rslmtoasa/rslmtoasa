@@ -48,7 +48,7 @@ module self_mod
 #ifdef USE_MPI
    use mpi
 #endif
-   use basis_mod, only: nb, norb, spin_off
+   use basis_mod, only: nb, norb, spin_off, lmax_basis
    implicit none
 
    private
@@ -529,6 +529,7 @@ contains
       allocate (this%bxc(this%lattice%nrec))
       allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
 #endif
+      this%fun2(:, :, :) = 0.0_rp
 
    end subroutine restore_to_default
 
@@ -1025,7 +1026,7 @@ contains
          write (newunit, '(A)') '|                       Charge Transfer                                   |'
          write (newunit, '(A)') '==========================================================================='
          do ia = 1, this%lattice%nrec
-            nb_slice = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax + 1
+            nb_slice = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
             write (newunit, '(a,i4,a,f10.6)') 'Occupation at atom', ia, ':', sum(this%mix%qia(ia, 1:2*nb_slice))
             write (newunit, '(a,i4,a,*(f10.6,1x))') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:nb_slice)
             write (newunit, '(a,i4,a,*(f10.6,1x))') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, nb_slice+1:2*nb_slice)
@@ -1050,7 +1051,7 @@ contains
          write (newunit, '(A)') '|                             Log info                                     |'
          write (newunit, '(A)') '==========================================================================='
          ncols = size(this%mix%qia, 2)
-         nb_slice = min(12, ncols)
+         nb_slice = min(6*(lmax_basis + 1), ncols)
          denom = max(1.0_rp, real(nb_slice)/2.0_rp)
          write (newunit, '(a,f10.6)') 'Total RMS Diff: ', this%mix%delta
          do ia = 1, this%lattice%nrec
@@ -1197,6 +1198,7 @@ contains
       LMAX = atom%potential%lmax
       NSP = 2
 
+      QSL(:) = 0.0_rp
       call this%RACSI(atom, ROFI, QSL)
 
       ! ---- MAKE POTENTIAL PARAMETERS TO SAME DNU VALUES ------
@@ -1265,6 +1267,7 @@ contains
       allocate (v, mold=rho_in)
       allocate (rho, mold=rho_in)
       allocate (rofi(size(rho_in(:, 1))))
+      if (allocated(this%fun2)) this%fun2(:, :, :) = 0.0_rp
 
       nr = size(rofi)
       B_fsm = merge(-atom%mag_cfield(3), real(0.0, rp), this%lattice%control%do_comom)
@@ -1287,7 +1290,17 @@ contains
       do l = 0, lmax
          deg = (2*(2*l + 1))/nsp
          do isp = 1, nsp
+            if (atom%potential%pl(l, isp) /= atom%potential%pl(l, isp)) then
+               call g_logger%fatal('Invalid PL before atomic core/valence setup: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(lmax)//' l='//int2str(l)//' spin='//int2str(isp)// &
+                                   ' PL=NaN', __FILE__, __LINE__)
+            end if
             konfig = int(atom%potential%pl(l, isp))
+            if (konfig < l + 1) then
+               call g_logger%fatal('Invalid PL before atomic core/valence setup: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(lmax)//' l='//int2str(l)//' spin='//int2str(isp)// &
+                                   ' PL='//real2str(atom%potential%pl(l, isp))//' KONFIG='//int2str(konfig), __FILE__, __LINE__)
+            end if
             do konf = l + 1, konfig - 1
                ncore = ncore + 1
                ec(ncore) = -5.d0
@@ -1607,7 +1620,18 @@ contains
             Q1 = QL(2, LP1, ISP)
             Q2 = QL(3, LP1, ISP)
             if (Q0 >= 1.d-5) then
+               if (PL(LP1, ISP) /= PL(LP1, ISP)) then
+                  call g_logger%fatal('Invalid PL before NEWRHO RSEQSR: atom='//trim(atom%element%symbol)// &
+                                      ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(ISP)// &
+                                      ' PL=NaN Q0='//real2str(Q0), __FILE__, __LINE__)
+               end if
                KONFIG = PL(LP1, ISP)
+               if (KONFIG < LP1) then
+                  call g_logger%fatal('Invalid PL before NEWRHO RSEQSR: atom='//trim(atom%element%symbol)// &
+                                      ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(ISP)// &
+                                      ' PL='//real2str(PL(LP1, ISP))//' KONFIG='//int2str(KONFIG)// &
+                                      ' NN='//int2str(KONFIG - LP1)//' Q0='//real2str(Q0), __FILE__, __LINE__)
+               end if
                DL = TAN(PI*(0.5d0 - PL(LP1, ISP)))
                NN = KONFIG - LP1
                IVAL = IVAL + 1
@@ -2918,7 +2942,7 @@ contains
       !real(rp), dimension(500), intent(in) :: ROFI
       !
       !.. Local Scalars ..
-      integer :: IDW, II, INUM, INUM1, IR, IR1, ISI, IUP, JM, JP, NSP
+      integer :: IDW, II, INUM, INUM1, IR, IR1, ISI, IUP, JM, JP, LMAX, NSP
       real(rp) :: C2, DRDI, FAK2, FAK4, S12, SUM, SUM1, SUM2, WGT
       !
       !.. Local Arrays ..
@@ -2934,7 +2958,9 @@ contains
       ! open (15, FILE = "dracsi")
       NR = size(ROFI)
       B = atom%B()
+      LMAX = atom%potential%lmax
       NSP = 2
+      QSL(:) = 0.0_rp
       C2 = 274.074d0**2
       allocate (DVDR(NR, 2), DVM(NR, 2), DVP(NR, 2))
       !     interpolate the derivatives
@@ -2952,7 +2978,7 @@ contains
       !-- calculates QSRD(IT, 1) and QSRD(IT, 2), prefactors qssi for L.S (SPIN UP)
       !-- calculates QSRD(IT, 4) and QSRD(IT, 5), prefactors qssi for L.S (SPIN DW)
       !---QSRD(IT, 1or4) for p-band and QSRD(IT, 2or5) for d-band-------------------
-      do INUM = 2, 3
+      do INUM = 2, min(3, LMAX + 1)
          do ISI = 1, NSP
             SUM = 0.0d0
             do IR = 2, NR
@@ -2974,60 +3000,68 @@ contains
          end do
       end do
       !----CALCULATES RACAH COEF QSR(IT, 3)-(spin up) and QSRD(IT, 4)-(spin-down)
-      do ISI = 1, NSP
-         do INUM = 2, 4, 2
-            INUM1 = INUM + 1
-            SUM = 0.0d0
-            do IR = 2, NR
-               SUM1 = 0.0d0
-               !---------first part of integral
-               do IR1 = 2, IR
-                  WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
-                  if (IR1 == 1 .or. IR1 == IR) then
+      if (LMAX >= 2) then
+         do ISI = 1, NSP
+            FAK2 = 0.0d0
+            FAK4 = 0.0d0
+            do INUM = 2, 4, 2
+               INUM1 = INUM + 1
+               SUM = 0.0d0
+               do IR = 2, NR
+                  SUM1 = 0.0d0
+                  !---------first part of integral
+                  do IR1 = 2, IR
+                     WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
+                     if (IR1 == 1 .or. IR1 == IR) then
+                        WGT = 1.0d0/3.0d0
+                     end if
+                     DRDI = atom%A*(ROFI(IR1) + B)
+                     SUM1 = SUM1 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR1)**INUM)/(ROFI(IR)**INUM1)
+                  end do
+                  !-----------second part of integral
+                  SUM2 = 0.0d0
+                  do IR1 = IR, NR
+                     WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
+                     if (IR1 == IR .or. IR1 == NR) then
+                        WGT = 1.0d0/3.0d0
+                     end if
+                     DRDI = atom%A*(ROFI(IR1) + B)
+                     SUM2 = SUM2 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR)**INUM)/(ROFI(IR1)**INUM1)
+                  end do
+                  !-----------------------------------------
+                  S12 = SUM1 + SUM2
+                  WGT = 2*(MOD(IR + 1, 2) + 1)/3.0d0
+                  if (IR == 1 .or. IR == NR) then
                      WGT = 1.0d0/3.0d0
                   end if
-                  DRDI = atom%A*(ROFI(IR1) + B)
-                  SUM1 = SUM1 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR1)**INUM)/(ROFI(IR)**INUM1)
+                  DRDI = atom%A*(ROFI(IR) + B)
+                  SUM = SUM + WGT*DRDI*S12*this%FUN2(IR, 3, ISI)
                end do
-               !-----------second part of integral
-               SUM2 = 0.0d0
-               do IR1 = IR, NR
-                  WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
-                  if (IR1 == IR .or. IR1 == NR) then
-                     WGT = 1.0d0/3.0d0
-                  end if
-                  DRDI = atom%A*(ROFI(IR1) + B)
-                  SUM2 = SUM2 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR)**INUM)/(ROFI(IR1)**INUM1)
-               end do
-               !-----------------------------------------
-               S12 = SUM1 + SUM2
-               WGT = 2*(MOD(IR + 1, 2) + 1)/3.0d0
-               if (IR == 1 .or. IR == NR) then
-                  WGT = 1.0d0/3.0d0
+               if (INUM == 2) then
+                  FAK2 = SUM/49.d0
+               else
+                  FAK4 = SUM/441.d0
                end if
-               DRDI = atom%A*(ROFI(IR) + B)
-               SUM = SUM + WGT*DRDI*S12*this%FUN2(IR, 3, ISI)
             end do
-            if (INUM == 2) then
-               FAK2 = SUM/49.d0
-               FAK4 = 0.0d0
-            else
-               FAK4 = SUM/441.d0
-            end if
             if (ISI == 1) then
                QSL(3) = 2.d0*(FAK2 - 5*FAK4)
             else
                QSL(6) = 2.d0*(FAK2 - 5*FAK4)
             end if
          end do
-         if (.not. this%fix_soc) then
-            atom%potential%xi_p(:) = [qsl(1), qsl(4)]
+      end if
+      if (.not. this%fix_soc) then
+         atom%potential%xi_p(:) = [qsl(1), qsl(4)]
+         if (LMAX >= 2) then
             atom%potential%xi_d(:) = [qsl(2), qsl(5)]
             atom%potential%rac(:) = [qsl(3), qsl(6)]
+         else
+            atom%potential%xi_d(:) = 0.0_rp
+            atom%potential%rac(:) = 0.0_rp
          end if
-         ! WRITE(17, 56)FAK2, FAK4
-         ! WRITE(17, *)RCH
-      end do
+      end if
+      ! WRITE(17, 56)FAK2, FAK4
+      ! WRITE(17, *)RCH
       !write (15, 10000) QSL(1), QSL(2), QSL(3)
       !write (15, 10000) QSL(4), QSL(5), QSL(6)
       return
@@ -3094,7 +3128,18 @@ contains
       allocate (G(NR, NSP), GP(NR, NSP), GPP(NR, NSP))
       do I = 1, nsp
          do L = 0, lmax
+            if (atom%potential%PNU(L, I) /= atom%potential%PNU(L, I)) then
+               call g_logger%fatal('Invalid PNU before POTPAR RSEQSR: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(I)// &
+                                   ' PNU=NaN', __FILE__, __LINE__)
+            end if
             KONFIG(L) = int(atom%potential%PNU(L, I))
+            if (KONFIG(L) < L + 1) then
+               call g_logger%fatal('Invalid PNU before POTPAR RSEQSR: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(I)// &
+                                   ' PNU='//real2str(atom%potential%PNU(L, I))//' KONFIG='//int2str(KONFIG(L))// &
+                                   ' NN='//int2str(KONFIG(L) - L - 1), __FILE__, __LINE__)
+            end if
             DNU(L) = TAN(PI*(0.5d0 - atom%potential%PNU(L, I)))
          end do
          !   write (6, 10000) (PNU(L, I), L = 0, LMAX)
