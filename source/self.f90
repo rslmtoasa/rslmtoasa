@@ -792,22 +792,25 @@ contains
          do ia = 1, this%lattice%nrec
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         ! if (rank == 0) call g_logger%info('Potential built for step '//int2str(iter), __FILE__, __LINE__)
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
+         ! if (rank == 0) call g_logger%info('Bulk Hamiltonian built for step '//int2str(iter), __FILE__, __LINE__)
       case ('S')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
       case ('I')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
          call this%hamiltonian%build_locham()
       end select
+      ! if (rank == 0) call g_logger%info('Hamiltonian mounted for step '//int2str(iter), __FILE__, __LINE__)
    
       select case (this%control%recur)
       case ('lanczos')

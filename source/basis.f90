@@ -75,6 +75,7 @@ contains
    !> @param[in] bdg    (optional) Enable Nambu/BdG mode (default .false.)
    !---------------------------------------------------------------------------
    subroutine basis_init(lmax, bdg)
+      use mpi_mod
       integer, intent(in) :: lmax
       logical, intent(in), optional :: bdg
 
@@ -100,12 +101,14 @@ contains
          bdg_mode = .false.
       end if
 
-      call g_logger%info('Basis initialised: lmax=' // int2str(lmax_basis) // &
-         ' (' // basis_label(lmax_basis) // ')' // &
-         '  norb=' // int2str(norb) // &
-         '  nb=' // int2str(nb) // &
-         '  spin_off=' // int2str(spin_off) // &
-         '  bdg=' // merge('T', 'F', bdg_mode), __FILE__, __LINE__)
+      if (rank==0) then
+         call g_logger%info('Basis initialised: lmax=' // int2str(lmax_basis) // &
+            ' (' // basis_label(lmax_basis) // ')' // &
+            '  norb=' // int2str(norb) // &
+            '  nb=' // int2str(nb) // &
+            '  spin_off=' // int2str(spin_off) // &
+            '  bdg=' // merge('T', 'F', bdg_mode), __FILE__, __LINE__)
+      end if
 
    end subroutine basis_init
 

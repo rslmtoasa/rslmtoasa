@@ -1166,6 +1166,7 @@ contains
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          !write(123, *)´bulkham´
+         ! call g_logger%info('Building Hamiltonian for atom type '//fmt('i5', ntype)//' with '//fmt('i5', nr)//' neighbours', __FILE__, __LINE__)
          call this%chbar_nc(ia, nr, ino, ntype)
          do m = 1, nr
             do i = 1, norb

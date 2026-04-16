@@ -2140,9 +2140,6 @@ contains
       real(rp) :: t_remd_start, t_remd_end, t_nm_store_start, t_nm_store_end
       real(rp) :: t_outmap_start, t_outmap_end, t_str_stage_end
 
-      call cpu_time(t_structb_start)
-      call g_logger%info('STRUCTB start: opening map/sbar outputs and preparing cluster stage', __FILE__, __LINE__)
-
       ! Open files
       open (12, file='map', form='unformatted')
       open (13, file="sbar", FORM="unformatted")
@@ -2152,10 +2149,6 @@ contains
          open (15, file="view.sdot")
       end if
       open (17, file='str.out')
-
-      call cpu_time(t_cluster_ready)
-      call g_logger%info('STRUCTB cluster construction complete: clust already available; setup cpu_s='// &
-                         fmt('f12.6', t_cluster_ready - t_structb_start), __FILE__, __LINE__)
 
       ! Clust parameters
       ncut = 9
@@ -2172,15 +2165,8 @@ contains
       write (17, 10000) kk
       write (17, 10001)
       write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
-      write (*, '(a,10f10.4)') 'NNCAL ct=', this%ct(1:min(this%ntype, size(this%ct)))
-      call cpu_time(t_nnmap_start)
-      call g_logger%info('STRUCTB neighbor map start: nncal', __FILE__, __LINE__)
+      ! write (*, '(a,10f10.4)') 'NNCAL ct=', this%ct(1:min(this%ntype, size(this%ct)))
       call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
-      call cpu_time(t_nnmap_end)
-      call g_logger%info('STRUCTB neighbor map end: nncal cpu_s='//fmt('f12.6', t_nnmap_end - t_nnmap_start), __FILE__, __LINE__)
-      do ii = 1, min(this%ntot, 8)
-         write (*, '(a,i5,a,i5)') 'NNCAL pre-remd atom=', ii, ' count=', nn(ii, 1)
-      end do
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.nn', this%nn, (/this%kk, nm + 1/))
@@ -2192,17 +2178,8 @@ contains
       end do
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
-      call cpu_time(t_remd_start)
-      call g_logger%info('STRUCTB neighbor reorder start: remd', __FILE__, __LINE__)
       call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
-      call cpu_time(t_remd_end)
-      call g_logger%info('STRUCTB neighbor reorder end: remd cpu_s='//fmt('f12.6', t_remd_end - t_remd_start), __FILE__, __LINE__)
-      do ii = 1, min(this%ntot, 8)
-         write (*, '(a,i5,a,i5)') 'NNCAL post-remd atom=', ii, ' count=', this%nn(ii, 1)
-      end do
       nm_store = max(1, maxval(this%nn(:, 1)))
-      call cpu_time(t_nm_store_start)
-      call g_logger%info('STRUCTB local cluster sizing start: clusba prepass', __FILE__, __LINE__)
       do ii = 1, this%ntot
          ia = this%iu(ii)
          if (ia <= 0) cycle
@@ -2210,9 +2187,6 @@ contains
          call this%clusba(this%r2, this%cr*this%alat, ia, kk, kk, nt_tmp)
          nm_store = max(nm_store, nt_tmp)
       end do
-      call cpu_time(t_nm_store_end)
-      call g_logger%info('STRUCTB local cluster sizing end: clusba prepass cpu_s='//fmt('f12.6', t_nm_store_end - t_nm_store_start)// &
-                         ' nm_store='//fmt('I0', nm_store), __FILE__, __LINE__)
       sbar_dim = max(norb, this%control%npold)
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/sbar_dim, sbar_dim, nm_store, this%ntot/))
@@ -2221,16 +2195,11 @@ contains
 #endif
       call this%init_strux_storage(sbar_dim, nm_store)
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
-      call cpu_time(t_outmap_start)
-      call g_logger%info('STRUCTB outmap start', __FILE__, __LINE__)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
-      call cpu_time(t_outmap_end)
-      call g_logger%info('STRUCTB outmap end cpu_s='//fmt('f12.6', t_outmap_end - t_outmap_start), __FILE__, __LINE__)
       write (17, 10003) kk, nm
       flush(17)
       if (do_str) then
-         print *,' AB: Calculating structure constants...', this%strux_backend
-         call g_logger%info('STRUCTB structure-constants stage start backend='//trim(this%strux_backend), __FILE__, __LINE__)
+         if (rank==0) call g_logger%info('STRUCTB structure-constants, backend='//trim(this%strux_backend), __FILE__, __LINE__)
          if (trim(lower(this%strux_backend)) == 'strux_lib') then
             call this%structb_strux()
          else
@@ -2241,10 +2210,6 @@ contains
                call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, norb, nr, ii)
             end do
          end if
-         call cpu_time(t_str_stage_end)
-         call g_logger%info('STRUCTB structure-constants stage end cpu_s='// &
-                            fmt('f12.6', t_str_stage_end - t_outmap_end)//' total_cpu_s='// &
-                            fmt('f12.6', t_str_stage_end - t_structb_start), __FILE__, __LINE__)
       end if
 10000 format(i5)
 10001 format(" LATTICE COORDINATES")
@@ -2476,14 +2441,7 @@ contains
       allocate(lmxb(nspec), rmt(nspec))
       allocate(alpha_in(0:nl - 1, nspec), hcr(nl, nspec))
       lmxb(:) = this%control%lmax
-      call cpu_time(t_inputs_start)
-      call g_logger%info('STRUCTB STRUX input build start', __FILE__, __LINE__)
       call this%build_strux_inputs(nspec, nl, species_labels(1:nspec), alpha_in, hcr, rmt)
-      call cpu_time(t_inputs_end)
-      call g_logger%info('STRUCTB STRUX input build end cpu_s='//fmt('f12.6', t_inputs_end - t_inputs_start)// &
-                         ' nbas='//fmt('I0', nbas)//' nspec='//fmt('I0', nspec), __FILE__, __LINE__)
-
-      write (*, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX periodic solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
       write (17, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX periodic solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
 
       if (trim(lower(this%screening)) == 'manual' .or. trim(lower(this%screening)) == 'default') then
@@ -2498,8 +2456,6 @@ contains
       if (allocated(result%s)) deallocate(result%s)
       if (allocated(result%sdot)) deallocate(result%sdot)
 
-      call cpu_time(t_total_start)
-      call g_logger%info('STRUCTB STRUX compute start screening='//trim(lower(this%screening)), __FILE__, __LINE__)
       select case (trim(lower(this%screening)))
       case ('manual', 'default')
          call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, alpha_in=alpha_in)
@@ -2528,22 +2484,14 @@ contains
                alpha_debug(1:min(nl, 4)) = result%alpha_l(0:min(nl - 1, 3), is)
             end if
          end select
-         write (*, '(a, a, a, i4, a, i6, a, 4f12.6)') 'STRUX screening=', trim(lower(this%screening)), &
-            ' species=', is, ' label=', species_labels(is), ' alpha=', alpha_debug
          write (17, '(a, a, a, i4, a, i6, a, 4f12.6)') 'STRUX screening=', trim(lower(this%screening)), &
             ' species=', is, ' label=', species_labels(is), ' alpha=', alpha_debug
       end do
       flush(17)
-      call cpu_time(t_total_end)
-      call g_logger%info('STRUCTB STRUX compute end cpu_s='//fmt('f12.6', t_total_end - t_total_start)// &
-                         ' nttab='//fmt('I0', result%nttab), __FILE__, __LINE__)
 
       nttab = result%nttab
-      write (*, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
       write (17, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
 
-      call cpu_time(t_store_start)
-      call g_logger%info('STRUCTB STRUX alpha/sbar staging start', __FILE__, __LINE__)
       do ii = 1, this%ntot
          this%alpha(:, :, ii) = 0.0_rp
          this%alpha_dot(:, :, ii) = 0.0_rp
@@ -2578,17 +2526,12 @@ contains
             end if
          end select
       end do
-      call cpu_time(t_store_end)
-      call g_logger%info('STRUCTB STRUX alpha/sbar staging end cpu_s='//fmt('f12.6', t_store_end - t_store_start), __FILE__, __LINE__)
-
-      call g_logger%info('STRUCTB STRUX remap/write stage start ntot='//fmt('I0', this%ntot), __FILE__, __LINE__)
       do ii = 1, this%ntot
          ia = representative_atom_index(this, ii)
          ib = this%num(ia)
          nt_store = this%kk
          call this%clusba(this%r2, cralat, ia, this%kk, this%kk, nt_store)
          call cpu_time(t_map_start)
-         write (*, '(a, i5, a, i5, a, i5, a, i6)') 'STRUX map   center ', ii, ' atom ', ia, ' basis=', ib, ' nt=', nt_store
          write (17, '(a, i5, a, i5, a, i5, a, i6)') 'STRUX map   center ', ii, ' atom ', ia, ' basis=', ib, ' nt=', nt_store
          call write_neighbor_vector_dump(17, this%sbarvec, nt_store)
 
@@ -2606,7 +2549,6 @@ contains
             vec_target(:) = this%sbarvec(:, m)
             pair_idx = find_pair_by_vector(nttab, result%iax, this%a, pos, this%alat, ib, jb, vec_target, match_tol)
             if (pair_idx == 0) then
-               write (*, '(a,3f14.8,a,2i6,a,2i6)') 'STRUX pair miss vec=', vec_target, ' center/neigh=', ia, ja, ' basis=', ib, jb
                write (17, '(a,3f14.8,a,2i6,a,2i6)') 'STRUX pair miss vec=', vec_target, ' center/neigh=', ia, ja, ' basis=', ib, jb
                call g_logger%fatal('Failed to map strux periodic pair to nn ordering', __FILE__, __LINE__)
             end if
@@ -2624,13 +2566,9 @@ contains
             call write_strux_block(this, nl2, m, ii, ja)
          end do
          call cpu_time(t_map_end)
-         write (*, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
          write (17, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
          flush(17)
       end do
-      call cpu_time(t_remap_end)
-      call g_logger%info('STRUCTB STRUX remap/write stage end cpu_s='//fmt('f12.6', t_remap_end - t_store_end)// &
-                         ' full_strux_path_cpu_s='//fmt('f12.6', t_remap_end - t_total_start), __FILE__, __LINE__)
 
       if (allocated(alpha_l_out)) deallocate(alpha_l_out)
       if (allocated(tral)) deallocate(tral)
@@ -2645,8 +2583,8 @@ contains
       integer, intent(in) :: nl2, m, ii, iclus
       integer :: is, js
 
-      write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus, &
-         this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
+      ! write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus, &
+      !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
       write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus
       if (this%strux_want_sdot) then
          write (15, '(" VECTOR=",3f12.6,"   ICLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus
@@ -3092,8 +3030,8 @@ contains
                if (this%nn(ia, m) > 0) iclus_dbg = this%nn(ia, m)
             end if
          end if
-         write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus_dbg, &
-            this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
+         ! write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus_dbg, &
+         !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
       end do
       flush(17)
 
@@ -4031,12 +3969,23 @@ contains
       ! External function
       integer, external :: NGBR
       ! Intrinsic function
-      intrinsic ABS, MAX
+      intrinsic ABS, MAX, MIN, FLOOR, NINT
       ! Local variables
       integer :: I, IADD, ID, II, IIP, ILJ, J, JJP, L, NNMAX
-      real(rp) :: R2
+      integer :: NX, NY, NZ, NBIN, BX, BY, BZ, DBX, DBY, DBZ, BIN_ID
+      integer :: CAP, CAND_COUNT, K, IX, IY, IZ, RX, RY, RZ
+      real(rp) :: R2, RCUT, RCUT2, DETC
       real(rp), dimension(3) :: DDUM
+      real(rp), dimension(3) :: MINC, MAXC, SPAN, BINW, DS
+      real(rp), dimension(3, 3) :: CELL, CELL_INV
+      real(rp), dimension(3, 2) :: CROSS_TMP
       real(rp), dimension(NM) :: DUM
+      real(rp), allocatable :: FRAC(:, :)
+      integer, allocatable :: HEAD(:), NEXT_ATOM(:), BIN_X(:), BIN_Y(:), BIN_Z(:), CANDIDATES(:)
+
+      CAP = NM
+      NN(:, :) = 0
+      NN(:, 1) = 1
 
       NNMAX = 0
       IADD = 1
@@ -4057,54 +4006,246 @@ contains
 1000  if (II <= 1) then
          II = 2
       end if
-      do I = II, NAT
-         if (IZP(I)*IADD <= 0) then
-            NN(I, 1) = 1
-            IIP = IZP(I)
-            IIP = ABS(IIP)
-            ILJ = I - 1
-            do J = 1, ILJ
-               JJP = IZP(J)
-               JJP = ABS(JJP)
-               R2 = 0.0
-               if (this%pbc) then
-                  call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
-                  r2 = sum(ddum(:)**2)
-               else        
-                  do L = 1, 3
-                     DDUM(L) = CRD(L, I) - CRD(L, J)
-                     R2 = R2 + DDUM(L)*DDUM(L)
+
+      RCUT = CT(1)
+      RCUT2 = RCUT*RCUT
+      if (RCUT2 <= 0.0_rp) then
+         NM = 0
+         return
+      end if
+
+      if (this%pbc .and. this%b1 .and. this%b2 .and. this%b3) then
+         CELL(:, 1) = real(this%n1, rp)*this%a(:, 1)*this%alat
+         CELL(:, 2) = real(this%n2, rp)*this%a(:, 2)*this%alat
+         CELL(:, 3) = real(this%n3, rp)*this%a(:, 3)*this%alat
+         CELL_INV = inverse_3x3(CELL)
+         DETC = abs(determinant(CELL))
+
+         CROSS_TMP(:, 1) = [ &
+            CELL(2, 2)*CELL(3, 3) - CELL(3, 2)*CELL(2, 3), &
+            CELL(3, 2)*CELL(1, 3) - CELL(1, 2)*CELL(3, 3), &
+            CELL(1, 2)*CELL(2, 3) - CELL(2, 2)*CELL(1, 3) ]
+         CROSS_TMP(:, 2) = [ &
+            CELL(2, 3)*CELL(3, 1) - CELL(3, 3)*CELL(2, 1), &
+            CELL(3, 3)*CELL(1, 1) - CELL(1, 3)*CELL(3, 1), &
+            CELL(1, 3)*CELL(2, 1) - CELL(2, 3)*CELL(1, 1) ]
+         DDUM = [ &
+            CELL(2, 1)*CELL(3, 2) - CELL(3, 1)*CELL(2, 2), &
+            CELL(3, 1)*CELL(1, 2) - CELL(1, 1)*CELL(3, 2), &
+            CELL(1, 1)*CELL(2, 2) - CELL(2, 1)*CELL(1, 2) ]
+
+         SPAN(1) = DETC/max(sqrt(sum(CROSS_TMP(:, 1)**2)), tiny(1.0_rp))
+         SPAN(2) = DETC/max(sqrt(sum(CROSS_TMP(:, 2)**2)), tiny(1.0_rp))
+         SPAN(3) = DETC/max(sqrt(sum(DDUM(:)**2)), tiny(1.0_rp))
+         NX = max(1, int(SPAN(1)/RCUT))
+         NY = max(1, int(SPAN(2)/RCUT))
+         NZ = max(1, int(SPAN(3)/RCUT))
+         NBIN = NX*NY*NZ
+
+         allocate(FRAC(3, NAT), HEAD(NBIN), NEXT_ATOM(NAT), BIN_X(NAT), BIN_Y(NAT), BIN_Z(NAT), CANDIDATES(NAT))
+         HEAD = 0
+         NEXT_ATOM = 0
+         do I = 1, NAT
+            FRAC(:, I) = matmul(CELL_INV, CRD(:, I))
+            do L = 1, 3
+               FRAC(L, I) = FRAC(L, I) - floor(FRAC(L, I))
+            end do
+            BIN_X(I) = 1 + min(NX - 1, int(FRAC(1, I)*NX))
+            BIN_Y(I) = 1 + min(NY - 1, int(FRAC(2, I)*NY))
+            BIN_Z(I) = 1 + min(NZ - 1, int(FRAC(3, I)*NZ))
+            BIN_ID = ((BIN_Z(I) - 1)*NY + (BIN_Y(I) - 1))*NX + BIN_X(I)
+            NEXT_ATOM(I) = HEAD(BIN_ID)
+            HEAD(BIN_ID) = I
+         end do
+
+         do I = II, NAT
+            if (IZP(I)*IADD > 0) cycle
+            CAND_COUNT = 0
+            BX = BIN_X(I); BY = BIN_Y(I); BZ = BIN_Z(I)
+            RX = merge(1, 0, NX > 1)
+            RY = merge(1, 0, NY > 1)
+            RZ = merge(1, 0, NZ > 1)
+            do DBZ = -RZ, RZ
+               IZ = modulo(BZ - 1 + DBZ, NZ) + 1
+               do DBY = -RY, RY
+                  IY = modulo(BY - 1 + DBY, NY) + 1
+                  do DBX = -RX, RX
+                     IX = modulo(BX - 1 + DBX, NX) + 1
+                     BIN_ID = ((IZ - 1)*NY + (IY - 1))*NX + IX
+                     J = HEAD(BIN_ID)
+                     do while (J > 0)
+                        if (J < I) then
+                           DS(:) = FRAC(:, J) - FRAC(:, I)
+                           DS(:) = DS(:) - real(nint(DS(:)), rp)
+                           DDUM(:) = matmul(CELL, DS)
+                           R2 = dot_product(DDUM, DDUM)
+                           if (R2 < RCUT2) then
+                              CAND_COUNT = CAND_COUNT + 1
+                              CANDIDATES(CAND_COUNT) = J
+                           end if
+                        end if
+                        J = NEXT_ATOM(J)
+                     end do
                   end do
-               end if
-               ID = NGBR(IIP, JJP, R2, DUM, CT)
-               !       if (ID /= 0 .and. ( IZP(I) > NTOT  .or. IZP(J) > NTOT) ) then
-               if (ID /= 0) then
-                  ID = NN(I, 1) + 1
-                  NN(I, 1) = ID
-                  !         NN(I, ID) = IZP(J)
-                  NN(I, ID) = J
-                  NNMAX = MAX(NNMAX, ID)
-                  ID = NN(J, 1) + 1
-                  NN(J, 1) = ID
-                  !         NN(J, ID) = IZP(I)
-                  NN(J, ID) = I
-                  NNMAX = MAX(NNMAX, ID)
-                  if (NNMAX > NM) then
-                     write (6, 10001)
-                     write (6, 10002) I
-                     write (6, *) NNMAX, ID, NM
-                     stop
-                  end if
+               end do
+            end do
+
+            call sort_integer_list(CANDIDATES, CAND_COUNT)
+            do K = 1, CAND_COUNT
+               J = CANDIDATES(K)
+               ID = NN(I, 1) + 1
+               NN(I, 1) = ID
+               NN(I, ID) = J
+               NNMAX = MAX(NNMAX, ID)
+               ID = NN(J, 1) + 1
+               NN(J, 1) = ID
+               NN(J, ID) = I
+               NNMAX = MAX(NNMAX, ID)
+               if (NNMAX > CAP) then
+                  write (6, '(" TOO MANY NEIGHBOURS")')
+                  write (6, '(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")') I
+                  write (6, *) NNMAX, ID, CAP
+                  stop
                end if
             end do
-         end if
-      end do
+         end do
+
+         deallocate(FRAC, HEAD, NEXT_ATOM, BIN_X, BIN_Y, BIN_Z, CANDIDATES)
+      else if (.not. this%pbc) then
+         do L = 1, 3
+            MINC(L) = minval(CRD(L, 1:NAT))
+            MAXC(L) = maxval(CRD(L, 1:NAT))
+            SPAN(L) = max(MAXC(L) - MINC(L), RCUT)
+         end do
+         NX = max(1, int(SPAN(1)/RCUT))
+         NY = max(1, int(SPAN(2)/RCUT))
+         NZ = max(1, int(SPAN(3)/RCUT))
+         BINW(1) = SPAN(1)/real(NX, rp)
+         BINW(2) = SPAN(2)/real(NY, rp)
+         BINW(3) = SPAN(3)/real(NZ, rp)
+         NBIN = NX*NY*NZ
+
+         allocate(HEAD(NBIN), NEXT_ATOM(NAT), BIN_X(NAT), BIN_Y(NAT), BIN_Z(NAT), CANDIDATES(NAT))
+         HEAD = 0
+         NEXT_ATOM = 0
+         do I = 1, NAT
+            BIN_X(I) = 1 + min(NX - 1, int((CRD(1, I) - MINC(1))/BINW(1)))
+            BIN_Y(I) = 1 + min(NY - 1, int((CRD(2, I) - MINC(2))/BINW(2)))
+            BIN_Z(I) = 1 + min(NZ - 1, int((CRD(3, I) - MINC(3))/BINW(3)))
+            BIN_ID = ((BIN_Z(I) - 1)*NY + (BIN_Y(I) - 1))*NX + BIN_X(I)
+            NEXT_ATOM(I) = HEAD(BIN_ID)
+            HEAD(BIN_ID) = I
+         end do
+
+         do I = II, NAT
+            if (IZP(I)*IADD > 0) cycle
+            CAND_COUNT = 0
+            BX = BIN_X(I); BY = BIN_Y(I); BZ = BIN_Z(I)
+            do DBZ = max(-1, 1 - BZ), min(1, NZ - BZ)
+               IZ = BZ + DBZ
+               do DBY = max(-1, 1 - BY), min(1, NY - BY)
+                  IY = BY + DBY
+                  do DBX = max(-1, 1 - BX), min(1, NX - BX)
+                     IX = BX + DBX
+                     BIN_ID = ((IZ - 1)*NY + (IY - 1))*NX + IX
+                     J = HEAD(BIN_ID)
+                     do while (J > 0)
+                        if (J < I) then
+                           DDUM(:) = CRD(:, J) - CRD(:, I)
+                           R2 = dot_product(DDUM, DDUM)
+                           if (R2 < RCUT2) then
+                              CAND_COUNT = CAND_COUNT + 1
+                              CANDIDATES(CAND_COUNT) = J
+                           end if
+                        end if
+                        J = NEXT_ATOM(J)
+                     end do
+                  end do
+               end do
+            end do
+
+            call sort_integer_list(CANDIDATES, CAND_COUNT)
+            do K = 1, CAND_COUNT
+               J = CANDIDATES(K)
+               ID = NN(I, 1) + 1
+               NN(I, 1) = ID
+               NN(I, ID) = J
+               NNMAX = MAX(NNMAX, ID)
+               ID = NN(J, 1) + 1
+               NN(J, 1) = ID
+               NN(J, ID) = I
+               NNMAX = MAX(NNMAX, ID)
+               if (NNMAX > CAP) then
+                  write (6, '(" TOO MANY NEIGHBOURS")')
+                  write (6, '(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")') I
+                  write (6, *) NNMAX, ID, CAP
+                  stop
+               end if
+            end do
+         end do
+
+         deallocate(HEAD, NEXT_ATOM, BIN_X, BIN_Y, BIN_Z, CANDIDATES)
+      else
+         do I = II, NAT
+            if (IZP(I)*IADD <= 0) then
+               NN(I, 1) = 1
+               IIP = IZP(I)
+               IIP = ABS(IIP)
+               ILJ = I - 1
+               do J = 1, ILJ
+                  JJP = IZP(J)
+                  JJP = ABS(JJP)
+                  R2 = 0.0
+                  if (this%pbc) then
+                     call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
+                     r2 = sum(ddum(:)**2)
+                  else        
+                     do L = 1, 3
+                        DDUM(L) = CRD(L, I) - CRD(L, J)
+                        R2 = R2 + DDUM(L)*DDUM(L)
+                     end do
+                  end if
+                  ID = NGBR(IIP, JJP, R2, DUM, CT)
+                  if (ID /= 0) then
+                     ID = NN(I, 1) + 1
+                     NN(I, 1) = ID
+                     NN(I, ID) = J
+                     NNMAX = MAX(NNMAX, ID)
+                     ID = NN(J, 1) + 1
+                     NN(J, 1) = ID
+                     NN(J, ID) = I
+                     NNMAX = MAX(NNMAX, ID)
+                     if (NNMAX > NM) then
+                        write (6, '(" TOO MANY NEIGHBOURS")')
+                        write (6, '(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")') I
+                        write (6, *) NNMAX, ID, NM
+                        stop
+                     end if
+                  end if
+               end do
+            end if
+         end do
+      end if
       nm = nnmax
       return
 
-10000 format("FROM NNCAL ")
-10001 format(" TOO MANY NEIGHBOURS")
-10002 format(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")
+contains
+
+      subroutine sort_integer_list(list, n)
+         integer, intent(inout) :: list(:)
+         integer, intent(in) :: n
+         integer :: a, b, value
+
+         do a = 2, n
+            value = list(a)
+            b = a - 1
+            do while (b >= 1 .and. list(b) > value)
+               list(b + 1) = list(b)
+               b = b - 1
+            end do
+            list(b + 1) = value
+         end do
+      end subroutine sort_integer_list
    end subroutine
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
