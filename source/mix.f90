@@ -174,6 +174,12 @@ contains
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close(funit)
+      ! PATCH_MIX_NML_FIX:
+      ! Persist parsed namelist values back to object state.
+      ! Without this, this%mixtype keeps restore_to_default() value ('linear').
+      this%var = var
+      this%mixtype = trim(mixtype)
+      this%beta = beta
       if (allocated(magbeta)) then
          call move_alloc(magbeta, this%magbeta)
       end if
