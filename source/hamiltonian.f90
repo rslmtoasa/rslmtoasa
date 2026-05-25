@@ -32,17 +32,13 @@ module hamiltonian_mod
    use string_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
-   use spectrum_bounds_mod, only: compute_spectrum_bounds, bounds, bounds_constructor
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private
-
-   type :: ArrayType
-      integer, allocatable :: val(:,:)
-   end type ArrayType
 
    !> Module´s main procedure
    type, public :: hamiltonian
@@ -52,8 +48,6 @@ module hamiltonian_mod
       class(lattice), pointer :: lattice
       !> Control
       class(control), pointer :: control
-   !> Bounds (OO wrapper from spectrum_bounds_mod)
-   class(bounds), pointer :: bounds
 
       !> Spin-orbit coupling Hamiltonian
       complex(rp), dimension(:, :, :), allocatable :: lsham
@@ -63,10 +57,10 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :, :), allocatable :: ee, eeo, eeoee
       !> Local Hamiltonian
       complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo
-      ! !> Hamiltonian built in chbar_nc (description to be improved)
-      ! complex(rp), dimension(:, :, :, :), allocatable :: hmag
-      ! !> Hamiltonian built in ham0m_nc (description to be improved
-      ! complex(rp), dimension(:, :, :), allocatable :: hhmag
+      !> Hamiltonian built in chbar_nc (description to be improved)
+      complex(rp), dimension(:, :, :, :), allocatable :: hmag, hxc
+      !> Hamiltonian built in ham0m_nc (description to be improved
+      complex(rp), dimension(:, :, :), allocatable :: hhmag
       !> Overlap Hamiltonian
       complex(rp), dimension(:, :, :), allocatable :: obarm
       !> Gravity center Hamiltonian
@@ -92,61 +86,9 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: velocity_scale
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
-      !> Spin-spiral wave vector q
-      real(rp), dimension(3) :: q_ss
-      !
-      !!! Testing Gershgorin bounds for later implementation
-      !!! !> Upper Gershgorin bound
-      !!! real(rp) :: g_max
-      !!! !> Lower Gershgorin bound
-      !!! real(rp) :: g_min
-
-      !> On-site potential for LDA+U+J correction
-      real(rp), dimension(:,:,:), allocatable :: hubbard_u_pot
-      real(rp), dimension(:,:,:,:), allocatable :: hubbard_v_pot
-   !> User-configurable spectrum bounds are now encapsulated in `bounds` object
-
-      !> New improved Hubbard parameters that should work for both bulk and impurity
-      real(rp), dimension(:,:), allocatable :: hubbard_u_general
-      real(rp), dimension(:,:), allocatable :: hubbard_j_general
-      logical :: hubbard_u_general_check = .False.
-
-      !> Hubbard parameters for LDA+U+J implementation
-      real(rp), dimension(:,:), allocatable :: hubbard_u
-      real(rp), dimension(:,:), allocatable :: hub_u_sort
-      real(rp), dimension(:,:), allocatable :: hubbard_j
-      real(rp), dimension(:,:), allocatable :: hub_j_sort
-      real(rp), dimension(:,:,:,:), allocatable :: hubbard_v ! (atom type 1, atom type 2, l1, l2) with l = 1,2,3,4 : s,p,d,f
-      !> Orbitals for Hubbard U+J+V
-      character(len=10), dimension(:), allocatable :: uj_orb
-      !> Array that stores orbitals for +V correction
-      type(ArrayType), dimension(:,:), allocatable :: orbs_v ! (atom type 1, atom type 2, l1, l2) with l = 1,2,3,4 : s,p,d,f
-      !> Array that counts orbital pairs for +V correction
-      integer, dimension(:,:), allocatable :: orbs_v_num 
-      !> Slater integral array
-      real(rp), dimension(:,:,:), allocatable :: F
-      ! To be able to get the character 's', 'p', 'd', 'f' from element l+1 = 1,2,3,4 for printing purposes
-      character(len=1), dimension(4) :: orb_conv 
-      !> Logical variables to include Hubbard U & J
-      logical :: hubbardU_check = .false.
-      logical :: hubbardJ_check = .false.
-      logical :: hubbardV_check = .false.
-      !> Logical variable to include self-consistent calculation of Hubbard U.
-      logical :: hubbardU_sc_check = .false.
-      !> Which atoms and orbitals to include self-consistent Hubbard U correction. (0 no correction. 1 include correction)
-      integer, dimension(:,:), allocatable :: hubbard_u_sc
-      !> Logical variable for including Hubbard correction U on impurities
-      logical :: hubbardU_impurity_check = .false.
-      !> Hubbard parameters for impurities
-      real(rp), dimension(:,:), allocatable :: hubbard_u_impurity, hubbard_j_impurity ! (impurity type, l) with l = 1,2,3,4 : s,p,d,f orbitals
-      !> Slater integral array for impurities
-      real(rp), dimension(:,:,:), allocatable :: F_impurity
-      !> On-site potential for LDA+U correction for impurities
-      real(rp), dimension(:,:,:), allocatable :: hubbard_pot_impurity
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
-      
       procedure :: build_locham
       procedure :: build_obarm
       procedure :: build_enim
@@ -160,7 +102,6 @@ module hamiltonian_mod
       procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
-      procedure :: rs2txt
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
@@ -168,16 +109,12 @@ module hamiltonian_mod
       procedure :: restore_to_default
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
-      procedure :: calculate_hubbard_u_potential_general
-      procedure :: compute_hamiltonian_bounds
       final     :: destructor
    end type hamiltonian
 
    interface hamiltonian
       procedure :: constructor
    end interface
-
-   
 
 contains
 
@@ -196,8 +133,6 @@ contains
       obj%charge => charge_obj
       obj%lattice => charge_obj%lattice
       obj%control => charge_obj%lattice%control
-      ! Construct bounds object and initialize defaults
-      obj%bounds => bounds_constructor()
 
       call obj%restore_to_default()
       call obj%build_from_file()
@@ -214,8 +149,8 @@ contains
       if (allocated(this%lsham)) call g_safe_alloc%deallocate('hamiltonian.lsham', this%lsham)
       if (allocated(this%tmat)) call g_safe_alloc%deallocate('hamiltonian.tmat', this%tmat)
       if (allocated(this%ee)) call g_safe_alloc%deallocate('hamiltonian.ee', this%ee)
-      !if (allocated(this%hmag)) call g_safe_alloc%deallocate('hamiltonian.hmag', this%hmag)
-      !if (allocated(this%hhmag)) call g_safe_alloc%deallocate('hamiltonian.hhmag', this%hhmag)
+      if (allocated(this%hmag)) call g_safe_alloc%deallocate('hamiltonian.hmag', this%hmag)
+      if (allocated(this%hhmag)) call g_safe_alloc%deallocate('hamiltonian.hhmag', this%hhmag)
       if (allocated(this%hall)) call g_safe_alloc%deallocate('hamiltonian.hall', this%hall)
       if (allocated(this%eeo)) call g_safe_alloc%deallocate('hamiltonian.eeo', this%eeo)
       if (allocated(this%eeoee)) call g_safe_alloc%deallocate('hamiltonian.eeoee', this%eeoee)
@@ -233,15 +168,15 @@ contains
       if (allocated(this%jlo_a)) call g_safe_alloc%deallocate('hamiltonian.jlo_a', this%jlo_a)
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
       if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
-      !if (associated(this%bounds)) call g_safe_alloc%deallocate('hamiltonian.bounds', this%bounds)
+      if (allocated(this%hxc)) call g_safe_alloc%deallocate('hamiltonian.hxc', this%hxc)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
       if (allocated(this%ee)) deallocate (this%ee)
       if (allocated(this%eeo)) deallocate (this%eeo)
       if (allocated(this%eeoee)) deallocate (this%eeoee)
-      ! if (allocated(this%hmag)) deallocate (this%hmag)
-      ! if (allocated(this%hhmag)) deallocate (this%hhmag)
+      if (allocated(this%hmag)) deallocate (this%hmag)
+      if (allocated(this%hhmag)) deallocate (this%hhmag)
       if (allocated(this%hall)) deallocate (this%hall)
       if (allocated(this%hallo)) deallocate (this%hallo)
       if (allocated(this%obarm)) deallocate (this%obarm)
@@ -257,25 +192,7 @@ contains
       if (allocated(this%jlo_a)) deallocate(this%jlo_a)
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
-      !if (associated(this%bounds)) deallocate(this%bounds)
-      if (allocated(this%hubbard_u)) deallocate (this%hubbard_u)
-      if (allocated(this%hubbard_j)) deallocate (this%hubbard_j)
-      if (allocated(this%hubbard_v)) deallocate (this%hubbard_v)
-      if (allocated(this%hub_u_sort)) deallocate (this%hub_u_sort)
-      if (allocated(this%hub_j_sort)) deallocate (this%hub_j_sort)
-      if (allocated(this%uj_orb)) deallocate (this%uj_orb)
-      if (allocated(this%orbs_v)) deallocate (this%orbs_v)
-      if (allocated(this%orbs_v_num)) deallocate (this%orbs_v_num)
-      if (allocated(this%F)) deallocate(this%F)
-      if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
-      if (allocated(this%hubbard_v_pot)) deallocate (this%hubbard_v_pot)
-      if (allocated(this%hubbard_u_sc)) deallocate (this%hubbard_u_sc)
-      if (allocated(this%hubbard_u_impurity)) deallocate (this%hubbard_u_impurity)
-      if (allocated(this%hubbard_j_impurity)) deallocate (this%hubbard_j_impurity)
-      if (allocated(this%F_impurity)) deallocate (this%F_impurity)
-      if (allocated(this%hubbard_pot_impurity)) deallocate (this%hubbard_pot_impurity)
-      if (allocated(this%hubbard_u_general)) deallocate (this%hubbard_u_general)
-      if (allocated(this%hubbard_j_general)) deallocate (this%hubbard_j_general)
+      if (allocated(this%hxc)) deallocate(this%hxc)
 #endif
    end subroutine destructor
 
@@ -284,28 +201,14 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Read parameters from input file
-   !> Edited to prompt Hubbard U+J correction by calculating Slater integrals,
-   !> check if Hubbard U and/or J should be in use and if there are incorrect input data, 
-   !> by Emil Beiersdorf and Viktor Frilén 17.07.2024
    !---------------------------------------------------------------------------
    subroutine build_from_file(this)
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, j, li, lj, k, max_orbs, length, cntr, na, l, ios
-      ! integer, dimension(this%lattice%nrec, this%lattice%nrec) :: orbs_v_num ! (atom1, atom2) = number of mutual orbs e.g. hubbard_v(1, 2, [p,d], [s,p]) -> orbs_v_num(1,2)=2
-      ! Logical variable to check if input data is good
-      logical :: implem_check = .true.
-      logical :: check
-      real(rp), dimension(:,:,:), allocatable :: array
-
+      integer :: iostatus, funit, i
 
       include 'include_codes/namelists/hamiltonian.f90'
-
-   ! Initialize namelist locals from object's defaults so missing keys
-   ! in the input file will preserve the object's restore_to_default values.
-      bounds_algorithm = this%bounds%algorithm
-      bounds_scaling = this%bounds%scaling
 
       hoh = this%hoh
       local_axis = this%local_axis
@@ -315,19 +218,6 @@ contains
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
-      q_ss = this%q_ss
-
-      call move_alloc(this%hubbard_u_sc, hubbard_u_sc)
-      call move_alloc(this%hubbard_u, hubbard_u)
-      call move_alloc(this%hubbard_j, hubbard_j)
-      call move_alloc(this%hubbard_v, hubbard_v) 
-      call move_alloc(this%uj_orb, uj_orb)
-
-      call move_alloc(this%hubbard_u_impurity, hubbard_u_impurity)
-      call move_alloc(this%hubbard_j_impurity, hubbard_j_impurity)
-
-      call move_alloc(this%hubbard_u_general, hubbard_u_general)
-      call move_alloc(this%hubbard_j_general, hubbard_j_general)
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -335,28 +225,6 @@ contains
          call g_logger%fatal('file '//trim(this%control%fname)//' not found', __FILE__, __LINE__)
       end if
 
-      !> Trick Ramon talked about
-      read (funit, nml=hamiltonian, iostat=iostatus)
-
-      max_orbs = 1
-      do i = 1, this%lattice%nrec   
-         max_orbs = max(max_orbs, len_trim(uj_orb(i)))
-      end do
-
-      
-      if (size(hubbard_u,2) .ne. max_orbs) then
-         deallocate(hubbard_u)
-         deallocate(hubbard_j)
-         deallocate(this%F)
-         allocate(hubbard_u(this%lattice%nrec, max_orbs))
-         allocate(hubbard_j(this%lattice%nrec, max_orbs))
-         allocate(this%F(this%lattice%nrec, 4, 4))
-         hubbard_u(:,:) = 0.0d0
-         hubbard_j(:,:) = 0.0d0
-         this%F(:,:,:) = 0.0d0
-      end if
-      
-      rewind (funit)
       read (funit, nml=hamiltonian, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
@@ -366,698 +234,14 @@ contains
 
       this%hoh = hoh
       this%local_axis = local_axis
-      this%q_ss = q_ss
       this%orb_pol = orb_pol
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
       this%js_alpha = js_alpha
-      ! Store namelist-provided bounds options
-      if (len_trim(bounds_algorithm) > 0) this%bounds%algorithm = bounds_algorithm
-      if (bounds_scaling > 0.0_rp) this%bounds%scaling = bounds_scaling
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
 
-      call move_alloc(hubbard_u_sc, this%hubbard_u_sc)
-      call move_alloc(hubbard_u, this%hubbard_u)
-      call move_alloc(hubbard_j, this%hubbard_j)
-      call move_alloc(hubbard_v, this%hubbard_v)
-      call move_alloc(uj_orb, this%uj_orb)
-      call move_alloc(hubbard_u_impurity, this%hubbard_u_impurity)
-      call move_alloc(hubbard_j_impurity, this%hubbard_j_impurity)
-
-      call move_alloc(hubbard_u_general, this%hubbard_u_general)
-      call move_alloc(hubbard_j_general, this%hubbard_j_general)
-
-      ! New check to see if Hubbard U correction should be initiated
-      ! This general check is the only check that is needed for the +U in bulk and impurity. 
-      ! It is not yet compatible with the +V implementation. Thus the other checks have not 
-      ! been removed yet.
-      do na = 1, this%lattice%ntype
-         do l = 1, 3
-            if (abs(this%hubbard_u_general(na, l)) > 1e-8) then
-               this%hubbard_u_general_check = .true.
-            end if
-         end do
-      end do
-      if ( this%hubbard_u_general_check ) then
-         print *, '----------------------------------------------------------------------------------------'
-         print *, 'Hubbard U correction initiated'
-         print *, '----------------------------------------------------------------------------------------'
-      end if
-      
-      
-      ! Checks if Hubbard U correction for impurity should be initiated (check for j also??)
-      if ( size(this%hubbard_u_impurity, 1) > 0 ) then
-         do i = 1, size(this%hubbard_u_impurity, 1)
-            do j = 1, size(this%hubbard_u_impurity, 2)
-               if (abs(this%hubbard_u_impurity(i,j)) > 1e-8) then
-                  this%hubbardU_impurity_check = .true.
-               else if (abs(this%hubbard_j_impurity(i,j)) > 1e-8) then
-                  this%hubbardU_impurity_check = .true.
-               end if
-            end do
-         end do
-      end if
-
-      if (this%hubbardU_impurity_check) then
-         ! Print inputs
-         print *, "Size of hubbard_u_impurity: ", size(hubbard_u_impurity)
-         print *, "lattice%nclu = ", this%lattice%nclu
-         print *, "hubbard_u_impurity:"
-         do i = 1, this%lattice%nrec
-            write(*, *) 'Impurity', i, '=', this%hubbard_u_impurity(i, :)
-         end do
-         print *, "hubbard_j_impurity:"
-         do i = 1, this%lattice%nrec
-            write(*, *) 'Impurity', i, '=', this%hubbard_j_impurity(i, :)
-         end do
-
-         print *, "Hubbard U correction for impurity initiated."
-         ! Calculates the Slater integrals F_impurity for impurities
-         ! F_impurity(impurity, l+1, k) with k = 1,2,3,4 = l+1 indexing F^(2(k-1)) for impurities
-         do i = 1, this%lattice%nrec ! For each impurity (same as size(hubbard_u_impurity,1) )
-            ! For s, p, d and f orbitals, F0 = U
-            ! s-orbital
-            this%F_impurity(i,1,1) = this%hubbard_u_impurity(i,1)
-            ! p-orbital J = (1/5)*F2 
-            this%F_impurity(i,2,1) = this%hubbard_u_impurity(i,2)
-            this%F_impurity(i,2,2) = this%hubbard_j_impurity(i,2)*5.0_rp
-            ! d-orbital, J = (F2 + F4)/14 with F4/F2 ~ 0.625
-            this%F_impurity(i,3,1) = this%hubbard_u_impurity(i,3)
-            this%F_impurity(i,3,2) = 14.0_rp*this%hubbard_j_impurity(i,3)/1.625_rp 
-            this%F_impurity(i,3,3) = 0.625_rp*this%F_impurity(i,3,2)
-            !> For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
-            this%F_impurity(i,4,1) = this%hubbard_u_impurity(i,4)
-            this%F_impurity(i,4,2) = 6435_rp*this%hubbard_j_impurity(i,4)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
-            this%F_impurity(i,4,3) = 0.67_rp*this%F(i,4,2)
-            this%F_impurity(i,4,4) = 0.49_rp*this%F(i,4,2)               
-         end do 
-         ! Print the slater intergrals
-         print *,''
-         print *, '----------------------------------------------------------------------------------------'
-         print *, 'Slater Integrals.'
-         print *, '----------------------------------------------------------------------------------------'
-         do i = 1, this%lattice%nrec
-            print *, 'Impurity ', i, ':'
-            do j = 1, 4 ! Orbitals spdf have implementation
-               if (count(this%F_impurity(i,j,:) > 1.0E-10) /= 0) then
-                  print *, ' Orbital ', this%orb_conv(j), ' :'
-                  if (j == 1) then
-                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
-                  else if (j == 2) then
-                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
-                     print *, '             F2 = ', this%F_impurity(i,j,2), ' eV'
-                  else if (j == 3) then
-                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
-                     print *, '             F2 = ', this%F_impurity(i,j,2), ' eV'
-                     print *, '             F4 = ', this%F_impurity(i,j,3), ' eV'
-                  else if (j == 4) then
-                     print *, '             F0 = ', this%F_impurity(i,j,1), ' eV'
-                     print *, '             F2 = ', this%F_impurity(i,j,2), ' eV'
-                     print *, '             F4 = ', this%F_impurity(i,j,3), ' eV'
-                     print *, '             F6 = ', this%F_impurity(i,j,4), ' eV'
-                  end if
-               end if
-            end do
-         end do
-         print *, '----------------------------------------------------------------------------------------'  
-      end if
-            
-
-      ! Checks if self-consistent 
-      do na = 1, this%lattice%nrec
-         do l = 1, 4
-            if ( this%hubbard_u_sc(na,l) == 1 ) then
-               if (l == 1) then
-                  print *, ''
-                  print *, 'Self-consistent U added for s-electrons on atom', na
-                  this%hubbardU_sc_check = .true.
-               else if (l == 2) then
-                  print *, ''
-                  print *, 'Self-consistent U added for p-electrons on atom', na
-                  this%hubbardU_sc_check = .true.
-               else if (l == 3) then
-                  print *, ''
-                  print *, 'Self-consistent U added for d-electrons on atom', na
-                  this%hubbardU_sc_check = .true.
-               else if ( l == 4 ) then
-                  print *, ''
-                  call g_logger%error('Self-consistent U calculation not implemented for f-electrons', __FILE__, __LINE__)
-                  error stop
-               end if
-            else if ( this%hubbard_u_sc(na,l) .gt. 1 ) then
-               print *, ''
-               call g_logger%error('WRONG INPUT. hubbard_u_sc input was larger than 1, but only 0 and 1 is allowed.', __FILE__, __LINE__)
-               error stop
-            end if
-         end do
-      end do
-      ! Check if correct input is given for hubbard_u_sc
-      if ( this%hubbardU_sc_check ) then
-         print *, ''
-         print *, '----------------------------------------------------------------------------------------'
-         print *, 'Self-consistent calculation of Hubbard U initiated.'
-         print *, '----------------------------------------------------------------------------------------'
-      end if
-
-      ! Establishes if Hubbard U should be implemented by checking if any Hubbard U is specified
-      outer2 : do i = 1, this%lattice%nrec 
-         do j = 1, len_trim(this%uj_orb(i)) 
-            if (this%hubbard_u(i,j) > 1.0E-10) then ! If a nonzero Hubbard U parameter is specified, Hubbard U is initiated
-               this%hubbardU_check = .true.
-               print *, 'Hubbard U correction initiated.', __FILE__, __LINE__
-               exit outer2
-            end if
-         end do
-      end do outer2
-
-      ! Establishes if Hubbard J should be implemented by checking if any Hubbard J is specified
-      outer3 : do i = 1, this%lattice%nrec 
-         do j = 1, len_trim(this%uj_orb(i)) 
-            if (this%hubbard_j(i,j) > 1.0E-10) then ! If a nonzero Hubbard J parameter is specified, Hubbard J is initiated
-               this%hubbardJ_check = .true.
-               print *, 'Hubbard J correction initiated.', __FILE__, __LINE__
-               exit outer3
-            end if
-         end do
-      end do outer3
-
-      ! Establishes if Hubbard V should be implemented by checking if any Hubbard V is specified
-      outer4 : do i = 1, this%lattice%nrec 
-         do j = 1, this%lattice%nrec
-            do li = 1, size(this%hubbard_v, 3)
-               do lj = 1, size(this%hubbard_v, 4)
-                  if (this%hubbard_v(i,j,li,lj) > 1.0E-10) then
-                     this%hubbardV_check = .true.
-                     print *, 'Hubbard V correction initiated.', __FILE__, __LINE__
-                  end if
-               end do
-            end do
-         end do
-      end do outer4
-
-      ! Testing reading from atom.nml instead!
-      ! ! Read Hubbard potential matrix for a +U calculation
-      ! if ( this%hubbardU_check ) then
-      !    open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
-      !    if (ios /= 0) then
-      !       print *, 'No Hubbard potential was found in input.'
-      !    else
-      !       read(10) na
-      !       if ( na == this%lattice%nrec ) then
-      !          print *, 'Reads input Hubbard potential.'
-      !          read(10) this%hubbard_u_pot
-      !       end if
-      !       close(10)
-      !    end if
-      ! end if
-
-      ! ! Read Hubbard potential matrix for a +U impurity calculation
-      ! if ( this%hubbardU_impurity_check ) then
-      !    open(unit=10, file='hubbard_potential', form='unformatted', status='old', iostat=ios)
-      !    if (ios /= 0) then
-      !       print *, 'No hubbard potential was found for the bulk. Continues without.'
-      !       if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
-      !       allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
-      !       this%hubbard_u_pot = 0.0d0
-      !    else
-      !       read(10) na
-      !       if ( na /= this%lattice%nbulk ) then
-      !          print *, 'ERROR: Input Hubbard potential has different dimension than bulk,'
-      !          print *, 'Stops program'
-      !          stop
-      !       else
-      !          print *, 'Reads input Hubbard potential for impurity calculation.'
-      !          if (allocated(array)) deallocate (array)
-      !          allocate (array(18, 18, na))
-      !          read(10) array
-
-      !          if (allocated(this%hubbard_u_pot)) deallocate (this%hubbard_u_pot)
-      !          allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
-
-      !          this%hubbard_u_pot = 0.0d0
-      !          do k = 1, this%lattice%nbulk
-      !             this%hubbard_u_pot(:, :, k) = array(:,:,k)
-      !          end do
-      !          deallocate (array)
-      !       end if
-      !       close(10)
-      !    end if
-      ! end if
-      
-      !> Raises an error if V correction is wanted when +U correction is not. Why not!?!
-      if (this%hubbardV_check .and. .not. this%hubbardU_check) then
-         print *, ''
-         print *, '----------------------------------------------------------------------------------------'
-         print *, '+V correction specified without +U correction!'
-         print *, '----------------------------------------------------------------------------------------'
-         call g_logger%error('Cannot add +V without +U!', __FILE__, __LINE__)
-         error stop
-      end if
-
-      ! Organizes the orbital Hubbard U & J values into the correct position
-      if (this%hubbardU_check) then
-         print *,'Hubbard U & J parameters.', this%hubbardU_check, this%hubbardJ_check
-         do i = 1, this%lattice%nrec
-            do j = 1, count(this%hubbard_u(i,:) > 1.0E-10)
-               if (this%uj_orb(i)(j:j) == 's') then
-                  this%hub_u_sort(i,1) = this%hubbard_u(i,j)
-                  this%hub_j_sort(i,1) = this%hubbard_j(i,j)
-               else if (this%uj_orb(i)(j:j) == 'p') then
-                  this%hub_u_sort(i,2) = this%hubbard_u(i,j)
-                  this%hub_j_sort(i,2) = this%hubbard_j(i,j)
-               else if (this%uj_orb(i)(j:j) == 'd') then
-                  this%hub_u_sort(i,3) = this%hubbard_u(i,j)
-                  this%hub_j_sort(i,3) = this%hubbard_j(i,j)
-               else if (this%uj_orb(i)(j:j) == 'f') then
-                  this%hub_u_sort(i,4) = this%hubbard_u(i,j)
-                  this%hub_j_sort(i,4) = this%hubbard_j(i,j)
-               end if
-            end do
-         end do
-      end if
-      
-      if (this%hubbardV_check) then
-
-      !> Checks if Vij = Vji in input.
-         do i = 1, this%lattice%nrec
-            do j = 1, this%lattice%nrec
-               do li = 1, 4
-                  do lj = 1, 4
-                     if (abs(this%hubbard_v(i,j,li,lj)) > 1.0E-10 .and. abs(this%hubbard_v(j,i,lj,li)) > 1.0E-10 .and. (this%hubbard_v(i,j,li,lj) - this%hubbard_v(j,i,lj,li) > 1.0E-10) ) then
-                        print *, 'Incorrect +V implementation for interaction between atom type ',i , 'and ',j , '.'
-                        call g_logger%error('Value for V(i,j,li,lj) must be the same as V(j,i,lj,li). Either delete one of them, or set them equal.', __FILE__, __LINE__)
-                        error stop
-                     end if
-                  end do
-               end do
-            end do
-         end do
-      end if
-
-      if (this%hubbardV_check) then
-      !> Finds and stores all orbital pairs (l+1) for each interaction in +V correction
-
-         do i = 1, this%lattice%nrec
-            !> Diagonal part
-            cntr = 0
-            do li = 1, 4
-               do lj = 1, 4
-                  if (this%hubbard_v(i,i,li,lj) > 1.0E-10) then
-                     cntr = cntr + 1
-                  end if
-               end do
-            end do
-            this%orbs_v_num(i,i) = cntr
-            allocate(this%orbs_v(i,i)%val(cntr,2))
-            cntr = 0
-            do li = 1, 4
-               do lj = 1, 4
-                  if (this%hubbard_v(i,i,li,lj) > 1.0E-10) then
-                     cntr = cntr + 1
-                     this%orbs_v(i,i)%val(cntr,:) = [li, lj]
-                  end if
-               end do
-            end do
-
-            !> Off-diagonal part
-            if (i+1 <= this%lattice%nrec) then
-               do j = i+1, this%lattice%nrec
-                  cntr = 0
-                  do li = 1, 4
-                     do lj = 1, 4
-                        if (this%hubbard_v(i,j,li,lj) > 1.0E-10 .or. this%hubbard_v(j,i,lj,li) > 1.0E-10) then
-                           cntr = cntr + 1
-                        end if
-                     end do
-                  end do
-                  this%orbs_v_num(i,j) = cntr
-                  this%orbs_v_num(j,i) = cntr
-                  allocate(this%orbs_v(i,j)%val(cntr,2))
-                  allocate(this%orbs_v(j,i)%val(cntr,2))
-                  cntr = 0
-                  do li = 1, 4
-                     do lj = 1, 4
-                        if (this%hubbard_v(i,j,li,lj) > 1.0E-10 .or. this%hubbard_v(j,i,lj,li) > 1.0E-10) then
-                           cntr = cntr + 1
-                           this%orbs_v(i,j)%val(cntr,:) = [li, lj]
-                           this%orbs_v(j,i)%val(cntr,:) = [lj, li]
-                        end if
-                     end do
-                  end do
-               end do             
-            end if
-         end do
-            
-
-      !> Sets the Vji = Vij for the +V correction based on input and raises error if Vij and Vji disagree if both are specified.
-         do i = 1, this%lattice%nrec
-            do j = 1, this%lattice%nrec
-               if (j /= i) then
-                  do li = 1, 4
-                     do lj = 1, 4
-                        if (abs(this%hubbard_v(i,j,li,lj)) > 1.0E-10 .and. abs(this%hubbard_v(j,i,lj,li)) < 1.0E-10) then
-                           this%hubbard_v(j,i,lj,li) = this%hubbard_v(i,j,li,lj)
-                        end if
-                     end do
-                  end do
-               end if
-            end do
-         end do
-      end if
-
-      if (this%hubbardU_check) then
-      !> Calculates the Slater integrals, F(atom, l+1, k) with k = 1,2,3,4 = l+1 indexing F^(2(k-1))
-         do i = 1, this%lattice%nrec ! For each atom
-            do j = 1, count(this%hubbard_u(i,:) > 1.0E-10) ! For each nonzero hubbard U value
-               if (this%uj_orb(i)(j:j) == 's') then ! If corresponding orbital is s
-               !> For s, p, d and f orbitals, F0 = U
-                  this%F(i,1,1) = this%hubbard_u(i,j)
-               else if (this%uj_orb(i)(j:j) == 'p') then ! If corresponding orbital is p
-               !> For p orbitals, J = (1/5)*F2 
-                  this%F(i,2,1) = this%hubbard_u(i,j)
-                  this%F(i,2,2) = this%hubbard_j(i,j)*5.0_rp
-               else if (this%uj_orb(i)(j:j) == 'd') then ! If corresponding orbital is d
-               !> For d orbitals, J = (F2 + F4)/14 with F4/F2 ~ 0.625
-                  this%F(i,3,1) = this%hubbard_u(i,j)
-                  this%F(i,3,2) = 14.0_rp*this%hubbard_j(i,j)/1.625_rp 
-                  this%F(i,3,3) = 0.625_rp*this%F(i,3,2)
-               else if (this%uj_orb(i)(j:j) == 'f') then ! If corresponding orbital is f
-               !> For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
-                  this%F(i,4,1) = this%hubbard_u(i,j)
-                  this%F(i,4,2) = 6435_rp*this%hubbard_j(i,j)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
-                  this%F(i,4,3) = 0.67_rp*this%F(i,4,2)
-                  this%F(i,4,4) = 0.49_rp*this%F(i,4,2)
-               else 
-                  call g_logger%error('Only spdf orbitals have implemented Hubbard U+J framework.', __FILE__, __LINE__)
-                  error stop
-               end if
-            end do
-         end do      
-      end if
-
-      outer : do i = 1, this%lattice%nrec ! Steps through the atoms
-         !> If no input values are given for some atom(s), default values is set given that Hubbard U and or J should be included
-         if (len_trim(this%uj_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check .and. this%hubbardJ_check) then
-            print *, ''
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'No input values for Hubbard U+J specified for atom ', i, ', setting default values.'
-            print *, '----------------------------------------------------------------------------------------'
-         else if (len_trim(this%uj_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
-            print *, ''
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'No input values for Hubbard U specified for atom ', i, ', setting default values of zero.'
-            print *, '----------------------------------------------------------------------------------------'
-         !> Also if only U or J value is unspecified when orbital and J or U is, default value is set.
-         else if (len_trim(this%uj_orb(i)) == 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardJ_check) then
-            print *, ''
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'No input values for Hubbard J specified for atom ', i, ', setting default values of zero.'
-            print *, '----------------------------------------------------------------------------------------'
-         else if (len_trim(this%uj_orb(i)) /= 0 .and. count(this%hubbard_u(i,:) > 1.0E-10) /= 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) == 0 .and. this%hubbardU_check) then
-            if (len_trim(this%uj_orb(i)) == count(this%hubbard_u(i,:) > 1.0E-10)) then
-               print *, ''
-               print *,''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'No J parameter specified for atom ', i, ', setting default value of zero.'
-               print *, '----------------------------------------------------------------------------------------'
-            else 
-               implem_check = .false.
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Number of orbitals and Hubbard U parameters for atom', i, ' disagrees.'
-               print *, '----------------------------------------------------------------------------------------'
-            end if
-         else if (len_trim(this%uj_orb(i)) /=0 .and. count(this%hubbard_u(i,:) > 1.0E-10) == 0 .and. count(this%hubbard_j(i,:) > 1.0E-10) /= 0 .and. this%hubbardJ_check) then
-            if (len_trim(this%uj_orb(i)) == count(this%hubbard_j(i,:) > 1.0E-10)) then
-               print *, ''
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'No U parameter specified for atom ', i, ', setting default value of zero'
-               print *, '----------------------------------------------------------------------------------------'
-            else 
-               implem_check = .false.
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Number of orbitals and Hubbard J parameters for atom', i, ' disagrees.'
-               print *, '----------------------------------------------------------------------------------------'
-            end if
-         else
-            !> If the number of orbitals and Hubbard U parameters per atom in input file disagree, then a raised error is prompted
-            if (count(this%hubbard_u(i,:) > 1.0E-10) /= len_trim(this%uj_orb(i))) then
-               implem_check = .false.
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Number of orbitals and Hubbard U parameters for atom', i, ' disagrees.'
-               print *, '----------------------------------------------------------------------------------------'
-            !> If the number of orbitals and Hubbard J parameters per atom in input file disagree, then a raised error is prompted 
-            else if (count(this%hubbard_j(i,:) > 1.0E-10) /= len_trim(this%uj_orb(i))) then 
-               implem_check = .false.
-               print *, ''
-               print *, '----------------------------------------------------------------------------------------'
-               print *, 'Number of orbitals and Hubbard J parameters for atom', i, ' disagrees.'
-               print *, '----------------------------------------------------------------------------------------'
-            end if
-         end if
-         if (.not. this%hubbardU_check .and. .not. this%hubbardJ_check .and. len_trim(this%uj_orb(i)) > 0 ) then
-            call g_logger%error('Hubbard orbitals specified without U parameters.', __FILE__, __LINE__)
-            error stop
-         end if
-      end do outer
-
-      !> If the +V (intersite Coulomb reaction) is added, we use the simplified +U correction which is spherically averaged.
-      !> This corresponds to setting F^2 = F^4 = J = 0.
-      if (this%hubbardV_check) then
-         this%hubbard_j = 0.0d0
-         this%F(:,:,2) = 0.0d0
-         this%F(:,:,3) = 0.0d0
-         this%F(:,:,4) = 0.0d0
-         call this%lattice%neigh(1)
-      end if 
-
-      !> Print Hubbard U+J info
-      if (this%hubbardU_check .and. this%hubbardJ_check) then 
-         if (implem_check) then
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'Stored input values for LDA+U+J'
-            print *, '----------------------------------------------------------------------------------------'
-            do i = 1, this%lattice%nrec
-               print *, 'Atom ', i, ':'
-               do j = 1, max_orbs
-                  if (this%uj_orb(i)(j:j) /= '') then
-                     print *, '  Orbital ', this%uj_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.', ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
-                  end if
-               end do
-            end do
-            print *, ''
-            print *, 'Hubbard U+J input data implemented successfully, proceeding...'
-            if (this%hubbardV_check) then
-               print *, '+V (intersite Coulomb) input data implemented successfully, proceeding...'
-               print *, ''
-               print *, 'NOTE: +U correction restored to simplified version (F^2 = F^4 = J = 0) since the'
-               print *, '      +V correction is asked to be included.'
-            end if
-            print *, '----------------------------------------------------------------------------------------'
-
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'Slater Integrals.'
-            print *, '----------------------------------------------------------------------------------------'
-            do i = 1, this%lattice%nrec
-               print *, 'Atom ', i, ':'
-               do j = 1, 4 ! Orbitals spdf have implementation
-                  if (count(this%F(i,j,:) > 1.0E-10) /= 0) then
-                     print *, ' Orbital ', this%orb_conv(j), ' :'
-                     if (j == 1) then
-                        print *, '             F0 = ', this%F(i,j,1), ' eV'
-                     else if (j == 2) then
-                        print *, '             F0 = ', this%F(i,j,1), ' eV'
-                        print *, '             F2 = ', this%F(i,j,2), ' eV'
-                     else if (j == 3) then
-                        print *, '             F0 = ', this%F(i,j,1), ' eV'
-                        print *, '             F2 = ', this%F(i,j,2), ' eV'
-                        print *, '             F4 = ', this%F(i,j,3), ' eV'
-                     else if (j == 4) then
-                        print *, '             F0 = ', this%F(i,j,1), ' eV'
-                        print *, '             F2 = ', this%F(i,j,2), ' eV'
-                        print *, '             F4 = ', this%F(i,j,3), ' eV'
-                        print *, '             F6 = ', this%F(i,j,4), ' eV'
-                     end if
-                  end if
-               end do
-            end do
-            print *, '----------------------------------------------------------------------------------------'
-         else 
-            call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-            error stop
-         end if      
-         
-      else if (this%hubbardU_check) then
-         if (implem_check) then
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'Stored input values for LDA+U'
-            print *, '----------------------------------------------------------------------------------------'
-               do i = 1, this%lattice%nrec
-                  print *, 'Atom ', i, ':'
-                  do j = 1, max_orbs
-                     if (this%uj_orb(i)(j:j) /= '') then
-                        print *, '  Orbital ', this%uj_orb(i)(j:j), ': Hubbard U = ', this%hubbard_u(i,j), ' eV.'
-                     end if
-                  end do
-               end do
-               print *, ''
-               print *, 'Hubbard U (no J) input data implemented successfully, proceeding...'
-               if (this%hubbardV_check) then
-                  print *, '+V (intersite Coulomb) input data implemented successfully, proceeding...'
-                  print *, ''
-                  print *, 'NOTE: +U correction restored to simplified version (F^2 = F^4 = J = 0) since the'
-                  print *, '      +V correction is asked to be included.'
-               end if
-               print *, '----------------------------------------------------------------------------------------'
-               print *, ''
-         else 
-            call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-            error stop
-         end if       
-
-      else if (this%hubbardJ_check) then 
-         if (implem_check) then
-            print *,''
-            print *, '----------------------------------------------------------------------------------------'
-            print *, 'Stored input values for LDA+J'
-            print *, '----------------------------------------------------------------------------------------'
-               do i = 1, this%lattice%nrec
-                  print *, 'Atom ', i, ':'
-                  do j = 1, max_orbs
-                     if (this%uj_orb(i)(j:j) /= '') then
-                        print *, '  Orbital ', this%uj_orb(i)(j:j), ' Hubbard J = ', this%hubbard_j(i,j), 'eV'
-                     end if
-                  end do
-               end do
-               print *, ''
-               print *, 'Hubbard J (no U) input data implemented successfully, proceeding...'
-               if (this%hubbardV_check) then
-                  print *, '+V (intersite Coulomb) input data implemented successfully, proceeding...'
-               end if
-               print *, 'N.B. that with +V correction, F^2 = F^4 = J = 0.'
-            print *, '----------------------------------------------------------------------------------------'
-         else 
-            call g_logger%error('Implementation error in input data.', __FILE__, __LINE__)
-            error stop
-         end if
-      else
-         print *, ''
-         print *, ''
-         ! print *, '----------------------------------------------------------------------------------------'
-         ! print *, 'No Hubbard U+J data was given as input, proceeding without.'
-         ! print *, '----------------------------------------------------------------------------------------'
-      end if      
-      
-      !> Converts the quantities from eV to Ry
-      this%hubbard_u = this%hubbard_u/ry2ev
-      this%hubbard_j = this%hubbard_j/ry2ev
-      this%hubbard_v = this%hubbard_v/ry2ev
-      this%F = this%F/ry2ev
-      this%hub_u_sort = this%hub_u_sort/ry2ev
-      this%hub_j_sort = this%hub_j_sort/ry2ev
-
-      this%hubbard_u_impurity = this%hubbard_u_impurity/ry2ev
-      this%hubbard_j_impurity = this%hubbard_j_impurity/ry2ev
-      this%F_impurity = this%F_impurity/ry2ev
-
-      this%hubbard_u_general = this%hubbard_u_general/ry2ev
-      this%hubbard_j_general = this%hubbard_j_general/ry2ev
-
-      !> Checks if self-consistent U flag and input values of U and J have both been provided. They would interfer with eachother. 
-      if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) .and. (this%hubbardJ_check)) then
-         call g_logger%error('Both input values for hubbard_u_sc and hubbard_u + hubbard_j has been provided. Only one of them are allowed.', __FILE__, __LINE__)
-         error stop
-      else if ( (this%hubbardU_sc_check) .and. (this%hubbardU_check) ) then
-         call g_logger%error('Both input values for hubbard_u_sc and hubbard_u has been provided. Only one of them are allowed.', __FILE__, __LINE__)
-         error stop
-      else if ( (this%hubbardU_sc_check) .and. (this%hubbardJ_check)) then 
-         call g_logger%error('Both input values for hubbard_u_sc and hubbard_j has been provided. Only one of them is allowed.', __FILE__, __LINE__)
-         error stop
-      end if
-
-      ! Check to see if hubbard U is in atom.nml input
-      check = .False.
-      do na = 1, this%lattice%ntype
-         do l = 1, 3
-            if ( abs(this%lattice%symbolic_atoms(na)%potential%hubbard_u(l)) > 1e-8 ) then
-               check = .True.
-            end if
-         end do
-      end do
-
-      if ( check ) then
-         print *, 'Hubbard was provided in the atom.nml files. Calculates the initial Hubbard potential matrix.'
-         do na = 1, this%lattice%ntype
-            call this%lattice%symbolic_atoms(na)%potential%expand_ldm()
-         end do
-         call this%calculate_hubbard_u_potential_general()
-         if (this%hubbard_u_general_check) then
-            print *, 'Hubbard parameters was provided in input.nml. Use these for the rest of the calculation.'
-            do na = 1, this%lattice%ntype
-               do l = 1, 3
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = this%hubbard_u_general(na, l)
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = this%hubbard_j_general(na, l)
-               end do
-            end do
-         else
-            print *, 'No Hubbard parameters was provided in the input.nml.'
-            print *, 'Uses no Hubbard correction for the rest of the calculation.'
-            do na = 1, this%lattice%ntype
-               do l = 1, 3
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = this%hubbard_u_general(na, l)
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = this%hubbard_j_general(na, l)
-               end do
-            end do
-         end if
-      else
-         if ( this%hubbard_u_general_check ) then
-            print *, 'No Hubbard corrections in atom.nml, but Hubbard U provided in input.nml'
-            print *, 'Stores these values in symbolic atoms.'
-            do na = 1, this%lattice%ntype
-               do l = 1, 3
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = this%hubbard_u_general(na, l)
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = this%hubbard_j_general(na, l)
-               end do
-            end do
-         end if
-      end if
-
-      ! Check if bulk U was provided in input, but not in atom.nml for the impurity calculation
-      if (this%lattice%nrec .ne. this%lattice%ntype) then
-         do na = 1, this%lattice%nbulk
-            do l = 1, 3
-               if ( abs(this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) - this%hubbard_u_general(na,l)) > 1e-8 ) then
-                  print *, 'ERROR! Hubbard U in atom.nml is not equal to the one in input.nml for atom ', na, ' l = ', l - 1
-                  print *, 'Hubbard U in atom.nml = ', this%lattice%symbolic_atoms(na)%potential%hubbard_u(l), 'Ry'
-                  print *, 'Hubbard U in input.nml = ', this%hubbard_u_general(na,l), 'Ry'
-                  print *, 'Hubbard parameters for the bulk atoms has to be equal in an impurity calculation.'
-                  print *, 'STOP PROGRAM'
-                  stop
-               else if ( abs(this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) - this%hubbard_j_general(na,l)) > 1e-8) then
-                  print *, 'ERROR! Hubbard J in atom.nml is not equal to the one in input.nml for atom ', na, ' l = ', l - 1
-                  print *, 'Hubbard J in atom.nml = ', this%lattice%symbolic_atoms(na)%potential%hubbard_u(l), 'Ry'
-                  print *, 'Hubbard J in input.nml = ', this%hubbard_u_general(na,l), 'Ry'
-                  print *, 'Hubbard parameters for the bulk atoms has to be equal in an impurity calculation.'
-                  print *, 'STOP PROGRAM'
-                  stop
-               end if
-            end do
-         end do
-      end if
-
-
    end subroutine build_from_file
-
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1068,97 +252,81 @@ contains
       class(hamiltonian) :: this
 
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.tmat', this%tmat, (/18, 18, 3, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hhmag', this%hhmag, (/9, 9, 4/))
-      call g_safe_alloc%allocate('hamiltonian.hmag', this%hmag, (/9, 9, this%charge%lattice%kk, 4/))
-      call g_safe_alloc%allocate('hamiltonian.ee', this%ee, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hall', this%hall, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/nb, nb, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.tmat', this%tmat, (/nb, nb, 3, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hhmag', this%hhmag, (/norb, norb, 4/))
+      call g_safe_alloc%allocate('hamiltonian.hmag', this%hmag, (/norb, norb, this%charge%lattice%kk, 4/))
+      call g_safe_alloc%allocate('hamiltonian.ee', this%ee, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hall', this%hall, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !if (hoh) then
-      call g_safe_alloc%allocate('hamiltonian.eeo', this%eeo, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.eeoee', this%eeoee, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.obarm', this%obarm, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.enim', this%enim, (/18, 18, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.eeo', this%eeo, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.eeoee', this%eeoee, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.obarm', this%obarm, (/nb, nb, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.enim', this%enim, (/nb, nb, this%charge%lattice%ntype/))
       !end if
       !if (local_axis)  then
-      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !if (hoh) then
-      call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.vo_a', this%vo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.vo_b', this%vo_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.js_a', this%js_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jl_a', this%jl_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/nb, nb, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.vo_a', this%vo_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.vo_b', this%vo_b, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.js_a', this%js_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jl_a', this%jl_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
-      allocate (this%lsham(18, 18, this%charge%lattice%ntype))
-      allocate (this%tmat(18, 18, 3, this%charge%lattice%ntype))
-      !allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, this%charge%lattice%kk, 4))
-      allocate (this%ee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      ! allocate (this%ee(18, 18, size(this%lattice%ijpair, 3), this%charge%lattice%ntype))
-      allocate (this%hall(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
+      allocate (this%lsham(nb, nb, this%charge%lattice%ntype))
+      allocate (this%tmat(nb, nb, 3, this%charge%lattice%ntype))
+      allocate (this%hhmag(norb, norb, 4), this%hmag(norb, norb, this%charge%lattice%kk, 4))
+      allocate (this%ee(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%hall(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
+      allocate (this%hxc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !if (this%hoh) then
-      allocate (this%eeo(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%eeoee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hallo(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      allocate (this%obarm(18, 18, this%charge%lattice%ntype))
-      allocate (this%enim(18, 18, this%charge%lattice%ntype))
+      allocate (this%eeo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%eeoee(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%hallo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
+      allocate (this%obarm(nb, nb, this%charge%lattice%ntype))
+      allocate (this%enim(nb, nb, this%charge%lattice%ntype))
       !end if
       !if (this%local_axis) then
-      allocate (this%ee_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hall_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
+      allocate (this%ee_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%hall_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       !if (this%hoh) then
-      allocate (this%eeo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%hallo_glob(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      allocate (this%enim_glob(18, 18, this%charge%lattice%ntype))
+      allocate (this%eeo_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%hallo_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
+      allocate (this%enim_glob(nb, nb, this%charge%lattice%ntype))
       ! Velocity operators
-      allocate (this%v_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%v_b(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%vo_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%vo_b(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%js_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%jl_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%jso_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      allocate (this%jlo_a(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%v_b(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%vo_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%vo_b(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%js_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%jl_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%jso_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
+      allocate (this%jlo_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%velocity_scale(this%charge%lattice%ntype))
-      allocate (this%hubbard_u(this%lattice%nrec, 1))
-      allocate(this%hubbard_j(this%lattice%nrec, 1))
-      allocate(this%hubbard_v(this%lattice%nrec, this%lattice%nrec, 4, 4))
-      allocate (this%hub_u_sort(this%lattice%nrec, 4))
-      allocate(this%hub_j_sort(this%lattice%nrec, 4))
-      allocate(this%orbs_v(this%lattice%nrec, this%lattice%nrec))
-      allocate(this%orbs_v_num(this%lattice%nrec, this%lattice%nrec))
-      allocate(this%F(this%lattice%nrec, 4, 4))
-      allocate (this%uj_orb(this%lattice%nrec))
-      allocate (this%hubbard_u_pot(18, 18, this%lattice%ntype))
-      allocate (this%hubbard_v_pot(18, 18, size(this%ee, 3) , this%lattice%nrec)) ! (lm, l'm', number of NN, number of atom types)
-      allocate (this%hubbard_u_sc(this%lattice%nrec,4))
-      allocate (this%hubbard_u_impurity(this%lattice%nrec,4)) ! Size is equal to the number of impurities (nclu)
-      allocate (this%hubbard_j_impurity(this%lattice%nrec,4))
-      allocate (this%F_impurity(this%lattice%nrec, 4, 4))
-      allocate (this%hubbard_pot_impurity(18, 18, this%lattice%nrec))
-      allocate (this%hubbard_u_general(this%lattice%ntype, 4)) ! These should work for both impurity and bulk!
-      allocate (this%hubbard_j_general(this%lattice%ntype, 4))
       !end if
       !end if
 #endif
 
       this%lsham(:, :, :) = 0.0d0
       this%tmat(:, :, :, :) = 0.0d0
-      ! this%hhmag(:, :, :) = 0.0d0
-      ! this%hmag(:, :, :, :) = 0.0d0
+      this%hhmag(:, :, :) = 0.0d0
+      this%hmag(:, :, :, :) = 0.0d0
       this%hall(:, :, :, :) = 0.0d0
+      this%hxc(:, :, :, :) = 0.0d0
       this%ee(:, :, :, :) = 0.0d0
       !if (this%hoh) then
       this%hallo(:, :, :, :) = 0.0d0
@@ -1186,52 +354,12 @@ contains
       this%jlo_a(:, :, :, :) = 0.0d0
       this%velocity_scale(:) = 1.0d0
       this%hoh = .false.
-      this%q_ss = [0.0d0, 0.0d0, 0.0d0]
       this%local_axis = .false.
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
       this%v_beta(:) = [1, 0, 0] 
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
-      this%hubbard_u(:,:) = 0.0d0
-      this%hubbard_j(:,:) = 0.0d0
-      this%hubbard_v(:,:,:,:) = 0.0d0
-      this%hub_u_sort(:,:) = 0.0d0
-      this%hub_j_sort(:,:) = 0.0d0
-      this%uj_orb(:) = ''
-      this%orbs_v_num(:,:) = 0
-      this%F(:,:,:) = 0.0d0
-      this%hubbardU_check = .false.
-      this%hubbardJ_check = .false.
-      this%hubbardV_check = .false.
-      this%hubbard_u_pot(:,:,:) = 0.0d0
-      this%hubbard_v_pot(:,:,:,:) = 0.0d0
-      this%orb_conv(1) = 's'
-      this%orb_conv(2) = 'p'
-      this%orb_conv(3) = 'd'
-      this%orb_conv(4) = 'f'
-      this%hubbard_u_sc(:,:) = 0
-      this%hubbard_u_impurity(:,:) = 0.0d0
-      this%hubbard_j_impurity(:,:) = 0.0d0
-      this%F_impurity(:,:,:) = 0.0d0
-      this%hubbard_pot_impurity(:,:,:) = 0.0d0
-      this%hubbard_u_general(:,:) = 0.0d0
-      this%hubbard_j_general(:,:) = 0.0d0
-      ! Default behavior for spectrum bounds: 'none' => use energy namelist values
-      ! this%bounds%algorithm = 'none'
-      ! this%bounds%scaling = 1.0_rp
-      ! ! Initialize object-bound spectrum info
-      ! this%bounds%e_min = huge(1.0_rp)
-      ! this%bounds%e_max = -huge(1.0_rp)
-      ! this%bounds%e_min_gershgorin = huge(1.0_rp)
-      ! this%bounds%e_max_gershgorin = -huge(1.0_rp)
-      ! this%bounds%e_min_sturm = huge(1.0_rp)
-      ! this%bounds%e_max_sturm = -huge(1.0_rp)
-      ! this%bounds%sturm_available = .false.
-      ! this%bounds%use_sturm = .false.
-      ! this%bounds%sturm_width = 0.0_rp
-      ! this%bounds%gershgorin_width = 0.0_rp
-      
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
@@ -1253,7 +381,7 @@ contains
        real(rp), dimension(3) :: rij  ! Displacement vector (unused for now but available)
   
        if (allocated(this%h_sparse)) deallocate(this%h_sparse) 
-       allocate(this%h_sparse(this%lattice%kk*18,this%lattice%kk*18))
+       allocate(this%h_sparse(this%lattice%kk*nb,this%lattice%kk*nb))
 
        ! Loop over cluster atoms
        do kk = 1, this%lattice%kk  ! Loop over all atoms in the cluster
@@ -1262,18 +390,18 @@ contains
            ! Loop over neighbors (including onsite, m = 1)
            do m = 1, nr
                ! Compute block indices in the global matrix
-               i_start = 18 * (kk - 1) + 1
+               i_start = nb * (kk - 1) + 1
                if (m == 1) then
                    j_start = i_start  ! Onsite term: diagonal block
                else
                    neighbor = this%charge%lattice%nn(kk, m)  ! Neighbor atom index
-                   j_start = 18 * (neighbor - 1) + 1
+                   j_start = nb * (neighbor - 1) + 1
                end if
                ! Add the block to the sparse matrix
                if (neighbor .ne. 0) then
                   this%h_sparse(i_start:i_start+17, j_start:j_start+17) = 0.0d0
-                  do i = 1, 18
-                      do j = 1, 18
+                  do i = 1, nb
+                      do j = 1, nb
                          this%h_sparse(i_start + i - 1, j_start + j - 1) = this%h_sparse(i_start + i - 1, j_start + j - 1) &
                                                                            + this%ee(i, j, m, 1)
                       end do
@@ -1337,7 +465,7 @@ contains
       integer :: ntype, ia, nr, m
       integer :: hblocksize
       complex(rp), allocatable :: tmp1(:,:), tmp2(:,:), L_op(:,:)  ! Temp matrices
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
 
       hblocksize = size(this%v_a, 1)
    
@@ -1361,14 +489,14 @@ contains
       ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
       select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
       case ('x')
-         L_op(1:9, 1:9) = mLx(:, :)
-         L_op(10:18, 10:18) = mLx(:, :)
+         L_op(1:norb, 1:norb) = mLx(:, :)
+         L_op(norb+1:nb, norb+1:nb) = mLx(:, :)
       case ('y')
-         L_op(1:9, 1:9) = mLy(:, :)
-         L_op(10:18, 10:18) = mLy(:, :)
+         L_op(1:norb, 1:norb) = mLy(:, :)
+         L_op(norb+1:nb, norb+1:nb) = mLy(:, :)
       case ('z')
-         L_op(1:9, 1:9) = mLz(:, :)
-         L_op(10:18, 10:18) = mLz(:, :)
+         L_op(1:norb, 1:norb) = mLz(:, :)
+         L_op(norb+1:nb, norb+1:nb) = mLz(:, :)
       end select
    
       ! Loop over each atom type
@@ -1572,7 +700,7 @@ contains
       integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
       integer :: hblocksize
       complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(18, 18) :: locham
+      complex(rp), dimension(nb, nb) :: locham
 
       ! Derive dimension from your velocity array:
       hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
@@ -1603,20 +731,22 @@ contains
          ! For each neighbor block 
          do m = 1, nr
 
-            if (m==1) then
-              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
-            else
-              locham(:,:) = this%ee(:, :, m, ntype)
-            end if
+            !if (m==1) then
+            !  locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
+            !else
+            !  locham(:,:) = this%ee(:, :, m, ntype)
+            !end if
+
+            locham(:,:) = this%hxc(:, :, m, ntype)
 
             tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * ee(:,:,m,ntype)
+            ! tmp1 = js_a * hxc(:,:,m,ntype)
             tmp1 = matmul(S_op, locham(:, :))
 
-            ! tmp2 = ee(:,:,m,ntype) * js_a
+            ! tmp2 = hxc(:,:,m,ntype) * js_a
             tmp2 = matmul(locham(:, :), S_op)
 
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
             this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
             !write(*,*) 'm=', m
             !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
@@ -1654,8 +784,8 @@ contains
       integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
       integer :: hblocksize
       complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-      complex(rp), dimension(18, 18) :: locham
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
+      complex(rp), dimension(nb, nb) :: locham
 
       ! Derive dimension from your velocity array:
       hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
@@ -1680,14 +810,14 @@ contains
       ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
       select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
       case ('x')
-         L_op(1:9, 1:9) = mLx(:, :)
-         L_op(10:18, 10:18) = mLx(:, :)
+         L_op(1:norb, 1:norb) = mLx(:, :)
+         L_op(norb+1:nb, norb+1:nb) = mLx(:, :)
       case ('y')
-         L_op(1:9, 1:9) = mLy(:, :)
-         L_op(10:18, 10:18) = mLy(:, :)
+         L_op(1:norb, 1:norb) = mLy(:, :)
+         L_op(norb+1:nb, norb+1:nb) = mLy(:, :)
       case ('z')
-         L_op(1:9, 1:9) = mLz(:, :)
-         L_op(10:18, 10:18) = mLz(:, :)
+         L_op(1:norb, 1:norb) = mLz(:, :)
+         L_op(norb+1:nb, norb+1:nb) = mLz(:, :)
       end select
 
       ! Loop over each atom type
@@ -1808,8 +938,8 @@ contains
                ! If hoh is true, multiply the velocity operator by the overlap matrix, similarly to whats done to the Hamiltonian
                if (this%hoh) then
                   ji = this%charge%lattice%iz(atom_neighbor) 
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%v_a(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%vo_a(:, :, m, ntype), 18)
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%v_b(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%vo_b(:, :, m, ntype), 18)
+                  call zgemm('n', 'n', nb, nb, nb, cone, this%v_a(:, :, m, ntype), nb, this%obarm(:, :, ji), nb, czero, this%vo_a(:, :, m, ntype), nb)
+                  call zgemm('n', 'n', nb, nb, nb, cone, this%v_b(:, :, m, ntype), nb, this%obarm(:, :, ji), nb, czero, this%vo_b(:, :, m, ntype), nb)
                end if
             end if
          end do
@@ -1828,7 +958,7 @@ contains
       complex(rp) :: prefac, sg
       real(rp) :: soc_p, soc_d
       complex(rp), dimension(2) :: rac
-      complex(rp), dimension(9, 9) :: Lx, Ly, Lz
+      complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       real(rp) :: lz_loc
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       Lx(:, :) = L_x(:, :)
@@ -1846,6 +976,10 @@ contains
          sg = cmplx(0.5d0, 0.0d0)
          soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
          soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
+         ! For f-orbitals, use a scaling based on d if not explicitly available
+         ! Set soc_f to small value (f-orbital spin-orbit is typically weak)
+         ! real soc_f = 0.0_rp  ! f-orbital s-o coupling (for future enhancement)
+
          ! Check if orbital polarization is enabled
          if (this%orb_pol) then
             rac = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%rac)
@@ -1856,20 +990,37 @@ contains
          end if
 
          prefac = 0.0_rp
-         do i = 1, 9
-            do j = 1, 9
+         do i = 1, norb
+            do j = 1, norb
+               ! p-orbitals (indices 2-4)
                if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
+               ! d-orbitals (indices 5-9)
                if (i >= 5 .and. i <= 9 .and. j >= 5 .and. j <= 9) prefac = sg*soc_d
+               ! f-orbitals (indices 10-16) - currently set to zero (no f-orbital s.o. coupling yet)
+               if (i >= 10 .and. i <= 16 .and. j >= 10 .and. j <= 16) prefac = cmplx(0.0_rp, 0.0_rp)
+
                this%lsham(j, i, k) = this%lsham(j, i, k) + prefac*Lz(j, i) + Lz(j, i)*rac(1)*lz_loc ! H11
-               this%lsham(j, i + 9, k) = this%lsham(j, i + 9, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i)) ! H12
-               this%lsham(j + 9, i, k) = this%lsham(j + 9, i, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i)) ! H21
-               this%lsham(j + 9, i + 9, k) = this%lsham(j + 9, i + 9, k) - prefac*Lz(j, i) - Lz(j, i)*rac(2)*lz_loc ! H22
-               !write(50,*) ´ntype=´, k
-               !write(51,*) ´ntype=´, k
-               !write(50,´(18f10.6)´) real(this%lsham(:,:,k))
-               !write(51,´(18f10.6)´) aimag(this%lsham(:,:,k))
+               this%lsham(j, i +spin_off, k) = this%lsham(j, i +spin_off, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i)) ! H12
+               this%lsham(j +spin_off, i, k) = this%lsham(j +spin_off, i, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i)) ! H21
+               this%lsham(j +spin_off, i +spin_off, k) = this%lsham(j +spin_off, i +spin_off, k) - prefac*Lz(j, i) - Lz(j, i)*rac(2)*lz_loc ! H22
             end do
          end do
+
+         ! Debug output: Print on-site Hamiltonian for lmax=3
+         if (norb == 16) then
+            open(unit=999, file='debug_hamiltonian_lsham.txt', action='write', status='replace')
+            write(999, '(A)') 'On-site Hamiltonian (lsham) for lmax=3 (SPDF basis)'
+            write(999, '(A, I0)') 'Atom type: ', k
+            write(999, '(A)') 'Real part:'
+            do i = 1, norb+spin_off
+               write(999, '(16F12.6)') (real(this%lsham(i, j, k)), j=1, norb+spin_off)
+            end do
+            write(999, '(A)') 'Imaginary part:'
+            do i = 1, norb+spin_off
+               write(999, '(16F12.6)') (aimag(this%lsham(i, j, k)), j=1, norb+spin_off)
+            end do
+            close(999)
+         end if
       end do
    end subroutine build_lsham
 
@@ -1887,7 +1038,7 @@ contains
       ! Local variables
       integer :: i, j, k
       complex(rp) :: prefac, sg, soc_p, soc_d
-      complex(rp), dimension(9, 9) :: Lx, Ly, Lz
+      complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       Lx(:, :) = L_x(:, :)
       Ly(:, :) = L_y(:, :)
@@ -1905,23 +1056,23 @@ contains
          soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
          soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
          prefac = 0.0_rp
-         do i = 1, 9
-            do j = 1, 9
+         do i = 1, norb
+            do j = 1, norb
                if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
                if (i >= 5 .and. i <= 9 .and. j >= 5 .and. j <= 9) prefac = sg*soc_d
                ! build Tx
                this%tmat(j, i, 1, k) = this%tmat(j, i, 1, k) + prefac*i_unit*Ly(j, i)*2.0_rp ! Tx_11
-               this%tmat(j, i + 9, 1, k) = this%tmat(j, i + 9, 1, k) - prefac*Lz(j, i)*2.0_rp*cone ! Tx_12
-               this%tmat(j + 9, i, 1, k) = this%tmat(j + 9, i, 1, k) + prefac*Lz(j, i)*2.0_rp*cone ! Tx_21
-               this%tmat(j + 9, i + 9, 1, k) = this%tmat(j + 9, i + 9, 1, k) - prefac*i_unit*Ly(j, i)*2.0_rp ! Tx_22
+               this%tmat(j, i +spin_off, 1, k) = this%tmat(j, i +spin_off, 1, k) - prefac*Lz(j, i)*2.0_rp*cone ! Tx_12
+               this%tmat(j +spin_off, i, 1, k) = this%tmat(j +spin_off, i, 1, k) + prefac*Lz(j, i)*2.0_rp*cone ! Tx_21
+               this%tmat(j +spin_off, i +spin_off, 1, k) = this%tmat(j +spin_off, i +spin_off, 1, k) - prefac*i_unit*Ly(j, i)*2.0_rp ! Tx_22
                ! build Ty
                this%tmat(j, i, 2, k) = this%tmat(j, i, 2, k) - prefac*i_unit*Lx(j, i)*2.0_rp ! Ty_11
-               this%tmat(j, i + 9, 2, k) = this%tmat(j, i + 9, 2, k) + prefac*i_unit*Lz(j, i)*2.0_rp ! Ty_12
-               this%tmat(j + 9, i, 2, k) = this%tmat(j + 9, i, 2, k) + prefac*i_unit*Lz(j, i)*2.0_rp ! Ty_21
-               this%tmat(j + 9, i + 9, 2, k) = this%tmat(j + 9, i + 9, 2, k) + prefac*i_unit*Lx(j, i)*2.0_rp ! Ty_22
+               this%tmat(j, i +spin_off, 2, k) = this%tmat(j, i +spin_off, 2, k) + prefac*i_unit*Lz(j, i)*2.0_rp ! Ty_12
+               this%tmat(j +spin_off, i, 2, k) = this%tmat(j +spin_off, i, 2, k) + prefac*i_unit*Lz(j, i)*2.0_rp ! Ty_21
+               this%tmat(j +spin_off, i +spin_off, 2, k) = this%tmat(j +spin_off, i +spin_off, 2, k) + prefac*i_unit*Lx(j, i)*2.0_rp ! Ty_22
                ! build Tz
-               this%tmat(j, i + 9, 3, k) = this%tmat(j, i + 9, 3, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i))*2.0_rp*cone ! Tz_12
-               this%tmat(j + 9, i, 3, k) = this%tmat(j + 9, i, 3, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i))*2.0_rp*cmone ! Tz_21
+               this%tmat(j, i +spin_off, 3, k) = this%tmat(j, i +spin_off, 3, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i))*2.0_rp*cone ! Tz_12
+               this%tmat(j +spin_off, i, 3, k) = this%tmat(j +spin_off, i, 3, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i))*2.0_rp*cmone ! Tz_21
             end do
          end do
       end do
@@ -1932,7 +1083,7 @@ contains
       implicit none
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      complex(rp), dimension(9, 9) :: obm0, obm1
+      complex(rp), dimension(norb, norb) :: obm0, obm1
       complex(rp), dimension(3) :: mom
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
@@ -1941,23 +1092,23 @@ contains
 
       do ntype = 1, this%lattice%ntype
          obm0 = cmplx(0.0d0); obm1 = cmplx(0.0d0)
-         do m = 1, 9
+         do m = 1, norb
             obm0(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx0(m)
             obm1(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx1(m)
          end do
          mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
-         do m = 1, 9
-            do l = 1, 9
+         do m = 1, norb
+            do l = 1, norb
                this%obarm(m, l, ntype) = obm0(m, l) + obm1(m, l)*mom(3)
-               this%obarm(m + 9, l + 9, ntype) = obm0(m, l) - obm1(m, l)*mom(3)
-               this%obarm(l, m + 9, ntype) = obm1(m, l)*mom(1) - i_unit*obm1(m, l)*mom(2)
-               this%obarm(l + 9, m, ntype) = obm1(m, l)*mom(1) + i_unit*obm1(m, l)*mom(2)
+               this%obarm(m +spin_off, l +spin_off, ntype) = obm0(m, l) - obm1(m, l)*mom(3)
+               this%obarm(l, m +spin_off, ntype) = obm1(m, l)*mom(1) - i_unit*obm1(m, l)*mom(2)
+               this%obarm(l +spin_off, m, ntype) = obm1(m, l)*mom(1) + i_unit*obm1(m, l)*mom(2)
             end do
          end do
-         call hcpx(this%obarm(1:9, 1:9, ntype), 'cart2sph')
-         call hcpx(this%obarm(10:18, 10:18, ntype), 'cart2sph')
-         call hcpx(this%obarm(1:9, 10:18, ntype), 'cart2sph')
-         call hcpx(this%obarm(10:18, 1:9, ntype), 'cart2sph')
+         call hcpx(this%obarm(1:norb, 1:norb, ntype), 'cart2sph')
+         call hcpx(this%obarm(norb+1:nb, norb+1:nb, ntype), 'cart2sph')
+         call hcpx(this%obarm(1:norb, norb+1:nb, ntype), 'cart2sph')
+         call hcpx(this%obarm(norb+1:nb, 1:norb, ntype), 'cart2sph')
       end do
    end subroutine build_obarm
 
@@ -1965,8 +1116,8 @@ contains
       implicit none
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      complex(rp), dimension(9, 9) :: em0, em1
-      complex(rp), dimension(9) :: ex0, ex1
+      complex(rp), dimension(norb, norb) :: em0, em1
+      complex(rp), dimension(norb) :: ex0, ex1
       complex(rp), dimension(3) :: mom
       complex(rp) :: eu, ed
       integer :: ntype ! Atom type index
@@ -1976,7 +1127,7 @@ contains
 
       do ntype = 1, this%lattice%ntype
          em0 = cmplx(0.0d0); em1 = cmplx(0.0d0)
-         do m = 1, 9
+         do m = 1, norb
             eu = this%lattice%symbolic_atoms(ntype)%potential%cx(m, 1) - this%lattice%symbolic_atoms(ntype)%potential%cex(m, 1)
             ed = this%lattice%symbolic_atoms(ntype)%potential%cx(m, 2) - this%lattice%symbolic_atoms(ntype)%potential%cex(m, 2)
             ex0(m) = 0.5*(eu + ed)
@@ -1985,18 +1136,18 @@ contains
             em1(m, m) = ex1(m)
          end do
          mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
-         do m = 1, 9
-            do l = 1, 9
+         do m = 1, norb
+            do l = 1, norb
                this%enim(m, l, ntype) = em0(m, l) + em1(m, l)*mom(3)
-               this%enim(m + 9, l + 9, ntype) = em0(m, l) - em1(m, l)*mom(3)
-               this%enim(l, m + 9, ntype) = em1(m, l)*mom(1) - i_unit*em1(m, l)*mom(2)
-               this%enim(l + 9, m, ntype) = em1(m, l)*mom(1) + i_unit*em1(m, l)*mom(2)
+               this%enim(m +spin_off, l +spin_off, ntype) = em0(m, l) - em1(m, l)*mom(3)
+               this%enim(l, m +spin_off, ntype) = em1(m, l)*mom(1) - i_unit*em1(m, l)*mom(2)
+               this%enim(l +spin_off, m, ntype) = em1(m, l)*mom(1) + i_unit*em1(m, l)*mom(2)
             end do
          end do
-         call hcpx(this%enim(1:9, 1:9, ntype), 'cart2sph')
-         call hcpx(this%enim(10:18, 10:18, ntype), 'cart2sph')
-         call hcpx(this%enim(1:9, 10:18, ntype), 'cart2sph')
-         call hcpx(this%enim(10:18, 1:9, ntype), 'cart2sph')
+         call hcpx(this%enim(1:norb, 1:norb, ntype), 'cart2sph')
+         call hcpx(this%enim(norb+1:nb, norb+1:nb, ntype), 'cart2sph')
+         call hcpx(this%enim(1:norb, norb+1:nb, ntype), 'cart2sph')
+         call hcpx(this%enim(norb+1:nb, 1:norb, ntype), 'cart2sph')
 
          if (this%local_axis) then
             this%enim_glob = this%enim
@@ -2007,74 +1158,38 @@ contains
    subroutine build_bulkham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ij, ji, nr, ia
+      integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
-      complex(rp), dimension(:,:,:,:), allocatable :: hmag
-
-      allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
-      hmag = (0.0d0, 0.0d0)
-
-      if (this%hoh) then
-         call this%build_obarm()
-         call this%build_enim()
-      end if
 
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          !write(123, *)´bulkham´
-         call this%chbar_nc(ia, nr, hmag)
+         ! call g_logger%info('Building Hamiltonian for atom type '//fmt('i5', ntype)//' with '//fmt('i5', nr)//' neighbours', __FILE__, __LINE__)
+         call this%chbar_nc(ia, nr, ino, ntype)
          do m = 1, nr
-            do i = 1, 9
-               do j = 1, 9
-                  this%ee(j, i, m, ntype) = hmag(j, i, m, 4) + hmag(j, i, m, 3)        ! H0+Hz
-                  this%ee(j + 9, i + 9, m, ntype) = hmag(j, i, m, 4) - hmag(j, i, m, 3)        ! H0-Hz
-                  this%ee(j, i + 9, m, ntype) = hmag(j, i, m, 1) - i_unit*hmag(j, i, m, 2) ! Hx-iHy
-                  this%ee(j + 9, i, m, ntype) = hmag(j, i, m, 1) + i_unit*hmag(j, i, m, 2) ! Hx+iHy
+            do i = 1, norb
+               do j = 1, norb
+                  this%ee(j, i, m, ntype) = this%hmag(j, i, m, 4) + this%hmag(j, i, m, 3)        ! H0+Hz
+                  this%ee(j +spin_off, i +spin_off, m, ntype) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3)        ! H0-Hz
+                  this%ee(j, i +spin_off, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
+                  this%ee(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
+                  ! Builds the magnetic part of the Hamiltonian only
+                  this%hxc(j, i, m, ntype) = this%hmag(j, i, m, 3)        ! Hz
+                  this%hxc(j +spin_off, i +spin_off, m, ntype) = - this%hmag(j, i, m, 3)        ! - Hz
+                  this%hxc(j, i +spin_off, m, ntype) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
+                  this%hxc(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            write(128, *) 'm=', m, 'ntype= ', ntype
-            write(128, '(18f10.6)') real(this%ee(:, :, m, ntype))
-            ! print '(9f6.2)', real(hmag(:, :, m, 4))
-            !print '(18f6.2)', real(this%hall(:, :, m, nlim))
-            ! print *,'========================'
+            write(131,*) 'm=', m
+            write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
+            write(132,*) 'm=', m
+            write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
-         ! Hubbard U correction.
-         ! Only implemented for spd-orbitals
-         ! if (this%hubbardU_check .or. this%hubbardU_impurity_check) then
-         if (this%hubbard_u_general_check) then
-            print *, 'Updating Hubbard U correction in Hamiltonian', sum(abs(this%hubbard_u_pot))
-            ! Note: For k-space SCF, this%ee is rebuilt from scratch each iteration
-            ! from the LDA potential, so we don't need to subtract the old Hubbard potential.
-            ! The hubbard_u_pot is recalculated from the new LDM each iteration.
-            do i = 1, 9
-               do j = 1, 9
-                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
-                  !this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) - this%hubbard_u_pot(i + 9, j + 9, ntype)
-                  this%ee(i + 9, j + 9, 1, ntype) = this%ee(i + 9, j + 9, 1, ntype) + this%hubbard_u_pot(i + 9, j + 9, ntype)
-               end do
-            end do
-            print '(i3, a, 9f8.4)', ino, ' Up', (this%hubbard_u_pot(i, i, ntype), i=1,9)
-            print '(i3, a, 9f8.4)', ino, ' Dw', (this%hubbard_u_pot(i, i, ntype), i=10,18)
-            print '(a, f10.6, a)', ' DEBUG: V_Hub d-orbital diagonal (spin-up, m=3): ', this%hubbard_u_pot(7, 7, ntype), ' Ry'
-            print '(a, f10.6, a)', ' DEBUG: V_Hub d-orbital diagonal (spin-down, m=3): ', this%hubbard_u_pot(16, 16, ntype), ' Ry'
-            ! print *, 'hub_v_pot test ', this%hubbard_v_pot
-            if (this%hubbardV_check) then
-               do i = 1, 9
-                  do j = 1, 9
-                     do m = 1, nr
-                        this%ee(i,j,m,ntype) = this%ee(i,j,m,ntype) + this%hubbard_v_pot(i,j,m,ntype)
-                        this%ee(i+9,j+9,m,ntype) = this%ee(i+9,j+9,m,ntype) + this%hubbard_v_pot(i+9,j+9,m,ntype)
-                     end do
-                  end do
-               end do
-            end if
-         end if
-
          if (this%hoh) then
-            ! call this%build_obarm()
-            ! call this%build_enim()
+            call this%build_obarm()
+            call this%build_enim()
             do m = 1, nr
                ji = 0
                if (m > 1) then
@@ -2087,8 +1202,8 @@ contains
                end if
                ! Check if neighbour ´m´ exists for atom ´ntype´, otherwise fill HoH Hamiltonian with zeros.
                if (ji > 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%ee(:, :, m, ntype), 18, this%obarm(:, :, ji), 18, czero, this%eeo(:, :, m, ntype), 18)
-                  call zgemm('n', 'c', 18, 18, 18, cone, this%eeo(:, :, m, ntype), 18, this%ee(:, :, m, ntype), 18, czero, this%eeoee(:, :, m, ntype), 18)
+                  call zgemm('n', 'n', nb, nb, nb, cone, this%ee(:, :, m, ntype), nb, this%obarm(:, :, ji), nb, czero, this%eeo(:, :, m, ntype), nb)
+                  call zgemm('n', 'c', nb, nb, nb, cone, this%eeo(:, :, m, ntype), nb, this%ee(:, :, m, ntype), nb, czero, this%eeoee(:, :, m, ntype), nb)
                else
                   this%eeo(:, :, m, ntype) = 0.0d0
                end if
@@ -2104,45 +1219,32 @@ contains
          if (this%hoh) this%eeo_glob = this%eeo
       end if
       close (128)
-      deallocate(hmag)
-
-      ! Compute spectrum bounds for KPM/Chebyshev applications
-      if (this%control%recur== 'chebyshev') then
-         call this%compute_hamiltonian_bounds(verbose=.false., bounds_algorithm=this%bounds%algorithm)
-      end if
    end subroutine build_bulkham
 
    subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji, iz
-      complex(rp), dimension(:,:,:,:), allocatable :: hmag
+      integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
-      ! print *, 'Building local Hamiltonian', this%charge%lattice%nmax, ' atoms'
-      call g_timer%start('Build local hamiltonian')
-      allocate(hmag(9, 9, this%charge%lattice%nn_max, 4))
-
-      !$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, hmag)
+      call g_timer%start('build local hamiltonian')
+    !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
       do nlim = 1, this%charge%lattice%nmax
-         ! print *, 'Building local Hamiltonian for atom ', nlim, ' of ', this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
-         iz = this%charge%lattice%iz(nlim) ! Atom type in the input.nml file
-         call this%chbar_nc(nlim, nr, hmag)
+         call this%chbar_nc(nlim, nr, ino, nlim)
          do m = 1, nr
-            do i = 1, 9
-               do j = 1, 9
-                  this%hall(j, i, m, nlim) = hmag(j, i, m, 4) + hmag(j, i, m, 3) ! H0+Hz
-                  this%hall(j + 9, i + 9, m, nlim) = hmag(j, i, m, 4) - hmag(j, i, m, 3) ! H0-Hz
-                  this%hall(j, i + 9, m, nlim) = hmag(j, i, m, 1) - i_unit*hmag(j, i, m, 2) ! Hx-iHy
-                  this%hall(j + 9, i, m, nlim) = hmag(j, i, m, 1) + i_unit*hmag(j, i, m, 2) ! Hx+iHy
+            do i = 1, norb
+               do j = 1, norb
+                  this%hall(j, i, m, nlim) = this%hmag(j, i, m, 4) + this%hmag(j, i, m, 3) ! H0+Hz
+                  this%hall(j +spin_off, i +spin_off, m, nlim) = this%hmag(j, i, m, 4) - this%hmag(j, i, m, 3) ! H0-Hz
+                  this%hall(j, i +spin_off, m, nlim) = this%hmag(j, i, m, 1) - i_unit*this%hmag(j, i, m, 2) ! Hx-iHy
+                  this%hall(j +spin_off, i, m, nlim) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do
             end do
-            ! print '(9f6.2)', real(hmag(:, :, m, 4))
-            !print '(18f6.2)', real(this%hall(:, :, m, nlim))
-            ! print *,'---------------------'
          end do
          if (this%hoh) then
+            call this%build_obarm()
+            call this%build_enim()
             do m = 1, nr
                ji = 0
                if (m > 1) then
@@ -2155,31 +1257,19 @@ contains
                end if
                ! Check if neighbour ´m´ exists for atom ´nlim´, otherwise fill HoH Hamiltonian with zeros.
                if (ji > 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hall(1, 1, m, nlim), 18, this%obarm(1, 1, ji), 18, czero, this%hallo(1, 1, m, nlim), 18)
+                  call zgemm('n', 'n', nb, nb, nb, cone, this%hall(1, 1, m, nlim), nb, this%obarm(1, 1, ji), nb, czero, this%hallo(1, 1, m, nlim), nb)
                else
                   this%hallo(:, :, m, nlim) = 0.0d0
                end if
             end do
          end if
-         ! if (this%hubbardU_impurity_check) then
-         if (this%hubbard_u_general_check) then
-            do i = 1, 9
-               do j = 1, 9
-                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, iz)
-                  this%hall(i + 9, j + 9, 1, nlim) = this%hall(i + 9, j + 9, 1, nlim) + this%hubbard_u_pot(i + 9, j + 9, iz)
-               end do
-            end do
-         end if
       end do
-      !$omp end parallel do
+    !!$omp end parallel do
       if (this%local_axis) then
          this%hall_glob = this%hall
          if (this%hoh) this%hallo_glob = this%hallo
       end if
-      deallocate(hmag)
-      !print '(2g12.5)', this%hall
-      ! this%hall = (0.0d0, 0.0d0) ! Free memory
-      call g_timer%stop('Build local hamiltonian')
+      call g_timer%stop('build local hamiltonian')
    end subroutine build_locham
 
    subroutine rs2pao(this)
@@ -2192,9 +1282,9 @@ contains
       integer :: ntype, iostat1, iostat2, iostatus
       real(rp), dimension(3) :: vet, vetpao, idx
       real(rp), dimension(3, 3) :: a_inv
-      complex(rp), dimension(18, 18) :: dum
+      complex(rp), dimension(nb, nb) :: dum
       n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
+      max_orbital = norb
 
       open (unit=92, file='rs2paoham.dat', action='write', iostat=iostatus, status='replace')
       do ntype = 1, this%charge%lattice%ntype
@@ -2225,12 +1315,12 @@ contains
 
                if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
 
-               call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
-               call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
-               call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
-               call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
-               do i = 1, 18
-                  do j = 1, 18
+               call hcpx(this%ee(1:norb,1:norb,k,ntype), 'sph2cart')
+               call hcpx(this%ee(1:norb,norb+1:nb,k,ntype), 'sph2cart')
+               call hcpx(this%ee(norb+1:nb,1:norb,k,ntype), 'sph2cart')
+               call hcpx(this%ee(norb+1:nb,norb+1:nb,k,ntype), 'sph2cart')
+               do i = 1, nb
+                  do j = 1, nb
                      ipao = 0; jpao = 0
                      call site2orb(i, ia, ipao, n_atoms, max_orbital)
                      call site2orb(j, this%charge%lattice%iz(jj), jpao, n_atoms, max_orbital)
@@ -2262,7 +1352,7 @@ contains
       type(hamData), allocatable :: hamArray(:)
 
       n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
+      max_orbital = norb
       numLines = countLines('paoham.dat')
       allocate (hamArray(numLines))
 
@@ -2315,8 +1405,8 @@ contains
             end if
             write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
             write (129, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
-            write (128, '(18f10.6)') real(this%EE(1:18, 1:18, k, ntype))*13.605703976
-            write (129, '(18f10.6)') aimag(this%EE(1:18, 1:18, k, ntype))*13.605703976
+            write (128, '(18f10.6)') real(this%EE(1:nb, 1:nb, k, ntype))*13.605703976
+            write (129, '(18f10.6)') aimag(this%EE(1:nb, 1:nb, k, ntype))*13.605703976
             write (128, *) sum(real(this%ee(:, :, k, ntype)))
             write (129, *) sum(real(this%ee(:, :, k, ntype)))
          end do
@@ -2337,7 +1427,7 @@ contains
       real(rp) :: dumre, dumcmplx
 
       n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
+      max_orbital = norb
       open (unit=90, file='paoup.dat', action='read', iostat=iostatus, status='old')
       open (unit=91, file='paodw.dat', action='read', iostat=iostatus, status='old')
       open (unit=92, file='paoham.dat', action='read', iostat=iostatus, status='old')
@@ -2422,13 +1512,13 @@ contains
 !!                         + (idxi*this%charge%lattice%a(:,1) + idxj*this%charge%lattice%a(:,2) + idxk*this%charge%lattice%a(:,3))!*this%charge%lattice%alat
 !              if(norm2(vet(:)-vetpao(:))<1.0d-3)then
 !                idxdw(k,:) = [idxi,idxj,idxk]
-!                this%ee(orbl+9-(iia-1)*9, orbm+9-(jja-1)*9,k,ntype) = cmplx(dumre,dumcmplx)/13.605703976
+!                this%ee(orbl+spin_off-(iia-1)*9, orbm+spin_off-(jja-1)*9,k,ntype) = cmplx(dumre,dumcmplx)/13.605703976
 !              end if
 !            end if
 !          end do
             end if
             write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
-            write (128, '(18f10.6)') real(this%EE(1:18, 1:18, k, ntype))!*13.605703976
+            write (128, '(18f10.6)') real(this%EE(1:nb, 1:nb, k, ntype))!*13.605703976
             write (128, *) sum(real(this%ee(:, :, k, ntype)))
             !write(129,*)´m=´,k, ´Atom=´, jj, ´Coordinates=´, this%charge%lattice%cr(:, jj), ´Ntype=´,ntype, ´Index=´, idx(k,:)
             !write(129,´(9f10.6)´) real(this%EE(10:18,1:9,k,ntype))*13.605703976
@@ -2440,73 +1530,75 @@ contains
       end do
    end subroutine build_from_paoflow
 
-   subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh, hhmag)
+   subroutine ham0m_nc(this, it, jt, vet, hhh)
       class(hamiltonian), intent(inout) :: this
       ! Input
-      integer, intent(in) :: ia, ja ! Atom sites i and j
       integer, intent(in) :: it, jt ! Type of atom i and j
       real(rp), dimension(3), intent(in) :: vet
-      real(rp), dimension(9, 9), intent(in) :: hhh
+      real(rp), dimension(norb, norb), intent(in) :: hhh
       ! Local Variables
       integer :: i, j, ilm, jlm, m
-      real(rp), dimension(3) :: mom_ia, mom_ja
-      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
-      complex(rp), dimension(9, 9) :: hhhc
-      ! complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
-      complex(rp), dimension(3) :: momc_ia, momc_ja
+      complex(rp), dimension(norb, norb) :: hhhc
+      complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
       complex(rp) :: dot
       real(rp) :: vv
-      complex(rp), dimension(9, 9, 4), intent(out) :: hhmag
 
-      hhmag(:, :, :) = 0.0d0
-      !this%hhmag(:, :, :) = 0.0d0
+      this%hhmag(:, :, :) = 0.0d0
 
       vv = norm2(vet)
-      mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-      mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-      if (norm2(this%q_ss)>0.00001_rp) then
-         !print *, 'q:', this%q_ss
-         r_ia = this%charge%lattice%cr(:, ia)
-         r_ja = this%charge%lattice%cr(:, ja)
-         mom_ia(3) = 0.0d0
-         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))
-         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))
-         mom_ja(3) = 0.0d0
-         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))
-         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))
-      end if
+
       ! Real to complex
-      dot = cmplx(dot_product(mom_ia, mom_ja), kind=kind(0.0d0))
-      momc_ia = cmplx(mom_ia, kind=kind(0.0d0))
-      momc_ja = cmplx(mom_ja, kind=kind(0.0d0))
-      cross = cmplx(cross_product(mom_ia, mom_ja), kind=kind(0.0d0))
+      dot = cmplx(dot_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
+      do i = 1, this%charge%lattice%ntype
+         do j = 1, 3
+            momc(i, j) = cmplx(this%charge%lattice%symbolic_atoms(i)%potential%mom(j), kind=kind(0.0d0))
+         end do
+      end do
+      cross = cmplx(cross_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
       hhhc(:, :) = cmplx(hhh(:, :), kind=kind(0.0d0))
 
-      do ilm = 1, 9
-         do jlm = 1, 9
-            hhmag(ilm, jlm, 4) = &
+      if (size(this%charge%lattice%symbolic_atoms(it)%potential%wx0) < norb) then
+         call g_logger%fatal('wx0(it) too small: type='//int2str(it)// &
+                             ' size='//int2str(size(this%charge%lattice%symbolic_atoms(it)%potential%wx0))// &
+                             ' norb='//int2str(norb)// &
+                             ' lmax='//int2str(this%charge%lattice%symbolic_atoms(it)%potential%lmax), __FILE__, __LINE__)
+      end if
+      if (size(this%charge%lattice%symbolic_atoms(jt)%potential%wx0) < norb) then
+         call g_logger%fatal('wx0(jt) too small: type='//int2str(jt)// &
+                             ' size='//int2str(size(this%charge%lattice%symbolic_atoms(jt)%potential%wx0))// &
+                             ' norb='//int2str(norb)// &
+                             ' lmax='//int2str(this%charge%lattice%symbolic_atoms(jt)%potential%lmax), __FILE__, __LINE__)
+      end if
+
+      do ilm = 1, norb
+         do jlm = 1, norb
+            this%hhmag(ilm, jlm, 4) = &
                this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm) + &
                this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*dot
          end do
       end do
 
+!    do ilm = 1, norb
+!      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
+!    end do
+
       if (vv <= 0.01d0) then
-         do ilm = 1, 9
+         do ilm = 1, norb
             if (this%hoh) then
-               hhmag(ilm, ilm, 4) = hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cex0(ilm)
+               this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cex0(ilm)
             else
-               hhmag(ilm, ilm, 4) = hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cx0(ilm)
+               this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cx0(ilm)
             end if
          end do
       end if
 
       do m = 1, 3
-         do jlm = 1, 9
-            do ilm = 1, 9
-               hhmag(ilm, jlm, m) = &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc_ia(m) + &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc_ja(m) + &
+         do jlm = 1, norb
+            do ilm = 1, norb
+               this%hhmag(ilm, jlm, m) = &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc(it, m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc(jt, m) + &
                   i_unit*this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cross(m)
             end do
          end do
@@ -2514,96 +1606,75 @@ contains
 
       if (vv > 0.01d0) return
       do m = 1, 3
-         do ilm = 1, 9
+         do ilm = 1, norb
             if (this%hoh) then
-               hhmag(ilm, ilm, m) = hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc_ia(m)
+               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc(it, m)
             else
-               hhmag(ilm, ilm, m) = hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc_ia(m)
+               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc(it, m)
             end if
          end do
       end do
 
       !do m=1, 3
       !  write(123, *)´m=´, m
-      !  do ilm=1, 9
+      !  do ilm = 1, norb
       !    write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
       !  end do
       !end do
    end subroutine ham0m_nc
 
-   subroutine chbar_nc(this, ia, nr, hmag)
+   subroutine chbar_nc(this, ia, nr, ino, ntype)
       class(hamiltonian), intent(inout) :: this
       ! Input
       integer, intent(in) :: ia ! Atom number in clust
       integer, intent(in) :: nr ! Number of neighbours considered
-      complex(rp), dimension(9, 9, this%charge%lattice%nn_max, 4), intent(out) :: hmag
+      integer, intent(in) :: ino ! Atom bravais type of ia
+      integer, intent(in) :: ntype ! Atom type
       ! Local variables
       real(rp) :: r2
-      real(rp), dimension(3, this%charge%lattice%kk ) :: cralat ! Clust position times the lattice constant
-      ! real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
+      real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
       real(rp), dimension(3) :: vet
-      real(rp), dimension(9, 9) :: hhh
-      integer :: i, j, k, l, m, n, it, jt, ja, nn_max_loc
+      real(rp), dimension(norb, norb) :: hhh
+      integer :: i, j, k, l, m, n, it, jt, jj, dummy
       integer :: ni, mdir
       integer :: kk ! Clust size number
-      real(rp), dimension(:, :), allocatable :: ham_vec
-      complex(rp), dimension(9, 9, 4) :: hhmag
 
-      hmag(:, :, :, :) = (0.0d0, 0.0d0)
-      !this%hmag(:, :, :, :) = 0.0d0
+      this%hmag(:, :, :, :) = 0.0d0
 
       r2 = this%charge%lattice%r2
+      cralat(:, :) = this%charge%lattice%cr(:, :)*this%charge%lattice%alat
       kk = this%charge%lattice%kk
-      !cralat(:, :) = this%charge%lattice%cr(:, :)*this%charge%lattice%alat
-      cralat(1:3, 1:kk) = this%charge%lattice%cr(1:3, 1:kk)*this%charge%lattice%alat
-      ! print *,'Shape of cralat in chbar_nc', shape(cralat)
-      ! print *,'kk:', kk ,'r2:', r2
-      allocate(ham_vec(3, nr))
-      nn_max_loc = nr
 
-      ! Use clusba directly - we only need local ham_vec, no lattice%sbarvec storage
-      call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
-
-      ! DEBUG: Print neighbor vectors from chbar_nc for comparison
-      ! if (ia == 1) then  ! Only for first atom
-      !    print *, '=== DEBUG chbar_nc: Neighbor vectors for ia=1, nr=', nr
-      !    do m = 1, min(5, nr)
-      !       print '(A,I3,A,3F12.6)', '  ham_vec[', m, '] = ', ham_vec(:, m)
-      !    end do
-      ! end if
+      call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, dummy)
 
       !do m=1, nr
       !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
       !end do
       it = this%charge%lattice%iz(ia)
       do m = 1, nr
-         ja = this%charge%lattice%nn(ia, m)
+         jj = this%charge%lattice%nn(ia, m)
          !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
          if (m == 1) then
-            ja = ia
+            jj = ia
          end if
-         ! print *, "CR test", shape(this%charge%lattice%cr)
-         if (ja /= 0) then
-            jt = this%charge%lattice%iz(ja)
+         if (jj /= 0) then
+            jt = this%charge%lattice%iz(jj)
             if (this%lattice%pbc) then
-               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,ja,vet)
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,jj,vet)
             else
-               vet(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+               vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
             end if
             !write(123, ´(3f10.6)´) vet(:)
             !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
             !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
-            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ham_vec)
+            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ntype)
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
             end if
-            call this%ham0m_nc(ia, ja, it, jt, vet, hhh, hhmag)
+            call this%ham0m_nc(it, jt, vet, hhh)
             do mdir = 1, 4
-               !call hcpx(this%hhmag(:, :, mdir), 'cart2sph')
-               call hcpx(hhmag(:, :, mdir), 'cart2sph')
-               !this%hmag(:, :, m, mdir) = this%hhmag(:, :, mdir)
-               hmag(:, :, m, mdir) = hhmag(:, :, mdir)
-               !this%hmag(:, :, m, mdir) = hhmag(:, :, mdir)
+               call hcpx(this%hhmag(:, :, mdir), 'cart2sph')
+               this%hmag(:, :, m, mdir) = this%hhmag(:, :, mdir)
             end do
          end if
       end do
@@ -2611,16 +1682,17 @@ contains
       !  write(123, *)´m=´, m
       !  do mdir=1, 4
       !    write(123, *)´mdir=´, mdir
-      !    do i=1, 9
+      !    do i = 1, norb
       !      write(123, ´(9f10.4)´)(real(this%hmag(i, j, m, mdir)), j=1, 9)
       !    end do
       !  end do
       !end do
    end subroutine chbar_nc
 
-   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ham_vec)
+   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ntype)
       class(hamiltonian), intent(inout) :: this
       ! Input
+      integer, intent(in) :: ntype ! Atom type
       integer, intent(in) :: m ! Number of the given neighbour
       integer, intent(in) :: ia ! Atom number in clust
       integer, intent(in) :: jn ! ?
@@ -2628,8 +1700,7 @@ contains
       real(rp), dimension(3), intent(in) :: vet
       ! Output
       integer, intent(out) :: ni
-      real(rp), dimension(9, 9), intent(inout) :: hhh
-      real(rp), dimension(3, this%lattice%nn_max), intent(in) :: ham_vec
+      real(rp), dimension(norb, norb), intent(inout) :: hhh
       ! Local variables
       real(rp) :: a1, a2, a3, aaa, eps
       integer :: i, ilm, jlm
@@ -2641,9 +1712,10 @@ contains
       a3 = 0.0d0
       aaa = 0.0d0
       do i = 1, nr
-         a1 = (vet(1) - ham_vec(1, i))
-         a2 = (vet(2) - ham_vec(2, i))
-         a3 = (vet(3) - ham_vec(3, i))
+         !write(123, ´(a, i4, 3f10.4)´)´i´, i, this%charge%lattice%sbarvec(:, i)
+         a1 = (vet(1) - this%charge%lattice%sbarvec(1, i))
+         a2 = (vet(2) - this%charge%lattice%sbarvec(2, i))
+         a3 = (vet(3) - this%charge%lattice%sbarvec(3, i))
          aaa = a1**2 + a2**2 + a3**2
          if (aaa < eps) goto 1000
       end do
@@ -2652,13 +1724,13 @@ contains
 
       ni = 0
 1000  continue
-      do ilm = 1, 9
-         do jlm = 1, 9
+      do ilm = 1, norb
+         do jlm = 1, norb
             hhh(ilm, jlm) = real(this%charge%lattice%sbar(jlm, ilm, m, this%charge%lattice%num(ia)))
          end do
       end do
 
-      !do ilm = 1, 9
+      !do ilm = 1, norb
       !    write(123, ´(9f10.6)´)(hhh(ilm, jlm), jlm=1, 9)
       !end do
    end subroutine hmfind
@@ -2671,7 +1743,7 @@ contains
          i_out = modulo(orb - 1, max_orbital) + 1
          ia_out = int((orb - 1)/max_orbital) + 1
       else
-         i_out = modulo(orb - 1, max_orbital) + 10
+         i_out = modulo(orb - 1, max_orbital) + max_orbital + 1
          ia_out = int((orb - 1 - n_atoms*max_orbital)/max_orbital) + 1
       end if
    end subroutine orb2site
@@ -2697,16 +1769,16 @@ contains
       integer :: sdim
       ! Rotate Hamiltonian to local axis if wanted
       if (this%local_axis) then
-         sdim = product(shape(this%hall))/18/18
+         sdim = product(shape(this%hall))/nb/nb
          call rotmag_loc(this%hall, this%hall_glob, sdim, m_loc)
-         sdim = product(shape(this%ee))/18/18
+         sdim = product(shape(this%ee))/nb/nb
          call rotmag_loc(this%ee, this%ee_glob, sdim, m_loc)
          if (this%hoh) then
-            sdim = product(shape(this%eeo))/18/18
+            sdim = product(shape(this%eeo))/nb/nb
             call rotmag_loc(this%eeo, this%eeo_glob, sdim, m_loc)
-            sdim = product(shape(this%hallo))/18/18
+            sdim = product(shape(this%hallo))/nb/nb
             call rotmag_loc(this%hallo, this%hallo_glob, sdim, m_loc)
-            sdim = product(shape(this%enim))/18/18
+            sdim = product(shape(this%enim))/nb/nb
             call rotmag_loc(this%enim, this%enim_glob, sdim, m_loc)
          end if
       end if
@@ -2731,487 +1803,4 @@ contains
          end if
       end if
    end subroutine rotate_from_local_axis
-
-   subroutine rs2txt(this)
-      implicit none
-      class(hamiltonian), intent(inout) :: this
-      ! Local variables
-      real(rp), dimension(3) :: rij, rijtest
-      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
-      integer :: jj, jt, max_orbital, n_atoms
-      integer :: ntype, iostat1, iostat2, iostatus
-      real(rp), dimension(3) :: vet, vetpao, idx
-      real(rp), dimension(3, 3) :: a_inv
-      complex(rp), dimension(18, 18) :: dum
-      n_atoms = this%charge%lattice%ntype
-      max_orbital = 9
-
-      open (unit=92, file='rs2txt.dat', action='write', iostat=iostatus, status='replace')
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
-         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
-         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-         do k = 1, nr
-            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
-            if (k == 1) then
-               jj = ia
-            else
-               jj = this%charge%lattice%nn(ia, k)
-            end if
-            if (jj /= 0) then
-               rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
-
-               if (k == 1) dum = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
-
-               call hcpx(dum(1:9,1:9), 'sph2cart')
-               call hcpx(dum(1:9,10:18), 'sph2cart')
-               call hcpx(dum(10:18,1:9), 'sph2cart')
-               call hcpx(dum(10:18,10:18), 'sph2cart')
-               ! Write each matrix element as two columns: real and imaginary part
-               do i = 1, 18
-                 do j = 1, 18
-                  write (92, '(I4,I7, 3F12.8, 2F22.14)') ntype, k, rij , real(this%ee(i, j, k, ntype)), aimag(this%ee(i, j, k, ntype))
-                 end do
-               end do
-            end if
-         end do
-      end do
-      close (92)
-   end subroutine rs2txt
-
-
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Calculates the on site Hubbard U potential matrix
-   !> It used the rotationally invariant formulation bt Liechtensteins (add ref.)
-   !> If hubbard_j was set to zero or not provided in the input, then Liechteinsteins formulation reduced to Dudarevs (add ref.).
-   !> In this case the provided U becomes U_eff = U-J in Dudarevs paper.
-   !> Inputs are number of atoms "na", Slater integrals "f", Hubbard U's "hubbard_u" and Hubbard J's, "hubbard_j"
-   !> A generalization of the spdf_Hubbard subroutine that can be used for both bulk and impurity corrections
-   !> Builds the effective single-particle potentials for the LDA+U correction for s,p and d orbitals.
-   !> (Only the slater integrals F0, F2, F4 and F6 are defined. Machinery works for f orbitals
-   !> too, but the corresponding (32x32) basis needs implementation.)
-   !> Created by Viktor Frilén and Emil Beiersdorf 27.11.2024
-   !> Modified by Viktor Frilén 13.12.2024
-   !---------------------------------------------------------------------------
-   subroutine calculate_hubbard_u_potential_general(this)
-      class(hamiltonian) :: this
-      
-      ! Local variables
-      integer :: nrec ! Number of atoms to perform recursion. This is different between bulk and impurity calculation. Which makes this subroutine compatable with both.
-      integer :: i, j ! Orbital indices
-      integer :: na ! Atom index
-      integer :: ie ! Energy channel index
-      integer :: ispin ! Spin index
-      integer :: l ! Orbital number, 0,1,2,3 (1,2,3,4) = s,p,d,f (index postions in arrays)
-      integer :: cntr ! Counts number of orbitals with a U per atom. 
-      real(rp) :: result
-      integer :: l_index ! Index for l 1,2,3,4 = s,p,d,f
-      integer :: m, m1, m2, m3, m4, m_max, m1_val, m2_val, m3_val, m4_val ! Magnetic quantum numbers
-      real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
-      real(rp), dimension(this%lattice%ntype, 4, 4) :: f
-      real(rp) :: f0, f2, f4, f6 ! Slater integrals
-      ! Local variable array for local density matrix
-      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: LDM ! Local density matrix (LDM), works for spdf orbitals
-      real(rp) :: dc ! Double counting term
-      real(rp), dimension(4) :: U_energy, dc_energy 
-      real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin ! LDM with m traced out
-      real(rp), dimension(this%lattice%ntype, 4) :: n_tot  ! LDM with traced out spin  
-      ! Temporary potential that will be put into this%hubbard_u_pot
-      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: hub_pot
-      
-      type :: ArrayType
-         integer, allocatable :: val(:)
-      end type ArrayType
-      type(ArrayType), dimension(4) :: ms
-      type(ArrayType), dimension(this%lattice%ntype) :: l_arr
-  
-      ms(1)%val = [0]
-      ms(2)%val = [-1, 0, 1]
-      ms(3)%val = [-2, -1, 0, 1, 2]
-      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
-
-      this%hubbard_u_pot(:,:,:) = 0.0d0
-
-      LDM(:,:,:,:,:) = 0.0d0
-      hub_pot(:,:,:,:,:) = 0.0d0
-      n_tot(:,:) = 0.0d0
-      n_spin(:,:,:) = 0.0d0
-      f(:,:,:) = 0.0d0
-
-      hub_u(:,:) = 0.0d0
-      hub_j(:,:) = 0.0d0
-      do na = 1, this%lattice%ntype
-         do l = 1, 3
-            hub_u(na,l) = this%lattice%symbolic_atoms(na)%potential%hubbard_u(l)
-            hub_j(na,l) = this%lattice%symbolic_atoms(na)%potential%hubbard_j(l)
-         end do
-      end do
-
-      ! Maybe do a loop similar to this one (so only the nrec hubbard_u_pot is calculated):
-      ! do k = 1, this%lattice%nrec
-      !    this%recursion%hamiltonian%hubbard_u_pot(:,:,this%lattice%nbulk + k) = array(:,:,k)
-      ! end do
-
-      ! Calculates slater integrals
-      do na = 1, this%lattice%ntype
-         ! For s, p, d and f orbitals, F0 = U
-         ! s-orbital
-         f(na,1,1) = hub_u(na,1)
-         ! p-orbital J = (1/5)*F2 
-         f(na,2,1) = hub_u(na,2)
-         f(na,2,2) = hub_j(na,2)*5.0_rp
-         ! d-orbital, J = (F2 + F4)/14 with F4/F2 ~ 0.625
-         f(na,3,1) = hub_u(na,3)
-         f(na,3,2) = 14.0_rp*hub_j(na,3)/1.625_rp 
-         f(na,3,3) = 0.625_rp*f(na,3,2)
-         !> For f orbitals, J = (286F2 + 195F4 + 250F6)/6435 with F4/F2 ~ 0.67 and F6/F2 ~ 0.49
-         f(na,4,1) = hub_u(na,4)
-         f(na,4,2) = 6435_rp*hub_j(na,4)/(286_rp + 195_rp*0.67_rp + 250_rp*0.49_rp)
-         f(na,4,3) = 0.67_rp*f(na,4,2)
-         f(na,4,4) = 0.49_rp*f(na,4,2)               
-      end do 
-      
-      !> Creates an array with each orbital for each atom
-      do i = 1, this%lattice%ntype
-         cntr = count(abs(hub_u(i,:)) > 1.0E-10) ! Counts orbitals with Hub U for each atom for allocation purposes
-         allocate(l_arr(i)%val(cntr))
-      end do
-
-      do i = 1, this%lattice%ntype
-         cntr = 0
-         do j = 1, 4
-            if (abs(hub_u(i,j)) > 1.0E-10) then
-               cntr = cntr + 1
-               l_arr(i)%val(cntr) = j ! Fills the l_arr list with the orbitals that have Hub U
-            end if
-         end do
-      end do       
-      
-      ! Sets up the local density matrix
-      do na = 1, this%lattice%ntype
-         do l = 0, 2
-            do ispin = 1, 2
-               do i = 1, 2*l + 1 !m3
-                  do j = 1, 2*l + 1 !m4
-                     LDM(na, l + 1, ispin, i, j) = this%lattice%symbolic_atoms(na)%potential%ldm(l + 1, ispin, i, j)
-                  end do
-               end do
-            end do
-         end do
-      end do
-      
-      ! Builds the Hubbard U+J potential 
-      print *, ''
-      print *, '-----------------------------------------------------------------------------------------------------------------'
-      print *, 'Calculate Hubbard U potential for impurity and bulk:'
-      do na = 1, this%lattice%ntype
-         print *, ' Atom ', na
-         print *, ''
-         ! Calculates traces of the local density matrix, n_spin is the trace in m, n_tot is trace in spin of n_spin.
-         do l = 1, 3 !0 to 3 but indexing starts on 1
-            do ispin = 1, 2
-               n_spin(na, l, ispin) = trace(LDM(na, l, ispin, :, :)) 
-               n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
-            end do
-         end do
-         U_energy = 0.0d0
-
-         ! l_arr(na)%val(l) gives the orbital index for each atom, for s,p,d its value is 1,2,3
-         ! l_arr(na)%val(l)-1 gives the actual l-value for each atom, for s,p,d its value is 0,1,2   
-         do l = 1, size(l_arr(na)%val)
-            l_index = l_arr(na)%val(l)
-            m_max = 2*l_index-1
-            do ispin = 1, 2
-               do m1 = 1, m_max
-                  do m2 = 1, m_max
-                     do m3 = 1, m_max
-                        do m4 = 1, m_max
-                           m1_val = ms(l_index)%val(m1)
-                           m2_val = ms(l_index)%val(m2)
-                           m3_val = ms(l_index)%val(m3)
-                           m4_val = ms(l_index)%val(m4)
-                           f0 = f(na,l_index,1)
-                           f2 = f(na,l_index,2)
-                           f4 = f(na,l_index,3)
-                           f6 = f(na,l_index,4)
-                             ! Diagnostic prints: show Slater integrals and representative Coulomb/a_k
-                             if (m1 == 1 .and. m2 == 1 .and. m3 == 1 .and. m4 == 1 .and. ispin == 1) then
-                                print *, 'DEBUG: Hubbard diagnostics for atom', na, 'l_index', l_index
-                                print *, ' DEBUG: Slater integrals (Ry): F0=', f0, ' F2=', f2, ' F4=', f4, ' F6=', f6
-                                ! show a_k contributions for the specific m-values
-                                print *, ' DEBUG: a_k (k=0,2,4) =', a_k(0,l_index-1,m1_val,m2_val,m3_val,m4_val), a_k(2,l_index-1,m1_val,m2_val,m3_val,m4_val), a_k(4,l_index-1,m1_val,m2_val,m3_val,m4_val)
-                                ! representative Coulomb matrix element for m=0 combination
-                                print *, ' DEBUG: Coulomb_mat (m=0,0,0,0) [Ry] =', Coulomb_mat(l_index-1, 0, 0, 0, 0, f0, f2, f4, f6)
-                             end if
-                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                           + Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6)*LDM(na,l_index,3-ispin,m3,m4) &
-                           + (Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                           - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6))*LDM(na,l_index,ispin,m3,m4)
-                           U_energy(l_index) = U_energy(l_index) + 0.5_rp *( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                           * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,3-ispin,m3,m4) &
-                           + ( Coulomb_mat(l_index-1,m1_val,m3_val,m2_val,m4_val,f0,f2,f4,f6) &
-                           - Coulomb_mat(l_index-1,m1_val,m3_val,m4_val,m2_val,f0,f2,f4,f6) ) &
-                           * LDM(na,l_index,ispin,m1,m2) * LDM(na,l_index,ispin,m3,m4) )
-                        end do
-                     end do
-                     ! Double counting terms only added to V_mm'^spin diagonal in m and m' (local density matrix is on-site)
-                     ! 
-                     ! AMF (Around Mean Field) double counting:
-                     ! E_DC^AMF = (1/2)*U*n^2 - (1/2)*J*(n_up^2 + n_down^2)
-                     ! V_DC^AMF = dE_DC/dn_sigma = U*n - J*n_sigma
-                     !  if (m1 == m2) then
-                     !     hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                     !     - hub_u(na,l_index)*n_tot(na,l_index) + hub_j(na,l_index)*n_spin(na,l_index,ispin)
-                     !  end if
-                     ! 
-                     ! FLL (Fully Localized Limit) double counting:
-                     ! E_DC^FLL = (1/2)*U*n*(n-1) - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)]
-                     ! V_DC^FLL = dE_DC/dn_sigma = U*(n - 1/2) - J*(n_sigma - 1/2)
-                     if (m1 == m2) then
-                        hub_pot(na,l_index,ispin,m1,m2) = hub_pot(na,l_index,ispin,m1,m2) &
-                              - hub_u(na,l_index)*(n_tot(na,l_index) - 0.5_rp) &
-                              + hub_j(na,l_index)*(n_spin(na,l_index,ispin) - 0.5_rp)  ! Corrected: minus sign for J term
-                      end if
-                  end do
-               end do
-            end do
-            print *, 'n_tot for atom', na, ':', n_tot(na, :)
-            print *, 'n_spin up:', n_spin(na, :, 1)
-            print *, 'n_spin down:', n_spin(na, :, 2)
-            print *, 'Sample diagonal V_U:', hub_pot(na, 3, 1, 3, 3)
-            print *, 'V_U diagonal spin-up (m=0):', hub_pot(na, 3, 1, 3, 3)
-            print *, 'V_U diagonal spin-down (m=0):', hub_pot(na, 3, 2, 3, 3)
-         end do  
-
-      !> Puts hub_pot into global hubbard_u_pot (only done for spd-orbitals)
-         do l = 0, 2
-            do i = 1, 2*l + 1
-               do j = 1, 2*l + 1
-                  this%hubbard_u_pot(l**2+i, l**2+j, na) = hub_pot(na, l+1, 1, i, j)
-                  this%hubbard_u_pot(l**2+i+9, l**2+j+9, na) = hub_pot(na, l+1, 2, i, j)
-               end do
-            end do
-            ! Double counting energy correction
-            ! 
-            ! AMF (Around Mean Field):
-            ! E_DC^AMF = (1/2)*U*n^2 - (1/2)*J*(n_up^2 + n_down^2)
-            ! Simplifies to: E_DC^AMF = (1/2)*U*n*(n-1) + (1/2)*U*n - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)] - (1/2)*J*(n_up + n_down)
-            !                         = (1/2)*U*n*(n-1) - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)] + (1/2)*(U - J)*n
-            !  dc_energy(l+1) = 0.5_rp*hub_u(na,l+1)*n_tot(na,l+1)**2 &
-            !                 - 0.5_rp*hub_j(na,l+1)*(n_spin(na,l+1,1)**2 + n_spin(na,l+1,2)**2)
-            ! 
-            ! FLL (Fully Localized Limit):
-            ! E_DC^FLL = (1/2)*U*n*(n-1) - (1/2)*J*[n_up*(n_up-1) + n_down*(n_down-1)]
-             dc_energy(l+1) = 0.5_rp * ( &
-               hub_u(na,l+1) * n_tot(na,l+1) * (n_tot(na,l+1) - 1.0_rp) &
-             - hub_j(na,l+1) * ( n_spin(na,l+1,1)*(n_spin(na,l+1,1) - 1.0_rp) &
-                               + n_spin(na,l+1,2)*(n_spin(na,l+1,2) - 1.0_rp) ) )
-
-            
-      ! This part could be modified to work for imputrities
-            do i = 1, size(l_arr(na)%val)
-               if (l+1 == l_arr(na)%val(i)) then ! Only prints U_energy if that orbital has a specified U
-                  print *, ' Orbital ', this%orb_conv(l+1), ' :'
-                  print *, '  (U, dc, total) [eV] = ', U_energy(l+1)*ry2ev, dc_energy(l+1)*ry2ev, U_energy(l+1)*ry2ev - dc_energy(l+1)*ry2ev
-                  print *, ''
-               end if
-            end do
-         end do
-         
-      end do 
-      print *, '-----------------------------------------------------------------------------------------------------------------'
-      print *,''
-      
-   end subroutine calculate_hubbard_u_potential_general
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Compute global spectrum bounds for bulk Hamiltonian
-   !>
-   !> Computes the global (overall) spectrum bounds across all neighbor shells
-   !> and atom types. This is used for KPM/Chebyshev scaling.
-   !>
-   !> @param[in] verbose Optional flag for detailed output
-   !---------------------------------------------------------------------------
-   subroutine compute_hamiltonian_bounds(this, verbose, bounds_algorithm)
-      class(hamiltonian), intent(inout) :: this
-      logical, intent(in), optional :: verbose
-      character(len=*), intent(in), optional :: bounds_algorithm ! 'gershgorin'|'sturm'|'both'
-
-      integer :: ntype, m, nr, ia, n_atoms, n_total_blocks
-      real(rp) :: global_e_min_gershgorin, global_e_max_gershgorin
-      real(rp) :: global_e_min_sturm, global_e_max_sturm
-
-      type(bounds) :: bounds_gamma
-      ! For superblock exact eigenvalue calculation
-      complex(rp), dimension(:,:), allocatable :: H_super
-      integer :: nb_blocks, sb_i, sb_j, atom_neighbor, neighbor_type
-      integer :: sb_block, sb_off_i, sb_off_j, nsize
-      real(rp) :: tmp_e_min, tmp_e_max
-      ! Temporaries used in Gershgorin loops
-      real(rp) :: center, radius
-      integer :: j, mnb
-      real(rp) :: e_min_super, e_max_super
-      real(rp) :: avg_gershgorin_width, avg_sturm_width
-      logical :: verb, sturm_available_any
-      complex(rp), dimension(:,:), allocatable :: H_block
-      character(len=256) :: msg
-      ! Optional bounds selection variables (declared here so they are available before executable statements)
-      character(len=16) :: algo
-      integer :: n_orb, n_sites, isite, jsite, i_start, i_end, j_start, j_end, ineigh, ntype_i, ia_loc, ja
-      complex(rp), dimension(:,:), allocatable :: H_gamma
-      real(rp) :: width, e_mid
-      ! Allocation status integers for allocatable temporaries
-      integer :: alloc_stat, alloc_stat2
-
-      verb = .false.
-      if (present(verbose)) verb = verbose
-
-      if (.not. allocated(this%ee)) then
-         call g_logger%warning('compute_hamiltonian_bounds: Bulk Hamiltonian ee not allocated', __FILE__, __LINE__)
-         return
-      end if
-
-      n_atoms = this%charge%lattice%ntype
-      n_total_blocks = 0
-      global_e_min_gershgorin = huge(1.0_rp)
-      global_e_max_gershgorin = -huge(1.0_rp)
-      global_e_min_sturm = huge(1.0_rp)
-      global_e_max_sturm = -huge(1.0_rp)
-      sturm_available_any = .false.
-   ! Read user options or set defaults
-   ! Start with object's algorithm and allow caller to override
-   algo = this%bounds%algorithm
-   if (present(bounds_algorithm)) algo = trim(adjustl(bounds_algorithm))
-      ! If caller passed an empty string (present but blank), treat as 'none'
-      if (len_trim(algo) == 0) algo = 'none'
-
-      ! If user explicitly requests 'none', skip bounds computation and
-      ! leave energy/recursion modules to use their namelist-provided values.
-      if (trim(adjustl(algo)) == 'none') then
-         ! call g_logger%info('compute_and_compare_bounds: bounds_algorithm="none"; skipping bounds calculation and using energy namelist values', __FILE__, __LINE__)
-         return
-      end if
-
-      ! Compute Gershgorin bounds from the full real-space Hamiltonian rows
-      ! (aggregate contributions from all neighbor blocks). This produces
-      ! conservative bounds that include inter-block hoppings and local
-      ! spin-orbit shifts (lsham) and is cheap to compute.
-      do ntype = 1, n_atoms
-         ia = this%charge%lattice%atlist(ntype)
-         nr = this%charge%lattice%nn(ia, 1)
-
-         ! Count blocks for reporting
-         n_total_blocks = n_total_blocks + nr
-
-         ! Gershgorin: for each orbital (1..18) sum couplings across all neighbor blocks
-         do sb_block = 1, 18
-            center = 0.0_rp
-            if (allocated(this%ee)) then
-               center = real(this%ee(sb_block, sb_block, 1, ntype))
-            end if
-            if (allocated(this%lsham)) then
-               center = center + real(this%lsham(sb_block, sb_block, ntype))
-            end if
-
-            radius = 0.0_rp
-            do mnb = 1, this%charge%lattice%nn(ia, 1)
-               do j = 1, 18
-                  if (mnb == 1 .and. j == sb_block) cycle
-                  radius = radius + abs(this%ee(sb_block, j, mnb, ntype))
-               end do
-            end do
-
-            global_e_min_gershgorin = min(global_e_min_gershgorin, center - radius)
-            global_e_max_gershgorin = max(global_e_max_gershgorin, center + radius)
-         end do
-
-      end do
-
-      ! Report global bounds
-      call g_logger%info('Spectrum bounds for bulk Hamiltonian', __FILE__, __LINE__)
-      
-      ! write(msg, '(A,I0,A)') 'Analyzed ', n_total_blocks, ' Hamiltonian blocks'
-      ! call g_logger%info(msg, __FILE__, __LINE__)
-
-      write(msg, '(A,F14.8,A,F14.8)') &
-         '  Gershgorin: E_min=', global_e_min_gershgorin, ', E_max=', global_e_max_gershgorin
-      call g_logger%info(msg, __FILE__, __LINE__)
-
-   ! Build H(k=Gamma) for the full unit cell and compute its spectrum
-
-      n_orb = 18
-      n_sites = this%charge%lattice%nrec
-      allocate(H_gamma(n_orb*n_sites, n_orb*n_sites), stat=alloc_stat2)
-      if (alloc_stat2 /= 0) then
-         call g_logger%warning('  compute_and_compare_bounds: failed to allocate H_gamma, skipping H(Gamma) check', __FILE__, __LINE__)
-      else
-         H_gamma = (0.0_rp, 0.0_rp)
-
-      ! Assemble H(k=Gamma): structure factors = 1 for all neighbors
-      do isite = 1, n_sites
-         ntype_i = this%charge%lattice%ib(isite)
-         ia_loc = this%charge%lattice%atlist(ntype_i)
-         i_start = (isite - 1) * n_orb + 1
-         i_end = isite * n_orb
-         do ineigh = 1, this%charge%lattice%nn(ia_loc, 1)
-            if (ineigh == 1) then
-               jsite = isite
-            else
-               ja = this%charge%lattice%nn(ia_loc, ineigh)
-               jsite = this%charge%lattice%iz(ja)
-               if (jsite < 1 .or. jsite > n_sites) cycle
-            end if
-            j_start = (jsite - 1) * n_orb + 1
-            j_end = jsite * n_orb
-            H_gamma(i_start:i_end, j_start:j_end) = H_gamma(i_start:i_end, j_start:j_end) + this%ee(:, :, ineigh, ntype_i)
-         end do
-      end do
-
-   end if  ! end if (alloc_stat2 /= 0) then ... else ...
-
-   ! Diagonalize H_gamma using the existing spectrum routine
-      if (alloc_stat2 == 0) then
-         call compute_spectrum_bounds(H_gamma, bounds_gamma, 'sturm', verbose=.false.)
-      end if
-   if (bounds_gamma%sturm_available) then
-      write(msg, '(A,F14.8,A,F14.8)') '  H(Gamma):   E_min=', bounds_gamma%e_min_sturm, ', E_max=', bounds_gamma%e_max_sturm
-   else
-      write(msg, '(A,F14.8,A,F14.8)') '  H(Gamma) (Gershgorin fallback): E_min=', bounds_gamma%e_min_gershgorin, ', E_max=', bounds_gamma%e_max_gershgorin
-   end if
-   call g_logger%info(msg, __FILE__, __LINE__)
-
-   ! Decide final selected bounds based on user algo and margin
-   if (algo == 'gershgorin') then
-      this%bounds%e_min = global_e_min_gershgorin
-      this%bounds%e_max = global_e_max_gershgorin
-   else if (algo == 'sturm' .or. algo == 'hgamma') then
-      if (bounds_gamma%sturm_available) then
-         this%bounds%e_min = bounds_gamma%e_min_sturm
-         this%bounds%e_max = bounds_gamma%e_max_sturm
-      else
-         this%bounds%e_min = global_e_min_gershgorin
-         this%bounds%e_max = global_e_max_gershgorin
-      end if
-   end if
-
-   ! Apply fractional margin (expand bounds)
-      width = this%bounds%e_max - this%bounds%e_min
-      e_mid = 0.5_rp * (this%bounds%e_max + this%bounds%e_min)
-      this%bounds%e_min = e_mid - 0.5_rp * this%bounds%scaling * width
-      this%bounds%e_max = e_mid + 0.5_rp * this%bounds%scaling * width
-
-      if (allocated(H_gamma)) then
-         deallocate(H_gamma)
-      end if
-
-      ! avg_gershgorin_width = global_e_max_gershgorin - global_e_min_gershgorin
-      ! call g_logger%info(msg, __FILE__, __LINE__)
-
-   end subroutine compute_hamiltonian_bounds
-
 end module hamiltonian_mod

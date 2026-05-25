@@ -43,6 +43,10 @@ contains
          allocate (dd_delta(ncomp, ndim))
          b_constr_iter = 0
          lambda_t = lambda
+         ! Zero-initialize PID arrays to avoid uninitialized values
+         d_delta = 0.0_dblprec
+         s_delta = 0.0_dblprec
+         dd_delta = 0.0_dblprec
          if (present(i_cons_in)) i_cons = i_cons_in
          if (present(code_prefac)) cfd_prefac = code_prefac
       else

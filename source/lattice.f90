@@ -28,20 +28,21 @@ module lattice_mod
    use globals_mod
    use control_mod
    use string_mod
+   use basis_mod, only: norb
    use math_mod
    use precision_mod, only: rp
    use symbolic_atom_mod, only: symbolic_atom, array_of_symbolic_atoms
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
+   use strux_lib, only: strux_compute, strux_lmto47_screening, strux_lmto47_autoalpha_screening, &
+      strux_options, strux_result, STRUX_METHOD_LMTO47, STRUX_LMTO47_IALPHA_MANUAL, &
+      STRUX_LMTO47_IALPHA_SIGMA, STRUX_LMTO47_IALPHA_FITD
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    implicit none
 
    private
-
-   ! Public procedures
-   public :: cartesian_to_fractional
 
    !> Module´s main structure
    type, public :: lattice
@@ -146,23 +147,17 @@ module lattice_mod
       !> Clust size
       integer :: kk
 
-   !> TODO
-   !> Clust coordinates (expanded cluster)
-   !>
-   !> 'cr' holds the fully expanded cluster coordinates (cartesian coordinates)
-   !> after the Bravais/cluster build. Shape is (3, kk) where 'kk' is the
-   !> actual number of atoms in the constructed cluster. During construction
-   !> a temporary local array with capacity (3, ndim) is often used and then
-   !> moved into 'this%cr'. We shrink 'this%cr' to (3,kk) as soon as 'kk' is
-   !> known to avoid holding a large buffer unnecessarily.
-   real(rp), dimension(:, :), allocatable :: cr
+      !> TODO
+      !> Clust coordinates
+      !>
+      !> Clust coordinates
+      real(rp), dimension(:, :), allocatable :: cr
 
-   !> TODO
-   !> Clust coordinates (primitive cell / basis)
-   !>
-   !> 'crd' stores the primitive cell (basis) coordinates (3, ntot). It is
-   !> used as the starting point when expanding to the cluster (cr).
-   real(rp), dimension(:, :), allocatable :: crd
+      !> TODO
+      !> Clust coordinates
+      !>
+      !> Clust coordinates
+      real(rp), dimension(:, :), allocatable :: crd
       !> Clust atom number
       integer, dimension(:), allocatable :: ham_i
       !> TODO
@@ -184,10 +179,6 @@ module lattice_mod
       !>TODO
       !> Nmax
       integer :: nmax
-
-      !> Max number of neighbours for TB interactions (calculated)
-      !> nn_max
-      integer :: nn_max
 
       !> TODO
       !> Atom number for calculation.
@@ -221,13 +212,31 @@ module lattice_mod
 
       !> Neighbouring map for each atom type
       integer, dimension(:, :), allocatable :: nn
+      !> Maximum number of neighbours found in current structure map.
+      integer :: nn_max
 
       !> Structure constant
       complex(rp), dimension(:, :, :, :), allocatable :: sbar
+      !> Structure constant derivative
+      complex(rp), dimension(:, :, :, :), allocatable :: sdot
       !> Vectors in the structure constant
       real(rp), dimension(:, :), allocatable :: sbarvec
-      !> Vectors in direct coordinates (fractional) for spglib compatibility
-      real(rp), dimension(:, :), allocatable :: sbarvec_direct
+      !> Screening constants for the local strux solve cluster
+      real(rp), dimension(:, :, :), allocatable :: alpha
+      !> Screening constant derivatives for the local strux solve cluster
+      real(rp), dimension(:, :, :), allocatable :: alpha_dot
+      !> Structure-constant backend selector
+      character(len=16) :: strux_backend
+      !> Screening mode for the strux backend
+      character(len=16) :: screening
+      !> Request derivative structure constants from strux
+      logical :: strux_want_sdot
+      !> Multiplier for the solve-cluster radius squared used by strux
+      real(rp) :: strux_solve_scale
+      !> Global l-resolved screening constants for manual mode
+      real(rp), dimension(:), allocatable :: screening_alpha
+      !> Global l-resolved normalized hard-core radii for sigma mode
+      real(rp), dimension(:), allocatable :: screening_sigma
       ! Variables to build clust for bulk calculation
 
       !> TODO
@@ -240,10 +249,10 @@ module lattice_mod
       !>
       !> Primitive vectors in units of lattice parameter \ref alat
       real(rp), dimension(3, 3) :: a
-   !> Inverse of the cartesian lattice matrix (a * alat) precomputed to speed up
-   !> conversions from cartesian to fractional coordinates
-   real(rp), dimension(3, 3) :: a_cart_inv
-   logical :: a_cart_inv_ready
+      !> Inverse lattice matrix in Cartesian coordinates (if available).
+      real(rp), dimension(3, 3) :: a_cart_inv
+      !> Flag indicating whether `a_cart_inv` is valid.
+      logical :: a_cart_inv_ready
       !> Variables to handle periodic boundary conditions
       !> 
       !> Variables to handle periodic boundary conditions
@@ -329,15 +338,6 @@ module lattice_mod
       !> Number of pairs
       integer :: njij
 
-      !> Pair of atoms to calculate the exchange interactions (unique and all)
-      integer, dimension(:,:), allocatable :: ijpair_all
-      !> Pair of atoms to calculate exchange, sorted by atom
-      integer, dimension(:,:,:,:), allocatable :: ijpair_sorted
-      !> Number of pairs (unique and all)
-      integer :: njij_all
-      !> Nearest neighbour distance for each atom (used for +V implementation)
-      real(rp), dimension(:), allocatable :: nn_dist
-
       !> Trio of atoms to calculate the spin-lattice interactions
       real(rp), dimension(:, :), allocatable :: ijktrio
       !> Number of trios i,j,k
@@ -348,8 +348,6 @@ module lattice_mod
       procedure :: build_from_file
       procedure :: build_from_lattice
       procedure :: restore_to_default
-      procedure :: neigh
-      procedure :: assign_ijpair
       procedure :: bravais
       procedure :: build_data
       procedure :: build_clusup
@@ -366,8 +364,15 @@ module lattice_mod
       procedure :: remd
       procedure :: nncal
       procedure, private :: dbar1
+      procedure, private :: structb_strux
+      procedure, private :: init_strux_storage
+      procedure, private :: build_strux_inputs
+      procedure, private :: strux_mode
+      procedure, private :: default_screening_alpha
+      procedure, private :: build_hcr
+      procedure, private :: build_rmt
+      procedure, private :: load_symbolic_atoms_if_needed
       procedure :: clusba
-      procedure :: get_neighbor_vectors
       procedure :: calculate_nbas
       procedure :: print_state
       procedure :: print_state_full
@@ -429,8 +434,12 @@ contains
       if (allocated(this%atlist)) call g_safe_alloc%deallocate('lattice.atlist', this%atlist)
       if (allocated(this%nn)) call g_safe_alloc%deallocate('lattice.nn', this%nn)
       if (allocated(this%sbar)) call g_safe_alloc%deallocate('lattice.sbar', this%sbar)
+      if (allocated(this%sdot)) call g_safe_alloc%deallocate('lattice.sdot', this%sdot)
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
-      if (allocated(this%sbarvec_direct)) call g_safe_alloc%deallocate('lattice.sbarvec_direct', this%sbarvec_direct)
+      if (allocated(this%alpha)) call g_safe_alloc%deallocate('lattice.alpha', this%alpha)
+      if (allocated(this%alpha_dot)) call g_safe_alloc%deallocate('lattice.alpha_dot', this%alpha_dot)
+      if (allocated(this%screening_alpha)) call g_safe_alloc%deallocate('lattice.screening_alpha', this%screening_alpha)
+      if (allocated(this%screening_sigma)) call g_safe_alloc%deallocate('lattice.screening_sigma', this%screening_sigma)
       if (allocated(this%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', this%ijpair)
       if (allocated(this%ijktrio)) call g_safe_alloc%deallocate('lattice.ijktrio', this%ijktrio)
       if (allocated(this%natoms_layer)) call g_safe_alloc%deallocate('lattice.natoms_layer', this%natoms_layer)
@@ -456,14 +465,15 @@ contains
       if (allocated(this%atlist)) deallocate (this%atlist)
       if (allocated(this%nn)) deallocate (this%nn)
       if (allocated(this%sbar)) deallocate (this%sbar)
+      if (allocated(this%sdot)) deallocate (this%sdot)
       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
-      if (allocated(this%sbarvec_direct)) deallocate (this%sbarvec_direct)
+      if (allocated(this%alpha)) deallocate (this%alpha)
+      if (allocated(this%alpha_dot)) deallocate (this%alpha_dot)
+      if (allocated(this%screening_alpha)) deallocate (this%screening_alpha)
+      if (allocated(this%screening_sigma)) deallocate (this%screening_sigma)
       if (allocated(this%ijpair)) deallocate (this%ijpair)
       if (allocated(this%ijktrio)) deallocate (this%ijktrio)
       if (allocated(this%natoms_layer)) deallocate (this%natoms_layer)
-      if (allocated(this%nn_dist)) deallocate (this%nn_dist)
-      if (allocated(this%ijpair_all)) deallocate (this%ijpair_all)
-      if (allocated(this%ijpair_sorted)) deallocate (this%ijpair_sorted)
 #endif
    end subroutine destructor
 
@@ -481,6 +491,7 @@ contains
       ! variables associated with the reading processes
       integer :: iostatus, funit, i
       character(len=sl) :: fname_
+      real(rp), allocatable :: ct_first(:), screening_alpha_first(:), screening_sigma_first(:)
 
       include 'include_codes/namelists/lattice.f90'
 
@@ -502,6 +513,10 @@ contains
       a = this%a
       wav = this%wav
       celldm = this%celldm
+      strux_backend = this%strux_backend
+      screening = this%screening
+      strux_want_sdot = this%strux_want_sdot
+      strux_solve_scale = this%strux_solve_scale
       b1 = this%b1
       b2 = this%b2
       b3 = this%b3
@@ -510,30 +525,30 @@ contains
       n3 = this%n3
       pbc = this%pbc
 
-      if (size(this%izp) .ne. this%ndim) then
+      if (.not. allocated(this%izp) .or. size(this%izp) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.izp', this%izp)
+         if (allocated(this%izp)) call g_safe_alloc%deallocate('lattice.izp', this%izp)
          call g_safe_alloc%allocate('lattice.izp', this%izp, (/this%ndim/))
 #else
-         deallocate (this%izp)
+         if (allocated(this%izp)) deallocate (this%izp)
          allocate (this%izp(this%ndim))
 #endif
       end if
-      if (size(this%no) .ne. this%ndim) then
+      if (.not. allocated(this%no) .or. size(this%no) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.no', this%no)
+         if (allocated(this%no)) call g_safe_alloc%deallocate('lattice.no', this%no)
          call g_safe_alloc%allocate('lattice.no', this%no, (/this%ndim/))
 #else
-         deallocate (this%no)
+         if (allocated(this%no)) deallocate (this%no)
          allocate (this%no(this%ndim))
 #endif
       end if
-      if (size(this%crd) .ne. 3*this%ndim) then
+      if (.not. allocated(this%crd) .or. size(this%crd) .ne. 3*this%ndim) then
 #ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.crd', this%crd)
+         if (allocated(this%crd)) call g_safe_alloc%deallocate('lattice.crd', this%crd)
          call g_safe_alloc%allocate('lattice.crd', this%crd, (/3, this%ndim/))
 #else
-         deallocate (this%crd)
+         if (allocated(this%crd)) deallocate (this%crd)
          allocate (this%crd(3, this%ndim))
 #endif
       end if
@@ -544,12 +559,12 @@ contains
 
       ! Impurity initialization
       nclu = this%nclu
-      if (size(this%inclu) .ne. 3*this%nclu) then
+      if (.not. allocated(this%inclu) .or. size(this%inclu) .ne. 3*this%nclu) then
 #ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('lattice.inclu', this%inclu)
+         if (allocated(this%inclu)) call g_safe_alloc%deallocate('lattice.inclu', this%inclu)
          call g_safe_alloc%allocate('lattice.inclu', this%inclu, (/this%nclu, 3/))
 #else
-         deallocate (this%inclu)
+         if (allocated(this%inclu)) deallocate (this%inclu)
          allocate (this%inclu(this%nclu, 3))
 #endif
       end if
@@ -560,10 +575,107 @@ contains
       nlay = this%nlay
       ntype = this%ntype
       call move_alloc(this%ct, ct)
+      call move_alloc(this%screening_alpha, screening_alpha)
+      call move_alloc(this%screening_sigma, screening_sigma)
       njij = this%njij
       call move_alloc(this%ijpair, ijpair)
       njijk = this%njijk
       call move_alloc(this%ijktrio, ijktrio)
+
+      ! Pre-size ct before the first read. ntype is unknown at this point
+      ! (local ntype = 0 from restore_to_default), so ct has size 0. 1000 is
+      ! a safe upper bound for atom types; the resize check below will shrink
+      ! it to the actual ntype read from the file.
+      if (.not. allocated(ct)) then
+         allocate (ct(size(izp)))
+      else if (size(ct) == 0) then
+         deallocate (ct)
+         allocate (ct(size(izp)))
+      end if
+      if (.not. allocated(screening_alpha)) then
+         allocate (screening_alpha(4))
+         screening_alpha = this%default_screening_alpha(size(screening_alpha))
+      else if (size(screening_alpha) < 4) then
+         deallocate (screening_alpha)
+         allocate (screening_alpha(4))
+         screening_alpha = this%default_screening_alpha(size(screening_alpha))
+      end if
+      if (.not. allocated(screening_sigma)) then
+         allocate (screening_sigma(4))
+         screening_sigma = 0.7_rp
+      else if (size(screening_sigma) < 4) then
+         deallocate (screening_sigma)
+         allocate (screening_sigma(4))
+         screening_sigma = 0.7_rp
+      end if
+      if (.not. allocated(z)) then
+         allocate (z(1))
+         z = 0.0_rp
+      end if
+      if (.not. allocated(primcell)) then
+         allocate (primcell(1, 1))
+         primcell = 0.0_rp
+      end if
+      if (.not. allocated(crsurf)) then
+         allocate (crsurf(1, 1))
+         crsurf = 0.0_rp
+      end if
+      if (.not. allocated(cr)) then
+         allocate (cr(1, 1))
+         cr = 0.0_rp
+      end if
+      if (.not. allocated(acr)) then
+         allocate (acr(1, 1))
+         acr = 0.0_rp
+      end if
+      if (.not. allocated(reduced_acr)) then
+         allocate (reduced_acr(1))
+         reduced_acr = 0
+      end if
+      if (.not. allocated(num)) then
+         allocate (num(1))
+         num = 0
+      end if
+      if (.not. allocated(izpsurf)) then
+         allocate (izpsurf(1))
+         izpsurf = 0
+      end if
+      if (.not. allocated(izsurf)) then
+         allocate (izsurf(1))
+         izsurf = 0
+      end if
+      if (.not. allocated(nosurf)) then
+         allocate (nosurf(1))
+         nosurf = 0
+      end if
+      if (.not. allocated(izpo)) then
+         allocate (izpo(1))
+         izpo = 0
+      end if
+      if (.not. allocated(iz)) then
+         allocate (iz(1))
+         iz = 0
+      end if
+      if (.not. allocated(iu)) then
+         allocate (iu(1))
+         iu = 0
+      end if
+      if (.not. allocated(irec)) then
+         allocate (irec(1))
+         irec = 0
+      end if
+      if (.not. allocated(ib)) then
+         allocate (ib(1))
+         ib = 0
+      end if
+      if (.not. allocated(ijpair)) then
+         allocate (ijpair(1, 2))
+         ijpair = 0
+      end if
+      if (.not. allocated(ijktrio)) then
+         allocate (ijktrio(1, 6))
+         ijktrio = 0.0_rp
+      end if
 
       open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -571,6 +683,19 @@ contains
       end if
 
       read (funit, nml=lattice, iostat=iostatus)
+
+      if (allocated(ct)) then
+         allocate (ct_first(size(ct)))
+         ct_first = ct
+      end if
+      if (allocated(screening_alpha)) then
+         allocate (screening_alpha_first(size(screening_alpha)))
+         screening_alpha_first = screening_alpha
+      end if
+      if (allocated(screening_sigma)) then
+         allocate (screening_sigma_first(size(screening_sigma)))
+         screening_sigma_first = screening_sigma
+      end if
 
       if (size(izp) .ne. ndim) then
          deallocate (izp)
@@ -598,6 +723,16 @@ contains
          deallocate (ct)
          allocate (ct(ntype))
       end if
+      if (size(screening_alpha) < 4) then
+         deallocate (screening_alpha)
+         allocate (screening_alpha(4))
+         screening_alpha = this%default_screening_alpha(size(screening_alpha))
+      end if
+      if (size(screening_sigma) < 4) then
+         deallocate (screening_sigma)
+         allocate (screening_sigma(4))
+         screening_sigma = 0.7_rp
+      end if
 
       if (size(ijktrio) .ne. 2*njijk) then
          deallocate (ijktrio)
@@ -608,9 +743,36 @@ contains
       read (funit, nml=lattice, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error(fmt('iostatus = , I0', iostatus), __FILE__, __LINE__)
+         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+
+      if (allocated(ct_first)) then
+         if (allocated(ct)) then
+            if (all(abs(ct) <= tiny(1.0_rp)) .and. any(abs(ct_first) > tiny(1.0_rp))) then
+               ct(1:min(size(ct), size(ct_first))) = ct_first(1:min(size(ct), size(ct_first)))
+            end if
+         end if
+         deallocate (ct_first)
+      end if
+      if (allocated(screening_alpha_first)) then
+         if (allocated(screening_alpha)) then
+            if (all(abs(screening_alpha) <= tiny(1.0_rp)) .and. any(abs(screening_alpha_first) > tiny(1.0_rp))) then
+               screening_alpha(1:min(size(screening_alpha), size(screening_alpha_first))) = &
+                  screening_alpha_first(1:min(size(screening_alpha), size(screening_alpha_first)))
+            end if
+         end if
+         deallocate (screening_alpha_first)
+      end if
+      if (allocated(screening_sigma_first)) then
+         if (allocated(screening_sigma)) then
+            if (all(abs(screening_sigma) <= tiny(1.0_rp)) .and. any(abs(screening_sigma_first) > tiny(1.0_rp))) then
+               screening_sigma(1:min(size(screening_sigma), size(screening_sigma_first))) = &
+                  screening_sigma_first(1:min(size(screening_sigma), size(screening_sigma_first)))
+            end if
+         end if
+         deallocate (screening_sigma_first)
+      end if
 
       ! General intialization
 
@@ -618,6 +780,13 @@ contains
       this%alat = alat
       this%celldm = celldm
       this%ntype = ntype
+      this%strux_backend = trim(adjustl(strux_backend))
+      this%screening = trim(adjustl(screening))
+      this%strux_want_sdot = strux_want_sdot
+      this%strux_solve_scale = strux_solve_scale
+      if (len_trim(this%strux_backend) == 0) this%strux_backend = 'legacy'
+      if (len_trim(this%screening) == 0) this%screening = 'default'
+      if (this%strux_solve_scale <= 0.0_rp) this%strux_solve_scale = 9.0_rp
       this%pbc = pbc
       this%b1 = b1
       this%b2 = b2
@@ -627,6 +796,15 @@ contains
       this%n3 = n3
 
       call move_alloc(ct, this%ct)
+      if (allocated(this%ct)) then
+         if (size(this%ct) > 0) then
+            if (all(abs(this%ct) <= tiny(1.0_rp)) .and. this%r2 > 0.0_rp) then
+               this%ct = sqrt(this%r2)
+            end if
+         end if
+      end if
+      call move_alloc(screening_alpha, this%screening_alpha)
+      call move_alloc(screening_sigma, this%screening_sigma)
       ! Reads Wigner-Seitz radius if available
       this%wav = wav
       ! Bulk initialization
@@ -685,41 +863,139 @@ contains
 
    subroutine build_from_lattice(this)
       class(lattice), intent(inout) :: this
-      integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus
-      real(rp) :: r2
+      integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus, nsite_guess
+      real(rp) :: r2, strux_solve_scale
       real(rp), dimension(3, 3) :: a
-      real(rp), dimension(:), allocatable :: ct
+      real(rp), dimension(:), allocatable :: ct, screening_alpha, screening_sigma
+      real(rp), dimension(:), allocatable :: ct_first, screening_alpha_first, screening_sigma_first
       integer, dimension(:), allocatable :: izp, no, iu, ib, irec
       real(rp), dimension(:, :), allocatable :: crd
+      character(len=16) :: strux_backend, screening
+      logical :: strux_want_sdot
       namelist /lattice/ r2, nbulk_bulk, ntot, nbas, nrec, &
          a, crd, &
-         ct, izp, no, iu, ib, irec, ct
+         ct, izp, no, iu, ib, irec, strux_backend, screening, strux_want_sdot, &
+         strux_solve_scale, screening_alpha, screening_sigma
+
+      strux_backend = this%strux_backend
+      screening = this%screening
+      strux_want_sdot = this%strux_want_sdot
+      strux_solve_scale = this%strux_solve_scale
 
       call move_alloc(this%crd, crd)
       call move_alloc(this%izp, izp)
       call move_alloc(this%no, no)
+      call move_alloc(this%ct, ct)
+      call move_alloc(this%screening_alpha, screening_alpha)
+      call move_alloc(this%screening_sigma, screening_sigma)
 
       open (newunit=funit, file='lattice.nml', action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
          call g_logger%fatal('file lattice.nml not found', __FILE__, __LINE__)
       end if
 
+      ! Pre-allocate ib, iu, irec before the sizing read to avoid undefined
+      ! behaviour on compilers that write into unallocated storage when these
+      ! variables appear in the namelist file. crd was moved from this%crd and
+      ! has size (3, ntot), so its second dimension is a safe upper bound.
+      nsite_guess = 1
+      if (allocated(crd)) then
+         nsite_guess = max(1, size(crd, 2))
+         allocate (ib(size(crd, 2)), iu(size(crd, 2)), irec(size(crd, 2)))
+      else if (allocated(izp)) then
+         nsite_guess = max(1, size(izp))
+         allocate (ib(nsite_guess), iu(nsite_guess), irec(nsite_guess))
+      else
+         allocate (ib(1), iu(1), irec(1))
+      end if
+      if (.not. allocated(ct)) then
+         allocate (ct(nsite_guess))
+         ct = 0.0_rp
+      else if (size(ct) == 0) then
+         deallocate (ct)
+         allocate (ct(nsite_guess))
+         ct = 0.0_rp
+      end if
+      if (.not. allocated(screening_alpha)) then
+         allocate (screening_alpha(4))
+         screening_alpha = this%default_screening_alpha(size(screening_alpha))
+      else if (size(screening_alpha) < 4) then
+         deallocate (screening_alpha)
+         allocate (screening_alpha(4))
+         screening_alpha = this%default_screening_alpha(size(screening_alpha))
+      end if
+      if (.not. allocated(screening_sigma)) then
+         allocate (screening_sigma(4))
+         screening_sigma = 0.7_rp
+      else if (size(screening_sigma) < 4) then
+         deallocate (screening_sigma)
+         allocate (screening_sigma(4))
+         screening_sigma = 0.7_rp
+      end if
       read (funit, nml=lattice, iostat=iostatus)
+      if (allocated(ct)) then
+         allocate (ct_first(size(ct)))
+         ct_first = ct
+      end if
+      if (allocated(screening_alpha)) then
+         allocate (screening_alpha_first(size(screening_alpha)))
+         screening_alpha_first = screening_alpha
+      end if
+      if (allocated(screening_sigma)) then
+         allocate (screening_sigma_first(size(screening_sigma)))
+         screening_sigma_first = screening_sigma
+      end if
+      deallocate (ib, iu, irec)
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.ib', ib, (/ntot/))
       call g_safe_alloc%allocate('lattice.iu', iu, (/ntot/))
       call g_safe_alloc%allocate('lattice.irec', irec, (/nrec/))
-!      call g_safe_alloc%allocate('lattice.ct', ct, (/ntype/))
 #else
-      allocate (ib(ntot), iu(ntot), irec(nrec)) !, ct(ntype))
+      allocate (ib(ntot), iu(ntot), irec(nrec))
 #endif
+      if (allocated(izp)) nsite_guess = max(1, size(izp))
+      if (size(ct) /= nsite_guess) then
+         deallocate (ct)
+         allocate (ct(nsite_guess))
+         ct = 0.0_rp
+      end if
+      if (size(screening_alpha) < 4) then
+         deallocate (screening_alpha)
+         allocate (screening_alpha(4))
+         screening_alpha = this%default_screening_alpha(size(screening_alpha))
+      end if
+      if (size(screening_sigma) < 4) then
+         deallocate (screening_sigma)
+         allocate (screening_sigma(4))
+         screening_sigma = 0.7_rp
+      end if
       rewind (funit)
       read (funit, nml=lattice, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error(fmt('iostatus = , I0', iostatus), __FILE__, __LINE__)
+         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+      if (allocated(ct_first)) then
+         if (all(abs(ct) <= tiny(1.0_rp)) .and. any(abs(ct_first) > tiny(1.0_rp))) then
+            ct(1:min(size(ct), size(ct_first))) = ct_first(1:min(size(ct), size(ct_first)))
+         end if
+         deallocate (ct_first)
+      end if
+      if (allocated(screening_alpha_first)) then
+         if (all(abs(screening_alpha) <= tiny(1.0_rp)) .and. any(abs(screening_alpha_first) > tiny(1.0_rp))) then
+            screening_alpha(1:min(size(screening_alpha), size(screening_alpha_first))) = &
+               screening_alpha_first(1:min(size(screening_alpha), size(screening_alpha_first)))
+         end if
+         deallocate (screening_alpha_first)
+      end if
+      if (allocated(screening_sigma_first)) then
+         if (all(abs(screening_sigma) <= tiny(1.0_rp)) .and. any(abs(screening_sigma_first) > tiny(1.0_rp))) then
+            screening_sigma(1:min(size(screening_sigma), size(screening_sigma_first))) = &
+               screening_sigma_first(1:min(size(screening_sigma), size(screening_sigma_first)))
+         end if
+         deallocate (screening_sigma_first)
+      end if
 
       this%nbulk_bulk = nbulk_bulk
       this%ntot = ntot
@@ -728,8 +1004,24 @@ contains
       this%nrec = nrec
       !this%r2 = r2
       this%nbulk = 0
+      this%strux_backend = trim(adjustl(strux_backend))
+      this%screening = trim(adjustl(screening))
+      this%strux_want_sdot = strux_want_sdot
+      this%strux_solve_scale = strux_solve_scale
+      if (len_trim(this%strux_backend) == 0) this%strux_backend = 'legacy'
+      if (len_trim(this%screening) == 0) this%screening = 'default'
+      if (this%strux_solve_scale <= 0.0_rp) this%strux_solve_scale = 9.0_rp
 
-      !call move_alloc(ct, this%ct)
+      call move_alloc(ct, this%ct)
+      if (allocated(this%ct)) then
+         if (size(this%ct) > 0) then
+            if (all(abs(this%ct) <= tiny(1.0_rp)) .and. this%r2 > 0.0_rp) then
+               this%ct = sqrt(this%r2)
+            end if
+         end if
+      end if
+      call move_alloc(screening_alpha, this%screening_alpha)
+      call move_alloc(screening_sigma, this%screening_sigma)
       call move_alloc(izp, this%izp)
       call move_alloc(no, this%no)
       call move_alloc(ib, this%ib)
@@ -941,14 +1233,30 @@ contains
          ! reads from input
          call this%build_from_lattice()
       end select
+
+      ! Ensure neighbour-cutoff data is valid for built-in crystal presets.
+      ! For legacy bulk/surface inputs, ct is often omitted and should default
+      ! to include first + second shells (historical behaviour: alat + 0.1).
+      if (this%crystal_sym /= 'file') then
+         if (.not. allocated(this%ct) .or. size(this%ct) /= this%ntype) then
+            if (allocated(this%ct)) deallocate(this%ct)
+            allocate(this%ct(this%ntype))
+            this%ct(:) = 0.0_rp
+         end if
+         if (all(abs(this%ct) <= tiny(1.0_rp))) then
+            this%ct(:) = this%alat + 0.1_rp
+         end if
+         if (this%r2 <= 0.0_rp) then
+            this%r2 = this%ct(1)**2
+         end if
+      end if
+
       ! Volume in cubic Angstroms
       this%vol = abs(dot_product(this%a(:, 3), cross_product(this%a(:, 1), this%a(:, 2))))*(this%alat**3)
       if (this%wav .eq. 0) then
          this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
          write (*, *) 'wav', this%wav
       end if
-      ! Precompute inverse of cartesian lattice matrix (this%a * this%alat)
-      call compute_cartesian_inverse(this)
       if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
    end subroutine build_data
 
@@ -967,10 +1275,18 @@ contains
       this%surftype = 'none'
       this%nlay = 0
       this%ntype = 0
+      this%nbas = 0
       this%wav = 0
       this%celldm = 0.0d0
       this%njij = 0
       this%njijk = 0
+      this%strux_backend = 'legacy'
+      this%screening = 'default'
+      this%strux_want_sdot = .false.
+      this%strux_solve_scale = 9.0_rp
+      this%nn_max = 0
+      this%a_cart_inv = 0.0_rp
+      this%a_cart_inv_ready = .false.
       this%b1 = .false.
       this%b2 = .false.
       this%b3 = .false.
@@ -987,6 +1303,8 @@ contains
       call g_safe_alloc%allocate('lattice.ijktrio', this%ijktrio, (/this%njijk, 6/))
       call g_safe_alloc%allocate('lattice.chargetrf_type', this%chargetrf_type, (/this%nbas/))
       call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+      call g_safe_alloc%allocate('lattice.screening_alpha', this%screening_alpha, (/max(1, this%control%lmax + 1)/))
+      call g_safe_alloc%allocate('lattice.screening_sigma', this%screening_sigma, (/max(1, this%control%lmax + 1)/))
 #else
       allocate (this%izp(this%ndim), this%no(this%ndim))
       allocate (this%crd(3, this%ndim))
@@ -994,17 +1312,21 @@ contains
       allocate (this%ijpair(this%njij, 2))
       allocate (this%ijktrio(this%njijk, 6))
       allocate (this%chargetrf_type(this%nbas))
-      allocate (this%nn_dist(this%nrec)) ! Storing nearest neighbour distance for later use in +V implementation
       allocate (this%ct(this%ntype))
+      allocate (this%screening_alpha(max(1, this%control%lmax + 1)))
+      allocate (this%screening_sigma(max(1, this%control%lmax + 1)))
 #endif
 
       this%izp = 0.0d0
+      this%no = 0
       this%crd = 0.d0
       this%inclu = 0.0d0
       this%ijpair = 0.0d0
       this%ijktrio = 0.0d0
       this%chargetrf_type = 0.0d0
       this%ct = 0.0d0
+      this%screening_alpha = this%default_screening_alpha(size(this%screening_alpha))
+      this%screening_sigma = 0.7_rp
       if (associated(this%control)) then
          if (present(full)) then
             if (full) then
@@ -1014,225 +1336,6 @@ contains
       end if
 
    end subroutine restore_to_default
-
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !>Subroutine for assigning nearest neighbors, not from file but from cluster built with bravais.
-   !> Constructor
-   !> Originally written by Elis Uebel summer 2023 for improvement of greens function self recursion.
-   !> Now, reimplemented and improved by Emil Beiersdorf and Viktor Frilén summer 2024.
-   !---------------------------------------------------------------------------
-   subroutine neigh(this, nhb_degree)
-      class(lattice) :: this
-      !> First neighbors and their type
-      integer, dimension(this%ntype, nhb_degree) :: inx_ntype_break
-      integer, dimension(this%ntype, this%kk) :: nhb_inx_m
-      integer :: l,i, nhb_it, j, append_iter, max_append, la
-      integer, intent(in) :: nhb_degree
-      integer, dimension(this%ntype, nhb_degree) :: nmb_of_nhbrs
-      real(rp), dimension(2) :: min_dist_m
-      real(rp) :: dist, min_dist
-      nhb_inx_m(:,:) = 0
-      max_append = 0
-      do l=1, this%ntype
-         la = this%atlist(l)
-         append_iter = 1
-         min_dist_m = 0
-         min_dist_m(2) = 10000
-         do j=1,nhb_degree
-            nhb_it = 1
-            do i=1, this%kk
-               dist = sqrt((this%cr(1,la) - this%cr(1,i))**2 + (this%cr(2,la) - this%cr(2,i))**2 + (this%cr(3,la) - this%cr(3,i))**2)
-               if ((dist - 0.001d0 > min_dist_m(1)) .and. (dist + 0.001d0 < min_dist_m(2))) then
-                  min_dist_m(2) = dist
-                  nhb_inx_m(l,append_iter:this%kk) = 0
-                  nhb_inx_m(l,append_iter) = i
-                  nhb_it = 1
-               else if ((dist - 0.001d0 <= min_dist_m(2)) .and. (dist - 0.001d0 > min_dist_m(1))) then
-                  nhb_inx_m(l,append_iter + nhb_it) = i
-                  nhb_it = nhb_it + 1
-               end if
-            end do
-            !> Store nearest neighbour distance
-            if (j == 1) then
-               this%nn_dist(l) = min_dist_m(2)
-            end if
-            min_dist_m(1) = min_dist_m(2)
-            min_dist_m(2) = 10000
-            nmb_of_nhbrs(l,j) = nhb_it
-            append_iter = append_iter + nhb_it
-            inx_ntype_break(l,j) = append_iter-1
-         end do
-         if (append_iter > max_append) then
-            max_append = append_iter
-         end if
-      end do
-      max_append = max_append - 1
-      call this%assign_ijpair(nhb_inx_m(:,1:max_append), nmb_of_nhbrs)
-   end subroutine neigh
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> assigns the actual values in the correct form to the lattice object.
-   !> Originally written by Elis Uebel summer 2023 for improvement of greens function self recursion.
-   !> Now, reimplemented and improved for Hubbard U+J+V by Emil Beiersdorf and Viktor Frilén summer 2024.
-   !---------------------------------------------------------------------------
-   subroutine assign_ijpair(this, input_indices, nmb_of_nhbrs)
-      class(lattice) :: this
-      integer, dimension(:,:), intent(in) :: input_indices
-      integer, dimension(:,:), intent(in) :: nmb_of_nhbrs
-      integer, dimension(:,:), allocatable :: ijpair_unique
-      integer, dimension(:,:,:,:), allocatable :: ijpair_sorted
-      integer, dimension(:,:,:), allocatable :: ijpair_unique_2, ijpair_temp
-      integer, dimension(this%nrec) :: counter
-      integer, dimension(size(input_indices,2)*this%ntype, 2) :: temp_save
-      integer :: l,j, ij_iter, i, k, max_nhbr, ia, nn, m,la 
-      logical :: is_duplicate
-      temp_save(:,:) = 0
-      ij_iter = 1
-      do l=1,size(input_indices,1)
-         la = this%atlist(l)
-         do j=1,size(input_indices,2)
-            if (input_indices(l,j) == 0) then
-               exit
-            else
-               temp_save(ij_iter,:) = [la,input_indices(l,j)]
-               ij_iter = ij_iter + 1
-            end if
-         end do
-      end do
-      if(allocated(this%ijpair)) deallocate(this%ijpair)
-      allocate(this%ijpair(ij_iter-1,2))
-      this%ijpair = temp_save(1:ij_iter-1,:)
-      this%njij = size(this%ijpair, 1)
-      !--------------------------------------------------------------------------------------------------------------------------------------------------------
-      !> Stores all unique pairs in ijpair with njij the number of unique pairs. All pairs and the corresponding number are stored in ijpair_all and njij_all
-      !--------------------------------------------------------------------------------------------------------------------------------------------------------
-      call move_alloc(this%ijpair, this%ijpair_all)
-      this%njij_all = ij_iter-1
-      !> Finds all unique pairs
-      allocate(ijpair_unique(size(this%ijpair_all, 1), size(this%ijpair_all, 2)))
-      ijpair_unique(1,:) = this%ijpair_all(1,:)
-      k = 1
-      do i = 2, this%njij_all
-         is_duplicate = .false.
-         do j = 1, k
-            if ((this%iz(ijpair_unique(j,1)) == this%iz(this%ijpair_all(i,1))) .and. (this%iz(ijpair_unique(j,2)) == this%iz(this%ijpair_all(i,2)))) then
-               is_duplicate = .true.
-               exit
-            else if ((this%iz(ijpair_unique(j,1)) == this%iz(this%ijpair_all(i,2))) .and. (this%iz(ijpair_unique(j,2)) == this%iz(this%ijpair_all(i,1)))) then
-               is_duplicate = .true.
-               exit
-            end if
-         end do
-         if (.not. is_duplicate) then
-            k = k + 1
-            ijpair_unique(k, :) = this%ijpair_all(i, :)
-         end if
-      end do
-      this%njij = k
-      if(allocated(this%ijpair)) deallocate(this%ijpair)
-      allocate(this%ijpair(k,2))
-      this%ijpair(:,:) = ijpair_unique(1:k,:)
-      deallocate(ijpair_unique)
-      !> Finds the maximum number of neighbours for creating improved ijpair_sorted
-      max_nhbr = 0
-      do i = 1, this%ntype
-         do j = 1, size(nmb_of_nhbrs, 2)
-            if (nmb_of_nhbrs(i,j) .gt. max_nhbr) then
-               max_nhbr = nmb_of_nhbrs(i,j)
-            end if
-         end do
-      end do
-      allocate(ijpair_sorted(this%ntype, size(nmb_of_nhbrs,2), max_nhbr, 2))
-      ijpair_sorted = 0
-      k = 1
-      do ia = 1, this%ntype
-         do nn = 1, size(nmb_of_nhbrs, 2)
-            do i = 1, nmb_of_nhbrs(ia,nn)
-               ijpair_sorted(ia, nn, i, :) = this%ijpair_all(k,:)
-               k = k + 1
-            end do
-         end do
-      end do
-      if(allocated(this%ijpair_sorted)) deallocate(this%ijpair_sorted)
-      allocate(this%ijpair_sorted(size(ijpair_sorted, 1), size(ijpair_sorted,2), size(ijpair_sorted, 3), 2))
-      this%ijpair_sorted = ijpair_sorted
-      deallocate(ijpair_sorted)
-      !> Finds all unique pairs 2.0
-      !---------------------------------------------------------------------------------------
-      allocate(ijpair_unique_2(size(this%ijpair_sorted, 2), this%njij_all, 2))
-      allocate(ijpair_temp(size(this%ijpair_sorted, 2), this%njij_all, 2))
-      ijpair_unique_2 = 0
-      ijpair_temp = 0
-      do nn = 1, size(this%ijpair_sorted,2)
-         k = 1
-         do ia = 1, this%ntype
-            do i = 1, size(this%ijpair_sorted, 3)
-               ijpair_temp(nn, k, :) = this%ijpair_sorted(ia, nn, i, :)
-               k = k + 1
-            end do
-         end do
-      end do
-      do nn = 1, size(this%ijpair_sorted,2)
-         ijpair_unique_2(nn,1,:) = ijpair_temp(nn,1,:)
-      end do
-      do nn = 1, size(this%ijpair_sorted,2)
-         k = 1
-         do i = 2, this%njij_all
-            is_duplicate = .false.
-            do j = 1, k
-               if ((this%iz(ijpair_unique_2(nn,j,1)) == this%iz(ijpair_temp(nn,i,1))) .and. (this%iz(ijpair_unique_2(nn,j,2)) == this%iz(ijpair_temp(nn,i,2)))) then
-                  is_duplicate = .true.
-                  exit
-               else if ((this%iz(ijpair_unique_2(nn,j,1)) == this%iz(ijpair_temp(nn,i,2))) .and. (this%iz(ijpair_unique_2(nn,j,2)) == this%iz(ijpair_temp(nn,i,1)))) then
-                  is_duplicate = .true.
-                  exit
-               end if
-            end do
-               if (.not. is_duplicate) then
-                  k = k + 1
-                  ijpair_unique_2(nn, k, :) = ijpair_temp(nn, i, :)
-               end if
-         end do
-      end do
-      deallocate(ijpair_temp)
-      k = 0
-      do nn = 1, size(ijpair_unique_2, 1)
-         do i = 1, size(ijpair_unique_2, 2)
-            if (ijpair_unique_2(nn,i,1) /= 0) then
-               k = k + 1
-            end if
-         end do
-      end do
-      this%njij = k
-      if(allocated(this%ijpair)) deallocate(this%ijpair)
-      allocate(this%ijpair(k,2))
-      k = 0
-      do nn = 1, size(ijpair_unique_2, 1)
-         do i = 1, size(ijpair_unique_2, 2)
-            if (ijpair_unique_2(nn,i,1) /= 0) then
-               k = k + 1
-               this%ijpair(k,:) = ijpair_unique_2(nn,i,:)
-            end if
-         end do
-      end do
-      this%njij = k
-      do nn = 1, size(ijpair_unique_2, 1)
-         do i = 1, size(ijpair_unique_2, 2)
-            if (ijpair_unique_2(nn,i,1) /= 0 .and. ijpair_unique_2(nn,i,2) /= 0) then
-            end if
-            end do
-      end do
-      deallocate(ijpair_unique_2)
-      do j=1,this%njij_all
-      end do
-      do j= 1, this%njij
-      end do
-   end subroutine assign_ijpair
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1245,7 +1348,6 @@ contains
       real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
-   real(rp), allocatable :: tmp(:, :)
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
@@ -1342,20 +1444,9 @@ contains
 
       this%kk = kk
       call move_alloc(cr, this%cr)
-      ! Shrink this%cr to the actual cluster size kk to avoid keeping the
-      ! large temporary allocation of shape (3, ndim). We copy the first kk
-      ! columns into a smaller array and move that allocation into this%cr.
-      if (allocated(this%cr)) then
-         if (size(this%cr, 2) > kk) then
-            allocate(tmp(3, kk))
-            tmp(:, :) = this%cr(:, 1:kk)
-            call move_alloc(tmp, this%cr)
-         end if
-      end if
       call move_alloc(iz, this%iz)
       call move_alloc(num, this%num)
       close (10)
-
    end subroutine bravais
 
    !---------------------------------------------------------------------------
@@ -1992,8 +2083,6 @@ contains
       end do
       this%nbas = ncnt
       this%nmax = nmax
-      ! Temporary hack for full HALL
-      ! this%nmax = kk
       write (11, *) "--Info-for-control-----------------"
       write (11, '(a6, i4, a6, i6, a6, i6, a6, i6)') 'NTYPE=', this%ntype, 'NMAX=', this%nmax, 'NBAS=', this%nbas, 'NREC=', this%nrec
 
@@ -2068,21 +2157,29 @@ contains
       logical, intent(in) :: do_str
       ! Local variables
       integer :: i, ia, nr, ii, j, nm, np, nlim, nomx, ncut, kk, nnmx
+      integer :: sbar_dim, nm_store, nt_tmp
       integer, dimension(:, :), allocatable :: nn
       integer, dimension(:), allocatable :: idnn
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
+      real(rp) :: t_structb_start, t_cluster_ready, t_nnmap_start, t_nnmap_end
+      real(rp) :: t_remd_start, t_remd_end, t_nm_store_start, t_nm_store_end
+      real(rp) :: t_outmap_start, t_outmap_end, t_str_stage_end
 
       ! Open files
       open (12, file='map', form='unformatted')
       open (13, file="sbar", FORM="unformatted")
       open (16, file="view.sbar")
+      if (this%strux_want_sdot) then
+         open (14, file="sdot", form="unformatted")
+         open (15, file="view.sdot")
+      end if
       open (17, file='str.out')
 
       ! Clust parameters
       ncut = 9
-      nnmx = 100 ! 5250
+      nnmx = 5250
       nomx = this%ntot
       kk = this%kk
       allocate (set(3, nomx, nnmx)); set = 0.0d0
@@ -2095,6 +2192,7 @@ contains
       write (17, 10000) kk
       write (17, 10001)
       write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
+      ! write (*, '(a,10f10.4)') 'NNCAL ct=', this%ct(1:min(this%ntype, size(this%ct)))
       call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
 
 #ifdef USE_SAFE_ALLOC
@@ -2105,24 +2203,44 @@ contains
       do ii = 1, nm + 1
          this%nn(:, ii) = nn(:, ii)
       end do
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/9, 9, nm, this%ntot/))
-#else
-      allocate (this%sbar(9, 9, nm, this%ntot))
-#endif
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
       call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
+      nm_store = max(1, maxval(this%nn(:, 1)))
+      do ii = 1, this%ntot
+         ia = this%iu(ii)
+         if (ia <= 0) cycle
+         nt_tmp = this%kk
+         call this%clusba(this%r2, this%cr*this%alat, ia, kk, kk, nt_tmp)
+         nm_store = max(nm_store, nt_tmp)
+      end do
+      this%nn_max = nm_store
+      sbar_dim = max(norb, this%control%npold)
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/sbar_dim, sbar_dim, nm_store, this%ntot/))
+#else
+      allocate (this%sbar(sbar_dim, sbar_dim, nm_store, this%ntot))
+#endif
+      call this%init_strux_storage(sbar_dim, nm_store)
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
       write (17, 10003) kk, nm
+      flush(17)
       if (do_str) then
-         do ii = 1, this%ntot
-            ia = this%iu(ii)
-            nr = this%nn(ia, 1)
-            write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
-            call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, this%control%npold, nr, ii)
-         end do
+         if (rank==0) call g_logger%info('STRUCTB structure-constants, backend='//trim(this%strux_backend), __FILE__, __LINE__)
+         if (this%control%lmax > 2 .and. trim(lower(this%strux_backend)) /= 'strux_lib') then
+            call g_logger%fatal('lmax='//int2str(this%control%lmax)//' requires strux_lib backend for structure constants; legacy backend is only valid up to spd (lmax=2).', __FILE__, __LINE__)
+         end if
+         if (trim(lower(this%strux_backend)) == 'strux_lib') then
+            call this%structb_strux()
+         else
+            do ii = 1, this%ntot
+               ia = this%iu(ii)
+               nr = this%nn(ia, 1)
+               write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
+               call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, norb, nr, ii)
+            end do
+         end if
       end if
 10000 format(i5)
 10001 format(" LATTICE COORDINATES")
@@ -2132,6 +2250,548 @@ contains
 10005 format(7x, i7)
    end subroutine structb
 
+   subroutine init_strux_storage(this, sbar_dim, nm)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: sbar_dim, nm
+
+#ifdef USE_SAFE_ALLOC
+      if (allocated(this%sdot)) call g_safe_alloc%deallocate('lattice.sdot', this%sdot)
+      call g_safe_alloc%allocate('lattice.sdot', this%sdot, (/sbar_dim, sbar_dim, nm, this%ntot/))
+      if (allocated(this%alpha)) call g_safe_alloc%deallocate('lattice.alpha', this%alpha)
+      call g_safe_alloc%allocate('lattice.alpha', this%alpha, (/sbar_dim, this%kk, this%ntot/))
+      if (allocated(this%alpha_dot)) call g_safe_alloc%deallocate('lattice.alpha_dot', this%alpha_dot)
+      call g_safe_alloc%allocate('lattice.alpha_dot', this%alpha_dot, (/sbar_dim, this%kk, this%ntot/))
+#else
+      if (allocated(this%sdot)) deallocate (this%sdot)
+      allocate (this%sdot(sbar_dim, sbar_dim, nm, this%ntot))
+      if (allocated(this%alpha)) deallocate (this%alpha)
+      allocate (this%alpha(sbar_dim, this%kk, this%ntot))
+      if (allocated(this%alpha_dot)) deallocate (this%alpha_dot)
+      allocate (this%alpha_dot(sbar_dim, this%kk, this%ntot))
+#endif
+
+      this%sbar(:, :, :, :) = czero
+      this%sdot(:, :, :, :) = czero
+      this%alpha(:, :, :) = 0.0_rp
+      this%alpha_dot(:, :, :) = 0.0_rp
+   end subroutine init_strux_storage
+
+   pure function default_screening_alpha(this, nl) result(alpha_default)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: nl
+      real(rp) :: alpha_default(nl)
+      real(rp), parameter :: default_values(4) = [0.3485_rp, 0.0530_rp, 0.0107_rp, 0.00674_rp]
+      integer :: i
+
+      alpha_default = 0.0_rp
+      do i = 1, nl
+         alpha_default(i) = default_values(min(i, size(default_values)))
+      end do
+   end function default_screening_alpha
+
+   integer function strux_mode(this)
+      class(lattice), intent(in) :: this
+      character(len=:), allocatable :: screening_mode
+
+      screening_mode = trim(lower(this%screening))
+      select case (screening_mode)
+      case ('manual', 'default')
+         strux_mode = STRUX_LMTO47_IALPHA_MANUAL
+      case ('sigma')
+         strux_mode = STRUX_LMTO47_IALPHA_SIGMA
+      case ('fitted')
+         strux_mode = STRUX_LMTO47_IALPHA_FITD
+      case default
+         call g_logger%fatal('Unsupported lattice.screening='//trim(this%screening), __FILE__, __LINE__)
+      end select
+   end function strux_mode
+
+   subroutine load_symbolic_atoms_if_needed(this)
+      class(lattice), intent(inout) :: this
+
+      if (allocated(this%symbolic_atoms)) then
+         if (size(this%symbolic_atoms) == this%ntype) return
+         deallocate(this%symbolic_atoms)
+      end if
+      if (.not. allocated(this%symbolic_atoms)) then
+         this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+      end if
+   end subroutine load_symbolic_atoms_if_needed
+
+   subroutine build_rmt(this, nspec, species_labels, rmt)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: nspec
+      integer, intent(in) :: species_labels(nspec)
+      real(rp), intent(out) :: rmt(nspec)
+      integer :: is, label
+
+      call this%load_symbolic_atoms_if_needed()
+
+      do is = 1, nspec
+         label = species_labels(is)
+         if (label < 1 .or. label > size(this%symbolic_atoms)) then
+            call g_logger%fatal('strux backend found invalid species label in lattice%no for WS radius lookup', __FILE__, __LINE__)
+         end if
+         if (this%symbolic_atoms(label)%potential%ws_r <= tiny(1.0_rp)) then
+            call g_logger%fatal('strux backend requires positive potential%ws_r for sigma/fitted screening', __FILE__, __LINE__)
+         end if
+         ! NOTE: potential%ws_r is already stored in Bohr in this code path.
+         ! Keep rmt in the same unit to remain consistent with avw_bohr.
+         rmt(is) = this%symbolic_atoms(label)%potential%ws_r
+      end do
+   end subroutine build_rmt
+
+   subroutine build_hcr(this, nl, nspec, rmt, hcr)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: nl, nspec
+      real(rp), intent(in) :: rmt(nspec)
+      real(rp), intent(out) :: hcr(nl, nspec)
+      integer :: is, l
+
+      do is = 1, nspec
+         do l = 1, nl
+            hcr(l, is) = this%screening_sigma(l)*rmt(is)
+         end do
+      end do
+   end subroutine build_hcr
+
+   subroutine build_strux_inputs(this, nspec, nl, species_labels, alpha_in, hcr, rmt)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: nspec, nl
+      integer, intent(in) :: species_labels(nspec)
+      real(rp), intent(out) :: alpha_in(0:nl - 1, nspec)
+      real(rp), intent(out) :: hcr(nl, nspec)
+      real(rp), intent(out) :: rmt(nspec)
+      integer :: is
+      real(rp) :: alpha_global(nl)
+
+      call this%build_rmt(nspec, species_labels, rmt)
+      call this%build_hcr(nl, nspec, rmt, hcr)
+
+      select case (trim(lower(this%screening)))
+      case ('manual')
+         alpha_global = this%screening_alpha(1:nl)
+      case ('default')
+         alpha_global = this%default_screening_alpha(nl)
+      case default
+         alpha_global = 0.0_rp
+      end select
+
+      alpha_in(:, :) = 0.0_rp
+      do is = 1, nspec
+         alpha_in(:, is) = alpha_global
+      end do
+   end subroutine build_strux_inputs
+
+   subroutine structb_strux(this)
+      class(lattice), intent(inout) :: this
+
+      integer, parameter :: max_orb = 16
+      real(rp), parameter :: match_tol = 1.0e-5_rp
+      integer :: ii, ia, ib, ja, jb, m, is, js, nspec, nl, nl2, sbar_dim, pair_idx, nt_store
+      integer :: nbas, nttab
+      integer :: label, species_idx
+      integer, allocatable :: ips(:), lmxb(:), orb_map(:), species_labels(:)
+      real(rp) :: pair_cutoff, solve_cutoff, pair_cutoff_bohr, solve_cutoff_bohr, alat_bohr, wav_bohr
+      real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end, t_inputs_start, t_inputs_end, t_store_start, t_store_end, t_remap_end
+      real(rp) :: alpha_debug(4)
+      character(len=16) :: effective_screening
+      real(rp) :: vec_target(3)
+      real(rp), allocatable :: pos(:,:), cralat(:,:), rmt(:), alpha_in(:,:), hcr(:,:), alpha_site(:,:), &
+         adot_site(:,:), alpha_l_out(:,:), tral(:,:,:), trad(:,:,:)
+      type(strux_options) :: opts
+      type(strux_result) :: result
+
+      nl = this%control%lmax + 1
+      nl2 = nl*nl
+      nbas = this%nbas
+      if (nbas <= 0) nbas = max(1, maxval(this%no(1:min(this%kk, size(this%no)))))
+      sbar_dim = size(this%sbar, 1)
+      pair_cutoff = sqrt(this%r2)
+      solve_cutoff = sqrt(max(this%strux_solve_scale, 1.0_rp)*this%r2)
+      pair_cutoff_bohr = pair_cutoff*ang2au
+      solve_cutoff_bohr = solve_cutoff*ang2au
+      alat_bohr = this%alat*ang2au
+      wav_bohr = this%wav*ang2au
+
+      if (nl2 > sbar_dim) then
+         call g_logger%fatal('strux basis size exceeds allocated sbar dimension', __FILE__, __LINE__)
+      end if
+      if (nbas <= 0) then
+         call g_logger%fatal('strux backend requires lattice basis coordinates', __FILE__, __LINE__)
+      end if
+      if (.not. allocated(this%crd) .or. .not. allocated(this%no)) then
+         call g_logger%fatal('strux backend requires primitive-cell coordinates and labels', __FILE__, __LINE__)
+      end if
+      if (size(this%crd, 2) < nbas .or. size(this%no) < nbas) then
+         call g_logger%fatal('strux inferred basis size exceeds primitive-cell storage', __FILE__, __LINE__)
+      end if
+      if (any(this%no(1:nbas) <= 0)) then
+         call g_logger%fatal('strux backend found non-positive primitive basis labels in lattice%no', __FILE__, __LINE__)
+      end if
+
+      allocate(orb_map(max_orb))
+      call build_orbital_map(sbar_dim, orb_map)
+
+      opts%method = STRUX_METHOD_LMTO47
+      opts%auto_alpha = .false.
+      opts%want_sdot = this%strux_want_sdot
+      opts%lmaxw = -1
+      opts%pair_cutoff = pair_cutoff_bohr
+      opts%solve_cutoff = solve_cutoff_bohr
+      effective_screening = trim(lower(this%screening))
+      select case (effective_screening)
+      case ('manual', 'default')
+         opts%screening_mode = STRUX_LMTO47_IALPHA_MANUAL
+      case ('sigma')
+         opts%screening_mode = STRUX_LMTO47_IALPHA_SIGMA
+      case ('fitted')
+         opts%screening_mode = STRUX_LMTO47_IALPHA_FITD
+      case default
+         call g_logger%fatal('Unsupported effective screening mode='//trim(effective_screening), __FILE__, __LINE__)
+      end select
+
+      if (effective_screening == 'sigma' .or. effective_screening == 'fitted') then
+         opts%auto_alpha = .true.
+      end if
+
+      allocate(species_labels(nbas))
+      species_labels = 0
+      nspec = 0
+      allocate(pos(3, nbas), ips(nbas))
+      allocate(cralat(3, this%kk))
+
+      pos(:, :) = this%crd(:, 1:nbas)
+      cralat(:, :) = this%cr(:, 1:this%kk)*this%alat
+      do ib = 1, nbas
+         label = this%no(ib)
+         if (label <= 0) then
+            call g_logger%fatal('strux backend found non-positive primitive basis labels in lattice%no', __FILE__, __LINE__)
+         end if
+         species_idx = 0
+         do is = 1, nspec
+            if (species_labels(is) == label) then
+               species_idx = is
+               exit
+            end if
+         end do
+         if (species_idx == 0) then
+            nspec = nspec + 1
+            species_labels(nspec) = label
+            species_idx = nspec
+         end if
+         ips(ib) = species_idx
+      end do
+      allocate(lmxb(nspec), rmt(nspec))
+      allocate(alpha_in(0:nl - 1, nspec), hcr(nl, nspec))
+      lmxb(:) = this%control%lmax
+      call this%build_strux_inputs(nspec, nl, species_labels(1:nspec), alpha_in, hcr, rmt)
+      write (17, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX periodic solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
+
+      ! DEBUG_STRUX_DIAG_BEGIN (temporary instrumentation; safe to remove as one block)
+      write (17, '(a)') 'DEBUG_STRUX_DIAG: begin'
+      write (17, '(a,a)') 'DEBUG_STRUX_DIAG: effective_screening=', trim(effective_screening)
+      write (17, '(a,i0)') 'DEBUG_STRUX_DIAG: opts%screening_mode=', opts%screening_mode
+      write (17, '(a,l1)') 'DEBUG_STRUX_DIAG: opts%auto_alpha=', opts%auto_alpha
+      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: hcr[min,max]=', minval(hcr), ',', maxval(hcr)
+      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: alpha_in[min,max]=', minval(alpha_in), ',', maxval(alpha_in)
+      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: rmt[min,max]=', minval(rmt), ',', maxval(rmt)
+      write (17, '(a,f12.6,a,f12.6)') 'DEBUG_STRUX_DIAG: avw_bohr, solve_cutoff_bohr=', wav_bohr, ',', solve_cutoff_bohr
+      write (17, '(a)') 'DEBUG_STRUX_DIAG: end'
+      flush(17)
+      if (rank == 0) then
+         call g_logger%info('DEBUG_STRUX_DIAG effective_screening='//trim(effective_screening)// &
+                            ' mode='//int2str(opts%screening_mode)// &
+                            ' auto='//merge('T','F',opts%auto_alpha), __FILE__, __LINE__)
+      end if
+      ! DEBUG_STRUX_DIAG_END
+
+      if (effective_screening == 'manual' .or. effective_screening == 'default') then
+         if (this%strux_want_sdot) then
+            call g_logger%fatal('strux manual/default screening with sdot is unsupported; use sigma or fitted', __FILE__, __LINE__)
+         end if
+      end if
+
+      if (allocated(result%iax)) deallocate(result%iax)
+      if (allocated(result%alpha)) deallocate(result%alpha)
+      if (allocated(result%alpha_l)) deallocate(result%alpha_l)
+      if (allocated(result%s)) deallocate(result%s)
+      if (allocated(result%sdot)) deallocate(result%sdot)
+
+      select case (effective_screening)
+      case ('manual', 'default')
+         call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, alpha_in=alpha_in)
+         call strux_lmto47_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, alpha_in, alpha_site, adot_site, &
+            tral, trad, screening_mode=opts%screening_mode)
+      case ('sigma')
+         call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, hcr=hcr)
+         call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
+            alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
+            screening_mode=opts%screening_mode)
+      case ('fitted')
+         call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result)
+         call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
+            alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
+            screening_mode=opts%screening_mode)
+      end select
+      do is = 1, nspec
+         alpha_debug = 0.0_rp
+         select case (effective_screening)
+         case ('manual', 'default')
+            alpha_debug(1:min(nl, 4)) = alpha_in(0:min(nl - 1, 3), is)
+         case ('sigma', 'fitted')
+            if (allocated(alpha_l_out)) then
+               alpha_debug(1:min(nl, 4)) = alpha_l_out(0:min(nl - 1, 3), is)
+            else if (allocated(result%alpha_l)) then
+               alpha_debug(1:min(nl, 4)) = result%alpha_l(0:min(nl - 1, 3), is)
+            end if
+         end select
+         write (17, '(a, a, a, i4, a, i6, a, 4f12.6)') 'STRUX screening=', trim(effective_screening), &
+            ' species=', is, ' label=', species_labels(is), ' alpha=', alpha_debug
+      end do
+      flush(17)
+
+      nttab = result%nttab
+      write (17, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
+
+      do ii = 1, this%ntot
+         this%alpha(:, :, ii) = 0.0_rp
+         this%alpha_dot(:, :, ii) = 0.0_rp
+         this%alpha(1:nl2, 1:nbas, ii) = alpha_site(:, 1:nbas)
+         this%alpha_dot(1:nl2, 1:nbas, ii) = adot_site(:, 1:nbas)
+      end do
+
+      do is = 1, nspec
+         label = species_labels(is)
+         if (label < 1 .or. label > size(this%symbolic_atoms)) then
+            call g_logger%fatal('strux backend found invalid species label for screening alpha storage', __FILE__, __LINE__)
+         end if
+         if (allocated(this%symbolic_atoms(label)%potential%screening_alpha)) then
+            if (lbound(this%symbolic_atoms(label)%potential%screening_alpha, 1) /= 0 .or. &
+                ubound(this%symbolic_atoms(label)%potential%screening_alpha, 1) /= nl - 1) then
+               deallocate(this%symbolic_atoms(label)%potential%screening_alpha)
+               allocate(this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1))
+            end if
+         else
+            allocate(this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1))
+         end if
+         select case (effective_screening)
+         case ('manual', 'default')
+            this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1) = alpha_in(0:nl - 1, is)
+         case ('sigma', 'fitted')
+            if (allocated(alpha_l_out)) then
+               this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1) = alpha_l_out(0:nl - 1, is)
+            else if (allocated(result%alpha_l)) then
+               this%symbolic_atoms(label)%potential%screening_alpha(0:nl - 1) = result%alpha_l(0:nl - 1, is)
+            else
+               call g_logger%fatal('strux backend did not produce screening alpha data for potential transform', __FILE__, __LINE__)
+            end if
+         end select
+      end do
+      do ii = 1, this%ntot
+         ia = representative_atom_index(this, ii)
+         ib = primitive_basis_label(this, ia)
+         nt_store = this%kk
+         call this%clusba(this%r2, cralat, ia, this%kk, this%kk, nt_store)
+         call cpu_time(t_map_start)
+         write (17, '(a, i5, a, i5, a, i5, a, i6)') 'STRUX map   center ', ii, ' atom ', ia, ' basis=', ib, ' nt=', nt_store
+         call write_neighbor_vector_dump(17, this%sbarvec, nt_store)
+
+         do m = 1, nt_store
+            vec_target(:) = this%sbarvec(:, m)
+            if (m == 1) then
+               ja = ia
+               jb = ib
+            else
+               ja = this%nn(ia, m)
+               if (ja == 0) then
+                  ja = find_neighbor_atom_by_vector(this, ia, vec_target, cralat, match_tol)
+                  if (ja == 0) cycle
+               end if
+               jb = primitive_basis_label(this, ja)
+            end if
+            pair_idx = find_pair_by_vector(nttab, result%iax, this%a, pos, this%alat, ib, jb, vec_target, match_tol)
+            if (pair_idx == 0) then
+               write (17, '(a,3f14.8,a,2i6,a,2i6)') 'STRUX pair miss vec=', vec_target, ' center/neigh=', ia, ja, ' basis=', ib, jb
+               call g_logger%fatal('Failed to map strux periodic pair to nn ordering', __FILE__, __LINE__)
+            end if
+
+            do is = 1, nl2
+               if (orb_map(is) <= 0) cycle
+               do js = 1, nl2
+                  if (orb_map(js) <= 0) cycle
+                  this%sbar(is, js, m, ii) = cmplx(result%s(orb_map(is), orb_map(js), pair_idx), 0.0_rp, kind=rp)
+                  if (this%strux_want_sdot) then
+                     this%sdot(is, js, m, ii) = cmplx(result%sdot(orb_map(is), orb_map(js), pair_idx), 0.0_rp, kind=rp)
+                  end if
+               end do
+            end do
+            call write_strux_block(this, nl2, m, ia, ja)
+         end do
+         call cpu_time(t_map_end)
+         write (17, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
+         flush(17)
+      end do
+
+      if (allocated(alpha_l_out)) deallocate(alpha_l_out)
+      if (allocated(tral)) deallocate(tral)
+      if (allocated(trad)) deallocate(trad)
+      if (allocated(alpha_site)) deallocate(alpha_site)
+      if (allocated(adot_site)) deallocate(adot_site)
+      deallocate(pos, cralat, ips, lmxb, rmt, alpha_in, hcr, orb_map, species_labels)
+   end subroutine structb_strux
+
+   subroutine write_strux_block(this, nl2, m, ii, jclus)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: nl2, m, ii, jclus
+      integer :: is, js
+
+      ! write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus, &
+      !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
+      write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), ii, jclus
+      if (this%strux_want_sdot) then
+         write (15, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), ii, jclus
+      end if
+
+      do is = 1, nl2
+         do js = 1, nl2
+            write (13) this%sbar(is, js, m, ii)
+            if (this%strux_want_sdot) write (14) this%sdot(is, js, m, ii)
+         end do
+         write (16, '(*(f10.4))') (real(this%sbar(is, js, m, ii), rp), js=1, nl2)
+         if (this%strux_want_sdot) then
+            write (15, '(*(f10.4))') (real(this%sdot(is, js, m, ii), rp), js=1, nl2)
+         end if
+      end do
+      flush(16)
+      flush(17)
+      if (this%strux_want_sdot) flush(15)
+   end subroutine write_strux_block
+
+   subroutine write_neighbor_vector_dump(iunit, sbarvec, nt)
+      integer, intent(in) :: iunit, nt
+      real(rp), intent(in) :: sbarvec(:, :)
+      integer :: i
+
+      write (iunit, '(i5)') nt
+      do i = 1, nt
+         write (iunit, '(3f8.4)') sbarvec(1, i), sbarvec(2, i), sbarvec(3, i)
+      end do
+   end subroutine write_neighbor_vector_dump
+
+   integer function representative_atom_index(this, ii)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: ii
+
+      representative_atom_index = 0
+
+      if (allocated(this%iu)) then
+         if (ii <= size(this%iu)) then
+            if (this%iu(ii) > 0) representative_atom_index = this%iu(ii)
+         end if
+      end if
+      if (representative_atom_index == 0 .and. allocated(this%ib)) then
+         if (ii <= size(this%ib)) then
+            if (this%ib(ii) > 0) representative_atom_index = this%ib(ii)
+         end if
+      end if
+      if (representative_atom_index == 0 .and. allocated(this%irec)) then
+         if (ii <= size(this%irec)) then
+            if (this%irec(ii) > 0) representative_atom_index = this%irec(ii)
+         end if
+      end if
+      if (representative_atom_index == 0) then
+         if (ii <= this%kk) representative_atom_index = ii
+      end if
+      if (representative_atom_index <= 0 .or. representative_atom_index > this%kk) then
+         call g_logger%fatal('Failed to resolve representative atom index for strux mapping', __FILE__, __LINE__)
+      end if
+   end function representative_atom_index
+
+   integer function primitive_basis_label(this, ia)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: ia
+
+      primitive_basis_label = 0
+      if (allocated(this%no)) then
+         if (ia >= 1 .and. ia <= size(this%no)) then
+            primitive_basis_label = this%no(ia)
+         end if
+      end if
+      if (primitive_basis_label <= 0 .and. allocated(this%num)) then
+         if (ia >= 1 .and. ia <= size(this%num)) then
+            primitive_basis_label = this%num(ia)
+         end if
+      end if
+      if (primitive_basis_label <= 0) then
+         call g_logger%fatal('Failed to resolve primitive basis label for strux mapping', __FILE__, __LINE__)
+      end if
+   end function primitive_basis_label
+
+   integer function find_pair_by_vector(nttab, iax, plat, pos, alat, ib, jb, vec_target, tol)
+      integer, intent(in) :: nttab, ib, jb
+      integer, intent(in) :: iax(:,:)
+      real(rp), intent(in) :: plat(3, 3), pos(:, :), alat, vec_target(3), tol
+      integer :: i, n1, n2, n3
+      real(rp) :: vec(3)
+      real(rp) :: dmax, best_d
+      integer :: best_i
+
+      find_pair_by_vector = 0
+      best_d = huge(1.0_rp)
+      best_i = 0
+      do i = 1, nttab
+         if (iax(1, i) /= ib) cycle
+         if (iax(2, i) /= jb) cycle
+         n1 = iax(3, i)
+         n2 = iax(4, i)
+         n3 = iax(5, i)
+         vec(:) = alat*(pos(:, jb) - pos(:, ib) + real(n1, rp)*plat(:, 1) + real(n2, rp)*plat(:, 2) + real(n3, rp)*plat(:, 3))
+         dmax = maxval(abs(vec - vec_target))
+         if (dmax < best_d) then
+            best_d = dmax
+            best_i = i
+         end if
+         if (dmax <= tol) then
+            find_pair_by_vector = i
+            return
+         end if
+      end do
+      if (best_i /= 0) find_pair_by_vector = best_i
+   end function find_pair_by_vector
+
+   integer function find_neighbor_atom_by_vector(this, ia, vec_target, cralat, tol)
+      class(lattice), intent(in) :: this
+      integer, intent(in) :: ia
+      real(rp), intent(in) :: vec_target(:), cralat(:, :)
+      real(rp), intent(in) :: tol
+      integer :: ja
+      real(rp) :: dv(3)
+
+      find_neighbor_atom_by_vector = 0
+      do ja = 1, this%kk
+         if (ja == ia) cycle
+         dv(:) = cralat(:, ja) - cralat(:, ia)
+         if (maxval(abs(dv - vec_target)) <= tol) then
+            find_neighbor_atom_by_vector = ja
+            return
+         end if
+      end do
+   end function find_neighbor_atom_by_vector
+
+   subroutine build_orbital_map(norb, orb_map)
+      integer, intent(in) :: norb
+      integer, intent(out) :: orb_map(16)
+      integer :: i
+      integer, parameter :: full_map(16) = [ &
+         1, 4, 2, 3, 5, 6, 8, 9, 7, 13, 14, 12, 15, 11, 16, 10 ]
+
+      orb_map = 0
+      do i = 1, min(norb, size(full_map))
+         orb_map(i) = full_map(i)
+      end do
+   end subroutine build_orbital_map
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -2140,7 +2800,8 @@ contains
    subroutine atomlist(this)
       class(lattice), intent(inout) :: this
       ! Local variables
-      integer :: i, j
+      integer :: i, j, itype
+      real(rp) :: mom_tmp(3)
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.atlist', this%atlist, (/this%ntype/))
@@ -2163,14 +2824,26 @@ contains
          j = j + 1
          this%atlist(j) = this%irec(i)
       end do
-      this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+      call this%load_symbolic_atoms_if_needed()
 
       
       write (805, *) this%kk
       write (805, *)
       do i = 1, this%kk
-            write (805, '(A6,6F16.6)') (elem_var(int(this%symbolic_atoms(this%iz(i))%element%atomic_number))), &
-            this%cr(:, i), this%symbolic_atoms(this%iz(i))%potential%mom(:)
+         itype = 1
+         if (allocated(this%iz)) then
+            if (i <= size(this%iz)) then
+               if (this%iz(i) >= 1 .and. this%iz(i) <= size(this%symbolic_atoms)) itype = this%iz(i)
+            end if
+         end if
+         mom_tmp(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         if (allocated(this%symbolic_atoms(itype)%potential%mom)) then
+            if (size(this%symbolic_atoms(itype)%potential%mom) >= 3) then
+               mom_tmp(:) = this%symbolic_atoms(itype)%potential%mom(1:3)
+            end if
+         end if
+         write (805, '(A6,6F16.6)') (elem_var(int(this%symbolic_atoms(itype)%element%atomic_number))), &
+            this%cr(:, i), mom_tmp(:)
       end do
    end subroutine atomlist
 
@@ -2431,52 +3104,51 @@ contains
       real(rp), intent(in) :: r2, wav
       real(rp), dimension(3, ndi), intent(in) :: crd
       ! Local Scalars
-      integer :: i, j, k, m, na, nrl, nt
+      integer :: i, j, k, m, na, nrl, nt, jclus_dbg
       real(rp), dimension(:), allocatable :: bet, wk
       real(rp), dimension(:), allocatable :: a
       real(rp), dimension(:, :), allocatable :: cr
       real(rp), dimension(:, :), allocatable :: s
       real(rp), dimension(:, :, :), allocatable :: sbar
-      real(rp), dimension(:, :), allocatable :: sbarvec
       !
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 2000 ! Neigbours for SBAR construction (>> TB neighbours)
-      ! allocate (cr(3, nt))
+      nt = 5250 !350
+      allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
-      allocate(sbarvec(3, nt))
-      call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
-      ! print *, 'Number of neighbours for sbar:', nt
-      write (17, 10000) nt
-      write (17, 10001) ((sbarvec(j, i), j=1, 3), i=1, nt)
-      !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
+      call this%clusba(r2, crd, ia, nat, ndi, nt)
+      call write_neighbor_vector_dump(17, this%sbarvec, nt)
+      flush(17)
       nrl = np*nt
       na = (nrl*(nrl + 1))/2
       allocate (a(na))
       allocate (bet(nrl))
       allocate (wk(nrl))
       allocate (s(nrl, nrl))
-      call micha(wav, sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
 
       ! Saving parameters to be used in the Hamiltonian build
-      ! Call clusba again for proper number of TB neighbours
-      nt = 2000  ! Reset to max size before calling clusba
-      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
-      !!! print *, 'REAL SPACE neigbours', ia
-      !!! do i = 2, nt
-      !!!    print '(a,2i4, a, 3f10.6)', 'Neighbour ', this%nn(ia, i), this%iz(this%nn(ia, i)), ' : ', sbarvec(:, i)
-      !!! end do
-      ! Store the number of neighbours
-      this%nn_max = nt
+      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
 
       do m = 1, nt
-         do i = 1, 9
-            do j = 1, 9
+         do i = 1, np
+            do j = 1, np
                this%sbar(i, j, m, ii) = sbar(i, j, m)
             end do
          end do
+         jclus_dbg = ia
+         if (m > 1 .and. allocated(this%nn)) then
+            if (ia >= 1 .and. ia <= size(this%nn, 1) .and. m <= size(this%nn, 2)) then
+               if (this%nn(ia, m) > 0) jclus_dbg = this%nn(ia, m)
+            end if
+         end if
+         write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), ia, jclus_dbg
+         do i = 1, np
+            write (16, '(*(f10.4))') (real(this%sbar(i, j, m, ii), rp), j=1, np)
+         end do
       end do
+      flush(17)
 
       !do m=1, nt
       !  write(*, *) ia, m
@@ -2484,11 +3156,8 @@ contains
       !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
-      deallocate (a, bet, wk, s, sbar)
+      deallocate (a, bet, cr, wk, s, sbar)
       return
-
-10000 format(i5)
-10001 format(3f8.4)
    end subroutine dbar1
 
    !---------------------------------------------------------------------------
@@ -2505,113 +3174,60 @@ contains
    !> @param[inout] cr
    !> @return type(calculation)
    !---------------------------------------------------------------------------
-   subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec)
+   subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out)
       implicit none
-      class(lattice), intent(in) :: this
+      class(lattice), intent(inout) :: this
       ! Inputs
       integer, intent(in) :: ia, nat, ndi
       real(rp), intent(in) :: r2
       real(rp), dimension(3, ndi), intent(in) :: crd
-      real(rp), dimension(3, n), intent(out) :: sbarvec
       ! Output
       integer, intent(inout) :: n
+      real(rp), dimension(:, :), intent(inout), optional :: sbarvec_out
+!    real(rp), dimension(3, n), intent(inout) :: cr
       ! Local variables
-      integer :: i, jatom, neighbor_count
-      real(rp) :: dist_sq
-      real(rp), dimension(3) :: delta
+      integer :: i, ii, k, nn
+      real(rp) :: s1
+      real(rp), dimension(3) :: dum
 
-      ! Initialize first neighbor as on-site (R=0)
-      neighbor_count = 1
-      sbarvec(:, 1) = 0.0_rp
-
-      ! Loop over all atoms to find neighbors
-      do jatom = 1, nat
-         ! Calculate distance squared
-         delta(:) = crd(:, jatom) - crd(:, ia)
-         dist_sq = sum(delta**2)
-
-         ! Check if within cutoff and not the same atom
-         if (dist_sq < r2 .and. dist_sq > 0.0001_rp) then
-            neighbor_count = neighbor_count + 1
-            
-            ! Check array bounds
-            if (neighbor_count > n) then
-               exit  ! Stop if we exceed the allocated array size
-            end if
-
-            ! Store Cartesian neighbor vector
-            sbarvec(:, neighbor_count) = delta(:)
-         end if
-      end do
-
-      ! Update n with actual count
-      n = neighbor_count
-   end subroutine clusba
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Find neighbor vectors and store them in lattice%sbarvec and lattice%sbarvec_direct.
-   !> This wrapper around clusba manages the lattice member arrays and performs
-   !> coordinate transformations. Used when we need to keep track of neighbor vectors
-   !> in the lattice object (e.g., for structure constants with TB-ranged neighbors).
-   !>
-   !> @param[in] r2_cutoff Cutoff radius squared
-   !> @param[in] atom_coords Atomic coordinates in Cartesian (absolute units)
-   !> @param[in] atom_index Index of the central atom
-   !> @param[in] n_atoms Total number of atoms in the cluster
-   !> @param[in] ndi Dimension of atom_coords array
-   !> @param[inout] n_neighbors Input: max neighbors; Output: actual neighbors found
-   !---------------------------------------------------------------------------
-   subroutine get_neighbor_vectors(this, r2_cutoff, atom_coords, atom_index, &
-                                   n_atoms, ndi, n_neighbors)
-      implicit none
-      class(lattice), intent(inout) :: this
-      ! Input parameters
-      real(rp), intent(in) :: r2_cutoff
-      integer, intent(in) :: atom_index, n_atoms, ndi
-      real(rp), dimension(3, ndi), intent(in) :: atom_coords
-      ! Output parameters
-      integer, intent(inout) :: n_neighbors  ! Input: max size, Output: actual count
-      ! Local variables
-      integer :: i, n_max
-      real(rp), dimension(3) :: delta_frac
-
-      ! Allocate lattice%sbarvec and sbarvec_direct arrays if needed
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
       call g_safe_alloc%allocate('lattice.sbarvec', this%sbarvec, (/3, this%kk/))
-      if (allocated(this%sbarvec_direct)) call g_safe_alloc%deallocate('lattice.sbarvec_direct', this%sbarvec_direct)
-      call g_safe_alloc%allocate('lattice.sbarvec_direct', this%sbarvec_direct, (/3, this%kk/))
 #else
       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
       allocate (this%sbarvec(3, this%kk))
-      if (allocated(this%sbarvec_direct)) deallocate (this%sbarvec_direct)
-      allocate (this%sbarvec_direct(3, this%kk))
 #endif
 
-      this%sbarvec(:, :) = 0.0_rp
-      this%sbarvec_direct(:, :) = 0.0_rp
+      this%sbarvec(:, :) = 0.0d0
+      if (present(sbarvec_out)) sbarvec_out(:, :) = 0.0d0
 
-      ! Use clusba to find neighbors (stores in lattice%sbarvec via output array)
-      n_max = min(n_neighbors, this%kk)
-      call this%clusba(r2_cutoff, atom_coords, atom_index, n_atoms, ndi, n_max, &
-                       this%sbarvec(:, 1:n_max))
-      
-      ! Update n_neighbors with the actual number found
-      n_neighbors = n_max
-      
-      ! Convert all neighbor vectors to fractional coordinates
-      do i = 1, n_neighbors
-         if (this%a_cart_inv_ready) then
-            delta_frac = matmul(this%a_cart_inv, this%sbarvec(:, i) / this%alat)
-         else
-            call cartesian_to_fractional(this%sbarvec(:, i) / this%alat, delta_frac, this%a, 1.0_rp)
-         end if
-         this%sbarvec_direct(:, i) = delta_frac
+      ii = 1
+      do k = 1, 3
+         this%sbarvec(k, 1) = 0.0d0
       end do
-
-   end subroutine get_neighbor_vectors
+      if (present(sbarvec_out)) sbarvec_out(:, 1) = 0.0d0
+      do nn = 1, nat
+         s1 = 0.0
+         do i = 1, 3
+            dum(i) = (crd(i, nn) - crd(i, ia))**2
+            s1 = s1 + dum(i)
+         end do
+         if (s1 < r2 .and. s1 > 0.0001) then
+            ii = ii + 1
+            this%sbarvec(1, ii) = crd(1, nn) - crd(1, ia)
+            this%sbarvec(2, ii) = crd(2, nn) - crd(2, ia)
+            this%sbarvec(3, ii) = crd(3, nn) - crd(3, ia)
+            if (present(sbarvec_out)) then
+               if (ii <= size(sbarvec_out, 2)) then
+                  sbarvec_out(:, ii) = this%sbarvec(:, ii)
+               end if
+            end if
+         end if
+!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
+!!    "in DBAR1."
+      end do
+      n = ii
+   end subroutine clusba
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -2646,7 +3262,7 @@ contains
       real(rp), dimension(nlm, nlm, nr), intent(inout) :: sbar
       ! Local variables
       real(rp) :: fak, pi
-      real(rp), dimension(3) :: q
+      real(rp), dimension(4) :: q
       ! External Calls
       !external SHLDCH, STREZE
       ! Intrinsic Functions
@@ -2661,6 +3277,7 @@ contains
       q(1) = 0.3485d0*fak
       q(2) = 0.05303d0*fak
       q(3) = 0.010714d0*fak
+      q(4) = 0.00337d0*fak   ! f-channel screening parameter
       ! Factors from LMTO47
       !q(1) = 0.33727d0 * fak
       !q(2) = 0.05115d0 * fak
@@ -2697,14 +3314,11 @@ contains
       integer :: ilm, ir, irl0, jlm, jr, jrl0
       real(rp) :: rr, w1
       real(rp), dimension(3) :: dr
-      real(rp), dimension(81) :: s0
+      real(rp), dimension(16, 16) :: s0
       ! External calls
       !external CANSO
       ! Intrinsic Functions
       intrinsic SQRT
-
-      if (nlm > 9) stop "**** CHANGE DIMS IN STRMAT"
-      ! print *,' In STREZE: nr, nlm, nrl = ', nr, nlm, nrl
       do ir = 1, nr
          irl0 = (ir - 1)*nlm
          do jr = 1, nr
@@ -2717,7 +3331,7 @@ contains
             call CANSO(w1, dr, s0)
             do jlm = 1, nlm
                do ilm = 1, nlm
-                  s(ilm + irl0, jlm + jrl0) = s0(ilm + (jlm - 1)*nlm)
+                  s(ilm + irl0, jlm + jrl0) = s0(ilm, jlm)
                end do
             end do
          end do
@@ -2750,7 +3364,7 @@ contains
       ! Input
       integer, intent(in) :: iclus, na, nlm, nr, nrl
       real(rp), intent(in) ::r2
-      real(rp), dimension(3), intent(in) :: q
+      real(rp), dimension(4), intent(in) :: q
       real(rp), dimension(3, nr), intent(in) :: r
       ! Output
       real(rp), dimension(na), intent(inout) :: a
@@ -2767,7 +3381,6 @@ contains
       ndef = 0
       lmax = LL(nlm)
       allocate (s_temp(nrl, nrl))
-      ! print *, ' In SHLDCH: nr, nlm, nrl, lmax = ', nr, nlm, nrl, lmax
       write (17, 10000) lmax, q
       irl = 0
       do ir = 1, nr
@@ -2793,15 +3406,10 @@ contains
 !      end do
 !    end do
 !    call chlr2f(a, na, wk, nrl, ndef)
-       !print *, ' Calling DPOTRF in SHLDCH', nrl
-       call DPOTRF('U', nrl, s_temp, nrl, info)
-       write (17, 10001) ndef
+      call DPOTRF('U', nrl, s_temp, nrl, info)
+      write (17, 10001) ndef
 !    call chlr2s(a, na, s, nrl, nlm)
-       !print *, ' Calling DPOTRS in SHLDCH', nrl
-       call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
-      ! Potential speedup by using DPOSV
-      !print *, ' Calling DPOSV in SHLDCH', nrl
-      !call DPOSV('U', nrl, nlm, s_temp, nrl, s, nrl, info)
+      call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
       deallocate (s_temp)
       do ilm = 1, nlm
          do irl = 1, nrl
@@ -2809,14 +3417,14 @@ contains
          end do
       end do
       ! --------------------------------
-      !print *, ' Making Sbar matrix in SHLDCH'
       ir = 0
       hitc = 0
       !print *, ´ nr = ´, nr
       do ir = 1, nr
          if (abs(R(1, IR)**2 + R(2, IR)**2 + R(3, IR)**2 - &
                  R(1, 1)**2 + R(2, 1)**2 + R(3, 1)**2) <= (R2/ncut)) then
-            write (16, 10002) r(1, ir), r(2, ir), r(3, ir), iclus
+            ! Legacy view.sbar printing is emitted in dbar1 where neighbour
+            ! atom indices are available from nn(ia,m).
             hitc = hitc + 1
             irl0 = (ir - 1)*nlm
             do ilm = 1, nlm
@@ -2847,17 +3455,16 @@ contains
             end do
             ! 208 FORMAT(5F12.6:/(12X, 4F12.6))
             do isb = 1, nlm
-               write (16, 10003) (sbar(isb, jsb, hitc), jsb=1, nlm)
+               ! Legacy view.sbar printing is emitted in dbar1.
             end do
          end if
       end do
-      !print *, ' Number of hitc in SHLDCH = ', hitc
       !print *, ´ hitc = ´, hitc
       return
       !
       ! ... Format Declarations ...
       !
-10000 format(" LMAX=", i2, "   Q=", 3f10.6)
+10000 format(" LMAX=", i2, "   Q=", 4f10.6)
 10001 format(" NDEF=", i10)
 10002 format(" VECTOR=", 3f12.6, "   ICLUS=", i5)
 10003 format(9f10.4)
@@ -2879,32 +3486,28 @@ contains
       real(rp), intent(in) :: w
       real(rp), dimension(3), intent(in) :: dr
       ! Output
-      real(rp), dimension(9, 9), intent(out) :: sc
+      real(rp), dimension(16, 16), intent(out) :: sc
       ! Local variables
       integer :: i, j, l, ll
-      real(rp) :: el, el2, elem, elen, em, em2, emen, en, en2, r1, r2, r3, rr, s2, s3, s4, s5, &
-                  sbyr, sq3, sq5
-      integer, dimension(9) :: ip
-      real(rp), dimension(9, 9) :: s
+      real(rp) :: el, el2, elem, elen, em, em2, emen, en, en2, r1, r2, r3, rr, s2, s3, s4, s5, s6, s7, &
+                  sbyr, sq3, sq5, sq7
+      integer, dimension(16) :: ip
+      real(rp), dimension(16, 16) :: s
       ! Intrinsic Functions
       intrinsic SQRT
       !.. Data Declarations ..
       ! original and correct
       !     S=1, X=2, Y=3, Z=4, XY=5, YZ=6, ZX=7, X**2-Y**2=8, 3Z*Z-R*R=9
-      data ip/1, 2, 3, 4, 5, 6, 7, 8, 9/
-      !data ip/1, 2, 3, 4, 5, 7, 6, 8, 9/
-      !data ip/1, 2, 3, 4, 5, 6, 7, 9, 8/
-      ! testing (old convention)
-      !data ip /  1,  4, 2, 3,   5, 6, 8, 9, 7  /
-      ! testing reversing d-orbitals (bstr convention)
-      !data ip/1, 2, 3, 4, 9, 8, 7, 6, 5/
+      !     f-orbitals (10-16): fz3, fxz2, fyz2, fz(x2-y2), fxyz, fx3, fy3
+      data ip/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16/
       !     S=1, X=2, Y=3, Z=4, XY=5, YZ=6, ZX=7, X**2-Y**2=8, 3Z*Z-R*R=9
+      !     (10-16 reserved for f-orbitals)
       r1 = dr(1)
       r2 = dr(2)
       r3 = dr(3)
       rr = SQRT(r1*r1 + r2*r2 + r3*r3)
-      do i = 1, 9
-         do j = 1, 9
+      do i = 1, 16
+         do j = 1, 16
             sc(i, j) = 0.0d0
          end do
       end do
@@ -2914,8 +3517,11 @@ contains
       s3 = s2*sbyr
       s4 = s3*sbyr
       s5 = s4*sbyr
+      s6 = s5*sbyr
+      s7 = s6*sbyr
       sq3 = SQRT(3.d0)
       sq5 = SQRT(5.d0)
+      sq7 = SQRT(7.d0)
       el = r1/rr
       em = r2/rr
       en = r3/rr
@@ -2980,7 +3586,114 @@ contains
       !-----------------------------------------------------------------------
       sc(9, 9) = -7.5d0*s5*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
       !-----------------------------------------------------------------------
-      do l = 2, 9
+      ! F-ORBITAL BLOCK (indices 10-16)
+      ! From Methfessel, Mossner & Springborg, J. Phys. C 20, 1069 (1987), Table 1
+      ! Orbital order: ilm 10=fz3, 11=fxz2, 12=fyz2, 13=fz(x2-y2), 14=fxyz, 15=fx3, 16=fy3
+      !
+      ! s-f interactions (row 1, cols 10-16)
+      sc(1, 10) = sq7*s3*(5.d0*en2*en2 - 3.d0*en2)
+      sc(1, 11) = -2.d0*sq7*sq5*elen*s4*(1.d0 - 5.d0*en2)
+      sc(1, 12) = -2.d0*sq7*sq5*emen*s4*(1.d0 - 5.d0*en2)
+      sc(1, 13) = -2.d0*sq7*sq5*(el2 - em2)*en*s4
+      sc(1, 14) = -4.d0*sq7*sq5*elem*en*s4
+      sc(1, 15) = sq7*s4*el*(5.d0*el2 - 3.d0)
+      sc(1, 16) = sq7*s4*em*(5.d0*em2 - 3.d0)
+      !
+      ! p-f interactions (rows 2-4, cols 10-16)
+      sc(2, 10) = 6.d0*sq7*sq3*s4*el*(5.d0*en2*en2 - 1.d0)
+      sc(2, 11) = 3.d0*sq7*sq5*s5*em*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
+      sc(2, 12) = -30.d0*sq7*sq5*s5*elem*en*(en2 - 1.d0)
+      sc(2, 13) = 3.d0*sq7*sq5*s5*el*(7.d0*en2 - 1.d0)*(el2 - em2)
+      sc(2, 14) = 6.d0*sq7*sq5*s5*elem*en*(7.d0*en2 - 3.d0)
+      sc(2, 15) = 3.d0*sq7*s5*el*(35.d0*el2*em2 - 5.d0*el2 - 20.d0*em2 + 4.d0)
+      sc(2, 16) = 3.d0*sq7*s5*el2*em*(35.d0*em2 - 15.d0)
+      !
+      sc(3, 10) = 6.d0*sq7*sq3*s4*em*(5.d0*en2*en2 - 1.d0)
+      sc(3, 11) = -30.d0*sq7*sq5*s5*elem*en*(en2 - 1.d0)
+      sc(3, 12) = 3.d0*sq7*sq5*s5*el*(35.d0*en2*en2 - 30.d0*en2 + 3.d0)
+      sc(3, 13) = 3.d0*sq7*sq5*s5*em*(7.d0*en2 - 1.d0)*(el2 - em2)
+      sc(3, 14) = 6.d0*sq7*sq5*s5*emen*en*(7.d0*en2 - 3.d0)
+      sc(3, 15) = 3.d0*sq7*s5*el*em2*(35.d0*el2 - 15.d0)
+      sc(3, 16) = 3.d0*sq7*s5*em*(35.d0*em2*el2 - 20.d0*el2 - 5.d0*em2 + 4.d0)
+      !
+      sc(4, 10) = 3.d0*sq7*sq5*s4*en*(35.d0*en2 - 28.d0)
+      sc(4, 11) = 6.d0*sq7*sq5*s5*elen*en*(7.d0*en2 - 3.d0)
+      sc(4, 12) = 6.d0*sq7*sq5*s5*emen*en*(7.d0*en2 - 3.d0)
+      sc(4, 13) = -12.d0*sq7*sq5*s5*(el2 - em2)*en*(7.d0*en2 - 1.d0)
+      sc(4, 14) = -12.d0*sq7*sq5*s5*elem*en*(7.d0*en2 - 1.d0)
+      sc(4, 15) = 3.d0*sq7*s5*el*(5.d0*el2 - 1.d0)*(7.d0*en2 - 3.d0)
+      sc(4, 16) = 3.d0*sq7*s5*em*(5.d0*em2 - 1.d0)*(7.d0*en2 - 3.d0)
+      !
+      ! d-f interactions (rows 5-9, cols 10-16)
+      sc(5, 10) = -15.d0*sq7*sq5*s5*elem*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(5, 11) = -35.d0*sq7*s6*emen*elem*(1.d0 - 7.d0*en2)
+      sc(5, 12) = -35.d0*sq7*s6*el2*en*elem*(1.d0 - 7.d0*en2)
+      sc(5, 13) = -35.d0*sq7*s6*elem*(el2 - em2)*(7.d0*en2 - 1.d0)
+      sc(5, 14) = -70.d0*sq7*s6*elem*(el2*en2 - em2*(1.d0 - en2))
+      sc(5, 15) = -15.d0*sq7*s6*elem*(el2 - 3.d0*em2)*(7.d0*en2 - 1.d0)
+      sc(5, 16) = -15.d0*sq7*s6*elem*(em2 - 3.d0*el2)*(7.d0*en2 - 1.d0)
+      !
+      sc(6, 10) = -15.d0*sq7*sq5*s5*emen*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(6, 11) = -35.d0*sq7*s6*el2*en*emen*(1.d0 - 7.d0*en2)
+      sc(6, 12) = -35.d0*sq7*s6*em2*en*emen*(1.d0 - 7.d0*en2)
+      sc(6, 13) = 35.d0*sq7*s6*emen*(el2 - em2)*(7.d0*en2 - 1.d0)
+      sc(6, 14) = -70.d0*sq7*s6*emen*el2*(7.d0*en2 - 1.d0)
+      sc(6, 15) = 15.d0*sq7*s6*emen*el*(em2 - 7.d0*el2)
+      sc(6, 16) = -15.d0*sq7*s6*emen*em*(el2 - 7.d0*em2)
+      !
+      sc(7, 10) = -15.d0*sq7*sq5*s5*elen*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(7, 11) = -35.d0*sq7*s6*el2*en*elen*(1.d0 - 7.d0*en2)
+      sc(7, 12) = 35.d0*sq7*s6*em2*elen*(1.d0 - 7.d0*en2)
+      sc(7, 13) = 35.d0*sq7*s6*elen*(el2 - em2)*(7.d0*en2 - 1.d0)
+      sc(7, 14) = -70.d0*sq7*s6*elen*em2*(7.d0*en2 - 1.d0)
+      sc(7, 15) = 15.d0*sq7*s6*elen*el*(em2 - 7.d0*el2)
+      sc(7, 16) = -15.d0*sq7*s6*elen*em*(el2 - 7.d0*em2)
+      !
+      sc(8, 10) = -15.d0*sq7*sq5*s5*(el2 - em2)*(7.d0*en2*en2 - 6.d0*en2 + 1.d0)
+      sc(8, 11) = 70.d0*sq7*s6*en*(el2 - em2)*elen
+      sc(8, 12) = 70.d0*sq7*s6*en*(el2 - em2)*emen
+      sc(8, 13) = -70.d0*sq7*s6*(el2 - em2)*(el2*7.d0*en2 - el2 - 7.d0*em2*en2 + em2)
+      sc(8, 14) = 140.d0*sq7*s6*elem*(el2 - em2)*(3.d0 - 7.d0*en2)
+      sc(8, 15) = 35.d0*sq7*s6*en*el*(el2 - em2)*(7.d0*el2 - 9.d0)
+      sc(8, 16) = -35.d0*sq7*s6*en*em*(el2 - em2)*(7.d0*em2 - 9.d0)
+      !
+      sc(9, 10) = 5.d0*sq7*sq5*s5*en*(21.d0*en2*en2 - 14.d0*en2 + 1.d0)
+      sc(9, 11) = 35.d0*sq7*s6*elen*(21.d0*en2 - 5.d0)
+      sc(9, 12) = 35.d0*sq7*s6*emen*(21.d0*en2 - 5.d0)
+      sc(9, 13) = -70.d0*sq7*s6*en*(el2 - em2)*(21.d0*en2 - 5.d0)
+      sc(9, 14) = -140.d0*sq7*s6*elem*en*(21.d0*en2 - 5.d0)
+      sc(9, 15) = 35.d0*sq7*s6*el*(21.d0*en2 - 3.d0)*(7.d0*en2 - 1.d0)
+      sc(9, 16) = 35.d0*sq7*s6*em*(21.d0*en2 - 3.d0)*(7.d0*en2 - 1.d0)
+      !
+      ! f-f interactions (rows 10-16, cols 10-16)
+      ! Diagonal terms
+      sc(10, 10) = -7.d0*s7*(99.d0*en2*en2*en2 - 135.d0*en2*en2 + 55.d0*en2 - 5.d0)
+      sc(11, 11) = s7*(-385.d0*en2*en2*(el2 + em2) + 70.d0*en2*(el2 + em2) + 245.d0*el2*em2 + 5.d0)
+      sc(12, 12) = sc(11, 11)  ! same for y
+      sc(13, 13) = s7*(245.d0*en2*(el2 - em2)**2 - 70.d0*(el2 - em2)**2 - 385.d0*en2*en2*(el2 - em2)**2 + 5.d0)
+      sc(14, 14) = s7*(-1225.d0*en2*en2*el2*em2 + 350.d0*en2*el2*em2 - 35.d0*el2*em2 + 5.d0)
+      sc(15, 15) = s7*(-231.d0*el2*el2*em2 - 385.d0*el2*el2*en2*en2 + 70.d0*el2*el2*en2 - 55.d0*el2*el2 + &
+                       245.d0*el2*em2*em2 + 5.d0)
+      sc(16, 16) = s7*(-231.d0*em2*em2*el2 - 385.d0*em2*em2*en2*en2 + 70.d0*em2*em2*en2 - 55.d0*em2*em2 + &
+                       245.d0*em2*el2*el2 + 5.d0)
+      ! Off-diagonal f-f terms (selected important ones)
+      sc(11, 12) = -35.d0*s7*elem*(35.d0*en2*en2 - 10.d0*en2 + 1.d0)
+      sc(11, 13) = s7*el*(-245.d0*en2*en2*el2 + 245.d0*en2*en2*em2 + 70.d0*en2*el2 - 70.d0*en2*em2 - 5.d0*el2 + 5.d0*em2)
+      sc(11, 14) = -70.d0*s7*elen*em*(35.d0*en2*en2 - 10.d0*en2 + 1.d0)
+      sc(11, 15) = s7*el*em*(245.d0*en2*(el2 - em2) - 49.d0*(el2 - em2))
+      sc(11, 16) = 70.d0*s7*em2*el*(35.d0*en2 - 5.d0)*(en2 - 1.d0)
+      sc(12, 13) = s7*em*(-245.d0*en2*en2*el2 + 245.d0*en2*en2*em2 + 70.d0*en2*el2 - 70.d0*en2*em2 - 5.d0*el2 + 5.d0*em2)
+      sc(12, 14) = -70.d0*s7*emen*el*(35.d0*en2*en2 - 10.d0*en2 + 1.d0)
+      sc(12, 15) = 70.d0*s7*el2*em*(35.d0*en2 - 5.d0)*(en2 - 1.d0)
+      sc(12, 16) = s7*el*em*(245.d0*en2*(el2 - em2) - 49.d0*(el2 - em2))
+      sc(13, 14) = -140.d0*s7*elem*(el2 - em2)*(7.d0*en2*en2 - 5.d0*en2 + 1.d0)
+      sc(13, 15) = -35.d0*s7*el*(el2 - em2)*(el2 - 7.d0*em2)*(7.d0*en2 - 1.d0)
+      sc(13, 16) = -35.d0*s7*em*(el2 - em2)*(em2 - 7.d0*el2)*(7.d0*en2 - 1.d0)
+      sc(14, 15) = -35.d0*s7*elem*em*(el2 - 3.d0*em2)*(7.d0*en2 - 1.d0)
+      sc(14, 16) = -35.d0*s7*elem*el*(em2 - 3.d0*el2)*(7.d0*en2 - 1.d0)
+      sc(15, 16) = 35.d0*s7*el*em*(el2 - em2)*(el2 + em2 - 5.d0*en2*(el2 + em2))
+      !-----------------------------------------------------------------------
+      do l = 2, 16
          ll = l - 1
          do j = 1, ll
             sc(l, j) = sc(j, l)
@@ -2994,14 +3707,19 @@ contains
             sc(l, j) = -sc(l, j)
          end do
       end do
+      do l = 10, 16
+         do j = 2, 4
+            sc(l, j) = -sc(l, j)
+         end do
+      end do
       ! ------ THIS PART CHANGES THE YLM ORDER AND MULTIPLIES BY -0.5 ----
-      do i = 1, 9
-         do j = 1, 9
+      do i = 1, 16
+         do j = 1, 16
             s(ip(j), ip(i)) = -0.5d0*sc(j, i)
          end do
       end do
-      do i = 1, 9
-         do j = 1, 9
+      do i = 1, 16
+         do j = 1, 16
             sc(j, i) = s(j, i)
          end do
       end do
@@ -3375,12 +4093,23 @@ contains
       ! External function
       integer, external :: NGBR
       ! Intrinsic function
-      intrinsic ABS, MAX
+      intrinsic ABS, MAX, MIN, FLOOR, NINT
       ! Local variables
       integer :: I, IADD, ID, II, IIP, ILJ, J, JJP, L, NNMAX
-      real(rp) :: R2
+      integer :: NX, NY, NZ, NBIN, BX, BY, BZ, DBX, DBY, DBZ, BIN_ID
+      integer :: CAP, CAND_COUNT, K, IX, IY, IZ, RX, RY, RZ
+      real(rp) :: R2, RCUT, RCUT2, DETC
       real(rp), dimension(3) :: DDUM
+      real(rp), dimension(3) :: MINC, MAXC, SPAN, BINW, DS
+      real(rp), dimension(3, 3) :: CELL, CELL_INV
+      real(rp), dimension(3, 2) :: CROSS_TMP
       real(rp), dimension(NM) :: DUM
+      real(rp), allocatable :: FRAC(:, :)
+      integer, allocatable :: HEAD(:), NEXT_ATOM(:), BIN_X(:), BIN_Y(:), BIN_Z(:), CANDIDATES(:)
+
+      CAP = NM
+      NN(:, :) = 0
+      NN(:, 1) = 1
 
       NNMAX = 0
       IADD = 1
@@ -3401,54 +4130,247 @@ contains
 1000  if (II <= 1) then
          II = 2
       end if
-      do I = II, NAT
-         if (IZP(I)*IADD <= 0) then
-            NN(I, 1) = 1
-            IIP = IZP(I)
-            IIP = ABS(IIP)
-            ILJ = I - 1
-            do J = 1, ILJ
-               JJP = IZP(J)
-               JJP = ABS(JJP)
-               R2 = 0.0
-               if (this%pbc) then
-                  call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
-                  r2 = sum(ddum(:)**2)
-               else        
-                  do L = 1, 3
-                     DDUM(L) = CRD(L, I) - CRD(L, J)
-                     R2 = R2 + DDUM(L)*DDUM(L)
+
+      RCUT = CT(1)
+      RCUT2 = RCUT*RCUT
+      if (RCUT2 <= 0.0_rp) then
+         NM = 0
+         return
+      end if
+
+      if (this%pbc .and. this%b1 .and. this%b2 .and. this%b3) then
+         CELL(:, 1) = real(this%n1, rp)*this%a(:, 1)*this%alat
+         CELL(:, 2) = real(this%n2, rp)*this%a(:, 2)*this%alat
+         CELL(:, 3) = real(this%n3, rp)*this%a(:, 3)*this%alat
+         CELL_INV = inverse_3x3(CELL)
+         DETC = abs(determinant(CELL))
+
+         CROSS_TMP(:, 1) = [ &
+            CELL(2, 2)*CELL(3, 3) - CELL(3, 2)*CELL(2, 3), &
+            CELL(3, 2)*CELL(1, 3) - CELL(1, 2)*CELL(3, 3), &
+            CELL(1, 2)*CELL(2, 3) - CELL(2, 2)*CELL(1, 3) ]
+         CROSS_TMP(:, 2) = [ &
+            CELL(2, 3)*CELL(3, 1) - CELL(3, 3)*CELL(2, 1), &
+            CELL(3, 3)*CELL(1, 1) - CELL(1, 3)*CELL(3, 1), &
+            CELL(1, 3)*CELL(2, 1) - CELL(2, 3)*CELL(1, 1) ]
+         DDUM = [ &
+            CELL(2, 1)*CELL(3, 2) - CELL(3, 1)*CELL(2, 2), &
+            CELL(3, 1)*CELL(1, 2) - CELL(1, 1)*CELL(3, 2), &
+            CELL(1, 1)*CELL(2, 2) - CELL(2, 1)*CELL(1, 2) ]
+
+         SPAN(1) = DETC/max(sqrt(sum(CROSS_TMP(:, 1)**2)), tiny(1.0_rp))
+         SPAN(2) = DETC/max(sqrt(sum(CROSS_TMP(:, 2)**2)), tiny(1.0_rp))
+         SPAN(3) = DETC/max(sqrt(sum(DDUM(:)**2)), tiny(1.0_rp))
+         NX = max(1, int(SPAN(1)/RCUT))
+         NY = max(1, int(SPAN(2)/RCUT))
+         NZ = max(1, int(SPAN(3)/RCUT))
+         NBIN = NX*NY*NZ
+
+         allocate(FRAC(3, NAT), HEAD(NBIN), NEXT_ATOM(NAT), BIN_X(NAT), BIN_Y(NAT), BIN_Z(NAT), CANDIDATES(NAT))
+         HEAD = 0
+         NEXT_ATOM = 0
+         do I = 1, NAT
+            FRAC(:, I) = matmul(CELL_INV, CRD(:, I))
+            do L = 1, 3
+               FRAC(L, I) = FRAC(L, I) - floor(FRAC(L, I))
+            end do
+            BIN_X(I) = 1 + min(NX - 1, int(FRAC(1, I)*NX))
+            BIN_Y(I) = 1 + min(NY - 1, int(FRAC(2, I)*NY))
+            BIN_Z(I) = 1 + min(NZ - 1, int(FRAC(3, I)*NZ))
+            BIN_ID = ((BIN_Z(I) - 1)*NY + (BIN_Y(I) - 1))*NX + BIN_X(I)
+            NEXT_ATOM(I) = HEAD(BIN_ID)
+            HEAD(BIN_ID) = I
+         end do
+
+         do I = II, NAT
+            if (IZP(I)*IADD > 0) cycle
+            CAND_COUNT = 0
+            BX = BIN_X(I); BY = BIN_Y(I); BZ = BIN_Z(I)
+            RX = merge(1, 0, NX > 1)
+            RY = merge(1, 0, NY > 1)
+            RZ = merge(1, 0, NZ > 1)
+            do DBZ = -RZ, RZ
+               IZ = modulo(BZ - 1 + DBZ, NZ) + 1
+               do DBY = -RY, RY
+                  IY = modulo(BY - 1 + DBY, NY) + 1
+                  do DBX = -RX, RX
+                     IX = modulo(BX - 1 + DBX, NX) + 1
+                     BIN_ID = ((IZ - 1)*NY + (IY - 1))*NX + IX
+                     J = HEAD(BIN_ID)
+                     do while (J > 0)
+                        if (J < I) then
+                           DS(:) = FRAC(:, J) - FRAC(:, I)
+                           DS(:) = DS(:) - real(nint(DS(:)), rp)
+                           DDUM(:) = matmul(CELL, DS)
+                           R2 = dot_product(DDUM, DDUM)
+                           if (R2 < RCUT2) then
+                              CAND_COUNT = CAND_COUNT + 1
+                              CANDIDATES(CAND_COUNT) = J
+                           end if
+                        end if
+                        J = NEXT_ATOM(J)
+                     end do
                   end do
-               end if
-               ID = NGBR(IIP, JJP, R2, DUM, CT)
-               !       if (ID /= 0 .and. ( IZP(I) > NTOT  .or. IZP(J) > NTOT) ) then
-               if (ID /= 0) then
-                  ID = NN(I, 1) + 1
-                  NN(I, 1) = ID
-                  !         NN(I, ID) = IZP(J)
-                  NN(I, ID) = J
-                  NNMAX = MAX(NNMAX, ID)
-                  ID = NN(J, 1) + 1
-                  NN(J, 1) = ID
-                  !         NN(J, ID) = IZP(I)
-                  NN(J, ID) = I
-                  NNMAX = MAX(NNMAX, ID)
-                  if (NNMAX > NM) then
-                     write (6, 10001)
-                     write (6, 10002) I
-                     write (6, *) NNMAX, ID, NM
-                     stop
-                  end if
+               end do
+            end do
+
+            call sort_integer_list(CANDIDATES, CAND_COUNT)
+            do K = 1, CAND_COUNT
+               J = CANDIDATES(K)
+               ID = NN(I, 1) + 1
+               NN(I, 1) = ID
+               NN(I, ID) = J
+               NNMAX = MAX(NNMAX, ID)
+               ID = NN(J, 1) + 1
+               NN(J, 1) = ID
+               NN(J, ID) = I
+               NNMAX = MAX(NNMAX, ID)
+               if (NNMAX > CAP) then
+                  write (6, '(" TOO MANY NEIGHBOURS")')
+                  write (6, '(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")') I
+                  write (6, *) NNMAX, ID, CAP
+                  stop
                end if
             end do
-         end if
-      end do
+         end do
+
+         deallocate(FRAC, HEAD, NEXT_ATOM, BIN_X, BIN_Y, BIN_Z, CANDIDATES)
+      else if (.not. this%pbc) then
+         do L = 1, 3
+            MINC(L) = minval(CRD(L, 1:NAT))
+            MAXC(L) = maxval(CRD(L, 1:NAT))
+            SPAN(L) = max(MAXC(L) - MINC(L), RCUT)
+         end do
+         NX = max(1, int(SPAN(1)/RCUT))
+         NY = max(1, int(SPAN(2)/RCUT))
+         NZ = max(1, int(SPAN(3)/RCUT))
+         BINW(1) = SPAN(1)/real(NX, rp)
+         BINW(2) = SPAN(2)/real(NY, rp)
+         BINW(3) = SPAN(3)/real(NZ, rp)
+         NBIN = NX*NY*NZ
+
+         allocate(HEAD(NBIN), NEXT_ATOM(NAT), BIN_X(NAT), BIN_Y(NAT), BIN_Z(NAT), CANDIDATES(NAT))
+         HEAD = 0
+         NEXT_ATOM = 0
+         do I = 1, NAT
+            BIN_X(I) = 1 + min(NX - 1, int((CRD(1, I) - MINC(1))/BINW(1)))
+            BIN_Y(I) = 1 + min(NY - 1, int((CRD(2, I) - MINC(2))/BINW(2)))
+            BIN_Z(I) = 1 + min(NZ - 1, int((CRD(3, I) - MINC(3))/BINW(3)))
+            BIN_ID = ((BIN_Z(I) - 1)*NY + (BIN_Y(I) - 1))*NX + BIN_X(I)
+            NEXT_ATOM(I) = HEAD(BIN_ID)
+            HEAD(BIN_ID) = I
+         end do
+
+         do I = II, NAT
+            if (IZP(I)*IADD > 0) cycle
+            CAND_COUNT = 0
+            BX = BIN_X(I); BY = BIN_Y(I); BZ = BIN_Z(I)
+            do DBZ = max(-1, 1 - BZ), min(1, NZ - BZ)
+               IZ = BZ + DBZ
+               do DBY = max(-1, 1 - BY), min(1, NY - BY)
+                  IY = BY + DBY
+                  do DBX = max(-1, 1 - BX), min(1, NX - BX)
+                     IX = BX + DBX
+                     BIN_ID = ((IZ - 1)*NY + (IY - 1))*NX + IX
+                     J = HEAD(BIN_ID)
+                     do while (J > 0)
+                        if (J < I) then
+                           DDUM(:) = CRD(:, J) - CRD(:, I)
+                           R2 = dot_product(DDUM, DDUM)
+                           if (R2 < RCUT2) then
+                              CAND_COUNT = CAND_COUNT + 1
+                              CANDIDATES(CAND_COUNT) = J
+                           end if
+                        end if
+                        J = NEXT_ATOM(J)
+                     end do
+                  end do
+               end do
+            end do
+
+            call sort_integer_list(CANDIDATES, CAND_COUNT)
+            do K = 1, CAND_COUNT
+               J = CANDIDATES(K)
+               ID = NN(I, 1) + 1
+               NN(I, 1) = ID
+               NN(I, ID) = J
+               NNMAX = MAX(NNMAX, ID)
+               ID = NN(J, 1) + 1
+               NN(J, 1) = ID
+               NN(J, ID) = I
+               NNMAX = MAX(NNMAX, ID)
+               if (NNMAX > CAP) then
+                  write (6, '(" TOO MANY NEIGHBOURS")')
+                  write (6, '(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")') I
+                  write (6, *) NNMAX, ID, CAP
+                  stop
+               end if
+            end do
+         end do
+
+         deallocate(HEAD, NEXT_ATOM, BIN_X, BIN_Y, BIN_Z, CANDIDATES)
+      else
+         do I = II, NAT
+            if (IZP(I)*IADD <= 0) then
+               NN(I, 1) = 1
+               IIP = IZP(I)
+               IIP = ABS(IIP)
+               ILJ = I - 1
+               do J = 1, ILJ
+                  JJP = IZP(J)
+                  JJP = ABS(JJP)
+                  R2 = 0.0
+                  if (this%pbc) then
+                     call this%f_wrap_coord_diff(nat, crd, i, j, ddum)
+                     r2 = sum(ddum(:)**2)
+                  else        
+                     do L = 1, 3
+                        DDUM(L) = CRD(L, I) - CRD(L, J)
+                        R2 = R2 + DDUM(L)*DDUM(L)
+                     end do
+                  end if
+                  ID = NGBR(IIP, JJP, R2, DUM, CT)
+                  if (ID /= 0) then
+                     ID = NN(I, 1) + 1
+                     NN(I, 1) = ID
+                     NN(I, ID) = J
+                     NNMAX = MAX(NNMAX, ID)
+                     ID = NN(J, 1) + 1
+                     NN(J, 1) = ID
+                     NN(J, ID) = I
+                     NNMAX = MAX(NNMAX, ID)
+                     if (NNMAX > NM) then
+                        write (6, '(" TOO MANY NEIGHBOURS")')
+                        write (6, '(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")') I
+                        write (6, *) NNMAX, ID, NM
+                        stop
+                     end if
+                  end if
+               end do
+            end if
+         end do
+      end if
       nm = nnmax
       return
 
-10000 format("FROM NNCAL ")
-10001 format(" TOO MANY NEIGHBOURS")
-10002 format(" NEIGHBOUR MAP AS FAR AS", i6, "TH SITE")
+contains
+
+      subroutine sort_integer_list(list, n)
+         integer, intent(inout) :: list(:)
+         integer, intent(in) :: n
+         integer :: a, b, value
+
+         do a = 2, n
+            value = list(a)
+            b = a - 1
+            do while (b >= 1)
+               if (list(b) <= value) exit
+               list(b + 1) = list(b)
+               b = b - 1
+            end do
+            list(b + 1) = value
+         end do
+      end subroutine sort_integer_list
    end subroutine
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -3715,6 +4637,10 @@ contains
       dw = this%dw
       crystal_sym = this%crystal_sym
       surftype = this%surftype
+      strux_backend = this%strux_backend
+      screening = this%screening
+      strux_want_sdot = this%strux_want_sdot
+      strux_solve_scale = this%strux_solve_scale
       a = this%a
 
       ! one dimensional allocatables
@@ -3730,6 +4656,18 @@ contains
          ct = this%ct
       else
          allocate (ct(0))
+      end if
+      if (allocated(this%screening_alpha)) then
+         allocate (screening_alpha, mold=this%screening_alpha)
+         screening_alpha = this%screening_alpha
+      else
+         allocate (screening_alpha(0))
+      end if
+      if (allocated(this%screening_sigma)) then
+         allocate (screening_sigma, mold=this%screening_sigma)
+         screening_sigma = this%screening_sigma
+      else
+         allocate (screening_sigma(0))
       end if
       if (allocated(this%reduced_acr)) then
          allocate (reduced_acr, mold=this%reduced_acr)
@@ -3848,7 +4786,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=lattice)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=lattice)
          close (newunit)
       else
@@ -3874,62 +4812,14 @@ contains
       character(len=*), intent(in), optional :: file
       integer :: newunit
 
-      include 'include_codes/namelists/lattice.f90'
-
-      ! scalar
-
-      wav = this%wav
-      rc = this%rc
-      celldm = this%celldm
-      alat = this%alat
-      nlay = this%nlay
-      ndim = this%ndim
-      npe = this%npe
-      nclu = this%nclu
-      crystal_sym = this%crystal_sym
-      surftype = this%surftype
-      a = this%a
-
-      ! ! one dimensional allocatables
-
-      if (allocated(this%no)) then
-         allocate (no, mold=this%no)
-         no = this%no
-      else
-         allocate (no(0))
-      end if
-      if (allocated(this%izp)) then
-         allocate (izp, mold=this%izp)
-         izp = this%izp
-      else
-         allocate (izp(0))
-      end if
-
-      ! ! two dimensional allocatables
-
-      if (allocated(this%inclu)) then
-         allocate (inclu, mold=this%inclu)
-         inclu = this%inclu
-      else
-         allocate (inclu(0, 0))
-      end if
-      if (allocated(this%crd)) then
-         allocate (crd, mold=this%crd)
-         crd = this%crd
-      else
-         allocate (crd(0, 0))
-      end if
-
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
       else if (present(unit)) then
-         write (unit, nml=lattice)
+         call this%print_state_formatted(unit=unit)
       else if (present(file)) then
-         open (unit=newunit, file=file, action='write')
-         write (newunit, nml=lattice)
-         close (newunit)
+         call this%print_state_formatted(file=file)
       else
-         write (*, nml=lattice)
+         call this%print_state_formatted()
       end if
 
    end subroutine print_state
@@ -3986,11 +4876,17 @@ contains
       call nml%add('surftype', this%surftype)
       call nml%add('njij', this%njij)
       call nml%add('njijk', this%njijk)
+      call nml%add('strux_backend', trim(this%strux_backend))
+      call nml%add('screening', trim(this%screening))
+      call nml%add('strux_want_sdot', this%strux_want_sdot)
+      call nml%add('strux_solve_scale', this%strux_solve_scale)
 
       ! one dimensional allocatables
       ! TODO: implement test inside namelist_generator
       if (allocated(this%z)) call nml%add('z', this%z)
       if (allocated(this%ct)) call nml%add('ct', this%ct)
+      if (allocated(this%screening_alpha)) call nml%add('screening_alpha', this%screening_alpha)
+      if (allocated(this%screening_sigma)) call nml%add('screening_sigma', this%screening_sigma)
       if (allocated(this%reduced_acr)) call nml%add('reduced_acr', this%reduced_acr)
       if (allocated(this%num)) call nml%add('num', this%num)
       if (allocated(this%no)) call nml%add('no', this%no)
@@ -4024,78 +4920,5 @@ contains
          call nml%generate_namelist()
       end if
    end subroutine print_state_formatted
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Convert cartesian coordinates to fractional coordinates
-   !---------------------------------------------------------------------------
-   subroutine cartesian_to_fractional(cart_vec, frac_vec, lattice_vectors, alat)
-      real(rp), dimension(3), intent(in) :: cart_vec
-      real(rp), dimension(3), intent(out) :: frac_vec
-      real(rp), dimension(3, 3), intent(in) :: lattice_vectors
-      real(rp), intent(in) :: alat
-      ! Try to use precomputed inverse if available (lattice module stores it in module variable)
-      ! Note: We can't directly access 'this' here, so we expect callers that have access to the lattice
-      ! object to call compute_cartesian_inverse() once after setting the lattice. As a fallback we
-      ! compute the inverse here.
-      real(rp), dimension(3, 3) :: lattice_matrix, inv_matrix
-      real(rp) :: det
-      integer :: i
-
-      ! Build lattice matrix (actual lattice vectors in cartesian coordinates)
-      do i = 1, 3
-         lattice_matrix(:, i) = lattice_vectors(:, i) * alat
-      end do
-
-      ! Compute inverse on-the-fly (fallback)
-      det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
-          - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
-          + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
-
-      inv_matrix(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
-      inv_matrix(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
-      inv_matrix(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
-      inv_matrix(2, 1) = (lattice_matrix(2, 3) * lattice_matrix(3, 1) - lattice_matrix(2, 1) * lattice_matrix(3, 3)) / det
-      inv_matrix(2, 2) = (lattice_matrix(1, 1) * lattice_matrix(3, 3) - lattice_matrix(1, 3) * lattice_matrix(3, 1)) / det
-      inv_matrix(2, 3) = (lattice_matrix(1, 3) * lattice_matrix(2, 1) - lattice_matrix(1, 1) * lattice_matrix(2, 3)) / det
-      inv_matrix(3, 1) = (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1)) / det
-      inv_matrix(3, 2) = (lattice_matrix(1, 2) * lattice_matrix(3, 1) - lattice_matrix(1, 1) * lattice_matrix(3, 2)) / det
-      inv_matrix(3, 3) = (lattice_matrix(1, 1) * lattice_matrix(2, 2) - lattice_matrix(1, 2) * lattice_matrix(2, 1)) / det
-
-      ! Convert cartesian to fractional: frac_vec = inv_matrix * cart_vec
-      frac_vec(1) = inv_matrix(1, 1) * cart_vec(1) + inv_matrix(1, 2) * cart_vec(2) + inv_matrix(1, 3) * cart_vec(3)
-      frac_vec(2) = inv_matrix(2, 1) * cart_vec(1) + inv_matrix(2, 2) * cart_vec(2) + inv_matrix(2, 3) * cart_vec(3)
-      frac_vec(3) = inv_matrix(3, 1) * cart_vec(1) + inv_matrix(3, 2) * cart_vec(2) + inv_matrix(3, 3) * cart_vec(3)
-   end subroutine cartesian_to_fractional
-
-   !-----------------------------------------------------------------------
-   !> Compute and store inverse of cartesian lattice matrix (this%a * this%alat)
-   subroutine compute_cartesian_inverse(this)
-      class(lattice), intent(inout) :: this
-      real(rp), dimension(3,3) :: lattice_matrix
-      real(rp) :: det
-
-      integer :: i
-      do i = 1, 3
-         lattice_matrix(:, i) = this%a(:, i) * this%alat
-      end do
-
-      det = lattice_matrix(1, 1) * (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) &
-          - lattice_matrix(1, 2) * (lattice_matrix(2, 1) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 1)) &
-          + lattice_matrix(1, 3) * (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1))
-
-      this%a_cart_inv(1, 1) = (lattice_matrix(2, 2) * lattice_matrix(3, 3) - lattice_matrix(2, 3) * lattice_matrix(3, 2)) / det
-      this%a_cart_inv(1, 2) = (lattice_matrix(1, 3) * lattice_matrix(3, 2) - lattice_matrix(1, 2) * lattice_matrix(3, 3)) / det
-      this%a_cart_inv(1, 3) = (lattice_matrix(1, 2) * lattice_matrix(2, 3) - lattice_matrix(1, 3) * lattice_matrix(2, 2)) / det
-      this%a_cart_inv(2, 1) = (lattice_matrix(2, 3) * lattice_matrix(3, 1) - lattice_matrix(2, 1) * lattice_matrix(3, 3)) / det
-      this%a_cart_inv(2, 2) = (lattice_matrix(1, 1) * lattice_matrix(3, 3) - lattice_matrix(1, 3) * lattice_matrix(3, 1)) / det
-      this%a_cart_inv(2, 3) = (lattice_matrix(1, 3) * lattice_matrix(2, 1) - lattice_matrix(1, 1) * lattice_matrix(2, 3)) / det
-      this%a_cart_inv(3, 1) = (lattice_matrix(2, 1) * lattice_matrix(3, 2) - lattice_matrix(2, 2) * lattice_matrix(3, 1)) / det
-      this%a_cart_inv(3, 2) = (lattice_matrix(1, 2) * lattice_matrix(3, 1) - lattice_matrix(1, 1) * lattice_matrix(3, 2)) / det
-      this%a_cart_inv(3, 3) = (lattice_matrix(1, 1) * lattice_matrix(2, 2) - lattice_matrix(1, 2) * lattice_matrix(2, 1)) / det
-
-      this%a_cart_inv_ready = .true.
-   end subroutine compute_cartesian_inverse
 
 end module lattice_mod

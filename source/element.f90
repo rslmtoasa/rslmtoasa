@@ -37,7 +37,7 @@ module element_mod
    type, public :: element
       character(len=10) :: symbol
       !> Element related variables
-      integer :: f_core, num_quant_s, num_quant_p, num_quant_d
+      integer :: f_core, num_quant_s, num_quant_p, num_quant_d, num_quant_f
       real(rp) :: atomic_number, core, valence
    contains
       procedure :: build_from_file
@@ -145,6 +145,7 @@ contains
       num_quant_s = this%num_quant_s
       num_quant_p = this%num_quant_p
       num_quant_d = this%num_quant_d
+      num_quant_f = this%num_quant_f
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -167,6 +168,7 @@ contains
       this%num_quant_s = num_quant_s
       this%num_quant_p = num_quant_p
       this%num_quant_d = num_quant_d
+      this%num_quant_f = num_quant_f
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -186,6 +188,7 @@ contains
       this%num_quant_s = -1
       this%num_quant_p = -1
       this%num_quant_d = -1
+      this%num_quant_f = -1
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -214,6 +217,7 @@ contains
       num_quant_s = this%num_quant_s
       num_quant_p = this%num_quant_p
       num_quant_d = this%num_quant_d
+      num_quant_f = this%num_quant_f
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -254,6 +258,7 @@ contains
       num_quant_s = this%num_quant_s
       num_quant_p = this%num_quant_p
       num_quant_d = this%num_quant_d
+      num_quant_f = this%num_quant_f
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -285,7 +290,7 @@ contains
       integer :: newunit
 
       character(len=10) :: symbol
-      integer :: f_core, num_quant_s, num_quant_p, num_quant_d
+      integer :: f_core, num_quant_s, num_quant_p, num_quant_d, num_quant_f
       real(rp) :: atomic_number, core, valence
 
       type(namelist_generator) :: nml
@@ -300,6 +305,7 @@ contains
       call nml%add('num_quant_s', this%num_quant_s)
       call nml%add('num_quant_p', this%num_quant_p)
       call nml%add('num_quant_d', this%num_quant_d)
+      call nml%add('num_quant_f', this%num_quant_f)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)

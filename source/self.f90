@@ -43,9 +43,12 @@ module self_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
    use namelist_generator_mod, only: namelist_generator
+      use cfd
+      use Parameters
 #ifdef USE_MPI
    use mpi
 #endif
+   use basis_mod, only: nb, norb, spin_off, lmax_basis
    implicit none
 
    private
@@ -159,14 +162,6 @@ module self_mod
       !> Default: false.
       logical :: freeze
 
-      !> Use k-space diagonalization instead of real-space recursion. Default: false.
-      !>
-      !> Use k-space diagonalization to calculate band moments for SCF instead of real-space recursion.
-      !> This is generally faster for small to medium systems and allows for band structure calculations.
-      !>
-      !> Default: false.
-      logical :: use_kspace
-
       !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file
       !>
       !> Freezes the strength of the spin-orbit coupling interaction to the assigned value in the potential file  
@@ -242,9 +237,6 @@ module self_mod
       procedure :: report
       procedure :: lmtst
       procedure :: is_converged
-      procedure :: run_kspace
-      procedure :: run_dos_kspace
-      procedure :: run_scf
       procedure, private :: atomsc
       procedure, private :: ftype
       procedure, private :: newrho
@@ -285,9 +277,6 @@ contains
       obj%mix => mix_obj
       obj%hamiltonian => bands_obj%recursion%hamiltonian
       obj%green => bands_obj%green
-
-      ! Set hamiltonian pointer in mix for LDA+U density matrix mixing
-      call obj%mix%set_hamiltonian_pointer(obj%hamiltonian)
 
       call obj%restore_to_default()
       call obj%build_from_file()
@@ -337,7 +326,6 @@ contains
       magnetic_mixing = this%magnetic_mixing
       mixmag_all = this%mixmag_all
       freeze = this%freeze
-      use_kspace = this%use_kspace
       rigid_band = this%rigid_band
       orbital_polarization = this%orbital_polarization
       init = this%init
@@ -437,7 +425,6 @@ contains
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
       this%freeze = freeze
-      this%use_kspace = use_kspace
       this%rigid_band = rigid_band
       this%fix_soc = fix_soc
       this%soc_scale = soc_scale
@@ -455,6 +442,12 @@ contains
       this%orbital_polarization = orbital_polarization
       this%init = init
       this%cold = cold
+      ! Initialize constraining facility if requested in control namelist
+      if (associated(this%control)) then
+         if (this%control%constraints_enable) then
+            call initialize_cfd(this%lattice%nrec, 1, this%control%constraints_i_cons, this%control%constraints_code_prefac)
+         end if
+      end if
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -465,7 +458,7 @@ contains
    subroutine restore_to_default(this, full)
       class(self), intent(inout):: this
       logical, intent(in), optional :: full
-      integer :: lmax, nsp
+      integer :: lmax, nsp, nfun_l
 
       ! Control variables
       ! if false force to read the original self file
@@ -500,7 +493,6 @@ contains
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
       this%freeze = .false.
-      this%use_kspace = .false.  ! Use recursion by default
       this%rigid_band = .false.
       this%fix_soc = .false. 
       this%soc_scale = 1.0d0
@@ -527,14 +519,17 @@ contains
       end if
 
 #ifdef USE_SAFE_ALLOC
+      nfun_l = max(3, this%control%lmax + 1)
       call g_safe_alloc%allocate('self.bxc', this%bxc, this%lattice%nrec)
       call g_safe_alloc%allocate('self.vtn', this%vtn, (/8001, 2/))
       call g_safe_alloc%allocate('self.vzt', this%vzt, (/8001, 2/))
-      call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, 3, 2/))
+      call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, nfun_l, 2/))
 #else
+      nfun_l = max(3, this%control%lmax + 1)
       allocate (this%bxc(this%lattice%nrec))
-      allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, 3, 2))
+      allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
 #endif
+      this%fun2(:, :, :) = 0.0_rp
 
    end subroutine restore_to_default
 
@@ -571,7 +566,6 @@ contains
       print *, ''
       print *, '[Constrain Variables]'
       print *, 'freeze     ', this%freeze
-      print *, 'use_kspace ', this%use_kspace
       print *, 'rigid_band ', this%rigid_band
       print *, 'rb         ', this%rb
       print *, ''
@@ -604,7 +598,6 @@ contains
       mix_all = this%mix_all
       magnetic_mixing = this%magnetic_mixing
       freeze = this%freeze
-      use_kspace = this%use_kspace
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
@@ -657,7 +650,6 @@ contains
       mix_all = this%mix_all
       magnetic_mixing = this%magnetic_mixing
       freeze = this%freeze
-      use_kspace = this%use_kspace
       all_inequivalent = this%all_inequivalent
       nstep = this%nstep
       init = this%init
@@ -687,7 +679,6 @@ contains
 
    end subroutine print_state
 
-
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -696,23 +687,13 @@ contains
    !> Performs the self-consistent calculation.
    !---------------------------------------------------------------------------
    subroutine run(this)
-      use reciprocal_mod
       class(self), intent(inout) :: this
-      integer :: i, ia, niter, ie, l1, l2
+      integer :: i, ia, niter
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
-      type(reciprocal) :: reciprocal_obj  ! K-space object for k-space SCF
    
-      ! Initialize reciprocal object if using k-space method
-      if (this%use_kspace) then
-         reciprocal_obj = reciprocal(this%hamiltonian)
-         if (rank == 0) call g_logger%info('Using k-space diagonalization for SCF', __FILE__, __LINE__)
-      else
-         if (rank == 0) call g_logger%info('Using real-space recursion for SCF', __FILE__, __LINE__)
-      end if
-
       !===========================================================================
       !                              BEGIN SCF LOOP
       !===========================================================================
@@ -720,14 +701,10 @@ contains
       do i = 1, this%nstep
          if (this%cold .and. i==1) call run_scf(this)
          !=========================================================================
-         !                PERFORM RECURSION OR K-SPACE HAMILTONIAN BUILD
+         !                        PERFORM THE RECURSION
          !=========================================================================
-         if (this%use_kspace) then
-            call run_kspace(this, i)
-         else
-            call run_recursion(this, i)
-         end if
-
+         call run_recursion(this, i)
+   
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
          !=========================================================================
@@ -747,13 +724,9 @@ contains
          end do
    
          !=========================================================================
-         !            CALCULATE DOS (RECURSION OR K-SPACE) AND MOMENTS
+         !                  CALCULATE THE DENSITY OF STATES
          !=========================================================================
-         if (this%use_kspace) then
-            call run_dos_kspace(this, reciprocal_obj, i)
-         else
-            call run_dos(this)
-         end if
+         call run_dos(this)
    
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
@@ -795,33 +768,11 @@ contains
          this%converged = this%is_converged(this%mix%delta)
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
-
-            if (this%hamiltonian%hubbard_u_general_check .and. i == 1) then
-               call g_logger%info('LDA+U module initiates at iteration 2. Continuing calculation...', __FILE__, __LINE__)
-               niter = niter + 1
-            else if (this%hamiltonian%hubbardU_sc_check) then
-               print *, 'Calculates U_eff'
-               call this%bands%calc_hubbard_U() ! Calculates Hubbard U
-               if ( this%bands%hubbard_u_converged ) then
-                  print *, 'The calculated Hubbard U has converged. Exit calculation.'
-                  exit
-               end if
-               niter = niter + 1
-               call this%bands%build_hubbard_u()
-            else
-               exit
-            end if
+            exit
          else
             if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
             niter = niter + 1
          end if
-         ! if (this%converged) then
-         !    if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
-         !    exit
-         ! else
-         !    if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
-         !    niter = niter + 1
-         ! end if
       end do
    end subroutine run
    
@@ -841,23 +792,25 @@ contains
          do ia = 1, this%lattice%nrec
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         ! if (rank == 0) call g_logger%info('Potential built for step '//int2str(iter), __FILE__, __LINE__)
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
-         call this%hamiltonian%build_locham()
+         ! if (rank == 0) call g_logger%info('Bulk Hamiltonian built for step '//int2str(iter), __FILE__, __LINE__)
       case ('S')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
       case ('I')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
          call this%hamiltonian%build_locham()
       end select
+      ! if (rank == 0) call g_logger%info('Hamiltonian mounted for step '//int2str(iter), __FILE__, __LINE__)
    
       select case (this%control%recur)
       case ('lanczos')
@@ -877,6 +830,9 @@ contains
    subroutine run_dos(this)
       class(self), intent(inout) :: this
       integer :: ia
+      ! variables for constraining
+      real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
+      integer :: ia_loc
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
       call g_timer%start('calculation-of-DOS')
@@ -894,14 +850,6 @@ contains
       end select
    
       call this%bands%calculate_fermi() ! Calculate the Fermi energy
-
-      !=========================================================================
-      !                  CALCULATE HUBBARD CORRECTION
-      !=========================================================================
-      if ( this%hamiltonian%hubbard_u_general_check ) then
-         call this%bands%build_hubbard_u_general()
-      end if
-
       !=========================================================================
       !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
       !=========================================================================
@@ -916,6 +864,28 @@ contains
       do ia = 1, this%lattice%nrec
          this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
       end do
+
+         ! Apply constraining field in SCF if enabled via control namelist
+         if (this%control%constraints_enable) then
+            allocate (mom_in(3, this%lattice%nrec))
+            allocate (mom_ref(3, this%lattice%nrec))
+            allocate (bfield(3, this%lattice%nrec))
+            do ia_loc = 1, this%lattice%nrec
+               mom_in(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom(:)
+               if (allocated(this%control%constraints_mom_ref)) then
+                  if (size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
+                     mom_ref(:, ia_loc) = this%control%constraints_mom_ref(:, ia_loc)
+                  else
+                     mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+                  end if
+               else
+                  mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+               end if
+               bfield(:, ia_loc) = 0.0_dblprec
+            end do
+            call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)
+            deallocate(mom_in, mom_ref, bfield)
+         end if
    
       !=========================================================================
       !                  CALCULATE THE NEW BAND MOMENTS QL
@@ -973,244 +943,6 @@ contains
       call g_timer%stop('atomic-scf')
    end subroutine run_scf
 
-   !=========================================================================
-   !                   RUN K-SPACE HAMILTONIAN BUILD
-   !=========================================================================
-   subroutine run_kspace(this, iter)
-      class(self), intent(inout) :: this
-      integer, intent(in) :: iter
-      integer :: ia
-
-      if (rank == 0) call g_logger%info('Building k-space Hamiltonian at step '//int2str(iter), __FILE__, __LINE__)
-      call g_timer%start('kspace-hamiltonian')
-
-      ! Build potentials and Hamiltonians (same as recursion)
-      select case (this%control%calctype)
-      case ('B')
-         do ia = 1, this%lattice%nrec
-            call this%symbolic_atom(ia)%build_pot()
-         end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
-         call this%hamiltonian%build_bulkham()
-      case ('S')
-         do ia = 1, this%lattice%ntype
-            call this%symbolic_atom(ia)%build_pot()
-         end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
-         call this%hamiltonian%build_bulkham()
-      case ('I')
-         do ia = 1, this%lattice%ntype
-            call this%symbolic_atom(ia)%build_pot()
-         end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham
-         call this%hamiltonian%build_bulkham()
-         call this%hamiltonian%build_locham()
-      end select
-
-      call g_timer%stop('kspace-hamiltonian')
-   end subroutine run_kspace
-
-   !=========================================================================
-   !                   RUN K-SPACE DOS AND MOMENTS CALCULATION
-   !=========================================================================
-   subroutine run_dos_kspace(this, reciprocal_obj, iteration)
-      use reciprocal_mod
-      class(self), intent(inout) :: this
-      type(reciprocal), intent(inout) :: reciprocal_obj
-      integer, intent(in) :: iteration
-      integer :: ia, isite, iorb, ispin
-      real(rp) :: vmad
-
-      if (rank == 0) call g_logger%info('Calculating k-space DOS and band moments', __FILE__, __LINE__)
-      call g_timer%start('kspace-dos-moments')
-
-      ! Check compatibility: tetrahedron method requires full k-mesh (no symmetry reduction)
-      if (reciprocal_obj%use_symmetry_reduction .and. (trim(reciprocal_obj%dos_method) == 'tetrahedron' .or. trim(reciprocal_obj%dos_method) == 'blochl')) then
-         if (rank == 0) call g_logger%warning('Tetrahedron/Blochl DOS method requires full k-mesh. Switching to Gaussian method.', __FILE__, __LINE__)
-         reciprocal_obj%dos_method = 'gaussian'
-      end if
-
-      ! Generate k-point mesh (with optional symmetry reduction)
-      if (reciprocal_obj%use_symmetry_reduction) then
-         ! Determine if shift is needed (any non-zero k_offset component)
-         call reciprocal_obj%generate_reduced_kpoint_mesh(reciprocal_obj%nk_mesh, &
-            any(abs(reciprocal_obj%k_offset) > 1.0e-12_rp))
-      else
-         call reciprocal_obj%generate_mp_mesh()
-      end if
-
-      ! Build k-space Hamiltonian and diagonalize
-      call reciprocal_obj%build_kspace_hamiltonian()
-
-      call reciprocal_obj%diagonalize_hamiltonian()
-
-      ! Output band structure data during SCF for debugging
-      ! Only output every few iterations to avoid too many files
-      if (rank == 0 .and. mod(iteration, 1) == 0) then
-         call output_scf_band_structure(reciprocal_obj, iteration)
-      end if
-
-      ! Setup DOS energy grid
-      call reciprocal_obj%setup_dos_energy_grid()
-
-      ! Calculate DOS using tetrahedron or Gaussian method
-      select case (reciprocal_obj%dos_method)
-      case ('tetrahedron')
-         call reciprocal_obj%setup_tetrahedra()
-         call reciprocal_obj%calculate_dos_tetrahedron()
-         call reciprocal_obj%project_dos_orbitals_tetrahedron()
-      case ('blochl')
-         call reciprocal_obj%setup_tetrahedra()
-         call reciprocal_obj%calculate_dos_blochl()
-         call reciprocal_obj%project_dos_orbitals_tetrahedron()
-      case ('gaussian')
-         call reciprocal_obj%calculate_dos_gaussian()
-         call reciprocal_obj%project_dos_orbitals_gaussian()
-      case default
-         if (rank == 0) call g_logger%warning('Unknown DOS method, using tetrahedron', __FILE__, __LINE__)
-         call reciprocal_obj%setup_tetrahedra()
-         call reciprocal_obj%calculate_dos_tetrahedron()
-         call reciprocal_obj%project_dos_orbitals_tetrahedron()
-      end select
-
-      ! Set Fermi level from energy object (initial guess)
-      reciprocal_obj%fermi_level = this%en%fermi
-
-      ! Calculate band moments (m0, m1, m2) from DOS
-      ! This will auto-find Fermi level if auto_find_fermi = .true.
-      call reciprocal_obj%calculate_band_moments()
-
-      ! Update Fermi energy in energy object from k-space calculation
-      ! This is CRITICAL for SCF convergence!
-      this%en%fermi = reciprocal_obj%fermi_level
-      if (rank == 0) call g_logger%info('K-space Fermi level = ' // trim(real2str(this%en%fermi, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
-
-      ! Print DOS summary (total and spin-resolved) for diagnostics each SCF iteration
-      if (rank == 0) then
-         call reciprocal_obj%print_total_and_spin_dos()
-      end if
-
-      !=========================================================================
-      !                  CALCULATE HUBBARD CORRECTION (LDA+U)
-      !=========================================================================
-      if ( this%hamiltonian%hubbard_u_general_check ) then
-         if (rank == 0) call g_logger%info('Calculating LDA+U Local Density Matrix from k-space DOS', __FILE__, __LINE__)
-         
-         ! Calculate LDM from projected DOS and store in symbolic_atom potentials
-         call reciprocal_obj%calculate_ldm_from_projected_dos(this%lattice)
-         
-         ! Calculate Hubbard U potential matrix from LDM
-         call this%hamiltonian%calculate_hubbard_u_potential_general()
-         
-         if (rank == 0) call g_logger%info('LDA+U Hubbard potential calculated', __FILE__, __LINE__)
-      end if
-
-      !=========================================================================
-      !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
-      !=========================================================================
-      ! NOTE: In k-space mode, we don't use bands%calculate_magnetic_moments()
-      !       which is designed for recursion. The band moments are already
-      !       calculated by reciprocal%calculate_band_moments() above.
-      !       For magnetic systems, the magnetic moments will be handled
-      !       by the band_moments transfer below.
-
-      do ia = 1, this%lattice%nrec
-         this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
-      end do
-
-      call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
-
-      do ia = 1, this%lattice%nrec
-         this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
-      end do
-
-      !=========================================================================
-      !     TRANSFER BAND MOMENTS FROM RECIPROCAL TO SYMBOLIC_ATOM
-      !     Apply LMTO-ASA convention: shift m^1 to 0 (subtract Madelung)
-      !     Match the transformation done in bands.f90 lines 491-494
-      !=========================================================================
-      
-      ! First, initialize ALL ql and gravity_center to zero for all sites
-      ! (This is important for unused orbitals like f-orbitals)
-      do isite = 1, this%lattice%nrec
-         this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql = 0.0_rp
-         this%symbolic_atom(this%lattice%nbulk + isite)%potential%gravity_center = 0.0_rp
-      end do
-      
-      ! Now fill in the calculated moments for s, p, d orbitals
-      do isite = 1, this%lattice%nrec
-         ! Get Madelung potential for this site
-         vmad = this%symbolic_atom(this%lattice%nbulk + isite)%potential%vmad
-
-         do iorb = 1, 3  ! s, p, d orbitals
-            ! K-space always calculates spin-resolved moments (2 spin channels)
-            ! even if control%nsp=1, so we must copy both spin channels
-            do ispin = 1, 2  ! Handle spin channels
-               ! Extract moments from reciprocal object
-               ! m0 = occupation (zeroth moment)
-               ! m1 = band center (first moment, normalized)
-               ! m2 = width (sqrt of variance, already relative to m1)
-               
-               ! Store occupation in ql(1)
-               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(1, iorb - 1, ispin) = &
-                  reciprocal_obj%band_moments(isite, iorb, ispin, 1)
-
-               ! Store gravity center = band_center - vmad
-               ! This shifts m^1 to zero (LMTO-ASA convention)
-               this%symbolic_atom(this%lattice%nbulk + isite)%potential%gravity_center(iorb, ispin) = &
-                  reciprocal_obj%band_moments(isite, iorb, ispin, 2) - vmad
-
-               ! Set ql(2,...) = 0 (convention for LMTO-ASA: m^1 = 0)
-               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(2, iorb - 1, ispin) = 0.0_rp
-               
-               ! Store second moment (variance relative to gravity center)
-               ! In bands.f90:494, recursion stores: smef - m1_raw^2/m0
-               ! which is the UNNORMALIZED variance: Var_unnorm = m0 * Var_norm
-               ! In reciprocal%band_moments(3) we store WIDTH = sqrt(Var_norm)
-               ! So: ql(3) = m0 * width^2 = m0 * band_moments(3)^2
-               this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(3, iorb - 1, ispin) = &
-                  reciprocal_obj%band_moments(isite, iorb, ispin, 1) * &  ! m0
-                  reciprocal_obj%band_moments(isite, iorb, ispin, 3)**2   ! width^2
-            end do
-         end do
-      end do
-
-      ! Debug: Check ql values before mixing
-      if (rank == 0) then
-         do isite = 1, this%lattice%nrec
-            call g_logger%info('DEBUG ql for site ' // trim(int2str(isite)) // ':', __FILE__, __LINE__)
-            do ispin = 1, 2
-               do iorb = 1, 3  ! s, p, d
-                  call g_logger%info('  ql(1,' // trim(int2str(iorb-1)) // ',' // trim(int2str(ispin)) // &
-                     ') = ' // trim(real2str(this%symbolic_atom(this%lattice%nbulk + isite)%potential%ql(1, iorb-1, ispin), '(ES15.8)')), &
-                     __FILE__, __LINE__)
-               end do
-            end do
-         end do
-      end if
-
-      ! Calculate pl moments from ql (same as recursion workflow)
-      call this%bands%calculate_pl()
-
-      ! Save for mixing
-      call this%mix%save_to('new')
-
-      !=========================================================================
-      !         CALCULATE BAND ENERGY FROM FIRST MOMENT OF DOS
-      !=========================================================================
-      this%ebsum = reciprocal_obj%calculate_band_energy_from_moments()
-      if (rank == 0) call g_logger%info('K-space band energy = ' // trim(real2str(this%ebsum, '(F16.10)')) // ' Ry', __FILE__, __LINE__)
-
-      !=========================================================================
-      !              WRITE DOS TO FILE (similar to recursion workflow)
-      !=========================================================================
-      if (rank == 0) then
-         call write_kspace_dos_to_file(reciprocal_obj, this%lattice, this%symbolic_atom, this%en%fermi)
-      end if
-
-      call g_timer%stop('kspace-dos-moments')
-   end subroutine run_dos_kspace
-
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1223,6 +955,8 @@ contains
       class(self), intent(inout) :: this
       integer :: newunit, iostatus
       integer :: ia, ia_loc
+      integer :: nb_slice, ncols
+      real(rp) :: denom
       real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
       ! Open report.out file
@@ -1258,20 +992,16 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Total Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
-         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
+!         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
+         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(:)%potential%etot)
          !===========================================================================
          !                       Band Energy
          !===========================================================================
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Band Energy                                       |'
          write (newunit, '(A)') '==========================================================================='
-         ! For k-space: band energy already calculated in run_dos_kspace and stored in this%ebsum
-         ! For recursion: calculate it now and copy to this%ebsum
-         if (.not. this%use_kspace) then
-            call this%bands%calculate_band_energy()
-            this%ebsum = this%bands%eband
-         end if
-         write (newunit, '(a,f16.10)') 'Band energy of system: ', this%ebsum
+         call this%bands%calculate_band_energy()
+         write (newunit, '(a,f16.10)') 'Band energy of system: ', this%bands%eband
          !===========================================================================
          !                       Magnetization
          !===========================================================================
@@ -1299,9 +1029,10 @@ contains
          write (newunit, '(A)') '|                       Charge Transfer                                   |'
          write (newunit, '(A)') '==========================================================================='
          do ia = 1, this%lattice%nrec
-            write (newunit, '(a,i4,a,f10.6)') 'Occupation at atom', ia, ':', sum(this%mix%qia(ia, 1:6))
-            write (newunit, '(a,i4,a,3f10.6)') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:3)
-            write (newunit, '(a,i4,a,3f10.6)') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, 4:6)
+            nb_slice = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
+            write (newunit, '(a,i4,a,f10.6)') 'Occupation at atom', ia, ':', sum(this%mix%qia(ia, 1:2*nb_slice))
+            write (newunit, '(a,i4,a,*(f10.6,1x))') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:nb_slice)
+            write (newunit, '(a,i4,a,*(f10.6,1x))') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, nb_slice+1:2*nb_slice)
             write (newunit, '(a,i4,a,f10.6)') 'Charge transfer at atom', ia, ':', this%charge%dq(ia)
          end do
          !===========================================================================
@@ -1322,9 +1053,12 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                             Log info                                     |'
          write (newunit, '(A)') '==========================================================================='
+         ncols = size(this%mix%qia, 2)
+         nb_slice = min(6*(lmax_basis + 1), ncols)
+         denom = max(1.0_rp, real(nb_slice)/2.0_rp)
          write (newunit, '(a,f10.6)') 'Total RMS Diff: ', this%mix%delta
          do ia = 1, this%lattice%nrec
-            write (newunit, '(a,i4,a,f10.6)') 'RMS Diff of atom', ia, ':', sqrt(sum((this%mix%qia_old(ia, 1:12) - this%mix%qia_new(ia, 1:12))**2))/6.0d0
+            write (newunit, '(a,i4,a,f10.6)') 'RMS Diff of atom', ia, ':', sqrt(sum((this%mix%qia_old(ia, 1:nb_slice) - this%mix%qia_new(ia, 1:nb_slice))**2))/denom
          end do
       end if
 
@@ -1467,6 +1201,7 @@ contains
       LMAX = atom%potential%lmax
       NSP = 2
 
+      QSL(:) = 0.0_rp
       call this%RACSI(atom, ROFI, QSL)
 
       ! ---- MAKE POTENTIAL PARAMETERS TO SAME DNU VALUES ------
@@ -1488,6 +1223,14 @@ contains
             end do
          end do
          call this%POTPAR(atom, V, ROFI)
+         if (lmax >= 3) then
+            call g_logger%info('DEBUG:atomsc f-channel after POTPAR ENU='// &
+                               fmt('f10.6', atom%potential%ENU(3, 1))//' '//fmt('f10.6', atom%potential%ENU(3, 2))// &
+                               ' C='//fmt('f10.6', atom%potential%C(3, 1))//' '//fmt('f10.6', atom%potential%C(3, 2))// &
+                               ' SRDEL='//fmt('f10.6', atom%potential%SRDEL(3, 1))//' '//fmt('f10.6', atom%potential%SRDEL(3, 2))// &
+                               ' QPAR='//fmt('f10.6', atom%potential%QPAR(3, 1))//' '//fmt('f10.6', atom%potential%QPAR(3, 2))// &
+                               ' PPAR='//fmt('f10.6', atom%potential%PPAR(3, 1))//' '//fmt('f10.6', atom%potential%PPAR(3, 2)), __FILE__, __LINE__)
+         end if
          do I = 1, NSP
             do L = 0, LMAX
                ! write (660, 10002) -L, ENU(L, I), VL(L, I), C(L, I), SRDEL(L, I), QPAR(L, I), PPAR(L, I)
@@ -1511,6 +1254,7 @@ contains
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
       real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
       integer :: ISP, ncore, nval, l, nsp, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
+      integer :: qn_default
       logical :: LAST
 
       real(rp), dimension(NCMX) :: EC
@@ -1527,6 +1271,7 @@ contains
       allocate (v, mold=rho_in)
       allocate (rho, mold=rho_in)
       allocate (rofi(size(rho_in(:, 1))))
+      if (allocated(this%fun2)) this%fun2(:, :, :) = 0.0_rp
 
       nr = size(rofi)
       B_fsm = merge(-atom%mag_cfield(3), real(0.0, rp), this%lattice%control%do_comom)
@@ -1546,10 +1291,51 @@ contains
       tolrsq = 1.d-8
       beta = 0.3d0
 
+      ! Backward-compatible guard: legacy spd potential files promoted to lmax=3
+      ! may not provide valid f-channel PL. Seed invalid channels from element
+      ! quantum numbers, otherwise enforce the minimum admissible n=l+1.
+      do isp = 1, nsp
+         do l = 0, lmax
+            if (atom%potential%pl(l, isp) < real(l + 1, rp)) then
+               select case (l)
+               case (0)
+                  qn_default = atom%element%num_quant_s
+               case (1)
+                  qn_default = atom%element%num_quant_p
+               case (2)
+                  qn_default = atom%element%num_quant_d
+               case (3)
+                  qn_default = atom%element%num_quant_f
+               case default
+                  qn_default = l + 1
+               end select
+               if (qn_default < l + 1) qn_default = l + 1
+               atom%potential%pl(l, isp) = real(qn_default, rp)
+            end if
+            ! For promoted high-l channels (e.g. f), enforce a minimal non-zero
+            ! Q0 to avoid singular atomic initialization from legacy inputs.
+            if (l >= 3) then
+               if (abs(atom%potential%ql(1, l, isp)) <= tiny(1.0_rp)) then
+                  atom%potential%ql(1, l, isp) = 1.0e-3_rp
+               end if
+            end if
+         end do
+      end do
+
       do l = 0, lmax
          deg = (2*(2*l + 1))/nsp
          do isp = 1, nsp
+            if (atom%potential%pl(l, isp) /= atom%potential%pl(l, isp)) then
+               call g_logger%fatal('Invalid PL before atomic core/valence setup: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(lmax)//' l='//int2str(l)//' spin='//int2str(isp)// &
+                                   ' PL=NaN', __FILE__, __LINE__)
+            end if
             konfig = int(atom%potential%pl(l, isp))
+            if (konfig < l + 1) then
+               call g_logger%fatal('Invalid PL before atomic core/valence setup: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(lmax)//' l='//int2str(l)//' spin='//int2str(isp)// &
+                                   ' PL='//real2str(atom%potential%pl(l, isp))//' KONFIG='//int2str(konfig), __FILE__, __LINE__)
+            end if
             do konf = l + 1, konfig - 1
                ncore = ncore + 1
                ec(ncore) = -5.d0
@@ -1559,13 +1345,21 @@ contains
             ev(nval) = -0.5d0
             qval(isp) = qval(isp) + atom%potential%ql(1, l, isp)
          end do
+         ! Debug output for orbital initialization
+         if (lmax >= 3) then
+            write (6, '(A, I1, A, F8.4, F8.4, A, I2, A, 2(F10.6,2X))') &
+               "  L=", l, "  PL=", atom%potential%pl(l, 1), atom%potential%pl(l, 2), &
+               "  KONFIG=", int(atom%potential%pl(l, 1)), &
+               "  Q0(spin1,2)=", atom%potential%ql(1, l, 1), atom%potential%ql(1, l, 2)
+         end if
       end do
       !----MODIFICATIONS TO INCLUDE FRACTIONARY F OCCUPATION IN THE CORE------
       IFCORE = atom%element%f_core
       DFCORE = REAL(IFCORE)
       call g_logger%info('F core check:'//int2str(ifcore), __FILE__, __LINE__)
       !write (9, *) ´F-core check:´, IFCORE, DFCORE
-      if (IFCORE /= 0) then
+      ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
+      if (IFCORE /= 0 .and. lmax < 3) then
          LCORE = 3
          DEG = (2*(2*LCORE + 1))/NSP
          do ISP = 1, NSP
@@ -1840,7 +1634,8 @@ contains
       end do
       !======MODIFICADO PARA INCLUIR F NO CAROCO================
       IFCORE = atom%element%f_core
-      if (IFCORE /= 0) then
+      ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
+      if (IFCORE /= 0 .and. LMAX < 3) then
          KONF(LMAX + 2) = 5
       end if
       !========FIM  DAS MODIFICACOES NESTE TRECHO================
@@ -1860,7 +1655,18 @@ contains
             Q1 = QL(2, LP1, ISP)
             Q2 = QL(3, LP1, ISP)
             if (Q0 >= 1.d-5) then
+               if (PL(LP1, ISP) /= PL(LP1, ISP)) then
+                  call g_logger%fatal('Invalid PL before NEWRHO RSEQSR: atom='//trim(atom%element%symbol)// &
+                                      ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(ISP)// &
+                                      ' PL=NaN Q0='//real2str(Q0), __FILE__, __LINE__)
+               end if
                KONFIG = PL(LP1, ISP)
+               if (KONFIG < LP1) then
+                  call g_logger%fatal('Invalid PL before NEWRHO RSEQSR: atom='//trim(atom%element%symbol)// &
+                                      ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(ISP)// &
+                                      ' PL='//real2str(PL(LP1, ISP))//' KONFIG='//int2str(KONFIG)// &
+                                      ' NN='//int2str(KONFIG - LP1)//' Q0='//real2str(Q0), __FILE__, __LINE__)
+               end if
                DL = TAN(PI*(0.5d0 - PL(LP1, ISP)))
                NN = KONFIG - LP1
                IVAL = IVAL + 1
@@ -1873,6 +1679,12 @@ contains
                if (FREE) then
                   SLO = -VAL
                end if
+               ! Debug output for orbital radial equation
+               ! if (L >= 2) then
+               !    write (6, '(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)') &
+               !       "NEWRHO: L=", L, " ISP=", ISP, " PL=", PL(LP1, ISP), &
+               !       " NN=", NN, " EVAL=", EVAL, " Q0=", Q0
+               ! end if
                call RSEQSR(EB1, EB2, EVAL, TOLVAL, Z, L, NN, VAL, SLO, V(1, ISP), G, SUM, A, B, &
                            rofi, NR, NRE, 0)
                EV(IVAL) = EVAL
@@ -2108,7 +1920,8 @@ contains
          !====MODIFICADO PARA INCLUIR F FRACIONARIO NO CAROCO==========
          IFCORE = atom%element%f_core
          DFCORE = REAL(IFCORE)
-         if (IFCORE /= 0) then
+         ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
+         if (IFCORE /= 0 .and. LMAX < 3) then
             LP1 = LMAX + 2
             L = LP1 - 1
             !     DEG=(2*(2*L+1))/NSP
@@ -2995,15 +2808,14 @@ contains
          R = (rofi(3) - rofi(2))
          RCE = R*R
          if (IXC == 5 .or. IXC >= 8) then
-            ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-            ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-            RHOD(1) = 0.5*RHOP(1, 1)
-            RHODD(1) = 0.5*RHOPP(1, 1)
+            ! RHODD(2) = RHODD(1)
+            RHOD(1) = 0.5*RHOP(1, 1)/R
+            RHODD(1) = 0.5*(RHOPP(1, 1) - RHOP(1, 1))/RCE
             RHOD(2) = RHOD(1)
             RHODD(2) = RHODD(1)
          end if
          ! CALL EVXC(RHO0(1), 0.5D0*RHO0(1), EXC, VXC)
-         call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
+         call xc_obj%XCPOT(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
          V(1, 1) = V(1, 1) + VXC1
          do IR = 2, NR
             RHO1 = 0.5*tRHO(1, 1)
@@ -3011,14 +2823,12 @@ contains
             R = (rofi(3) - rofi(2))
             RCE = R*R
             if (IXC == 5 .or. IXC >= 8) then
-               ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-               ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-               RHOD(1) = 0.5*RHOP(IR, 1)
-               RHODD(1) = 0.5*RHOPP(IR, 1)
+               RHOD(1) = 0.5*RHOP(IR, 1)/R
+               RHODD(1) = 0.5*(RHOPP(IR, 1) - RHOP(IR, 1))/RCE
                RHOD(2) = RHOD(1)
                RHODD(2) = RHODD(1)
             end if
-            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+            call xc_obj%XCPOT(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
             !RHOTRU = RHO(IR, 1) * OB4PI / rofi(IR)**2
         !!       Call EVXC(RHOTRU, 0.5D0*RHOTRU, EXC, VXC)
             !call EVXC(RHOTRU, 0.5*RHOTRU, EXC, VXC)
@@ -3039,15 +2849,16 @@ contains
          R = (rofi(3) - rofi(2))
          RCE = R*R
          if (IXC == 5 .or. IXC >= 8) then
-            ! Fixed: RHOD should be dρ/dr, not dρ/dr/r  
-            ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-            ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
-            RHOD(2) = RHOP(1, 1)
-            RHOD(1) = RHOP(1, 2)
-            RHODD(2) = RHOPP(1, 1)
-            RHODD(1) = RHOPP(1, 2)
+            ! RHOD(2) = RHOP(IR, 1) / R
+            ! RHOD(1) = RHOP(IR, 2) / R
+            ! RHODD(2) = (RHOPP(IR, 1)-RHOP(IR, 1)) / RCE
+            ! RHODD(1) = (RHOPP(IR, 2)-RHOP(IR, 2)) / RCE
+            RHOD(2) = RHOP(1, 1)/R
+            RHOD(1) = RHOP(1, 2)/R
+            RHODD(2) = (RHOPP(1, 1) - RHOP(1, 1))/RCE
+            RHODD(1) = (RHOPP(1, 2) - RHOP(1, 2))/RCE
          end if
-         call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+         call xc_obj%XCPOT(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
          !V(1, 1) = V(1, 1) + VXC1
          !V(1, 2) = V(1, 2) + VXC2
          V(1, 1) = V(1, 1) + VXC1 + B_fsm
@@ -3059,14 +2870,12 @@ contains
             RHO1 = tRHO(IR, 1)
             RHO2 = tRHO(IR, 2)
             if (IXC == 5 .or. IXC >= 8) then
-               ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-               ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-               RHOD(2) = RHOP(IR, 1)
-               RHOD(1) = RHOP(IR, 2)
-               RHODD(2) = RHOPP(IR, 1)
-               RHODD(1) = RHOPP(IR, 2)
+               RHOD(2) = RHOP(IR, 1)/R
+               RHOD(1) = RHOP(IR, 2)/R
+               RHODD(2) = (RHOPP(IR, 1) - RHOP(IR, 1))/RCE
+               RHODD(1) = (RHOPP(IR, 2) - RHOP(IR, 2))/RCE
             end if
-            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
+            call xc_obj%XCPOT(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
             !
             !RHOT1 = RHO(IR, 1) * (OB4PI/rofi(IR)**2)
             !RHOT2 = RHO(IR, 2) * (OB4PI/rofi(IR)**2)
@@ -3153,733 +2962,6 @@ contains
       end do
       return
    end subroutine radgra
-!!! subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
-!!!   !-----------------------------------------------------------------------
-!!!   ! Add exchange-correlation (XC) potential to spherical potential
-!!!   ! and compute RHOMU and RHOEPS integrals.
-!!!   !
-!!!   ! Supports LDA and GGA functionals (via libXC).
-!!!   ! In GGA case, includes correct spherical divergence term using sphdiv.
-!!!   !-----------------------------------------------------------------------
-!!!    use xc_f90_mod, only: vxc0sp_q, vxcgr2
-!!!    implicit none
-!!!   class(self), intent(inout) :: this
-!!!   type(xc), intent(in) :: xc_obj
-!!!   integer, intent(in) :: NR, NSP
-!!!   real(rp), intent(in) :: A, B, Z, B_fsm
-!!!   real(rp), dimension(2), intent(inout) :: RHO0
-!!!   real(rp), dimension(NR), intent(in) :: rofi
-!!!   real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
-!!!   real(rp), dimension(NR, NSP), intent(in) :: RHO
-!!!   real(rp), dimension(NR, NSP), intent(inout) :: V
-!!! 
-!!!   ! Locals
-!!!   integer :: IR, ISP, IXC
-!!!    real(rp) :: OB4PI, WGT, DRDI
-!!!   real(rp) :: RHO1, RHO2, RHO3, R, EXC, VXC1, VXC2, EXC1
-!!!   real(rp), dimension(NR, NSP) :: tRHO, RHOP
-!!!   real(rp), dimension(NR, NSP) :: divRHO   ! spherical divergence of grad rho
-!!!   real(rp), dimension(2) :: RHOD, RHODD
-!!!   real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
-!!!    logical :: use_vxcgr2
-!!!    real(rp), allocatable :: grh(:,:), ggrh(:,:), agrh(:,:), grgagr(:,:), exc_tmp(:), vxc_tmp(:,:)
-!!! 
-!!!   ! PI    = 4.d0*atan(1.d0)
-!!!   OB4PI = 1.d0/(4.d0*PI)
-!!!   IXC   = xc_obj%txc
-!!! 
-!!!   ! If this is a libXC functional, delegate to the centralized implementation
-!!!   ! IXC = 6619266
-!!!   ! print *, 'Using libXC functional with IXC = ', IXC
-!!!   ! if (abs(IXC) >= 1000) then
-!!!   !  print *, 'Calling vxc0sp_q from VXC0SP'
-!!!   !  call vxc0sp_q(lxcfun=IXC, rofi=rofi, rho=RHO, nr=NR, v=V, rho0=RHO0, bscal=1.0_rp, rep=RHOEPS, rmu=RHOMU, nsp=NSP)
-!!!   !    return
-!!!   ! end if
-!!! 
-!!!   Bxc_up = 0.0d0
-!!!   Bxc_dw = 0.0d0
-!!! 
-!!!   ! Extrapolate density to core point
-!!!   do ISP = 1, NSP
-!!!      RHOEPS(ISP) = 0.d0
-!!!      RHOMU(ISP)  = 0.d0
-!!!      RHO0(ISP)   = OB4PI * (RHO(2,ISP)/rofi(2)**2*rofi(3) - &
-!!!                              RHO(3,ISP)/rofi(3)**2*rofi(2)) / (rofi(3)-rofi(2))
-!!!   end do
-!!! 
-!!!   ! Build true densities and first derivatives
-!!!   do ISP = 1, NSP
-!!!      tRHO(1,ISP) = RHO0(ISP)
-!!!      do IR = 2, NR
-!!!         tRHO(IR,ISP) = RHO(IR,ISP)*OB4PI/rofi(IR)**2
-!!!      end do
-!!!   end do
-!!! 
-!!!   ! Decide which gradient routine to use: prefer xc_f90_mod:vxcgr2 for libXC functionals
-!!!   use_vxcgr2 = .false. ! xc_obj%is_libxc_functional()
-!!! 
-!!!   if (use_vxcgr2) then
-!!!    !print *, 'Using vxcgr2 for gradient and divergence calculation'
-!!!      ! vxcgr2 expects rpr(nr, nsp) input; we have tRHO(nr,nsp)
-!!!      allocate(grh(NR, 2), ggrh(NR, 2), agrh(NR, 4), grgagr(NR, 3))
-!!!      allocate(exc_tmp(NR), vxc_tmp(NR, 2))
-!!!      call vxcgr2(-1, NR, NSP, NR, rofi, tRHO, grh, ggrh, agrh, grgagr, exc_tmp, vxc_tmp)
-!!!      ! Map outputs to RHOP (radial derivative) and divRHO (spherical divergence)
-!!!      do ISP = 1, NSP
-!!!         do IR = 1, NR
-!!!            RHOP(IR, ISP) = grh(IR, ISP)
-!!!            divRHO(IR, ISP) = ggrh(IR, ISP)
-!!!         end do
-!!!      end do
-!!!      !write(333,'(f12.6)') grh(:,1)
-!!!      !write(343,'(g12.6)') ggrh(:,1)
-!!!      deallocate(grh, ggrh, agrh, grgagr, exc_tmp, vxc_tmp)
-!!!   else
-!!!    !print *, 'Using legacy radgra + sphdiv for gradient and divergence calculation'
-!!!      ! Use legacy mesh-based gradient + spherical divergence
-!!!      do ISP = 1, NSP
-!!!         call radgra(A,B,NR,rofi,tRHO(1,ISP),RHOP(1,ISP))
-!!!         call sphdiv(A,B,NR,rofi,RHOP(1,ISP),divRHO(1,ISP))
-!!!      end do
-!!!      !write(334,'(f12.6)') RHOP(:,1)
-!!!      !write(344,'(g12.6)') divRHO(:,1)
-!!!   end if
-!!!   !stop
-!!! 
-!!!   ! =========================
-!!!   ! Non-spin-polarized case
-!!!   ! =========================
-!!!   if (NSP == 1) then
-!!!      ! First radial point
-!!!      RHO1 = 0.5*tRHO(1,1)
-!!!      RHO2 = RHO1
-!!!      R    = rofi(1)
-!!!      if (R < 1.d-10) R = rofi(2)*0.1d0
-!!! 
-!!!      RHOD(1)  = 0.5*RHOP(1,1)
-!!!      RHOD(2)  = RHOD(1)
-!!!      RHODD(1) = 0.5*divRHO(1,1)
-!!!      RHODD(2) = RHODD(1)
-!!! 
-!!!      call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1,1), RHOD, RHODD, R, &
-!!!                               VXC2, VXC1, EXC)
-!!!      V(1,1) = V(1,1) + VXC1
-!!! 
-!!!      ! Remaining radial points
-!!!      do IR = 2, NR
-!!!         RHO1 = 0.5*tRHO(IR,1)
-!!!         RHO2 = RHO1
-!!!         R    = rofi(IR)
-!!! 
-!!!         RHOD(1)  = 0.5*RHOP(IR,1)
-!!!         RHOD(2)  = RHOD(1)
-!!!         RHODD(1) = 0.5*divRHO(IR,1)
-!!!         RHODD(2) = RHODD(1)
-!!! 
-!!!         call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(IR,1), RHOD, RHODD, R, &
-!!!                                  VXC2, VXC1, EXC1)
-!!! 
-!!!         V(IR,1) = V(IR,1) + VXC1
-!!! 
-!!!         ! Simpson’s rule weights
-!!!         WGT = 2.d0*(mod(IR+1,2)+1)/3.d0
-!!!         if (IR == 1 .or. IR == NR) WGT = 1.d0/3.d0
-!!!         DRDI = A*(rofi(IR) + B)
-!!! 
-!!!         RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR,1)*EXC1
-!!!         RHOMU(1)  = RHOMU(1)  + WGT*DRDI*RHO(IR,1)*VXC1
-!!!      end do
-!!! 
-!!!   ! =========================
-!!!   ! Spin-polarized case
-!!!   ! =========================
-!!!   else
-!!!      ! First radial point
-!!!      RHO1 = tRHO(1,1)
-!!!      RHO2 = tRHO(1,2)
-!!!      R    = rofi(1)
-!!!      if (R < 1.d-10) R = rofi(2)*0.1d0
-!!! 
-!!!      RHOD(2)  = RHOP(1,1)
-!!!      RHOD(1)  = RHOP(1,2)
-!!!      RHODD(2) = divRHO(1,1)
-!!!      RHODD(1) = divRHO(1,2)
-!!! 
-!!!      call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1,1)+tRHO(1,2), &
-!!!                               RHOD, RHODD, R, VXC2, VXC1, EXC1)
-!!! 
-!!!      V(1,1) = V(1,1) + VXC1 + B_fsm
-!!!      V(1,2) = V(1,2) + VXC2 - B_fsm
-!!! 
-!!!      ! Remaining radial points
-!!!      do IR = 2, NR
-!!!         R    = rofi(IR)
-!!!         RHO1 = tRHO(IR,1)
-!!!         RHO2 = tRHO(IR,2)
-!!!         RHO3 = RHO1 + RHO2
-!!! 
-!!!         RHOD(2)  = RHOP(IR,1)
-!!!         RHOD(1)  = RHOP(IR,2)
-!!!         RHODD(2) = divRHO(IR,1)
-!!!         RHODD(1) = divRHO(IR,2)
-!!! 
-!!!         call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, &
-!!!                                  VXC2, VXC1, EXC1)
-!!! 
-!!!         V(IR,1) = V(IR,1) + VXC1 + B_fsm
-!!!         V(IR,2) = V(IR,2) + VXC2 - B_fsm
-!!! 
-!!!         ! Simpson’s rule weights
-!!!         WGT = 2.d0*(mod(IR+1,2)+1)/3.d0
-!!!         if (IR == 1 .or. IR == NR) WGT = 1.d0/3.d0
-!!!         DRDI = A*(rofi(IR) + B)
-!!! 
-!!!         RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR,1)*EXC1
-!!!         RHOMU(1)  = RHOMU(1)  + WGT*DRDI*RHO(IR,1)*(VXC1+B_fsm)
-!!!         RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR,2)*EXC1
-!!!         RHOMU(2)  = RHOMU(2)  + WGT*DRDI*RHO(IR,2)*(VXC2-B_fsm)
-!!! 
-!!!         Bxc_up = Bxc_up + WGT*DRDI*VXC1
-!!!         Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
-!!!      end do
-!!! 
-!!!      Bxc_tot = Bxc_up - Bxc_dw
-!!!      ! could store Bxc_tot in xc_obj for FSM if needed
-!!!   end if
-!!! 
-!!! end subroutine VXC0SP
-!!! 
-!!! !!! subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
-!!! !!!    !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
-!!! !!!    !
-!!! !!!    implicit none
-!!! !!!    !
-!!! !!!    !.. Formal Arguments ..
-!!! !!!    class(self), intent(inout) :: this
-!!! !!!    type(xc), intent(in) :: xc_obj
-!!! !!!    integer, intent(in) :: NR, NSP
-!!! !!!    real(rp), intent(in) :: A, B
-!!! !!!    real(rp) :: Z
-!!! !!!    real(rp), dimension(2), intent(inout) :: RHO0
-!!! !!!    real(rp), dimension(NR), intent(in) :: rofi
-!!! !!!    real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
-!!! !!!    real(rp), dimension(NR, NSP), intent(in) :: RHO
-!!! !!!    real(rp), dimension(NR, NSP), intent(inout) :: V
-!!! !!!    real(rp), intent(in)  :: B_fsm
-!!! !!!    !
-!!! !!!    !.. Local Scalars ..
-!!! !!!    integer :: IR, ISP, IXC
-!!! !!!    real(rp) :: DRDI, EXC, EXC1, OB4PI, PI, RHO2, RHO3, &
-!!! !!!                VXC, VXC1, VXC2, WGT, RHO1, R
-!!! !!!    real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
-!!! !!!    real(rp), dimension(2) :: RHOD, RHODD
-!!! !!!    real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
-!!! !!!    !
-!!! !!!    !.. Intrinsic Functions ..
-!!! !!!    intrinsic ATAN, MOD
-!!! !!!    !
-!!! !!!    ! ... Executable Statements ...
-!!! !!!    !
-!!! !!!    PI = 4.d0*ATAN(1.d0)
-!!! !!!    OB4PI = 1.d0/(4.d0*PI)
-!!! !!!    IXC = xc_obj%txc
-!!! !!!    !
-!!! !!!    ! Constraining field related hacks below
-!!! !!!    Bxc_up = 0.0d0
-!!! !!!    Bxc_dw = 0.0d0
-!!! !!!    !
-!!! !!!    ! Extrapolate density to core point
-!!! !!!    do ISP = 1, NSP
-!!! !!!       RHOEPS(ISP) = 0.d0
-!!! !!!       RHOMU(ISP) = 0.d0
-!!! !!!       RHO2 = RHO(2, ISP)/rofi(2)**2
-!!! !!!       RHO3 = RHO(3, ISP)/rofi(3)**2
-!!! !!!       RHO0(ISP) = OB4PI*(RHO2*rofi(3) - RHO3*rofi(2))/(rofi(3) - rofi(2))
-!!! !!!    end do
-!!! !!!    
-!!! !!!    ! Calculate gradients in case of GGA
-!!! !!!    do ISP = 1, NSP
-!!! !!!       ! Build physical density array: ρ(r) = RHO(r)/(4πr²)
-!!! !!!       tRHO(1, ISP) = RHO0(ISP)
-!!! !!!       do IR = 2, NR
-!!! !!!          tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
-!!! !!!       end do
-!!! !!!       
-!!! !!!       !if (IXC == 5 .or. IXC >= 8) then
-!!! !!!          ! Compute dρ/dr by differentiating physical density
-!!! !!!          call radgra(a, b, NR, rofi, tRHO(1, ISP), RHOP(1, ISP))
-!!! !!!          ! Compute d²ρ/dr² by differentiating dρ/dr
-!!! !!!          call radgra(a, b, NR, rofi, RHOP(1, ISP), RHOPP(1, ISP))
-!!! !!!       !else
-!!! !!!       !   RHOP = 0.0d0
-!!! !!!       !   RHOPP = 0.0d0
-!!! !!!       !end if
-!!! !!!    end do
-!!! !!!    
-!!! !!!    if (NSP == 1) then
-!!! !!!       ! Non-spin-polarized case
-!!! !!!       ! First point (IR=1, at or near origin)
-!!! !!!       RHO1 = 0.5*tRHO(1, 1)
-!!! !!!       RHO2 = RHO1
-!!! !!!       R = rofi(1)
-!!! !!!       if (R < 1.d-10) R = rofi(2)*0.1d0  ! Handle r=0
-!!! !!!       
-!!! !!!       !if (IXC == 5 .or. IXC >= 8) then
-!!! !!!          RHOD(1) = 0.5*RHOP(1, 1)
-!!! !!!          RHODD(1) = 0.5*RHOPP(1, 1)
-!!! !!!          RHOD(2) = RHOD(1)
-!!! !!!          RHODD(2) = RHODD(1)
-!!! !!!       !end if
-!!! !!!       
-!!! !!!       call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, &
-!!! !!!                                 VXC2, VXC1, EXC)
-!!! !!!       V(1, 1) = V(1, 1) + VXC1
-!!! !!!       
-!!! !!!       ! Loop over remaining radial points
-!!! !!!       do IR = 2, NR
-!!! !!!          RHO1 = 0.5*tRHO(IR, 1)
-!!! !!!          RHO2 = RHO1
-!!! !!!          R = rofi(IR)
-!!! !!!          
-!!! !!!          !if (IXC == 5 .or. IXC >= 8) then
-!!! !!!             RHOD(1) = 0.5*RHOP(IR, 1)
-!!! !!!             RHODD(1) = 0.5*RHOPP(IR, 1)
-!!! !!!             RHOD(2) = RHOD(1)
-!!! !!!             RHODD(2) = RHODD(1)
-!!! !!!          !end if
-!!! !!!          
-!!! !!!          call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(IR, 1), RHOD, RHODD, R, &
-!!! !!!                                    VXC2, VXC1, EXC1)
-!!! !!!          
-!!! !!!          V(IR, 1) = V(IR, 1) + VXC1
-!!! !!!          
-!!! !!!          ! Simpson's rule weights
-!!! !!!          WGT = 2.d0*(MOD(IR + 1, 2) + 1)/3.d0
-!!! !!!          if (IR == 1 .or. IR == NR) then
-!!! !!!             WGT = 1.d0/3.d0
-!!! !!!          end if
-!!! !!!          
-!!! !!!          DRDI = A*(rofi(IR) + B)
-!!! !!!          RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
-!!! !!!          RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
-!!! !!!       end do
-!!! !!!       
-!!! !!!    else
-!!! !!!       ! Spin-polarized case (NSP=2)
-!!! !!!       ! First point (IR=1, at or near origin)
-!!! !!!       RHO1 = tRHO(1, 1)
-!!! !!!       RHO2 = tRHO(1, 2)
-!!! !!!       R = rofi(1)
-!!! !!!       if (R < 1.d-10) R = rofi(2)*0.1d0  ! Handle r=0
-!!! !!!       
-!!! !!!       !if (IXC == 5 .or. IXC >= 8) then
-!!! !!!          ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
-!!! !!!          RHOD(2) = RHOP(1, 1)
-!!! !!!          RHOD(1) = RHOP(1, 2)
-!!! !!!          RHODD(2) = RHOPP(1, 1)
-!!! !!!          RHODD(1) = RHOPP(1, 2)
-!!! !!!       !end if
-!!! !!!       
-!!! !!!       call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1) + tRHO(1, 2), &
-!!! !!!                                 RHOD, RHODD, R, VXC2, VXC1, EXC1)
-!!! !!!       
-!!! !!!       V(1, 1) = V(1, 1) + VXC1 + B_fsm
-!!! !!!       V(1, 2) = V(1, 2) + VXC2 - B_fsm
-!!! !!!       
-!!! !!!       ! Loop over remaining radial points
-!!! !!!       do IR = 2, NR
-!!! !!!          R = rofi(IR)
-!!! !!!          RHO1 = tRHO(IR, 1)
-!!! !!!          RHO2 = tRHO(IR, 2)
-!!! !!!          RHO3 = RHO1 + RHO2
-!!! !!!          
-!!! !!!          !if (IXC == 5 .or. IXC >= 8) then
-!!! !!!             RHOD(2) = RHOP(IR, 1)
-!!! !!!             RHOD(1) = RHOP(IR, 2)
-!!! !!!             RHODD(2) = RHOPP(IR, 1)
-!!! !!!             RHODD(1) = RHOPP(IR, 2)
-!!! !!!          !end if
-!!! !!!          
-!!! !!!          call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, &
-!!! !!!                                    VXC2, VXC1, EXC1)
-!!! !!!          
-!!! !!!          ! Add XC potential with constraining field for FSM
-!!! !!!          V(IR, 1) = V(IR, 1) + VXC1 + B_fsm
-!!! !!!          V(IR, 2) = V(IR, 2) + VXC2 - B_fsm
-!!! !!!          
-!!! !!!          ! Simpson's rule weights
-!!! !!!          WGT = 2.d0*(MOD(IR + 1, 2) + 1)/3.d0
-!!! !!!          if (IR == 1 .or. IR == NR) then
-!!! !!!             WGT = 1.d0/3.d0
-!!! !!!          end if
-!!! !!!          
-!!! !!!          DRDI = A*(rofi(IR) + B)
-!!! !!!          RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
-!!! !!!          RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
-!!! !!!          RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR, 2)*EXC1
-!!! !!!          RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
-!!! !!!          
-!!! !!!          Bxc_up = Bxc_up + WGT*DRDI*VXC1
-!!! !!!          Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
-!!! !!!       end do
-!!! !!!       
-!!! !!!       Bxc_tot = Bxc_up - Bxc_dw
-!!! !!!       ! Uncomment if needed:
-!!! !!!       ! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
-!!! !!!    end if
-!!! !!!    
-!!! !!! end subroutine VXC0SP
-!!! 
-!!! 
-!!! subroutine radgra(a, b, nr, rofi, f, gradf)
-!!!    !- radial gradient
-!!!    !-----------------------------------------------------------------------
-!!!    !i Inputs:
-!!!    !i   a     :the mesh points are given by rofi(i) = b [e^(a(i-1)) -1]
-!!!    !i   b     :                 -//-
-!!!    !i   nr    :number of mesh points
-!!!    !i   rofi  :radial mesh points
-!!!    !i   f     :given function defined in a mesh rofi(i)
-!!!    !o Outputs:
-!!!    !o  gradf  :derivative of the function f defined in a mesh rofi(i)
-!!!    !-----------------------------------------------------------------------
-!!!    implicit none
-!!!    ! Passed variables:
-!!!    integer, intent(in) ::  nr
-!!!    real(rp), intent(in) :: a, b
-!!!    real(rp), dimension(nr), intent(in) :: rofi
-!!!    real(rp), dimension(nr), intent(in) :: f
-!!!    real(rp), dimension(nr), intent(out) :: gradf
-!!!    ! Local variables:
-!!!    integer :: nm2, i
-!!!    !
-!!!    nm2 = nr - 2
-!!!    ! for the first and second point are used the Forward differences
-!!!    ! (Handbook, 25.3.9 with 25.1.1)
-!!!    gradf(1) = ((6.d0*f(2) + 20.d0/3.d0*f(4) + 1.2d0*f(6)) &
-!!!                - (2.45d0*f(1) + 7.5d0*f(3) + 3.75d0*f(5) + 1.d0/6.d0*f(7)))/a
-!!!    !
-!!!    gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
-!!!                - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
-!!!    !
-!!!    ! --- Five points' formula  (25.3.6)
-!!!    do i = 3, nm2
-!!!       gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
-!!!    end do
-!!!    ! --- Five points' formula  (25.3.6)
-!!!    gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
-!!!                     + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
-!!!    gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
-!!!                 - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
-!!!    !
-!!!    ! --- Three points' formula  (25.3.4)
-!!!    !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
-!!!    !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
-!!!    do i = 1, nr
-!!!       gradf(i) = gradf(i)/(rofi(i) + b)
-!!!    end do
-!!!    return
-!!! end subroutine radgra
-
-subroutine sphdiv(a, b, nr, rofi, Arr, divA)
-  !-----------------------------------------------------------------------
-  ! Compute spherical divergence of a radial vector field A(r) * r^hat
-  !
-  !   divA(r) = (1/r^2) * d/dr [ r^2 * A(r) ]
-  !
-  ! Arguments:
-  !   a, b   : exponential mesh parameters
-  !   nr     : number of radial points
-  !   rofi   : mesh points
-  !   Arr    : radial function A(r)
-  !   divA   : spherical divergence of A(r)
-  !-----------------------------------------------------------------------
-  implicit none
-  integer, intent(in) :: nr
-  real(rp), intent(in) :: a, b
-  real(rp), dimension(nr), intent(in) :: rofi, Arr
-  real(rp), dimension(nr), intent(out) :: divA
-  real(rp), dimension(nr) :: tmp, dtmp
-  integer :: i
-        real(rp) :: r2
-
-  ! Build r^2 * A(r)
-  do i = 1, nr
-     tmp(i) = rofi(i)**2 * Arr(i)
-  end do
-
-  ! Differentiate
-  call radgra(a, b, nr, rofi, tmp, dtmp)
-  ! Divide by r^2 for i >= 2 to avoid division by zero at origin
-  if (nr >= 3) then
-     do i = 2, nr
-        divA(i) = dtmp(i) / (rofi(i)**2)
-     end do
-
-     ! Extrapolate value at origin (i=1) from nearby points to avoid division by zero
-     ! Use same extrapolation pattern used elsewhere in code
-     divA(1) = (rofi(3)*divA(2) - rofi(2)*divA(3)) / (rofi(3) - rofi(2))
-  else
-     ! Fallback: if too few points, compute naively but guard small r
-     do i = 1, nr
-        r2 = max(rofi(i)**2, 1.0e-30_rp)
-        divA(i) = dtmp(i) / r2
-     end do
-  end if
-
-  ! Clamp extremely large values and replace NaNs/Infs with a large finite value
-  do i = 1, nr
-     if (.not. (abs(divA(i)) < 1.0e30_rp)) then
-        call g_logger%info('sphdiv: clamping extreme divA at index='//trim(int2str(i)), __FILE__, __LINE__)
-        if (divA(i) > 0.0_rp) then
-           divA(i) = 1.0e30_rp
-        else
-           divA(i) = -1.0e30_rp
-        end if
-     end if
-  end do
-end subroutine sphdiv
-
-!!!    subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
-!!!       !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
-!!!       !
-!!!       ! use xcdata
-!!!       ! use common_asd, only : asd_atom, bxc
-!!!       ! use control_mod, only : control_obj
-!!!       !.. Implicit Declarations ..
-!!!       implicit none
-!!!       !
-!!!       !.. Formal Arguments ..
-!!!       class(self), intent(inout) :: this
-!!!       type(xc), intent(in) :: xc_obj
-!!!       integer, intent(in) :: NR, NSP
-!!!       real(rp), intent(in) :: A, B
-!!!       real(rp) :: Z
-!!!       real(rp), dimension(2), intent(inout) :: RHO0
-!!!       real(rp), dimension(NR), intent(in) :: rofi
-!!!       real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
-!!!       real(rp), dimension(NR, NSP), intent(in) :: RHO
-!!!       real(rp), dimension(NR, NSP), intent(inout) :: V
-!!!       real(rp), intent(in)  :: B_fsm
-!!!       !
-!!!       !.. Local Scalars ..
-!!!       integer :: IR, ISP, IXC
-!!!       real(rp) :: DRDI, EXC, EXC1, EXC2, OB4PI, PI, RHO2, RHO3, RHOT1, &
-!!!                   RHOT2, RHOTRU, VXC, VXC1, VXC2, WGT, &
-!!!                   RHO1, R, RCE
-!!!       real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
-!!!       real(rp), dimension(2) :: RHOD, RHODD
-!!!       real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
-!!!       !.. External Calls ..
-!!!       ! external EVXC
-!!!       !
-!!!       !.. Intrinsic Functions ..
-!!!       intrinsic ATAN, MOD
-!!!       !
-!!!       ! ... Executable Statements ...
-!!!       !
-!!!       PI = 4.d0*ATAN(1.d0)
-!!!       OB4PI = 1.d0/(4.d0*PI)
-!!!       IXC = xc_obj%txc
-!!!       !
-!!!       ! Constraining field related hacks below
-!!!       Bxc_up = 0.0d0
-!!!       Bxc_dw = 0.0d0
-!!!       !
-!!!       ! Extrapolate density to core point
-!!!       do ISP = 1, NSP
-!!!          RHOEPS(ISP) = 0.d0
-!!!          RHOMU(ISP) = 0.d0
-!!!          RHO2 = RHO(2, ISP)/rofi(2)**2
-!!!          RHO3 = RHO(3, ISP)/rofi(3)**2
-!!!          RHO0(ISP) = OB4PI*(RHO2*rofi(3) - RHO3*rofi(2))/(rofi(3) - rofi(2))
-!!!       end do
-!!!       ! Calculate gradients in case of GGA
-!!!       do ISP = 1, NSP
-!!!          tRHO(1, ISP) = RHO0(ISP)
-!!!          do IR = 2, NR
-!!!             tRHO(IR, 1) = RHO(IR, 1)*OB4PI/rofi(IR)**2
-!!!             tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
-!!!          end do
-!!!          if (IXC == 5 .or. IXC >= 8) then
-!!!             !subroutine radgra(a, b, nr, rofi, f, gradf)
-!!!             !call DIFFN(tRHO(1, ISP), RHOP(1, ISP), RHOPP(1, ISP), NR, A)
-!!!             call radgra(a, b, NR, rofi, tRHO(1, ISP), RHOP(1, ISP))
-!!!             call radgra(a, b, NR, rofi, RHOP(1, ISP), RHOPP(1, ISP))
-!!!             !Comment line below or not?
-!!!             !call DIFFN(tRHO(2, ISP), RHOP(2, ISP), RHOPP(2, ISP), NR, A)
-!!!             !call radgra(a, b, NR, rofi, tRHO(2, ISP), RHOP(2, ISP))
-!!!             !call radgra(a, b, NR, rofi, RHOP(2, ISP), RHOPP(2, ISP))
-!!!          else
-!!!             RHOP = 0.0d0
-!!!             RHOPP = 0.0d0
-!!!          end if
-!!!       end do
-!!!       if (NSP == 1) then
-!!!          RHO1 = 0.5*tRHO(1, 1)
-!!!          RHO2 = RHO1
-!!!          R = (rofi(3) - rofi(2))
-!!!          RCE = R*R
-!!!          if (IXC == 5 .or. IXC >= 8) then
-!!!             ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-!!!             ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-!!!             RHOD(1) = 0.5*RHOP(1, 1)
-!!!             RHODD(1) = 0.5*RHOPP(1, 1)
-!!!             RHOD(2) = RHOD(1)
-!!!             RHODD(2) = RHODD(1)
-!!!          end if
-!!!          ! CALL EVXC(RHO0(1), 0.5D0*RHO0(1), EXC, VXC)
-!!!          call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
-!!!          V(1, 1) = V(1, 1) + VXC1
-!!!          do IR = 2, NR
-!!!             RHO1 = 0.5*tRHO(1, 1)
-!!!             RHO2 = RHO1
-!!!             R = (rofi(3) - rofi(2))
-!!!             RCE = R*R
-!!!             if (IXC == 5 .or. IXC >= 8) then
-!!!                ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-!!!                ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-!!!                RHOD(1) = 0.5*RHOP(IR, 1)
-!!!                RHODD(1) = 0.5*RHOPP(IR, 1)
-!!!                RHOD(2) = RHOD(1)
-!!!                RHODD(2) = RHODD(1)
-!!!             end if
-!!!             call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
-!!!             !RHOTRU = RHO(IR, 1) * OB4PI / rofi(IR)**2
-!!!         !!       Call EVXC(RHOTRU, 0.5D0*RHOTRU, EXC, VXC)
-!!!             !call EVXC(RHOTRU, 0.5*RHOTRU, EXC, VXC)
-!!!             V(IR, 1) = V(IR, 1) + VXC1
-!!!             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
-!!!             if (IR == 1 .or. IR == NR) then
-!!!                WGT = 1.d0/3.d0
-!!!             end if
-!!!             DRDI = A*(rofi(IR) + B)
-!!!             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
-!!!             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
-!!!          end do
-!!!       else
-!!!          ! call EVXC(RHO0(1)+RHO0(2), RHO0(1), EXC1, VXC1)
-!!!          ! call EVXC(RHO0(1)+RHO0(2), RHO0(2), EXC2, VXC2)
-!!!          RHO1 = tRHO(1, 1)
-!!!          RHO2 = tRHO(1, 2)
-!!!          R = (rofi(3) - rofi(2))
-!!!          RCE = R*R
-!!!          if (IXC == 5 .or. IXC >= 8) then
-!!!             ! Fixed: RHOD should be dρ/dr, not dρ/dr/r  
-!!!             ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-!!!             ! For spin-polarized: RHOD(1)=dρ↓/dr, RHOD(2)=dρ↑/dr
-!!!             RHOD(2) = RHOP(1, 1)
-!!!             RHOD(1) = RHOP(1, 2)
-!!!             RHODD(2) = RHOPP(1, 1)
-!!!             RHODD(1) = RHOPP(1, 2)
-!!!          end if
-!!!          call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
-!!!          !V(1, 1) = V(1, 1) + VXC1
-!!!          !V(1, 2) = V(1, 2) + VXC2
-!!!          V(1, 1) = V(1, 1) + VXC1 + B_fsm
-!!!          V(1, 2) = V(1, 2) + VXC2 - B_fsm
-!!!          do IR = 2, NR
-!!!             R = rofi(IR)
-!!!             RCE = R*R
-!!!             RHO3 = tRHO(IR, 1) + tRHO(IR, 2)
-!!!             RHO1 = tRHO(IR, 1)
-!!!             RHO2 = tRHO(IR, 2)
-!!!             if (IXC == 5 .or. IXC >= 8) then
-!!!                ! Fixed: RHOD should be dρ/dr, not dρ/dr/r
-!!!                ! RHODD should be d²ρ/dr², not (d²ρ/dr² - dρ/dr)/R²
-!!!                RHOD(2) = RHOP(IR, 1)
-!!!                RHOD(1) = RHOP(IR, 2)
-!!!                RHODD(2) = RHOPP(IR, 1)
-!!!                RHODD(1) = RHOPP(IR, 2)
-!!!             end if
-!!!             call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
-!!!             !
-!!!             !RHOT1 = RHO(IR, 1) * (OB4PI/rofi(IR)**2)
-!!!             !RHOT2 = RHO(IR, 2) * (OB4PI/rofi(IR)**2)
-!!!             !call EVXC(RHOT1+RHOT2, RHOT1, EXC1, VXC1)
-!!!             !call EVXC(RHOT1+RHOT2, RHOT2, EXC2, VXC2)
-!!!             !V(IR, 1) = V(IR, 1) + VXC1
-!!!             !V(IR, 2) = V(IR, 2) + VXC2
-!!!             ! Insertion of constraining field for FSM
-!!!             V(IR, 1) = V(IR, 1) + VXC1 + B_fsm
-!!!             V(IR, 2) = V(IR, 2) + VXC2 - B_fsm
-!!!             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
-!!!             if (IR == 1 .or. IR == NR) then
-!!!                WGT = 1.d0/3.d0
-!!!             end if
-!!!             DRDI = A*(rofi(IR) + B)
-!!!             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
-!!!             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
-!!!             !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
-!!!             RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR, 2)*EXC1
-!!!             RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
-!!!             !RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*VXC2
-!!!             !Bxc_up=Bxc_up + WGT*DRDI*VXC1
-!!!             !Bxc_dw=Bxc_dw + WGT*DRDI*VXC2
-!!!             Bxc_up = Bxc_up + WGT*DRDI*VXC1
-!!!             Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
-!!!          end do
-!!!          !write(*, *)wgt, drdi, exc1, vxc1, vxc2
-!!!          Bxc_tot = Bxc_up - Bxc_dw
-!!!          ! RHOEPS=RHOEPS/4.0d0
-!!!          ! AB comment
-!!!       !!! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
-!!!          !print *, ´B_XC´, Bxc_tot, rhomu(1)-rhomu(2)
-!!!          !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
-!!!       end if
-!!!    end subroutine VXC0SP
-!!! 
-!!!    subroutine radgra(a, b, nr, rofi, f, gradf)
-!!!       !- radial gradient
-!!!       !-----------------------------------------------------------------------
-!!!       !i Inputs:
-!!!       !i   a     :the mesh points are given by rofi(i) = b [e^(a(i-1)) -1]
-!!!       !i   b     :                 -//-
-!!!       !i   nr    :number of mesh points
-!!!       !i   rofi  :radial mesh points
-!!!       !i   f     :given function defined in a mesh rofi(i)
-!!!       !o Outputs:
-!!!       !o  gradf  :derivative of the function f defined in a mesh rofi(i)
-!!!       !-----------------------------------------------------------------------
-!!!       implicit none
-!!!       ! Passed variables:
-!!!       integer, intent(in) ::  nr
-!!!       real(rp), intent(in) :: a, b
-!!!       real(rp), dimension(nr), intent(in) :: rofi
-!!!       real(rp), dimension(nr), intent(in) :: f
-!!!       real(rp), dimension(nr), intent(out) :: gradf
-!!! 
-!!!       ! Local variables:
-!!!       integer :: nm2, i
-!!!       !
-!!!       nm2 = nr - 2
-!!!       ! for the first and second point are used the Forward edifferences
-!!!       ! (Handbook, 25.3.9 with 25.1.1)
-!!!       gradf(1) = ((6.d0*f(2) + 20.d0/3.d0*f(4) + 1.2d0*f(6)) &
-!!!                   - (2.45d0*f(1) + 7.5d0*f(3) + 3.75d0*f(5) + 1.d0/6.d0*f(7)))/a
-!!!       !
-!!!       gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
-!!!                   - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
-!!!       !
-!!!       ! --- Five points´ formula  (25.3.6)
-!!!       do i = 3, nm2
-!!!          gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
-!!!       end do
-!!!       ! --- Five points´ formula  (25.3.6)
-!!!       gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
-!!!                        + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
-!!!       gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
-!!!                    - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
-!!!       !
-!!!       ! --- Three points´ formula  (25.3.4)
-!!!       !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
-!!!       !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
-!!!       do i = 1, nr
-!!!          gradf(i) = gradf(i)/(rofi(i) + b)
-!!!       end do
-!!!       return
-!!!    end subroutine radgra
 
    subroutine RACSI(this, atom, ROFI, QSL)
       ! use common_pri
@@ -3895,7 +2977,7 @@ end subroutine sphdiv
       !real(rp), dimension(500), intent(in) :: ROFI
       !
       !.. Local Scalars ..
-      integer :: IDW, II, INUM, INUM1, IR, IR1, ISI, IUP, JM, JP, NSP
+      integer :: IDW, II, INUM, INUM1, IR, IR1, ISI, IUP, JM, JP, LMAX, NSP
       real(rp) :: C2, DRDI, FAK2, FAK4, S12, SUM, SUM1, SUM2, WGT
       !
       !.. Local Arrays ..
@@ -3911,7 +2993,9 @@ end subroutine sphdiv
       ! open (15, FILE = "dracsi")
       NR = size(ROFI)
       B = atom%B()
+      LMAX = atom%potential%lmax
       NSP = 2
+      QSL(:) = 0.0_rp
       C2 = 274.074d0**2
       allocate (DVDR(NR, 2), DVM(NR, 2), DVP(NR, 2))
       !     interpolate the derivatives
@@ -3929,7 +3013,7 @@ end subroutine sphdiv
       !-- calculates QSRD(IT, 1) and QSRD(IT, 2), prefactors qssi for L.S (SPIN UP)
       !-- calculates QSRD(IT, 4) and QSRD(IT, 5), prefactors qssi for L.S (SPIN DW)
       !---QSRD(IT, 1or4) for p-band and QSRD(IT, 2or5) for d-band-------------------
-      do INUM = 2, 3
+      do INUM = 2, min(3, LMAX + 1)
          do ISI = 1, NSP
             SUM = 0.0d0
             do IR = 2, NR
@@ -3951,60 +3035,68 @@ end subroutine sphdiv
          end do
       end do
       !----CALCULATES RACAH COEF QSR(IT, 3)-(spin up) and QSRD(IT, 4)-(spin-down)
-      do ISI = 1, NSP
-         do INUM = 2, 4, 2
-            INUM1 = INUM + 1
-            SUM = 0.0d0
-            do IR = 2, NR
-               SUM1 = 0.0d0
-               !---------first part of integral
-               do IR1 = 2, IR
-                  WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
-                  if (IR1 == 1 .or. IR1 == IR) then
+      if (LMAX >= 2) then
+         do ISI = 1, NSP
+            FAK2 = 0.0d0
+            FAK4 = 0.0d0
+            do INUM = 2, 4, 2
+               INUM1 = INUM + 1
+               SUM = 0.0d0
+               do IR = 2, NR
+                  SUM1 = 0.0d0
+                  !---------first part of integral
+                  do IR1 = 2, IR
+                     WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
+                     if (IR1 == 1 .or. IR1 == IR) then
+                        WGT = 1.0d0/3.0d0
+                     end if
+                     DRDI = atom%A*(ROFI(IR1) + B)
+                     SUM1 = SUM1 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR1)**INUM)/(ROFI(IR)**INUM1)
+                  end do
+                  !-----------second part of integral
+                  SUM2 = 0.0d0
+                  do IR1 = IR, NR
+                     WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
+                     if (IR1 == IR .or. IR1 == NR) then
+                        WGT = 1.0d0/3.0d0
+                     end if
+                     DRDI = atom%A*(ROFI(IR1) + B)
+                     SUM2 = SUM2 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR)**INUM)/(ROFI(IR1)**INUM1)
+                  end do
+                  !-----------------------------------------
+                  S12 = SUM1 + SUM2
+                  WGT = 2*(MOD(IR + 1, 2) + 1)/3.0d0
+                  if (IR == 1 .or. IR == NR) then
                      WGT = 1.0d0/3.0d0
                   end if
-                  DRDI = atom%A*(ROFI(IR1) + B)
-                  SUM1 = SUM1 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR1)**INUM)/(ROFI(IR)**INUM1)
+                  DRDI = atom%A*(ROFI(IR) + B)
+                  SUM = SUM + WGT*DRDI*S12*this%FUN2(IR, 3, ISI)
                end do
-               !-----------second part of integral
-               SUM2 = 0.0d0
-               do IR1 = IR, NR
-                  WGT = 2*(MOD(IR1 + 1, 2) + 1)/3.0d0
-                  if (IR1 == IR .or. IR1 == NR) then
-                     WGT = 1.0d0/3.0d0
-                  end if
-                  DRDI = atom%A*(ROFI(IR1) + B)
-                  SUM2 = SUM2 + WGT*DRDI*this%FUN2(IR1, 3, ISI)*(ROFI(IR)**INUM)/(ROFI(IR1)**INUM1)
-               end do
-               !-----------------------------------------
-               S12 = SUM1 + SUM2
-               WGT = 2*(MOD(IR + 1, 2) + 1)/3.0d0
-               if (IR == 1 .or. IR == NR) then
-                  WGT = 1.0d0/3.0d0
+               if (INUM == 2) then
+                  FAK2 = SUM/49.d0
+               else
+                  FAK4 = SUM/441.d0
                end if
-               DRDI = atom%A*(ROFI(IR) + B)
-               SUM = SUM + WGT*DRDI*S12*this%FUN2(IR, 3, ISI)
             end do
-            if (INUM == 2) then
-               FAK2 = SUM/49.d0
-               FAK4 = 0.0d0
-            else
-               FAK4 = SUM/441.d0
-            end if
             if (ISI == 1) then
                QSL(3) = 2.d0*(FAK2 - 5*FAK4)
             else
                QSL(6) = 2.d0*(FAK2 - 5*FAK4)
             end if
          end do
-         if (.not. this%fix_soc) then
-            atom%potential%xi_p(:) = [qsl(1), qsl(4)]
+      end if
+      if (.not. this%fix_soc) then
+         atom%potential%xi_p(:) = [qsl(1), qsl(4)]
+         if (LMAX >= 2) then
             atom%potential%xi_d(:) = [qsl(2), qsl(5)]
             atom%potential%rac(:) = [qsl(3), qsl(6)]
+         else
+            atom%potential%xi_d(:) = 0.0_rp
+            atom%potential%rac(:) = 0.0_rp
          end if
-         ! WRITE(17, 56)FAK2, FAK4
-         ! WRITE(17, *)RCH
-      end do
+      end if
+      ! WRITE(17, 56)FAK2, FAK4
+      ! WRITE(17, *)RCH
       !write (15, 10000) QSL(1), QSL(2), QSL(3)
       !write (15, 10000) QSL(4), QSL(5), QSL(6)
       return
@@ -4071,7 +3163,18 @@ end subroutine sphdiv
       allocate (G(NR, NSP), GP(NR, NSP), GPP(NR, NSP))
       do I = 1, nsp
          do L = 0, lmax
+            if (atom%potential%PNU(L, I) /= atom%potential%PNU(L, I)) then
+               call g_logger%fatal('Invalid PNU before POTPAR RSEQSR: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(I)// &
+                                   ' PNU=NaN', __FILE__, __LINE__)
+            end if
             KONFIG(L) = int(atom%potential%PNU(L, I))
+            if (KONFIG(L) < L + 1) then
+               call g_logger%fatal('Invalid PNU before POTPAR RSEQSR: atom='//trim(atom%element%symbol)// &
+                                   ' lmax='//int2str(LMAX)//' l='//int2str(L)//' spin='//int2str(I)// &
+                                   ' PNU='//real2str(atom%potential%PNU(L, I))//' KONFIG='//int2str(KONFIG(L))// &
+                                   ' NN='//int2str(KONFIG(L) - L - 1), __FILE__, __LINE__)
+            end if
             DNU(L) = TAN(PI*(0.5d0 - atom%potential%PNU(L, I)))
          end do
          !   write (6, 10000) (PNU(L, I), L = 0, LMAX)
@@ -4127,149 +3230,5 @@ end subroutine sphdiv
       ! 10002 format (i3, 4f12.5, 2f12.4)
       ! 10003 format (/"  L", 7x, "ENU", 9x, "V", 11x, "C", 10x, "SRDEL", 8x, "1/Q", 9x, "1/SRP")
    end subroutine POTPAR
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Write k-space DOS to files (similar to recursion workflow)
-   !>
-   !> Writes total and orbital-projected DOS for each atom to separate files
-   !---------------------------------------------------------------------------
-   subroutine write_kspace_dos_to_file(reciprocal_obj, lattice_obj, symbolic_atoms, fermi)
-      use reciprocal_mod
-      use lattice_mod
-      use symbolic_atom_mod
-      type(reciprocal), intent(in) :: reciprocal_obj
-      type(lattice), intent(in) :: lattice_obj
-      type(symbolic_atom), dimension(:), intent(in) :: symbolic_atoms
-      real(rp), intent(in) :: fermi
-      integer :: ia, ie, unitnum, unitnum2, unitnum3, iorb, ispin
-      character(len=256) :: fname_dos, fname_orb_dos, fname_spin_dos
-      real(rp) :: energy_val, dos_up, dos_dn
-      
-      if (.not. allocated(reciprocal_obj%dos_energy_grid)) return
-      if (.not. allocated(reciprocal_obj%total_dos)) return
-      
-      ! Write total DOS for each atom (summed over orbitals and spins)
-      do ia = 1, lattice_obj%nrec
-         unitnum = 250 + ia
-         fname_dos = trim(symbolic_atoms(lattice_obj%nbulk + ia)%element%symbol) // "_dos.out"
-         
-         open(unit=unitnum, file=fname_dos, status='replace', action='write')
-         
-         do ie = 1, reciprocal_obj%n_energy_points
-            energy_val = reciprocal_obj%dos_energy_grid(ie) - fermi
-            ! Sum projected DOS over all orbitals and spins for this site
-            write(unitnum, '(2f16.5)') energy_val, sum(reciprocal_obj%projected_dos(ia, :, :, ie))
-         end do
-         
-         close(unitnum)
-      end do
-      
-      ! Write orbital-projected DOS for each atom
-      if (allocated(reciprocal_obj%projected_dos)) then
-         do ia = 1, lattice_obj%nrec
-            unitnum2 = 450 + ia
-            fname_orb_dos = trim(symbolic_atoms(lattice_obj%nbulk + ia)%element%symbol) // "_orbital_dos.out"
-            
-            open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
-            
-            do ie = 1, reciprocal_obj%n_energy_points
-               energy_val = reciprocal_obj%dos_energy_grid(ie) - fermi
-               ! Write: energy, s_up, p_up, d_up, f_up, s_dn, p_dn, d_dn, f_dn (if spin-polarized)
-               write(unitnum2, '(20f16.5)') energy_val, &
-                  ((reciprocal_obj%projected_dos(ia, iorb, ispin, ie), iorb=1, reciprocal_obj%n_orb_types), &
-                   ispin=1, min(reciprocal_obj%n_spin_components, 2))
-            end do
-            
-            close(unitnum2)
-         end do
-      end if
-      
-      ! Write spin-resolved total DOS for each atom (if spin-polarized)
-      if (reciprocal_obj%n_spin_components >= 2) then
-         do ia = 1, lattice_obj%nrec
-            unitnum3 = 550 + ia
-            fname_spin_dos = trim(symbolic_atoms(lattice_obj%nbulk + ia)%element%symbol) // "_spin_dos.out"
-            
-            open(unit=unitnum3, file=fname_spin_dos, status='replace', action='write')
-            
-            do ie = 1, reciprocal_obj%n_energy_points
-               energy_val = reciprocal_obj%dos_energy_grid(ie) - fermi
-               ! Sum over all orbitals for each spin component
-               dos_up = sum(reciprocal_obj%projected_dos(ia, :, 1, ie))
-               dos_dn = sum(reciprocal_obj%projected_dos(ia, :, 2, ie))
-               ! Write: energy, total_dos_up, total_dos_down
-               write(unitnum3, '(3f16.5)') energy_val, dos_up, dos_dn
-            end do
-            
-            close(unitnum3)
-         end do
-      end if
-      
-      call g_logger%info('K-space DOS written to *_dos.out and *_orbital_dos.out files', __FILE__, __LINE__)
-      if (reciprocal_obj%n_spin_components >= 2) then
-         call g_logger%info('K-space spin-resolved DOS written to *_spin_dos.out files', __FILE__, __LINE__)
-      end if
-   end subroutine write_kspace_dos_to_file
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Output band structure (k-points and eigenvalues) during SCF for debugging
-   !>
-   !> @details
-   !> Writes k-points and eigenvalues to a file during SCF iterations.
-   !> Format: k_x k_y k_z e(band1) e(band2) ... e(bandN)
-   !> This helps diagnose band discontinuities and convergence issues.
-   !---------------------------------------------------------------------------
-   subroutine output_scf_band_structure(reciprocal_obj, iteration)
-      use reciprocal_mod
-      use string_mod
-      type(reciprocal), intent(in) :: reciprocal_obj
-      integer, intent(in) :: iteration
-      
-      integer :: ik, ib, unit_num
-      real(rp), dimension(3) :: k_cart
-      character(len=256) :: filename
-      
-      ! Only output if eigenvalues are allocated
-      if (.not. allocated(reciprocal_obj%eigenvalues)) return
-      
-      ! Create filename with iteration number
-      write(filename, '(A,I3.3,A)') 'scf_bands_iter_', iteration, '.dat'
-      
-      unit_num = 900
-      open(unit=unit_num, file=trim(filename), status='replace', action='write')
-      
-      ! Write header
-      write(unit_num, '(A)') '# SCF Band Structure Output'
-      write(unit_num, '(A,I0)') '# Iteration: ', iteration
-      write(unit_num, '(A,I0)') '# Number of k-points: ', reciprocal_obj%nk_total
-      write(unit_num, '(A,I0)') '# Number of bands: ', size(reciprocal_obj%eigenvalues, 1)
-      write(unit_num, '(A)') '# Format: k_x(frac) k_y(frac) k_z(frac) k_x(cart) k_y(cart) k_z(cart) e(band1) e(band2) ...'
-      write(unit_num, '(A)') '# Energy in Ry relative to Fermi level'
-      
-      ! Write k-points and eigenvalues
-      do ik = 1, reciprocal_obj%nk_total
-         ! Convert to Cartesian for reference
-         k_cart = matmul(reciprocal_obj%reciprocal_vectors, reciprocal_obj%k_points(:, ik))
-         
-         ! Write fractional and Cartesian k-point
-         write(unit_num, '(6F12.6)', advance='no') &
-            reciprocal_obj%k_points(1:3, ik), k_cart(1:3)
-         
-         ! Write eigenvalues (relative to Fermi level)
-         ! eigenvalues is (nbands, nk_total)
-         do ib = 1, size(reciprocal_obj%eigenvalues, 1)
-            write(unit_num, '(F12.6)', advance='no') &
-               reciprocal_obj%eigenvalues(ib, ik) - reciprocal_obj%fermi_level
-         end do
-         write(unit_num, *)  ! New line
-      end do
-      
-      close(unit_num)
-      call g_logger%info('SCF band structure written to ' // trim(filename), __FILE__, __LINE__)
-   end subroutine output_scf_band_structure
 
 end module self_mod

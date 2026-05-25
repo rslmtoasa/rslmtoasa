@@ -162,26 +162,19 @@ contains
 
    subroutine build_pot(this)
       class(symbolic_atom), intent(inout) :: this
-      integer :: i
+      integer :: l, m, ml
 
       ! Setting the potential parameters
       ! Imaginary part is set to 0
       ! kind is rp (same as real part)
-      this%potential%cx(1, :) = cmplx(this%potential%center_band(1, :), 0, rp)
-      this%potential%wx(1, :) = cmplx(this%potential%width_band(1, :), 0, rp)
-      this%potential%cex(1, :) = cmplx(this%potential%shifted_band(1, :), 0, rp)
-      this%potential%obx(1, :) = cmplx(this%potential%obar(1, :), 0, rp)
-      do i = 2, 4
-         this%potential%cx(i, :) = cmplx(this%potential%center_band(2, :), 0, rp)
-         this%potential%wx(i, :) = cmplx(this%potential%width_band(2, :), 0, rp)
-         this%potential%cex(i, :) = cmplx(this%potential%shifted_band(2, :), 0, rp)
-         this%potential%obx(i, :) = cmplx(this%potential%obar(2, :), 0, rp)
-      end do
-      do i = 5, 9
-         this%potential%cx(i, :) = cmplx(this%potential%center_band(3, :), 0, rp)
-         this%potential%wx(i, :) = cmplx(this%potential%width_band(3, :), 0, rp)
-         this%potential%cex(i, :) = cmplx(this%potential%shifted_band(3, :), 0, rp)
-         this%potential%obx(i, :) = cmplx(this%potential%obar(3, :), 0, rp)
+      do l = 0, this%potential%lmax
+         do m = 1, 2*l + 1
+            ml = l*l + m
+            this%potential%cx(ml, :) = cmplx(this%potential%center_band(l + 1, :), 0, rp)
+            this%potential%wx(ml, :) = cmplx(this%potential%width_band(l + 1, :), 0, rp)
+            this%potential%cex(ml, :) = cmplx(this%potential%shifted_band(l + 1, :), 0, rp)
+            this%potential%obx(ml, :) = cmplx(this%potential%obar(l + 1, :), 0, rp)
+         end do
       end do
 
       this%potential%cx0(:) = 0.5d0*(this%potential%cx(:, 1) + this%potential%cx(:, 2))
@@ -207,8 +200,8 @@ contains
       real(rp) :: wsm
       real(rp) :: x, y, wow, vmad
       real(rp), dimension(this%potential%lmax + 1, 2) :: dele, qi, del, q, c, enu
-      real(rp), dimension(3) :: qm
-      integer :: i, j, lmax
+      real(rp), dimension(this%potential%lmax + 1) :: qm
+      integer :: i, j, lmax, ncopy
 
       wow = wsm/this%potential%ws_r
       lmax = this%potential%lmax
@@ -218,7 +211,14 @@ contains
       q(:, :) = this%potential%qpar(0:lmax, :)
       vmad = this%potential%vmad
       lmax = this%potential%lmax
-      qm(:) = qm_canonical(:)
+      ncopy = min(size(qm_canonical), size(qm))
+      qm(1:ncopy) = qm_canonical(1:ncopy)
+      if (size(qm) > ncopy) qm(ncopy + 1:) = qm_canonical(ncopy)
+      if (allocated(this%potential%screening_alpha)) then
+         if (size(this%potential%screening_alpha) == this%potential%lmax + 1) then
+            qm(:) = this%potential%screening_alpha(:)
+         end if
+      end if
 
       do J = 1, 2
          do I = 1, lmax + 1
@@ -242,12 +242,16 @@ contains
       class(symbolic_atom) :: this
       !
       real(rp), intent(in) :: e
-      complex(rp), dimension(9, 9), intent(inout) :: mat
-      integer :: k, l, m, ml
+      complex(rp), dimension(:, :), intent(inout) :: mat
+      integer :: l, m, ml, lmax_eff
       complex(rp):: cu, cd, wu, wd, de, wuwd
 
       mat = 0.0d0
-      do l = 0, 2
+      lmax_eff = this%potential%lmax
+      do while ((lmax_eff + 1)*(lmax_eff + 1) > min(size(mat, 1), size(mat, 2)))
+         lmax_eff = lmax_eff - 1
+      end do
+      do l = 0, lmax_eff
          ml = l*l + 1
          cu = cmplx(this%potential%c(l, 1) + this%potential%vmad, 0.0d0)
          cd = cmplx(this%potential%c(l, 2) + this%potential%vmad, 0.0d0)
@@ -259,7 +263,7 @@ contains
          de = (cd*wu - cu*wd + 1.0d0*(wd - wu)*e)/(wuwd)
          do m = 1, 2*l + 1
             ml = l*l + m
-            mat(ml, ml) = de
+            if (ml <= min(size(mat, 1), size(mat, 2))) mat(ml, ml) = de
          end do
       end do
    end subroutine d_matrix

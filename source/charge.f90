@@ -31,6 +31,7 @@ module charge_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private
@@ -268,17 +269,149 @@ contains
       gt = this%gt
       vmix = this%vmix
 
-      if (size(this%wssurf) .ne. this%lattice%nbas) then
+      if (.not. allocated(this%wssurf) .or. size(this%wssurf) .ne. this%lattice%nbas) then
 #ifdef USE_SAFE_ALLOC
-         call g_safe_alloc%deallocate('charge.wssurf', this%wssurf)
+         if (allocated(this%wssurf)) call g_safe_alloc%deallocate('charge.wssurf', this%wssurf)
          call g_safe_alloc%allocate('charge.wssurf', this%wssurf, (/this%lattice%nbas/))
 #else
-         deallocate (this%wssurf)
+         if (allocated(this%wssurf)) deallocate (this%wssurf)
          allocate (this%wssurf(this%lattice%nbas))
 #endif
       end if
 
       call move_alloc(this%wssurf, wssurf)
+      if (.not. allocated(w)) then
+         allocate(w(1))
+         w = 0.0_rp
+      end if
+      if (.not. allocated(dss)) then
+         allocate(dss(1, 1))
+         dss = 0.0_rp
+      end if
+      if (.not. allocated(dsz)) then
+         allocate(dsz(1, 1))
+         dsz = 0.0_rp
+      end if
+      if (.not. allocated(ds3z2)) then
+         allocate(ds3z2(1, 1))
+         ds3z2 = 0.0_rp
+      end if
+      if (.not. allocated(dsx2y2)) then
+         allocate(dsx2y2(1, 1))
+         dsx2y2 = 0.0_rp
+      end if
+      if (.not. allocated(dsxy)) then
+         allocate(dsxy(1, 1))
+         dsxy = 0.0_rp
+      end if
+      if (.not. allocated(dzz)) then
+         allocate(dzz(1, 1))
+         dzz = 0.0_rp
+      end if
+      if (.not. allocated(dz3z2)) then
+         allocate(dz3z2(1, 1))
+         dz3z2 = 0.0_rp
+      end if
+      if (.not. allocated(am)) then
+         allocate(am(1, 1))
+         am = 0.0_rp
+      end if
+      if (.not. allocated(bm)) then
+         allocate(bm(1, 1))
+         bm = 0.0_rp
+      end if
+      if (.not. allocated(pm)) then
+         allocate(pm(1, 1))
+         pm = 0.0_rp
+      end if
+      if (.not. allocated(bsx)) then
+         allocate(bsx(1))
+         bsx = 0.0_rp
+      end if
+      if (.not. allocated(bsy)) then
+         allocate(bsy(1))
+         bsy = 0.0_rp
+      end if
+      if (.not. allocated(bsz)) then
+         allocate(bsz(1))
+         bsz = 0.0_rp
+      end if
+      if (.not. allocated(bkx)) then
+         allocate(bkx(1))
+         bkx = 0.0_rp
+      end if
+      if (.not. allocated(bky)) then
+         allocate(bky(1))
+         bky = 0.0_rp
+      end if
+      if (.not. allocated(bkz)) then
+         allocate(bkz(1))
+         bkz = 0.0_rp
+      end if
+      if (.not. allocated(qx3)) then
+         allocate(qx3(1))
+         qx3 = 0.0_rp
+      end if
+      if (.not. allocated(qy3)) then
+         allocate(qy3(1))
+         qy3 = 0.0_rp
+      end if
+      if (.not. allocated(qz3)) then
+         allocate(qz3(1))
+         qz3 = 0.0_rp
+      end if
+      if (.not. allocated(qx)) then
+         allocate(qx(1))
+         qx = 0.0_rp
+      end if
+      if (.not. allocated(qy)) then
+         allocate(qy(1))
+         qy = 0.0_rp
+      end if
+      if (.not. allocated(qz)) then
+         allocate(qz(1))
+         qz = 0.0_rp
+      end if
+      if (.not. allocated(asx)) then
+         allocate(asx(1))
+         asx = 0.0_rp
+      end if
+      if (.not. allocated(asy)) then
+         allocate(asy(1))
+         asy = 0.0_rp
+      end if
+      if (.not. allocated(asz)) then
+         allocate(asz(1))
+         asz = 0.0_rp
+      end if
+      if (.not. allocated(akx)) then
+         allocate(akx(1))
+         akx = 0.0_rp
+      end if
+      if (.not. allocated(aky)) then
+         allocate(aky(1))
+         aky = 0.0_rp
+      end if
+      if (.not. allocated(akz)) then
+         allocate(akz(1))
+         akz = 0.0_rp
+      end if
+      if (.not. allocated(dr)) then
+         allocate(dr(1))
+         dr = 0.0_rp
+      end if
+      if (.not. allocated(dg)) then
+         allocate(dg(1))
+         dg = 0.0_rp
+      end if
+      if (.not. allocated(amad)) then
+         allocate(amad(1, 1))
+         amad = 0.0_rp
+      end if
+      if (.not. allocated(wsimp)) then
+         allocate(wsimp(1))
+         wsimp = 0.0_rp
+      end if
 
       open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -602,7 +735,7 @@ contains
 
       ! Defining some parameters. Need to find a way to set them automatically in
       ! the future
-      nsize = 3000000
+      nsize = 4000000
       nbmx = 5500
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('charge.w', this%w, nsize)
@@ -1799,7 +1932,7 @@ contains
    subroutine madmat(NBAS, TAU, A, ALAT, VOL, RLAT, NKR, DLAT, NKD, AMAD)
 ! ....MAKES MADELUNG MATRIX
       ! Input and output
-      integer, parameter :: nbmx = 550
+      integer, parameter :: nbmx = 2000
       integer, intent(inout) :: nkr, nkd, nbas
       real(rp), dimension(3, nbmx), intent(inout) :: tau, dlat, rlat
       real(rp), dimension(nbas, nbas), intent(inout) :: amad
@@ -2387,7 +2520,7 @@ contains
       save
 ! ----- DEFINE STORAGE SIZE ------
 !  START OF FIRST ARRAY AND MAX NUMBER TO BE DEFINED:
-      nsize = 3000000
+      nsize = 4000000
       J70 = 5
       NDEFMX = 100
       LIMIT = NSIZE
@@ -2769,7 +2902,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=charge)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=charge)
          close (newunit)
       else
@@ -2794,36 +2927,15 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
-
-      include 'include_codes/namelists/charge.f90'
-
-      ! scalar
-
-      gx = this%gx
-      gy = this%gy
-      gz = this%gz
-      gt = this%gt
-
-      ! 1d allocatable
-
-      if (allocated(this%wssurf)) then
-         allocate (wssurf, mold=this%wssurf)
-         wssurf = this%wssurf
-      else
-         allocate (wssurf(0))
-      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
       else if (present(unit)) then
-         write (unit, nml=charge)
+         call this%print_state_formatted(unit=unit)
       else if (present(file)) then
-         open (unit=newunit, file=file)
-         write (newunit, nml=charge)
-         close (newunit)
+         call this%print_state_formatted(file=file)
       else
-         write (*, nml=charge)
+         call this%print_state_formatted()
       end if
 
    end subroutine print_state

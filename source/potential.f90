@@ -28,6 +28,7 @@ module potential_mod
    use string_mod, only: path_join, sl, fmt, real2str, int2str
    use logger_mod, only: g_logger
    use namelist_generator_mod, only: namelist_generator
+   use basis_mod, only: lmax_basis
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -107,6 +108,10 @@ module potential_mod
       real(rp), dimension(:,:,:,:), allocatable :: ldm
       !> Temporary variable to read and write ldm in a 3D format. 
       real(rp), dimension(:,:,:), allocatable :: ldm_flatten
+      !> Optional screening constants used by the strux backend (indexed by l=0..lmax).
+      real(rp), dimension(:), allocatable :: screening_alpha
+      !> Optional screening sigma values used by the strux backend (indexed by l=0..lmax).
+      real(rp), dimension(:), allocatable :: screening_sigma
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -216,9 +221,17 @@ contains
       integer :: iostatus, funit
 
       ! Local variables
-      integer :: i
+      integer :: i, l, is, file_lmax, lsrc
 
       include 'include_codes/namelists/potential.f90'
+
+      ! Pre-size containers to the active basis before namelist read.
+      ! This avoids truncated/failed reads when restart files carry lmax=3
+      ! while the default constructor started from lmax=2.
+      if (this%lmax < lmax_basis) then
+         this%lmax = lmax_basis
+         call ensure_lmax_consistency(this)
+      end if
 
       ! Save previous values
       ws_r = this%ws_r
@@ -269,12 +282,26 @@ contains
       if ( &
          iostatus /= 0 .and. &
          .not. IS_IOSTAT_END(iostatus) .and. &
-         iostatus /= 5010 & ! LIBERROR_READ_VALUE (according to https://www.hep.manchester.ac.uk/u/samt/misc/gfortran_errors.html)
+         iostatus /= 5010 & ! LIBERROR_READ_VALUE
          ) then
          call g_logger%fatal('Error while reading namelist', __FILE__, __LINE__)
          call g_logger%fatal('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
+      if (iostatus == 5010) then
+         call g_logger%warning('Non-fatal namelist read value mismatch in '//trim(fname)//' (iostatus=5010).', __FILE__, __LINE__)
+      end if
       close (funit)
+
+      file_lmax = lmax
+      if (lmax < lmax_basis) then
+         call g_logger%warning('Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
+                               ' while active basis lmax='//int2str(lmax_basis)//'. Promoting potential arrays.', __FILE__, __LINE__)
+         lmax = lmax_basis
+      else if (lmax > lmax_basis) then
+         call g_logger%warning('Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
+                               ' while active basis lmax='//int2str(lmax_basis)//'. Truncating to active basis.', __FILE__, __LINE__)
+         lmax = lmax_basis
+      end if
 
       ! Setting user values
       this%ws_r = ws_r
@@ -314,7 +341,226 @@ contains
       call move_alloc(hubbard_j, this%hubbard_j)
       ! call move_alloc(ldm, this%ldm)
       call move_alloc(ldm_flatten, this%ldm_flatten)
+
+      ! Ensure all potential containers are dimensionally consistent with lmax.
+      call ensure_lmax_consistency(this)
+
+      ! If we promoted from a smaller basis, seed newly introduced channels with
+      ! minimal sane defaults for atomic solver initialization.
+      if (file_lmax < this%lmax) then
+         lsrc = max(0, min(file_lmax, this%lmax))
+         do is = 1, 2
+            do l = file_lmax + 1, this%lmax
+               ! Scalar orbital-channel quantities: inherit from highest
+               ! available channel in the input file.
+               this%center_band(l + 1, is) = this%center_band(lsrc + 1, is)
+               this%width_band(l + 1, is) = this%width_band(lsrc + 1, is)
+               this%gravity_center(l + 1, is) = this%gravity_center(lsrc + 1, is)
+               this%shifted_band(l + 1, is) = this%shifted_band(lsrc + 1, is)
+               this%obar(l + 1, is) = this%obar(lsrc + 1, is)
+               this%c(l, is) = this%c(lsrc, is)
+               this%enu(l, is) = this%enu(lsrc, is)
+               this%ppar(l, is) = this%ppar(lsrc, is)
+               this%qpar(l, is) = this%qpar(lsrc, is)
+               this%srdel(l, is) = this%srdel(lsrc, is)
+               this%vl(l, is) = this%vl(lsrc, is)
+               this%pnu(l, is) = this%pnu(lsrc, is)
+               this%qi(l, is) = this%qi(lsrc, is)
+               this%dele(l, is) = this%dele(lsrc, is)
+
+               ! Keep PL/KONFIG valid for atomic setup in promoted channels.
+               if (this%pl(l, is) < real(l + 1, rp)) this%pl(l, is) = real(l + 1, rp) + 0.3_rp
+               ! Seed promoted-channel moments conservatively: near-empty default.
+               this%ql(:, l, is) = 0.0_rp
+               this%ql(1, l, is) = 1.0e-3_rp
+
+               ! Safety for invalid promoted values.
+               if (this%srdel(l, is) /= this%srdel(l, is) .or. abs(this%srdel(l, is)) <= tiny(1.0_rp)) then
+                  this%srdel(l, is) = max(abs(this%srdel(lsrc, is)), 1.0e-3_rp)
+               end if
+               if (this%ppar(l, is) /= this%ppar(l, is)) this%ppar(l, is) = this%ppar(lsrc, is)
+               if (this%qpar(l, is) /= this%qpar(l, is)) this%qpar(l, is) = this%qpar(lsrc, is)
+               if (this%c(l, is) /= this%c(l, is)) this%c(l, is) = this%c(lsrc, is)
+               if (this%enu(l, is) /= this%enu(l, is)) this%enu(l, is) = this%enu(lsrc, is)
+            end do
+         end do
+      end if
    end subroutine build_from_file
+
+   subroutine ensure_lmax_consistency(this)
+      class(potential), intent(inout) :: this
+      integer :: lmax_new, norb_new, nspin_orb_new
+
+      lmax_new = this%lmax
+      norb_new = (lmax_new + 1)*(lmax_new + 1)
+      nspin_orb_new = (2*(lmax_new + 1))*(2*(lmax_new + 1))
+      call resize_2d_l1(this%center_band, lmax_new + 1, 2)
+      call resize_2d_l1(this%width_band, lmax_new + 1, 2)
+      call resize_2d_l1(this%gravity_center, lmax_new + 1, 2)
+      call resize_2d_l1(this%shifted_band, lmax_new + 1, 2)
+      call resize_2d_l1(this%obar, lmax_new + 1, 2)
+      call resize_c2d_l1(this%cx, norb_new, 2)
+      call resize_c2d_l1(this%wx, norb_new, 2)
+      call resize_c2d_l1(this%cex, norb_new, 2)
+      call resize_c2d_l1(this%obx, norb_new, 2)
+      call resize_c1d(this%cx0, norb_new)
+      call resize_c1d(this%cx1, norb_new)
+      call resize_c1d(this%wx0, norb_new)
+      call resize_c1d(this%wx1, norb_new)
+      call resize_c1d(this%cex0, norb_new)
+      call resize_c1d(this%cex1, norb_new)
+      call resize_c1d(this%obx0, norb_new)
+      call resize_c1d(this%obx1, norb_new)
+      call resize_1d(this%cshi, nspin_orb_new)
+      call resize_1d(this%dw_l, nspin_orb_new)
+      call resize_2d_l0(this%pl, 0, lmax_new, 2)
+      call resize_3d_ql(this%ql, 3, 0, lmax_new, 2)
+      call resize_2d_l0(this%c, 0, lmax_new, 2)
+      call resize_2d_l0(this%enu, 0, lmax_new, 2)
+      call resize_2d_l0(this%ppar, 0, lmax_new, 2)
+      call resize_2d_l0(this%qpar, 0, lmax_new, 2)
+      call resize_2d_l0(this%srdel, 0, lmax_new, 2)
+      call resize_2d_l0(this%vl, 0, lmax_new, 2)
+      call resize_2d_l0(this%pnu, 0, lmax_new, 2)
+      call resize_2d_l0(this%qi, 0, lmax_new, 2)
+      call resize_2d_l0(this%dele, 0, lmax_new, 2)
+      call resize_1d(this%hubbard_u, lmax_new + 1)
+      call resize_1d(this%hubbard_j, lmax_new + 1)
+      call resize_3d_lm_flat(this%ldm_flatten, lmax_new + 1, 2, (2*lmax_new + 1)**2)
+   end subroutine ensure_lmax_consistency
+
+   subroutine resize_1d(arr, n1)
+      real(rp), allocatable, intent(inout) :: arr(:)
+      integer, intent(in) :: n1
+      real(rp), allocatable :: tmp(:)
+      integer :: c1
+      if (.not. allocated(arr)) then
+         allocate(arr(n1))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1) return
+      allocate(tmp(n1))
+      tmp = 0.0_rp
+      c1 = min(size(arr, 1), n1)
+      tmp(1:c1) = arr(1:c1)
+      call move_alloc(tmp, arr)
+   end subroutine resize_1d
+
+   subroutine resize_c1d(arr, n1)
+      complex(rp), allocatable, intent(inout) :: arr(:)
+      integer, intent(in) :: n1
+      complex(rp), allocatable :: tmp(:)
+      integer :: c1
+      if (.not. allocated(arr)) then
+         allocate(arr(n1))
+         arr = cmplx(0.0_rp, 0.0_rp, kind=rp)
+         return
+      end if
+      if (size(arr, 1) == n1) return
+      allocate(tmp(n1))
+      tmp = cmplx(0.0_rp, 0.0_rp, kind=rp)
+      c1 = min(size(arr, 1), n1)
+      tmp(1:c1) = arr(1:c1)
+      call move_alloc(tmp, arr)
+   end subroutine resize_c1d
+
+   subroutine resize_c2d_l1(arr, n1, n2)
+      complex(rp), allocatable, intent(inout) :: arr(:, :)
+      integer, intent(in) :: n1, n2
+      complex(rp), allocatable :: tmp(:, :)
+      integer :: c1, c2
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2))
+         arr = cmplx(0.0_rp, 0.0_rp, kind=rp)
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2) return
+      allocate(tmp(n1, n2))
+      tmp = cmplx(0.0_rp, 0.0_rp, kind=rp)
+      c1 = min(size(arr, 1), n1)
+      c2 = min(size(arr, 2), n2)
+      tmp(1:c1, 1:c2) = arr(1:c1, 1:c2)
+      call move_alloc(tmp, arr)
+   end subroutine resize_c2d_l1
+
+   subroutine resize_2d_l1(arr, n1, n2)
+      real(rp), allocatable, intent(inout) :: arr(:, :)
+      integer, intent(in) :: n1, n2
+      real(rp), allocatable :: tmp(:, :)
+      integer :: c1, c2
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2) return
+      allocate(tmp(n1, n2))
+      tmp = 0.0_rp
+      c1 = min(size(arr, 1), n1)
+      c2 = min(size(arr, 2), n2)
+      tmp(1:c1, 1:c2) = arr(1:c1, 1:c2)
+      call move_alloc(tmp, arr)
+   end subroutine resize_2d_l1
+
+   subroutine resize_2d_l0(arr, lb1, ub1, n2)
+      real(rp), allocatable, intent(inout) :: arr(:, :)
+      integer, intent(in) :: lb1, ub1, n2
+      real(rp), allocatable :: tmp(:, :)
+      integer :: l1, u1, l2, u2
+      if (.not. allocated(arr)) then
+         allocate(arr(lb1:ub1, n2))
+         arr = 0.0_rp
+         return
+      end if
+      if (lbound(arr, 1) == lb1 .and. ubound(arr, 1) == ub1 .and. size(arr, 2) == n2) return
+      allocate(tmp(lb1:ub1, n2))
+      tmp = 0.0_rp
+      l1 = max(lb1, lbound(arr, 1)); u1 = min(ub1, ubound(arr, 1))
+      l2 = 1; u2 = min(n2, size(arr, 2))
+      if (u1 >= l1 .and. u2 >= l2) tmp(l1:u1, l2:u2) = arr(l1:u1, l2:u2)
+      call move_alloc(tmp, arr)
+   end subroutine resize_2d_l0
+
+   subroutine resize_3d_ql(arr, n1, lb2, ub2, n3)
+      real(rp), allocatable, intent(inout) :: arr(:, :, :)
+      integer, intent(in) :: n1, lb2, ub2, n3
+      real(rp), allocatable :: tmp(:, :, :)
+      integer :: l2, u2, c1, c3
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, lb2:ub2, n3))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. lbound(arr, 2) == lb2 .and. ubound(arr, 2) == ub2 .and. size(arr, 3) == n3) return
+      allocate(tmp(n1, lb2:ub2, n3))
+      tmp = 0.0_rp
+      c1 = min(n1, size(arr, 1))
+      l2 = max(lb2, lbound(arr, 2)); u2 = min(ub2, ubound(arr, 2))
+      c3 = min(n3, size(arr, 3))
+      if (u2 >= l2 .and. c1 > 0 .and. c3 > 0) tmp(1:c1, l2:u2, 1:c3) = arr(1:c1, l2:u2, 1:c3)
+      call move_alloc(tmp, arr)
+   end subroutine resize_3d_ql
+
+   subroutine resize_3d_lm_flat(arr, n1, n2, n3)
+      real(rp), allocatable, intent(inout) :: arr(:, :, :)
+      integer, intent(in) :: n1, n2, n3
+      real(rp), allocatable :: tmp(:, :, :)
+      integer :: c1, c2, c3
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2, n3))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2 .and. size(arr, 3) == n3) return
+      allocate(tmp(n1, n2, n3))
+      tmp = 0.0_rp
+      c1 = min(n1, size(arr, 1))
+      c2 = min(n2, size(arr, 2))
+      c3 = min(n3, size(arr, 3))
+      tmp(1:c1, 1:c2, 1:c3) = arr(1:c1, 1:c2, 1:c3)
+      call move_alloc(tmp, arr)
+   end subroutine resize_3d_lm_flat
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

@@ -164,6 +164,13 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
 #####################
 
 # NOTE: agressive optimizations (-O3) are already turned on by default
+# For GNU, force conservative optimization in RELEASE to match stable runtime
+# behavior observed in DEBUG for strux/SPDF workflows.
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran REQUIRED "-O0")
+endif()
+
 # Optimizations
 #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #                 Fortran REQUIRED "-fastsse" # All compilers not on Windows
@@ -173,21 +180,21 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
 #                )
 
 
-# Unroll loops
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-                 Fortran "-funroll-loops" # GNU
-                         "-unroll"        # Intel
-                         "-Munroll"       # Portland Group
-                         "/unroll"        # Intel Windows
-                )
+# Unroll/inline are disabled for GNU release builds due numerical-instability
+# regressions in LMTO47 screening. Keep them for non-GNU compilers.
+if (NOT CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran "-unroll"        # Intel
+                           "-Munroll"       # Portland Group
+                           "/unroll"        # Intel Windows
+                  )
 
-# Inline functions
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-                 Fortran "-inline"            # Intel
-                         "-finline-functions" # GNU
-                         "-Minline"           # Portland Group
-                         "/Qinline"           # Intel Windows
-                )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran "-inline"            # Intel
+                           "-Minline"           # Portland Group
+                           "/Qinline"           # Intel Windows
+                  )
+endif()
 
              ## Interprocedural (link-time) optimizations
              #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
