@@ -2516,21 +2516,23 @@ contains
    function tabulated_slater_integrals(k, l1, l2, l3, l4) result(res)
       integer, intent(in) :: k, l1, l2, l3, l4 ! l=1..4 (=s,p,d,f), k=1..4 (=0,2,4,6)
       real(rp) :: res
-      real(rp) :: au2Ry
+      real(rp) :: ha_to_ry
       real(rp), dimension(4, 4, 4, 4, 4) :: slater
 
-      au2Ry = 0.5_rp**5
+      ! Tabulated values are treated as Hartree atomic units (Ha).
+      ! Internal Hamiltonian energy unit is Rydberg (Ry): 1 Ha = 2 Ry.
+      ha_to_ry = 2.0_rp
       slater = 0.0_rp
 
       ! 4s-electrons
-      slater(1, 1, 1, 1, 1) = 0.0372715_rp*au2Ry
+      slater(1, 1, 1, 1, 1) = 0.0372715_rp*ha_to_ry
       ! 3p-electrons
-      slater(1, 2, 2, 2, 2) = 0.0718678_rp*au2Ry
-      slater(2, 2, 2, 2, 2) = 0.0359881_rp*au2Ry
+      slater(1, 2, 2, 2, 2) = 0.0718678_rp*ha_to_ry
+      slater(2, 2, 2, 2, 2) = 0.0359881_rp*ha_to_ry
       ! 3d-electrons
-      slater(1, 3, 3, 3, 3) = 0.0860460_rp*au2Ry
-      slater(2, 3, 3, 3, 3) = 0.0454210_rp*au2Ry
-      slater(3, 3, 3, 3, 3) = 0.0296224_rp*au2Ry
+      slater(1, 3, 3, 3, 3) = 0.0860460_rp*ha_to_ry
+      slater(2, 3, 3, 3, 3) = 0.0454210_rp*ha_to_ry
+      slater(3, 3, 3, 3, 3) = 0.0296224_rp*ha_to_ry
 
       if (k < 1 .or. k > 4) then
          res = 0.0_rp

@@ -20,6 +20,7 @@ Table of Contents
    scf_cycle
    spin_dynamics
    constraining_fields
+   lda_u_workflow
 
 Overview
 ========
