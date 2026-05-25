@@ -49,9 +49,7 @@
       },
       "checks": {
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ],
-        "text": [
+          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] },
           { "file": "Pt_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
@@ -67,9 +65,7 @@
       },
       "checks": {
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ],
-        "text": [
+          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] },
           { "file": "Pt_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
