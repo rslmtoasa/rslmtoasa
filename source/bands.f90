@@ -244,6 +244,7 @@ contains
       integer :: l, l_index, m1, m2, m3, m4, mmax, ispin, ispin2
       integer :: i0, i1, iorb, jorb, m1_val, m2_val, m3_val, m4_val
       integer :: i, n_enabled, n_conv
+      logical, save :: slater_diag_printed = .false.
       real(rp) :: f0, f2, f4, f6, den_u, den_j, uval, jval
       real(rp) :: result
       real(rp), dimension(this%en%channels_ldos + 10) :: work_vec
@@ -320,12 +321,16 @@ contains
             uval = 0.0_rp
             jval = 0.0_rp
 
-            ! Relative Slater-integral scale for constrained-RPA-like estimate.
-            ! The absolute U scale is set by the screened density-matrix ratio below.
-            f0 = 1.0_rp
-            f2 = 0.0_rp
-            f4 = 0.0_rp
-            f6 = 0.0_rp
+            ! Tabulated hydrogenic Slater integrals (diagonal channel l,l,l,l).
+            f0 = tabulated_slater_integrals(1, l_index, l_index, l_index, l_index)
+            f2 = tabulated_slater_integrals(2, l_index, l_index, l_index, l_index)
+            f4 = tabulated_slater_integrals(3, l_index, l_index, l_index, l_index)
+            f6 = tabulated_slater_integrals(4, l_index, l_index, l_index, l_index)
+            if (rank == 0 .and. .not. slater_diag_printed) then
+               call g_logger%info('DEBUG_HUBBARD_SLATER itype='//fmt('i4', itype)//' l='//fmt('i2', l_index - 1)// &
+                  ' f0='//fmt('f12.6', f0)//' f2='//fmt('f12.6', f2)//' f4='//fmt('f12.6', f4)//' f6='//fmt('f12.6', f6), &
+                  __FILE__, __LINE__)
+            end if
 
             do ispin = 1, 2
                do ispin2 = 1, 2
@@ -394,6 +399,7 @@ contains
 
       ! Keep U/J-potential channel bookkeeping consistent for upcoming Hamiltonian build.
       call this%recursion%hamiltonian%calculate_hubbard_u_potential_general()
+      slater_diag_printed = .true.
 
       if (allocated(ldm)) deallocate(ldm)
       if (allocated(ldm_scr)) deallocate(ldm_scr)

@@ -231,6 +231,9 @@ contains
       ! variables associated with the reading processes
       integer :: iostatus, funit, i, j, l, li, lj, n_l_in
       integer :: nimp_in
+      integer :: na
+      logical :: legacy_uj_present
+      character(len=1) :: orbch
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -279,6 +282,40 @@ contains
                this%lattice%symbolic_atoms(i)%potential%hubbard_j(l) = hubbard_j_general(i, l)/ry2ev
             end do
          end do
+      end if
+
+      ! Legacy LDA+U(+J) input path from lda_u branch:
+      ! map (hubbard_u/hubbard_j + uj_orb) into per-atom per-l potential arrays.
+      legacy_uj_present = .false.
+      if (allocated(uj_orb) .and. allocated(hubbard_u) .and. allocated(hubbard_j)) then
+         do i = 1, min(this%lattice%nrec, size(uj_orb), size(hubbard_u, 1), size(hubbard_j, 1))
+            na = this%lattice%nbulk + i
+            if (na < 1 .or. na > this%lattice%ntype) cycle
+            do j = 1, len_trim(uj_orb(i))
+               if (j > size(hubbard_u, 2) .or. j > size(hubbard_j, 2)) exit
+               orbch = uj_orb(i)(j:j)
+               select case (orbch)
+               case ('s', 'S')
+                  l = 1
+               case ('p', 'P')
+                  l = 2
+               case ('d', 'D')
+                  l = 3
+               case ('f', 'F')
+                  l = 4
+               case default
+                  cycle
+               end select
+               if (l <= size(this%lattice%symbolic_atoms(na)%potential%hubbard_u)) then
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = hubbard_u(i, j)/ry2ev
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = hubbard_j(i, j)/ry2ev
+                  if (abs(hubbard_u(i, j)) > 1.0e-10_rp .or. abs(hubbard_j(i, j)) > 1.0e-10_rp) legacy_uj_present = .true.
+               end if
+            end do
+         end do
+      end if
+      if (legacy_uj_present) then
+         call g_logger%info('Legacy uj_orb + hubbard_u/hubbard_j input detected and mapped to symbolic-atom Hubbard channels.', __FILE__, __LINE__)
       end if
 
       this%hubbard_u_impurity_check = .false.

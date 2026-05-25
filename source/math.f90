@@ -1714,6 +1714,18 @@ contains
          v(4, 3) = cone
          vc(3, 4) = cone
       else
+         ! NOTE/TODO (spdf transform):
+         ! For basis sizes other than n=4 (sp) and n=9 (spd), hcpx currently
+         ! falls back to identity (no-op). This means n=16 (spdf) does NOT yet
+         ! have an explicit cartesian <-> spherical transform matrix here.
+         !
+         ! When implementing n=16, keep orbital ordering consistent with the
+         ! real-basis convention used in lattice%canso:
+         !   1:s, 2:x, 3:y, 4:z, 5:xy, 6:yz, 7:zx, 8:x2-y2, 9:3z2-r2,
+         !   10:fz3, 11:fxz2, 12:fyz2, 13:fz(x2-y2), 14:fxyz, 15:fx3, 16:fy3.
+         !
+         ! Until then, identity is intentional to avoid silently applying an
+         ! inconsistent transform.
          ! For other basis sizes, default to identity transform (no-op)
          do ii = 1, n
             v(ii, ii) = cone
@@ -2497,7 +2509,78 @@ contains
       matrix(3, 3) = cosTheta + uz*uz*(1.0 - cosTheta)
    end subroutine
 
+   ! --------------------------------------------------------------------------------------
+   !> Tabulated values of hydrogenic Slater radial integrals.
+   !> Returns only diagonal terms F^k(l l, l l) for l = s,p,d.
+   ! --------------------------------------------------------------------------------------
+   function tabulated_slater_integrals(k, l1, l2, l3, l4) result(res)
+      integer, intent(in) :: k, l1, l2, l3, l4 ! l=1..4 (=s,p,d,f), k=1..4 (=0,2,4,6)
+      real(rp) :: res
+      real(rp) :: au2Ry
+      real(rp), dimension(4, 4, 4, 4, 4) :: slater
+
+      au2Ry = 0.5_rp**5
+      slater = 0.0_rp
+
+      ! 4s-electrons
+      slater(1, 1, 1, 1, 1) = 0.0372715_rp*au2Ry
+      ! 3p-electrons
+      slater(1, 2, 2, 2, 2) = 0.0718678_rp*au2Ry
+      slater(2, 2, 2, 2, 2) = 0.0359881_rp*au2Ry
+      ! 3d-electrons
+      slater(1, 3, 3, 3, 3) = 0.0860460_rp*au2Ry
+      slater(2, 3, 3, 3, 3) = 0.0454210_rp*au2Ry
+      slater(3, 3, 3, 3, 3) = 0.0296224_rp*au2Ry
+
+      if (k < 1 .or. k > 4) then
+         res = 0.0_rp
+      else
+         res = slater(k, l1, l2, l3, l4)
+      end if
+   end function tabulated_slater_integrals
+
+   ! --------------------------------------------------------------------------------------
+   !> Calculates a_k(m,m',m'',m''') for LDA+U(+J) matrix elements.
+   ! --------------------------------------------------------------------------------------
+   function a_k(k, l, m1, m2, m3, m4) result(res)
+      implicit none
+      integer, intent(in) :: k, l, m1, m2, m3, m4
+      integer :: q
+      real(rp) :: res
+
+      res = 0.0_rp
+      do q = -k, k
+         res = res + (4.0_rp*pi/(2.0_rp*real(k, rp) + 1.0_rp))* &
+            real(realgaunt(l, k, l, m1, q, m2), rp)*real(realgaunt(l, k, l, m3, q, m4), rp)
+      end do
+   end function a_k
+
    function Coulomb_mat(l, m1, m3, m2, m4, f0, f2, f4, f6) result(res)
+      implicit none
+      integer, intent(in) :: l, m1, m3, m2, m4
+      real(rp), intent(in) :: f0, f2, f4, f6
+      real(rp) :: res
+
+      res = 0.0_rp
+      res = res + a_k(0, l, m1, m2, m3, m4)*f0 &
+                + a_k(2, l, m1, m2, m3, m4)*f2 &
+                + a_k(4, l, m1, m2, m3, m4)*f4 &
+                + a_k(6, l, m1, m2, m3, m4)*f6
+   end function Coulomb_mat
+
+   ! --------------------------------------------------------------------------------------
+   !> Direct-Gaunt reference form for Coulomb matrix elements.
+   !>
+   !> Notes on conventions:
+   !> - This routine is intentionally NOT wired into the active LDA+U workflow.
+   !> - It uses the same m-quantum-number convention as current callers:
+   !>     m \in {-l, ..., +l}
+   !>   (see ms-arrays in bands/hamiltonian where channel blocks are iterated).
+   !> - Linear orbital index ordering (s/p/d/f block layout in basis space) is handled
+   !>   by caller mapping; this routine only acts on (l,m) labels.
+   ! --------------------------------------------------------------------------------------
+   function Coulomb_mat_direct_gaunt(l, m1, m3, m2, m4, f0, f2, f4, f6) result(res)
+      implicit none
       integer, intent(in) :: l, m1, m3, m2, m4
       real(rp), intent(in) :: f0, f2, f4, f6
       real(rp) :: res
@@ -2508,6 +2591,6 @@ contains
       if (l == 3) then
          res = res + gaunt(l, m1, l, m2, 6, m1 - m2)*gaunt(l, m3, l, m4, 6, m2 - m1)*f6
       end if
-   end function Coulomb_mat
+   end function Coulomb_mat_direct_gaunt
 
 end module math_mod
