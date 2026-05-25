@@ -2042,12 +2042,11 @@ contains
       integer :: i, ij, j, l, ll, kk, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
-      complex(rp), dimension(nb, nb, this%lattice%kk) :: psiref
+      complex(rp), allocatable, dimension(:, :, :) :: psiref
 
       integer :: ij_loc
 
-      ! Note: AB: Check how to treat psiref here. Should it come as allocated or allocatable?
-      !allocate(psiref(18, 18, this%lattice%kk))
+      allocate(psiref(18, 18, this%lattice%kk))
 
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
@@ -2145,8 +2144,7 @@ contains
          end do
       end do
 
-      ! Note AB: Check if deallocation of psiref is needed here or if it should be done in the calling subroutine
-      !deallocate(psiref)
+      deallocate(psiref)
    end subroutine chebyshev_recur_ij
 
    !---------------------------------------------------------------------------

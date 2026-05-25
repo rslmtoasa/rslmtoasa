@@ -1,0 +1,34 @@
+{
+  "name": "Example_exchange_conductivity_fccPt_hoh",
+  "case": "conductivity/fccPt",
+  "timeout": 600,
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 50
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": true
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "Pt_cond.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}
