@@ -768,7 +768,12 @@ contains
          this%converged = this%is_converged(this%mix%delta)
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
-            exit
+            if (this%hamiltonian%hubbard_u_sc_check .and. .not. this%bands%hubbard_u_converged) then
+               if (rank == 0) call g_logger%info('SCF converged but hubbard_u_sc not converged; continuing.', __FILE__, __LINE__)
+               niter = niter + 1
+            else
+               exit
+            end if
          else
             if (rank == 0) call g_logger%info('Not converged! Diff= '//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
             niter = niter + 1
@@ -850,6 +855,9 @@ contains
       end select
    
       call this%bands%calculate_fermi() ! Calculate the Fermi energy
+      if (this%hamiltonian%hubbard_u_sc_check) then
+         call this%bands%calculate_hubbard_u_sc()
+      end if
       !=========================================================================
       !  MIX THE MAGNETIC MOMENTS BEFORE CALCULATING THE NEW BAND MOMENTS QL
       !=========================================================================

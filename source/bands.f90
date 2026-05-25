@@ -80,6 +80,10 @@ module bands_mod
       real(rp) :: eband
       !> Magnetic force
       real(rp), dimension(:, :), allocatable :: mag_for
+      !> Previous Hubbard U_eff values for self-consistent +U flow (itype,l=s,p,d,f)
+      real(rp), dimension(:, :), allocatable :: hubbard_u_eff_old
+      !> Convergence flag for self-consistent Hubbard U updates
+      logical :: hubbard_u_converged
    contains
       procedure :: calculate_projected_green
       procedure :: calculate_projected_dos
@@ -96,6 +100,7 @@ module bands_mod
       procedure :: calculate_fermi_gauss
       procedure :: calculate_occupation_gauss_legendre
       procedure :: calculate_angles
+      procedure :: calculate_hubbard_u_sc
       !procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
@@ -153,6 +158,7 @@ contains
       if (allocated(this%dspd)) call g_safe_alloc%deallocate('bands.dspd', this%dspd)
       if (allocated(this%d_orb)) call g_safe_alloc%deallocate('bands.ddw', this%d_orb)
       if (allocated(this%mag_for)) call g_safe_alloc%deallocate('bands.mag_for', this%mag_for)
+      if (allocated(this%hubbard_u_eff_old)) call g_safe_alloc%deallocate('bands.hubbard_u_eff_old', this%hubbard_u_eff_old)
 #else
       if (allocated(this%dtot)) deallocate (this%dtot)
       if (allocated(this%dtotcheb)) deallocate (this%dtotcheb)
@@ -168,6 +174,7 @@ contains
       if (allocated(this%dspd)) deallocate (this%dspd)
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
+      if (allocated(this%hubbard_u_eff_old)) deallocate (this%hubbard_u_eff_old)
 #endif
    end subroutine destructor
 
@@ -192,6 +199,7 @@ contains
       call g_safe_alloc%allocate('bands.dspd', this%dspd, (/2*(lmax_basis + 1), this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.mag_for', this%mag_for, (/3, atoms_per_process/))
+      call g_safe_alloc%allocate('bands.hubbard_u_eff_old', this%hubbard_u_eff_old, (/max(1, this%lattice%ntype), 4/))
 #else
       allocate (this%dtot(this%en%channels_ldos + 10))
       allocate (this%dtotcheb(this%en%channels_ldos + 10))
@@ -204,6 +212,7 @@ contains
       allocate (this%dspd(2*(lmax_basis + 1), this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%d_orb(norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%mag_for(3, atoms_per_process))
+      allocate (this%hubbard_u_eff_old(max(1, this%lattice%ntype), 4))
 #endif
 
       this%dtot(:) = 0.0d0
@@ -217,7 +226,179 @@ contains
       this%dspd(:, :, :) = 0.0d0
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
+      this%hubbard_u_eff_old(:, :) = 0.0d0
+      this%hubbard_u_converged = .false.
    end subroutine restore_to_default
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Update effective Hubbard U (Ueff = U - J) self-consistently from current Green function.
+   !> Enabled channels are selected by hamiltonian%hubbard_u_sc(itype,l)=1.
+   !---------------------------------------------------------------------------
+   subroutine calculate_hubbard_u_sc(this)
+      use mpi_mod, only: rank, start_atom, end_atom, g2l_map
+      class(bands), intent(inout) :: this
+
+      integer :: ia_glob, ia_loc, itype
+      integer :: l, l_index, m1, m2, m3, m4, mmax, ispin, ispin2
+      integer :: i0, i1, iorb, jorb, m1_val, m2_val, m3_val, m4_val
+      integer :: i, n_enabled, n_conv
+      real(rp) :: f0, f2, f4, f6, den_u, den_j, uval, jval
+      real(rp) :: result
+      real(rp), dimension(this%en%channels_ldos + 10) :: work_vec
+      real(rp), dimension(:,:,:,:,:), allocatable :: ldm, ldm_scr
+      real(rp), dimension(:,:), allocatable :: hub_u_eff
+
+      type :: ArrayType
+         integer, allocatable :: val(:)
+      end type ArrayType
+      type(ArrayType), dimension(4) :: ms
+
+      if (.not. this%recursion%hamiltonian%hubbard_u_sc_check) return
+
+      ms(1)%val = [0]
+      ms(2)%val = [-1, 0, 1]
+      ms(3)%val = [-2, -1, 0, 1, 2]
+      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
+
+      allocate(ldm(this%lattice%ntype, 4, 2, 7, 7))
+      allocate(ldm_scr(this%lattice%ntype, 4, 2, 7, 7))
+      allocate(hub_u_eff(this%lattice%ntype, 4))
+      ldm = 0.0_rp
+      ldm_scr = 0.0_rp
+      hub_u_eff = 0.0_rp
+
+      ! Build LDM from current Green function for enabled channels.
+      do ia_glob = start_atom, end_atom
+         ia_loc = g2l_map(ia_glob)
+         itype = this%lattice%nbulk + ia_glob
+         if (itype < 1 .or. itype > this%lattice%ntype) cycle
+
+         do l_index = 1, min(4, this%control%lmax + 1)
+            if (this%recursion%hamiltonian%hubbard_u_sc(itype, l_index) /= 1) cycle
+            mmax = 2*l_index - 1
+            i0 = (l_index - 1)*(l_index - 1) + 1
+            i1 = i0 + mmax - 1
+            do ispin = 1, 2
+               do iorb = i0, i1
+                  do jorb = i0, i1
+                     work_vec(:) = -aimag(this%green%g0(iorb + (ispin - 1)*spin_off, jorb + (ispin - 1)*spin_off, :, ia_loc))/pi
+                     call simpson_m(result, this%en%edel, this%en%fermi, this%nv1, work_vec, this%e1, 0, this%en%ene)
+                     ldm(itype, l_index, ispin, iorb - i0 + 1, jorb - i0 + 1) = result
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+#ifdef USE_MPI
+      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm, product(shape(ldm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+
+      ! Screened density matrix (Agapito-like renormalization).
+      do itype = 1, this%lattice%ntype
+         do l_index = 1, min(4, this%control%lmax + 1)
+            if (this%recursion%hamiltonian%hubbard_u_sc(itype, l_index) /= 1) cycle
+            mmax = 2*l_index - 1
+            do ispin = 1, 2
+               do m1 = 1, mmax
+                  do m2 = 1, mmax
+                     ldm_scr(itype, l_index, ispin, m1, m2) = ldm(itype, l_index, ispin, m1, m2) * &
+                        (ldm(itype, l_index, ispin, m1, m1) + ldm(itype, l_index, ispin, m2, m2))
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      ! Compute Ueff channel-wise and write back to potential%hubbard_u.
+      do itype = 1, this%lattice%ntype
+         do l_index = 1, min(4, this%control%lmax + 1)
+            if (this%recursion%hamiltonian%hubbard_u_sc(itype, l_index) /= 1) cycle
+            mmax = 2*l_index - 1
+            uval = 0.0_rp
+            jval = 0.0_rp
+
+            ! Relative Slater-integral scale for constrained-RPA-like estimate.
+            ! The absolute U scale is set by the screened density-matrix ratio below.
+            f0 = 1.0_rp
+            f2 = 0.0_rp
+            f4 = 0.0_rp
+            f6 = 0.0_rp
+
+            do ispin = 1, 2
+               do ispin2 = 1, 2
+                  do m1 = 1, mmax
+                     do m2 = 1, mmax
+                        do m3 = 1, mmax
+                           do m4 = 1, mmax
+                              m1_val = ms(l_index)%val(m1)
+                              m2_val = ms(l_index)%val(m2)
+                              m3_val = ms(l_index)%val(m3)
+                              m4_val = ms(l_index)%val(m4)
+                              uval = uval + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) * &
+                                 ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
+                              if (ispin == ispin2) then
+                                 jval = jval + Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6) * &
+                                    ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
+                              end if
+                           end do
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+
+            den_u = 0.0_rp
+            den_j = 0.0_rp
+            do m1 = 1, mmax
+               do m2 = 1, mmax
+                  den_u = den_u + ldm(itype, l_index, 1, m1, m1)*ldm(itype, l_index, 2, m2, m2) + &
+                                 ldm(itype, l_index, 2, m1, m1)*ldm(itype, l_index, 1, m2, m2)
+                  if (m1 /= m2) then
+                     den_u = den_u + ldm(itype, l_index, 1, m1, m1)*ldm(itype, l_index, 1, m2, m2) + &
+                                    ldm(itype, l_index, 2, m1, m1)*ldm(itype, l_index, 2, m2, m2)
+                     den_j = den_j + ldm(itype, l_index, 1, m1, m1)*ldm(itype, l_index, 1, m2, m2) + &
+                                    ldm(itype, l_index, 2, m1, m1)*ldm(itype, l_index, 2, m2, m2)
+                  end if
+               end do
+            end do
+
+            if (den_u > 1.0e-12_rp) uval = uval/den_u
+            if (l_index == 1) then
+               jval = 0.0_rp
+            else if (den_j > 1.0e-12_rp) then
+               jval = jval/den_j
+            else
+               jval = 0.0_rp
+            end if
+            hub_u_eff(itype, l_index) = max(0.0_rp, uval - jval)
+            this%symbolic_atom(itype)%potential%hubbard_u(l_index) = hub_u_eff(itype, l_index)
+            this%symbolic_atom(itype)%potential%hubbard_j(l_index) = 0.0_rp
+         end do
+      end do
+
+      ! Convergence test for enabled channels only.
+      n_enabled = 0
+      n_conv = 0
+      do itype = 1, this%lattice%ntype
+         do l = 1, 4
+            if (this%recursion%hamiltonian%hubbard_u_sc(itype, l) /= 1) cycle
+            n_enabled = n_enabled + 1
+            if (abs(this%hubbard_u_eff_old(itype, l) - hub_u_eff(itype, l)) < 3.0e-5_rp) n_conv = n_conv + 1
+            this%hubbard_u_eff_old(itype, l) = hub_u_eff(itype, l)
+         end do
+      end do
+      this%hubbard_u_converged = (n_enabled > 0 .and. n_conv == n_enabled)
+
+      ! Keep U/J-potential channel bookkeeping consistent for upcoming Hamiltonian build.
+      call this%recursion%hamiltonian%calculate_hubbard_u_potential_general()
+
+      if (allocated(ldm)) deallocate(ldm)
+      if (allocated(ldm_scr)) deallocate(ldm_scr)
+      if (allocated(hub_u_eff)) deallocate(hub_u_eff)
+   end subroutine calculate_hubbard_u_sc
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

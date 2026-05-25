@@ -94,6 +94,10 @@ module hamiltonian_mod
       !> Optional impurity-only Hubbard inputs (eV in input.nml, stored as Ry here)
       real(rp), dimension(:, :), allocatable :: hubbard_u_impurity, hubbard_j_impurity
       logical :: hubbard_u_impurity_check = .false.
+      !> Optional self-consistent Hubbard-U mask (itype,l) with l=1..4 => s,p,d,f.
+      !> 0 = disabled, 1 = enable self-consistent U update for this channel.
+      integer, dimension(:, :), allocatable :: hubbard_u_sc
+      logical :: hubbard_u_sc_check = .false.
       !> Optional intersite Hubbard-V input and corresponding matrix correction
       real(rp), dimension(:, :, :, :), allocatable :: hubbard_v, hubbard_v_pot
       logical :: hubbard_v_check = .false.
@@ -209,6 +213,7 @@ contains
       if (allocated(this%hubbard_u_pot)) deallocate(this%hubbard_u_pot)
       if (allocated(this%hubbard_u_impurity)) deallocate(this%hubbard_u_impurity)
       if (allocated(this%hubbard_j_impurity)) deallocate(this%hubbard_j_impurity)
+      if (allocated(this%hubbard_u_sc)) deallocate(this%hubbard_u_sc)
       if (allocated(this%hubbard_v)) deallocate(this%hubbard_v)
       if (allocated(this%hubbard_v_pot)) deallocate(this%hubbard_v_pot)
 #endif
@@ -305,6 +310,21 @@ contains
          end do
       end if
 
+      ! Optional self-consistent U selector (0/1 mask by atom type and l-channel).
+      this%hubbard_u_sc_check = .false.
+      this%hubbard_u_sc(:, :) = 0
+      if (allocated(hubbard_u_sc)) then
+         do i = 1, min(size(this%hubbard_u_sc, 1), size(hubbard_u_sc, 1))
+            do l = 1, min(size(this%hubbard_u_sc, 2), size(hubbard_u_sc, 2))
+               if (hubbard_u_sc(i, l) < 0 .or. hubbard_u_sc(i, l) > 1) then
+                  call g_logger%fatal('Invalid hubbard_u_sc value. Only 0 or 1 is allowed.', __FILE__, __LINE__)
+               end if
+               this%hubbard_u_sc(i, l) = hubbard_u_sc(i, l)
+               if (this%hubbard_u_sc(i, l) == 1) this%hubbard_u_sc_check = .true.
+            end do
+         end do
+      end if
+
       this%hubbard_v_check = .false.
       if (allocated(hubbard_v)) then
          this%hubbard_v(:, :, :, :) = 0.0_rp
@@ -346,6 +366,11 @@ contains
             this%hubbard_u_general_check = .true.
          end if
       end do
+
+      ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
+      if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
+         call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
+      end if
 
    end subroutine build_from_file
 
@@ -393,7 +418,9 @@ contains
       call g_safe_alloc%allocate('hamiltonian.hubbard_u_pot', this%hubbard_u_pot, (/nb, nb, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_u_impurity', this%hubbard_u_impurity, (/max(1, this%charge%lattice%nrec), 4/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_j_impurity', this%hubbard_j_impurity, (/max(1, this%charge%lattice%nrec), 4/))
-      call g_safe_alloc%allocate('hamiltonian.hubbard_v', this%hubbard_v, (/max(1, this%charge%lattice%nrec), max(1, this%charge%lattice%nrec), 4, 4/))
+      call g_safe_alloc%allocate('hamiltonian.hubbard_u_sc', this%hubbard_u_sc, (/max(1, this%charge%lattice%ntype), 4/))
+      ! Hubbard-V is indexed by symbolic atom type pair (itype,jtype), not by impurity index.
+      call g_safe_alloc%allocate('hamiltonian.hubbard_v', this%hubbard_v, (/max(1, this%charge%lattice%ntype), max(1, this%charge%lattice%ntype), 4, 4/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_v_pot', this%hubbard_v_pot, (/nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
@@ -431,7 +458,9 @@ contains
       allocate (this%hubbard_u_pot(nb, nb, this%charge%lattice%ntype))
       allocate (this%hubbard_u_impurity(max(1, this%charge%lattice%nrec), 4))
       allocate (this%hubbard_j_impurity(max(1, this%charge%lattice%nrec), 4))
-      allocate (this%hubbard_v(max(1, this%charge%lattice%nrec), max(1, this%charge%lattice%nrec), 4, 4))
+      allocate (this%hubbard_u_sc(max(1, this%charge%lattice%ntype), 4))
+      ! Hubbard-V is indexed by symbolic atom type pair (itype,jtype), not by impurity index.
+      allocate (this%hubbard_v(max(1, this%charge%lattice%ntype), max(1, this%charge%lattice%ntype), 4, 4))
       allocate (this%hubbard_v_pot(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !end if
       !end if
@@ -472,6 +501,7 @@ contains
       this%hubbard_u_pot(:, :, :) = 0.0d0
       this%hubbard_u_impurity(:, :) = 0.0d0
       this%hubbard_j_impurity(:, :) = 0.0d0
+      this%hubbard_u_sc(:, :) = 0
       this%hubbard_v(:, :, :, :) = 0.0d0
       this%hubbard_v_pot(:, :, :, :) = 0.0d0
       this%hoh = .false.
@@ -485,6 +515,7 @@ contains
       this%jl_alpha = 'z'
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
+      this%hubbard_u_sc_check = .false.
       this%hubbard_v_check = .false.
    end subroutine restore_to_default
 
