@@ -94,6 +94,9 @@ module hamiltonian_mod
       !> Optional impurity-only Hubbard inputs (eV in input.nml, stored as Ry here)
       real(rp), dimension(:, :), allocatable :: hubbard_u_impurity, hubbard_j_impurity
       logical :: hubbard_u_impurity_check = .false.
+      !> Optional intersite Hubbard-V input and corresponding matrix correction
+      real(rp), dimension(:, :, :, :), allocatable :: hubbard_v, hubbard_v_pot
+      logical :: hubbard_v_check = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -118,6 +121,7 @@ module hamiltonian_mod
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
       procedure :: calculate_hubbard_u_potential_general
+      procedure :: calculate_hubbard_v_potential
       final     :: destructor
    end type hamiltonian
 
@@ -205,6 +209,8 @@ contains
       if (allocated(this%hubbard_u_pot)) deallocate(this%hubbard_u_pot)
       if (allocated(this%hubbard_u_impurity)) deallocate(this%hubbard_u_impurity)
       if (allocated(this%hubbard_j_impurity)) deallocate(this%hubbard_j_impurity)
+      if (allocated(this%hubbard_v)) deallocate(this%hubbard_v)
+      if (allocated(this%hubbard_v_pot)) deallocate(this%hubbard_v_pot)
 #endif
    end subroutine destructor
 
@@ -218,7 +224,7 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, l, n_l_in
+      integer :: iostatus, funit, i, j, l, li, lj, n_l_in
       integer :: nimp_in
 
       include 'include_codes/namelists/hamiltonian.f90'
@@ -299,6 +305,38 @@ contains
          end do
       end if
 
+      this%hubbard_v_check = .false.
+      if (allocated(hubbard_v)) then
+         this%hubbard_v(:, :, :, :) = 0.0_rp
+         do i = 1, min(size(this%hubbard_v, 1), size(hubbard_v, 1))
+            do j = 1, min(size(this%hubbard_v, 2), size(hubbard_v, 2))
+               do li = 1, min(size(this%hubbard_v, 3), size(hubbard_v, 3))
+                  do lj = 1, min(size(this%hubbard_v, 4), size(hubbard_v, 4))
+                     this%hubbard_v(i, j, li, lj) = hubbard_v(i, j, li, lj)/ry2ev
+                  end do
+               end do
+            end do
+         end do
+
+         ! Enforce V_ji(lj,li) = V_ij(li,lj) when only one side is provided.
+         do i = 1, size(this%hubbard_v, 1)
+            do j = 1, size(this%hubbard_v, 2)
+               do li = 1, size(this%hubbard_v, 3)
+                  do lj = 1, size(this%hubbard_v, 4)
+                     if (abs(this%hubbard_v(i, j, li, lj)) > 1.0e-10_rp) then
+                        this%hubbard_v_check = .true.
+                        if (j <= size(this%hubbard_v, 1) .and. i <= size(this%hubbard_v, 2)) then
+                           if (abs(this%hubbard_v(j, i, lj, li)) <= 1.0e-10_rp) then
+                              this%hubbard_v(j, i, lj, li) = this%hubbard_v(i, j, li, lj)
+                           end if
+                        end if
+                     end if
+                  end do
+               end do
+            end do
+         end do
+      end if
+
       this%hubbard_u_general_check = .false.
       do i = 1, this%lattice%ntype
          if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u(:))) > 1.0e-10_rp) then
@@ -355,6 +393,8 @@ contains
       call g_safe_alloc%allocate('hamiltonian.hubbard_u_pot', this%hubbard_u_pot, (/nb, nb, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_u_impurity', this%hubbard_u_impurity, (/max(1, this%charge%lattice%nrec), 4/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_j_impurity', this%hubbard_j_impurity, (/max(1, this%charge%lattice%nrec), 4/))
+      call g_safe_alloc%allocate('hamiltonian.hubbard_v', this%hubbard_v, (/max(1, this%charge%lattice%nrec), max(1, this%charge%lattice%nrec), 4, 4/))
+      call g_safe_alloc%allocate('hamiltonian.hubbard_v_pot', this%hubbard_v_pot, (/nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
@@ -391,6 +431,8 @@ contains
       allocate (this%hubbard_u_pot(nb, nb, this%charge%lattice%ntype))
       allocate (this%hubbard_u_impurity(max(1, this%charge%lattice%nrec), 4))
       allocate (this%hubbard_j_impurity(max(1, this%charge%lattice%nrec), 4))
+      allocate (this%hubbard_v(max(1, this%charge%lattice%nrec), max(1, this%charge%lattice%nrec), 4, 4))
+      allocate (this%hubbard_v_pot(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       !end if
       !end if
 #endif
@@ -430,6 +472,8 @@ contains
       this%hubbard_u_pot(:, :, :) = 0.0d0
       this%hubbard_u_impurity(:, :) = 0.0d0
       this%hubbard_j_impurity(:, :) = 0.0d0
+      this%hubbard_v(:, :, :, :) = 0.0d0
+      this%hubbard_v_pot(:, :, :, :) = 0.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
@@ -441,6 +485,7 @@ contains
       this%jl_alpha = 'z'
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
+      this%hubbard_v_check = .false.
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
@@ -1245,6 +1290,9 @@ contains
       if (this%hubbard_u_general_check) then
          call this%calculate_hubbard_u_potential_general()
       end if
+      if (this%hubbard_v_check) then
+         call this%calculate_hubbard_v_potential()
+      end if
 
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
@@ -1276,6 +1324,15 @@ contains
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + cmplx(this%hubbard_u_pot(i, j, ntype), 0.0_rp, kind=rp)
+               end do
+            end do
+         end if
+         if (this%hubbard_v_check) then
+            do m = 1, nr
+               do i = 1, nb
+                  do j = 1, nb
+                     this%ee(i, j, m, ntype) = this%ee(i, j, m, ntype) + cmplx(this%hubbard_v_pot(i, j, m, ntype), 0.0_rp, kind=rp)
+                  end do
                end do
             end do
          end if
@@ -1321,6 +1378,9 @@ contains
       if (this%hubbard_u_general_check) then
          call this%calculate_hubbard_u_potential_general()
       end if
+      if (this%hubbard_v_check) then
+         call this%calculate_hubbard_v_potential()
+      end if
 
       call g_timer%start('build local hamiltonian')
     !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
@@ -1342,6 +1402,15 @@ contains
             do i = 1, nb
                do j = 1, nb
                   this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + cmplx(this%hubbard_u_pot(i, j, ino), 0.0_rp, kind=rp)
+               end do
+            end do
+         end if
+         if (this%hubbard_v_check) then
+            do m = 1, nr
+               do i = 1, nb
+                  do j = 1, nb
+                     this%hall(i, j, m, nlim) = this%hall(i, j, m, nlim) + cmplx(this%hubbard_v_pot(i, j, m, ino), 0.0_rp, kind=rp)
+                  end do
                end do
             end do
          end if
@@ -2064,4 +2133,88 @@ contains
          if (allocated(l_arr(na)%val)) deallocate(l_arr(na)%val)
       end do
    end subroutine calculate_hubbard_u_potential_general
+
+   subroutine calculate_hubbard_v_potential(this)
+      class(hamiltonian), intent(inout) :: this
+
+      integer :: itype, ia, nr, m, ja, jt, ispin, li, lj, ii, i0, i1, jdim
+      real(rp) :: rmin, rcur, tol, occ_up, occ_dn
+      real(rp), dimension(3) :: dr
+      real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin
+
+      this%hubbard_v_pot(:, :, :, :) = 0.0_rp
+      n_spin(:, :, :) = 0.0_rp
+      tol = 1.0e-4_rp
+
+      ! Spin- and l-resolved occupations from local density matrices.
+      do itype = 1, this%lattice%ntype
+         do li = 1, min(4, this%control%lmax + 1)
+            jdim = 2*li - 1
+            do ispin = 1, 2
+               do ii = 1, jdim
+                  n_spin(itype, li, ispin) = n_spin(itype, li, ispin) + &
+                     this%lattice%symbolic_atoms(itype)%potential%ldm(li, ispin, ii, ii)
+               end do
+            end do
+         end do
+      end do
+
+      do itype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(itype)
+         nr = this%lattice%nn(ia, 1)
+
+         ! Find nearest-neighbour shell radius for this atom type.
+         rmin = huge(1.0_rp)
+         do m = 2, nr
+            ja = this%lattice%nn(ia, m)
+            if (ja == 0) cycle
+            if (this%lattice%pbc) then
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, dr)
+            else
+               dr(:) = (this%lattice%cr(:, ja) - this%lattice%cr(:, ia))*this%lattice%alat
+            end if
+            rcur = norm2(dr)
+            if (rcur > tol .and. rcur < rmin) rmin = rcur
+         end do
+         if (rmin >= huge(1.0_rp)*0.5_rp) cycle
+
+         do m = 2, nr
+            ja = this%lattice%nn(ia, m)
+            if (ja == 0) cycle
+            jt = this%lattice%iz(ja)
+            if (jt <= 0 .or. jt > this%lattice%ntype) cycle
+
+            if (this%lattice%pbc) then
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, dr)
+            else
+               dr(:) = (this%lattice%cr(:, ja) - this%lattice%cr(:, ia))*this%lattice%alat
+            end if
+            rcur = norm2(dr)
+            if (abs(rcur - rmin) > 5.0e-3_rp) cycle
+
+            ! Approximate intersite +V contribution:
+            ! V^I,sigma_mm' += - sum_{J in NN} V^{IJ}_{li,lj} * n^{J,sigma}_{lj} / (2*li-1) * delta_mm'
+            do li = 1, min(4, this%control%lmax + 1)
+               if (li > size(this%hubbard_v, 3)) cycle
+               if (li > size(this%hubbard_v, 4)) cycle
+               jdim = 2*li - 1
+               i0 = (li - 1)*(li - 1) + 1
+               i1 = i0 + jdim - 1
+               do lj = 1, min(4, size(this%hubbard_v, 4), this%control%lmax + 1)
+                  if (lj > size(this%hubbard_v, 3)) cycle
+                  if (abs(this%hubbard_v(itype, jt, li, lj)) <= 1.0e-12_rp) cycle
+                  occ_up = n_spin(jt, lj, 1)
+                  occ_dn = n_spin(jt, lj, 2)
+                  do ii = i0, i1
+                     this%hubbard_v_pot(ii, ii, m, itype) = this%hubbard_v_pot(ii, ii, m, itype) - &
+                        this%hubbard_v(itype, jt, li, lj)*occ_up/max(1, jdim)
+                     this%hubbard_v_pot(ii + spin_off, ii + spin_off, m, itype) = &
+                        this%hubbard_v_pot(ii + spin_off, ii + spin_off, m, itype) - &
+                        this%hubbard_v(itype, jt, li, lj)*occ_dn/max(1, jdim)
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine calculate_hubbard_v_potential
 end module hamiltonian_mod
