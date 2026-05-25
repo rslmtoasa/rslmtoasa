@@ -87,6 +87,10 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: velocity_scale
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
+      !> On-site potential correction for LDA+U (+J) in spin-orbital basis
+      real(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
+      !> Enable +U correction when any U/J is provided on symbolic atoms
+      logical :: hubbard_u_general_check = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -110,6 +114,7 @@ module hamiltonian_mod
       procedure :: restore_to_default
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
+      procedure :: calculate_hubbard_u_potential_general
       final     :: destructor
    end type hamiltonian
 
@@ -194,6 +199,7 @@ contains
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
       if (allocated(this%hxc)) deallocate(this%hxc)
+      if (allocated(this%hubbard_u_pot)) deallocate(this%hubbard_u_pot)
 #endif
    end subroutine destructor
 
@@ -245,6 +251,16 @@ contains
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
+
+      this%hubbard_u_general_check = .false.
+      do i = 1, this%lattice%ntype
+         if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u(:))) > 1.0e-10_rp) then
+            this%hubbard_u_general_check = .true.
+         end if
+         if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j(:))) > 1.0e-10_rp) then
+            this%hubbard_u_general_check = .true.
+         end if
+      end do
 
    end subroutine build_from_file
 
@@ -322,6 +338,7 @@ contains
       allocate (this%jso_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%jlo_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%velocity_scale(this%charge%lattice%ntype))
+      allocate (this%hubbard_u_pot(nb, nb, this%charge%lattice%ntype))
       !end if
       !end if
 #endif
@@ -358,6 +375,7 @@ contains
       this%jso_a(:, :, :, :) = 0.0d0
       this%jlo_a(:, :, :, :) = 0.0d0
       this%velocity_scale(:) = 1.0d0
+      this%hubbard_u_pot(:, :, :) = 0.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
@@ -367,6 +385,7 @@ contains
       this%theta_ss = 0.0_rp
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
+      this%hubbard_u_general_check = .false.
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
@@ -1168,6 +1187,10 @@ contains
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
 
+      if (this%hubbard_u_general_check) then
+         call this%calculate_hubbard_u_potential_general()
+      end if
+
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
@@ -1194,6 +1217,13 @@ contains
             write(132,*) 'm=', m
             write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
+         if (this%hubbard_u_general_check) then
+            do i = 1, nb
+               do j = 1, nb
+                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + cmplx(this%hubbard_u_pot(i, j, ntype), 0.0_rp, kind=rp)
+               end do
+            end do
+         end if
          if (this%hoh) then
             call this%build_obarm()
             call this%build_enim()
@@ -1233,6 +1263,10 @@ contains
       ! Local variables
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
+      if (this%hubbard_u_general_check) then
+         call this%calculate_hubbard_u_potential_general()
+      end if
+
       call g_timer%start('build local hamiltonian')
     !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
       do nlim = 1, this%charge%lattice%nmax
@@ -1249,6 +1283,13 @@ contains
                end do
             end do
          end do
+         if (this%hubbard_u_general_check) then
+            do i = 1, nb
+               do j = 1, nb
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + cmplx(this%hubbard_u_pot(i, j, ino), 0.0_rp, kind=rp)
+               end do
+            end do
+         end if
          if (this%hoh) then
             call this%build_obarm()
             call this%build_enim()
@@ -1831,4 +1872,121 @@ contains
          end if
       end if
    end subroutine rotate_from_local_axis
+
+   subroutine calculate_hubbard_u_potential_general(this)
+      class(hamiltonian), intent(inout) :: this
+
+      integer :: na, l, ispin, i, j, m1, m2, m3, m4, l_index, m_max
+      integer :: m1_val, m2_val, m3_val, m4_val
+      real(rp) :: f0, f2, f4, f6
+      real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
+      real(rp), dimension(this%lattice%ntype, 4, 4) :: f
+      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
+      type :: int_array
+         integer, allocatable :: val(:)
+      end type int_array
+      type(int_array), dimension(this%lattice%ntype) :: l_arr
+      type(int_array), dimension(4) :: ms
+      integer :: cntr
+
+      ms(1)%val = [0]
+      ms(2)%val = [-1, 0, 1]
+      ms(3)%val = [-2, -1, 0, 1, 2]
+      ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
+
+      this%hubbard_u_pot(:, :, :) = 0.0_rp
+      hub_u(:, :) = 0.0_rp
+      hub_j(:, :) = 0.0_rp
+      f(:, :, :) = 0.0_rp
+      ldm(:, :, :, :, :) = 0.0_rp
+      hub_pot(:, :, :, :, :) = 0.0_rp
+
+      do na = 1, this%lattice%ntype
+         do l = 1, 4
+            hub_u(na, l) = this%lattice%symbolic_atoms(na)%potential%hubbard_u(l)
+            hub_j(na, l) = this%lattice%symbolic_atoms(na)%potential%hubbard_j(l)
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
+         f(na, 1, 1) = hub_u(na, 1)
+         f(na, 2, 1) = hub_u(na, 2)
+         f(na, 2, 2) = hub_j(na, 2)*5.0_rp
+         f(na, 3, 1) = hub_u(na, 3)
+         f(na, 3, 2) = 14.0_rp*hub_j(na, 3)/1.625_rp
+         f(na, 3, 3) = 0.625_rp*f(na, 3, 2)
+         f(na, 4, 1) = hub_u(na, 4)
+         f(na, 4, 2) = 6435.0_rp*hub_j(na, 4)/(286.0_rp + 195.0_rp*0.67_rp + 250.0_rp*0.49_rp)
+         f(na, 4, 3) = 0.67_rp*f(na, 4, 2)
+         f(na, 4, 4) = 0.49_rp*f(na, 4, 2)
+      end do
+
+      do na = 1, this%lattice%ntype
+         cntr = count(abs(hub_u(na, :)) > 1.0e-10_rp)
+         allocate(l_arr(na)%val(cntr))
+         cntr = 0
+         do l = 1, 4
+            if (abs(hub_u(na, l)) > 1.0e-10_rp) then
+               cntr = cntr + 1
+               l_arr(na)%val(cntr) = l
+            end if
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
+         do l = 0, min(3, this%control%lmax)
+            do ispin = 1, 2
+               do i = 1, 2*l + 1
+                  do j = 1, 2*l + 1
+                     ldm(na, l + 1, ispin, i, j) = this%lattice%symbolic_atoms(na)%potential%ldm(l + 1, ispin, i, j)
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
+         do l = 1, size(l_arr(na)%val)
+            l_index = l_arr(na)%val(l)
+            m_max = 2*l_index - 1
+            do ispin = 1, 2
+               do m1 = 1, m_max
+                  do m2 = 1, m_max
+                     do m3 = 1, m_max
+                        do m4 = 1, m_max
+                           m1_val = ms(l_index)%val(m1)
+                           m2_val = ms(l_index)%val(m2)
+                           m3_val = ms(l_index)%val(m3)
+                           m4_val = ms(l_index)%val(m4)
+                           f0 = f(na, l_index, 1)
+                           f2 = f(na, l_index, 2)
+                           f4 = f(na, l_index, 3)
+                           f6 = f(na, l_index, 4)
+                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                                + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*ldm(na, l_index, 3 - ispin, m3, m4) &
+                                + (Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) &
+                                -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*ldm(na, l_index, ispin, m3, m4)
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
+         do l = 0, min(3, this%control%lmax)
+            do i = 1, 2*l + 1
+               do j = 1, 2*l + 1
+                  this%hubbard_u_pot(l**2 + i, l**2 + j, na) = hub_pot(na, l + 1, 1, i, j)
+                  this%hubbard_u_pot(l**2 + i + spin_off, l**2 + j + spin_off, na) = hub_pot(na, l + 1, 2, i, j)
+               end do
+            end do
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
+         if (allocated(l_arr(na)%val)) deallocate(l_arr(na)%val)
+      end do
+   end subroutine calculate_hubbard_u_potential_general
 end module hamiltonian_mod

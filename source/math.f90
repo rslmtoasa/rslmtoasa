@@ -2497,4 +2497,17 @@ contains
       matrix(3, 3) = cosTheta + uz*uz*(1.0 - cosTheta)
    end subroutine
 
+   function Coulomb_mat(l, m1, m3, m2, m4, f0, f2, f4, f6) result(res)
+      integer, intent(in) :: l, m1, m3, m2, m4
+      real(rp), intent(in) :: f0, f2, f4, f6
+      real(rp) :: res
+
+      res = gaunt(l, m1, l, m2, 0, 0)*gaunt(l, m3, l, m4, 0, 0)*f0
+      res = res + gaunt(l, m1, l, m2, 2, m1 - m2)*gaunt(l, m3, l, m4, 2, m2 - m1)*f2
+      res = res + gaunt(l, m1, l, m2, 4, m1 - m2)*gaunt(l, m3, l, m4, 4, m2 - m1)*f4
+      if (l == 3) then
+         res = res + gaunt(l, m1, l, m2, 6, m1 - m2)*gaunt(l, m3, l, m4, 6, m2 - m1)*f6
+      end if
+   end function Coulomb_mat
+
 end module math_mod
