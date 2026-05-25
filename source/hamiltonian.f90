@@ -91,6 +91,9 @@ module hamiltonian_mod
       real(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
       !> Enable +U correction when any U/J is provided on symbolic atoms
       logical :: hubbard_u_general_check = .false.
+      !> Optional impurity-only Hubbard inputs (eV in input.nml, stored as Ry here)
+      real(rp), dimension(:, :), allocatable :: hubbard_u_impurity, hubbard_j_impurity
+      logical :: hubbard_u_impurity_check = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -200,6 +203,8 @@ contains
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
       if (allocated(this%hxc)) deallocate(this%hxc)
       if (allocated(this%hubbard_u_pot)) deallocate(this%hubbard_u_pot)
+      if (allocated(this%hubbard_u_impurity)) deallocate(this%hubbard_u_impurity)
+      if (allocated(this%hubbard_j_impurity)) deallocate(this%hubbard_j_impurity)
 #endif
    end subroutine destructor
 
@@ -214,6 +219,7 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit, i, l, n_l_in
+      integer :: nimp_in
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -261,6 +267,35 @@ contains
                this%lattice%symbolic_atoms(i)%potential%hubbard_u(l) = hubbard_u_general(i, l)/ry2ev
                this%lattice%symbolic_atoms(i)%potential%hubbard_j(l) = hubbard_j_general(i, l)/ry2ev
             end do
+         end do
+      end if
+
+      this%hubbard_u_impurity_check = .false.
+      if (allocated(hubbard_u_impurity) .and. allocated(hubbard_j_impurity)) then
+         nimp_in = min(size(hubbard_u_impurity, 1), size(hubbard_j_impurity, 1))
+         if (nimp_in > 0) then
+            this%hubbard_u_impurity(:, :) = 0.0_rp
+            this%hubbard_j_impurity(:, :) = 0.0_rp
+            do i = 1, min(this%lattice%nrec, nimp_in)
+               do l = 1, min(4, size(hubbard_u_impurity, 2), size(hubbard_j_impurity, 2))
+                  this%hubbard_u_impurity(i, l) = hubbard_u_impurity(i, l)/ry2ev
+                  this%hubbard_j_impurity(i, l) = hubbard_j_impurity(i, l)/ry2ev
+               end do
+            end do
+         end if
+      end if
+
+      ! Apply impurity-specific U/J to recursive atoms (nbulk+1:ntype)
+      if (this%lattice%nrec > 0) then
+         do i = 1, this%lattice%nrec
+            if (maxval(abs(this%hubbard_u_impurity(i, :))) > 1.0e-10_rp .or. &
+                maxval(abs(this%hubbard_j_impurity(i, :))) > 1.0e-10_rp) then
+               this%hubbard_u_impurity_check = .true.
+               do l = 1, min(4, size(this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%hubbard_u))
+                  this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%hubbard_u(l) = this%hubbard_u_impurity(i, l)
+                  this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%hubbard_j(l) = this%hubbard_j_impurity(i, l)
+               end do
+            end if
          end do
       end if
 
@@ -317,6 +352,9 @@ contains
       call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hubbard_u_pot', this%hubbard_u_pot, (/nb, nb, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hubbard_u_impurity', this%hubbard_u_impurity, (/max(1, this%charge%lattice%nrec), 4/))
+      call g_safe_alloc%allocate('hamiltonian.hubbard_j_impurity', this%hubbard_j_impurity, (/max(1, this%charge%lattice%nrec), 4/))
       !end if
       !end if
 #else
@@ -351,6 +389,8 @@ contains
       allocate (this%jlo_a(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%velocity_scale(this%charge%lattice%ntype))
       allocate (this%hubbard_u_pot(nb, nb, this%charge%lattice%ntype))
+      allocate (this%hubbard_u_impurity(max(1, this%charge%lattice%nrec), 4))
+      allocate (this%hubbard_j_impurity(max(1, this%charge%lattice%nrec), 4))
       !end if
       !end if
 #endif
@@ -388,6 +428,8 @@ contains
       this%jlo_a(:, :, :, :) = 0.0d0
       this%velocity_scale(:) = 1.0d0
       this%hubbard_u_pot(:, :, :) = 0.0d0
+      this%hubbard_u_impurity(:, :) = 0.0d0
+      this%hubbard_j_impurity(:, :) = 0.0d0
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
@@ -398,6 +440,7 @@ contains
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_u_general_check = .false.
+      this%hubbard_u_impurity_check = .false.
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
