@@ -32,6 +32,10 @@ module exchange_mod
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
+#ifdef USE_MPI
+   use mpi
+#endif
+   use cfd
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -112,6 +116,12 @@ contains
       obj%hamiltonian => bands_obj%recursion%hamiltonian
 
       call obj%restore_to_default()
+      ! initialize constraining if requested for exchange calculations
+      if (associated(obj%control)) then
+         if (obj%control%constraints_enable) then
+            call initialize_cfd(obj%lattice%nrec, 1, obj%control%constraints_i_cons, obj%control%constraints_code_prefac)
+         end if
+      end if
    end function constructor
 
    subroutine destructor(this)
@@ -1435,6 +1445,7 @@ contains
 
    subroutine calculate_exchange(this)
       use mpi_mod
+      use Parameters
       class(exchange) :: this
       complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4, smat
       complex(rp), dimension(this%en%channels_ldos + 10) :: jtot, jcomp
@@ -1443,6 +1454,9 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(3, 3) :: jtens
       integer :: nv, i, j, k, l, njij, funit, iostatus
+      ! variables for constraining
+      real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
+      integer :: ia_loc
       logical :: isopen
 
       integer :: njij_glob
@@ -1456,6 +1470,30 @@ contains
       ! row = [ jij dij aij]
       allocate (T_comm_xc(13, this%lattice%njij))
       T_comm_xc = 0.0_rp
+
+      ! Apply constraining field for exchange if requested
+      if (associated(this%control)) then
+         if (this%control%constraints_enable) then
+            allocate (mom_in(3, this%lattice%nrec))
+            allocate (mom_ref(3, this%lattice%nrec))
+            allocate (bfield(3, this%lattice%nrec))
+            do ia_loc = 1, this%lattice%nrec
+               mom_in(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom(:)
+               if (allocated(this%control%constraints_mom_ref)) then
+                  if (size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
+                     mom_ref(:, ia_loc) = this%control%constraints_mom_ref(:, ia_loc)
+                  else
+                     mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+                  end if
+               else
+                  mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+               end if
+               bfield(:, ia_loc) = 0.0_dblprec
+            end do
+            call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)
+            deallocate(mom_in, mom_ref, bfield)
+         end if
+      end if
 
       inquire (unit=20, opened=isopen)
       if (isopen) then
