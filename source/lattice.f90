@@ -148,15 +148,21 @@ module lattice_mod
       integer :: kk
 
       !> TODO
-      !> Clust coordinates
+      !> Clust coordinates (expanded cluster)
       !>
-      !> Clust coordinates
+      !> 'cr' holds the fully expanded cluster coordinates (cartesian coordinates)
+      !> after the Bravais/cluster build. Shape is (3, kk) where 'kk' is the
+      !> actual number of atoms in the constructed cluster. During construction
+      !> a temporary local array with capacity (3, ndim) is often used and then
+      !> moved into 'this%cr'. We shrink 'this%cr' to (3,kk) as soon as 'kk' is
+      !> known to avoid holding a large buffer unnecessarily.
       real(rp), dimension(:, :), allocatable :: cr
 
       !> TODO
-      !> Clust coordinates
+      !> Clust coordinates (primitive cell / basis)
       !>
-      !> Clust coordinates
+      !> 'crd' stores the primitive cell (basis) coordinates (3, ntot). It is
+      !> used as the starting point when expanding to the cluster (cr).
       real(rp), dimension(:, :), allocatable :: crd
       !> Clust atom number
       integer, dimension(:), allocatable :: ham_i
@@ -179,6 +185,7 @@ module lattice_mod
       !>TODO
       !> Nmax
       integer :: nmax
+
 
       !> TODO
       !> Atom number for calculation.
@@ -212,6 +219,7 @@ module lattice_mod
 
       !> Neighbouring map for each atom type
       integer, dimension(:, :), allocatable :: nn
+
       !> Maximum number of neighbours found in current structure map.
       integer :: nn_max
 
@@ -1348,6 +1356,7 @@ contains
       real(rp) :: rc, rs, lc, lcx, lcy, lcz
       integer, dimension(:), allocatable :: iz, num
       real(rp), dimension(:, :), allocatable :: cr, crbravais
+   real(rp), allocatable :: tmp(:, :)
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
@@ -1444,9 +1453,22 @@ contains
 
       this%kk = kk
       call move_alloc(cr, this%cr)
+      ! Shrink this%cr to the actual cluster size kk to avoid keeping the
+      ! large temporary allocation of shape (3, ndim). We copy the first kk
+      ! columns into a smaller array and move that allocation into this%cr.
+      if (allocated(this%cr)) then
+         if (size(this%cr, 2) > kk) then
+            allocate(tmp(3, kk))
+            tmp(:, :) = this%cr(:, 1:kk)
+            call move_alloc(tmp, this%cr)
+         end if
+      end if
       call move_alloc(iz, this%iz)
       call move_alloc(num, this%num)
       close (10)
+
+      ! Test to set nmax to the whole cluster
+      ! this%nmax = kk
    end subroutine bravais
 
    !---------------------------------------------------------------------------
@@ -2083,6 +2105,8 @@ contains
       end do
       this%nbas = ncnt
       this%nmax = nmax
+      ! Temporary hack for full HALL
+      !this%nmax = kk
       write (11, *) "--Info-for-control-----------------"
       write (11, '(a6, i4, a6, i6, a6, i6, a6, i6)') 'NTYPE=', this%ntype, 'NMAX=', this%nmax, 'NBAS=', this%nbas, 'NREC=', this%nrec
 
@@ -2179,7 +2203,7 @@ contains
 
       ! Clust parameters
       ncut = 9
-      nnmx = 5250
+      nnmx = 100 ! 5250
       nomx = this%ntot
       kk = this%kk
       allocate (set(3, nomx, nnmx)); set = 0.0d0
@@ -3110,26 +3134,34 @@ contains
       real(rp), dimension(:, :), allocatable :: cr
       real(rp), dimension(:, :), allocatable :: s
       real(rp), dimension(:, :, :), allocatable :: sbar
+      real(rp), dimension(:, :), allocatable :: sbarvec
       !
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 5250 !350
-      allocate (cr(3, nt))
+      nt = this%kk ! Use cluster size instead of fixed 500 for neighbours
+      ! allocate (cr(3, nt))
       allocate (sbar(np, np, nt))
-      call this%clusba(r2, crd, ia, nat, ndi, nt)
-      call write_neighbor_vector_dump(17, this%sbarvec, nt)
-      flush(17)
+      allocate(sbarvec(3, nt))
+      call this%clusba(r2, crd, ia, nat, ndi, nt, sbarvec)
+      write (17, 10000) nt
+      write (17, 10002) ((sbarvec(j, i), j=1, 3), i=1, nt)
+      !call write_neighbor_vector_dump(17, this%sbarvec, nt)
+      !write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
       nrl = np*nt
       na = (nrl*(nrl + 1))/2
       allocate (a(na))
       allocate (bet(nrl))
       allocate (wk(nrl))
       allocate (s(nrl, nrl))
-      call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      call micha(wav, sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      !call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
 
       ! Saving parameters to be used in the Hamiltonian build
-      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
+      ! Call clusba again for proper number of TB neighbours
+      call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt, sbarvec)
+      ! Store the number of neighbours
+      this%nn_max = nt
 
       do m = 1, nt
          do i = 1, np
@@ -3156,8 +3188,12 @@ contains
       !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
-      deallocate (a, bet, cr, wk, s, sbar)
+      deallocate (a, bet, wk, s, sbar, sbarvec)
       return
+
+10000 format(i5)
+10001 format(3f8.4)
+10002 format(3f8.4)
    end subroutine dbar1
 
    !---------------------------------------------------------------------------
@@ -3184,7 +3220,6 @@ contains
       ! Output
       integer, intent(inout) :: n
       real(rp), dimension(:, :), intent(inout), optional :: sbarvec_out
-!    real(rp), dimension(3, n), intent(inout) :: cr
       ! Local variables
       integer :: i, ii, k, nn
       real(rp) :: s1
@@ -3206,6 +3241,7 @@ contains
          this%sbarvec(k, 1) = 0.0d0
       end do
       if (present(sbarvec_out)) sbarvec_out(:, 1) = 0.0d0
+
       do nn = 1, nat
          s1 = 0.0
          do i = 1, 3
@@ -3223,8 +3259,6 @@ contains
                end if
             end if
          end if
-!!    if(ii>n) stop "Too large sbar cutoff, decrease NCUT in MAIN or increase NA", &
-!!    "in DBAR1."
       end do
       n = ii
    end subroutine clusba
@@ -3425,6 +3459,7 @@ contains
                  R(1, 1)**2 + R(2, 1)**2 + R(3, 1)**2) <= (R2/ncut)) then
             ! Legacy view.sbar printing is emitted in dbar1 where neighbour
             ! atom indices are available from nn(ia,m).
+	    ! write (16, 10002) r(1, ir), r(2, ir), r(3, ir), iclus
             hitc = hitc + 1
             irl0 = (ir - 1)*nlm
             do ilm = 1, nlm
@@ -4811,6 +4846,52 @@ contains
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
       integer :: newunit
+
+      include 'include_codes/namelists/lattice.f90'
+
+      ! scalar
+
+      wav = this%wav
+      rc = this%rc
+      celldm = this%celldm
+      alat = this%alat
+      nlay = this%nlay
+      ndim = this%ndim
+      npe = this%npe
+      nclu = this%nclu
+      crystal_sym = this%crystal_sym
+      surftype = this%surftype
+      a = this%a
+
+      ! ! one dimensional allocatables
+
+      if (allocated(this%no)) then
+         allocate (no, mold=this%no)
+         no = this%no
+      else
+         allocate (no(0))
+      end if
+      if (allocated(this%izp)) then
+         allocate (izp, mold=this%izp)
+         izp = this%izp
+      else
+         allocate (izp(0))
+      end if
+
+      ! ! two dimensional allocatables
+
+      if (allocated(this%inclu)) then
+         allocate (inclu, mold=this%inclu)
+         inclu = this%inclu
+      else
+         allocate (inclu(0, 0))
+      end if
+      if (allocated(this%crd)) then
+         allocate (crd, mold=this%crd)
+         crd = this%crd
+      else
+         allocate (crd(0, 0))
+      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)

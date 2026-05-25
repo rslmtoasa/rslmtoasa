@@ -82,7 +82,8 @@ module hamiltonian_mod
       !> Velocity operators
       complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, js_a, jl_a, vo_a, vo_b, jso_a, jlo_a
       character(len=10) :: js_alpha, jl_alpha
-      real(rp), dimension(3) :: v_alpha, v_beta
+      real(rp), dimension(3) :: v_alpha, v_beta, q_ss
+      real(rp) :: theta_ss
       real(rp), dimension(:), allocatable :: velocity_scale
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
@@ -215,6 +216,8 @@ contains
       orb_pol = this%orb_pol
       v_alpha(:) = this%v_alpha(:)
       v_beta(:) = this%v_beta(:)
+      q_ss(:) = this%q_ss(:)
+      theta_ss = this%theta_ss
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
@@ -237,6 +240,8 @@ contains
       this%orb_pol = orb_pol
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
+      this%q_ss(:) = q_ss(:)
+      this%theta_ss = theta_ss
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
@@ -357,7 +362,9 @@ contains
       this%local_axis = .false.
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
-      this%v_beta(:) = [1, 0, 0] 
+      this%v_beta(:) = [1, 0, 0]
+      this%q_ss(:) = [0.0_rp, 0.0_rp, 0.0_rp]
+      this%theta_ss = 0.0_rp
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
    end subroutine restore_to_default
@@ -1530,14 +1537,17 @@ contains
       end do
    end subroutine build_from_paoflow
 
-   subroutine ham0m_nc(this, it, jt, vet, hhh)
+   subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh)
       class(hamiltonian), intent(inout) :: this
       ! Input
+      integer, intent(in) :: ia, ja ! Atom sites i and j
       integer, intent(in) :: it, jt ! Type of atom i and j
       real(rp), dimension(3), intent(in) :: vet
       real(rp), dimension(norb, norb), intent(in) :: hhh
       ! Local Variables
       integer :: i, j, ilm, jlm, m
+      real(rp), dimension(3) :: mom_ia, mom_ja
+      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
       complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
@@ -1547,15 +1557,29 @@ contains
       this%hhmag(:, :, :) = 0.0d0
 
       vv = norm2(vet)
+      mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
+      mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
+      if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
+         r_ia = this%charge%lattice%cr(:, ia)
+         r_ja = this%charge%lattice%cr(:, ja)
+         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom_ia(3) = cos(this%theta_ss)
+         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
+         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
+         mom_ja(3) = cos(this%theta_ss)
+      end if
 
       ! Real to complex
-      dot = cmplx(dot_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
+      dot = cmplx(dot_product(mom_ia, mom_ja), kind=kind(0.0d0))
       do i = 1, this%charge%lattice%ntype
          do j = 1, 3
             momc(i, j) = cmplx(this%charge%lattice%symbolic_atoms(i)%potential%mom(j), kind=kind(0.0d0))
          end do
       end do
-      cross = cmplx(cross_product(this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom), kind=kind(0.0d0))
+      momc(it, :) = cmplx(mom_ia, kind=kind(0.0d0))
+      momc(jt, :) = cmplx(mom_ja, kind=kind(0.0d0))
+      cross = cmplx(cross_product(mom_ia, mom_ja), kind=kind(0.0d0))
       hhhc(:, :) = cmplx(hhh(:, :), kind=kind(0.0d0))
 
       if (size(this%charge%lattice%symbolic_atoms(it)%potential%wx0) < norb) then
@@ -1635,9 +1659,10 @@ contains
       real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
       real(rp), dimension(3) :: vet
       real(rp), dimension(norb, norb) :: hhh
-      integer :: i, j, k, l, m, n, it, jt, jj, dummy
+      integer :: i, j, k, l, m, n, it, jt, jj, nn_max_loc
       integer :: ni, mdir
       integer :: kk ! Clust size number
+      real(rp), dimension(:, :), allocatable :: ham_vec
 
       this%hmag(:, :, :, :) = 0.0d0
 
@@ -1645,7 +1670,9 @@ contains
       cralat(:, :) = this%charge%lattice%cr(:, :)*this%charge%lattice%alat
       kk = this%charge%lattice%kk
 
-      call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, dummy)
+      allocate(ham_vec(3, nr))
+      nn_max_loc = nr
+      call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
 
       !do m=1, nr
       !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
@@ -1667,17 +1694,18 @@ contains
             !write(123, ´(3f10.6)´) vet(:)
             !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
             !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
-            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ntype)
+            call this%hmfind(vet, nr, hhh, m, ia, m, ni, ham_vec)
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
             end if
-            call this%ham0m_nc(it, jt, vet, hhh)
+            call this%ham0m_nc(ia, jj, it, jt, vet, hhh)
             do mdir = 1, 4
                call hcpx(this%hhmag(:, :, mdir), 'cart2sph')
                this%hmag(:, :, m, mdir) = this%hhmag(:, :, mdir)
             end do
          end if
       end do
+      if (allocated(ham_vec)) deallocate(ham_vec)
       !do m=1, nr
       !  write(123, *)´m=´, m
       !  do mdir=1, 4
@@ -1689,10 +1717,9 @@ contains
       !end do
    end subroutine chbar_nc
 
-   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ntype)
+   subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ham_vec)
       class(hamiltonian), intent(inout) :: this
       ! Input
-      integer, intent(in) :: ntype ! Atom type
       integer, intent(in) :: m ! Number of the given neighbour
       integer, intent(in) :: ia ! Atom number in clust
       integer, intent(in) :: jn ! ?
@@ -1701,6 +1728,7 @@ contains
       ! Output
       integer, intent(out) :: ni
       real(rp), dimension(norb, norb), intent(inout) :: hhh
+      real(rp), dimension(3, this%lattice%nn_max), intent(in) :: ham_vec
       ! Local variables
       real(rp) :: a1, a2, a3, aaa, eps
       integer :: i, ilm, jlm
@@ -1713,9 +1741,9 @@ contains
       aaa = 0.0d0
       do i = 1, nr
          !write(123, ´(a, i4, 3f10.4)´)´i´, i, this%charge%lattice%sbarvec(:, i)
-         a1 = (vet(1) - this%charge%lattice%sbarvec(1, i))
-         a2 = (vet(2) - this%charge%lattice%sbarvec(2, i))
-         a3 = (vet(3) - this%charge%lattice%sbarvec(3, i))
+         a1 = (vet(1) - ham_vec(1, i))
+         a2 = (vet(2) - ham_vec(2, i))
+         a3 = (vet(3) - ham_vec(3, i))
          aaa = a1**2 + a2**2 + a3**2
          if (aaa < eps) goto 1000
       end do
