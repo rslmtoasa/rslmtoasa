@@ -126,7 +126,7 @@ Expected: 2.15-2.25 Bohr magnetons per Fe atom (experimental: 2.22).
 
    grep "fermi" input_out.nml
 
-Expected: fermi = -0.069 ± 0.005 Ry.
+Expected: fermi = -0.069 +- 0.005 Ry.
 
 **Spin-split DOS:** Plot DOS to see exchange splitting (up and down bands shifted).
 

@@ -84,7 +84,7 @@ nx, ny, nz
 
 - Defines number of unit cells in each Cartesian direction
 - Center atom typically at (nx+1)/2, (ny+1)/2, (nz+1)/2
-- Larger values → larger cluster → more expensive
+- Larger values -> larger cluster -> more expensive
 
 **Example:**
 
@@ -178,7 +178,7 @@ ws_r (from &par namelist)
 **Meaning:**
 
 - Defines size of non-overlapping sphere around each atom
-- Larger sphere → includes more electron density
+- Larger sphere -> includes more electron density
 - Related to ``sws`` in charge density calculations
 
 **Example:**
@@ -191,8 +191,8 @@ ws_r (from &par namelist)
 
 - For cubic: WS radius ≈ alat × sqrt(π/6) for fcc, etc.
 - ASA requires overlapping spheres to cover all space
-- Too large → overlaps excessive
-- Too small → misses density
+- Too large -> overlaps excessive
+- Too small -> misses density
 
 **Constraint:**
 

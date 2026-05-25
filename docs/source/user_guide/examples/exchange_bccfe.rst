@@ -141,13 +141,13 @@ Physical Interpretation
 
 **Exchange parameters determine:**
 
-- **Curie temperature:** T_C ∝ Σ_j J_ij
-- **Magnon spectrum:** ω(q) depends on J(R)
-- **Domain wall properties:** Width ∝ √(A/K) where A ∝ J
+- **Curie temperature:** :math:`T_C \propto \sum_j J_{ij}`
+- **Magnon spectrum:** :math:`\omega(q)` depends on :math:`J(R)`
+- **Domain wall properties:** Width :math:`\propto \sqrt{A/K}` where :math:`A \propto J`
 
 **For bcc Fe:**
 
-- Strong ferromagnetic 1NN interaction → high T_C (1043 K)
+- Strong ferromagnetic 1NN interaction -> high T_C (1043 K)
 - Weaker 2NN coupling
 - J_ij decays with distance
 
@@ -175,13 +175,13 @@ Export J_ij for downstream simulations:
 
 .. math::
 
-   A = \\frac{J \\cdot S^2}{2a}
+   A = \frac{J \cdot S^2}{2a}
 
 For Fe with J_1 ≈ 22 mRy, S = 1.1, a = 2.86 Å:
 
 .. math::
 
-   A \\approx 2 \\times 10^{-11} \\text{ J/m (agrees with experiment!)}
+   A \approx 2 \times 10^{-11} \text{ J/m (agrees with experiment!)}
 
 Troubleshooting
 ===============

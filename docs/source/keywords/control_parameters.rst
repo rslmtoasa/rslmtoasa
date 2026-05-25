@@ -84,8 +84,8 @@ llsp
 
 **Notes:**
 
-- Too low → missed spectral features
-- Too high → diminishing returns (convergence slows down)
+- Too low -> missed spectral features
+- Too high -> diminishing returns (convergence slows down)
 - Convergence study recommended (see :doc:`../user_guide/examples`)
 
 **Related code:** ``source/recursion.f90::recur()``
@@ -385,7 +385,7 @@ npold
 
 - Related to ``broyden_history`` in SCF mixing
 - Allows Broyden mixing to use multiple previous iterations
-- More history → better convergence but more memory
+- More history -> better convergence but more memory
 
 orb_pol
 -------

@@ -75,8 +75,8 @@ alpha
 **Meaning:**
 
 - New density weight in mixing formula
-- Larger α → larger step (faster but riskier)
-- Smaller α → smaller step (slower but more stable)
+- Larger α -> larger step (faster but riskier)
+- Smaller α -> smaller step (slower but more stable)
 
 **Guidance:**
 
@@ -110,7 +110,7 @@ broyden_history
 
 **Meaning:**
 
-- Higher number: uses more history → better prediction
+- Higher number: uses more history -> better prediction
 - Lower number: faster but less information
 
 **Guidance:**
@@ -251,7 +251,7 @@ Solutions:
 - Verify cluster size adequate (increase r2 or nx,ny,nz)
 
 Additional &self Parameters
-==========================
+===========================
 
 The following parameters from the ``&self`` namelist are less commonly used but
 important for specific situations.
@@ -501,7 +501,7 @@ others may be added in future versions.
 If non-zero temperature (``&energy``):
 
 - SCF may converge more slowly
-- Smeared Fermi surface → fewer oscillations
+- Smeared Fermi surface -> fewer oscillations
 - Can sometimes help or hinder
 
 **Constraint fields:**

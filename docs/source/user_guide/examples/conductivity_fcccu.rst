@@ -93,7 +93,7 @@ Input File: input.nml
 Critical Conductivity Parameters
 ---------------------------------
 
-- ``cond_ll = 500``: Chebyshev expansion order (higher → better resolution, but slower)
+- ``cond_ll = 500``: Chebyshev expansion order (higher -> better resolution, but slower)
 - ``cond_type = 'spin'`` or ``'orb'``: Calculate spin or orbital contribution
 - ``cond_calctype = 'per_type'``: Atom-type resolved conductivity
 - ``v_alpha, v_beta``: Velocity operator directions for tensor component σ_αβ
@@ -113,8 +113,8 @@ The ``&hamiltonian`` namelist specifies which conductivity tensor element to cal
 
 **Common configurations:**
 
-- **Longitudinal:** ``v_alpha = (1,0,0), v_beta = (1,0,0)`` → σ_xx
-- **Hall:** ``v_alpha = (0,1,0), v_beta = (0,0,1)`` → σ_yz
+- **Longitudinal:** ``v_alpha = (1,0,0), v_beta = (1,0,0)`` -> σ_xx
+- **Hall:** ``v_alpha = (0,1,0), v_beta = (0,0,1)`` -> σ_yz
 - **Cross terms:** Any combination
 
 For cubic Cu, by symmetry: σ_xx = σ_yy = σ_zz and off-diagonal terms are zero.

@@ -25,5 +25,9 @@ help:
 
 .DEFAULT_TARGET := help
 
+pdf:
+	@$(SPHINXBUILD) -M latex $(ALLSPHINXOPTS) $(BUILDDIR)
+	@$(MAKE) -C $(BUILDDIR) all-pdf
+
 %: Makefile
 	@$(SPHINXBUILD) -M $@ $(ALLSPHINXOPTS) $(BUILDDIR)

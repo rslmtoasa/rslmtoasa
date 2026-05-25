@@ -166,8 +166,8 @@ These determine the **depth** of recursion (number of coefficients computed).
 
 **Trade-off:**
 
-- Higher cutoff → better accuracy but more computation
-- Lower cutoff → faster but coarser spectral resolution
+- Higher cutoff -> better accuracy but more computation
+- Lower cutoff -> faster but coarser spectral resolution
 
 Typical values balance accuracy and speed; see examples in ``example/`` directory.
 
@@ -236,7 +236,7 @@ Beyond the hopping region, contributions are neglected (Hamiltonian is zero).
 - Accuracy for cluster properties (need to reach bulk limit)
 - Computational cost (scales with cluster size)
 
-Larger ``r2`` → includes more neighbors → more accurate but slower.
+Larger ``r2`` -> includes more neighbors -> more accurate but slower.
 
 Block Recursion for Multi-Orbital Systems
 ==========================================
@@ -262,24 +262,31 @@ Computational cost: $O(n_{\text{orb}}^3)$ higher per step, but fewer iterations 
 Comparison: Direct Diagonalization vs. Recursion
 =================================================
 
-.. table::
+.. list-table::
+   :header-rows: 1
    :align: left
 
-   +-----------------------+------------------------+------------------+
-   | Aspect                | Direct Diagonalization | Recursion Method |
-   +=======================+========================+==================+
-   | Memory                | $O(N^2)$               | $O(N \times L)$  |
-   +-----------------------+------------------------+------------------+
-   | Time (per energy)     | $O(N^3)$               | $O(N \times L)$  |
-   +-----------------------+------------------------+------------------+
-   | Spectral resolution   | Fixed by eigenvalues   | Flexible         |
-   +-----------------------+------------------------+------------------+
-   | Works for disorder    | ✓ (harder)             | ✓ (natural)      |
-   +-----------------------+------------------------+------------------+
-   | Requires k-mesh       | ✓                      | ✗                |
-   +-----------------------+------------------------+------------------+
-   | Code complexity       | Low                    | High             |
-   +-----------------------+------------------------+------------------+
+   * - Aspect
+     - Direct Diagonalization
+     - Recursion Method
+   * - Memory
+     - $O(N^2)$
+     - $O(N \times L)$
+   * - Time (per energy)
+     - $O(N^3)$
+     - $O(N \times L)$
+   * - Spectral resolution
+     - Fixed by eigenvalues
+     - Flexible
+   * - Works for disorder
+     - [OK] (harder)
+     - [OK] (natural)
+   * - Requires k-mesh
+     - [OK]
+     - [X]
+   * - Code complexity
+     - Low
+     - High
 
 where $L$ is recursion cutoff (``llsp`` or ``lld``).
 

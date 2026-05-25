@@ -128,7 +128,7 @@ Key Parameters Explained
 
 - ``energy_min/max``: Energy window for Green's function calculation. Should bracket all valence states.
 
-- ``channels_ldos = 2000``: Number of energy points for DOS. More points → smoother DOS.
+- ``channels_ldos = 2000``: Number of energy points for DOS. More points -> smoother DOS.
 
 **Control Parameters:**
 
@@ -136,13 +136,13 @@ Key Parameters Explained
 
 - ``nsp = 2``: Spin-polarized formalism. Even for non-magnetic systems, use nsp=2 to allow spin polarization if needed.
 
-- ``lld = 250``: Number of recursion levels. Higher → better convergence but slower.
+- ``lld = 250``: Number of recursion levels. Higher -> better convergence but slower.
 
 - ``recur = 'chebyshev'``: Use Chebyshev recursion (Kernel Polynomial Method). Alternative: 'block'.
 
 **Mixing Parameters:**
 
-- ``beta = 0.1``: Mixing parameter for SCF convergence. Lower values (0.01-0.1) → more stable but slower. Higher values (0.3-0.5) → faster but may oscillate.
+- ``beta = 0.1``: Mixing parameter for SCF convergence. Lower values (0.01-0.1) -> more stable but slower. Higher values (0.3-0.5) -> faster but may oscillate.
 
 - ``mixtype = 'broyden'``: Broyden mixing for accelerated convergence.
 
@@ -287,7 +287,7 @@ Parameters Explained
 
 - ``width_band``: Width of each orbital band. Related to hopping strength.
 
-- ``ql(1, :, spin)``: Charge moments (Q₀). Sum should equal valence charge: 0.394 + 0.992 ≈ 1.386 e⁻ per spin → total ≈ 2.77 e⁻ (note: this is per orbital symmetry, not total).
+- ``ql(1, :, spin)``: Charge moments (Q₀). Sum should equal valence charge: 0.394 + 0.992 ≈ 1.386 e⁻ per spin -> total ≈ 2.77 e⁻ (note: this is per orbital symmetry, not total).
 
 **Wigner-Seitz Radius:**
 
@@ -364,7 +364,7 @@ Convergence Metrics
 
    grep "fermi" input_out.nml
 
-Expected: fermi ≈ -0.168 ± 0.005 Ry
+Expected: fermi ≈ -0.168 +- 0.005 Ry
 
 **Check total charge:**
 

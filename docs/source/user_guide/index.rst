@@ -42,10 +42,10 @@ Before You Start
 
 Ensure you have:
 
-✓ Compiled RS-LMTO-ASA (see :doc:`../getting_started`)
-✓ Basic understanding of LMTO-ASA (see :ref:`theory/lmto_asa_overview`)
-✓ Example files (in ``example/`` directory)
-✓ Element/potential database files (required for your system)
+[OK] Compiled RS-LMTO-ASA (see :doc:`../getting_started`)
+[OK] Basic understanding of LMTO-ASA (see :ref:`theory/lmto_asa_overview`)
+[OK] Example files (in ``example/`` directory)
+[OK] Element/potential database files (required for your system)
 
 Common Tasks
 ============

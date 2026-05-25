@@ -127,7 +127,7 @@ fermi
 **Notes:**
 
 - For metals: typically near 0 Ry
-- For semiconductors: gap is usually near ±1-2 Ry
+- For semiconductors: gap is usually near +-1-2 Ry
 - Good initial guess accelerates convergence
 
 fix_fermi
@@ -271,7 +271,7 @@ The imaginary part ``η`` in Green's function:
 
    G(E) = (E - H + i\eta)^{-1}
 
-Controls spectral broadening. Smaller η → sharper features → slower convergence.
+Controls spectral broadening. Smaller η -> sharper features -> slower convergence.
 
 Typical: $\eta = 0.001$ to $0.01$ Ry.
 

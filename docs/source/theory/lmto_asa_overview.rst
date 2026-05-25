@@ -190,33 +190,33 @@ Typical Workflow
 
 .. code-block:: text
 
-   1. Define crystal structure → lattice.f90
-   2. Load element and potential parameters → element.f90, potential.f90
-   3. Build Hamiltonian matrix → hamiltonian.f90
-   4. Compute recursion coefficients → recursion.f90
-   5. Calculate Green's functions → green.f90
-   6. Integrate DOS for charge density → density_of_states.f90, charge.f90
-   7. Update potential and check convergence → self.f90
+   1. Define crystal structure -> lattice.f90
+   2. Load element and potential parameters -> element.f90, potential.f90
+   3. Build Hamiltonian matrix -> hamiltonian.f90
+   4. Compute recursion coefficients -> recursion.f90
+   5. Calculate Green's functions -> green.f90
+   6. Integrate DOS for charge density -> density_of_states.f90, charge.f90
+   7. Update potential and check convergence -> self.f90
    8. Repeat 3-7 until convergence
-   9. Calculate properties (DOS, bands, exchange, etc.) → various modules
+   9. Calculate properties (DOS, bands, exchange, etc.) -> various modules
 
 Advantages and Limitations
 ===========================
 
 **Advantages:**
 
-✓ Efficient for large clusters (scaling better than k-space methods)
-✓ Natural treatment of disorder, surfaces, impurities
-✓ Direct access to real-space quantities (local moments, magnetization density)
-✓ Strong analytical and semi-empirical foundation
-✓ Excellent for transition metals and magnetism
+[OK] Efficient for large clusters (scaling better than k-space methods)
+[OK] Natural treatment of disorder, surfaces, impurities
+[OK] Direct access to real-space quantities (local moments, magnetization density)
+[OK] Strong analytical and semi-empirical foundation
+[OK] Excellent for transition metals and magnetism
 
 **Limitations:**
 
-✗ ASA less accurate for systems with rough potentials (f-electrons)
-✗ Cluster size effects (need to reach bulk limit)
-✗ No systematic way to improve beyond ASA
-✗ Fewer automated fitting procedures than plane-wave codes
+[X] ASA less accurate for systems with rough potentials (f-electrons)
+[X] Cluster size effects (need to reach bulk limit)
+[X] No systematic way to improve beyond ASA
+[X] Fewer automated fitting procedures than plane-wave codes
 
 Provenance
 ==========

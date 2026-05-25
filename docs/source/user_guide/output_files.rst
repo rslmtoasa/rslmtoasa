@@ -163,8 +163,8 @@ Magnetic exchange interactions:
 
 **Interpretation:**
 
-- $J > 0$ → Ferromagnetic coupling
-- $J < 0$ → Antiferromagnetic coupling
+- $J > 0$ -> Ferromagnetic coupling
+- $J < 0$ -> Antiferromagnetic coupling
 - Magnitude indicates strength
 
 **Use for:**

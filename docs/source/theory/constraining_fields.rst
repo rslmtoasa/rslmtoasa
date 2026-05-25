@@ -354,7 +354,7 @@ input.  The call chain is:
               mom_ref ← reference moments from input or initial guess
               bfield  ← 0 (re-initialised each call in self.f90)
               call constrain(mom_in, mom_ref, bfield, nrec)
-              bfield  → added to effective exchange-correlation field
+              bfield  -> added to effective exchange-correlation field
                         in the Hamiltonian
 
 The ``bfield`` array (shape ``(3, natoms)``) is added to the exchange-correlation

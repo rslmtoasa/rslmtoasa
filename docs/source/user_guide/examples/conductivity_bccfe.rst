@@ -137,7 +137,7 @@ Physical Interpretation
    
    .. math::
    
-      \\Omega_n(\\mathbf{k}) = \\nabla_k \\times \\langle u_n | i\\nabla_k | u_n \\rangle
+      \Omega_n(\mathbf{k}) = \nabla_k \times \langle u_n | i\nabla_k | u_n \rangle
 
 2. **Side-jump contribution:** Asymmetric scattering
 3. **Skew-scattering contribution:** Spin-orbit coupling in scattering

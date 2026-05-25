@@ -108,7 +108,7 @@ width_band
 **Meaning:**
 
 - Controls width and shape of band(s)
-- Larger value → broader band
+- Larger value -> broader band
 - Related to electron hopping strength
 
 **Physical interpretation:**

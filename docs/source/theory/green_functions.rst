@@ -247,17 +247,17 @@ Advantages and Limitations
 
 **Advantages:**
 
-✓ No diagonalization needed
-✓ Direct access to local properties
-✓ Efficient for large clusters
-✓ Natural way to include broadening
-✓ Enables disorder calculations
+[OK] No diagonalization needed
+[OK] Direct access to local properties
+[OK] Efficient for large clusters
+[OK] Natural way to include broadening
+[OK] Enables disorder calculations
 
 **Limitations:**
 
-✗ More complex than eigenvalue approach for simple systems
-✗ Requires careful energy mesh choices
-✗ Convergence depends on broadening parameter $\eta$
+[X] More complex than eigenvalue approach for simple systems
+[X] Requires careful energy mesh choices
+[X] Convergence depends on broadening parameter $\eta$
 
 Provenance
 ==========

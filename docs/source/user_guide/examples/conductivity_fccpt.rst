@@ -94,13 +94,13 @@ The spin Hall conductivity relates charge current to transverse spin current:
 
 .. math::
 
-   \\mathbf{j}_s^z = \\sigma_{SH} \\frac{\\hbar}{2e} \\mathbf{E} \\times \\hat{z}
+   \mathbf{j}_s^z = \sigma_{SH} \frac{\hbar}{2e} \mathbf{E} \times \hat{z}
 
 where the spin Hall angle is:
 
 .. math::
 
-   \\theta_{SH} = \\frac{\\sigma_{SH}}{\\sigma_{charge}}
+   \theta_{SH} = \frac{\sigma_{SH}}{\sigma_{charge}}
 
 Running the Calculation
 =======================

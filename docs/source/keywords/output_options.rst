@@ -264,9 +264,9 @@ Controlling Output Size
 
 **Large output:**
 
-- Long ``channels_ldos`` → large DOS and LDOS files
-- Long recursion cutoff → slower but not larger files
-- Large cluster → more exchange pairs
+- Long ``channels_ldos`` -> large DOS and LDOS files
+- Long recursion cutoff -> slower but not larger files
+- Large cluster -> more exchange pairs
 
 **Disk space:**
 
