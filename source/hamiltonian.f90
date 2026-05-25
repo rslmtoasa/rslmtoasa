@@ -213,7 +213,7 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit, i, l, n_l_in
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -251,6 +251,18 @@ contains
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       call move_alloc(velocity_scale, this%velocity_scale)
+
+      ! Optional Hubbard U/J input from &hamiltonian is provided in eV.
+      ! Map it into per-species potential arrays (internal units: Ry).
+      if (allocated(hubbard_u_general) .and. allocated(hubbard_j_general)) then
+         n_l_in = min(size(hubbard_u_general, 2), size(hubbard_j_general, 2))
+         do i = 1, min(this%lattice%ntype, size(hubbard_u_general, 1), size(hubbard_j_general, 1))
+            do l = 1, min(n_l_in, size(this%lattice%symbolic_atoms(i)%potential%hubbard_u))
+               this%lattice%symbolic_atoms(i)%potential%hubbard_u(l) = hubbard_u_general(i, l)/ry2ev
+               this%lattice%symbolic_atoms(i)%potential%hubbard_j(l) = hubbard_j_general(i, l)/ry2ev
+            end do
+         end do
+      end if
 
       this%hubbard_u_general_check = .false.
       do i = 1, this%lattice%ntype
@@ -1882,6 +1894,8 @@ contains
       real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
       real(rp), dimension(this%lattice%ntype, 4, 4) :: f
       real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
+      real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin
+      real(rp), dimension(this%lattice%ntype, 4) :: n_tot
       type :: int_array
          integer, allocatable :: val(:)
       end type int_array
@@ -1900,6 +1914,8 @@ contains
       f(:, :, :) = 0.0_rp
       ldm(:, :, :, :, :) = 0.0_rp
       hub_pot(:, :, :, :, :) = 0.0_rp
+      n_spin(:, :, :) = 0.0_rp
+      n_tot(:, :) = 0.0_rp
 
       do na = 1, this%lattice%ntype
          do l = 1, 4
@@ -1946,6 +1962,17 @@ contains
       end do
 
       do na = 1, this%lattice%ntype
+         do l = 1, 4
+            do ispin = 1, 2
+               do i = 1, 2*l - 1
+                  n_spin(na, l, ispin) = n_spin(na, l, ispin) + ldm(na, l, ispin, i, i)
+               end do
+               n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
+            end do
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
          do l = 1, size(l_arr(na)%val)
             l_index = l_arr(na)%val(l)
             m_max = 2*l_index - 1
@@ -1968,6 +1995,11 @@ contains
                                 -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*ldm(na, l_index, ispin, m3, m4)
                         end do
                      end do
+                     if (m1 == m2) then
+                        hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                           - hub_u(na, l_index)*(n_tot(na, l_index) - 0.5_rp) &
+                           + hub_j(na, l_index)*(n_spin(na, l_index, ispin) - 0.5_rp)
+                     end if
                   end do
                end do
             end do
