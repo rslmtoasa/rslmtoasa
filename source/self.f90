@@ -715,6 +715,7 @@ contains
          !            SAVE THE PARAMETERS QL AND PL TO BE MIXED LATER
          !=========================================================================
          call this%mix%save_to('old') ! Save to qia_old to mix with qia_new.
+         call this%mix%save_ldm_to('old') ! Save LDA+U density matrices before DOS step.
 
          !=========================================================================
          !                      SAVE THE MAGNETIC MOMENTS
@@ -733,6 +734,8 @@ contains
          !=========================================================================
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
          call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
+         call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
+         call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
    
          !=========================================================================
          !         CALCULATE THE MADELUNG POTENTIAL (BULK ONLY IMPLEMENTED)
@@ -750,6 +753,7 @@ contains
          !                        SAVE MIXED PARAMETERS
          !=========================================================================
          call this%mix%save_to('current') ! Save mixed parameters into potential%pl and potential%ql
+         call this%mix%save_ldm_to('current') ! Save mixed density matrices into potential%ldm.
    
          !=========================================================================
          !                       MAKE SFC ATOMIC SPHERE

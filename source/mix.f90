@@ -52,8 +52,14 @@ module mix_mod
       real(rp), dimension(:, :), allocatable :: qia, qia_new, qia_old, qiaprev
       !> Variables to save magnetic moments for mixing
       real(rp), dimension(:, :), allocatable :: mag_old, mag_new, mag_mix
+      !> Variables to save LDA+U density matrices for optional linear mixing
+      !> Dimensions: (atom, l-channel, spin, flattened m,m')
+      real(rp), dimension(:, :, :, :), allocatable :: ldm_old, ldm_new, ldm_mix
       !> Mixing parameter
       real(rp) :: beta
+      !> Linear mixing factor for LDA+U density matrix (ldm).
+      !> 1.0 => no ldm mixing, 0.0 => keep previous ldm.
+      real(rp) :: ldm_beta
       !> Magnetic mixing parameter
       real(rp), dimension(:), allocatable :: magbeta
       !> Difference between interactions
@@ -72,6 +78,8 @@ module mix_mod
       procedure :: print_state
       procedure :: save_to
       procedure :: mixpq
+      procedure :: save_ldm_to
+      procedure :: mix_ldm_linear
       procedure :: mix_magnetic_moments
       final :: destructor
    end type mix
@@ -124,6 +132,9 @@ contains
       if (allocated(this%mag_new)) call g_safe_alloc%deallocate('mix.mag_new', this%mag_new)
       if (allocated(this%mag_old)) call g_safe_alloc%deallocate('mix.mag_old', this%mag_old)
       if (allocated(this%mag_mix)) call g_safe_alloc%deallocate('mix.mag_mix', this%mag_mix)
+      if (allocated(this%ldm_old)) call g_safe_alloc%deallocate('mix.ldm_old', this%ldm_old)
+      if (allocated(this%ldm_new)) call g_safe_alloc%deallocate('mix.ldm_new', this%ldm_new)
+      if (allocated(this%ldm_mix)) call g_safe_alloc%deallocate('mix.ldm_mix', this%ldm_mix)
       if (allocated(this%is_induced)) call g_safe_alloc%deallocate('mix.is_induced', this%is_induced)
 #else
       if (allocated(this%qia)) deallocate (this%qia)
@@ -138,6 +149,9 @@ contains
       if (allocated(this%mag_new)) deallocate (this%mag_new)
       if (allocated(this%mag_old)) deallocate (this%mag_old)
       if (allocated(this%mag_mix)) deallocate (this%mag_mix)
+      if (allocated(this%ldm_old)) deallocate (this%ldm_old)
+      if (allocated(this%ldm_new)) deallocate (this%ldm_new)
+      if (allocated(this%ldm_mix)) deallocate (this%ldm_mix)
       if (allocated(this%is_induced)) deallocate (this%is_induced)
 #endif
    end subroutine destructor
@@ -162,6 +176,7 @@ contains
       var = this%var
       mixtype = this%mixtype
       beta = this%beta
+      ldm_beta = this%ldm_beta
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -180,6 +195,7 @@ contains
       this%var = var
       this%mixtype = trim(mixtype)
       this%beta = beta
+      this%ldm_beta = min(1.0_rp, max(0.0_rp, ldm_beta))
       if (allocated(magbeta)) then
          call move_alloc(magbeta, this%magbeta)
       end if
@@ -192,8 +208,10 @@ contains
       subroutine restore_to_default(this)
       class(mix), intent(inout) :: this
       integer :: qia_width
+      integer :: ldm_flat
 
       qia_width = 6*(lmax_basis + 1)
+      ldm_flat = (2*lmax_basis + 1)*(2*lmax_basis + 1)
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('mix.qia', this%qia, (/this%lattice%nrec, qia_width/))
       call g_safe_alloc%allocate('mix.qia_new', this%qia_new, (/this%lattice%nrec, qia_width/))
@@ -207,12 +225,18 @@ contains
       call g_safe_alloc%allocate('mix.mag_old', this%mag_old, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_new', this%mag_new, (/this%lattice%nrec, 3/))
       call g_safe_alloc%allocate('mix.mag_mix', this%mag_mix, (/this%lattice%nrec, 3/))
+      call g_safe_alloc%allocate('mix.ldm_old', this%ldm_old, (/this%lattice%nrec, lmax_basis + 1, 2, ldm_flat/))
+      call g_safe_alloc%allocate('mix.ldm_new', this%ldm_new, (/this%lattice%nrec, lmax_basis + 1, 2, ldm_flat/))
+      call g_safe_alloc%allocate('mix.ldm_mix', this%ldm_mix, (/this%lattice%nrec, lmax_basis + 1, 2, ldm_flat/))
       call g_safe_alloc%allocate('mix.is_induced', this%is_induced, (/this%lattice%nrec/))
 #else
       allocate (this%qia(this%lattice%nrec, qia_width), this%qia_new(this%lattice%nrec, qia_width), this%qia_old(this%lattice%nrec, qia_width))
       allocate (this%qiaprev(this%lattice%nrec, qia_width))
       allocate (this%v_broy(this%lattice%nrec*qia_width), this%u_broy(this%lattice%nrec*qia_width), this%fo_broy(this%lattice%nrec*qia_width), this%muo_broy(this%lattice%nrec*qia_width))
       allocate (this%magbeta(this%lattice%nrec), this%mag_old(this%lattice%nrec, 3), this%mag_new(this%lattice%nrec, 3), this%mag_mix(this%lattice%nrec, 3))
+      allocate (this%ldm_old(this%lattice%nrec, lmax_basis + 1, 2, ldm_flat))
+      allocate (this%ldm_new(this%lattice%nrec, lmax_basis + 1, 2, ldm_flat))
+      allocate (this%ldm_mix(this%lattice%nrec, lmax_basis + 1, 2, ldm_flat))
       allocate (this%is_induced(this%lattice%nrec))
 #endif
 
@@ -220,6 +244,9 @@ contains
       this%qia_new(:, :) = 0.0_rp
       this%qia_old(:, :) = 0.0_rp
       this%qiaprev(:, :) = 0.0_rp
+      this%ldm_old(:, :, :, :) = 0.0_rp
+      this%ldm_new(:, :, :, :) = 0.0_rp
+      this%ldm_mix(:, :, :, :) = 0.0_rp
       this%v_broy(:) = 0.0d0
       this%u_broy(:) = 0.0d0
       this%fo_broy(:) = 0.0d0
@@ -228,6 +255,7 @@ contains
       this%itr = 0
       this%var = 0
       this%beta = 0.1d0
+      this%ldm_beta = 1.0d0
       this%magbeta(:) = 1.0d0
       this%nmix = 2
       this%mixtype = 'linear'
@@ -254,6 +282,14 @@ contains
       include 'include_codes/namelists/mix.f90'
 
       var = this%var
+      beta = this%beta
+      mixtype = this%mixtype
+      ldm_beta = this%ldm_beta
+      if (allocated(this%magbeta)) then
+         if (allocated(magbeta)) deallocate(magbeta)
+         allocate(magbeta(size(this%magbeta)))
+         magbeta = this%magbeta
+      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -516,6 +552,61 @@ contains
       denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
+
+   subroutine save_ldm_to(this, whereto)
+      class(mix), intent(inout) :: this
+      character(len=*), intent(in) :: whereto
+      integer :: it, ispin, l, lcount, max_flat, local_flat
+
+      max_flat = size(this%ldm_old, 4)
+
+      select case (trim(whereto))
+      case ('old', 'new')
+         do it = 1, this%lattice%nrec
+            call this%symbolic_atom(this%lattice%nbulk + it)%potential%flatten_ldm()
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            local_flat = (2*lcount - 1)*(2*lcount - 1)
+            if (trim(whereto) == 'old') then
+               this%ldm_old(it, :, :, :) = 0.0_rp
+            else
+               this%ldm_new(it, :, :, :) = 0.0_rp
+            end if
+            do l = 1, lcount
+               do ispin = 1, 2
+                  if (trim(whereto) == 'old') then
+                     this%ldm_old(it, l, ispin, 1:min(local_flat, max_flat)) = &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat))
+                  else
+                     this%ldm_new(it, l, ispin, 1:min(local_flat, max_flat)) = &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat))
+                  end if
+               end do
+            end do
+         end do
+
+      case ('current')
+         do it = 1, this%lattice%nrec
+            lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+            local_flat = (2*lcount - 1)*(2*lcount - 1)
+            this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(:, :, :) = 0.0_rp
+            do l = 1, lcount
+               do ispin = 1, 2
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)) = &
+                     this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat))
+               end do
+            end do
+            call this%symbolic_atom(this%lattice%nbulk + it)%potential%expand_ldm()
+         end do
+      end select
+   end subroutine save_ldm_to
+
+   subroutine mix_ldm_linear(this)
+      class(mix), intent(inout) :: this
+      real(rp) :: beta_loc
+
+      beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
+      this%ldm_mix(:, :, :, :) = (1.0_rp - beta_loc)*this%ldm_old(:, :, :, :) + beta_loc*this%ldm_new(:, :, :, :)
+   end subroutine mix_ldm_linear
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
       ! implemented by g.p.srivastava, j. phys a 17, l317(1984),
