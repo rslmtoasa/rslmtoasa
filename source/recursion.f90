@@ -1761,7 +1761,7 @@ contains
                end do
             end do
          end do
-         write(*,*) 'DEBUG:get_terminf INPUT n=', n, ' maxA=', maxA, ' maxB=', maxB, ' NaN_in=', foundNaN_in
+         ! write(*,*) 'DEBUG:get_terminf INPUT n=', n, ' maxA=', maxA, ' maxB=', maxB, ' NaN_in=', foundNaN_in
          call this%get_cinf(Acoef_r, B2coef_r, ll_t, ldim*ldim, nw, a_inf(:, :, n), b_inf(:, :, n))
          do j = 1, ldim
             do i = 1, ldim
@@ -1780,7 +1780,7 @@ contains
                if (IsNaN(a_inf(i, j, n)) .or. IsNaN(b_inf(i, j, n))) foundNaN_out = .true.
             end do
          end do
-         write(*,*) 'DEBUG:get_terminf OUTPUT n=', n, ' a_inf0_avg=', a_inf0(n), ' maxAinf=', maxAinf, ' maxBinf=', maxBinf, ' NaN_out=', foundNaN_out
+         ! write(*,*) 'DEBUG:get_terminf OUTPUT n=', n, ' a_inf0_avg=', a_inf0(n), ' maxAinf=', maxAinf, ' maxBinf=', maxBinf, ' NaN_out=', foundNaN_out
          a_inf0(n) = 0.0d0
          do i = 1, ldim
             a_inf0(n) = a_inf0(n) + a_inf(i, i, n)

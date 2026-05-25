@@ -1223,14 +1223,14 @@ contains
             end do
          end do
          call this%POTPAR(atom, V, ROFI)
-         if (lmax >= 3) then
-            call g_logger%info('DEBUG:atomsc f-channel after POTPAR ENU='// &
-                               fmt('f10.6', atom%potential%ENU(3, 1))//' '//fmt('f10.6', atom%potential%ENU(3, 2))// &
-                               ' C='//fmt('f10.6', atom%potential%C(3, 1))//' '//fmt('f10.6', atom%potential%C(3, 2))// &
-                               ' SRDEL='//fmt('f10.6', atom%potential%SRDEL(3, 1))//' '//fmt('f10.6', atom%potential%SRDEL(3, 2))// &
-                               ' QPAR='//fmt('f10.6', atom%potential%QPAR(3, 1))//' '//fmt('f10.6', atom%potential%QPAR(3, 2))// &
-                               ' PPAR='//fmt('f10.6', atom%potential%PPAR(3, 1))//' '//fmt('f10.6', atom%potential%PPAR(3, 2)), __FILE__, __LINE__)
-         end if
+         ! if (lmax >= 3) then
+         !    call g_logger%info('DEBUG:atomsc f-channel after POTPAR ENU='// &
+         !                       fmt('f10.6', atom%potential%ENU(3, 1))//' '//fmt('f10.6', atom%potential%ENU(3, 2))// &
+         !                       ' C='//fmt('f10.6', atom%potential%C(3, 1))//' '//fmt('f10.6', atom%potential%C(3, 2))// &
+         !                       ' SRDEL='//fmt('f10.6', atom%potential%SRDEL(3, 1))//' '//fmt('f10.6', atom%potential%SRDEL(3, 2))// &
+         !                       ' QPAR='//fmt('f10.6', atom%potential%QPAR(3, 1))//' '//fmt('f10.6', atom%potential%QPAR(3, 2))// &
+         !                       ' PPAR='//fmt('f10.6', atom%potential%PPAR(3, 1))//' '//fmt('f10.6', atom%potential%PPAR(3, 2)), __FILE__, __LINE__)
+         ! end if
          do I = 1, NSP
             do L = 0, LMAX
                ! write (660, 10002) -L, ENU(L, I), VL(L, I), C(L, I), SRDEL(L, I), QPAR(L, I), PPAR(L, I)
@@ -1346,12 +1346,12 @@ contains
             qval(isp) = qval(isp) + atom%potential%ql(1, l, isp)
          end do
          ! Debug output for orbital initialization
-         if (lmax >= 3) then
-            write (6, '(A, I1, A, F8.4, F8.4, A, I2, A, 2(F10.6,2X))') &
-               "  L=", l, "  PL=", atom%potential%pl(l, 1), atom%potential%pl(l, 2), &
-               "  KONFIG=", int(atom%potential%pl(l, 1)), &
-               "  Q0(spin1,2)=", atom%potential%ql(1, l, 1), atom%potential%ql(1, l, 2)
-         end if
+         !if (lmax >= 3) then
+         !   write (6, '(A, I1, A, F8.4, F8.4, A, I2, A, 2(F10.6,2X))') &
+         !      "  L=", l, "  PL=", atom%potential%pl(l, 1), atom%potential%pl(l, 2), &
+         !      "  KONFIG=", int(atom%potential%pl(l, 1)), &
+         !      "  Q0(spin1,2)=", atom%potential%ql(1, l, 1), atom%potential%ql(1, l, 2)
+         !end if
       end do
       !----MODIFICATIONS TO INCLUDE FRACTIONARY F OCCUPATION IN THE CORE------
       IFCORE = atom%element%f_core

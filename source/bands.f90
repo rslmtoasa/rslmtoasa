@@ -505,20 +505,20 @@ contains
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = 0.0_rp
             end if
          end do
-         if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
-            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-                               ' ql_s_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
-                               ' ql_s_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 2)), __FILE__, __LINE__)
-            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-                               ' ql_p_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 1))// &
-                               ' ql_p_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 2)), __FILE__, __LINE__)
-            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-                               ' ql_d_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 1))// &
-                               ' ql_d_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 2)), __FILE__, __LINE__)
-            call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-                               ' ql_f_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 1))// &
-                               ' ql_f_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
-         end if
+         ! if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
+         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+         !                       ' ql_s_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
+         !                       ' ql_s_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 2)), __FILE__, __LINE__)
+         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+         !                       ' ql_p_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 1))// &
+         !                       ' ql_p_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 2)), __FILE__, __LINE__)
+         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+         !                       ' ql_d_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 1))// &
+         !                       ' ql_d_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 2)), __FILE__, __LINE__)
+         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
+         !                       ' ql_f_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 1))// &
+         !                       ' ql_f_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
+         ! end if
       end do
 
       call this%calculate_pl()

@@ -614,7 +614,7 @@ contains
       call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, atoms_per_process, &
                                       ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
 
-      print *, "AB check:", shape(this%g0)
+      ! print *, "AB check:", shape(this%g0)
       do n_glob = start_atom, end_atom
          n = g2l_map(n_glob)
 
@@ -1246,8 +1246,8 @@ contains
       factor_z = 1.0d0
 
       ! Lightweight runtime shapes/logging (once per green instance call)
-      call g_logger%info('DEBUG:bgreen shapes nb='//int2str(nb)//' ldim='//int2str(ldim), __FILE__, __LINE__)
-      call g_logger%info('DEBUG:bgreen a_b dims=('//int2str(size(this%recursion%a_b,1))//','//int2str(size(this%recursion%a_b,2))//','//int2str(size(this%recursion%a_b,3))//','//int2str(size(this%recursion%a_b,4))//')', __FILE__, __LINE__)
+      ! call g_logger%info('DEBUG:bgreen shapes nb='//int2str(nb)//' ldim='//int2str(ldim), __FILE__, __LINE__)
+      ! call g_logger%info('DEBUG:bgreen a_b dims=('//int2str(size(this%recursion%a_b,1))//','//int2str(size(this%recursion%a_b,2))//','//int2str(size(this%recursion%a_b,3))//','//int2str(size(this%recursion%a_b,4))//')', __FILE__, __LINE__)
 
       ! Unchanged code
       ll_t = ll
@@ -1548,11 +1548,11 @@ contains
                               end do
                            end do
                         end do
-                        call g_logger%info('DEBUG:bgreen recursion site='//int2str(i_site)//' ie='//int2str(ei)//' maxA='//real2str(recMaxA)//' maxB='//real2str(recMaxB)//' recNaN='//log2str(recNaN), __FILE__, __LINE__)
-                        ! Log diagonal of a_inf/b_inf and Dfac_mat for quick inspection
-                        do ii = 1, ldim
-                           call g_logger%info('DEBUG:bgreen a_inf('//int2str(ii)//')='//real2str(a_inf(ii,ii))//' b_inf='//real2str(b_inf(ii,ii))//' Dfac='//real2str(real(Dfac_mat(ii,ii))), __FILE__, __LINE__)
-                        end do
+                        ! call g_logger%info('DEBUG:bgreen recursion site='//int2str(i_site)//' ie='//int2str(ei)//' maxA='//real2str(recMaxA)//' maxB='//real2str(recMaxB)//' recNaN='//log2str(recNaN), __FILE__, __LINE__)
+                        ! ! Log diagonal of a_inf/b_inf and Dfac_mat for quick inspection
+                        ! do ii = 1, ldim
+                        !    call g_logger%info('DEBUG:bgreen a_inf('//int2str(ii)//')='//real2str(a_inf(ii,ii))//' b_inf='//real2str(b_inf(ii,ii))//' Dfac='//real2str(real(Dfac_mat(ii,ii))), __FILE__, __LINE__)
+                        ! end do
                         ! Additional diagnostics: check Q, W and B2z for NaNs/large values
                         qMax = 0.0_rp
                         qHasNaN = .false.
@@ -1576,7 +1576,7 @@ contains
                               end if
                            end do
                         end do
-                        call g_logger%info('DEBUG:bgreen Q_max='//real2str(qMax)//' Q_hasNaN='//log2str(qHasNaN)//' W_max='//real2str(wMax)//' B2z_max='//real2str(b2Max), __FILE__, __LINE__)
+                        ! call g_logger%info('DEBUG:bgreen Q_max='//real2str(qMax)//' Q_hasNaN='//log2str(qHasNaN)//' W_max='//real2str(wMax)//' B2z_max='//real2str(b2Max), __FILE__, __LINE__)
                        !$omp critical
                        if (.not. dump_done) then
                           dump_done = .true.

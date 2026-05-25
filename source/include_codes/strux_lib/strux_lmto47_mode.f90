@@ -457,9 +457,6 @@ subroutine salph1_lmto47_direct(nbas, nenv, nl2, ldot, ndimW, lmaxw, npr, plat, 
     if (any(abs(alphv) <= tiny(1d0))) then
         call strux_fail('salph1_lmto47_direct: alpha contains zero/underflow entries')
     end if
-    write(1002,'(f12.6)') alphv(1:ndimW)
-    print *,' ndimW=', ndimW, ' nenv=', nenv
-    print *,'-----------------------------'
     a = 1d0 / alphv
     d = 0d0
     if (ldot) d = -adotv / (alphv*alphv)
@@ -473,12 +470,7 @@ subroutine salph1_lmto47_direct(nbas, nenv, nl2, ldot, ndimW, lmaxw, npr, plat, 
     end do
 
     allocate(ipiv(ndimW), work(max(1, ndimW*64)))
-    write(1001,'(f12.6)') s0a(1:ndimW, 1:ndimW)
-    print *,'-----------------------------'
     call dsytrf('L', ndimW, s0a, ndimW, ipiv, work, size(work), info)
-    print *, 'DEBUG: dsytrf info=', info, ' for ndimW=', ndimW, ' nenv=', nenv
-    write(1002,'(f12.6)') s0a(1:ndimW, 1:ndimW)
-    print *,'-----------------------------'
     if (info /= 0) call strux_fail('salph1_lmto47_direct: matrix singular')
     call dsytrs('L', ndimW, nenv, s0a, ndimW, ipiv, balph, ndimW, info)
     if (info /= 0) call strux_fail('salph1_lmto47_direct: backsolve failed')
@@ -558,11 +550,12 @@ subroutine strscr_lmto47(nbas, npadl, npadr, alat, plat, bas, rwats, nl, kap, nk
             allocate(alphv(ndimW), salph(ndimW,1,nl2,1))
             if (ldot) then
                 allocate(adotv(ndimW), sadot(ndimW,1,nl2,1))
+                call dpzero(adotv, ndimW)
                 call dpzero(sadot, ndimW*nl2)
             else
                 allocate(adotv(ndimW), sadot(ndimW,1,nl2,1))
-                adotv = 0d0
-                sadot = 0d0
+                call dpzero(adotv, ndimW)
+                call dpzero(sadot, ndimW*nl2)
             end if
 
             call pack_screening_lmto47(alpha(1,offik), adot(1,offik), iax(1,iclus), nl2, nbaspp, 1, nclus, ndimW, alphv, adotv)
