@@ -117,9 +117,9 @@ Core arrays and variables
 -------------------------
 
 - ``ldm(na,l,ispin,m,m')``: local density matrix per atom type and channel.
-- ``hubbard_u(l)``, ``hubbard_j(l)``: on-site U/J per ``l`` channel.
+- ``hubbard_u(l)``, ``hubbard_j(l)``: on-site U/J per ``l`` channel (internal Ry).
 - ``hubbard_u_pot(i,j,na)``: assembled on-site correction in basis space.
-- ``hubbard_v(i,j,li,lj)`` and ``hubbard_v_pot``: inter-site correction data.
+- ``hubbard_v(i,j,li,lj)`` and ``hubbard_v_pot``: inter-site correction data (internal Ry).
 - ``hubbard_u_sc(itype,l)``: mask enabling SC-U update for a channel.
 - ``hubbard_u_potential_form``:
   ``'liechtenstein'`` (default) or ``'acbn0'``.
@@ -128,6 +128,13 @@ Namelist inputs
 ===============
 
 The relevant keys are in ``&hamiltonian``.
+
+Units
+-----
+
+- ``hubbard_u*``, ``hubbard_j*`` and ``hubbard_v`` in ``input.nml`` are interpreted in **eV**.
+- Internally, RS-LMTO-ASA stores and applies these values in **Ry**.
+- Conversion is done during namelist load in ``source/hamiltonian.f90`` via division by ``ry2ev``.
 
 1. Fixed on-site U/J (recommended baseline)
 -------------------------------------------
@@ -177,6 +184,6 @@ The relevant keys are in ``&hamiltonian``.
 Notes and constraints
 =====================
 
-- Internal energy unit is Ry; user inputs in namelists are interpreted in eV and converted.
+- Internal energy unit is Ry; Hubbard inputs in namelists are interpreted in eV and converted on read.
 - ``hubbard_u_sc`` and explicit ``hubbard_u_general/hubbard_j_general`` are mutually exclusive in the current flow.
 - For ``lmax=3`` (spdf), orbital blocks are sized from the active basis dimensions (no hardwired spd-only matrix extents in the current implementation path).
