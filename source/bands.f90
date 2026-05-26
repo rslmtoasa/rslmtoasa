@@ -483,66 +483,6 @@ contains
 
       dos_nmag_tot(:) = 0.5_rp*(dos_up_tot(:) + dos_dw_tot(:))
 
-      ! Writing the total density of states
-      fname_total = "totaldos.out"
-      if (rank == 0) then
-         open(unit=125, file=fname_total, status='replace', action='write')
-         do i = 1, this%en%channels_ldos + 10
-            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
-         end do
-         rewind(125)
-         close(125)
-      end if
-
-      ! Writing spin-polarized and magnetic DOS components.
-      fname_magnetic = "magneticdos.out"
-      if (rank == 0) then
-         open(unit=126, file=fname_magnetic, status='replace', action='write')
-         write(126, '(a)') '# energy dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
-         do i = 1, this%en%channels_ldos + 10
-            write(126, '(7f16.5)') this%en%ene(i) - this%en%fermi, dos_up_tot(i), dos_dw_tot(i), &
-               dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
-         end do
-         rewind(126)
-         close(126)
-      end if
-      
-      ! Writing the local density of states
-      if (rank == 0) then
-         do ia = 1, this%lattice%nrec
-            unitnum = 250 + ia
-            ! Construct the filename using the element symbol:
-            fname_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_dos.out"
-               
-            ! Associate that filename with the unit:
-            open(unit=unitnum, file=fname_dos, status='replace', action='write')
-      
-            do i = 1, this%en%channels_ldos + 10
-               write(unitnum, '(2f16.5)') this%en%ene(i) - this%en%fermi, dosia(ia, i)
-            end do
-      
-            rewind(unitnum)
-            close(unitnum)
-         end do
-      end if
-      
-      ! Writing the local density of states per orbital
-      if (rank == 0) then
-         do ia = 1, this%lattice%nrec
-            unitnum2 = 450 + ia
-            fname_orb_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_orbital_dos.out"
-      
-            open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
-      
-            do i = 1, this%en%channels_ldos + 10
-               write(unitnum2, '(*(f16.5))') this%en%ene(i) - this%en%fermi, dosial(ia, 1:nb, i)
-            end do
-      
-            rewind(unitnum2)
-            close(unitnum2)
-         end do
-      end if
-
       ! Calculate the Fermi enery
       ef_mag = this%en%fermi
       this%en%chebfermi = this%en%fermi
@@ -560,6 +500,55 @@ contains
          this%nv1 = ik1
          this%e1 = e1
          if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
+      end if
+
+      ! Write DOS outputs using the current (just-updated) Fermi level.
+      fname_total = "totaldos.out"
+      if (rank == 0) then
+         open(unit=125, file=fname_total, status='replace', action='write')
+         do i = 1, this%en%channels_ldos + 10
+            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
+         end do
+         rewind(125)
+         close(125)
+      end if
+
+      fname_magnetic = "magneticdos.out"
+      if (rank == 0) then
+         open(unit=126, file=fname_magnetic, status='replace', action='write')
+         write(126, '(a)') '# energy dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
+         do i = 1, this%en%channels_ldos + 10
+            write(126, '(7f16.5)') this%en%ene(i) - this%en%fermi, dos_up_tot(i), dos_dw_tot(i), &
+               dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
+         end do
+         rewind(126)
+         close(126)
+      end if
+
+      if (rank == 0) then
+         do ia = 1, this%lattice%nrec
+            unitnum = 250 + ia
+            fname_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_dos.out"
+            open(unit=unitnum, file=fname_dos, status='replace', action='write')
+            do i = 1, this%en%channels_ldos + 10
+               write(unitnum, '(2f16.5)') this%en%ene(i) - this%en%fermi, dosia(ia, i)
+            end do
+            rewind(unitnum)
+            close(unitnum)
+         end do
+      end if
+
+      if (rank == 0) then
+         do ia = 1, this%lattice%nrec
+            unitnum2 = 450 + ia
+            fname_orb_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_orbital_dos.out"
+            open(unit=unitnum2, file=fname_orb_dos, status='replace', action='write')
+            do i = 1, this%en%channels_ldos + 10
+               write(unitnum2, '(*(f16.5))') this%en%ene(i) - this%en%fermi, dosial(ia, 1:nb, i)
+            end do
+            rewind(unitnum2)
+            close(unitnum2)
+         end do
       end if
 
       deallocate(dosia)
@@ -792,7 +781,14 @@ contains
                   jdim = 2*li + 1
                   occ_ch(:) = 0.0_rp
                   do iorb = li*li + 1, (li + 1)*(li + 1)
-                     y(:) = -aimag(this%green%g0(iorb + soff, iorb + soff, :, na))/pi
+                     isgn = (-1.0d0)**(ispin - 1)
+                     ! Use the same spin-projected decomposition as ql/dspd so
+                     ! LDM(up,dn) and ql(up,dn) are directly comparable.
+                     y(:) = -aimag(this%green%g0(iorb, iorb, :, na) + this%green%g0(iorb + spin_off, iorb + spin_off, :, na)) - &
+                            isgn*this%symbolic_atom(plusbulk)%potential%mom(3)*aimag(this%green%g0(iorb, iorb, :, na) - this%green%g0(iorb + spin_off, iorb + spin_off, :, na)) - &
+                            isgn*this%symbolic_atom(plusbulk)%potential%mom(2)*aimag(i_unit*this%green%g0(iorb, iorb + spin_off, :, na) - i_unit*this%green%g0(iorb + spin_off, iorb, :, na)) - &
+                            isgn*this%symbolic_atom(plusbulk)%potential%mom(1)*aimag(this%green%g0(iorb, iorb + spin_off, :, na) + this%green%g0(iorb + spin_off, iorb, :, na))
+                     y(:) = 0.5_rp*y(:)/pi
                      occ_orb = 0.0_rp
                      call simpson_m(occ_orb, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
                      occ_raw = occ_orb
@@ -819,6 +815,15 @@ contains
                call g_logger%warning('HUBBARD_LDM_CAP atom='//fmt('i4', na_glob)// &
                                      ' orb_caps='//fmt('i0', ncap_orb)// &
                                      ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
+            end if
+            if (rank == 0) then
+               do li = 0, min(3, lmax_basis)
+                  call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', na_glob)//' l='//fmt('i2', li)// &
+                                     ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &
+                                     ' ql_dn='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 2))// &
+                                     ' ldm_up='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 1, iorb, iorb), iorb=1,2*li+1)]))// &
+                                     ' ldm_dn='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 2, iorb, iorb), iorb=1,2*li+1)])), __FILE__, __LINE__)
+               end do
             end if
             call this%symbolic_atom(plusbulk)%potential%flatten_ldm()
          end do

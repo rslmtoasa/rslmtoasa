@@ -565,13 +565,13 @@ contains
          do it = 1, this%lattice%nrec
             call this%symbolic_atom(this%lattice%nbulk + it)%potential%flatten_ldm()
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-            local_flat = (2*lcount - 1)*(2*lcount - 1)
             if (trim(whereto) == 'old') then
                this%ldm_old(it, :, :, :) = 0.0_rp
             else
                this%ldm_new(it, :, :, :) = 0.0_rp
             end if
             do l = 1, lcount
+               local_flat = (2*l - 1)*(2*l - 1)
                do ispin = 1, 2
                   if (trim(whereto) == 'old') then
                      this%ldm_old(it, l, ispin, 1:min(local_flat, max_flat)) = &
@@ -587,9 +587,9 @@ contains
       case ('current')
          do it = 1, this%lattice%nrec
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
-            local_flat = (2*lcount - 1)*(2*lcount - 1)
             this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(:, :, :) = 0.0_rp
             do l = 1, lcount
+               local_flat = (2*l - 1)*(2*l - 1)
                do ispin = 1, 2
                   this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)) = &
                      this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat))

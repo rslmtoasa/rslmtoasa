@@ -2172,6 +2172,7 @@ contains
       type(int_array), dimension(4) :: ms
       integer :: cntr
       real(rp) :: ldm_trace_up, ldm_trace_dn, ldm_max_abs, hup_max_abs
+      real(rp) :: ql_occ_up, ql_occ_dn
 
       ms(1)%val = [0]
       ms(2)%val = [-1, 0, 1]
@@ -2252,6 +2253,17 @@ contains
                ' U='//fmt('f10.6', hub_u(na, l))//' J='//fmt('f10.6', hub_j(na, l))// &
                ' nup='//fmt('f10.6', ldm_trace_up)//' ndn='//fmt('f10.6', ldm_trace_dn)// &
                ' ntot='//fmt('f10.6', ldm_trace_up + ldm_trace_dn), __FILE__, __LINE__)
+            ql_occ_up = 0.0_rp
+            ql_occ_dn = 0.0_rp
+            if ((l - 1) <= this%lattice%symbolic_atoms(na)%potential%lmax) then
+               ql_occ_up = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 1)
+               ql_occ_dn = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 2)
+            end if
+            call g_logger%info('HUBBARD_QLCMP type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
+               ' ql_up='//fmt('f10.6', ql_occ_up)//' ql_dn='//fmt('f10.6', ql_occ_dn)// &
+               ' ldm_up='//fmt('f10.6', ldm_trace_up)//' ldm_dn='//fmt('f10.6', ldm_trace_dn)// &
+               ' d_up(ql-ldm)='//fmt('f10.6', ql_occ_up - ldm_trace_up)// &
+               ' d_dn(ql-ldm)='//fmt('f10.6', ql_occ_dn - ldm_trace_dn), __FILE__, __LINE__)
          end do
       end do
 

@@ -1407,8 +1407,8 @@ contains
       do l = 1, this%lmax + 1
          do ispin = 1, 2
             k = 0
-            do i = 1, 2* this%lmax + 1
-               do j = 1, 2*this%lmax + 1
+            do i = 1, 2*l - 1
+               do j = 1, 2*l - 1
                   k = k + 1
                   this%ldm_flatten(l, ispin, k) = this%ldm(l, ispin, i, j)
                end do
@@ -1426,8 +1426,8 @@ contains
       do l = 1, this%lmax + 1
          do ispin = 1, 2
             k = 0
-            do i = 1, 2* this%lmax + 1
-               do j = 1, 2*this%lmax + 1
+            do i = 1, 2*l - 1
+               do j = 1, 2*l - 1
                   k = k + 1
                   this%ldm(l, ispin, i, j) = this%ldm_flatten(l, ispin, k)
                end do
