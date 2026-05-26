@@ -3,6 +3,10 @@ character(len=20) :: js_alpha, jl_alpha
 real(rp), dimension(3) :: v_alpha, v_beta, q_ss
 real(rp) :: theta_ss
 real(rp), dimension(:), allocatable :: velocity_scale
+! Hubbard input units in this namelist:
+! - hubbard_u / hubbard_j / hubbard_u_impurity / hubbard_j_impurity /
+!   hubbard_u_general / hubbard_j_general / hubbard_v are read in eV.
+! Internal Hamiltonian/potential storage uses Ry.
 real(rp), dimension(:,:), allocatable :: hubbard_u
 character(len=10), dimension(:), allocatable :: uj_orb
 real(rp), dimension(:,:), allocatable :: hubbard_j

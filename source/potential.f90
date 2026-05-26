@@ -426,6 +426,7 @@ contains
       call resize_2d_l0(this%dele, 0, lmax_new, 2)
       call resize_1d(this%hubbard_u, lmax_new + 1)
       call resize_1d(this%hubbard_j, lmax_new + 1)
+      call resize_4d_ldm(this%ldm, lmax_new + 1, 2, 2*lmax_new + 1, 2*lmax_new + 1)
       call resize_3d_lm_flat(this%ldm_flatten, lmax_new + 1, 2, (2*lmax_new + 1)**2)
    end subroutine ensure_lmax_consistency
 
@@ -561,6 +562,27 @@ contains
       tmp(1:c1, 1:c2, 1:c3) = arr(1:c1, 1:c2, 1:c3)
       call move_alloc(tmp, arr)
    end subroutine resize_3d_lm_flat
+
+   subroutine resize_4d_ldm(arr, n1, n2, n3, n4)
+      real(rp), allocatable, intent(inout) :: arr(:, :, :, :)
+      integer, intent(in) :: n1, n2, n3, n4
+      real(rp), allocatable :: tmp(:, :, :, :)
+      integer :: c1, c2, c3, c4
+      if (.not. allocated(arr)) then
+         allocate(arr(n1, n2, n3, n4))
+         arr = 0.0_rp
+         return
+      end if
+      if (size(arr, 1) == n1 .and. size(arr, 2) == n2 .and. size(arr, 3) == n3 .and. size(arr, 4) == n4) return
+      allocate(tmp(n1, n2, n3, n4))
+      tmp = 0.0_rp
+      c1 = min(n1, size(arr, 1))
+      c2 = min(n2, size(arr, 2))
+      c3 = min(n3, size(arr, 3))
+      c4 = min(n4, size(arr, 4))
+      tmp(1:c1, 1:c2, 1:c3, 1:c4) = arr(1:c1, 1:c2, 1:c3, 1:c4)
+      call move_alloc(tmp, arr)
+   end subroutine resize_4d_ldm
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

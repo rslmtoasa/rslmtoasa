@@ -2444,14 +2444,14 @@ contains
       if (nbas <= 0) then
          call g_logger%fatal('strux backend requires lattice basis coordinates', __FILE__, __LINE__)
       end if
-      if (.not. allocated(this%crd) .or. .not. allocated(this%no)) then
-         call g_logger%fatal('strux backend requires primitive-cell coordinates and labels', __FILE__, __LINE__)
+      if (.not. allocated(this%crd) .or. .not. allocated(this%izp)) then
+         call g_logger%fatal('strux backend requires primitive-cell coordinates and species labels', __FILE__, __LINE__)
       end if
-      if (size(this%crd, 2) < nbas .or. size(this%no) < nbas) then
+      if (size(this%crd, 2) < nbas .or. size(this%izp) < nbas) then
          call g_logger%fatal('strux inferred basis size exceeds primitive-cell storage', __FILE__, __LINE__)
       end if
-      if (any(this%no(1:nbas) <= 0)) then
-         call g_logger%fatal('strux backend found non-positive primitive basis labels in lattice%no', __FILE__, __LINE__)
+      if (any(this%izp(1:nbas) <= 0)) then
+         call g_logger%fatal('strux backend found non-positive primitive species labels in lattice%izp', __FILE__, __LINE__)
       end if
 
       allocate(orb_map(max_orb))
@@ -2488,9 +2488,9 @@ contains
       pos(:, :) = this%crd(:, 1:nbas)
       cralat(:, :) = this%cr(:, 1:this%kk)*this%alat
       do ib = 1, nbas
-         label = this%no(ib)
+         label = this%izp(ib)
          if (label <= 0) then
-            call g_logger%fatal('strux backend found non-positive primitive basis labels in lattice%no', __FILE__, __LINE__)
+            call g_logger%fatal('strux backend found non-positive primitive species labels in lattice%izp', __FILE__, __LINE__)
          end if
          species_idx = 0
          do is = 1, nspec
@@ -2737,7 +2737,15 @@ contains
       integer, intent(in) :: ia
 
       primitive_basis_label = 0
-      if (allocated(this%no)) then
+      ! For strux_lib mapping, primitive labels must be species labels.
+      ! Use izp first so this remains consistent with legacy setups where
+      ! lattice%no may encode prototype classes (not species IDs).
+      if (allocated(this%izp)) then
+         if (ia >= 1 .and. ia <= size(this%izp)) then
+            primitive_basis_label = this%izp(ia)
+         end if
+      end if
+      if (primitive_basis_label <= 0 .and. allocated(this%no)) then
          if (ia >= 1 .and. ia <= size(this%no)) then
             primitive_basis_label = this%no(ia)
          end if

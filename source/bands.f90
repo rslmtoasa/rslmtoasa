@@ -420,9 +420,13 @@ contains
       integer :: ia_glob
       real(rp), dimension(:, :), allocatable :: dosia
       real(rp), dimension(:, :, :), allocatable :: dosial
-      character(len=256) :: fname_total, fname_dos, fname_orb_dos
+      real(rp), dimension(:), allocatable :: dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot
+      character(len=256) :: fname_total, fname_dos, fname_orb_dos, fname_magnetic
 
       allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, nb, this%en%channels_ldos + 10))
+      allocate(dos_up_tot(this%en%channels_ldos + 10), dos_dw_tot(this%en%channels_ldos + 10))
+      allocate(dos_mx_tot(this%en%channels_ldos + 10), dos_my_tot(this%en%channels_ldos + 10), dos_mz_tot(this%en%channels_ldos + 10))
+      allocate(dos_nmag_tot(this%en%channels_ldos + 10))
 
       e1_mag = 0.0d0
       ef_mag = 0.0d0
@@ -431,6 +435,12 @@ contains
       this%dtot(:) = 0.0d0
       dosial = 0.0d0
       dosia = 0.0d0
+      dos_up_tot = 0.0d0
+      dos_dw_tot = 0.0d0
+      dos_mx_tot = 0.0d0
+      dos_my_tot = 0.0d0
+      dos_mz_tot = 0.0d0
+      dos_nmag_tot = 0.0d0
 
       ik1 = this%en%ik1
       nv1 = this%en%nv1
@@ -450,6 +460,11 @@ contains
                dosia(ia_glob, i) = dosia(ia_glob, i) - aimag(this%green%g0(j, j, i, ia) + this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
                dosial(ia_glob, j, i) = -aimag(this%green%g0(j, j, i, ia))/pi
                dosial(ia_glob, j +spin_off, i) = -aimag(this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
+               dos_up_tot(i) = dos_up_tot(i) - aimag(this%green%g0(j, j, i, ia))/pi
+               dos_dw_tot(i) = dos_dw_tot(i) - aimag(this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
+               dos_mx_tot(i) = dos_mx_tot(i) - 0.5_rp*aimag(this%green%g0(j, j +spin_off, i, ia) + this%green%g0(j +spin_off, j, i, ia))/pi
+               dos_my_tot(i) = dos_my_tot(i) - 0.5_rp*aimag(i_unit*this%green%g0(j, j +spin_off, i, ia) - i_unit*this%green%g0(j +spin_off, j, i, ia))/pi
+               dos_mz_tot(i) = dos_mz_tot(i) - 0.5_rp*aimag(this%green%g0(j, j, i, ia) - this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
             end do
          end do
       end do
@@ -459,20 +474,38 @@ contains
                          MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosia, product(shape(dosia)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosial, product(shape(dosial)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dos_up_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dos_dw_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dos_mx_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dos_my_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dos_mz_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
+      dos_nmag_tot(:) = 0.5_rp*(dos_up_tot(:) + dos_dw_tot(:))
 
       ! Writing the total density of states
       fname_total = "totaldos.out"
-      open(unit=125, file=fname_total, status='replace', action='write')
-      
       if (rank == 0) then
+         open(unit=125, file=fname_total, status='replace', action='write')
          do i = 1, this%en%channels_ldos + 10
             write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
          end do
          rewind(125)
+         close(125)
       end if
-      close(125)
+
+      ! Writing spin-polarized and magnetic DOS components.
+      fname_magnetic = "magneticdos.out"
+      if (rank == 0) then
+         open(unit=126, file=fname_magnetic, status='replace', action='write')
+         write(126, '(a)') '# energy dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
+         do i = 1, this%en%channels_ldos + 10
+            write(126, '(7f16.5)') this%en%ene(i) - this%en%fermi, dos_up_tot(i), dos_dw_tot(i), &
+               dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
+         end do
+         rewind(126)
+         close(126)
+      end if
       
       ! Writing the local density of states
       if (rank == 0) then
@@ -531,6 +564,7 @@ contains
 
       deallocate(dosia)
       deallocate(dosial)
+      deallocate(dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot)
    end subroutine calculate_fermi
 
    !---------------------------------------------------------------------------
@@ -541,6 +575,32 @@ contains
    subroutine calculate_band_energy(this)
       class(bands) :: this
       ! Local variable
+
+      if (.not. allocated(this%dtot)) then
+         this%eband = 0.0_rp
+         if (rank == 0) call g_logger%warning('calculate_band_energy skipped: dtot not allocated', __FILE__, __LINE__)
+         return
+      end if
+      if (.not. associated(this%en)) then
+         this%eband = 0.0_rp
+         if (rank == 0) call g_logger%warning('calculate_band_energy skipped: energy object not associated', __FILE__, __LINE__)
+         return
+      end if
+      if (.not. allocated(this%en%ene)) then
+         this%eband = 0.0_rp
+         if (rank == 0) call g_logger%warning('calculate_band_energy skipped: energy mesh not allocated', __FILE__, __LINE__)
+         return
+      end if
+      if (this%nv1 < 3 .or. this%nv1 > size(this%dtot) - 2) then
+         this%eband = 0.0_rp
+         if (rank == 0) call g_logger%warning('calculate_band_energy skipped: invalid nv1='//fmt('i0', this%nv1), __FILE__, __LINE__)
+         return
+      end if
+      if (size(this%en%ene) < this%nv1 + 2) then
+         this%eband = 0.0_rp
+         if (rank == 0) call g_logger%warning('calculate_band_energy skipped: energy mesh size too small for nv1', __FILE__, __LINE__)
+         return
+      end if
 
       call simpson_m(this%eband, this%en%edel, this%en%fermi, this%nv1, this%dtot, this%e1, 1, this%en%ene)
    end subroutine
@@ -611,6 +671,9 @@ contains
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
       real(rp), dimension(3, atoms_per_process) :: mom_prev
+      logical :: hubbard_active
+      integer :: li, iorb, jdim, ispin
+      real(rp) :: occ_orb
 
       ! Store previous moments if needed for reverse rotation later
       do na_glob = start_atom, end_atom
@@ -621,6 +684,9 @@ contains
 
       !call this%calculate_magnetic_moments()
       call this%calculate_orbital_moments()
+      hubbard_active = this%recursion%hamiltonian%hubbard_u_general_check .or. &
+                       this%recursion%hamiltonian%hubbard_u_sc_check .or. &
+                       this%recursion%hamiltonian%hubbard_v_check
 
       nchan_spin = lmax_basis + 1
       nchan = 2*nchan_spin
@@ -707,6 +773,29 @@ contains
          !                       ' ql_f_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
          ! end if
       end do
+
+      ! Rebuild orbital-diagonal LDM from Green-function occupations so LDA+U has
+      ! physical occupancies in recursion mode. Off-diagonal terms remain zero.
+      if (hubbard_active) then
+         do na_glob = start_atom, end_atom
+            na = g2l_map(na_glob)
+            plusbulk = this%lattice%nbulk + na_glob
+            this%symbolic_atom(plusbulk)%potential%ldm(:, :, :, :) = 0.0_rp
+            do ispin = 1, 2
+               soff = (ispin - 1)*spin_off
+               do li = 0, min(3, lmax_basis)
+                  jdim = 2*li + 1
+                  do iorb = li*li + 1, (li + 1)*(li + 1)
+                     y(:) = -aimag(this%green%g0(iorb + soff, iorb + soff, :, na))/pi
+                     occ_orb = 0.0_rp
+                     call simpson_m(occ_orb, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                     this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = occ_orb
+                  end do
+               end do
+            end do
+            call this%symbolic_atom(plusbulk)%potential%flatten_ldm()
+         end do
+      end if
 
       call this%calculate_pl()
 

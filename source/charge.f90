@@ -467,6 +467,7 @@ contains
       class(charge), intent(inout) :: this
       ! Local variables
       integer :: I, IBAS, ICLAS, IM, JBAS, j, i_all, i_stat
+      integer :: nmad
       real(rp) :: DIF, VADD, VERR, VMADI
       real(rp), dimension(this%lattice%nrec) :: TDQ, RMAX
       real(rp), dimension(:, :), allocatable :: AMAD
@@ -481,10 +482,11 @@ contains
       do im = 1, this%lattice%nrec
          VMAD0(IM) = this%symbolic_atom(this%lattice%nbulk + im)%potential%vmad
       end do
-      if (this%lattice%NBAS > npot) then
+      nmad = this%lattice%ntot
+      if (nmad > npot) then
          write (*, *) "# DE ATOMOS NA CELA FERE AS DIMENSOES ATRIBUIDAS"
          write (*, *) "             JOB ABORTADO                       "
-         write (*, *) "NBAS=", this%lattice%NBAS, "DIFF NDIM=", NPOT, "IN MAD"
+         write (*, *) "NTOT=", nmad, "DIFF NDIM=", NPOT, "IN MAD"
          !IFAIL = 1
          return
       end if
@@ -498,15 +500,17 @@ contains
          if (rank == 0) call g_logger%warning('too much charge in the external atom! Careful', __FILE__, __LINE__)
       end if
 
-      allocate (AMAD(this%lattice%nbas, this%lattice%nbas), stat=i_stat)
+      ! MADMAT in bulkmat writes an ntot x ntot matrix to mad.mat.
+      ! Use the same dimension here; nbas can differ from ntot in reduced cells.
+      allocate (AMAD(nmad, nmad), stat=i_stat)
       open (15, file="mad.mat", form="unformatted", STATUS="OLD")
-      do i = 1, this%lattice%nbas
-         read (15) (AMAD(i, j), j=1, this%lattice%nbas)
+      do i = 1, nmad
+         read (15) (AMAD(i, j), j=1, nmad)
       end do
       close (15)
-      do IBAS = 1, this%lattice%NBAS
+      do IBAS = 1, nmad
          VMADI = 0.d0
-         do JBAS = 1, this%lattice%NBAS
+         do JBAS = 1, nmad
             VMADI = VMADI + 2.d0*AMAD(JBAS, IBAS)*TDQ(this%lattice%iz(JBAS))
          end do
          this%symbolic_atom(this%lattice%nbulk + this%lattice%iz(IBAS))%potential%VMAD = VMADI

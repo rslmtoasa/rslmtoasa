@@ -233,8 +233,12 @@ contains
       integer :: iostatus, funit, i, j, l, li, lj, n_l_in
       integer :: nimp_in
       integer :: na
+      integer :: ntype_nml, nrec_nml
       logical :: legacy_uj_present
+      logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
       character(len=1) :: orbch
+      real(rp), parameter :: hubbard_sentinel = -9.87654321e30_rp
+      integer, parameter :: hubbard_sc_sentinel = -999
 
       include 'include_codes/namelists/hamiltonian.f90'
 
@@ -249,6 +253,31 @@ contains
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
       hubbard_u_potential_form = this%hubbard_u_potential_form
+
+      ! Robust namelist buffers: pre-allocate allocatable inputs so namelist
+      ! read does not depend on compiler-specific auto-allocation behavior.
+      ntype_nml = max(1, this%lattice%ntype)
+      nrec_nml = max(1, this%lattice%nrec)
+
+      if (.not. allocated(hubbard_u_general)) allocate(hubbard_u_general(ntype_nml, 4))
+      if (.not. allocated(hubbard_j_general)) allocate(hubbard_j_general(ntype_nml, 4))
+      if (.not. allocated(hubbard_u)) allocate(hubbard_u(nrec_nml, 4))
+      if (.not. allocated(hubbard_j)) allocate(hubbard_j(nrec_nml, 4))
+      if (.not. allocated(hubbard_u_impurity)) allocate(hubbard_u_impurity(nrec_nml, 4))
+      if (.not. allocated(hubbard_j_impurity)) allocate(hubbard_j_impurity(nrec_nml, 4))
+      if (.not. allocated(hubbard_u_sc)) allocate(hubbard_u_sc(ntype_nml, 4))
+      if (.not. allocated(hubbard_v)) allocate(hubbard_v(ntype_nml, ntype_nml, 4, 4))
+      if (.not. allocated(uj_orb)) allocate(uj_orb(nrec_nml))
+
+      hubbard_u_general(:, :) = hubbard_sentinel
+      hubbard_j_general(:, :) = hubbard_sentinel
+      hubbard_u(:, :) = hubbard_sentinel
+      hubbard_j(:, :) = hubbard_sentinel
+      hubbard_u_impurity(:, :) = hubbard_sentinel
+      hubbard_j_impurity(:, :) = hubbard_sentinel
+      hubbard_v(:, :, :, :) = hubbard_sentinel
+      hubbard_u_sc(:, :) = hubbard_sc_sentinel
+      uj_orb(:) = ''
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -278,12 +307,23 @@ contains
       end if
       call move_alloc(velocity_scale, this%velocity_scale)
 
-      ! Optional Hubbard U/J input from &hamiltonian is provided in eV.
-      ! Map it into per-species potential arrays (internal units: Ry).
-      if (allocated(hubbard_u_general) .and. allocated(hubbard_j_general)) then
+      has_hubbard_general = any(hubbard_u_general /= hubbard_sentinel) .or. any(hubbard_j_general /= hubbard_sentinel)
+      has_legacy_uj = any(uj_orb /= '') .and. (any(hubbard_u /= hubbard_sentinel) .or. any(hubbard_j /= hubbard_sentinel))
+      has_impurity_uj = any(hubbard_u_impurity /= hubbard_sentinel) .or. any(hubbard_j_impurity /= hubbard_sentinel)
+      has_hubbard_v = any(hubbard_v /= hubbard_sentinel)
+      has_hubbard_u_sc = any(hubbard_u_sc /= hubbard_sc_sentinel)
+
+      ! Optional Hubbard inputs from &hamiltonian are provided in eV.
+      ! Converted below to internal Ry units:
+      ! - hubbard_u_general / hubbard_j_general
+      ! - legacy hubbard_u / hubbard_j via uj_orb mapping
+      ! - hubbard_u_impurity / hubbard_j_impurity
+      ! - hubbard_v (intersite)
+      if (has_hubbard_general) then
          n_l_in = min(size(hubbard_u_general, 2), size(hubbard_j_general, 2))
          do i = 1, min(this%lattice%ntype, size(hubbard_u_general, 1), size(hubbard_j_general, 1))
             do l = 1, min(n_l_in, size(this%lattice%symbolic_atoms(i)%potential%hubbard_u))
+               if (hubbard_u_general(i, l) == hubbard_sentinel .or. hubbard_j_general(i, l) == hubbard_sentinel) cycle
                this%lattice%symbolic_atoms(i)%potential%hubbard_u(l) = hubbard_u_general(i, l)/ry2ev
                this%lattice%symbolic_atoms(i)%potential%hubbard_j(l) = hubbard_j_general(i, l)/ry2ev
             end do
@@ -293,7 +333,7 @@ contains
       ! Legacy LDA+U(+J) input path from lda_u branch:
       ! map (hubbard_u/hubbard_j + uj_orb) into per-atom per-l potential arrays.
       legacy_uj_present = .false.
-      if (allocated(uj_orb) .and. allocated(hubbard_u) .and. allocated(hubbard_j)) then
+      if (has_legacy_uj) then
          do i = 1, min(this%lattice%nrec, size(uj_orb), size(hubbard_u, 1), size(hubbard_j, 1))
             na = this%lattice%nbulk + i
             if (na < 1 .or. na > this%lattice%ntype) cycle
@@ -313,6 +353,7 @@ contains
                   cycle
                end select
                if (l <= size(this%lattice%symbolic_atoms(na)%potential%hubbard_u)) then
+                  if (hubbard_u(i, j) == hubbard_sentinel .or. hubbard_j(i, j) == hubbard_sentinel) cycle
                   this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = hubbard_u(i, j)/ry2ev
                   this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = hubbard_j(i, j)/ry2ev
                   if (abs(hubbard_u(i, j)) > 1.0e-10_rp .or. abs(hubbard_j(i, j)) > 1.0e-10_rp) legacy_uj_present = .true.
@@ -325,13 +366,14 @@ contains
       end if
 
       this%hubbard_u_impurity_check = .false.
-      if (allocated(hubbard_u_impurity) .and. allocated(hubbard_j_impurity)) then
+      if (has_impurity_uj) then
          nimp_in = min(size(hubbard_u_impurity, 1), size(hubbard_j_impurity, 1))
          if (nimp_in > 0) then
             this%hubbard_u_impurity(:, :) = 0.0_rp
             this%hubbard_j_impurity(:, :) = 0.0_rp
             do i = 1, min(this%lattice%nrec, nimp_in)
                do l = 1, min(4, size(hubbard_u_impurity, 2), size(hubbard_j_impurity, 2))
+                  if (hubbard_u_impurity(i, l) == hubbard_sentinel .or. hubbard_j_impurity(i, l) == hubbard_sentinel) cycle
                   this%hubbard_u_impurity(i, l) = hubbard_u_impurity(i, l)/ry2ev
                   this%hubbard_j_impurity(i, l) = hubbard_j_impurity(i, l)/ry2ev
                end do
@@ -356,9 +398,10 @@ contains
       ! Optional self-consistent U selector (0/1 mask by atom type and l-channel).
       this%hubbard_u_sc_check = .false.
       this%hubbard_u_sc(:, :) = 0
-      if (allocated(hubbard_u_sc)) then
+      if (has_hubbard_u_sc) then
          do i = 1, min(size(this%hubbard_u_sc, 1), size(hubbard_u_sc, 1))
             do l = 1, min(size(this%hubbard_u_sc, 2), size(hubbard_u_sc, 2))
+               if (hubbard_u_sc(i, l) == hubbard_sc_sentinel) cycle
                if (hubbard_u_sc(i, l) < 0 .or. hubbard_u_sc(i, l) > 1) then
                   call g_logger%fatal('Invalid hubbard_u_sc value. Only 0 or 1 is allowed.', __FILE__, __LINE__)
                end if
@@ -369,20 +412,22 @@ contains
       end if
 
       this%hubbard_v_check = .false.
-      if (allocated(hubbard_v)) then
+      if (has_hubbard_v) then
          this%hubbard_v(:, :, :, :) = 0.0_rp
          do i = 1, min(size(this%hubbard_v, 1), size(hubbard_v, 1))
             do j = 1, min(size(this%hubbard_v, 2), size(hubbard_v, 2))
                do li = 1, min(size(this%hubbard_v, 3), size(hubbard_v, 3))
                   do lj = 1, min(size(this%hubbard_v, 4), size(hubbard_v, 4))
+                     if (hubbard_v(i, j, li, lj) == hubbard_sentinel) cycle
                      this%hubbard_v(i, j, li, lj) = hubbard_v(i, j, li, lj)/ry2ev
                   end do
                end do
             end do
          end do
 
-         ! Enforce V_ji(lj,li) = V_ij(li,lj) when only one side is provided.
-         do i = 1, size(this%hubbard_v, 1)
+      ! Enforce V_ji(lj,li) = V_ij(li,lj) when only one side is provided.
+      ! this%hubbard_v is already in Ry at this point.
+      do i = 1, size(this%hubbard_v, 1)
             do j = 1, size(this%hubbard_v, 2)
                do li = 1, size(this%hubbard_v, 3)
                   do lj = 1, size(this%hubbard_v, 4)
@@ -413,6 +458,32 @@ contains
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
+      end if
+
+      call g_logger%info('HUBBARD summary: form='//trim(this%hubbard_u_potential_form)// &
+                         ' fixed_UJ='//merge('T', 'F', this%hubbard_u_general_check)// &
+                         ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
+                         ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
+      if (this%hubbard_u_general_check) then
+         do i = 1, this%lattice%ntype
+            call g_logger%info('HUBBARD fixed U/J type='//fmt('i4', i)//' [Ry] U='// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(1))//' '// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(2))//' '// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(3))//' '// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(4))// &
+                               ' J='// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(1))//' '// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(2))//' '// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(3))//' '// &
+                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(4)), __FILE__, __LINE__)
+         end do
+      end if
+      if (this%hubbard_u_sc_check) then
+         do i = 1, size(this%hubbard_u_sc, 1)
+            call g_logger%info('HUBBARD sc_U mask type='//fmt('i4', i)//' [s p d f]='// &
+                               fmt('i2', this%hubbard_u_sc(i, 1))//' '//fmt('i2', this%hubbard_u_sc(i, 2))//' '// &
+                               fmt('i2', this%hubbard_u_sc(i, 3))//' '//fmt('i2', this%hubbard_u_sc(i, 4)), __FILE__, __LINE__)
+         end do
       end if
 
    end subroutine build_from_file
@@ -1363,9 +1434,11 @@ contains
       integer :: ntype
 
       if (this%hubbard_u_general_check) then
+         call g_logger%info('HUBBARD applying on-site +U correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
       if (this%hubbard_v_check) then
+         call g_logger%info('HUBBARD applying inter-site +V correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
 
@@ -1451,9 +1524,11 @@ contains
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
       if (this%hubbard_u_general_check) then
+         call g_logger%info('HUBBARD applying on-site +U correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
       if (this%hubbard_v_check) then
+         call g_logger%info('HUBBARD applying inter-site +V correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
 
@@ -2095,6 +2170,7 @@ contains
       type(int_array), dimension(this%lattice%ntype) :: l_arr
       type(int_array), dimension(4) :: ms
       integer :: cntr
+      real(rp) :: ldm_trace_up, ldm_trace_dn, ldm_max_abs, hup_max_abs
 
       ms(1)%val = [0]
       ms(2)%val = [-1, 0, 1]
@@ -2155,13 +2231,34 @@ contains
       end do
 
       do na = 1, this%lattice%ntype
+         do l = 1, min(4, this%control%lmax + 1)
+            if ((abs(hub_u(na, l)) <= 1.0e-10_rp) .and. (abs(hub_j(na, l)) <= 1.0e-10_rp)) cycle
+            ldm_trace_up = 0.0_rp
+            ldm_trace_dn = 0.0_rp
+            ldm_max_abs = 0.0_rp
+            do i = 1, 2*l - 1
+               ldm_trace_up = ldm_trace_up + ldm(na, l, 1, i, i)
+               ldm_trace_dn = ldm_trace_dn + ldm(na, l, 2, i, i)
+               do j = 1, 2*l - 1
+                  ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 1, i, j)))
+                  ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 2, i, j)))
+               end do
+            end do
+            call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
+               ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
+               ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
+         end do
+      end do
+
+      do na = 1, this%lattice%ntype
          do l = 1, 4
             do ispin = 1, 2
                do i = 1, 2*l - 1
                   n_spin(na, l, ispin) = n_spin(na, l, ispin) + ldm(na, l, ispin, i, i)
                end do
-               n_tot(na, l) = n_tot(na, l) + n_spin(na, l, ispin)
             end do
+            ! Total occupancy for this channel is n_up + n_dn.
+            n_tot(na, l) = n_spin(na, l, 1) + n_spin(na, l, 2)
          end do
       end do
 
@@ -2328,6 +2425,16 @@ contains
                end do
             end do
          end do
+      end do
+
+      do na = 1, this%lattice%ntype
+         hup_max_abs = 0.0_rp
+         do i = 1, nb
+            do j = 1, nb
+               hup_max_abs = max(hup_max_abs, abs(this%hubbard_u_pot(i, j, na)))
+            end do
+         end do
+         call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
       end do
 
       do na = 1, this%lattice%ntype

@@ -715,7 +715,9 @@ contains
          !            SAVE THE PARAMETERS QL AND PL TO BE MIXED LATER
          !=========================================================================
          call this%mix%save_to('old') ! Save to qia_old to mix with qia_new.
-         call this%mix%save_ldm_to('old') ! Save LDA+U density matrices before DOS step.
+         if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+            call this%mix%save_ldm_to('old') ! Save LDA+U density matrices before DOS step.
+         end if
 
          !=========================================================================
          !                      SAVE THE MAGNETIC MOMENTS
@@ -734,8 +736,10 @@ contains
          !=========================================================================
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
          call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
-         call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
-         call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
+         if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+            call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
+            call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
+         end if
    
          !=========================================================================
          !         CALCULATE THE MADELUNG POTENTIAL (BULK ONLY IMPLEMENTED)
@@ -753,7 +757,9 @@ contains
          !                        SAVE MIXED PARAMETERS
          !=========================================================================
          call this%mix%save_to('current') ! Save mixed parameters into potential%pl and potential%ql
-         call this%mix%save_ldm_to('current') ! Save mixed density matrices into potential%ldm.
+         if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+            call this%mix%save_ldm_to('current') ! Save mixed density matrices into potential%ldm.
+         end if
    
          !=========================================================================
          !                       MAKE SFC ATOMIC SPHERE
@@ -1012,8 +1018,12 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Band Energy                                       |'
          write (newunit, '(A)') '==========================================================================='
-         call this%bands%calculate_band_energy()
-         write (newunit, '(a,f16.10)') 'Band energy of system: ', this%bands%eband
+         if (associated(this%bands)) then
+            call this%bands%calculate_band_energy()
+            write (newunit, '(a,f16.10)') 'Band energy of system: ', this%bands%eband
+         else
+            write (newunit, '(a)') 'Band energy of system: unavailable (bands object not associated)'
+         end if
          !===========================================================================
          !                       Magnetization
          !===========================================================================
