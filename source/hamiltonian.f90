@@ -2156,6 +2156,7 @@ contains
       real(rp) :: ubar, jbar, ueff, d1, d2, eps_den, tr_n1mn
       real(rp) :: num_u, num_j, sum_occ_opposite, sum_occ_same_excl
       real(rp) :: common_pref, sum_u_aux, sum_j_aux, dUdn, dJdn, dUeff_dn
+      real(rp) :: vdiag_up_avg, vdiag_dn_avg, vdiag_split
       real(rp), dimension(2, 7) :: occ_m
       real(rp), dimension(2, 7, 7) :: pbar
       logical :: use_acbn0
@@ -2247,6 +2248,10 @@ contains
             call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
                ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
+            call g_logger%info('HUBBARD_OCC type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
+               ' U='//fmt('f10.6', hub_u(na, l))//' J='//fmt('f10.6', hub_j(na, l))// &
+               ' nup='//fmt('f10.6', ldm_trace_up)//' ndn='//fmt('f10.6', ldm_trace_dn)// &
+               ' ntot='//fmt('f10.6', ldm_trace_up + ldm_trace_dn), __FILE__, __LINE__)
          end do
       end do
 
@@ -2413,6 +2418,20 @@ contains
                   end do
                end do
             end do
+
+            ! Diagnostic for expected splitting: average diagonal on-site +U potential per spin.
+            vdiag_up_avg = 0.0_rp
+            vdiag_dn_avg = 0.0_rp
+            do m1 = 1, m_max
+               vdiag_up_avg = vdiag_up_avg + hub_pot(na, l_index, 1, m1, m1)
+               vdiag_dn_avg = vdiag_dn_avg + hub_pot(na, l_index, 2, m1, m1)
+            end do
+            vdiag_up_avg = vdiag_up_avg/real(max(1, m_max), rp)
+            vdiag_dn_avg = vdiag_dn_avg/real(max(1, m_max), rp)
+            vdiag_split = vdiag_up_avg - vdiag_dn_avg
+            call g_logger%info('HUBBARD_VDIAG type='//fmt('i4', na)//' l='//fmt('i2', l_index - 1)// &
+               ' avg_up='//fmt('f11.6', vdiag_up_avg)//' avg_dn='//fmt('f11.6', vdiag_dn_avg)// &
+               ' split(up-dn)='//fmt('f11.6', vdiag_split), __FILE__, __LINE__)
          end do
       end do
 

@@ -673,6 +673,9 @@ contains
       real(rp), dimension(3, atoms_per_process) :: mom_prev
       logical :: hubbard_active
       integer :: li, iorb, jdim, ispin
+      integer :: ncap_orb, ncap_trace
+      real(rp) :: occ_raw, ch_sum, scale_ch
+      real(rp), dimension(7) :: occ_ch
       real(rp) :: occ_orb
 
       ! Store previous moments if needed for reverse rotation later
@@ -781,18 +784,42 @@ contains
             na = g2l_map(na_glob)
             plusbulk = this%lattice%nbulk + na_glob
             this%symbolic_atom(plusbulk)%potential%ldm(:, :, :, :) = 0.0_rp
+            ncap_orb = 0
+            ncap_trace = 0
             do ispin = 1, 2
                soff = (ispin - 1)*spin_off
                do li = 0, min(3, lmax_basis)
                   jdim = 2*li + 1
+                  occ_ch(:) = 0.0_rp
                   do iorb = li*li + 1, (li + 1)*(li + 1)
                      y(:) = -aimag(this%green%g0(iorb + soff, iorb + soff, :, na))/pi
                      occ_orb = 0.0_rp
                      call simpson_m(occ_orb, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                     occ_raw = occ_orb
+                     ! Physical per-spin-orbital occupation cap for narrow-band
+                     ! numerical noise: enforce 0 <= n_m^sigma <= 1.
+                     occ_orb = max(0.0_rp, min(1.0_rp, occ_orb))
+                     if (abs(occ_orb - occ_raw) > 1.0e-12_rp) ncap_orb = ncap_orb + 1
+                     occ_ch(iorb - li*li) = occ_orb
                      this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = occ_orb
                   end do
+                  ! Physical per-channel trace cap: sum_m n_m^sigma <= 2l+1.
+                  ch_sum = sum(occ_ch(1:jdim))
+                  if (ch_sum > real(jdim, rp) + 1.0e-10_rp) then
+                     scale_ch = real(jdim, rp)/ch_sum
+                     do iorb = 1, jdim
+                        this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb, iorb) = &
+                           this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb, iorb)*scale_ch
+                     end do
+                     ncap_trace = ncap_trace + 1
+                  end if
                end do
             end do
+            if (rank == 0 .and. (ncap_orb > 0 .or. ncap_trace > 0)) then
+               call g_logger%warning('HUBBARD_LDM_CAP atom='//fmt('i4', na_glob)// &
+                                     ' orb_caps='//fmt('i0', ncap_orb)// &
+                                     ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
+            end if
             call this%symbolic_atom(plusbulk)%potential%flatten_ldm()
          end do
       end if

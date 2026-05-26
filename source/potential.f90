@@ -344,6 +344,10 @@ contains
 
       ! Ensure all potential containers are dimensionally consistent with lmax.
       call ensure_lmax_consistency(this)
+      ! Reconstruct 4D density matrix from serialized restart storage.
+      ! Without this, potential%ldm can stay at constructor defaults (zeros)
+      ! even when ldm_flatten was read from *_out.nml.
+      call this%expand_ldm()
 
       ! If we promoted from a smaller basis, seed newly introduced channels with
       ! minimal sane defaults for atomic solver initialization.
