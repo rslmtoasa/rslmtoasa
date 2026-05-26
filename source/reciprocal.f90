@@ -36,12 +36,14 @@ module reciprocal_mod
    use lattice_mod
    use hamiltonian_mod
    use charge_mod
+   use spectrum_bounds_mod, only: bounds, compute_spectrum_bounds
    use precision_mod, only: rp
    use math_mod
-   use string_mod, only: int2str, real2str, fmt
+   use string_mod, only: int2str, real2str, fmt, lower
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
+   use basis_mod, only: nb, norb
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -87,6 +89,15 @@ module reciprocal_mod
       complex(rp), dimension(:, :, :), allocatable :: hk_total
       !> Overlap matrix in k-space
       complex(rp), dimension(:, :, :), allocatable :: sk_overlap
+      !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
+      !> or 'generalized_overlap_kanpur'.
+      character(len=32) :: reciprocal_mode
+      !> Kanpur-alignment diagnostics toggle
+      logical :: kanpur_diagnostics
+      !> Optional H(Gamma) bounds diagnostics
+      logical :: gamma_bounds_diagnostics
+      !> Experimental finite real-space HALL diagonalization
+      logical :: hall_diag_experimental
 
       ! Band structure variables
       !> Maximum number of orbital channels per atom type
@@ -190,10 +201,16 @@ module reciprocal_mod
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
+      procedure :: fourier_transform_overlap
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
       procedure :: check_multisite_hamiltonian_diagonal
+      procedure :: build_kspace_overlap
       procedure :: diagonalize_hamiltonian
+      procedure :: print_kanpur_mapping
+      procedure :: check_overlap_properties
+      procedure :: run_gamma_bounds_diagnostics
+      procedure :: diagonalize_hall_experimental
       procedure :: calculate_band_structure
       procedure :: calculate_density_of_states
       procedure :: calculate_dos_tetrahedron
@@ -331,7 +348,7 @@ contains
       this%use_time_reversal = .true.
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
-      this%max_orbs = 18  ! spd noncollinear default
+      this%max_orbs = nb
 
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
@@ -350,6 +367,10 @@ contains
       this%fermi_level = 0.0_rp  ! Default Fermi level
       this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
       this%auto_find_fermi = .true.  ! Auto-find Fermi level from DOS (recommended default)
+      this%reciprocal_mode = 'ham_only'
+      this%kanpur_diagnostics = .true.
+      this%gamma_bounds_diagnostics = .false.
+      this%hall_diag_experimental = .false.
       this%n_sites = 0
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 1  ! Default to non-spin-polarized
@@ -396,6 +417,10 @@ contains
       dos_method = this%dos_method
       auto_find_fermi = this%auto_find_fermi
       suppress_internal_logs = this%suppress_internal_logs
+      reciprocal_mode = this%reciprocal_mode
+      kanpur_diagnostics = this%kanpur_diagnostics
+      gamma_bounds_diagnostics = this%gamma_bounds_diagnostics
+      hall_diag_experimental = this%hall_diag_experimental
       
       ! K-path settings
       auto_kpath = this%auto_kpath
@@ -436,6 +461,20 @@ contains
       this%dos_method = dos_method
       this%auto_find_fermi = auto_find_fermi
       this%suppress_internal_logs = suppress_internal_logs
+      this%reciprocal_mode = lower(trim(reciprocal_mode))
+      this%kanpur_diagnostics = kanpur_diagnostics
+      this%gamma_bounds_diagnostics = gamma_bounds_diagnostics
+      this%hall_diag_experimental = hall_diag_experimental
+      if (this%reciprocal_mode == 'generalized_overlap') then
+         this%reciprocal_mode = 'generalized_overlap_proxy'
+         call g_logger%warning("reciprocal_mode='generalized_overlap' is deprecated alias; using 'generalized_overlap_proxy'.", __FILE__, __LINE__)
+      end if
+      if (this%reciprocal_mode /= 'ham_only' .and. &
+          this%reciprocal_mode /= 'generalized_overlap_proxy' .and. &
+          this%reciprocal_mode /= 'generalized_overlap_kanpur') then
+         call g_logger%warning("reciprocal_mode must be 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'. Falling back to ham_only.", __FILE__, __LINE__)
+         this%reciprocal_mode = 'ham_only'
+      end if
 
       ! K-path settings
       this%auto_kpath = auto_kpath
@@ -463,6 +502,7 @@ contains
       if (this%auto_kpath) then
          call g_logger%info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
       end if
+      call g_logger%info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -600,29 +640,12 @@ contains
       allocate(this%basis_size(this%lattice%ntype))
 #endif
 
-      ! Determine basis size for each atom type
-      ! This should ideally be read from input or deduced from potential info
+      ! Determine basis size for each atom type from active global basis.
       do ntype = 1, this%lattice%ntype
-         ! For now, assume spd basis (9 orbitals) for all atom types
-         ! TODO: Extend to read from symbolic_atoms potential configuration
-         this%basis_size(ntype) = 9  ! spd basis: s(1) + p(3) + d(5) = 9 orbitals
-         
-         ! Alternative basis sizes:
-         ! sp basis: s(1) + p(3) = 4 orbitals
-         ! spdf basis: s(1) + p(3) + d(5) + f(7) = 16 orbitals
+         this%basis_size(ntype) = norb
       end do
 
-      ! Set maximum orbital channels (×2 for spin, stored as 18 for noncollinear spd)
-      this%max_orbs = maxval(this%basis_size) * 2
-      
-      ! For current spd case: 9 orbitals × 2 = 18 for noncollinear
-      if (maxval(this%basis_size) == 9) then
-         this%max_orbs = 18
-      else if (maxval(this%basis_size) == 4) then
-         this%max_orbs = 8   ! sp basis
-      else if (maxval(this%basis_size) == 16) then
-         this%max_orbs = 32  ! spdf basis
-      end if
+      this%max_orbs = nb
 
       call g_logger%info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orbs)), __FILE__, __LINE__)
    end subroutine set_basis_sizes
@@ -640,6 +663,14 @@ contains
       integer :: ntype, ia, nr, nn_max_loc, kk
       real(rp) :: r2
       real(rp), dimension(3, this%lattice%kk) :: cralat
+
+      if (allocated(this%ham_vec_type) .and. allocated(this%ham_vec_type_direct)) then
+         if (size(this%ham_vec_type, 1) == 3 .and. &
+             size(this%ham_vec_type, 2) == this%lattice%nn_max .and. &
+             size(this%ham_vec_type, 3) == this%lattice%ntype) then
+            return
+         end if
+      end if
 
       call g_logger%info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
 
@@ -686,10 +717,9 @@ contains
                this%ham_vec_type_direct(:, nn_max_loc, ntype) = &
                   matmul(this%lattice%a_cart_inv, this%ham_vec_type(:, nn_max_loc, ntype) ) !/ this%lattice%alat
             else
-               ! cartesian_to_fractional expects Cartesian in units of alat as first arg
-               call cartesian_to_fractional(this%ham_vec_type(:, nn_max_loc, ntype) / this%lattice%alat, &
-                                          this%ham_vec_type_direct(:, nn_max_loc, ntype), &
-                                          this%lattice%a, 1.0_rp)
+               ! Fallback: use inverse of lattice vectors directly.
+               this%ham_vec_type_direct(:, nn_max_loc, ntype) = &
+                  matmul(inverse_3x3(this%lattice%a), this%ham_vec_type(:, nn_max_loc, ntype) / this%lattice%alat)
             end if
          end do
 
@@ -765,7 +795,7 @@ contains
       complex(rp), dimension(:, :), allocatable :: structure_factors  ! (nr_max, ntype)
       
       ! Get dimensions
-      n_orb = 18  ! spd (9 orbitals) * spinor (2)
+      n_orb = nb
       n_sites = this%lattice%nrec
       
       ! Allocate structure factors for all types
@@ -812,17 +842,61 @@ contains
          end do
       end do
 
-      if (norm2(k_vec) < 1.0e-8_rp) then
-         ! Debug: Print H(k) at Gamma point
-         call g_logger%info('fourier_transform_hamiltonian: H(k) at Gamma point:', __FILE__, __LINE__)
-         write(1000,'(18f6.2)')  abs(hk_result( 1:18, 1:18))
-         write(1010,'(18f6.2)')  abs(hk_result(19:36, 1:18))
-         write(1001,'(18f6.2)')  abs(hk_result( 1:18,19:36))
-         write(1011,'(18f6.2)')  abs(hk_result(19:36,19:36))
-      end if
       deallocate(structure_factors)
       
    end subroutine fourier_transform_hamiltonian
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Fourier transform real-space overlap proxy to k-space.
+   !> Current proxy uses S(R) = I + eeo(R) with on-site identity term.
+   !---------------------------------------------------------------------------
+   subroutine fourier_transform_overlap(this, k_vec, sk_result)
+      class(reciprocal), intent(in) :: this
+      real(rp), dimension(3), intent(in) :: k_vec
+      complex(rp), dimension(:, :), intent(out) :: sk_result
+      integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr, iorb
+      integer :: i_start, i_end, j_start, j_end
+      integer :: n_orb, n_sites
+      complex(rp), dimension(:, :), allocatable :: structure_factors
+      complex(rp), dimension(:, :), allocatable :: overlap_block
+
+      n_orb = nb
+      n_sites = this%lattice%nrec
+      allocate(structure_factors(this%lattice%nn_max, this%lattice%ntype))
+      allocate(overlap_block(n_orb, n_orb))
+      call this%calculate_structure_factors(k_vec, structure_factors)
+
+      sk_result = cmplx(0.0_rp, 0.0_rp, rp)
+      do isite = 1, n_sites
+         ntype_i = this%lattice%ib(isite)
+         ia = this%lattice%atlist(ntype_i)
+         nr = this%lattice%nn(ia, 1)
+         i_start = (isite - 1) * n_orb + 1
+         i_end = isite * n_orb
+         do ineigh = 1, nr
+            if (ineigh == 1) then
+               jsite = isite
+            else
+               ja = this%lattice%nn(ia, ineigh)
+               jsite = this%lattice%iz(ja)
+               if (jsite < 1 .or. jsite > n_sites) cycle
+            end if
+            j_start = (jsite - 1) * n_orb + 1
+            j_end = jsite * n_orb
+            overlap_block(:, :) = this%hamiltonian%eeo(:, :, ineigh, ntype_i)
+            if (ineigh == 1 .and. jsite == isite) then
+               do iorb = 1, n_orb
+                  overlap_block(iorb, iorb) = overlap_block(iorb, iorb) + cmplx(1.0_rp, 0.0_rp, rp)
+               end do
+            end if
+            sk_result(i_start:i_end, j_start:j_end) = sk_result(i_start:i_end, j_start:j_end) + &
+               overlap_block * structure_factors(ineigh, ntype_i)
+         end do
+      end do
+      deallocate(overlap_block, structure_factors)
+   end subroutine fourier_transform_overlap
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -888,10 +962,10 @@ contains
       ! Dimension: (n_orb * n_sites) x (n_orb * n_sites) x n_kpoints
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.hk_bulk', this%hk_bulk, &
-                                [18*this%lattice%nrec, 18*this%lattice%nrec, nk])
+                                [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk])
 #else
    if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
-   allocate(this%hk_bulk(18*this%lattice%nrec, 18*this%lattice%nrec, nk))
+   allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk))
 #endif
 
       ! Parallelize over k-points (coarse-grained) when OpenMP is available.
@@ -911,12 +985,61 @@ contains
 #endif
 
       call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
+         call this%build_kspace_overlap()
+      else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
+         call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
+      end if
       
       ! Diagnostic: Check H(k) at Gamma point for multi-site systems
       if (this%lattice%nrec > 1 .and. nk > 0) then
          call this%check_multisite_hamiltonian_diagonal()
       end if
    end subroutine build_kspace_hamiltonian
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build overlap proxy S(k) for all k-points.
+   !---------------------------------------------------------------------------
+   subroutine build_kspace_overlap(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: ik, nk
+      logical :: using_kpath
+
+      using_kpath = .false.
+      if (allocated(this%k_path)) then
+         nk = this%nk_path
+         using_kpath = .true.
+      else if (allocated(this%k_points)) then
+         nk = this%nk_total
+      else
+         call g_logger%error('build_kspace_overlap: No k-point set available.', __FILE__, __LINE__)
+         return
+      end if
+
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk])
+#else
+      if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
+      allocate(this%sk_overlap(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk))
+#endif
+
+#ifdef _OPENMP
+      !$omp parallel do private(ik) shared(this, nk, using_kpath) default(none)
+#endif
+      do ik = 1, nk
+         if (using_kpath) then
+            call this%fourier_transform_overlap(this%k_path(:, ik), this%sk_overlap(:, :, ik))
+         else
+            call this%fourier_transform_overlap(this%k_points(:, ik), this%sk_overlap(:, :, ik))
+         end if
+      end do
+#ifdef _OPENMP
+      !$omp end parallel do
+#endif
+      call g_logger%info('reciprocal%build_kspace_overlap: Built S(k) overlap proxy.', __FILE__, __LINE__)
+   end subroutine build_kspace_overlap
 
 !---------------------------------------------------------------------------
 ! DESCRIPTION:
@@ -1117,12 +1240,14 @@ end subroutine print_hamiltonian_structure
       class(reciprocal), intent(inout) :: this
       
       ! Local variables
-      integer :: nk, ik, nmat, lwork, info
+      integer :: nk, ik, nmat, lwork, info, mode_fail_count
       complex(rp), dimension(:, :), allocatable :: h_k_copy
+      complex(rp), dimension(:, :), allocatable :: s_k_copy
       real(rp), dimension(:), allocatable :: eigenvals
       complex(rp), dimension(:), allocatable :: work_complex
       real(rp), dimension(:), allocatable :: rwork
       character(len=100) :: info_msg
+      logical :: use_generalized
 
       ! Check prerequisites
       if (.not. allocated(this%hk_bulk)) then
@@ -1139,27 +1264,44 @@ end subroutine print_hamiltonian_structure
       call g_logger%info('diagonalize_hamiltonian: Matrix size = ' // &
                         trim(int2str(nmat)) // ' x ' // trim(int2str(nmat)), __FILE__, __LINE__)
 
+      use_generalized = trim(this%reciprocal_mode) == 'generalized_overlap_proxy'
+      if (use_generalized) then
+         if (.not. allocated(this%sk_overlap)) call this%build_kspace_overlap()
+         if (.not. allocated(this%sk_overlap)) then
+            call g_logger%warning('diagonalize_hamiltonian: S(k) unavailable, falling back to ham_only.', __FILE__, __LINE__)
+            use_generalized = .false.
+         end if
+      end if
+
+      if (this%kanpur_diagnostics) call this%print_kanpur_mapping()
+
       ! Allocate eigenvalue and eigenvector storage
       if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
       if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
       allocate(this%eigenvalues(nmat, nk))
       allocate(this%eigenvectors(nmat, nmat, nk))
+      mode_fail_count = 0
 
       ! Parallel diagonalization over k-points
       ! Each thread needs its own LAPACK workspace
 !$OMP PARALLEL DEFAULT(SHARED) &
-!$OMP& PRIVATE(ik, h_k_copy, eigenvals, work_complex, rwork, lwork, info, info_msg) &
+!$OMP& PRIVATE(ik, h_k_copy, s_k_copy, eigenvals, work_complex, rwork, lwork, info, info_msg) &
 !$OMP& IF(nk > 10)
       
       ! Allocate thread-private work arrays
       allocate(h_k_copy(nmat, nmat))
+      allocate(s_k_copy(nmat, nmat))
       allocate(eigenvals(nmat))
       allocate(rwork(3*nmat - 2))
       
       ! Query optimal LAPACK workspace size
       lwork = -1
       allocate(work_complex(1))
-      call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
+      if (use_generalized) then
+         call zhegv(1, 'V', 'U', nmat, h_k_copy, nmat, s_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
+      else
+         call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
+      end if
       lwork = int(real(work_complex(1)))
       deallocate(work_complex)
       allocate(work_complex(lwork))
@@ -1170,13 +1312,21 @@ end subroutine print_hamiltonian_structure
          ! Copy H(k) from pre-computed array
          h_k_copy = this%hk_bulk(:, :, ik)
 
-         ! Diagonalize H(k) using LAPACK ZHEEV
-         ! Note: ZHEEV overwrites h_k_copy with eigenvectors
-         call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
+         if (use_generalized) then
+            s_k_copy = this%sk_overlap(:, :, ik)
+            call this%check_overlap_properties(ik, s_k_copy)
+            call zhegv(1, 'V', 'U', nmat, h_k_copy, nmat, s_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
+         else
+            ! Diagonalize H(k) using LAPACK ZHEEV
+            call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
+         end if
          
          if (info /= 0) then
-            write(info_msg, '(A,I0,A,I0)') 'ZHEEV failed at k-point ', ik, ', info = ', info
+            write(info_msg, '(A,I0,A,I0)') 'Diagonalization failed at k-point ', ik, ', info = ', info
             call g_logger%error('diagonalize_hamiltonian: ' // trim(info_msg), __FILE__, __LINE__)
+!$OMP CRITICAL
+            mode_fail_count = mode_fail_count + 1
+!$OMP END CRITICAL
             cycle
          end if
 
@@ -1187,12 +1337,125 @@ end subroutine print_hamiltonian_structure
 !$OMP END DO
       
       ! Cleanup thread-private arrays
-      deallocate(h_k_copy, eigenvals, work_complex, rwork)
+      deallocate(h_k_copy, s_k_copy, eigenvals, work_complex, rwork)
       
 !$OMP END PARALLEL
 
+      if (mode_fail_count > 0 .and. use_generalized) then
+         call g_logger%warning('diagonalize_hamiltonian: generalized_overlap had failures; consider ham_only for robustness.', __FILE__, __LINE__)
+      end if
+      if (this%gamma_bounds_diagnostics) call this%run_gamma_bounds_diagnostics()
+      if (this%hall_diag_experimental) call this%diagonalize_hall_experimental()
       call g_logger%info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)
    end subroutine diagonalize_hamiltonian
+
+   subroutine print_kanpur_mapping(this)
+      class(reciprocal), intent(in) :: this
+      call g_logger%info('Kanpur mapping: reciprocal_mode=' // trim(this%reciprocal_mode), __FILE__, __LINE__)
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
+         call g_logger%info('Kanpur mapping: PROXY generalized solve H(k)c = E S_proxy(k)c, S_proxy from eeo + I.', __FILE__, __LINE__)
+         call g_logger%warning('Kanpur mapping: PROXY mode is not a formal Kanpur LMTO overlap representation.', __FILE__, __LINE__)
+      else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
+         call g_logger%warning('Kanpur mapping: generalized_overlap_kanpur selected but not implemented; currently falling back to ham_only.', __FILE__, __LINE__)
+      else
+         call g_logger%info('Kanpur mapping: Hamiltonian-only mode (TB-like).', __FILE__, __LINE__)
+      end if
+      call g_logger%info('Kanpur mapping: non-orthogonality treatment is approximation-level diagnostic.', __FILE__, __LINE__)
+   end subroutine print_kanpur_mapping
+
+   subroutine check_overlap_properties(this, ik, s_k)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ik
+      complex(rp), dimension(:, :), intent(in) :: s_k
+      integer :: i, j, n
+      real(rp) :: max_herm
+      max_herm = 0.0_rp
+      n = size(s_k, 1)
+      do i = 1, n
+         do j = 1, n
+            max_herm = max(max_herm, abs(s_k(i, j) - conjg(s_k(j, i))))
+         end do
+      end do
+      if (ik == 1 .or. max_herm > 1.0e-6_rp) then
+         call g_logger%info('S(k) hermiticity check ik=' // trim(int2str(ik)) // ' max_diff=' // &
+            trim(real2str(max_herm, '(ES12.4)')), __FILE__, __LINE__)
+      end if
+   end subroutine check_overlap_properties
+
+   subroutine run_gamma_bounds_diagnostics(this)
+      class(reciprocal), intent(inout) :: this
+      complex(rp), allocatable :: h_gamma(:, :)
+      real(rp) :: egmin, egmax
+      type(bounds) :: bnd
+
+      if (.not. allocated(this%hk_bulk)) return
+      allocate(h_gamma(size(this%hk_bulk, 1), size(this%hk_bulk, 2)))
+      h_gamma = this%hk_bulk(:, :, 1)
+      call compute_spectrum_bounds(h_gamma, bnd, method='both', verbose=.false.)
+      call g_logger%info('Gamma bounds diagnostic: Gershgorin [' // &
+         trim(real2str(bnd%e_min_gershgorin, '(F12.6)')) // ', ' // &
+         trim(real2str(bnd%e_max_gershgorin, '(F12.6)')) // ']', __FILE__, __LINE__)
+      call this%diagonalize_hall_experimental() ! reuse exact solver utility logs for finite matrix check
+      if (allocated(this%eigenvalues)) then
+         egmin = minval(this%eigenvalues(:, 1))
+         egmax = maxval(this%eigenvalues(:, 1))
+         call g_logger%info('Gamma bounds diagnostic: eig(H(Gamma))=[' // &
+            trim(real2str(egmin, '(F12.6)')) // ', ' // trim(real2str(egmax, '(F12.6)')) // ']', __FILE__, __LINE__)
+      end if
+      deallocate(h_gamma)
+   end subroutine run_gamma_bounds_diagnostics
+
+   subroutine diagonalize_hall_experimental(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: nsites, n_orb, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
+      integer :: i_start, i_end, j_start, j_end
+      complex(rp), allocatable :: hall_mat(:, :), work(:)
+      real(rp), allocatable :: evals(:), rwork(:)
+
+      if (.not. this%hall_diag_experimental) return
+      if (this%control%calctype /= 'I') then
+         call g_logger%info('HALL experimental diagonalization skipped: calctype is not impurity.', __FILE__, __LINE__)
+         return
+      end if
+
+      nsites = this%lattice%nmax
+      n_orb = 18
+      if (nsites <= 0) return
+      n = nsites * n_orb
+      allocate(hall_mat(n, n), evals(n), rwork(max(1, 3*n - 2)))
+      hall_mat = cmplx(0.0_rp, 0.0_rp, rp)
+      do isite = 1, nsites
+         ia = isite
+         nr = this%lattice%nn(ia, 1)
+         i_start = (isite - 1) * n_orb + 1
+         i_end = isite * n_orb
+         do ineigh = 1, nr
+            if (ineigh == 1) then
+               jsite = isite
+            else
+               ja = this%lattice%nn(ia, ineigh)
+               jsite = ja
+               if (jsite < 1 .or. jsite > nsites) cycle
+            end if
+            j_start = (jsite - 1) * n_orb + 1
+            j_end = jsite * n_orb
+            hall_mat(i_start:i_end, j_start:j_end) = hall_mat(i_start:i_end, j_start:j_end) + this%hamiltonian%hall(:, :, ineigh, isite)
+         end do
+      end do
+      allocate(work(1))
+      call zheev('N', 'U', n, hall_mat, n, evals, work, -1, rwork, info)
+      lwork = max(1, int(real(work(1))))
+      deallocate(work)
+      allocate(work(lwork))
+      call zheev('N', 'U', n, hall_mat, n, evals, work, lwork, rwork, info)
+      if (info == 0) then
+         call g_logger%info('HALL experimental eig range: [' // trim(real2str(minval(evals), '(F12.6)')) // ', ' // &
+            trim(real2str(maxval(evals), '(F12.6)')) // '] (diagnostic only)', __FILE__, __LINE__)
+      else
+         call g_logger%warning('HALL experimental diagonalization failed, info=' // trim(int2str(info)), __FILE__, __LINE__)
+      end if
+      deallocate(hall_mat, evals, rwork, work)
+   end subroutine diagonalize_hall_experimental
 
 
    !---------------------------------------------------------------------------
@@ -2434,8 +2697,9 @@ end subroutine calculate_dos_gaussian
    !---------------------------------------------------------------------------
 subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
-   integer :: ik, ib, ie, iorb, ispin, i, isite, ii, itype
-   integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end
+   integer :: ik, ib, ie, iorb, ispin, i, isite
+   integer :: n_orb_per_spin, orb_start, site_orb_start
+   integer :: lstart(4), lend(4)
    real(rp) :: weight, orbital_char, energy
    real(rp) :: gaussian_weight, sigma_squared, sigma_use
    complex(rp) :: psi_element
@@ -2462,34 +2726,18 @@ subroutine project_dos_orbitals_gaussian(this)
    this%n_spin_components = 2
    nbands = size(this%eigenvalues, 1)
 
-   ! CRITICAL FIX: Check if eigenvectors match multi-site or single-site layout
-   ! If hk_total was NOT built, eigenvectors are single-site (18×18), not multi-site (n_sites*18 × n_sites*18)
-   if (size(this%eigenvectors, 1) == 18 .and. this%n_sites == 1) then
-      ! Single-site mode: eigenvectors are 18-dimensional (not site-blocked)
-      call g_logger%info('project_dos_orbitals_gaussian: Single-site mode detected (eigenvector dim=18)', __FILE__, __LINE__)
-   else if (size(this%eigenvectors, 1) == this%n_sites * 18) then
-      ! Multi-site mode: eigenvectors are site-blocked  
-      call g_logger%info('project_dos_orbitals_gaussian: Multi-site mode (eigenvector dim=' // &
-         trim(int2str(size(this%eigenvectors, 1))) // ')', __FILE__, __LINE__)
-   else
-      call g_logger%warning('project_dos_orbitals_gaussian: Unexpected eigenvector dimension = ' // &
-         trim(int2str(size(this%eigenvectors, 1))) // ', expected ' // trim(int2str(this%n_sites * 18)), &
-         __FILE__, __LINE__)
-   end if
+   n_orb_per_spin = norb
 
    if (allocated(this%projected_dos)) deallocate(this%projected_dos)
    allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
    this%projected_dos = 0.0_rp
 
-   ! Build per-site orbital offsets
-   ! CRITICAL: Eigenvector layout matches Hamiltonian (site-blocked):
-   !   [site1(18), site2(18), ..., siteN(18)]
-   ! where each site block is [s_up, px_up, py_up, pz_up, d_up(5), s_dn, px_dn, py_dn, pz_dn, d_dn(5)]
-   ! Each site has 18 orbitals total (9 per spin, both spins together)
    allocate(site_orb_offset(this%n_sites + 1))
    do isite = 1, this%n_sites + 1
-      site_orb_offset(isite) = (isite - 1) * 18
+      site_orb_offset(isite) = (isite - 1) * (n_orb_per_spin * this%n_spin_components)
    end do
+   lstart = [1, 2, 5, 10]
+   lend = [1, 4, 9, 16]
 
    ! Diagnostic logging
    call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
@@ -2527,50 +2775,20 @@ subroutine project_dos_orbitals_gaussian(this)
                site_orb_start = site_orb_offset(isite)
 
                do ispin = 1, this%n_spin_components
-                  ! Within each site's 18-orbital block:
-                  !   spin-up orbitals: indices 1-9
-                  !   spin-down orbitals: indices 10-18
-                  ! So for spin-up (ispin=1): orb_start = site_orb_start + 0
-                  !    for spin-down (ispin=2): orb_start = site_orb_start + 9
-                  orb_start = site_orb_start + (ispin - 1) * 9
-
-                  ! s orbital (index 1 within the 9-orbital spin block)
-                  iorb = 1
-                  if (orb_start + 1 <= size(this%eigenvectors, 1)) then
-                     psi_element = this%eigenvectors(orb_start + 1, ib, ik)
-                     orbital_char = real(conjg(psi_element) * psi_element, rp)
+                  orb_start = site_orb_start + (ispin - 1) * n_orb_per_spin
+                  do iorb = 1, 4
+                     orbital_char = 0.0_rp
+                     if (lstart(iorb) <= n_orb_per_spin) then
+                        do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
+                           if (orb_start + i <= size(this%eigenvectors, 1)) then
+                              psi_element = this%eigenvectors(orb_start + i, ib, ik)
+                              orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                           end if
+                        end do
+                     end if
                      this%projected_dos(isite, iorb, ispin, ie) = &
                         this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
-                  end if
-
-                  ! p orbitals (indices 2, 3, 4 within the 9-orbital spin block)
-                  iorb = 2
-                  orbital_char = 0.0_rp
-                  do i = 2, 4
-                     if (orb_start + i <= size(this%eigenvectors, 1)) then
-                        psi_element = this%eigenvectors(orb_start + i, ib, ik)
-                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                     end if
                   end do
-                  this%projected_dos(isite, iorb, ispin, ie) = &
-                     this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
-
-                  ! d orbitals (indices 5-9 within the 9-orbital spin block)
-                  iorb = 3
-                  orbital_char = 0.0_rp
-                  do i = 5, 9
-                     if (orb_start + i <= size(this%eigenvectors, 1)) then
-                        psi_element = this%eigenvectors(orb_start + i, ib, ik)
-                        orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                     end if
-                  end do
-                  this%projected_dos(isite, iorb, ispin, ie) = &
-                     this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
-
-                  ! f orbitals (zero for spd basis)
-                  iorb = 4
-                  this%projected_dos(isite, iorb, ispin, ie) = &
-                     this%projected_dos(isite, iorb, ispin, ie) + 0.0_rp
                end do
             end do
          end do
@@ -2614,13 +2832,13 @@ end subroutine project_dos_orbitals_gaussian
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite, itype
-      integer :: n_orb_per_spin, orb_start, site_orb_start, site_orb_end, ik
+      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite
+      integer :: n_orb_per_spin, orb_start, site_orb_start, ik
       integer :: ie, nbands
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
-      integer, dimension(4) :: sort_idx
+      integer :: lstart(4), lend(4)
       complex(rp) :: psi_element
       ! Per-site orbital offsets for mixed atom types
       integer, dimension(:), allocatable :: site_orb_offset
@@ -2631,6 +2849,9 @@ end subroutine project_dos_orbitals_gaussian
       this%n_sites = this%lattice%nrec
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 2  ! spin up/down
+      n_orb_per_spin = norb
+      lstart = [1, 2, 5, 10]
+      lend = [1, 4, 9, 16]
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
                         ' site(s)', __FILE__, __LINE__)
@@ -2640,14 +2861,9 @@ end subroutine project_dos_orbitals_gaussian
       allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       this%projected_dos = 0.0_rp
 
-      ! Build per-site orbital offsets
-      ! CRITICAL: Eigenvector layout matches Hamiltonian (site-blocked):
-      !   [site1(18), site2(18), ..., siteN(18)]
-      ! where each site block is [s_up, px_up, py_up, pz_up, d_up(5), s_dn, px_dn, py_dn, pz_dn, d_dn(5)]
-      ! Each site has 18 orbitals total (9 per spin, both spins together)
       allocate(site_orb_offset(this%n_sites + 1))
       do isite = 1, this%n_sites + 1
-         site_orb_offset(isite) = (isite - 1) * 18
+         site_orb_offset(isite) = (isite - 1) * (n_orb_per_spin * this%n_spin_components)
       end do
 
       ! Setup tetrahedra if not already done
@@ -2657,7 +2873,7 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Parallelize over energy points: each thread writes to independent i_energy
 #ifdef _OPENMP
-      !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start,site_orb_end) firstprivate(n_orb_per_spin) shared(this,site_orb_offset) default(none)
+      !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start) firstprivate(n_orb_per_spin,lstart,lend) shared(this,site_orb_offset) default(none)
 #endif
       do i_energy = 1, this%n_energy_points
          ! Energy grid already in Ry (consistent with eigenvalues)
@@ -2700,70 +2916,26 @@ end subroutine project_dos_orbitals_gaussian
 
                   ! Calculate orbital character for each orbital type and spin
                   do ispin = 1, this%n_spin_components
-                     ! Within each site's 18-orbital block:
-                     !   spin-up orbitals: indices 1-9
-                     !   spin-down orbitals: indices 10-18
-                     ! So for spin-up (ispin=1): orb_start = site_orb_start + 0
-                     !    for spin-down (ispin=2): orb_start = site_orb_start + 9
-                     orb_start = site_orb_start + (ispin - 1) * 9
-
-                     ! s orbital (index 1 in each site/spin block)
-                     iorb = 1
-                     orbital_char_avg = 0.0_rp
-                     do i_corner = 1, 4
-                        ik = this%tetrahedra(i_corner, i_tet)
-                        if (orb_start + 1 <= size(this%eigenvectors, 1)) then
-                           psi_element = this%eigenvectors(orb_start + 1, i_band, ik)
-                           orbital_chars(i_corner) = real(conjg(psi_element) * psi_element, rp)
-                        else
-                           orbital_chars(i_corner) = 0.0_rp
+                     orb_start = site_orb_start + (ispin - 1) * n_orb_per_spin
+                     do iorb = 1, 4
+                        orbital_char_avg = 0.0_rp
+                        if (lstart(iorb) <= n_orb_per_spin) then
+                           do i_corner = 1, 4
+                              ik = this%tetrahedra(i_corner, i_tet)
+                              orbital_char = 0.0_rp
+                              do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
+                                 if (orb_start + i <= size(this%eigenvectors, 1)) then
+                                    psi_element = this%eigenvectors(orb_start + i, i_band, ik)
+                                    orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                                 end if
+                              end do
+                              orbital_chars(i_corner) = orbital_char
+                           end do
+                           orbital_char_avg = sum(orbital_chars) / 4.0_rp
                         end if
+                        this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
+                                                                           orbital_char_avg * dos_contrib
                      end do
-                     orbital_char_avg = sum(orbital_chars) / 4.0_rp  ! Average over tetrahedron corners
-                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
-                                                                        orbital_char_avg * dos_contrib
-
-                     ! p orbitals (indices 2-4 in each site/spin block)
-                     iorb = 2
-                     orbital_char_avg = 0.0_rp
-                     do i_corner = 1, 4
-                        ik = this%tetrahedra(i_corner, i_tet)
-                        orbital_char = 0.0_rp
-                        do i = 2, 4
-                           if (orb_start + i <= size(this%eigenvectors, 1)) then
-                              psi_element = this%eigenvectors(orb_start + i, i_band, ik)
-                              orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                           end if
-                        end do
-                        orbital_chars(i_corner) = orbital_char
-                     end do
-                     orbital_char_avg = sum(orbital_chars) / 4.0_rp
-                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
-                                                                        orbital_char_avg * dos_contrib
-
-                     ! d orbitals (indices 5-9 in each site/spin block)
-                     iorb = 3
-                     orbital_char_avg = 0.0_rp
-                     do i_corner = 1, 4
-                        ik = this%tetrahedra(i_corner, i_tet)
-                        orbital_char = 0.0_rp
-                        do i = 5, 9
-                           if (orb_start + i <= size(this%eigenvectors, 1)) then
-                              psi_element = this%eigenvectors(orb_start + i, i_band, ik)
-                              orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                           end if
-                        end do
-                        orbital_chars(i_corner) = orbital_char
-                     end do
-                     orbital_char_avg = sum(orbital_chars) / 4.0_rp
-                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
-                                                                        orbital_char_avg * dos_contrib
-
-                     ! f orbitals (would be indices 10-16, but not present in spd basis)
-                     iorb = 4
-                     orbital_char_avg = 0.0_rp  ! No f orbitals in current spd basis
-                     this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
-                                                                        orbital_char_avg * dos_contrib
                   end do
                end do
             end do
@@ -3419,12 +3591,7 @@ end function integrate_dos_up_to_energy
       type(lattice), intent(inout) :: lattice_obj
       
       ! Local variables
-      integer :: isite, iorb, ispin, ie, l, m1, m2
-      integer :: ik, ib, i_orb_start, i_orb_end, norb_l
-      integer :: i_orb_m1, i_orb_m2, row, col
-      real(rp) :: energy, weight, occupation
-      real(rp) :: e_low, e_high, dos_contrib
-      complex(rp) :: overlap_contrib
+      integer :: isite
       
       ! Orbital indexing: 
       ! iorb = 1 (s, 1 orbital), iorb = 2 (p, 3 orbitals), iorb = 3 (d, 5 orbitals)
@@ -3434,15 +3601,6 @@ end function integrate_dos_up_to_energy
       ! Initialize all LDM to zero
       do isite = 1, lattice_obj%nrec
          lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(:,:,:,:) = 0.0_rp
-      end do
-      
-      ! Method 2: Full LDM (including off-diagonal) from eigenvector projections
-      ! This properly captures orbital hybridization and is more accurate than diagonal-only
-      call calculate_ldm_from_eigenvectors(this, lattice_obj)
-      
-      ! Save flattened copy for each site
-      do isite = 1, lattice_obj%nrec
-         call lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%flatten_ldm()
       end do
       
       ! Method 2: Full LDM (including off-diagonal) from eigenvector projections
@@ -3485,10 +3643,10 @@ end function integrate_dos_up_to_energy
       real(rp) :: trace_tot, trace_up, trace_dn, max_imag
       integer :: idx_a, idx_b
 
-      call g_logger%info('calculate_ldm_from_eigenvectors: Computing full 18x18 DM per site from eigenvectors', __FILE__, __LINE__)
+      call g_logger%info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
 
       nbands = size(this%eigenvalues, 1)
-      n_orb_per_spin = 9
+      n_orb_per_spin = norb
       nsites = lattice_obj%nrec
       n_orb_site = n_orb_per_spin * this%n_spin_components  ! typically 18
 
@@ -3557,7 +3715,7 @@ end function integrate_dos_up_to_energy
             end if
             
             ! Project DM into ldm structure: iterate over angular momentum channels
-            do iorb = 0, 2  ! l = 0 (s), 1 (p), 2 (d)
+            do iorb = 0, min(3, lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%lmax)
                norb_l = 2*iorb + 1
                basis_offset = iorb**2  ! 0, 1, 4 mapping
                

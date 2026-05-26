@@ -36,6 +36,7 @@ module calculation_mod
    use exchange_mod
    use spin_dynamics_mod
    use conductivity_mod
+   use reciprocal_mod
    use mix_mod
    use math_mod
    use precision_mod, only: rp
@@ -87,6 +88,8 @@ module calculation_mod
       procedure, private :: post_processing_conductivity_p2rs
       procedure, private :: post_processing_conductivity
       procedure, private :: post_processing_orbital_modern
+      procedure, private :: post_processing_band_structure
+      procedure, private :: post_processing_density_of_states
       procedure :: process
       final :: destructor
    end type calculation
@@ -208,6 +211,10 @@ contains
          call this%post_processing_conductivity()
       case ('orbital_modern')
          call this%post_processing_orbital_modern()
+      case ('band_structure')
+         call this%post_processing_band_structure()
+      case ('density_of_states')
+         call this%post_processing_density_of_states()
       end select
    end subroutine
 
@@ -1280,6 +1287,63 @@ contains
       self_obj = self(bands_obj, mix_obj)
    end subroutine post_processing_orbital_modern
 
+   subroutine post_processing_band_structure(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(reciprocal), target :: reciprocal_obj
+      integer :: i
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.true.)
+      call lattice_obj%atomlist()
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      hamiltonian_obj = hamiltonian(charge_obj)
+      do i = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(i)%build_pot()
+      end do
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      call reciprocal_obj%calculate_band_structure(hamiltonian_obj, 'auto', reciprocal_obj%nk_per_segment, 'band_structure.dat')
+   end subroutine post_processing_band_structure
+
+   subroutine post_processing_density_of_states(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(reciprocal), target :: reciprocal_obj
+      integer :: i
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.true.)
+      call lattice_obj%atomlist()
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      hamiltonian_obj = hamiltonian(charge_obj)
+      do i = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(i)%build_pot()
+      end do
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      call reciprocal_obj%calculate_density_of_states(hamiltonian_obj, reciprocal_obj%n_energy_points, &
+           reciprocal_obj%dos_energy_range, reciprocal_obj%dos_method, reciprocal_obj%gaussian_sigma, &
+           reciprocal_obj%temperature, reciprocal_obj%fermi_level, reciprocal_obj%total_electrons, &
+           reciprocal_obj%auto_find_fermi, 'dos_kspace.dat')
+   end subroutine post_processing_density_of_states
+
 
 
    !---------------------------------------------------------------------------
@@ -1309,10 +1373,12 @@ contains
           .and. post_processing /= 'exchange_p2rs' &
           .and. post_processing /= 'conductivity' &
           .and. post_processing /= 'conductivity_p2rs' &
-          .and. post_processing /= 'orbital_modern') then 
+          .and. post_processing /= 'orbital_modern' &
+          .and. post_processing /= 'band_structure' &
+          .and. post_processing /= 'density_of_states') then 
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern'", __FILE__, __LINE__)
+                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'density_of_states'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

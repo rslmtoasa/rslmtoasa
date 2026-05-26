@@ -39,6 +39,7 @@ module self_mod
    use energy_mod
    use hamiltonian_mod
    use mix_mod
+   use reciprocal_mod
    use math_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
@@ -226,6 +227,10 @@ module self_mod
       !> Logical variable to control if initial
       ! potential parameters are calculated from moments
       logical :: cold
+      !> Experimental opt-in k-space reciprocal diagnostics path for SCF loop.
+      logical :: use_kspace
+      !> Cached reciprocal helper for k-space SCF branch (reused across iterations).
+      type(reciprocal), allocatable :: reciprocal_scf_cache
 
    contains
       procedure :: build_from_file
@@ -244,6 +249,8 @@ module self_mod
       procedure, private :: vxc0sp
       procedure, private :: racsi
       procedure, private :: potpar
+      procedure, private :: write_kspace_scf_dos_outputs
+      procedure, private :: compute_kspace_spin_moments_spinor
       final :: destructor
    end type self
 
@@ -302,6 +309,7 @@ contains
       if (allocated(this%mixmag)) deallocate (this%mixmag)
       if (allocated(this%rb)) deallocate (this%rb)
 #endif
+      if (allocated(this%reciprocal_scf_cache)) deallocate(this%reciprocal_scf_cache)
    end subroutine destructor
 
    ! Member functions
@@ -334,6 +342,7 @@ contains
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
       cold = this%cold
+      use_kspace = this%use_kspace
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -442,6 +451,7 @@ contains
       this%orbital_polarization = orbital_polarization
       this%init = init
       this%cold = cold
+      this%use_kspace = use_kspace
       ! Initialize constraining facility if requested in control namelist
       if (associated(this%control)) then
          if (this%control%constraints_enable) then
@@ -509,6 +519,7 @@ contains
       this%ws_max = 9.99d0
 
       this%cold = .false.
+      this%use_kspace = .false.
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -827,14 +838,18 @@ contains
       end select
       ! if (rank == 0) call g_logger%info('Hamiltonian mounted for step '//int2str(iter), __FILE__, __LINE__)
    
-      select case (this%control%recur)
-      case ('lanczos')
-         call this%recursion%recur()
-      case ('chebyshev')
-         call this%recursion%chebyshev_recur()
-      case ('block')
-         call this%recursion%recur_b()
-      end select
+      if (this%use_kspace) then
+         if (rank == 0) call g_logger%info('run_recursion: use_kspace=.true., skipping recursion solver stage (Hamiltonian build kept).', __FILE__, __LINE__)
+      else
+         select case (this%control%recur)
+         case ('lanczos')
+            call this%recursion%recur()
+         case ('chebyshev')
+            call this%recursion%chebyshev_recur()
+         case ('block')
+            call this%recursion%recur_b()
+         end select
+      end if
    
       call g_timer%stop('recursion')
    end subroutine run_recursion
@@ -844,15 +859,121 @@ contains
    !=========================================================================
    subroutine run_dos(this)
       class(self), intent(inout) :: this
-      integer :: ia
+      integer :: ia, l, lmax_site, li, iorb, plusbulk
       ! variables for constraining
       real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
       integer :: ia_loc
+      real(rp) :: q_up, q_dn, mz, mtot
+      real(rp), allocatable :: kspace_spin_mom(:,:)
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
       call g_timer%start('calculation-of-DOS')
    
       call this%en%e_mesh()
+
+      if (this%use_kspace) then
+         call g_logger%info('run_dos: use_kspace=.true. reciprocal SCF branch enabled (optional path).', __FILE__, __LINE__)
+         if (.not. allocated(this%reciprocal_scf_cache)) then
+            allocate(this%reciprocal_scf_cache)
+            this%reciprocal_scf_cache = reciprocal(this%hamiltonian)
+         end if
+         if (rank == 0) then
+            call g_logger%info('k-space SCF mesh: ' // &
+                               int2str(this%reciprocal_scf_cache%nk_mesh(1)) // ' x ' // &
+                               int2str(this%reciprocal_scf_cache%nk_mesh(2)) // ' x ' // &
+                               int2str(this%reciprocal_scf_cache%nk_mesh(3)), __FILE__, __LINE__)
+         end if
+         if (.not. allocated(this%reciprocal_scf_cache%k_points)) call this%reciprocal_scf_cache%generate_mp_mesh()
+         call this%reciprocal_scf_cache%build_kspace_hamiltonian()
+         call this%reciprocal_scf_cache%diagonalize_hamiltonian()
+         call this%reciprocal_scf_cache%calculate_density_of_states(this%hamiltonian)
+         if (this%control%nsp == 2) then
+            allocate(kspace_spin_mom(3, this%lattice%nrec))
+            call this%compute_kspace_spin_moments_spinor(this%reciprocal_scf_cache, kspace_spin_mom)
+         end if
+
+         ! Map reciprocal projected-DOS moments onto SCF quantities expected by mix/save_to.
+         do ia = 1, this%lattice%nrec
+            lmax_site = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax
+            do l = 0, lmax_site
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(:, l, :) = 0.0_rp
+            end do
+
+            do l = 0, min(lmax_site, this%reciprocal_scf_cache%n_orb_types - 1)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, l, 1) = this%reciprocal_scf_cache%band_moments(ia, l + 1, 1, 1)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, l, 2) = this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%gravity_center(l + 1, 1) = &
+                  this%reciprocal_scf_cache%band_moments(ia, l + 1, 1, 2) - this%symbolic_atom(this%lattice%nbulk + ia)%potential%vmad
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%gravity_center(l + 1, 2) = &
+                  this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 2) - this%symbolic_atom(this%lattice%nbulk + ia)%potential%vmad
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, l, 1) = &
+                  this%reciprocal_scf_cache%band_moments(ia, l + 1, 1, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 1, 1)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, l, 2) = &
+                  this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
+            end do
+
+            if (this%control%nsp == 2) then
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx = kspace_spin_mom(1, ia)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%my = kspace_spin_mom(2, ia)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz = kspace_spin_mom(3, ia)
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom0(:) = kspace_spin_mom(:, ia)
+               mtot = sqrt(sum(kspace_spin_mom(:, ia)**2)) + 1.0e-15_rp
+            else
+               ! Collinear proxy from spin occupations (nsp=1 path).
+               q_up = sum(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 0:lmax_site, 1))
+               q_dn = sum(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 0:lmax_site, 2))
+               mz = q_up - q_dn
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx = 0.0_rp
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%my = 0.0_rp
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz = mz
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom0(:) = [0.0_rp, 0.0_rp, mz]
+               mtot = abs(mz)
+            end if
+            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mtot = mtot
+            if (mtot > tiny(1.0_rp)) then
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = &
+                  [this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx, &
+                   this%symbolic_atom(this%lattice%nbulk + ia)%potential%my, &
+                   this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz]/mtot
+            else
+               this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+            end if
+            call this%symbolic_atom(this%lattice%nbulk + ia)%potential%copy_mom_to_scal()
+            if (rank == 0) then
+               call g_logger%info('Spin moment of atom'//fmt('i4', ia)//' is '// &
+                                  fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + ia)%potential%mtot), __FILE__, __LINE__)
+               call g_logger%info('Spin moment projections of atom'//fmt('i4', ia)//' is '// &
+                                  fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx)//' '// &
+                                  fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + ia)%potential%my)//' '// &
+                                  fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz), __FILE__, __LINE__)
+            end if
+         end do
+         if (allocated(kspace_spin_mom)) deallocate(kspace_spin_mom)
+
+         call this%bands%calculate_pl()
+         this%en%fermi = this%reciprocal_scf_cache%fermi_level
+
+         if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+            call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice)
+            if (rank == 0) then
+               do ia = 1, this%lattice%nrec
+                  plusbulk = this%lattice%nbulk + ia
+                  do li = 0, min(3, lmax_basis)
+                     call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', ia)//' l='//fmt('i2', li)// &
+                                        ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &
+                                        ' ql_dn='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 2))// &
+                                        ' ldm_up='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 1, iorb, iorb), iorb=1,2*li+1)]))// &
+                                        ' ldm_dn='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 2, iorb, iorb), iorb=1,2*li+1)])), __FILE__, __LINE__)
+                  end do
+               end do
+            end if
+         end if
+         call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
+
+         call this%mix%save_to('new')
+         call g_timer%stop('calculation-of-DOS')
+         return
+      end if
    
       select case (this%control%recur)
       case ('lanczos')
@@ -913,6 +1034,120 @@ contains
    
       call g_timer%stop('calculation-of-DOS')
    end subroutine run_dos
+
+   !=========================================================================
+   !      WRITE k-SPACE SCF DOS OUTPUTS IN LEGACY-COMPATIBLE FILE FORMAT
+   !=========================================================================
+   subroutine write_kspace_scf_dos_outputs(this, reciprocal_obj)
+      class(self), intent(inout) :: this
+      type(reciprocal), intent(in) :: reciprocal_obj
+      integer :: i, isite, iorb
+      real(rp), allocatable :: dos_up_tot(:), dos_dw_tot(:), dos_mz_tot(:), dos_nmag_tot(:)
+
+      if (rank /= 0) return
+      if (.not. allocated(reciprocal_obj%total_dos)) return
+      if (.not. allocated(reciprocal_obj%dos_energy_grid)) return
+
+      allocate(dos_up_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_dw_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_mz_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_nmag_tot(reciprocal_obj%n_energy_points))
+      dos_up_tot = 0.0_rp
+      dos_dw_tot = 0.0_rp
+      dos_mz_tot = 0.0_rp
+      dos_nmag_tot = 0.0_rp
+
+      if (allocated(reciprocal_obj%projected_dos)) then
+         do i = 1, reciprocal_obj%n_energy_points
+            do isite = 1, reciprocal_obj%n_sites
+               do iorb = 1, reciprocal_obj%n_orb_types
+                  dos_up_tot(i) = dos_up_tot(i) + reciprocal_obj%projected_dos(isite, iorb, 1, i)
+                  dos_dw_tot(i) = dos_dw_tot(i) + reciprocal_obj%projected_dos(isite, iorb, 2, i)
+               end do
+            end do
+         end do
+      else
+         dos_up_tot = 0.5_rp*reciprocal_obj%total_dos
+         dos_dw_tot = 0.5_rp*reciprocal_obj%total_dos
+      end if
+
+      dos_mz_tot = dos_up_tot - dos_dw_tot
+      dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
+
+      open(unit=125, file='totaldos.out', status='replace', action='write')
+      do i = 1, reciprocal_obj%n_energy_points
+         write(125, '(2f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, reciprocal_obj%total_dos(i)
+      end do
+      close(125)
+
+      open(unit=126, file='magneticdos.out', status='replace', action='write')
+      write(126, '(a)') '# energy dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
+      do i = 1, reciprocal_obj%n_energy_points
+         write(126, '(7f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, &
+            dos_up_tot(i), dos_dw_tot(i), 0.0_rp, 0.0_rp, dos_mz_tot(i), dos_nmag_tot(i)
+      end do
+      close(126)
+
+      deallocate(dos_up_tot, dos_dw_tot, dos_mz_tot, dos_nmag_tot)
+   end subroutine write_kspace_scf_dos_outputs
+
+   !=========================================================================
+   !  SPINOR-RIGOROUS SITE MOMENTS FROM k-SPACE EIGENVECTORS (nsp=2/SOC path)
+   !=========================================================================
+   subroutine compute_kspace_spin_moments_spinor(this, reciprocal_obj, site_mom)
+      class(self), intent(in) :: this
+      type(reciprocal), intent(in) :: reciprocal_obj
+      real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
+      integer :: ik, ib, ia, io, iup, idn, site_offset
+      real(rp) :: wk, occ, e, kT, farg
+      complex(rp) :: u, d, ud
+      real(rp) :: mxs, mys, mzs
+      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
+
+      site_mom(:, :) = 0.0_rp
+      kT = reciprocal_obj%temperature*kB_Ry_per_K
+
+      do ik = 1, reciprocal_obj%nk_total
+         wk = reciprocal_obj%k_weights(ik)
+         do ib = 1, size(reciprocal_obj%eigenvalues, 1)
+            e = reciprocal_obj%eigenvalues(ib, ik)
+            if (kT > 1.0e-12_rp) then
+               farg = (e - reciprocal_obj%fermi_level)/kT
+               if (farg > 50.0_rp) then
+                  occ = 0.0_rp
+               else if (farg < -50.0_rp) then
+                  occ = 1.0_rp
+               else
+                  occ = 1.0_rp/(exp(farg) + 1.0_rp)
+               end if
+            else
+               occ = merge(1.0_rp, 0.0_rp, e <= reciprocal_obj%fermi_level)
+            end if
+            if (occ <= 1.0e-14_rp) cycle
+
+            do ia = 1, this%lattice%nrec
+               site_offset = (ia - 1)*nb
+               mxs = 0.0_rp
+               mys = 0.0_rp
+               mzs = 0.0_rp
+               do io = 1, norb
+                  iup = site_offset + io
+                  idn = site_offset + norb + io
+                  if (idn > size(reciprocal_obj%eigenvectors, 1)) cycle
+                  u = reciprocal_obj%eigenvectors(iup, ib, ik)
+                  d = reciprocal_obj%eigenvectors(idn, ib, ik)
+                  ud = conjg(u)*d
+                  mxs = mxs + 2.0_rp*real(ud, rp)
+                  mys = mys - 2.0_rp*aimag(ud)
+                  mzs = mzs + real(conjg(u)*u - conjg(d)*d, rp)
+               end do
+               site_mom(1, ia) = site_mom(1, ia) + wk*occ*mxs
+               site_mom(2, ia) = site_mom(2, ia) + wk*occ*mys
+               site_mom(3, ia) = site_mom(3, ia) + wk*occ*mzs
+            end do
+         end do
+      end do
+   end subroutine compute_kspace_spin_moments_spinor
    
    !=========================================================================
    !                   RUN SELF-CONSISTENT FIELD UPDATE

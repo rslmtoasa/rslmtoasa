@@ -15,6 +15,7 @@ Table of Contents
    :maxdepth: 2
 
    lmto_asa_overview
+   kspace_modes
    green_functions
    recursion_method
    scf_cycle

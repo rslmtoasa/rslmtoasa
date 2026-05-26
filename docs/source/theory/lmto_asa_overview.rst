@@ -159,6 +159,30 @@ Reciprocal vs. Real-Space Representation
 - Green's function encodes all spatial and energetic information
 - On-site and inter-site Green's functions directly computed
 
+Current k-space implementation status (important)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The code now supports explicit reciprocal-space solve modes via ``&reciprocal``:
+
+- ``reciprocal_mode='ham_only'``:
+  
+  - Solves standard Hermitian eigenproblem from Fourier-transformed Hamiltonian only.
+  - This is the current baseline production-style behavior.
+
+- ``reciprocal_mode='generalized_overlap_proxy'``:
+  
+  - Solves a generalized eigenproblem :math:`H(k)c = E\,S_{\mathrm{proxy}}(k)c`.
+  - ``S_proxy(k)`` is currently built from a proxy overlap construction (from real-space arrays), primarily for workflow and diagnostics.
+  - This mode is **experimental** and **not** a formal Kanpur-consistent LMTO overlap representation.
+
+- ``reciprocal_mode='generalized_overlap_kanpur'``:
+  
+  - Reserved mode name for a future formal Kanpur-consistent overlap/secular implementation.
+  - At present this path is not implemented and falls back to ``ham_only`` behavior with warnings.
+
+Implication: reciprocal-space generalized-overlap results should currently be interpreted as
+diagnostic/prototyping output unless and until the Kanpur-consistent overlap path is completed.
+
 Collinear vs. Non-Collinear Magnetism
 --------------------------------------
 

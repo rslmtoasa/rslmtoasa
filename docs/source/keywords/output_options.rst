@@ -106,13 +106,21 @@ post_processing
    +====================+=======================================+
    | 'none'             | No post-processing (default)          |
    +--------------------+---------------------------------------+
-   | 'dos'              | Calculate density of states           |
+   | 'density_of_states'| Calculate density of states           |
    +--------------------+---------------------------------------+
-   | 'bands'            | Calculate band structure              |
+   | 'band_structure'   | Calculate band structure              |
+   +--------------------+---------------------------------------+
+   | 'paoflow2rs'       | PAOFLOW-to-RS conversion workflow     |
    +--------------------+---------------------------------------+
    | 'exchange'         | Calculate exchange interactions       |
    +--------------------+---------------------------------------+
    | 'conductivity'     | Calculate transport properties        |
+   +--------------------+---------------------------------------+
+   | 'exchange_p2rs'    | Exchange in p2rs workflow             |
+   +--------------------+---------------------------------------+
+   | 'conductivity_p2rs'| Conductivity in p2rs workflow         |
+   +--------------------+---------------------------------------+
+   | 'orbital_modern'   | Orbital-moment post-processing        |
    +--------------------+---------------------------------------+
 
 **Default:** 'none'
@@ -131,8 +139,8 @@ post_processing
 
 **Output files generated:**
 
-- 'dos': ``dos.dat``, possibly ``ldos_*.dat``
-- 'bands': ``bands.dat``
+- 'density_of_states': ``dos_kspace.dat`` (k-space mode) and/or DOS outputs
+- 'band_structure': ``band_structure.dat``
 - 'exchange': ``exchange.dat``, ``exchange_expanded.dat``
 - 'conductivity': ``conductivity_tensor.dat``, ``conductivity_scalar.dat``
 

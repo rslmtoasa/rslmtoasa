@@ -18,6 +18,7 @@ All examples are located in the ``example/`` directory of the RS-LMTO-ASA distri
 - :doc:`examples/bulk_mn3sn` - Mn₃Sn kagome antiferromagnet (non-collinear magnetism)
 - :doc:`examples/surface_fcccu001` - Cu(001) surface (semi-infinite system)
 - :doc:`examples/impurity_b2feco` - Fe impurity in B2 FeCo (embedded cluster)
+- :doc:`examples/kspace_scf_bccfe` - K-space-enabled SCF template for bcc Fe
 
 **Post-Processing Calculations:**
 
@@ -60,6 +61,7 @@ The following sections explain each example in detail.
    examples/bulk_mn3sn
    examples/surface_fcccu001
    examples/impurity_b2feco
+   examples/kspace_scf_bccfe
 
 .. toctree::
    :maxdepth: 1

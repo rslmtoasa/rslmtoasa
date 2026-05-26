@@ -465,18 +465,23 @@ contains
                          ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
                          ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
       if (this%hubbard_u_general_check) then
-         do i = 1, this%lattice%ntype
-            call g_logger%info('HUBBARD fixed U/J type='//fmt('i4', i)//' [Ry] U='// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(1))//' '// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(2))//' '// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(3))//' '// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(4))// &
-                               ' J='// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(1))//' '// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(2))//' '// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(3))//' '// &
-                               fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(4)), __FILE__, __LINE__)
-         end do
+         block
+            integer :: lch, nch
+            character(len=512) :: u_msg, j_msg
+            do i = 1, this%lattice%ntype
+               u_msg = ''
+               j_msg = ''
+               nch = size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)
+               do lch = 1, nch
+                  u_msg = trim(u_msg)//' '//fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(lch))
+               end do
+               nch = size(this%lattice%symbolic_atoms(i)%potential%hubbard_j)
+               do lch = 1, nch
+                  j_msg = trim(j_msg)//' '//fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(lch))
+               end do
+               call g_logger%info('HUBBARD fixed U/J type='//fmt('i4', i)//' [Ry] U='//trim(u_msg)//' J='//trim(j_msg), __FILE__, __LINE__)
+            end do
+         end block
       end if
       if (this%hubbard_u_sc_check) then
          do i = 1, size(this%hubbard_u_sc, 1)
@@ -2189,8 +2194,10 @@ contains
       n_tot(:, :) = 0.0_rp
 
       do na = 1, this%lattice%ntype
-         do l = 1, 4
+         do l = 1, min(4, size(this%lattice%symbolic_atoms(na)%potential%hubbard_u))
             hub_u(na, l) = this%lattice%symbolic_atoms(na)%potential%hubbard_u(l)
+         end do
+         do l = 1, min(4, size(this%lattice%symbolic_atoms(na)%potential%hubbard_j))
             hub_j(na, l) = this%lattice%symbolic_atoms(na)%potential%hubbard_j(l)
          end do
       end do

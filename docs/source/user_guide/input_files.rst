@@ -238,6 +238,37 @@ Error: "Sphere overlap exceeds limit"
 Advanced Topics
 ===============
 
+Reciprocal-space mode selection
+-------------------------------
+
+When using reciprocal-space post-processing (for example ``post_processing='band_structure'`` or
+``post_processing='density_of_states'``), the ``&reciprocal`` namelist supports:
+
+.. code-block:: fortran
+
+   &reciprocal
+      reciprocal_mode = 'ham_only'  ! default
+      kanpur_diagnostics = .true.
+      gamma_bounds_diagnostics = .false.
+      hall_diag_experimental = .false.
+   /
+
+Allowed ``reciprocal_mode`` values:
+
+- ``'ham_only'``:
+  
+  - Standard Hamiltonian-only k-space diagonalization.
+
+- ``'generalized_overlap_proxy'``:
+  
+  - Experimental generalized-eigen workflow using a proxy overlap matrix.
+  - Intended for diagnostics and method development.
+
+- ``'generalized_overlap_kanpur'``:
+  
+  - Reserved for a future formal Kanpur-consistent overlap implementation.
+  - Currently falls back to ``'ham_only'`` with warnings.
+
 **Array parameters:**
 
 Many parameters are 1D or 2D arrays. Syntax:
