@@ -418,12 +418,13 @@ contains
       integer :: i, j, k, l, m, n, ia, ik1_mag, ik1, nv1, ifail, unitnum, unitnum2
       real(rp) :: e1_mag, ef_mag, e1
       integer :: ia_glob
-      real(rp), dimension(:, :), allocatable :: dosia
+      real(rp), dimension(:, :), allocatable :: dosia, dosia_up, dosia_dw
       real(rp), dimension(:, :, :), allocatable :: dosial
       real(rp), dimension(:), allocatable :: dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot
       character(len=256) :: fname_total, fname_dos, fname_orb_dos, fname_magnetic
 
       allocate(dosia(this%lattice%nrec, this%en%channels_ldos + 10), dosial(this%lattice%nrec, nb, this%en%channels_ldos + 10))
+      allocate(dosia_up(this%lattice%nrec, this%en%channels_ldos + 10), dosia_dw(this%lattice%nrec, this%en%channels_ldos + 10))
       allocate(dos_up_tot(this%en%channels_ldos + 10), dos_dw_tot(this%en%channels_ldos + 10))
       allocate(dos_mx_tot(this%en%channels_ldos + 10), dos_my_tot(this%en%channels_ldos + 10), dos_mz_tot(this%en%channels_ldos + 10))
       allocate(dos_nmag_tot(this%en%channels_ldos + 10))
@@ -435,6 +436,8 @@ contains
       this%dtot(:) = 0.0d0
       dosial = 0.0d0
       dosia = 0.0d0
+      dosia_up = 0.0d0
+      dosia_dw = 0.0d0
       dos_up_tot = 0.0d0
       dos_dw_tot = 0.0d0
       dos_mx_tot = 0.0d0
@@ -460,6 +463,8 @@ contains
                dosia(ia_glob, i) = dosia(ia_glob, i) - aimag(this%green%g0(j, j, i, ia) + this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
                dosial(ia_glob, j, i) = -aimag(this%green%g0(j, j, i, ia))/pi
                dosial(ia_glob, j +spin_off, i) = -aimag(this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
+               dosia_up(ia_glob, i) = dosia_up(ia_glob, i) - aimag(this%green%g0(j, j, i, ia))/pi
+               dosia_dw(ia_glob, i) = dosia_dw(ia_glob, i) - aimag(this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
                dos_up_tot(i) = dos_up_tot(i) - aimag(this%green%g0(j, j, i, ia))/pi
                dos_dw_tot(i) = dos_dw_tot(i) - aimag(this%green%g0(j +spin_off, j +spin_off, i, ia))/pi
                dos_mx_tot(i) = dos_mx_tot(i) - 0.5_rp*aimag(this%green%g0(j, j +spin_off, i, ia) + this%green%g0(j +spin_off, j, i, ia))/pi
@@ -473,6 +478,8 @@ contains
       call MPI_ALLREDUCE(MPI_IN_PLACE, this%dtot, this%en%channels_ldos + 10, &
                          MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosia, product(shape(dosia)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dosia_up, product(shape(dosia_up)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, dosia_dw, product(shape(dosia_dw)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dosial, product(shape(dosial)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dos_up_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE, dos_dw_tot, this%en%channels_ldos + 10, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -530,8 +537,9 @@ contains
             unitnum = 250 + ia
             fname_dos = trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol) // "_dos.out"
             open(unit=unitnum, file=fname_dos, status='replace', action='write')
+            write(unitnum, '(a)') '# energy site_dos_total site_dos_up site_dos_dw'
             do i = 1, this%en%channels_ldos + 10
-               write(unitnum, '(2f16.5)') this%en%ene(i) - this%en%fermi, dosia(ia, i)
+               write(unitnum, '(4f16.5)') this%en%ene(i) - this%en%fermi, dosia(ia, i), dosia_up(ia, i), dosia_dw(ia, i)
             end do
             rewind(unitnum)
             close(unitnum)
@@ -552,6 +560,7 @@ contains
       end if
 
       deallocate(dosia)
+      deallocate(dosia_up, dosia_dw)
       deallocate(dosial)
       deallocate(dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot)
    end subroutine calculate_fermi
@@ -666,6 +675,9 @@ contains
       real(rp) :: occ_raw, ch_sum, scale_ch
       real(rp), dimension(7) :: occ_ch
       real(rp) :: occ_orb
+      real(rp), allocatable :: ldm_comm(:, :, :, :)
+      real(rp), allocatable :: pl_comm(:, :, :)
+      integer :: lcount_ldm, max_flat_ldm, local_flat
 
       ! Store previous moments if needed for reverse rotation later
       do na_glob = start_atom, end_atom
@@ -833,7 +845,55 @@ contains
 
       ! Transfer calculated moments across MPI ranks
 #ifdef USE_MPI
-      pot_size = this%symbolic_atom(start_atom)%potential%sizeof_potential_lite()
+      ! Synchronize Hubbard LDM explicitly across ranks.
+      ! NOTE: flatten_potential_lite does not contain ldm/ldm_flatten.
+      max_flat_ldm = (2*lmax_basis + 1)*(2*lmax_basis + 1)
+      allocate(ldm_comm(this%lattice%nrec, lmax_basis + 1, 2, max_flat_ldm))
+      ldm_comm(:, :, :, :) = 0.0_rp
+      do na_glob = start_atom, end_atom
+         plusbulk = this%lattice%nbulk + na_glob
+         lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
+         do l = 1, lcount_ldm
+            local_flat = (2*l - 1)*(2*l - 1)
+            do ispin = 1, 2
+               ldm_comm(na_glob, l, ispin, 1:local_flat) = &
+                  this%symbolic_atom(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat)
+            end do
+         end do
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm, product(shape(ldm_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do na_glob = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + na_glob
+         this%symbolic_atom(plusbulk)%potential%ldm_flatten(:, :, :) = 0.0_rp
+         lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
+         do l = 1, lcount_ldm
+            local_flat = (2*l - 1)*(2*l - 1)
+            do ispin = 1, 2
+               this%symbolic_atom(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat) = &
+                  ldm_comm(na_glob, l, ispin, 1:local_flat)
+            end do
+         end do
+         call this%symbolic_atom(plusbulk)%potential%expand_ldm()
+      end do
+      deallocate(ldm_comm)
+
+      ! Synchronize PL explicitly: flatten_potential_lite does not include it.
+      allocate(pl_comm(this%lattice%nrec, lmax_basis + 1, 2))
+      pl_comm(:, :, :) = 0.0_rp
+      do na_glob = start_atom, end_atom
+         plusbulk = this%lattice%nbulk + na_glob
+         lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
+         pl_comm(na_glob, 1:lcount_ldm, 1:2) = this%symbolic_atom(plusbulk)%potential%pl(0:lcount_ldm - 1, 1:2)
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, pl_comm, product(shape(pl_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do na_glob = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + na_glob
+         lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
+         this%symbolic_atom(plusbulk)%potential%pl(0:lcount_ldm - 1, 1:2) = pl_comm(na_glob, 1:lcount_ldm, 1:2)
+      end do
+      deallocate(pl_comm)
+
+      pot_size = this%symbolic_atom(this%lattice%nbulk + start_atom)%potential%sizeof_potential_lite()
       allocate (T_comm(pot_size, this%lattice%nrec))
       T_comm = 0.0_rp
       do na_glob = start_atom, end_atom
@@ -1142,6 +1202,7 @@ contains
 
       integer :: na_loc, unitmag
       character(len=256) :: fnamemag
+      real(rp), allocatable :: mag_comm(:, :)
 
       call this%calculate_projected_dos()
 
@@ -1174,7 +1235,8 @@ contains
             end if
          end if
 
-         fnamemag = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_spinene.out"
+         fnamemag = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol)//'_'// &
+                    trim(adjustl(fmt('i0', na)))//"_spinene.out"
          unitmag = 1000 !rank * 123 + na
          open(unit=unitmag, file=fnamemag, status='replace', action='write')
 
@@ -1218,6 +1280,44 @@ contains
             call g_logger%info('Spin moment projections of atom'//fmt('i4', na)//' is '//fmt('f10.6', mx)//' '//fmt('f10.6', my)//' '//fmt('f10.6', mz), __FILE__, __LINE__)
          end if
       end do
+
+#ifdef USE_MPI
+      ! Keep magnetic state consistent on all ranks before SCF mixing consumes it.
+      allocate(mag_comm(this%lattice%nrec, 13))
+      mag_comm(:, :) = 0.0_rp
+      do na = start_atom, end_atom
+         mag_comm(na, 1) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
+         mag_comm(na, 2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my
+         mag_comm(na, 3) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz
+         mag_comm(na, 4) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(1)
+         mag_comm(na, 5) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(2)
+         mag_comm(na, 6) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(3)
+         mag_comm(na, 7) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom1(1)
+         mag_comm(na, 8) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom1(2)
+         mag_comm(na, 9) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom1(3)
+         mag_comm(na, 10) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
+         mag_comm(na, 11) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(1)
+         mag_comm(na, 12) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(2)
+         mag_comm(na, 13) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(3)
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, mag_comm, product(shape(mag_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do na = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mx = mag_comm(na, 1)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%my = mag_comm(na, 2)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mz = mag_comm(na, 3)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(1) = mag_comm(na, 4)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(2) = mag_comm(na, 5)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom0(3) = mag_comm(na, 6)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom1(1) = mag_comm(na, 7)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom1(2) = mag_comm(na, 8)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom1(3) = mag_comm(na, 9)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot = mag_comm(na, 10)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(1) = mag_comm(na, 11)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(2) = mag_comm(na, 12)
+         this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(3) = mag_comm(na, 13)
+      end do
+      deallocate(mag_comm)
+#endif
    end subroutine calculate_magnetic_moments
 
    !---------------------------------------------------------------------------

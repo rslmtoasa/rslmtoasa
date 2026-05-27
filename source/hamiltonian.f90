@@ -21,6 +21,7 @@
 
 module hamiltonian_mod
 
+   use mpi_mod, only: rank
    use control_mod
    use symbolic_atom_mod
    use element_mod
@@ -473,10 +474,12 @@ contains
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
       end if
 
-      call g_logger%info('HUBBARD summary: form='//trim(this%hubbard_u_potential_form)// &
-                         ' fixed_UJ='//merge('T', 'F', this%hubbard_u_general_check)// &
-                         ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
-                         ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
+      if (rank == 0) then
+         call g_logger%info('HUBBARD summary: form='//trim(this%hubbard_u_potential_form)// &
+                            ' fixed_UJ='//merge('T', 'F', this%hubbard_u_general_check)// &
+                            ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
+                            ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
+      end if
       if (this%hubbard_u_general_check) then
          block
             integer :: lch, nch
@@ -492,15 +495,19 @@ contains
                do lch = 1, nch
                   j_msg = trim(j_msg)//' '//fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(lch))
                end do
-               call g_logger%info('HUBBARD fixed U/J type='//fmt('i4', i)//' [Ry] U='//trim(u_msg)//' J='//trim(j_msg), __FILE__, __LINE__)
+               if (rank == 0) then
+                  call g_logger%info('HUBBARD fixed U/J type='//fmt('i4', i)//' [Ry] U='//trim(u_msg)//' J='//trim(j_msg), __FILE__, __LINE__)
+               end if
             end do
          end block
       end if
       if (this%hubbard_u_sc_check) then
          do i = 1, size(this%hubbard_u_sc, 1)
-            call g_logger%info('HUBBARD sc_U mask type='//fmt('i4', i)//' [s p d f]='// &
-                               fmt('i2', this%hubbard_u_sc(i, 1))//' '//fmt('i2', this%hubbard_u_sc(i, 2))//' '// &
-                               fmt('i2', this%hubbard_u_sc(i, 3))//' '//fmt('i2', this%hubbard_u_sc(i, 4)), __FILE__, __LINE__)
+            if (rank == 0) then
+               call g_logger%info('HUBBARD sc_U mask type='//fmt('i4', i)//' [s p d f]='// &
+                                  fmt('i2', this%hubbard_u_sc(i, 1))//' '//fmt('i2', this%hubbard_u_sc(i, 2))//' '// &
+                                  fmt('i2', this%hubbard_u_sc(i, 3))//' '//fmt('i2', this%hubbard_u_sc(i, 4)), __FILE__, __LINE__)
+            end if
          end do
       end if
 
@@ -1456,11 +1463,11 @@ contains
       integer :: ntype
 
       if (this%hubbard_u_general_check) then
-         call g_logger%info('HUBBARD applying on-site +U correction to bulk Hamiltonian', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
       if (this%hubbard_v_check) then
-         call g_logger%info('HUBBARD applying inter-site +V correction to bulk Hamiltonian', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
 
@@ -1549,11 +1556,11 @@ contains
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
       if (this%hubbard_u_general_check) then
-         call g_logger%info('HUBBARD applying on-site +U correction to local Hamiltonian', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
       if (this%hubbard_v_check) then
-         call g_logger%info('HUBBARD applying inter-site +V correction to local Hamiltonian', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
 
@@ -2273,24 +2280,28 @@ contains
                   ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 2, i, j)))
                end do
             end do
-            call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
-               ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
-               ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
-            call g_logger%info('HUBBARD_OCC type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
-               ' U='//fmt('f10.6', hub_u(na, l))//' J='//fmt('f10.6', hub_j(na, l))// &
-               ' nup='//fmt('f10.6', ldm_trace_up)//' ndn='//fmt('f10.6', ldm_trace_dn)// &
-               ' ntot='//fmt('f10.6', ldm_trace_up + ldm_trace_dn), __FILE__, __LINE__)
+            if (rank == 0) then
+               call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
+                  ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
+                  ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
+               call g_logger%info('HUBBARD_OCC type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
+                  ' U='//fmt('f10.6', hub_u(na, l))//' J='//fmt('f10.6', hub_j(na, l))// &
+                  ' nup='//fmt('f10.6', ldm_trace_up)//' ndn='//fmt('f10.6', ldm_trace_dn)// &
+                  ' ntot='//fmt('f10.6', ldm_trace_up + ldm_trace_dn), __FILE__, __LINE__)
+            end if
             ql_occ_up = 0.0_rp
             ql_occ_dn = 0.0_rp
             if ((l - 1) <= this%lattice%symbolic_atoms(na)%potential%lmax) then
                ql_occ_up = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 1)
                ql_occ_dn = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 2)
             end if
-            call g_logger%info('HUBBARD_QLCMP type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
-               ' ql_up='//fmt('f10.6', ql_occ_up)//' ql_dn='//fmt('f10.6', ql_occ_dn)// &
-               ' ldm_up='//fmt('f10.6', ldm_trace_up)//' ldm_dn='//fmt('f10.6', ldm_trace_dn)// &
-               ' d_up(ql-ldm)='//fmt('f10.6', ql_occ_up - ldm_trace_up)// &
-               ' d_dn(ql-ldm)='//fmt('f10.6', ql_occ_dn - ldm_trace_dn), __FILE__, __LINE__)
+            if (rank == 0) then
+               call g_logger%info('HUBBARD_QLCMP type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
+                  ' ql_up='//fmt('f10.6', ql_occ_up)//' ql_dn='//fmt('f10.6', ql_occ_dn)// &
+                  ' ldm_up='//fmt('f10.6', ldm_trace_up)//' ldm_dn='//fmt('f10.6', ldm_trace_dn)// &
+                  ' d_up(ql-ldm)='//fmt('f10.6', ql_occ_up - ldm_trace_up)// &
+                  ' d_dn(ql-ldm)='//fmt('f10.6', ql_occ_dn - ldm_trace_dn), __FILE__, __LINE__)
+            end if
          end do
       end do
 
@@ -2468,9 +2479,11 @@ contains
             vdiag_up_avg = vdiag_up_avg/real(max(1, m_max), rp)
             vdiag_dn_avg = vdiag_dn_avg/real(max(1, m_max), rp)
             vdiag_split = vdiag_up_avg - vdiag_dn_avg
-            call g_logger%info('HUBBARD_VDIAG type='//fmt('i4', na)//' l='//fmt('i2', l_index - 1)// &
-               ' avg_up='//fmt('f11.6', vdiag_up_avg)//' avg_dn='//fmt('f11.6', vdiag_dn_avg)// &
-               ' split(up-dn)='//fmt('f11.6', vdiag_split), __FILE__, __LINE__)
+            if (rank == 0) then
+               call g_logger%info('HUBBARD_VDIAG type='//fmt('i4', na)//' l='//fmt('i2', l_index - 1)// &
+                  ' avg_up='//fmt('f11.6', vdiag_up_avg)//' avg_dn='//fmt('f11.6', vdiag_dn_avg)// &
+                  ' split(up-dn)='//fmt('f11.6', vdiag_split), __FILE__, __LINE__)
+            end if
          end do
       end do
 
@@ -2492,7 +2505,7 @@ contains
                hup_max_abs = max(hup_max_abs, abs(this%hubbard_u_pot(i, j, na)))
             end do
          end do
-         call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
       end do
 
       do na = 1, this%lattice%ntype
