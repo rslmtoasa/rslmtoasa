@@ -344,7 +344,7 @@ contains
                               m4_val = ms(l_index)%val(m4)
                               uval = uval + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) * &
                                  ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
-                              if (ispin == ispin2) then
+                              if (ispin == ispin2 .and. m1 /= m2) then
                                  jval = jval + Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6) * &
                                     ldm_scr(itype, l_index, ispin, m1, m2) * ldm_scr(itype, l_index, ispin2, m3, m4)
                               end if
@@ -670,9 +670,9 @@ contains
       real(rp), dimension(:, :), allocatable :: T_comm
       real(rp), dimension(3, atoms_per_process) :: mom_prev
       logical :: hubbard_active
-      integer :: li, iorb, jdim, ispin
+      integer :: li, iorb, jorb, jdim, ispin
       integer :: ncap_orb, ncap_trace
-      real(rp) :: occ_raw, ch_sum, scale_ch
+      real(rp) :: occ_raw, ch_sum, scale_ch, ldm_val
       real(rp), dimension(7) :: occ_ch
       real(rp) :: occ_orb
       real(rp), allocatable :: ldm_comm(:, :, :, :)
@@ -778,8 +778,8 @@ contains
          ! end if
       end do
 
-      ! Rebuild orbital-diagonal LDM from Green-function occupations so LDA+U has
-      ! physical occupancies in recursion mode. Off-diagonal terms remain zero.
+      ! Rebuild full on-site LDM from Green-function occupations so LDA+U/Liechtenstein
+      ! can use both diagonal and off-diagonal orbital components.
       if (hubbard_active) then
          do na_glob = start_atom, end_atom
             na = g2l_map(na_glob)
@@ -793,23 +793,19 @@ contains
                   jdim = 2*li + 1
                   occ_ch(:) = 0.0_rp
                   do iorb = li*li + 1, (li + 1)*(li + 1)
-                     isgn = (-1.0d0)**(ispin - 1)
-                     ! Use the same spin-projected decomposition as ql/dspd so
-                     ! LDM(up,dn) and ql(up,dn) are directly comparable.
-                     y(:) = -aimag(this%green%g0(iorb, iorb, :, na) + this%green%g0(iorb + spin_off, iorb + spin_off, :, na)) - &
-                            isgn*this%symbolic_atom(plusbulk)%potential%mom(3)*aimag(this%green%g0(iorb, iorb, :, na) - this%green%g0(iorb + spin_off, iorb + spin_off, :, na)) - &
-                            isgn*this%symbolic_atom(plusbulk)%potential%mom(2)*aimag(i_unit*this%green%g0(iorb, iorb + spin_off, :, na) - i_unit*this%green%g0(iorb + spin_off, iorb, :, na)) - &
-                            isgn*this%symbolic_atom(plusbulk)%potential%mom(1)*aimag(this%green%g0(iorb, iorb + spin_off, :, na) + this%green%g0(iorb + spin_off, iorb, :, na))
-                     y(:) = 0.5_rp*y(:)/pi
-                     occ_orb = 0.0_rp
-                     call simpson_m(occ_orb, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                     do jorb = li*li + 1, (li + 1)*(li + 1)
+                        y(:) = -aimag(this%green%g0(iorb + soff, jorb + soff, :, na))/pi
+                        ldm_val = 0.0_rp
+                        call simpson_m(ldm_val, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                        this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, jorb - li*li) = ldm_val
+                     end do
+                     occ_orb = this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li)
                      occ_raw = occ_orb
-                     ! Physical per-spin-orbital occupation cap for narrow-band
-                     ! numerical noise: enforce 0 <= n_m^sigma <= 1.
+                     ! Keep diagonal safety cap; off-diagonal elements are not capped.
                      occ_orb = max(0.0_rp, min(1.0_rp, occ_orb))
                      if (abs(occ_orb - occ_raw) > 1.0e-12_rp) ncap_orb = ncap_orb + 1
-                     occ_ch(iorb - li*li) = occ_orb
                      this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = occ_orb
+                     occ_ch(iorb - li*li) = occ_orb
                   end do
                   ! Physical per-channel trace cap: sum_m n_m^sigma <= 2l+1.
                   ch_sum = sum(occ_ch(1:jdim))

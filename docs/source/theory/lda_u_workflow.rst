@@ -93,6 +93,8 @@ Implementation status
 - ``+V``:
   implemented as a nearest-neighbor orbital-channel correction using local
   occupations and a practical diagonal-in-m approximation.
+  This is a **proxy** implementation: the full inter-site matrix form
+  :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active.
 
 Code mapping (developer view)
 =============================
@@ -103,7 +105,7 @@ Main entry points
 - ``source/hamiltonian.f90``: ``calculate_hubbard_u_potential_general`` builds
   the on-site Hubbard potential matrix.
 - ``source/hamiltonian.f90``: ``calculate_hubbard_v_potential`` builds the
-  inter-site nearest-neighbor +V potential contribution.
+  current proxy nearest-neighbor +V potential contribution (diagonal/local-occupation based).
 - ``source/hamiltonian.f90``: ``build_bulkham`` and ``build_locham`` inject
   ``hubbard_u_pot`` and ``hubbard_v_pot`` into Hamiltonian blocks.
 - ``source/bands.f90``: ``calculate_hubbard_u_sc`` performs the self-consistent
@@ -120,6 +122,7 @@ Core arrays and variables
 - ``hubbard_u(l)``, ``hubbard_j(l)``: on-site U/J per ``l`` channel (internal Ry).
 - ``hubbard_u_pot(i,j,na)``: assembled on-site correction in basis space.
 - ``hubbard_v(i,j,li,lj)`` and ``hubbard_v_pot``: inter-site correction data (internal Ry).
+  In the current implementation, ``hubbard_v_pot`` is populated by a diagonal proxy.
 - ``hubbard_u_sc(itype,l)``: mask enabling SC-U update for a channel.
 - ``hubbard_u_potential_form``:
   ``'liechtenstein'`` (default) or ``'acbn0'``.
@@ -187,3 +190,7 @@ Notes and constraints
 - Internal energy unit is Ry; Hubbard inputs in namelists are interpreted in eV and converted on read.
 - ``hubbard_u_sc`` and explicit ``hubbard_u_general/hubbard_j_general`` are mutually exclusive in the current flow.
 - For ``lmax=3`` (spdf), orbital blocks are sized from the active basis dimensions (no hardwired spd-only matrix extents in the current implementation path).
+- ``+V`` currently lacks the inter-site density-matrix machinery required for the
+  full matrix expression. The implemented path uses nearest-neighbor, orbital-diagonal
+  shifts derived from local occupations. Treat ``+V`` as a proxy/experimental correction
+  until inter-site :math:`n^{JI,\sigma}_{m' m}` integration is wired from inter-site Green functions.

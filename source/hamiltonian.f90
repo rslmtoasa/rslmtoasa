@@ -2345,7 +2345,7 @@ contains
                d2 = 0.0_rp
                do m1 = 1, m_max
                   do m2 = 1, m_max
-                     d1 = d1 + occ_m(1, m1)*occ_m(2, m2)
+                     d1 = d1 + occ_m(1, m1)*occ_m(2, m2) + occ_m(2, m1)*occ_m(1, m2)
                      if (m1 /= m2) then
                         d1 = d1 + occ_m(1, m1)*occ_m(1, m2) + occ_m(2, m1)*occ_m(2, m2)
                         d2 = d2 + occ_m(1, m1)*occ_m(1, m2) + occ_m(2, m1)*occ_m(2, m2)
@@ -2448,8 +2448,15 @@ contains
                         if (m1 == m2) common_pref = common_pref + 2.0_rp*occ_m(ispin, m1)
                         sum_occ_opposite = sum(occ_m(3 - ispin, 1:m_max))
                         sum_occ_same_excl = sum(occ_m(ispin, 1:m_max)) - occ_m(ispin, m1)
-                        dUdn = common_pref*sum_u_aux/max(d1, eps_den) - (2.0_rp*ubar/max(d1, eps_den))*(sum_occ_opposite - merge(sum_occ_same_excl, 0.0_rp, m1 == m2))
-                        dJdn = common_pref*sum_j_aux/max(d2, eps_den) - (2.0_rp*jbar/max(d2, eps_den))*sum_occ_same_excl
+                        if (m1 == m2) then
+                           dUdn = common_pref*sum_u_aux/max(d1, eps_den) - &
+                                  (2.0_rp*ubar/max(d1, eps_den))*(sum_occ_opposite - sum_occ_same_excl)
+                           dJdn = common_pref*sum_j_aux/max(d2, eps_den) - &
+                                  (2.0_rp*jbar/max(d2, eps_den))*sum_occ_same_excl
+                        else
+                           dUdn = common_pref*sum_u_aux/max(d1, eps_den)
+                           dJdn = common_pref*sum_j_aux/max(d2, eps_den)
+                        end if
                         dUeff_dn = dUdn - dJdn
                      end if
                      if (m1 == m2) then
@@ -2520,10 +2527,16 @@ contains
       real(rp) :: rmin, rcur, tol, occ_up, occ_dn, nn_shell_tol
       real(rp), dimension(3) :: dr
       real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin
+      logical, save :: warned_proxy_once = .false.
 
       this%hubbard_v_pot(:, :, :, :) = 0.0_rp
       n_spin(:, :, :) = 0.0_rp
       tol = 1.0e-4_rp
+
+      if (rank == 0 .and. .not. warned_proxy_once) then
+         call g_logger%warning('HUBBARD +V currently uses a diagonal local-occupation proxy. Full inter-site n^{JI}_{mm''} from inter-site Green functions is not yet wired into calculate_hubbard_v_potential.', __FILE__, __LINE__)
+         warned_proxy_once = .true.
+      end if
 
       ! Spin- and l-resolved occupations from local density matrices.
       do itype = 1, this%lattice%ntype
@@ -2572,8 +2585,13 @@ contains
             nn_shell_tol = max(5.0e-4_rp, 2.5e-3_rp*rmin)
             if (abs(rcur - rmin) > nn_shell_tol) cycle
 
-            ! Approximate intersite +V contribution:
+            ! Approximate intersite +V contribution (current proxy implementation):
             ! V^I,sigma_mm' += - sum_{J in NN} V^{IJ}_{li,lj} * n^{J,sigma}_{lj} / (2*li-1) * delta_mm'
+            !
+            ! IMPORTANT LIMITATION:
+            ! The full +V expression requires inter-site density matrices n^{JI,sigma}_{mprime,m}
+            ! from inter-site Green functions. That machinery is not yet wired here, so only
+            ! an orbital-diagonal proxy based on local occupations is applied.
             do li = 1, min(4, this%control%lmax + 1)
                if (li > size(this%hubbard_v, 3)) cycle
                if (li > size(this%hubbard_v, 4)) cycle
