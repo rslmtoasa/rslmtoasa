@@ -94,6 +94,7 @@ module recursion_mod
       procedure :: cheb_0th_mom
       procedure :: cheb_1st_mom
       procedure :: cheb_1st_mom_hoh
+      procedure :: resolve_chebyshev_window
       procedure :: chebyshev_recur_ij
       procedure :: chebyshev_recur_ll
       procedure :: chebyshev_recur_ll_hoh
@@ -119,6 +120,29 @@ module recursion_mod
    end interface recursion
 
 contains
+
+   subroutine resolve_chebyshev_window(this, emin, emax)
+      class(recursion), intent(inout) :: this
+      real(rp), intent(out) :: emin, emax
+      character(len=256) :: msg
+
+      emin = this%en%energy_min
+      emax = this%en%energy_max
+
+      if (this%control%recur /= 'chebyshev') return
+
+      if (this%hamiltonian%bounds%e_max > this%hamiltonian%bounds%e_min) then
+         emin = this%hamiltonian%bounds%e_min
+         emax = this%hamiltonian%bounds%e_max
+         msg = 'Chebyshev scaling window from Hamiltonian bounds: ['// &
+               trim(fmt('f12.6', emin))//','//trim(fmt('f12.6', emax))//']'
+         call g_logger%info(msg, __FILE__, __LINE__)
+      else
+         msg = 'Chebyshev Hamiltonian bounds from energy namelist window ['// &
+               trim(fmt('f12.6', emin))//','//trim(fmt('f12.6', emax))//']'
+         call g_logger%info(msg, __FILE__, __LINE__)
+      end if
+   end subroutine resolve_chebyshev_window
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -617,7 +641,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp), dimension(this%control%cond_ll) :: kernel
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10) :: g0
-      real(rp) :: a, b, rng 
+      real(rp) :: a, b, rng, emin_win, emax_win
       complex(rp) :: exp_factor
 
       lmax = lmax_basis
@@ -649,8 +673,9 @@ contains
       allocate(v2(hblocksize, hblocksize, this%lattice%kk), S_op(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
 
       ! General procedures
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       call this%hamiltonian%build_realspace_velocity_operators()
 
@@ -2038,7 +2063,7 @@ contains
       use mpi_mod
       class(recursion), intent(inout) :: this
       ! Local variables
-      real(rp) :: a, b
+      real(rp) :: a, b, emin_win, emax_win
       integer :: i, ij, j, l, ll, kk, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
@@ -2048,8 +2073,9 @@ contains
 
       allocate(psiref(18, 18, this%lattice%kk))
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       llmax = this%lattice%control%lld
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
@@ -2511,7 +2537,7 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale, lzi
       real(rp), dimension(3) :: rij, crossrij
       
-      real(rp) :: a, b, start, finish, rng
+      real(rp) :: a, b, start, finish, rng, emin_win, emax_win
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2525,8 +2551,9 @@ contains
       lmax = lmax_basis
       nv = this%en%channels_ldos + 10
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       wscale(:) = (this%en%ene(:) - b)/a
 
@@ -2733,7 +2760,7 @@ contains
       complex(rp), dimension(nb, nb) :: dum, dum1, dum2
       complex(rp), dimension(nb, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
-      real(rp) :: a, b, start, finish
+      real(rp) :: a, b, start, finish, emin_win, emax_win
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2744,8 +2771,9 @@ contains
       nlimplus1 = this%lattice%nmax + 1
       llcheb = (2*this%control%lld) + 2
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       do i = start_atom, end_atom ! Loop on the number of atoms to be treat self-consistently by this process
          i_loc = g2l_map(i)
@@ -2816,7 +2844,7 @@ contains
       complex(rp), dimension(nb, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
       complex(rp), dimension(:, :, :), allocatable :: psiref
-      real(rp) :: a, b, start, finish
+      real(rp) :: a, b, start, finish, emin_win, emax_win
       ! External functions
       complex(rp), external :: zdotc
 
@@ -2825,8 +2853,9 @@ contains
       nlimplus1 = this%lattice%nmax + 1
       allocate (hcheb(nb, nb, (this%lattice%nn(1, 1) + 1), this%lattice%kk), psiref(nb, nb, this%lattice%kk))
 
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call resolve_chebyshev_window(this, emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       hcheb(:, :, :, :) = this%hamiltonian%ee(:, :, :, :) !hcheb(:, :, :, :)!/cmplx(a, 0.d0)
 
@@ -3495,4 +3524,3 @@ contains
    end subroutine restore_to_default
 
 end module recursion_mod
-

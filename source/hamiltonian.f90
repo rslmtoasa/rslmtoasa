@@ -32,6 +32,7 @@ module hamiltonian_mod
    use string_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
+   use spectrum_bounds_mod, only: compute_spectrum_bounds, bounds, normalize_bounds_algorithm, select_bounds_interval, apply_bounds_scaling
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -102,6 +103,8 @@ module hamiltonian_mod
       !> Optional intersite Hubbard-V input and corresponding matrix correction
       real(rp), dimension(:, :, :, :), allocatable :: hubbard_v, hubbard_v_pot
       logical :: hubbard_v_check = .false.
+      !> Spectrum bounds for Chebyshev scaling
+      type(bounds) :: bounds
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -127,6 +130,7 @@ module hamiltonian_mod
       procedure :: rotate_from_local_axis
       procedure :: calculate_hubbard_u_potential_general
       procedure :: calculate_hubbard_v_potential
+      procedure :: compute_hamiltonian_bounds
       final     :: destructor
    end type hamiltonian
 
@@ -253,6 +257,8 @@ contains
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
       hubbard_u_potential_form = this%hubbard_u_potential_form
+      bounds_algorithm = this%bounds%algorithm
+      bounds_scaling = this%bounds%scaling
 
       ! Robust namelist buffers: pre-allocate allocatable inputs so namelist
       ! read does not depend on compiler-specific auto-allocation behavior.
@@ -304,6 +310,13 @@ contains
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
       if (this%hubbard_u_potential_form /= 'liechtenstein' .and. this%hubbard_u_potential_form /= 'acbn0') then
          call g_logger%fatal("Invalid hubbard_u_potential_form. Use 'liechtenstein' or 'acbn0'.", __FILE__, __LINE__)
+      end if
+      this%bounds%algorithm = lower(trim(bounds_algorithm))
+      if (len_trim(this%bounds%algorithm) == 0) this%bounds%algorithm = 'none'
+      if (bounds_scaling > 0.0_rp) then
+         this%bounds%scaling = bounds_scaling
+      else
+         this%bounds%scaling = 1.05_rp
       end if
       call move_alloc(velocity_scale, this%velocity_scale)
 
@@ -618,6 +631,10 @@ contains
       this%jlo_a(:, :, :, :) = 0.0d0
       this%velocity_scale(:) = 1.0d0
       this%hubbard_u_pot(:, :, :) = 0.0d0
+      this%bounds%algorithm = 'none'
+      this%bounds%scaling = 1.05_rp
+      this%bounds%e_min = 0.0_rp
+      this%bounds%e_max = 0.0_rp
       this%hubbard_u_impurity(:, :) = 0.0d0
       this%hubbard_j_impurity(:, :) = 0.0d0
       this%hubbard_u_sc(:, :) = 0
@@ -1519,6 +1536,9 @@ contains
       if (this%local_axis) then
          this%ee_glob = this%ee
          if (this%hoh) this%eeo_glob = this%eeo
+      end if
+      if (trim(this%control%recur) == 'chebyshev') then
+         call this%compute_hamiltonian_bounds(verbose=.false.)
       end if
       close (128)
    end subroutine build_bulkham
@@ -2564,4 +2584,120 @@ contains
          end do
       end do
    end subroutine calculate_hubbard_v_potential
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Compute bulk Hamiltonian spectrum bounds for Chebyshev scaling.
+   !---------------------------------------------------------------------------
+   subroutine compute_hamiltonian_bounds(this, verbose)
+      class(hamiltonian), intent(inout) :: this
+      logical, intent(in), optional :: verbose
+
+      integer :: ntype, ia, nr, i, j, m, n_orb, n_sites
+      integer :: isite, jsite, i_start, i_end, j_start, j_end, ineigh, ntype_i, ia_loc, ja
+      real(rp) :: g_min, g_max, center, radius
+      real(rp) :: hgamma_min, hgamma_max
+      logical :: verb, have_gamma
+      character(len=16) :: algo
+      character(len=256) :: msg
+      type(bounds) :: gamma_bounds
+      complex(rp), allocatable :: h_gamma(:, :)
+
+      verb = .false.
+      if (present(verbose)) verb = verbose
+
+      if (.not. allocated(this%ee)) then
+         call g_logger%warning('compute_hamiltonian_bounds: ee is not allocated; skipping bounds', __FILE__, __LINE__)
+         return
+      end if
+
+      call normalize_bounds_algorithm(this%bounds%algorithm, algo)
+      if (algo == 'none') return
+
+      g_min = huge(1.0_rp)
+      g_max = -huge(1.0_rp)
+
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+         do i = 1, nb
+            center = real(this%ee(i, i, 1, ntype))
+            if (allocated(this%lsham)) center = center + real(this%lsham(i, i, ntype))
+            radius = 0.0_rp
+            do m = 1, nr
+               do j = 1, nb
+                  if (m == 1 .and. i == j) cycle
+                  radius = radius + abs(this%ee(i, j, m, ntype))
+               end do
+            end do
+            g_min = min(g_min, center - radius)
+            g_max = max(g_max, center + radius)
+         end do
+      end do
+
+      have_gamma = .false.
+      hgamma_min = g_min
+      hgamma_max = g_max
+      n_orb = nb
+      n_sites = this%charge%lattice%nrec
+      if (n_sites > 0) then
+         allocate(h_gamma(n_orb*n_sites, n_orb*n_sites))
+         h_gamma(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
+         do isite = 1, n_sites
+            ntype_i = this%charge%lattice%ib(isite)
+            ia_loc = this%charge%lattice%atlist(ntype_i)
+            i_start = (isite - 1)*n_orb + 1
+            i_end = isite*n_orb
+            do ineigh = 1, this%charge%lattice%nn(ia_loc, 1)
+               if (ineigh == 1) then
+                  jsite = isite
+               else
+                  ja = this%charge%lattice%nn(ia_loc, ineigh)
+                  jsite = this%charge%lattice%iz(ja)
+                  if (jsite < 1 .or. jsite > n_sites) cycle
+               end if
+               j_start = (jsite - 1)*n_orb + 1
+               j_end = jsite*n_orb
+               h_gamma(i_start:i_end, j_start:j_end) = h_gamma(i_start:i_end, j_start:j_end) + this%ee(:, :, ineigh, ntype_i)
+            end do
+            if (allocated(this%lsham)) then
+               h_gamma(i_start:i_end, i_start:i_end) = h_gamma(i_start:i_end, i_start:i_end) + this%lsham(:, :, ntype_i)
+            end if
+         end do
+         call compute_spectrum_bounds(h_gamma, gamma_bounds, 'sturm', verbose=.false.)
+         if (gamma_bounds%sturm_available) then
+            have_gamma = .true.
+            hgamma_min = gamma_bounds%e_min_sturm
+            hgamma_max = gamma_bounds%e_max_sturm
+         else
+            have_gamma = .true.
+            hgamma_min = gamma_bounds%e_min_gershgorin
+            hgamma_max = gamma_bounds%e_max_gershgorin
+         end if
+         deallocate(h_gamma)
+      end if
+
+      call select_bounds_interval(algo, g_min, g_max, have_gamma, hgamma_min, hgamma_max, this%bounds%e_min, this%bounds%e_max)
+      call apply_bounds_scaling(this%bounds%e_min, this%bounds%e_max, this%bounds%scaling)
+
+      msg = 'Chebyshev bounds algorithm='//trim(algo)//' Gershgorin=['// &
+            trim(fmt('f12.6', g_min))//','//trim(fmt('f12.6', g_max))//']'
+      call g_logger%info(msg, __FILE__, __LINE__)
+      if (have_gamma) then
+         msg = 'Chebyshev bounds H(Gamma)=['//trim(fmt('f12.6', hgamma_min))//','// &
+               trim(fmt('f12.6', hgamma_max))//']'
+      else
+         msg = 'Chebyshev bounds H(Gamma)=unavailable, fallback to Gershgorin'
+      end if
+      call g_logger%info(msg, __FILE__, __LINE__)
+      msg = 'Chebyshev final scaled bounds=['//trim(fmt('f12.6', this%bounds%e_min))//','// &
+            trim(fmt('f12.6', this%bounds%e_max))//'] scale='//trim(fmt('f8.4', this%bounds%scaling))
+      call g_logger%info(msg, __FILE__, __LINE__)
+
+      if (verb) then
+         write(msg, '(A,L1)') 'Chebyshev bounds detailed mode, H(Gamma) available=', have_gamma
+         call g_logger%info(trim(msg), __FILE__, __LINE__)
+      end if
+   end subroutine compute_hamiltonian_bounds
 end module hamiltonian_mod

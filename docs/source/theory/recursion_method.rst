@@ -216,6 +216,28 @@ To use Chebyshev polynomials ($T_n : [-1,1] \to \mathbb{R}$), energies are resca
 
 where $E_{\min}$, $E_{\max}$ define the spectral window.
 
+Chebyshev Bounds Workflow
+=========================
+
+Chebyshev scaling in production recursion is driven by Hamiltonian bounds and implemented through ``source/bounds.f90``.
+
+- ``bounds_algorithm='gershgorin'``: use real-space Gershgorin bounds from assembled ``ee``.
+- ``bounds_algorithm='hgamma'`` or ``'sturm'``: use ``H(Gamma)`` spectrum estimate (via ``compute_spectrum_bounds``), with Gershgorin fallback.
+- ``bounds_algorithm='both'`` (or ``'hybrid'``): conservative envelope of both estimators.
+- ``bounds_scaling``: symmetric expansion factor applied to the selected interval.
+- Default is ``bounds_algorithm='none'``: keep legacy behavior and use ``energy_min``/``energy_max`` from ``&energy``.
+
+This is a recursion/Chebyshev feature, not a k-space-only feature.
+
+Example (``&hamiltonian``):
+
+.. code-block:: fortran
+
+   &hamiltonian
+      bounds_algorithm = 'both'
+      bounds_scaling = 1.05
+   /
+
 **Convergence Criteria:**
 
 - Check when Chebyshev moments drop below numerical noise

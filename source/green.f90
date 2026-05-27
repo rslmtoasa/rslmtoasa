@@ -899,7 +899,7 @@ contains
       real(rp), dimension(:), allocatable :: kernel
       real(rp), dimension(:, :), allocatable :: polycheb
       real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n
 
@@ -908,8 +908,9 @@ contains
       allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
                 wscale(this%en%channels_ldos + 10))
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       wscale(:) = (this%en%ene(:) - b)/a
 
@@ -970,7 +971,7 @@ contains
       real(rp), dimension(:), allocatable :: kernel
       real(rp), dimension(:, :), allocatable :: polycheb
       real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n
 
@@ -979,8 +980,9 @@ contains
       allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
                 wscale(this%en%channels_ldos + 10))
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       wscale(:) = (this%en%ene(:) - b)/a
 
@@ -1037,7 +1039,7 @@ contains
       real(rp), dimension(this%control%lld*2+2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2+2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n, nv
 
@@ -1049,8 +1051,9 @@ contains
       this%g0 = 0.0d0
 
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       wscale(:) = (this%en%ene(:) - b)/a
 
@@ -1130,7 +1133,7 @@ contains
       real(rp), dimension(this%control%lld*2 + 2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b
+      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
       integer :: ie, i, j, k, l, m, n, nv
       integer :: n_glob
@@ -1138,8 +1141,9 @@ contains
       g_ef = 0.0d0
 
       ! Defining rescaling coeficients
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
-      b = (this%en%energy_max + this%en%energy_min)/2
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
 
       wscale(:) = (this%en%ene(:) - b)/a
 

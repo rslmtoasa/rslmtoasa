@@ -1,4 +1,4 @@
-!---------------------------------------------------------------------------
+ !---------------------------------------------------------------------------
 ! DESCRIPTION:
 !> @brief
 !> Symmetry analysis module for crystallographic operations and k-path generation

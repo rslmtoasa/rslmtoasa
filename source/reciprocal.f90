@@ -826,6 +826,7 @@ contains
             else
                ! Off-site: determine which j_site this neighbor corresponds to
                ja = this%lattice%nn(ia, ineigh)     ! Cluster atom index
+               if (ja < 1 .or. ja > this%lattice%kk) cycle
                jsite = this%lattice%iz(ja)          ! Map to unit cell site
                if (jsite < 1 .or. jsite > n_sites) cycle
             end if
@@ -880,6 +881,7 @@ contains
                jsite = isite
             else
                ja = this%lattice%nn(ia, ineigh)
+               if (ja < 1 .or. ja > this%lattice%kk) cycle
                jsite = this%lattice%iz(ja)
                if (jsite < 1 .or. jsite > n_sites) cycle
             end if
@@ -2698,7 +2700,7 @@ end subroutine calculate_dos_gaussian
 subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
    integer :: ik, ib, ie, iorb, ispin, i, isite
-   integer :: n_orb_per_spin, orb_start, site_orb_start
+   integer :: n_orb_per_spin, orb_start, site_orb_start, n_orb_site
    integer :: lstart(4), lend(4)
    real(rp) :: weight, orbital_char, energy
    real(rp) :: gaussian_weight, sigma_squared, sigma_use
@@ -2726,7 +2728,20 @@ subroutine project_dos_orbitals_gaussian(this)
    this%n_spin_components = 2
    nbands = size(this%eigenvalues, 1)
 
-   n_orb_per_spin = norb
+   if (this%n_sites <= 0) then
+      call g_logger%fatal('project_dos_orbitals_gaussian: invalid number of sites', __FILE__, __LINE__)
+   end if
+   if (size(this%eigenvectors, 1) <= 0) then
+      call g_logger%fatal('project_dos_orbitals_gaussian: eigenvectors not available', __FILE__, __LINE__)
+   end if
+   if (mod(size(this%eigenvectors, 1), this%n_sites) /= 0) then
+      call g_logger%fatal('project_dos_orbitals_gaussian: eigenvector basis size not divisible by number of sites', __FILE__, __LINE__)
+   end if
+   n_orb_site = size(this%eigenvectors, 1)/this%n_sites
+   if (mod(n_orb_site, this%n_spin_components) /= 0) then
+      call g_logger%fatal('project_dos_orbitals_gaussian: per-site basis size incompatible with spin components', __FILE__, __LINE__)
+   end if
+   n_orb_per_spin = n_orb_site/this%n_spin_components
 
    if (allocated(this%projected_dos)) deallocate(this%projected_dos)
    allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
@@ -2734,7 +2749,7 @@ subroutine project_dos_orbitals_gaussian(this)
 
    allocate(site_orb_offset(this%n_sites + 1))
    do isite = 1, this%n_sites + 1
-      site_orb_offset(isite) = (isite - 1) * (n_orb_per_spin * this%n_spin_components)
+      site_orb_offset(isite) = (isite - 1) * n_orb_site
    end do
    lstart = [1, 2, 5, 10]
    lend = [1, 4, 9, 16]
@@ -2833,7 +2848,7 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Local variables
       integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite
-      integer :: n_orb_per_spin, orb_start, site_orb_start, ik
+      integer :: n_orb_per_spin, orb_start, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
@@ -2849,7 +2864,20 @@ end subroutine project_dos_orbitals_gaussian
       this%n_sites = this%lattice%nrec
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 2  ! spin up/down
-      n_orb_per_spin = norb
+      if (this%n_sites <= 0) then
+         call g_logger%fatal('project_dos_orbitals_tetrahedron: invalid number of sites', __FILE__, __LINE__)
+      end if
+      if (size(this%eigenvectors, 1) <= 0) then
+         call g_logger%fatal('project_dos_orbitals_tetrahedron: eigenvectors not available', __FILE__, __LINE__)
+      end if
+      if (mod(size(this%eigenvectors, 1), this%n_sites) /= 0) then
+         call g_logger%fatal('project_dos_orbitals_tetrahedron: eigenvector basis size not divisible by number of sites', __FILE__, __LINE__)
+      end if
+      n_orb_site = size(this%eigenvectors, 1)/this%n_sites
+      if (mod(n_orb_site, this%n_spin_components) /= 0) then
+         call g_logger%fatal('project_dos_orbitals_tetrahedron: per-site basis size incompatible with spin components', __FILE__, __LINE__)
+      end if
+      n_orb_per_spin = n_orb_site/this%n_spin_components
       lstart = [1, 2, 5, 10]
       lend = [1, 4, 9, 16]
 
@@ -2863,7 +2891,7 @@ end subroutine project_dos_orbitals_gaussian
 
       allocate(site_orb_offset(this%n_sites + 1))
       do isite = 1, this%n_sites + 1
-         site_orb_offset(isite) = (isite - 1) * (n_orb_per_spin * this%n_spin_components)
+         site_orb_offset(isite) = (isite - 1) * n_orb_site
       end do
 
       ! Setup tetrahedra if not already done
@@ -3646,9 +3674,18 @@ end function integrate_dos_up_to_energy
       call g_logger%info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
 
       nbands = size(this%eigenvalues, 1)
-      n_orb_per_spin = norb
       nsites = lattice_obj%nrec
-      n_orb_site = n_orb_per_spin * this%n_spin_components  ! typically 18
+      if (nsites <= 0) then
+         call g_logger%fatal('calculate_ldm_from_eigenvectors: invalid number of sites', __FILE__, __LINE__)
+      end if
+      if (mod(size(this%eigenvectors, 1), nsites) /= 0) then
+         call g_logger%fatal('calculate_ldm_from_eigenvectors: eigenvector basis size not divisible by number of sites', __FILE__, __LINE__)
+      end if
+      n_orb_site = size(this%eigenvectors, 1)/nsites
+      if (mod(n_orb_site, this%n_spin_components) /= 0) then
+         call g_logger%fatal('calculate_ldm_from_eigenvectors: per-site basis size incompatible with spin components', __FILE__, __LINE__)
+      end if
+      n_orb_per_spin = n_orb_site/this%n_spin_components
 
       ! Allocate temporary DM (n_orb_site x n_orb_site)
       allocate(DM(n_orb_site, n_orb_site))
@@ -3725,6 +3762,7 @@ end function integrate_dos_up_to_energy
                         ! Map to DM indices: spin_block_offset + basis_offset + m
                         idx_a = (ispin - 1) * n_orb_per_spin + basis_offset + alpha
                         idx_b = (ispin - 1) * n_orb_per_spin + basis_offset + beta
+                        if (idx_a > n_orb_site .or. idx_b > n_orb_site) cycle
                         
                         ! Accumulate real part (imaginary should be ~0 for proper DM)
                         lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) = &

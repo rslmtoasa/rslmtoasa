@@ -886,7 +886,10 @@ contains
          if (.not. allocated(this%reciprocal_scf_cache%k_points)) call this%reciprocal_scf_cache%generate_mp_mesh()
          call this%reciprocal_scf_cache%build_kspace_hamiltonian()
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
-         call this%reciprocal_scf_cache%calculate_density_of_states(this%hamiltonian)
+         call this%reciprocal_scf_cache%calculate_density_of_states( &
+            this%hamiltonian, &
+            n_energy_points=this%en%channels_ldos + 10, &
+            energy_range=[this%en%energy_min, this%en%energy_max])
          if (this%control%nsp == 2) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call this%compute_kspace_spin_moments_spinor(this%reciprocal_scf_cache, kspace_spin_mom)
