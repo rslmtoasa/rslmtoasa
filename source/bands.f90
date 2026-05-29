@@ -490,6 +490,17 @@ contains
 
       dos_nmag_tot(:) = 0.5_rp*(dos_up_tot(:) + dos_dw_tot(:))
 
+      ! Write DOS outputs using the current (just-updated) Fermi level.
+      fname_total = "totaldos.out"
+      if (rank == 0) then
+         open(unit=125, file=fname_total, status='replace', action='write')
+         do i = 1, this%en%channels_ldos + 10
+            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
+         end do
+         rewind(125)
+         close(125)
+      end if
+
       ! Calculate the Fermi enery
       ef_mag = this%en%fermi
       this%en%chebfermi = this%en%fermi
@@ -507,17 +518,6 @@ contains
          this%nv1 = ik1
          this%e1 = e1
          if (rank == 0) call g_logger%info('Fixed Fermi energy:'//fmt('f10.6', this%en%fermi), __FILE__, __LINE__)
-      end if
-
-      ! Write DOS outputs using the current (just-updated) Fermi level.
-      fname_total = "totaldos.out"
-      if (rank == 0) then
-         open(unit=125, file=fname_total, status='replace', action='write')
-         do i = 1, this%en%channels_ldos + 10
-            write(125, '(2f16.5)') this%en%ene(i) - this%en%fermi, this%dtot(i)
-         end do
-         rewind(125)
-         close(125)
       end if
 
       fname_magnetic = "magneticdos.out"
@@ -889,7 +889,9 @@ contains
       end do
       deallocate(pl_comm)
 
-      pot_size = this%symbolic_atom(this%lattice%nbulk + start_atom)%potential%sizeof_potential_lite()
+      ! Use a rank-independent reference atom for buffer sizing so idle MPI
+      ! ranks (numprocs > nrec) never dereference an invalid start_atom.
+      pot_size = this%symbolic_atom(this%lattice%nbulk + 1)%potential%sizeof_potential_lite()
       allocate (T_comm(pot_size, this%lattice%nrec))
       T_comm = 0.0_rp
       do na_glob = start_atom, end_atom

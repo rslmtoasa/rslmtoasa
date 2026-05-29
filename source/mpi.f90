@@ -19,11 +19,13 @@
 !> Module to handle the MPI variables for parallelization
 !------------------------------------------------------------------------------
 module mpi_mod
+   use logger_mod, only: g_logger
 #ifdef USE_MPI
    use mpi
 #endif
    integer :: ierr, rank, numprocs
    integer :: remainder_atoms, atoms_per_process, start_atom, end_atom
+   logical :: oversubscribe_warned = .false.
    integer, dimension(:), allocatable :: l2g_map
    integer, dimension(:), allocatable :: g2l_map
 
@@ -32,8 +34,16 @@ contains
    subroutine get_mpi_variables(rank_in, number_of_atoms)
       implicit none
       integer, intent(in) :: number_of_atoms, rank_in
+      character(len=160) :: warn_msg
 
 #ifdef USE_MPI
+      if ((numprocs > number_of_atoms) .and. (rank_in == 0) .and. (.not. oversubscribe_warned)) then
+         write (warn_msg, '(a,i0,a,i0,a)') 'MPI oversubscription in atom-parallel region (ranks=', &
+            numprocs, ', atoms=', number_of_atoms, '). Some ranks will stay idle.'
+         call g_logger%warning(trim(warn_msg), __FILE__, __LINE__)
+         oversubscribe_warned = .true.
+      end if
+
       atoms_per_process = number_of_atoms/numprocs
       remainder_atoms = mod(number_of_atoms, numprocs)
 
@@ -44,6 +54,13 @@ contains
          start_atom = rank_in*atoms_per_process + remainder_atoms + 1
       end if
       end_atom = start_atom + atoms_per_process - 1
+
+      ! Oversubscription guard: ranks with no assigned atoms must keep an
+      ! empty range that cannot produce out-of-bounds atom indices.
+      if (atoms_per_process == 0) then
+         start_atom = 1
+         end_atom = 0
+      end if
 #else
       remainder_atoms = 0
       atoms_per_process = number_of_atoms

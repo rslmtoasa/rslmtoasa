@@ -1175,7 +1175,9 @@ contains
       !      TRANSFER ATOMIC POTENTIAL DATA ACROSS MPI RANKS
       !=========================================================================
 #ifdef USE_MPI
-      pot_size = this%symbolic_atom(start_atom)%potential%sizeof_potential_full()
+      ! Use a rank-independent reference atom for buffer sizing so idle MPI
+      ! ranks (numprocs > nrec) never dereference an invalid start_atom.
+      pot_size = this%symbolic_atom(this%lattice%nbulk + 1)%potential%sizeof_potential_full()
       allocate (T_comm(pot_size, this%lattice%nrec))
       T_comm = 0.0_rp
       do na_glob = start_atom, end_atom
