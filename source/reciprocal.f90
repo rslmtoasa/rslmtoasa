@@ -417,8 +417,6 @@ contains
       k_offset_z = this%k_offset(3)
       use_symmetry_reduction = this%use_symmetry_reduction
       use_time_reversal = this%use_time_reversal
-      use_time_reversal_symmetry = this%use_time_reversal
-      strict_symmetry_checks = this%strict_symmetry_checks
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -465,10 +463,6 @@ contains
       this%k_offset = [k_offset_x, k_offset_y, k_offset_z]
       this%use_symmetry_reduction = use_symmetry_reduction
       this%use_time_reversal = use_time_reversal
-      if (use_time_reversal_symmetry .neqv. use_time_reversal) then
-         this%use_time_reversal = use_time_reversal_symmetry
-      end if
-      this%strict_symmetry_checks = strict_symmetry_checks
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
       this%gaussian_sigma = gaussian_sigma
@@ -608,6 +602,8 @@ contains
       integer :: ik, ix, iy, iz, nk_irred
       real(rp) :: kx, ky, kz
       real(rp), parameter :: tol = 1.0e-8_rp
+      integer :: shift(3), nfull
+      real(rp), allocatable :: kpoints_full(:,:)
 
       this%nk_total = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
 
@@ -626,23 +622,42 @@ contains
       allocate(this%full_to_irred_k(this%nk_total))
       allocate(this%irred_to_full_k(this%nk_total))
 
-      ! Generate Monkhorst-Pack mesh
+      shift = [0, 0, 0]
+      if (abs(this%k_offset(1)) > tol) shift(1) = 1
+      if (abs(this%k_offset(2)) > tol) shift(2) = 1
+      if (abs(this%k_offset(3)) > tol) shift(3) = 1
+
+#ifdef USE_SPGLIB
+      if (this%symmetry_analysis%spglib%is_available()) then
+         nfull = this%symmetry_analysis%spglib%get_full_kpoint_mesh_with_points(this%nk_mesh, shift, kpoints_full)
+         if (nfull == this%nk_total) then
+            this%k_points = kpoints_full
+            this%k_weights = 1.0_rp / real(this%nk_total, rp)
+            do ik = 1, this%nk_total
+               this%full_to_irred_k(ik) = ik
+               this%irred_to_full_k(ik) = ik
+            end do
+            deallocate(kpoints_full)
+            call g_logger%info('reciprocal%generate_mp_mesh: Generated full mesh via spglib grid convention (' // &
+                               trim(int2str(this%nk_total)) // ' k-points)', __FILE__, __LINE__)
+            return
+         end if
+         if (allocated(kpoints_full)) deallocate(kpoints_full)
+      end if
+#endif
+
+      ! Fallback: internal MP mesh formula
       ik = 0
       do iz = 1, this%nk_mesh(3)
          do iy = 1, this%nk_mesh(2)
             do ix = 1, this%nk_mesh(1)
                ik = ik + 1
-               
-               ! Monkhorst-Pack formula: k_i = (2n_i - N_i - 1) / (2*N_i) + offset_i
                kx = (2.0_rp * ix - this%nk_mesh(1) - 1.0_rp) / (2.0_rp * this%nk_mesh(1)) + this%k_offset(1)
                ky = (2.0_rp * iy - this%nk_mesh(2) - 1.0_rp) / (2.0_rp * this%nk_mesh(2)) + this%k_offset(2)
                kz = (2.0_rp * iz - this%nk_mesh(3) - 1.0_rp) / (2.0_rp * this%nk_mesh(3)) + this%k_offset(3)
-
                this%k_points(1, ik) = kx
                this%k_points(2, ik) = ky
                this%k_points(3, ik) = kz
-
-               ! Equal weights for now (should implement symmetry reduction)
                this%k_weights(ik) = 1.0_rp / real(this%nk_total, rp)
                this%full_to_irred_k(ik) = ik
                this%irred_to_full_k(ik) = ik
@@ -1935,6 +1950,20 @@ end subroutine print_hamiltonian_structure
          call this%diagonalize_hamiltonian()
       end if
 
+      ! IMPORTANT:
+      ! Full-mesh expansion currently expands eigenvalues only. Eigenvectors are
+      ! still stored on the irreducible mesh and are required for projected DOS,
+      ! band moments, and spin-moment extraction in k-space SCF.
+      ! Therefore, do not expand in Gaussian mode to avoid eigenvalue/eigenvector
+      ! mesh mismatch in downstream moment/charge routines.
+      if (this%use_symmetry_reduction) then
+         if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
+            if (this%nk_total /= this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
+               call this%expand_eigenvalues_to_full_mesh()
+            end if
+         end if
+      end if
+
       ! Calculate DOS based on method
       select case (trim(this%dos_method))
       case ('tetrahedron')
@@ -2631,6 +2660,8 @@ end subroutine calculate_dos_gaussian
       class(reciprocal), intent(inout) :: this
       integer :: ik_full, nk_full, nk_irred, nbands, ik_irred
       real(rp), dimension(:, :), allocatable :: eigenvalues_full
+      complex(rp), dimension(:, :, :), allocatable :: eigenvectors_full
+      integer :: nrow_evec, nband_evec, nk_evec
       
       if (.not. this%use_symmetry_reduction) then
          call g_logger%info('expand_eigenvalues_to_full_mesh: No symmetry reduction, skipping', __FILE__, __LINE__)
@@ -2674,9 +2705,38 @@ end subroutine calculate_dos_gaussian
       deallocate(this%eigenvalues)
       allocate(this%eigenvalues(nbands, nk_full))
       this%eigenvalues = eigenvalues_full
+
+      ! If eigenvectors are available on irreducible mesh, expand them with
+      ! the same full->irred mapping so projection/moment integrations remain
+      ! consistent with expanded eigenvalues.
+      if (allocated(this%eigenvectors)) then
+         nrow_evec = size(this%eigenvectors, 1)
+         nband_evec = size(this%eigenvectors, 2)
+         nk_evec = size(this%eigenvectors, 3)
+         if (nband_evec == nbands .and. nk_evec == nk_irred) then
+            allocate(eigenvectors_full(nrow_evec, nband_evec, nk_full))
+            eigenvectors_full = cmplx(0.0_rp, 0.0_rp, rp)
+            if (allocated(this%full_to_irred_k)) then
+               do ik_full = 1, nk_full
+                  ik_irred = this%full_to_irred_k(ik_full)
+                  if (ik_irred >= 1 .and. ik_irred <= nk_irred) then
+                     eigenvectors_full(:, :, ik_full) = this%eigenvectors(:, :, ik_irred)
+                  end if
+               end do
+            end if
+            deallocate(this%eigenvectors)
+            allocate(this%eigenvectors(nrow_evec, nband_evec, nk_full))
+            this%eigenvectors = eigenvectors_full
+            deallocate(eigenvectors_full)
+         else
+            call g_logger%warning('expand_eigenvalues_to_full_mesh: eigenvector dimensions do not match irreducible eigenvalue mesh; skipping eigenvector expansion', __FILE__, __LINE__)
+         end if
+      end if
       
       ! Update nk_total to full mesh
       this%nk_total = nk_full
+      ! Keep k-points/weights/maps consistent with the expanded full mesh.
+      call this%generate_mp_mesh()
       
       deallocate(eigenvalues_full)
       

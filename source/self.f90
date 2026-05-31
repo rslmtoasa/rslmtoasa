@@ -865,6 +865,7 @@ contains
       integer :: ia_loc
       real(rp) :: q_up, q_dn, mz, mtot
       real(rp), allocatable :: kspace_spin_mom(:,:)
+      logical :: use_shifted_kmesh
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
       call g_timer%start('calculation-of-DOS')
@@ -883,7 +884,15 @@ contains
                                int2str(this%reciprocal_scf_cache%nk_mesh(2)) // ' x ' // &
                                int2str(this%reciprocal_scf_cache%nk_mesh(3)), __FILE__, __LINE__)
          end if
-         if (.not. allocated(this%reciprocal_scf_cache%k_points)) call this%reciprocal_scf_cache%generate_mp_mesh()
+         if (.not. allocated(this%reciprocal_scf_cache%k_points)) then
+            use_shifted_kmesh = (sum(abs(this%reciprocal_scf_cache%k_offset)) > 1.0e-12_rp)
+            if (this%reciprocal_scf_cache%use_symmetry_reduction) then
+               call this%reciprocal_scf_cache%generate_reduced_kpoint_mesh( &
+                  this%reciprocal_scf_cache%nk_mesh, use_shifted_kmesh)
+            else
+               call this%reciprocal_scf_cache%generate_mp_mesh()
+            end if
+         end if
          call this%reciprocal_scf_cache%build_kspace_hamiltonian()
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
          call this%reciprocal_scf_cache%calculate_density_of_states( &

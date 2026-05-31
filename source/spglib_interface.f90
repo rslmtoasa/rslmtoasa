@@ -132,6 +132,7 @@ module spglib_interface_mod
       procedure :: get_symmetry_operations
       procedure :: get_reduced_kpoint_mesh
       procedure :: get_reduced_kpoint_mesh_with_points
+      procedure :: get_full_kpoint_mesh_with_points
       procedure :: get_crystal_system
       procedure :: get_band_path_points
       procedure :: get_dataset
@@ -495,6 +496,71 @@ contains
       write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
 #endif
    end function get_reduced_kpoint_mesh_with_points
+
+   !---------------------------------------------------------------------------
+   !> @brief Get full (non-reduced) k-point mesh points in spglib grid convention
+   !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
+   !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]
+   !> @param[out] kpoints Full k-point coordinates [3, prod(mesh)]
+   !> @return Number of k-points (=prod(mesh), or 0 on failure)
+   !---------------------------------------------------------------------------
+   function get_full_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints) result(num_kpoints)
+      class(spglib_interface), intent(in) :: this
+      integer, intent(in) :: mesh_dims(3)
+      integer, intent(in), optional :: is_shift(3)
+      real(rp), allocatable, intent(out) :: kpoints(:,:)
+      integer :: num_kpoints
+
+      integer :: total_kpoints, shift(3), i
+#ifdef USE_SPGLIB
+      integer, allocatable :: grid_address(:,:)
+      integer, allocatable :: ir_mapping(:)
+#endif
+
+      total_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)
+      num_kpoints = total_kpoints
+
+      if (present(is_shift)) then
+         shift = is_shift
+      else
+         shift = [0, 0, 0]
+      end if
+
+#ifdef USE_SPGLIB
+      if (.not. this%initialized) then
+         num_kpoints = 0
+         return
+      end if
+
+      allocate(grid_address(3, total_kpoints))
+      allocate(ir_mapping(total_kpoints))
+
+      ! We only need grid_address ordering/convention; mapping return is ignored here.
+      i = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
+                                     mesh_dims, shift, 0, &
+                                     this%lattice_vectors, this%atomic_positions, &
+                                     this%atomic_types, this%num_atoms, this%symprec)
+      if (i <= 0) then
+         num_kpoints = 0
+         deallocate(grid_address, ir_mapping)
+         return
+      end if
+
+      allocate(kpoints(3, total_kpoints))
+      do i = 1, total_kpoints
+         kpoints(1, i) = (real(grid_address(1, i), rp) + 0.5_rp * real(shift(1), rp)) / real(mesh_dims(1), rp)
+         kpoints(2, i) = (real(grid_address(2, i), rp) + 0.5_rp * real(shift(2), rp)) / real(mesh_dims(2), rp)
+         kpoints(3, i) = (real(grid_address(3, i), rp) + 0.5_rp * real(shift(3), rp)) / real(mesh_dims(3), rp)
+      end do
+      deallocate(grid_address, ir_mapping)
+#else
+      allocate(kpoints(3, total_kpoints))
+      i = 0
+      do concurrent (i = 1:total_kpoints)
+         kpoints(:, i) = 0.0_rp
+      end do
+#endif
+   end function get_full_kpoint_mesh_with_points
 
    !---------------------------------------------------------------------------
    !> @brief Determine crystal system from space group number
