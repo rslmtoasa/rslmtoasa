@@ -1947,10 +1947,14 @@ end subroutine print_hamiltonian_structure
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band
-      real(rp) :: energy, dos_contrib
-      real(rp), dimension(4) :: e_corners, sorted_e
-      integer, dimension(4) :: sort_idx
+      integer :: i_energy, i_tet, i_corner, i_band, nbands
+      integer :: i_start, i_end
+      real(rp) :: energy, dos_contrib, de
+      real(rp) :: e1, e2, e3, e4, x
+      real(rp) :: c1, c2, c3, dos_integral, norm_factor
+      real(rp), dimension(4) :: e_corners
+      real(rp), allocatable :: sorted_cache(:, :, :)
+      real(rp), parameter :: eps = 1.0e-12_rp
 
       call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
 
@@ -1963,41 +1967,73 @@ end subroutine print_hamiltonian_structure
       if (allocated(this%total_dos)) deallocate(this%total_dos)
       allocate(this%total_dos(this%n_energy_points))
       this%total_dos = 0.0_rp
+      nbands = size(this%eigenvalues, 1)
+      de = (this%dos_energy_grid(this%n_energy_points) - this%dos_energy_grid(1)) / &
+           real(this%n_energy_points - 1, rp)
+      if (de <= 0.0_rp) then
+         call g_logger%fatal('calculate_dos_tetrahedron: Invalid DOS energy grid spacing', __FILE__, __LINE__)
+      end if
 
-      ! Parallelize over energy points: each thread works on distinct i_energy
-#ifdef _OPENMP
-     !$omp parallel do private(i_energy,energy,i_tet,i_band,i_corner,e_corners,sorted_e,dos_contrib) shared(this) default(none)
-#endif
-      do i_energy = 1, this%n_energy_points
-         ! Energy grid already in Ry (consistent with eigenvalues)
-         energy = this%dos_energy_grid(i_energy)
+      ! Precompute sorted tetra-corner energies once per (tetra, band).
+      allocate(sorted_cache(4, nbands, this%n_tetrahedra))
+      do i_tet = 1, this%n_tetrahedra
+         do i_band = 1, nbands
+            do i_corner = 1, 4
+               e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+            end do
+            call sort4(e_corners, sorted_cache(:, i_band, i_tet))
+         end do
+      end do
 
-         ! Loop over tetrahedra
-         do i_tet = 1, this%n_tetrahedra
+      ! LMTO-style traversal: loop tetrahedron/band first, update only touched energy bins.
+      do i_tet = 1, this%n_tetrahedra
+         do i_band = 1, nbands
+            e1 = sorted_cache(1, i_band, i_tet)
+            e2 = sorted_cache(2, i_band, i_tet)
+            e3 = sorted_cache(3, i_band, i_tet)
+            e4 = sorted_cache(4, i_band, i_tet)
 
-            ! Loop over bands
-            do i_band = 1, size(this%eigenvalues, 1)
+            if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
+            if (abs(e2 - e1) < eps .or. abs(e3 - e1) < eps .or. abs(e4 - e1) < eps .or. &
+                abs(e3 - e2) < eps .or. abs(e4 - e2) < eps .or. abs(e4 - e3) < eps) cycle
 
-               ! Get eigenvalues at tetrahedron corners
-               do i_corner = 1, 4
-                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
-               end do
+            i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
+            i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
 
-               ! Sort eigenvalues (optimized for 4 elements)
-               call sort4(e_corners, sorted_e)
+            c3 = 3.0_rp / ((e2 - e1) * (e3 - e1) * (e4 - e1))
+            c2 = 6.0_rp / ((e3 - e1) * (e4 - e1))
+            c1 = c2 * (e2 - e1) * 0.5_rp
 
-               ! Calculate DOS contribution from this tetrahedron and band
-               dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
-
-               ! Add to total DOS (weight by tetrahedron volume)
-               this%total_dos(i_energy) = this%total_dos(i_energy) + &
-                                        dos_contrib * this%tetrahedron_volumes(i_tet)
+            do i_energy = i_start, i_end
+               energy = this%dos_energy_grid(i_energy)
+               if (energy < e1 .or. energy >= e4) cycle
+               if (energy < e2) then
+                  x = energy - e1
+                  dos_contrib = c3 * x * x
+               else if (energy < e3) then
+                  x = energy - e2
+                  dos_contrib = c1 + x * (c2 + x * (3.0_rp * (e1 + e2 - e3 - e4) / &
+                                ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
+               else
+                  x = energy - e4
+                  dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
+               end if
+               this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * this%tetrahedron_volumes(i_tet)
             end do
          end do
       end do
-#ifdef _OPENMP
-     !$omp end parallel do
-#endif
+
+      dos_integral = trapezoidal_integral(this%dos_energy_grid, this%total_dos)
+      if (abs(dos_integral) > 1.0e-12_rp) then
+         norm_factor = real(nbands, rp) / dos_integral
+         this%total_dos = this%total_dos * norm_factor
+         call g_logger%info('calculate_dos_tetrahedron: DOS normalization factor = ' // &
+                           trim(real2str(norm_factor, '(ES12.4)')), __FILE__, __LINE__)
+      else
+         call g_logger%warning('calculate_dos_tetrahedron: DOS integral is ~0, skipping normalization', __FILE__, __LINE__)
+      end if
+
+      deallocate(sorted_cache)
 
       call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_tetrahedron
@@ -2303,15 +2339,17 @@ end subroutine calculate_dos_gaussian
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band
-      real(rp) :: energy, dos_contrib
-      real(rp), dimension(4) :: e_corners, sorted_e, weights_blochl
-      integer, dimension(4) :: sort_idx
+      integer :: i_energy, i_tet, i_corner, i_band, i_start, i_end
+      real(rp) :: energy, dos_contrib, de
+      real(rp), dimension(4) :: e_corners
       integer :: nbands
       real(rp) :: e1, e2, e3, e4, E, C
       real(rp) :: dos_integral, norm_factor
       integer :: skipped_degenerate
       real(rp), parameter :: TOL = 1.0e-10_rp
+      real(rp), allocatable :: sorted_cache(:, :, :)
+      logical, allocatable :: degenerate_cache(:, :)
+      real(rp), allocatable :: e1_cache(:, :), e2_cache(:, :), e3_cache(:, :), e4_cache(:, :)
 
       call g_logger%info('calculate_dos_blochl: Calculating DOS using Blöchl modified tetrahedron method', __FILE__, __LINE__)
 
@@ -2338,76 +2376,70 @@ end subroutine calculate_dos_gaussian
       if (allocated(this%total_dos)) deallocate(this%total_dos)
       allocate(this%total_dos(this%n_energy_points))
       this%total_dos = 0.0_rp
+      de = (this%dos_energy_grid(this%n_energy_points) - this%dos_energy_grid(1)) / &
+           real(this%n_energy_points - 1, rp)
+      if (de <= 0.0_rp) then
+         call g_logger%fatal('calculate_dos_blochl: Invalid DOS energy grid spacing', __FILE__, __LINE__)
+      end if
 
       nbands = size(this%eigenvalues, 1)
+      allocate(sorted_cache(4, nbands, this%n_tetrahedra))
+      allocate(degenerate_cache(nbands, this%n_tetrahedra))
+      allocate(e1_cache(nbands, this%n_tetrahedra), e2_cache(nbands, this%n_tetrahedra))
+      allocate(e3_cache(nbands, this%n_tetrahedra), e4_cache(nbands, this%n_tetrahedra))
 
-   skipped_degenerate = 0
-   ! Loop over energy points
-      do i_energy = 1, this%n_energy_points
-         energy = this%dos_energy_grid(i_energy)
+      ! Precompute sorted tetra-corner energies and degeneracy masks once.
+      do i_tet = 1, this%n_tetrahedra
+         do i_band = 1, nbands
+            do i_corner = 1, 4
+               e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+            end do
+            call sort4(e_corners, sorted_cache(:, i_band, i_tet))
+            e1 = sorted_cache(1, i_band, i_tet)
+            e2 = sorted_cache(2, i_band, i_tet)
+            e3 = sorted_cache(3, i_band, i_tet)
+            e4 = sorted_cache(4, i_band, i_tet)
+            e1_cache(i_band, i_tet) = e1
+            e2_cache(i_band, i_tet) = e2
+            e3_cache(i_band, i_tet) = e3
+            e4_cache(i_band, i_tet) = e4
+            degenerate_cache(i_band, i_tet) = &
+               (abs(e2-e1) < TOL .or. abs(e3-e1) < TOL .or. abs(e4-e1) < TOL .or. &
+                abs(e4-e2) < TOL .or. abs(e4-e3) < TOL .or. abs(e3-e2) < TOL)
+         end do
+      end do
 
-         ! Loop over tetrahedra
-         do i_tet = 1, this%n_tetrahedra
-            ! Loop over bands
-            do i_band = 1, nbands
-               ! Get eigenvalues at tetrahedron corners
-               do i_corner = 1, 4
-                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
-               end do
+      skipped_degenerate = 0
+      ! Bounded energy-window traversal (tetra/band outer loop).
+      do i_tet = 1, this%n_tetrahedra
+         do i_band = 1, nbands
+            e1 = e1_cache(i_band, i_tet)
+            e2 = e2_cache(i_band, i_tet)
+            e3 = e3_cache(i_band, i_tet)
+            e4 = e4_cache(i_band, i_tet)
+            if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
+            if (degenerate_cache(i_band, i_tet)) then
+               skipped_degenerate = skipped_degenerate + 1
+               cycle
+            end if
 
-               ! Sort eigenvalues
-               call sort_eigenvalues(e_corners, sorted_e, sort_idx)
-               e1 = sorted_e(1)
-               e2 = sorted_e(2)
-               e3 = sorted_e(3)
-               e4 = sorted_e(4)
+            i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
+            i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
 
-               ! Skip if energy outside tetrahedron range
-               if (energy < e1 - TOL .or. energy > e4 + TOL) cycle
-
-               E = energy
-
-               ! Blöchl modified tetrahedron DOS contribution
-               ! Based on PRB 49, 16223 (1994), equations (22)-(25)
-               ! Guard against degenerate tetrahedra (equal corner energies) which
-               ! would produce divisions by zero and NaNs. If denominators are too
-               ! small, skip this tetrahedron-band contribution.
-               if (abs(e2-e1) < TOL .or. abs(e3-e1) < TOL .or. abs(e4-e1) < TOL .or. &
-                  abs(e4-e2) < TOL .or. abs(e4-e3) < TOL .or. abs(e3-e2) < TOL) then
-                  skipped_degenerate = skipped_degenerate + 1
-                  cycle
-               end if
-
-               if (E <= e1) then
-                  dos_contrib = 0.0_rp
-               else if (E >= e4) then
-                  dos_contrib = 0.0_rp
-               else if (E <= e2) then
-                  ! Region I: e1 < E <= e2
-                  ! Blöchl Eq. (23): D(E) = 3(E-e1)²/[(e4-e1)(e3-e1)(e2-e1)]
+            do i_energy = i_start, i_end
+               E = this%dos_energy_grid(i_energy)
+               if (E <= e1 .or. E >= e4) cycle
+               if (E <= e2) then
                   dos_contrib = 3.0_rp * (E - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
                else if (E <= e3) then
-                  ! Region II: e2 < E <= e3
-                  ! Blöchl Eq. (24): D(E) = 1/[(e4-e1)(e3-e1)] * 
-                  !   [3(e2-e1) + 6(E-e2) - 3(e3+e4-e1-e2)(E-e2)²/[(e3-e2)(e4-e2)]]
                   C = 1.0_rp / ((e4 - e1) * (e3 - e1))
                   dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (E - e2) - &
                                     3.0_rp * (e3 + e4 - e1 - e2) * (E - e2)**2 / &
                                     ((e3 - e2) * (e4 - e2)))
                else
-                  ! Region III: e3 < E < e4
-                  ! Blöchl Eq. (25): D(E) = 3(e4-E)²/[(e4-e1)(e4-e2)(e4-e3)]
                   dos_contrib = 3.0_rp * (e4 - E)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
                end if
-
-               ! Weight by tetrahedron volume (consistent with tetrahedron method)
-               this%total_dos(i_energy) = this%total_dos(i_energy) + &
-                  dos_contrib * this%tetrahedron_volumes(i_tet)
-               ! Guard against numerical issues accumulating NaN/Inf
-               if (.not. (this%total_dos(i_energy) == this%total_dos(i_energy))) then
-                  call g_logger%warning('calculate_dos_blochl: NaN detected in total_dos at energy index ' // trim(int2str(i_energy)), __FILE__, __LINE__)
-                  this%total_dos(i_energy) = 0.0_rp
-               end if
+               this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * this%tetrahedron_volumes(i_tet)
             end do
          end do
       end do
@@ -2425,7 +2457,7 @@ end subroutine calculate_dos_gaussian
       end do
 
       if (abs(dos_integral) > TOL) then
-         norm_factor = 1.0_rp ! real(nbands, rp) / dos_integral
+         norm_factor = real(nbands, rp) / dos_integral
          this%total_dos = this%total_dos * norm_factor
          
          call g_logger%info('calculate_dos_blochl: DOS normalized by factor ' // &
@@ -2436,6 +2468,7 @@ end subroutine calculate_dos_gaussian
       else
          call g_logger%warning('calculate_dos_blochl: DOS integral is zero', __FILE__, __LINE__)
       end if
+      deallocate(degenerate_cache, sorted_cache, e1_cache, e2_cache, e3_cache, e4_cache)
 
       call g_logger%info('calculate_dos_blochl: Blöchl DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_blochl
@@ -2848,13 +2881,16 @@ end subroutine project_dos_orbitals_gaussian
 
       ! Local variables
       integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite
+      integer :: i_start, i_end
       integer :: n_orb_per_spin, orb_start, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
-      real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char
+      real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char, de
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       integer :: lstart(4), lend(4)
       complex(rp) :: psi_element
+      real(rp) :: e1, e2, e3, e4, x, C
+      real(rp), parameter :: TOL = 1.0e-10_rp
       ! Per-site orbital offsets for mixed atom types
       integer, dimension(:), allocatable :: site_orb_offset
 
@@ -2898,69 +2934,84 @@ end subroutine project_dos_orbitals_gaussian
       if (.not. allocated(this%tetrahedra)) then
          call this%setup_tetrahedra()
       end if
+      de = (this%dos_energy_grid(this%n_energy_points) - this%dos_energy_grid(1)) / &
+           real(this%n_energy_points - 1, rp)
+      if (de <= 0.0_rp) then
+         call g_logger%fatal('project_dos_orbitals_tetrahedron: Invalid DOS energy grid spacing', __FILE__, __LINE__)
+      end if
 
-      ! Parallelize over energy points: each thread writes to independent i_energy
-#ifdef _OPENMP
-      !$omp parallel do private(i_energy,energy,i_tet,i_corner,i_band,ik,sorted_e,e_corners,dos_contrib,orbital_chars,orbital_char,orbital_char_avg,orb_start,iorb,ispin,i,psi_element,isite,site_orb_start) firstprivate(n_orb_per_spin,lstart,lend) shared(this,site_orb_offset) default(none)
-#endif
-      do i_energy = 1, this%n_energy_points
-         ! Energy grid already in Ry (consistent with eigenvalues)
-         energy = this%dos_energy_grid(i_energy)
+      ! Tetra/band-first traversal with bounded energy windows.
+      do i_tet = 1, this%n_tetrahedra
+         do i_band = 1, size(this%eigenvalues, 1)
+            do i_corner = 1, 4
+               ik = this%tetrahedra(i_corner, i_tet)
+               e_corners(i_corner) = this%eigenvalues(i_band, ik)
+            end do
+            call sort4(e_corners, sorted_e)
+            e1 = sorted_e(1)
+            e2 = sorted_e(2)
+            e3 = sorted_e(3)
+            e4 = sorted_e(4)
+            if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
+            if (abs(e2 - e1) < TOL .or. abs(e3 - e1) < TOL .or. abs(e4 - e1) < TOL .or. &
+                abs(e3 - e2) < TOL .or. abs(e4 - e2) < TOL .or. abs(e4 - e3) < TOL) cycle
 
-         ! Loop over tetrahedra
-         do i_tet = 1, this%n_tetrahedra
+            i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
+            i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
 
-            ! Loop over bands (use actual number of eigenvalues/bands)
-            do i_band = 1, size(this%eigenvalues, 1)
-
-               ! Get eigenvalues at tetrahedron corners
-               do i_corner = 1, 4
-                  ik = this%tetrahedra(i_corner, i_tet)
-                  e_corners(i_corner) = this%eigenvalues(i_band, ik)
-               end do
-
-               ! Sort eigenvalues (optimized for 4 elements)
-               call sort4(e_corners, sorted_e)
-
-               ! Calculate DOS contribution from this tetrahedron and band
-               ! Use Blöchl formula if dos_method is 'blochl', otherwise standard tetrahedron
-               if (trim(this%dos_method) == 'blochl') then
-                  dos_contrib = this%blochl_dos_contribution(energy, sorted_e)
-               else
-                  dos_contrib = this%tetrahedron_dos_contribution(energy, sorted_e)
-               end if
-
-               ! Skip if DOS contribution is negligible
-               if (abs(dos_contrib) < 1.0e-12_rp) cycle
-
-               ! Weight by tetrahedron volume
-               dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
-
-               ! Loop over sites
-               do isite = 1, this%n_sites
-                  ! Site-blocked layout: eigenvectors are [site1(18), site2(18), ...]
-                  ! where each site block contains [orb1_up...orb9_up, orb1_dn...orb9_dn]
-                  site_orb_start = site_orb_offset(isite)
-
-                  ! Calculate orbital character for each orbital type and spin
-                  do ispin = 1, this%n_spin_components
-                     orb_start = site_orb_start + (ispin - 1) * n_orb_per_spin
-                     do iorb = 1, 4
-                        orbital_char_avg = 0.0_rp
-                        if (lstart(iorb) <= n_orb_per_spin) then
-                           do i_corner = 1, 4
-                              ik = this%tetrahedra(i_corner, i_tet)
-                              orbital_char = 0.0_rp
-                              do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
-                                 if (orb_start + i <= size(this%eigenvectors, 1)) then
-                                    psi_element = this%eigenvectors(orb_start + i, i_band, ik)
-                                    orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                                 end if
-                              end do
-                              orbital_chars(i_corner) = orbital_char
+            do isite = 1, this%n_sites
+               site_orb_start = site_orb_offset(isite)
+               do ispin = 1, this%n_spin_components
+                  orb_start = site_orb_start + (ispin - 1) * n_orb_per_spin
+                  do iorb = 1, 4
+                     orbital_char_avg = 0.0_rp
+                     if (lstart(iorb) <= n_orb_per_spin) then
+                        do i_corner = 1, 4
+                           ik = this%tetrahedra(i_corner, i_tet)
+                           orbital_char = 0.0_rp
+                           do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
+                              if (orb_start + i <= size(this%eigenvectors, 1)) then
+                                 psi_element = this%eigenvectors(orb_start + i, i_band, ik)
+                                 orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
+                              end if
                            end do
-                           orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                           orbital_chars(i_corner) = orbital_char
+                        end do
+                        orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                     end if
+                     if (abs(orbital_char_avg) < 1.0e-14_rp) cycle
+
+                     do i_energy = i_start, i_end
+                        energy = this%dos_energy_grid(i_energy)
+                        if (trim(this%dos_method) == 'blochl') then
+                           if (energy <= e1 .or. energy >= e4) cycle
+                           if (energy <= e2) then
+                              dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
+                           else if (energy <= e3) then
+                              C = 1.0_rp / ((e4 - e1) * (e3 - e1))
+                              dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
+                                             3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
+                                             ((e3 - e2) * (e4 - e2)))
+                           else
+                              dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+                           end if
+                        else
+                           if (energy < e1 .or. energy >= e4) cycle
+                           if (energy < e2) then
+                              x = energy - e1
+                              dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
+                           else if (energy < e3) then
+                              x = energy - e2
+                              dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
+                                          x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
+                                          x * (3.0_rp * (e1 + e2 - e3 - e4) / &
+                                          ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
+                           else
+                              x = energy - e4
+                              dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
+                           end if
                         end if
+                        dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
                         this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
                                                                            orbital_char_avg * dos_contrib
                      end do
@@ -2969,9 +3020,6 @@ end subroutine project_dos_orbitals_gaussian
             end do
          end do
       end do
-#ifdef _OPENMP
-      !$omp end parallel do
-#endif
 
       deallocate(site_orb_offset)
 
@@ -3000,7 +3048,7 @@ end subroutine project_dos_orbitals_gaussian
          
          ! Normalize projected DOS by the same factor
          if (abs(proj_dos_integral) > 1.0e-10_rp) then
-            norm_factor = 1.0_rp ! real(nbands, rp) / proj_dos_integral
+            norm_factor = total_dos_integral / proj_dos_integral
             this%projected_dos = this%projected_dos * norm_factor
             call g_logger%info('project_dos_orbitals_tetrahedron: Normalized projected DOS by factor ' // &
                               trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
