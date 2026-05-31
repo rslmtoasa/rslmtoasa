@@ -187,6 +187,10 @@ module reciprocal_mod
       logical :: use_symmetry_reduction
       !> Enforce strict symmetry consistency checks
       logical :: strict_symmetry_checks
+      !> Dump symmetry k-point mapping diagnostics to file
+      logical :: dump_symmetry_kmap
+      !> Tetra symmetry backend: 'full_expand_ref' (safe default) or 'irreducible_native' (future)
+      character(len=32) :: tetra_symmetry_mode
       !> Full-mesh to irreducible-k mapping (size = nk1*nk2*nk3)
       integer, dimension(:), allocatable :: full_to_irred_k
       !> Irreducible-k representative indices in full mesh
@@ -245,6 +249,10 @@ module reciprocal_mod
       procedure :: build_from_file
       procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
+      procedure :: validate_symmetry_kmap
+      procedure :: write_symmetry_kmap_dump
+      procedure :: ensure_tetra_symmetry_backend
+      procedure :: build_irreducible_tetrahedra
       final     :: destructor
    end type reciprocal
 
@@ -355,6 +363,8 @@ contains
       this%nk_total = 0
       this%use_time_reversal = .true.
       this%strict_symmetry_checks = .false.
+      this%dump_symmetry_kmap = .false.
+      this%tetra_symmetry_mode = 'full_expand_ref'
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orbs = nb
@@ -417,6 +427,9 @@ contains
       k_offset_z = this%k_offset(3)
       use_symmetry_reduction = this%use_symmetry_reduction
       use_time_reversal = this%use_time_reversal
+      strict_symmetry_checks = this%strict_symmetry_checks
+      dump_symmetry_kmap = this%dump_symmetry_kmap
+      tetra_symmetry_mode = this%tetra_symmetry_mode
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -463,6 +476,14 @@ contains
       this%k_offset = [k_offset_x, k_offset_y, k_offset_z]
       this%use_symmetry_reduction = use_symmetry_reduction
       this%use_time_reversal = use_time_reversal
+      this%strict_symmetry_checks = strict_symmetry_checks
+      this%dump_symmetry_kmap = dump_symmetry_kmap
+      this%tetra_symmetry_mode = lower(trim(tetra_symmetry_mode))
+      if (this%tetra_symmetry_mode /= 'full_expand_ref' .and. &
+          this%tetra_symmetry_mode /= 'irreducible_native') then
+         call g_logger%warning("reciprocal%build_from_file: tetra_symmetry_mode must be 'full_expand_ref' or 'irreducible_native'. Falling back to full_expand_ref.", __FILE__, __LINE__)
+         this%tetra_symmetry_mode = 'full_expand_ref'
+      end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
       this%gaussian_sigma = gaussian_sigma
@@ -517,6 +538,7 @@ contains
       else
          call g_logger%info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
+      call g_logger%info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call g_logger%info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
@@ -1853,6 +1875,8 @@ end subroutine print_hamiltonian_structure
             end if
          end if
       end if
+      call this%validate_symmetry_kmap('generate_reduced_kpoint_mesh')
+      if (this%dump_symmetry_kmap) call this%write_symmetry_kmap_dump('symmetry_kmap.dat')
    end subroutine generate_reduced_kpoint_mesh
 
    !---------------------------------------------------------------------------
@@ -1950,17 +1974,12 @@ end subroutine print_hamiltonian_structure
          call this%diagonalize_hamiltonian()
       end if
 
-      ! IMPORTANT:
-      ! Full-mesh expansion currently expands eigenvalues only. Eigenvectors are
-      ! still stored on the irreducible mesh and are required for projected DOS,
-      ! band moments, and spin-moment extraction in k-space SCF.
-      ! Therefore, do not expand in Gaussian mode to avoid eigenvalue/eigenvector
-      ! mesh mismatch in downstream moment/charge routines.
+      ! Symmetry-reduced tetra path:
+      ! keep a correctness-first backend that switches to full mesh diagonalization
+      ! for tetra/blochl to preserve exact SCF observables.
       if (this%use_symmetry_reduction) then
          if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
-            if (this%nk_total /= this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
-               call this%expand_eigenvalues_to_full_mesh()
-            end if
+            call this%ensure_tetra_symmetry_backend()
          end if
       end if
 
@@ -1989,6 +2008,234 @@ end subroutine print_hamiltonian_structure
 
       call g_logger%info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_density_of_states
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Validate full<->irreducible k-point map consistency.
+   !---------------------------------------------------------------------------
+   subroutine validate_symmetry_kmap(this, context_tag)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context_tag
+      integer :: nk_full_expected, nk_irred, i, idx
+      integer, allocatable :: counts(:)
+      real(rp) :: wsum
+
+      if (.not. this%use_symmetry_reduction) return
+      if (.not. allocated(this%full_to_irred_k)) return
+      if (.not. allocated(this%k_weights)) return
+
+      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      nk_irred = this%nk_total
+      if (nk_irred <= 0) return
+
+      if (size(this%full_to_irred_k) /= nk_full_expected) then
+         if (this%strict_symmetry_checks) then
+            call g_logger%fatal(trim(context_tag) // ': full_to_irred_k size mismatch', __FILE__, __LINE__)
+         else
+            call g_logger%warning(trim(context_tag) // ': full_to_irred_k size mismatch', __FILE__, __LINE__)
+            return
+         end if
+      end if
+
+      if (any(this%full_to_irred_k < 1) .or. any(this%full_to_irred_k > nk_irred)) then
+         if (this%strict_symmetry_checks) then
+            call g_logger%fatal(trim(context_tag) // ': invalid full_to_irred_k entries', __FILE__, __LINE__)
+         else
+            call g_logger%warning(trim(context_tag) // ': invalid full_to_irred_k entries', __FILE__, __LINE__)
+         end if
+         return
+      end if
+
+      allocate(counts(nk_irred))
+      counts = 0
+      do i = 1, nk_full_expected
+         idx = this%full_to_irred_k(i)
+         counts(idx) = counts(idx) + 1
+      end do
+
+      if (size(this%k_weights) == nk_irred) then
+         wsum = sum(this%k_weights)
+         if (abs(wsum - 1.0_rp) > 1.0e-8_rp) then
+            if (this%strict_symmetry_checks) then
+               call g_logger%fatal(trim(context_tag) // ': k-point weights do not sum to 1', __FILE__, __LINE__)
+            else
+               call g_logger%warning(trim(context_tag) // ': k-point weights do not sum to 1', __FILE__, __LINE__)
+            end if
+         end if
+      end if
+      deallocate(counts)
+   end subroutine validate_symmetry_kmap
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Dump symmetry mapping information for debugging reproducibility.
+   !---------------------------------------------------------------------------
+   subroutine write_symmetry_kmap_dump(this, filename)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: filename
+      integer :: u, i, nk_full_expected
+
+      if (.not. allocated(this%full_to_irred_k)) return
+      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      if (size(this%full_to_irred_k) /= nk_full_expected) return
+
+      open(newunit=u, file=trim(filename), status='replace', action='write')
+      write(u,'(A)') '# full_k_index full_to_irred'
+      do i = 1, nk_full_expected
+         write(u,'(I12,1X,I12)') i, this%full_to_irred_k(i)
+      end do
+      close(u)
+   end subroutine write_symmetry_kmap_dump
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Ensure tetra symmetry backend is prepared before tetra/blochl integrations.
+   !---------------------------------------------------------------------------
+   subroutine ensure_tetra_symmetry_backend(this)
+      class(reciprocal), intent(inout) :: this
+      integer :: nk_full_expected
+      logical :: need_full
+
+      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      need_full = (this%nk_total /= nk_full_expected)
+      if (.not. need_full) return
+
+      call this%validate_symmetry_kmap('ensure_tetra_symmetry_backend')
+
+      select case (trim(this%tetra_symmetry_mode))
+      case ('irreducible_native')
+         call g_logger%info('ensure_tetra_symmetry_backend: Using irreducible_native tetra backend.', __FILE__, __LINE__)
+         return
+      case default
+         continue
+      end select
+
+      ! Safe parity path: rebuild full mesh and rediagonalize there.
+      call g_logger%info('ensure_tetra_symmetry_backend: Switching to full mesh reference backend for tetra/blochl parity.', __FILE__, __LINE__)
+      call this%generate_mp_mesh()
+      call this%build_kspace_hamiltonian()
+      call this%diagonalize_hamiltonian()
+   end subroutine ensure_tetra_symmetry_backend
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build irreducible tetrahedra classes from full-mesh tetra connectivity.
+   !> Each class is keyed by sorted tuple of 4 irreducible k-indices.
+   !---------------------------------------------------------------------------
+   subroutine build_irreducible_tetrahedra(this, tet_ir, tet_mult, n_tet_ir)
+      class(reciprocal), intent(inout) :: this
+      integer, allocatable, intent(out) :: tet_ir(:, :)
+      integer, allocatable, intent(out) :: tet_mult(:)
+      integer, intent(out) :: n_tet_ir
+      integer :: nk1, nk2, nk3, i, j, k, n1, n2, n3, idx
+      integer :: n_tet_per_cube, tet_full_count, tet_idx, key_pos
+      integer :: nk_full_expected
+      integer, dimension(4, 6) :: tetrahedra_corners
+      integer, dimension(4) :: corner_indices, key_unsorted, key_sorted
+      integer, allocatable :: keys(:, :), mult_tmp(:)
+      logical :: found
+
+      n_tet_ir = 0
+      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      if (.not. allocated(this%full_to_irred_k)) then
+         call g_logger%fatal('build_irreducible_tetrahedra: full_to_irred_k is not allocated', __FILE__, __LINE__)
+      end if
+      if (size(this%full_to_irred_k) /= nk_full_expected) then
+         call g_logger%fatal('build_irreducible_tetrahedra: full_to_irred_k size mismatch', __FILE__, __LINE__)
+      end if
+
+      nk1 = this%nk_mesh(1)
+      nk2 = this%nk_mesh(2)
+      nk3 = this%nk_mesh(3)
+      n_tet_per_cube = 6
+      tet_full_count = n_tet_per_cube * nk1 * nk2 * nk3
+
+      allocate(keys(4, tet_full_count))
+      allocate(mult_tmp(tet_full_count))
+      keys = 0
+      mult_tmp = 0
+
+      tetrahedra_corners(:, 1) = [1, 2, 4, 5]
+      tetrahedra_corners(:, 2) = [2, 3, 4, 5]
+      tetrahedra_corners(:, 3) = [3, 4, 5, 6]
+      tetrahedra_corners(:, 4) = [4, 5, 7, 8]
+      tetrahedra_corners(:, 5) = [5, 6, 7, 8]
+      tetrahedra_corners(:, 6) = [4, 5, 6, 7]
+
+      tet_idx = 0
+      do i = 1, nk1
+         do j = 1, nk2
+            do k = 1, nk3
+               do n1 = 1, n_tet_per_cube
+                  corner_indices = tetrahedra_corners(:, n1)
+                  do n2 = 1, 4
+                     n3 = corner_indices(n2)
+                     select case (n3)
+                     case (1)
+                        idx = this%get_kpoint_index(i, j, k, nk1, nk2, nk3)
+                     case (2)
+                        idx = this%get_kpoint_index(i+1, j, k, nk1, nk2, nk3)
+                     case (3)
+                        idx = this%get_kpoint_index(i+1, j+1, k, nk1, nk2, nk3)
+                     case (4)
+                        idx = this%get_kpoint_index(i, j+1, k, nk1, nk2, nk3)
+                     case (5)
+                        idx = this%get_kpoint_index(i, j, k+1, nk1, nk2, nk3)
+                     case (6)
+                        idx = this%get_kpoint_index(i+1, j, k+1, nk1, nk2, nk3)
+                     case (7)
+                        idx = this%get_kpoint_index(i, j+1, k+1, nk1, nk2, nk3)
+                     case (8)
+                        idx = this%get_kpoint_index(i+1, j+1, k+1, nk1, nk2, nk3)
+                     end select
+                     key_unsorted(n2) = this%full_to_irred_k(idx)
+                  end do
+
+                  key_sorted = key_unsorted
+                  call sort4_int(key_sorted)
+
+                  found = .false.
+                  do key_pos = 1, n_tet_ir
+                     if (all(keys(:, key_pos) == key_sorted)) then
+                        mult_tmp(key_pos) = mult_tmp(key_pos) + 1
+                        found = .true.
+                        exit
+                     end if
+                  end do
+                  if (.not. found) then
+                     n_tet_ir = n_tet_ir + 1
+                     keys(:, n_tet_ir) = key_sorted
+                     mult_tmp(n_tet_ir) = 1
+                  end if
+                  tet_idx = tet_idx + 1
+               end do
+            end do
+         end do
+      end do
+
+      allocate(tet_ir(4, n_tet_ir))
+      allocate(tet_mult(n_tet_ir))
+      tet_ir = keys(:, 1:n_tet_ir)
+      tet_mult = mult_tmp(1:n_tet_ir)
+
+      deallocate(keys, mult_tmp)
+      call g_logger%info('build_irreducible_tetrahedra: Reduced ' // trim(int2str(tet_full_count)) // &
+                         ' full tetrahedra to ' // trim(int2str(n_tet_ir)) // ' irreducible classes', __FILE__, __LINE__)
+   contains
+      subroutine sort4_int(arr)
+         integer, intent(inout) :: arr(4)
+         integer :: t
+         if (arr(1) > arr(2)) then; t = arr(1); arr(1) = arr(2); arr(2) = t; end if
+         if (arr(3) > arr(4)) then; t = arr(3); arr(3) = arr(4); arr(4) = t; end if
+         if (arr(1) > arr(3)) then; t = arr(1); arr(1) = arr(3); arr(3) = t; end if
+         if (arr(2) > arr(4)) then; t = arr(2); arr(2) = arr(4); arr(4) = t; end if
+         if (arr(2) > arr(3)) then; t = arr(2); arr(2) = arr(3); arr(3) = t; end if
+      end subroutine sort4_int
+   end subroutine build_irreducible_tetrahedra
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -2037,6 +2284,9 @@ end subroutine print_hamiltonian_structure
       real(rp) :: c1, c2, c3, dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners
       real(rp), allocatable :: sorted_cache(:, :, :)
+      integer, allocatable :: tet_ir(:, :), tet_mult(:)
+      integer :: n_tet_ir
+      real(rp) :: vol_scale
       real(rp), parameter :: eps = 1.0e-12_rp
 
       call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
@@ -2057,19 +2307,34 @@ end subroutine print_hamiltonian_structure
          call g_logger%fatal('calculate_dos_tetrahedron: Invalid DOS energy grid spacing', __FILE__, __LINE__)
       end if
 
-      ! Precompute sorted tetra-corner energies once per (tetra, band).
-      allocate(sorted_cache(4, nbands, this%n_tetrahedra))
-      do i_tet = 1, this%n_tetrahedra
-         do i_band = 1, nbands
-            do i_corner = 1, 4
-               e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+      if (this%use_symmetry_reduction .and. trim(this%tetra_symmetry_mode) == 'irreducible_native' .and. &
+          this%nk_total < this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
+         call this%build_irreducible_tetrahedra(tet_ir, tet_mult, n_tet_ir)
+         allocate(sorted_cache(4, nbands, n_tet_ir))
+         do i_tet = 1, n_tet_ir
+            do i_band = 1, nbands
+               do i_corner = 1, 4
+                  e_corners(i_corner) = this%eigenvalues(i_band, tet_ir(i_corner, i_tet))
+               end do
+               call sort4(e_corners, sorted_cache(:, i_band, i_tet))
             end do
-            call sort4(e_corners, sorted_cache(:, i_band, i_tet))
          end do
-      end do
+         vol_scale = 1.0_rp / (6.0_rp * real(this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3), rp))
+      else
+         allocate(sorted_cache(4, nbands, this%n_tetrahedra))
+         do i_tet = 1, this%n_tetrahedra
+            do i_band = 1, nbands
+               do i_corner = 1, 4
+                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+               end do
+               call sort4(e_corners, sorted_cache(:, i_band, i_tet))
+            end do
+         end do
+         vol_scale = 1.0_rp
+      end if
 
       ! LMTO-style traversal: loop tetrahedron/band first, update only touched energy bins.
-      do i_tet = 1, this%n_tetrahedra
+      do i_tet = 1, size(sorted_cache, 3)
          do i_band = 1, nbands
             e1 = sorted_cache(1, i_band, i_tet)
             e2 = sorted_cache(2, i_band, i_tet)
@@ -2101,7 +2366,11 @@ end subroutine print_hamiltonian_structure
                   x = energy - e4
                   dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
                end if
-               this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * this%tetrahedron_volumes(i_tet)
+               if (allocated(tet_mult)) then
+                  this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * vol_scale * real(tet_mult(i_tet), rp)
+               else
+                  this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * this%tetrahedron_volumes(i_tet)
+               end if
             end do
          end do
       end do
@@ -2117,6 +2386,8 @@ end subroutine print_hamiltonian_structure
       end if
 
       deallocate(sorted_cache)
+      if (allocated(tet_ir)) deallocate(tet_ir)
+      if (allocated(tet_mult)) deallocate(tet_mult)
 
       call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_tetrahedron
@@ -2433,6 +2704,9 @@ end subroutine calculate_dos_gaussian
       real(rp), allocatable :: sorted_cache(:, :, :)
       logical, allocatable :: degenerate_cache(:, :)
       real(rp), allocatable :: e1_cache(:, :), e2_cache(:, :), e3_cache(:, :), e4_cache(:, :)
+      integer, allocatable :: tet_ir(:, :), tet_mult(:)
+      integer :: n_tet_ir
+      real(rp) :: vol_scale
 
       call g_logger%info('calculate_dos_blochl: Calculating DOS using Blöchl modified tetrahedron method', __FILE__, __LINE__)
 
@@ -2466,16 +2740,31 @@ end subroutine calculate_dos_gaussian
       end if
 
       nbands = size(this%eigenvalues, 1)
-      allocate(sorted_cache(4, nbands, this%n_tetrahedra))
-      allocate(degenerate_cache(nbands, this%n_tetrahedra))
-      allocate(e1_cache(nbands, this%n_tetrahedra), e2_cache(nbands, this%n_tetrahedra))
-      allocate(e3_cache(nbands, this%n_tetrahedra), e4_cache(nbands, this%n_tetrahedra))
+      if (this%use_symmetry_reduction .and. trim(this%tetra_symmetry_mode) == 'irreducible_native' .and. &
+          this%nk_total < this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
+         call this%build_irreducible_tetrahedra(tet_ir, tet_mult, n_tet_ir)
+         allocate(sorted_cache(4, nbands, n_tet_ir))
+         allocate(degenerate_cache(nbands, n_tet_ir))
+         allocate(e1_cache(nbands, n_tet_ir), e2_cache(nbands, n_tet_ir))
+         allocate(e3_cache(nbands, n_tet_ir), e4_cache(nbands, n_tet_ir))
+         vol_scale = 1.0_rp / (6.0_rp * real(this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3), rp))
+      else
+         allocate(sorted_cache(4, nbands, this%n_tetrahedra))
+         allocate(degenerate_cache(nbands, this%n_tetrahedra))
+         allocate(e1_cache(nbands, this%n_tetrahedra), e2_cache(nbands, this%n_tetrahedra))
+         allocate(e3_cache(nbands, this%n_tetrahedra), e4_cache(nbands, this%n_tetrahedra))
+         vol_scale = 1.0_rp
+      end if
 
       ! Precompute sorted tetra-corner energies and degeneracy masks once.
-      do i_tet = 1, this%n_tetrahedra
+      do i_tet = 1, size(sorted_cache, 3)
          do i_band = 1, nbands
             do i_corner = 1, 4
-               e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+               if (allocated(tet_ir)) then
+                  e_corners(i_corner) = this%eigenvalues(i_band, tet_ir(i_corner, i_tet))
+               else
+                  e_corners(i_corner) = this%eigenvalues(i_band, this%tetrahedra(i_corner, i_tet))
+               end if
             end do
             call sort4(e_corners, sorted_cache(:, i_band, i_tet))
             e1 = sorted_cache(1, i_band, i_tet)
@@ -2494,7 +2783,7 @@ end subroutine calculate_dos_gaussian
 
       skipped_degenerate = 0
       ! Bounded energy-window traversal (tetra/band outer loop).
-      do i_tet = 1, this%n_tetrahedra
+      do i_tet = 1, size(sorted_cache, 3)
          do i_band = 1, nbands
             e1 = e1_cache(i_band, i_tet)
             e2 = e2_cache(i_band, i_tet)
@@ -2522,7 +2811,11 @@ end subroutine calculate_dos_gaussian
                else
                   dos_contrib = 3.0_rp * (e4 - E)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
                end if
-               this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * this%tetrahedron_volumes(i_tet)
+               if (allocated(tet_mult)) then
+                  this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * vol_scale * real(tet_mult(i_tet), rp)
+               else
+                  this%total_dos(i_energy) = this%total_dos(i_energy) + dos_contrib * this%tetrahedron_volumes(i_tet)
+               end if
             end do
          end do
       end do
@@ -2552,6 +2845,8 @@ end subroutine calculate_dos_gaussian
          call g_logger%warning('calculate_dos_blochl: DOS integral is zero', __FILE__, __LINE__)
       end if
       deallocate(degenerate_cache, sorted_cache, e1_cache, e2_cache, e3_cache, e4_cache)
+      if (allocated(tet_ir)) deallocate(tet_ir)
+      if (allocated(tet_mult)) deallocate(tet_mult)
 
       call g_logger%info('calculate_dos_blochl: Blöchl DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_blochl
@@ -3005,6 +3300,8 @@ end subroutine project_dos_orbitals_gaussian
       complex(rp) :: psi_element
       real(rp) :: e1, e2, e3, e4, x, C
       real(rp), parameter :: TOL = 1.0e-10_rp
+      integer, allocatable :: tet_ir(:, :), tet_mult(:)
+      integer :: n_tet_ir
       ! Per-site orbital offsets for mixed atom types
       integer, dimension(:), allocatable :: site_orb_offset
 
@@ -3048,6 +3345,10 @@ end subroutine project_dos_orbitals_gaussian
       if (.not. allocated(this%tetrahedra)) then
          call this%setup_tetrahedra()
       end if
+      if (this%use_symmetry_reduction .and. trim(this%tetra_symmetry_mode) == 'irreducible_native' .and. &
+          this%nk_total < this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
+         call this%build_irreducible_tetrahedra(tet_ir, tet_mult, n_tet_ir)
+      end if
       de = (this%dos_energy_grid(this%n_energy_points) - this%dos_energy_grid(1)) / &
            real(this%n_energy_points - 1, rp)
       if (de <= 0.0_rp) then
@@ -3055,10 +3356,14 @@ end subroutine project_dos_orbitals_gaussian
       end if
 
       ! Tetra/band-first traversal with bounded energy windows.
-      do i_tet = 1, this%n_tetrahedra
+      do i_tet = 1, merge(n_tet_ir, this%n_tetrahedra, allocated(tet_ir))
          do i_band = 1, size(this%eigenvalues, 1)
             do i_corner = 1, 4
-               ik = this%tetrahedra(i_corner, i_tet)
+               if (allocated(tet_ir)) then
+                  ik = tet_ir(i_corner, i_tet)
+               else
+                  ik = this%tetrahedra(i_corner, i_tet)
+               end if
                e_corners(i_corner) = this%eigenvalues(i_band, ik)
             end do
             call sort4(e_corners, sorted_e)
@@ -3081,7 +3386,11 @@ end subroutine project_dos_orbitals_gaussian
                      orbital_char_avg = 0.0_rp
                      if (lstart(iorb) <= n_orb_per_spin) then
                         do i_corner = 1, 4
-                           ik = this%tetrahedra(i_corner, i_tet)
+                           if (allocated(tet_ir)) then
+                              ik = tet_ir(i_corner, i_tet)
+                           else
+                              ik = this%tetrahedra(i_corner, i_tet)
+                           end if
                            orbital_char = 0.0_rp
                            do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
                               if (orb_start + i <= size(this%eigenvectors, 1)) then
@@ -3125,7 +3434,12 @@ end subroutine project_dos_orbitals_gaussian
                               dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
                            end if
                         end if
-                        dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
+                        if (allocated(tet_mult)) then
+                           dos_contrib = dos_contrib * real(tet_mult(i_tet), rp) / &
+                              (6.0_rp * real(this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3), rp))
+                        else
+                           dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
+                        end if
                         this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
                                                                            orbital_char_avg * dos_contrib
                      end do
@@ -3136,6 +3450,8 @@ end subroutine project_dos_orbitals_gaussian
       end do
 
       deallocate(site_orb_offset)
+      if (allocated(tet_ir)) deallocate(tet_ir)
+      if (allocated(tet_mult)) deallocate(tet_mult)
 
       ! Normalize projected DOS to match total DOS normalization
       ! When using Blöchl or standard tetrahedron method, the raw DOS needs normalization
