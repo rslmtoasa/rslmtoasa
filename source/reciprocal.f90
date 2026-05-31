@@ -185,6 +185,12 @@ module reciprocal_mod
       character(len=200) :: custom_kpath_spec
       !> Use symmetry reduction for k-mesh
       logical :: use_symmetry_reduction
+      !> Enforce strict symmetry consistency checks
+      logical :: strict_symmetry_checks
+      !> Full-mesh to irreducible-k mapping (size = nk1*nk2*nk3)
+      integer, dimension(:), allocatable :: full_to_irred_k
+      !> Irreducible-k representative indices in full mesh
+      integer, dimension(:), allocatable :: irred_to_full_k
 
       ! Real-space neighbor vectors per atom type (for multi-site H_k)
       !> Neighbor vectors for each atom type [3, nn_max, ntype]
@@ -331,6 +337,8 @@ contains
       if (allocated(this%tetrahedron_volumes)) deallocate (this%tetrahedron_volumes)
       if (allocated(this%ham_vec_type)) deallocate (this%ham_vec_type)
       if (allocated(this%ham_vec_type_direct)) deallocate (this%ham_vec_type_direct)
+      if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
+      if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
 #endif
    end subroutine destructor
 
@@ -346,6 +354,7 @@ contains
       this%nk_mesh = [8, 8, 8]  ! Default 8x8x8 mesh
       this%nk_total = 0
       this%use_time_reversal = .true.
+      this%strict_symmetry_checks = .false.
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orbs = nb
@@ -408,6 +417,8 @@ contains
       k_offset_z = this%k_offset(3)
       use_symmetry_reduction = this%use_symmetry_reduction
       use_time_reversal = this%use_time_reversal
+      use_time_reversal_symmetry = this%use_time_reversal
+      strict_symmetry_checks = this%strict_symmetry_checks
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -454,6 +465,10 @@ contains
       this%k_offset = [k_offset_x, k_offset_y, k_offset_z]
       this%use_symmetry_reduction = use_symmetry_reduction
       this%use_time_reversal = use_time_reversal
+      if (use_time_reversal_symmetry .neqv. use_time_reversal) then
+         this%use_time_reversal = use_time_reversal_symmetry
+      end if
+      this%strict_symmetry_checks = strict_symmetry_checks
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
       this%gaussian_sigma = gaussian_sigma
@@ -497,6 +512,16 @@ contains
       
       if (this%use_symmetry_reduction) then
          call g_logger%info('reciprocal%build_from_file: Symmetry reduction enabled', __FILE__, __LINE__)
+      end if
+      if (this%use_time_reversal) then
+         call g_logger%info('reciprocal%build_from_file: use_time_reversal = true', __FILE__, __LINE__)
+      else
+         call g_logger%info('reciprocal%build_from_file: use_time_reversal = false', __FILE__, __LINE__)
+      end if
+      if (this%strict_symmetry_checks) then
+         call g_logger%info('reciprocal%build_from_file: strict_symmetry_checks = true', __FILE__, __LINE__)
+      else
+         call g_logger%info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
       
       if (this%auto_kpath) then
@@ -596,6 +621,10 @@ contains
       allocate(this%k_points(3, this%nk_total))
       allocate(this%k_weights(this%nk_total))
 #endif
+      if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
+      if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+      allocate(this%full_to_irred_k(this%nk_total))
+      allocate(this%irred_to_full_k(this%nk_total))
 
       ! Generate Monkhorst-Pack mesh
       ik = 0
@@ -615,6 +644,8 @@ contains
 
                ! Equal weights for now (should implement symmetry reduction)
                this%k_weights(ik) = 1.0_rp / real(this%nk_total, rp)
+               this%full_to_irred_k(ik) = ik
+               this%irred_to_full_k(ik) = ik
             end do
          end do
       end do
@@ -1712,6 +1743,7 @@ end subroutine print_hamiltonian_structure
       logical :: do_shift
       real(rp), allocatable :: kpoints_frac(:,:), weights(:)
       integer :: i
+      integer, allocatable :: full_to_irred(:), irred_to_full(:)
 
       do_shift = .false.
       if (present(use_shift)) do_shift = use_shift
@@ -1734,7 +1766,8 @@ end subroutine print_hamiltonian_structure
 
    ! Get irreducible k-points and weights from spglib
    num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh_with_points( &
-                           mesh_dims, shift, kpoints_frac, weights)
+                           mesh_dims, shift, kpoints_frac, weights, this%use_time_reversal, &
+                           full_to_irred, irred_to_full)
 #else
    ! SPGLIB not enabled at compile time: fall back to full mesh
    call g_logger%warning('generate_reduced_kpoint_mesh: spglib support was not compiled in, using full mesh', __FILE__, __LINE__)
@@ -1767,9 +1800,15 @@ end subroutine print_hamiltonian_structure
       ! Copy k-points and weights
       this%k_points = kpoints_frac
       this%k_weights = weights
+      if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
+      if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+      allocate(this%full_to_irred_k(size(full_to_irred)))
+      allocate(this%irred_to_full_k(size(irred_to_full)))
+      this%full_to_irred_k = full_to_irred
+      this%irred_to_full_k = irred_to_full
 
       ! Clean up temporary arrays
-      deallocate(kpoints_frac, weights)
+      deallocate(kpoints_frac, weights, full_to_irred, irred_to_full)
 
       call g_logger%info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(this%nk_total)) // &
                         ' irreducible k-points from ' // trim(int2str(product(mesh_dims))) // ' total points', &
@@ -1780,9 +1819,24 @@ end subroutine print_hamiltonian_structure
       
       ! Verify weights sum to 1
       if (abs(sum(this%k_weights) - 1.0_rp) > 1.0e-6_rp) then
-         call g_logger%warning('generate_reduced_kpoint_mesh: K-point weights sum to ' // &
-                              trim(real2str(sum(this%k_weights), '(F12.8)')) // ' (should be 1.0)', &
-                              __FILE__, __LINE__)
+         if (this%strict_symmetry_checks) then
+            call g_logger%fatal('generate_reduced_kpoint_mesh: K-point weights sum to ' // &
+                               trim(real2str(sum(this%k_weights), '(F12.8)')) // ' (expected 1.0)', &
+                               __FILE__, __LINE__)
+         else
+            call g_logger%warning('generate_reduced_kpoint_mesh: K-point weights sum to ' // &
+                                 trim(real2str(sum(this%k_weights), '(F12.8)')) // ' (should be 1.0)', &
+                                 __FILE__, __LINE__)
+         end if
+      end if
+      if (allocated(this%full_to_irred_k)) then
+         if (any(this%full_to_irred_k < 1) .or. any(this%full_to_irred_k > this%nk_total)) then
+            if (this%strict_symmetry_checks) then
+               call g_logger%fatal('generate_reduced_kpoint_mesh: Invalid full_to_irred mapping detected', __FILE__, __LINE__)
+            else
+               call g_logger%warning('generate_reduced_kpoint_mesh: Invalid full_to_irred mapping detected', __FILE__, __LINE__)
+            end if
+         end if
       end if
    end subroutine generate_reduced_kpoint_mesh
 
@@ -2575,8 +2629,7 @@ end subroutine calculate_dos_gaussian
    !---------------------------------------------------------------------------
    subroutine expand_eigenvalues_to_full_mesh(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik_irred, ik_full, ib, isym, nk_full, nk_irred, nbands
-      integer, dimension(:), allocatable :: irred_to_full_map
+      integer :: ik_full, nk_full, nk_irred, nbands, ik_irred
       real(rp), dimension(:, :), allocatable :: eigenvalues_full
       
       if (.not. this%use_symmetry_reduction) then
@@ -2595,24 +2648,27 @@ end subroutine calculate_dos_gaussian
       allocate(eigenvalues_full(nbands, nk_full))
       eigenvalues_full = 0.0_rp
       
-      ! Map each full mesh k-point to its irreducible representative
-      ! This requires symmetry operations from spglib
-      ! For now, use simple unfolding assuming time-reversal and inversion symmetry
-      ! (This is a simplified implementation - full version would use symmetry_analysis)
-      
-      ! For BCC with inversion: each irreducible k-point represents itself and its inverse
-      ! Weight factor tells us multiplicity
-      do ik_irred = 1, nk_irred
-         ! Find all full-mesh k-points that map to this irreducible one
-         ! For simplicity, just copy eigenvalues (full implementation needs symmetry ops)
+      if (.not. allocated(this%full_to_irred_k)) then
+         if (this%strict_symmetry_checks) then
+            call g_logger%fatal('expand_eigenvalues_to_full_mesh: full_to_irred mapping not available', __FILE__, __LINE__)
+         else
+            call g_logger%warning('expand_eigenvalues_to_full_mesh: full_to_irred mapping not available; fallback copy', __FILE__, __LINE__)
+            do ik_irred = 1, min(nk_irred, nk_full)
+               eigenvalues_full(:, ik_irred) = this%eigenvalues(:, ik_irred)
+            end do
+         end if
+      else
          do ik_full = 1, nk_full
-            ! Check if this full k-point maps to ik_irred
-            ! Simplified: use weight to determine copies
-            if (ik_full == ik_irred) then
+            ik_irred = this%full_to_irred_k(ik_full)
+            if (ik_irred >= 1 .and. ik_irred <= nk_irred) then
                eigenvalues_full(:, ik_full) = this%eigenvalues(:, ik_irred)
+            else
+               if (this%strict_symmetry_checks) then
+                  call g_logger%fatal('expand_eigenvalues_to_full_mesh: invalid mapping index ' // trim(int2str(ik_irred)), __FILE__, __LINE__)
+               end if
             end if
          end do
-      end do
+      end if
       
       ! Store expanded eigenvalues
       deallocate(this%eigenvalues)
@@ -2624,9 +2680,7 @@ end subroutine calculate_dos_gaussian
       
       deallocate(eigenvalues_full)
       
-      call g_logger%info('expand_eigenvalues_to_full_mesh: Expansion complete', __FILE__, __LINE__)
-      call g_logger%warning('expand_eigenvalues_to_full_mesh: Using simplified symmetry unfolding - ' // &
-                           'full implementation requires symmetry operations', __FILE__, __LINE__)
+      call g_logger%info('expand_eigenvalues_to_full_mesh: Expansion complete using explicit full_to_irred map', __FILE__, __LINE__)
    end subroutine expand_eigenvalues_to_full_mesh
 
    !---------------------------------------------------------------------------

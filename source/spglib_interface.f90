@@ -333,15 +333,20 @@ contains
    !> @param[out] weights K-point weights (normalized to sum to 1) [num_ir]
    !> @return Number of irreducible k-points
    !---------------------------------------------------------------------------
-   function get_reduced_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints, weights) result(num_ir_kpoints)
+   function get_reduced_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints, weights, use_time_reversal, &
+                                                full_to_irred, irred_to_full) result(num_ir_kpoints)
       class(spglib_interface), intent(in) :: this
       integer, intent(in) :: mesh_dims(3)
       integer, intent(in), optional :: is_shift(3)
       real(rp), allocatable, intent(out) :: kpoints(:,:)
       real(rp), allocatable, intent(out) :: weights(:)
+      logical, intent(in), optional :: use_time_reversal
+      integer, allocatable, intent(out), optional :: full_to_irred(:)
+      integer, allocatable, intent(out), optional :: irred_to_full(:)
       integer :: num_ir_kpoints
 
       integer :: total_kpoints, shift(3), ir_idx, i, j, k
+      integer :: trs_flag
       
 #ifdef USE_SPGLIB
       integer, allocatable :: grid_address(:,:)
@@ -363,13 +368,21 @@ contains
       else
          shift = [0, 0, 0]  ! No shift by default
       end if
+      trs_flag = 1
+      if (present(use_time_reversal)) then
+         if (use_time_reversal) then
+            trs_flag = 1
+         else
+            trs_flag = 0
+         end if
+      end if
 
       allocate(grid_address(3, total_kpoints))
       allocate(ir_mapping(total_kpoints))
 
       ! Get irreducible k-points from spglib
       num_ir_kpoints = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
-                                                 mesh_dims, shift, 1, &  ! 1 = use time reversal
+                                                 mesh_dims, shift, trs_flag, &
                                                  this%lattice_vectors, &
                                                  this%atomic_positions, &
                                                  this%atomic_types, &
@@ -416,6 +429,28 @@ contains
          weights(ir_idx) = real(multiplicity, rp) / real(total_kpoints, rp)
       end do
 
+      ! Optional exact mapping output
+      if (present(full_to_irred)) then
+         if (allocated(full_to_irred)) deallocate(full_to_irred)
+         allocate(full_to_irred(total_kpoints))
+         full_to_irred = 0
+      end if
+      if (present(irred_to_full)) then
+         if (allocated(irred_to_full)) deallocate(irred_to_full)
+         allocate(irred_to_full(num_ir_kpoints))
+         irred_to_full = ir_kpoint_indices
+      end if
+      if (present(full_to_irred)) then
+         do i = 1, total_kpoints
+            do ir_idx = 1, num_ir_kpoints
+               if (ir_mapping(i) == ir_kpoint_indices(ir_idx) - 1) then
+                  full_to_irred(i) = ir_idx
+                  exit
+               end if
+            end do
+         end do
+      end if
+
       write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
                  num_ir_kpoints, 'irreducible points'
       write(*,*) 'spglib_interface: Weight sum =', sum(weights), '(should be 1.0)'
@@ -442,6 +477,20 @@ contains
          end do
       end do
       weights = 1.0_rp / real(num_ir_kpoints, rp)
+      if (present(full_to_irred)) then
+         if (allocated(full_to_irred)) deallocate(full_to_irred)
+         allocate(full_to_irred(num_ir_kpoints))
+         do i = 1, num_ir_kpoints
+            full_to_irred(i) = i
+         end do
+      end if
+      if (present(irred_to_full)) then
+         if (allocated(irred_to_full)) deallocate(irred_to_full)
+         allocate(irred_to_full(num_ir_kpoints))
+         do i = 1, num_ir_kpoints
+            irred_to_full(i) = i
+         end do
+      end if
       
       write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
 #endif
