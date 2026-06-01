@@ -899,7 +899,7 @@ contains
             this%hamiltonian, &
             n_energy_points=this%en%channels_ldos + 10, &
             energy_range=[this%en%energy_min, this%en%energy_max])
-         if (this%control%nsp == 2) then
+         if (this%control%nsp >= 2) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call this%compute_kspace_spin_moments_spinor(this%reciprocal_scf_cache, kspace_spin_mom)
          end if
@@ -924,7 +924,7 @@ contains
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
             end do
 
-            if (this%control%nsp == 2) then
+            if (this%control%nsp >= 2) then
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx = kspace_spin_mom(1, ia)
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%my = kspace_spin_mom(2, ia)
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz = kspace_spin_mom(3, ia)
@@ -981,6 +981,8 @@ contains
             end if
          end if
          call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
+
+         this%bands%eband = this%reciprocal_scf_cache%calculate_band_energy_from_moments()
 
          call this%mix%save_to('new')
          call g_timer%stop('calculation-of-DOS')
@@ -1150,7 +1152,7 @@ contains
                   d = reciprocal_obj%eigenvectors(idn, ib, ik)
                   ud = conjg(u)*d
                   mxs = mxs + 2.0_rp*real(ud, rp)
-                  mys = mys - 2.0_rp*aimag(ud)
+                  mys = mys + 2.0_rp*aimag(ud)
                   mzs = mzs + real(conjg(u)*u - conjg(d)*d, rp)
                end do
                site_mom(1, ia) = site_mom(1, ia) + wk*occ*mxs
@@ -1160,7 +1162,7 @@ contains
          end do
       end do
    end subroutine compute_kspace_spin_moments_spinor
-   
+
    !=========================================================================
    !                   RUN SELF-CONSISTENT FIELD UPDATE
    !=========================================================================
@@ -1268,7 +1270,7 @@ contains
          write (newunit, '(A)') '|                       Band Energy                                       |'
          write (newunit, '(A)') '==========================================================================='
          if (associated(this%bands)) then
-            call this%bands%calculate_band_energy()
+            if (.not. this%use_kspace) call this%bands%calculate_band_energy()
             write (newunit, '(a,f16.10)') 'Band energy of system: ', this%bands%eband
          else
             write (newunit, '(a)') 'Band energy of system: unavailable (bands object not associated)'
