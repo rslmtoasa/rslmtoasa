@@ -151,6 +151,8 @@ module reciprocal_mod
       real(rp), dimension(:), allocatable :: dos_mx_tot
       !> Directional DOS y-component [n_energy_points]
       real(rp), dimension(:), allocatable :: dos_my_tot
+      !> Directional DOS z-component [n_energy_points]
+      real(rp), dimension(:), allocatable :: dos_mz_tot
       !> Projected directional DOS [n_sites, n_orb_types, n_spin, 3(x/y/z), n_energy_points]
       real(rp), dimension(:, :, :, :, :), allocatable :: projected_dos_moments
       !> DOS calculation method ('tetrahedron' or 'gaussian')
@@ -330,6 +332,10 @@ contains
       if (allocated(this%total_dos)) call g_safe_alloc%deallocate('reciprocal.total_dos', this%total_dos)
       if (allocated(this%projected_dos)) call g_safe_alloc%deallocate('reciprocal.projected_dos', this%projected_dos)
       if (allocated(this%band_moments)) call g_safe_alloc%deallocate('reciprocal.band_moments', this%band_moments)
+      if (allocated(this%dos_mx_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mx_tot', this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) call g_safe_alloc%deallocate('reciprocal.dos_my_tot', this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mz_tot', this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) call g_safe_alloc%deallocate('reciprocal.projected_dos_moments', this%projected_dos_moments)
       if (allocated(this%tetrahedra)) call g_safe_alloc%deallocate('reciprocal.tetrahedra', this%tetrahedra)
       if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
       if (allocated(this%ham_vec_type)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type', this%ham_vec_type)
@@ -352,6 +358,10 @@ contains
       if (allocated(this%total_dos)) deallocate (this%total_dos)
       if (allocated(this%projected_dos)) deallocate (this%projected_dos)
       if (allocated(this%band_moments)) deallocate (this%band_moments)
+      if (allocated(this%dos_mx_tot)) deallocate (this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) deallocate (this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) deallocate (this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) deallocate (this%projected_dos_moments)
       if (allocated(this%tetrahedra)) deallocate (this%tetrahedra)
       if (allocated(this%tetrahedron_volumes)) deallocate (this%tetrahedron_volumes)
       if (allocated(this%ham_vec_type)) deallocate (this%ham_vec_type)
@@ -3152,7 +3162,7 @@ end subroutine calculate_dos_gaussian
    !---------------------------------------------------------------------------
 subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
-   integer :: ik, ib, ie, iorb, ispin, i, isite
+   integer :: ik, ib, ie, iorb, i, isite
    integer :: n_orb_per_spin, orb_start, site_orb_start, n_orb_site
    integer :: lstart(4), lend(4)
    real(rp) :: weight, orbital_char, energy
@@ -3165,6 +3175,8 @@ subroutine project_dos_orbitals_gaussian(this)
    integer :: iei
    ! Per-site orbital offsets for mixed atom types
    integer, dimension(:), allocatable :: site_orb_offset
+   real(rp) :: mx_char, my_char, mz_char, local_char
+   real(rp) :: axis(3)
 
    call g_logger%info('project_dos_orbitals_gaussian: Starting projection', __FILE__, __LINE__)
 
@@ -3202,10 +3214,13 @@ subroutine project_dos_orbitals_gaussian(this)
 
    if (allocated(this%dos_mx_tot)) deallocate(this%dos_mx_tot)
    if (allocated(this%dos_my_tot)) deallocate(this%dos_my_tot)
+   if (allocated(this%dos_mz_tot)) deallocate(this%dos_mz_tot)
    allocate(this%dos_mx_tot(this%n_energy_points))
    allocate(this%dos_my_tot(this%n_energy_points))
+    allocate(this%dos_mz_tot(this%n_energy_points))
    this%dos_mx_tot = 0.0_rp
    this%dos_my_tot = 0.0_rp
+   this%dos_mz_tot = 0.0_rp
 
    if (allocated(this%projected_dos_moments)) deallocate(this%projected_dos_moments)
    allocate(this%projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
@@ -3253,21 +3268,29 @@ subroutine project_dos_orbitals_gaussian(this)
                ! where each site block contains [orb1_up...orb9_up, orb1_dn...orb9_dn]
                site_orb_start = site_orb_offset(isite)
 
-               do ispin = 1, this%n_spin_components
-                  orb_start = site_orb_start + (ispin - 1) * n_orb_per_spin
-                  do iorb = 1, 4
-                     orbital_char = 0.0_rp
-                     if (lstart(iorb) <= n_orb_per_spin) then
-                        do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
-                           if (orb_start + i <= size(this%eigenvectors, 1)) then
-                              psi_element = this%eigenvectors(orb_start + i, ib, ik)
-                              orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                           end if
-                        end do
-                     end if
-                     this%projected_dos(isite, iorb, ispin, ie) = &
-                        this%projected_dos(isite, iorb, ispin, ie) + orbital_char * weight
-                  end do
+               call get_site_spin_axis(this, isite, axis)
+               do iorb = 1, 4
+                  orbital_char = 0.0_rp
+                  mx_char = 0.0_rp
+                  my_char = 0.0_rp
+                  mz_char = 0.0_rp
+                  if (lstart(iorb) <= n_orb_per_spin) then
+                     call compute_spinor_block_projection(this, ik, ib, site_orb_start, n_orb_per_spin, &
+                                                          lstart(iorb), lend(iorb), orbital_char, mx_char, my_char, mz_char)
+                  end if
+                  if (abs(orbital_char) < 1.0e-14_rp) cycle
+
+                  local_char = axis(1)*mx_char + axis(2)*my_char + axis(3)*mz_char
+                  this%projected_dos(isite, iorb, 1, ie) = this%projected_dos(isite, iorb, 1, ie) + &
+                                                            0.5_rp*(orbital_char + local_char)*weight
+                  this%projected_dos(isite, iorb, 2, ie) = this%projected_dos(isite, iorb, 2, ie) + &
+                                                            0.5_rp*(orbital_char - local_char)*weight
+                  this%projected_dos_moments(isite, iorb, 1, 1, ie) = this%projected_dos_moments(isite, iorb, 1, 1, ie) + mx_char*weight
+                  this%projected_dos_moments(isite, iorb, 1, 2, ie) = this%projected_dos_moments(isite, iorb, 1, 2, ie) + my_char*weight
+                  this%projected_dos_moments(isite, iorb, 1, 3, ie) = this%projected_dos_moments(isite, iorb, 1, 3, ie) + mz_char*weight
+                  this%dos_mx_tot(ie) = this%dos_mx_tot(ie) + mx_char*weight
+                  this%dos_my_tot(ie) = this%dos_my_tot(ie) + my_char*weight
+                  this%dos_mz_tot(ie) = this%dos_mz_tot(ie) + mz_char*weight
                end do
             end do
          end do
@@ -3305,19 +3328,84 @@ end subroutine project_dos_orbitals_gaussian
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Return normalized local quantization axis for a site.
+   !---------------------------------------------------------------------------
+   subroutine get_site_spin_axis(this, isite, axis)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: isite
+      real(rp), intent(out) :: axis(3)
+      integer :: atom_idx
+      real(rp) :: axis_norm
+
+      axis = [0.0_rp, 0.0_rp, 1.0_rp]
+      atom_idx = this%lattice%nbulk + isite
+      if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
+         axis = this%lattice%symbolic_atoms(atom_idx)%potential%mom(:)
+      end if
+
+      axis_norm = sqrt(sum(axis**2))
+      if (axis_norm > tiny(1.0_rp)) then
+         axis = axis/axis_norm
+      else
+         axis = [0.0_rp, 0.0_rp, 1.0_rp]
+      end if
+   end subroutine get_site_spin_axis
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Compute spinor-resolved spectral weights for one site/orbital block.
+   !---------------------------------------------------------------------------
+   subroutine compute_spinor_block_projection(this, ik, ib, site_orb_start, n_orb_per_spin, i_first, i_last, &
+                                              total_char, mx_char, my_char, mz_char)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ik, ib, site_orb_start, n_orb_per_spin, i_first, i_last
+      real(rp), intent(out) :: total_char, mx_char, my_char, mz_char
+
+      integer :: i, idx_up, idx_dn
+      real(rp) :: up_w, dn_w
+      complex(rp) :: u, d, ud
+
+      total_char = 0.0_rp
+      mx_char = 0.0_rp
+      my_char = 0.0_rp
+      mz_char = 0.0_rp
+
+      do i = i_first, min(i_last, n_orb_per_spin)
+         idx_up = site_orb_start + i
+         idx_dn = site_orb_start + n_orb_per_spin + i
+         if (idx_dn > size(this%eigenvectors, 1)) cycle
+
+         u = this%eigenvectors(idx_up, ib, ik)
+         d = this%eigenvectors(idx_dn, ib, ik)
+         up_w = real(conjg(u)*u, rp)
+         dn_w = real(conjg(d)*d, rp)
+         ud = conjg(u)*d
+
+         total_char = total_char + up_w + dn_w
+         mx_char = mx_char + 2.0_rp*real(ud, rp)
+         my_char = my_char + 2.0_rp*aimag(ud)
+         mz_char = mz_char + up_w - dn_w
+      end do
+   end subroutine compute_spinor_block_projection
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Project DOS onto orbitals, sites, and spin using tetrahedron method
    !---------------------------------------------------------------------------
    subroutine project_dos_orbitals_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band, iorb, ispin, i, isite
+      integer :: i_energy, i_tet, i_corner, i_band, iorb, i, isite
       integer :: i_start, i_end
       integer :: n_orb_per_spin, orb_start, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char, de
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
+      real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
       integer :: lstart(4), lend(4)
       complex(rp) :: psi_element
       real(rp) :: e1, e2, e3, e4, x, C
@@ -3326,6 +3414,8 @@ end subroutine project_dos_orbitals_gaussian
       integer :: n_tet_ir
       ! Per-site orbital offsets for mixed atom types
       integer, dimension(:), allocatable :: site_orb_offset
+      real(rp) :: mx_char_avg, my_char_avg, mz_char_avg, local_char
+      real(rp) :: axis(3)
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -3360,10 +3450,13 @@ end subroutine project_dos_orbitals_gaussian
 
       if (allocated(this%dos_mx_tot)) deallocate(this%dos_mx_tot)
       if (allocated(this%dos_my_tot)) deallocate(this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) deallocate(this%dos_mz_tot)
       allocate(this%dos_mx_tot(this%n_energy_points))
       allocate(this%dos_my_tot(this%n_energy_points))
+      allocate(this%dos_mz_tot(this%n_energy_points))
       this%dos_mx_tot = 0.0_rp
       this%dos_my_tot = 0.0_rp
+      this%dos_mz_tot = 0.0_rp
 
       if (allocated(this%projected_dos_moments)) deallocate(this%projected_dos_moments)
       allocate(this%projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
@@ -3413,69 +3506,81 @@ end subroutine project_dos_orbitals_gaussian
 
             do isite = 1, this%n_sites
                site_orb_start = site_orb_offset(isite)
-               do ispin = 1, this%n_spin_components
-                  orb_start = site_orb_start + (ispin - 1) * n_orb_per_spin
-                  do iorb = 1, 4
-                     orbital_char_avg = 0.0_rp
-                     if (lstart(iorb) <= n_orb_per_spin) then
-                        do i_corner = 1, 4
-                           if (allocated(tet_ir)) then
-                              ik = tet_ir(i_corner, i_tet)
-                           else
-                              ik = this%tetrahedra(i_corner, i_tet)
-                           end if
-                           orbital_char = 0.0_rp
-                           do i = lstart(iorb), min(lend(iorb), n_orb_per_spin)
-                              if (orb_start + i <= size(this%eigenvectors, 1)) then
-                                 psi_element = this%eigenvectors(orb_start + i, i_band, ik)
-                                 orbital_char = orbital_char + real(conjg(psi_element) * psi_element, rp)
-                              end if
-                           end do
-                           orbital_chars(i_corner) = orbital_char
-                        end do
-                        orbital_char_avg = sum(orbital_chars) / 4.0_rp
-                     end if
-                     if (abs(orbital_char_avg) < 1.0e-14_rp) cycle
-
-                     do i_energy = i_start, i_end
-                        energy = this%dos_energy_grid(i_energy)
-                        if (trim(this%dos_method) == 'blochl') then
-                           if (energy <= e1 .or. energy >= e4) cycle
-                           if (energy <= e2) then
-                              dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
-                           else if (energy <= e3) then
-                              C = 1.0_rp / ((e4 - e1) * (e3 - e1))
-                              dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
-                                             3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
-                                             ((e3 - e2) * (e4 - e2)))
-                           else
-                              dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
-                           end if
+               call get_site_spin_axis(this, isite, axis)
+               do iorb = 1, 4
+                  orbital_char_avg = 0.0_rp
+                  mx_char_avg = 0.0_rp
+                  my_char_avg = 0.0_rp
+                  mz_char_avg = 0.0_rp
+                  if (lstart(iorb) <= n_orb_per_spin) then
+                     do i_corner = 1, 4
+                        if (allocated(tet_ir)) then
+                           ik = tet_ir(i_corner, i_tet)
                         else
-                           if (energy < e1 .or. energy >= e4) cycle
-                           if (energy < e2) then
-                              x = energy - e1
-                              dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
-                           else if (energy < e3) then
-                              x = energy - e2
-                              dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
-                                          x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
-                                          x * (3.0_rp * (e1 + e2 - e3 - e4) / &
-                                          ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
-                           else
-                              x = energy - e4
-                              dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
-                           end if
+                           ik = this%tetrahedra(i_corner, i_tet)
                         end if
-                        if (allocated(tet_mult)) then
-                           dos_contrib = dos_contrib * real(tet_mult(i_tet), rp) / &
-                              (6.0_rp * real(this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3), rp))
-                        else
-                           dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
-                        end if
-                        this%projected_dos(isite, iorb, ispin, i_energy) = this%projected_dos(isite, iorb, ispin, i_energy) + &
-                                                                           orbital_char_avg * dos_contrib
+                        call compute_spinor_block_projection(this, ik, i_band, site_orb_start, n_orb_per_spin, &
+                                                             lstart(iorb), lend(iorb), orbital_char, mx_chars(i_corner), &
+                                                             my_chars(i_corner), mz_chars(i_corner))
+                        orbital_chars(i_corner) = orbital_char
                      end do
+                     orbital_char_avg = sum(orbital_chars) / 4.0_rp
+                     mx_char_avg = sum(mx_chars) / 4.0_rp
+                     my_char_avg = sum(my_chars) / 4.0_rp
+                     mz_char_avg = sum(mz_chars) / 4.0_rp
+                  end if
+                  if (abs(orbital_char_avg) < 1.0e-14_rp) cycle
+
+                  local_char = axis(1)*mx_char_avg + axis(2)*my_char_avg + axis(3)*mz_char_avg
+                  do i_energy = i_start, i_end
+                     energy = this%dos_energy_grid(i_energy)
+                     if (trim(this%dos_method) == 'blochl') then
+                        if (energy <= e1 .or. energy >= e4) cycle
+                        if (energy <= e2) then
+                           dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
+                        else if (energy <= e3) then
+                           C = 1.0_rp / ((e4 - e1) * (e3 - e1))
+                           dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
+                                          3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
+                                          ((e3 - e2) * (e4 - e2)))
+                        else
+                           dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+                        end if
+                     else
+                        if (energy < e1 .or. energy >= e4) cycle
+                        if (energy < e2) then
+                           x = energy - e1
+                           dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
+                        else if (energy < e3) then
+                           x = energy - e2
+                           dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
+                                       x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
+                                       x * (3.0_rp * (e1 + e2 - e3 - e4) / &
+                                       ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
+                        else
+                           x = energy - e4
+                           dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
+                        end if
+                     end if
+                     if (allocated(tet_mult)) then
+                        dos_contrib = dos_contrib * real(tet_mult(i_tet), rp) / &
+                           (6.0_rp * real(this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3), rp))
+                     else
+                        dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
+                     end if
+                     this%projected_dos(isite, iorb, 1, i_energy) = this%projected_dos(isite, iorb, 1, i_energy) + &
+                                                                     0.5_rp*(orbital_char_avg + local_char)*dos_contrib
+                     this%projected_dos(isite, iorb, 2, i_energy) = this%projected_dos(isite, iorb, 2, i_energy) + &
+                                                                     0.5_rp*(orbital_char_avg - local_char)*dos_contrib
+                     this%projected_dos_moments(isite, iorb, 1, 1, i_energy) = this%projected_dos_moments(isite, iorb, 1, 1, i_energy) + &
+                                                                                  mx_char_avg*dos_contrib
+                     this%projected_dos_moments(isite, iorb, 1, 2, i_energy) = this%projected_dos_moments(isite, iorb, 1, 2, i_energy) + &
+                                                                                  my_char_avg*dos_contrib
+                     this%projected_dos_moments(isite, iorb, 1, 3, i_energy) = this%projected_dos_moments(isite, iorb, 1, 3, i_energy) + &
+                                                                                  mz_char_avg*dos_contrib
+                     this%dos_mx_tot(i_energy) = this%dos_mx_tot(i_energy) + mx_char_avg*dos_contrib
+                     this%dos_my_tot(i_energy) = this%dos_my_tot(i_energy) + my_char_avg*dos_contrib
+                     this%dos_mz_tot(i_energy) = this%dos_mz_tot(i_energy) + mz_char_avg*dos_contrib
                   end do
                end do
             end do

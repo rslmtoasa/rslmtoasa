@@ -1098,10 +1098,9 @@ contains
       dos_mz_tot = dos_up_tot - dos_dw_tot
       dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
 
-      ! NOTE: dos_mx_tot and dos_my_tot are set to zero because k-space projected_dos only has
-      ! spin-up/spin-down components, not directional moment decomposition. For non-collinear
-      ! magnetism with directional DOS, this would require computing moment projections from
-      ! eigenvectors, which is a future enhancement.
+      if (allocated(reciprocal_obj%dos_mx_tot)) dos_mx_tot = reciprocal_obj%dos_mx_tot
+      if (allocated(reciprocal_obj%dos_my_tot)) dos_my_tot = reciprocal_obj%dos_my_tot
+      if (allocated(reciprocal_obj%dos_mz_tot)) dos_mz_tot = reciprocal_obj%dos_mz_tot
 
       open(unit=125, file='totaldos.out', status='replace', action='write')
       do i = 1, reciprocal_obj%n_energy_points
