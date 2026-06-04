@@ -686,8 +686,10 @@ contains
          mom_prev(:, na) = this%symbolic_atom(plusbulk)%potential%mom
       end do
 
+      !print *,'AB debug: Starting calculate_moments'
       !call this%calculate_magnetic_moments()
       call this%calculate_orbital_moments()
+      !print *,'AB debug: Finished orbital moments, starting Hubbard U check'
       hubbard_active = this%recursion%hamiltonian%hubbard_u_general_check .or. &
                        this%recursion%hamiltonian%hubbard_u_sc_check .or. &
                        this%recursion%hamiltonian%hubbard_v_check
@@ -695,9 +697,11 @@ contains
       nchan_spin = lmax_basis + 1
       nchan = 2*nchan_spin
 
+      !print *,'AB debug: Finished Hubbard U check, starting moment calculation'
       this%dspd(:, :, :) = 0.0d0
       !do na=1, this%lattice%nrec
       do na_glob = start_atom, end_atom
+         !print *,'AB debug: Calculating moments for atom_glob='//fmt('i4', na_glob)
          na = g2l_map(na_glob)
          plusbulk = this%lattice%nbulk + na_glob
          do isp = 1, 2
@@ -1338,8 +1342,9 @@ contains
       complex(rp), dimension(nb, nb) :: mLx_ext, mLy_ext, mLz_ext
       !
 
-      integer :: na_loc, unitorb
+      integer :: na_loc, unitorb, io_stat
       character(len=256) :: fnameorb
+      character(len=512) :: io_msg
 
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       mLx(:, :) = L_x(:, :)
@@ -1365,7 +1370,12 @@ contains
 
       !do na=1, this%lattice%nrec
       do na = start_atom, end_atom
+         !print *,' AB debug: calculating orbital moment for atom ', na
          na_loc = g2l_map(na)
+         if (na_loc < 1 .or. na_loc > atoms_per_process) then
+            if (rank == 0) call g_logger%error('calculate_orbital_moments: invalid na_loc='//fmt('i6', na_loc)//' for na='//fmt('i6', na), __FILE__, __LINE__)
+            error stop 'calculate_orbital_moments: invalid local atom index'
+         end if
 
          l_orb = 0.0d0
          lx = 0.0d0; ly = 0.0d0; lz = 0.d0
@@ -1389,8 +1399,11 @@ contains
          call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
 
          fnameorb = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbene.out"
-         unitorb = rank * 132 + na
-         open(unit=unitorb, file=fnameorb, status='replace', action='write')
+         open(newunit=unitorb, file=fnameorb, status='replace', action='write', iostat=io_stat, iomsg=io_msg)
+         if (io_stat /= 0) then
+            call g_logger%error('calculate_orbital_moments: failed to open '//trim(fnameorb)//' iostat='//fmt('i8', io_stat)//' msg='//trim(io_msg), __FILE__, __LINE__)
+            error stop 'calculate_orbital_moments: failed to open orbital DOS output file'
+         end if
 
          do ie = 1, this%en%channels_ldos + 10
             call simpson_f(lxe, this%en%ene, this%en%ene(ie), this%en%nv1, lxi, .true., .false., 0.0d0) 
@@ -1399,7 +1412,6 @@ contains
             write(unitorb, '(4es16.6)') this%en%ene(ie) - this%en%fermi, -(lxe/pi), -(lye/pi), -(lze/pi)
          end do
          
-         rewind(unitorb)
          close(unitorb)
 
          lz =  - (lz / pi) 
@@ -1410,7 +1422,9 @@ contains
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(2) = ly
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(3) = lz
+         !print *,' AB debug: finished calculating orbital moment for atom ', na
       end do
+      !print *,' AB debug: finished calculating orbital moments for all atoms'
    end subroutine calculate_orbital_moments
 
    subroutine calculate_projected_dos(this)
@@ -1636,13 +1650,13 @@ contains
                dot_prod = dot_product(magmom(i, :), magmom(j, :))
                mag_a = sqrt(sum(magmom(i, :)**2))
                mag_b = sqrt(sum(magmom(j, :)**2))
-               angles_magmom(i, j) = acos(dot_prod / (mag_a * mag_b))
+               angles_magmom(i, j) = acos(dot_prod / (mag_a * mag_b + 1.0e-15)) ! Add small value to avoid division by zero
    
                ! Calculate the angle between orbital moments
                dot_prod = dot_product(lmom(i, :), lmom(j, :))
                mag_a = sqrt(sum(lmom(i, :)**2))
                mag_b = sqrt(sum(lmom(j, :)**2))
-               angles_lmom(i, j) = acos(dot_prod / (mag_a * mag_b))
+               angles_lmom(i, j) = acos(dot_prod / (mag_a * mag_b + 1.0e-15)) ! Add small value to avoid division by zero
             else
                ! Set the diagonal to zero since the angle between the same vectors is undefined
                angles_magmom(i, j) = 0.0_rp

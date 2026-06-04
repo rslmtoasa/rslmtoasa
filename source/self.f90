@@ -962,6 +962,12 @@ contains
          end do
          if (allocated(kspace_spin_mom)) deallocate(kspace_spin_mom)
 
+                        call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+
+                        do ia = 1, this%lattice%nrec
+                           this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
+                        end do
+
          call this%bands%calculate_pl()
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
 
@@ -1056,7 +1062,7 @@ contains
       class(self), intent(inout) :: this
       type(reciprocal), intent(in) :: reciprocal_obj
       integer :: i, isite, iorb
-      real(rp), allocatable :: dos_up_tot(:), dos_dw_tot(:), dos_mz_tot(:), dos_nmag_tot(:)
+      real(rp), allocatable :: dos_up_tot(:), dos_dw_tot(:), dos_mx_tot(:), dos_my_tot(:), dos_mz_tot(:), dos_nmag_tot(:)
 
       if (rank /= 0) return
       if (.not. allocated(reciprocal_obj%total_dos)) return
@@ -1064,10 +1070,14 @@ contains
 
       allocate(dos_up_tot(reciprocal_obj%n_energy_points))
       allocate(dos_dw_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_mx_tot(reciprocal_obj%n_energy_points))
+      allocate(dos_my_tot(reciprocal_obj%n_energy_points))
       allocate(dos_mz_tot(reciprocal_obj%n_energy_points))
       allocate(dos_nmag_tot(reciprocal_obj%n_energy_points))
       dos_up_tot = 0.0_rp
       dos_dw_tot = 0.0_rp
+      dos_mx_tot = 0.0_rp
+      dos_my_tot = 0.0_rp
       dos_mz_tot = 0.0_rp
       dos_nmag_tot = 0.0_rp
 
@@ -1088,6 +1098,11 @@ contains
       dos_mz_tot = dos_up_tot - dos_dw_tot
       dos_nmag_tot = 0.5_rp*(dos_up_tot + dos_dw_tot)
 
+      ! NOTE: dos_mx_tot and dos_my_tot are set to zero because k-space projected_dos only has
+      ! spin-up/spin-down components, not directional moment decomposition. For non-collinear
+      ! magnetism with directional DOS, this would require computing moment projections from
+      ! eigenvectors, which is a future enhancement.
+
       open(unit=125, file='totaldos.out', status='replace', action='write')
       do i = 1, reciprocal_obj%n_energy_points
          write(125, '(2f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, reciprocal_obj%total_dos(i)
@@ -1098,11 +1113,11 @@ contains
       write(126, '(a)') '# energy dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
       do i = 1, reciprocal_obj%n_energy_points
          write(126, '(7f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, &
-            dos_up_tot(i), dos_dw_tot(i), 0.0_rp, 0.0_rp, dos_mz_tot(i), dos_nmag_tot(i)
+            dos_up_tot(i), dos_dw_tot(i), dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
       end do
       close(126)
 
-      deallocate(dos_up_tot, dos_dw_tot, dos_mz_tot, dos_nmag_tot)
+      deallocate(dos_up_tot, dos_dw_tot, dos_mx_tot, dos_my_tot, dos_mz_tot, dos_nmag_tot)
    end subroutine write_kspace_scf_dos_outputs
 
    !=========================================================================

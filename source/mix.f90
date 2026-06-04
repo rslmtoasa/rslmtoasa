@@ -177,6 +177,10 @@ contains
       mixtype = this%mixtype
       beta = this%beta
       ldm_beta = this%ldm_beta
+      if (allocated(this%magbeta)) then
+         allocate(magbeta(size(this%magbeta)))
+         magbeta = this%magbeta
+      end if
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -184,9 +188,11 @@ contains
       end if
 
       read (funit, nml=mix, iostat=iostatus)
-      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus) .and. iostatus /= 5010) then
          call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+      else if (iostatus == 5010) then
+         call g_logger%warning('Non-fatal namelist read value mismatch in '//trim(fname)//' (iostatus=5010).', __FILE__, __LINE__)
       end if
       close(funit)
       ! PATCH_MIX_NML_FIX:
@@ -432,17 +438,17 @@ contains
       end do
 
       ! Quick diagnostic printout for the first few atoms to help debug mixing
-      if (rank == 0) then
-         do ia = 1, min(3, this%lattice%nrec)
-            call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": magbeta='"//fmt('f6.3', this%magbeta(ia)) &
-                 //' mag_old='//fmt('f10.6', mag_old(ia,1))//' '//fmt('f10.6', mag_old(ia,2))//' '//fmt('f10.6', mag_old(ia,3)) &
-                 , __FILE__, __LINE__)
-            call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_new='"//fmt('f10.6', mag_new(ia,1))//' '//fmt('f10.6', mag_new(ia,2))//' '//fmt('f10.6', mag_new(ia,3)) &
-                 , __FILE__, __LINE__)
-            call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_mix='"//fmt('f10.6', mag_mix(ia,1))//' '//fmt('f10.6', mag_mix(ia,2))//' '//fmt('f10.6', mag_mix(ia,3)) &
-                 , __FILE__, __LINE__)
-         end do
-      end if
+      ! if (rank == 0) then
+      !    do ia = 1, min(3, this%lattice%nrec)
+      !       call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": magbeta='"//fmt('f6.3', this%magbeta(ia)) &
+      !            //' mag_old='//fmt('f10.6', mag_old(ia,1))//' '//fmt('f10.6', mag_old(ia,2))//' '//fmt('f10.6', mag_old(ia,3)) &
+      !            , __FILE__, __LINE__)
+      !       call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_new='"//fmt('f10.6', mag_new(ia,1))//' '//fmt('f10.6', mag_new(ia,2))//' '//fmt('f10.6', mag_new(ia,3)) &
+      !            , __FILE__, __LINE__)
+      !       call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_mix='"//fmt('f10.6', mag_mix(ia,1))//' '//fmt('f10.6', mag_mix(ia,2))//' '//fmt('f10.6', mag_mix(ia,3)) &
+      !            , __FILE__, __LINE__)
+      !    end do
+      ! end if
    end subroutine mix_magnetic_moments
 
    !---------------------------------------------------------------------------

@@ -248,30 +248,109 @@ contains
       rac = this%rac
 
       ! Normalize the magnetic moments
-      this%mom(:) = this%mom(:)/norm2(this%mom(:))
+      if (allocated(this%mom)) then
+         if (norm2(this%mom(:)) > tiny(1.0_rp)) then
+            this%mom(:) = this%mom(:)/norm2(this%mom(:))
+         else
+            this%mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         end if
+      end if
 
-      call move_alloc(this%ql, ql)
-      call move_alloc(this%mom, mom)
-      call move_alloc(this%lmom, lmom)
-      call move_alloc(this%pl, pl)
+      if (allocated(this%ql)) call move_alloc(this%ql, ql)
+      if (allocated(this%mom)) call move_alloc(this%mom, mom)
+      if (allocated(this%lmom)) call move_alloc(this%lmom, lmom)
+      if (allocated(this%pl)) call move_alloc(this%pl, pl)
 
-      call move_alloc(this%center_band, center_band)
-      call move_alloc(this%width_band, width_band)
-      call move_alloc(this%gravity_center, gravity_center)
-      call move_alloc(this%shifted_band, shifted_band)
-      call move_alloc(this%obar, obar)
+      if (allocated(this%center_band)) call move_alloc(this%center_band, center_band)
+      if (allocated(this%width_band)) call move_alloc(this%width_band, width_band)
+      if (allocated(this%gravity_center)) call move_alloc(this%gravity_center, gravity_center)
+      if (allocated(this%shifted_band)) call move_alloc(this%shifted_band, shifted_band)
+      if (allocated(this%obar)) call move_alloc(this%obar, obar)
 
-      call move_alloc(this%c, c)
-      call move_alloc(this%enu, enu)
-      call move_alloc(this%ppar, ppar)
-      call move_alloc(this%qpar, qpar)
-      call move_alloc(this%srdel, srdel)
-      call move_alloc(this%vl, vl)
+      if (allocated(this%c)) call move_alloc(this%c, c)
+      if (allocated(this%enu)) call move_alloc(this%enu, enu)
+      if (allocated(this%ppar)) call move_alloc(this%ppar, ppar)
+      if (allocated(this%qpar)) call move_alloc(this%qpar, qpar)
+      if (allocated(this%srdel)) call move_alloc(this%srdel, srdel)
+      if (allocated(this%vl)) call move_alloc(this%vl, vl)
 
-      call move_alloc(this%hubbard_u, hubbard_u)
-      call move_alloc(this%hubbard_j, hubbard_j)
+      if (allocated(this%hubbard_u)) call move_alloc(this%hubbard_u, hubbard_u)
+      if (allocated(this%hubbard_j)) call move_alloc(this%hubbard_j, hubbard_j)
       ! call move_alloc(this%ldm, ldm)
-      call move_alloc(this%ldm_flatten, ldm_flatten)
+      if (allocated(this%ldm_flatten)) call move_alloc(this%ldm_flatten, ldm_flatten)
+
+      if (.not. allocated(ql)) then
+         allocate(ql(3, 0:this%lmax, 2))
+         ql = 0.0_rp
+      end if
+      if (.not. allocated(pl)) then
+         allocate(pl(0:this%lmax, 2))
+         pl = 0.0_rp
+      end if
+      if (.not. allocated(center_band)) then
+         allocate(center_band(this%lmax + 1, 2))
+         center_band = 0.0_rp
+      end if
+      if (.not. allocated(width_band)) then
+         allocate(width_band(this%lmax + 1, 2))
+         width_band = 0.0_rp
+      end if
+      if (.not. allocated(gravity_center)) then
+         allocate(gravity_center(this%lmax + 1, 2))
+         gravity_center = 0.0_rp
+      end if
+      if (.not. allocated(shifted_band)) then
+         allocate(shifted_band(this%lmax + 1, 2))
+         shifted_band = 0.0_rp
+      end if
+      if (.not. allocated(obar)) then
+         allocate(obar(this%lmax + 1, 2))
+         obar = 0.0_rp
+      end if
+      if (.not. allocated(c)) then
+         allocate(c(0:this%lmax, 2))
+         c = 0.0_rp
+      end if
+      if (.not. allocated(enu)) then
+         allocate(enu(0:this%lmax, 2))
+         enu = 0.0_rp
+      end if
+      if (.not. allocated(ppar)) then
+         allocate(ppar(0:this%lmax, 2))
+         ppar = 0.0_rp
+      end if
+      if (.not. allocated(qpar)) then
+         allocate(qpar(0:this%lmax, 2))
+         qpar = 0.0_rp
+      end if
+      if (.not. allocated(srdel)) then
+         allocate(srdel(0:this%lmax, 2))
+         srdel = 0.0_rp
+      end if
+      if (.not. allocated(vl)) then
+         allocate(vl(0:this%lmax, 2))
+         vl = 0.0_rp
+      end if
+      if (.not. allocated(mom)) then
+         allocate(mom(3))
+         mom = [0.0_rp, 0.0_rp, 1.0_rp]
+      end if
+      if (.not. allocated(lmom)) then
+         allocate(lmom(3))
+         lmom = 0.0_rp
+      end if
+      if (.not. allocated(hubbard_u)) then
+         allocate(hubbard_u(this%lmax + 1))
+         hubbard_u = 0.0_rp
+      end if
+      if (.not. allocated(hubbard_j)) then
+         allocate(hubbard_j(this%lmax + 1))
+         hubbard_j = 0.0_rp
+      end if
+      if (.not. allocated(ldm_flatten)) then
+         allocate(ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2))
+         ldm_flatten = 0.0_rp
+      end if
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -303,6 +382,8 @@ contains
          lmax = lmax_basis
       end if
 
+      !print *,'AB build_from_file: lmax from file = '//int2str(file_lmax)//', active basis lmax = '//int2str(lmax_basis)// &
+      !      ', final potential lmax = '//int2str(lmax)
       ! Setting user values
       this%ws_r = ws_r
       this%sumec = sumec
@@ -323,7 +404,11 @@ contains
       call move_alloc(shifted_band, this%shifted_band)
       call move_alloc(obar, this%obar)
 
-      mom(:) = mom(:)/norm2(mom(:))
+      if (norm2(mom(:)) > tiny(1.0_rp)) then
+         mom(:) = mom(:)/norm2(mom(:))
+      else
+         mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+      end if
 
       call move_alloc(mom, this%mom)
       call move_alloc(lmom, this%lmom)
@@ -349,12 +434,14 @@ contains
       ! even when ldm_flatten was read from *_out.nml.
       call this%expand_ldm()
 
+      !print *,'AB Finished building potential from file '//trim(fname)//'. Final lmax = '//int2str(this%lmax)
       ! If we promoted from a smaller basis, seed newly introduced channels with
       ! minimal sane defaults for atomic solver initialization.
       if (file_lmax < this%lmax) then
          lsrc = max(0, min(file_lmax, this%lmax))
          do is = 1, 2
             do l = file_lmax + 1, this%lmax
+               !print *,'AB Promoting potential parameters for spin='//int2str(is)//' and l='//int2str(l)//' from file lmax='//int2str(file_lmax)
                ! Scalar orbital-channel quantities: inherit from highest
                ! available channel in the input file.
                this%center_band(l + 1, is) = this%center_band(lsrc + 1, is)
@@ -372,16 +459,19 @@ contains
                this%qi(l, is) = this%qi(lsrc, is)
                this%dele(l, is) = this%dele(lsrc, is)
 
+               !print *,'AB Before promotion, l='//int2str(l)//' has pl='//real2str(this%pl(l, is))//' and ql(1)='//real2str(this%ql(1, l, is))
                ! Keep PL/KONFIG valid for atomic setup in promoted channels.
                if (this%pl(l, is) < real(l + 1, rp)) this%pl(l, is) = real(l + 1, rp) + 0.3_rp
                ! Seed promoted-channel moments conservatively: near-empty default.
                this%ql(:, l, is) = 0.0_rp
                this%ql(1, l, is) = 1.0e-3_rp
 
+               !print *,'AB After promotion, l='//int2str(l)//' has pl='//real2str(this%pl(l, is))//' and ql(1)='//real2str(this%ql(1, l, is))
                ! Safety for invalid promoted values.
                if (this%srdel(l, is) /= this%srdel(l, is) .or. abs(this%srdel(l, is)) <= tiny(1.0_rp)) then
                   this%srdel(l, is) = max(abs(this%srdel(lsrc, is)), 1.0e-3_rp)
                end if
+               !print *, 'AB After promotion, l='//int2str(l)//' has srdel='//real2str(this%srdel(l, is))
                if (this%ppar(l, is) /= this%ppar(l, is)) this%ppar(l, is) = this%ppar(lsrc, is)
                if (this%qpar(l, is) /= this%qpar(l, is)) this%qpar(l, is) = this%qpar(lsrc, is)
                if (this%c(l, is) /= this%c(l, is)) this%c(l, is) = this%c(lsrc, is)
@@ -389,12 +479,15 @@ contains
             end do
          end do
       end if
+      !print *,'AB Finished potential promotion from file lmax='//int2str(file_lmax)//' to lmax='//int2str(this%lmax)
+      !print *,'exiting potential%build_from_file with lmax='//int2str(this%lmax)
    end subroutine build_from_file
 
    subroutine ensure_lmax_consistency(this)
       class(potential), intent(inout) :: this
       integer :: lmax_new, norb_new, nspin_orb_new
 
+      !print *,'AB ensure_lmax_consistency'
       lmax_new = this%lmax
       norb_new = (lmax_new + 1)*(lmax_new + 1)
       nspin_orb_new = (2*(lmax_new + 1))*(2*(lmax_new + 1))

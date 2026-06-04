@@ -475,10 +475,12 @@ contains
       end if
 
       if (rank == 0) then
+         if (this%hubbard_u_general_check .or. this%hubbard_u_sc_check .or. this%hubbard_v_check) then
          call g_logger%info('HUBBARD summary: form='//trim(this%hubbard_u_potential_form)// &
                             ' fixed_UJ='//merge('T', 'F', this%hubbard_u_general_check)// &
                             ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
                             ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
+         end if
       end if
       if (this%hubbard_u_general_check) then
          block

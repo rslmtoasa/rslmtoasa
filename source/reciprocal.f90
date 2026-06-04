@@ -147,6 +147,12 @@ module reciprocal_mod
       real(rp), dimension(:, :, :, :), allocatable :: projected_dos
       !> Band moments [m0, m1, m2] for each projection
       real(rp), dimension(:, :, :, :), allocatable :: band_moments
+      !> Directional DOS x-component [n_energy_points]
+      real(rp), dimension(:), allocatable :: dos_mx_tot
+      !> Directional DOS y-component [n_energy_points]
+      real(rp), dimension(:), allocatable :: dos_my_tot
+      !> Projected directional DOS [n_sites, n_orb_types, n_spin, 3(x/y/z), n_energy_points]
+      real(rp), dimension(:, :, :, :, :), allocatable :: projected_dos_moments
       !> DOS calculation method ('tetrahedron' or 'gaussian')
       character(len=20) :: dos_method
       !> Gaussian smearing parameter (in energy units)
@@ -284,10 +290,15 @@ contains
       call obj%set_basis_sizes()
       call obj%symmetry_analysis%initialize(obj%lattice)
       
-      ! Auto-calculate total electrons from valence if not set in input
-      ! Similar to bands.f90: this%qqv = real(sum(this%symbolic_atom(1:this%lattice%nbulk_bulk)%element%valence))
+      ! Auto-calculate total electrons from valence if not set in input.
+      ! For bulk systems nbulk can be zero; nbulk_bulk is the correct valence span.
       if (obj%total_electrons <= 1.0e-3_rp) then
-         obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nbulk_bulk)%element%valence), rp)
+         if (obj%lattice%nbulk_bulk > 0) then
+            obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nbulk_bulk)%element%valence), rp)
+         else if (obj%lattice%nrec > 0) then
+            obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nrec)%element%valence), rp)
+            call g_logger%warning('reciprocal%constructor: nbulk_bulk<=0, using nrec span for total_electrons.', __FILE__, __LINE__)
+         end if
          call g_logger%info('reciprocal%constructor: Auto-calculated total_electrons = ' // trim(real2str(obj%total_electrons)) // ' from valence', __FILE__, __LINE__)
       end if
    end function constructor
@@ -3189,6 +3200,17 @@ subroutine project_dos_orbitals_gaussian(this)
    allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
    this%projected_dos = 0.0_rp
 
+   if (allocated(this%dos_mx_tot)) deallocate(this%dos_mx_tot)
+   if (allocated(this%dos_my_tot)) deallocate(this%dos_my_tot)
+   allocate(this%dos_mx_tot(this%n_energy_points))
+   allocate(this%dos_my_tot(this%n_energy_points))
+   this%dos_mx_tot = 0.0_rp
+   this%dos_my_tot = 0.0_rp
+
+   if (allocated(this%projected_dos_moments)) deallocate(this%projected_dos_moments)
+   allocate(this%projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
+   this%projected_dos_moments = 0.0_rp
+
    allocate(site_orb_offset(this%n_sites + 1))
    do isite = 1, this%n_sites + 1
       site_orb_offset(isite) = (isite - 1) * n_orb_site
@@ -3335,6 +3357,17 @@ end subroutine project_dos_orbitals_gaussian
       if (allocated(this%projected_dos)) deallocate(this%projected_dos)
       allocate(this%projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       this%projected_dos = 0.0_rp
+
+      if (allocated(this%dos_mx_tot)) deallocate(this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) deallocate(this%dos_my_tot)
+      allocate(this%dos_mx_tot(this%n_energy_points))
+      allocate(this%dos_my_tot(this%n_energy_points))
+      this%dos_mx_tot = 0.0_rp
+      this%dos_my_tot = 0.0_rp
+
+      if (allocated(this%projected_dos_moments)) deallocate(this%projected_dos_moments)
+      allocate(this%projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
+      this%projected_dos_moments = 0.0_rp
 
       allocate(site_orb_offset(this%n_sites + 1))
       do isite = 1, this%n_sites + 1
@@ -3542,15 +3575,31 @@ subroutine calculate_band_moments(this)
    call g_logger%info('calculate_band_moments: DEBUG - Fermi level on entry = ' // &
                      trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
 
+   if (this%total_electrons <= 1.0e-3_rp) then
+      if (this%lattice%nbulk_bulk > 0) then
+         this%total_electrons = real(sum(this%lattice%symbolic_atoms(1:this%lattice%nbulk_bulk)%element%valence), rp)
+         call g_logger%info('calculate_band_moments: Recovered total_electrons from valence = ' // &
+                           trim(real2str(this%total_electrons, '(F10.5)')), __FILE__, __LINE__)
+      else if (this%lattice%nrec > 0) then
+         this%total_electrons = real(sum(this%lattice%symbolic_atoms(1:this%lattice%nrec)%element%valence), rp)
+         call g_logger%warning('calculate_band_moments: nbulk_bulk<=0; recovered total_electrons using nrec span.', __FILE__, __LINE__)
+      end if
+   end if
+
    ! Auto-find Fermi level if requested
    if (this%auto_find_fermi .and. this%total_electrons > 0.0_rp) then
       this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
       call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // &
                         trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
    else
-      call g_logger%info('calculate_band_moments: Using pre-set Fermi level = ' // &
-                        trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry (auto_find disabled)', &
-                        __FILE__, __LINE__)
+      if (.not. this%auto_find_fermi) then
+         call g_logger%info('calculate_band_moments: Using pre-set Fermi level = ' // &
+                           trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry (auto_find disabled)', &
+                           __FILE__, __LINE__)
+      else
+         call g_logger%warning('calculate_band_moments: auto_find_fermi=.true. but total_electrons<=0; using current Fermi level = ' // &
+                              trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
+      end if
    end if
 
    if (allocated(this%band_moments)) deallocate(this%band_moments)
