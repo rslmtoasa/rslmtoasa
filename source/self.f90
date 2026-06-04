@@ -966,6 +966,10 @@ contains
          end do
          if (allocated(kspace_spin_mom)) deallocate(kspace_spin_mom)
 
+                        do ia = 1, this%lattice%nrec
+                           this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
+                        end do
+
                         call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
 
                         do ia = 1, this%lattice%nrec
