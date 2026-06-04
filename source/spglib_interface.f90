@@ -33,6 +33,7 @@ module spglib_interface_mod
    ! Use ISO_C_BINDING for proper C interoperability
    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_char, c_null_char, c_ptr, c_associated
 #endif
+   use mpi_mod, only: rank
 
    implicit none
 
@@ -150,6 +151,12 @@ module spglib_interface_mod
 
 contains
 
+   subroutine root_print(message)
+      character(len=*), intent(in) :: message
+
+      if (rank == 0) write (*, *) trim(message)
+   end subroutine root_print
+
    !---------------------------------------------------------------------------
    !> @brief Constructor for spglib_interface
    !---------------------------------------------------------------------------
@@ -157,9 +164,9 @@ contains
       type(spglib_interface) :: this
       
 #ifdef USE_SPGLIB
-      write(*,*) 'spglib_interface: Constructor called with spglib support'
+      call root_print('spglib_interface: Constructor called with spglib support')
 #else
-      write(*,*) 'spglib_interface: Constructor called WITHOUT spglib support'
+      call root_print('spglib_interface: Constructor called WITHOUT spglib support')
 #endif
    end function constructor
 
@@ -189,11 +196,13 @@ contains
 #ifdef USE_SPGLIB
       call this%detect_space_group()
       this%initialized = .true.
-      write(*,*) 'spglib_interface: Initialized with', this%num_atoms, 'atoms'
-      write(*,*) 'spglib_interface: Space group:', trim(this%space_group_symbol), &
-                 '(#', this%space_group_number, ')'
+      if (rank == 0) then
+         write(*,*) 'spglib_interface: Initialized with', this%num_atoms, 'atoms'
+         write(*,*) 'spglib_interface: Space group:', trim(this%space_group_symbol), &
+                    '(#', this%space_group_number, ')'
+      end if
 #else
-      write(*,*) 'spglib_interface: Initialized but spglib not available'
+      call root_print('spglib_interface: Initialized but spglib not available')
       this%initialized = .false.
 #endif
    end subroutine initialize
@@ -243,7 +252,7 @@ contains
       this%space_group_number = 0
       this%space_group_symbol = 'UNKNOWN'
       this%crystal_system = 'UNKNOWN'
-      write(*,*) 'spglib_interface: Space group detection unavailable (spglib not compiled)'
+      call root_print('spglib_interface: Space group detection unavailable (spglib not compiled)')
 #endif
    end subroutine detect_space_group
 
@@ -260,7 +269,7 @@ contains
       real(c_double) :: translation(3,max_operations)
 
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          num_ops = 0
          return
       end if
@@ -269,10 +278,10 @@ contains
                                 this%lattice_vectors, this%atomic_positions, &
                                 this%atomic_types, this%num_atoms, this%symprec)
 
-      write(*,*) 'spglib_interface: Found', num_ops, 'symmetry operations'
+      if (rank == 0) write(*,*) 'spglib_interface: Found', num_ops, 'symmetry operations'
 #else
       num_ops = 0
-      write(*,*) 'spglib_interface: Symmetry operations unavailable (spglib not compiled)'
+      call root_print('spglib_interface: Symmetry operations unavailable (spglib not compiled)')
 #endif
    end function get_symmetry_operations
 
@@ -292,7 +301,7 @@ contains
       integer, allocatable :: ir_mapping(:)
 
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          num_ir_kpoints = 0
          return
       end if
@@ -316,13 +325,13 @@ contains
                                                  this%num_atoms, &
                                                  this%symprec)
 
-      write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
-                 num_ir_kpoints, 'irreducible points'
+      if (rank == 0) write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
+                                 num_ir_kpoints, 'irreducible points'
 
       deallocate(grid_address, ir_mapping)
 #else
       num_ir_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)  ! Full mesh without reduction
-      write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
+      call root_print('spglib_interface: Using full k-mesh (spglib not compiled)')
 #endif
    end function get_reduced_kpoint_mesh
 
@@ -357,7 +366,7 @@ contains
       logical, allocatable :: is_irreducible(:)
 
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          num_ir_kpoints = 0
          return
       end if
@@ -452,9 +461,11 @@ contains
          end do
       end if
 
-      write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
-                 num_ir_kpoints, 'irreducible points'
-      write(*,*) 'spglib_interface: Weight sum =', sum(weights), '(should be 1.0)'
+      if (rank == 0) then
+         write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
+                    num_ir_kpoints, 'irreducible points'
+         write(*,*) 'spglib_interface: Weight sum =', sum(weights), '(should be 1.0)'
+      end if
 
       deallocate(grid_address, ir_mapping, is_irreducible, ir_kpoint_indices)
 #else
@@ -493,7 +504,7 @@ contains
          end do
       end if
       
-      write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
+      call root_print('spglib_interface: Using full k-mesh (spglib not compiled)')
 #endif
    end function get_reduced_kpoint_mesh_with_points
 
@@ -604,7 +615,7 @@ contains
       path_available = .false.
       
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          return
       end if
 
@@ -613,10 +624,10 @@ contains
       ! This would involve calling spglib functions to get high-symmetry points
       ! For now, just indicate that the feature is available with spglib
       path_available = .true.
-      write(*,*) 'spglib_interface: Band path generation available for ', &
-                 trim(this%crystal_system), ' crystal system'
+      if (rank == 0) write(*,*) 'spglib_interface: Band path generation available for ', &
+                                trim(this%crystal_system), ' crystal system'
 #else
-      write(*,*) 'spglib_interface: Band path generation unavailable (spglib not compiled)'
+      call root_print('spglib_interface: Band path generation unavailable (spglib not compiled)')
 #endif
    end function get_band_path_points
 

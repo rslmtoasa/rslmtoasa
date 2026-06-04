@@ -34,6 +34,7 @@ module lattice_mod
    use symbolic_atom_mod, only: symbolic_atom, array_of_symbolic_atoms
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
+   use timer_mod, only: g_timer
    use strux_lib, only: strux_compute, strux_lmto47_screening, strux_lmto47_autoalpha_screening, &
       strux_options, strux_result, STRUX_METHOD_LMTO47, STRUX_LMTO47_IALPHA_MANUAL, &
       STRUX_LMTO47_IALPHA_SIGMA, STRUX_LMTO47_IALPHA_FITD
@@ -1049,6 +1050,8 @@ contains
       real(rp), dimension(3, 3) :: a
       integer :: i, j
 
+      call g_timer%start('build_data')
+
       select case (this%crystal_sym)
       case ('bcc')
          a(:, 1) = [-0.50000000, 0.50000000, 0.50000000]
@@ -1266,6 +1269,7 @@ contains
          write (*, *) 'wav', this%wav
       end if
       if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
+      call g_timer%stop('build_data')
    end subroutine build_data
 
    !---------------------------------------------------------------------------
@@ -1360,6 +1364,8 @@ contains
       integer :: npe, ndim, nx, ny, nz, npr, l, n, i, nl, k, kk
       logical :: isopen
       integer :: iostatus
+
+      call g_timer%start('bravais')
 
       inquire (unit=10, opened=isopen)
       if (isopen) then
@@ -1469,6 +1475,7 @@ contains
 
       ! Test to set nmax to the whole cluster
       ! this%nmax = kk
+      call g_timer%stop('bravais')
    end subroutine bravais
 
    !---------------------------------------------------------------------------
@@ -2191,6 +2198,8 @@ contains
       real(rp) :: t_remd_start, t_remd_end, t_nm_store_start, t_nm_store_end
       real(rp) :: t_outmap_start, t_outmap_end, t_str_stage_end
 
+      call g_timer%start('structb')
+
       ! Open files
       open (12, file='map', form='unformatted')
       open (13, file="sbar", FORM="unformatted")
@@ -2266,6 +2275,7 @@ contains
             end do
          end if
       end if
+      call g_timer%stop('structb')
 10000 format(i5)
 10001 format(" LATTICE COORDINATES")
 10002 format(2(i5, 3f8.4))

@@ -873,7 +873,7 @@ contains
       call this%en%e_mesh()
 
       if (this%use_kspace) then
-         call g_logger%info('run_dos: use_kspace=.true. reciprocal SCF branch enabled (optional path).', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%info('run_dos: use_kspace=.true. reciprocal SCF branch enabled (optional path).', __FILE__, __LINE__)
          if (.not. allocated(this%reciprocal_scf_cache)) then
             allocate(this%reciprocal_scf_cache)
             this%reciprocal_scf_cache = reciprocal(this%hamiltonian)
@@ -894,7 +894,11 @@ contains
             end if
          end if
          call this%reciprocal_scf_cache%build_kspace_hamiltonian()
+         call g_timer%stop('calculation-of-DOS')
+         call g_timer%start('diagonalization')
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
+         call g_timer%stop('diagonalization')
+         call g_timer%start('calculation-of-DOS')
          call this%reciprocal_scf_cache%calculate_density_of_states( &
             this%hamiltonian, &
             n_energy_points=this%en%channels_ldos + 10, &
@@ -1126,7 +1130,7 @@ contains
       class(self), intent(in) :: this
       type(reciprocal), intent(in) :: reciprocal_obj
       real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
-      integer :: ik, ib, ia, io, iup, idn, site_offset
+      integer :: ik, ik_global, ib, ia, io, iup, idn, site_offset
       real(rp) :: wk, occ, e, kT, farg
       complex(rp) :: u, d, ud
       real(rp) :: mxs, mys, mzs
@@ -1135,8 +1139,10 @@ contains
       site_mom(:, :) = 0.0_rp
       kT = reciprocal_obj%temperature*kB_Ry_per_K
 
-      do ik = 1, reciprocal_obj%nk_total
-         wk = reciprocal_obj%k_weights(ik)
+      do ik = 1, size(reciprocal_obj%eigenvalues, 2)
+         ik_global = ik
+         if (allocated(reciprocal_obj%k_l2g_map) .and. ik <= size(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
+         wk = reciprocal_obj%k_weights(ik_global)
          do ib = 1, size(reciprocal_obj%eigenvalues, 1)
             e = reciprocal_obj%eigenvalues(ib, ik)
             if (kT > 1.0e-12_rp) then
@@ -1175,6 +1181,11 @@ contains
             end do
          end do
       end do
+#ifdef USE_MPI
+      if (reciprocal_obj%k_mesh_distributed_active) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, site_mom, product(shape(site_mom)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
+#endif
    end subroutine compute_kspace_spin_moments_spinor
 
    !=========================================================================
@@ -1193,8 +1204,8 @@ contains
       !=========================================================================
       do ia = start_atom, end_atom
          qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia)) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
-         call g_logger%info('Atomic SFC done for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
       end do
+      if (rank == 0) call g_logger%info('Atomic SFC done for all atoms', __FILE__, __LINE__)
 
       !=========================================================================
       !      TRANSFER ATOMIC POTENTIAL DATA ACROSS MPI RANKS

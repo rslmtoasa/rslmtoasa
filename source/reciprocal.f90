@@ -44,6 +44,10 @@ module reciprocal_mod
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
    use basis_mod, only: nb, norb
+   use mpi_mod, only: rank, ierr, get_mpi_range
+#ifdef USE_MPI
+   use mpi
+#endif
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -69,6 +73,13 @@ module reciprocal_mod
       real(rp), dimension(:, :), allocatable :: k_points
       !> K-point weights for Brillouin zone integration
       real(rp), dimension(:), allocatable :: k_weights
+      !> Local k-point ownership for distributed mesh workflows
+      integer :: nk_local
+      integer :: k_start
+      integer :: k_end
+      integer, dimension(:), allocatable :: k_l2g_map
+      integer, dimension(:), allocatable :: k_g2l_map
+      logical :: k_mesh_distributed_active
       !> Include time-reversal symmetry in k-point generation
       logical :: use_time_reversal
       !> Offset for k-point mesh (for shifted grids)
@@ -270,6 +281,13 @@ module reciprocal_mod
 
 contains
 
+   subroutine root_info(message, file_name, line_no)
+      character(len=*), intent(in) :: message, file_name
+      integer, intent(in) :: line_no
+
+      if (rank == 0) call g_logger%info(message, file_name, line_no)
+   end subroutine root_info
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -299,9 +317,9 @@ contains
             obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nbulk_bulk)%element%valence), rp)
          else if (obj%lattice%nrec > 0) then
             obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nrec)%element%valence), rp)
-            call g_logger%warning('reciprocal%constructor: nbulk_bulk<=0, using nrec span for total_electrons.', __FILE__, __LINE__)
+            if (rank == 0) call g_logger%warning('reciprocal%constructor: nbulk_bulk<=0, using nrec span for total_electrons.', __FILE__, __LINE__)
          end if
-         call g_logger%info('reciprocal%constructor: Auto-calculated total_electrons = ' // trim(real2str(obj%total_electrons)) // ' from valence', __FILE__, __LINE__)
+         call root_info('reciprocal%constructor: Auto-calculated total_electrons = ' // trim(real2str(obj%total_electrons)) // ' from valence', __FILE__, __LINE__)
       end if
    end function constructor
 
@@ -315,6 +333,8 @@ contains
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%k_points)) call g_safe_alloc%deallocate('reciprocal.k_points', this%k_points)
       if (allocated(this%k_weights)) call g_safe_alloc%deallocate('reciprocal.k_weights', this%k_weights)
+      if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
+      if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
       if (allocated(this%hk_bulk)) call g_safe_alloc%deallocate('reciprocal.hk_bulk', this%hk_bulk)
       if (allocated(this%hk_so)) call g_safe_alloc%deallocate('reciprocal.hk_so', this%hk_so)
       if (allocated(this%hk_total)) call g_safe_alloc%deallocate('reciprocal.hk_total', this%hk_total)
@@ -343,6 +363,8 @@ contains
 #else
       if (allocated(this%k_points)) deallocate (this%k_points)
       if (allocated(this%k_weights)) deallocate (this%k_weights)
+      if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
+      if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
       if (allocated(this%hk_bulk)) deallocate (this%hk_bulk)
       if (allocated(this%hk_so)) deallocate (this%hk_so)
       if (allocated(this%hk_total)) deallocate (this%hk_total)
@@ -382,6 +404,10 @@ contains
       ! Default k-point mesh settings
       this%nk_mesh = [8, 8, 8]  ! Default 8x8x8 mesh
       this%nk_total = 0
+      this%nk_local = 0
+      this%k_start = 1
+      this%k_end = 0
+      this%k_mesh_distributed_active = .false.
       this%use_time_reversal = .true.
       this%strict_symmetry_checks = .false.
       this%dump_symmetry_kmap = .false.
@@ -480,7 +506,7 @@ contains
       read (funit, nml=reciprocal, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          ! Namelist not found or error - use defaults
-         call g_logger%info('reciprocal namelist not found in input file, using defaults', __FILE__, __LINE__)
+         call root_info('reciprocal namelist not found in input file, using defaults', __FILE__, __LINE__)
       end if
       
       ! Read kpath namelist
@@ -488,7 +514,7 @@ contains
       read (funit, nml=kpath, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
          ! Namelist not found or error - use defaults
-         call g_logger%info('kpath namelist not found in input file, using defaults', __FILE__, __LINE__)
+         call root_info('kpath namelist not found in input file, using defaults', __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -534,9 +560,9 @@ contains
       this%custom_kpath_spec = custom_kpath_spec
 
       ! Log what was read
-      call g_logger%info('reciprocal%build_from_file: Read k-mesh = ' // &
-                        trim(int2str(nk1)) // ' x ' // trim(int2str(nk2)) // ' x ' // trim(int2str(nk3)), &
-                        __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: Read k-mesh = ' // &
+                     trim(int2str(nk1)) // ' x ' // trim(int2str(nk2)) // ' x ' // trim(int2str(nk3)), &
+                     __FILE__, __LINE__)
       
       ! if (sum(abs(this%k_offset)) > 1.0e-8_rp) then
       !    call g_logger%info('reciprocal%build_from_file: k-offset = [' // &
@@ -547,24 +573,24 @@ contains
       ! end if
       
       if (this%use_symmetry_reduction) then
-         call g_logger%info('reciprocal%build_from_file: Symmetry reduction enabled', __FILE__, __LINE__)
+         call root_info('reciprocal%build_from_file: Symmetry reduction enabled', __FILE__, __LINE__)
       end if
       if (this%use_time_reversal) then
-         call g_logger%info('reciprocal%build_from_file: use_time_reversal = true', __FILE__, __LINE__)
+         call root_info('reciprocal%build_from_file: use_time_reversal = true', __FILE__, __LINE__)
       else
-         call g_logger%info('reciprocal%build_from_file: use_time_reversal = false', __FILE__, __LINE__)
+         call root_info('reciprocal%build_from_file: use_time_reversal = false', __FILE__, __LINE__)
       end if
       if (this%strict_symmetry_checks) then
-         call g_logger%info('reciprocal%build_from_file: strict_symmetry_checks = true', __FILE__, __LINE__)
+         call root_info('reciprocal%build_from_file: strict_symmetry_checks = true', __FILE__, __LINE__)
       else
-         call g_logger%info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
+         call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
-      call g_logger%info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
-         call g_logger%info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
+         call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
       end if
-      call g_logger%info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -619,17 +645,17 @@ contains
 
       this%reciprocal_volume = (two_pi)**3 / abs(det)
 
-      call g_logger%info('reciprocal%generate_reciprocal_vectors: Reciprocal lattice vectors generated', __FILE__, __LINE__)
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal lattice vectors generated', __FILE__, __LINE__)
       
       ! Debug output - but use info level for now since debug is not enabled
-      call g_logger%info('reciprocal%generate_reciprocal_vectors: Real cell volume = ' // real2str(det), __FILE__, __LINE__)
-      call g_logger%info('reciprocal%generate_reciprocal_vectors: Reciprocal b1 = [' // &
+      call root_info('reciprocal%generate_reciprocal_vectors: Real cell volume = ' // real2str(det), __FILE__, __LINE__)
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal b1 = [' // &
          real2str(this%reciprocal_vectors(1, 1)) // ', ' // real2str(this%reciprocal_vectors(2, 1)) // ', ' // &
          real2str(this%reciprocal_vectors(3, 1)) // ']', __FILE__, __LINE__)
-      call g_logger%info('reciprocal%generate_reciprocal_vectors: Reciprocal b2 = [' // &
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal b2 = [' // &
          real2str(this%reciprocal_vectors(1, 2)) // ', ' // real2str(this%reciprocal_vectors(2, 2)) // ', ' // &
          real2str(this%reciprocal_vectors(3, 2)) // ']', __FILE__, __LINE__)
-      call g_logger%info('reciprocal%generate_reciprocal_vectors: Reciprocal b3 = [' // &
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal b3 = [' // &
          real2str(this%reciprocal_vectors(1, 3)) // ', ' // real2str(this%reciprocal_vectors(2, 3)) // ', ' // &
          real2str(this%reciprocal_vectors(3, 3)) // ']', __FILE__, __LINE__)
    end subroutine generate_reciprocal_vectors
@@ -708,7 +734,7 @@ contains
          end do
       end do
 
-      call g_logger%info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
+      call root_info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
    end subroutine generate_mp_mesh
 
    !---------------------------------------------------------------------------
@@ -736,7 +762,7 @@ contains
 
       this%max_orbs = nb
 
-      call g_logger%info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orbs)), __FILE__, __LINE__)
+      call root_info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orbs)), __FILE__, __LINE__)
    end subroutine set_basis_sizes
 
    !---------------------------------------------------------------------------
@@ -761,7 +787,7 @@ contains
          end if
       end if
 
-      call g_logger%info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
+      call root_info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
 
       r2 = this%lattice%r2
       kk = this%lattice%kk
@@ -812,12 +838,12 @@ contains
             end if
          end do
 
-         call g_logger%info('reciprocal%build_neighbor_vectors: Built ' // trim(int2str(nr)) // &
-                          ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
+         call root_info('reciprocal%build_neighbor_vectors: Built ' // trim(int2str(nr)) // &
+                        ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
          
       end do
 
-      call g_logger%info('reciprocal%build_neighbor_vectors: Completed neighbor vector build for all types', __FILE__, __LINE__)
+      call root_info('reciprocal%build_neighbor_vectors: Completed neighbor vector build for all types', __FILE__, __LINE__)
 
    end subroutine build_neighbor_vectors
 
@@ -989,6 +1015,45 @@ contains
       deallocate(overlap_block, structure_factors)
    end subroutine fourier_transform_overlap
 
+   subroutine setup_k_mesh_distribution(this, nk_global, enable_distribution)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: nk_global
+      logical, intent(in) :: enable_distribution
+      integer :: local_count
+      integer :: ik
+
+      if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
+      if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
+
+      if (enable_distribution) then
+         call get_mpi_range(rank, nk_global, this%k_start, this%k_end, local_count, this%k_l2g_map, this%k_g2l_map, 'k')
+         this%nk_local = local_count
+         this%k_mesh_distributed_active = .true.
+      else
+         this%k_start = 1
+         this%k_end = nk_global
+         this%nk_local = nk_global
+         this%k_mesh_distributed_active = .false.
+         allocate(this%k_l2g_map(this%nk_local))
+         allocate(this%k_g2l_map(nk_global))
+         do ik = 1, nk_global
+            this%k_l2g_map(ik) = ik
+            this%k_g2l_map(ik) = ik
+         end do
+      end if
+   end subroutine setup_k_mesh_distribution
+
+   integer function local_k_index_to_global(this, ik_local) result(ik_global)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ik_local
+
+      if (allocated(this%k_l2g_map) .and. ik_local >= 1 .and. ik_local <= size(this%k_l2g_map)) then
+         ik_global = this%k_l2g_map(ik_local)
+      else
+         ik_global = ik_local
+      end if
+   end function local_k_index_to_global
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1011,9 +1076,9 @@ contains
    subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ik, nk, ntype
+      integer :: ik, ik_global, nk, ntype
       character(len=200) :: debug_msg
-      logical :: using_kpath
+      logical :: using_kpath, distribute_mesh
       integer :: i, j
 
       ! Determine which k-point set to use
@@ -1022,11 +1087,11 @@ contains
          ! Use k-path for band structure
          nk = this%nk_path
          using_kpath = .true.
-         call g_logger%info('reciprocal%build_kspace_hamiltonian: Building H(k) for k-path', __FILE__, __LINE__)
+         call root_info('reciprocal%build_kspace_hamiltonian: Building H(k) for k-path', __FILE__, __LINE__)
       else if (allocated(this%k_points)) then
          ! Use k-mesh for DOS/SCF
          nk = this%nk_total
-         call g_logger%info('reciprocal%build_kspace_hamiltonian: Building H(k) for k-mesh', __FILE__, __LINE__)
+         call root_info('reciprocal%build_kspace_hamiltonian: Building H(k) for k-mesh', __FILE__, __LINE__)
       else
          call g_logger%error('reciprocal%build_kspace_hamiltonian: No k-points generated. ' // &
                            'Call generate_mp_mesh or generate k-path first.', __FILE__, __LINE__)
@@ -1035,7 +1100,10 @@ contains
 
       write(debug_msg, '(A,I0,A,I0,A)') 'build_kspace_hamiltonian: Building for ', nk, &
                                         ' k-points and ', this%lattice%ntype, ' atom types'
-      call g_logger%info(trim(debug_msg), __FILE__, __LINE__)
+      call root_info(trim(debug_msg), __FILE__, __LINE__)
+
+      distribute_mesh = (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian')
+      call setup_k_mesh_distribution(this, nk, distribute_mesh)
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
       call this%build_neighbor_vectors()
@@ -1053,29 +1121,30 @@ contains
       ! Dimension: (n_orb * n_sites) x (n_orb * n_sites) x n_kpoints
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('reciprocal.hk_bulk', this%hk_bulk, &
-                                [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk])
+                                [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local])
 #else
    if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
-   allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk))
+   allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
       ! Parallelize over k-points (coarse-grained) when OpenMP is available.
 #ifdef _OPENMP
-      !$omp parallel do private(ik) shared(this, nk, using_kpath) default(none)
+      !$omp parallel do private(ik, ik_global) shared(this, using_kpath) default(none)
 #endif
-      do ik = 1, nk
+      do ik = 1, this%nk_local
+         ik_global = local_k_index_to_global(this, ik)
          ! Fourier transform: builds full multi-site H(k)
          if (using_kpath) then
             call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
          else
-            call this%fourier_transform_hamiltonian(this%k_points(:, ik), this%hk_bulk(:, :, ik))
+            call this%fourier_transform_hamiltonian(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
          end if
       end do
 #ifdef _OPENMP
       !$omp end parallel do
 #endif
 
-      call g_logger%info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
+      call root_info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
       if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
          call this%build_kspace_overlap()
       else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
@@ -1083,7 +1152,7 @@ contains
       end if
       
       ! Diagnostic: Check H(k) at Gamma point for multi-site systems
-      if (this%lattice%nrec > 1 .and. nk > 0) then
+      if (this%lattice%nrec > 1 .and. this%nk_local > 0 .and. local_k_index_to_global(this, 1) == 1) then
          call this%check_multisite_hamiltonian_diagonal()
       end if
    end subroutine build_kspace_hamiltonian
@@ -1095,7 +1164,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_kspace_overlap(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik, nk
+      integer :: ik, ik_global, nk
       logical :: using_kpath
 
       using_kpath = .false.
@@ -1109,27 +1178,30 @@ contains
          return
       end if
 
+      call setup_k_mesh_distribution(this, nk, (.not. using_kpath) .and. (trim(this%dos_method) == 'gaussian'))
+
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk])
+      call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, [this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local])
 #else
       if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
-      allocate(this%sk_overlap(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, nk))
+      allocate(this%sk_overlap(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
 #ifdef _OPENMP
-      !$omp parallel do private(ik) shared(this, nk, using_kpath) default(none)
+      !$omp parallel do private(ik, ik_global) shared(this, using_kpath) default(none)
 #endif
-      do ik = 1, nk
+      do ik = 1, this%nk_local
+         ik_global = local_k_index_to_global(this, ik)
          if (using_kpath) then
             call this%fourier_transform_overlap(this%k_path(:, ik), this%sk_overlap(:, :, ik))
          else
-            call this%fourier_transform_overlap(this%k_points(:, ik), this%sk_overlap(:, :, ik))
+            call this%fourier_transform_overlap(this%k_points(:, ik_global), this%sk_overlap(:, :, ik))
          end if
       end do
 #ifdef _OPENMP
       !$omp end parallel do
 #endif
-      call g_logger%info('reciprocal%build_kspace_overlap: Built S(k) overlap proxy.', __FILE__, __LINE__)
+      call root_info('reciprocal%build_kspace_overlap: Built S(k) overlap proxy.', __FILE__, __LINE__)
    end subroutine build_kspace_overlap
 
 !---------------------------------------------------------------------------
@@ -1184,15 +1256,15 @@ subroutine check_multisite_hamiltonian_diagonal(this)
    
    write(msg, '(A,2F12.6)') 'H(k=0) diagonal check - Site 1 d-orbital avg (up/dn): ', &
                              real(h_avg_site1_up), real(h_avg_site1_dn)
-   call g_logger%info(trim(msg), __FILE__, __LINE__)
+   call root_info(trim(msg), __FILE__, __LINE__)
    
    write(msg, '(A,2F12.6)') 'H(k=0) diagonal check - Site 2 d-orbital avg (up/dn): ', &
                              real(h_avg_site2_up), real(h_avg_site2_dn)
-   call g_logger%info(trim(msg), __FILE__, __LINE__)
+   call root_info(trim(msg), __FILE__, __LINE__)
    
    write(msg, '(A,F12.6)') 'H(k=0) diagonal difference (site2-site1) up: ', &
                             real(h_avg_site2_up - h_avg_site1_up)
-   call g_logger%info(trim(msg), __FILE__, __LINE__)
+   call root_info(trim(msg), __FILE__, __LINE__)
    
 end subroutine check_multisite_hamiltonian_diagonal
 
@@ -1351,8 +1423,8 @@ end subroutine print_hamiltonian_structure
       nmat = size(this%hk_bulk, 1)
       nk = size(this%hk_bulk, 3)
       
-      call g_logger%info('diagonalize_hamiltonian: Diagonalizing ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
-      call g_logger%info('diagonalize_hamiltonian: Matrix size = ' // &
+      call root_info('diagonalize_hamiltonian: Diagonalizing ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
+      call root_info('diagonalize_hamiltonian: Matrix size = ' // &
                         trim(int2str(nmat)) // ' x ' // trim(int2str(nmat)), __FILE__, __LINE__)
 
       use_generalized = trim(this%reciprocal_mode) == 'generalized_overlap_proxy'
@@ -1437,21 +1509,21 @@ end subroutine print_hamiltonian_structure
       end if
       if (this%gamma_bounds_diagnostics) call this%run_gamma_bounds_diagnostics()
       if (this%hall_diag_experimental) call this%diagonalize_hall_experimental()
-      call g_logger%info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)
+      call root_info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)
    end subroutine diagonalize_hamiltonian
 
    subroutine print_kanpur_mapping(this)
       class(reciprocal), intent(in) :: this
-      call g_logger%info('Kanpur mapping: reciprocal_mode=' // trim(this%reciprocal_mode), __FILE__, __LINE__)
+      call root_info('Kanpur mapping: reciprocal_mode=' // trim(this%reciprocal_mode), __FILE__, __LINE__)
       if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
-         call g_logger%info('Kanpur mapping: PROXY generalized solve H(k)c = E S_proxy(k)c, S_proxy from eeo + I.', __FILE__, __LINE__)
-         call g_logger%warning('Kanpur mapping: PROXY mode is not a formal Kanpur LMTO overlap representation.', __FILE__, __LINE__)
+         call root_info('Kanpur mapping: PROXY generalized solve H(k)c = E S_proxy(k)c, S_proxy from eeo + I.', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%warning('Kanpur mapping: PROXY mode is not a formal Kanpur LMTO overlap representation.', __FILE__, __LINE__)
       else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
-         call g_logger%warning('Kanpur mapping: generalized_overlap_kanpur selected but not implemented; currently falling back to ham_only.', __FILE__, __LINE__)
+         if (rank == 0) call g_logger%warning('Kanpur mapping: generalized_overlap_kanpur selected but not implemented; currently falling back to ham_only.', __FILE__, __LINE__)
       else
-         call g_logger%info('Kanpur mapping: Hamiltonian-only mode (TB-like).', __FILE__, __LINE__)
+         call root_info('Kanpur mapping: Hamiltonian-only mode (TB-like).', __FILE__, __LINE__)
       end if
-      call g_logger%info('Kanpur mapping: non-orthogonality treatment is approximation-level diagnostic.', __FILE__, __LINE__)
+      call root_info('Kanpur mapping: non-orthogonality treatment is approximation-level diagnostic.', __FILE__, __LINE__)
    end subroutine print_kanpur_mapping
 
    subroutine check_overlap_properties(this, ik, s_k)
@@ -1868,12 +1940,12 @@ end subroutine print_hamiltonian_structure
       ! Clean up temporary arrays
       deallocate(kpoints_frac, weights, full_to_irred, irred_to_full)
 
-      call g_logger%info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(this%nk_total)) // &
-                        ' irreducible k-points from ' // trim(int2str(product(mesh_dims))) // ' total points', &
-                        __FILE__, __LINE__)
-      call g_logger%info('generate_reduced_kpoint_mesh: Reduction factor: ' // &
-                        trim(real2str(real(product(mesh_dims), rp)/real(this%nk_total, rp), '(F6.2)')) // 'x', &
-                        __FILE__, __LINE__)
+      call root_info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(this%nk_total)) // &
+                     ' irreducible k-points from ' // trim(int2str(product(mesh_dims))) // ' total points', &
+                     __FILE__, __LINE__)
+      call root_info('generate_reduced_kpoint_mesh: Reduction factor: ' // &
+                     trim(real2str(real(product(mesh_dims), rp)/real(this%nk_total, rp), '(F6.2)')) // 'x', &
+                     __FILE__, __LINE__)
       
       ! Verify weights sum to 1
       if (abs(sum(this%k_weights) - 1.0_rp) > 1.0e-6_rp) then
@@ -1965,7 +2037,7 @@ end subroutine print_hamiltonian_structure
       ! Local variables
       character(len=100) :: filename
 
-      call g_logger%info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
+      call root_info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
 
       ! Set parameters from optional arguments
       if (present(n_energy_points)) this%n_energy_points = n_energy_points
@@ -1986,7 +2058,7 @@ end subroutine print_hamiltonian_structure
 
       ! Build k-space Hamiltonian and diagonalize if not already done
       if (.not. allocated(this%eigenvalues)) then
-         call g_logger%info('calculate_density_of_states: Building and diagonalizing Hamiltonian on k-mesh', __FILE__, __LINE__)
+         call root_info('calculate_density_of_states: Building and diagonalizing Hamiltonian on k-mesh', __FILE__, __LINE__)
          
          ! Build H(k) for all k-points in mesh
          call this%build_kspace_hamiltonian()
@@ -2007,13 +2079,13 @@ end subroutine print_hamiltonian_structure
       ! Calculate DOS based on method
       select case (trim(this%dos_method))
       case ('tetrahedron')
-         call g_logger%info('calculate_density_of_states: Using tetrahedron method', __FILE__, __LINE__)
+         call root_info('calculate_density_of_states: Using tetrahedron method', __FILE__, __LINE__)
          call this%calculate_dos_tetrahedron()
       case ('blochl')
-         call g_logger%info('calculate_density_of_states: Using Blöchl modified tetrahedron method', __FILE__, __LINE__)
+         call root_info('calculate_density_of_states: Using Blöchl modified tetrahedron method', __FILE__, __LINE__)
          call this%calculate_dos_blochl()
       case ('gaussian')
-         call g_logger%info('calculate_density_of_states: Using Gaussian smearing method', __FILE__, __LINE__)
+         call root_info('calculate_density_of_states: Using Gaussian smearing method', __FILE__, __LINE__)
          call this%calculate_dos_gaussian()
       case default
          call g_logger%error('calculate_density_of_states: Unknown DOS method: ' // trim(this%dos_method), __FILE__, __LINE__)
@@ -2027,7 +2099,7 @@ end subroutine print_hamiltonian_structure
       ! Write results to file
       call this%write_dos_to_file(filename)
 
-      call g_logger%info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
+      call root_info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_density_of_states
 
    !---------------------------------------------------------------------------
@@ -2283,10 +2355,10 @@ end subroutine print_hamiltonian_structure
          this%dos_energy_grid(i) = energy_min + real(i-1, rp) * delta_energy
       end do
 
-      call g_logger%info('setup_dos_energy_grid: Created energy grid with ' // &
-                        trim(int2str(this%n_energy_points)) // ' points from ' // &
-                        trim(real2str(energy_min, '(F 8.5)')) // ' to ' // trim(real2str(energy_max, '(F 8.5)')) // ' Ry', &
-                        __FILE__, __LINE__)
+      call root_info('setup_dos_energy_grid: Created energy grid with ' // &
+                     trim(int2str(this%n_energy_points)) // ' points from ' // &
+                     trim(real2str(energy_min, '(F 8.5)')) // ' to ' // trim(real2str(energy_max, '(F 8.5)')) // ' Ry', &
+                     __FILE__, __LINE__)
    end subroutine setup_dos_energy_grid
 
    !---------------------------------------------------------------------------
@@ -2605,7 +2677,7 @@ end subroutine print_hamiltonian_structure
 subroutine calculate_dos_gaussian(this)
    class(reciprocal), intent(inout) :: this
 
-   integer :: i_energy, i_k, i_band
+   integer :: i_energy, i_k, i_band, i_k_global
    real(rp) :: energy, weight, gaussian_factor
    real(rp) :: sigma_squared, sigma_use
    real(rp) :: local_sum, dos_integral, norm_factor, kweight_sum
@@ -2620,7 +2692,7 @@ subroutine calculate_dos_gaussian(this)
          trim(real2str(this%dos_energy_range(1), '(F12.6)')) // ', ' // &
          trim(real2str(this%dos_energy_range(2), '(F12.6)')) // '] Ry', __FILE__, __LINE__)
       call g_logger%info('calculate_dos_gaussian: Number of k-points = ' // &
-         trim(int2str(this%nk_total)), __FILE__, __LINE__)
+         trim(int2str(max(this%nk_local, size(this%eigenvalues, 2)))), __FILE__, __LINE__)
       call g_logger%info('calculate_dos_gaussian: K-point weight = ' // &
          trim(real2str(this%k_weights(1), '(ES12.4)')), __FILE__, __LINE__)
    end if
@@ -2628,11 +2700,11 @@ subroutine calculate_dos_gaussian(this)
    ! Determine sigma (already in Ry from input)
    if (this%gaussian_sigma < 0.001_rp) then
       sigma_use = this%calculate_adaptive_sigma()
-      call g_logger%info('calculate_dos_gaussian: Using adaptive sigma = ' // &
+      call root_info('calculate_dos_gaussian: Using adaptive sigma = ' // &
                         trim(real2str(sigma_use, '(F8.5)')) // ' Ry', __FILE__, __LINE__)
    else
       sigma_use = this%gaussian_sigma
-      call g_logger%info('calculate_dos_gaussian: Using input sigma = ' // &
+      call root_info('calculate_dos_gaussian: Using input sigma = ' // &
                         trim(real2str(sigma_use, '(F8.5)')) // ' Ry', __FILE__, __LINE__)
    end if
 
@@ -2645,14 +2717,18 @@ subroutine calculate_dos_gaussian(this)
    nbands = size(this%eigenvalues, 1)
    
    ! DEBUG: Check k-point weights sum
-   kweight_sum = sum(this%k_weights)
+   if (this%k_mesh_distributed_active) then
+      kweight_sum = sum(this%k_weights(this%k_start:this%k_end))
+   else
+      kweight_sum = sum(this%k_weights)
+   end if
    
-   call g_logger%info('calculate_dos_gaussian: nbands = ' // trim(int2str(nbands)) // &
-                     ', nk_total = ' // trim(int2str(this%nk_total)) // &
+   call root_info('calculate_dos_gaussian: nbands = ' // trim(int2str(nbands)) // &
+                     ', nk_local = ' // trim(int2str(size(this%eigenvalues, 2))) // &
                      ', k_weights sum = ' // trim(real2str(kweight_sum, '(F12.8)')), __FILE__, __LINE__)
    
    ! DEBUG: Check eigenvalue array size
-   call g_logger%info('calculate_dos_gaussian: eigenvalues array size = ' // &
+   call root_info('calculate_dos_gaussian: eigenvalues array size = ' // &
                      trim(int2str(size(this%eigenvalues, 1))) // ' x ' // &
                      trim(int2str(size(this%eigenvalues, 2))), __FILE__, __LINE__)
 
@@ -2662,9 +2738,10 @@ subroutine calculate_dos_gaussian(this)
       local_sum = 0.0_rp
 
 !$OMP PARALLEL DO PRIVATE(i_k, i_band, weight, gaussian_factor) REDUCTION(+:local_sum) &
-!$OMP& SCHEDULE(STATIC) IF(this%nk_total > 100)
-      do i_k = 1, this%nk_total
-         weight = this%k_weights(i_k)
+!$OMP& SCHEDULE(STATIC) IF(size(this%eigenvalues, 2) > 100)
+      do i_k = 1, size(this%eigenvalues, 2)
+         i_k_global = local_k_index_to_global(this, i_k)
+         weight = this%k_weights(i_k_global)
          do i_band = 1, nbands
             gaussian_factor = exp(-((energy - this%eigenvalues(i_band, i_k))**2) / (2.0_rp * sigma_squared))
             gaussian_factor = gaussian_factor / (sigma_use * sqrt(2.0_rp * 3.141592653589793_rp))
@@ -2675,6 +2752,12 @@ subroutine calculate_dos_gaussian(this)
       this%total_dos(i_energy) = local_sum
    end do
 
+#ifdef USE_MPI
+   if (this%k_mesh_distributed_active) then
+      call MPI_ALLREDUCE(MPI_IN_PLACE, this%total_dos, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+   end if
+#endif
+
    ! DEBUG: Check DOS integral WITHOUT normalization first
    dos_integral = 0.0_rp
    do i_energy = 1, this%n_energy_points - 1
@@ -2682,7 +2765,7 @@ subroutine calculate_dos_gaussian(this)
                                    (this%dos_energy_grid(i_energy+1) - this%dos_energy_grid(i_energy))
    end do
    
-   call g_logger%info('calculate_dos_gaussian: Raw DOS (before norm) integrates to ' // &
+   call root_info('calculate_dos_gaussian: Raw DOS (before norm) integrates to ' // &
                      trim(real2str(dos_integral, '(F12.6)')) // ' (should be ' // trim(int2str(nbands)) // ')', &
                      __FILE__, __LINE__)
    
@@ -2691,16 +2774,16 @@ subroutine calculate_dos_gaussian(this)
       norm_factor = 1.0_rp ! real(nbands, rp) / dos_integral
       this%total_dos = this%total_dos * norm_factor
       
-      call g_logger%info('calculate_dos_gaussian: DOS normalized by factor ' // &
+      call root_info('calculate_dos_gaussian: DOS normalized by factor ' // &
                         trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
-      call g_logger%info('calculate_dos_gaussian: DOS integrates to ' // &
+      call root_info('calculate_dos_gaussian: DOS integrates to ' // &
                         trim(real2str(dos_integral * norm_factor, '(F10.4)')) // &
                         ' (should be ' // trim(int2str(nbands)) // ')', __FILE__, __LINE__)
    else
       call g_logger%error('calculate_dos_gaussian: DOS integral is zero!', __FILE__, __LINE__)
    end if
 
-   call g_logger%info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
+   call root_info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
 end subroutine calculate_dos_gaussian
 
    !---------------------------------------------------------------------------
@@ -3145,7 +3228,7 @@ end subroutine calculate_dos_gaussian
    subroutine project_dos_orbitals(this)
       class(reciprocal), intent(inout) :: this
 
-      call g_logger%info('project_dos_orbitals: Starting orbital projection calculation', __FILE__, __LINE__)
+      call root_info('project_dos_orbitals: Starting orbital projection calculation', __FILE__, __LINE__)
 
       ! Use tetrahedron or Gaussian method based on dos_method
       if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
@@ -3162,7 +3245,7 @@ end subroutine calculate_dos_gaussian
    !---------------------------------------------------------------------------
 subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
-   integer :: ik, ib, ie, iorb, i, isite
+   integer :: ik, ik_global, ib, ie, iorb, i, isite
    integer :: n_orb_per_spin, orb_start, site_orb_start, n_orb_site
    integer :: lstart(4), lend(4)
    real(rp) :: weight, orbital_char, energy
@@ -3178,7 +3261,7 @@ subroutine project_dos_orbitals_gaussian(this)
    real(rp) :: mx_char, my_char, mz_char, local_char
    real(rp) :: axis(3)
 
-   call g_logger%info('project_dos_orbitals_gaussian: Starting projection', __FILE__, __LINE__)
+   call root_info('project_dos_orbitals_gaussian: Starting projection', __FILE__, __LINE__)
 
    ! Determine sigma (same as in calculate_dos_gaussian, already in Ry)
    if (this%gaussian_sigma < 0.001_rp) then
@@ -3234,7 +3317,7 @@ subroutine project_dos_orbitals_gaussian(this)
    lend = [1, 4, 9, 16]
 
    ! Diagnostic logging
-   call g_logger%info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
+   call root_info('project_dos_orbitals_gaussian: n_sites = ' // trim(int2str(this%n_sites)) // &
                      ', nbands = ' // trim(int2str(nbands)) // &
                      ', max_orb_channels = ' // trim(int2str(this%max_orbs)) // &
                      ', eigenvector size = ' // trim(int2str(size(this%eigenvectors, 1))), __FILE__, __LINE__)
@@ -3249,7 +3332,8 @@ subroutine project_dos_orbitals_gaussian(this)
    do ie = 1, this%n_energy_points
       energy = this%dos_energy_grid(ie)  ! Already in Ry
 
-      do ik = 1, this%nk_total
+      do ik = 1, size(this%eigenvalues, 2)
+         ik_global = local_k_index_to_global(this, ik)
          do ib = 1, nbands  ! Loop over all bands, not just max_orb_channels
             ! Skip if eigenvalue is far from current energy
             if (abs(this%eigenvalues(ib, ik) - energy) > 5.0_rp * sigma_use) cycle
@@ -3261,7 +3345,7 @@ subroutine project_dos_orbitals_gaussian(this)
             if (abs(gaussian_weight) < 1.0e-10_rp) cycle
 
             ! Apply k-point weight
-            weight = gaussian_weight * this%k_weights(ik)
+            weight = gaussian_weight * this%k_weights(ik_global)
 
             do isite = 1, this%n_sites
                ! Site-blocked layout: eigenvectors are [site1(18), site2(18), ...]
@@ -3297,8 +3381,18 @@ subroutine project_dos_orbitals_gaussian(this)
       end do
    end do
 
+#ifdef USE_MPI
+   if (this%k_mesh_distributed_active) then
+      call MPI_ALLREDUCE(MPI_IN_PLACE, this%projected_dos, product(shape(this%projected_dos)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, this%projected_dos_moments, product(shape(this%projected_dos_moments)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_mx_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_my_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_mz_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+   end if
+#endif
+
    ! Normalize projected DOS so integrated sum over projections equals nbands
-   call g_logger%info('project_dos_orbitals_gaussian: Projection completed (raw)', __FILE__, __LINE__)
+   call root_info('project_dos_orbitals_gaussian: Projection completed (raw)', __FILE__, __LINE__)
    if (this%n_energy_points > 2) then
       proj_integral = 0.0_rp
       do iei = 1, this%n_energy_points - 1
@@ -3310,7 +3404,7 @@ subroutine project_dos_orbitals_gaussian(this)
       if (abs(proj_integral) > 1.0e-12_rp) then
          norm_factor = 1.0_rp ! real(nbands, rp) / proj_integral
          this%projected_dos = this%projected_dos * norm_factor
-         call g_logger%info('project_dos_orbitals_gaussian: Normalized projected DOS by factor ' // trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
+         call root_info('project_dos_orbitals_gaussian: Normalized projected DOS by factor ' // trim(real2str(norm_factor, '(F10.6)')), __FILE__, __LINE__)
       else
          call g_logger%warning('project_dos_orbitals_gaussian: projected DOS integral is zero, skipping normalization', __FILE__, __LINE__)
       end if
@@ -3318,7 +3412,7 @@ subroutine project_dos_orbitals_gaussian(this)
       ! Diagnostic: check mid-energy ratio after normalization
       ie = this%n_energy_points / 2
       if (abs(this%total_dos(ie)) > 1.0e-12_rp) then
-         call g_logger%info('project_dos_orbitals_gaussian: At mid-energy, proj/total ratio (post-norm) = ' // &
+         call root_info('project_dos_orbitals_gaussian: At mid-energy, proj/total ratio (post-norm) = ' // &
             trim(real2str(sum(this%projected_dos(:, :, :, ie)) / this%total_dos(ie), '(F10.6)')), __FILE__, __LINE__)
       end if
    end if
@@ -3350,6 +3444,47 @@ end subroutine project_dos_orbitals_gaussian
          axis = [0.0_rp, 0.0_rp, 1.0_rp]
       end if
    end subroutine get_site_spin_axis
+
+#ifdef USE_MPI
+   subroutine sync_lattice_ldm(lattice_obj)
+      use lattice_mod
+      type(lattice), intent(inout) :: lattice_obj
+      real(rp), allocatable :: ldm_comm(:, :, :, :)
+      integer :: max_flat_ldm, local_flat
+      integer :: na_glob, plusbulk, lcount_ldm, l, ispin
+
+      max_flat_ldm = (2*lmax_basis + 1)*(2*lmax_basis + 1)
+      allocate(ldm_comm(lattice_obj%nrec, lmax_basis + 1, 2, max_flat_ldm))
+      ldm_comm(:, :, :, :) = 0.0_rp
+      do na_glob = 1, lattice_obj%nrec
+         plusbulk = lattice_obj%nbulk + na_glob
+         call lattice_obj%symbolic_atoms(plusbulk)%potential%flatten_ldm()
+         lcount_ldm = min(lattice_obj%symbolic_atoms(plusbulk)%potential%lmax, lmax_basis) + 1
+         do l = 1, lcount_ldm
+            local_flat = (2*l - 1)*(2*l - 1)
+            do ispin = 1, 2
+               ldm_comm(na_glob, l, ispin, 1:local_flat) = &
+                  lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat)
+            end do
+         end do
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm, product(shape(ldm_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do na_glob = 1, lattice_obj%nrec
+         plusbulk = lattice_obj%nbulk + na_glob
+         lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(:, :, :) = 0.0_rp
+         lcount_ldm = min(lattice_obj%symbolic_atoms(plusbulk)%potential%lmax, lmax_basis) + 1
+         do l = 1, lcount_ldm
+            local_flat = (2*l - 1)*(2*l - 1)
+            do ispin = 1, 2
+               lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat) = &
+                  ldm_comm(na_glob, l, ispin, 1:local_flat)
+            end do
+         end do
+         call lattice_obj%symbolic_atoms(plusbulk)%potential%expand_ldm()
+      end do
+      deallocate(ldm_comm)
+   end subroutine sync_lattice_ldm
+#endif
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -3672,13 +3807,13 @@ subroutine calculate_band_moments(this)
       real(rp), allocatable :: energy_grid_ry(:)
       real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
-   call g_logger%info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
-   call g_logger%info('calculate_band_moments: DEBUG - this%auto_find_fermi = ' // &
-                     merge('TRUE ', 'FALSE', this%auto_find_fermi) // &
-                     ', this%total_electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
-                     __FILE__, __LINE__)
-   call g_logger%info('calculate_band_moments: DEBUG - Fermi level on entry = ' // &
-                     trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
+   call root_info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
+   call root_info('calculate_band_moments: DEBUG - this%auto_find_fermi = ' // &
+                  merge('TRUE ', 'FALSE', this%auto_find_fermi) // &
+                  ', this%total_electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
+                  __FILE__, __LINE__)
+   call root_info('calculate_band_moments: DEBUG - Fermi level on entry = ' // &
+                  trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry', __FILE__, __LINE__)
 
    if (this%total_electrons <= 1.0e-3_rp) then
       if (this%lattice%nbulk_bulk > 0) then
@@ -3919,9 +4054,9 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
    real(rp), parameter :: eV_to_Ry = 0.073498618_rp
    real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
-   call g_logger%info('find_fermi_level_from_dos: Finding Fermi level for ' // &
-                     trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
-                     trim(real2str(this%temperature, '(F 8.5)')) // ' K', __FILE__, __LINE__)
+   call root_info('find_fermi_level_from_dos: Finding Fermi level for ' // &
+                  trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
+                  trim(real2str(this%temperature, '(F 8.5)')) // ' K', __FILE__, __LINE__)
 
    if (.not. allocated(this%total_dos)) then
       call g_logger%error('find_fermi_level_from_dos: Total DOS not calculated', __FILE__, __LINE__)
@@ -3952,7 +4087,7 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
 
       if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then
          fermi_level = e_mid
-         call g_logger%info('  Bisection converged at iteration ' // trim(int2str(ie)), __FILE__, __LINE__)
+         call root_info('  Bisection converged at iteration ' // trim(int2str(ie)), __FILE__, __LINE__)
          exit
       else if (electrons_at_e < total_electrons) then
          e_min = e_mid
@@ -3969,17 +4104,17 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
 
    ! Final check
    electrons_at_e = this%integrate_dos_up_to_energy(fermi_level, kT)
-   call g_logger%info('find_fermi_level_from_dos: Found Fermi level at ' // &
-                     trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
-                     trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
+   call root_info('find_fermi_level_from_dos: Found Fermi level at ' // &
+                  trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
+                  trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
    
    ! DEBUG: Check total DOS integral
-   call g_logger%info('find_fermi_level_from_dos: DEBUG - Checking DOS integral...', __FILE__, __LINE__)
-   call g_logger%info('  Total electrons requested: ' // trim(real2str(total_electrons, '(F10.6)')), __FILE__, __LINE__)
-   call g_logger%info('  Total electrons found: ' // trim(real2str(electrons_at_e, '(F10.6)')), __FILE__, __LINE__)
-   call g_logger%info('  Error: ' // trim(real2str(electrons_at_e - total_electrons, '(F10.6)')) // &
-                     ' (' // trim(real2str(100.0_rp*(electrons_at_e - total_electrons)/total_electrons, '(F6.3)')) // '%)', &
-                     __FILE__, __LINE__)
+   call root_info('find_fermi_level_from_dos: DEBUG - Checking DOS integral...', __FILE__, __LINE__)
+   call root_info('  Total electrons requested: ' // trim(real2str(total_electrons, '(F10.6)')), __FILE__, __LINE__)
+   call root_info('  Total electrons found: ' // trim(real2str(electrons_at_e, '(F10.6)')), __FILE__, __LINE__)
+   call root_info('  Error: ' // trim(real2str(electrons_at_e - total_electrons, '(F10.6)')) // &
+                  ' (' // trim(real2str(100.0_rp*(electrons_at_e - total_electrons)/total_electrons, '(F6.3)')) // '%)', &
+                  __FILE__, __LINE__)
 end function find_fermi_level_from_dos
 
 
@@ -4036,7 +4171,9 @@ end function integrate_dos_up_to_energy
       character(len=256) :: proj_filename
       real(rp), parameter :: eV_to_Ry = 0.073498618_rp
 
-      call g_logger%info('write_dos_to_file: Writing DOS to ' // trim(filename), __FILE__, __LINE__)
+      if (rank /= 0) return
+
+      call root_info('write_dos_to_file: Writing DOS to ' // trim(filename), __FILE__, __LINE__)
 
       ! Write total DOS
       open(newunit=unit, file=trim(filename), status='replace', action='write')
@@ -4062,7 +4199,7 @@ end function integrate_dos_up_to_energy
       ! Write projected DOS if available
       if (allocated(this%projected_dos)) then
          proj_filename = 'projected_dos.dat'
-         call g_logger%info('write_dos_to_file: Writing projected DOS to ' // trim(proj_filename), __FILE__, __LINE__)
+         call root_info('write_dos_to_file: Writing projected DOS to ' // trim(proj_filename), __FILE__, __LINE__)
 
          open(newunit=unit, file=trim(proj_filename), status='replace', action='write')
 
@@ -4085,13 +4222,13 @@ end function integrate_dos_up_to_energy
          end do
 
          close(unit)
-         call g_logger%info('write_dos_to_file: Projected DOS written to file', __FILE__, __LINE__)
+         call root_info('write_dos_to_file: Projected DOS written to file', __FILE__, __LINE__)
       end if
 
       ! Write band moments if available
       if (allocated(this%band_moments)) then
          proj_filename = 'band_moments.dat'
-         call g_logger%info('write_dos_to_file: Writing band moments to ' // trim(proj_filename), __FILE__, __LINE__)
+         call root_info('write_dos_to_file: Writing band moments to ' // trim(proj_filename), __FILE__, __LINE__)
 
          open(newunit=unit, file=trim(proj_filename), status='replace', action='write')
 
@@ -4123,10 +4260,10 @@ end function integrate_dos_up_to_energy
          end do
 
          close(unit)
-         call g_logger%info('write_dos_to_file: Band moments written to file', __FILE__, __LINE__)
+         call root_info('write_dos_to_file: Band moments written to file', __FILE__, __LINE__)
       end if
 
-      call g_logger%info('write_dos_to_file: DOS written to file', __FILE__, __LINE__)
+      call root_info('write_dos_to_file: DOS written to file', __FILE__, __LINE__)
    end subroutine write_dos_to_file
 
    !---------------------------------------------------------------------------
@@ -4256,7 +4393,7 @@ end function integrate_dos_up_to_energy
       ! Orbital indexing: 
       ! iorb = 1 (s, 1 orbital), iorb = 2 (p, 3 orbitals), iorb = 3 (d, 5 orbitals)
       
-      call g_logger%info('calculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS', __FILE__, __LINE__)
+      call root_info('calculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS', __FILE__, __LINE__)
       
       ! Initialize all LDM to zero
       do isite = 1, lattice_obj%nrec
@@ -4273,7 +4410,7 @@ end function integrate_dos_up_to_energy
       end do
       
       ! Print LDM for debugging
-      call g_logger%info('calculate_ldm_from_projected_dos: LDM calculation complete', __FILE__, __LINE__)
+      call root_info('calculate_ldm_from_projected_dos: LDM calculation complete', __FILE__, __LINE__)
       
    end subroutine calculate_ldm_from_projected_dos
 
@@ -4294,7 +4431,7 @@ end function integrate_dos_up_to_energy
       type(lattice), intent(inout) :: lattice_obj
       
       ! Local variables
-      integer :: ik, ib, isite, alpha, beta, iorb, norb_l
+      integer :: ik, ik_global, ib, isite, alpha, beta, iorb, norb_l
       integer :: ispin, basis_offset, site_offset, n_orb_site, n_orb_per_spin
       real(rp) :: kweight, fermi_occ
       complex(rp), allocatable :: DM(:,:)
@@ -4303,7 +4440,7 @@ end function integrate_dos_up_to_energy
       real(rp) :: trace_tot, trace_up, trace_dn, max_imag
       integer :: idx_a, idx_b
 
-      call g_logger%info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
+      call root_info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
 
       nbands = size(this%eigenvalues, 1)
       nsites = lattice_obj%nrec
@@ -4329,8 +4466,9 @@ end function integrate_dos_up_to_energy
 
       ! Accumulate density matrix per site
       ! Loop order: k-points -> sites -> bands for better cache locality
-      do ik = 1, this%nk_total
-         kweight = this%k_weights(ik)
+      do ik = 1, size(this%eigenvalues, 2)
+         ik_global = local_k_index_to_global(this, ik)
+         kweight = this%k_weights(ik_global)
          
          do isite = 1, nsites
             ! Reset DM for this site at this k-point
@@ -4353,7 +4491,7 @@ end function integrate_dos_up_to_energy
             end do ! bands
             
             ! Diagnostics: check DM properties for first k-point
-            if (ik == 1) then
+            if (ik_global == 1) then
                trace_tot = 0.0_rp
                trace_up = 0.0_rp
                trace_dn = 0.0_rp
@@ -4371,7 +4509,7 @@ end function integrate_dos_up_to_energy
                   end if
                end do
                
-               call g_logger%info('calculate_ldm_from_eigenvectors: DM diagnostics site=' // trim(int2str(isite)) // &
+               call root_info('calculate_ldm_from_eigenvectors: DM diagnostics site=' // trim(int2str(isite)) // &
                                  ', trace_tot=' // trim(real2str(trace_tot, '(F10.6)')) // &
                                  ', trace_up=' // trim(real2str(trace_up, '(F10.6)')) // &
                                  ', trace_dn=' // trim(real2str(trace_dn, '(F10.6)')) // &
@@ -4408,8 +4546,14 @@ end function integrate_dos_up_to_energy
          end do ! sites
       end do ! k-points
 
+#ifdef USE_MPI
+      if (this%k_mesh_distributed_active) then
+         call sync_lattice_ldm(lattice_obj)
+      end if
+#endif
+
       deallocate(DM)
-      call g_logger%info('calculate_ldm_from_eigenvectors: Eigenvector-based 18x18 DM -> ldm complete', __FILE__, __LINE__)
+      call root_info('calculate_ldm_from_eigenvectors: Eigenvector-based 18x18 DM -> ldm complete', __FILE__, __LINE__)
       
    end subroutine calculate_ldm_from_eigenvectors
 end module reciprocal_mod
