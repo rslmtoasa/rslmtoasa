@@ -1,7 +1,8 @@
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugins)
 file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
-option(BUILD_ONEMKL_PLUGIN "Build the oneMKL sparse backend plugin when oneMKL is available" ON)
+include(CheckLanguage)
+
 set(ONEMKL_ROOT "" CACHE PATH "Root directory of an Intel oneMKL installation")
 
 add_library(rslmto_cpu_sparse_plugin SHARED
@@ -29,6 +30,47 @@ if(ENABLE_OPENMP)
   find_package(OpenMP QUIET COMPONENTS C)
   if(OpenMP_C_FOUND)
     target_link_libraries(rslmto_openmp_sparse_plugin PRIVATE OpenMP::OpenMP_C)
+  endif()
+endif()
+
+if(BUILD_CUDA_PLUGIN)
+  check_language(CUDA)
+  if(CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+    find_package(CUDAToolkit QUIET)
+
+    if(CUDAToolkit_FOUND)
+      add_library(rslmto_cuda_sparse_plugin SHARED
+        cuda_sparse_plugin.cu
+      )
+
+      target_link_libraries(rslmto_cuda_sparse_plugin PRIVATE
+        CUDA::cudart
+        ${BLAS_LIBRARIES}
+        ${LAPACK_LIBRARIES}
+      )
+
+      target_include_directories(rslmto_cuda_sparse_plugin PRIVATE
+        ${CMAKE_SOURCE_DIR}/source
+      )
+
+      set_target_properties(rslmto_cuda_sparse_plugin PROPERTIES
+        OUTPUT_NAME rslmto_cuda_sparse_plugin
+        PREFIX "lib"
+        CUDA_STANDARD 14
+        CUDA_STANDARD_REQUIRED ON
+      )
+
+      target_compile_definitions(rslmto_cuda_sparse_plugin PRIVATE
+        RSLMTO_CUDA_PLUGIN=1
+      )
+
+      message(STATUS "Building CUDA sparse plugin with compiler: ${CMAKE_CUDA_COMPILER}")
+    else()
+      message(STATUS "CUDA sparse plugin disabled: CUDAToolkit not found.")
+    endif()
+  else()
+    message(STATUS "CUDA sparse plugin disabled: no CUDA compiler detected.")
   endif()
 endif()
 
