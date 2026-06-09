@@ -85,12 +85,28 @@ Plugin target:
 
 - `rslmto_cuda_sparse_plugin`
 
-Current intended rollout:
+Current implemented status:
 
-- operator upload/apply: CUDA path
-- block Chebyshev: CUDA backend entrypoint
-- block Lanczos: CUDA backend entrypoint
-- transport: not yet completed
+- operator upload: implemented
+- operator apply: implemented
+- scalar Lanczos: implemented in plugin
+- block Lanczos: implemented in plugin
+- block Chebyshev: implemented in plugin
+- transport: implemented in plugin
+
+Current CUDA apply path:
+
+- lowers block operators to scalar CSR internally
+- uses cuSPARSE `SpMV` over each block column
+- keeps the public ABI block-valued and complex-valued
+- supports `trans_mode='n'` and `trans_mode='c'`
+- supports complex FP64 only
+
+Current recurrence path:
+
+- uses the same cuSPARSE-backed operator application inside plugin-native recurrence loops
+- keeps Fortran physics consumers unchanged by returning `a`, `b2`, `a_b`, `b2_b`, `mu_n`, and `mu_nm_stochastic`
+- currently keeps recurrence orchestration and small dense block algebra inside the plugin implementation
 
 The first CUDA backend remains:
 

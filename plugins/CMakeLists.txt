@@ -46,6 +46,8 @@ if(BUILD_CUDA_PLUGIN)
 
       target_link_libraries(rslmto_cuda_sparse_plugin PRIVATE
         CUDA::cudart
+        CUDA::cusparse
+        CUDA::cublas
         ${BLAS_LIBRARIES}
         ${LAPACK_LIBRARIES}
       )
