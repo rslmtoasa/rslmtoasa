@@ -5,6 +5,8 @@ add_library(${PROJECT_NAME} STATIC
     array.f90
     basis.f90
     bands.f90
+    backend_plugin_loader.c
+    block_sparse_operator.f90
     calculation.f90
     charge.f90
     conductivity.f90
@@ -28,6 +30,7 @@ add_library(${PROJECT_NAME} STATIC
     potential.f90
     precision.f90
     reciprocal.f90
+    recursion_backend.f90
     recursion.f90
     report.f90
     safe_alloc.f90

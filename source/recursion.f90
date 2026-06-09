@@ -29,6 +29,7 @@ module recursion_mod
    use math_mod
    use string_mod
    use logger_mod, only: g_logger
+   use recursion_backend_mod, only: recursion_backend_context
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -75,6 +76,7 @@ module recursion_mod
       complex(rp), dimension(:, :), allocatable :: v
       !> Variable to save T(H)
       complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
+      type(recursion_backend_context) :: backend
    contains
       procedure :: hop
       procedure :: crecal
@@ -172,6 +174,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine destructor(this)
       type(recursion) :: this
+      call this%backend%finalize()
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%a)) call g_safe_alloc%deallocate('recursion.a', this%a)
       if (allocated(this%b2)) call g_safe_alloc%deallocate('recursion.b2', this%b2)
@@ -243,67 +246,7 @@ contains
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       character :: c_or_n 
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
-      hblocksize = nb
-      nat = this%lattice%kk
-
-      psi_out(:, :, :) = (0.0d0, 0.0d0)
-
-      ! NOT YET IMPLEMENTED THE VELOCITY OPERATOR FOR THE LOCAL HAMILTONIAN
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-      !   !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
-      !      this%idum(k) = this%izero(k)
-      !      ih = this%lattice%iz(k)
-      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-      !      if (this%izero(k) /= 0) then
-      !         locham = this%hamiltonian%hall(1:18, 1:18, 1, k) + this%hamiltonian%lsham(1:18, 1:18, ih)
-      !         call zgemm('n', 'n', nb, nb, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
-      !      end if
-      !      if (nr >= 2) then
-      !         do ineigh = 2, nr ! Loop on the neighbouring
-      !            nnmap = this%lattice%nn(k, ineigh)
-      !            if (nnmap /= 0) then
-      !               if (this%izero(nnmap) /= 0) then
-      !                  call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%hall(:, :, ineigh, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-      !                  this%idum(k) = 1
-      !               end if
-      !            end if
-      !         end do ! End of loop in the neighbouring
-      !      end if
-      !      ! Do the scaling and shifting
-      !      psi_out(:, :, k) = psi_out(:, :, k) - b*psi_in(:, :, k)
-      !      psi_out(:, :, k) = psi_out(:, :, k)/a
-      !   end do ! End of loop in the neighbouring
-      !   !$omp end parallel do
-      !end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            !!!!! Probably useless because the onsite term is null. Here for consistency only
-            call zgemm('n', 'n', nb, nb, nb, cone, v_op(:, :, 1, ih), nb, psi_in(:, :, k), nb, cone, psi_out(:, :, k), nb) 
-            !!!!! Probably useless because the onsite term is null. Here for consistency only
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm(c_or_n, 'n', nb, nb, nb, cone, v_op(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
+      call this%backend%apply_velocity('v_generic', v_op, psi_in, psi_out, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), c_or_n)
    end subroutine velo_vec_matmul
 
    subroutine velo_hoh_vec_matmul(this, v_op, vo_op, psi_in, psi_out)
@@ -312,127 +255,7 @@ contains
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       complex(rp), dimension(:, :, :, :), intent(in) :: v_op
       complex(rp), dimension(:, :, :, :), intent(in) :: vo_op
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
-
-      hblocksize = nb
-      nat = this%lattice%kk
-
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-      !   !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
-      !      this%idum(k) = this%izero(k)
-      !      ih = this%lattice%iz(k)
-      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-      !      if (this%izero(k) /= 0) then
-      !         locham = this%hamiltonian%hall(1:18, 1:18, 1, k)
-      !         call zgemm('n', 'n', nb, nb, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, this%psi2(:, :, k), 18)
-      !         call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%lsham(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%socpsi(:, :, k), 18)
-      !         call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%enim(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%enupsi(:, :, k), 18)
-      !      end if
-      !      if (nr >= 2) then
-      !         do ineigh = 2, nr ! Loop on the neighbouring
-      !            nnmap = this%lattice%nn(k, ineigh)
-      !            if (nnmap /= 0) then
-      !               if (this%izero(nnmap) /= 0) then
-      !                  call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%hall(:, :, ineigh, k), 18, psi_in(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
-      !                  this%idum(k) = 1
-      !               end if
-      !            end if
-      !         end do ! End of loop in the neighbouring
-      !      end if
-      !   end do ! End of loop in the neighbouring
-      !   !$omp end parallel do
-      !end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            !locham = this%hamiltonian%ee(1:18, 1:18, 1, ih)
-            call zgemm('n', 'n', nb, nb, nb, cone, v_op(:, :, 1, ih), nb, psi_in(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, 1, ih), nb, psi_in(:, :, k), nb, cone, this%psi1(:, :, k), nb)
-            !call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%enim(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%enupsi(:, :, k), 18)
-            !call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%lsham(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%socpsi(:, :, k), 18)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, v_op(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = this%idum(:)
-
-      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-      !   !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
-      !      this%idum(k) = this%izero(k)
-      !      ih = this%lattice%iz(k)
-      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-      !      if (this%izero(k) /= 0) then
-      !         call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%hallo(:, :, 1, k), 18, this%psi2(:, :, k), 18, cone, this%hohpsi(:, :, k), 18)
-      !      end if
-      !      if (nr >= 2) then
-      !         do ineigh = 2, nr ! Loop on the neighbouring
-      !            nnmap = this%lattice%nn(k, ineigh)
-      !            if (nnmap /= 0) then
-      !               if (this%izero(nnmap) /= 0) then
-      !                  call zgemm('n', 'n', nb, nb, 18, cone, this%hamiltonian%hallo(:, :, ineigh, k), 18, this%psi2(:, :, nnmap), 18, cone, this%hohpsi(:, :, k), 18)
-      !                  this%idum(k) = 1
-      !               end if
-      !            end if
-      !         end do ! End of loop in the neighbouring
-      !      end if
-      !   end do ! End of loop in the neighbouring
-      !   !$omp end parallel do
-      !end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k) ! Atom type
-         nr = this%lattice%nn(k, 1) ! Number of neighbours
-         if (this%izero(k) /= 0) then
-         !   call zgemm('n', 'n', nb, nb, 18, cone, vo_op(:, :, 1, ih), 18, this%psi2(:, :, k), 18, cone, this%hohpsi(:, :, k), 18)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, vo_op(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%hohpsi(:, :, k), nb)
-                     this%idum(k) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
-      ! H = h - hoh + e_nu + l.s
-      psi_out(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
-
-      this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
-      this%psi1(:, :, :) = (0.0_rp, 0.0_rp)
-
+      call this%backend%apply_velocity_hoh('v_generic', 'vo_generic', v_op, vo_op, psi_in, psi_out, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk))
    end subroutine velo_hoh_vec_matmul
 
    subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
@@ -440,127 +263,7 @@ contains
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       real(rp), intent(in) :: a, b
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
-
-      hblocksize = nb
-      nat = this%lattice%kk
-
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k)
-               call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih)
-            call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = this%idum(:)
-
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, 1, k), nb, this%psi2(:, :, k), nb, cone, this%hohpsi(:, :, k), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, ineigh, k), nb, this%psi2(:, :, nnmap), nb, cone, this%hohpsi(:, :, k), nb)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k) ! Atom type
-         nr = this%lattice%nn(k, 1) ! Number of neighbours
-         if (this%izero(k) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, 1, ih), nb, this%psi2(:, :, k), nb, cone, this%hohpsi(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, ineigh, ih), nb, this%psi2(:, :, nnmap), nb, cone, this%hohpsi(:, :, k), nb)
-                     this%idum(k) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
-      ! H = h - hoh + e_nu + l.s
-      psi_out(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
-
-      ! Do the scaling and shifting
-      psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
-      psi_out(:, :, :) = psi_out(:, :, :)/a
-     
-      this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
+      call this%backend%apply_hamiltonian_hoh(psi_in, psi_out, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), a, b)
    end subroutine ham_hoh_vec_matmul
 
    subroutine ham_vec_matmul(this, psi_in, psi_out, a, b)
@@ -568,71 +271,14 @@ contains
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       real(rp), intent(in) :: a, b
-      ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
-      hblocksize = nb
-      nat = this%lattice%kk
-
-      psi_out(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
-               call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, psi_out(:, :, k), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
-            call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, psi_out(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-      ! Do the scaling and shifting
-      psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
-      psi_out(:, :, :) = psi_out(:, :, :)/a 
+      call this%backend%apply_hamiltonian(psi_in, psi_out, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), a, b)
    end subroutine ham_vec_matmul
 
    subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
       integer :: ineigh, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, loop_over, ie, lmax, ntype
+      integer, allocatable :: type_sites(:)
       complex(rp), dimension(nb, nb) :: dum, dum1, dum2
       complex(rp), dimension(:, :), allocatable :: S_op, L_op
       complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
@@ -643,6 +289,7 @@ contains
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10) :: g0
       real(rp) :: a, b, rng, emin_win, emax_win
       complex(rp) :: exp_factor
+      logical :: backend_handled
 
       lmax = lmax_basis
       hblocksize = nb
@@ -752,6 +399,22 @@ contains
       case('random_vec')
          loop_over = this%control%random_vec_num
       end select  
+
+      allocate(type_sites(loop_over))
+      type_sites(:) = 0
+      if (this%control%cond_calctype == 'per_type') then
+         do i = 1, loop_over
+            type_sites(i) = this%lattice%atlist(i)
+         end do
+      end if
+
+      call this%backend%run_transport_stochastic(this%control%cond_ll, merge(1, 2, this%control%cond_calctype == 'per_type'), type_sites, &
+                                                 this%hamiltonian%hoh, a, b, this%hamiltonian%v_a, this%hamiltonian%vo_a, this%hamiltonian%v_b, &
+                                                 this%hamiltonian%vo_b, this%mu_nm_stochastic, backend_handled)
+      if (backend_handled) then
+         deallocate(type_sites, psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, S_op, L_op)
+         return
+      end if
 
       do i = 1, loop_over
          call random_seed()
@@ -880,6 +543,7 @@ contains
          end do
       end do
 
+      deallocate(type_sites)
       deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, S_op, L_op)
 
    end subroutine compute_moments_stochastic
@@ -1062,126 +726,16 @@ contains
    subroutine hop_b_hoh(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, nr, nnmap, nlimplus1
+      integer :: i
       integer :: ll ! Recursion step
-      integer :: ino ! Atom type
-      integer :: ih ! Atom number in the clust
-      integer, dimension(0:this%lattice%kk) :: idum
       complex(rp), dimension(nb, nb) :: summ
-      complex(rp), dimension(nb, nb) :: locham
-
-      idum(:) = 0
-      this%hpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(i, ino, nr, j, nnmap, locham) schedule(dynamic, 100)
-         do i = 1, this%lattice%nmax ! Loop in the neighbouring
-            idum(i) = this%izero(i)
-            ino = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
-            if (this%izero(i) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ino), nb, this%psi_b(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ino), nb, this%psi_b(:, :, i), nb, cone, this%socpsi(:, :, i), nb)
-            end if
-            if (nr >= 2) then
-               do j = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, j)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
-                        idum(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(i, ih, nr, j, nnmap, locham) schedule(dynamic, 100)
-      do i = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         idum(i) = this%izero(i)
-         ih = this%lattice%iz(i) ! Atom type
-         nr = this%lattice%nn(i, 1) ! Number of neighbours
-         if (this%izero(i) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, 1, ih), nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi_b(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi_b(:, :, i), nb, cone, this%socpsi(:, :, i), nb)
-         end if
-         if (nr >= 2) then
-            do j = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(i, j)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
-                     idum(i) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = idum(:)
-
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(i, ino, nr, j, nnmap, locham) schedule(dynamic, 100)
-         do i = 1, this%lattice%nmax ! Loop in the neighbouring
-            idum(i) = this%izero(i)
-            ino = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
-            if (this%izero(i) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, 1, i), nb, this%hpsi(:, :, i), nb, cone, this%hohpsi(:, :, i), nb)
-            end if
-            if (nr >= 2) then
-               do j = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, j)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, j, i), nb, this%hpsi(:, :, nnmap), nb, cone, this%hohpsi(:, :, i), nb)
-                        idum(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(i, ih, nr, j, nnmap, locham) schedule(dynamic, 100)
-      do i = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         idum(i) = this%izero(i)
-         ih = this%lattice%iz(i) ! Atom type
-         nr = this%lattice%nn(i, 1) ! Number of neighbours
-         if (this%izero(i) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, 1, ih), nb, this%hpsi(:, :, i), nb, cone, this%hohpsi(:, :, i), nb)
-         end if
-         if (nr >= 2) then
-            do j = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(i, j)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, j, ih), nb, this%hpsi(:, :, nnmap), nb, cone, this%hohpsi(:, :, i), nb)
-                     idum(i) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
       summ = 0.0d0
 
-      ! Redefines idum for all clust atoms
+      call this%backend%apply_hamiltonian_hoh(this%psi_b, this%hpsi, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), 1.0_rp, 0.0_rp)
+
       this%irnum = 0
       do i = 1, this%lattice%kk
-         this%izero(i) = idum(i)
+         this%izero(i) = this%idum(i)
          if (this%izero(i) /= 0) then
             this%irnum = this%irnum + 1
             this%irlist(this%irnum) = i
@@ -1190,11 +744,7 @@ contains
 
       !$omp parallel do default(shared) private(i) reduction(+:SUMM) schedule(dynamic, 100)
       do i = 1, this%irnum
-         ! H = h - hoh + e_nu + l.s
-         this%hpsi(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%hohpsi(:, :, this%irlist(i)) + this%enupsi(:, :, this%irlist(i)) + this%socpsi(:, :, this%irlist(i))
-         !
          this%pmn_b(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%pmn_b(:, :, this%irlist(i))
-         !
          call zgemm('c', 'n', nb, nb, nb, cone, this%psi_b(:, :, this%irlist(i)), nb, this%hpsi(:, :, this%irlist(i)), nb, cone, summ, nb)
       end do
       !$omp end parallel do
@@ -1211,75 +761,16 @@ contains
    subroutine hop_b(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
-      integer :: i, j, k, l, m, n, nr, nnmap, nlimplus1
+      integer :: i
       integer :: ll ! Recursion step
-      integer :: ino ! Atom type
-      integer :: ih ! Atom number in the clust
-      integer, dimension(0:this%lattice%kk) :: idum
       complex(rp), dimension(nb, nb) :: summ
-      complex(rp), dimension(nb, nb) :: locham
-
-      idum(:) = 0
-      this%hpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(i, ino, nr, j, nnmap, locham) schedule(dynamic, 100)
-         do i = 1, this%lattice%nmax ! Loop in the neighbouring
-            idum(i) = this%izero(i)
-            ino = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
-            if (this%izero(i) /= 0) then
-               locham = this%hamiltonian%hall(:, :, 1, i) + this%hamiltonian%lsham(:, :, ino)
-               call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
-               !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-               !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
-            end if
-            if (nr >= 2) then
-               do j = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, j)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
-                        idum(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(i, ih, nr, j, nnmap, locham) schedule(dynamic, 100)
-      do i = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         idum(i) = this%izero(i)
-         ih = this%lattice%iz(i) ! Atom type
-         nr = this%lattice%nn(i, 1) ! Number of neighbours
-         if (this%izero(i) /= 0) then
-            locham = this%hamiltonian%ee(:, :, 1, ih) + this%hamiltonian%lsham(:, :, ih)
-            call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
-            !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-            !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
-         end if
-         if (nr >= 2) then
-            do j = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(i, j)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
-                     idum(i) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
       summ = 0.0d0
-      ! Redefines idum for all clust atoms
+
+      call this%backend%apply_hamiltonian(this%psi_b, this%hpsi, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), 1.0_rp, 0.0_rp)
+
       this%irnum = 0
       do i = 1, this%lattice%kk
-         this%izero(i) = idum(i)
+         this%izero(i) = this%idum(i)
          if (this%izero(i) /= 0) then
             this%irnum = this%irnum + 1
             this%irlist(this%irnum) = i
@@ -1288,15 +779,13 @@ contains
 
       !$omp parallel do default(shared) private(i) reduction(+:SUMM) schedule(dynamic, 100)
       do i = 1, this%irnum
-         !do i=1, this%lattice%kk
          this%pmn_b(:, :, this%irlist(i)) = this%hpsi(:, :, this%irlist(i)) - this%pmn_b(:, :, this%irlist(i))
          call zgemm('c', 'n', nb, nb, nb, cone, this%psi_b(:, :, this%irlist(i)), nb, this%hpsi(:, :, this%irlist(i)), nb, cone, summ, nb)
-         !call zgemm(´c´,´n´, nb, nb,18,cone,PSI_B(1,1,irlist(I)),18,Hpsi(1,1,irlist(I)),18,cone,SUMM,18)
       end do
       !$omp end parallel do
 
       this%atemp_b(:, :, ll) = summ
-   end subroutine hop_b
+   end subroutine
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1310,10 +799,35 @@ contains
       integer :: i, ij, j, l, ll, kk, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
+      integer :: n_pairs, workflow_idx
+      integer, allocatable :: site_i(:), site_j(:), variant_id(:)
+      real(rp), allocatable :: a_diag(:,:,:), b2_diag(:,:,:)
+      logical :: backend_handled
 
       integer :: ij_loc
 
       llmax = this%lattice%control%lld
+      n_pairs = end_atom - start_atom + 1
+      if (n_pairs > 0) then
+         allocate(site_i(4*n_pairs), site_j(4*n_pairs), variant_id(4*n_pairs))
+         allocate(a_diag(llmax, nb, 4*n_pairs), b2_diag(llmax, nb, 4*n_pairs))
+         workflow_idx = 0
+         do ij = start_atom, end_atom
+            i = this%lattice%ijpair(ij, 1)
+            j = this%lattice%ijpair(ij, 2)
+            do reci = 1, 4
+               workflow_idx = workflow_idx + 1
+               site_i(workflow_idx) = i
+               site_j(workflow_idx) = j
+               variant_id(workflow_idx) = reci
+            end do
+         end do
+         call this%backend%run_block_lanczos(llmax, site_i, site_j, variant_id, this%hamiltonian%hoh, this%a_b(:, :, :, 1:4*n_pairs), &
+                                             this%b2_b(:, :, :, 1:4*n_pairs), a_diag, b2_diag, backend_handled)
+         deallocate(site_i, site_j, variant_id, a_diag, b2_diag)
+         if (backend_handled) return
+      end if
+
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
       do ij = start_atom, end_atom
          ij_loc = g2l_map(ij)
@@ -1462,11 +976,28 @@ contains
       integer :: i, j, l, ll, kk, m
       integer :: llmax ! Recursion steps
       real(rp) :: rng
+      integer :: n_targets
+      integer, allocatable :: target_sites(:), target_pair(:), target_variant(:)
+      logical :: backend_handled
 
       ! Determine how many atoms each process should handle
       call get_mpi_variables(rank, this%lattice%nrec)
 
       llmax = this%lattice%control%lld
+      n_targets = end_atom - start_atom + 1
+      if (n_targets > 0) then
+         allocate(target_sites(n_targets), target_pair(n_targets), target_variant(n_targets))
+         do i = 1, n_targets
+            target_sites(i) = this%lattice%irec(start_atom + i - 1)
+         end do
+         target_pair(:) = target_sites(:)
+         target_variant(:) = 1
+         call this%backend%run_block_lanczos(llmax, target_sites, target_pair, target_variant, this%hamiltonian%hoh, this%a_b(:, :, :, 1:n_targets), &
+                                             this%b2_b(:, :, :, 1:n_targets), this%a(:, :, 1:n_targets, 1), this%b2(:, :, 1:n_targets, 1), backend_handled)
+         deallocate(target_sites, target_pair, target_variant)
+         if (backend_handled) return
+      end if
+
       !do i=1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
       do i = start_atom, end_atom ! Loop on the number of atoms to be treat self-consistently
          j = this%lattice%irec(i) ! Atom number in the clust file
@@ -1856,64 +1387,10 @@ contains
       class(recursion), intent(inout) :: this
       real(rp), intent(in) :: a, b ! scale and shift
       complex(rp), dimension(nb, nb, this%lattice%kk), intent(in) :: psiref
-      integer :: nat, hblocksize, nlimplus1, k, ih, nr, n, ineigh, nnmap, i
-
-      hblocksize = nb
-      nat = this%lattice%kk
-      nlimplus1 = this%lattice%nmax + 1
+      integer :: n
 
       this%cheb_mom_temp(:, :) = 0.0d0
-
-      ! Write |phi_1>=H|phi_0>
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         do i = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(i) = this%izero(i)
-            ih = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
-            if (this%izero(i) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
-                        this%idum(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-            ! Do the scaling and shifting
-            this%psi1(:, :, i) = this%psi1(:, :, i) - b*this%psi0(:, :, i)
-            this%psi1(:, :, i) = this%psi1(:, :, i)/a
-         end do ! End of loop in the neighbouring
-      end if ! End of local Hamiltonian loop
-
-      ! Write |phi_1>=H|phi_0>
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-         ! Do the scaling and shifting
-         this%psi1(:, :, k) = this%psi1(:, :, k) - b*this%psi0(:, :, k)
-         this%psi1(:, :, k) = this%psi1(:, :, k)/a
-      end do ! End loop in the clust
+      call this%backend%apply_hamiltonian(this%psi0, this%psi1, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), a, b)
 
       ! Write the 1st moment
       do n = 1, this%lattice%kk
@@ -1932,119 +1409,10 @@ contains
       class(recursion), intent(inout) :: this
       real(rp), intent(in) :: a, b ! scale and shift
       complex(rp), dimension(nb, nb, this%lattice%kk), intent(in) :: psiref
-      integer :: nat, hblocksize, nlimplus1, k, ih, nr, n, ineigh, nnmap, i
-
-      hblocksize = nb
-      nat = this%lattice%kk
-      nlimplus1 = this%lattice%nmax + 1
+      integer :: n
 
       this%cheb_mom_temp(:, :) = 0.0d0
-
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write |phi_1>=H|phi_0>
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         do i = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(i) = this%izero(i)
-            ih = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
-            if (this%izero(i) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%socpsi(:, :, i), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
-                        this%idum(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-      end if ! End of local Hamiltonian loop
-
-      ! Write |phi_1>=H|phi_0>
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-         ! Do the scaling and shifting
-         !this%psi1(:, :, k) = this%psi1(:, :, k) - b*this%psi0(:, :, k)
-         !this%psi1(:, :, k) = this%psi1(:, :, k)/a
-      end do ! End loop in the clust
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = this%idum(:)
-
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         do i = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(i) = this%izero(i)
-            ih = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
-            if (this%izero(i) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, 1, i), nb, this%psi1(:, :, i), nb, cone, this%hohpsi(:, :, i), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, ineigh, i), nb, this%psi1(:, :, nnmap), nb, cone, this%hohpsi(:, :, i), nb)
-                        this%idum(i) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-      end if ! End of local Hamiltonian loop
-
-      do i = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         this%idum(i) = this%izero(i)
-         ih = this%lattice%iz(i) ! Atom type
-         nr = this%lattice%nn(i, 1) ! Number of neighbours
-         if (this%izero(i) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, 1, ih), nb, this%psi1(:, :, i), nb, cone, this%hohpsi(:, :, i), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(i, ineigh)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%hohpsi(:, :, i), nb)
-                     this%idum(i) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-
-      ! H = h - hoh + e_nu + l.s
-      this%psi1(:, :, :) = this%psi1(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
-
-      ! Do the scaling and shifting
-      this%psi1(:, :, :) = this%psi1(:, :, :) - b*this%psi0(:, :, :)
-      this%psi1(:, :, :) = this%psi1(:, :, :)/a
+      call this%backend%apply_hamiltonian_hoh(this%psi0, this%psi1, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), a, b)
 
       ! Write the 1st moment
       do n = 1, this%lattice%kk
@@ -2068,16 +1436,41 @@ contains
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
       complex(rp), allocatable, dimension(:, :, :) :: psiref
+      integer :: n_pairs, workflow_idx
+      integer, allocatable :: site_i(:), site_j(:), variant_id(:)
+      logical :: backend_handled
 
       integer :: ij_loc
 
-      allocate(psiref(18, 18, this%lattice%kk))
+      allocate(psiref(nb, nb, this%lattice%kk))
 
       call resolve_chebyshev_window(this, emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
 
       llmax = this%lattice%control%lld
+      n_pairs = end_atom - start_atom + 1
+      if (n_pairs > 0) then
+         allocate(site_i(4*n_pairs), site_j(4*n_pairs), variant_id(4*n_pairs))
+         workflow_idx = 0
+         do ij = start_atom, end_atom
+            i = this%lattice%ijpair(ij, 1)
+            j = this%lattice%ijpair(ij, 2)
+            do reci = 1, 4
+               workflow_idx = workflow_idx + 1
+               site_i(workflow_idx) = i
+               site_j(workflow_idx) = j
+               variant_id(workflow_idx) = reci
+            end do
+         end do
+         call this%backend%run_block_chebyshev(llmax, site_i, site_j, variant_id, this%hamiltonian%hoh, a, b, this%mu_n(:, :, 1:(2*llmax + 2), 1:4*n_pairs), backend_handled)
+         deallocate(site_i, site_j, variant_id)
+         if (backend_handled) then
+            deallocate(psiref)
+            return
+         end if
+      end if
+
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
       do ij = start_atom, end_atom
          ij_loc = g2l_map(ij)
@@ -2184,72 +1577,12 @@ contains
       integer, intent(in) :: i, ll
       real(rp), intent(in) :: a, b
       ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
+      integer :: n
+      complex(rp), dimension(nb, nb) :: dum1, dum2
 
-      hblocksize = nb
-      nat = this%lattice%kk
+      call this%backend%apply_hamiltonian(this%psi1, this%psi2, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), a, b)
+      this%psi2(:, :, :) = 2.0_rp*this%psi2(:, :, :)
 
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
-               call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-            ! Do the scaling and shifting
-            this%psi2(:, :, k) = this%psi2(:, :, k) - b*this%psi1(:, :, k)
-            this%psi2(:, :, k) = this%psi2(:, :, k)/a
-            ! Write 2*H*|phi_1>
-            this%psi2(:, :, k) = 2*this%psi2(:, :, k)
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
-            call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-         ! Do the scaling and shifting
-         this%psi2(:, :, k) = this%psi2(:, :, k) - b*this%psi1(:, :, k)
-         this%psi2(:, :, k) = this%psi2(:, :, k)/a
-         ! Write 2*H*|phi_1>
-         this%psi2(:, :, k) = 2*this%psi2(:, :, k)
-      end do ! End loop in the clust
-      !$omp end parallel do
-
-      ! Write Moments
       dum1(:, :) = (0.0d0, 0.0d0)
       dum2(:, :) = (0.0d0, 0.0d0)
 
@@ -2294,126 +1627,11 @@ contains
       integer, intent(in) :: i, ll
       real(rp), intent(in) :: a, b
       ! Local variables
-      integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(nb, nb) :: dum1, dum2, locham
+      integer :: n
+      complex(rp), dimension(nb, nb) :: dum1, dum2
 
-      hblocksize = nb
-      nat = this%lattice%kk
-
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k)
-               call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih)
-            call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = this%idum(:)
-
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, 1, k), nb, this%psi2(:, :, k), nb, cone, this%hohpsi(:, :, k), nb)
-            end if
-            if (nr >= 2) then
-               do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallo(:, :, ineigh, k), nb, this%psi2(:, :, nnmap), nb, cone, this%hohpsi(:, :, k), nb)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(k, ih, nr, ineigh, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k) ! Atom type
-         nr = this%lattice%nn(k, 1) ! Number of neighbours
-         if (this%izero(k) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, 1, ih), nb, this%psi2(:, :, k), nb, cone, this%hohpsi(:, :, k), nb)
-         end if
-         if (nr >= 2) then
-            do ineigh = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eeo(:, :, ineigh, ih), nb, this%psi2(:, :, nnmap), nb, cone, this%hohpsi(:, :, k), nb)
-                     this%idum(k) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
-      ! H = h - hoh + e_nu + l.s
-      this%psi2(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
-
-      ! Do the scaling and shifting
-      this%psi2(:, :, :) = this%psi2(:, :, :) - b*this%psi1(:, :, :)
-      this%psi2(:, :, :) = this%psi2(:, :, :)/a
-      ! Write 2*H*|phi_1>
-      this%psi2(:, :, :) = 2*this%psi2(:, :, :)
+      call this%backend%apply_hamiltonian_hoh(this%psi1, this%psi2, this%izero(1:this%lattice%kk), this%idum(1:this%lattice%kk), a, b)
+      this%psi2(:, :, :) = 2.0_rp*this%psi2(:, :, :)
 
       ! Write Moments
       dum1(:, :) = (0.0d0, 0.0d0)
@@ -2765,6 +1983,9 @@ contains
       complex(rp), external :: zdotc
 
       integer :: i_loc
+      integer :: n_targets
+      integer, allocatable :: site_i(:), site_j(:), variant_id(:)
+      logical :: backend_handled
 
       hblocksize = nb
       nat = this%lattice%kk
@@ -2774,6 +1995,21 @@ contains
       call resolve_chebyshev_window(this, emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
+
+      n_targets = end_atom - start_atom + 1
+      if (n_targets > 0) then
+         allocate(site_i(n_targets), site_j(n_targets), variant_id(n_targets))
+         do i = 1, n_targets
+            site_i(i) = this%lattice%irec(start_atom + i - 1)
+         end do
+         site_j(:) = site_i(:)
+         variant_id(:) = 1
+         call this%backend%run_block_chebyshev(llmax=this%control%lld, site_i=site_i, site_j=site_j, variant_id=variant_id, &
+                                               hoh_enabled=this%hamiltonian%hoh, a_scale=a, b_shift=b, &
+                                               mu_out=this%mu_n(:, :, 1:(2*this%control%lld + 2), 1:n_targets), handled=backend_handled)
+         deallocate(site_i, site_j, variant_id)
+         if (backend_handled) return
+      end if
 
       do i = start_atom, end_atom ! Loop on the number of atoms to be treat self-consistently by this process
          i_loc = g2l_map(i)
@@ -3187,8 +2423,21 @@ contains
       integer :: i, j, l, ll
       integer :: llmax ! Recursion steps
       integer :: i_loc
+      integer :: n_targets
+      integer, allocatable :: target_sites(:)
+      logical :: backend_handled
 
       llmax = this%lattice%control%lld
+      n_targets = end_atom - start_atom + 1
+      if (n_targets > 0) then
+         allocate(target_sites(n_targets))
+         do i = 1, n_targets
+            target_sites(i) = this%lattice%irec(start_atom + i - 1)
+         end do
+         call this%backend%run_scalar_lanczos(llmax, target_sites, this%hamiltonian%hoh, this%a(:, :, 1:n_targets, 1), this%b2(:, :, 1:n_targets, 1), backend_handled)
+         deallocate(target_sites)
+         if (backend_handled) return
+      end if
 
       !do i=1, this%lattice%nrec ! Loop on the number of atoms to be treat self-consistently
       do i = start_atom, end_atom
@@ -3519,6 +2768,10 @@ contains
             if (associated(this%lattice)) call this%lattice%restore_to_default()
             if (associated(this%en)) call this%en%restore_to_default()
          end if
+      end if
+
+      if (associated(this%hamiltonian) .and. associated(this%control) .and. associated(this%lattice)) then
+         call this%backend%initialize(this%hamiltonian, this%control, this%lattice)
       end if
 
    end subroutine restore_to_default

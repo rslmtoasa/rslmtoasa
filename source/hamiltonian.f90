@@ -38,6 +38,7 @@ module hamiltonian_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
+   use block_sparse_operator_mod, only: block_sparse_operator
    implicit none
 
    private
@@ -90,6 +91,9 @@ module hamiltonian_mod
       character(len=16) :: hubbard_u_potential_form
       !> Sparse Real Space Hamiltonian
       complex(rp), dimension(:, :), allocatable :: h_sparse
+      !> Exported block operators used by recursion backends
+      type(block_sparse_operator) :: exported_h_plain, exported_h_full
+      type(block_sparse_operator) :: exported_v_a, exported_v_b, exported_vo_a, exported_vo_b
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis
       real(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
       !> Enable +U correction when any U/J is provided on symbolic atoms
@@ -120,6 +124,8 @@ module hamiltonian_mod
       procedure :: build_realspace_orbital_velocity_operators
       procedure :: build_realspace_orbital_torque_operators
       procedure :: block_to_sparse
+      procedure :: export_block_operator
+      procedure :: export_velocity_operator
       procedure :: torque_operator_collinear
       procedure :: rs2pao
       procedure :: chbar_nc
@@ -523,6 +529,13 @@ contains
    subroutine restore_to_default(this)
       class(hamiltonian) :: this
 
+      call this%exported_h_plain%clear()
+      call this%exported_h_full%clear()
+      call this%exported_v_a%clear()
+      call this%exported_v_b%clear()
+      call this%exported_vo_a%clear()
+      call this%exported_vo_b%clear()
+
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/nb, nb, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.tmat', this%tmat, (/nb, nb, 3, this%charge%lattice%ntype/))
@@ -666,54 +679,215 @@ contains
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
-       !*************************************************************************
-       !> @brief Constructs the sparse Hamiltonian matrix for a real-space cluster.
-       !>
-       !> This subroutine loops through all cluster atoms and their neighbors to
-       !> assemble the sparse Hamiltonian matrix in a block-wise manner. The matrix
-       !> size is determined by the number of atoms in the cluster and their spd basis.
-       !>
-       !> @param[in] this       Hamiltonian type derived
-       !> @param[out] H_sparse  Sparse matrix structure to store the Hamiltonian.
-       !*************************************************************************
-       class(hamiltonian), intent(inout) :: this
-   
-       ! Local variables
-       integer :: kk, m, nr, i, j, i_start, j_start
-       integer :: neighbor  ! Neighbor atom index
-       real(rp), dimension(3) :: rij  ! Displacement vector (unused for now but available)
-  
-       if (allocated(this%h_sparse)) deallocate(this%h_sparse) 
-       allocate(this%h_sparse(this%lattice%kk*nb,this%lattice%kk*nb))
+      class(hamiltonian), intent(inout) :: this
+      integer :: row, entry, col, i0, j0
+      character(len=:), allocatable :: base
 
-       ! Loop over cluster atoms
-       do kk = 1, this%lattice%kk  ! Loop over all atoms in the cluster
-           ! Number of neighbors for the kk-th atom
-           nr = this%charge%lattice%nn(kk, 1)
-           ! Loop over neighbors (including onsite, m = 1)
-           do m = 1, nr
-               ! Compute block indices in the global matrix
-               i_start = nb * (kk - 1) + 1
-               if (m == 1) then
-                   j_start = i_start  ! Onsite term: diagonal block
-               else
-                   neighbor = this%charge%lattice%nn(kk, m)  ! Neighbor atom index
-                   j_start = nb * (neighbor - 1) + 1
-               end if
-               ! Add the block to the sparse matrix
-               if (neighbor .ne. 0) then
-                  this%h_sparse(i_start:i_start+17, j_start:j_start+17) = 0.0d0
-                  do i = 1, nb
-                      do j = 1, nb
-                         this%h_sparse(i_start + i - 1, j_start + j - 1) = this%h_sparse(i_start + i - 1, j_start + j - 1) &
-                                                                           + this%ee(i, j, m, 1)
-                      end do
-                  end do
-               end if
-           end do
-       end do
-       ! Placeholder: Incorporate atom type and neighbor type logic in future if required.
+      if (this%hoh) then
+         call this%export_block_operator('hamiltonian_hoh', this%exported_h_full)
+         if (allocated(this%h_sparse)) deallocate (this%h_sparse)
+         allocate (this%h_sparse(this%lattice%kk*nb, this%lattice%kk*nb))
+         this%h_sparse(:, :) = (0.0_rp, 0.0_rp)
+         do row = 1, this%exported_h_full%n_sites
+            i0 = (row - 1)*nb + 1
+            do entry = this%exported_h_full%row_ptr(row), this%exported_h_full%row_ptr(row + 1) - 1
+               col = this%exported_h_full%col_ind(entry)
+               j0 = (col - 1)*nb + 1
+               this%h_sparse(i0:i0 + nb - 1, j0:j0 + nb - 1) = this%exported_h_full%blocks(:, :, entry)
+            end do
+         end do
+      else
+         call this%export_block_operator('hamiltonian', this%exported_h_plain)
+         if (allocated(this%h_sparse)) deallocate (this%h_sparse)
+         allocate (this%h_sparse(this%lattice%kk*nb, this%lattice%kk*nb))
+         this%h_sparse(:, :) = (0.0_rp, 0.0_rp)
+         do row = 1, this%exported_h_plain%n_sites
+            i0 = (row - 1)*nb + 1
+            do entry = this%exported_h_plain%row_ptr(row), this%exported_h_plain%row_ptr(row + 1) - 1
+               col = this%exported_h_plain%col_ind(entry)
+               j0 = (col - 1)*nb + 1
+               this%h_sparse(i0:i0 + nb - 1, j0:j0 + nb - 1) = this%exported_h_plain%blocks(:, :, entry)
+            end do
+         end do
+      end if
+
+      if (this%control%export_hamiltonian) then
+         base = trim(this%control%export_hamiltonian_path)
+         if (len_trim(base) > 0) then
+            if (this%hoh) then
+               call this%exported_h_full%write_text(base)
+            else
+               call this%exported_h_plain%write_text(base)
+            end if
+         end if
+      end if
    end subroutine block_to_sparse
+
+   subroutine export_block_operator(this, operator_name, op)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: operator_name
+      type(block_sparse_operator), intent(inout) :: op
+      integer :: site, nr, m, nnzb, entry, neighbor, ih
+      character(len=:), allocatable :: op_name
+      complex(rp) :: block(nb, nb)
+
+      op_name = lower(trim(operator_name))
+      call op%clear()
+
+      op%block_dim = nb
+      op%n_sites = this%lattice%kk
+      op%kind = op_name
+      op%includes_overlap = (op_name == 'hamiltonian_overlap')
+      op%includes_soc = (op_name == 'hamiltonian' .or. op_name == 'hamiltonian_hoh' .or. op_name == 'hamiltonian_shift')
+      op%includes_enim = (op_name == 'hamiltonian_hoh' .or. op_name == 'hamiltonian_shift')
+
+      allocate(op%site_types(this%lattice%kk))
+      op%site_types(:) = this%lattice%iz(1:this%lattice%kk)
+
+      nnzb = 0
+      do site = 1, this%lattice%kk
+         nr = max(1, this%lattice%nn(site, 1))
+         nnzb = nnzb + 1
+         do m = 2, nr
+            neighbor = this%lattice%nn(site, m)
+            if (neighbor /= 0) nnzb = nnzb + 1
+         end do
+      end do
+
+      op%nnzb = nnzb
+      allocate(op%row_ptr(this%lattice%kk + 1))
+      allocate(op%col_ind(nnzb))
+      allocate(op%blocks(nb, nb, nnzb))
+
+      entry = 1
+      op%row_ptr(1) = 1
+      do site = 1, this%lattice%kk
+         nr = max(1, this%lattice%nn(site, 1))
+
+         call build_operator_block(site, 1, site, op_name, block)
+         op%col_ind(entry) = site
+         op%blocks(:, :, entry) = block(:, :)
+         entry = entry + 1
+
+         do m = 2, nr
+            neighbor = this%lattice%nn(site, m)
+            if (neighbor == 0) cycle
+            call build_operator_block(site, m, neighbor, op_name, block)
+            op%col_ind(entry) = neighbor
+            op%blocks(:, :, entry) = block(:, :)
+            entry = entry + 1
+         end do
+         op%row_ptr(site + 1) = entry
+      end do
+
+   contains
+
+      subroutine build_operator_block(site, neighbor_idx, neighbor_site, name, block_out)
+         integer, intent(in) :: site, neighbor_idx, neighbor_site
+         character(len=*), intent(in) :: name
+         complex(rp), intent(out) :: block_out(nb, nb)
+         integer :: site_type
+
+         block_out(:, :) = (0.0_rp, 0.0_rp)
+         site_type = this%lattice%iz(site)
+
+         if (site <= this%lattice%nmax .and. this%lattice%nmax /= 0) then
+            select case (name)
+            case ('hamiltonian')
+               block_out(:, :) = this%hall(:, :, neighbor_idx, site)
+               if (neighbor_idx == 1) block_out(:, :) = block_out(:, :) + this%lsham(:, :, site_type)
+            case ('hamiltonian_core')
+               block_out(:, :) = this%hall(:, :, neighbor_idx, site)
+            case ('hamiltonian_overlap')
+               block_out(:, :) = this%hallo(:, :, neighbor_idx, site)
+            case ('hamiltonian_shift')
+               if (neighbor_idx == 1) block_out(:, :) = this%enim(:, :, site_type) + this%lsham(:, :, site_type)
+            case ('hamiltonian_hoh')
+               block_out(:, :) = this%hall(:, :, neighbor_idx, site) - this%hallo(:, :, neighbor_idx, site)
+               if (neighbor_idx == 1) block_out(:, :) = block_out(:, :) + this%enim(:, :, site_type) + this%lsham(:, :, site_type)
+            case default
+               call g_logger%fatal('Unsupported operator export: '//trim(name), __FILE__, __LINE__)
+            end select
+         else
+            select case (name)
+            case ('hamiltonian')
+               block_out(:, :) = this%ee(:, :, neighbor_idx, site_type)
+               if (neighbor_idx == 1) block_out(:, :) = block_out(:, :) + this%lsham(:, :, site_type)
+            case ('hamiltonian_core')
+               block_out(:, :) = this%ee(:, :, neighbor_idx, site_type)
+            case ('hamiltonian_overlap')
+               block_out(:, :) = this%eeo(:, :, neighbor_idx, site_type)
+            case ('hamiltonian_shift')
+               if (neighbor_idx == 1) block_out(:, :) = this%enim(:, :, site_type) + this%lsham(:, :, site_type)
+            case ('hamiltonian_hoh')
+               block_out(:, :) = this%ee(:, :, neighbor_idx, site_type) - this%eeo(:, :, neighbor_idx, site_type)
+               if (neighbor_idx == 1) block_out(:, :) = block_out(:, :) + this%enim(:, :, site_type) + this%lsham(:, :, site_type)
+            case default
+               call g_logger%fatal('Unsupported operator export: '//trim(name), __FILE__, __LINE__)
+            end select
+         end if
+      end subroutine build_operator_block
+
+   end subroutine export_block_operator
+
+   subroutine export_velocity_operator(this, operator_name, v_op, op)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: operator_name
+      complex(rp), intent(in) :: v_op(:, :, :, :)
+      type(block_sparse_operator), intent(inout) :: op
+      integer :: site, nr, m, nnzb, entry, neighbor, site_type
+      complex(rp) :: block(nb, nb)
+
+      call op%clear()
+      op%block_dim = nb
+      op%n_sites = this%lattice%kk
+      op%kind = lower(trim(operator_name))
+      op%includes_overlap = index(op%kind, 'vo_') == 1
+      op%includes_soc = .false.
+      op%includes_enim = .false.
+
+      allocate(op%site_types(this%lattice%kk))
+      op%site_types(:) = this%lattice%iz(1:this%lattice%kk)
+
+      nnzb = 0
+      do site = 1, this%lattice%kk
+         nr = max(1, this%lattice%nn(site, 1))
+         nnzb = nnzb + 1
+         do m = 2, nr
+            neighbor = this%lattice%nn(site, m)
+            if (neighbor /= 0) nnzb = nnzb + 1
+         end do
+      end do
+
+      op%nnzb = nnzb
+      allocate(op%row_ptr(this%lattice%kk + 1))
+      allocate(op%col_ind(nnzb))
+      allocate(op%blocks(nb, nb, nnzb))
+
+      entry = 1
+      op%row_ptr(1) = 1
+      do site = 1, this%lattice%kk
+         nr = max(1, this%lattice%nn(site, 1))
+         site_type = this%lattice%iz(site)
+
+         block(:, :) = (0.0_rp, 0.0_rp)
+         if (site > this%lattice%nmax .or. this%lattice%nmax == 0) block(:, :) = v_op(:, :, 1, site_type)
+         op%col_ind(entry) = site
+         op%blocks(:, :, entry) = block(:, :)
+         entry = entry + 1
+
+         do m = 2, nr
+            neighbor = this%lattice%nn(site, m)
+            if (neighbor == 0) cycle
+            block(:, :) = (0.0_rp, 0.0_rp)
+            if (site > this%lattice%nmax .or. this%lattice%nmax == 0) block(:, :) = v_op(:, :, m, site_type)
+            op%col_ind(entry) = neighbor
+            op%blocks(:, :, entry) = block(:, :)
+            entry = entry + 1
+         end do
+         op%row_ptr(site + 1) = entry
+      end do
+   end subroutine export_velocity_operator
 
 
    !**************************************************************************
@@ -1896,12 +2070,15 @@ contains
       ! Local Variables
       integer :: i, j, ilm, jlm, m
       real(rp), dimension(3) :: mom_ia, mom_ja
-      real(rp), dimension(3) :: r_ia, r_ja
+      real(rp), dimension(3) :: vet_dir
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
       complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
       complex(rp) :: dot
       real(rp) :: vv
+      real(rp), dimension(3, 3) :: cell
+      complex(rp), dimension(nb, nb) :: h_spin
+      real(rp), parameter :: qtol = 1.0e-10_rp
 
       this%hhmag(:, :, :) = 0.0d0
 
@@ -1909,14 +2086,8 @@ contains
       mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
       mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
       if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
-         r_ia = this%charge%lattice%cr(:, ia)
-         r_ja = this%charge%lattice%cr(:, ja)
-         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
-         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
-         mom_ia(3) = cos(this%theta_ss)
-         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
-         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
-         mom_ja(3) = cos(this%theta_ss)
+         mom_ia = [sin(this%theta_ss), 0.0_rp, cos(this%theta_ss)]
+         mom_ja = mom_ia
       end if
 
       ! Real to complex
@@ -1977,6 +2148,14 @@ contains
          end do
       end do
 
+      if (norm2(this%q_ss) > qtol .and. vv > 0.01d0) then
+         call build_spinor_from_hhmag(this%hhmag, h_spin)
+         cell(:, :) = this%charge%lattice%a(:, :)*this%charge%lattice%alat
+         vet_dir(:) = cartesian_to_direct(cell, vet)
+         call rotate_spin_spiral_bond(this%q_ss, vet_dir, h_spin)
+         call project_spinor_to_hhmag(h_spin, this%hhmag)
+      end if
+
       if (vv > 0.01d0) return
       do m = 1, 3
          do ilm = 1, norb
@@ -1995,6 +2174,66 @@ contains
       !  end do
       !end do
    end subroutine ham0m_nc
+
+   subroutine build_spinor_from_hhmag(hhmag_in, h_spin)
+      complex(rp), intent(in) :: hhmag_in(norb, norb, 4)
+      complex(rp), intent(out) :: h_spin(nb, nb)
+      integer :: iorb, jorb
+
+      h_spin(:, :) = cmplx(0.0_rp, 0.0_rp, rp)
+      do iorb = 1, norb
+         do jorb = 1, norb
+            h_spin(iorb, jorb) = hhmag_in(iorb, jorb, 4) + hhmag_in(iorb, jorb, 3)
+            h_spin(iorb + spin_off, jorb + spin_off) = hhmag_in(iorb, jorb, 4) - hhmag_in(iorb, jorb, 3)
+            h_spin(iorb, jorb + spin_off) = hhmag_in(iorb, jorb, 1) - i_unit*hhmag_in(iorb, jorb, 2)
+            h_spin(iorb + spin_off, jorb) = hhmag_in(iorb, jorb, 1) + i_unit*hhmag_in(iorb, jorb, 2)
+         end do
+      end do
+   end subroutine build_spinor_from_hhmag
+
+   subroutine project_spinor_to_hhmag(h_spin, hhmag_out)
+      complex(rp), intent(in) :: h_spin(nb, nb)
+      complex(rp), intent(out) :: hhmag_out(norb, norb, 4)
+      integer :: iorb, jorb
+      complex(rp) :: huu, hdd, hud, hdu
+
+      hhmag_out(:, :, :) = cmplx(0.0_rp, 0.0_rp, rp)
+      do iorb = 1, norb
+         do jorb = 1, norb
+            huu = h_spin(iorb, jorb)
+            hdd = h_spin(iorb + spin_off, jorb + spin_off)
+            hud = h_spin(iorb, jorb + spin_off)
+            hdu = h_spin(iorb + spin_off, jorb)
+            hhmag_out(iorb, jorb, 4) = 0.5_rp*(huu + hdd)
+            hhmag_out(iorb, jorb, 3) = 0.5_rp*(huu - hdd)
+            hhmag_out(iorb, jorb, 1) = 0.5_rp*(hud + hdu)
+            hhmag_out(iorb, jorb, 2) = 0.5_rp*i_unit*(hud - hdu)
+         end do
+      end do
+   end subroutine project_spinor_to_hhmag
+
+   subroutine rotate_spin_spiral_bond(q_vec, r_vec_direct, h_spin)
+      real(rp), intent(in) :: q_vec(3), r_vec_direct(3)
+      complex(rp), intent(inout) :: h_spin(nb, nb)
+      integer :: idx
+      real(rp) :: phi
+      complex(rp) :: phase_up, phase_dn
+      complex(rp), dimension(nb) :: left_phase
+
+      phi = 2.0_rp*pi*dot_product(q_vec, r_vec_direct)
+      phase_up = exp(-0.5_rp*i_unit*phi)
+      phase_dn = exp(0.5_rp*i_unit*phi)
+
+      left_phase(1:spin_off) = phase_up
+      left_phase(spin_off + 1:nb) = phase_dn
+
+      do idx = 1, nb
+         h_spin(idx, :) = left_phase(idx)*h_spin(idx, :)
+      end do
+      do idx = 1, nb
+         h_spin(:, idx) = h_spin(:, idx)*conjg(left_phase(idx))
+      end do
+   end subroutine rotate_spin_spiral_bond
 
    subroutine chbar_nc(this, ia, nr, ino, ntype)
       class(hamiltonian), intent(inout) :: this

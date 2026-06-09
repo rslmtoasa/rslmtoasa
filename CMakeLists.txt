@@ -12,7 +12,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 set(PROJECT_NAME rslmto)
-project(${PROJECT_NAME})
+project(${PROJECT_NAME} LANGUAGES C Fortran)
 
 # Find all the .in files
 # file(GLOB inFiles RELATIVE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/*.in" "${PROJECT_SOURCE_DIR}/test/*.in")
@@ -26,6 +26,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 # Enable Fortran language
 enable_language(Fortran)
+enable_language(C)
 message(STATUS "Using Fortran compiler ${CMAKE_Fortran_COMPILER_ID} Fortran ${CMAKE_Fortran_COMPILER_VERSION}")
 
 # Fortran module and output directories
@@ -47,6 +48,7 @@ option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
 option(ENABLE_SPGLIB "Enable spglib for symmetry operations and k-path generation" ON)
 option(RUN_EXAMPLE_TESTS "Run fast example-based SCF tests" OFF)
+option(BUILD_BACKEND_PLUGINS "Build sample recursion backend plugins" ON)
 set(EXAMPLE_REF_ABS_TOL "1e-6" CACHE STRING "Absolute tolerance for example reference comparisons")
 set(EXAMPLE_REF_REL_TOL "1e-6" CACHE STRING "Relative tolerance for example reference comparisons")
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
@@ -247,6 +249,10 @@ add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
 
 # Add the directory of the sources
 add_subdirectory(${SRC})
+
+if(BUILD_BACKEND_PLUGINS)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/plugins)
+endif()
 
 # Linking with Libraries
 set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})

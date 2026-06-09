@@ -170,6 +170,13 @@ module control_mod
       !>
       !> Allowed values: ´block´, ´chebyshev´
       character(len=9) :: recur
+      character(len=32) :: recur_backend
+      character(len=sl) :: recur_backend_plugin
+      character(len=sl) :: recur_backend_library
+      character(len=32) :: recur_precision
+      logical :: export_hamiltonian
+      character(len=sl) :: export_hamiltonian_path
+      logical :: validate_backend_roundtrip
 
       !> Number of recursion levels for the conductivity tensor calculation
       !>
@@ -308,6 +315,13 @@ contains
       cond_ll = this%cond_ll
       cond_type = this%cond_type
       cond_calctype = this%cond_calctype
+      recur_backend = this%recur_backend
+      recur_backend_plugin = this%recur_backend_plugin
+      recur_backend_library = this%recur_backend_library
+      recur_precision = this%recur_precision
+      export_hamiltonian = this%export_hamiltonian
+      export_hamiltonian_path = this%export_hamiltonian_path
+      validate_backend_roundtrip = this%validate_backend_roundtrip
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
@@ -365,6 +379,13 @@ contains
       this%cond_ll = cond_ll
       this%cond_type = cond_type
       this%cond_calctype = cond_calctype
+      this%recur_backend = recur_backend
+      this%recur_backend_plugin = recur_backend_plugin
+      this%recur_backend_library = recur_backend_library
+      this%recur_precision = recur_precision
+      this%export_hamiltonian = export_hamiltonian
+      this%export_hamiltonian_path = export_hamiltonian_path
+      this%validate_backend_roundtrip = validate_backend_roundtrip
 
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
@@ -452,6 +473,13 @@ contains
       this%cond_ll = 200
       this%cond_type = 'charge'
       this%cond_calctype = 'per_type'
+      this%recur_backend = 'cpu_reference'
+      this%recur_backend_plugin = ''
+      this%recur_backend_library = ''
+      this%recur_precision = 'complex_fp64'
+      this%export_hamiltonian = .false.
+      this%export_hamiltonian_path = 'exported_block_operator.dat'
+      this%validate_backend_roundtrip = .false.
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
@@ -501,6 +529,13 @@ contains
       concb = this%concb
       ruban = this%ruban
       do_comom = this%do_comom
+      recur_backend = this%recur_backend
+      recur_backend_plugin = this%recur_backend_plugin
+      recur_backend_library = this%recur_backend_library
+      recur_precision = this%recur_precision
+      export_hamiltonian = this%export_hamiltonian
+      export_hamiltonian_path = this%export_hamiltonian_path
+      validate_backend_roundtrip = this%validate_backend_roundtrip
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -592,6 +627,15 @@ contains
           .and. this%recur /= 'chebyshev' &
           .and. this%recur /= 'block') then
          call g_logger%fatal('lattice%recur must be one of: ''lanczos'', ''chebyshev'' or ''block''")', __FILE__, __LINE__)
+      end if
+      if (this%recur_backend /= 'cpu_reference' &
+          .and. this%recur_backend /= 'cpu_sparse_reference' &
+          .and. this%recur_backend /= 'external_plugin') then
+         call g_logger%fatal('control%recur_backend must be ''cpu_reference'', ''cpu_sparse_reference'' or ''external_plugin''', __FILE__, __LINE__)
+      end if
+      if (this%recur_precision /= 'complex_fp64' &
+          .and. this%recur_precision /= 'complex_fp32') then
+         call g_logger%fatal('control%recur_precision must be ''complex_fp64'' or ''complex_fp32''', __FILE__, __LINE__)
       end if
    end subroutine check_all
 
