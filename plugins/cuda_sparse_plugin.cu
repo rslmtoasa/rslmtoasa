@@ -365,6 +365,30 @@ static int ensure_spmv_buffer(plugin_backend *backend, plugin_operator *op) {
     return 0;
 }
 
+static int ensure_operator_spmat(plugin_operator *op) {
+    if (op == NULL) {
+        return 1;
+    }
+    if (op->spmat != NULL) {
+        return 0;
+    }
+    if (cusparse_ok(cusparseCreateCsr(
+            &op->spmat,
+            op->scalar_dim,
+            op->scalar_dim,
+            op->scalar_nnz,
+            op->d_csr_row_ptr,
+            op->d_csr_col_ind,
+            op->d_csr_values,
+            CUSPARSE_INDEX_32I,
+            CUSPARSE_INDEX_32I,
+            CUSPARSE_INDEX_BASE_ZERO,
+            CUDA_C_64F)) != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 __global__ static void pack_block_column_kernel(
     int block_dim,
     int n_sites,
@@ -464,10 +488,12 @@ static int apply_named_operator(
     }
 
     op = find_operator(backend, name);
-    if (op == NULL || op->spmat == NULL) {
+    if (op == NULL) {
         return 1;
     }
-
+    if (ensure_operator_spmat(op) != 0) {
+        return 1;
+    }
     if (ensure_spmv_buffer(backend, op) != 0) {
         return 1;
     }
@@ -955,6 +981,10 @@ extern "C" int rslmto_backend_upload_operator(
         int block_start = row_ptr[site] - 1;
         int block_stop = row_ptr[site + 1] - 1;
         int block_count = block_stop - block_start;
+        if (block_start < 0 || block_stop < block_start || block_stop > nnzb) {
+            free_operator(op);
+            return 1;
+        }
         for (local_row = 0; local_row < block_dim; ++local_row) {
             int scalar_row = site * block_dim + local_row;
             for (entry = block_start; entry < block_stop; ++entry) {
@@ -968,6 +998,10 @@ extern "C" int rslmto_backend_upload_operator(
                     size_t block_idx = (size_t) local_row +
                                        (size_t) local_col * (size_t) block_dim +
                                        (size_t) entry * (size_t) block_dim * (size_t) block_dim;
+                    if (cursor >= scalar_nnz) {
+                        free_operator(op);
+                        return 1;
+                    }
                     op->csr_col_ind[cursor] = block_col * block_dim + local_col;
                     op->csr_values[cursor] = op->blocks[block_idx];
                     ++cursor;
@@ -992,27 +1026,6 @@ extern "C" int rslmto_backend_upload_operator(
     if (cuda_ok(cudaMemcpy(op->d_csr_row_ptr, op->csr_row_ptr, (size_t) (scalar_dim + 1) * sizeof(*op->d_csr_row_ptr), cudaMemcpyHostToDevice)) != 0 ||
         cuda_ok(cudaMemcpy(op->d_csr_col_ind, op->csr_col_ind, (size_t) scalar_nnz * sizeof(*op->d_csr_col_ind), cudaMemcpyHostToDevice)) != 0 ||
         cuda_ok(cudaMemcpy(op->d_csr_values, op->csr_values, (size_t) scalar_nnz * sizeof(*op->d_csr_values), cudaMemcpyHostToDevice)) != 0) {
-        free_operator(op);
-        return 1;
-    }
-
-    if (cusparse_ok(cusparseCreateCsr(
-            &op->spmat,
-            scalar_dim,
-            scalar_dim,
-            scalar_nnz,
-            op->d_csr_row_ptr,
-            op->d_csr_col_ind,
-            op->d_csr_values,
-            CUSPARSE_INDEX_32I,
-            CUSPARSE_INDEX_32I,
-            CUSPARSE_INDEX_BASE_ZERO,
-            CUDA_C_64F)) != 0) {
-        free_operator(op);
-        return 1;
-    }
-
-    if (ensure_spmv_buffer(backend, op) != 0) {
         free_operator(op);
         return 1;
     }

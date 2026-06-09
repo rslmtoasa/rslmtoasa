@@ -507,6 +507,8 @@ contains
 
       if (this%backend_kind /= 'external_plugin') return
       call this%ensure_plugin_ready()
+      call g_logger%info('Uploading backend operator '//trim(operator_name)//' with nnzb='//trim(int2str(op%nnzb))// &
+                         ' block_dim='//trim(int2str(op%block_dim))//' n_sites='//trim(int2str(op%n_sites)), __FILE__, __LINE__)
       call to_c_string(trim(operator_name), c_name)
 
       allocate(row_ptr_c(size(op%row_ptr)), col_ind_c(size(op%col_ind)), site_types_c(size(op%site_types)))
