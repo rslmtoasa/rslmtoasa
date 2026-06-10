@@ -2342,15 +2342,34 @@ contains
 
    subroutine load_symbolic_atoms_if_needed(this)
       class(lattice), intent(inout) :: this
+      
+      ! 1. Declare the temporary array. 
+      type(symbolic_atom), allocatable :: temp_atoms(:)
 
       if (allocated(this%symbolic_atoms)) then
          if (size(this%symbolic_atoms) == this%ntype) return
          deallocate(this%symbolic_atoms)
       end if
+      
       if (.not. allocated(this%symbolic_atoms)) then
-         this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+         ! 2. Assign the function result to the standard local variable
+         temp_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+         
+         ! 3. Safely move the memory allocation into the derived type component
+         call move_alloc(from=temp_atoms, to=this%symbolic_atoms)
       end if
    end subroutine load_symbolic_atoms_if_needed
+   !subroutine load_symbolic_atoms_if_needed(this)
+   !   class(lattice), intent(inout) :: this
+
+   !   if (allocated(this%symbolic_atoms)) then
+   !      if (size(this%symbolic_atoms) == this%ntype) return
+   !      deallocate(this%symbolic_atoms)
+   !   end if
+   !   if (.not. allocated(this%symbolic_atoms)) then
+   !      this%symbolic_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+   !   end if
+   !end subroutine load_symbolic_atoms_if_needed
 
    subroutine build_rmt(this, nspec, species_labels, rmt)
       class(lattice), intent(inout) :: this
