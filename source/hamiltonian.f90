@@ -38,6 +38,7 @@ module hamiltonian_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
+   use sparse_matrix_mod, only: bsr_matrix
    implicit none
 
    private
@@ -88,8 +89,10 @@ module hamiltonian_mod
       real(rp) :: theta_ss
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
-      !> Sparse Real Space Hamiltonian
+      !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
+      !> BSR (Block Sparse Row) format for GPU/oneMKL operations
+      type(bsr_matrix) :: h_bsr
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis
       real(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
       !> Enable +U correction when any U/J is provided on symbolic atoms
@@ -667,52 +670,87 @@ contains
 
    subroutine block_to_sparse(this)
        !*************************************************************************
-       !> @brief Constructs the sparse Hamiltonian matrix for a real-space cluster.
+       !> @brief Constructs BSR sparse Hamiltonian for real-space cluster.
        !>
-       !> This subroutine loops through all cluster atoms and their neighbors to
-       !> assemble the sparse Hamiltonian matrix in a block-wise manner. The matrix
-       !> size is determined by the number of atoms in the cluster and their spd basis.
+       !> Builds Block Sparse Row (BSR) format where each 18×18 block is a
+       !> TB-LMTO site-pair hopping matrix. Only non-zero blocks are stored.
+       !> Compatible with oneMKL and cuSPARSE.
        !>
-       !> @param[in] this       Hamiltonian type derived
-       !> @param[out] H_sparse  Sparse matrix structure to store the Hamiltonian.
+       !> Format:
+       !> - blocksize = 18 (spd basis: s,p_x,p_y,p_z,d_xx,...,d_zz per spin)
+       !> - values(18,18,nblocks): dense blocks
+       !> - col_indices(nblocks): column block index for each block
+       !> - row_ptr(nrows+1): CSR-style row pointers for block-rows
        !*************************************************************************
-       class(hamiltonian), intent(inout) :: this
-   
-       ! Local variables
-       integer :: kk, m, nr, i, j, i_start, j_start
-       integer :: neighbor  ! Neighbor atom index
-       real(rp), dimension(3) :: rij  ! Displacement vector (unused for now but available)
-  
-       if (allocated(this%h_sparse)) deallocate(this%h_sparse) 
-       allocate(this%h_sparse(this%lattice%kk*nb,this%lattice%kk*nb))
+       use sparse_matrix_mod, only: allocate_bsr
 
-       ! Loop over cluster atoms
-       do kk = 1, this%lattice%kk  ! Loop over all atoms in the cluster
-           ! Number of neighbors for the kk-th atom
-           nr = this%charge%lattice%nn(kk, 1)
-           ! Loop over neighbors (including onsite, m = 1)
+       class(hamiltonian), intent(inout) :: this
+       integer :: kk, m, nr, block_idx, nblocks, i, j, block_col
+       integer :: neighbor
+       logical :: is_impurity
+
+       ! Pass 1: Count non-zero blocks
+       nblocks = 0
+       do kk = 1, this%lattice%kk
+           nr = this%lattice%nn(kk, 1)
            do m = 1, nr
-               ! Compute block indices in the global matrix
-               i_start = nb * (kk - 1) + 1
-               if (m == 1) then
-                   j_start = i_start  ! Onsite term: diagonal block
-               else
-                   neighbor = this%charge%lattice%nn(kk, m)  ! Neighbor atom index
-                   j_start = nb * (neighbor - 1) + 1
-               end if
-               ! Add the block to the sparse matrix
-               if (neighbor .ne. 0) then
-                  this%h_sparse(i_start:i_start+17, j_start:j_start+17) = 0.0d0
-                  do i = 1, nb
-                      do j = 1, nb
-                         this%h_sparse(i_start + i - 1, j_start + j - 1) = this%h_sparse(i_start + i - 1, j_start + j - 1) &
-                                                                           + this%ee(i, j, m, 1)
-                      end do
-                  end do
+               if (m == 1 .or. this%lattice%nn(kk, m) /= 0) then
+                   nblocks = nblocks + 1
                end if
            end do
        end do
-       ! Placeholder: Incorporate atom type and neighbor type logic in future if required.
+
+       ! Allocate BSR structure
+       call allocate_bsr(this%h_bsr, nblocks, this%lattice%kk, nb)
+
+       ! Pass 2: Fill BSR data
+       block_idx = 0
+       this%h_bsr%row_ptr(1) = 1
+
+       is_impurity = (this%lattice%nmax > 0)
+
+       ! Loop over block-rows (atoms)
+       do kk = 1, this%lattice%kk
+           nr = this%lattice%nn(kk, 1)
+
+           do m = 1, nr
+               if (m == 1) then
+                   ! Onsite block: diagonal
+                   block_col = kk
+               else
+                   neighbor = this%lattice%nn(kk, m)
+                   if (neighbor == 0) cycle
+                   block_col = neighbor
+               end if
+
+               block_idx = block_idx + 1
+
+               ! Fill block from appropriate source
+               if (is_impurity .and. kk <= this%lattice%nmax) then
+                   ! Local region: use hall
+                   this%h_bsr%values(:, :, block_idx) = this%hall(:, :, m, kk)
+               else
+                   ! Bulk region: use ee
+                   ! Note: need to map atom type correctly
+                   this%h_bsr%values(:, :, block_idx) = this%ee(:, :, m, this%lattice%iz(kk))
+               end if
+
+               this%h_bsr%col_indices(block_idx) = block_col
+           end do
+
+           ! Update row_ptr for next block-row
+           if (kk < this%lattice%kk) then
+               this%h_bsr%row_ptr(kk + 1) = block_idx + 1
+           end if
+       end do
+
+       ! Close final row pointer
+       this%h_bsr%row_ptr(this%lattice%kk + 1) = nblocks + 1
+
+       ! Legacy: also build dense format if needed (for backward compatibility)
+       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
+       ! Sparse format no longer allocated by default; call separately if needed
+
    end subroutine block_to_sparse
 
 

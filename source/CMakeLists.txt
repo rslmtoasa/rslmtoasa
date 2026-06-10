@@ -16,6 +16,8 @@ add_library(${PROJECT_NAME} STATIC
     face.F90
     globals.f90
     green.f90
+    hamiltonian_base_mod.f90
+    hamiltonian_cpu_mod.f90
     hamiltonian.f90
     lattice.f90
     # lists.f90
@@ -29,6 +31,7 @@ add_library(${PROJECT_NAME} STATIC
     precision.f90
     reciprocal.f90
     recursion.f90
+    sparse_matrix_mod.f90
     report.f90
     safe_alloc.f90
     self.f90
