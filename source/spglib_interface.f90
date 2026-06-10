@@ -33,6 +33,7 @@ module spglib_interface_mod
    ! Use ISO_C_BINDING for proper C interoperability
    use, intrinsic :: iso_c_binding, only: c_int, c_double, c_char, c_null_char, c_ptr, c_associated
 #endif
+   use mpi_mod, only: rank
 
    implicit none
 
@@ -132,6 +133,7 @@ module spglib_interface_mod
       procedure :: get_symmetry_operations
       procedure :: get_reduced_kpoint_mesh
       procedure :: get_reduced_kpoint_mesh_with_points
+      procedure :: get_full_kpoint_mesh_with_points
       procedure :: get_crystal_system
       procedure :: get_band_path_points
       procedure :: get_dataset
@@ -149,6 +151,12 @@ module spglib_interface_mod
 
 contains
 
+   subroutine root_print(message)
+      character(len=*), intent(in) :: message
+
+      if (rank == 0) write (*, *) trim(message)
+   end subroutine root_print
+
    !---------------------------------------------------------------------------
    !> @brief Constructor for spglib_interface
    !---------------------------------------------------------------------------
@@ -156,9 +164,9 @@ contains
       type(spglib_interface) :: this
       
 #ifdef USE_SPGLIB
-      write(*,*) 'spglib_interface: Constructor called with spglib support'
+      call root_print('spglib_interface: Constructor called with spglib support')
 #else
-      write(*,*) 'spglib_interface: Constructor called WITHOUT spglib support'
+      call root_print('spglib_interface: Constructor called WITHOUT spglib support')
 #endif
    end function constructor
 
@@ -188,11 +196,13 @@ contains
 #ifdef USE_SPGLIB
       call this%detect_space_group()
       this%initialized = .true.
-      write(*,*) 'spglib_interface: Initialized with', this%num_atoms, 'atoms'
-      write(*,*) 'spglib_interface: Space group:', trim(this%space_group_symbol), &
-                 '(#', this%space_group_number, ')'
+      if (rank == 0) then
+         write(*,*) 'spglib_interface: Initialized with', this%num_atoms, 'atoms'
+         write(*,*) 'spglib_interface: Space group:', trim(this%space_group_symbol), &
+                    '(#', this%space_group_number, ')'
+      end if
 #else
-      write(*,*) 'spglib_interface: Initialized but spglib not available'
+      call root_print('spglib_interface: Initialized but spglib not available')
       this%initialized = .false.
 #endif
    end subroutine initialize
@@ -242,7 +252,7 @@ contains
       this%space_group_number = 0
       this%space_group_symbol = 'UNKNOWN'
       this%crystal_system = 'UNKNOWN'
-      write(*,*) 'spglib_interface: Space group detection unavailable (spglib not compiled)'
+      call root_print('spglib_interface: Space group detection unavailable (spglib not compiled)')
 #endif
    end subroutine detect_space_group
 
@@ -259,7 +269,7 @@ contains
       real(c_double) :: translation(3,max_operations)
 
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          num_ops = 0
          return
       end if
@@ -268,10 +278,10 @@ contains
                                 this%lattice_vectors, this%atomic_positions, &
                                 this%atomic_types, this%num_atoms, this%symprec)
 
-      write(*,*) 'spglib_interface: Found', num_ops, 'symmetry operations'
+      if (rank == 0) write(*,*) 'spglib_interface: Found', num_ops, 'symmetry operations'
 #else
       num_ops = 0
-      write(*,*) 'spglib_interface: Symmetry operations unavailable (spglib not compiled)'
+      call root_print('spglib_interface: Symmetry operations unavailable (spglib not compiled)')
 #endif
    end function get_symmetry_operations
 
@@ -291,7 +301,7 @@ contains
       integer, allocatable :: ir_mapping(:)
 
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          num_ir_kpoints = 0
          return
       end if
@@ -315,13 +325,13 @@ contains
                                                  this%num_atoms, &
                                                  this%symprec)
 
-      write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
-                 num_ir_kpoints, 'irreducible points'
+      if (rank == 0) write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
+                                 num_ir_kpoints, 'irreducible points'
 
       deallocate(grid_address, ir_mapping)
 #else
       num_ir_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)  ! Full mesh without reduction
-      write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
+      call root_print('spglib_interface: Using full k-mesh (spglib not compiled)')
 #endif
    end function get_reduced_kpoint_mesh
 
@@ -333,15 +343,20 @@ contains
    !> @param[out] weights K-point weights (normalized to sum to 1) [num_ir]
    !> @return Number of irreducible k-points
    !---------------------------------------------------------------------------
-   function get_reduced_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints, weights) result(num_ir_kpoints)
+   function get_reduced_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints, weights, use_time_reversal, &
+                                                full_to_irred, irred_to_full) result(num_ir_kpoints)
       class(spglib_interface), intent(in) :: this
       integer, intent(in) :: mesh_dims(3)
       integer, intent(in), optional :: is_shift(3)
       real(rp), allocatable, intent(out) :: kpoints(:,:)
       real(rp), allocatable, intent(out) :: weights(:)
+      logical, intent(in), optional :: use_time_reversal
+      integer, allocatable, intent(out), optional :: full_to_irred(:)
+      integer, allocatable, intent(out), optional :: irred_to_full(:)
       integer :: num_ir_kpoints
 
       integer :: total_kpoints, shift(3), ir_idx, i, j, k
+      integer :: trs_flag
       
 #ifdef USE_SPGLIB
       integer, allocatable :: grid_address(:,:)
@@ -351,7 +366,7 @@ contains
       logical, allocatable :: is_irreducible(:)
 
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          num_ir_kpoints = 0
          return
       end if
@@ -363,13 +378,21 @@ contains
       else
          shift = [0, 0, 0]  ! No shift by default
       end if
+      trs_flag = 1
+      if (present(use_time_reversal)) then
+         if (use_time_reversal) then
+            trs_flag = 1
+         else
+            trs_flag = 0
+         end if
+      end if
 
       allocate(grid_address(3, total_kpoints))
       allocate(ir_mapping(total_kpoints))
 
       ! Get irreducible k-points from spglib
       num_ir_kpoints = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
-                                                 mesh_dims, shift, 1, &  ! 1 = use time reversal
+                                                 mesh_dims, shift, trs_flag, &
                                                  this%lattice_vectors, &
                                                  this%atomic_positions, &
                                                  this%atomic_types, &
@@ -416,9 +439,33 @@ contains
          weights(ir_idx) = real(multiplicity, rp) / real(total_kpoints, rp)
       end do
 
-      write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
-                 num_ir_kpoints, 'irreducible points'
-      write(*,*) 'spglib_interface: Weight sum =', sum(weights), '(should be 1.0)'
+      ! Optional exact mapping output
+      if (present(full_to_irred)) then
+         if (allocated(full_to_irred)) deallocate(full_to_irred)
+         allocate(full_to_irred(total_kpoints))
+         full_to_irred = 0
+      end if
+      if (present(irred_to_full)) then
+         if (allocated(irred_to_full)) deallocate(irred_to_full)
+         allocate(irred_to_full(num_ir_kpoints))
+         irred_to_full = ir_kpoint_indices
+      end if
+      if (present(full_to_irred)) then
+         do i = 1, total_kpoints
+            do ir_idx = 1, num_ir_kpoints
+               if (ir_mapping(i) == ir_kpoint_indices(ir_idx) - 1) then
+                  full_to_irred(i) = ir_idx
+                  exit
+               end if
+            end do
+         end do
+      end if
+
+      if (rank == 0) then
+         write(*,*) 'spglib_interface: Reduced', total_kpoints, 'k-points to', &
+                    num_ir_kpoints, 'irreducible points'
+         write(*,*) 'spglib_interface: Weight sum =', sum(weights), '(should be 1.0)'
+      end if
 
       deallocate(grid_address, ir_mapping, is_irreducible, ir_kpoint_indices)
 #else
@@ -442,10 +489,89 @@ contains
          end do
       end do
       weights = 1.0_rp / real(num_ir_kpoints, rp)
+      if (present(full_to_irred)) then
+         if (allocated(full_to_irred)) deallocate(full_to_irred)
+         allocate(full_to_irred(num_ir_kpoints))
+         do i = 1, num_ir_kpoints
+            full_to_irred(i) = i
+         end do
+      end if
+      if (present(irred_to_full)) then
+         if (allocated(irred_to_full)) deallocate(irred_to_full)
+         allocate(irred_to_full(num_ir_kpoints))
+         do i = 1, num_ir_kpoints
+            irred_to_full(i) = i
+         end do
+      end if
       
-      write(*,*) 'spglib_interface: Using full k-mesh (spglib not compiled)'
+      call root_print('spglib_interface: Using full k-mesh (spglib not compiled)')
 #endif
    end function get_reduced_kpoint_mesh_with_points
+
+   !---------------------------------------------------------------------------
+   !> @brief Get full (non-reduced) k-point mesh points in spglib grid convention
+   !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
+   !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]
+   !> @param[out] kpoints Full k-point coordinates [3, prod(mesh)]
+   !> @return Number of k-points (=prod(mesh), or 0 on failure)
+   !---------------------------------------------------------------------------
+   function get_full_kpoint_mesh_with_points(this, mesh_dims, is_shift, kpoints) result(num_kpoints)
+      class(spglib_interface), intent(in) :: this
+      integer, intent(in) :: mesh_dims(3)
+      integer, intent(in), optional :: is_shift(3)
+      real(rp), allocatable, intent(out) :: kpoints(:,:)
+      integer :: num_kpoints
+
+      integer :: total_kpoints, shift(3), i
+#ifdef USE_SPGLIB
+      integer, allocatable :: grid_address(:,:)
+      integer, allocatable :: ir_mapping(:)
+#endif
+
+      total_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)
+      num_kpoints = total_kpoints
+
+      if (present(is_shift)) then
+         shift = is_shift
+      else
+         shift = [0, 0, 0]
+      end if
+
+#ifdef USE_SPGLIB
+      if (.not. this%initialized) then
+         num_kpoints = 0
+         return
+      end if
+
+      allocate(grid_address(3, total_kpoints))
+      allocate(ir_mapping(total_kpoints))
+
+      ! We only need grid_address ordering/convention; mapping return is ignored here.
+      i = spg_get_ir_reciprocal_mesh(grid_address, ir_mapping, &
+                                     mesh_dims, shift, 0, &
+                                     this%lattice_vectors, this%atomic_positions, &
+                                     this%atomic_types, this%num_atoms, this%symprec)
+      if (i <= 0) then
+         num_kpoints = 0
+         deallocate(grid_address, ir_mapping)
+         return
+      end if
+
+      allocate(kpoints(3, total_kpoints))
+      do i = 1, total_kpoints
+         kpoints(1, i) = (real(grid_address(1, i), rp) + 0.5_rp * real(shift(1), rp)) / real(mesh_dims(1), rp)
+         kpoints(2, i) = (real(grid_address(2, i), rp) + 0.5_rp * real(shift(2), rp)) / real(mesh_dims(2), rp)
+         kpoints(3, i) = (real(grid_address(3, i), rp) + 0.5_rp * real(shift(3), rp)) / real(mesh_dims(3), rp)
+      end do
+      deallocate(grid_address, ir_mapping)
+#else
+      allocate(kpoints(3, total_kpoints))
+      i = 0
+      do concurrent (i = 1:total_kpoints)
+         kpoints(:, i) = 0.0_rp
+      end do
+#endif
+   end function get_full_kpoint_mesh_with_points
 
    !---------------------------------------------------------------------------
    !> @brief Determine crystal system from space group number
@@ -489,7 +615,7 @@ contains
       path_available = .false.
       
       if (.not. this%initialized) then
-         write(*,*) 'ERROR: spglib_interface: Not initialized'
+         call root_print('ERROR: spglib_interface: Not initialized')
          return
       end if
 
@@ -498,10 +624,10 @@ contains
       ! This would involve calling spglib functions to get high-symmetry points
       ! For now, just indicate that the feature is available with spglib
       path_available = .true.
-      write(*,*) 'spglib_interface: Band path generation available for ', &
-                 trim(this%crystal_system), ' crystal system'
+      if (rank == 0) write(*,*) 'spglib_interface: Band path generation available for ', &
+                                trim(this%crystal_system), ' crystal system'
 #else
-      write(*,*) 'spglib_interface: Band path generation unavailable (spglib not compiled)'
+      call root_print('spglib_interface: Band path generation unavailable (spglib not compiled)')
 #endif
    end function get_band_path_points
 

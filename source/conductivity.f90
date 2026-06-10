@@ -41,6 +41,8 @@ module conductivity_mod
    use self_mod
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
+   use cfd
+   use basis_mod, only: nb, norb, spin_off
    implicit none
 
    private
@@ -97,6 +99,12 @@ contains
 
       call obj%restore_to_default()
       call obj%build_from_file()
+      ! initialize constraining if requested for transport calculations
+      if (associated(obj%control)) then
+         if (obj%control%constraints_enable) then
+            call initialize_cfd(obj%lattice%nrec, 1, obj%control%constraints_i_cons, obj%control%constraints_code_prefac)
+         end if
+      end if
    end function
 
    !---------------------------------------------------------------------------
@@ -233,7 +241,7 @@ contains
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
-      complex(rp), dimension(18) :: temp
+      complex(rp), dimension(nb) :: temp
       real(rp) :: a, b, real_part, im_part, factor, volume, de
       ! Printing variables
       character(len=*), parameter :: fname_cond_total = "cond_total.out"
@@ -241,11 +249,11 @@ contains
       character(len=*), parameter :: fname_cond_orb_im   = "cond_total_orb_im.out"
       character(len=sl) :: fname_r, fname_i, fname_orb_r, fname_orb_i, symbol
 
-      allocate(integrand(18, 18, this%en%channels_ldos + 10), real_part_l(18), im_part_l(18))
+      allocate(integrand(nb, nb, this%en%channels_ldos + 10), real_part_l(nb), im_part_l(nb))
       allocate(integrand_tot_real(this%en%channels_ldos + 10), integrand_tot_im(this%en%channels_ldos + 10))
       allocate(wscale(this%en%channels_ldos + 10))
-      allocate(integrand_l_real(18, this%en%channels_ldos + 10), integrand_l_im(18, this%en%channels_ldos + 10))
-      allocate(integrand_at(18, 18, this%en%channels_ldos + 10, this%lattice%ntype))
+      allocate(integrand_l_real(nb, this%en%channels_ldos + 10), integrand_l_im(nb, this%en%channels_ldos + 10))
+      allocate(integrand_at(nb, nb, this%en%channels_ldos + 10, this%lattice%ntype))
       
       integrand(:, :, :) = (0.0d0, 0.0d0)
       real_part_l(:) = 0.0d0
@@ -284,7 +292,7 @@ contains
             ! Accumulate the contributions over the Chebyshev recursion indices.
             do n = 1, this%control%cond_ll
                do m = 1, this%control%cond_ll
-                  do l2 = 1, 18
+                  do l2 = 1, nb
                      integrand(l2, l2, i) = integrand(l2, l2, i) + factor * this%gamma_nm(i, n, m) * &
                                 this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
                      if (this%control%cond_calctype == 'per_type') then
@@ -301,7 +309,7 @@ contains
       integrand_tot_real(:) = 0.0d0
       integrand_tot_im(:) = 0.0d0
 
-      do l2 = 1, 18
+      do l2 = 1, nb
          integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
          integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :))
          integrand_l_real(l2, :) = real(integrand(l2, l2, :))
@@ -319,12 +327,12 @@ contains
          call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
          call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
          write(3, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part / real(loop_over),  im_part / real(loop_over)
-         do l2 = 1, 18
+         do l2 = 1, nb
             call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
             call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
          end do
-         write(32,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) / real(loop_over)
-         write(33,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) / real(loop_over)
+         write(32,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:nb) / real(loop_over)
+         write(33,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:nb) / real(loop_over)
       end do
 
 
@@ -337,7 +345,7 @@ contains
             integrand_l_real(:, :) = 0.0d0
             integrand_l_im(:, :) = 0.0d0 
 
-            do l2 = 1, 18
+            do l2 = 1, nb
                integrand_tot_real(:) = integrand_tot_real(:) + real(integrand_at(l2, l2, :, ntype))
                integrand_tot_im(:)   = integrand_tot_im(:)   + aimag(integrand_at(l2, l2, :, ntype))
                integrand_l_real(l2, :) = real(integrand_at(l2, l2, :, ntype))
@@ -358,12 +366,12 @@ contains
                call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
                call simpson_f(im_part,   wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
                write(100+ntype, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part, im_part
-               do l2 = 1, 18
+               do l2 = 1, nb
                   call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
                   call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
                end do
-               write(300+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:18) 
-               write(400+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:18) 
+               write(300+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:nb) 
+               write(400+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:nb) 
                end do
             close(100+ntype)
             close(300+ntype)

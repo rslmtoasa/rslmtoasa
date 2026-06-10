@@ -24,6 +24,8 @@ module control_mod
    use string_mod, only: sl, fmt
    use namelist_generator_mod, only: namelist_generator
    use logger_mod, only: g_logger
+   use basis_mod, only: basis_init, norb
+   use math_mod, only: init_math_operators
    implicit none
 
    private
@@ -60,6 +62,19 @@ module control_mod
       !> - \ref nsp \f$= 3\f$: Non-collinear scalar relativistic
       !> - \ref nsp \f$= 4\f$: Non-collinear fully relativistic (l.s)-only no OP
       integer :: nsp
+
+      !> Maximum angular momentum quantum number for the orbital basis.
+      !>
+      !> Determines the block size used throughout the code:
+      !>   norb = (lmax+1)**2   (orbitals per spin channel)
+      !>   nb   = 2*norb        (full spinor block)
+      !>
+      !> Values:
+      !>
+      !> - \ref lmax \f$= 1\f$: sp  basis (norb= 4, nb= 8)
+      !> - \ref lmax \f$= 2\f$: spd basis (norb= 9, nb=18)  [default]
+      !> - \ref lmax \f$= 3\f$: spdf basis (norb=16, nb=32)
+      integer :: lmax
 
       !> Type of LDOS s, p, d output
       !>
@@ -188,6 +203,12 @@ module control_mod
       !real(rp), dimension(:, :), allocatable :: mom ! common_cnc
       integer :: nmdir
       character(len=sl) :: fname
+      ! Constraints configuration (filled from namelist)
+      logical :: constraints_enable
+      integer :: constraints_i_cons
+      integer :: constraints_code_prefac
+      real(rp), dimension(:, :), allocatable :: constraints_mom_ref
+      real(rp), dimension(:, :), allocatable :: constraints_bfield
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -243,9 +264,11 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
+      integer :: iostatus2, funit2
       character(len=sl) :: fname_
 
       include 'include_codes/namelists/control.f90'
+      include 'include_codes/namelists/constraints.f90'
 
       if (present(fname)) then
          fname_ = fname
@@ -258,6 +281,7 @@ contains
       nlim = this%nlim
       npold = this%npold
       nsp = this%nsp
+      lmax = this%lmax
       calctype = this%calctype
       hyperfine = this%hyperfine
       sym_term = this%sym_term
@@ -284,10 +308,28 @@ contains
       cond_ll = this%cond_ll
       cond_type = this%cond_type
       cond_calctype = this%cond_calctype
+      ! Save previous constraints values
+      constraints_enable = this%constraints_enable
+      constraints_i_cons = this%constraints_i_cons
+      constraints_code_prefac = this%constraints_code_prefac
+      if (allocated(this%constraints_mom_ref)) then
+         allocate(constraints_mom_ref, mold=this%constraints_mom_ref)
+         constraints_mom_ref = this%constraints_mom_ref
+      else
+         allocate(constraints_mom_ref(1, 1))
+         constraints_mom_ref = 0.0_rp
+      end if
+      if (allocated(this%constraints_bfield)) then
+         allocate(constraints_bfield, mold=this%constraints_bfield)
+         constraints_bfield = this%constraints_bfield
+      else
+         allocate(constraints_bfield(1, 1))
+         constraints_bfield = 0.0_rp
+      end if
 
-      open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
+      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
-         call g_logger%fatal('file '//fmt('A', fname)//' not found', __FILE__, __LINE__)
+         call g_logger%fatal('file '//fmt('A', fname_)//' not found', __FILE__, __LINE__)
       end if
 
       read (funit, nml=control, iostat=iostatus)
@@ -298,6 +340,7 @@ contains
       close (funit)
 
       ! Setting user values
+      this%lmax = lmax
       this%npold = npold
       this%llsp = llsp
       this%lld = lld
@@ -323,6 +366,30 @@ contains
       this%cond_type = cond_type
       this%cond_calctype = cond_calctype
 
+      ! Read optional constraints namelist and move values into the control object
+      open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
+      if (iostatus2 == 0) then
+         read (funit2, nml=constraints, iostat=iostatus2)
+         if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
+            call g_logger%error('Error while reading constraints namelist', __FILE__, __LINE__)
+         else
+            this%constraints_enable = constraints_enable
+            this%constraints_i_cons = constraints_i_cons
+            this%constraints_code_prefac = constraints_code_prefac
+            if (allocated(constraints_mom_ref)) then
+               if (allocated(this%constraints_mom_ref)) deallocate(this%constraints_mom_ref)
+               allocate(this%constraints_mom_ref(size(constraints_mom_ref,1), size(constraints_mom_ref,2)))
+               this%constraints_mom_ref = constraints_mom_ref
+            end if
+            if (allocated(constraints_bfield)) then
+               if (allocated(this%constraints_bfield)) deallocate(this%constraints_bfield)
+               allocate(this%constraints_bfield(size(constraints_bfield,1), size(constraints_bfield,2)))
+               this%constraints_bfield = constraints_bfield
+            end if
+         end if
+         close (funit2)
+      end if
+
       ! end default
 
       ! Mandatory statements
@@ -338,6 +405,11 @@ contains
       end if
       ! end reading the control file
 
+      ! Initialise basis dimensions (norb, nb, spin_off) from lmax
+      call basis_init(this%lmax)
+      ! Initialise spin and orbital angular momentum operator matrices
+      call init_math_operators()
+
       ! check input
       call this%check_all()
    end subroutine build_from_file
@@ -352,7 +424,8 @@ contains
       class(control), intent(out) :: this
 
       this%calctype = ''
-      this%npold = 9
+      this%lmax = 2
+      this%npold = norb
       this%llsp = 16
       this%lld = 16
       this%idos = 0
@@ -379,6 +452,10 @@ contains
       this%cond_ll = 200
       this%cond_type = 'charge'
       this%cond_calctype = 'per_type'
+      ! default constraints settings
+      this%constraints_enable = .false.
+      this%constraints_i_cons = 0
+      this%constraints_code_prefac = 1
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -430,7 +507,7 @@ contains
       else if (present(unit)) then
          write (unit, nml=control)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=control)
          close (newunit)
       else
@@ -519,4 +596,3 @@ contains
    end subroutine check_all
 
 end module control_mod
-

@@ -1,4 +1,4 @@
-!---------------------------------------------------------------------------
+ !---------------------------------------------------------------------------
 ! DESCRIPTION:
 !> @brief
 !> Symmetry analysis module for crystallographic operations and k-path generation
@@ -17,6 +17,7 @@ module symmetry_mod
    use logger_mod, only: g_logger
    use string_mod, only: int2str, real2str
    use lattice_mod, only: lattice
+   use mpi_mod, only: rank
 #ifdef USE_SPGLIB
    use spglib_interface_mod, only: spglib_interface
 #endif
@@ -76,6 +77,13 @@ module symmetry_mod
 
 contains
 
+   subroutine root_info(message, file_name, line_no)
+      character(len=*), intent(in) :: message, file_name
+      integer, intent(in) :: line_no
+
+      if (rank == 0) call g_logger%info(message, file_name, line_no)
+   end subroutine root_info
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -119,15 +127,15 @@ contains
       if (this%spglib%is_available()) then
          ! Get space group information
          call this%get_symmetry_info()
-         call g_logger%info('initialize_symmetry: Detected space group ' // &
-                           trim(this%space_group_symbol) // ' ( #' // &
-                           trim(int2str(this%space_group_number)) // ' ), crystal system: ' // &
-                           trim(this%crystal_system), __FILE__, __LINE__)
+         call root_info('initialize_symmetry: Detected space group ' // &
+                        trim(this%space_group_symbol) // ' ( #' // &
+                        trim(int2str(this%space_group_number)) // ' ), crystal system: ' // &
+                        trim(this%crystal_system), __FILE__, __LINE__)
       else
          call g_logger%warning('initialize_symmetry: spglib not available', __FILE__, __LINE__)
       end if
 #else
-      call g_logger%info('initialize_symmetry: Built without spglib support', __FILE__, __LINE__)
+      call root_info('initialize_symmetry: Built without spglib support', __FILE__, __LINE__)
 #endif
       
    end subroutine initialize_symmetry

@@ -32,6 +32,10 @@ module exchange_mod
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
+#ifdef USE_MPI
+   use mpi
+#endif
+   use cfd
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -112,6 +116,12 @@ contains
       obj%hamiltonian => bands_obj%recursion%hamiltonian
 
       call obj%restore_to_default()
+      ! initialize constraining if requested for exchange calculations
+      if (associated(obj%control)) then
+         if (obj%control%constraints_enable) then
+            call initialize_cfd(obj%lattice%nrec, 1, obj%control%constraints_i_cons, obj%control%constraints_code_prefac)
+         end if
+      end if
    end function constructor
 
    subroutine destructor(this)
@@ -1272,6 +1282,10 @@ contains
          this%jij = 0.0d0
          call simpson_f(this%jij, this%en%ene, this%en%fermi, this%en%nv1, real(jtotso), .true., .false., 0.0d0)
          T_comm_xcso(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
+         do nv = 1, this%en%channels_ldos + 10
+            this%jij = 0.0d0
+            call simpson_f(this%jij, this%en%ene, this%en%ene(nv), this%en%nv1, real(jtotso), .true., .false., 0.0d0)
+         end do
          this%jij = 0.0d0
          call simpson_f(this%jij, this%en%ene, this%en%fermi, this%en%nv1, real(jtotfo), .true., .false., 0.0d0)
          T_comm_xcfo(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
@@ -1369,41 +1383,41 @@ contains
 
             ! Jij second order
             this%jij = T_comm_xcso(1, njij_glob)
-            write (20, '(2i8,2x,3f12.6,2x,1f12.6,1x,f12.6)') &
+            write (20, '(2i8,2x,3f12.6,2x,1es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Jij first order
             this%jij = T_comm_xcfo(1, njij_glob)
-            write (25, '(2i8,2x,3f12.6,2x,1f12.6,1x,f12.6)') &
+            write (25, '(2i8,2x,3f12.6,2x,1es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             !  Jij parts
             this%jijcd = T_comm_xcparts(1, njij_glob) ; this%jijsd = T_comm_xcparts(2, njij_glob)    
             this%jijcc = T_comm_xcparts(3, njij_glob) ; this%jijsc = T_comm_xcparts(4, njij_glob) 
-            write (70, '(2i8,2x,3f12.6,2x,4f12.6,1x,f12.6)') &
+            write (70, '(2i8,2x,3f12.6,2x,4es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%jijcd, this%jijsd, this%jijcc, this%jijsc, &
       & norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij second order
             this%dmi = T_comm_xcso(2:4, njij_glob)
-            write (30, '(2i8,2x,3f12.6,2x,3f12.6,1x,f12.6)') &
+            write (30, '(2i8,2x,3f12.6,2x,3es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmi, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij first order
             this%dmi = T_comm_xcfo(2:4, njij_glob)
-            write (35, '(2i8,2x,3f12.6,2x,3f12.6,1x,f12.6)') &
+            write (35, '(2i8,2x,3f12.6,2x,3es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmi, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Dij parts
             this%dmicc = T_comm_xcparts(5:7, njij_glob) ; this%dmisc = T_comm_xcparts(8:10, njij_glob)
-            write (75, '(2i8,2x,3f12.6,2x,6f12.6,1x,f12.6)') &
+            write (75, '(2i8,2x,3f12.6,2x,6es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%dmicc, this%dmisc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij second order
             this%aij = reshape(T_comm_xcso(5:13, njij_glob), [3, 3])
-            write (40, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
+            write (40, '(2i8,2x,3f12.6,2x,9es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij first order
             this%aij = reshape(T_comm_xcfo(5:13, njij_glob), [3, 3])
-            write (45, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
+            write (45, '(2i8,2x,3f12.6,2x,9es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             ! Aij parts
             this%aijsd = reshape(T_comm_xcparts(11:19, njij_glob), [3, 3]); this%aijsc = reshape(T_comm_xcparts(20:28, njij_glob), [3, 3])
-            write (80, '(2i8,2x,3f12.6,2x,18f12.6,1x,f12.6)') &
+            write (80, '(2i8,2x,3f12.6,2x,18es16.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aijsd, this%aijsc, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
          end do
       end if
@@ -1431,6 +1445,7 @@ contains
 
    subroutine calculate_exchange(this)
       use mpi_mod
+      use Parameters
       class(exchange) :: this
       complex(rp), dimension(9, 9) :: dmat1, dmat2, tmat1, tmat2, tmat3, tmat4, smat
       complex(rp), dimension(this%en%channels_ldos + 10) :: jtot, jcomp
@@ -1439,6 +1454,9 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(3, 3) :: jtens
       integer :: nv, i, j, k, l, njij, funit, iostatus
+      ! variables for constraining
+      real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
+      integer :: ia_loc
       logical :: isopen
 
       integer :: njij_glob
@@ -1452,6 +1470,30 @@ contains
       ! row = [ jij dij aij]
       allocate (T_comm_xc(13, this%lattice%njij))
       T_comm_xc = 0.0_rp
+
+      ! Apply constraining field for exchange if requested
+      if (associated(this%control)) then
+         if (this%control%constraints_enable) then
+            allocate (mom_in(3, this%lattice%nrec))
+            allocate (mom_ref(3, this%lattice%nrec))
+            allocate (bfield(3, this%lattice%nrec))
+            do ia_loc = 1, this%lattice%nrec
+               mom_in(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom(:)
+               if (allocated(this%control%constraints_mom_ref)) then
+                  if (size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
+                     mom_ref(:, ia_loc) = this%control%constraints_mom_ref(:, ia_loc)
+                  else
+                     mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+                  end if
+               else
+                  mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
+               end if
+               bfield(:, ia_loc) = 0.0_dblprec
+            end do
+            call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)
+            deallocate(mom_in, mom_ref, bfield)
+         end if
+      end if
 
       inquire (unit=20, opened=isopen)
       if (isopen) then

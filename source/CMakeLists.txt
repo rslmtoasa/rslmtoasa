@@ -3,6 +3,7 @@ set(cmake_archive_output_directory lib)
 message(STATUS "The project name is: ${PROJECT_NAME}")
 add_library(${PROJECT_NAME} STATIC
     array.f90
+    basis.f90
     bands.f90
     calculation.f90
     charge.f90
@@ -42,3 +43,5 @@ add_library(${PROJECT_NAME} STATIC
 )
 add_subdirectory(./include_codes/abspinlib)
 target_link_libraries(${PROJECT_NAME} abspinlib)
+add_subdirectory(./include_codes/strux_lib)
+target_link_libraries(${PROJECT_NAME} strux_lib)

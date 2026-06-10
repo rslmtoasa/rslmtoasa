@@ -78,10 +78,17 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
                  Fortran "-cpp"
                          "-fpp")
 
-# There is some bug where -march=native doesn't work on Mac
+# Optimize for the host's architecture (default: native -march=native).
+# For portable/CI builds where the binary may run on a different machine,
+# pass -DENABLE_MARCH_NATIVE=OFF to use generic baseline (-mtune=generic).
+option(ENABLE_MARCH_NATIVE "Optimize for native CPU architecture (-march=native)" ON)
 IF(APPLE)
     SET(GNUNATIVE "-mtune=native")
+ELSEIF(NOT ENABLE_MARCH_NATIVE)
+    # Portable/CI: generic baseline
+    SET(GNUNATIVE "-mtune=generic")
 ELSE()
+    # Default: native optimization
     SET(GNUNATIVE "-march=native")
 ENDIF()
 # Optimize for the host's architecture
@@ -133,11 +140,10 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 
 # Check array bounds
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
-                 Fortran "-check bounds"  # Intel
-                         "-fcheck=bounds" # GNU (New style)
-                         "-fbounds-check" # GNU (Old style)
-                         "-Mbounds"       # Portland Group
-                          "/check:bounds"  # Intel Windows
+                 Fortran "-check all"   # Intel
+                         "-fcheck=all"  # GNU (bounds + do + mem + pointer + recursion)
+                         "-Mbounds"     # Portland Group
+                          "/check:all"   # Intel Windows
                 )
 
 #####################
@@ -164,6 +170,13 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
 #####################
 
 # NOTE: agressive optimizations (-O3) are already turned on by default
+# For GNU, force conservative optimization in RELEASE to match stable runtime
+# behavior observed in DEBUG for strux/SPDF workflows.
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran REQUIRED "-O0")
+endif()
+
 # Optimizations
 #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #                 Fortran REQUIRED "-fastsse" # All compilers not on Windows
@@ -173,21 +186,21 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
 #                )
 
 
-# Unroll loops
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-                 Fortran "-funroll-loops" # GNU
-                         "-unroll"        # Intel
-                         "-Munroll"       # Portland Group
-                         "/unroll"        # Intel Windows
-                )
+# Unroll/inline are disabled for GNU release builds due numerical-instability
+# regressions in LMTO47 screening. Keep them for non-GNU compilers.
+if (NOT CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran "-unroll"        # Intel
+                           "-Munroll"       # Portland Group
+                           "/unroll"        # Intel Windows
+                  )
 
-# Inline functions
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-                 Fortran "-inline"            # Intel
-                         "-finline-functions" # GNU
-                         "-Minline"           # Portland Group
-                         "/Qinline"           # Intel Windows
-                )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran "-inline"            # Intel
+                           "-Minline"           # Portland Group
+                           "/Qinline"           # Intel Windows
+                  )
+endif()
 
              ## Interprocedural (link-time) optimizations
              #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
