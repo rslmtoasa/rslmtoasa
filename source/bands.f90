@@ -90,6 +90,7 @@ module bands_mod
       procedure :: calculate_band_energy
       procedure :: calculate_magnetic_moments
       procedure :: calculate_orbital_moments
+      procedure :: calculate_orbital_quadrupoles
       procedure :: calculate_magnetic_torques
       procedure :: calculate_fermi
       procedure :: calculate_fermi_gauss
@@ -248,7 +249,7 @@ contains
       nv1 = this%en%nv1
 
       ! Define the valence electrons from the bulk parameters
-      this%qqv = real(sum(this%symbolic_atom(1:this%lattice%nbulk_bulk)%element%valence))
+      this%qqv = real(sum(this%symbolic_atom(1:this%lattice%nbulk_bulk)%element%valence)) 
       if (rank == 0) call g_logger%info('Valence is:'//fmt('f16.6', this%qqv), __FILE__, __LINE__)
       ! Calculate the total density of states
       !do ia=1, this%lattice%nrec
@@ -852,6 +853,219 @@ contains
          end if
       end do
    end subroutine calculate_magnetic_moments
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Calculates the on-site orbital quadrupolar moments / OAP components:
+   !>
+   !>   Qxx = Lx^2
+   !>   Qyy = Ly^2
+   !>   Qzz = Lz^2
+   !>   Qxy = 1/2 {Lx,Ly}
+   !>   Qyz = 1/2 {Ly,Lz}
+   !>   Qzx = 1/2 {Lz,Lx}
+   !>
+   !> where {A,B} = AB + BA.
+   !>
+   !> The expectation value is computed from the on-site Green function as
+   !>
+   !>   <Q_ab> = -1/pi Im int^{Ef} dE Tr[ Q_ab G_ii(E) ].
+   !>
+   !> The operators are first transformed from Cartesian to spherical harmonics
+   !> coordinates, following the same convention used in calculate_orbital_moments.
+   !---------------------------------------------------------------------------
+   subroutine calculate_orbital_quadrupoles(this)
+      use mpi_mod
+      class(bands) :: this
+
+      ! Local variables
+      real(rp) :: qxx, qyy, qzz, qxy, qyz, qzx
+      real(rp) :: qxxe, qyye, qzze, qxye, qyze, qzxe
+      real(rp) :: qx2y2, q3z2r2
+
+      real(rp), dimension(this%en%channels_ldos+10) :: qxxi, qyyi, qzzi
+      real(rp), dimension(this%en%channels_ldos+10) :: qxyi, qyzi, qzxi
+
+      integer :: na      ! Atom index
+      integer :: ie      ! Energy channel index
+
+      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
+
+      complex(rp), dimension(18, 18) :: mQxx_ext, mQyy_ext, mQzz_ext
+      complex(rp), dimension(18, 18) :: mQxy_ext, mQyz_ext, mQzx_ext
+
+      integer :: na_loc, unitquad
+      character(len=256) :: fnamequad
+
+      !-----------------------------------------------------------------------
+      ! Getting the angular momentum operators from math_mod.
+      ! They are initially in Cartesian coordinates.
+      !-----------------------------------------------------------------------
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      !-----------------------------------------------------------------------
+      ! Transforming them into the spherical harmonics coordinates.
+      ! This follows the same convention used in calculate_orbital_moments.
+      !-----------------------------------------------------------------------
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      !-----------------------------------------------------------------------
+      ! Extending the 9x9 orbital operators to the 18x18 spin-orbital basis.
+      ! This assumes the basis ordering:
+      !
+      !   1:9   -> spin up orbitals
+      !   10:18 -> spin down orbitals
+      !
+      ! with the same orbital operator acting in both spin blocks.
+      !-----------------------------------------------------------------------
+      mLx_ext = (0.0_rp, 0.0_rp)
+      mLy_ext = (0.0_rp, 0.0_rp)
+      mLz_ext = (0.0_rp, 0.0_rp)
+
+      mLx_ext(1:9, 1:9)     = mLx(:, :)
+      mLx_ext(10:18, 10:18) = mLx(:, :)
+
+      mLy_ext(1:9, 1:9)     = mLy(:, :)
+      mLy_ext(10:18, 10:18) = mLy(:, :)
+
+      mLz_ext(1:9, 1:9)     = mLz(:, :)
+      mLz_ext(10:18, 10:18) = mLz(:, :)
+
+      !-----------------------------------------------------------------------
+      ! Constructing the raw quadrupolar / OAP operators:
+      !
+      !   Q_ab = 1/2 {L_a,L_b}
+      !
+      ! For diagonal components this reduces to:
+      !
+      !   Q_xx = Lx^2, Q_yy = Ly^2, Q_zz = Lz^2.
+      !-----------------------------------------------------------------------
+      mQxx_ext = matmul(mLx_ext, mLx_ext)
+      mQyy_ext = matmul(mLy_ext, mLy_ext)
+      mQzz_ext = matmul(mLz_ext, mLz_ext)
+
+      mQxy_ext = 0.5_rp * (matmul(mLx_ext, mLy_ext) + matmul(mLy_ext, mLx_ext))
+      mQyz_ext = 0.5_rp * (matmul(mLy_ext, mLz_ext) + matmul(mLz_ext, mLy_ext))
+      mQzx_ext = 0.5_rp * (matmul(mLz_ext, mLx_ext) + matmul(mLx_ext, mLz_ext))
+
+      !-----------------------------------------------------------------------
+      ! Make sure the on-site Green functions for LDOS are available.
+      ! This follows the same structure as calculate_orbital_moments.
+      !-----------------------------------------------------------------------
+      call this%calculate_orbital_dos()
+
+      !-----------------------------------------------------------------------
+      ! Loop over atoms assigned to this MPI rank.
+      !-----------------------------------------------------------------------
+      do na = start_atom, end_atom
+         na_loc = g2l_map(na)
+
+         qxx = 0.0_rp
+         qyy = 0.0_rp
+         qzz = 0.0_rp
+         qxy = 0.0_rp
+         qyz = 0.0_rp
+         qzx = 0.0_rp
+
+         !--------------------------------------------------------------------
+         ! Energy-resolved integrands:
+         !
+         !   Im Tr[ Q_ab G_ii(E) ]
+         !
+         ! The final expectation value is obtained after integration as:
+         !
+         !   - integral / pi.
+         !--------------------------------------------------------------------
+         do ie = 1, this%en%channels_ldos + 10
+            qxxi(ie) = imtrace(matmul(mQxx_ext, this%green%g0(:, :, ie, na_loc)))
+            qyyi(ie) = imtrace(matmul(mQyy_ext, this%green%g0(:, :, ie, na_loc)))
+            qzzi(ie) = imtrace(matmul(mQzz_ext, this%green%g0(:, :, ie, na_loc)))
+
+            qxyi(ie) = imtrace(matmul(mQxy_ext, this%green%g0(:, :, ie, na_loc)))
+            qyzi(ie) = imtrace(matmul(mQyz_ext, this%green%g0(:, :, ie, na_loc)))
+            qzxi(ie) = imtrace(matmul(mQzx_ext, this%green%g0(:, :, ie, na_loc)))
+         end do
+
+         !--------------------------------------------------------------------
+         ! Integrating up to the Fermi energy.
+         !--------------------------------------------------------------------
+         call simpson_m(qxx, this%en%edel, this%en%fermi, this%nv1, qxxi, this%e1, 0, this%en%ene)
+         call simpson_m(qyy, this%en%edel, this%en%fermi, this%nv1, qyyi, this%e1, 0, this%en%ene)
+         call simpson_m(qzz, this%en%edel, this%en%fermi, this%nv1, qzzi, this%e1, 0, this%en%ene)
+
+         call simpson_m(qxy, this%en%edel, this%en%fermi, this%nv1, qxyi, this%e1, 0, this%en%ene)
+         call simpson_m(qyz, this%en%edel, this%en%fermi, this%nv1, qyzi, this%e1, 0, this%en%ene)
+         call simpson_m(qzx, this%en%edel, this%en%fermi, this%nv1, qzxi, this%e1, 0, this%en%ene)
+
+         !--------------------------------------------------------------------
+         ! Writing energy-resolved cumulative quadrupolar moments.
+         !
+         ! Columns:
+         !   E-Ef, Qxx, Qyy, Qzz, Qxy, Qyz, Qzx,
+         !   Qx2y2, Q3z2r2
+         !--------------------------------------------------------------------
+         fnamequad = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbquadene.out"
+         unitquad = rank * 132 + na
+
+         open(unit=unitquad, file=fnamequad, status='replace', action='write')
+
+         do ie = 1, this%en%channels_ldos + 10
+            call simpson_f(qxxe, this%en%ene, this%en%ene(ie), this%en%nv1, qxxi, .true., .false., 0.0_rp)
+            call simpson_f(qyye, this%en%ene, this%en%ene(ie), this%en%nv1, qyyi, .true., .false., 0.0_rp)
+            call simpson_f(qzze, this%en%ene, this%en%ene(ie), this%en%nv1, qzzi, .true., .false., 0.0_rp)
+
+            call simpson_f(qxye, this%en%ene, this%en%ene(ie), this%en%nv1, qxyi, .true., .false., 0.0_rp)
+            call simpson_f(qyze, this%en%ene, this%en%ene(ie), this%en%nv1, qyzi, .true., .false., 0.0_rp)
+            call simpson_f(qzxe, this%en%ene, this%en%ene(ie), this%en%nv1, qzxi, .true., .false., 0.0_rp)
+
+            write(unitquad, '(9es16.6)') this%en%ene(ie) - this%en%fermi, &
+                 -(qxxe/pi), -(qyye/pi), -(qzze/pi), &
+                 -(qxye/pi), -(qyze/pi), -(qzxe/pi), &
+                 -((qxxe - qyye)/pi), &
+                 -((2.0_rp*qzze - qxxe - qyye)/pi)
+         end do
+
+         rewind(unitquad)
+         close(unitquad)
+
+         !--------------------------------------------------------------------
+         ! Final integrated expectation values.
+         !--------------------------------------------------------------------
+         qxx = -(qxx / pi)
+         qyy = -(qyy / pi)
+         qzz = -(qzz / pi)
+
+         qxy = -(qxy / pi)
+         qyz = -(qyz / pi)
+         qzx = -(qzx / pi)
+
+         qx2y2  = qxx - qyy
+         q3z2r2 = 2.0_rp*qzz - qxx - qyy
+
+         !--------------------------------------------------------------------
+         ! Logging.
+         !--------------------------------------------------------------------
+         call g_logger%info('Orbital quadrupoles of atom'//fmt('i4', na)// &
+              ' Qxx Qyy Qzz Qxy Qyz Qzx = '// &
+              fmt('f10.6', qxx)//' '//fmt('f10.6', qyy)//' '//fmt('f10.6', qzz)//' '// &
+              fmt('f10.6', qxy)//' '//fmt('f10.6', qyz)//' '//fmt('f10.6', qzx), &
+              __FILE__, __LINE__)
+
+         call g_logger%info('Traceless orbital quadrupoles of atom'//fmt('i4', na)// &
+              ' Qx2y2 Q3z2r2 = '// &
+              fmt('f10.6', qx2y2)//' '//fmt('f10.6', q3z2r2), &
+              __FILE__, __LINE__)
+
+      end do
+
+   end subroutine calculate_orbital_quadrupoles
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

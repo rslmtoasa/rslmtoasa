@@ -618,6 +618,7 @@ contains
       call save_state(lattice_obj%symbolic_atoms)
 
       call hamiltonian_obj%rs2pao()
+      call bands_obj%calculate_orbital_quadrupoles
       !call bands_obj%calculate_moments_gauss_legendre()
    end subroutine pre_processing_bravais
 
@@ -851,7 +852,7 @@ contains
       case ('I')
          call lattice_obj%build_data()
          call lattice_obj%bravais()
-         call lattice_obj%build_surf_full()
+         !call lattice_obj%build_surf_full()
          call lattice_obj%newclu()
          call lattice_obj%structb(.true.)
       end select
