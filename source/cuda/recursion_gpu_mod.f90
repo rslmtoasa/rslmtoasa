@@ -64,6 +64,7 @@ module recursion_gpu_mod
       procedure :: set_velocity => rsgpu_set_velocity
       procedure :: set_grid => rsgpu_set_grid
       procedure :: set_precision => rsgpu_set_precision
+      procedure :: chebyshev_dos => rsgpu_chebyshev_dos
       procedure :: ham_apply => rsgpu_ham_apply
       procedure :: chebyshev_moments => rsgpu_chebyshev_moments
       procedure :: block_lanczos => rsgpu_block_lanczos
@@ -119,6 +120,16 @@ module recursion_gpu_mod
          import :: c_ptr, c_int
          type(c_ptr), value :: ctx
          integer(c_int), value :: prec
+         integer(c_int) :: ierr
+      end function
+
+      function c_rsrec_chebyshev_dos(ctx, mu, n_mom, natoms, ene, nv, &
+                                     a, b, g0) &
+         bind(C, name="rsrec_chebyshev_dos") result(ierr)
+         import :: c_ptr, c_int, c_double
+         type(c_ptr), value :: ctx, mu, ene, g0
+         integer(c_int), value :: n_mom, natoms, nv
+         real(c_double), value :: a, b
          integer(c_int) :: ierr
       end function
 
@@ -253,6 +264,30 @@ contains
       if (c_rsrec_set_precision(this%ctx, int(prec, c_int)) /= 0) &
          call die("set_precision")
    end subroutine rsgpu_set_precision
+
+   !> Green function / DOS reconstruction, drop-in for the per-atom body
+   !> of chebyshev_green: pass the LOCAL moment and g0 slices, e.g.
+   !>   call gpu%chebyshev_dos(rec%mu_n(:, :, :, 1:n_loc), &
+   !>                          en%ene(1:nv), a, b, green%g0(:, :, 1:nv, 1:n_loc))
+   !> with a = (emax_win - emin_win)/(2 - 0.3_rp), b = (emax_win + emin_win)/2
+   !> from resolve_chebyshev_window, replacing the whole n/ie/i loop nest.
+   subroutine rsgpu_chebyshev_dos(this, mu_n, ene, a, b, g0)
+      class(rsgpu), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(in), target :: mu_n
+      real(rp), dimension(:), intent(in), target :: ene
+      real(rp), intent(in) :: a, b
+      complex(rp), dimension(:, :, :, :), intent(inout), target :: g0
+      integer(c_int) :: n_mom, natoms, nv
+      n_mom = int(size(mu_n, 3), c_int)
+      natoms = int(size(mu_n, 4), c_int)
+      nv = int(size(ene), c_int)
+      if (size(g0, 3) < nv .or. size(g0, 4) < natoms) &
+         call die("chebyshev_dos: g0 too small")
+      if (c_rsrec_chebyshev_dos(this%ctx, c_loc(mu_n), n_mom, natoms, &
+                                c_loc(ene), nv, real(a, c_double), &
+                                real(b, c_double), c_loc(g0)) /= 0) &
+         call die("chebyshev_dos")
+   end subroutine rsgpu_chebyshev_dos
 
    !> psi_out = (H psi_in - b psi_in)/a  -- drop-in for ham_vec_matmul
    subroutine rsgpu_ham_apply(this, psi_in, psi_out, a, b)

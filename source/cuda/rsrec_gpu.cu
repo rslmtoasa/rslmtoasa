@@ -1449,3 +1449,125 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
     cudaFree(left); cudaFree(dmu); cudaFree(R);
     return 0;
 }
+
+/* --------------------------------------------------------------------------
+ * Chebyshev Green-function / DOS reconstruction (GPU port of
+ * chebyshev_green in bands.f90; identical math and Jackson convention).
+ *
+ *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) F(i,ie),
+ *   F(i,ie) = g_J(i) c_i (-i) e^{-i(i-1)acos(x_ie)} / sqrt(a^2-(E_ie-b)^2)
+ *
+ * F is built by one kernel; the contraction over moments is ONE
+ * cublas[Z|C]gemmStridedBatched over the local atoms (strideB = 0 -- all
+ * atoms share F). Precision follows rsrec_set_precision: fp32 (default,
+ * cgemm3m, consistent with the fp32 moment engine) or fp64
+ * (bit-comparable with the Fortran loop). Atom chunking keeps device
+ * memory bounded for large nv/lld.
+ * ------------------------------------------------------------------------ */
+__global__ void k_build_F64(int N, int nv, const double *__restrict__ ene,
+                            double a, double b, zc *__restrict__ F) {
+    size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= (size_t)N * nv) return;
+    const double PI = 3.14159265358979323846;
+    int i = (int)(idx % N), ie = (int)(idx / N);
+    double x = (ene[ie] - b) / a;
+    double th = acos(x);
+    double pref = rsqrt(a * a - (ene[ie] - b) * (ene[ie] - b));
+    double thl = PI * i / (N + 1.0);
+    double cot = cos(PI / (N + 1.0)) / sin(PI / (N + 1.0));
+    double gj = ((N - i + 1) * cos(thl) + sin(thl) * cot) / (N + 1.0);
+    double cc = (i == 0) ? 1.0 : 2.0;
+    double ang = i * th;                       /* (-i) e^{-i ang}           */
+    F[idx] = make_cuDoubleComplex(-gj * cc * pref * sin(ang),
+                                  -gj * cc * pref * cos(ang));
+}
+
+__global__ void k_z2c(size_t n, const zc *__restrict__ in,
+                      fc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = make_cuFloatComplex((float)in[i].x, (float)in[i].y);
+}
+
+__global__ void k_c2z(size_t n, const fc *__restrict__ in,
+                      zc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = make_cuDoubleComplex(in[i].x, in[i].y);
+}
+
+extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
+                                   int natoms, const double *ene, int nv,
+                                   double a, double b, void *g0_) {
+    if (n_mom < 1 || natoms < 1 || nv < 1) FAIL("chebyshev_dos: bad sizes");
+    const int bb = c->nb * c->nb;
+    const cplx *mu = (const cplx *)mu_;
+    cplx *g0 = (cplx *)g0_;
+    const bool f32 = (c->cheb_prec == 0);
+    const int tpb = 256;
+
+    /* F (always built in fp64; converted once if needed)                   */
+    double *d_ene; zc *d_F64 = nullptr; fc *d_F32 = nullptr;
+    CUCHK(cudaMalloc(&d_ene, nv * sizeof(double)));
+    CUCHK(cudaMemcpy(d_ene, ene, nv * sizeof(double),
+                     cudaMemcpyHostToDevice));
+    size_t nF = (size_t)n_mom * nv;
+    CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
+    k_build_F64<<<(int)((nF + tpb - 1) / tpb), tpb>>>(n_mom, nv, d_ene,
+                                                      a, b, d_F64);
+    CUCHK(cudaGetLastError());
+    if (f32) {
+        CUCHK(cudaMalloc(&d_F32, nF * sizeof(fc)));
+        k_z2c<<<(int)((nF + tpb - 1) / tpb), tpb>>>(nF, d_F64, d_F32);
+        CUCHK(cudaGetLastError());
+    }
+
+    /* atom chunking against free device memory                             */
+    size_t per_atom = (size_t)bb * n_mom * sizeof(zc)        /* mu          */
+                    + (size_t)bb * nv * sizeof(zc)           /* g0          */
+                    + (f32 ? ((size_t)bb * n_mom + (size_t)bb * nv)
+                                 * sizeof(fc) : 0);
+    size_t freeb, totalb;
+    cudaMemGetInfo(&freeb, &totalb);
+    int chunk = (int)std::min<size_t>((size_t)natoms,
+                                      std::max<size_t>(1, (freeb * 7 / 10)
+                                                          / per_atom));
+    zc *d_mu, *d_g0; fc *d_muf = nullptr, *d_g0f = nullptr;
+    CUCHK(cudaMalloc(&d_mu, (size_t)bb * n_mom * chunk * sizeof(zc)));
+    CUCHK(cudaMalloc(&d_g0, (size_t)bb * nv * chunk * sizeof(zc)));
+    if (f32) {
+        CUCHK(cudaMalloc(&d_muf, (size_t)bb * n_mom * chunk * sizeof(fc)));
+        CUCHK(cudaMalloc(&d_g0f, (size_t)bb * nv * chunk * sizeof(fc)));
+    }
+    const fc conef = make_cuFloatComplex(1.0f, 0.0f);
+    const fc czerof = make_cuFloatComplex(0.0f, 0.0f);
+
+    for (int n0 = 0; n0 < natoms; n0 += chunk) {
+        int nc = std::min(chunk, natoms - n0);
+        size_t nmu = (size_t)bb * n_mom * nc, ng = (size_t)bb * nv * nc;
+        CUCHK(cudaMemcpy(d_mu, mu + (size_t)bb * n_mom * n0,
+                         nmu * sizeof(zc), cudaMemcpyHostToDevice));
+        if (f32) {
+            k_z2c<<<(int)((nmu + tpb - 1) / tpb), tpb>>>(nmu, d_mu, d_muf);
+            CUCHK(cudaGetLastError());
+            CBCHK(cublasCgemm3mStridedBatched(
+                c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, nv, n_mom, &conef,
+                d_muf, bb, (long long)bb * n_mom,
+                d_F32, n_mom, 0, &czerof,
+                d_g0f, bb, (long long)bb * nv, nc));
+            k_c2z<<<(int)((ng + tpb - 1) / tpb), tpb>>>(ng, d_g0f, d_g0);
+            CUCHK(cudaGetLastError());
+        } else {
+            CBCHK(cublasZgemmStridedBatched(
+                c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, nv, n_mom, &Z_ONE,
+                d_mu, bb, (long long)bb * n_mom,
+                d_F64, n_mom, 0, &Z_ZERO,
+                d_g0, bb, (long long)bb * nv, nc));
+        }
+        CUCHK(cudaMemcpy(g0 + (size_t)bb * nv * n0, d_g0, ng * sizeof(zc),
+                         cudaMemcpyDeviceToHost));
+    }
+    for (void *p : {(void *)d_ene, (void *)d_F64, (void *)d_F32,
+                    (void *)d_mu, (void *)d_g0, (void *)d_muf,
+                    (void *)d_g0f})
+        if (p) cudaFree(p);
+    return 0;
+}

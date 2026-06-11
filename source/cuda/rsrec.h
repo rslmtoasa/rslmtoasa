@@ -95,6 +95,28 @@ int rsrec_set_grid(rsrec_ctx *ctx, const int *coords, int use_structured);
  * orthogonalisation is precision-sensitive) always run in fp64.            */
 int rsrec_set_precision(rsrec_ctx *ctx, int prec);
 
+/* --- Chebyshev Green-function / DOS reconstruction ------------------------
+ * GPU/GEMM port of chebyshev_green (bands.f90): for each local atom n
+ *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) * gJ(i) c_i (-i) e^{-i(i-1)acos(x)}
+ *                  / sqrt(a^2 - (E_ie - b)^2),   x = (E_ie - b)/a
+ * with the Jackson kernel gJ in the exact bands.f90 convention and
+ * c_1 = 1, c_i = 2 otherwise. The transfer matrix F(i,ie) is built once;
+ * the moment contraction is one strided-batched GEMM over atoms.
+ *
+ *   mu      : (nb, nb, n_moments, natoms) complex(rp) -- the LOCAL slice
+ *             mu_n(:,:,:,g2l_map(start_atom:end_atom)); n_moments = 2*lld+2
+ *   ene     : (nv) real(rp) energy grid; keep it inside the (a,b) window
+ *             (outside points give NaN, exactly like the CPU loop)
+ *   g0      : (nb, nb, nv, natoms) complex(rp) out -- same layout as
+ *             this%g0(:,:,1:nv, local atoms); DOS = -aimag(g0)/pi
+ * a, b are the window coefficients, a = (emax-emin)/(2-0.3),
+ * b = (emax+emin)/2, as in chebyshev_green. Precision follows
+ * rsrec_set_precision (fp32 default ~1e-6, matching the moment engine;
+ * fp64 bit-comparable with the Fortran triple loop).                       */
+int rsrec_chebyshev_dos(rsrec_ctx *ctx, const void *mu, int n_moments,
+                        int natoms, const double *ene, int nv,
+                        double a, double b, void *g0);
+
 /* --- core matvec (exposed mostly for testing / custom drivers) ----------- */
 /* y = (H x - b x)/a   with x, y: (nb, nrhs, kk).  a=1,b=0 gives plain H x.
  * which: 0 = Hamiltonian, 1 = v_a, 2 = v_b (no shift/scale applied to 1,2

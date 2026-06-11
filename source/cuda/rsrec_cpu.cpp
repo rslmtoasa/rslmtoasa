@@ -22,6 +22,18 @@ typedef std::complex<double> cplx;
 extern "C" void zheev_(const char *jobz, const char *uplo, const int *n,
                        cplx *a, const int *lda, double *w, cplx *work,
                        const int *lwork, double *rwork, int *info);
+extern "C" void zgemm_(const char *, const char *, const int *, const int *,
+                       const int *, const std::complex<double> *,
+                       const std::complex<double> *, const int *,
+                       const std::complex<double> *, const int *,
+                       const std::complex<double> *, std::complex<double> *,
+                       const int *);
+extern "C" void cgemm_(const char *, const char *, const int *, const int *,
+                       const int *, const std::complex<float> *,
+                       const std::complex<float> *, const int *,
+                       const std::complex<float> *, const int *,
+                       const std::complex<float> *, std::complex<float> *,
+                       const int *);
 
 static std::string g_err;
 extern "C" const char *rsrec_last_error(void) { return g_err.c_str(); }
@@ -865,6 +877,83 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                     }
             }
         }
+    }
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Chebyshev Green-function / DOS reconstruction (mirrors chebyshev_green in
+ * bands.f90, including its Jackson kernel convention):
+ *
+ *   g0(:,:,ie,n) = sum_i mu(:,:,i,n) * F(i,ie)
+ *   F(i,ie) = g_J(i) * c_i * (-i) e^{-i (i-1) arccos(x_ie)}
+ *                                       / sqrt(a^2 - (E_ie - b)^2)
+ *   x = (E - b)/a,  c_1 = 1, c_i>=2 = 2,
+ *   g_J(i) = [(N-(i-1)+1) cos(th_i) + sin(th_i)/tan(pi/(N+1))]/(N+1),
+ *   th_i = pi (i-1)/(N+1),  N = n_moments.
+ *
+ * Evaluated as ONE GEMM per atom (G_n = M_n * F): the scalar exp/acos
+ * triple loop of the Fortran routine becomes a level-3 BLAS call; the
+ * unused t_polynomial evaluation is dropped. DOS = -Im g0 / pi as usual.
+ * Precision follows rsrec_set_precision (fp32 default, matching the
+ * moment engine; fp64 bit-comparable with the Fortran loop).
+ * Energies outside the (a, b) window produce NaN exactly like the CPU
+ * code (sqrt of a negative argument) -- keep the grid inside the window.
+ * ------------------------------------------------------------------------ */
+static void build_F(int N, int nv, const double *ene, double a, double b,
+                    cplx *F) {
+    const double PI = 3.14159265358979323846;
+    const double cot = sin(PI / (N + 1.0)) > 0.0
+                           ? cos(PI / (N + 1.0)) / sin(PI / (N + 1.0)) : 0.0;
+#pragma omp parallel for schedule(static)
+    for (int ie = 0; ie < nv; ++ie) {
+        double x = (ene[ie] - b) / a;
+        double th = acos(x);
+        double pref = 1.0 / sqrt(a * a - (ene[ie] - b) * (ene[ie] - b));
+        for (int i = 0; i < N; ++i) {
+            double thl = PI * i / (N + 1.0);
+            double gj = ((N - i + 1) * cos(thl) + sin(thl) * cot) / (N + 1.0);
+            double cc = (i == 0) ? 1.0 : 2.0;
+            double ang = i * th;             /* e^{-i ang} * (-i)           */
+            double fr = -sin(ang), fi = -cos(ang);
+            F[(size_t)i + (size_t)N * ie] = gj * cc * pref * cplx(fr, fi);
+        }
+    }
+}
+
+extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
+                                   int natoms, const double *ene, int nv,
+                                   double a, double b, void *g0_) {
+    if (n_mom < 1 || natoms < 1 || nv < 1) FAIL("chebyshev_dos: bad sizes");
+    const int bb = c->nb * c->nb;
+    const cplx *mu = (const cplx *)mu_;
+    cplx *g0 = (cplx *)g0_;
+    std::vector<cplx> F((size_t)n_mom * nv);
+    build_F(n_mom, nv, ene, a, b, F.data());
+
+    if (c->cheb_prec == 1) {                 /* fp64: one zgemm per atom    */
+        const cplx one(1.0, 0.0), zero(0.0, 0.0);
+        for (int n = 0; n < natoms; ++n)
+            zgemm_("N", "N", &bb, &nv, &n_mom, &one,
+                   mu + (size_t)bb * n_mom * n, &bb, F.data(), &n_mom,
+                   &zero, g0 + (size_t)bb * nv * n, &bb);
+        return 0;
+    }
+    /* fp32 (default): mirrors the CUDA cgemm3m path                        */
+    typedef std::complex<float> cf;
+    std::vector<cf> Ff(F.size()), Mf((size_t)bb * n_mom), Gf((size_t)bb * nv);
+    for (size_t i = 0; i < F.size(); ++i)
+        Ff[i] = cf((float)F[i].real(), (float)F[i].imag());
+    const cf onef(1.0f, 0.0f), zerof(0.0f, 0.0f);
+    for (int n = 0; n < natoms; ++n) {
+        const cplx *Mn = mu + (size_t)bb * n_mom * n;
+        for (size_t i = 0; i < Mf.size(); ++i)
+            Mf[i] = cf((float)Mn[i].real(), (float)Mn[i].imag());
+        cgemm_("N", "N", &bb, &nv, &n_mom, &onef, Mf.data(), &bb,
+               Ff.data(), &n_mom, &zerof, Gf.data(), &bb);
+        cplx *Gn = g0 + (size_t)bb * nv * n;
+        for (size_t i = 0; i < Gf.size(); ++i)
+            Gn[i] = cplx(Gf[i].real(), Gf[i].imag());
     }
     return 0;
 }
