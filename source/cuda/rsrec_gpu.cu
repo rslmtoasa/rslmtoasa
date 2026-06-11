@@ -1038,47 +1038,136 @@ __global__ void k_pack_psi_f32(size_t nfield, int nb, int nrhs, size_t ld,
 /* Fused Chebyshev step:  y = alpha * (Ht x1) + beta * x0   (fp32).
  * alpha=1, beta=0  -> psi1 = Ht psi0      (first application)
  * alpha=2, beta=-1 -> psi2 = 2 Ht psi1 - psi0  (recurrence)
- * One thread block per atom, (nb, nb) = (row, rhs) threads; the H block
- * and the neighbour x1 block are staged through shared memory per shell.
- * Per-type bulk blocks are read through L2 (they typically fit).           */
-__global__ void k_cheb_step_f32(int kk, int nb, int nnmax, int nmax,
-                                const int *__restrict__ nn,
-                                const int *__restrict__ iz,
-                                const fc *__restrict__ fee,
-                                const fc *__restrict__ fhall,
-                                const fc *__restrict__ x1,
-                                const fc *__restrict__ x0,
-                                fc *__restrict__ y,
-                                float alpha, float beta, size_t ld) {
+ *
+ * The NB=18 and NB=9 cases dominate RS-LMTO workloads. They are small
+ * enough that an explicitly unrolled register-level micro-kernel beats the
+ * generic shared-memory path. Shared blocks use LDS padding to eliminate
+ * column-read bank conflicts for even NB (e.g. 18 -> stride 19).          */
+template<int NB>
+__global__ void k_cheb_step_f32_opt(
+    int kk, int nnmax, int nmax,
+    const int *__restrict__ nn,
+    const int *__restrict__ iz,
+    const fc *__restrict__ fee,
+    const fc *__restrict__ fhall,
+    const fc *__restrict__ x1,
+    const fc *__restrict__ x0,
+    fc *__restrict__ y,
+    float alpha, float beta, size_t ld) {
+    constexpr int LDS = (NB % 2 == 0) ? (NB + 1) : NB;
     extern __shared__ fc shf[];
-    fc *sH = shf, *sX = shf + nb * nb;
+    fc *sH = shf;
+    fc *sX = shf + NB * LDS;
     const int k = blockIdx.x;
     if (k >= kk) return;
-    const int l = threadIdx.x, col = threadIdx.y;
-    const size_t bb = (size_t)nb * nb;
+    const int l = threadIdx.x;
+    const int col = threadIdx.y;
+    const size_t bb = (size_t)NB * NB;
     const fc *base = (k < nmax) ? fhall + bb * (size_t)nnmax * k
                                 : fee + bb * (size_t)nnmax * (iz[k] - 1);
     fc acc = make_cuFloatComplex(0.0f, 0.0f);
     const int nr = nn[k];
+
     for (int s = 0; s < nr; ++s) {
         const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
-        if (nbr >= 0) {
-            sH[l + nb * col] = base[bb * s + l + nb * col];
-            sX[l + nb * col] = x1[(size_t)l + nb * nbr + ld * col];
-            __syncthreads();
-            for (int m = 0; m < nb; ++m)
-                acc = ffma(sH[l + nb * m], sX[m + nb * col], acc);
-            __syncthreads();
-        }
+        if (nbr < 0) continue;
+        sH[l + LDS * col] = base[bb * s + l + NB * col];
+        sX[l + LDS * col] = x1[(size_t)l + NB * nbr + ld * col];
+        __syncthreads();
+        #pragma unroll
+        for (int m = 0; m < NB; ++m)
+            acc = ffma(sH[l + LDS * m], sX[m + LDS * col], acc);
+        __syncthreads();
     }
-    const size_t idx = (size_t)l + nb * k + ld * col;
+
+    const size_t idx = (size_t)l + NB * k + ld * col;
     if (beta != 0.0f) {
-        fc p = x0[idx];
+        const fc p = x0[idx];
         y[idx] = make_cuFloatComplex(fmaf(alpha, acc.x, beta * p.x),
                                      fmaf(alpha, acc.y, beta * p.y));
     } else {
         y[idx] = make_cuFloatComplex(alpha * acc.x, alpha * acc.y);
     }
+}
+
+__global__ void k_cheb_step_f32_dyn(
+    int kk, int nb, int nnmax, int nmax,
+    const int *__restrict__ nn,
+    const int *__restrict__ iz,
+    const fc *__restrict__ fee,
+    const fc *__restrict__ fhall,
+    const fc *__restrict__ x1,
+    const fc *__restrict__ x0,
+    fc *__restrict__ y,
+    float alpha, float beta, size_t ld) {
+    extern __shared__ fc shf[];
+    const int LDS = (nb % 2 == 0) ? (nb + 1) : nb;
+    fc *sH = shf;
+    fc *sX = shf + nb * LDS;
+    const int k = blockIdx.x;
+    if (k >= kk) return;
+    const int l = threadIdx.x;
+    const int col = threadIdx.y;
+    const size_t bb = (size_t)nb * nb;
+    const fc *base = (k < nmax) ? fhall + bb * (size_t)nnmax * k
+                                : fee + bb * (size_t)nnmax * (iz[k] - 1);
+    fc acc = make_cuFloatComplex(0.0f, 0.0f);
+    const int nr = nn[k];
+
+    for (int s = 0; s < nr; ++s) {
+        const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
+        if (nbr < 0) continue;
+        sH[l + LDS * col] = base[bb * s + l + nb * col];
+        sX[l + LDS * col] = x1[(size_t)l + nb * nbr + ld * col];
+        __syncthreads();
+        for (int m = 0; m < nb; ++m)
+            acc = ffma(sH[l + LDS * m], sX[m + LDS * col], acc);
+        __syncthreads();
+    }
+
+    const size_t idx = (size_t)l + nb * k + ld * col;
+    if (beta != 0.0f) {
+        const fc p = x0[idx];
+        y[idx] = make_cuFloatComplex(fmaf(alpha, acc.x, beta * p.x),
+                                     fmaf(alpha, acc.y, beta * p.y));
+    } else {
+        y[idx] = make_cuFloatComplex(alpha * acc.x, alpha * acc.y);
+    }
+}
+
+static int launch_cheb_step_f32(rsrec_ctx *c, const fc *x1, const fc *x0,
+                                fc *y, float alpha, float beta, size_t ld) {
+    const dim3 thr(c->nb, c->nb);
+    switch (c->nb) {
+    case 18: {
+        constexpr int NB = 18;
+        constexpr int LDS = NB + 1;
+        const size_t shmem = 2 * NB * LDS * sizeof(fc);
+        k_cheb_step_f32_opt<NB><<<c->kk, dim3(NB, NB), shmem>>>(
+            c->kk, c->nnmax, c->nmax, c->d_nn, c->d_iz, c->f_ee, c->f_hall,
+            x1, x0, y, alpha, beta, ld);
+        break;
+    }
+    case 9: {
+        constexpr int NB = 9;
+        constexpr int LDS = NB;
+        const size_t shmem = 2 * NB * LDS * sizeof(fc);
+        k_cheb_step_f32_opt<NB><<<c->kk, dim3(NB, NB), shmem>>>(
+            c->kk, c->nnmax, c->nmax, c->d_nn, c->d_iz, c->f_ee, c->f_hall,
+            x1, x0, y, alpha, beta, ld);
+        break;
+    }
+    default: {
+        const int lds = (c->nb % 2 == 0) ? (c->nb + 1) : c->nb;
+        const size_t shmem = 2 * (size_t)c->nb * lds * sizeof(fc);
+        k_cheb_step_f32_dyn<<<c->kk, thr, shmem>>>(
+            c->kk, c->nb, c->nnmax, c->nmax, c->d_nn, c->d_iz, c->f_ee,
+            c->f_hall, x1, x0, y, alpha, beta, ld);
+        break;
+    }
+    }
+    CUCHK(cudaGetLastError());
+    return 0;
 }
 
 /* Build/refresh the fp32 scaled Hamiltonian copy for window (a, b).        */
@@ -1131,28 +1220,18 @@ static int cheb_moments_f32(rsrec_ctx *c, const void *psi0_, int lld,
     const fc cone = make_cuFloatComplex(1.0f, 0.0f);
     const fc czero = make_cuFloatComplex(0.0f, 0.0f);
     fc *p0 = c->f_p0, *p1 = c->f_p1, *p2 = c->f_p2;
-    dim3 thr(nb, nb);
-    const size_t shmem = 2 * bb * sizeof(fc);
-
     /* mu_1 raw = psi0^H psi0 (Hermitian rank-k update)                     */
     CBCHK(cublasCherk(c->blas, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, nb,
                       (int)ld, &one_f, p0, (int)ld, &zero_f, dmu, nb));
     /* psi1 = Ht psi0;  mu_2 raw = psi0^H psi1                              */
-    k_cheb_step_f32<<<kk, thr, shmem>>>(kk, nb, c->nnmax, c->nmax, c->d_nn,
-                                        c->d_iz, c->f_ee, c->f_hall,
-                                        p0, nullptr, p1, 1.0f, 0.0f, ld);
-    CUCHK(cudaGetLastError());
+    if (launch_cheb_step_f32(c, p0, nullptr, p1, 1.0f, 0.0f, ld)) return 1;
     CBCHK(cublasCgemm3m(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
                         &cone, p0, (int)ld, p1, (int)ld, &czero,
                         dmu + bb, nb));
 
     for (int ll = 1; ll <= lld; ++ll) {
         /* psi2 = 2 Ht psi1 - psi0 (single fused pass)                      */
-        k_cheb_step_f32<<<kk, thr, shmem>>>(kk, nb, c->nnmax, c->nmax,
-                                            c->d_nn, c->d_iz, c->f_ee,
-                                            c->f_hall, p1, p0, p2,
-                                            2.0f, -1.0f, ld);
-        CUCHK(cudaGetLastError());
+        if (launch_cheb_step_f32(c, p1, p0, p2, 2.0f, -1.0f, ld)) return 1;
         /* dum1 = psi1^H psi1 (cherk), dum2 = psi2^H psi1 (cgemm3m)         */
         CBCHK(cublasCherk(c->blas, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, nb,
                           (int)ld, &one_f, p1, (int)ld, &zero_f,
