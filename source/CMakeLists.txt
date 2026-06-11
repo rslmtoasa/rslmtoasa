@@ -66,12 +66,16 @@ if(ENABLE_CUDA_PLUGIN)
     if(NOT TARGET rsrec_cpp)
         message(FATAL_ERROR "rsrec_cpp target is required for ENABLE_CUDA_PLUGIN")
     endif()
-    # rsrec_gpu.cu is compiled as C++ (CUDA is compiled through nvcc to C++)
+    # rsrec_cuda is a backend dispatcher that provides rsrec_cuda_* interface
+    # for backward compatibility with rsrec_cuda_plugin.f90; internally dispatches to
+    # rsrec_cpu.cpp (CPU) or rsrec_gpu.cu (GPU) based on backend selection.
+    # Both rsrec_gpu.cu (CUDA) and rsrec.cpp (wrapper) are compiled into this target.
     add_library(rsrec_cuda STATIC
+        cuda/rsrec_cuda.cpp
         cuda/rsrec_gpu.cu
     )
     target_compile_features(rsrec_cuda PRIVATE cxx_std_11)
-    # Link against rsrec_cpp for shared CPU fallback code and CUDA runtime libraries
+    # Link against rsrec_cpp and CUDA runtime libraries
     target_link_libraries(rsrec_cuda rsrec_cpp CUDA::cudart CUDA::cusparse CUDA::cufft CUDA::cublas)
     if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
         target_link_libraries(rsrec_cuda OpenMP::OpenMP_CXX)
