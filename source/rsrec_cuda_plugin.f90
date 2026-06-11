@@ -1,0 +1,305 @@
+module rsrec_cuda_plugin_mod
+
+   use, intrinsic :: iso_c_binding, only: c_associated, c_char, c_double, &
+      c_double_complex, c_int, c_null_char, c_null_ptr, c_ptr, c_f_pointer, c_loc
+   use precision_mod, only: rp
+   use logger_mod, only: g_logger
+   use sparse_mod, only: sparse
+   implicit none
+
+   private
+
+   integer, parameter, public :: gpu_backend_csr = 0
+   integer, parameter, public :: gpu_backend_bsr = 1
+   integer, parameter, public :: gpu_backend_fft = 2
+   integer, parameter, public :: gpu_backend_conv = 3
+
+   public :: rsrec_cuda_backend
+   public :: rsrec_cuda_plugin_compiled
+   public :: decode_gpu_backend
+
+   type :: rsrec_cuda_backend
+      type(c_ptr) :: ctx = c_null_ptr
+      integer(c_int) :: kk = 0
+      integer(c_int) :: nb = 0
+      integer(c_int) :: nnmax = 0
+      integer(c_int) :: ntype = 0
+      integer(c_int) :: nmax = -1
+   contains
+      procedure :: ensure_context
+      procedure :: destroy
+      procedure :: set_backend
+      procedure :: set_periodic_lattice
+      procedure :: set_hamiltonian
+      procedure :: set_velocity
+      procedure :: upload_bsr
+      procedure :: chebyshev_moments
+      procedure :: stochastic_moments
+   end type rsrec_cuda_backend
+
+#ifdef USE_CUDA_PLUGIN
+   interface
+      function rsrec_cuda_create(kk, nb, nnmax, ntype, nmax, device) bind(C, name='rsrec_cuda_create')
+         import :: c_int, c_ptr
+         integer(c_int), value :: kk, nb, nnmax, ntype, nmax, device
+         type(c_ptr) :: rsrec_cuda_create
+      end function rsrec_cuda_create
+
+      subroutine rsrec_cuda_destroy(ctx) bind(C, name='rsrec_cuda_destroy')
+         import :: c_ptr
+         type(c_ptr), value :: ctx
+      end subroutine rsrec_cuda_destroy
+
+      function rsrec_cuda_last_error() bind(C, name='rsrec_cuda_last_error')
+         import :: c_ptr
+         type(c_ptr) :: rsrec_cuda_last_error
+      end function rsrec_cuda_last_error
+
+      function rsrec_cuda_set_backend(ctx, backend) bind(C, name='rsrec_cuda_set_backend')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         integer(c_int), value :: backend
+         integer(c_int) :: rsrec_cuda_set_backend
+      end function rsrec_cuda_set_backend
+
+      function rsrec_cuda_set_periodic_lattice(ctx, pbc, n1, n2, n3, a, crd, nbas) bind(C, name='rsrec_cuda_set_periodic_lattice')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, a, crd
+         integer(c_int), value :: pbc, n1, n2, n3, nbas
+         integer(c_int) :: rsrec_cuda_set_periodic_lattice
+      end function rsrec_cuda_set_periodic_lattice
+
+      function rsrec_cuda_set_hamiltonian(ctx, ee, hall, lsham, nn, iz) bind(C, name='rsrec_cuda_set_hamiltonian')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, ee, hall, lsham, nn, iz
+         integer(c_int) :: rsrec_cuda_set_hamiltonian
+      end function rsrec_cuda_set_hamiltonian
+
+      function rsrec_cuda_set_velocity(ctx, v_a, v_b) bind(C, name='rsrec_cuda_set_velocity')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, v_a, v_b
+         integer(c_int) :: rsrec_cuda_set_velocity
+      end function rsrec_cuda_set_velocity
+
+      function rsrec_cuda_chebyshev_moments(ctx, psi0, lld, a, b, mu_out) bind(C, name='rsrec_cuda_chebyshev_moments')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, psi0, mu_out
+         integer(c_int), value :: lld
+         real(c_double), value :: a, b
+         integer(c_int) :: rsrec_cuda_chebyshev_moments
+      end function rsrec_cuda_chebyshev_moments
+
+      function rsrec_cuda_stochastic_moments(ctx, psiref, lld, a, b, mu_nm) bind(C, name='rsrec_cuda_stochastic_moments')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, psiref, mu_nm
+         integer(c_int), value :: lld
+         real(c_double), value :: a, b
+         integer(c_int) :: rsrec_cuda_stochastic_moments
+      end function rsrec_cuda_stochastic_moments
+   end interface
+#endif
+
+contains
+
+   logical function rsrec_cuda_plugin_compiled()
+#ifdef USE_CUDA_PLUGIN
+      rsrec_cuda_plugin_compiled = .true.
+#else
+      rsrec_cuda_plugin_compiled = .false.
+#endif
+   end function rsrec_cuda_plugin_compiled
+
+   integer function decode_gpu_backend(name)
+      character(len=*), intent(in) :: name
+
+      select case (trim(name))
+      case ('csr')
+         decode_gpu_backend = gpu_backend_csr
+      case ('bsr')
+         decode_gpu_backend = gpu_backend_bsr
+      case ('fft')
+         decode_gpu_backend = gpu_backend_fft
+      case ('conv')
+         decode_gpu_backend = gpu_backend_conv
+      case default
+         decode_gpu_backend = -1
+      end select
+   end function decode_gpu_backend
+
+   subroutine ensure_context(this, kk, nb, nnmax, ntype, nmax)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax
+#ifdef USE_CUDA_PLUGIN
+      if (c_associated(this%ctx)) then
+         if (this%kk == kk .and. this%nb == nb .and. this%nnmax == nnmax .and. &
+             this%ntype == ntype .and. this%nmax == nmax) return
+         call this%destroy()
+      end if
+
+      this%ctx = rsrec_cuda_create(int(kk, c_int), int(nb, c_int), int(nnmax, c_int), &
+         int(ntype, c_int), int(nmax, c_int), 0_c_int)
+      if (.not. c_associated(this%ctx)) then
+         call g_logger%fatal('Failed to create CUDA plugin context: '// &
+            trim(last_error_string()), __FILE__, __LINE__)
+      end if
+      this%kk = int(kk, c_int)
+      this%nb = int(nb, c_int)
+      this%nnmax = int(nnmax, c_int)
+      this%ntype = int(ntype, c_int)
+      this%nmax = int(nmax, c_int)
+#else
+      call g_logger%fatal('gpu_plugin=.true. requested, but this executable '// &
+         'was built without ENABLE_CUDA_PLUGIN.', __FILE__, __LINE__)
+#endif
+   end subroutine ensure_context
+
+   subroutine destroy(this)
+      class(rsrec_cuda_backend), intent(inout) :: this
+#ifdef USE_CUDA_PLUGIN
+      if (c_associated(this%ctx)) call rsrec_cuda_destroy(this%ctx)
+#endif
+      this%ctx = c_null_ptr
+      this%kk = 0
+      this%nb = 0
+      this%nnmax = 0
+      this%ntype = 0
+      this%nmax = -1
+   end subroutine destroy
+
+   subroutine set_backend(this, backend)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      integer, intent(in) :: backend
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_set_backend(this%ctx, int(backend, c_int))
+      call check_status(status, 'rsrec_cuda_set_backend')
+#endif
+   end subroutine set_backend
+
+   subroutine set_periodic_lattice(this, pbc, n1, n2, n3, a, crd)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      logical, intent(in) :: pbc
+      integer, intent(in) :: n1, n2, n3
+      real(rp), target, contiguous, intent(in) :: a(:, :)
+      real(rp), target, contiguous, intent(in) :: crd(:, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status, pbc_i
+      pbc_i = 0_c_int
+      if (pbc) pbc_i = 1_c_int
+      status = rsrec_cuda_set_periodic_lattice(this%ctx, pbc_i, int(n1, c_int), &
+         int(n2, c_int), int(n3, c_int), c_loc(a), c_loc(crd), &
+         int(size(crd, 2), c_int))
+      call check_status(status, 'rsrec_cuda_set_periodic_lattice')
+#endif
+   end subroutine set_periodic_lattice
+
+   subroutine set_hamiltonian(this, ee, hall, lsham, nn, iz, nmax)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: ee(:, :, :, :)
+      complex(rp), target, contiguous, intent(in), optional :: hall(:, :, :, :)
+      complex(rp), target, contiguous, intent(in), optional :: lsham(:, :, :)
+      integer, target, contiguous, intent(in) :: nn(:, :)
+      integer, target, contiguous, intent(in) :: iz(:)
+      integer, intent(in) :: nmax
+#ifdef USE_CUDA_PLUGIN
+      type(c_ptr) :: hall_ptr, lsham_ptr
+      integer(c_int) :: status
+
+      call this%ensure_context(size(nn, 1), size(ee, 1), size(ee, 3), size(ee, 4), nmax)
+      hall_ptr = c_null_ptr
+      if (present(hall)) hall_ptr = c_loc(hall)
+      lsham_ptr = c_null_ptr
+      if (present(lsham)) lsham_ptr = c_loc(lsham)
+      status = rsrec_cuda_set_hamiltonian(this%ctx, c_loc(ee), hall_ptr, &
+         lsham_ptr, c_loc(nn), c_loc(iz))
+      call check_status(status, 'rsrec_cuda_set_hamiltonian')
+#else
+      call this%ensure_context(size(nn, 1), size(ee, 1), size(ee, 3), size(ee, 4), nmax)
+#endif
+   end subroutine set_hamiltonian
+
+   subroutine set_velocity(this, v_a, v_b)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: v_a(:, :, :, :)
+      complex(rp), target, contiguous, intent(in) :: v_b(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_set_velocity(this%ctx, c_loc(v_a), c_loc(v_b))
+      call check_status(status, 'rsrec_cuda_set_velocity')
+#endif
+   end subroutine set_velocity
+
+   subroutine upload_bsr(this, sparse_obj)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      type(sparse), intent(inout) :: sparse_obj
+      logical :: is_valid
+
+      call sparse_obj%export_gpu_cusparse(is_valid)
+      if (.not. is_valid) then
+         call g_logger%fatal('Failed to export BSR data for CUDA backend.', __FILE__, __LINE__)
+      end if
+   end subroutine upload_bsr
+
+   subroutine chebyshev_moments(this, psi0, lld, a, b, mu_out)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: psi0(:, :, :)
+      integer, intent(in) :: lld
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, intent(out) :: mu_out(:, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_chebyshev_moments(this%ctx, c_loc(psi0), int(lld, c_int), &
+         real(a, c_double), real(b, c_double), c_loc(mu_out))
+      call check_status(status, 'rsrec_cuda_chebyshev_moments')
+#endif
+   end subroutine chebyshev_moments
+
+   subroutine stochastic_moments(this, psiref, lld, a, b, mu_nm)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: psiref(:, :, :)
+      integer, intent(in) :: lld
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, intent(out) :: mu_nm(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_stochastic_moments(this%ctx, c_loc(psiref), int(lld, c_int), &
+         real(a, c_double), real(b, c_double), c_loc(mu_nm))
+      call check_status(status, 'rsrec_cuda_stochastic_moments')
+#endif
+   end subroutine stochastic_moments
+
+#ifdef USE_CUDA_PLUGIN
+   subroutine check_status(status, where)
+      integer(c_int), intent(in) :: status
+      character(len=*), intent(in) :: where
+
+      if (status /= 0_c_int) then
+         call g_logger%fatal(trim(where)//' failed: '//trim(last_error_string()), __FILE__, __LINE__)
+      end if
+   end subroutine check_status
+
+   function last_error_string() result(msg)
+      character(len=512) :: msg
+      type(c_ptr) :: err_ptr
+      character(kind=c_char), pointer :: chars(:)
+      integer :: i, n
+
+      msg = 'unknown error'
+      err_ptr = rsrec_cuda_last_error()
+      if (.not. c_associated(err_ptr)) return
+      call c_f_pointer(err_ptr, chars, [512])
+      n = 0
+      do i = 1, size(chars)
+         if (chars(i) == c_null_char) exit
+         n = n + 1
+      end do
+      if (n > 0) then
+         msg = ''
+         do i = 1, n
+            msg(i:i) = chars(i)
+         end do
+      end if
+   end function last_error_string
+#endif
+
+end module rsrec_cuda_plugin_mod
