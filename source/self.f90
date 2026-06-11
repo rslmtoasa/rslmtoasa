@@ -1007,7 +1007,7 @@ contains
       case ('lanczos')
          call this%green%sgreen()
       case ('chebyshev')
-         call this%green%chebyshev_green()
+         call this%green%chebyshev_dos_dispatch()  ! Dispatches to GPU/C++/legacy based on control flags
       case ('block')
          call this%recursion%zsqr()
          call this%green%block_green()

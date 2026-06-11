@@ -729,7 +729,7 @@ contains
       case ('lanczos')
          call green_obj%sgreen()
       case ('chebyshev')
-         call green_obj%chebyshev_green()
+         call green_obj%chebyshev_dos_dispatch()  ! Dispatches to GPU/C++/legacy based on control flags
       case ('block')
          call recursion_obj%zsqr()
          call green_obj%block_green()
