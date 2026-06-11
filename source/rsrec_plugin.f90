@@ -26,6 +26,7 @@ module rsrec_plugin_mod
       procedure :: scalar_lanczos
       procedure :: block_lanczos
       procedure :: chebyshev_moments
+      procedure :: chebyshev_dos
       procedure :: stochastic_moments
    end type rsrec_backend
 
@@ -80,6 +81,15 @@ module rsrec_plugin_mod
          integer(c_int), value :: site_j, lld
          integer(c_int) :: rsrec_scalar_lanczos
       end function rsrec_scalar_lanczos
+
+      function rsrec_chebyshev_dos(ctx, mu, n_moments, natoms, ene, nv, a, b, g0) &
+         bind(C, name='rsrec_chebyshev_dos')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, mu, ene, g0
+         integer(c_int), value :: n_moments, natoms, nv
+         real(c_double), value :: a, b
+         integer(c_int) :: rsrec_chebyshev_dos
+      end function rsrec_chebyshev_dos
 
       function rsrec_stochastic_moments(ctx, psiref, lld, a, b, mu_nm) bind(C, name='rsrec_stochastic_moments')
          import :: c_double, c_int, c_ptr
@@ -222,6 +232,25 @@ contains
       call check_status(status, 'rsrec_chebyshev_moments')
 #endif
    end subroutine chebyshev_moments
+
+   subroutine chebyshev_dos(this, mu_n, ene, a, b, g0)
+      class(rsrec_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: mu_n(:, :, :, :)
+      real(rp), target, contiguous, intent(in) :: ene(:)
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+#ifdef USE_CPP_PLUGIN
+      integer(c_int) :: status, n_mom, natoms, nv
+
+      n_mom = int(size(mu_n, 3), c_int)
+      natoms = int(size(mu_n, 4), c_int)
+      nv = int(size(ene), c_int)
+
+      status = rsrec_chebyshev_dos(this%ctx, c_loc(mu_n), n_mom, natoms, &
+         c_loc(ene), nv, real(a, c_double), real(b, c_double), c_loc(g0))
+      call check_status(status, 'rsrec_chebyshev_dos')
+#endif
+   end subroutine chebyshev_dos
 
    subroutine stochastic_moments(this, psiref, lld, a, b, mu_nm)
       class(rsrec_backend), intent(inout) :: this
