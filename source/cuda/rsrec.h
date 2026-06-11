@@ -61,6 +61,26 @@ int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
  * v_a, v_b: (nb, nb, nnmax, ntype) complex(rp). */
 int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b);
 
+/* --- structured (FFT stencil + correction) acceleration ------------------ */
+/* Map the clust onto a regular lattice grid and switch the matvec to
+ *      H = Stencil(ee[:, :, :, t_ref])  +  dH,   dH = H_true - H_stencil
+ * The stencil is evaluated as a zero-padded linear convolution (cuFFT on
+ * the GPU): vacuum cells carry psi = 0, so OPEN BOUNDARIES ARE AUTOMATIC.
+ * dH collects every deviating row -- the hall impurity region, atoms of
+ * type /= t_ref, irregular neighbour patterns -- and is applied with the
+ * block-sparse batched-GEMM machinery. Bit-compatible with the ELL backend
+ * (validated to machine precision); profitable when most rows are bulk.
+ *
+ *   coords        : (3, kk) INTEGER lattice coordinates of each atom
+ *                   (any consistent integer cell indexing; one atom per
+ *                   cell -- multi-atom bases are not supported yet)
+ *   use_structured: 1 = enable, 0 = revert to the block-ELL backend
+ *
+ * Call AFTER rsrec_set_hamiltonian (and after rsrec_set_velocity if the
+ * stochastic driver will be used). Requires nmax < kk (a bulk must exist).
+ * Re-call after each Hamiltonian upload to refresh the stencil tables.     */
+int rsrec_set_grid(rsrec_ctx *ctx, const int *coords, int use_structured);
+
 /* --- core matvec (exposed mostly for testing / custom drivers) ----------- */
 /* y = (H x - b x)/a   with x, y: (nb, nrhs, kk).  a=1,b=0 gives plain H x.
  * which: 0 = Hamiltonian, 1 = v_a, 2 = v_b (no shift/scale applied to 1,2

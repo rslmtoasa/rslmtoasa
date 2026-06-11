@@ -67,7 +67,9 @@ if (ENABLE_CUDA_PLUGIN AND NOT ENABLE_CPP_PLUGIN)
 endif()
 
 if (ENABLE_CUDA_PLUGIN)
-  find_package(CUDAToolkit REQUIRED COMPONENTS cudart cusparse cufft)
+  enable_language(CUDA)
+  message(STATUS "Using CUDA compiler ${CMAKE_CUDA_COMPILER_ID} CUDA ${CMAKE_CUDA_COMPILER_VERSION}")
+  find_package(CUDAToolkit REQUIRED COMPONENTS cudart cusparse cufft cublas)
   message(STATUS "CUDA toolkit root: ${CUDAToolkit_LIBRARY_ROOT}")
 endif()
 

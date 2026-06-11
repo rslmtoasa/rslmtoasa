@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME} STATIC
     precision.f90
     reciprocal.f90
     recursion.f90
+    cuda/recursion_gpu_mod.f90
     sparse.f90
     report.f90
     rsrec_plugin.f90
@@ -49,7 +50,7 @@ add_library(${PROJECT_NAME} STATIC
 
 if(ENABLE_CPP_PLUGIN OR ENABLE_CUDA_PLUGIN)
     add_library(rsrec_cpp STATIC
-        cuda/rsrec.cpp
+        cuda/rsrec_cpu.cpp
     )
     target_compile_features(rsrec_cpp PRIVATE cxx_std_11)
     if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
@@ -65,11 +66,13 @@ if(ENABLE_CUDA_PLUGIN)
     if(NOT TARGET rsrec_cpp)
         message(FATAL_ERROR "rsrec_cpp target is required for ENABLE_CUDA_PLUGIN")
     endif()
+    # rsrec_gpu.cu is compiled as C++ (CUDA is compiled through nvcc to C++)
     add_library(rsrec_cuda STATIC
-        cuda/rsrec_cuda.cpp
+        cuda/rsrec_gpu.cu
     )
     target_compile_features(rsrec_cuda PRIVATE cxx_std_11)
-    target_link_libraries(rsrec_cuda rsrec_cpp CUDA::cudart CUDA::cusparse CUDA::cufft)
+    # Link against rsrec_cpp for shared CPU fallback code and CUDA runtime libraries
+    target_link_libraries(rsrec_cuda rsrec_cpp CUDA::cudart CUDA::cusparse CUDA::cufft CUDA::cublas)
     if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
         target_link_libraries(rsrec_cuda OpenMP::OpenMP_CXX)
     endif()

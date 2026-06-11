@@ -2768,6 +2768,7 @@ contains
       write(u,'(A,I0)') 'n_atoms ', n_atoms
       write(u,'(A,I0)') 'norb_scalar ', max_orbital
       write(u,'(A,I0)') 'block_size ', nb
+      ! write(u,'(A,f12.6)') 'Fermi level', this
       write(u,'(A)') 'index_base 1'
       write(u,'(A)') 'lattice_vectors_cart'
       do i = 1, 3
