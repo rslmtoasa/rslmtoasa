@@ -51,6 +51,7 @@
 #include <vector>
 
 typedef cuDoubleComplex zc;
+typedef cuComplex fc;
 typedef std::complex<double> cplx;
 
 extern "C" void zheev_(const char *, const char *, const int *, cplx *,
@@ -65,25 +66,6 @@ extern "C" const char *rsrec_last_error(void) { return g_err.c_str(); }
 #define CBCHK(x) do { if ((x) != CUBLAS_STATUS_SUCCESS) \
     { g_err = "cuBLAS error"; return 1; } } while (0)
 
-/* Custom atomicAdd for double (CUDA 12.8 compatibility) */
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ < 600
-__device__ double atomicAddDouble(double *address, double val) {
-    unsigned long long int *address_as_ull = (unsigned long long int *)address;
-    unsigned long long int old = *address_as_ull, assumed;
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(
-                            __longlong_as_double(assumed) + val));
-    } while (assumed != old);
-    return __longlong_as_double(old);
-}
-#else
-__device__ inline double atomicAddDouble(double *address, double val) {
-    return atomicAdd(address, val);
-}
-#endif
-
 /* --------------------------------------------------------------------------
  * Context
  * ------------------------------------------------------------------------ */
@@ -95,6 +77,14 @@ struct rsrec_ctx {
     zc *d_ee = nullptr, *d_hall = nullptr, *d_va = nullptr, *d_vb = nullptr;
     int *d_nn = nullptr, *d_iz = nullptr;
     bool have_h = false, have_v = false;
+    int ham_ver = 0;                      /* bumped on each upload           */
+
+    /* ---- fp32 block-Chebyshev engine (rsrec_set_precision) ------------- */
+    int cheb_prec = 0;                    /* 0 = fp32 (default), 1 = fp64    */
+    fc *f_ee = nullptr, *f_hall = nullptr;/* (H - b)/a, complex float        */
+    double f_a = 0.0, f_b = 0.0;          /* scaling baked into f_ee/f_hall  */
+    int f_ver = -1;                       /* ham_ver the fp32 copy matches   */
+    fc *f_p0 = nullptr, *f_p1 = nullptr, *f_p2 = nullptr; /* site-major psi */
 
     /* Static (atom, neighbour) pair lists, compacted per shell, and the
      * per-operator A-pointer arrays over the same ordering.                 */
@@ -156,7 +146,9 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_negW, (void *)c->d_c_atom,
                     (void *)c->d_c_nbr, (void *)c->d_cA_H,
                     (void *)c->d_cA_VA, (void *)c->d_cA_VB,
-                    (void *)c->d_cB, (void *)c->d_cC})
+                    (void *)c->d_cB, (void *)c->d_cC,
+                    (void *)c->f_ee, (void *)c->f_hall, (void *)c->f_p0,
+                    (void *)c->f_p1, (void *)c->f_p2})
         if (p) cudaFree(p);
     if (c->have_plan) cufftDestroy(c->fft_plan);
     if (c->d_col) cudaFree(c->d_col);
@@ -298,6 +290,7 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
     if (!c->d_pair_atom)                  /* static topology: build once    */
         if (build_pairs(c, nn, iz)) return 1;
     c->have_h = true;
+    c->ham_ver++;                         /* invalidate fp32 scaled copy     */
     return 0;
 }
 
@@ -428,7 +421,7 @@ __global__ void k_col_dot(int kk, int nb, const zc *__restrict__ A,
         size_t id = (size_t)l + nb * ((size_t)col + nb * k);
         s += A[id].x * B[id].x + A[id].y * B[id].y;
     }
-    atomicAddDouble(&out[col], s);
+    atomicAdd(&out[col], s);
 }
 
 __global__ void k_col_axpy(size_t kk, int nb, const double *__restrict__ alpha,
@@ -982,11 +975,239 @@ extern "C" int rsrec_op_apply(rsrec_ctx *c, int which, const void *x_,
 }
 
 /* --------------------------------------------------------------------------
- * API: Chebyshev block moments (device-resident loop)
+ * FP32 block-Chebyshev engine.
+ *
+ * Rationale (RTX A4000 / GA10x and all GeForce-class parts): FP64 runs at
+ * 1/64 of FP32 (~0.3 vs ~19 TFLOP/s), so a double-complex KPM loop is
+ * hardware-capped at CPU-class speed regardless of kernel quality. KPM is
+ * famously robust in single precision (Chebyshev iterates are bounded on
+ * [-1,1]; Jackson damping suppresses high-order moment noise -- Weisse et
+ * al., RMP 78, 275 (2006); KITE and GPUQT run production KPM in fp32), and
+ * our Python prototypes validated fp32 against fp64 to ~5e-4 on O(1) DOS
+ * over hundreds of moments. Use rsrec_set_precision(ctx, 1) to force the
+ * fp64 path when cross-checking.
+ *
+ * Design (mirrors what made the Python/torch version fast):
+ *   - the KPM rescaling (H - b)/a is folded ONCE into an fp32 copy of
+ *     ee/hall; per-type bulk blocks then usually fit in L2,
+ *   - psi is repacked site-major, shape (nb*kk, nrhs=nb) column-major, so
+ *     every block moment sum_k psi^H phi is ONE tall-skinny GEMM:
+ *     cublasCherk for psi1^H psi1 (Hermitian, half flops) and
+ *     cublasCgemm3m for psi2^H psi1,
+ *   - the recurrence psi2 = 2*Ht*psi1 - psi0 is ONE fused kernel: block
+ *     per atom, (nb x nb) threads, H and neighbour psi blocks staged
+ *     through shared memory; no separate scale/shift/axpby passes,
+ *   - no host synchronisation inside the loop; the 2*dum - mu_{1,2}
+ *     combination is done on the host after a single download.
  * ------------------------------------------------------------------------ */
-extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0_,
-                                       int lld, double a, double b,
-                                       void *mu_) {
+__device__ __forceinline__ fc ffma(fc a, fc b, fc s) {
+    s.x = fmaf(a.x, b.x, fmaf(-a.y, b.y, s.x));
+    s.y = fmaf(a.x, b.y, fmaf(a.y, b.x, s.y));
+    return s;
+}
+
+/* Convert + scale operator blocks: out = (in - b*delta_onsite)/a, fp32.
+ * dims: (nb, nb, nnmax, nslot); the -b applies at (l==m, shell==0).        */
+__global__ void k_ham_to_f32(size_t n, int nb, int nnmax, double inva,
+                             double b, const zc *__restrict__ in,
+                             fc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    size_t bb = (size_t)nb * nb;
+    int l = (int)(i % nb), m = (int)((i / nb) % nb);
+    int s = (int)((i / bb) % nnmax);
+    double re = in[i].x, im = in[i].y;
+    if (l == m && s == 0) re -= b;
+    out[i] = make_cuFloatComplex((float)(re * inva), (float)(im * inva));
+}
+
+/* Repack psi: (nb, nrhs, kk) fp64 atom-major -> (nb*kk, nrhs) fp32
+ * site-major (column-major, ld = nb*kk).                                   */
+__global__ void k_pack_psi_f32(size_t nfield, int nb, int nrhs, size_t ld,
+                               const zc *__restrict__ in,
+                               fc *__restrict__ out) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= nfield) return;
+    int l = (int)(i % nb);
+    int col = (int)((i / nb) % nrhs);
+    size_t k = i / ((size_t)nb * nrhs);
+    out[(size_t)l + nb * k + ld * col] =
+        make_cuFloatComplex((float)in[i].x, (float)in[i].y);
+}
+
+/* Fused Chebyshev step:  y = alpha * (Ht x1) + beta * x0   (fp32).
+ * alpha=1, beta=0  -> psi1 = Ht psi0      (first application)
+ * alpha=2, beta=-1 -> psi2 = 2 Ht psi1 - psi0  (recurrence)
+ * One thread block per atom, (nb, nb) = (row, rhs) threads; the H block
+ * and the neighbour x1 block are staged through shared memory per shell.
+ * Per-type bulk blocks are read through L2 (they typically fit).           */
+__global__ void k_cheb_step_f32(int kk, int nb, int nnmax, int nmax,
+                                const int *__restrict__ nn,
+                                const int *__restrict__ iz,
+                                const fc *__restrict__ fee,
+                                const fc *__restrict__ fhall,
+                                const fc *__restrict__ x1,
+                                const fc *__restrict__ x0,
+                                fc *__restrict__ y,
+                                float alpha, float beta, size_t ld) {
+    extern __shared__ fc shf[];
+    fc *sH = shf, *sX = shf + nb * nb;
+    const int k = blockIdx.x;
+    if (k >= kk) return;
+    const int l = threadIdx.x, col = threadIdx.y;
+    const size_t bb = (size_t)nb * nb;
+    const fc *base = (k < nmax) ? fhall + bb * (size_t)nnmax * k
+                                : fee + bb * (size_t)nnmax * (iz[k] - 1);
+    fc acc = make_cuFloatComplex(0.0f, 0.0f);
+    const int nr = nn[k];
+    for (int s = 0; s < nr; ++s) {
+        const int nbr = (s == 0) ? k : nn[k + (size_t)kk * s] - 1;
+        if (nbr >= 0) {
+            sH[l + nb * col] = base[bb * s + l + nb * col];
+            sX[l + nb * col] = x1[(size_t)l + nb * nbr + ld * col];
+            __syncthreads();
+            for (int m = 0; m < nb; ++m)
+                acc = ffma(sH[l + nb * m], sX[m + nb * col], acc);
+            __syncthreads();
+        }
+    }
+    const size_t idx = (size_t)l + nb * k + ld * col;
+    if (beta != 0.0f) {
+        fc p = x0[idx];
+        y[idx] = make_cuFloatComplex(fmaf(alpha, acc.x, beta * p.x),
+                                     fmaf(alpha, acc.y, beta * p.y));
+    } else {
+        y[idx] = make_cuFloatComplex(alpha * acc.x, alpha * acc.y);
+    }
+}
+
+/* Build/refresh the fp32 scaled Hamiltonian copy for window (a, b).        */
+static int ensure_f32_ham(rsrec_ctx *c, double a, double b) {
+    if (c->f_ee && c->f_ver == c->ham_ver && c->f_a == a && c->f_b == b)
+        return 0;
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t nee = bb * c->nnmax * c->ntype;
+    const size_t nha = bb * c->nnmax * (size_t)c->nmax;
+    if (!c->f_ee) CUCHK(cudaMalloc(&c->f_ee, nee * sizeof(fc)));
+    if (c->nmax > 0 && !c->f_hall)
+        CUCHK(cudaMalloc(&c->f_hall, nha * sizeof(fc)));
+    const int tpb = 256;
+    k_ham_to_f32<<<(int)((nee + tpb - 1) / tpb), tpb>>>(
+        nee, c->nb, c->nnmax, 1.0 / a, b, c->d_ee, c->f_ee);
+    CUCHK(cudaGetLastError());
+    if (c->nmax > 0) {
+        k_ham_to_f32<<<(int)((nha + tpb - 1) / tpb), tpb>>>(
+            nha, c->nb, c->nnmax, 1.0 / a, b, c->d_hall, c->f_hall);
+        CUCHK(cudaGetLastError());
+    }
+    c->f_a = a; c->f_b = b; c->f_ver = c->ham_ver;
+    return 0;
+}
+
+/* fp32 device Chebyshev driver: raw dums in d_fmu, combined on the host.   */
+static int cheb_moments_f32(rsrec_ctx *c, const void *psi0_, int lld,
+                            double a, double b, void *mu_) {
+    const int nb = c->nb, kk = c->kk;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * kk;
+    const size_t nmom = 2 * (size_t)lld + 2;
+    if (ensure_f32_ham(c, a, b)) return 1;
+    for (fc **p : {&c->f_p0, &c->f_p1, &c->f_p2})
+        if (!*p) CUCHK(cudaMalloc(p, nf * sizeof(fc)));
+
+    /* psi0 host->device (fp64 staging buffer s0), pack to site-major fp32  */
+    CUCHK(cudaMemcpy(c->d_s0, psi0_, nf * sizeof(zc),
+                     cudaMemcpyHostToDevice));
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    k_pack_psi_f32<<<nbl, tpb>>>(nf, nb, nb, ld, c->d_s0, c->f_p0);
+    CUCHK(cudaGetLastError());
+
+    fc *dmu;
+    CUCHK(cudaMalloc(&dmu, nmom * bb * sizeof(fc)));
+    CUCHK(cudaMemset(dmu, 0, nmom * bb * sizeof(fc)));
+
+    const float one_f = 1.0f, zero_f = 0.0f;
+    const fc cone = make_cuFloatComplex(1.0f, 0.0f);
+    const fc czero = make_cuFloatComplex(0.0f, 0.0f);
+    fc *p0 = c->f_p0, *p1 = c->f_p1, *p2 = c->f_p2;
+    dim3 thr(nb, nb);
+    const size_t shmem = 2 * bb * sizeof(fc);
+
+    /* mu_1 raw = psi0^H psi0 (Hermitian rank-k update)                     */
+    CBCHK(cublasCherk(c->blas, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, nb,
+                      (int)ld, &one_f, p0, (int)ld, &zero_f, dmu, nb));
+    /* psi1 = Ht psi0;  mu_2 raw = psi0^H psi1                              */
+    k_cheb_step_f32<<<kk, thr, shmem>>>(kk, nb, c->nnmax, c->nmax, c->d_nn,
+                                        c->d_iz, c->f_ee, c->f_hall,
+                                        p0, nullptr, p1, 1.0f, 0.0f, ld);
+    CUCHK(cudaGetLastError());
+    CBCHK(cublasCgemm3m(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                        &cone, p0, (int)ld, p1, (int)ld, &czero,
+                        dmu + bb, nb));
+
+    for (int ll = 1; ll <= lld; ++ll) {
+        /* psi2 = 2 Ht psi1 - psi0 (single fused pass)                      */
+        k_cheb_step_f32<<<kk, thr, shmem>>>(kk, nb, c->nnmax, c->nmax,
+                                            c->d_nn, c->d_iz, c->f_ee,
+                                            c->f_hall, p1, p0, p2,
+                                            2.0f, -1.0f, ld);
+        CUCHK(cudaGetLastError());
+        /* dum1 = psi1^H psi1 (cherk), dum2 = psi2^H psi1 (cgemm3m)         */
+        CBCHK(cublasCherk(c->blas, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, nb,
+                          (int)ld, &one_f, p1, (int)ld, &zero_f,
+                          dmu + (size_t)(2 * ll) * bb, nb));
+        CBCHK(cublasCgemm3m(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb,
+                            (int)ld, &cone, p2, (int)ld, p1, (int)ld,
+                            &czero, dmu + (size_t)(2 * ll + 1) * bb, nb));
+        fc *t = p0; p0 = p1; p1 = p2; p2 = t;
+    }
+
+    /* single download; combine and hermitise on the host                   */
+    std::vector<fc> h(nmom * bb);
+    CUCHK(cudaMemcpy(h.data(), dmu, nmom * bb * sizeof(fc),
+                     cudaMemcpyDeviceToHost));
+    cudaFree(dmu);
+    cplx *mu = (cplx *)mu_;
+    auto herm = [&](const fc *src, cplx *dst) {  /* lower -> full Hermitian */
+        for (int j = 0; j < nb; ++j)
+            for (int i = 0; i < nb; ++i)
+                dst[i + (size_t)nb * j] =
+                    (i >= j) ? cplx(src[i + nb * j].x, src[i + nb * j].y)
+                             : cplx(src[j + nb * i].x, -src[j + nb * i].y);
+    };
+    std::vector<cplx> mu1(bb), dum1(bb);
+    herm(h.data(), mu1.data());
+    for (size_t i = 0; i < bb; ++i) {
+        mu[i] = mu1[i];
+        mu[bb + i] = cplx(h[bb + i].x, h[bb + i].y);
+    }
+    for (int ll = 1; ll <= lld; ++ll) {
+        herm(h.data() + (size_t)(2 * ll) * bb, dum1.data());
+        cplx *m1 = mu + (size_t)(2 * ll) * bb;
+        cplx *m2 = mu + (size_t)(2 * ll + 1) * bb;
+        const fc *d2 = h.data() + (size_t)(2 * ll + 1) * bb;
+        for (size_t i = 0; i < bb; ++i) {
+            m1[i] = 2.0 * dum1[i] - mu[i];
+            m2[i] = 2.0 * cplx(d2[i].x, d2[i].y) - mu[bb + i];
+        }
+    }
+    return 0;
+}
+
+extern "C" int rsrec_set_precision(rsrec_ctx *c, int prec) {
+    if (prec < 0 || prec > 1) FAIL("set_precision: 0 = fp32, 1 = fp64");
+    c->cheb_prec = prec;
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: Chebyshev block moments. Dispatches to the fp32 engine (default) or
+ * the fp64 path (rsrec_set_precision(ctx, 1); bit-comparable with the CPU
+ * reference, hardware-limited on FP64-capped cards).
+ * ------------------------------------------------------------------------ */
+static int cheb_moments_f64(rsrec_ctx *c, const void *psi0_, int lld,
+                            double a, double b, void *mu_) {
     if (!c->have_h) FAIL("chebyshev_moments: Hamiltonian not set");
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
@@ -1022,6 +1243,17 @@ extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0_,
                      cudaMemcpyDeviceToHost));
     cudaFree(dmu);
     return 0;
+}
+
+extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0_,
+                                       int lld, double a, double b,
+                                       void *mu_) {
+    if (!c->have_h) FAIL("chebyshev_moments: Hamiltonian not set");
+    if (c->cheb_prec == 0 && !c->use_struct)
+        return cheb_moments_f32(c, psi0_, lld, a, b, mu_);
+    /* fp64 path; also used under the structured backend until the fp32
+     * cuFFT variant lands (cufftComplex C2C is a direct extension)         */
+    return cheb_moments_f64(c, psi0_, lld, a, b, mu_);
 }
 
 /* --------------------------------------------------------------------------

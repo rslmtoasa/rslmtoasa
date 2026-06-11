@@ -40,6 +40,7 @@ struct rsrec_ctx {
     std::vector<int> nn;      /* (kk,nnmax) 1-based, nn(k,1)=count          */
     std::vector<int> iz;      /* (kk)       1-based type                    */
     bool have_h = false, have_v = false;
+    int cheb_prec = 0;                   /* 0 = fp32 (default), 1 = fp64     */
 
     /* ---- structured (stencil + correction) path, see rsrec_set_grid ---- */
     bool use_struct = false;
@@ -476,12 +477,126 @@ static int eig_sqrt(int nb, const cplx *S, cplx *B, cplx *Bi) {
     return 0;
 }
 
+extern "C" int rsrec_set_precision(rsrec_ctx *c, int prec) {
+    if (prec < 0 || prec > 1) FAIL("set_precision: 0 = fp32, 1 = fp64");
+    c->cheb_prec = prec;
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * FP32 block-Chebyshev path: exact algorithmic mirror of the CUDA engine
+ * (site-major packed psi, scaled fp32 Hamiltonian copy, fused recurrence,
+ * raw moments combined in double on the host). Validates the GPU math and
+ * doubles as a faster CPU option.
+ * ------------------------------------------------------------------------ */
+typedef std::complex<float> cflt;
+
+static int cheb_moments_f32_cpu(rsrec_ctx *c, const void *psi0_, int lld,
+                                double a, double b, void *mu_) {
+    const int nb = c->nb, kk = c->kk, nnmax = c->nnmax;
+    const size_t bb = (size_t)nb * nb;
+    const size_t ld = (size_t)nb * kk;
+    const double inva = 1.0 / a;
+
+    /* scaled fp32 Hamiltonian copies (lsham already folded in ee/hall)     */
+    auto cvt = [&](const std::vector<cplx> &in, std::vector<cflt> &out) {
+        out.resize(in.size());
+        for (size_t i = 0; i < in.size(); ++i) {
+            int l = (int)(i % nb), m = (int)((i / nb) % nb);
+            int s = (int)((i / bb) % nnmax);
+            double re = in[i].real(), im = in[i].imag();
+            if (l == m && s == 0) re -= b;
+            out[i] = cflt((float)(re * inva), (float)(im * inva));
+        }
+    };
+    std::vector<cflt> fee, fhall;
+    cvt(c->ee, fee);
+    if (c->nmax > 0) cvt(c->hall, fhall);
+
+    /* pack psi0 site-major fp32                                            */
+    const cplx *p0d = (const cplx *)psi0_;
+    std::vector<cflt> p0(ld * nb), p1(ld * nb), p2(ld * nb);
+    for (int k = 0; k < kk; ++k)
+        for (int col = 0; col < nb; ++col)
+            for (int l = 0; l < nb; ++l)
+                p0[(size_t)l + nb * k + ld * col] =
+                    cflt((float)p0d[l + nb * ((size_t)col + nb * k)].real(),
+                         (float)p0d[l + nb * ((size_t)col + nb * k)].imag());
+
+    auto step = [&](const std::vector<cflt> &x1, const std::vector<cflt> &x0,
+                    std::vector<cflt> &y, float alpha, float beta) {
+#pragma omp parallel for schedule(static)
+        for (int k = 0; k < kk; ++k) {
+            const cflt *base = (k < c->nmax)
+                ? fhall.data() + bb * (size_t)nnmax * k
+                : fee.data() + bb * (size_t)nnmax * (c->iz[k] - 1);
+            const int nr = NNF(c, k, 0);
+            for (int col = 0; col < nb; ++col) {
+                for (int l = 0; l < nb; ++l) {
+                    cflt acc(0.0f, 0.0f);
+                    for (int s = 0; s < nr; ++s) {
+                        const int nbr = (s == 0) ? k : NNF(c, k, s) - 1;
+                        if (nbr < 0) continue;
+                        const cflt *B = base + bb * s;
+                        const cflt *xv = x1.data() + (size_t)nb * nbr +
+                                         ld * col;
+                        for (int m = 0; m < nb; ++m)
+                            acc += B[l + nb * m] * xv[m];
+                    }
+                    size_t idx = (size_t)l + nb * k + ld * col;
+                    y[idx] = (beta != 0.0f)
+                                 ? alpha * acc + beta * x0[idx]
+                                 : alpha * acc;
+                }
+            }
+        }
+    };
+    /* fp32 block moments C = A^H B over the packed layout                  */
+    auto fdot = [&](const std::vector<cflt> &A, const std::vector<cflt> &B,
+                    cflt *C) {
+        for (int j = 0; j < nb; ++j)
+            for (int i = 0; i < nb; ++i) {
+                cflt s(0.0f, 0.0f);
+                const cflt *ai = A.data() + ld * i, *bj = B.data() + ld * j;
+                for (size_t r = 0; r < ld; ++r) s += std::conj(ai[r]) * bj[r];
+                C[i + (size_t)nb * j] = s;
+            }
+    };
+
+    const size_t nmom = 2 * (size_t)lld + 2;
+    std::vector<cflt> raw(nmom * bb);
+    fdot(p0, p0, raw.data());
+    step(p0, p0, p1, 1.0f, 0.0f);
+    fdot(p0, p1, raw.data() + bb);
+    for (int ll = 1; ll <= lld; ++ll) {
+        step(p1, p0, p2, 2.0f, -1.0f);
+        fdot(p1, p1, raw.data() + (size_t)(2 * ll) * bb);
+        fdot(p2, p1, raw.data() + (size_t)(2 * ll + 1) * bb);
+        std::swap(p0, p1); std::swap(p1, p2);
+    }
+    cplx *mu = (cplx *)mu_;
+    for (size_t i = 0; i < bb; ++i) {
+        mu[i] = cplx(raw[i].real(), raw[i].imag());
+        mu[bb + i] = cplx(raw[bb + i].real(), raw[bb + i].imag());
+    }
+    for (int ll = 1; ll <= lld; ++ll)
+        for (size_t i = 0; i < bb; ++i) {
+            cplx d1(raw[(size_t)(2 * ll) * bb + i].real(),
+                    raw[(size_t)(2 * ll) * bb + i].imag());
+            cplx d2(raw[(size_t)(2 * ll + 1) * bb + i].real(),
+                    raw[(size_t)(2 * ll + 1) * bb + i].imag());
+            mu[(size_t)(2 * ll) * bb + i] = 2.0 * d1 - mu[i];
+            mu[(size_t)(2 * ll + 1) * bb + i] = 2.0 * d2 - mu[bb + i];
+        }
+    return 0;
+}
+
 /* --------------------------------------------------------------------------
  * Chebyshev block moments (mirrors cheb_0th_mom / cheb_1st_mom /
  * chebyshev_recur_ll with the double-moment trick)
  * ------------------------------------------------------------------------ */
-extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0_, int lld,
-                                       double a, double b, void *mu_) {
+static int cheb_moments_f64_cpu(rsrec_ctx *c, const void *psi0_, int lld,
+                                double a, double b, void *mu_) {
     if (!c->have_h) FAIL("chebyshev_moments: Hamiltonian not set");
     const cplx *psiref = (const cplx *)psi0_;
     cplx *mu = (cplx *)mu_;
@@ -518,6 +633,15 @@ extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0_, int lld,
         cplx *t = p0; p0 = p1; p1 = p2; p2 = t;
     }
     return 0;
+}
+
+extern "C" int rsrec_chebyshev_moments(rsrec_ctx *c, const void *psi0_,
+                                       int lld, double a, double b,
+                                       void *mu_) {
+    if (!c->have_h) FAIL("chebyshev_moments: Hamiltonian not set");
+    if (c->cheb_prec == 0 && !c->use_struct)
+        return cheb_moments_f32_cpu(c, psi0_, lld, a, b, mu_);
+    return cheb_moments_f64_cpu(c, psi0_, lld, a, b, mu_);
 }
 
 /* --------------------------------------------------------------------------

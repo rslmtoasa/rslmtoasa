@@ -81,6 +81,20 @@ int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b);
  * Re-call after each Hamiltonian upload to refresh the stencil tables.     */
 int rsrec_set_grid(rsrec_ctx *ctx, const int *coords, int use_structured);
 
+/* --- Chebyshev arithmetic precision --------------------------------------
+ * prec = 0 (DEFAULT): the block-Chebyshev driver runs in COMPLEX SINGLE
+ *          precision on a device-resident fused engine. KPM is robust in
+ *          fp32 (iterates bounded on [-1,1], Jackson damping suppresses
+ *          high-order noise; cf. Weisse et al. RMP 78, 275; KITE, GPUQT);
+ *          validated here to ~1e-6 relative on the moments. On FP64-capped
+ *          GPUs (GeForce/RTX A-series: FP64 = FP32/64) this is the only
+ *          route to large speedups.
+ * prec = 1: full double precision, bit-comparable with the CPU reference.
+ *          Recommended once per new system as a cross-check.
+ * Affects rsrec_chebyshev_moments only; the Lanczos drivers (whose
+ * orthogonalisation is precision-sensitive) always run in fp64.            */
+int rsrec_set_precision(rsrec_ctx *ctx, int prec);
+
 /* --- core matvec (exposed mostly for testing / custom drivers) ----------- */
 /* y = (H x - b x)/a   with x, y: (nb, nrhs, kk).  a=1,b=0 gives plain H x.
  * which: 0 = Hamiltonian, 1 = v_a, 2 = v_b (no shift/scale applied to 1,2

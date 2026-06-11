@@ -3130,7 +3130,7 @@ contains
          do i = start_atom, end_atom
             i_loc = g2l_map(i)
             j = this%lattice%irec(i)
-            call g_logger%info('CUDA Chebyshev recursion on progress for atom '// &
+            call g_logger%info('CUDA Chebyshev recursion in progress for atom '// &
                int2str(j), __FILE__, __LINE__)
             this%psi0(:, :, :) = (0.0d0, 0.0d0)
             do l = 1, nb
@@ -3138,6 +3138,8 @@ contains
             end do
             call this%gpu_backend%chebyshev_moments(this%psi0, this%control%lld, a, b, &
                this%mu_n(:, :, :, i_loc))
+            call g_logger%info('CUDA Chebyshev recursion done for atom '// &
+               int2str(j), __FILE__, __LINE__)
          end do
          return
       end if

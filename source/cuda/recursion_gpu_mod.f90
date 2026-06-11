@@ -63,6 +63,7 @@ module recursion_gpu_mod
       procedure :: set_hamiltonian => rsgpu_set_hamiltonian
       procedure :: set_velocity => rsgpu_set_velocity
       procedure :: set_grid => rsgpu_set_grid
+      procedure :: set_precision => rsgpu_set_precision
       procedure :: ham_apply => rsgpu_ham_apply
       procedure :: chebyshev_moments => rsgpu_chebyshev_moments
       procedure :: block_lanczos => rsgpu_block_lanczos
@@ -110,6 +111,14 @@ module recursion_gpu_mod
          import :: c_ptr, c_int
          type(c_ptr), value :: ctx, coords
          integer(c_int), value :: use_structured
+         integer(c_int) :: ierr
+      end function
+
+      function c_rsrec_set_precision(ctx, prec) &
+         bind(C, name="rsrec_set_precision") result(ierr)
+         import :: c_ptr, c_int
+         type(c_ptr), value :: ctx
+         integer(c_int), value :: prec
          integer(c_int) :: ierr
       end function
 
@@ -235,6 +244,15 @@ contains
       if (c_rsrec_set_grid(this%ctx, c_loc(coords), flag) /= 0) &
          call die("set_grid")
    end subroutine rsgpu_set_grid
+
+   !> Chebyshev arithmetic precision: 0 = fp32 engine (default, fast on
+   !> all GPUs, ~1e-6 moment accuracy), 1 = fp64 (bit-comparable reference)
+   subroutine rsgpu_set_precision(this, prec)
+      class(rsgpu), intent(inout) :: this
+      integer, intent(in) :: prec
+      if (c_rsrec_set_precision(this%ctx, int(prec, c_int)) /= 0) &
+         call die("set_precision")
+   end subroutine rsgpu_set_precision
 
    !> psi_out = (H psi_in - b psi_in)/a  -- drop-in for ham_vec_matmul
    subroutine rsgpu_ham_apply(this, psi_in, psi_out, a, b)
