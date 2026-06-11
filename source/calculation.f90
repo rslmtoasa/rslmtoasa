@@ -29,6 +29,7 @@ module calculation_mod
    use charge_mod
    use symbolic_atom_mod
    use hamiltonian_mod
+   use sparse_mod, only: sparse
    use recursion_mod
    use green_mod
    use density_of_states_mod
@@ -278,7 +279,7 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -299,7 +300,7 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -381,7 +382,7 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -462,7 +463,7 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -540,7 +541,7 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -616,7 +617,7 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -637,7 +638,12 @@ contains
 
       call save_state(lattice_obj%symbolic_atoms)
 
-      call hamiltonian_obj%rs2pao()
+      select case (trim(hamiltonian_obj%export))
+      case ('rs2pao')
+         call hamiltonian_obj%rs2pao()
+      case ('python')
+         call hamiltonian_obj%export_rs_tb_all()
+      end select
       !call bands_obj%calculate_moments_gauss_legendre()
    end subroutine pre_processing_bravais
 
@@ -697,7 +703,7 @@ contains
       call hamiltonian_obj%build_from_paoflow_opt()
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       select case (control_obj%recur)
       case ('lanczos')
@@ -799,7 +805,7 @@ contains
       end select
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -927,7 +933,7 @@ contains
       end select
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
       ! Creating density of states object
       dos_obj = dos(recursion_obj, energy_obj)
@@ -1066,7 +1072,7 @@ contains
       end select
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
       
       call recursion_obj%compute_moments_stochastic()
 
@@ -1150,7 +1156,7 @@ contains
       end select
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
       
       call recursion_obj%compute_moments_stochastic()
 
@@ -1270,7 +1276,7 @@ contains
       end select
 
       ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj)
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
       
       call recursion_obj%chebyshev_orbital_mod()
 

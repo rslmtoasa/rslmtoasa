@@ -170,6 +170,9 @@ module control_mod
       !>
       !> Allowed values: ´block´, ´chebyshev´
       character(len=9) :: recur
+      logical :: cpp_plugin
+      logical :: gpu_plugin
+      character(len=16) :: gpu_backend
 
       !> Number of recursion levels for the conductivity tensor calculation
       !>
@@ -304,6 +307,9 @@ contains
       ruban = this%ruban
       do_comom = this%do_comom
       recur = this%recur
+      cpp_plugin = this%cpp_plugin
+      gpu_plugin = this%gpu_plugin
+      gpu_backend = this%gpu_backend
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
       cond_type = this%cond_type
@@ -361,6 +367,9 @@ contains
       this%ruban = ruban
       this%do_comom = do_comom
       this%recur = recur
+      this%cpp_plugin = cpp_plugin
+      this%gpu_plugin = gpu_plugin
+      this%gpu_backend = gpu_backend
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
       this%cond_type = cond_type
@@ -445,6 +454,9 @@ contains
       this%ruban = 0.0d0
       this%do_comom = .false.
       this%recur = 'block'
+      this%cpp_plugin = .false.
+      this%gpu_plugin = .false.
+      this%gpu_backend = 'csr'
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
@@ -501,6 +513,9 @@ contains
       concb = this%concb
       ruban = this%ruban
       do_comom = this%do_comom
+      cpp_plugin = this%cpp_plugin
+      gpu_plugin = this%gpu_plugin
+      gpu_backend = this%gpu_backend
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -558,6 +573,9 @@ contains
       call nml%add('concb', this%concb)
       call nml%add('hyperfine', this%hyperfine)
       call nml%add('sym_term', this%sym_term)
+      call nml%add('cpp_plugin', this%cpp_plugin)
+      call nml%add('gpu_plugin', this%gpu_plugin)
+      call nml%add('gpu_backend', this%gpu_backend)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
 
@@ -592,6 +610,12 @@ contains
           .and. this%recur /= 'chebyshev' &
           .and. this%recur /= 'block') then
          call g_logger%fatal('lattice%recur must be one of: ''lanczos'', ''chebyshev'' or ''block''")', __FILE__, __LINE__)
+      end if
+      if (this%gpu_backend /= 'csr' &
+          .and. this%gpu_backend /= 'bsr' &
+          .and. this%gpu_backend /= 'fft' &
+          .and. this%gpu_backend /= 'conv') then
+         call g_logger%fatal('control%gpu_backend must be one of: ''csr'', ''bsr'', ''fft'' or ''conv''.', __FILE__, __LINE__)
       end if
    end subroutine check_all
 

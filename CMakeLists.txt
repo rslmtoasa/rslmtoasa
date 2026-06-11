@@ -42,6 +42,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${fortran_output_directory})
 option(ENABLE_OPENMP "Use OpenMP for parallelization" ON)
 option(ENABLE_MPI "Use MPI for parallelization" OFF)
 option(ENABLE_LIBXC "Use libXC for exchange-correlation functionals" OFF)
+option(ENABLE_CPP_PLUGIN "Build the optional C++ recursion plugin backend" OFF)
+option(ENABLE_CUDA_PLUGIN "Build the optional CUDA recursion plugin backend" OFF)
 option(ENABLE_FLUSH "Flush printouts" OFF)
 option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
@@ -53,6 +55,21 @@ mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory 
 if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
 endif(APPLE)
+
+if (ENABLE_CPP_PLUGIN)
+  enable_language(CXX)
+  message(STATUS "Using C++ compiler ${CMAKE_CXX_COMPILER_ID} C++ ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
+if (ENABLE_CUDA_PLUGIN AND NOT ENABLE_CPP_PLUGIN)
+  enable_language(CXX)
+  message(STATUS "Using C++ compiler ${CMAKE_CXX_COMPILER_ID} C++ ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
+if (ENABLE_CUDA_PLUGIN)
+  find_package(CUDAToolkit REQUIRED COMPONENTS cudart cusparse cufft)
+  message(STATUS "CUDA toolkit root: ${CUDAToolkit_LIBRARY_ROOT}")
+endif()
 
 ##############################################################################################
 # Determine and set compiler-dependent flags
@@ -281,6 +298,8 @@ message(STATUS "| Compiler ID : ${CMAKE_Fortran_COMPILER_ID}")
 message(STATUS "| OpenMP      : ${ENABLE_OPENMP}")
 message(STATUS "| MPI         : ${ENABLE_MPI}")
 message(STATUS "| libXC       : ${ENABLE_LIBXC}")
+message(STATUS "| C++ plugin  : ${ENABLE_CPP_PLUGIN}")
+message(STATUS "| CUDA plugin : ${ENABLE_CUDA_PLUGIN}")
 message(STATUS "--------------------------------------------")
 
 ##############################################################################################

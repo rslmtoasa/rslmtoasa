@@ -38,7 +38,6 @@ module hamiltonian_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
-   use sparse_matrix_mod, only: bsr_matrix
    implicit none
 
    private
@@ -91,8 +90,6 @@ module hamiltonian_mod
       character(len=16) :: hubbard_u_potential_form
       !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
-      !> BSR (Block Sparse Row) format for GPU/oneMKL operations
-      type(bsr_matrix) :: h_bsr
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis
       real(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
       !> Enable +U correction when any U/J is provided on symbolic atoms
@@ -109,6 +106,8 @@ module hamiltonian_mod
       logical :: hubbard_v_check = .false.
       !> Spectrum bounds for Chebyshev scaling
       type(bounds) :: bounds
+      !> Hamiltonian export format: 'none', 'rs2pao', 'python'
+      character(len=16) :: export
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -122,9 +121,9 @@ module hamiltonian_mod
       procedure :: build_realspace_spin_torque_operators
       procedure :: build_realspace_orbital_velocity_operators
       procedure :: build_realspace_orbital_torque_operators
-      procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
+      procedure :: export_rs_tb_all
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
@@ -263,6 +262,7 @@ contains
       hubbard_u_potential_form = this%hubbard_u_potential_form
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
+      export = this%export
 
       ! Robust namelist buffers: pre-allocate allocatable inputs so namelist
       ! read does not depend on compiler-specific auto-allocation behavior.
@@ -317,6 +317,8 @@ contains
       end if
       this%bounds%algorithm = lower(trim(bounds_algorithm))
       if (len_trim(this%bounds%algorithm) == 0) this%bounds%algorithm = 'none'
+      this%export = lower(trim(export))
+      if (len_trim(this%export) == 0) this%export = 'none'
       if (bounds_scaling > 0.0_rp) then
          this%bounds%scaling = bounds_scaling
       else
@@ -666,93 +668,8 @@ contains
       this%hubbard_u_impurity_check = .false.
       this%hubbard_u_sc_check = .false.
       this%hubbard_v_check = .false.
+      this%export = 'none'
    end subroutine restore_to_default
-
-   subroutine block_to_sparse(this)
-       !*************************************************************************
-       !> @brief Constructs BSR sparse Hamiltonian for real-space cluster.
-       !>
-       !> Builds Block Sparse Row (BSR) format where each 18×18 block is a
-       !> TB-LMTO site-pair hopping matrix. Only non-zero blocks are stored.
-       !> Compatible with oneMKL and cuSPARSE.
-       !>
-       !> Format:
-       !> - blocksize = 18 (spd basis: s,p_x,p_y,p_z,d_xx,...,d_zz per spin)
-       !> - values(18,18,nblocks): dense blocks
-       !> - col_indices(nblocks): column block index for each block
-       !> - row_ptr(nrows+1): CSR-style row pointers for block-rows
-       !*************************************************************************
-       use sparse_matrix_mod, only: allocate_bsr
-
-       class(hamiltonian), intent(inout) :: this
-       integer :: kk, m, nr, block_idx, nblocks, i, j, block_col
-       integer :: neighbor
-       logical :: is_impurity
-
-       ! Pass 1: Count non-zero blocks
-       nblocks = 0
-       do kk = 1, this%lattice%kk
-           nr = this%lattice%nn(kk, 1)
-           do m = 1, nr
-               if (m == 1 .or. this%lattice%nn(kk, m) /= 0) then
-                   nblocks = nblocks + 1
-               end if
-           end do
-       end do
-
-       ! Allocate BSR structure
-       call allocate_bsr(this%h_bsr, nblocks, this%lattice%kk, nb)
-
-       ! Pass 2: Fill BSR data
-       block_idx = 0
-       this%h_bsr%row_ptr(1) = 1
-
-       is_impurity = (this%lattice%nmax > 0)
-
-       ! Loop over block-rows (atoms)
-       do kk = 1, this%lattice%kk
-           nr = this%lattice%nn(kk, 1)
-
-           do m = 1, nr
-               if (m == 1) then
-                   ! Onsite block: diagonal
-                   block_col = kk
-               else
-                   neighbor = this%lattice%nn(kk, m)
-                   if (neighbor == 0) cycle
-                   block_col = neighbor
-               end if
-
-               block_idx = block_idx + 1
-
-               ! Fill block from appropriate source
-               if (is_impurity .and. kk <= this%lattice%nmax) then
-                   ! Local region: use hall
-                   this%h_bsr%values(:, :, block_idx) = this%hall(:, :, m, kk)
-               else
-                   ! Bulk region: use ee
-                   ! Note: need to map atom type correctly
-                   this%h_bsr%values(:, :, block_idx) = this%ee(:, :, m, this%lattice%iz(kk))
-               end if
-
-               this%h_bsr%col_indices(block_idx) = block_col
-           end do
-
-           ! Update row_ptr for next block-row
-           if (kk < this%lattice%kk) then
-               this%h_bsr%row_ptr(kk + 1) = block_idx + 1
-           end if
-       end do
-
-       ! Close final row pointer
-       this%h_bsr%row_ptr(this%lattice%kk + 1) = nblocks + 1
-
-       ! Legacy: also build dense format if needed (for backward compatibility)
-       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
-       ! Sparse format no longer allocated by default; call separately if needed
-
-   end subroutine block_to_sparse
-
 
    !**************************************************************************
    !> @brief Build orbital-velocity operators (\f$\mathbf{j}^{L}\f$) by combining 
@@ -2771,4 +2688,256 @@ contains
          call g_logger%info(trim(msg), __FILE__, __LINE__)
       end if
    end subroutine compute_hamiltonian_bounds
+   
+   
+   !------------------------------------------------------------------------------
+   ! RS-LMTO-ASA tight-binding export helpers
+   !------------------------------------------------------------------------------
+   !
+   ! Intended use:
+   !   Place these procedures in the same module that defines type(hamiltonian),
+   !   or adapt the `class(hamiltonian)` declarations to your module layout.
+   !
+   ! Required symbols from the host code:
+   !   - rp, nb, norb, ry2ev
+   !   - type hamiltonian with this%charge%lattice, this%ee, this%lsham
+   !   - hcpx(block, 'sph2cart')
+   !   - site2orb(local_orb, atom_or_type, global_orb, n_atoms, max_orbital)
+   !   - optional: g_logger%fatal(...), replace fatal calls if unavailable
+   !
+   ! Purpose:
+   !   This is a non-destructive replacement/extension of the current rs2pao path.
+   !   It exports
+   !     1. legacy PAOFLOW-like 7-column paoham.dat
+   !     2. canonical 13-column TB hopping file with explicit site/local-orb info
+   !     3. metadata sidecar needed by Python exporters for HDF5/Kwant/KITE/hr.dat
+   !
+   ! Important convention:
+   !   R = idx = cell(j) - cell(i) in the sense used by the existing rs2pao code:
+   !       r_i - (r_j + R_1 a_1 + R_2 a_2 + R_3 a_3)
+   !   The Python driver can flip this convention if needed.
+   !------------------------------------------------------------------------------
+   
+   subroutine export_rs_tb_all(this, basename, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in), optional :: basename
+      real(rp), intent(in), optional :: tol
+      logical, intent(in), optional :: include_lsham, transform_sph2cart
+   
+      character(len=512) :: base
+      real(rp) :: eps
+      logical :: add_lsham, do_sph2cart
+   
+      base = 'rs_tb'
+      if (present(basename)) base = trim(basename)
+   
+      eps = 1.0e-3_rp
+      if (present(tol)) eps = tol
+   
+      add_lsham = .true.
+      if (present(include_lsham)) add_lsham = include_lsham
+   
+      do_sph2cart = .true.
+      if (present(transform_sph2cart)) do_sph2cart = transform_sph2cart
+   
+      call export_rs_tb_metadata(this, trim(base)//'.meta')
+      call export_rs_tb_hoppings(this, trim(base)//'.tb', eps, add_lsham, do_sph2cart)
+      call export_rs_paoflow_legacy(this, trim(base)//'_paoham.dat', eps, add_lsham, do_sph2cart)
+   end subroutine export_rs_tb_all
+   
+   
+   subroutine export_rs_tb_metadata(this, filename)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: filename
+   
+      integer :: u, i, ios, n_atoms, max_orbital
+   
+      n_atoms = this%charge%lattice%ntype
+      max_orbital = norb
+   
+      open(newunit=u, file=filename, action='write', status='replace', iostat=ios)
+      if (ios /= 0) then
+         call g_logger%fatal('could not open TB metadata file for writing', __FILE__, __LINE__)
+      end if
+   
+      write(u,'(A)') '# rs-tb-meta-v1'
+      write(u,'(A)') 'energy_unit eV'
+      write(u,'(A)') 'length_unit Angstrom'
+      write(u,'(A,I0)') 'n_atoms ', n_atoms
+      write(u,'(A,I0)') 'norb_scalar ', max_orbital
+      write(u,'(A,I0)') 'block_size ', nb
+      write(u,'(A)') 'index_base 1'
+      write(u,'(A)') 'lattice_vectors_cart'
+      do i = 1, 3
+         write(u,'(3ES26.16)') this%charge%lattice%a(:, i)
+      end do
+      write(u,'(A)') 'positions_cart'
+      do i = 1, n_atoms
+         ! atlist(i) maps type/basis index to the representative cluster atom.
+         write(u,'(I8,3ES26.16)') i, this%charge%lattice%cr(:, this%charge%lattice%atlist(i))
+      end do
+      close(u)
+   end subroutine export_rs_tb_metadata
+   
+   
+   subroutine export_rs_paoflow_legacy(this, filename, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: filename
+      real(rp), intent(in) :: tol
+      logical, intent(in) :: include_lsham, transform_sph2cart
+   
+      integer :: u, ios
+   
+      open(newunit=u, file=filename, action='write', status='replace', iostat=ios)
+      if (ios /= 0) then
+         call g_logger%fatal('could not open legacy PAOFLOW-like Hamiltonian file', __FILE__, __LINE__)
+      end if
+   
+      call write_rs_tb_records(this, u, 'legacy7', tol, include_lsham, transform_sph2cart)
+      close(u)
+   end subroutine export_rs_paoflow_legacy
+   
+   
+   subroutine export_rs_tb_hoppings(this, filename, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: filename
+      real(rp), intent(in) :: tol
+      logical, intent(in) :: include_lsham, transform_sph2cart
+   
+      integer :: u, ios
+   
+      open(newunit=u, file=filename, action='write', status='replace', iostat=ios)
+      if (ios /= 0) then
+         call g_logger%fatal('could not open canonical TB hopping file', __FILE__, __LINE__)
+      end if
+   
+      write(u,'(A)') '# rs-tb-hoppings-v1'
+      write(u,'(A)') '# columns:'
+      write(u,'(A)') '# R1 R2 R3 ia jbasis k_neigh i_local j_local ipao jpao real_eV imag_eV'
+      call write_rs_tb_records(this, u, 'canonical13', tol, include_lsham, transform_sph2cart)
+      close(u)
+   end subroutine export_rs_tb_hoppings
+   
+   
+   subroutine write_rs_tb_records(this, u, mode, tol, include_lsham, transform_sph2cart)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: u
+      character(len=*), intent(in) :: mode
+      real(rp), intent(in) :: tol
+      logical, intent(in) :: include_lsham, transform_sph2cart
+   
+      integer :: ntype, ia, nr, k, jj, jbasis
+      integer :: i, j, ipao, jpao, n_atoms, max_orbital
+      integer :: idx(3)
+      logical :: found
+      complex(rp) :: hblock(nb, nb)
+   
+      n_atoms = this%charge%lattice%ntype
+      max_orbital = norb
+   
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+      
+         do k = 1, nr
+            jj = this%charge%lattice%nn(ia, k)
+            if (k == 1) jj = ia
+            if (jj == 0) cycle
+         
+            call rs_neighbor_lattice_index(this, ia, jj, idx, found, tol)
+            if (.not. found) then
+               write(*,'(A,2I8,A)') 'WARNING: no lattice index found for neighbour pair ia,jj=', ia, jj, '; skipping'
+               cycle
+            end if
+         
+            jbasis = this%charge%lattice%iz(jj)
+         
+            hblock(:, :) = this%ee(:, :, k, ntype)
+            if (include_lsham .and. k == 1) hblock(:, :) = hblock(:, :) + this%lsham(:, :, ntype)
+         
+            if (transform_sph2cart) then
+               call hcpx(hblock(1:norb,       1:norb      ), 'sph2cart')
+               call hcpx(hblock(1:norb,       norb+1:nb   ), 'sph2cart')
+               call hcpx(hblock(norb+1:nb,    1:norb      ), 'sph2cart')
+               call hcpx(hblock(norb+1:nb,    norb+1:nb   ), 'sph2cart')
+            end if
+         
+            do i = 1, nb
+               do j = 1, nb
+                  if (abs(hblock(i,j)) <= 0.0_rp) cycle
+               
+                  ipao = 0
+                  jpao = 0
+                  call site2orb(i, ia,     ipao, n_atoms, max_orbital)
+                  call site2orb(j, jbasis, jpao, n_atoms, max_orbital)
+               
+                  select case (trim(mode))
+                  case ('legacy7')
+                     ! PAOFLOW-like/local legacy format used by build_from_paoflow_opt:
+                     ! R1 R2 R3 global_orb_i global_orb_j Re[eV] Im[eV]
+                     write(u,'(3I6,2I10,2ES26.16)') idx(:), ipao, jpao, &
+                        real(hblock(i,j))*ry2ev, aimag(hblock(i,j))*ry2ev
+                  case ('canonical13')
+                     ! Extended self-describing scalar record. ia and jbasis are 1-based
+                     ! host-code atom/basis identifiers; i,j and ipao,jpao are 1-based.
+                     write(u,'(3I6,7I10,2ES26.16)') idx(:), ia, jbasis, k, i, j, ipao, jpao, &
+                        real(hblock(i,j))*ry2ev, aimag(hblock(i,j))*ry2ev
+                  end select
+               end do
+            end do
+         end do
+      end do
+   end subroutine write_rs_tb_records
+   
+   
+   subroutine rs_neighbor_lattice_index(this, ia, jj, idx, found, tol)
+      implicit none
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, jj
+      integer, intent(out) :: idx(3)
+      logical, intent(out) :: found
+      real(rp), intent(in) :: tol
+   
+      integer :: idxi, idxj, idxk, jbasis
+      real(rp) :: rij(3), rijtest(3), err, best_err
+   
+      idx = 0
+      found = .false.
+      best_err = huge(1.0_rp)
+   
+      ! For onsite blocks, do not search a supercell image.
+      if (ia == jj) then
+         idx = [0, 0, 0]
+         found = .true.
+         return
+      end if
+   
+      rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
+      jbasis = this%charge%lattice%iz(jj)
+   
+      do idxi = -5, 5
+         do idxj = -5, 5
+            do idxk = -5, 5
+               rijtest(:) = this%charge%lattice%cr(:, ia) - &
+                  (this%charge%lattice%cr(:, jbasis) + &
+                   idxi*this%charge%lattice%a(:, 1) + &
+                   idxj*this%charge%lattice%a(:, 2) + &
+                   idxk*this%charge%lattice%a(:, 3))
+               err = norm2(rij(:) - rijtest(:))
+               if (err < best_err) then
+                  best_err = err
+                  idx = [idxi, idxj, idxk]
+               end if
+            end do
+         end do
+      end do
+   
+      found = (best_err < tol)
+   end subroutine rs_neighbor_lattice_index
+
 end module hamiltonian_mod
