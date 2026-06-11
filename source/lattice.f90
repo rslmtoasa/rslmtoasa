@@ -1283,6 +1283,7 @@ contains
             one = this%dx*this%cr(1, j) + this%dy*this%cr(2, j) + this%dz*this%cr(3, j)
             if ((abs(new - one) .gt. 1.d-6) .and. (abs(new - one) .le. ds)) then
                ds = abs(new - one)
+               write(*,*) ds
             end if
             if ((abs(new) .le. ds2)) then
                ds2 = abs(new)
@@ -1292,8 +1293,9 @@ contains
 
       this%zstep = ds
       this%zmin = ds2 - this%zstep
-      this%zmax = ds2 + 20*this%zstep
-
+      this%zmax = ds2 + 50*this%zstep
+      write(*,*) this%zstep, this%zmin, this%zmax
+      write(*,*) this%dx, this%dy, this%dz
       n = int((this%zmax - this%zmin)/this%zstep) + 1
 
       ! Allocate the number of layers
@@ -1312,6 +1314,7 @@ contains
       call move_alloc(this%num, crystalType)
 
       nsurf = 0
+      write(*,*) natoms
       do i = 1, n
          nTypesForCurrentLayer(i) = 0
          disi_min = sqrt(this%z(i)**2) + 1.0d0
