@@ -22,6 +22,7 @@
 module recursion_mod
 
    use hamiltonian_mod
+   use chebyshev_fast_mod, only: cheb_moments_fast
    use lattice_mod
    use control_mod
    use energy_mod
@@ -2529,6 +2530,42 @@ contains
          j = this%lattice%ijpair(ij, 2) ! Atom number in the clust file, atom j
 !         call g_logger%info('Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
          call g_logger%info(int2str(rank)//': Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
+         if (.not. this%hamiltonian%hoh) then
+            do reci = 1, 4
+               this%psi0(:, :, :) = (0.0d0, 0.0d0)
+
+               select case (reci)
+               case (1)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
+               case (2)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
+               case (3)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
+               case (4)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
+               end select
+
+               do l = 1, nb
+                  this%psi0(l, l, i) = asign
+                  this%psi0(l, l, j) = bsign
+               end do
+
+               call cheb_moments_fast(this%psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+                  this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+                  nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, llmax, &
+                  a, b, this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
+
+               if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
+                  call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
+               end if
+            end do
+            cycle
+         end if
+
          do reci = 1, 4
             ! Clear list of atoms in hopping region
             this%izero(:) = 0
@@ -3257,6 +3294,18 @@ contains
          i_loc = g2l_map(i)
          j = this%lattice%irec(i) ! Atom number in the clust file
          call g_logger%info('Chebyshev recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
+         if (.not. this%hamiltonian%hoh) then
+            this%psi0(:, :, :) = (0.0d0, 0.0d0)
+            do l = 1, nb
+               this%psi0(l, l, j) = (1.0d0, 0.0d0)
+            end do
+            call cheb_moments_fast(this%psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               this%control%lld, a, b, this%mu_n(:, :, :, i_loc))
+            cycle
+         end if
+
          ! Initialize neighbouring map
          this%izeroll(:, :) = 0
          this%izeroll(j, 1) = 1

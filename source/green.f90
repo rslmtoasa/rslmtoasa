@@ -27,6 +27,7 @@ module green_mod
    use symbolic_atom_mod
    use recursion_mod
    use density_of_states_mod
+   use chebyshev_fast_mod, only: cheb_green_fast
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
@@ -1041,17 +1042,10 @@ contains
       use mpi_mod
       class(green), intent(inout) :: this
       ! Local variables
-      real(rp), dimension(this%control%lld*2+2) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2+2) :: polycheb
-      real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
-      complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n, nv
-
-      integer :: n_glob
-      logical, save :: dump_done = .false.
-      character(len=200) :: dump_fname
-      integer :: dump_unit, dump_iostat
+      complex(rp), allocatable :: mu_local(:, :, :, :)
+      complex(rp), allocatable :: g0_local(:, :, :, :)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: n, n_glob, n_local, nv
 
       this%g0 = 0.0d0
 
@@ -1060,58 +1054,28 @@ contains
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
 
-      wscale(:) = (this%en%ene(:) - b)/a
-
       ! Number of DOS points
       nv = this%en%channels_ldos + 10
 
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
+      n_local = end_atom - start_atom + 1
+      if (n_local <= 0) return
 
-      ! Calculating the Lorentz Kernel
-      ! call lorentz_kernel(this%control%lld, kernel, 4.0d0)
+      allocate (mu_local(nb, nb, size(this%recursion%mu_n, 3), n_local))
+      allocate (g0_local(nb, nb, nv, n_local))
 
-      ! Determine how many atoms each process should handle
-      ! Already done earlier
-      !call get_mpi_variables(rank,this%lattice%nrec)
-
-      do n_glob = start_atom, end_atom ! Loop on self-consistent atoms
+      do n_glob = start_atom, end_atom
          n = g2l_map(n_glob)
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
-            end do
-         end do
+         mu_local(:, :, :, n) = this%recursion%mu_n(:, :, :, n)
+      end do
 
-         this%recursion%mu_ng(:, :, 2:size(kernel), n) = this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
+      call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
 
-         !do i=1, size(kernel)
-         !  write(400+n, *) i, sum(this%recursion%mu_ng(1:18, 1:18, i, n)), sum(this%recursion%mu_n(1:18, 1:18, i, n))
-         !end do
+      do n_glob = start_atom, end_atom
+         n = g2l_map(n_glob)
+         this%g0(:, :, 1:nv, n) = g0_local(:, :, :, n)
+      end do
 
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
-
-         ! Calculate the density of states
-         !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-         do ie = 1, this%en%channels_ldos + 10
-            do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
-               do l = 1, nb
-                  do m = 1, nb
-                     this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n)*exp_factor
-                  end do
-               end do
-            end do
-            do l = 1, nb
-               do m = 1, nb
-                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
-               end do
-            end do
-         end do
-         !$omp end parallel do
-      end do  ! End loop on self-consistent atoms
+      deallocate (g0_local, mu_local)
 !!! ! MPI moved to moment section
 !!! #ifdef USE_MPI
 !!!     call g_timer%start(´MPI DOS communication´)

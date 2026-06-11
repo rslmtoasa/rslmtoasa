@@ -7,6 +7,7 @@ add_library(${PROJECT_NAME} STATIC
     bands.f90
     calculation.f90
     charge.f90
+    chebyshev_fast.f90
     conductivity.f90
     control.f90
     density_of_states.f90
