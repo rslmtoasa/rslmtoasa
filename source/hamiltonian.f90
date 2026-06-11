@@ -80,7 +80,7 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
       !> Velocity operators
       complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, js_a, jl_a, vo_a, vo_b, jso_a, jlo_a
-      character(len=10) :: js_alpha, jl_alpha
+      character(len=10) :: pol_alpha, pol_beta
       real(rp), dimension(3) :: v_alpha, v_beta
       real(rp), dimension(:), allocatable :: velocity_scale
       !> Sparse Real Space Hamiltonian
@@ -96,6 +96,7 @@ module hamiltonian_mod
       procedure :: build_realspace_velocity_operators
       procedure :: build_realspace_spin_operators
       procedure :: build_realspace_spin_torque_operators
+      procedure :: build_realspace_spin_soc_torque_operators
       procedure :: build_realspace_orbital_velocity_operators
       procedure :: build_realspace_orbital_torque_operators
       procedure :: block_to_sparse
@@ -214,8 +215,8 @@ contains
       orb_pol = this%orb_pol
       v_alpha(:) = this%v_alpha(:)
       v_beta(:) = this%v_beta(:)
-      js_alpha = this%js_alpha
-      jl_alpha = this%jl_alpha
+      pol_alpha = this%pol_alpha
+      pol_beta  = this%pol_beta
       call move_alloc(this%velocity_scale, velocity_scale)
 
       ! Reading
@@ -236,8 +237,8 @@ contains
       this%orb_pol = orb_pol
       this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
-      this%js_alpha = js_alpha
-      this%jl_alpha = jl_alpha
+      this%pol_alpha = pol_alpha
+      this%pol_beta  = pol_beta
       call move_alloc(velocity_scale, this%velocity_scale)
 
    end subroutine build_from_file
@@ -357,8 +358,8 @@ contains
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
       this%v_beta(:) = [1, 0, 0] 
-      this%js_alpha = 'z'
-      this%jl_alpha = 'z'
+      this%pol_alpha = 'z'
+      this%pol_beta  = 'z'
    end subroutine restore_to_default
 
    subroutine block_to_sparse(this)
@@ -412,460 +413,874 @@ contains
    end subroutine block_to_sparse
 
 
-   !**************************************************************************
-   !> @brief Build orbital-velocity operators (\f$\mathbf{j}^{L}\f$) by combining 
-   !>        an orbital operator (\f$L_\gamma\f$) with an existing velocity operator.
-   !>
-   !> This subroutine constructs orbital-velocity operators that couple an orbital 
-   !> operator (\f$L_\gamma\f$) and a velocity operator (\f$v_\alpha\f$) in the 
-   !> same orbital (and possibly spin–orbital) basis. Similar to spin–velocity 
-   !> constructs, one can use the anticommutator for symmetrization:
-   !>
-   !> \f[
-   !>   j_\alpha^{L}(\gamma) 
-   !>     = \tfrac12 
-   !>       \Bigl(
-   !>         L_\gamma \,v_\alpha \;+\; v_\alpha \,L_\gamma
-   !>       \Bigr),
-   !> \f]
-   !>
-   !> storing the resulting blocks in \f$j_{\alpha}^{L}(\gamma)\f$. This approach 
-   !> may be used to evaluate orbital currents or to track orbital angular momentum 
-   !> flow in a lattice system.
-   !>
-   !> @param[inout] this
-   !>   A derived type representing the Hamiltonian system. It contains both:
-   !>   - The orbital velocity operator \f$\hat{v}\f$ (e.g., \f$this\%\text{v\_a}\f$),
-   !>   - The orbital operator(s) \f$L_x, L_y, L_z\f$,
-   !>   - The data structure to hold the new orbital–velocity operator 
-   !>     \f$j^L_\alpha(\gamma)\f$.
-   !> 
-   !> @details
-   !> - The subroutine loops over the same block structure (\f$\mathrm{dim}\times\mathrm{dim}\f$) 
-   !>   as in real-space velocity. Each block is multiplied twice: 
-   !>   \f$L_\gamma\,v_\alpha\f$ and \f$v_\alpha\,L_\gamma\f$, then averaged 
-   !>   (\f$\times 0.5\f$).
-   !> - One can repeat this logic for each \f$L_\gamma\f$ (\f$L_x,L_y,L_z\f$) and each velocity 
-   !>   operator (\f$v_a,v_b\f$) to construct the entire set of orbital–velocity arrays 
-   !>   for subsequent Chebyshev or Kubo expansions.
-   !>
-   !> @warning
-   !>   - Ensure that \f$L_\gamma\f$ is defined in the **same** dimension/basis as 
-   !>     \f$v_\alpha\f$. A mismatch in matrix size or basis alignment will 
-   !>     invalidate the block multiplications.
-   !>   - If additional factors (e.g., \(\hbar\) or a sign convention) are required 
-   !>     for \f$L_\gamma\f$, confirm it is consistent with how \f$v_\alpha\f$ 
-   !>     was defined.
-   !>
-   !**************************************************************************
-   subroutine build_realspace_orbital_velocity_operators(this)
-      class(hamiltonian), intent(inout) :: this
-   
-      integer :: ntype, ia, nr, m
-      integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:,:), tmp2(:,:), L_op(:,:)  ! Temp matrices
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select spin operator S_x, S_y, or S_z from a polarization label.
+   !---------------------------------------------------------------------------
+   subroutine select_spin_operator(pol, S_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(18, 18), intent(out) :: S_op
+
+      S_op(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+      case('x')
+         S_op(:, :) = S_x(:, :)
+      case('y')
+         S_op(:, :) = S_y(:, :)
+      case('z')
+         S_op(:, :) = S_z(:, :)
+      case default
+         call g_logger%fatal('Invalid spin polarization: '//trim(pol), __FILE__, __LINE__)
+      end select
+
+   end subroutine select_spin_operator
+
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select orbital operator L_x, L_y, or L_z from a polarization label.
+   !> The math_mod matrices are transformed from Cartesian to spherical basis.
+   !---------------------------------------------------------------------------
+   subroutine select_orbital_operator(pol, L_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(18, 18), intent(out) :: L_op
+
       complex(rp), dimension(9, 9) :: mLx, mLy, mLz
 
-      hblocksize = size(this%v_a, 1)
-   
-      ! Allocate local matrices for partial products
-      allocate(tmp1(hblocksize,hblocksize), tmp2(hblocksize,hblocksize), L_op(hblocksize,hblocksize))
-   
-      ! Initialize the orbital–velocity array
-      this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp) 
-
-      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       mLx(:, :) = L_x(:, :)
       mLy(:, :) = L_y(:, :)
       mLz(:, :) = L_z(:, :)
-      
-      ! Transforming them into the spherical harmonics coordinates
+
       call hcpx(mLx, 'cart2sph')
       call hcpx(mLy, 'cart2sph')
       call hcpx(mLz, 'cart2sph')
-   
-      ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
-      case ('x')
-         L_op(1:9, 1:9) = mLx(:, :)
-         L_op(10:18, 10:18) = mLx(:, :)
-      case ('y')
-         L_op(1:9, 1:9) = mLy(:, :)
-         L_op(10:18, 10:18) = mLy(:, :)
-      case ('z')
-         L_op(1:9, 1:9) = mLz(:, :)
-         L_op(10:18, 10:18) = mLz(:, :)
+
+      L_op(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+      case('x')
+         L_op(1:9, 1:9)     = mLx(:, :)
+         L_op(10:18,10:18)  = mLx(:, :)
+      case('y')
+         L_op(1:9, 1:9)     = mLy(:, :)
+         L_op(10:18,10:18)  = mLy(:, :)
+      case('z')
+         L_op(1:9, 1:9)     = mLz(:, :)
+         L_op(10:18,10:18)  = mLz(:, :)
+      case default
+         call g_logger%fatal('Invalid orbital polarization: '//trim(pol), __FILE__, __LINE__)
       end select
-   
-      ! Loop over each atom type
+
+   end subroutine select_orbital_operator
+
+ 
+   !**************************************************************************
+   !> @brief Build spin-current operator j^S = 1/2 {S_pol, v_slot}.
+   !>
+   !> pol selects the spin polarization: 'x', 'y', or 'z'.
+   !> velocity_slot selects the spatial velocity operator:
+   !>   'a' -> use v_a / vo_a
+   !>   'b' -> use v_b / vo_b
+   !>
+   !> The result is stored in js_a / jso_a as temporary containers.
+   !**************************************************************************
+   subroutine build_realspace_spin_operators(this, pol, velocity_slot)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
+      character(len=*), intent(in) :: velocity_slot
+
+      integer :: ntype, ia, nr, m
+      integer :: hblocksize
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)
+
+      hblocksize = size(this%v_a, 1)
+
+      allocate(tmp1(hblocksize, hblocksize))
+      allocate(tmp2(hblocksize, hblocksize))
+      allocate(S_op(hblocksize, hblocksize))
+
+      this%js_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      call select_spin_operator(pol, S_op)
+
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
          nr = this%charge%lattice%nn(ia, 1)
-   
-         ! For each neighbor block
+
          do m = 2, nr
-            ! tmp1 = L_op * v_a(:,:,m,ntype)
-            tmp1 = matmul(L_op, this%v_a(:,:,m,ntype))
-   
-            ! tmp2 = v_a(:,:,m,ntype) * L_op
-            tmp2 = matmul(this%v_a(:,:,m,ntype), L_op)
-   
-            ! jl_a(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-            this%jl_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-   
+
+            tmp1(:, :) = (0.0_rp, 0.0_rp)
+            tmp2(:, :) = (0.0_rp, 0.0_rp)
+
+            select case(trim(velocity_slot))
+            case('a')
+               tmp1 = matmul(S_op, this%v_a(:, :, m, ntype))
+               tmp2 = matmul(this%v_a(:, :, m, ntype), S_op)
+            case('b')
+               tmp1 = matmul(S_op, this%v_b(:, :, m, ntype))
+               tmp2 = matmul(this%v_b(:, :, m, ntype), S_op)
+            case default
+               call g_logger%fatal('Invalid velocity slot in build_realspace_spin_operators: '//trim(velocity_slot), __FILE__, __LINE__)
+            end select
+
+            this%js_a(:, :, m, ntype) = 0.5_rp * (tmp1 + tmp2)
+
             if (this%hoh) then
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = js_a * v_a(:,:,m,ntype)
-               tmp1 = matmul(L_op, this%vo_a(:, :, m, ntype))
+               tmp1(:, :) = (0.0_rp, 0.0_rp)
+               tmp2(:, :) = (0.0_rp, 0.0_rp)
 
-               ! tmp2 = v_a(:,:,m,ntype) * js_a
-               tmp2 = matmul(this%vo_a(:, :, m, ntype), L_op)
+               select case(trim(velocity_slot))
+               case('a')
+                  tmp1 = matmul(S_op, this%vo_a(:, :, m, ntype))
+                  tmp2 = matmul(this%vo_a(:, :, m, ntype), S_op)
+               case('b')
+                  tmp1 = matmul(S_op, this%vo_b(:, :, m, ntype))
+                  tmp2 = matmul(this%vo_b(:, :, m, ntype), S_op)
+               case default
+                  call g_logger%fatal('Invalid velocity slot in build_realspace_spin_operators: '//trim(velocity_slot), __FILE__, __LINE__)
+               end select
 
-               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jlo_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+               this%jso_a(:, :, m, ntype) = 0.5_rp * (tmp1 + tmp2)
             end if
 
-            ! Optional debugging output:
-            ! write(*,*) 'm=', m
-            ! write(*,'(18f10.6)') real(this%jo_a(:,:,m,ntype))
-            ! write(*,*)
-            ! write(*,'(18f10.6)') aimag(this%jo_a(:,:,m,ntype))
          end do
       end do
-   
+
+      deallocate(tmp1, tmp2, S_op)
+
+   end subroutine build_realspace_spin_operators
+
+
+   !**************************************************************************
+   !> @brief Build orbital-current operator j^L = 1/2 {L_pol, v_slot}.
+   !>
+   !> pol selects the orbital polarization: 'x', 'y', or 'z'.
+   !> velocity_slot selects the spatial velocity operator:
+   !>   'a' -> use v_a / vo_a
+   !>   'b' -> use v_b / vo_b
+   !>
+   !> The result is stored in jl_a / jlo_a as temporary containers.
+   !**************************************************************************
+   subroutine build_realspace_orbital_velocity_operators(this, pol, velocity_slot)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
+      character(len=*), intent(in) :: velocity_slot
+
+      integer :: ntype, ia, nr, m
+      integer :: hblocksize
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)
+
+      hblocksize = size(this%v_a, 1)
+
+      allocate(tmp1(hblocksize, hblocksize))
+      allocate(tmp2(hblocksize, hblocksize))
+      allocate(L_op(hblocksize, hblocksize))
+
+      this%jl_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      call select_orbital_operator(pol, L_op)
+
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+
+         do m = 2, nr
+
+            tmp1(:, :) = (0.0_rp, 0.0_rp)
+            tmp2(:, :) = (0.0_rp, 0.0_rp)
+
+            select case(trim(velocity_slot))
+            case('a')
+               tmp1 = matmul(L_op, this%v_a(:, :, m, ntype))
+               tmp2 = matmul(this%v_a(:, :, m, ntype), L_op)
+            case('b')
+               tmp1 = matmul(L_op, this%v_b(:, :, m, ntype))
+               tmp2 = matmul(this%v_b(:, :, m, ntype), L_op)
+            case default
+               call g_logger%fatal('Invalid velocity slot in build_realspace_orbital_velocity_operators: '//trim(velocity_slot), __FILE__, __LINE__)
+            end select
+
+            this%jl_a(:, :, m, ntype) = 0.5_rp * (tmp1 + tmp2)
+
+            if (this%hoh) then
+               tmp1(:, :) = (0.0_rp, 0.0_rp)
+               tmp2(:, :) = (0.0_rp, 0.0_rp)
+
+               select case(trim(velocity_slot))
+               case('a')
+                  tmp1 = matmul(L_op, this%vo_a(:, :, m, ntype))
+                  tmp2 = matmul(this%vo_a(:, :, m, ntype), L_op)
+               case('b')
+                  tmp1 = matmul(L_op, this%vo_b(:, :, m, ntype))
+                  tmp2 = matmul(this%vo_b(:, :, m, ntype), L_op)
+               case default
+                  call g_logger%fatal('Invalid velocity slot in build_realspace_orbital_velocity_operators: '//trim(velocity_slot), __FILE__, __LINE__)
+               end select
+
+               this%jlo_a(:, :, m, ntype) = 0.5_rp * (tmp1 + tmp2)
+            end if
+
+         end do
+      end do
+
       deallocate(tmp1, tmp2, L_op)
+
    end subroutine build_realspace_orbital_velocity_operators
 
 
    !**************************************************************************
-   !> @brief Build spin-velocity operators (\f$\mathbf{j}^{s}\f$) by combining 
-   !>        the spin operator (\f$S_\beta\f$) with an existing velocity operator.
+   !> @brief Build SOC contribution to the spin torque:
    !>
-   !> This subroutine constructs spin-velocity operators that couple a spin operator 
-   !> (\f$S_\beta\f$) and a velocity operator (\f$v_\alpha\f$) within the same spin–orbital 
-   !> basis. In many spin Hall or related calculations, one uses the anticommutator:
+   !>        tau^SOC_pol = (1/i) [S_pol, H_SOC]
    !>
-   !> \f[
-   !>   j_\alpha^{s}(\beta) 
-   !>     = \tfrac12 
-   !>       \Bigl(
-   !>         S_\beta \,v_\alpha \;+\; v_\alpha \,S_\beta
-   !>       \Bigr),
-   !> \f]
+   !> where
    !>
-   !> storing the resulting blocks in \f$j_{\alpha}^{s}(\beta)\f$. This approach 
-   !> is commonly used to evaluate spin currents along a chosen direction \(\alpha\) 
-   !> with spin polarization \(\beta\).
+   !>        [S_pol, H_SOC] = S_pol H_SOC - H_SOC S_pol.
    !>
-   !> @param[inout] this
-   !>   A derived type representing the Hamiltonian system. It contains both:
-   !>   - The orbital velocity operator \f$\hat{v}\f$ (e.g., \f$this\%\text{v\_a}\f$),
-   !>   - The spin operator(s) \f$S_x, S_y, S_z\f$,
-   !>   - The data structure to hold the new spin–velocity operator 
-   !>     \f$j^s_\alpha(\beta)\f$.
-   !> 
-   !> @details
-   !> - The subroutine loops over the same blocks (\f$\mathrm{dim}\times\mathrm{dim}\f$) 
-   !>   as in real-space velocity. Each block is multiplied twice: once \f$S_\beta v_\alpha\f$ 
-   !>   and once \f$v_\alpha S_\beta\f$, and the results are averaged (multiplied by 0.5).
-   !> - One typically repeats this for each spin operator component (\f$S_x, S_y, S_z\f$) 
-   !>   and/or each velocity operator (\f$v_a, v_b\f$) to build the needed spin–velocity 
-   !>   arrays for Chebyshev or Kubo expansions.
+   !> pol selects the spin component: 'x', 'y', or 'z'.
    !>
-   !> @warning
-   !>   - The spin operators \f$S_\beta\f$ must be defined in the **same** spin–orbital 
-   !>     dimension as the velocity operator \f$v_\alpha\f$. Inconsistencies in dimension 
-   !>     or basis alignment will lead to incorrect matrix products.
-   !>   - Ensure that the factor \(\frac{1}{i}\) or \(\hbar\equiv1\) is consistently 
-   !>     applied to both velocity and spin definitions, if required.
+   !> This operator measures the spin non-conservation generated by the
+   !> spin-orbit Hamiltonian. It is distinct from the exchange torque
+   !> tau^xc = (1/i) [S_pol, H_xc].
    !>
+   !> The SOC Hamiltonian is assumed to be the on-site matrix
+   !> this%lsham(:, :, ntype). Therefore this operator is placed only in
+   !> the on-site block m = 1.
+   !>
+   !> The result is stored in js_a / jso_a as temporary containers,
+   !> following the same convention used by the other spin-type operators.
    !**************************************************************************
-   subroutine build_realspace_spin_operators(this)
+   subroutine build_realspace_spin_soc_torque_operators(this, pol)
       class(hamiltonian), intent(inout) :: this
-   
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor
+      character(len=*), intent(in) :: pol
+
+      integer :: ntype
       integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
-   
-      ! Derive dimension from your velocity array:
-      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
-   
-      ! Allocate temporary matrices for local block multiplication
-      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
-   
-      ! Initialize the spin–velocity array to zero
-      this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :)
+      complex(rp), allocatable :: S_op(:, :)
+      complex(rp), allocatable :: H_soc(:, :)
+
+      hblocksize = size(this%v_a, 1)
+
+      allocate(tmp1(hblocksize, hblocksize))
+      allocate(tmp2(hblocksize, hblocksize))
+      allocate(S_op(hblocksize, hblocksize))
+      allocate(H_soc(hblocksize, hblocksize))
+
+      this%js_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
       this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-      
-      select case(this%js_alpha)
-      
-      case('z')
-         S_op = S_z
-      case('x')
-         S_op = S_x
-      case('y')
-         S_op = S_y
-      end select
 
-      !write(*,'(18f10.6)') real(S_op)
-      ! Loop over each atom type
+      call select_spin_operator(pol, S_op)
+
       do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype)
-         nr = this%charge%lattice%nn(ia, 1)
-   
-         ! For each neighbor block 
-         do m = 2, nr
 
-            tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * v_a(:,:,m,ntype)
-            tmp1 = matmul(S_op, this%v_a(:, :, m, ntype))
-   
-            ! tmp2 = v_a(:,:,m,ntype) * js_a
-            tmp2 = matmul(this%v_a(:, :, m, ntype), S_op)
+         ! H_SOC is an on-site term.
+         H_soc(:, :) = this%lsham(:, :, ntype)
 
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-            this%js_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-            !write(*,*) 'm=', m
-            !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
-            !write(*,*)
-            !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
-            if (this%hoh) then
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = js_a * v_a(:,:,m,ntype)
-               tmp1 = matmul(S_op, this%vo_a(:, :, m, ntype))
-   
-               ! tmp2 = v_a(:,:,m,ntype) * js_a
-               tmp2 = matmul(this%vo_a(:, :, m, ntype), S_op)
-   
-               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jso_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-            end if
+         tmp1(:, :) = matmul(S_op, H_soc)
+         tmp2(:, :) = matmul(H_soc, S_op)
 
-         end do  ! m
-      end do  ! ntype
-   
-      deallocate(tmp1, tmp2)
-   end subroutine build_realspace_spin_operators
+         ! tau^SOC = (1/i) [S_pol, H_SOC]
+         this%js_a(:, :, 1, ntype) = (1.0_rp / i_unit) * (tmp1 - tmp2)
+
+         ! In hoh mode, keep the same operator in the overlap container for now.
+         ! If a specific overlap/SOC representation is later introduced,
+         ! replace this assignment by the corresponding expression.
+         if (this%hoh) then
+            this%jso_a(:, :, 1, ntype) = this%js_a(:, :, 1, ntype)
+         end if
+
+      end do
+
+      deallocate(tmp1, tmp2, S_op, H_soc)
+
+   end subroutine build_realspace_spin_soc_torque_operators
 
    !**************************************************************************
-   !> @brief Build **spin-torque operators** (\f$\boldsymbol{\tau}\f$) by taking the
-   !>        commutator of the spin operator (\f$S_\beta\f$) with the Hamiltonian.
+   !> @brief Build spin-torque operator tau^S = (1/i) [S_pol, H_xc].
    !>
-   !> This subroutine constructs layer- or orbital-resolved spin-torque operators
-   !> that couple a spin operator (\f$S_\beta\f$) to the system Hamiltonian
-   !> (\f$H\f$) within the same spin–orbital basis.  For torkance calculations one
-   !> uses the commutator
-   !>
-   !> \f[
-   !>   \boxed{\;
-   !>     \tau_\beta
-   !>        = \frac{1}{i\hbar}\bigl[\,S_\beta,\,H\,\bigr]
-   !>        = \frac{1}{i\hbar}
-   !>          \Bigl(
-   !>            S_\beta\,H \;-\; H\,S_\beta
-   !>          \Bigr)
-   !>   \;}
-   !> \f]
-   !>
-   !> The resulting blocks are stored in \f$\tau_\beta\f$.  These operators enter
-   !> linear-response formulas for the (field-like / damping-like) torkance
-   !> tensor.
-   !>
-   !> @param[inout] this
-   !>   A derived type representing the Hamiltonian system.  It contains:
-   !>   - The Hamiltonian blocks \f$\hat{H}\f$ (e.g.\ \f$this\%\text{H}\f$),
-   !>   - The spin operator(s) \f$S_x, S_y, S_z\f$,
-   !>   - The data structure to hold the new spin-torque operator \f$\tau_\beta\f$.
-   !>
-   !> @details
-   !> - The subroutine loops over the same blocks (\f$\mathrm{dim}\!\times\!\mathrm{dim}\f$)
-   !>   used for the Hamiltonian.  For each block it evaluates
-   !>   \f$S_\beta H - H S_\beta\f$ and multiplies by \f$(i/\hbar)\f$.
-   !> - One repeats this for every spin component (\f$S_x, S_y, S_z\f$) to build
-   !>   the full set of spin-torque arrays required by Chebyshev or Kubo routines.
-   !>
-   !> @warning
-   !>   - The spin operators \f$S_\beta\f$ and Hamiltonian blocks \f$H\f$ must share
-   !>     the **same** spin–orbital dimension and ordering; any mismatch yields an
-   !>     incorrect commutator.
-   !>   - Check that the factor \f$1/\hbar\f$ is consistent with units used
-   !>     elsewhere (set \f$\hbar\!\equiv\!1\f$ if that is your convention).
-   !>
+   !> pol selects the spin polarization: 'x', 'y', or 'z'.
+   !> The result is stored in js_a / jso_a as temporary containers.
    !**************************************************************************
-   subroutine build_realspace_spin_torque_operators(this)
+   subroutine build_realspace_spin_torque_operators(this, pol)
       class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
 
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
+      integer :: ntype, ia, nr, m
       integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)
       complex(rp), dimension(18, 18) :: locham
 
-      ! Derive dimension from your velocity array:
-      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+      hblocksize = size(this%v_a, 1)
 
-      ! Allocate temporary matrices for local block multiplication
-      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
+      allocate(tmp1(hblocksize, hblocksize))
+      allocate(tmp2(hblocksize, hblocksize))
+      allocate(S_op(hblocksize, hblocksize))
 
-      ! Initialize the spin–velocity array to zero
-      this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%js_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
       this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
 
-      select case(this%js_alpha)
+      call select_spin_operator(pol, S_op)
 
-      case('z')
-         S_op = S_z
-      case('x')
-         S_op = S_x
-      case('y')
-         S_op = S_y
-      end select
-
-      !write(*,'(18f10.6)') real(S_op)
-      ! Loop over each atom type
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
          nr = this%charge%lattice%nn(ia, 1)
-          
-         ! For each neighbor block 
+
          do m = 1, nr
 
-            !if (m==1) then
-            !  locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
-            !else
-            !  locham(:,:) = this%ee(:, :, m, ntype)
-            !end if
+            locham(:, :) = this%hxc(:, :, m, ntype)
 
-            locham(:,:) = this%hxc(:, :, m, ntype)
+            tmp1 = matmul(S_op, locham)
+            tmp2 = matmul(locham, S_op)
 
-            tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = js_a * hxc(:,:,m,ntype)
-            tmp1 = matmul(S_op, locham(:, :))
+            this%js_a(:, :, m, ntype) = (1.0_rp / i_unit) * (tmp1 - tmp2)
 
-            ! tmp2 = hxc(:,:,m,ntype) * js_a
-            tmp2 = matmul(locham(:, :), S_op)
+           !if (this%hoh) then
+           !   if (m == 1) then
+           !      locham(:, :) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
+           !   else
+           !      locham(:, :) = this%eeo(:, :, m, ntype)
+           !   end if
 
-            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
-            this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            !write(*,*) 'm=', m
-            !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
-            !write(*,*)
-            !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
-            if (this%hoh) then
+           !   tmp1 = matmul(S_op, locham)
+           !   tmp2 = matmul(locham, S_op)
 
-               if (m==1) then
-                 locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
-               else
-                 locham(:,:) = this%eeo(:, :, m, ntype)
-               end if
+           !   this%jso_a(:, :, m, ntype) = (1.0_rp / i_unit) * (tmp1 - tmp2)
+           !end if
 
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = js_a * eeo(:,:,m,ntype)
-               tmp1 = matmul(S_op, locham(:, :))
+         end do
+      end do
 
-               ! tmp2 = ee(:,:,m,ntype) * js_a
-               tmp2 = matmul(locham(:, :), S_op)
+      deallocate(tmp1, tmp2, S_op)
 
-               ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jso_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            end if
-
-         end do  ! m
-      end do  ! ntype
-
-      deallocate(tmp1, tmp2)
    end subroutine build_realspace_spin_torque_operators
 
 
-   subroutine build_realspace_orbital_torque_operators(this)
+   !**************************************************************************
+   !> @brief Build orbital-torque operator tau^L = (1/i) [L_pol, H].
+   !>
+   !> pol selects the orbital polarization: 'x', 'y', or 'z'.
+   !> The result is stored in jl_a / jlo_a as temporary containers.
+   !**************************************************************************
+   subroutine build_realspace_orbital_torque_operators(this, pol)
       class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
 
-      integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
+      integer :: ntype, ia, nr, m
       integer :: hblocksize
-      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)  ! Temp matrices for partial products
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)
       complex(rp), dimension(18, 18) :: locham
 
-      ! Derive dimension from your velocity array:
-      hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+      hblocksize = size(this%v_a, 1)
 
-      ! Allocate temporary matrices for local block multiplication
-      allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
+      allocate(tmp1(hblocksize, hblocksize))
+      allocate(tmp2(hblocksize, hblocksize))
+      allocate(L_op(hblocksize, hblocksize))
 
-      ! Initialize the spin–velocity array to zero
-      this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%jl_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
       this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
 
-      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-      mLx(:, :) = L_x(:, :)
-      mLy(:, :) = L_y(:, :)
-      mLz(:, :) = L_z(:, :)
+      call select_orbital_operator(pol, L_op)
 
-      ! Transforming them into the spherical harmonics coordinates
-      call hcpx(mLx, 'cart2sph')
-      call hcpx(mLy, 'cart2sph')
-      call hcpx(mLz, 'cart2sph')
-
-      ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
-      case ('x')
-         L_op(1:9, 1:9) = mLx(:, :)
-         L_op(10:18, 10:18) = mLx(:, :)
-      case ('y')
-         L_op(1:9, 1:9) = mLy(:, :)
-         L_op(10:18, 10:18) = mLy(:, :)
-      case ('z')
-         L_op(1:9, 1:9) = mLz(:, :)
-         L_op(10:18, 10:18) = mLz(:, :)
-      end select
-
-      ! Loop over each atom type
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
          nr = this%charge%lattice%nn(ia, 1)
 
-         ! For each neighbor block 
          do m = 1, nr
 
-            if (m==1) then
-              locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype)
+            if (m == 1) then
+               locham(:, :) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype)
             else
-              locham(:,:) = this%ee(:, :, m, ntype)
+               locham(:, :) = this%ee(:, :, m, ntype)
             end if
 
-            tmp1 = 0.0d0; tmp2 = 0.0d0
-            ! tmp1 = jl_a * ee(:,:,m,ntype)
-            tmp1 = matmul(L_op, locham(:, :))
+            tmp1 = matmul(L_op, locham)
+            tmp2 = matmul(locham, L_op)
 
-            ! tmp2 = ee(:,:,m,ntype) * jl_a
-            tmp2 = matmul(locham(:, :), L_op)
+            this%jl_a(:, :, m, ntype) = (1.0_rp / i_unit) * (tmp1 - tmp2)
 
-            ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-            this%jl_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
             if (this%hoh) then
-
-               if (m==1) then
-                 locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
+               if (m == 1) then
+                  locham(:, :) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
                else
-                 locham(:,:) = this%eeo(:, :, m, ntype)
+                  locham(:, :) = this%eeo(:, :, m, ntype)
                end if
 
-               tmp1 = 0.0d0; tmp2 = 0.0d0
-               ! tmp1 = jl_a * eeo(:,:,m,ntype)
-               tmp1 = matmul(L_op, locham(:, :))
+               tmp1 = matmul(L_op, locham)
+               tmp2 = matmul(locham, L_op)
 
-               ! tmp2 = ee(:,:,m,ntype) * jl_a
-               tmp2 = matmul(locham(:, :), L_op)
-
-               ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
-               this%jlo_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+               this%jlo_a(:, :, m, ntype) = (1.0_rp / i_unit) * (tmp1 - tmp2)
             end if
 
-         end do  ! m
-      end do  ! ntype
+         end do
+      end do
 
-      deallocate(tmp1, tmp2)
+      deallocate(tmp1, tmp2, L_op)
+
    end subroutine build_realspace_orbital_torque_operators
+
+
+
+
+   !!**************************************************************************
+   !!> @brief Build orbital-velocity operators (\f$\mathbf{j}^{L}\f$) by combining 
+   !!>        an orbital operator (\f$L_\gamma\f$) with an existing velocity operator.
+   !!>
+   !!> This subroutine constructs orbital-velocity operators that couple an orbital 
+   !!> operator (\f$L_\gamma\f$) and a velocity operator (\f$v_\alpha\f$) in the 
+   !!> same orbital (and possibly spin–orbital) basis. Similar to spin–velocity 
+   !!> constructs, one can use the anticommutator for symmetrization:
+   !!>
+   !!> \f[
+   !!>   j_\alpha^{L}(\gamma) 
+   !!>     = \tfrac12 
+   !!>       \Bigl(
+   !!>         L_\gamma \,v_\alpha \;+\; v_\alpha \,L_\gamma
+   !!>       \Bigr),
+   !!> \f]
+   !!>
+   !!> storing the resulting blocks in \f$j_{\alpha}^{L}(\gamma)\f$. This approach 
+   !!> may be used to evaluate orbital currents or to track orbital angular momentum 
+   !!> flow in a lattice system.
+   !!>
+   !!> @param[inout] this
+   !!>   A derived type representing the Hamiltonian system. It contains both:
+   !!>   - The orbital velocity operator \f$\hat{v}\f$ (e.g., \f$this\%\text{v\_a}\f$),
+   !!>   - The orbital operator(s) \f$L_x, L_y, L_z\f$,
+   !!>   - The data structure to hold the new orbital–velocity operator 
+   !!>     \f$j^L_\alpha(\gamma)\f$.
+   !!> 
+   !!> @details
+   !!> - The subroutine loops over the same block structure (\f$\mathrm{dim}\times\mathrm{dim}\f$) 
+   !!>   as in real-space velocity. Each block is multiplied twice: 
+   !!>   \f$L_\gamma\,v_\alpha\f$ and \f$v_\alpha\,L_\gamma\f$, then averaged 
+   !!>   (\f$\times 0.5\f$).
+   !!> - One can repeat this logic for each \f$L_\gamma\f$ (\f$L_x,L_y,L_z\f$) and each velocity 
+   !!>   operator (\f$v_a,v_b\f$) to construct the entire set of orbital–velocity arrays 
+   !!>   for subsequent Chebyshev or Kubo expansions.
+   !!>
+   !!> @warning
+   !!>   - Ensure that \f$L_\gamma\f$ is defined in the **same** dimension/basis as 
+   !!>     \f$v_\alpha\f$. A mismatch in matrix size or basis alignment will 
+   !!>     invalidate the block multiplications.
+   !!>   - If additional factors (e.g., \(\hbar\) or a sign convention) are required 
+   !!>     for \f$L_\gamma\f$, confirm it is consistent with how \f$v_\alpha\f$ 
+   !!>     was defined.
+   !!>
+   !!**************************************************************************
+   !subroutine build_realspace_orbital_velocity_operators(this)
+   !   class(hamiltonian), intent(inout) :: this
+   !
+   !   integer :: ntype, ia, nr, m
+   !   integer :: hblocksize
+   !   complex(rp), allocatable :: tmp1(:,:), tmp2(:,:), L_op(:,:)  ! Temp matrices
+   !   complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+
+   !   hblocksize = size(this%v_a, 1)
+   !
+   !   ! Allocate local matrices for partial products
+   !   allocate(tmp1(hblocksize,hblocksize), tmp2(hblocksize,hblocksize), L_op(hblocksize,hblocksize))
+   !
+   !   ! Initialize the orbital–velocity array
+   !   this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+   !   this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp) 
+
+   !   !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+   !   mLx(:, :) = L_x(:, :)
+   !   mLy(:, :) = L_y(:, :)
+   !   mLz(:, :) = L_z(:, :)
+   !   
+   !   ! Transforming them into the spherical harmonics coordinates
+   !   call hcpx(mLx, 'cart2sph')
+   !   call hcpx(mLy, 'cart2sph')
+   !   call hcpx(mLz, 'cart2sph')
+   !
+   !   ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
+   !   select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
+   !   case ('x')
+   !      L_op(1:9, 1:9) = mLx(:, :)
+   !      L_op(10:18, 10:18) = mLx(:, :)
+   !   case ('y')
+   !      L_op(1:9, 1:9) = mLy(:, :)
+   !      L_op(10:18, 10:18) = mLy(:, :)
+   !   case ('z')
+   !      L_op(1:9, 1:9) = mLz(:, :)
+   !      L_op(10:18, 10:18) = mLz(:, :)
+   !   end select
+   !
+   !   ! Loop over each atom type
+   !   do ntype = 1, this%charge%lattice%ntype
+   !      ia = this%charge%lattice%atlist(ntype)
+   !      nr = this%charge%lattice%nn(ia, 1)
+   !
+   !      ! For each neighbor block
+   !      do m = 2, nr
+   !         ! tmp1 = L_op * v_a(:,:,m,ntype)
+   !         tmp1 = matmul(L_op, this%v_a(:,:,m,ntype))
+   !
+   !         ! tmp2 = v_a(:,:,m,ntype) * L_op
+   !         tmp2 = matmul(this%v_a(:,:,m,ntype), L_op)
+   !
+   !         ! jl_a(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !         this%jl_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+   !
+   !         if (this%hoh) then
+   !            tmp1 = 0.0d0; tmp2 = 0.0d0
+   !            ! tmp1 = js_a * v_a(:,:,m,ntype)
+   !            tmp1 = matmul(L_op, this%vo_a(:, :, m, ntype))
+
+   !            ! tmp2 = v_a(:,:,m,ntype) * js_a
+   !            tmp2 = matmul(this%vo_a(:, :, m, ntype), L_op)
+
+   !            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !            this%jlo_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+   !         end if
+
+   !         ! Optional debugging output:
+   !         ! write(*,*) 'm=', m
+   !         ! write(*,'(18f10.6)') real(this%jo_a(:,:,m,ntype))
+   !         ! write(*,*)
+   !         ! write(*,'(18f10.6)') aimag(this%jo_a(:,:,m,ntype))
+   !      end do
+   !   end do
+   !
+   !   deallocate(tmp1, tmp2, L_op)
+   !end subroutine build_realspace_orbital_velocity_operators
+
+
+   !!**************************************************************************
+   !!> @brief Build spin-velocity operators (\f$\mathbf{j}^{s}\f$) by combining 
+   !!>        the spin operator (\f$S_\beta\f$) with an existing velocity operator.
+   !!>
+   !!> This subroutine constructs spin-velocity operators that couple a spin operator 
+   !!> (\f$S_\beta\f$) and a velocity operator (\f$v_\alpha\f$) within the same spin–orbital 
+   !!> basis. In many spin Hall or related calculations, one uses the anticommutator:
+   !!>
+   !!> \f[
+   !!>   j_\alpha^{s}(\beta) 
+   !!>     = \tfrac12 
+   !!>       \Bigl(
+   !!>         S_\beta \,v_\alpha \;+\; v_\alpha \,S_\beta
+   !!>       \Bigr),
+   !!> \f]
+   !!>
+   !!> storing the resulting blocks in \f$j_{\alpha}^{s}(\beta)\f$. This approach 
+   !!> is commonly used to evaluate spin currents along a chosen direction \(\alpha\) 
+   !!> with spin polarization \(\beta\).
+   !!>
+   !!> @param[inout] this
+   !!>   A derived type representing the Hamiltonian system. It contains both:
+   !!>   - The orbital velocity operator \f$\hat{v}\f$ (e.g., \f$this\%\text{v\_a}\f$),
+   !!>   - The spin operator(s) \f$S_x, S_y, S_z\f$,
+   !!>   - The data structure to hold the new spin–velocity operator 
+   !!>     \f$j^s_\alpha(\beta)\f$.
+   !!> 
+   !!> @details
+   !!> - The subroutine loops over the same blocks (\f$\mathrm{dim}\times\mathrm{dim}\f$) 
+   !!>   as in real-space velocity. Each block is multiplied twice: once \f$S_\beta v_\alpha\f$ 
+   !!>   and once \f$v_\alpha S_\beta\f$, and the results are averaged (multiplied by 0.5).
+   !!> - One typically repeats this for each spin operator component (\f$S_x, S_y, S_z\f$) 
+   !!>   and/or each velocity operator (\f$v_a, v_b\f$) to build the needed spin–velocity 
+   !!>   arrays for Chebyshev or Kubo expansions.
+   !!>
+   !!> @warning
+   !!>   - The spin operators \f$S_\beta\f$ must be defined in the **same** spin–orbital 
+   !!>     dimension as the velocity operator \f$v_\alpha\f$. Inconsistencies in dimension 
+   !!>     or basis alignment will lead to incorrect matrix products.
+   !!>   - Ensure that the factor \(\frac{1}{i}\) or \(\hbar\equiv1\) is consistently 
+   !!>     applied to both velocity and spin definitions, if required.
+   !!>
+   !!**************************************************************************
+   !subroutine build_realspace_spin_operators(this)
+   !   class(hamiltonian), intent(inout) :: this
+   !
+   !   integer :: ntype, ia, nr, m, ji, ja, atom_neighbor
+   !   integer :: hblocksize
+   !   complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
+   !
+   !   ! Derive dimension from your velocity array:
+   !   hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+   !
+   !   ! Allocate temporary matrices for local block multiplication
+   !   allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
+   !
+   !   ! Initialize the spin–velocity array to zero
+   !   this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+   !   this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+   !   
+   !   select case(this%js_alpha)
+   !   
+   !   case('z')
+   !      S_op = S_z
+   !   case('x')
+   !      S_op = S_x
+   !   case('y')
+   !      S_op = S_y
+   !   end select
+
+   !   !write(*,'(18f10.6)') real(S_op)
+   !   ! Loop over each atom type
+   !   do ntype = 1, this%charge%lattice%ntype
+   !      ia = this%charge%lattice%atlist(ntype)
+   !      nr = this%charge%lattice%nn(ia, 1)
+   !
+   !      ! For each neighbor block 
+   !      do m = 2, nr
+
+   !         tmp1 = 0.0d0; tmp2 = 0.0d0
+   !         ! tmp1 = js_a * v_a(:,:,m,ntype)
+   !         tmp1 = matmul(S_op, this%v_a(:, :, m, ntype))
+   !
+   !         ! tmp2 = v_a(:,:,m,ntype) * js_a
+   !         tmp2 = matmul(this%v_a(:, :, m, ntype), S_op)
+
+   !         ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !         this%js_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+   !         !write(*,*) 'm=', m
+   !         !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
+   !         !write(*,*)
+   !         !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
+   !         if (this%hoh) then
+   !            tmp1 = 0.0d0; tmp2 = 0.0d0
+   !            ! tmp1 = js_a * v_a(:,:,m,ntype)
+   !            tmp1 = matmul(S_op, this%vo_a(:, :, m, ntype))
+   !
+   !            ! tmp2 = v_a(:,:,m,ntype) * js_a
+   !            tmp2 = matmul(this%vo_a(:, :, m, ntype), S_op)
+   !
+   !            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !            this%jso_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
+   !         end if
+
+   !      end do  ! m
+   !   end do  ! ntype
+   !
+   !   deallocate(tmp1, tmp2)
+   !end subroutine build_realspace_spin_operators
+
+   !!**************************************************************************
+   !!> @brief Build **spin-torque operators** (\f$\boldsymbol{\tau}\f$) by taking the
+   !!>        commutator of the spin operator (\f$S_\beta\f$) with the Hamiltonian.
+   !!>
+   !!> This subroutine constructs layer- or orbital-resolved spin-torque operators
+   !!> that couple a spin operator (\f$S_\beta\f$) to the system Hamiltonian
+   !!> (\f$H\f$) within the same spin–orbital basis.  For torkance calculations one
+   !!> uses the commutator
+   !!>
+   !!> \f[
+   !!>   \boxed{\;
+   !!>     \tau_\beta
+   !!>        = \frac{1}{i\hbar}\bigl[\,S_\beta,\,H\,\bigr]
+   !!>        = \frac{1}{i\hbar}
+   !!>          \Bigl(
+   !!>            S_\beta\,H \;-\; H\,S_\beta
+   !!>          \Bigr)
+   !!>   \;}
+   !!> \f]
+   !!>
+   !!> The resulting blocks are stored in \f$\tau_\beta\f$.  These operators enter
+   !!> linear-response formulas for the (field-like / damping-like) torkance
+   !!> tensor.
+   !!>
+   !!> @param[inout] this
+   !!>   A derived type representing the Hamiltonian system.  It contains:
+   !!>   - The Hamiltonian blocks \f$\hat{H}\f$ (e.g.\ \f$this\%\text{H}\f$),
+   !!>   - The spin operator(s) \f$S_x, S_y, S_z\f$,
+   !!>   - The data structure to hold the new spin-torque operator \f$\tau_\beta\f$.
+   !!>
+   !!> @details
+   !!> - The subroutine loops over the same blocks (\f$\mathrm{dim}\!\times\!\mathrm{dim}\f$)
+   !!>   used for the Hamiltonian.  For each block it evaluates
+   !!>   \f$S_\beta H - H S_\beta\f$ and multiplies by \f$(i/\hbar)\f$.
+   !!> - One repeats this for every spin component (\f$S_x, S_y, S_z\f$) to build
+   !!>   the full set of spin-torque arrays required by Chebyshev or Kubo routines.
+   !!>
+   !!> @warning
+   !!>   - The spin operators \f$S_\beta\f$ and Hamiltonian blocks \f$H\f$ must share
+   !!>     the **same** spin–orbital dimension and ordering; any mismatch yields an
+   !!>     incorrect commutator.
+   !!>   - Check that the factor \f$1/\hbar\f$ is consistent with units used
+   !!>     elsewhere (set \f$\hbar\!\equiv\!1\f$ if that is your convention).
+   !!>
+   !!**************************************************************************
+   !subroutine build_realspace_spin_torque_operators(this)
+   !   class(hamiltonian), intent(inout) :: this
+
+   !   integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
+   !   integer :: hblocksize
+   !   complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
+   !   complex(rp), dimension(18, 18) :: locham
+
+   !   ! Derive dimension from your velocity array:
+   !   hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+
+   !   ! Allocate temporary matrices for local block multiplication
+   !   allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), S_op(hblocksize, hblocksize))
+
+   !   ! Initialize the spin–velocity array to zero
+   !   this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+   !   this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+   !   select case(this%js_alpha)
+
+   !   case('z')
+   !      S_op = S_z
+   !   case('x')
+   !      S_op = S_x
+   !   case('y')
+   !      S_op = S_y
+   !   end select
+
+   !   !write(*,'(18f10.6)') real(S_op)
+   !   ! Loop over each atom type
+   !   do ntype = 1, this%charge%lattice%ntype
+   !      ia = this%charge%lattice%atlist(ntype)
+   !      nr = this%charge%lattice%nn(ia, 1)
+   !       
+   !      ! For each neighbor block 
+   !      do m = 1, nr
+
+   !         !if (m==1) then
+   !         !  locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype) 
+   !         !else
+   !         !  locham(:,:) = this%ee(:, :, m, ntype)
+   !         !end if
+
+   !         locham(:,:) = this%hxc(:, :, m, ntype)
+
+   !         tmp1 = 0.0d0; tmp2 = 0.0d0
+   !         ! tmp1 = js_a * hxc(:,:,m,ntype)
+   !         tmp1 = matmul(S_op, locham(:, :))
+
+   !         ! tmp2 = hxc(:,:,m,ntype) * js_a
+   !         tmp2 = matmul(locham(:, :), S_op)
+
+   !         ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
+   !         this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+   !         !write(*,*) 'm=', m
+   !         !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
+   !         !write(*,*)
+   !         !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
+   !         if (this%hoh) then
+
+   !            if (m==1) then
+   !              locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
+   !            else
+   !              locham(:,:) = this%eeo(:, :, m, ntype)
+   !            end if
+
+   !            tmp1 = 0.0d0; tmp2 = 0.0d0
+   !            ! tmp1 = js_a * eeo(:,:,m,ntype)
+   !            tmp1 = matmul(S_op, locham(:, :))
+
+   !            ! tmp2 = ee(:,:,m,ntype) * js_a
+   !            tmp2 = matmul(locham(:, :), S_op)
+
+   !            ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !            this%jso_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+   !         end if
+
+   !      end do  ! m
+   !   end do  ! ntype
+
+   !   deallocate(tmp1, tmp2)
+   !end subroutine build_realspace_spin_torque_operators
+
+
+   !subroutine build_realspace_orbital_torque_operators(this)
+   !   class(hamiltonian), intent(inout) :: this
+
+   !   integer :: ntype, ia, nr, m, ji, ja, atom_neighbor, ino
+   !   integer :: hblocksize
+   !   complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), L_op(:, :)  ! Temp matrices for partial products
+   !   complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+   !   complex(rp), dimension(18, 18) :: locham
+
+   !   ! Derive dimension from your velocity array:
+   !   hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
+
+   !   ! Allocate temporary matrices for local block multiplication
+   !   allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
+
+   !   ! Initialize the spin–velocity array to zero
+   !   this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+   !   this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+   !   !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+   !   mLx(:, :) = L_x(:, :)
+   !   mLy(:, :) = L_y(:, :)
+   !   mLz(:, :) = L_z(:, :)
+
+   !   ! Transforming them into the spherical harmonics coordinates
+   !   call hcpx(mLx, 'cart2sph')
+   !   call hcpx(mLy, 'cart2sph')
+   !   call hcpx(mLz, 'cart2sph')
+
+   !   ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
+   !   select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
+   !   case ('x')
+   !      L_op(1:9, 1:9) = mLx(:, :)
+   !      L_op(10:18, 10:18) = mLx(:, :)
+   !   case ('y')
+   !      L_op(1:9, 1:9) = mLy(:, :)
+   !      L_op(10:18, 10:18) = mLy(:, :)
+   !   case ('z')
+   !      L_op(1:9, 1:9) = mLz(:, :)
+   !      L_op(10:18, 10:18) = mLz(:, :)
+   !   end select
+
+   !   ! Loop over each atom type
+   !   do ntype = 1, this%charge%lattice%ntype
+   !      ia = this%charge%lattice%atlist(ntype)
+   !      nr = this%charge%lattice%nn(ia, 1)
+
+   !      ! For each neighbor block 
+   !      do m = 1, nr
+
+   !         if (m==1) then
+   !           locham(:,:) = this%ee(:, :, m, ntype) + this%lsham(:, :, ntype)
+   !         else
+   !           locham(:,:) = this%ee(:, :, m, ntype)
+   !         end if
+
+   !         tmp1 = 0.0d0; tmp2 = 0.0d0
+   !         ! tmp1 = jl_a * ee(:,:,m,ntype)
+   !         tmp1 = matmul(L_op, locham(:, :))
+
+   !         ! tmp2 = ee(:,:,m,ntype) * jl_a
+   !         tmp2 = matmul(locham(:, :), L_op)
+
+   !         ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !         this%jl_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+   !         if (this%hoh) then
+
+   !            if (m==1) then
+   !              locham(:,:) = this%eeo(:, :, 1, ntype) + this%lsham(:, :, ntype)
+   !            else
+   !              locham(:,:) = this%eeo(:, :, m, ntype)
+   !            end if
+
+   !            tmp1 = 0.0d0; tmp2 = 0.0d0
+   !            ! tmp1 = jl_a * eeo(:,:,m,ntype)
+   !            tmp1 = matmul(L_op, locham(:, :))
+
+   !            ! tmp2 = ee(:,:,m,ntype) * jl_a
+   !            tmp2 = matmul(locham(:, :), L_op)
+
+   !            ! v_lza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
+   !            this%jlo_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
+   !         end if
+
+   !      end do  ! m
+   !   end do  ! ntype
+
+   !   deallocate(tmp1, tmp2)
+   !end subroutine build_realspace_orbital_torque_operators
 
 
    !**************************************************************************
@@ -902,8 +1317,10 @@ contains
       real(rp), dimension(3) :: dir_a, dir_b                 ! Velocity operator directions
       real(rp) :: norm_a, norm_b, dot_a, dot_b
       ! Initialize velocity operators to zero
-      this%v_a(:, :, :, :) = 0.0_rp
-      this%v_b(:, :, :, :) = 0.0_rp
+      this%v_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%v_b(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%vo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+      this%vo_b(:, :, :, :) = (0.0_rp, 0.0_rp)
    
       norm_a = norm2(this%v_alpha)
       norm_b = norm2(this%v_beta)
@@ -1249,66 +1666,364 @@ contains
       call g_timer%stop('build local hamiltonian')
    end subroutine build_locham
 
-   subroutine rs2pao(this)
-      implicit none
-      class(hamiltonian), intent(inout) :: this
-      ! Local variables
-      real(rp), dimension(3) :: rij, rijtest
-      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
-      integer :: jj, jt, max_orbital, n_atoms
-      integer :: ntype, iostat1, iostat2, iostatus
-      real(rp), dimension(3) :: vet, vetpao, idx
-      real(rp), dimension(3, 3) :: a_inv
-      complex(rp), dimension(18, 18) :: dum
-      n_atoms = this%charge%lattice%ntype
-      max_orbital = 9 
+subroutine rs2pao(this)
+   implicit none
+   class(hamiltonian), intent(inout) :: this
 
-      open (unit=92, file='rs2paoham.dat', action='write', iostat=iostatus, status='replace')
-      do ntype = 1, this%charge%lattice%ntype
-         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
-         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
-         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
-         do k = 1, nr
-            jj = this%charge%lattice%nn(ia, k)
-            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
-            if (k == 1) then
-               jj = ia
-            end if
-            if (jj /= 0) then
-               rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
+   integer :: n_atoms, max_orbital
+   integer :: ntype, ia, nr_i, jlab, ja, jtype, nr_j, klab, ka, ktype
+   integer :: qlab_jk
+   integer :: i, j, p, ipao, jpao
+   integer :: max_pairs, npairs
+   integer :: iostatus
 
-               rijtest(:) = 0.0d0
-               do idxi = -5, 5
-                  do idxj = -5, 5
-                     do idxk = -5, 5
-                        rijtest(:) = this%charge%lattice%cr(:, ia) - (this%charge%lattice%cr(:, this%charge%lattice%iz(jj)) &
-                                                                      + idxi*this%charge%lattice%a(:, 1) + idxj*this%charge%lattice%a(:, 2) + idxk*this%charge%lattice%a(:, 3))
-                        if (norm2(rij(:) - rijtest(:)) < 1.0d-3) then
-                           idx(:) = [idxi, idxj, idxk]
-                        end if
-                     end do
-                  end do
-               end do
+   integer, allocatable :: pair_type(:)
+   integer, allocatable :: pair_idx(:, :)
+   complex(rp), allocatable :: pair_h(:, :, :)
 
-               if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
+   real(rp), dimension(3) :: rjk
+   complex(rp), dimension(18,18) :: hij
+   complex(rp), dimension(18,18) :: hjk
+   complex(rp), dimension(18,18) :: himom
+   complex(rp), dimension(18,18) :: pathblk
+   complex(rp), dimension(18,18) :: dum
 
-               call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
-               call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
-               call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
-               call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
-               do i = 1, 18
-                  do j = 1, 18
-                     ipao = 0; jpao = 0
-                     call site2orb(i, ia, ipao, n_atoms, max_orbital)
-                     call site2orb(j, this%charge%lattice%iz(jj), jpao, n_atoms, max_orbital)
-                     write (92, '(3I4,2I7,2F22.14)') int(idx(:)), ipao, jpao, real(this%ee(i, j, k, ntype))*ry2ev, aimag(this%ee(i, j, k, ntype))*ry2ev
-                  end do
-               end do
+   n_atoms     = this%charge%lattice%ntype
+   max_orbital = 9
+
+   if (this%hoh) then
+      call this%build_obarm()
+      call this%build_enim()
+   end if
+
+   open(unit=92, file='rs2paoham.dat', action='write', status='replace', iostat=iostatus)
+   if (iostatus /= 0) then
+      write(*,*) 'rs2pao: could not open rs2paoham.dat'
+      return
+   end if
+
+   do ntype = 1, this%charge%lattice%ntype
+
+      ia   = this%charge%lattice%atlist(ntype)
+      nr_i = this%charge%lattice%nn(ia, 1)
+
+      ! Safe upper bound:
+      ! original bare pairs + all double-loop i->j->k path destinations
+      max_pairs = max(1, nr_i)
+      if (this%hoh) then
+         do jlab = 1, nr_i
+            call get_atom_from_ee_label(ia, jlab, ja)
+            if (ja /= 0) then
+               max_pairs = max_pairs + max(1, this%charge%lattice%nn(ja, 1))
             end if
          end do
+      end if
+
+      allocate(pair_type(max_pairs))
+      allocate(pair_idx(3, max_pairs))
+      allocate(pair_h(18,18,max_pairs))
+
+      pair_type(:)    = 0
+      pair_idx(:, :)  = 0
+      pair_h(:, :, :) = czero
+      npairs          = 0
+
+      ! ============================================================
+      ! 1) Bare h-part: accumulate h_ik from the original one-hop set
+      ! ============================================================
+      do jlab = 1, nr_i
+         call get_atom_from_ee_label(ia, jlab, ja)
+         if (ja == 0) cycle
+
+         hij(:, :) = this%ee(:, :, jlab, ntype)
+
+         call accumulate_block_by_actual_pair(ia, ja, hij, &
+                                              pair_type, pair_idx, pair_h, npairs)
       end do
-      close (92)
-   end subroutine rs2pao
+
+      ! ============================================================
+      ! 2) HoH part: for every path i -> j -> k, add
+      !              - h_ij * obar_j * h_jk
+      ! ============================================================
+      if (this%hoh) then
+         do jlab = 1, nr_i
+
+            call get_atom_from_ee_label(ia, jlab, ja)
+            if (ja == 0) cycle
+
+            jtype = this%charge%lattice%iz(ja)
+            if (jtype <= 0) cycle
+
+            hij(:, :) = this%ee(:, :, jlab, ntype)
+
+            ! himom = h_ij * obar_j
+            call zgemm('n', 'n', 18, 18, 18, cone, hij, 18, &
+                       this%obarm(:, :, jtype), 18, czero, himom, 18)
+
+            nr_j = this%charge%lattice%nn(ja, 1)
+
+            do klab = 1, nr_j
+
+               call get_atom_from_ee_label(ja, klab, ka)
+               if (ka == 0) cycle
+
+               ktype = this%charge%lattice%iz(ka)
+               if (ktype <= 0) cycle
+
+               ! Actual vector of the second hop j -> k
+               rjk(:) = this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ka)
+
+               ! Find which representative ee(:, :, label, jtype)
+               ! corresponds to the actual vector r_jk
+               call find_ee_label_from_vector(jtype, rjk, qlab_jk)
+               if (qlab_jk <= 0) cycle
+
+               hjk(:, :) = this%ee(:, :, qlab_jk, jtype)
+
+               ! pathblk = - (h_ij * obar_j) * h_jk
+               call zgemm('n', 'n', 18, 18, 18, -cone, himom, 18, &
+                          hjk, 18, czero, pathblk, 18)
+
+               ! Accumulate into the FINAL effective pair (i,k),
+               ! whose key is built from the ACTUAL rik = r_i - r_k
+               call accumulate_block_by_actual_pair(ia, ka, pathblk, &
+                                                    pair_type, pair_idx, pair_h, npairs)
+            end do
+         end do
+      end if
+
+      ! ============================================================
+      ! 3) Add onsite-only one-site terms at the very end
+      ! ============================================================
+      call accumulate_block_by_actual_pair(ia, ia, this%lsham(:, :, ntype), &
+                                           pair_type, pair_idx, pair_h, npairs)
+
+      if (this%hoh) then
+         call accumulate_block_by_actual_pair(ia, ia, this%enim(:, :, ntype), &
+                                              pair_type, pair_idx, pair_h, npairs)
+      end if
+
+      ! ============================================================
+      ! 4) Convert and print all final effective blocks
+      ! ============================================================
+      do p = 1, npairs
+         dum(:, :) = pair_h(:, :, p)
+
+         call hcpx(dum(1:9,   1:9   ), 'sph2cart')
+         call hcpx(dum(1:9,   10:18 ), 'sph2cart')
+         call hcpx(dum(10:18, 1:9   ), 'sph2cart')
+         call hcpx(dum(10:18, 10:18 ), 'sph2cart')
+
+         do i = 1, 18
+            do j = 1, 18
+               ipao = 0
+               jpao = 0
+               call site2orb(i, ia,           ipao, n_atoms, max_orbital)
+               call site2orb(j, pair_type(p), jpao, n_atoms, max_orbital)
+               write(92, '(3I4,2I7,2F22.14)') pair_idx(:, p), ipao, jpao, &
+                    real(dum(i, j)) * ry2ev, aimag(dum(i, j)) * ry2ev
+            end do
+         end do
+      end do
+
+      deallocate(pair_type)
+      deallocate(pair_idx)
+      deallocate(pair_h)
+
+   end do
+
+   close(92)
+
+contains
+
+   subroutine get_atom_from_ee_label(center_atom, ee_label, atom_out)
+      implicit none
+      integer, intent(in)  :: center_atom, ee_label
+      integer, intent(out) :: atom_out
+
+      ! Same convention as your original rs2pao:
+      !   ee(:,:,1, type_of_center) = onsite block of THIS ACTUAL center atom
+      !   ee(:,:,label>1, ...)      = neighbor block associated with nn(center_atom, label)
+      if (ee_label == 1) then
+         atom_out = center_atom
+      else
+         atom_out = this%charge%lattice%nn(center_atom, ee_label)
+      end if
+   end subroutine get_atom_from_ee_label
+
+
+   subroutine build_idx_from_actual_pair(icenter, kactual, ktype_out, idx_out)
+      implicit none
+      integer, intent(in)  :: icenter, kactual
+      integer, intent(out) :: ktype_out
+      integer, intent(out) :: idx_out(3)
+
+      real(rp), parameter :: tol = 1.0d-3
+      real(rp), dimension(3) :: rik, rijtest
+      integer :: repk_atom
+      integer :: idxi, idxj, idxk
+
+      ! IMPORTANT:
+      ! rik is built from ACTUAL atom numbers in the cluster
+      ! ktype is only used afterwards to select the representative atom
+      ktype_out = this%charge%lattice%iz(kactual)
+      idx_out(:) = 0
+
+      repk_atom = this%charge%lattice%atlist(ktype_out)
+
+      rik(:) = this%charge%lattice%cr(:, icenter) - this%charge%lattice%cr(:, kactual)
+
+      do idxi = -10, 10
+         do idxj = -10, 10
+            do idxk = -10, 10
+               rijtest(:) = this%charge%lattice%cr(:, icenter) - &
+                            ( this%charge%lattice%cr(:, repk_atom) &
+                            + idxi * this%charge%lattice%a(:, 1) &
+                            + idxj * this%charge%lattice%a(:, 2) &
+                            + idxk * this%charge%lattice%a(:, 3) )
+
+               if (norm2(rik(:) - rijtest(:)) < tol) then
+                  idx_out(:) = (/ idxi, idxj, idxk /)
+                  return
+               end if
+            end do
+         end do
+      end do
+
+      write(*,'(a,2i8)') 'rs2pao warning: idx not found for actual pair ', icenter, kactual
+   end subroutine build_idx_from_actual_pair
+
+
+   subroutine find_ee_label_from_vector(center_type, r_target, label_out)
+      implicit none
+      integer, intent(in)  :: center_type
+      real(rp), intent(in) :: r_target(3)
+      integer, intent(out) :: label_out
+
+      real(rp), parameter :: tol = 1.0d-3
+      integer :: center_rep, nrrep, qlab, qatom
+      real(rp), dimension(3) :: rrep
+
+      label_out  = 0
+      center_rep = this%charge%lattice%atlist(center_type)
+      nrrep      = this%charge%lattice%nn(center_rep, 1)
+
+      do qlab = 1, nrrep
+         call get_atom_from_ee_label(center_rep, qlab, qatom)
+         if (qatom == 0) cycle
+
+         ! Vector represented by ee(:, :, qlab, center_type)
+         rrep(:) = this%charge%lattice%cr(:, center_rep) - this%charge%lattice%cr(:, qatom)
+
+         if (norm2(rrep(:) - r_target(:)) < tol) then
+            label_out = qlab
+            return
+         end if
+      end do
+
+      write(*,'(a,i8,3f12.6)') 'rs2pao warning: label not found for center_type / r_target = ', &
+                               center_type, r_target(1), r_target(2), r_target(3)
+   end subroutine find_ee_label_from_vector
+
+
+   subroutine accumulate_block_by_actual_pair(icenter, kactual, block_in, &
+                                              pair_type_arr, pair_idx_arr, pair_h_arr, npairs_inout)
+      implicit none
+      integer, intent(in) :: icenter, kactual
+      complex(rp), intent(in) :: block_in(18,18)
+      integer, intent(inout) :: pair_type_arr(:)
+      integer, intent(inout) :: pair_idx_arr(:, :)
+      complex(rp), intent(inout) :: pair_h_arr(:, :, :)
+      integer, intent(inout) :: npairs_inout
+
+      integer :: ktype_loc, idx_loc(3)
+      integer :: q, nmax
+
+      call build_idx_from_actual_pair(icenter, kactual, ktype_loc, idx_loc)
+
+      do q = 1, npairs_inout
+         if (pair_type_arr(q) == ktype_loc) then
+            if (all(pair_idx_arr(:, q) == idx_loc(:))) then
+               pair_h_arr(:, :, q) = pair_h_arr(:, :, q) + block_in(:, :)
+               return
+            end if
+         end if
+      end do
+
+      nmax = size(pair_type_arr)
+      if (npairs_inout >= nmax) then
+         write(*,*) 'rs2pao error: pair buffer too small.'
+         stop
+      end if
+
+      npairs_inout = npairs_inout + 1
+      pair_type_arr(npairs_inout)   = ktype_loc
+      pair_idx_arr(:, npairs_inout) = idx_loc(:)
+      pair_h_arr(:, :, npairs_inout)= block_in(:, :)
+   end subroutine accumulate_block_by_actual_pair
+
+end subroutine rs2pao
+
+!   subroutine rs2pao(this)
+!      implicit none
+!      class(hamiltonian), intent(inout) :: this
+!      ! Local variables
+!      real(rp), dimension(3) :: rij, rijtest
+!      integer :: i, j, k, l, idxi, idxj, idxk, itype, ino, ja, jo, ji, nr, ia, iia, jja, ipao, jpao
+!      integer :: jj, jt, max_orbital, n_atoms
+!      integer :: ntype, iostat1, iostat2, iostatus
+!      real(rp), dimension(3) :: vet, vetpao, idx
+!      real(rp), dimension(3, 3) :: a_inv
+!      complex(rp), dimension(18, 18) :: dum
+!      n_atoms = this%charge%lattice%ntype
+!      max_orbital = 9 
+!
+!      open (unit=92, file='rs2paoham.dat', action='write', iostat=iostatus, status='replace')
+!      do ntype = 1, this%charge%lattice%ntype
+!         ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
+!         ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
+!         nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
+!         do k = 1, nr
+!            jj = this%charge%lattice%nn(ia, k)
+!            !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
+!            if (k == 1) then
+!               jj = ia
+!            end if
+!            if (jj /= 0) then
+!               rij(:) = this%charge%lattice%cr(:, ia) - this%charge%lattice%cr(:, jj)
+!
+!               rijtest(:) = 0.0d0
+!               do idxi = -5, 5
+!                  do idxj = -5, 5
+!                     do idxk = -5, 5
+!                        rijtest(:) = this%charge%lattice%cr(:, ia) - (this%charge%lattice%cr(:, this%charge%lattice%iz(jj)) &
+!                                                                      + idxi*this%charge%lattice%a(:, 1) + idxj*this%charge%lattice%a(:, 2) + idxk*this%charge%lattice%a(:, 3))
+!                        if (norm2(rij(:) - rijtest(:)) < 1.0d-3) then
+!                           idx(:) = [idxi, idxj, idxk]
+!                        end if
+!                     end do
+!                  end do
+!               end do
+!
+!               if (k == 1) this%ee(:, :, k, ntype) = this%ee(:, :, k, ntype) + this%lsham(:, :, ntype) !+ this%enim(:,:,ntype)
+!
+!               call hcpx(this%ee(1:9,1:9,k,ntype), 'sph2cart')
+!               call hcpx(this%ee(1:9,10:18,k,ntype), 'sph2cart')
+!               call hcpx(this%ee(10:18,1:9,k,ntype), 'sph2cart')
+!               call hcpx(this%ee(10:18,10:18,k,ntype), 'sph2cart')
+!               do i = 1, 18
+!                  do j = 1, 18
+!                     ipao = 0; jpao = 0
+!                     call site2orb(i, ia, ipao, n_atoms, max_orbital)
+!                     call site2orb(j, this%charge%lattice%iz(jj), jpao, n_atoms, max_orbital)
+!                     write (92, '(3I4,2I7,2F22.14)') int(idx(:)), ipao, jpao, real(this%ee(i, j, k, ntype))*ry2ev, aimag(this%ee(i, j, k, ntype))*ry2ev
+!                  end do
+!               end do
+!            end if
+!         end do
+!      end do
+!      close (92)
+!   end subroutine rs2pao
 
    subroutine build_from_paoflow_opt(this)
       implicit none
@@ -1767,4 +2482,5 @@ contains
          end if
       end if
    end subroutine rotate_from_local_axis
+
 end module hamiltonian_mod

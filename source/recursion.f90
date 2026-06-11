@@ -105,6 +105,8 @@ module recursion_mod
       !procedure :: compute_moments ! temporary for test purposes
       !procedure :: evaluate_chebyshev ! temporary for test purposes
       !procedure :: calculate_gamma_nm
+      procedure :: setup_kubo_operators
+      procedure :: set_kubo_operator_slot
       procedure :: ham_vec_matmul
       procedure :: ham_hoh_vec_matmul
       procedure :: velo_vec_matmul
@@ -211,6 +213,376 @@ contains
       if (allocated(this%mdum)) deallocate (this%mdum)
 #endif
    end subroutine destructor
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Setup the two operators entering the Kubo-Bastin linear-response kernel.
+   !>
+   !> Convention:
+   !>   linear_in   -> entrance operator  -> v_b / vo_b
+   !>   linear_out  -> response operator  -> v_a / vo_a
+   !>
+   !> The Chebyshev kernel later evaluates:
+   !>
+   !>   v_a * T_n(H) * v_b |r>
+   !>
+   !> Therefore:
+   !>   v_b is the operator applied first, associated with linear_in.
+   !>   v_a is the operator applied second, associated with linear_out.
+   !>
+   !> For charge-current operators:
+   !>   v_alpha controls v_a
+   !>   v_beta  controls v_b
+   !>
+   !> For spin/orbital polarized operators:
+   !>   pol_alpha controls the response/output polarization
+   !>   pol_beta  controls the entrance/input polarization
+   !---------------------------------------------------------------------------
+   subroutine setup_kubo_operators(this, linear_out, linear_in)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: linear_out
+      character(len=*), intent(in) :: linear_in
+
+      ! First build the ordinary charge-current velocity operators.
+      !
+      ! This creates:
+      !   v_a  from v_alpha
+      !   v_b  from v_beta
+      !   vo_a from v_alpha, if hoh = .true.
+      !   vo_b from v_beta,  if hoh = .true.
+      call this%hamiltonian%build_realspace_velocity_operators()
+
+      ! Entrance/input operator: placed in v_b / vo_b.
+      call this%set_kubo_operator_slot(linear_in, 'b')
+
+      ! Response/output operator: placed in v_a / vo_a.
+      call this%set_kubo_operator_slot(linear_out, 'a')
+
+   end subroutine setup_kubo_operators
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Fill one Kubo-Bastin operator slot.
+   !>
+   !> slot = 'a':
+   !>   response/output operator
+   !>   fills this%hamiltonian%v_a and this%hamiltonian%vo_a
+   !>   uses this%hamiltonian%pol_alpha when a polarization is needed.
+   !>
+   !> slot = 'b':
+   !>   entrance/input operator
+   !>   fills this%hamiltonian%v_b and this%hamiltonian%vo_b
+   !>   uses this%hamiltonian%pol_beta when a polarization is needed.
+   !>
+   !> op_type can be:
+   !>   charge
+   !>   spin
+   !>   orbital
+   !>   spin_accumulation
+   !>   orbital_accumulation
+   !>   spin_torque
+   !>   spin_soc_torque
+   !>   soc_spin_torque
+   !>   orbital_torque
+   !>
+   !> Notes:
+   !>   - js_a, jso_a, jl_a, and jlo_a are used only as temporary containers.
+   !>   - For spin/orbital currents, the Hamiltonian builder must know which
+   !>     velocity slot to use:
+   !>        slot = 'a' -> build from v_a / vo_a
+   !>        slot = 'b' -> build from v_b / vo_b
+   !>   - spin_torque is the exchange contribution:
+   !>        tau^xc = (1/i) [S_pol, H_xc]
+   !>   - spin_soc_torque / soc_spin_torque is the SOC contribution:
+   !>        tau^SOC = (1/i) [S_pol, H_SOC]
+   !---------------------------------------------------------------------------
+   subroutine set_kubo_operator_slot(this, op_type, slot)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: op_type
+      character(len=*), intent(in) :: slot
+
+      integer :: ntype
+      character(len=10) :: pol
+      complex(rp), dimension(18, 18) :: S_op, L_op
+      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+
+      S_op(:, :) = (0.0_rp, 0.0_rp)
+      L_op(:, :) = (0.0_rp, 0.0_rp)
+
+      !-----------------------------------------------------------------------
+      ! Select the polarization associated with the requested Kubo slot.
+      !
+      ! slot = 'a' uses pol_alpha and fills v_a / vo_a.
+      ! slot = 'b' uses pol_beta  and fills v_b / vo_b.
+      !-----------------------------------------------------------------------
+      select case(trim(slot))
+      case('a')
+         pol = this%hamiltonian%pol_alpha
+
+      case('b')
+         pol = this%hamiltonian%pol_beta
+
+      case default
+         call g_logger%fatal('Invalid Kubo operator slot: '//trim(slot), __FILE__, __LINE__)
+      end select
+
+      select case(trim(op_type))
+
+      !-----------------------------------------------------------------------
+      ! Ordinary charge-current operator.
+      !
+      ! build_realspace_velocity_operators() already created:
+      !   v_a  / vo_a from v_alpha
+      !   v_b  / vo_b from v_beta
+      !
+      ! Therefore:
+      !   slot = 'a' -> v_a is already the output charge-current operator.
+      !   slot = 'b' -> v_b is already the input charge-current operator.
+      !-----------------------------------------------------------------------
+      case('charge')
+
+         continue
+
+      !-----------------------------------------------------------------------
+      ! Spin-current operator:
+      !
+      !   j^S_pol = 1/2 {S_pol, v_slot}
+      !
+      ! For slot = 'a', the spin current is built from v_a / vo_a.
+      ! For slot = 'b', the spin current is built from v_b / vo_b.
+      !
+      ! The result is first stored in js_a / jso_a as temporary containers,
+      ! then copied into the requested Kubo slot.
+      !-----------------------------------------------------------------------
+      case('spin')
+
+         call this%hamiltonian%build_realspace_spin_operators(pol, slot)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Orbital-current operator:
+      !
+      !   j^L_pol = 1/2 {L_pol, v_slot}
+      !
+      ! For slot = 'a', the orbital current is built from v_a / vo_a.
+      ! For slot = 'b', the orbital current is built from v_b / vo_b.
+      !
+      ! The result is first stored in jl_a / jlo_a as temporary containers,
+      ! then copied into the requested Kubo slot.
+      !-----------------------------------------------------------------------
+      case('orbital')
+
+         call this%hamiltonian%build_realspace_orbital_velocity_operators(pol, slot)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Spin accumulation:
+      !
+      !   local S_pol operator
+      !
+      ! This is a local on-site operator. Therefore only the m = 1 block is
+      ! filled for each atom type.
+      !-----------------------------------------------------------------------
+      case('spin_accumulation')
+
+         select case(trim(pol))
+         case('x')
+            S_op(:, :) = S_x(:, :)
+
+         case('y')
+            S_op(:, :) = S_y(:, :)
+
+         case('z')
+            S_op(:, :) = S_z(:, :)
+
+         case default
+            call g_logger%fatal('Invalid spin accumulation polarization: '//trim(pol), __FILE__, __LINE__)
+         end select
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+            this%hamiltonian%vo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+            do ntype = 1, this%lattice%ntype
+               this%hamiltonian%v_a(:, :, 1, ntype) = S_op(:, :)
+            end do
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = (0.0_rp, 0.0_rp)
+            this%hamiltonian%vo_b(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+            do ntype = 1, this%lattice%ntype
+               this%hamiltonian%v_b(:, :, 1, ntype) = S_op(:, :)
+            end do
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Orbital accumulation:
+      !
+      !   local L_pol operator
+      !
+      ! The L_x, L_y, and L_z matrices from math_mod are given in Cartesian
+      ! harmonics and are transformed here to spherical-harmonics coordinates.
+      ! The same 9 x 9 orbital operator is used for the spin-up and spin-down
+      ! blocks.
+      !
+      ! This is a local on-site operator. Therefore only the m = 1 block is
+      ! filled for each atom type.
+      !-----------------------------------------------------------------------
+      case('orbital_accumulation')
+
+         ! Angular momentum matrices from math_mod are in Cartesian harmonics.
+         mLx(:, :) = L_x(:, :)
+         mLy(:, :) = L_y(:, :)
+         mLz(:, :) = L_z(:, :)
+
+         ! Transform to spherical-harmonics coordinates.
+         call hcpx(mLx, 'cart2sph')
+         call hcpx(mLy, 'cart2sph')
+         call hcpx(mLz, 'cart2sph')
+
+         L_op(:, :) = (0.0_rp, 0.0_rp)
+
+         select case(trim(pol))
+         case('x')
+            L_op(1:9, 1:9)     = mLx(:, :)
+            L_op(10:18, 10:18) = mLx(:, :)
+
+         case('y')
+            L_op(1:9, 1:9)     = mLy(:, :)
+            L_op(10:18, 10:18) = mLy(:, :)
+
+         case('z')
+            L_op(1:9, 1:9)     = mLz(:, :)
+            L_op(10:18, 10:18) = mLz(:, :)
+
+         case default
+            call g_logger%fatal('Invalid orbital accumulation polarization: '//trim(pol), __FILE__, __LINE__)
+         end select
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+            this%hamiltonian%vo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+            do ntype = 1, this%lattice%ntype
+               this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
+            end do
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = (0.0_rp, 0.0_rp)
+            this%hamiltonian%vo_b(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+            do ntype = 1, this%lattice%ntype
+               this%hamiltonian%v_b(:, :, 1, ntype) = L_op(:, :)
+            end do
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Exchange spin torque:
+      !
+      !   tau^xc_pol = (1/i) [S_pol, H_xc]
+      !
+      ! This is the exchange-field contribution to spin non-conservation.
+      ! The result is first stored in js_a / jso_a as temporary containers,
+      ! then copied into the requested Kubo slot.
+      !-----------------------------------------------------------------------
+      case('spin_torque')
+
+         call this%hamiltonian%build_realspace_spin_torque_operators(pol)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+         end select
+
+      !-----------------------------------------------------------------------
+      ! SOC spin torque:
+      !
+      !   tau^SOC_pol = (1/i) [S_pol, H_SOC]
+      !
+      ! This is the spin-orbit contribution to spin non-conservation.
+      ! It is distinct from the exchange spin torque:
+      !
+      !   tau^xc_pol = (1/i) [S_pol, H_xc]
+      !
+      ! Accepted input keywords:
+      !   spin_soc_torque
+      !   soc_spin_torque
+      !
+      ! The result is first stored in js_a / jso_a as temporary containers,
+      ! then copied into the requested Kubo slot.
+      !-----------------------------------------------------------------------
+      case('spin_soc_torque', 'soc_spin_torque')
+
+         call this%hamiltonian%build_realspace_spin_soc_torque_operators(pol)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Orbital torque:
+      !
+      !   tau^L_pol = (1/i) [L_pol, H]
+      !
+      ! This is the rate of change of orbital angular momentum due to the
+      ! Hamiltonian. The result is first stored in jl_a / jlo_a as temporary
+      ! containers, then copied into the requested Kubo slot.
+      !-----------------------------------------------------------------------
+      case('orbital_torque')
+
+         call this%hamiltonian%build_realspace_orbital_torque_operators(pol)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+         end select
+
+      case default
+         call g_logger%fatal('Unknown linear-response operator type: '//trim(op_type), __FILE__, __LINE__)
+
+      end select
+
+   end subroutine set_kubo_operator_slot
+
 
    subroutine velo_vec_matmul(this, c_or_n, v_op, psi_in, psi_out)
       class(recursion), intent(inout) :: this
@@ -651,73 +1023,76 @@ contains
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
-      call this%hamiltonian%build_realspace_velocity_operators()
+      call this%setup_kubo_operators(this%control%linear_out, &
+                                     this%control%linear_in)
 
       ! Check the type of conductivity
-      select case(this%control%cond_type)
-      case ('charge')
-         ! Redundant, but just testing
-         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%v_a(:, :, :, :)
-         this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%vo_a(:, :, :, :)
-      case('spin')
-         call this%hamiltonian%build_realspace_spin_operators()
-         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :) 
-         this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-      case('orbital')
-         call this%hamiltonian%build_realspace_orbital_velocity_operators()
-         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
-         this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-      case('spin_accumulation')
-         select case(this%hamiltonian%js_alpha)
-         case('z')
-            S_op = S_z
-         case('x')
-            S_op = S_x
-         case('y')
-            S_op = S_y
-         end select
-         this%hamiltonian%v_a(:, :, :, :) = (0.d0, 0.0d0)
-         this%hamiltonian%vo_a(:, :, :, :) = (0.d0, 0.0d0)
-         do ntype = 1, this%lattice%ntype
-            this%hamiltonian%v_a(:, :, 1, ntype) = S_op(:, :)
-         end do
-      case('spin_torque')
-         call this%hamiltonian%build_realspace_spin_torque_operators()
-         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :)
-         this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-      case('orbital_torque')
-         call this%hamiltonian%build_realspace_orbital_torque_operators()
-         this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
-         this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-      case('orbital_accumulation')
-         !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-         mLx(:, :) = L_x(:, :)
-         mLy(:, :) = L_y(:, :)
-         mLz(:, :) = L_z(:, :)
+      !select case(this%control%cond_type)
+      !case ('charge')
+      !   ! Redundant, but just testing
+      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%v_a(:, :, :, :)
+      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%vo_a(:, :, :, :)
+      !case('spin')
+      !   call this%hamiltonian%build_realspace_spin_operators()
+      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :) 
+      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+      !case('orbital')
+      !   call this%hamiltonian%build_realspace_orbital_velocity_operators()
+      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
+      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+      !case('spin_accumulation')
+      !   select case(this%hamiltonian%js_alpha)
+      !   case('z')
+      !      S_op = S_z
+      !   case('x')
+      !      S_op = S_x
+      !   case('y')
+      !      S_op = S_y
+      !   end select
+      !   this%hamiltonian%v_a(:, :, :, :) = (0.d0, 0.0d0)
+      !   this%hamiltonian%vo_a(:, :, :, :) = (0.d0, 0.0d0)
+      !   do ntype = 1, this%lattice%ntype
+      !      this%hamiltonian%v_a(:, :, 1, ntype) = S_op(:, :)
+      !   end do
+      !case('spin_torque')
+      !   call this%hamiltonian%build_realspace_spin_torque_operators()
+      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :)
+      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
+      !case('orbital_torque')
+      !   call this%hamiltonian%build_realspace_orbital_torque_operators()
+      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
+      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+      !case('orbital_accumulation')
+      !   !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+      !   mLx(:, :) = L_x(:, :)
+      !   mLy(:, :) = L_y(:, :)
+      !   mLz(:, :) = L_z(:, :)
    
-         ! Transforming them into the spherical harmonics coordinates
-         call hcpx(mLx, 'cart2sph')
-         call hcpx(mLy, 'cart2sph')
-         call hcpx(mLz, 'cart2sph') 
-            
-         ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-         select case (this%hamiltonian%jl_alpha)   ! or whichever variable holds 'x','y','z'
-         case ('x')
-            L_op(1:9, 1:9) = mLx(:, :)
-            L_op(10:18, 10:18) = mLx(:, :)
-         case ('y') 
-            L_op(1:9, 1:9) = mLy(:, :)
-            L_op(10:18, 10:18) = mLy(:, :)
-         case ('z')
-            L_op(1:9, 1:9) = mLz(:, :)
-            L_op(10:18, 10:18) = mLz(:, :)
-         end select
-         this%hamiltonian%v_a(:, :, :, :) = (0.d0, 0.0d0)
-         this%hamiltonian%vo_a(:, :, :, :) = (0.d0, 0.0d0)
-         do ntype = 1, this%lattice%ntype
-            this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
-         end do
-      end select
+      !   ! Transforming them into the spherical harmonics coordinates
+      !   call hcpx(mLx, 'cart2sph')
+      !   call hcpx(mLy, 'cart2sph')
+      !   call hcpx(mLz, 'cart2sph') 
+      !      
+      !   L_op(:, :) = (0.0d0, 0.0d0)
+
+      !   ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
+      !   select case (this%hamiltonian%jl_alpha)   ! or whichever variable holds 'x','y','z'
+      !   case ('x')
+      !      L_op(1:9, 1:9) = mLx(:, :)
+      !      L_op(10:18, 10:18) = mLx(:, :)
+      !   case ('y') 
+      !      L_op(1:9, 1:9) = mLy(:, :)
+      !      L_op(10:18, 10:18) = mLy(:, :)
+      !   case ('z')
+      !      L_op(1:9, 1:9) = mLz(:, :)
+      !      L_op(10:18, 10:18) = mLz(:, :)
+      !   end select
+      !   this%hamiltonian%v_a(:, :, :, :) = (0.d0, 0.0d0)
+      !   this%hamiltonian%vo_a(:, :, :, :) = (0.d0, 0.0d0)
+      !   do ntype = 1, this%lattice%ntype
+      !      this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
+      !   end do
+      !end select
 
       ! Check what kind of calculation
       select case(this%control%cond_calctype)

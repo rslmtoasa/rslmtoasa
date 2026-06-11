@@ -8,4 +8,4 @@ logical :: cold !< Cold start: perform ASA to extract potential parameters.
 namelist /self/ ws_all, all_inequivalent, &
    mix_all, magnetic_mixing, mixmag_all, freeze, orbital_polarization, &
    rigid_band, rb, nstep, init, soc_scale, &
-   conv_thr, ws, mixmag, fix_soc , cold
+   conv_thr, ws, mixmag, fix_soc, cold
