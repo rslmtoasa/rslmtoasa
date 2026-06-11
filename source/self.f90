@@ -223,7 +223,6 @@ module self_mod
       !> Logical variable to control if initial
       ! potential parameters are calculated from moments
       logical :: cold
-
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
