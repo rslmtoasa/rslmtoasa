@@ -35,7 +35,7 @@ module hamiltonian_cpu_mod
    public :: cpu_hamiltonian, init_cpu_hamiltonian
 
    !> CPU-based Hamiltonian type that wraps the real TB-LMTO arrays
-   type, extends(hamiltonian_type), public :: cpu_hamiltonian
+   type, extends(hamiltonian_type) :: cpu_hamiltonian
       !> Pointer to the actual TB-LMTO Hamiltonian data
       type(hamiltonian), pointer :: h      => null()
       !> Pointer to lattice data (neighbor list, atom types, etc.)

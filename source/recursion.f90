@@ -330,9 +330,9 @@ contains
             lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
             iz=this%lattice%iz, nmax=this%lattice%nmax)
       end if
-      call this%gpu_backend%set_backend(backend)
       call this%gpu_backend%set_periodic_lattice(this%lattice%pbc, this%lattice%n1, &
          this%lattice%n2, this%lattice%n3, this%lattice%a, this%lattice%crd)
+      call this%gpu_backend%set_backend(backend)
       if (backend == gpu_backend_bsr) then
          call this%gpu_backend%upload_bsr(this%sparse_obj)
       end if
