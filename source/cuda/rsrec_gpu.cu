@@ -65,6 +65,25 @@ extern "C" const char *rsrec_last_error(void) { return g_err.c_str(); }
 #define CBCHK(x) do { if ((x) != CUBLAS_STATUS_SUCCESS) \
     { g_err = "cuBLAS error"; return 1; } } while (0)
 
+/* Custom atomicAdd for double (CUDA 12.8 compatibility) */
+#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ < 600
+__device__ double atomicAddDouble(double *address, double val) {
+    unsigned long long int *address_as_ull = (unsigned long long int *)address;
+    unsigned long long int old = *address_as_ull, assumed;
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        __double_as_longlong(
+                            __longlong_as_double(assumed) + val));
+    } while (assumed != old);
+    return __longlong_as_double(old);
+}
+#else
+__device__ inline double atomicAddDouble(double *address, double val) {
+    return atomicAdd(address, val);
+}
+#endif
+
 /* --------------------------------------------------------------------------
  * Context
  * ------------------------------------------------------------------------ */
@@ -409,7 +428,7 @@ __global__ void k_col_dot(int kk, int nb, const zc *__restrict__ A,
         size_t id = (size_t)l + nb * ((size_t)col + nb * k);
         s += A[id].x * B[id].x + A[id].y * B[id].y;
     }
-    atomicAdd(&out[col], s);
+    atomicAddDouble(&out[col], s);
 }
 
 __global__ void k_col_axpy(size_t kk, int nb, const double *__restrict__ alpha,
