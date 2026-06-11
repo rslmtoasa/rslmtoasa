@@ -257,13 +257,17 @@ contains
       gpu_periodic_backend = (backend == gpu_backend_fft .or. backend == gpu_backend_conv)
    end function gpu_periodic_backend
 
-   logical function gpu_plugin_ready(this, feature)
+   logical function gpu_plugin_ready(this, feature, require_nsp1)
       class(recursion), intent(in) :: this
       character(len=*), intent(in) :: feature
+      logical, intent(in), optional :: require_nsp1
       integer :: backend
+      logical :: nsp1_only
 
       gpu_plugin_ready = .false.
       if (.not. gpu_plugin_enabled(this)) return
+      nsp1_only = .false.
+      if (present(require_nsp1)) nsp1_only = require_nsp1
 
       if (.not. rsrec_cuda_plugin_compiled()) then
          call g_logger%warning('gpu_plugin requested for '//trim(feature)// &
@@ -282,6 +286,12 @@ contains
          call g_logger%warning('gpu_plugin does not support local-axis '// &
             'rotation in '//trim(feature)//'. Falling back to current recursion path.', &
             __FILE__, __LINE__)
+         return
+      end if
+
+      if (nsp1_only .and. this%control%nsp /= 1) then
+         call g_logger%warning('gpu_plugin scalar Lanczos path is restricted '// &
+            'to nsp=1. Falling back to current recursion path.', __FILE__, __LINE__)
          return
       end if
 
@@ -1508,6 +1518,62 @@ contains
       integer :: ij_loc
 
       llmax = this%lattice%control%lld
+      if (gpu_plugin_ready(this, 'recur_b_ij()')) then
+         call gpu_plugin_upload_hamiltonian(this)
+         do ij = start_atom, end_atom
+            ij_loc = g2l_map(ij)
+            i = this%lattice%ijpair(ij, 1)
+            j = this%lattice%ijpair(ij, 2)
+            call g_logger%info('CUDA block recursion on progress between atoms '// &
+               int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
+            do reci = 1, 4
+               this%psi_b(:, :, :) = (0.0d0, 0.0d0)
+               this%atemp_b(:, :, :) = (0.0d0, 0.0d0)
+               this%b2temp_b(:, :, :) = (0.0d0, 0.0d0)
+
+               select case (reci)
+               case (1)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
+               case (2)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
+               case (3)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
+               case (4)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
+               end select
+
+               if ((reci .eq. 1) .and. (i .eq. j)) then
+                  asign = (1.0d0, 0.0d0)
+                  bsign = (1.0d0, 0.0d0)
+               else if (i .eq. j) then
+                  cycle
+               end if
+
+               do l = 1, nb
+                  this%psi_b(l, l, i) = asign
+                  this%psi_b(l, l, j) = bsign
+               end do
+
+               call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
+                  this%atemp_b, this%b2temp_b)
+
+               do ll = 1, llmax
+                  do l = 1, nb
+                     do m = 1, nb
+                        this%a_b(l, m, ll, ij_loc*4 - 4 + reci) = this%atemp_b(l, m, ll)
+                        this%b2_b(l, m, ll, ij_loc*4 - 4 + reci) = this%b2temp_b(l, m, ll)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+         return
+      end if
+
       if (cpp_plugin_ready(this, 'recur_b_ij()', require_no_local_axis=.true.)) then
          call cpp_plugin_upload_hamiltonian(this)
          do ij = start_atom, end_atom
@@ -1715,6 +1781,34 @@ contains
       call get_mpi_variables(rank, this%lattice%nrec)
 
       llmax = this%lattice%control%lld
+      if (gpu_plugin_ready(this, 'recur_b()')) then
+         call gpu_plugin_upload_hamiltonian(this)
+         do i = start_atom, end_atom
+            j = this%lattice%irec(i)
+            call g_logger%info('CUDA block recursion on progress for atom '// &
+               int2str(j), __FILE__, __LINE__)
+            this%psi_b(:, :, :) = (0.0d0, 0.0d0)
+            this%atemp_b(:, :, :) = (0.0d0, 0.0d0)
+            this%b2temp_b(:, :, :) = (0.0d0, 0.0d0)
+            do l = 1, nb
+               this%psi_b(l, l, j) = (1.0d0, 0.0d0)
+            end do
+            call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
+               this%atemp_b, this%b2temp_b)
+            do ll = 1, llmax
+               do l = 1, nb
+                  do m = 1, nb
+                     this%a_b(l, m, ll, i - start_atom + 1) = this%atemp_b(l, m, ll)
+                     this%b2_b(l, m, ll, i - start_atom + 1) = this%b2temp_b(l, m, ll)
+                  end do
+                  this%a(ll, l, i - start_atom + 1, 1) = real(this%atemp_b(l, l, ll))
+                  this%b2(ll, l, i - start_atom + 1, 1) = real(this%b2temp_b(l, l, ll))
+               end do
+            end do
+         end do
+         return
+      end if
+
       if (cpp_plugin_ready(this, 'recur_b()', require_no_local_axis=.true.)) then
          call cpp_plugin_upload_hamiltonian(this)
          do i = start_atom, end_atom
@@ -3573,6 +3667,19 @@ contains
       integer :: i_loc
 
       llmax = this%lattice%control%lld
+
+      if (gpu_plugin_ready(this, 'recur()', require_nsp1=.true.)) then
+         call gpu_plugin_upload_hamiltonian(this)
+         do i = start_atom, end_atom
+            i_loc = g2l_map(i)
+            j = this%lattice%irec(i)
+            call g_logger%info('CUDA scalar Lanczos recursion on progress for atom '// &
+               int2str(j), __FILE__, __LINE__)
+            call this%gpu_backend%scalar_lanczos(j, llmax, this%a(:, :, i_loc, 1), &
+               this%b2(:, :, i_loc, 1))
+         end do
+         return
+      end if
 
       if (cpp_plugin_ready(this, 'recur()', require_nsp1=.true.)) then
          call cpp_plugin_upload_hamiltonian(this)

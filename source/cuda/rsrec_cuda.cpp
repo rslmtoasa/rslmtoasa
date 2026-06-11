@@ -197,6 +197,38 @@ extern "C" int rsrec_cuda_chebyshev_moments(rsrec_cuda_ctx *ctx,
     return status;
 }
 
+extern "C" int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0,
+                                        int lld, void *a_b, void *b2_b) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_block_lanczos: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_block_lanczos(ctx->inner, psi0, lld, a_b, b2_b);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_block_lanczos: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j,
+                                         int lld, double *a_out,
+                                         double *b2_out) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_scalar_lanczos: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status =
+        rsrec_scalar_lanczos(ctx->inner, site_j, lld, a_out, b2_out);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_scalar_lanczos: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx,
                                              const void *psiref, int lld,
                                              double a, double b,

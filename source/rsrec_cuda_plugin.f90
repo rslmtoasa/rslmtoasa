@@ -34,6 +34,8 @@ module rsrec_cuda_plugin_mod
       procedure :: set_velocity
       procedure :: upload_bsr
       procedure :: chebyshev_moments
+      procedure :: block_lanczos
+      procedure :: scalar_lanczos
       procedure :: stochastic_moments
    end type rsrec_cuda_backend
 
@@ -88,6 +90,22 @@ module rsrec_cuda_plugin_mod
          real(c_double), value :: a, b
          integer(c_int) :: rsrec_cuda_chebyshev_moments
       end function rsrec_cuda_chebyshev_moments
+
+      function rsrec_cuda_block_lanczos(ctx, psi0, lld, a_b, b2_b) &
+         bind(C, name='rsrec_cuda_block_lanczos')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, psi0, a_b, b2_b
+         integer(c_int), value :: lld
+         integer(c_int) :: rsrec_cuda_block_lanczos
+      end function rsrec_cuda_block_lanczos
+
+      function rsrec_cuda_scalar_lanczos(ctx, site_j, lld, a_out, b2_out) &
+         bind(C, name='rsrec_cuda_scalar_lanczos')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, a_out, b2_out
+         integer(c_int), value :: site_j, lld
+         integer(c_int) :: rsrec_cuda_scalar_lanczos
+      end function rsrec_cuda_scalar_lanczos
 
       function rsrec_cuda_stochastic_moments(ctx, psiref, lld, a, b, mu_nm) bind(C, name='rsrec_cuda_stochastic_moments')
          import :: c_double, c_int, c_ptr
@@ -253,6 +271,33 @@ contains
       call check_status(status, 'rsrec_cuda_chebyshev_moments')
 #endif
    end subroutine chebyshev_moments
+
+   subroutine block_lanczos(this, psi0, lld, a_b, b2_b)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: psi0(:, :, :)
+      integer, intent(in) :: lld
+      complex(rp), target, contiguous, intent(out) :: a_b(:, :, :)
+      complex(rp), target, contiguous, intent(out) :: b2_b(:, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_block_lanczos(this%ctx, c_loc(psi0), int(lld, c_int), &
+         c_loc(a_b), c_loc(b2_b))
+      call check_status(status, 'rsrec_cuda_block_lanczos')
+#endif
+   end subroutine block_lanczos
+
+   subroutine scalar_lanczos(this, site_j, lld, a_out, b2_out)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      integer, intent(in) :: site_j, lld
+      real(rp), target, contiguous, intent(out) :: a_out(:, :)
+      real(rp), target, contiguous, intent(out) :: b2_out(:, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_scalar_lanczos(this%ctx, int(site_j, c_int), &
+         int(lld, c_int), c_loc(a_out), c_loc(b2_out))
+      call check_status(status, 'rsrec_cuda_scalar_lanczos')
+#endif
+   end subroutine scalar_lanczos
 
    subroutine stochastic_moments(this, psiref, lld, a, b, mu_nm)
       class(rsrec_cuda_backend), intent(inout) :: this

@@ -1,10 +1,13 @@
 /* ===========================================================================
  * rsrec_cuda.h -- CUDA-oriented recursion plugin ABI
  *
- * v1 scope:
+ * Scope:
  *   - chebyshev_recur()
  *   - chebyshev_recur_ij()
  *   - compute_moments_stochastic()
+ *   - recur_b()
+ *   - recur_b_ij()
+ *   - recur()  [nsp == 1 / spin-diagonal path]
  *
  * Backend selection:
  *   0 = csr
@@ -52,6 +55,10 @@ int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
 
 int rsrec_cuda_chebyshev_moments(rsrec_cuda_ctx *ctx, const void *psi0,
                                  int lld, double a, double b, void *mu_out);
+int rsrec_cuda_block_lanczos(rsrec_cuda_ctx *ctx, const void *psi0, int lld,
+                             void *a_b, void *b2_b);
+int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j, int lld,
+                              double *a_out, double *b2_out);
 int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx, const void *psiref,
                                   int lld, double a, double b, void *mu_nm);
 
