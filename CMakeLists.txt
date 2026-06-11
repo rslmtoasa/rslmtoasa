@@ -56,12 +56,7 @@ if (APPLE)
   mark_as_advanced(CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT)
 endif(APPLE)
 
-if (ENABLE_CPP_PLUGIN)
-  enable_language(CXX)
-  message(STATUS "Using C++ compiler ${CMAKE_CXX_COMPILER_ID} C++ ${CMAKE_CXX_COMPILER_VERSION}")
-endif()
-
-if (ENABLE_CUDA_PLUGIN AND NOT ENABLE_CPP_PLUGIN)
+if (ENABLE_CPP_PLUGIN OR ENABLE_CUDA_PLUGIN OR EXISTS "${SRC}/cuda/rsrec_cpu.cpp")
   enable_language(CXX)
   message(STATUS "Using C++ compiler ${CMAKE_CXX_COMPILER_ID} C++ ${CMAKE_CXX_COMPILER_VERSION}")
 endif()

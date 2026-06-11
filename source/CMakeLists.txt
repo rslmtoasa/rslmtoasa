@@ -48,18 +48,16 @@ add_library(${PROJECT_NAME} STATIC
     xc.f90
 )
 
-if(ENABLE_CPP_PLUGIN OR ENABLE_CUDA_PLUGIN)
-    add_library(rsrec_cpp STATIC
-        cuda/rsrec_cpu.cpp
-    )
-    target_compile_features(rsrec_cpp PRIVATE cxx_std_11)
-    if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-        target_link_libraries(rsrec_cpp OpenMP::OpenMP_CXX)
-    endif()
-    if(ENABLE_CPP_PLUGIN)
-        target_link_libraries(${PROJECT_NAME} rsrec_cpp)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CPP_PLUGIN)
-    endif()
+add_library(rsrec_cpp STATIC
+    cuda/rsrec_cpu.cpp
+)
+target_compile_features(rsrec_cpp PRIVATE cxx_std_11)
+if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+    target_link_libraries(rsrec_cpp OpenMP::OpenMP_CXX)
+endif()
+target_link_libraries(${PROJECT_NAME} rsrec_cpp)
+if(ENABLE_CPP_PLUGIN)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CPP_PLUGIN)
 endif()
 
 if(ENABLE_CUDA_PLUGIN)
