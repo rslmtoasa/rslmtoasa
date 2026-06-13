@@ -79,7 +79,6 @@ module green_mod
       procedure :: calculate_intersite_gf_twoindex
       procedure :: calculate_intersite_gf_eta
       procedure :: chebyshev_green
-      procedure :: chebyshev_green_cpp
       procedure :: chebyshev_green_gpu
       procedure :: chebyshev_green_eta
       procedure :: chebyshev_green_ij
@@ -1086,69 +1085,6 @@ contains
    end subroutine chebyshev_green
 
    !---------------------------------------------------------------------------
-   !> Chebyshev Green function with C++ BLAS acceleration (cgemm/zgemm)
-   !> 10-50x faster than scalar loop for large nv
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green_cpp(this)
-      use mpi_mod
-      class(green), intent(inout) :: this
-
-      ! Local variables
-      real(rp), dimension(this%control%lld*2+2) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10) :: wscale
-      real(rp) :: a, b, emin_win, emax_win
-      integer :: ie, i, j, k, l, m, n, nv, n_glob
-
-      ! Static C++ backend (one per program lifetime)
-      type(rsrec_backend), save :: cpp_backend
-      logical, save :: first_call = .true.
-
-      this%g0 = 0.0d0
-
-      ! === Setup (identical to legacy path) ===
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-
-      wscale(:) = (this%en%ene(:) - b)/a
-
-      ! Number of DOS points
-      nv = this%en%channels_ldos + 10
-
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
-
-      ! === Kernel application loop (identical to legacy path) ===
-      do n_glob = start_atom, end_atom
-         n = g2l_map(n_glob)
-
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
-            end do
-         end do
-
-         this%recursion%mu_ng(:, :, 2:size(kernel), n) = &
-            this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
-      end do
-
-      ! === Initialize C++ backend (first call only) ===
-      if (first_call) then
-         call cpp_backend%ensure_context(1, nb, 1, 1, 1)
-         first_call = .false.
-      end if
-
-      ! === DOS reconstruction via C++ BLAS (one call replaces entire ie/i/l/m loop nest) ===
-      ! Transfer matrix F(i,ie) absorbs Jackson kernel, ×2 coeff, phase, and prefactor
-      ! Then G₀ = moments · F via cgemm (fp32) or zgemm (fp64)
-      call cpp_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
-                                      this%en%ene(1:nv), a, b,                         &
-                                      this%g0(:, :, 1:nv, start_atom:end_atom))
-
-   end subroutine chebyshev_green_cpp
-
-   !---------------------------------------------------------------------------
    !> Chebyshev Green function with GPU CUDA acceleration (cuBLAS)
    !> 20-100x faster than scalar loop for large nv
    !> Falls back to CPU BLAS if GPU unavailable
@@ -1216,9 +1152,8 @@ contains
 
    !---------------------------------------------------------------------------
    !> Dispatcher for Chebyshev DOS reconstruction
-   !> Selects implementation based on control flags (cpp_plugin, gpu_plugin)
+   !> Selects implementation based on control flags (gpu_plugin)
    !> - gpu_plugin=.true.  → chebyshev_green_gpu (GPU with CPU fallback)
-   !> - cpp_plugin=.true.  → chebyshev_green_cpp (C++ BLAS)
    !> - otherwise          → chebyshev_green (legacy Fortran)
    !---------------------------------------------------------------------------
    subroutine chebyshev_dos_dispatch(this)
@@ -1233,19 +1168,6 @@ contains
             return
          end if
          call this%chebyshev_green_gpu()
-         return
-      end if
-
-      ! Try C++ path (if compiled and enabled)
-      if (this%control%cpp_plugin) then
-         if (.not. rsrec_plugin_compiled()) then
-            call g_logger%warning('cpp_plugin requested for Chebyshev DOS, '// &
-               'but executable was built without ENABLE_CPP_PLUGIN. '// &
-               'Using legacy path.', __FILE__, __LINE__)
-            call this%chebyshev_green()
-            return
-         end if
-         call this%chebyshev_green_cpp()
          return
       end if
 

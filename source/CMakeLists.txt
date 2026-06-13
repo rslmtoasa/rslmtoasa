@@ -17,8 +17,8 @@ add_library(${PROJECT_NAME} STATIC
     face.F90
     globals.f90
     green.f90
-    hamiltonian_base_mod.f90
-    hamiltonian_cpu_mod.f90
+    #hamiltonian_base_mod.f90
+    #hamiltonian_cpu_mod.f90
     hamiltonian.f90
     lattice.f90
     # lists.f90
@@ -35,7 +35,6 @@ add_library(${PROJECT_NAME} STATIC
     cuda/recursion_gpu_mod.f90
     sparse.f90
     report.f90
-    rsrec_plugin.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
     self.f90
@@ -48,17 +47,6 @@ add_library(${PROJECT_NAME} STATIC
     timer.f90
     xc.f90
 )
-
-# green.f90 imports recursion_gpu_mod unconditionally, and that module binds to
-# the rsrec_* C interface implemented by this CPU backend.
-add_library(rsrec_cpp STATIC
-    cuda/rsrec_cpu.cpp
-)
-target_compile_features(rsrec_cpp PRIVATE cxx_std_11)
-if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-    target_link_libraries(rsrec_cpp OpenMP::OpenMP_CXX)
-endif()
-target_link_libraries(${PROJECT_NAME} rsrec_cpp)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
     # ifx 202x can ICE in charge.f90 around legacy FORMAT handling in release
@@ -90,10 +78,6 @@ if(ENABLE_MKL_SPARSE)
     endif()
 endif()
 
-if(ENABLE_CPP_PLUGIN)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CPP_PLUGIN)
-endif()
-
 if(ENABLE_CUDA_PLUGIN)
     # rsrec_cuda is a backend dispatcher that provides rsrec_cuda_* interface
     # for backward compatibility with rsrec_cuda_plugin.f90; internally dispatches to
@@ -105,7 +89,7 @@ if(ENABLE_CUDA_PLUGIN)
     )
     target_compile_features(rsrec_cuda PRIVATE cxx_std_11)
     # Link against rsrec_cpp and CUDA runtime libraries
-    target_link_libraries(rsrec_cuda rsrec_cpp CUDA::cudart CUDA::cusparse CUDA::cufft CUDA::cublas)
+    target_link_libraries(rsrec_cuda CUDA::cudart CUDA::cusparse CUDA::cufft CUDA::cublas)
     if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
         target_link_libraries(rsrec_cuda OpenMP::OpenMP_CXX)
     endif()

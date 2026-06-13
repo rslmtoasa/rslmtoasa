@@ -85,7 +85,6 @@ module recursion_mod
       complex(rp), dimension(:, :), allocatable :: v
       !> Variable to save T(H)
       complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
-      type(rsrec_backend) :: cpp_backend
       type(rsrec_cuda_backend) :: gpu_backend
    contains
       procedure :: hop
@@ -215,70 +214,6 @@ contains
       call obj%restore_to_default()
    end function constructor
 
-   logical function cpp_plugin_enabled(this)
-      class(recursion), intent(in) :: this
-
-      cpp_plugin_enabled = this%control%cpp_plugin
-   end function cpp_plugin_enabled
-
-   logical function cpp_plugin_ready(this, feature, allow_hoh, require_nsp1, require_no_local_axis)
-      class(recursion), intent(in) :: this
-      character(len=*), intent(in) :: feature
-      logical, intent(in), optional :: allow_hoh, require_nsp1, require_no_local_axis
-      logical :: hoh_ok, nsp1_only, no_local_axis
-
-      cpp_plugin_ready = .false.
-      if (.not. cpp_plugin_enabled(this)) return
-
-      hoh_ok = .false.
-      if (present(allow_hoh)) hoh_ok = allow_hoh
-      nsp1_only = .false.
-      if (present(require_nsp1)) nsp1_only = require_nsp1
-      no_local_axis = .false.
-      if (present(require_no_local_axis)) no_local_axis = require_no_local_axis
-
-      if (.not. rsrec_plugin_compiled()) then
-         call g_logger%warning('cpp_plugin requested for '//trim(feature)// &
-            ', but the executable was built without ENABLE_CPP_PLUGIN. '// &
-            'Falling back to Fortran recursion.', __FILE__, __LINE__)
-         return
-      end if
-
-      if ((.not. hoh_ok) .and. this%hamiltonian%hoh) then
-         call g_logger%warning('cpp_plugin does not support hoh in '// &
-            trim(feature)//'. Falling back to Fortran recursion.', __FILE__, __LINE__)
-         return
-      end if
-
-      if (nsp1_only .and. this%control%nsp /= 1) then
-         call g_logger%warning('cpp_plugin scalar Lanczos path is restricted '// &
-            'to nsp=1. Falling back to Fortran recursion.', __FILE__, __LINE__)
-         return
-      end if
-
-      if (no_local_axis .and. this%hamiltonian%local_axis) then
-         call g_logger%warning('cpp_plugin block Lanczos path does not support '// &
-            'per-site local-axis rotation. Falling back to Fortran recursion.', __FILE__, __LINE__)
-         return
-      end if
-
-      cpp_plugin_ready = .true.
-   end function cpp_plugin_ready
-
-   subroutine cpp_plugin_upload_hamiltonian(this)
-      class(recursion), intent(inout) :: this
-
-      if (this%lattice%nmax > 0) then
-         call this%cpp_backend%set_hamiltonian(this%hamiltonian%ee, &
-            this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
-            this%lattice%iz, this%lattice%nmax)
-      else
-         call this%cpp_backend%set_hamiltonian(this%hamiltonian%ee, &
-            lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
-            iz=this%lattice%iz, nmax=this%lattice%nmax)
-      end if
-   end subroutine cpp_plugin_upload_hamiltonian
-
    logical function gpu_plugin_enabled(this)
       class(recursion), intent(in) :: this
 
@@ -392,7 +327,6 @@ contains
    subroutine destructor(this)
       type(recursion) :: this
       call this%gpu_backend%destroy()
-      call this%cpp_backend%destroy()
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%a)) call g_safe_alloc%deallocate('recursion.a', this%a)
       if (allocated(this%b2)) call g_safe_alloc%deallocate('recursion.b2', this%b2)
@@ -1024,15 +958,6 @@ contains
             cycle
          end if
 
-         if (cpp_plugin_ready(this, 'compute_moments_stochastic()')) then
-            if (i == 1) then
-               call cpp_plugin_upload_hamiltonian(this)
-               call this%cpp_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
-            end if
-            call this%cpp_backend%stochastic_moments(psiref, this%control%cond_ll, a, b, this%mu_nm_stochastic(:, :, :, :, i))
-            cycle
-         end if
-
          ! Computing the left vector <r|Tm(H)
          do m=1, this%control%cond_ll 
             if (m == 1) then
@@ -1610,60 +1535,6 @@ contains
          return
       end if
 
-      if (cpp_plugin_ready(this, 'recur_b_ij()', require_no_local_axis=.true.)) then
-         call cpp_plugin_upload_hamiltonian(this)
-         do ij = start_atom, end_atom
-            ij_loc = g2l_map(ij)
-            i = this%lattice%ijpair(ij, 1)
-            j = this%lattice%ijpair(ij, 2)
-            call g_logger%info('C++ block recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
-            do reci = 1, 4
-               this%psi_b(:, :, :) = (0.0d0, 0.0d0)
-               this%atemp_b(:, :, :) = (0.0d0, 0.0d0)
-               this%b2temp_b(:, :, :) = (0.0d0, 0.0d0)
-
-               select case (reci)
-               case (1)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
-               case (2)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
-               case (3)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
-               case (4)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
-               end select
-
-               if ((reci .eq. 1) .and. (i .eq. j)) then
-                  asign = (1.0d0, 0.0d0)
-                  bsign = (1.0d0, 0.0d0)
-               else if (i .eq. j) then
-                  cycle
-               end if
-
-               do l = 1, nb
-                  this%psi_b(l, l, i) = asign
-                  this%psi_b(l, l, j) = bsign
-               end do
-
-               call this%cpp_backend%block_lanczos(this%psi_b, llmax, this%atemp_b, this%b2temp_b)
-
-               do ll = 1, llmax
-                  do l = 1, nb
-                     do m = 1, nb
-                        this%a_b(l, m, ll, ij_loc*4 - 4 + reci) = this%atemp_b(l, m, ll)
-                        this%b2_b(l, m, ll, ij_loc*4 - 4 + reci) = this%b2temp_b(l, m, ll)
-                     end do
-                  end do
-               end do
-            end do
-         end do
-         return
-      end if
-
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
       do ij = start_atom, end_atom
          ij_loc = g2l_map(ij)
@@ -1831,32 +1702,6 @@ contains
             end do
             call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
                this%atemp_b, this%b2temp_b)
-            do ll = 1, llmax
-               do l = 1, nb
-                  do m = 1, nb
-                     this%a_b(l, m, ll, i - start_atom + 1) = this%atemp_b(l, m, ll)
-                     this%b2_b(l, m, ll, i - start_atom + 1) = this%b2temp_b(l, m, ll)
-                  end do
-                  this%a(ll, l, i - start_atom + 1, 1) = real(this%atemp_b(l, l, ll))
-                  this%b2(ll, l, i - start_atom + 1, 1) = real(this%b2temp_b(l, l, ll))
-               end do
-            end do
-         end do
-         return
-      end if
-
-      if (cpp_plugin_ready(this, 'recur_b()', require_no_local_axis=.true.)) then
-         call cpp_plugin_upload_hamiltonian(this)
-         do i = start_atom, end_atom
-            j = this%lattice%irec(i)
-            call g_logger%info('C++ block recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
-            this%psi_b(:, :, :) = (0.0d0, 0.0d0)
-            this%atemp_b(:, :, :) = (0.0d0, 0.0d0)
-            this%b2temp_b(:, :, :) = (0.0d0, 0.0d0)
-            do l = 1, nb
-               this%psi_b(l, l, j) = (1.0d0, 0.0d0)
-            end do
-            call this%cpp_backend%block_lanczos(this%psi_b, llmax, this%atemp_b, this%b2temp_b)
             do ll = 1, llmax
                do l = 1, nb
                   do m = 1, nb
@@ -2513,43 +2358,6 @@ contains
                end do
                call this%gpu_backend%chebyshev_moments(this%psi0, llmax, a, b, &
                   this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
-               if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
-                  call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
-               end if
-            end do
-         end do
-         deallocate(psiref)
-         return
-      end if
-
-      if (cpp_plugin_ready(this, 'chebyshev_recur_ij()')) then
-         call cpp_plugin_upload_hamiltonian(this)
-         do ij = start_atom, end_atom
-            ij_loc = g2l_map(ij)
-            i = this%lattice%ijpair(ij, 1)
-            j = this%lattice%ijpair(ij, 2)
-            call g_logger%info(int2str(rank)//': C++ Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
-            do reci = 1, 4
-               this%psi0(:, :, :) = (0.0d0, 0.0d0)
-               select case (reci)
-               case (1)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
-               case (2)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
-               case (3)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
-               case (4)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
-               end select
-               do l = 1, nb
-                  this%psi0(l, l, i) = asign
-                  this%psi0(l, l, j) = bsign
-               end do
-               call this%cpp_backend%chebyshev_moments(this%psi0, llmax, a, b, this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
                if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
                   call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
                end if
@@ -3310,21 +3118,6 @@ contains
          return
       end if
 
-      if (cpp_plugin_ready(this, 'chebyshev_recur()')) then
-         call cpp_plugin_upload_hamiltonian(this)
-         do i = start_atom, end_atom
-            i_loc = g2l_map(i)
-            j = this%lattice%irec(i)
-            call g_logger%info('C++ Chebyshev recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
-            this%psi0(:, :, :) = (0.0d0, 0.0d0)
-            do l = 1, nb
-               this%psi0(l, l, j) = (1.0d0, 0.0d0)
-            end do
-            call this%cpp_backend%chebyshev_moments(this%psi0, this%control%lld, a, b, this%mu_n(:, :, :, i_loc))
-         end do
-         return
-      end if
-
       do i = start_atom, end_atom ! Loop on the number of atoms to be treat self-consistently by this process
          i_loc = g2l_map(i)
          j = this%lattice%irec(i) ! Atom number in the clust file
@@ -3759,17 +3552,6 @@ contains
                int2str(j), __FILE__, __LINE__)
             call this%gpu_backend%scalar_lanczos(j, llmax, this%a(:, :, i_loc, 1), &
                this%b2(:, :, i_loc, 1))
-         end do
-         return
-      end if
-
-      if (cpp_plugin_ready(this, 'recur()', require_nsp1=.true.)) then
-         call cpp_plugin_upload_hamiltonian(this)
-         do i = start_atom, end_atom
-            i_loc = g2l_map(i)
-            j = this%lattice%irec(i)
-            call g_logger%info('C++ scalar Lanczos recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
-            call this%cpp_backend%scalar_lanczos(j, llmax, this%a(:, :, i_loc, 1), this%b2(:, :, i_loc, 1))
          end do
          return
       end if
