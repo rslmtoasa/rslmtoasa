@@ -62,6 +62,13 @@ if (ENABLE_MKL_BATCH OR ENABLE_CUDA_PLUGIN)
   message(STATUS "Using C++ compiler ${CMAKE_CXX_COMPILER_ID} C++ ${CMAKE_CXX_COMPILER_VERSION}")
 endif()
 
+if (NOT ENABLE_CUDA_PLUGIN)
+  # recursion_gpu_mod.f90 always binds the rsrec_* C interface; without the
+  # CUDA plugin its symbols are supplied by cuda/rsrec_stub.c, which needs a C
+  # compiler. (With the plugin, rsrec_gpu.cu provides them instead.)
+  enable_language(C)
+endif()
+
 if (ENABLE_CUDA_PLUGIN)
   enable_language(CUDA)
   message(STATUS "Using CUDA compiler ${CMAKE_CUDA_COMPILER_ID} CUDA ${CMAKE_CUDA_COMPILER_VERSION}")

@@ -33,7 +33,7 @@ module recursion_mod
    use math_mod
    use string_mod
    use logger_mod, only: g_logger
-   use rsrec_plugin_mod, only: rsrec_backend, rsrec_plugin_compiled
+   !use rsrec_plugin_mod, only: rsrec_backend, rsrec_plugin_compiled
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, &
       rsrec_cuda_plugin_compiled, decode_gpu_backend, gpu_backend_bsr, &
       gpu_backend_conv, gpu_backend_fft

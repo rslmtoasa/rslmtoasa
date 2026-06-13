@@ -33,7 +33,7 @@ module green_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use string_mod, only: fmt, int2str, real2str, log2str
-   use rsrec_plugin_mod, only: rsrec_backend, rsrec_plugin_compiled
+   !use rsrec_plugin_mod, only: rsrec_backend, rsrec_plugin_compiled
    use recursion_gpu_mod, only: rsgpu
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc

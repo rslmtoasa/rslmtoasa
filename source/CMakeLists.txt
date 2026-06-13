@@ -78,6 +78,15 @@ if(ENABLE_MKL_SPARSE)
     endif()
 endif()
 
+if(NOT ENABLE_CUDA_PLUGIN)
+    # cuda/recursion_gpu_mod.f90 is compiled unconditionally and binds the
+    # rsrec_* C interface. The real kernels (cuda/rsrec_gpu.cu) are only built
+    # with the CUDA plugin, so on plain CPU builds we link a no-op stub that
+    # makes the symbols resolve and fails cleanly if the gpu_plugin path is
+    # ever requested at runtime. No compute kernels are pulled in.
+    target_sources(${PROJECT_NAME} PRIVATE cuda/rsrec_stub.c)
+endif()
+
 if(ENABLE_CUDA_PLUGIN)
     # rsrec_cuda is a backend dispatcher that provides rsrec_cuda_* interface
     # for backward compatibility with rsrec_cuda_plugin.f90; internally dispatches to
