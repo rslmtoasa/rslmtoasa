@@ -24,7 +24,9 @@
 module chebyshev_fast_mod
    implicit none
    private
-   public :: cheb_moments_fast, cheb_green_fast
+   public :: cheb_moments_fast, cheb_moments_fast_batched
+   public :: cheb_moments_fast_mkl_batch, cheb_moments_fast_mkl_sparse
+   public :: cheb_green_fast
    integer, parameter :: sp = selected_real_kind(6, 37)
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
@@ -237,6 +239,619 @@ contains
       end subroutine swapm
 
    end subroutine cheb_moments_fast
+
+   !> Block Chebyshev moments using a scaled single-precision BSR operator.
+   !> This is an optional tuning path for BLAS implementations that handle a
+   !> smaller number of wider GEMMs better than many tiny per-neighbor GEMMs.
+   !> It preserves the cheb_moments_fast interface and moment ordering.
+   subroutine cheb_moments_fast_batched(psi0, ee, hall, lsham, nn, iz, kk, nb, &
+                                        nnmax, ntype, nmax, lld, a, b, mu)
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
+      complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
+      complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
+      complex(sp), allocatable :: hval(:, :, :)
+      complex(sp), allocatable :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
+      integer, allocatable :: hcol(:), hrow(:)
+      integer :: k, l, c, ld, ll
+      real(sp) :: inva, a_sp, b_sp
+
+      ld = nb*kk
+      a_sp = real(a, sp)
+      b_sp = real(b, sp)
+      inva = 1.0_sp/a_sp
+      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+
+      call build_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+
+      !$omp parallel do private(k, c, l) schedule(static)
+      do k = 1, kk
+         do c = 1, nb
+            do l = 1, nb
+               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
+            end do
+         end do
+      end do
+      !$omp end parallel do
+
+      call cherk_full_batched(nb, ld, p0, mu1_sp)
+      mu(:, :, 1) = mu1_sp
+      call apply_step_bsr(p0, p0, p1, 1.0_sp, 0.0_sp)
+      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+      mu(:, :, 2) = mu2_sp
+
+      do ll = 1, lld
+         call apply_step_bsr(p1, p0, p2, 2.0_sp, -1.0_sp)
+         call cherk_full_batched(nb, ld, p1, dum_sp)
+         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+         call swapm_batched(p0, p1)
+         call swapm_batched(p1, p2)
+      end do
+
+      deallocate (p0, p1, p2, hval, hcol, hrow)
+
+   contains
+
+      subroutine build_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+         integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
+         integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+         real(sp), intent(in) :: inva_in, b_in
+         complex(sp), allocatable, intent(out) :: hval_out(:, :, :)
+         integer, allocatable, intent(out) :: hcol_out(:), hrow_out(:)
+         integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks, num_neighbors, ih, l_in
+
+         nblocks = 0
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks = nblocks + 1
+            end do
+         end do
+
+         allocate (hval_out(nb_in, nb_in, nblocks), hcol_out(nblocks), hrow_out(kk_in + 1))
+         block_idx = 0
+         hrow_out(1) = 1
+
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1) then
+                  block_col = atom
+               else
+                  neighbor = nn_in(atom, neighbor_idx)
+                  if (neighbor == 0) cycle
+                  block_col = neighbor
+               end if
+
+               block_idx = block_idx + 1
+               if (nmax_in > 0 .and. atom <= nmax_in) then
+                  hval_out(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
+                                                    aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
+                  ih = iz_in(atom)
+               else
+                  ih = iz_in(atom)
+                  hval_out(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
+                                                    aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
+               end if
+
+               if (neighbor_idx == 1) then
+                  hval_out(:, :, block_idx) = hval_out(:, :, block_idx) + &
+                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
+                  do l_in = 1, nb_in
+                     hval_out(l_in, l_in, block_idx) = hval_out(l_in, l_in, block_idx) - b_in*inva_in
+                  end do
+               end if
+               hcol_out(block_idx) = block_col
+            end do
+            if (atom < kk_in) hrow_out(atom + 1) = block_idx + 1
+         end do
+         hrow_out(kk_in + 1) = nblocks + 1
+      end subroutine build_scaled_bsr_sp
+
+      !> y = alpha*(Ht x1) + beta*x0 using one packed GEMM per BSR row.
+      subroutine apply_step_bsr(x1, x0, y, alpha, beta)
+         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         real(sp), intent(in) :: alpha, beta
+         complex(sp), allocatable :: hrow_pack(:, :), xrow_pack(:, :)
+         complex(sp) :: acc(nb, nb)
+         integer :: row, first_blk, last_blk, nblk, iblk, blk, col, r0, j0
+
+         !$omp parallel private(row, first_blk, last_blk, nblk, iblk, blk, col, r0, j0, acc, hrow_pack, xrow_pack)
+         allocate (hrow_pack(nb, nb*nnmax), xrow_pack(nb*nnmax, nb))
+         !$omp do schedule(dynamic, 32)
+         do row = 1, kk
+            first_blk = hrow(row)
+            last_blk = hrow(row + 1) - 1
+            nblk = last_blk - first_blk + 1
+
+            do iblk = 1, nblk
+               blk = first_blk + iblk - 1
+               col = hcol(blk)
+               j0 = nb*(iblk - 1)
+               r0 = nb*(col - 1)
+               hrow_pack(:, j0 + 1:j0 + nb) = hval(:, :, blk)
+               xrow_pack(j0 + 1:j0 + nb, :) = x1(r0 + 1:r0 + nb, :)
+            end do
+
+            call cgemm('N', 'N', nb, nb, nb*nblk, cone, hrow_pack, nb, xrow_pack, nb*nblk, czero, acc, nb)
+            r0 = nb*(row - 1)
+            if (beta /= 0.0_sp) then
+               y(r0 + 1:r0 + nb, :) = alpha*acc + beta*x0(r0 + 1:r0 + nb, :)
+            else
+               y(r0 + 1:r0 + nb, :) = alpha*acc
+            end if
+         end do
+         !$omp end do
+         deallocate (hrow_pack, xrow_pack)
+         !$omp end parallel
+      end subroutine apply_step_bsr
+
+      subroutine cherk_full_batched(n, kdim, Amat, C)
+         integer, intent(in) :: n, kdim
+         complex(sp), intent(in) :: Amat(kdim, n)
+         complex(sp), intent(out) :: C(n, n)
+         integer :: i, j
+         C = (0.0_sp, 0.0_sp)
+         call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
+         do j = 2, n
+            do i = 1, j - 1
+               C(i, j) = conjg(C(j, i))
+            end do
+         end do
+      end subroutine cherk_full_batched
+
+      subroutine swapm_batched(x, y)
+         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
+         complex(sp) :: tmp
+         integer :: i, j
+         !$omp parallel do private(i, j, tmp) schedule(static)
+         do j = 1, nb
+            do i = 1, ld
+               tmp = x(i, j)
+               x(i, j) = y(i, j)
+               y(i, j) = tmp
+            end do
+         end do
+         !$omp end parallel do
+      end subroutine swapm_batched
+
+   end subroutine cheb_moments_fast_batched
+
+   !> Optional Intel oneMKL cgemm_batch implementation.
+   !> Compiled with -DUSE_MKL_BATCH and CMake option ENABLE_MKL_BATCH=ON.
+   subroutine cheb_moments_fast_mkl_batch(psi0, ee, hall, lsham, nn, iz, kk, nb, &
+                                          nnmax, ntype, nmax, lld, a, b, mu)
+#ifdef USE_MKL_BATCH
+      use iso_c_binding, only: c_int, c_ptr, c_float_complex, c_loc
+#endif
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
+      complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
+      complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
+
+#ifndef USE_MKL_BATCH
+      write (*, '(A)') 'ERROR: cheb_backend=mkl_batch requires CMake option ENABLE_MKL_BATCH=ON.'
+      error stop
+#else
+      interface
+         subroutine rslmto_mkl_cgemm_batch_nn(batch_count, m, n, k, alpha, a_array, lda, &
+                                              b_array, ldb, beta, c_array, ldc, status) bind(C, name='rslmto_mkl_cgemm_batch_nn')
+            import :: c_int, c_ptr, c_float_complex
+            integer(c_int), intent(in) :: batch_count, m, n, k, lda, ldb, ldc
+            complex(c_float_complex), intent(in) :: alpha, beta
+            type(c_ptr), intent(in) :: a_array(*), b_array(*)
+            type(c_ptr), intent(inout) :: c_array(*)
+            integer(c_int), intent(out) :: status
+         end subroutine rslmto_mkl_cgemm_batch_nn
+      end interface
+
+      complex(sp), allocatable, target :: hval(:, :, :)
+      complex(sp), allocatable, target :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp), allocatable, target :: block_products(:, :, :)
+      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
+      integer, allocatable :: hcol(:), hrow(:)
+      integer :: k, l, c, ld, ll, nblocks
+      real(sp) :: inva, a_sp, b_sp
+
+      ld = nb*kk
+      a_sp = real(a, sp)
+      b_sp = real(b, sp)
+      inva = 1.0_sp/a_sp
+      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+
+      call build_scaled_bsr_sp_mkl_batch(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      nblocks = size(hcol)
+      allocate (block_products(nb, nb, nblocks))
+
+      !$omp parallel do private(k, c, l) schedule(static)
+      do k = 1, kk
+         do c = 1, nb
+            do l = 1, nb
+               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
+            end do
+         end do
+      end do
+      !$omp end parallel do
+
+      call cherk_full_mkl_batch(nb, ld, p0, mu1_sp)
+      mu(:, :, 1) = mu1_sp
+      call apply_step_mkl_batch(p0, p0, p1, 1.0_sp, 0.0_sp)
+      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+      mu(:, :, 2) = mu2_sp
+
+      do ll = 1, lld
+         call apply_step_mkl_batch(p1, p0, p2, 2.0_sp, -1.0_sp)
+         call cherk_full_mkl_batch(nb, ld, p1, dum_sp)
+         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+         call swapm_mkl_batch(p0, p1)
+         call swapm_mkl_batch(p1, p2)
+      end do
+
+      deallocate (p0, p1, p2, block_products, hval, hcol, hrow)
+
+   contains
+
+      subroutine build_scaled_bsr_sp_mkl_batch(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+         integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
+         integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+         real(sp), intent(in) :: inva_in, b_in
+         complex(sp), allocatable, target, intent(out) :: hval_out(:, :, :)
+         integer, allocatable, intent(out) :: hcol_out(:), hrow_out(:)
+         integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks_out, num_neighbors, ih, l_in
+
+         nblocks_out = 0
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks_out = nblocks_out + 1
+            end do
+         end do
+
+         allocate (hval_out(nb_in, nb_in, nblocks_out), hcol_out(nblocks_out), hrow_out(kk_in + 1))
+         block_idx = 0
+         hrow_out(1) = 1
+
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1) then
+                  block_col = atom
+               else
+                  neighbor = nn_in(atom, neighbor_idx)
+                  if (neighbor == 0) cycle
+                  block_col = neighbor
+               end if
+
+               block_idx = block_idx + 1
+               if (nmax_in > 0 .and. atom <= nmax_in) then
+                  hval_out(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
+                                                    aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
+                  ih = iz_in(atom)
+               else
+                  ih = iz_in(atom)
+                  hval_out(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
+                                                    aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
+               end if
+
+               if (neighbor_idx == 1) then
+                  hval_out(:, :, block_idx) = hval_out(:, :, block_idx) + &
+                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
+                  do l_in = 1, nb_in
+                     hval_out(l_in, l_in, block_idx) = hval_out(l_in, l_in, block_idx) - b_in*inva_in
+                  end do
+               end if
+               hcol_out(block_idx) = block_col
+            end do
+            if (atom < kk_in) hrow_out(atom + 1) = block_idx + 1
+         end do
+         hrow_out(kk_in + 1) = nblocks_out + 1
+      end subroutine build_scaled_bsr_sp_mkl_batch
+
+      subroutine apply_step_mkl_batch(x1, x0, y, alpha, beta)
+         complex(sp), intent(in), target :: x1(ld, nb), x0(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         real(sp), intent(in) :: alpha, beta
+         type(c_ptr), allocatable :: a_ptr(:), b_ptr(:), c_ptrs(:)
+         complex(c_float_complex) :: alpha_c, beta_c
+         complex(sp) :: acc(nb, nb)
+         integer(c_int) :: batch_count_c, m_c, n_c, k_c, lda_c, ldb_c, ldc_c, status_c
+         integer :: block, row, col, r0
+
+         if (nblocks > huge(batch_count_c)) then
+            write (*, '(A)') 'ERROR: mkl_batch backend has too many BSR blocks for the C wrapper.'
+            error stop
+         end if
+
+         allocate (a_ptr(nblocks), b_ptr(nblocks), c_ptrs(nblocks))
+         !$omp parallel do private(block, col, r0) schedule(static)
+         do block = 1, nblocks
+            col = hcol(block)
+            r0 = nb*(col - 1)
+            a_ptr(block) = c_loc(hval(1, 1, block))
+            b_ptr(block) = c_loc(x1(r0 + 1, 1))
+            c_ptrs(block) = c_loc(block_products(1, 1, block))
+         end do
+         !$omp end parallel do
+
+         batch_count_c = int(nblocks, c_int)
+         m_c = int(nb, c_int)
+         n_c = int(nb, c_int)
+         k_c = int(nb, c_int)
+         lda_c = int(nb, c_int)
+         ldb_c = int(ld, c_int)
+         ldc_c = int(nb, c_int)
+         alpha_c = cmplx(alpha, 0.0_sp, c_float_complex)
+         beta_c = cmplx(0.0_sp, 0.0_sp, c_float_complex)
+
+         call rslmto_mkl_cgemm_batch_nn(batch_count_c, m_c, n_c, k_c, alpha_c, a_ptr, lda_c, &
+                                        b_ptr, ldb_c, beta_c, c_ptrs, ldc_c, status_c)
+         if (status_c /= 0_c_int) then
+            write (*, '(A,I0)') 'ERROR: rslmto_mkl_cgemm_batch_nn failed with status ', status_c
+            error stop
+         end if
+
+         !$omp parallel do private(row, block, r0, acc) schedule(dynamic, 32)
+         do row = 1, kk
+            acc = (0.0_sp, 0.0_sp)
+            do block = hrow(row), hrow(row + 1) - 1
+               acc = acc + block_products(:, :, block)
+            end do
+            r0 = nb*(row - 1)
+            if (beta /= 0.0_sp) then
+               y(r0 + 1:r0 + nb, :) = acc + beta*x0(r0 + 1:r0 + nb, :)
+            else
+               y(r0 + 1:r0 + nb, :) = acc
+            end if
+         end do
+         !$omp end parallel do
+         deallocate (a_ptr, b_ptr, c_ptrs)
+      end subroutine apply_step_mkl_batch
+
+      subroutine cherk_full_mkl_batch(n, kdim, Amat, C)
+         integer, intent(in) :: n, kdim
+         complex(sp), intent(in) :: Amat(kdim, n)
+         complex(sp), intent(out) :: C(n, n)
+         integer :: i, j
+         C = (0.0_sp, 0.0_sp)
+         call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
+         do j = 2, n
+            do i = 1, j - 1
+               C(i, j) = conjg(C(j, i))
+            end do
+         end do
+      end subroutine cherk_full_mkl_batch
+
+      subroutine swapm_mkl_batch(x, y)
+         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
+         complex(sp) :: tmp
+         integer :: i, j
+         !$omp parallel do private(i, j, tmp) schedule(static)
+         do j = 1, nb
+            do i = 1, ld
+               tmp = x(i, j)
+               x(i, j) = y(i, j)
+               y(i, j) = tmp
+            end do
+         end do
+         !$omp end parallel do
+      end subroutine swapm_mkl_batch
+#endif
+   end subroutine cheb_moments_fast_mkl_batch
+
+   !> Optional Intel oneMKL Inspector-Executor Sparse BLAS implementation.
+   !> Compiled with -DUSE_MKL_SPARSE.
+   subroutine cheb_moments_fast_mkl_sparse(psi0, ee, hall, lsham, nn, iz, kk, nb, &
+                                           nnmax, ntype, nmax, lld, a, b, mu)
+#ifdef USE_MKL_SPARSE
+      use mkl_spblas
+#endif
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
+      complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
+      complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
+
+#ifndef USE_MKL_SPARSE
+      write (*, '(A)') 'ERROR: cheb_backend=mkl_sparse requires CMake option ENABLE_MKL_SPARSE=ON.'
+      error stop
+#else
+      type(sparse_matrix_t) :: mkl_A
+      type(matrix_descr) :: descA
+      complex(sp), allocatable :: hval(:, :, :)
+      complex(sp), allocatable :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
+      integer, allocatable :: hcol(:), hrow(:)
+      integer :: status, k, l, c, ld, ll
+      real(sp) :: inva, a_sp, b_sp
+
+      ld = nb*kk
+      a_sp = real(a, sp)
+      b_sp = real(b, sp)
+      inva = 1.0_sp/a_sp
+      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+
+      call build_scaled_bsr_sp_mkl(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+
+      status = mkl_sparse_c_create_bsr(mkl_A, SPARSE_INDEX_BASE_ONE, SPARSE_LAYOUT_COLUMN_MAJOR, &
+                                       kk, kk, nb, hrow(1:kk), hrow(2:kk + 1), hcol, hval)
+      call check_mkl_sparse_status(status, 'mkl_sparse_c_create_bsr')
+
+      descA%type = SPARSE_MATRIX_TYPE_GENERAL
+      descA%mode = SPARSE_FILL_MODE_FULL
+      descA%diag = SPARSE_DIAG_NON_UNIT
+
+      status = mkl_sparse_set_mm_hint(mkl_A, SPARSE_OPERATION_NON_TRANSPOSE, descA, &
+                                      SPARSE_LAYOUT_COLUMN_MAJOR, nb, max(2*lld + 1, 1))
+      call check_mkl_sparse_status(status, 'mkl_sparse_set_mm_hint')
+
+      status = mkl_sparse_optimize(mkl_A)
+      call check_mkl_sparse_status(status, 'mkl_sparse_optimize')
+
+      !$omp parallel do private(k, c, l) schedule(static)
+      do k = 1, kk
+         do c = 1, nb
+            do l = 1, nb
+               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
+            end do
+         end do
+      end do
+      !$omp end parallel do
+
+      call cherk_full_mkl(nb, ld, p0, mu1_sp)
+      mu(:, :, 1) = mu1_sp
+      call apply_step_mkl(p0, p0, p1, 1.0_sp, 0.0_sp)
+      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+      mu(:, :, 2) = mu2_sp
+
+      do ll = 1, lld
+         call apply_step_mkl(p1, p0, p2, 2.0_sp, -1.0_sp)
+         call cherk_full_mkl(nb, ld, p1, dum_sp)
+         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+         call swapm_mkl(p0, p1)
+         call swapm_mkl(p1, p2)
+      end do
+
+      status = mkl_sparse_destroy(mkl_A)
+      call check_mkl_sparse_status(status, 'mkl_sparse_destroy')
+      deallocate (p0, p1, p2, hval, hcol, hrow)
+
+   contains
+
+      subroutine build_scaled_bsr_sp_mkl(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+         integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
+         integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+         real(sp), intent(in) :: inva_in, b_in
+         complex(sp), allocatable, intent(out) :: hval_out(:, :, :)
+         integer, allocatable, intent(out) :: hcol_out(:), hrow_out(:)
+         integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks, num_neighbors, ih, l_in
+
+         nblocks = 0
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks = nblocks + 1
+            end do
+         end do
+
+         allocate (hval_out(nb_in, nb_in, nblocks), hcol_out(nblocks), hrow_out(kk_in + 1))
+         block_idx = 0
+         hrow_out(1) = 1
+
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1) then
+                  block_col = atom
+               else
+                  neighbor = nn_in(atom, neighbor_idx)
+                  if (neighbor == 0) cycle
+                  block_col = neighbor
+               end if
+
+               block_idx = block_idx + 1
+               if (nmax_in > 0 .and. atom <= nmax_in) then
+                  hval_out(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
+                                                    aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
+                  ih = iz_in(atom)
+               else
+                  ih = iz_in(atom)
+                  hval_out(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
+                                                    aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
+               end if
+
+               if (neighbor_idx == 1) then
+                  hval_out(:, :, block_idx) = hval_out(:, :, block_idx) + &
+                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
+                  do l_in = 1, nb_in
+                     hval_out(l_in, l_in, block_idx) = hval_out(l_in, l_in, block_idx) - b_in*inva_in
+                  end do
+               end if
+               hcol_out(block_idx) = block_col
+            end do
+            if (atom < kk_in) hrow_out(atom + 1) = block_idx + 1
+         end do
+         hrow_out(kk_in + 1) = nblocks + 1
+      end subroutine build_scaled_bsr_sp_mkl
+
+      subroutine apply_step_mkl(x1, x0, y, alpha, beta)
+         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         real(sp), intent(in) :: alpha, beta
+         complex(sp) :: alpha_c, beta_c
+         integer :: status_mkl
+
+         y = x0
+         alpha_c = cmplx(alpha, 0.0_sp, sp)
+         beta_c = cmplx(beta, 0.0_sp, sp)
+         status_mkl = mkl_sparse_c_mm(SPARSE_OPERATION_NON_TRANSPOSE, alpha_c, mkl_A, descA, &
+                                      SPARSE_LAYOUT_COLUMN_MAJOR, x1, nb, ld, beta_c, y, ld)
+         call check_mkl_sparse_status(status_mkl, 'mkl_sparse_c_mm')
+      end subroutine apply_step_mkl
+
+      subroutine cherk_full_mkl(n, kdim, Amat, C)
+         integer, intent(in) :: n, kdim
+         complex(sp), intent(in) :: Amat(kdim, n)
+         complex(sp), intent(out) :: C(n, n)
+         integer :: i, j
+         C = (0.0_sp, 0.0_sp)
+         call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
+         do j = 2, n
+            do i = 1, j - 1
+               C(i, j) = conjg(C(j, i))
+            end do
+         end do
+      end subroutine cherk_full_mkl
+
+      subroutine swapm_mkl(x, y)
+         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
+         complex(sp) :: tmp
+         integer :: i, j
+         !$omp parallel do private(i, j, tmp) schedule(static)
+         do j = 1, nb
+            do i = 1, ld
+               tmp = x(i, j)
+               x(i, j) = y(i, j)
+               y(i, j) = tmp
+            end do
+         end do
+         !$omp end parallel do
+      end subroutine swapm_mkl
+
+      subroutine check_mkl_sparse_status(status_in, routine)
+         integer, intent(in) :: status_in
+         character(len=*), intent(in) :: routine
+         if (status_in /= SPARSE_STATUS_SUCCESS) then
+            write (*, '(A,A,A,I0)') 'ERROR: ', trim(routine), ' failed with MKL sparse status ', status_in
+            error stop
+         end if
+      end subroutine check_mkl_sparse_status
+#endif
+   end subroutine cheb_moments_fast_mkl_sparse
 
    !> Green-function / DOS reconstruction, replacing the per-atom body of
    !> chebyshev_green: g0(:,:,ie,n) = sum_i mu(:,:,i,n)*F(i,ie). One GEMM

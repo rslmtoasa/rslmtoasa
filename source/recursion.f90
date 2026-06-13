@@ -22,7 +22,9 @@
 module recursion_mod
 
    use hamiltonian_mod
-   use chebyshev_fast_mod, only: cheb_moments_fast
+   use chebyshev_fast_mod, only: cheb_moments_fast, cheb_moments_fast_batched, &
+      cheb_moments_fast_mkl_batch, &
+      cheb_moments_fast_mkl_sparse
    use lattice_mod
    use control_mod
    use energy_mod
@@ -130,6 +132,37 @@ module recursion_mod
    end interface recursion
 
 contains
+
+   subroutine cheb_moments_cpu(this, psi0, lld, a, b, mu)
+      class(recursion), intent(in) :: this
+      complex(rp), intent(in) :: psi0(:, :, :)
+      integer, intent(in) :: lld
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(out) :: mu(:, :, :)
+
+      select case (trim(this%control%cheb_backend))
+      case ('fast')
+         call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+            lld, a, b, mu)
+      case ('batched')
+         call cheb_moments_fast_batched(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+            lld, a, b, mu)
+      case ('mkl_batch')
+         call cheb_moments_fast_mkl_batch(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+            lld, a, b, mu)
+      case ('mkl_sparse')
+         call cheb_moments_fast_mkl_sparse(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+            lld, a, b, mu)
+      end select
+   end subroutine cheb_moments_cpu
 
    subroutine resolve_chebyshev_window(this, emin, emax)
       class(recursion), intent(inout) :: this
@@ -2554,10 +2587,8 @@ contains
                   this%psi0(l, l, j) = bsign
                end do
 
-               call cheb_moments_fast(this%psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-                  this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-                  nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, llmax, &
-                  a, b, this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
+               call cheb_moments_cpu(this, this%psi0, llmax, a, b, &
+                  this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
 
                if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
                   call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
@@ -3299,10 +3330,8 @@ contains
             do l = 1, nb
                this%psi0(l, l, j) = (1.0d0, 0.0d0)
             end do
-            call cheb_moments_fast(this%psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               this%control%lld, a, b, this%mu_n(:, :, :, i_loc))
+            call cheb_moments_cpu(this, this%psi0, this%control%lld, a, b, &
+               this%mu_n(:, :, :, i_loc))
             cycle
          end if
 

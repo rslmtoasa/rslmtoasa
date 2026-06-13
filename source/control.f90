@@ -173,6 +173,7 @@ module control_mod
       logical :: cpp_plugin
       logical :: gpu_plugin
       character(len=16) :: gpu_backend
+      character(len=16) :: cheb_backend
 
       !> Number of recursion levels for the conductivity tensor calculation
       !>
@@ -310,6 +311,7 @@ contains
       cpp_plugin = this%cpp_plugin
       gpu_plugin = this%gpu_plugin
       gpu_backend = this%gpu_backend
+      cheb_backend = this%cheb_backend
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
       cond_type = this%cond_type
@@ -370,6 +372,7 @@ contains
       this%cpp_plugin = cpp_plugin
       this%gpu_plugin = gpu_plugin
       this%gpu_backend = gpu_backend
+      this%cheb_backend = cheb_backend
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
       this%cond_type = cond_type
@@ -457,6 +460,7 @@ contains
       this%cpp_plugin = .false.
       this%gpu_plugin = .false.
       this%gpu_backend = 'csr'
+      this%cheb_backend = 'fast'
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
@@ -516,6 +520,7 @@ contains
       cpp_plugin = this%cpp_plugin
       gpu_plugin = this%gpu_plugin
       gpu_backend = this%gpu_backend
+      cheb_backend = this%cheb_backend
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -576,6 +581,7 @@ contains
       call nml%add('cpp_plugin', this%cpp_plugin)
       call nml%add('gpu_plugin', this%gpu_plugin)
       call nml%add('gpu_backend', this%gpu_backend)
+      call nml%add('cheb_backend', this%cheb_backend)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
 
@@ -616,6 +622,12 @@ contains
           .and. this%gpu_backend /= 'fft' &
           .and. this%gpu_backend /= 'conv') then
          call g_logger%fatal('control%gpu_backend must be one of: ''csr'', ''bsr'', ''fft'' or ''conv''.', __FILE__, __LINE__)
+      end if
+      if (this%cheb_backend /= 'fast' &
+          .and. this%cheb_backend /= 'batched' &
+          .and. this%cheb_backend /= 'mkl_batch' &
+          .and. this%cheb_backend /= 'mkl_sparse') then
+         call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''batched'', ''mkl_batch'' or ''mkl_sparse''.', __FILE__, __LINE__)
       end if
    end subroutine check_all
 
