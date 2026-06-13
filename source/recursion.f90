@@ -161,6 +161,8 @@ contains
             this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
             nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
             lld, a, b, mu)
+      case ('legacy')
+         call g_logger%fatal('Internal error: cheb_backend=legacy should use the original Chebyshev recursion path.', __FILE__, __LINE__)
       end select
    end subroutine cheb_moments_cpu
 
@@ -2564,7 +2566,7 @@ contains
          j = this%lattice%ijpair(ij, 2) ! Atom number in the clust file, atom j
 !         call g_logger%info('Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
          call g_logger%info(int2str(rank)//': Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
-         if (.not. this%hamiltonian%hoh) then
+         if (.not. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
             do reci = 1, 4
                this%psi0(:, :, :) = (0.0d0, 0.0d0)
 
@@ -3327,7 +3329,7 @@ contains
          i_loc = g2l_map(i)
          j = this%lattice%irec(i) ! Atom number in the clust file
          call g_logger%info('Chebyshev recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
-         if (.not. this%hamiltonian%hoh) then
+         if (.not. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
             this%psi0(:, :, :) = (0.0d0, 0.0d0)
             do l = 1, nb
                this%psi0(l, l, j) = (1.0d0, 0.0d0)

@@ -626,8 +626,9 @@ contains
       if (this%cheb_backend /= 'fast' &
           .and. this%cheb_backend /= 'batched' &
           .and. this%cheb_backend /= 'mkl_batch' &
-          .and. this%cheb_backend /= 'mkl_sparse') then
-         call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''batched'', ''mkl_batch'' or ''mkl_sparse''.', __FILE__, __LINE__)
+          .and. this%cheb_backend /= 'mkl_sparse' &
+          .and. this%cheb_backend /= 'legacy') then
+         call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
       end if
    end subroutine check_all
 
