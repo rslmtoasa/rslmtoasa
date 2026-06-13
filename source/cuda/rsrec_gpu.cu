@@ -492,29 +492,15 @@ __global__ void k_unpack64(size_t n, int nb, int ncols, size_t ld,
     out[i] = in[(size_t)l + (size_t)nb * k + ld * col];
 }
 
-/* Scalar-Lanczos per-column kernels (site-major: column stride ld).
- * Grid (nblocks_rows, ncols); each block reduces a row slab of one column. */
-__global__ void k_col_dot(size_t ld, int ncols, const zc *__restrict__ A,
-                          const zc *__restrict__ B, double *__restrict__ out,
-                          size_t rows_per_block) {
-    const int col = blockIdx.y;
-    if (col >= ncols) return;
-    const size_t kbeg = (size_t)blockIdx.x * rows_per_block;
-    const size_t kend = min(ld, kbeg + rows_per_block);
-    double s = 0.0;
-    for (size_t r = kbeg + threadIdx.x; r < kend; r += blockDim.x) {
-        size_t id = r + ld * col;
-        s += A[id].x * B[id].x + A[id].y * B[id].y;
-    }
-    /* warp + block reduction via shared, then one atomicAdd per block       */
-    __shared__ double sh[256];
-    sh[threadIdx.x] = s;
-    __syncthreads();
-    for (int off = blockDim.x / 2; off > 0; off >>= 1) {
-        if (threadIdx.x < off) sh[threadIdx.x] += sh[threadIdx.x + off];
-        __syncthreads();
-    }
-    if (threadIdx.x == 0) atomicAdd(&out[col], sh[0]);
+/* Scalar-Lanczos per-column helpers (site-major: column stride ld).
+ * The per-column dot products diag(A^H B) come from a single gram gemm
+ * (gram64) followed by this diagonal pick -- no atomics in the hot path.
+ * G is the nb x nb gram matrix (column-major, leading dim nb); its (j,j)
+ * real part is the column-j dot.                                            */
+__global__ void k_diag_real(int nb, const zc *__restrict__ G,
+                            double *__restrict__ out) {
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j < nb) out[j] = G[(size_t)j + (size_t)nb * j].x;
 }
 
 __global__ void k_col_axpy(size_t ld, int ncols,
@@ -1378,20 +1364,22 @@ extern "C" int rsrec_scalar_lanczos(rsrec_ctx *c, int site_j, int lld,
         }
     }
     double *dA = c->d_col, *dS = c->d_col + nb;
+    zc *dG = c->d_blk;                       /* nb x nb gram scratch          */
     std::vector<double> acol(nb), s2(nb), summ(nb, 1.0);
     std::memset(a_out, 0, sizeof(double) * lld * nb);
     std::memset(b2_out, 0, sizeof(double) * lld * nb);
 
-    const size_t rpb = 4096;
-    dim3 gdot((unsigned)((ld + rpb - 1) / rpb), nb);
     const int tpb = 256;
     const int nbl = (int)((nf + tpb - 1) / tpb);
+    const int ndg = (nb + 255) / 256;
 
     for (int ll = 0; ll < lld - 1; ++ll) {
         if (step64(c, 0, psi, nullptr, hpsi, tmp, nb, 1.0, 0.0, 1.0, 0.0))
             return 1;
-        CUCHK(cudaMemset(dA, 0, nb * sizeof(double)));
-        k_col_dot<<<gdot, 256>>>(ld, nb, psi, hpsi, dA, rpb);
+        /* a_col = Re diag(psi^H H psi): one gram gemm + diagonal pick        */
+        if (gram64(c, psi, nb, hpsi, nb, dG)) return 1;
+        k_diag_real<<<ndg, tpb>>>(nb, dG, dA);
+        CUCHK(cudaGetLastError());
         k_axpby<zc, double><<<nbl, tpb>>>(nf, 1.0, hpsi, 1.0, pmn);
         CUCHK(cudaMemcpy(acol.data(), dA, nb * sizeof(double),
                          cudaMemcpyDeviceToHost));
@@ -1403,8 +1391,10 @@ extern "C" int rsrec_scalar_lanczos(rsrec_ctx *c, int site_j, int lld,
         CUCHK(cudaMemcpy(dA, acol.data(), nb * sizeof(double),
                          cudaMemcpyHostToDevice));
         k_col_axpy<<<nbl, tpb>>>(ld, nb, dA, psi, pmn);  /* pmn -= a psi    */
-        CUCHK(cudaMemset(dS, 0, nb * sizeof(double)));
-        k_col_dot<<<gdot, 256>>>(ld, nb, pmn, pmn, dS, rpb);
+        /* B^2 = Re diag(pmn^H pmn): one gram gemm + diagonal pick           */
+        if (gram64(c, pmn, nb, pmn, nb, dG)) return 1;
+        k_diag_real<<<ndg, tpb>>>(nb, dG, dS);
+        CUCHK(cudaGetLastError());
         CUCHK(cudaMemcpy(s2.data(), dS, nb * sizeof(double),
                          cudaMemcpyDeviceToHost));
         k_col_shift<<<nbl, tpb>>>(ld, nb, dS, psi, pmn);
@@ -1486,10 +1476,16 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
         }
         if (step64(c, 1, v1, nullptr, R, tmp, nb, 1.0, 0.0, 1.0, 0.0))
             return 1;                            /* R = V_a v_n              */
-        for (int m = 0; m < lld; ++m)
-            if (gram64(c, left + (size_t)m * nf, nb, R, nb,
-                       dmu + bb * ((size_t)(n - 1) + (size_t)lld * m)))
-                return 1;
+        /* (n, m) contraction for ALL m at once: one strided-batched gemm.
+         * batch m -> C_m = left_m^H R (nb x nb). left states are contiguous
+         * (stride nf); R is shared (strideB = 0). The dmu slot (n-1, m) sits
+         * at base bb*(n-1) with per-m stride bb*lld, so the batched output
+         * lands directly in place -- lld launches collapse to one.          */
+        CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                           &Z_ONE, left, (int)ld, (long long)nf,
+                           R, (int)ld, 0,
+                           &Z_ZERO, dmu + bb * (size_t)(n - 1), nb,
+                           (long long)bb * lld, lld));
     }
     CUCHK(cudaMemcpy(mu_, dmu, bb * (size_t)lld * lld * sizeof(zc),
                      cudaMemcpyDeviceToHost));
