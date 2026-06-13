@@ -22,16 +22,259 @@
 ! preserving double-precision interfaces to the rest of the code.
 !------------------------------------------------------------------------------
 module chebyshev_fast_mod
+   use iso_c_binding, only: c_ptr
    implicit none
    private
    public :: cheb_moments_fast, cheb_moments_fast_batched
    public :: cheb_moments_fast_mkl_batch, cheb_moments_fast_mkl_sparse
-   public :: cheb_green_fast
+   public :: cheb_green_fast, cheb_fast_reset_cache
    integer, parameter :: sp = selected_real_kind(6, 37)
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
+   complex(sp), allocatable, target, save :: hee_cache(:, :, :, :), hha_cache(:, :, :, :)
+   complex(sp), allocatable, target, save :: hval_cache(:, :, :)
+   complex(sp), allocatable, target, save :: work0_cache(:, :), work1_cache(:, :), work2_cache(:, :)
+   complex(sp), allocatable, target, save :: block_products_cache(:, :, :)
+   integer, allocatable, target, save :: hcol_cache(:), hrow_cache(:)
+   type(c_ptr), allocatable, target, save :: mkl_a_ptr_cache(:), mkl_b_ptr_cache(:), mkl_c_ptr_cache(:)
+   logical, save :: scaled_cache_valid = .false.
+   logical, save :: bsr_cache_valid = .false.
+   integer, save :: scaled_cache_nb = 0, scaled_cache_nnmax = 0, scaled_cache_ntype = 0
+   integer, save :: scaled_cache_nmax = -1, scaled_cache_kk = 0
+   integer, save :: bsr_cache_nb = 0, bsr_cache_nnmax = 0, bsr_cache_ntype = 0
+   integer, save :: bsr_cache_nmax = -1, bsr_cache_kk = 0
+   real(sp), save :: scaled_cache_inva = -1.0_sp, scaled_cache_b = huge(1.0_sp)
+   real(sp), save :: bsr_cache_inva = -1.0_sp, bsr_cache_b = huge(1.0_sp)
+   integer, save :: work_cache_ld = 0, work_cache_nb = 0
+   integer, save :: block_products_cache_nb = 0, block_products_cache_nblocks = 0
+   integer, save :: mkl_ptr_cache_nblocks = 0
 
 contains
+
+   subroutine cheb_fast_reset_cache()
+      if (allocated(hee_cache)) deallocate (hee_cache)
+      if (allocated(hha_cache)) deallocate (hha_cache)
+      if (allocated(hval_cache)) deallocate (hval_cache)
+      if (allocated(work0_cache)) deallocate (work0_cache)
+      if (allocated(work1_cache)) deallocate (work1_cache)
+      if (allocated(work2_cache)) deallocate (work2_cache)
+      if (allocated(block_products_cache)) deallocate (block_products_cache)
+      if (allocated(hcol_cache)) deallocate (hcol_cache)
+      if (allocated(hrow_cache)) deallocate (hrow_cache)
+      if (allocated(mkl_a_ptr_cache)) deallocate (mkl_a_ptr_cache)
+      if (allocated(mkl_b_ptr_cache)) deallocate (mkl_b_ptr_cache)
+      if (allocated(mkl_c_ptr_cache)) deallocate (mkl_c_ptr_cache)
+      scaled_cache_valid = .false.
+      bsr_cache_valid = .false.
+      work_cache_ld = 0
+      work_cache_nb = 0
+      block_products_cache_nb = 0
+      block_products_cache_nblocks = 0
+      mkl_ptr_cache_nblocks = 0
+   end subroutine cheb_fast_reset_cache
+
+   subroutine ensure_work_buffers(ld_in, nb_in, w0, w1, w2)
+      integer, intent(in) :: ld_in, nb_in
+      complex(sp), pointer, intent(out) :: w0(:, :), w1(:, :), w2(:, :)
+
+      if (.not. allocated(work0_cache) .or. work_cache_ld /= ld_in .or. work_cache_nb /= nb_in) then
+         if (allocated(work0_cache)) deallocate (work0_cache)
+         if (allocated(work1_cache)) deallocate (work1_cache)
+         if (allocated(work2_cache)) deallocate (work2_cache)
+         allocate (work0_cache(ld_in, nb_in), work1_cache(ld_in, nb_in), work2_cache(ld_in, nb_in))
+         work_cache_ld = ld_in
+         work_cache_nb = nb_in
+      end if
+
+      w0 => work0_cache
+      w1 => work1_cache
+      w2 => work2_cache
+   end subroutine ensure_work_buffers
+
+   subroutine ensure_block_products(nb_in, nblocks_in, block_products)
+      integer, intent(in) :: nb_in, nblocks_in
+      complex(sp), pointer, intent(out) :: block_products(:, :, :)
+
+      if (.not. allocated(block_products_cache) &
+          .or. block_products_cache_nb /= nb_in &
+          .or. block_products_cache_nblocks /= nblocks_in) then
+         if (allocated(block_products_cache)) deallocate (block_products_cache)
+         allocate (block_products_cache(nb_in, nb_in, nblocks_in))
+         block_products_cache_nb = nb_in
+         block_products_cache_nblocks = nblocks_in
+      end if
+
+      block_products => block_products_cache
+   end subroutine ensure_block_products
+
+   subroutine ensure_mkl_batch_ptr_arrays(nblocks_in, a_ptr, b_ptr, c_ptrs)
+      integer, intent(in) :: nblocks_in
+      type(c_ptr), pointer, intent(out) :: a_ptr(:), b_ptr(:), c_ptrs(:)
+
+      if (.not. allocated(mkl_a_ptr_cache) .or. mkl_ptr_cache_nblocks /= nblocks_in) then
+         if (allocated(mkl_a_ptr_cache)) deallocate (mkl_a_ptr_cache)
+         if (allocated(mkl_b_ptr_cache)) deallocate (mkl_b_ptr_cache)
+         if (allocated(mkl_c_ptr_cache)) deallocate (mkl_c_ptr_cache)
+         allocate (mkl_a_ptr_cache(nblocks_in), mkl_b_ptr_cache(nblocks_in), mkl_c_ptr_cache(nblocks_in))
+         mkl_ptr_cache_nblocks = nblocks_in
+      end if
+
+      a_ptr => mkl_a_ptr_cache
+      b_ptr => mkl_b_ptr_cache
+      c_ptrs => mkl_c_ptr_cache
+   end subroutine ensure_mkl_batch_ptr_arrays
+
+   subroutine ensure_scaled_hamiltonian_sp(ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
+      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+      integer, intent(in) :: iz_in(kk_in), kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      real(sp), intent(in) :: inva_in, b_in
+      complex(sp), pointer, intent(out) :: hee_out(:, :, :, :), hha_out(:, :, :, :)
+      integer :: t_in, k_in, l_in
+      logical :: valid
+
+      valid = scaled_cache_valid &
+         .and. scaled_cache_nb == nb_in &
+         .and. scaled_cache_nnmax == nnmax_in &
+         .and. scaled_cache_ntype == ntype_in &
+         .and. scaled_cache_nmax == nmax_in &
+         .and. scaled_cache_kk == kk_in &
+         .and. scaled_cache_inva == inva_in &
+         .and. scaled_cache_b == b_in
+
+      if (.not. valid) then
+         if (allocated(hee_cache)) deallocate (hee_cache)
+         if (allocated(hha_cache)) deallocate (hha_cache)
+
+         allocate (hee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         hee_cache = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
+         do t_in = 1, ntype_in
+            hee_cache(:, :, 1, t_in) = hee_cache(:, :, 1, t_in) + &
+               cmplx(real(lsham_in(:, :, t_in), sp), aimag(lsham_in(:, :, t_in)), sp)*inva_in
+            do l_in = 1, nb_in
+               hee_cache(l_in, l_in, 1, t_in) = hee_cache(l_in, l_in, 1, t_in) - b_in*inva_in
+            end do
+         end do
+
+         if (nmax_in > 0) then
+            allocate (hha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+            hha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
+            do k_in = 1, nmax_in
+               t_in = iz_in(k_in)
+               hha_cache(:, :, 1, k_in) = hha_cache(:, :, 1, k_in) + &
+                  cmplx(real(lsham_in(:, :, t_in), sp), aimag(lsham_in(:, :, t_in)), sp)*inva_in
+               do l_in = 1, nb_in
+                  hha_cache(l_in, l_in, 1, k_in) = hha_cache(l_in, l_in, 1, k_in) - b_in*inva_in
+               end do
+            end do
+         end if
+
+         scaled_cache_nb = nb_in
+         scaled_cache_nnmax = nnmax_in
+         scaled_cache_ntype = ntype_in
+         scaled_cache_nmax = nmax_in
+         scaled_cache_kk = kk_in
+         scaled_cache_inva = inva_in
+         scaled_cache_b = b_in
+         scaled_cache_valid = .true.
+      end if
+
+      hee_out => hee_cache
+      if (allocated(hha_cache)) then
+         hha_out => hha_cache
+      else
+         nullify (hha_out)
+      end if
+   end subroutine ensure_scaled_hamiltonian_sp
+
+   subroutine ensure_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+      integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
+      integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      real(sp), intent(in) :: inva_in, b_in
+      complex(sp), pointer, intent(out) :: hval_out(:, :, :)
+      integer, pointer, intent(out) :: hcol_out(:), hrow_out(:)
+      integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks, num_neighbors, ih, l_in
+      logical :: valid
+
+      valid = bsr_cache_valid &
+         .and. bsr_cache_nb == nb_in &
+         .and. bsr_cache_nnmax == nnmax_in &
+         .and. bsr_cache_ntype == ntype_in &
+         .and. bsr_cache_nmax == nmax_in &
+         .and. bsr_cache_kk == kk_in &
+         .and. bsr_cache_inva == inva_in &
+         .and. bsr_cache_b == b_in
+
+      if (.not. valid) then
+         if (allocated(hval_cache)) deallocate (hval_cache)
+         if (allocated(hcol_cache)) deallocate (hcol_cache)
+         if (allocated(hrow_cache)) deallocate (hrow_cache)
+
+         nblocks = 0
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks = nblocks + 1
+            end do
+         end do
+
+         allocate (hval_cache(nb_in, nb_in, nblocks), hcol_cache(nblocks), hrow_cache(kk_in + 1))
+         block_idx = 0
+         hrow_cache(1) = 1
+
+         do atom = 1, kk_in
+            num_neighbors = nn_in(atom, 1)
+            do neighbor_idx = 1, num_neighbors
+               if (neighbor_idx == 1) then
+                  block_col = atom
+               else
+                  neighbor = nn_in(atom, neighbor_idx)
+                  if (neighbor == 0) cycle
+                  block_col = neighbor
+               end if
+
+               block_idx = block_idx + 1
+               if (nmax_in > 0 .and. atom <= nmax_in) then
+                  hval_cache(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
+                                                      aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
+                  ih = iz_in(atom)
+               else
+                  ih = iz_in(atom)
+                  hval_cache(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
+                                                      aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
+               end if
+
+               if (neighbor_idx == 1) then
+                  hval_cache(:, :, block_idx) = hval_cache(:, :, block_idx) + &
+                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
+                  do l_in = 1, nb_in
+                     hval_cache(l_in, l_in, block_idx) = hval_cache(l_in, l_in, block_idx) - b_in*inva_in
+                  end do
+               end if
+               hcol_cache(block_idx) = block_col
+            end do
+            if (atom < kk_in) hrow_cache(atom + 1) = block_idx + 1
+         end do
+         hrow_cache(kk_in + 1) = nblocks + 1
+
+         bsr_cache_nb = nb_in
+         bsr_cache_nnmax = nnmax_in
+         bsr_cache_ntype = ntype_in
+         bsr_cache_nmax = nmax_in
+         bsr_cache_kk = kk_in
+         bsr_cache_inva = inva_in
+         bsr_cache_b = b_in
+         bsr_cache_valid = .true.
+      end if
+
+      hval_out => hval_cache
+      hcol_out => hcol_cache
+      hrow_out => hrow_cache
+   end subroutine ensure_scaled_bsr_sp
 
    !> Block Chebyshev moments for one starting state.
    !> psi0  : (nb, nb, kk) starting block state (site or ij sign combos)
@@ -47,8 +290,9 @@ contains
       real(rp), intent(in) :: a, b
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
       ! Locals
-      complex(sp), allocatable :: hee(:, :, :, :), hha(:, :, :, :)
-      complex(sp), allocatable :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
+      complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
       complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer :: k, l, c, ld, ll
@@ -58,10 +302,13 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      p0 => w0
+      p1 => w1
+      p2 => w2
 
       ! --- 1. scaled operator copies: Ht = (H + lsham - b*I)/a -------------
-      call prepare_scaled_hamiltonian_sp(ee, hall, lsham, iz, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
+      call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
 
       ! --- 2. pack psi0 site-major: p(l + nb*(k-1), c) ---------------------
       !$omp parallel do private(k, c, l) schedule(static)
@@ -87,43 +334,13 @@ contains
          mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
          call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
          mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         call swapm(p0, p1); call swapm(p1, p2)         ! rotate registers
+         ptmp => p0
+         p0 => p1
+         p1 => p2
+         p2 => ptmp
       end do
-      deallocate (p0, p1, p2, hee)
-      if (allocated(hha)) deallocate (hha)
 
    contains
-
-      subroutine prepare_scaled_hamiltonian_sp(ee_in, hall_in, lsham_in, iz_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
-         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-         integer, intent(in) :: iz_in(kk), nb_in, nnmax_in, ntype_in, nmax_in
-         real(sp), intent(in) :: inva_in, b_in
-         complex(sp), allocatable, intent(out) :: hee_out(:, :, :, :), hha_out(:, :, :, :)
-         integer :: t_in, k_in, l_in
-
-         allocate (hee_out(nb_in, nb_in, nnmax_in, ntype_in))
-         hee_out = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
-         do t_in = 1, ntype_in
-            hee_out(:, :, 1, t_in) = hee_out(:, :, 1, t_in) + cmplx(real(lsham_in(:, :, t_in), sp), aimag(lsham_in(:, :, t_in)), sp)*inva_in
-            do l_in = 1, nb_in
-               hee_out(l_in, l_in, 1, t_in) = hee_out(l_in, l_in, 1, t_in) - b_in*inva_in
-            end do
-         end do
-
-         if (nmax_in > 0) then
-            allocate (hha_out(nb_in, nb_in, nnmax_in, nmax_in))
-            hha_out = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
-            do k_in = 1, nmax_in
-               t_in = iz_in(k_in)
-               hha_out(:, :, 1, k_in) = hha_out(:, :, 1, k_in) + cmplx(real(lsham_in(:, :, t_in), sp), aimag(lsham_in(:, :, t_in)), sp)*inva_in
-               do l_in = 1, nb_in
-                  hha_out(l_in, l_in, 1, k_in) = hha_out(l_in, l_in, 1, k_in) - b_in*inva_in
-               end do
-            end do
-         end if
-      end subroutine prepare_scaled_hamiltonian_sp
 
       subroutine apply_step_manual(x1, x0, y, alpha, beta)
          complex(sp), intent(in)  :: x1(ld, nb), x0(ld, nb)
@@ -252,12 +469,13 @@ contains
       integer, intent(in) :: nn(kk, nnmax), iz(kk)
       real(rp), intent(in) :: a, b
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
-      complex(sp), allocatable :: hval(:, :, :)
-      complex(sp), allocatable :: p0(:, :), p1(:, :), p2(:, :)
-      complex(sp), allocatable :: block_products(:, :, :)
+      complex(sp), pointer :: hval(:, :, :)
+      complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
+      complex(sp), pointer :: block_products(:, :, :)
       complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
-      integer, allocatable :: hcol(:), hrow(:)
+      integer, pointer :: hcol(:), hrow(:)
       integer :: k, l, c, ld, ll, nblocks
       real(sp) :: inva, a_sp, b_sp
 
@@ -265,11 +483,14 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      p0 => w0
+      p1 => w1
+      p2 => w2
 
-      call build_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      call ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
       nblocks = size(hcol)
-      allocate (block_products(nb, nb, nblocks))
+      call ensure_block_products(nb, nblocks, block_products)
 
       !$omp parallel do private(k, c, l) schedule(static)
       do k = 1, kk
@@ -293,72 +514,14 @@ contains
          mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
          call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
          mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         call swapm_batched(p0, p1)
-         call swapm_batched(p1, p2)
+         ptmp => p0
+         p0 => p1
+         p1 => p2
+         p2 => ptmp
       end do
 
-      deallocate (p0, p1, p2, block_products, hval, hcol, hrow)
 
    contains
-
-      subroutine build_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
-         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-         integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
-         integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-         real(sp), intent(in) :: inva_in, b_in
-         complex(sp), allocatable, intent(out) :: hval_out(:, :, :)
-         integer, allocatable, intent(out) :: hcol_out(:), hrow_out(:)
-         integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks, num_neighbors, ih, l_in
-
-         nblocks = 0
-         do atom = 1, kk_in
-            num_neighbors = nn_in(atom, 1)
-            do neighbor_idx = 1, num_neighbors
-               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks = nblocks + 1
-            end do
-         end do
-
-         allocate (hval_out(nb_in, nb_in, nblocks), hcol_out(nblocks), hrow_out(kk_in + 1))
-         block_idx = 0
-         hrow_out(1) = 1
-
-         do atom = 1, kk_in
-            num_neighbors = nn_in(atom, 1)
-            do neighbor_idx = 1, num_neighbors
-               if (neighbor_idx == 1) then
-                  block_col = atom
-               else
-                  neighbor = nn_in(atom, neighbor_idx)
-                  if (neighbor == 0) cycle
-                  block_col = neighbor
-               end if
-
-               block_idx = block_idx + 1
-               if (nmax_in > 0 .and. atom <= nmax_in) then
-                  hval_out(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
-                                                    aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
-                  ih = iz_in(atom)
-               else
-                  ih = iz_in(atom)
-                  hval_out(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
-                                                    aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
-               end if
-
-               if (neighbor_idx == 1) then
-                  hval_out(:, :, block_idx) = hval_out(:, :, block_idx) + &
-                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
-                  do l_in = 1, nb_in
-                     hval_out(l_in, l_in, block_idx) = hval_out(l_in, l_in, block_idx) - b_in*inva_in
-                  end do
-               end if
-               hcol_out(block_idx) = block_col
-            end do
-            if (atom < kk_in) hrow_out(atom + 1) = block_idx + 1
-         end do
-         hrow_out(kk_in + 1) = nblocks + 1
-      end subroutine build_scaled_bsr_sp
 
       !> y = alpha*(Ht x1) + beta*x0 using one packed GEMM per BSR row.
       subroutine apply_step_bsr(x1, x0, y, alpha, beta)
@@ -429,7 +592,7 @@ contains
    subroutine cheb_moments_fast_mkl_batch(psi0, ee, hall, lsham, nn, iz, kk, nb, &
                                           nnmax, ntype, nmax, lld, a, b, mu)
 #ifdef USE_MKL_BATCH
-      use iso_c_binding, only: c_int, c_ptr, c_float_complex, c_loc
+      use iso_c_binding, only: c_int, c_float_complex, c_loc
 #endif
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
       complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
@@ -454,12 +617,14 @@ contains
          end subroutine rslmto_mkl_cgemm_batch_nn
       end interface
 
-      complex(sp), allocatable, target :: hval(:, :, :)
-      complex(sp), allocatable, target :: p0(:, :), p1(:, :), p2(:, :)
-      complex(sp), allocatable, target :: block_products(:, :, :)
+      complex(sp), pointer :: hval(:, :, :)
+      complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
+      complex(sp), pointer :: block_products(:, :, :)
       complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
-      integer, allocatable :: hcol(:), hrow(:)
+      integer, pointer :: hcol(:), hrow(:)
+      type(c_ptr), pointer :: a_ptr(:), b_ptr(:), c_ptrs(:)
       integer :: k, l, c, ld, ll, nblocks
       real(sp) :: inva, a_sp, b_sp
 
@@ -467,11 +632,16 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      p0 => w0
+      p1 => w1
+      p2 => w2
 
-      call build_scaled_bsr_sp_mkl_batch(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      call ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
       nblocks = size(hcol)
-      allocate (block_products(nb, nb, nblocks))
+      call ensure_block_products(nb, nblocks, block_products)
+      call ensure_mkl_batch_ptr_arrays(nblocks, a_ptr, b_ptr, c_ptrs)
+      call init_mkl_batch_static_ptrs()
 
       !$omp parallel do private(k, c, l) schedule(static)
       do k = 1, kk
@@ -495,78 +665,29 @@ contains
          mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
          call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
          mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         call swapm_mkl_batch(p0, p1)
-         call swapm_mkl_batch(p1, p2)
+         ptmp => p0
+         p0 => p1
+         p1 => p2
+         p2 => ptmp
       end do
 
-      deallocate (p0, p1, p2, block_products, hval, hcol, hrow)
 
    contains
 
-      subroutine build_scaled_bsr_sp_mkl_batch(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
-         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-         integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
-         integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-         real(sp), intent(in) :: inva_in, b_in
-         complex(sp), allocatable, target, intent(out) :: hval_out(:, :, :)
-         integer, allocatable, intent(out) :: hcol_out(:), hrow_out(:)
-         integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks_out, num_neighbors, ih, l_in
-
-         nblocks_out = 0
-         do atom = 1, kk_in
-            num_neighbors = nn_in(atom, 1)
-            do neighbor_idx = 1, num_neighbors
-               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks_out = nblocks_out + 1
-            end do
+      subroutine init_mkl_batch_static_ptrs()
+         integer :: block
+         !$omp parallel do private(block) schedule(static)
+         do block = 1, nblocks
+            a_ptr(block) = c_loc(hval(1, 1, block))
+            c_ptrs(block) = c_loc(block_products(1, 1, block))
          end do
-
-         allocate (hval_out(nb_in, nb_in, nblocks_out), hcol_out(nblocks_out), hrow_out(kk_in + 1))
-         block_idx = 0
-         hrow_out(1) = 1
-
-         do atom = 1, kk_in
-            num_neighbors = nn_in(atom, 1)
-            do neighbor_idx = 1, num_neighbors
-               if (neighbor_idx == 1) then
-                  block_col = atom
-               else
-                  neighbor = nn_in(atom, neighbor_idx)
-                  if (neighbor == 0) cycle
-                  block_col = neighbor
-               end if
-
-               block_idx = block_idx + 1
-               if (nmax_in > 0 .and. atom <= nmax_in) then
-                  hval_out(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
-                                                    aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
-                  ih = iz_in(atom)
-               else
-                  ih = iz_in(atom)
-                  hval_out(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
-                                                    aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
-               end if
-
-               if (neighbor_idx == 1) then
-                  hval_out(:, :, block_idx) = hval_out(:, :, block_idx) + &
-                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
-                  do l_in = 1, nb_in
-                     hval_out(l_in, l_in, block_idx) = hval_out(l_in, l_in, block_idx) - b_in*inva_in
-                  end do
-               end if
-               hcol_out(block_idx) = block_col
-            end do
-            if (atom < kk_in) hrow_out(atom + 1) = block_idx + 1
-         end do
-         hrow_out(kk_in + 1) = nblocks_out + 1
-      end subroutine build_scaled_bsr_sp_mkl_batch
+         !$omp end parallel do
+      end subroutine init_mkl_batch_static_ptrs
 
       subroutine apply_step_mkl_batch(x1, x0, y, alpha, beta)
          complex(sp), intent(in), target :: x1(ld, nb), x0(ld, nb)
          complex(sp), intent(out) :: y(ld, nb)
          real(sp), intent(in) :: alpha, beta
-         type(c_ptr), allocatable :: a_ptr(:), b_ptr(:), c_ptrs(:)
          complex(c_float_complex) :: alpha_c, beta_c
          complex(sp) :: acc(nb, nb)
          integer(c_int) :: batch_count_c, m_c, n_c, k_c, lda_c, ldb_c, ldc_c, status_c
@@ -577,14 +698,11 @@ contains
             error stop
          end if
 
-         allocate (a_ptr(nblocks), b_ptr(nblocks), c_ptrs(nblocks))
          !$omp parallel do private(block, col, r0) schedule(static)
          do block = 1, nblocks
             col = hcol(block)
             r0 = nb*(col - 1)
-            a_ptr(block) = c_loc(hval(1, 1, block))
             b_ptr(block) = c_loc(x1(r0 + 1, 1))
-            c_ptrs(block) = c_loc(block_products(1, 1, block))
          end do
          !$omp end parallel do
 
@@ -619,7 +737,6 @@ contains
             end if
          end do
          !$omp end parallel do
-         deallocate (a_ptr, b_ptr, c_ptrs)
       end subroutine apply_step_mkl_batch
 
       subroutine cherk_full_mkl_batch(n, kdim, Amat, C)
@@ -673,11 +790,12 @@ contains
 #else
       type(sparse_matrix_t) :: mkl_A
       type(matrix_descr) :: descA
-      complex(sp), allocatable :: hval(:, :, :)
-      complex(sp), allocatable :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp), pointer :: hval(:, :, :)
+      complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
       complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
-      integer, allocatable :: hcol(:), hrow(:)
+      integer, pointer :: hcol(:), hrow(:)
       integer :: status, k, l, c, ld, ll
       real(sp) :: inva, a_sp, b_sp
 
@@ -685,9 +803,12 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
+      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      p0 => w0
+      p1 => w1
+      p2 => w2
 
-      call build_scaled_bsr_sp_mkl(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      call ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
 
       status = mkl_sparse_c_create_bsr(mkl_A, SPARSE_INDEX_BASE_ONE, SPARSE_LAYOUT_COLUMN_MAJOR, &
                                        kk, kk, nb, hrow(1:kk), hrow(2:kk + 1), hcol, hval)
@@ -726,74 +847,16 @@ contains
          mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
          call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
          mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         call swapm_mkl(p0, p1)
-         call swapm_mkl(p1, p2)
+         ptmp => p0
+         p0 => p1
+         p1 => p2
+         p2 => ptmp
       end do
 
       status = mkl_sparse_destroy(mkl_A)
       call check_mkl_sparse_status(status, 'mkl_sparse_destroy')
-      deallocate (p0, p1, p2, hval, hcol, hrow)
 
    contains
-
-      subroutine build_scaled_bsr_sp_mkl(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
-         complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-         complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-         complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-         integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
-         integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-         real(sp), intent(in) :: inva_in, b_in
-         complex(sp), allocatable, intent(out) :: hval_out(:, :, :)
-         integer, allocatable, intent(out) :: hcol_out(:), hrow_out(:)
-         integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks, num_neighbors, ih, l_in
-
-         nblocks = 0
-         do atom = 1, kk_in
-            num_neighbors = nn_in(atom, 1)
-            do neighbor_idx = 1, num_neighbors
-               if (neighbor_idx == 1 .or. nn_in(atom, neighbor_idx) /= 0) nblocks = nblocks + 1
-            end do
-         end do
-
-         allocate (hval_out(nb_in, nb_in, nblocks), hcol_out(nblocks), hrow_out(kk_in + 1))
-         block_idx = 0
-         hrow_out(1) = 1
-
-         do atom = 1, kk_in
-            num_neighbors = nn_in(atom, 1)
-            do neighbor_idx = 1, num_neighbors
-               if (neighbor_idx == 1) then
-                  block_col = atom
-               else
-                  neighbor = nn_in(atom, neighbor_idx)
-                  if (neighbor == 0) cycle
-                  block_col = neighbor
-               end if
-
-               block_idx = block_idx + 1
-               if (nmax_in > 0 .and. atom <= nmax_in) then
-                  hval_out(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
-                                                    aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
-                  ih = iz_in(atom)
-               else
-                  ih = iz_in(atom)
-                  hval_out(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
-                                                    aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
-               end if
-
-               if (neighbor_idx == 1) then
-                  hval_out(:, :, block_idx) = hval_out(:, :, block_idx) + &
-                     cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
-                  do l_in = 1, nb_in
-                     hval_out(l_in, l_in, block_idx) = hval_out(l_in, l_in, block_idx) - b_in*inva_in
-                  end do
-               end if
-               hcol_out(block_idx) = block_col
-            end do
-            if (atom < kk_in) hrow_out(atom + 1) = block_idx + 1
-         end do
-         hrow_out(kk_in + 1) = nblocks + 1
-      end subroutine build_scaled_bsr_sp_mkl
 
       subroutine apply_step_mkl(x1, x0, y, alpha, beta)
          complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)

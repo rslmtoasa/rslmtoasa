@@ -24,7 +24,7 @@ module recursion_mod
    use hamiltonian_mod
    use chebyshev_fast_mod, only: cheb_moments_fast, cheb_moments_fast_batched, &
       cheb_moments_fast_mkl_batch, &
-      cheb_moments_fast_mkl_sparse
+      cheb_moments_fast_mkl_sparse, cheb_fast_reset_cache
    use lattice_mod
    use control_mod
    use energy_mod
@@ -2478,6 +2478,7 @@ contains
       call resolve_chebyshev_window(this, emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
+      call cheb_fast_reset_cache()
 
       llmax = this%lattice%control%lld
       if (gpu_plugin_ready(this, 'chebyshev_recur_ij()')) then
@@ -3286,6 +3287,7 @@ contains
       call resolve_chebyshev_window(this, emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
+      call cheb_fast_reset_cache()
 
       if (gpu_plugin_ready(this, 'chebyshev_recur()')) then
          call gpu_plugin_upload_hamiltonian(this)
