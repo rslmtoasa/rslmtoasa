@@ -70,12 +70,24 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: obarm
       !> Gravity center Hamiltonian
       complex(rp), dimension(:, :, :), allocatable :: enim
+      !> Aggregate on-site matrix applied separately from the hopping in the
+      !> two-step hoh recursion: h_onsite = lsham + enim (each summand is nonzero
+      !> only in its mode -- lsham for nsp=2/4, enim for hoh, and +U via enim in
+      !> LDA+U with hubbard_u_outside_hoh). Built only when hoh is active; lets
+      !> the two-step routines apply E_nu+l.s(+U) in a single zgemm.
+      complex(rp), dimension(:, :, :), allocatable :: h_onsite
       !> Logical variable to include hoh term
       logical :: hoh
       !> Flatten H = E_nu + h - hoh into a single second-order Hamiltonian
       !> (ee_2nd/hall_2nd on an extended two-hop neighbour map) instead of the
       !> implicit two-step hoh recursion. Opt-in; requires hoh = .true.
       logical :: flatten_hoh
+      !> Treat the Hubbard +U as a pure on-site matrix that is EXCLUDED from the
+      !> orthogonalisation correction hoh (handled exactly like the spin-orbit
+      !> term lsham), instead of folding it into h before hoh is built. Carried
+      !> via enim, so it applies identically to the two-step and flattened hoh
+      !> workflows. Opt-in; only takes effect when hoh = .true.
+      logical :: hubbard_u_outside_hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
       !> Add orbital polarization to Hamiltonian
@@ -191,6 +203,7 @@ contains
       if (allocated(this%hallo)) call g_safe_alloc%deallocate('hamiltonian.hallo', this%hallo)
       if (allocated(this%obarm)) call g_safe_alloc%deallocate('hamiltonian.obarm', this%obarm)
       if (allocated(this%enim)) call g_safe_alloc%deallocate('hamiltonian.enim', this%enim)
+      if (allocated(this%h_onsite)) call g_safe_alloc%deallocate('hamiltonian.h_onsite', this%h_onsite)
       if (allocated(this%ee_2nd)) call g_safe_alloc%deallocate('hamiltonian.ee_2nd', this%ee_2nd)
       if (allocated(this%hall_2nd)) call g_safe_alloc%deallocate('hamiltonian.hall_2nd', this%hall_2nd)
       if (allocated(this%ee_glob)) call g_safe_alloc%deallocate('hamiltonian.ee_glob', this%ee_glob)
@@ -217,6 +230,7 @@ contains
       if (allocated(this%hallo)) deallocate (this%hallo)
       if (allocated(this%obarm)) deallocate (this%obarm)
       if (allocated(this%enim)) deallocate (this%enim)
+      if (allocated(this%h_onsite)) deallocate (this%h_onsite)
       if (allocated(this%ee_2nd)) deallocate (this%ee_2nd)
       if (allocated(this%hall_2nd)) deallocate (this%hall_2nd)
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
@@ -264,6 +278,7 @@ contains
 
       hoh = this%hoh
       flatten_hoh = this%flatten_hoh
+      hubbard_u_outside_hoh = this%hubbard_u_outside_hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
       v_alpha(:) = this%v_alpha(:)
@@ -323,6 +338,10 @@ contains
       end if
       if (this%flatten_hoh .and. local_axis) then
          call g_logger%fatal('flatten_hoh = .true. is not yet supported together with local_axis', __FILE__, __LINE__)
+      end if
+      this%hubbard_u_outside_hoh = hubbard_u_outside_hoh
+      if (this%hubbard_u_outside_hoh .and. .not. this%hoh) then
+         call g_logger%warning('hubbard_u_outside_hoh has no effect when hoh = .false.; +U stays in h', __FILE__, __LINE__)
       end if
       this%local_axis = local_axis
       this%orb_pol = orb_pol
@@ -564,6 +583,7 @@ contains
       call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.obarm', this%obarm, (/nb, nb, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.enim', this%enim, (/nb, nb, this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.h_onsite', this%h_onsite, (/nb, nb, this%charge%lattice%ntype/))
       !end if
       !if (local_axis)  then
       call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
@@ -604,6 +624,7 @@ contains
       allocate (this%hallo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%obarm(nb, nb, this%charge%lattice%ntype))
       allocate (this%enim(nb, nb, this%charge%lattice%ntype))
+      allocate (this%h_onsite(nb, nb, this%charge%lattice%ntype))
       !end if
       !if (this%local_axis) then
       allocate (this%ee_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
@@ -677,6 +698,7 @@ contains
       this%hubbard_v_pot(:, :, :, :) = 0.0d0
       this%hoh = .false.
       this%flatten_hoh = .false.
+      this%hubbard_u_outside_hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
@@ -1476,7 +1498,13 @@ contains
             write(132,*) 'm=', m
             write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
-         if (this%hubbard_u_general_check) then
+         ! +U on-site correction. By default it is added into h here, so it is
+         ! subsequently wrapped by the hoh orthogonalisation. When
+         ! hubbard_u_outside_hoh is set (and hoh is active), +U is kept out of h
+         ! and instead carried via enim (see after the type loop), so that it is
+         ! excluded from hoh and applied purely on-site, like the spin-orbit term.
+         if (this%hubbard_u_general_check .and. &
+             .not. (this%hubbard_u_outside_hoh .and. this%hoh)) then
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + cmplx(this%hubbard_u_pot(i, j, ntype), 0.0_rp, kind=rp)
@@ -1519,6 +1547,27 @@ contains
             end do
          end if
       end do ! end of atom type number
+      ! +U outside hoh: carry the on-site Hubbard matrix in enim (which is added
+      ! on-site by every two-step recursion routine and folded into ee_2nd by the
+      ! flattened path), so +U is excluded from the hoh orthogonalisation and
+      ! treated purely on-site like lsham. Done after the type loop because
+      ! build_enim (called inside the loop) rebuilds enim for all types.
+      if (this%hoh .and. this%hubbard_u_outside_hoh .and. this%hubbard_u_general_check) then
+         do ntype = 1, this%charge%lattice%ntype
+            this%enim(:, :, ntype) = this%enim(:, :, ntype) &
+               + cmplx(this%hubbard_u_pot(:, :, ntype), 0.0_rp, kind=rp)
+         end do
+         if (this%local_axis) this%enim_glob = this%enim
+      end if
+      ! Aggregate on-site matrix for the two-step hoh recursion: lsham + enim
+      ! (enim already carries E_nu and, when requested, the on-site +U). Each
+      ! summand is zero outside its mode, so this is correct for all of
+      ! nsp=1/2/4, with/without LDA+U. Only needed when hoh is active.
+      if (this%hoh) then
+         do ntype = 1, this%charge%lattice%ntype
+            this%h_onsite(:, :, ntype) = this%lsham(:, :, ntype) + this%enim(:, :, ntype)
+         end do
+      end if
       if (this%local_axis) then
          this%ee_glob = this%ee
          if (this%hoh) this%eeo_glob = this%eeo
