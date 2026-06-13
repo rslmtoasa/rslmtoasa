@@ -59,6 +59,9 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :, :), allocatable :: ee, eeo, eeoee
       !> Local Hamiltonian
       complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo
+      !> Flattened second-order Hamiltonian H = E_nu + h - hoh on the extended
+      !> two-hop neighbour map (lattice%nn2). Built when flatten_hoh = .true.
+      complex(rp), dimension(:, :, :, :), allocatable :: ee_2nd, hall_2nd
       !> Hamiltonian built in chbar_nc (description to be improved)
       complex(rp), dimension(:, :, :, :), allocatable :: hmag, hxc
       !> Hamiltonian built in ham0m_nc (description to be improved
@@ -69,6 +72,10 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim
       !> Logical variable to include hoh term
       logical :: hoh
+      !> Flatten H = E_nu + h - hoh into a single second-order Hamiltonian
+      !> (ee_2nd/hall_2nd on an extended two-hop neighbour map) instead of the
+      !> implicit two-step hoh recursion. Opt-in; requires hoh = .true.
+      logical :: flatten_hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
       !> Add orbital polarization to Hamiltonian
@@ -112,6 +119,8 @@ module hamiltonian_mod
       procedure :: build_lsham
       procedure :: build_bulkham
       procedure :: build_locham
+      procedure :: build_bulkham_2nd
+      procedure :: build_locham_2nd
       procedure :: build_obarm
       procedure :: build_enim
       procedure :: build_from_paoflow
@@ -182,6 +191,8 @@ contains
       if (allocated(this%hallo)) call g_safe_alloc%deallocate('hamiltonian.hallo', this%hallo)
       if (allocated(this%obarm)) call g_safe_alloc%deallocate('hamiltonian.obarm', this%obarm)
       if (allocated(this%enim)) call g_safe_alloc%deallocate('hamiltonian.enim', this%enim)
+      if (allocated(this%ee_2nd)) call g_safe_alloc%deallocate('hamiltonian.ee_2nd', this%ee_2nd)
+      if (allocated(this%hall_2nd)) call g_safe_alloc%deallocate('hamiltonian.hall_2nd', this%hall_2nd)
       if (allocated(this%ee_glob)) call g_safe_alloc%deallocate('hamiltonian.ee_glob', this%ee_glob)
       if (allocated(this%eeo_glob)) call g_safe_alloc%deallocate('hamiltonian.eeo_glob', this%eeo_glob)
       if (allocated(this%enim_glob)) call g_safe_alloc%deallocate('hamiltonian.enim_glob', this%enim_glob)
@@ -206,6 +217,8 @@ contains
       if (allocated(this%hallo)) deallocate (this%hallo)
       if (allocated(this%obarm)) deallocate (this%obarm)
       if (allocated(this%enim)) deallocate (this%enim)
+      if (allocated(this%ee_2nd)) deallocate (this%ee_2nd)
+      if (allocated(this%hall_2nd)) deallocate (this%hall_2nd)
       if (allocated(this%ee_glob)) deallocate (this%ee_glob)
       if (allocated(this%eeo_glob)) deallocate (this%eeo_glob)
       if (allocated(this%enim_glob)) deallocate (this%enim_glob)
@@ -250,6 +263,7 @@ contains
       include 'include_codes/namelists/hamiltonian.f90'
 
       hoh = this%hoh
+      flatten_hoh = this%flatten_hoh
       local_axis = this%local_axis
       orb_pol = this%orb_pol
       v_alpha(:) = this%v_alpha(:)
@@ -303,6 +317,13 @@ contains
       close (funit)
 
       this%hoh = hoh
+      this%flatten_hoh = flatten_hoh
+      if (this%flatten_hoh .and. .not. this%hoh) then
+         call g_logger%fatal('flatten_hoh = .true. requires hoh = .true.', __FILE__, __LINE__)
+      end if
+      if (this%flatten_hoh .and. local_axis) then
+         call g_logger%fatal('flatten_hoh = .true. is not yet supported together with local_axis', __FILE__, __LINE__)
+      end if
       this%local_axis = local_axis
       this%orb_pol = orb_pol
       this%v_alpha(:) = v_alpha(:)
@@ -655,6 +676,7 @@ contains
       this%hubbard_v(:, :, :, :) = 0.0d0
       this%hubbard_v_pot(:, :, :, :) = 0.0d0
       this%hoh = .false.
+      this%flatten_hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
       this%v_alpha(:) = [1, 0, 0]
@@ -1501,6 +1523,12 @@ contains
          this%ee_glob = this%ee
          if (this%hoh) this%eeo_glob = this%eeo
       end if
+      ! Flatten H = E_nu + h - hoh into the single second-order array ee_2nd
+      ! on the extended two-hop neighbour map. Must run before bounds so the
+      ! Chebyshev scaling is computed from the Hamiltonian that is actually used.
+      if (this%hoh .and. this%flatten_hoh) then
+         call this%build_bulkham_2nd()
+      end if
       if (trim(this%control%recur) == 'chebyshev') then
          call this%compute_hamiltonian_bounds(verbose=.false.)
       end if
@@ -1580,8 +1608,194 @@ contains
          this%hall_glob = this%hall
          if (this%hoh) this%hallo_glob = this%hallo
       end if
+      if (this%hoh .and. this%flatten_hoh) then
+         call this%build_locham_2nd()
+      end if
       call g_timer%stop('build local hamiltonian')
    end subroutine build_locham
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Locate cluster atom 'jt' in the extended two-hop shell list of center
+   !> 'ic'. Returns the shell index (1 = on-site, 2..count = off-site shells in
+   !> nn2 order). Returns 0 if 'jt' is not reachable within two hops of 'ic'.
+   !---------------------------------------------------------------------------
+   pure integer function nn2_shell(nn2, ic, jt) result(s)
+      integer, dimension(:, :), intent(in) :: nn2
+      integer, intent(in) :: ic, jt
+      integer :: t, cnt
+      s = 0
+      if (jt == ic) then
+         s = 1
+         return
+      end if
+      cnt = nn2(ic, 1)
+      do t = 2, cnt
+         if (nn2(ic, t) == jt) then
+            s = t
+            return
+         end if
+      end do
+   end function nn2_shell
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build the flattened second-order bulk Hamiltonian
+   !>     H(R) = E_nu*delta_R0 + l.s*delta_R0 + h(R) - sum_l h(0,l) o(l) h(l,R)
+   !> stored as ee_2nd(:,:,shell,ntype) on the extended two-hop neighbour map
+   !> lattice%nn2. This reproduces, as an explicit single matrix, exactly what
+   !> the two-step recursion ham_hoh_vec_matmul computes implicitly:
+   !>     H|psi> = (h)|psi> - (h o h)|psi> + (E_nu + l.s)|psi>.
+   !> The on-site E_nu (enim) and spin-orbit (lsham) terms are folded into the
+   !> on-site shell so the single-step matvec can treat ee_2nd as the complete
+   !> Hamiltonian. Requires ee, eeo, enim, lsham (built by build_bulkham + hoh).
+   !---------------------------------------------------------------------------
+   subroutine build_bulkham_2nd(this)
+      class(hamiltonian), intent(inout) :: this
+      ! Local variables
+      integer :: ntype, ia, nrk, ml, mj, l, j, tl, nrl, s, nmax
+      complex(rp), dimension(nb, nb) :: hblk, prod
+
+      ! Extended two-hop neighbour map must exist before we can index shells.
+      if (.not. allocated(this%charge%lattice%nn2)) then
+         call this%charge%lattice%build_nn2()
+      end if
+      nmax = this%charge%lattice%nmax
+
+      if (allocated(this%ee_2nd)) then
+         if (size(this%ee_2nd, 3) /= this%charge%lattice%nn2_max) deallocate (this%ee_2nd)
+      end if
+      if (.not. allocated(this%ee_2nd)) then
+         allocate (this%ee_2nd(nb, nb, this%charge%lattice%nn2_max, this%charge%lattice%ntype))
+      end if
+      this%ee_2nd(:, :, :, :) = czero
+
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nrk = this%charge%lattice%nn(ia, 1)
+
+         ! --- First order: on-site (E_nu + h(0,0)) and off-site h(R) ---
+         ! Note: l.s (lsham) is NOT folded here. It is added on-site by every
+         ! recursion backend (CPU and fast/GPU kernels) exactly as for the
+         ! first-order Hamiltonian, so keeping it separate avoids double-counting.
+         this%ee_2nd(:, :, 1, ntype) = this%ee(:, :, 1, ntype) + this%enim(:, :, ntype)
+         do ml = 2, nrk
+            j = this%charge%lattice%nn(ia, ml)
+            if (j <= 0) cycle
+            s = nn2_shell(this%charge%lattice%nn2, ia, j)
+            if (s <= 0) call g_logger%fatal('build_bulkham_2nd: first-hop neighbour missing from nn2', __FILE__, __LINE__)
+            this%ee_2nd(:, :, s, ntype) = this%ee_2nd(:, :, s, ntype) + this%ee(:, :, ml, ntype)
+         end do
+
+         ! --- Second order: subtract hoh(R) = sum_l h(0,l) o(l) h(l,R) ---
+         ! Outer factor h(0,l) o(l) = eeo(:,:,ml,ntype); inner factor h(l,R)
+         ! is hall (if l is a local impurity atom) or ee of l's type (host).
+         do ml = 1, nrk
+            if (ml == 1) then
+               l = ia
+            else
+               l = this%charge%lattice%nn(ia, ml)
+            end if
+            if (l <= 0) cycle
+            tl = this%charge%lattice%iz(l)
+            nrl = this%charge%lattice%nn(l, 1)
+            do mj = 1, nrl
+               if (mj == 1) then
+                  j = l
+               else
+                  j = this%charge%lattice%nn(l, mj)
+               end if
+               if (j <= 0) cycle
+               if (nmax > 0 .and. l <= nmax) then
+                  hblk = this%hall(:, :, mj, l)
+               else
+                  hblk = this%ee(:, :, mj, tl)
+               end if
+               call zgemm('n', 'n', nb, nb, nb, cone, this%eeo(:, :, ml, ntype), nb, hblk, nb, czero, prod, nb)
+               s = nn2_shell(this%charge%lattice%nn2, ia, j)
+               if (s <= 0) call g_logger%fatal('build_bulkham_2nd: two-hop neighbour missing from nn2', __FILE__, __LINE__)
+               this%ee_2nd(:, :, s, ntype) = this%ee_2nd(:, :, s, ntype) - prod
+            end do
+         end do
+      end do
+      if (rank == 0) call g_logger%info('build_bulkham_2nd: flattened second-order bulk H built (ee_2nd)', __FILE__, __LINE__)
+   end subroutine build_bulkham_2nd
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build the flattened second-order local (impurity) Hamiltonian hall_2nd,
+   !> the impurity analogue of build_bulkham_2nd. The center is a local atom
+   !> (indexed directly by nlim); the outer factor is hallo(:,:,ml,nlim) and the
+   !> inner h(l,R) factor is hall when the intermediate l is a local atom and ee
+   !> of l's type when l is in the host. Requires hall, hallo, enim, lsham.
+   !---------------------------------------------------------------------------
+   subroutine build_locham_2nd(this)
+      class(hamiltonian), intent(inout) :: this
+      ! Local variables
+      integer :: nlim, ih, nrk, ml, mj, l, j, nrl, s, nmax
+      complex(rp), dimension(nb, nb) :: hblk, prod
+
+      nmax = this%charge%lattice%nmax
+      if (nmax <= 0) return
+
+      if (.not. allocated(this%charge%lattice%nn2)) then
+         call this%charge%lattice%build_nn2()
+      end if
+
+      if (allocated(this%hall_2nd)) then
+         if (size(this%hall_2nd, 3) /= this%charge%lattice%nn2_max) deallocate (this%hall_2nd)
+      end if
+      if (.not. allocated(this%hall_2nd)) then
+         allocate (this%hall_2nd(nb, nb, this%charge%lattice%nn2_max, nmax))
+      end if
+      this%hall_2nd(:, :, :, :) = czero
+
+      do nlim = 1, nmax
+         ih = this%charge%lattice%iz(nlim)
+         nrk = this%charge%lattice%nn(nlim, 1)
+
+         ! l.s (lsham) kept separate, added on-site by the recursion backends.
+         this%hall_2nd(:, :, 1, nlim) = this%hall(:, :, 1, nlim) + this%enim(:, :, ih)
+         do ml = 2, nrk
+            j = this%charge%lattice%nn(nlim, ml)
+            if (j <= 0) cycle
+            s = nn2_shell(this%charge%lattice%nn2, nlim, j)
+            if (s <= 0) call g_logger%fatal('build_locham_2nd: first-hop neighbour missing from nn2', __FILE__, __LINE__)
+            this%hall_2nd(:, :, s, nlim) = this%hall_2nd(:, :, s, nlim) + this%hall(:, :, ml, nlim)
+         end do
+
+         do ml = 1, nrk
+            if (ml == 1) then
+               l = nlim
+            else
+               l = this%charge%lattice%nn(nlim, ml)
+            end if
+            if (l <= 0) cycle
+            nrl = this%charge%lattice%nn(l, 1)
+            do mj = 1, nrl
+               if (mj == 1) then
+                  j = l
+               else
+                  j = this%charge%lattice%nn(l, mj)
+               end if
+               if (j <= 0) cycle
+               if (l <= nmax) then
+                  hblk = this%hall(:, :, mj, l)
+               else
+                  hblk = this%ee(:, :, mj, this%charge%lattice%iz(l))
+               end if
+               call zgemm('n', 'n', nb, nb, nb, cone, this%hallo(:, :, ml, nlim), nb, hblk, nb, czero, prod, nb)
+               s = nn2_shell(this%charge%lattice%nn2, nlim, j)
+               if (s <= 0) call g_logger%fatal('build_locham_2nd: two-hop neighbour missing from nn2', __FILE__, __LINE__)
+               this%hall_2nd(:, :, s, nlim) = this%hall_2nd(:, :, s, nlim) - prod
+            end do
+         end do
+      end do
+      if (rank == 0) call g_logger%info('build_locham_2nd: flattened second-order local H built (hall_2nd)', __FILE__, __LINE__)
+   end subroutine build_locham_2nd
 
    subroutine rs2pao(this)
       implicit none
@@ -2602,6 +2816,38 @@ contains
 
       call normalize_bounds_algorithm(this%bounds%algorithm, algo)
       if (algo == 'none') return
+
+      ! Flattened second-order Hamiltonian: h - hoh + E_nu lives in ee_2nd on the
+      ! extended map nn2 (l.s kept separate). Gershgorin estimate over ee_2nd,
+      ! adding lsham to the centre exactly as for the first-order branch below.
+      if (this%flatten_hoh .and. allocated(this%ee_2nd)) then
+         g_min = huge(1.0_rp)
+         g_max = -huge(1.0_rp)
+         do ntype = 1, this%charge%lattice%ntype
+            ia = this%charge%lattice%atlist(ntype)
+            nr = this%charge%lattice%nn2(ia, 1)
+            do i = 1, nb
+               center = real(this%ee_2nd(i, i, 1, ntype))
+               if (allocated(this%lsham)) center = center + real(this%lsham(i, i, ntype))
+               radius = 0.0_rp
+               do m = 1, nr
+                  do j = 1, nb
+                     if (m == 1 .and. i == j) cycle
+                     radius = radius + abs(this%ee_2nd(i, j, m, ntype))
+                  end do
+               end do
+               g_min = min(g_min, center - radius)
+               g_max = max(g_max, center + radius)
+            end do
+         end do
+         call select_bounds_interval(algo, g_min, g_max, .false., g_min, g_max, this%bounds%e_min, this%bounds%e_max)
+         call apply_bounds_scaling(this%bounds%e_min, this%bounds%e_max, this%bounds%scaling)
+         msg = 'Chebyshev bounds (flatten_hoh) Gershgorin=['// &
+               trim(fmt('f12.6', g_min))//','//trim(fmt('f12.6', g_max))//'] scaled=['// &
+               trim(fmt('f12.6', this%bounds%e_min))//','//trim(fmt('f12.6', this%bounds%e_max))//']'
+         call g_logger%info(msg, __FILE__, __LINE__)
+         return
+      end if
 
       g_min = huge(1.0_rp)
       g_max = -huge(1.0_rp)

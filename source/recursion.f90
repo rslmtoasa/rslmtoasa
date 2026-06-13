@@ -134,32 +134,51 @@ module recursion_mod
 contains
 
    subroutine cheb_moments_cpu(this, psi0, lld, a, b, mu)
-      class(recursion), intent(in) :: this
+      class(recursion), intent(in), target :: this
       complex(rp), intent(in) :: psi0(:, :, :)
       integer, intent(in) :: lld
       real(rp), intent(in) :: a, b
       complex(rp), intent(out) :: mu(:, :, :)
+      ! Flattened second-order Hamiltonian: the fast kernels apply a single H over
+      ! a neighbour map and add lsham on-site, exactly what the flattened
+      ! ee_2nd/hall_2nd over the two-hop map nn2 needs (E_nu folded in, l.s
+      ! separate). Selecting these arrays makes every fast kernel support hoh with
+      ! no kernel changes.
+      complex(rp), pointer, contiguous :: ee_p(:, :, :, :), hall_p(:, :, :, :)
+      integer, pointer, contiguous :: nn_p(:, :)
+      integer :: nm
+
+      if (this%hamiltonian%flatten_hoh) then
+         ee_p => this%hamiltonian%ee_2nd
+         hall_p => this%hamiltonian%hall_2nd
+         nn_p => this%lattice%nn2
+      else
+         ee_p => this%hamiltonian%ee
+         hall_p => this%hamiltonian%hall
+         nn_p => this%lattice%nn
+      end if
+      nm = size(nn_p, 2)
 
       select case (trim(this%control%cheb_backend))
       case ('fast')
-         call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+         call cheb_moments_fast(psi0, ee_p, hall_p, &
+            this%hamiltonian%lsham, nn_p, this%lattice%iz, this%lattice%kk, &
+            nb, nm, this%lattice%ntype, this%lattice%nmax, &
             lld, a, b, mu)
       case ('batched')
-         call cheb_moments_fast_batched(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+         call cheb_moments_fast_batched(psi0, ee_p, hall_p, &
+            this%hamiltonian%lsham, nn_p, this%lattice%iz, this%lattice%kk, &
+            nb, nm, this%lattice%ntype, this%lattice%nmax, &
             lld, a, b, mu)
       case ('mkl_batch')
-         call cheb_moments_fast_mkl_batch(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+         call cheb_moments_fast_mkl_batch(psi0, ee_p, hall_p, &
+            this%hamiltonian%lsham, nn_p, this%lattice%iz, this%lattice%kk, &
+            nb, nm, this%lattice%ntype, this%lattice%nmax, &
             lld, a, b, mu)
       case ('mkl_sparse')
-         call cheb_moments_fast_mkl_sparse(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+         call cheb_moments_fast_mkl_sparse(psi0, ee_p, hall_p, &
+            this%hamiltonian%lsham, nn_p, this%lattice%iz, this%lattice%kk, &
+            nb, nm, this%lattice%ntype, this%lattice%nmax, &
             lld, a, b, mu)
       case ('legacy')
          call g_logger%fatal('Internal error: cheb_backend=legacy should use the original Chebyshev recursion path.', __FILE__, __LINE__)
@@ -847,8 +866,9 @@ contains
       !$omp end parallel do
       ! Do the scaling and shifting
       psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
-      psi_out(:, :, :) = psi_out(:, :, :)/a 
+      psi_out(:, :, :) = psi_out(:, :, :)/a
    end subroutine ham_vec_matmul
+
 
    subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
@@ -1449,7 +1469,7 @@ contains
    !> Calculate the recursion coefficients a_b (block recursion)
    !---------------------------------------------------------------------------
    subroutine hop_b(this, ll)
-      class(recursion), intent(inout) :: this
+      class(recursion), intent(inout), target :: this
       ! Local variables
       integer :: i, j, k, l, m, n, nr, nnmap, nlimplus1
       integer :: ll ! Recursion step
@@ -1458,6 +1478,23 @@ contains
       integer, dimension(0:this%lattice%kk) :: idum
       complex(rp), dimension(nb, nb) :: summ
       complex(rp), dimension(nb, nb) :: locham
+      ! Flattened second-order path: select ee_2nd/hall_2nd over the two-hop map
+      ! nn2 (which already contains E_nu + l.s - hoh), otherwise the first-order
+      ! arrays over nn (with l.s added on-site).
+      logical :: flat
+      integer, pointer, contiguous :: nntab(:, :)
+      complex(rp), pointer, contiguous :: ee_p(:, :, :, :), hall_p(:, :, :, :)
+
+      flat = this%hamiltonian%flatten_hoh
+      if (flat) then
+         nntab => this%lattice%nn2
+         ee_p => this%hamiltonian%ee_2nd
+         hall_p => this%hamiltonian%hall_2nd
+      else
+         nntab => this%lattice%nn
+         ee_p => this%hamiltonian%ee
+         hall_p => this%hamiltonian%hall
+      end if
 
       idum(:) = 0
       this%hpsi(:, :, :) = (0.0d0, 0.0d0)
@@ -1468,19 +1505,18 @@ contains
          do i = 1, this%lattice%nmax ! Loop in the neighbouring
             idum(i) = this%izero(i)
             ino = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
+            nr = nntab(i, 1) ! Number of neighbours of atom i
             if (this%izero(i) /= 0) then
-               locham = this%hamiltonian%hall(:, :, 1, i) + this%hamiltonian%lsham(:, :, ino)
+               locham = hall_p(:, :, 1, i)
+               locham = locham + this%hamiltonian%lsham(:, :, ino)
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
-               !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-               !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
             end if
             if (nr >= 2) then
                do j = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, j)
+                  nnmap = nntab(i, j)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                        call zgemm('n', 'n', nb, nb, nb, cone, hall_p(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
                         idum(i) = 1
                      end if
                   end if
@@ -1494,19 +1530,18 @@ contains
       do i = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
          idum(i) = this%izero(i)
          ih = this%lattice%iz(i) ! Atom type
-         nr = this%lattice%nn(i, 1) ! Number of neighbours
+         nr = nntab(i, 1) ! Number of neighbours
          if (this%izero(i) /= 0) then
-            locham = this%hamiltonian%ee(:, :, 1, ih) + this%hamiltonian%lsham(:, :, ih)
+            locham = ee_p(:, :, 1, ih)
+            locham = locham + this%hamiltonian%lsham(:, :, ih)
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
-            !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
-            !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
          end if
          if (nr >= 2) then
             do j = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(i, j)
+               nnmap = nntab(i, j)
                if (nnmap /= 0) then
                   if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                     call zgemm('n', 'n', nb, nb, nb, cone, ee_p(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
                      idum(i) = 1
                   end if
                end if
@@ -1955,10 +1990,10 @@ contains
          !call HOP to get H*w = A; psi=psi ; pmn=Hpsi - B_n-1|Psi_n-1>
          !PMN = H Wn - W_(n-1)B_(n-1) in Inoue syntax  (is zero for first recursion step)
          call g_timer%start('H|PSI_n>')
-         if (this%hamiltonian%hoh) then
-            call this%hop_b_hoh(ll) ! a_n=<PSI_n|H|PSI_n>
+         if (this%hamiltonian%hoh .and. .not. this%hamiltonian%flatten_hoh) then
+            call this%hop_b_hoh(ll) ! a_n=<PSI_n|H|PSI_n> (two-step hoh)
          else
-            call this%hop_b(ll)     ! a_n=<PSI_n|H|PSI_n>
+            call this%hop_b(ll)     ! a_n=<PSI_n|H|PSI_n> (first-order, or flattened ee_2nd)
          end if
          call g_timer%stop('H|PSI_n>')
 
@@ -2257,14 +2292,29 @@ contains
    !> Calculates the 1st Chebyshev moment
    !---------------------------------------------------------------------------
    subroutine cheb_1st_mom(this, psiref, a, b)
-      class(recursion), intent(inout) :: this
+      class(recursion), intent(inout), target :: this
       real(rp), intent(in) :: a, b ! scale and shift
       complex(rp), dimension(nb, nb, this%lattice%kk), intent(in) :: psiref
       integer :: nat, hblocksize, nlimplus1, k, ih, nr, n, ineigh, nnmap, i
+      ! Flattened second-order path selection (see hop_b for details).
+      logical :: flat
+      integer, pointer, contiguous :: nntab(:, :)
+      complex(rp), pointer, contiguous :: ee_p(:, :, :, :), hall_p(:, :, :, :)
 
       hblocksize = nb
       nat = this%lattice%kk
       nlimplus1 = this%lattice%nmax + 1
+
+      flat = this%hamiltonian%flatten_hoh
+      if (flat) then
+         nntab => this%lattice%nn2
+         ee_p => this%hamiltonian%ee_2nd
+         hall_p => this%hamiltonian%hall_2nd
+      else
+         nntab => this%lattice%nn
+         ee_p => this%hamiltonian%ee
+         hall_p => this%hamiltonian%hall
+      end if
 
       this%cheb_mom_temp(:, :) = 0.0d0
 
@@ -2274,17 +2324,17 @@ contains
          do i = 1, this%lattice%nmax ! Loop in the neighbouring
             this%idum(i) = this%izero(i)
             ih = this%lattice%iz(i)
-            nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
+            nr = nntab(i, 1) ! Number of neighbours of atom i
             if (this%izero(i) /= 0) then
-               call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
+               call zgemm('n', 'n', nb, nb, nb, cone, hall_p(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
             end if
             if (nr >= 2) then
                do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(i, ineigh)
+                  nnmap = nntab(i, ineigh)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
+                        call zgemm('n', 'n', nb, nb, nb, cone, hall_p(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
                         this%idum(i) = 1
                      end if
                   end if
@@ -2300,16 +2350,16 @@ contains
       do k = nlimplus1, this%lattice%kk ! Loop in the clust
          this%idum(k) = this%izero(k)
          ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
+         nr = nntab(k, 1)
          if (this%izero(k) /= 0) then
-            call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
+            call zgemm('n', 'n', nb, nb, nb, cone, ee_p(:, :, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
+               nnmap = nntab(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
+                  call zgemm('n', 'n', nb, nb, nb, cone, ee_p(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -2660,7 +2710,7 @@ contains
 
             call g_timer%start('<PSI_0|PSI_1>')
             ! Write the 1st moment
-            if (this%hamiltonian%hoh) then
+            if (this%hamiltonian%hoh .and. .not. this%hamiltonian%flatten_hoh) then
                call this%cheb_1st_mom_hoh(psiref, a, b)
             else
                call this%cheb_1st_mom(psiref, a, b)
@@ -2672,7 +2722,7 @@ contains
             ! Start the recursion
             do ll = 1, this%lattice%control%lld ! Loop in the recursion steps
                call g_timer%start('<PSI_0|PSI_n>')
-               if (this%hamiltonian%hoh) then
+               if (this%hamiltonian%hoh .and. .not. this%hamiltonian%flatten_hoh) then
                   call this%chebyshev_recur_ll_hoh(ij_loc*4 - 4 + reci, ll, a, b)
                else
                   call this%chebyshev_recur_ll(ij_loc*4 - 4 + reci, ll, a, b)
@@ -2695,15 +2745,30 @@ contains
    !  recursion steps.
    !---------------------------------------------------------------------------
    subroutine chebyshev_recur_ll(this, i, ll, a, b)
-      class(recursion), intent(inout) :: this
+      class(recursion), intent(inout), target :: this
       integer, intent(in) :: i, ll
       real(rp), intent(in) :: a, b
       ! Local variables
       integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(nb, nb) :: dum1, dum2, locham
+      ! Flattened second-order path selection (see hop_b for details).
+      logical :: flat
+      integer, pointer, contiguous :: nntab(:, :)
+      complex(rp), pointer, contiguous :: ee_p(:, :, :, :), hall_p(:, :, :, :)
 
       hblocksize = nb
       nat = this%lattice%kk
+
+      flat = this%hamiltonian%flatten_hoh
+      if (flat) then
+         nntab => this%lattice%nn2
+         ee_p => this%hamiltonian%ee_2nd
+         hall_p => this%hamiltonian%hall_2nd
+      else
+         nntab => this%lattice%nn
+         ee_p => this%hamiltonian%ee
+         hall_p => this%hamiltonian%hall
+      end if
 
       ! Write H*|phi_1> for the local Hamiltonian
       nlimplus1 = this%lattice%nmax + 1
@@ -2712,17 +2777,18 @@ contains
          do k = 1, this%lattice%nmax ! Loop in the neighbouring
             this%idum(k) = this%izero(k)
             ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
+            nr = nntab(k, 1) ! Number of neighbours of atom i
             if (this%izero(k) /= 0) then
-               locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
+               locham = hall_p(1:nb, 1:nb, 1, k)
+               locham = locham + this%hamiltonian%lsham(1:nb, 1:nb, ih)
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
             end if
             if (nr >= 2) then
                do ineigh = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, ineigh)
+                  nnmap = nntab(k, ineigh)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                        call zgemm('n', 'n', nb, nb, nb, cone, hall_p(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
                         this%idum(k) = 1
                      end if
                   end if
@@ -2742,16 +2808,17 @@ contains
       do k = nlimplus1, this%lattice%kk ! Loop in the clust
          this%idum(k) = this%izero(k)
          ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
+         nr = nntab(k, 1)
          if (this%izero(k) /= 0) then
-            locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
+            locham = ee_p(1:nb, 1:nb, 1, ih)
+            locham = locham + this%hamiltonian%lsham(1:nb, 1:nb, ih)
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, ineigh)
+               nnmap = nntab(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                  call zgemm('n', 'n', nb, nb, nb, cone, ee_p(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -3329,7 +3396,11 @@ contains
          i_loc = g2l_map(i)
          j = this%lattice%irec(i) ! Atom number in the clust file
          call g_logger%info('Chebyshev recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
-         if (.not. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
+         ! Fast CPU kernels handle the single-H apply. They support hoh when it
+         ! has been flattened into ee_2nd/hall_2nd over nn2 (flatten_hoh), since
+         ! cheb_moments_cpu then feeds them the flattened arrays.
+         if ((.not. this%hamiltonian%hoh .or. this%hamiltonian%flatten_hoh) .and. &
+             trim(this%control%cheb_backend) /= 'legacy') then
             this%psi0(:, :, :) = (0.0d0, 0.0d0)
             do l = 1, nb
                this%psi0(l, l, j) = (1.0d0, 0.0d0)
@@ -3364,7 +3435,7 @@ contains
          call g_timer%stop('<PSI_0|PSI_0>')
 
          call g_timer%start('<PSI_0|PSI_1>')
-         if (this%hamiltonian%hoh) then
+         if (this%hamiltonian%hoh .and. .not. this%hamiltonian%flatten_hoh) then
             call this%cheb_1st_mom_hoh(this%psi0, a, b)
          else
             call this%cheb_1st_mom(this%psi0, a, b)
@@ -3376,7 +3447,7 @@ contains
          ! Start the recursion
          do ll = 1, this%lattice%control%lld
             call g_timer%start('<PSI_0|PSI_n>')
-            if (this%hamiltonian%hoh) then
+            if (this%hamiltonian%hoh .and. .not. this%hamiltonian%flatten_hoh) then
                call this%chebyshev_recur_ll_hoh(i_loc, ll, a, b)
             else
                call this%chebyshev_recur_ll(i_loc, ll, a, b)

@@ -1,4 +1,4 @@
-!------------------------------------------------------------------------------
+ !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
 !
@@ -224,6 +224,14 @@ module lattice_mod
       !> Maximum number of neighbours found in current structure map.
       integer :: nn_max
 
+      !> Extended (two-hop) neighbouring map, used by the flattened
+      !> second-order Hamiltonian (flatten_hoh). Same (count, indices...)
+      !> layout as 'nn' but covering all atoms reachable in <= 2 hops.
+      integer, dimension(:, :), allocatable :: nn2
+
+      !> Maximum number of neighbours found in the extended two-hop map.
+      integer :: nn2_max
+
       !> Structure constant
       complex(rp), dimension(:, :, :, :), allocatable :: sbar
       !> Structure constant derivative
@@ -364,6 +372,7 @@ module lattice_mod
       procedure :: build_surf_full
       procedure :: newclu
       procedure :: structb
+      procedure :: build_nn2
       procedure :: atomlist
       procedure :: check_atoms_in_volume
       procedure :: find_unique_struct
@@ -442,6 +451,7 @@ contains
       if (allocated(this%acr)) call g_safe_alloc%deallocate('lattice.acr', this%acr)
       if (allocated(this%atlist)) call g_safe_alloc%deallocate('lattice.atlist', this%atlist)
       if (allocated(this%nn)) call g_safe_alloc%deallocate('lattice.nn', this%nn)
+      if (allocated(this%nn2)) call g_safe_alloc%deallocate('lattice.nn2', this%nn2)
       if (allocated(this%sbar)) call g_safe_alloc%deallocate('lattice.sbar', this%sbar)
       if (allocated(this%sdot)) call g_safe_alloc%deallocate('lattice.sdot', this%sdot)
       if (allocated(this%sbarvec)) call g_safe_alloc%deallocate('lattice.sbarvec', this%sbarvec)
@@ -473,6 +483,7 @@ contains
       if (allocated(this%acr)) deallocate (this%acr)
       if (allocated(this%atlist)) deallocate (this%atlist)
       if (allocated(this%nn)) deallocate (this%nn)
+      if (allocated(this%nn2)) deallocate (this%nn2)
       if (allocated(this%sbar)) deallocate (this%sbar)
       if (allocated(this%sdot)) deallocate (this%sdot)
       if (allocated(this%sbarvec)) deallocate (this%sbarvec)
@@ -2283,6 +2294,103 @@ contains
 10004 format(3i5)
 10005 format(7x, i7)
    end subroutine structb
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build the extended two-hop neighbour map 'nn2' from the first-hop map
+   !> 'nn'. For every cluster atom k, nn2 lists every atom reachable in at most
+   !> two hops, i.e. {k} U nn(k) U { nn(l) : l in nn(k) }. This is the support
+   !> needed by the flattened second-order Hamiltonian H = E_nu + h - hoh, since
+   !> the -hoh = -sum_l h(k,l) o(l) h(l,j) convolution couples k to second-hop
+   !> neighbours j.
+   !>
+   !> Layout matches 'nn': nn2(k,1) is the shell count (on-site counted as
+   !> shell 1), nn2(k,2..count) are the off-site cluster indices. The off-site
+   !> ordering is produced by a deterministic traversal (intermediate sites in
+   !> nn(k,:) order, then their neighbours in nn(l,:) order, deduplicated by
+   !> first occurrence). Because 'nn' is already type-consistent (nn(k,m) and
+   !> nn(ia,m) share the same relative vector for atoms of the same type), the
+   !> resulting nn2 ordering is likewise type-consistent: nn2(k,s) and
+   !> nn2(ia,s) share the same relative vector. This lets the second-order
+   !> Hamiltonian be stored per type/shell (ee_2nd/hall_2nd) and applied over
+   !> nn2 exactly as the first-order h is stored per type and applied over nn.
+   !---------------------------------------------------------------------------
+   subroutine build_nn2(this)
+      class(lattice), intent(inout) :: this
+      ! Local variables
+      integer :: kk, k, l, j, ml, mj, nrk, nrl, cnt, nm2, pass
+      integer, allocatable :: mark(:)
+
+      kk = this%kk
+      if (.not. allocated(this%nn)) then
+         call g_logger%fatal('build_nn2 called before nn is built (structb)', __FILE__, __LINE__)
+      end if
+
+      allocate (mark(kk)); mark = 0
+
+      ! Pass 1: determine the maximum off-site count (nn2_max - 1 of capacity).
+      ! Pass 2: fill nn2.
+      nm2 = 0
+      do pass = 1, 2
+         do k = 1, kk
+            nrk = this%nn(k, 1)
+            if (nrk < 1) then
+               if (pass == 2) this%nn2(k, 1) = 1
+               cycle
+            end if
+            cnt = 0
+            ! Stamp the centre so it is never recorded as an off-site neighbour.
+            mark(k) = k
+            ! Intermediate sites l: the centre k itself, then its first-hop
+            ! neighbours nn(k,2..nrk). For each, sweep its neighbours (and l
+            ! itself, which contributes the first-hop / on-site endpoints).
+            do ml = 1, nrk
+               if (ml == 1) then
+                  l = k
+               else
+                  l = this%nn(k, ml)
+               end if
+               if (l <= 0) cycle
+               nrl = this%nn(l, 1)
+               do mj = 1, max(nrl, 1)
+                  if (mj == 1) then
+                     j = l
+                  else
+                     j = this%nn(l, mj)
+                  end if
+                  if (j <= 0) cycle
+                  if (mark(j) == k) cycle    ! already recorded (or is centre)
+                  mark(j) = k
+                  cnt = cnt + 1
+                  if (pass == 2) this%nn2(k, cnt + 1) = j
+               end do
+            end do
+            if (pass == 1) then
+               nm2 = max(nm2, cnt)
+            else
+               this%nn2(k, 1) = cnt + 1     ! shell count includes on-site shell 1
+            end if
+         end do
+
+         if (pass == 1) then
+            this%nn2_max = nm2 + 1
+#ifdef USE_SAFE_ALLOC
+            call g_safe_alloc%allocate('lattice.nn2', this%nn2, (/this%kk, nm2 + 1/))
+#else
+            allocate (this%nn2(this%kk, nm2 + 1))
+#endif
+            this%nn2(:, :) = 0
+            mark = 0
+         end if
+      end do
+
+      deallocate (mark)
+      if (rank == 0) then
+         call g_logger%info('build_nn2: extended two-hop map built, nn2_max=' &
+            //int2str(this%nn2_max)//' (nn_max='//int2str(this%nn_max)//')', __FILE__, __LINE__)
+      end if
+   end subroutine build_nn2
 
    subroutine init_strux_storage(this, sbar_dim, nm)
       class(lattice), intent(inout) :: this
