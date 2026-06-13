@@ -4,42 +4,58 @@
 
 message(STATUS "Setting compiler flags.")
 ####################################################################
-# Make sure that the default build type is RELEASE if not specified.
+# Make sure that the default build type is Release if not specified.
 ####################################################################
 INCLUDE(${LOCAL_MODULE_PATH}/SetCompileFlag.cmake)
 
-# Make sure the build type is uppercase
-STRING(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
+set(RSLMTO_BUILD_TYPES Debug Release RelWithDebInfo Test)
+set(RSLMTO_BUILD_TYPE_HELP
+    "Choose the type of build, options are: Debug, Release, RelWithDebInfo, Test.")
 
-IF(BT STREQUAL "RELEASE")
-    SET(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-      "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
-      FORCE)
-ELSEIF(BT STREQUAL "DEBUG")
-    SET (CMAKE_BUILD_TYPE DEBUG CACHE STRING
-      "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
-      FORCE)
-ELSEIF(BT STREQUAL "TESTING")
-    SET (CMAKE_BUILD_TYPE TESTING CACHE STRING
-      "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
-      FORCE)
-ELSEIF(NOT BT)
-    SET(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-      "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
-      FORCE)
-    MESSAGE(STATUS "CMAKE_BUILD_TYPE not given, defaulting to RELEASE")
-ELSE()
-    MESSAGE(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, or TESTING")
-ENDIF(BT STREQUAL "RELEASE")
+if(CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_CONFIGURATION_TYPES "${RSLMTO_BUILD_TYPES}" CACHE STRING
+        "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+else()
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
+
+    if(NOT BT)
+        set(CMAKE_BUILD_TYPE Release CACHE STRING "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+        message(STATUS "CMAKE_BUILD_TYPE not given, defaulting to Release")
+    elseif(BT STREQUAL "RELEASE")
+        set(CMAKE_BUILD_TYPE Release CACHE STRING "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+    elseif(BT STREQUAL "DEBUG")
+        set(CMAKE_BUILD_TYPE Debug CACHE STRING "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+    elseif(BT STREQUAL "RELWITHDEBINFO")
+        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+    elseif(BT STREQUAL "RELWITHDEB" OR
+           BT STREQUAL "RELEASEWITHDEB" OR
+           BT STREQUAL "RELEASWITHDEB" OR
+           BT STREQUAL "RELEASEWITHDEBINFO" OR
+           BT STREQUAL "RELEASEWITHDEBUGINFO")
+        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+        message(STATUS "Normalized CMAKE_BUILD_TYPE=${BT} to RelWithDebInfo")
+    elseif(BT STREQUAL "TEST" OR BT STREQUAL "TESTING")
+        set(CMAKE_BUILD_TYPE Test CACHE STRING "${RSLMTO_BUILD_TYPE_HELP}" FORCE)
+        if(BT STREQUAL "TESTING")
+            message(STATUS "Normalized legacy CMAKE_BUILD_TYPE=TESTING to Test")
+        endif()
+    else()
+        message(FATAL_ERROR
+            "CMAKE_BUILD_TYPE='${CMAKE_BUILD_TYPE}' is not valid. "
+            "Choices are: Debug, Release, RelWithDebInfo, Test.")
+    endif()
+
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${RSLMTO_BUILD_TYPES})
+endif()
 
 #########################################################
 # If the compiler flags have already been set, return now
 #########################################################
 #
-IF(CMAKE_Fortran_FLAGS_RELEASE AND CMAKE_Fortran_FLAGS_TESTING AND CMAKE_Fortran_FLAGS_DEBUG)
+IF(CMAKE_Fortran_FLAGS_RELEASE AND CMAKE_Fortran_FLAGS_RELWITHDEBINFO AND CMAKE_Fortran_FLAGS_TEST AND CMAKE_Fortran_FLAGS_DEBUG)
    #unset(CMAKE_Fortran_FLAGS CACHE)
     RETURN ()
-ENDIF(CMAKE_Fortran_FLAGS_RELEASE AND CMAKE_Fortran_FLAGS_TESTING AND CMAKE_Fortran_FLAGS_DEBUG)
+ENDIF(CMAKE_Fortran_FLAGS_RELEASE AND CMAKE_Fortran_FLAGS_RELWITHDEBINFO AND CMAKE_Fortran_FLAGS_TEST AND CMAKE_Fortran_FLAGS_DEBUG)
 
 ########################################################################
 # Determine the appropriate flags for this compiler for each build type.
@@ -65,6 +81,8 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
 #                 Fortran "-std=legacy")
 
 message(STATUS "CMAKE_Fortran_FLAGS_RELEASE        : ${CMAKE_Fortran_FLAGS_RELEASE}")
+message(STATUS "CMAKE_Fortran_FLAGS_RELWITHDEBINFO : ${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}")
+message(STATUS "CMAKE_Fortran_FLAGS_TEST           : ${CMAKE_Fortran_FLAGS_TEST}")
 message(STATUS "CMAKE_Fortran_FLAGS_DEBUG          : ${CMAKE_Fortran_FLAGS_DEBUG}")
 message(STATUS "CMAKE_Fortran_FLAGS                : ${CMAKE_Fortran_FLAGS}")
 
@@ -147,22 +165,49 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                 )
 
 #####################
-### TESTING FLAGS ###
+### TEST FLAGS ###
 #####################
 
 # Optimizations
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TEST "${CMAKE_Fortran_FLAGS_TEST}"
                  Fortran REQUIRED "-O2" # All compilers not on Windows
                                   "/O2" # Intel Windows
                 )
 # Profiling
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TEST "${CMAKE_Fortran_FLAGS_TEST}"
                  Fortran "-fprofile-arcs" # Profiling
                 )
 
 # Coverage
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TESTING}"
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_TEST "${CMAKE_Fortran_FLAGS_TEST}"
                  Fortran "-ftest-coverage" # Profiling
+                )
+
+# Preserve compatibility with existing build trees or scripts that still use
+# -DCMAKE_BUILD_TYPE=TESTING.
+set(CMAKE_Fortran_FLAGS_TESTING "${CMAKE_Fortran_FLAGS_TEST}" CACHE STRING
+    "Legacy alias for CMAKE_Fortran_FLAGS_TEST" FORCE)
+
+#############################
+### RELWITHDEBINFO FLAGS  ###
+#############################
+
+# Optimized build with symbols, intended for CLI profilers and debuggers.
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}"
+                 Fortran REQUIRED "-O2" # All compilers not on Windows
+                                  "/O2" # Intel Windows
+                )
+
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}"
+                 Fortran "-g"
+                         "/debug:full"
+                )
+
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}"
+                 Fortran "-traceback"   # Intel/Portland Group
+                         "-fbacktrace"  # GNU (gfortran)
+                         "-ftrace=full" # GNU (g95)
+                          "/traceback"  # Intel Windows
                 )
 
 #####################
@@ -224,11 +269,14 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
                 )
 
              
-mark_as_advanced(CMAKE_Fortran_FLAGS_TESTING)
+mark_as_advanced(CMAKE_Fortran_FLAGS_TEST CMAKE_Fortran_FLAGS_TESTING)
 list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_RELEASE)
-list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_TESTING)
+list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_RELWITHDEBINFO)
+list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_TEST)
 list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS_DEBUG)
 list(REMOVE_DUPLICATES CMAKE_Fortran_FLAGS)
 message(STATUS "CMAKE_Fortran_FLAGS_RELEASE        : ${CMAKE_Fortran_FLAGS_RELEASE}")
+message(STATUS "CMAKE_Fortran_FLAGS_RELWITHDEBINFO : ${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}")
+message(STATUS "CMAKE_Fortran_FLAGS_TEST           : ${CMAKE_Fortran_FLAGS_TEST}")
 message(STATUS "CMAKE_Fortran_FLAGS_DEBUG          : ${CMAKE_Fortran_FLAGS_DEBUG}")
 message(STATUS "CMAKE_Fortran_FLAGS                : ${CMAKE_Fortran_FLAGS}")

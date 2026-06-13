@@ -49,24 +49,22 @@ add_library(${PROJECT_NAME} STATIC
     xc.f90
 )
 
-if(ENABLE_CPP_PLUGIN OR ENABLE_CUDA_PLUGIN)
-    add_library(rsrec_cpp STATIC
-        cuda/rsrec_cpu.cpp
-    )
-    target_compile_features(rsrec_cpp PRIVATE cxx_std_11)
-    if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-        target_link_libraries(rsrec_cpp OpenMP::OpenMP_CXX)
-    endif()
-    if(ENABLE_CPP_PLUGIN)
-        target_link_libraries(${PROJECT_NAME} rsrec_cpp)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CPP_PLUGIN)
-    endif()
+# green.f90 imports recursion_gpu_mod unconditionally, and that module binds to
+# the rsrec_* C interface implemented by this CPU backend.
+add_library(rsrec_cpp STATIC
+    cuda/rsrec_cpu.cpp
+)
+target_compile_features(rsrec_cpp PRIVATE cxx_std_11)
+if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+    target_link_libraries(rsrec_cpp OpenMP::OpenMP_CXX)
+endif()
+target_link_libraries(${PROJECT_NAME} rsrec_cpp)
+
+if(ENABLE_CPP_PLUGIN)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CPP_PLUGIN)
 endif()
 
 if(ENABLE_CUDA_PLUGIN)
-    if(NOT TARGET rsrec_cpp)
-        message(FATAL_ERROR "rsrec_cpp target is required for ENABLE_CUDA_PLUGIN")
-    endif()
     # rsrec_cuda is a backend dispatcher that provides rsrec_cuda_* interface
     # for backward compatibility with rsrec_cuda_plugin.f90; internally dispatches to
     # rsrec_cpu.cpp (CPU) or rsrec_gpu.cu (GPU) based on backend selection.

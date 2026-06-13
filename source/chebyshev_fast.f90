@@ -123,6 +123,54 @@ contains
          end if
       end subroutine prepare_scaled_hamiltonian_sp
 
+      subroutine apply_step_manual(x1, x0, y, alpha, beta)
+         complex(sp), intent(in)  :: x1(ld, nb), x0(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         real(sp), intent(in)     :: alpha, beta
+         complex(sp) :: acc(nb, nb), xm
+         integer :: kk_, t_, s_, nbr, nr, r0, m, cc, l
+         !$omp parallel do private(kk_,t_,s_,nbr,nr,r0,m,cc,l,xm,acc) schedule(dynamic,32)
+         do kk_ = 1, kk
+            acc = (0.0_sp, 0.0_sp)
+            nr = nn(kk_, 1)
+            t_ = iz(kk_)
+            do s_ = 1, nr
+               if (s_ == 1) then
+                  nbr = kk_
+               else
+                  nbr = nn(kk_, s_); if (nbr == 0) cycle
+               end if
+               r0 = nb*(nbr - 1)
+               if (kk_ <= nmax) then          ! acc += hha(:,:,s_,kk_) * x1_block
+                  do cc = 1, nb
+                     do m = 1, nb
+                        xm = x1(r0 + m, cc)
+                        do l = 1, nb          ! contiguous in l -> vectorizes
+                           acc(l, cc) = acc(l, cc) + hha(l, m, s_, kk_)*xm
+                        end do
+                     end do
+                  end do
+               else                            ! acc += hee(:,:,s_,t_) * x1_block
+                  do cc = 1, nb
+                     do m = 1, nb
+                        xm = x1(r0 + m, cc)
+                        do l = 1, nb
+                           acc(l, cc) = acc(l, cc) + hee(l, m, s_, t_)*xm
+                        end do
+                     end do
+                  end do
+               end if
+            end do
+            r0 = nb*(kk_ - 1)
+            if (beta /= 0.0_sp) then
+               y(r0+1:r0+nb, :) = alpha*acc + beta*x0(r0+1:r0+nb, :)
+            else
+               y(r0+1:r0+nb, :) = alpha*acc
+            end if
+         end do
+         !$omp end parallel do
+      end subroutine apply_step_manual
+
       !> y = alpha*(Ht x1) + beta*x0, one fused sweep (site-major arrays)
       subroutine apply_step(x1, x0, y, alpha, beta)
          complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)

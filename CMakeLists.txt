@@ -297,6 +297,7 @@ endif()
 ##############################################################################################
 message(STATUS "--------Summary of compiler options---------")
 message(STATUS "| Compiler ID : ${CMAKE_Fortran_COMPILER_ID}")
+message(STATUS "| Build type  : ${CMAKE_BUILD_TYPE}")
 message(STATUS "| OpenMP      : ${ENABLE_OPENMP}")
 message(STATUS "| MPI         : ${ENABLE_MPI}")
 message(STATUS "| libXC       : ${ENABLE_LIBXC}")
