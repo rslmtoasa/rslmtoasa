@@ -37,8 +37,8 @@ extern "C" void rslmto_mkl_cgemm_batch_nn(
     const MKL_INT lda[1] = {static_cast<MKL_INT>(*lda_in)};
     const MKL_INT ldb[1] = {static_cast<MKL_INT>(*ldb_in)};
     const MKL_INT ldc[1] = {static_cast<MKL_INT>(*ldc_in)};
-    const void *alpha_array[1] = {alpha};
-    const void *beta_array[1] = {beta};
+    const MKL_Complex8 alpha_array[1] = {*alpha};
+    const MKL_Complex8 beta_array[1] = {*beta};
 
     cblas_cgemm_batch(CblasColMajor, transa, transb, m, n, k, alpha_array,
                       a_array, lda, b_array, ldb, beta_array,
