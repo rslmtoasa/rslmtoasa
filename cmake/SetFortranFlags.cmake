@@ -254,12 +254,14 @@ endif()
              #                         "-Mipa=fast"    # Portland Group
              #)
 
-# Single-file optimizations
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-                 Fortran "-ip"  # Intel
-                 "-Mnoipa"    # Portland
-                 "/Qip" # Intel Windows
-                )
+# Single-file optimizations. ifx/IntelLLVM no longer supports -ip.
+if (NOT CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+                   Fortran "-ip"  # classic Intel
+                   "-Mnoipa"    # Portland
+                   "/Qip" # Intel Windows
+                  )
+endif()
 
 # Vectorize code
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"

@@ -60,6 +60,12 @@ if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
 endif()
 target_link_libraries(${PROJECT_NAME} rsrec_cpp)
 
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+    # ifx 202x can ICE in charge.f90 around legacy FORMAT handling in release
+    # builds. Keep the workaround local to this translation unit.
+    set_source_files_properties(charge.f90 PROPERTIES COMPILE_OPTIONS "-O0")
+endif()
+
 if(ENABLE_MKL_BATCH OR ENABLE_MKL_SPARSE)
     if(DEFINED ENV{MKLROOT})
         target_include_directories(${PROJECT_NAME} PRIVATE "$ENV{MKLROOT}/include")

@@ -2000,11 +2000,15 @@ contains
       real(rp), dimension(3, 3), intent(inout) :: rb0, rb, qb
       real(rp), dimension(1), intent(inout) :: work
       real(rp) :: tol, alat, alat0, g1, g2, g3, gt, vol, as, awald
-      ! Local variables
-      real(rp), dimension(3, 3) :: qb0
-      real(rp) :: tpiba, vol0, dstx, rdist0, qdist0, radd, qadd, alat1, a0, tol1, q0, r0
-      integer :: nkdest, nkrest, iv, k, m
-      TPIBA = 8.D0*DATAN(1.D0)/ALAT
+	      ! Local variables
+	      real(rp), dimension(3, 3) :: qb0
+	      real(rp) :: tpiba, vol0, dstx, rdist0, qdist0, radd, qadd, alat1, a0, tol1, q0, r0
+	      integer :: nkdest, nkrest, iv, k, m
+	      character(len=*), parameter :: lattc_summary_fmt = &
+	         "(/' LATTC:  AS=', F6.3, '   TOL=', 1P, E10.2, '   LMAX=', I1, " // &
+	         "'   AWALD=', 0P, F7.4, '   V0=', F8.5/' ALAT1=', F9.5, " // &
+	         "'   ESTIMATES:   NKD', I6, '   NKD', I6)"
+	      TPIBA = 8.D0*DATAN(1.D0)/ALAT
 
       qb0(1, :) = cross_product(rb0(2, :), rb0(3, :))
       qb0(2, :) = cross_product(rb0(3, :), rb0(1, :))
@@ -2051,11 +2055,8 @@ contains
       NKDEST = 4.18879*(R0 + RADD)**3/VOL0 + .5
       NKREST = 4.18879*(Q0 + QADD)**3*VOL0 + .5
       !write(*, *)radd, r0
-      WRITE (10, 340) AS, TOL, LMAX, AWALD, VOL0, ALAT1, NKDEST, NKREST
-340   FORMAT(/' LATTC:  AS=', F6.3, '   TOL=', 1P, E8.2, '   LMAX=', I1,      &
-                                                           &  '   AWALD=', 0P, F7.4, '   V0=', F8.5/' ALAT1=', F9.5,               &
-                                                                   &  '   ESTIMATES:   NKD', I6, '   NKD', I6)
-      CALL LGEN(RB0, R0 + RADD, NKD, NKDMX, DLAT, WORK)
+	      WRITE (10, lattc_summary_fmt) AS, TOL, LMAX, AWALD, VOL0, ALAT1, NKDEST, NKREST
+	      CALL LGEN(RB0, R0 + RADD, NKD, NKDMX, DLAT, WORK)
       WRITE (10, 342) R0, R0*ALAT, RADD, NKD
 342   FORMAT('  R0=', F9.4, '   RC=', F9.4, '   RADD=', F9.4, '   NKD=', I7)
       CALL LGEN(QB0, Q0 + QADD, NKR, NKRMX, RLAT, WORK)
