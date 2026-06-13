@@ -254,10 +254,11 @@ contains
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
       complex(sp), allocatable :: hval(:, :, :)
       complex(sp), allocatable :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp), allocatable :: block_products(:, :, :)
       complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer, allocatable :: hcol(:), hrow(:)
-      integer :: k, l, c, ld, ll
+      integer :: k, l, c, ld, ll, nblocks
       real(sp) :: inva, a_sp, b_sp
 
       ld = nb*kk
@@ -267,6 +268,8 @@ contains
       allocate (p0(ld, nb), p1(ld, nb), p2(ld, nb))
 
       call build_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      nblocks = size(hcol)
+      allocate (block_products(nb, nb, nblocks))
 
       !$omp parallel do private(k, c, l) schedule(static)
       do k = 1, kk
@@ -294,7 +297,7 @@ contains
          call swapm_batched(p1, p2)
       end do
 
-      deallocate (p0, p1, p2, hval, hcol, hrow)
+      deallocate (p0, p1, p2, block_products, hval, hcol, hrow)
 
    contains
 
@@ -362,28 +365,24 @@ contains
          complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
          complex(sp), intent(out) :: y(ld, nb)
          real(sp), intent(in) :: alpha, beta
-         complex(sp), allocatable :: hrow_pack(:, :), xrow_pack(:, :)
          complex(sp) :: acc(nb, nb)
-         integer :: row, first_blk, last_blk, nblk, iblk, blk, col, r0, j0
+         integer :: row, blk, col, r0
 
-         !$omp parallel private(row, first_blk, last_blk, nblk, iblk, blk, col, r0, j0, acc, hrow_pack, xrow_pack)
-         allocate (hrow_pack(nb, nb*nnmax), xrow_pack(nb*nnmax, nb))
-         !$omp do schedule(dynamic, 32)
+         !$omp parallel do private(blk, col, r0) schedule(static)
+         do blk = 1, nblocks
+            col = hcol(blk)
+            r0 = nb*(col - 1)
+            call cgemm('N', 'N', nb, nb, nb, cone, hval(:, :, blk), nb, &
+                       x1(r0 + 1, 1), ld, czero, block_products(:, :, blk), nb)
+         end do
+         !$omp end parallel do
+
+         !$omp parallel do private(row, blk, r0, acc) schedule(dynamic, 32)
          do row = 1, kk
-            first_blk = hrow(row)
-            last_blk = hrow(row + 1) - 1
-            nblk = last_blk - first_blk + 1
-
-            do iblk = 1, nblk
-               blk = first_blk + iblk - 1
-               col = hcol(blk)
-               j0 = nb*(iblk - 1)
-               r0 = nb*(col - 1)
-               hrow_pack(:, j0 + 1:j0 + nb) = hval(:, :, blk)
-               xrow_pack(j0 + 1:j0 + nb, :) = x1(r0 + 1:r0 + nb, :)
+            acc = (0.0_sp, 0.0_sp)
+            do blk = hrow(row), hrow(row + 1) - 1
+               acc = acc + block_products(:, :, blk)
             end do
-
-            call cgemm('N', 'N', nb, nb, nb*nblk, cone, hrow_pack, nb, xrow_pack, nb*nblk, czero, acc, nb)
             r0 = nb*(row - 1)
             if (beta /= 0.0_sp) then
                y(r0 + 1:r0 + nb, :) = alpha*acc + beta*x0(r0 + 1:r0 + nb, :)
@@ -391,9 +390,7 @@ contains
                y(r0 + 1:r0 + nb, :) = alpha*acc
             end if
          end do
-         !$omp end do
-         deallocate (hrow_pack, xrow_pack)
-         !$omp end parallel
+         !$omp end parallel do
       end subroutine apply_step_bsr
 
       subroutine cherk_full_batched(n, kdim, Amat, C)
@@ -598,7 +595,7 @@ contains
          lda_c = int(nb, c_int)
          ldb_c = int(ld, c_int)
          ldc_c = int(nb, c_int)
-         alpha_c = cmplx(alpha, 0.0_sp, c_float_complex)
+         alpha_c = cmplx(1.0_sp, 0.0_sp, c_float_complex)
          beta_c = cmplx(0.0_sp, 0.0_sp, c_float_complex)
 
          call rslmto_mkl_cgemm_batch_nn(batch_count_c, m_c, n_c, k_c, alpha_c, a_ptr, lda_c, &
@@ -616,9 +613,9 @@ contains
             end do
             r0 = nb*(row - 1)
             if (beta /= 0.0_sp) then
-               y(r0 + 1:r0 + nb, :) = acc + beta*x0(r0 + 1:r0 + nb, :)
+               y(r0 + 1:r0 + nb, :) = alpha*acc + beta*x0(r0 + 1:r0 + nb, :)
             else
-               y(r0 + 1:r0 + nb, :) = acc
+               y(r0 + 1:r0 + nb, :) = alpha*acc
             end if
          end do
          !$omp end parallel do
