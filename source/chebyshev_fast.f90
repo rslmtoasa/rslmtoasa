@@ -112,8 +112,15 @@ contains
    subroutine ensure_hoh_buffer(ld_in, nb_in, wt)
       integer, intent(in) :: ld_in, nb_in
       complex(sp), pointer, contiguous, intent(out) :: wt(:, :)
+      logical :: need
 
-      if (.not. allocated(workt_cache) .or. size(workt_cache, 1) /= ld_in .or. size(workt_cache, 2) /= nb_in) then
+      ! NOTE: Fortran does not short-circuit .or., so size() must not be
+      ! evaluated on an unallocated array. Test allocation status separately.
+      need = .true.
+      if (allocated(workt_cache)) then
+         need = (size(workt_cache, 1) /= ld_in .or. size(workt_cache, 2) /= nb_in)
+      end if
+      if (need) then
          if (allocated(workt_cache)) deallocate (workt_cache)
          allocate (workt_cache(ld_in, nb_in))
       end if
