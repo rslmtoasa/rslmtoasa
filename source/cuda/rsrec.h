@@ -135,6 +135,22 @@ int rsrec_chebyshev_dos(rsrec_ctx *ctx, const void *mu, int n_moments,
                         int natoms, const double *ene, int nv,
                         double a, double b, void *g0);
 
+/* --- Block (Haydock) Green-function / DOS reconstruction ------------------
+ * GPU port of bgreen() (green.f90): per local atom, the matrix continued
+ * fraction G_0(E) = [(E+eta)I - a_l - b_l^H G_{l+1} b_l]^-1 (l=1..lld-1),
+ * terminated by a square-root semicircle tail from a_inf/b_inf, evaluated
+ * batched over the nv energies.
+ *   a_b, b2_b : (nb,nb,lld,natoms) complex(rp) recursion coefficients
+ *   a_inf,b_inf: (nb,natoms) real(rp) terminator DIAGONALS (a_inf(i,i),...)
+ *   ene       : (nv) real(rp) energy grid; eta = eta_re + i eta_im
+ *   sym       : 1 -> orbital-independent terminator (control%sym_term)
+ *   g0        : (nb,nb,nv,natoms) complex(rp) out; DOS = -aimag(g0)/pi
+ * Precision follows rsrec_set_precision (0=fp32, 1=fp64).                   */
+int rsrec_block_dos(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
+                    const double *a_inf, const double *b_inf,
+                    const double *ene, int nv, double eta_re, double eta_im,
+                    int natoms, int lld, int sym, void *g0);
+
 /* --- core matvec (exposed mostly for testing / custom drivers) ----------- */
 /* y = (H x - b x)/a   with x, y: (nb, nrhs, kk).  a=1,b=0 gives plain H x.
  * which: 0 = Hamiltonian, 1 = v_a, 2 = v_b (no shift/scale applied to 1,2

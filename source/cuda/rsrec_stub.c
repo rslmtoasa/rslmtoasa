@@ -80,6 +80,17 @@ int rsrec_chebyshev_dos(rsrec_ctx *ctx, const void *mu, int n_moments,
     return 1;
 }
 
+int rsrec_block_dos(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
+                    const double *a_inf, const double *b_inf,
+                    const double *ene, int nv, double eta_re, double eta_im,
+                    int natoms, int lld, int sym, void *g0)
+{
+    (void)ctx; (void)a_b; (void)b2_b; (void)a_inf; (void)b_inf; (void)ene;
+    (void)nv; (void)eta_re; (void)eta_im; (void)natoms; (void)lld; (void)sym;
+    (void)g0;
+    return 1;
+}
+
 int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
                             double a, double b, void *mu_out)
 {

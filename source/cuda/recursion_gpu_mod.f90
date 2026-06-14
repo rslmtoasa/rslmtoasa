@@ -65,6 +65,7 @@ module recursion_gpu_mod
       procedure :: set_grid => rsgpu_set_grid
       procedure :: set_precision => rsgpu_set_precision
       procedure :: chebyshev_dos => rsgpu_chebyshev_dos
+      procedure :: block_dos => rsgpu_block_dos
       procedure :: ham_apply => rsgpu_ham_apply
       procedure :: chebyshev_moments => rsgpu_chebyshev_moments
       procedure :: block_lanczos => rsgpu_block_lanczos
@@ -132,6 +133,16 @@ module recursion_gpu_mod
          type(c_ptr), value :: ctx, mu, ene, g0
          integer(c_int), value :: n_mom, natoms, nv
          real(c_double), value :: a, b
+         integer(c_int) :: ierr
+      end function
+
+      function c_rsrec_block_dos(ctx, a_b, b2_b, a_inf, b_inf, ene, nv, &
+                                 eta_re, eta_im, natoms, lld, sym, g0) &
+         bind(C, name="rsrec_block_dos") result(ierr)
+         import :: c_ptr, c_int, c_double
+         type(c_ptr), value :: ctx, a_b, b2_b, a_inf, b_inf, ene, g0
+         integer(c_int), value :: nv, natoms, lld, sym
+         real(c_double), value :: eta_re, eta_im
          integer(c_int) :: ierr
       end function
 
@@ -300,6 +311,31 @@ contains
                                 real(b, c_double), c_loc(g0)) /= 0) &
          call die("chebyshev_dos")
    end subroutine rsgpu_chebyshev_dos
+
+   !> Block (Haydock) Green / DOS reconstruction -- drop-in for the per-atom
+   !> bgreen loop. a_b/b2_b: (nb,nb,lld,natoms); a_inf/b_inf: (nb,natoms)
+   !> terminator diagonals; ene: (nv); g0: (nb,nb,nv,natoms) out.
+   subroutine rsgpu_block_dos(this, a_b, b2_b, a_inf, b_inf, ene, eta, sym, g0)
+      class(rsgpu), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(in), target :: a_b, b2_b
+      real(rp), dimension(:, :), intent(in), target :: a_inf, b_inf
+      real(rp), dimension(:), intent(in), target :: ene
+      complex(rp), intent(in) :: eta
+      logical, intent(in) :: sym
+      complex(rp), dimension(:, :, :, :), intent(inout), target :: g0
+      integer(c_int) :: nv, natoms, lld, isym
+      nv = int(size(ene), c_int)
+      lld = int(size(a_b, 3), c_int)
+      natoms = int(size(a_b, 4), c_int)
+      if (size(g0, 3) < nv .or. size(g0, 4) < natoms) &
+         call die("block_dos: g0 too small")
+      isym = merge(1_c_int, 0_c_int, sym)
+      if (c_rsrec_block_dos(this%ctx, c_loc(a_b), c_loc(b2_b), c_loc(a_inf), &
+                            c_loc(b_inf), c_loc(ene), nv, &
+                            real(real(eta), c_double), real(aimag(eta), c_double), &
+                            natoms, lld, isym, c_loc(g0)) /= 0) &
+         call die("block_dos")
+   end subroutine rsgpu_block_dos
 
    !> psi_out = (H psi_in - b psi_in)/a  -- drop-in for ham_vec_matmul
    subroutine rsgpu_ham_apply(this, psi_in, psi_out, a, b)

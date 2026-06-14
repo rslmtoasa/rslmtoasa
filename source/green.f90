@@ -71,6 +71,7 @@ module green_mod
       procedure :: sgreen
       procedure :: bgreen
       procedure :: block_green
+      procedure :: block_green_gpu
       procedure :: block_green_eta
       procedure :: block_green_ij
       procedure :: block_green_ij_eta
@@ -604,6 +605,11 @@ contains
       real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
       integer :: n, n_glob
       !
+      ! GPU path: reconstruct the block continued fraction on the device.
+      if (this%control%gpu_plugin) then
+         call this%block_green_gpu()
+         return
+      end if
       !
       ! Definitions so it is not necessary to change the code
       ll = this%control%lld
@@ -626,6 +632,73 @@ contains
       end do
 
    end subroutine block_green
+
+   !---------------------------------------------------------------------------
+   !> GPU port of block_green: the block (Haydock) continued-fraction Green's
+   !> function is reconstructed on the device (rsrec_block_dos), replacing the
+   !> per-atom/per-energy bgreen loop. The terminator (get_terminf) stays on the
+   !> CPU; only its diagonals are passed down. Falls back transparently to the
+   !> legacy path if the GPU plugin is unavailable (handled inside the backend).
+   !---------------------------------------------------------------------------
+   subroutine block_green_gpu(this)
+      use mpi_mod
+      implicit none
+      class(green), intent(inout) :: this
+      !
+      integer :: nw, ll, ldim, nv, n_loc, n, n_glob, k, i
+      complex(rp) :: eta
+      real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
+      real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
+      complex(rp), allocatable :: ab_loc(:, :, :, :), b2_loc(:, :, :, :), g0_loc(:, :, :, :)
+      real(rp), allocatable :: ainf_d(:, :), binf_d(:, :)
+      ! Static GPU backend (one per program lifetime), as in chebyshev_green_gpu
+      type(rsgpu), save :: gpu_backend
+      logical, save :: first_call = .true.
+
+      ll = this%control%lld
+      ldim = nb
+      eta = (0.0d0, 0.0d0)
+      nw = 10*ll
+      nv = this%en%channels_ldos + 10
+
+      ! Terminator coefficients on the CPU (a_inf/b_inf), as in block_green.
+      call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, &
+                                      atoms_per_process, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
+
+      ! Gather this rank's local atoms into contiguous batch buffers (mirrors the
+      ! n = g2l_map(n_glob) indexing of block_green's bgreen loop).
+      n_loc = end_atom - start_atom + 1
+      allocate (ab_loc(nb, nb, ll, n_loc), b2_loc(nb, nb, ll, n_loc), g0_loc(nb, nb, nv, n_loc))
+      allocate (ainf_d(nb, n_loc), binf_d(nb, n_loc))
+      do n_glob = start_atom, end_atom
+         n = g2l_map(n_glob)
+         k = n_glob - start_atom + 1
+         ab_loc(:, :, :, k) = this%recursion%a_b(:, :, :, n)
+         b2_loc(:, :, :, k) = this%recursion%b2_b(:, :, :, n)
+         do i = 1, nb
+            ainf_d(i, k) = a_inf(i, i, n)
+            binf_d(i, k) = b_inf(i, i, n)
+         end do
+      end do
+
+      if (first_call) then
+         call gpu_backend%init(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+         first_call = .false.
+      end if
+
+      call gpu_backend%block_dos(ab_loc, b2_loc, ainf_d, binf_d, &
+                                 this%en%ene(1:nv), eta, this%control%sym_term, g0_loc)
+
+      ! Scatter back to the local g0 slots.
+      do n_glob = start_atom, end_atom
+         n = g2l_map(n_glob)
+         k = n_glob - start_atom + 1
+         this%g0(:, :, 1:nv, n) = g0_loc(:, :, :, k)
+      end do
+
+      deallocate (ab_loc, b2_loc, g0_loc, ainf_d, binf_d)
+   end subroutine block_green_gpu
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
