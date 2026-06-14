@@ -340,10 +340,10 @@ contains
          return
       end if
 
-      ! hoh is supported on the GPU only via the two-sweep block-ELL Chebyshev
-      ! moment path (allow_hoh from the chebyshev call sites). The structured /
-      ! FFT periodic backend assumes an ee-only Hamiltonian, so hoh is rejected
-      ! there regardless.
+      ! hoh is supported on the GPU only via the two-sweep block-ELL path:
+      ! the Chebyshev moment kernels and the block-Lanczos (Haydock) kernel
+      ! (allow_hoh from those call sites). The structured / FFT periodic backend
+      ! assumes an ee-only Hamiltonian, so hoh is rejected there regardless.
       if (this%hamiltonian%hoh .and. (.not. hoh_ok .or. gpu_periodic_backend(this))) then
          call g_logger%warning('gpu_plugin does not support hoh in '// &
             trim(feature)//'. Falling back to current recursion path.', __FILE__, __LINE__)
@@ -1618,7 +1618,7 @@ contains
       integer :: ij_loc
 
       llmax = this%lattice%control%lld
-      if (gpu_plugin_ready(this, 'recur_b_ij()')) then
+      if (gpu_plugin_ready(this, 'recur_b_ij()', allow_hoh=.true.)) then
          call gpu_plugin_upload_hamiltonian(this)
          do ij = start_atom, end_atom
             ij_loc = g2l_map(ij)
@@ -1659,7 +1659,8 @@ contains
                end do
 
                call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
-                  this%atemp_b, this%b2temp_b)
+                  this%atemp_b, this%b2temp_b, &
+                  prec=merge(1, 0, trim(this%control%cheb_backend) == 'fast_dp'))
 
                do ll = 1, llmax
                   do l = 1, nb
@@ -1892,7 +1893,7 @@ contains
       call get_mpi_variables(rank, this%lattice%nrec)
 
       llmax = this%lattice%control%lld
-      if (gpu_plugin_ready(this, 'recur_b()')) then
+      if (gpu_plugin_ready(this, 'recur_b()', allow_hoh=.true.)) then
          call gpu_plugin_upload_hamiltonian(this)
          do i = start_atom, end_atom
             j = this%lattice%irec(i)
@@ -1905,7 +1906,8 @@ contains
                this%psi_b(l, l, j) = (1.0d0, 0.0d0)
             end do
             call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
-               this%atemp_b, this%b2temp_b)
+               this%atemp_b, this%b2temp_b, &
+               prec=merge(1, 0, trim(this%control%cheb_backend) == 'fast_dp'))
             do ll = 1, llmax
                do l = 1, nb
                   do m = 1, nb

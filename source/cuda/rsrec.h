@@ -160,7 +160,7 @@ int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
  *   a_b    : (nb, nb, lld) out, = atemp_b
  *   b2_b   : (nb, nb, lld) out, = b2temp_b  (B^2 BEFORE zsqr, like the CPU) */
 int rsrec_block_lanczos(rsrec_ctx *ctx, const void *psi0, int lld,
-                        void *a_b, void *b2_b);
+                        void *a_b, void *b2_b, int prec);
 
 /* Scalar Lanczos, mirrors recur()/crecal()/hop() but runs all nb orbital
  * chains of one site simultaneously as independent columns.

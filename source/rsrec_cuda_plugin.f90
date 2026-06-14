@@ -101,11 +101,11 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_chebyshev_moments
       end function rsrec_cuda_chebyshev_moments
 
-      function rsrec_cuda_block_lanczos(ctx, psi0, lld, a_b, b2_b) &
+      function rsrec_cuda_block_lanczos(ctx, psi0, lld, a_b, b2_b, prec) &
          bind(C, name='rsrec_cuda_block_lanczos')
          import :: c_int, c_ptr
          type(c_ptr), value :: ctx, psi0, a_b, b2_b
-         integer(c_int), value :: lld
+         integer(c_int), value :: lld, prec
          integer(c_int) :: rsrec_cuda_block_lanczos
       end function rsrec_cuda_block_lanczos
 
@@ -318,16 +318,24 @@ contains
 #endif
    end subroutine chebyshev_moments
 
-   subroutine block_lanczos(this, psi0, lld, a_b, b2_b)
+   subroutine block_lanczos(this, psi0, lld, a_b, b2_b, prec)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: psi0(:, :, :)
       integer, intent(in) :: lld
       complex(rp), target, contiguous, intent(out) :: a_b(:, :, :)
       complex(rp), target, contiguous, intent(out) :: b2_b(:, :, :)
+      !> Working precision for the hoh block engine: 0 = fp32 (mixed, fp64
+      !> B-sqrt), 1 = fp64. Ignored by the ee-only (non-hoh) path.
+      integer, intent(in), optional :: prec
+      integer :: prec_
 #ifdef USE_CUDA_PLUGIN
       integer(c_int) :: status
+#endif
+      prec_ = 0
+      if (present(prec)) prec_ = prec
+#ifdef USE_CUDA_PLUGIN
       status = rsrec_cuda_block_lanczos(this%ctx, c_loc(psi0), int(lld, c_int), &
-         c_loc(a_b), c_loc(b2_b))
+         c_loc(a_b), c_loc(b2_b), int(prec_, c_int))
       call check_status(status, 'rsrec_cuda_block_lanczos')
 #endif
    end subroutine block_lanczos
