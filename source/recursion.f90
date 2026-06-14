@@ -1,4 +1,4 @@
-!------------------------------------------------------------------------------
+ !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
 !
@@ -33,7 +33,6 @@ module recursion_mod
    use math_mod
    use string_mod
    use logger_mod, only: g_logger
-   !use rsrec_plugin_mod, only: rsrec_backend, rsrec_plugin_compiled
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, &
       rsrec_cuda_plugin_compiled, decode_gpu_backend, gpu_backend_bsr, &
       gpu_backend_conv, gpu_backend_fft
@@ -133,13 +132,21 @@ module recursion_mod
 contains
 
    subroutine cheb_moments_cpu(this, psi0, lld, a, b, mu)
-      class(recursion), intent(in) :: this
+      class(recursion), intent(inout) :: this
       complex(rp), intent(in) :: psi0(:, :, :)
       integer, intent(in) :: lld
       real(rp), intent(in) :: a, b
-      complex(rp), intent(out) :: mu(:, :, :)
+      complex(rp), intent(inout) :: mu(:, :, :)
+      character(len=:), allocatable :: backend
 
-      select case (trim(this%control%cheb_backend))
+      backend = trim(this%control%cheb_backend)
+
+      ! The orthogonalisation (hoh) term is only implemented in the legacy CPU
+      ! driver; the fast kernels operate on the bare h Hamiltonian. Fall back to
+      ! legacy whenever hoh is active, regardless of the requested backend.
+      if (this%hamiltonian%hoh) backend = 'legacy'
+
+      select case (backend)
       case ('fast')
          call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
             this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
@@ -161,9 +168,71 @@ contains
             nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
             lld, a, b, mu)
       case ('legacy')
-         call g_logger%fatal('Internal error: cheb_backend=legacy should use the original Chebyshev recursion path.', __FILE__, __LINE__)
+         call cheb_moments_legacy(this, psi0, lld, a, b, mu)
+      case default
+         call g_logger%fatal('Unknown cheb_backend "'//backend//'"', __FILE__, __LINE__)
       end select
    end subroutine cheb_moments_cpu
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Legacy CPU Chebyshev moment driver. Wraps the original lightcone-based
+   !> recursion (cheb_0th_mom, cheb_1st_mom[_hoh], chebyshev_recur_ll[_hoh])
+   !> behind the same (psi0, lld, a, b, mu) interface as the fast kernels, so it
+   !> can be dispatched from cheb_moments_cpu on equal footing. Works for any
+   !> starting block state: single-site identity blocks for diagonal moments
+   !> (bands/exchange) as well as the two-site sign combinations used for the
+   !> inter-site moments (transport). The hoh-aware leaf routines are selected
+   !> automatically when this%hamiltonian%hoh is set.
+   !---------------------------------------------------------------------------
+   subroutine cheb_moments_legacy(this, psi0, lld, a, b, mu)
+      class(recursion), intent(inout) :: this
+      complex(rp), intent(in) :: psi0(:, :, :)
+      integer, intent(in) :: lld
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(inout) :: mu(:, :, :)
+      ! Local variables
+      integer :: k, ll
+
+      ! Rebuild the initial lightcone from the support of psi0. The leaf
+      ! routines propagate it dynamically through this%izero/this%idum, so the
+      ! izeroll/create_ll_map bookkeeping of the old inline drivers is not
+      ! needed (those arrays are never read by the leaf routines).
+      this%izero(:) = 0
+      do k = 1, this%lattice%kk
+         if (any(psi0(:, :, k) /= (0.0_rp, 0.0_rp))) this%izero(k) = 1
+      end do
+
+      ! Initialise the propagated states. psi0 also serves as the projection
+      ! reference (diagonal double-trick), matching the original drivers.
+      this%psi0(:, :, :) = psi0(:, :, :)
+      this%psi1(:, :, :) = (0.0_rp, 0.0_rp)
+      this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
+
+      ! 0th moment
+      call this%cheb_0th_mom(psi0)
+      mu(:, :, 1) = this%cheb_mom_temp(:, :)
+
+      ! 1st moment
+      if (this%hamiltonian%hoh) then
+         call this%cheb_1st_mom_hoh(psi0, a, b)
+      else
+         call this%cheb_1st_mom(psi0, a, b)
+      end if
+      mu(:, :, 2) = this%cheb_mom_temp(:, :)
+
+      this%izero(:) = this%idum(:)
+
+      ! Higher moments via the double-trick recursion
+      do ll = 1, lld
+         if (this%hamiltonian%hoh) then
+            call this%chebyshev_recur_ll_hoh(mu, ll, a, b)
+         else
+            call this%chebyshev_recur_ll(mu, ll, a, b)
+         end if
+      end do
+   end subroutine cheb_moments_legacy
 
    subroutine resolve_chebyshev_window(this, emin, emax)
       class(recursion), intent(inout) :: this
@@ -2316,11 +2385,8 @@ contains
       integer :: i, ij, j, l, ll, kk, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
-      complex(rp), allocatable, dimension(:, :, :) :: psiref
 
       integer :: ij_loc
-
-      allocate(psiref(18, 18, this%lattice%kk))
 
       call resolve_chebyshev_window(this, emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
@@ -2363,7 +2429,6 @@ contains
                end if
             end do
          end do
-         deallocate(psiref)
          return
       end if
 
@@ -2374,126 +2439,42 @@ contains
          j = this%lattice%ijpair(ij, 2) ! Atom number in the clust file, atom j
 !         call g_logger%info('Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
          call g_logger%info(int2str(rank)//': Chebyshev recursion on progress between atoms '//int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
-         if (.not. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
-            do reci = 1, 4
-               this%psi0(:, :, :) = (0.0d0, 0.0d0)
-
-               select case (reci)
-               case (1)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
-               case (2)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
-               case (3)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
-               case (4)
-                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
-                  bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
-               end select
-
-               do l = 1, nb
-                  this%psi0(l, l, i) = asign
-                  this%psi0(l, l, j) = bsign
-               end do
-
-               call cheb_moments_cpu(this, this%psi0, llmax, a, b, &
-                  this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
-
-               if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
-                  call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
-               end if
-            end do
-            cycle
-         end if
-
          do reci = 1, 4
-            ! Clear list of atoms in hopping region
-            this%izero(:) = 0
-            ! Initializing wave functions
+            ! Starting state |phi_0>: the four +/-, +/-i sign combinations on
+            ! the two atoms i and j of the pair (RMP 78, 275). The same block
+            ! also serves as the projection reference inside the drivers.
             this%psi0(:, :, :) = (0.0d0, 0.0d0)
-            this%psi1(:, :, :) = (0.0d0, 0.0d0)
-            this%psi2(:, :, :) = (0.0d0, 0.0d0)
-
-            psiref(:, :, :) = (0.0d0, 0.0d0)
 
             select case (reci)
             case (1)
                asign = (1.0d0, 0.0d0)*one_over_sqrt_two
                bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
-               this%izero(i) = 1
-               this%izero(j) = 1
-               !do l = 1, nb
-               !this%psi0(l,l,j) = asign
-               !this%psi0(l,l,j) = bsign
-               !psiref(l,l,i) = asign
-               !psiref(l,l,i) = bsign
-               !end do
             case (2)
                asign = (1.0d0, 0.0d0)*one_over_sqrt_two
                bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
-               this%izero(i) = 1
-               this%izero(j) = 1
-               !do l = 1, nb
-               !this%psi0(l,l,i) = asign
-               !this%psi0(l,l,j) = bsign
-               !psiref(l,l,i) = asign
-               !psiref(l,l,j) = bsign
-               !end do
             case (3)
                asign = (1.0d0, 0.0d0)*one_over_sqrt_two
                bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
-               this%izero(i) = 1
-               this%izero(j) = 1
             case (4)
                asign = (1.0d0, 0.0d0)*one_over_sqrt_two
                bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
-               this%izero(i) = 1
-               this%izero(j) = 1
             end select
 
             do l = 1, nb
                this%psi0(l, l, i) = asign
                this%psi0(l, l, j) = bsign
-               psiref(l, l, i) = asign
-               psiref(l, l, j) = bsign
             end do
 
-            ! Write the 0th moment
-            call g_timer%start('<PSI_0|PSI_0>')
-            call this%cheb_0th_mom(psiref)
-            this%mu_n(:, :, 1, ij_loc*4 - 4 + reci) = this%cheb_mom_temp(:, :)
-            call g_timer%stop('<PSI_0|PSI_0>')
+            ! Dispatch to the selected CPU backend (fast kernels or, for hoh /
+            ! cheb_backend='legacy', the wrapped legacy recursion).
+            call cheb_moments_cpu(this, this%psi0, llmax, a, b, &
+               this%mu_n(:, :, :, ij_loc*4 - 4 + reci))
 
-            call g_timer%start('<PSI_0|PSI_1>')
-            ! Write the 1st moment
-            if (this%hamiltonian%hoh) then
-               call this%cheb_1st_mom_hoh(psiref, a, b)
-            else
-               call this%cheb_1st_mom(psiref, a, b)
+            if (real(sum(this%mu_n(:, :, llmax + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
+               call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
             end if
-            this%mu_n(:, :, 2, ij_loc*4 - 4 + reci) = this%cheb_mom_temp(:, :)
-            call g_timer%stop('<PSI_0|PSI_1>')
-
-            this%izero(:) = this%idum(:)
-            ! Start the recursion
-            do ll = 1, this%lattice%control%lld ! Loop in the recursion steps
-               call g_timer%start('<PSI_0|PSI_n>')
-               if (this%hamiltonian%hoh) then
-                  call this%chebyshev_recur_ll_hoh(ij_loc*4 - 4 + reci, ll, a, b)
-               else
-                  call this%chebyshev_recur_ll(ij_loc*4 - 4 + reci, ll, a, b)
-               end if
-               call g_timer%stop('<PSI_0|PSI_n>')
-               if (real(sum(this%mu_n(:, :, ll + 2, ij_loc*4 - 4 + reci))) > 1000.d0) then
-                  call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
-               end if
-            end do ! End loop in the recursion steps
          end do
       end do
-
-      deallocate(psiref)
    end subroutine chebyshev_recur_ij
 
    !---------------------------------------------------------------------------
@@ -2502,9 +2483,10 @@ contains
    !> Recursion method to calculate Chebyshev moments for a given number of
    !  recursion steps.
    !---------------------------------------------------------------------------
-   subroutine chebyshev_recur_ll(this, i, ll, a, b)
+   subroutine chebyshev_recur_ll(this, mu, ll, a, b)
       class(recursion), intent(inout) :: this
-      integer, intent(in) :: i, ll
+      complex(rp), intent(inout) :: mu(:, :, :)
+      integer, intent(in) :: ll
       real(rp), intent(in) :: a, b
       ! Local variables
       integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
@@ -2598,10 +2580,10 @@ contains
       end do
       !$omp end parallel  do
 
-      this%mu_n(:, :, 2*ll + 1, i) = 2.0_rp*dum1(:, :) - this%mu_n(:, :, 1, i)
-      this%mu_n(:, :, 2*ll + 2, i) = 2.0_rp*dum2(:, :) - this%mu_n(:, :, 2, i)
+      mu(:, :, 2*ll + 1) = 2.0_rp*dum1(:, :) - mu(:, :, 1)
+      mu(:, :, 2*ll + 2) = 2.0_rp*dum2(:, :) - mu(:, :, 2)
 
-      if (sum(real(this%mu_n(:, :, 2*ll + 2, i))) > 1000.d0) then
+      if (sum(real(mu(:, :, 2*ll + 2))) > 1000.d0) then
          call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
       end if
    end subroutine chebyshev_recur_ll
@@ -2612,9 +2594,10 @@ contains
    !> Recursion method to calculate Chebyshev moments for a given number of
    !  recursion steps. Includes the hoh term
    !---------------------------------------------------------------------------
-   subroutine chebyshev_recur_ll_hoh(this, i, ll, a, b)
+   subroutine chebyshev_recur_ll_hoh(this, mu, ll, a, b)
       class(recursion), intent(inout) :: this
-      integer, intent(in) :: i, ll
+      complex(rp), intent(inout) :: mu(:, :, :)
+      integer, intent(in) :: ll
       real(rp), intent(in) :: a, b
       ! Local variables
       integer :: ineigh, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
@@ -2764,10 +2747,10 @@ contains
       end do
       !$omp end parallel  do
 
-      this%mu_n(:, :, 2*ll + 1, i) = 2.0_rp*dum1(:, :) - this%mu_n(:, :, 1, i)
-      this%mu_n(:, :, 2*ll + 2, i) = 2.0_rp*dum2(:, :) - this%mu_n(:, :, 2, i)
+      mu(:, :, 2*ll + 1) = 2.0_rp*dum1(:, :) - mu(:, :, 1)
+      mu(:, :, 2*ll + 2) = 2.0_rp*dum2(:, :) - mu(:, :, 2)
 
-      if (sum(real(this%mu_n(:, :, 2*ll + 2, i))) > 1000.d0) then
+      if (sum(real(mu(:, :, 2*ll + 2))) > 1000.d0) then
          call g_logger%fatal('Chebyshev moments did not converge. Check energy limits energy_min and energy_max', __FILE__, __LINE__)
       end if
    end subroutine chebyshev_recur_ll_hoh
@@ -3122,60 +3105,17 @@ contains
          i_loc = g2l_map(i)
          j = this%lattice%irec(i) ! Atom number in the clust file
          call g_logger%info('Chebyshev recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
-         if (.not. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
-            this%psi0(:, :, :) = (0.0d0, 0.0d0)
-            do l = 1, nb
-               this%psi0(l, l, j) = (1.0d0, 0.0d0)
-            end do
-            call cheb_moments_cpu(this, this%psi0, this%control%lld, a, b, &
-               this%mu_n(:, :, :, i_loc))
-            cycle
-         end if
 
-         ! Initialize neighbouring map
-         this%izeroll(:, :) = 0
-         this%izeroll(j, 1) = 1
-
-         this%izero(:) = 0
-         this%izero(j) = 1
-         call this%create_ll_map()
-
-         ! Initializing wave functions
+         ! Starting state |phi_0>: identity block on the recursion site j.
          this%psi0(:, :, :) = (0.0d0, 0.0d0)
-         this%psi1(:, :, :) = (0.0d0, 0.0d0)
-         this%psi2(:, :, :) = (0.0d0, 0.0d0)
-
          do l = 1, nb
-            !> Starting state for |phi_0>
             this%psi0(l, l, j) = (1.0d0, 0.0d0)
          end do
 
-         ! Write the 0th moment
-         call g_timer%start('<PSI_0|PSI_0>')
-         call this%cheb_0th_mom(this%psi0)
-         this%mu_n(:, :, 1, i_loc) = (this%cheb_mom_temp(:, :))
-         call g_timer%stop('<PSI_0|PSI_0>')
-
-         call g_timer%start('<PSI_0|PSI_1>')
-         if (this%hamiltonian%hoh) then
-            call this%cheb_1st_mom_hoh(this%psi0, a, b)
-         else
-            call this%cheb_1st_mom(this%psi0, a, b)
-         end if
-         this%mu_n(:, :, 2, i_loc) = (this%cheb_mom_temp(:, :))
-         call g_timer%stop('<PSI_0|PSI_1>')
-
-         this%izero(:) = this%idum(:)
-         ! Start the recursion
-         do ll = 1, this%lattice%control%lld
-            call g_timer%start('<PSI_0|PSI_n>')
-            if (this%hamiltonian%hoh) then
-               call this%chebyshev_recur_ll_hoh(i_loc, ll, a, b)
-            else
-               call this%chebyshev_recur_ll(i_loc, ll, a, b)
-            end if
-            call g_timer%stop('<PSI_0|PSI_n>')
-         end do ! End loop in the recursion steps
+         ! Dispatch to the selected CPU backend (fast kernels or, for hoh /
+         ! cheb_backend='legacy', the wrapped legacy recursion).
+         call cheb_moments_cpu(this, this%psi0, this%control%lld, a, b, &
+            this%mu_n(:, :, :, i_loc))
       end do ! End loop on the number of atoms to be treat self-consistently
    end subroutine chebyshev_recur
 
