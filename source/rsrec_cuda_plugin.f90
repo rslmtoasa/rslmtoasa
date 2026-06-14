@@ -34,6 +34,7 @@ module rsrec_cuda_plugin_mod
       procedure :: set_velocity
       procedure :: upload_bsr
       procedure :: chebyshev_moments
+      procedure :: orbital_moments
       procedure :: block_lanczos
       procedure :: scalar_lanczos
       procedure :: stochastic_moments
@@ -78,11 +79,19 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_set_hamiltonian
       end function rsrec_cuda_set_hamiltonian
 
-      function rsrec_cuda_set_velocity(ctx, v_a, v_b) bind(C, name='rsrec_cuda_set_velocity')
+      function rsrec_cuda_set_velocity(ctx, v_a, v_b, vo_a, vo_b) bind(C, name='rsrec_cuda_set_velocity')
          import :: c_int, c_ptr
-         type(c_ptr), value :: ctx, v_a, v_b
+         type(c_ptr), value :: ctx, v_a, v_b, vo_a, vo_b
          integer(c_int) :: rsrec_cuda_set_velocity
       end function rsrec_cuda_set_velocity
+
+      function rsrec_cuda_orbital_moments(ctx, left, psiref, lld, a, b, mu) bind(C, name='rsrec_cuda_orbital_moments')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, left, psiref, mu
+         integer(c_int), value :: lld
+         real(c_double), value :: a, b
+         integer(c_int) :: rsrec_cuda_orbital_moments
+      end function rsrec_cuda_orbital_moments
 
       function rsrec_cuda_chebyshev_moments(ctx, psi0, lld, a, b, mu_out) bind(C, name='rsrec_cuda_chebyshev_moments')
          import :: c_double, c_int, c_ptr
@@ -249,16 +258,40 @@ contains
 #endif
    end subroutine set_hamiltonian
 
-   subroutine set_velocity(this, v_a, v_b)
+   subroutine set_velocity(this, v_a, v_b, vo_a, vo_b)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: v_a(:, :, :, :)
       complex(rp), target, contiguous, intent(in) :: v_b(:, :, :, :)
+      complex(rp), target, contiguous, intent(in), optional :: vo_a(:, :, :, :)
+      complex(rp), target, contiguous, intent(in), optional :: vo_b(:, :, :, :)
 #ifdef USE_CUDA_PLUGIN
       integer(c_int) :: status
-      status = rsrec_cuda_set_velocity(this%ctx, c_loc(v_a), c_loc(v_b))
+      type(c_ptr) :: voa_ptr, vob_ptr
+      voa_ptr = c_null_ptr
+      vob_ptr = c_null_ptr
+      if (present(vo_a)) voa_ptr = c_loc(vo_a)
+      if (present(vo_b)) vob_ptr = c_loc(vo_b)
+      status = rsrec_cuda_set_velocity(this%ctx, c_loc(v_a), c_loc(v_b), voa_ptr, vob_ptr)
       call check_status(status, 'rsrec_cuda_set_velocity')
+#else
+      if (present(vo_a) .or. present(vo_b)) continue
 #endif
    end subroutine set_velocity
+
+   subroutine orbital_moments(this, left, psiref, lld, a, b, mu)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: left(:, :, :)
+      complex(rp), target, contiguous, intent(in) :: psiref(:, :, :)
+      integer, intent(in) :: lld
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, intent(out) :: mu(:, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_orbital_moments(this%ctx, c_loc(left), c_loc(psiref), &
+         int(lld, c_int), real(a, c_double), real(b, c_double), c_loc(mu))
+      call check_status(status, 'rsrec_cuda_orbital_moments')
+#endif
+   end subroutine orbital_moments
 
    subroutine upload_bsr(this, sparse_obj)
       class(rsrec_cuda_backend), intent(inout) :: this

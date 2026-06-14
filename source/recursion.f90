@@ -1053,10 +1053,15 @@ contains
             psiref(:, :, :) = psiref(:, :, :) / sqrt(real(this%lattice%kk))
          end select
 
-         if (gpu_plugin_ready(this, 'compute_moments_stochastic()')) then
+         if (gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)) then
             if (i == 1) then
                call gpu_plugin_upload_hamiltonian(this)
-               call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
+               if (this%hamiltonian%hoh) then
+                  call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b, &
+                     vo_a=this%hamiltonian%vo_a, vo_b=this%hamiltonian%vo_b)
+               else
+                  call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
+               end if
             end if
             call this%gpu_backend%stochastic_moments(psiref, this%control%cond_ll, a, b, &
                this%mu_nm_stochastic(:, :, :, :, i))
@@ -2869,7 +2874,7 @@ contains
       complex(rp), dimension(nb, this%lattice%kk) :: v
       complex(rp), dimension(:, :, :, :), allocatable :: hcheb
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, left_vec1, left_vec2
-      complex(rp), dimension(:, :, :), allocatable :: mu_n_orb
+      complex(rp), dimension(:, :, :), allocatable :: mu_n_orb, mu_tmp
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10) :: g0
       complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
       complex(rp), dimension(nb, nb) :: L_op
@@ -2903,6 +2908,7 @@ contains
       call jackson_kernel((this%control%lld), kernel)
 
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk), mu_n_orb(2*(lmax + 1)**2, 2*(lmax + 1)**2, this%control%lld))
+      allocate(mu_tmp(nb, nb, this%control%lld))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
       allocate(w2(hblocksize, hblocksize, this%lattice%kk), v0(hblocksize, hblocksize, this%lattice%kk), v1(hblocksize, hblocksize, this%lattice%kk))
       allocate(v2(hblocksize, hblocksize, this%lattice%kk), left_vec1(hblocksize, hblocksize, this%lattice%kk), left_vec2(hblocksize, hblocksize, this%lattice%kk))
@@ -3008,6 +3014,17 @@ contains
 
          left_vec(:, :, :) = i_unit * (left_vec1(:, :, :) - left_vec2(:, :, :))
          write(*,*) sum(left_vec), sum(psiref), sum(left_vec1), sum(left_vec2)
+
+         ! GPU path: offload the T_n(H~) right recursion + left^H projection.
+         ! left_vec (orbital current) is built on the host above, exactly as in
+         ! the legacy path; the GPU only evaluates mu_n = sum_k left^H T_n|r>.
+         if (gpu_plugin_ready(this, 'chebyshev_orbital_mod()', allow_hoh=.true.)) then
+            if (random == 1) call gpu_plugin_upload_hamiltonian(this)
+            call this%gpu_backend%orbital_moments(left_vec, psiref, this%control%lld, a, b, mu_tmp)
+            mu_n_orb(:, :, :) = mu_n_orb(:, :, :) + mu_tmp(:, :, :)
+            cycle
+         end if
+
          do n=1, this%control%lld
             call show_progress(n, this%control%lld)
             if (n == 1) then

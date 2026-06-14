@@ -66,8 +66,18 @@ int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
 
 /* Velocity (or current) operators for the stochastic conductivity moments.
  * Same neighbour structure as ee, per-type, no lsham term:
- * v_a, v_b: (nb, nb, nnmax, ntype) complex(rp). */
-int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b);
+ * v_a, v_b: (nb, nb, nnmax, ntype) complex(rp).
+ * vo_a, vo_b: velocity orthogonalisation operators for the hoh velocity apply
+ *   (out = v*psi - vo*(h_bare*psi)); pass NULL to disable. On-site shell-1 of
+ *   vo is zeroed on upload to match velo_hoh_vec_matmul. */
+int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b,
+                       const void *vo_a, const void *vo_b);
+
+/* Orbital moments: single Chebyshev expansion with a fixed left state,
+ *   mu_n = sum_k left(k)^H T_{n-1}(H~)|psiref>(k),  n = 1..lld.
+ * left, psiref: (nb, nb, kk) complex(rp) atom-major; mu: (nb, nb, lld). */
+int rsrec_orbital_moments(rsrec_ctx *ctx, const void *left, const void *psiref,
+                          int lld, double a, double b, void *mu);
 
 /* --- structured (FFT stencil + correction) acceleration ------------------ */
 /* Map the clust onto a regular lattice grid and switch the matvec to

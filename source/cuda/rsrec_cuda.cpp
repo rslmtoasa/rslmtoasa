@@ -167,18 +167,35 @@ extern "C" int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
 }
 
 extern "C" int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
-                                       const void *v_b) {
+                                       const void *v_b, const void *vo_a,
+                                       const void *vo_b) {
     if (!ctx) {
         set_error("rsrec_cuda_set_velocity: null ctx");
         return 1;
     }
-    const int status = rsrec_set_velocity(ctx->inner, v_a, v_b);
+    const int status = rsrec_set_velocity(ctx->inner, v_a, v_b, vo_a, vo_b);
     if (status != 0) {
         set_error(std::string("rsrec_cuda_set_velocity: ") + rsrec_last_error());
         return status;
     }
     ctx->have_v = true;
     return validate_backend(ctx);
+}
+
+extern "C" int rsrec_cuda_orbital_moments(rsrec_cuda_ctx *ctx, const void *left,
+                                          const void *psiref, int lld, double a,
+                                          double b, void *mu) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_orbital_moments: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status =
+        rsrec_orbital_moments(ctx->inner, left, psiref, lld, a, b, mu);
+    if (status != 0)
+        set_error(std::string("rsrec_cuda_orbital_moments: ") +
+                  rsrec_last_error());
+    return status;
 }
 
 extern "C" int rsrec_cuda_chebyshev_moments(rsrec_cuda_ctx *ctx,

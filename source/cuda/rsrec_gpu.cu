@@ -95,6 +95,16 @@ struct rsrec_ctx {
     int f_hoh_ver = -1;
     bool have_hoh = false;
 
+    /* Velocity orthogonalisation operators for the hoh two-sweep velocity apply
+     * (out = v*psi - vo*(h_bare*psi); vo on-site shell-1 is zeroed on upload to
+     * match velo_hoh_vec_matmul). fp32 mirrors of v_a/v_b/vo_a/vo_b for the
+     * default fp32 path. */
+    zc *d_voa = nullptr, *d_vob = nullptr;
+    bool have_vo = false;
+    fc *f_va = nullptr, *f_vb = nullptr, *f_voa = nullptr, *f_vob = nullptr;
+    int f_vel_ver = -1;
+    int vel_ver = 0;
+
     int cheb_prec = 0;                       /* 0 = fp32 (default), 1 = fp64 */
     fc *f_ee = nullptr, *f_hall = nullptr;   /* (H - b)/a fp32 copies        */
     double f_a = 0.0, f_b = 0.0;
@@ -145,7 +155,10 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_ee_bare, (void *)c->d_hall_bare,
                     (void *)c->d_eeo, (void *)c->d_hallo, (void *)c->d_hons,
                     (void *)c->f_ee_bare, (void *)c->f_hall_bare,
-                    (void *)c->f_eeo, (void *)c->f_hallo, (void *)c->f_hons})
+                    (void *)c->f_eeo, (void *)c->f_hallo, (void *)c->f_hons,
+                    (void *)c->d_voa, (void *)c->d_vob,
+                    (void *)c->f_va, (void *)c->f_vb,
+                    (void *)c->f_voa, (void *)c->f_vob})
         if (p) cudaFree(p);
     if (c->have_plan) cufftDestroy(c->fft_plan);
     if (c->blas) cublasDestroy(c->blas);
@@ -292,14 +305,36 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
 }
 
 extern "C" int rsrec_set_velocity(rsrec_ctx *c, const void *va,
-                                  const void *vb) {
+                                  const void *vb, const void *voa,
+                                  const void *vob) {
     if (!va || !vb) FAIL("set_velocity: null input");
-    size_t n = (size_t)c->nb * c->nb * c->nnmax * c->ntype * sizeof(zc);
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t ne = bb * c->nnmax * c->ntype;
+    const size_t n = ne * sizeof(zc);
     if (!c->d_va) CUCHK(cudaMalloc(&c->d_va, n));
     if (!c->d_vb) CUCHK(cudaMalloc(&c->d_vb, n));
     CUCHK(cudaMemcpy(c->d_va, va, n, cudaMemcpyHostToDevice));
     CUCHK(cudaMemcpy(c->d_vb, vb, n, cudaMemcpyHostToDevice));
     c->have_v = true;
+
+    /* hoh velocity ortho: upload vo_a/vo_b with the on-site shell-1 block
+     * zeroed (velo_hoh_vec_matmul applies vo only off-site).               */
+    c->have_vo = false;
+    if (voa && vob) {
+        std::vector<cplx> ha((const cplx *)voa, (const cplx *)voa + ne);
+        std::vector<cplx> hb((const cplx *)vob, (const cplx *)vob + ne);
+        for (int t = 0; t < c->ntype; ++t)
+            for (size_t i = 0; i < bb; ++i) {
+                ha[i + bb * (size_t)c->nnmax * t] = cplx(0.0, 0.0);
+                hb[i + bb * (size_t)c->nnmax * t] = cplx(0.0, 0.0);
+            }
+        if (!c->d_voa) CUCHK(cudaMalloc(&c->d_voa, n));
+        if (!c->d_vob) CUCHK(cudaMalloc(&c->d_vob, n));
+        CUCHK(cudaMemcpy(c->d_voa, ha.data(), n, cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(c->d_vob, hb.data(), n, cudaMemcpyHostToDevice));
+        c->have_vo = true;
+    }
+    c->vel_ver++;
     return 0;
 }
 
@@ -1164,6 +1199,28 @@ static int step_apply_hoh(rsrec_ctx *c, const CT *bare, const CT *bare_imp,
     return 0;
 }
 
+/* Velocity apply with hoh orthogonalisation, mirroring velo_hoh_vec_matmul:
+ *   out = v*x - vo*(h_bare*x)
+ * vo carries the on-site block already zeroed at upload (velo_hoh applies vo
+ * off-site only). Velocity operators are UNSCALED (inva=1, bsc=0), like the
+ * non-hoh velocity apply. Reuses step_apply entirely (no new kernel); `tmp`
+ * is caller-provided (nfield) scratch. */
+template <class CT, class RT>
+static int step_velo_hoh(rsrec_ctx *c, const CT *v_op, const CT *vo_op,
+                         const CT *bare, const CT *bare_imp, CT *tmp,
+                         const CT *x1, CT *y, int nrhs) {
+    /* out = v*x1 */
+    if (step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, y, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+    /* tmp = h_bare*x1 */
+    if (step_apply<CT, RT>(c, bare, bare_imp, c->nmax > 0, x1, nullptr, tmp, nrhs,
+                           (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
+    /* out = -vo*tmp + out  (x0 = y, beta = 1, alpha = -1) */
+    if (step_apply<CT, RT>(c, vo_op, nullptr, 0, tmp, y, y, nrhs,
+                           (RT)-1, (RT)1, (RT)1, (RT)0)) return 1;
+    return 0;
+}
+
 /* fp64 generalized step (site-major): y = alpha*(Op x1 - bsc x1)*inva +
  * beta*x0. Routes through the structured backend when active (needs tmp).   */
 static int step64(rsrec_ctx *c, int which, const zc *x1, const zc *x0,
@@ -1296,6 +1353,33 @@ static int ensure_f32_hoh(rsrec_ctx *c) {
     }
 #undef RSREC_DOWNCONV
     c->f_hoh_ver = c->ham_ver;
+    return 0;
+}
+
+/* fp32 mirrors of the (unscaled) velocity operators v_a/v_b and, when hoh is
+ * active, vo_a/vo_b (on-site already zeroed at upload). Pure down-conversion,
+ * gated on vel_ver. */
+static int ensure_f32_velocity(rsrec_ctx *c) {
+    if (!c->have_v) return 0;
+    if (c->f_va && c->f_vel_ver == c->vel_ver) return 0;
+    const size_t ne = (size_t)c->nb * c->nb * c->nnmax * c->ntype;
+    if (!c->f_va) CUCHK(cudaMalloc(&c->f_va, ne * sizeof(fc)));
+    if (!c->f_vb) CUCHK(cudaMalloc(&c->f_vb, ne * sizeof(fc)));
+    const int tpb = 256;
+    const int nbl = (int)((ne + tpb - 1) / tpb);
+    k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_va, c->f_va);
+    CUCHK(cudaGetLastError());
+    k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_vb, c->f_vb);
+    CUCHK(cudaGetLastError());
+    if (c->have_vo) {
+        if (!c->f_voa) CUCHK(cudaMalloc(&c->f_voa, ne * sizeof(fc)));
+        if (!c->f_vob) CUCHK(cudaMalloc(&c->f_vob, ne * sizeof(fc)));
+        k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_voa, c->f_voa);
+        CUCHK(cudaGetLastError());
+        k_zc_to_fc<<<nbl, tpb>>>(ne, c->d_vob, c->f_vob);
+        CUCHK(cudaGetLastError());
+    }
+    c->f_vel_ver = c->vel_ver;
     return 0;
 }
 
@@ -1642,14 +1726,174 @@ extern "C" int rsrec_scalar_lanczos(rsrec_ctx *c, int site_j, int lld,
 }
 
 /* --------------------------------------------------------------------------
- * API: stochastic conductivity moments (fp64, site-major; the (n, m)
- * contraction is one gram gemm per stored left state)
+ * Stochastic conductivity moments, block-ELL path, templated precision.
+ *   mu_{nm} = left_m^H (V_a T_{n-1}(H~) V_b |psiref>),   left_m = T_{m-1}(H~)|psiref>
+ * Reuses step_apply / step_apply_hoh (H~) and step_velo_hoh / step_apply (V).
+ * Operator pointers and scaling follow the same conventions as cheb_engine:
+ *  - non-hoh: Hop = folded H, (inva,bsc) = (1/a,b) fp64 or (1,0) fp32-prescaled;
+ *    velocity raw (va/vb), no vo.
+ *  - hoh: H via two-sweep (h_bare/eeo/hons, inva=1/a, bsc=b), velocity via
+ *    step_velo_hoh (va/vb + voa/vob + h_bare); operators raw.
+ * ------------------------------------------------------------------------ */
+template <class CT, class RT>
+static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
+                        RT inva, RT bsc, void *mu_,
+                        const CT *Hop, const CT *Himp,
+                        const CT *va, const CT *vb,
+                        const CT *h_bare, const CT *h_bare_imp,
+                        const CT *h_eeo, const CT *h_eeo_imp, const CT *h_hons,
+                        const CT *voa, const CT *vob) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    const bool do_hoh = c->have_hoh;
+
+    size_t freeb, totalb;
+    cudaMemGetInfo(&freeb, &totalb);
+    size_t scratch = (do_hoh ? 9 : 5) * nf;   /* w0..2, R, tmp [+ t,e,o,vtmp] */
+    size_t need = ((size_t)lld * nf + scratch + bb * (size_t)lld * lld)
+                  * sizeof(CT);
+    if (need > freeb * 9 / 10)
+        FAIL("stochastic_moments: left states do not fit on the device; "
+             "reduce lld or split over reference vectors / devices");
+
+    CT *left, *dmu, *R, *w0, *w1, *w2;
+    CT *ht = nullptr, *he = nullptr, *ho = nullptr, *vtmp = nullptr;
+    zc *stage;
+    CUCHK(cudaMalloc(&left, (size_t)lld * nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&dmu, bb * (size_t)lld * lld * sizeof(CT)));
+    CUCHK(cudaMalloc(&R, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w0, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w1, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w2, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&stage, nf * sizeof(zc)));   /* fp64 host staging */
+    if (do_hoh) {
+        CUCHK(cudaMalloc(&ht, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&he, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&ho, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&vtmp, nf * sizeof(CT)));
+    }
+    CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * sizeof(CT)));
+
+    /* H~ apply (Chebyshev recurrence operator), hoh-aware. */
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
+                                          h_eeo_imp, h_hons, ht, he, ho,
+                                          x1, x0, yv, nb, al, be, inva, bsc);
+        return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nb,
+                                  al, be, inva, bsc);
+    };
+    /* velocity apply (raw, hoh-aware). */
+    auto velo = [&](const CT *v_op, const CT *vo_op, const CT *x1, CT *yv) -> int {
+        if (do_hoh)
+            return step_velo_hoh<CT, RT>(c, v_op, vo_op, h_bare, h_bare_imp,
+                                         vtmp, x1, yv, nb);
+        return step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, yv, nb,
+                                  (RT)1, (RT)0, (RT)1, (RT)0);
+    };
+
+    const CT one = {(RT)1, (RT)0};
+    const CT zero = {(RT)0, (RT)0};
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+    CUCHK(cudaMemcpy(stage, psiref_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, w1);
+    CUCHK(cudaGetLastError());
+
+    /* left states L_m = T_{m-1}(H~)|psiref>, stored device-resident. */
+    CUCHK(cudaMemcpy(left, w1, nf * sizeof(CT), cudaMemcpyDeviceToDevice));
+    for (int m = 2; m <= lld; ++m) {
+        if (m == 2) {
+            CT *t = w0; w0 = w1; w1 = t;
+            if (matvec(w0, nullptr, w1, (RT)1, (RT)0)) return 1;
+        } else {
+            if (matvec(w1, w0, w2, (RT)2, (RT)-1)) return 1;
+            CT *t = w0; w0 = w1; w1 = w2; w2 = t;
+        }
+        CUCHK(cudaMemcpy(left + (size_t)(m - 1) * nf, w1, nf * sizeof(CT),
+                         cudaMemcpyDeviceToDevice));
+    }
+
+    /* right recursion v_n = T_{n-1}(H~) V_b|psiref>; left slot 0 = psiref. */
+    if (velo(vb, vob, left, w0)) return 1;        /* w0 = V_b psiref */
+    CT *v0 = w0, *v1 = w1, *v2 = w2;
+    for (int n = 1; n <= lld; ++n) {
+        if (n == 1) {
+            CUCHK(cudaMemcpy(v1, v0, nf * sizeof(CT), cudaMemcpyDeviceToDevice));
+        } else if (n == 2) {
+            CUCHK(cudaMemcpy(v0, v1, nf * sizeof(CT), cudaMemcpyDeviceToDevice));
+            if (matvec(v0, nullptr, v1, (RT)1, (RT)0)) return 1;
+        } else {
+            if (matvec(v1, v0, v2, (RT)2, (RT)-1)) return 1;
+            CT *t = v0; v0 = v1; v1 = v2; v2 = t;
+        }
+        if (velo(va, voa, v1, R)) return 1;        /* R = V_a v_n */
+        CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                           &one, left, (int)ld, (long long)nf,
+                           R, (int)ld, 0,
+                           &zero, dmu + bb * (size_t)(n - 1), nb,
+                           (long long)bb * lld, lld));
+    }
+
+    /* copy moments back, widening to cplx (fp64) for the Fortran side. */
+    std::vector<CT> h(bb * (size_t)lld * lld);
+    CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
+                     cudaMemcpyDeviceToHost));
+    cplx *mu = (cplx *)mu_;
+    for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
+
+    cudaFree(left); cudaFree(dmu); cudaFree(R); cudaFree(stage);
+    cudaFree(w0); cudaFree(w1); cudaFree(w2);
+    if (ht) { cudaFree(ht); cudaFree(he); cudaFree(ho); cudaFree(vtmp); }
+    return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: stochastic conductivity moments. Dispatch fp32/fp64 x hoh over the
+ * block-ELL engine; the structured/FFT backend keeps the original fp64
+ * step64-based path (ee-only, non-hoh).
  * ------------------------------------------------------------------------ */
 extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                                         int lld, double a, double b,
                                         void *mu_) {
     if (!c->have_h) FAIL("stochastic_moments: Hamiltonian not set");
     if (!c->have_v) FAIL("stochastic_moments: velocity operators not set");
+    if (c->have_hoh && !c->have_vo)
+        FAIL("stochastic_moments: hoh active but velocity ortho (vo) not set");
+
+    if (!c->use_struct) {
+        if (c->have_hoh) {
+            if (c->cheb_prec == 0) {
+                if (ensure_f32_hoh(c)) return 1;
+                if (ensure_f32_velocity(c)) return 1;
+                return stoch_engine<fc, float>(
+                    c, psiref_, lld, (float)(1.0 / a), (float)b, mu_,
+                    c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
+                    c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
+                    c->f_hons, c->f_voa, c->f_vob);
+            }
+            return stoch_engine<zc, double>(
+                c, psiref_, lld, 1.0 / a, b, mu_,
+                c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
+                c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
+                c->d_voa, c->d_vob);
+        }
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_ham(c, a, b)) return 1;
+            if (ensure_f32_velocity(c)) return 1;
+            return stoch_engine<fc, float>(
+                c, psiref_, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+                c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+                nullptr, nullptr);
+        }
+        return stoch_engine<zc, double>(
+            c, psiref_, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+            c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr);
+    }
+
+    /* --- structured/FFT backend: original fp64 step64 path (non-hoh) ----- */
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
     const size_t ld = (size_t)nb * c->kk;
@@ -1672,10 +1916,9 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
     const int tpb = 256;
     const int nbl = (int)((nf + tpb - 1) / tpb);
     CUCHK(cudaMemcpy(R, psiref_, nf * sizeof(zc), cudaMemcpyHostToDevice));
-    k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, R, w1);    /* w1 = psiref       */
+    k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, R, w1);
     CUCHK(cudaGetLastError());
 
-    /* left states L_m = T_{m-1}(H~)|psiref>, stored device-resident         */
     CUCHK(cudaMemcpy(left, w1, nf * sizeof(zc), cudaMemcpyDeviceToDevice));
     for (int m = 2; m <= lld; ++m) {
         if (m == 2) {
@@ -1691,17 +1934,14 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                          cudaMemcpyDeviceToDevice));
     }
 
-    /* right recursion v_n = T_{n-1}(H~) V_b|psiref>; left slot 0 = psiref   */
     if (step64(c, 2, left, nullptr, w0, tmp, nb, 1.0, 0.0, 1.0, 0.0))
-        return 1;                                /* w0 = V_b psiref          */
+        return 1;
     zc *v0 = w0, *v1 = w1, *v2 = w2;
     for (int n = 1; n <= lld; ++n) {
         if (n == 1) {
-            CUCHK(cudaMemcpy(v1, v0, nf * sizeof(zc),
-                             cudaMemcpyDeviceToDevice));
+            CUCHK(cudaMemcpy(v1, v0, nf * sizeof(zc), cudaMemcpyDeviceToDevice));
         } else if (n == 2) {
-            CUCHK(cudaMemcpy(v0, v1, nf * sizeof(zc),
-                             cudaMemcpyDeviceToDevice));
+            CUCHK(cudaMemcpy(v0, v1, nf * sizeof(zc), cudaMemcpyDeviceToDevice));
             if (step64(c, 0, v0, nullptr, v1, tmp, nb, 1.0, 0.0, 1.0 / a, b))
                 return 1;
         } else {
@@ -1710,12 +1950,7 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
             zc *t = v0; v0 = v1; v1 = v2; v2 = t;
         }
         if (step64(c, 1, v1, nullptr, R, tmp, nb, 1.0, 0.0, 1.0, 0.0))
-            return 1;                            /* R = V_a v_n              */
-        /* (n, m) contraction for ALL m at once: one strided-batched gemm.
-         * batch m -> C_m = left_m^H R (nb x nb). left states are contiguous
-         * (stride nf); R is shared (strideB = 0). The dmu slot (n-1, m) sits
-         * at base bb*(n-1) with per-m stride bb*lld, so the batched output
-         * lands directly in place -- lld launches collapse to one.          */
+            return 1;
         CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
                            &Z_ONE, left, (int)ld, (long long)nf,
                            R, (int)ld, 0,
@@ -1726,6 +1961,121 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                      cudaMemcpyDeviceToHost));
     cudaFree(left); cudaFree(dmu); cudaFree(R);
     return 0;
+}
+
+/* --------------------------------------------------------------------------
+ * API: orbital moments (single Chebyshev expansion with a fixed left state):
+ *   mu_n = sum_k left(k)^H T_{n-1}(H~)|psiref>(k),   n = 1..lld
+ * This is the stochastic engine specialised to one fixed left state and no
+ * velocity operators; it reuses the same H~ apply (hoh-aware) and a single
+ * gram gemm per moment. left and psiref are host (nb,nb,kk) atom-major; mu is
+ * (nb,nb,lld). fp32/fp64 selected by cheb_prec.
+ * ------------------------------------------------------------------------ */
+template <class CT, class RT>
+static int orbital_engine(rsrec_ctx *c, const void *left_h, const void *psiref_h,
+                          int lld, RT inva, RT bsc, void *mu_,
+                          const CT *Hop, const CT *Himp,
+                          const CT *h_bare, const CT *h_bare_imp,
+                          const CT *h_eeo, const CT *h_eeo_imp,
+                          const CT *h_hons) {
+    const int nb = c->nb;
+    const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
+    const size_t ld = (size_t)nb * c->kk;
+    const bool do_hoh = c->have_hoh;
+
+    CT *L, *dmu, *w0, *w1, *w2;
+    zc *stage;
+    CT *ht = nullptr, *he = nullptr, *ho = nullptr;
+    CUCHK(cudaMalloc(&L, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&dmu, bb * (size_t)lld * sizeof(CT)));
+    CUCHK(cudaMalloc(&w0, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w1, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&w2, nf * sizeof(CT)));
+    CUCHK(cudaMalloc(&stage, nf * sizeof(zc)));   /* fp64 host staging */
+    if (do_hoh) {
+        CUCHK(cudaMalloc(&ht, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&he, nf * sizeof(CT)));
+        CUCHK(cudaMalloc(&ho, nf * sizeof(CT)));
+    }
+
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (do_hoh)
+            return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
+                                          h_eeo_imp, h_hons, ht, he, ho,
+                                          x1, x0, yv, nb, al, be, inva, bsc);
+        return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nb,
+                                  al, be, inva, bsc);
+    };
+
+    const CT one = {(RT)1, (RT)0};
+    const CT zero = {(RT)0, (RT)0};
+    const int tpb = 256;
+    const int nbl = (int)((nf + tpb - 1) / tpb);
+
+    /* pack fixed left state and psiref (site-major). */
+    CUCHK(cudaMemcpy(stage, left_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, L);
+    CUCHK(cudaGetLastError());
+    CUCHK(cudaMemcpy(stage, psiref_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, w1);
+    CUCHK(cudaGetLastError());
+
+    for (int n = 1; n <= lld; ++n) {
+        if (n == 1) {
+            /* v1 already = psiref in w1 */
+        } else if (n == 2) {
+            CT *t = w0; w0 = w1; w1 = t;
+            if (matvec(w0, nullptr, w1, (RT)1, (RT)0)) return 1;
+        } else {
+            if (matvec(w1, w0, w2, (RT)2, (RT)-1)) return 1;
+            CT *t = w0; w0 = w1; w1 = w2; w2 = t;
+        }
+        /* mu_n = L^H w1 (nb x nb) */
+        CBCHK(blas_gemm(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                        &one, L, (int)ld, w1, (int)ld, &zero,
+                        dmu + bb * (size_t)(n - 1), nb));
+    }
+
+    std::vector<CT> h(bb * (size_t)lld);
+    CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
+                     cudaMemcpyDeviceToHost));
+    cplx *mu = (cplx *)mu_;
+    for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
+
+    cudaFree(L); cudaFree(dmu); cudaFree(w0); cudaFree(w1); cudaFree(w2);
+    cudaFree(stage);
+    if (ht) { cudaFree(ht); cudaFree(he); cudaFree(ho); }
+    return 0;
+}
+
+extern "C" int rsrec_orbital_moments(rsrec_ctx *c, const void *left,
+                                     const void *psiref, int lld, double a,
+                                     double b, void *mu_) {
+    if (!c->have_h) FAIL("orbital_moments: Hamiltonian not set");
+    if (c->use_struct)
+        FAIL("orbital_moments: structured backend not supported");
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c)) return 1;
+            return orbital_engine<fc, float>(
+                c, left, psiref, lld, (float)(1.0 / a), (float)b, mu_,
+                c->f_ee_bare, c->f_hall_bare, c->f_ee_bare, c->f_hall_bare,
+                c->f_eeo, c->f_hallo, c->f_hons);
+        }
+        return orbital_engine<zc, double>(
+            c, left, psiref, lld, 1.0 / a, b, mu_, c->d_ee_bare,
+            c->d_hall_bare, c->d_ee_bare, c->d_hall_bare, c->d_eeo,
+            c->d_hallo, c->d_hons);
+    }
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_ham(c, a, b)) return 1;
+        return orbital_engine<fc, float>(
+            c, left, psiref, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    }
+    return orbital_engine<zc, double>(
+        c, left, psiref, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+        nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
 /* --------------------------------------------------------------------------

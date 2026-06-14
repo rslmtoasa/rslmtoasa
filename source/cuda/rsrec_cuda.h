@@ -52,7 +52,11 @@ int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
                                const int *nn, const int *iz, const void *eeo,
                                const void *hallo, const void *enim);
 int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
-                            const void *v_b);
+                            const void *v_b, const void *vo_a,
+                            const void *vo_b);
+int rsrec_cuda_orbital_moments(rsrec_cuda_ctx *ctx, const void *left,
+                               const void *psiref, int lld, double a, double b,
+                               void *mu);
 
 int rsrec_cuda_chebyshev_moments(rsrec_cuda_ctx *ctx, const void *psi0,
                                  int lld, double a, double b, void *mu_out);
