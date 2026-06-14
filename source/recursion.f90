@@ -24,7 +24,9 @@ module recursion_mod
    use hamiltonian_mod
    use chebyshev_fast_mod, only: cheb_moments_fast, cheb_moments_fast_batched, &
       cheb_moments_fast_mkl_batch, &
-      cheb_moments_fast_mkl_sparse, cheb_fast_reset_cache
+      cheb_moments_fast_mkl_sparse, cheb_fast_reset_cache, &
+      cheb_moments_stochastic_fast, cheb_moments_orbital_fast
+   use haydock_fast_mod, only: block_lanczos_fast
    use lattice_mod
    use control_mod
    use energy_mod
@@ -141,6 +143,10 @@ contains
       character(len=256) :: msg
 
       backend = trim(this%control%cheb_backend)
+
+      ! 'fast_dp' is the fp64 selector for the block (Haydock) fast kernels; the
+      ! Chebyshev fast kernel is single precision only, so treat it as 'fast'.
+      if (backend == 'fast_dp') backend = 'fast'
 
       ! The orthogonalisation (hoh) term is now supported natively by the 'fast'
       ! kernel via a genuine two-sweep apply (h*x then eeo*(h*x)), mirroring the
@@ -1068,6 +1074,29 @@ contains
             cycle
          end if
 
+         ! Fast CPU stochastic kernel (single precision, hoh-aware). Falls back
+         ! to the legacy loop below only when cheb_backend='legacy'.
+         if (trim(this%control%cheb_backend) /= 'legacy') then
+            if (this%hamiltonian%hoh) then
+               call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
+                  this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+                  this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, this%control%cond_ll, a, b, &
+                  this%mu_nm_stochastic(:, :, :, :, i), .true., this%hamiltonian%eeo, &
+                  this%hamiltonian%hallo, this%hamiltonian%enim, this%hamiltonian%v_a, &
+                  this%hamiltonian%v_b, this%hamiltonian%vo_a, this%hamiltonian%vo_b)
+            else
+               call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
+                  this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+                  this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, this%control%cond_ll, a, b, &
+                  this%mu_nm_stochastic(:, :, :, :, i), .false., this%hamiltonian%ee, &
+                  this%hamiltonian%hall, this%hamiltonian%lsham, this%hamiltonian%v_a, &
+                  this%hamiltonian%v_b, this%hamiltonian%v_a, this%hamiltonian%v_b)
+            end if
+            cycle
+         end if
+
          ! Computing the left vector <r|Tm(H)
          do m=1, this%control%cond_ll 
             if (m == 1) then
@@ -1645,6 +1674,71 @@ contains
          return
       end if
 
+      ! Fast CPU block-Lanczos kernels (haydock_fast) for the inter-site (ij)
+      ! moments. cheb_backend: 'fast' -> fp32, 'fast_dp' -> fp64.
+      if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis) then
+         do ij = start_atom, end_atom
+            ij_loc = g2l_map(ij)
+            i = this%lattice%ijpair(ij, 1)
+            j = this%lattice%ijpair(ij, 2)
+            call g_logger%info('Fast block recursion on progress between atoms '// &
+               int2str(i)//' and '//int2str(j), __FILE__, __LINE__)
+            do reci = 1, 4
+               this%psi_b(:, :, :) = (0.0d0, 0.0d0)
+               this%atemp_b(:, :, :) = (0.0d0, 0.0d0)
+               this%b2temp_b(:, :, :) = (0.0d0, 0.0d0)
+               select case (reci)
+               case (1)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (1.0d0, 0.0d0)*one_over_sqrt_two
+               case (2)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (-1.0d0, 0.0d0)*one_over_sqrt_two
+               case (3)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (0.0d0, 1.0d0)*one_over_sqrt_two
+               case (4)
+                  asign = (1.0d0, 0.0d0)*one_over_sqrt_two
+                  bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
+               end select
+               if ((reci .eq. 1) .and. (i .eq. j)) then
+                  asign = (1.0d0, 0.0d0)
+                  bsign = (1.0d0, 0.0d0)
+               else if (i .eq. j) then
+                  cycle
+               end if
+               do l = 1, nb
+                  this%psi_b(l, l, i) = asign
+                  this%psi_b(l, l, j) = bsign
+               end do
+               if (this%hamiltonian%hoh) then
+                  call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+                     this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
+                     this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                     this%lattice%ntype, this%lattice%nmax, &
+                     trim(this%control%cheb_backend) == 'fast', .true., &
+                     this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
+               else
+                  call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+                     this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
+                     this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                     this%lattice%ntype, this%lattice%nmax, &
+                     trim(this%control%cheb_backend) == 'fast', .false., &
+                     this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham)
+               end if
+               do ll = 1, llmax
+                  do l = 1, nb
+                     do m = 1, nb
+                        this%a_b(l, m, ll, ij_loc*4 - 4 + reci) = this%atemp_b(l, m, ll)
+                        this%b2_b(l, m, ll, ij_loc*4 - 4 + reci) = this%b2temp_b(l, m, ll)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+         return
+      end if
+
       !do ij=1, this%lattice%njij ! Loop on the number of pair of atoms
       do ij = start_atom, end_atom
          ij_loc = g2l_map(ij)
@@ -1812,6 +1906,48 @@ contains
             end do
             call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
                this%atemp_b, this%b2temp_b)
+            do ll = 1, llmax
+               do l = 1, nb
+                  do m = 1, nb
+                     this%a_b(l, m, ll, i - start_atom + 1) = this%atemp_b(l, m, ll)
+                     this%b2_b(l, m, ll, i - start_atom + 1) = this%b2temp_b(l, m, ll)
+                  end do
+                  this%a(ll, l, i - start_atom + 1, 1) = real(this%atemp_b(l, l, ll))
+                  this%b2(ll, l, i - start_atom + 1, 1) = real(this%b2temp_b(l, l, ll))
+               end do
+            end do
+         end do
+         return
+      end if
+
+      ! Fast CPU block-Lanczos kernels (haydock_fast). cheb_backend selects:
+      !   'fast'    -> fp32 working precision, 'fast_dp' -> fp64. local_axis is
+      ! not yet supported in the fast path -> fall through to legacy.
+      if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis) then
+         do i = start_atom, end_atom
+            j = this%lattice%irec(i)
+            call g_logger%info('Fast block recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
+            this%psi_b(:, :, :) = (0.0d0, 0.0d0)
+            this%atemp_b(:, :, :) = (0.0d0, 0.0d0)
+            this%b2temp_b(:, :, :) = (0.0d0, 0.0d0)
+            do l = 1, nb
+               this%psi_b(l, l, j) = (1.0d0, 0.0d0)
+            end do
+            if (this%hamiltonian%hoh) then
+               call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+                  this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
+                  this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, &
+                  trim(this%control%cheb_backend) == 'fast', .true., &
+                  this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
+            else
+               call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+                  this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
+                  this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, &
+                  trim(this%control%cheb_backend) == 'fast', .false., &
+                  this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham)
+            end if
             do ll = 1, llmax
                do l = 1, nb
                   do m = 1, nb
@@ -3021,6 +3157,25 @@ contains
          if (gpu_plugin_ready(this, 'chebyshev_orbital_mod()', allow_hoh=.true.)) then
             if (random == 1) call gpu_plugin_upload_hamiltonian(this)
             call this%gpu_backend%orbital_moments(left_vec, psiref, this%control%lld, a, b, mu_tmp)
+            mu_n_orb(:, :, :) = mu_n_orb(:, :, :) + mu_tmp(:, :, :)
+            cycle
+         end if
+
+         ! Fast CPU orbital kernel (single precision, hoh-aware).
+         if (trim(this%control%cheb_backend) /= 'legacy') then
+            if (this%hamiltonian%hoh) then
+               call cheb_moments_orbital_fast(left_vec, psiref, this%hamiltonian%ee, &
+                  this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+                  this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, this%control%lld, a, b, mu_tmp, &
+                  .true., this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
+            else
+               call cheb_moments_orbital_fast(left_vec, psiref, this%hamiltonian%ee, &
+                  this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+                  this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, this%control%lld, a, b, mu_tmp, &
+                  .false., this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham)
+            end if
             mu_n_orb(:, :, :) = mu_n_orb(:, :, :) + mu_tmp(:, :, :)
             cycle
          end if

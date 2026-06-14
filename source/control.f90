@@ -624,11 +624,12 @@ contains
          call g_logger%fatal('control%gpu_backend must be one of: ''csr'', ''bsr'', ''fft'' or ''conv''.', __FILE__, __LINE__)
       end if
       if (this%cheb_backend /= 'fast' &
+          .and. this%cheb_backend /= 'fast_dp' &
           .and. this%cheb_backend /= 'batched' &
           .and. this%cheb_backend /= 'mkl_batch' &
           .and. this%cheb_backend /= 'mkl_sparse' &
           .and. this%cheb_backend /= 'legacy') then
-         call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
+         call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''fast_dp'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
       end if
    end subroutine check_all
 
