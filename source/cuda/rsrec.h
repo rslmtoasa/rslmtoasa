@@ -52,9 +52,17 @@ const char *rsrec_last_error(void);
  * lsham: (nb, nb, ntype)          complex(rp)   (may be NULL => zero)
  * nn   : (kk, nnmax)              integer, nn(k,1) = #neighbour entries,
  *                                 nn(k,j) = 1-based neighbour atom (0 = none)
- * iz   : (kk)                     integer, 1-based atom type                 */
+ * iz   : (kk)                     integer, 1-based atom type
+ * eeo  : (nb, nb, nnmax, ntype)   complex(rp)   orthogonalisation factor, or
+ *                                 NULL to disable hoh (single-operator path)
+ * hallo: (nb, nb, nnmax, nmax)    complex(rp)   impurity eeo (NULL if nmax==0)
+ * enim : (nb, nb, ntype)          complex(rp)   on-site E_nu (NULL => zero)
+ * When eeo != NULL the engine uses the two-sweep hoh apply
+ *   H = ( h - eeo*h + (enim+lsham) - b ) / a  (fp64 block-ELL only).        */
 int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
-                          const void *lsham, const int *nn, const int *iz);
+                          const void *lsham, const int *nn, const int *iz,
+                          const void *eeo, const void *hallo,
+                          const void *enim);
 
 /* Velocity (or current) operators for the stochastic conductivity moments.
  * Same neighbour structure as ee, per-type, no lsham term:

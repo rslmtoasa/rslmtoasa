@@ -266,6 +266,10 @@ module lattice_mod
       !> 
       !> Variables to handle periodic boundary conditions
       logical :: pbc
+      !> Flag to reorder the bulk cluster along a Morton (Z-order) space-filling
+      !> curve to improve data locality in the recursion/Chebyshev kernels.
+      !> Default .false. (preserves legacy lattice-scan ordering).
+      logical :: morton_sfc
       logical :: b1, b2, b3
       integer :: n1, n2, n3  
       !> TODO
@@ -358,6 +362,7 @@ module lattice_mod
       procedure :: build_from_lattice
       procedure :: restore_to_default
       procedure :: bravais
+      procedure :: morton_reorder_bulk
       procedure :: build_data
       procedure :: build_clusup
       procedure :: build_surf
@@ -533,6 +538,7 @@ contains
       n2 = this%n2
       n3 = this%n3
       pbc = this%pbc
+      morton_sfc = this%morton_sfc
 
       if (.not. allocated(this%izp) .or. size(this%izp) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
@@ -797,6 +803,7 @@ contains
       if (len_trim(this%screening) == 0) this%screening = 'default'
       if (this%strux_solve_scale <= 0.0_rp) this%strux_solve_scale = 9.0_rp
       this%pbc = pbc
+      this%morton_sfc = morton_sfc
       this%b1 = b1
       this%b2 = b2
       this%b3 = b3
@@ -1303,6 +1310,7 @@ contains
       this%b2 = .false.
       this%b3 = .false.
       this%pbc = .false.
+      this%morton_sfc = .false.
       this%n1 = 0
       this%n2 = 0
       this%n3 = 0
@@ -1473,10 +1481,154 @@ contains
       call move_alloc(num, this%num)
       close (10)
 
+      ! Optional Morton (Z-order) reordering of the bulk cluster to improve
+      ! data locality of the recursion/Chebyshev SpMV kernels. Atom 1 (the
+      ! central reference site) is kept first; only atoms 2..kk are permuted.
+      if (this%morton_sfc) then
+         call this%morton_reorder_bulk()
+      end if
+
       ! Test to set nmax to the whole cluster
       ! this%nmax = kk
       call g_timer%stop('bravais')
    end subroutine bravais
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Reorder the bulk cluster (this%cr/iz/num) along a Morton (Z-order)
+   !> space-filling curve to improve data locality of the neighbour gathers
+   !> in the recursion/Chebyshev kernels.
+   !>
+   !> The reordering is a pure permutation of atom indices and therefore
+   !> leaves the physics invariant: the recursion engine is oblivious to atom
+   !> ordering, and the neighbour maps (nn/nn2) are rebuilt from the permuted
+   !> coordinates in newclu/structb downstream. Atom 1 is the central
+   !> reference site and is kept at index 1; only atoms 2..kk are sorted.
+   !---------------------------------------------------------------------------
+   subroutine morton_reorder_bulk(this)
+      class(lattice), intent(inout) :: this
+      integer :: kk, i, n
+      integer, allocatable :: perm(:)
+      integer(8), allocatable :: key(:)
+      real(rp) :: cmin(3), cmax(3), span(3), inv_span(3)
+      integer, parameter :: nbits = 21      ! 21 bits/axis -> 63-bit Morton key
+      integer, parameter :: gmax = 2**nbits - 1
+      real(rp), allocatable :: cr_new(:, :)
+      integer, allocatable :: iz_new(:), num_new(:)
+      integer :: q(3)
+
+      kk = this%kk
+      if (kk <= 2) return
+
+      ! Bounding box of the full cluster (used for quantization).
+      do i = 1, 3
+         cmin(i) = minval(this%cr(i, 1:kk))
+         cmax(i) = maxval(this%cr(i, 1:kk))
+      end do
+      span(:) = cmax(:) - cmin(:)
+      do i = 1, 3
+         if (span(i) > tiny(1.0_rp)) then
+            inv_span(i) = real(gmax, rp)/span(i)
+         else
+            inv_span(i) = 0.0_rp
+         end if
+      end do
+
+      ! Compute a Morton key for atoms 2..kk; atom 1 stays first via a key of 0.
+      allocate (key(kk), perm(kk))
+      key(1) = -1_8                          ! sorts before any non-negative key
+      perm(1) = 1
+      do n = 2, kk
+         do i = 1, 3
+            q(i) = nint((this%cr(i, n) - cmin(i))*inv_span(i))
+            if (q(i) < 0) q(i) = 0
+            if (q(i) > gmax) q(i) = gmax
+         end do
+         key(n) = morton_encode3(q(1), q(2), q(3), nbits)
+         perm(n) = n
+      end do
+
+      ! Sort indices 1..kk by Morton key (stable not required; ties are
+      ! spatially coincident bins).
+      call sort_by_key(key, perm, kk)
+
+      ! Apply the permutation to the cluster arrays.
+      allocate (cr_new(3, kk), iz_new(kk), num_new(kk))
+      do n = 1, kk
+         cr_new(:, n) = this%cr(:, perm(n))
+         iz_new(n) = this%iz(perm(n))
+         num_new(n) = this%num(perm(n))
+      end do
+      this%cr(:, 1:kk) = cr_new(:, 1:kk)
+      this%iz(1:kk) = iz_new(1:kk)
+      this%num(1:kk) = num_new(1:kk)
+
+      deallocate (cr_new, iz_new, num_new, key, perm)
+
+      call g_logger%info('lattice%bravais: bulk cluster reordered along Morton (Z-order) curve', __FILE__, __LINE__)
+   end subroutine morton_reorder_bulk
+
+   !---------------------------------------------------------------------------
+   !> @brief Interleave the low nbits of three integers into a Morton code.
+   !---------------------------------------------------------------------------
+   pure function morton_encode3(x, y, z, nbits) result(code)
+      integer, intent(in) :: x, y, z, nbits
+      integer(8) :: code
+      integer :: b
+      code = 0_8
+      do b = 0, nbits - 1
+         code = ior(code, ishft(iand(int(x, 8), ishft(1_8, b)), 2*b))
+         code = ior(code, ishft(iand(int(y, 8), ishft(1_8, b)), 2*b + 1))
+         code = ior(code, ishft(iand(int(z, 8), ishft(1_8, b)), 2*b + 2))
+      end do
+   end function morton_encode3
+
+   !---------------------------------------------------------------------------
+   !> @brief In-place ascending sort of perm(1:n) by key(1:n) (heapsort).
+   !>        key is carried along so the two stay consistent.
+   !---------------------------------------------------------------------------
+   subroutine sort_by_key(key, perm, n)
+      integer(8), intent(inout) :: key(:)
+      integer, intent(inout) :: perm(:)
+      integer, intent(in) :: n
+      integer :: i, start, bottom
+      integer(8) :: tkey
+      integer :: tperm
+
+      ! Build heap then sift down (standard heapsort, O(n log n)).
+      do start = n/2, 1, -1
+         call sift_down(key, perm, start, n)
+      end do
+      do bottom = n, 2, -1
+         tkey = key(1); key(1) = key(bottom); key(bottom) = tkey
+         tperm = perm(1); perm(1) = perm(bottom); perm(bottom) = tperm
+         call sift_down(key, perm, 1, bottom - 1)
+      end do
+   contains
+      subroutine sift_down(key, perm, start, end)
+         integer(8), intent(inout) :: key(:)
+         integer, intent(inout) :: perm(:)
+         integer, intent(in) :: start, end
+         integer :: root, child
+         integer(8) :: sk
+         integer :: sp
+         root = start
+         do while (2*root <= end)
+            child = 2*root
+            if (child < end) then
+               if (key(child) < key(child + 1)) child = child + 1
+            end if
+            if (key(root) < key(child)) then
+               sk = key(root); key(root) = key(child); key(child) = sk
+               sp = perm(root); perm(root) = perm(child); perm(child) = sp
+               root = child
+            else
+               return
+            end if
+         end do
+      end subroutine sift_down
+   end subroutine sort_by_key
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -4998,6 +5150,7 @@ contains
       call nml%add('screening', trim(this%screening))
       call nml%add('strux_want_sdot', this%strux_want_sdot)
       call nml%add('strux_solve_scale', this%strux_solve_scale)
+      call nml%add('morton_sfc', this%morton_sfc)
 
       ! one dimensional allocatables
       ! TODO: implement test inside namelist_generator

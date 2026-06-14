@@ -92,11 +92,13 @@ module recursion_gpu_mod
          type(c_ptr) :: msg
       end function
 
-      function c_rsrec_set_hamiltonian(ctx, ee, hall, lsham, nn, iz) &
+      function c_rsrec_set_hamiltonian(ctx, ee, hall, lsham, nn, iz, &
+                                       eeo, hallo, enim) &
          bind(C, name="rsrec_set_hamiltonian") result(ierr)
          import :: c_ptr, c_int
          type(c_ptr), value :: ctx, ee, hall, lsham
          type(c_ptr), value :: nn, iz
+         type(c_ptr), value :: eeo, hallo, enim
          integer(c_int) :: ierr
       end function
 
@@ -214,20 +216,30 @@ contains
       if (.not. c_associated(this%ctx)) call die("init")
    end subroutine rsgpu_init
 
-   subroutine rsgpu_set_hamiltonian(this, ee, hall, lsham, nn, iz)
+   subroutine rsgpu_set_hamiltonian(this, ee, hall, lsham, nn, iz, nmax, eeo, hallo, enim)
       class(rsgpu), intent(inout) :: this
       complex(rp), dimension(:, :, :, :), intent(in), target :: ee
       complex(rp), dimension(:, :, :, :), intent(in), target, optional :: hall
       complex(rp), dimension(:, :, :), intent(in), target, optional :: lsham
       integer(c_int), dimension(:, :), intent(in), target :: nn
       integer(c_int), dimension(:), intent(in), target :: iz
-      type(c_ptr) :: p_hall, p_ls
+      integer, intent(in), optional :: nmax   ! struct member; accepted for caller compat
+      complex(rp), dimension(:, :, :, :), intent(in), target, optional :: eeo
+      complex(rp), dimension(:, :, :, :), intent(in), target, optional :: hallo
+      complex(rp), dimension(:, :, :), intent(in), target, optional :: enim
+      type(c_ptr) :: p_hall, p_ls, p_eeo, p_hallo, p_enim
       p_hall = c_null_ptr
       p_ls = c_null_ptr
+      p_eeo = c_null_ptr
+      p_hallo = c_null_ptr
+      p_enim = c_null_ptr
       if (present(hall)) p_hall = c_loc(hall)
       if (present(lsham)) p_ls = c_loc(lsham)
+      if (present(eeo)) p_eeo = c_loc(eeo)
+      if (present(hallo)) p_hallo = c_loc(hallo)
+      if (present(enim)) p_enim = c_loc(enim)
       if (c_rsrec_set_hamiltonian(this%ctx, c_loc(ee), p_hall, p_ls, &
-                                  c_loc(nn), c_loc(iz)) /= 0) &
+                                  c_loc(nn), c_loc(iz), p_eeo, p_hallo, p_enim) /= 0) &
          call die("set_hamiltonian")
    end subroutine rsgpu_set_hamiltonian
 

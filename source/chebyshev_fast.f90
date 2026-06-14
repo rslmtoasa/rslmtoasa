@@ -32,15 +32,23 @@ module chebyshev_fast_mod
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
    complex(sp), allocatable, target, save :: hee_cache(:, :, :, :), hha_cache(:, :, :, :)
+   complex(sp), allocatable, target, save :: oee_cache(:, :, :, :), oha_cache(:, :, :, :)
+   complex(sp), allocatable, target, save :: bee_cache(:, :, :, :), bha_cache(:, :, :, :)
+   complex(sp), allocatable, target, save :: hons_cache(:, :, :)
    complex(sp), allocatable, target, save :: hval_cache(:, :, :)
    complex(sp), allocatable, target, save :: work0_cache(:, :), work1_cache(:, :), work2_cache(:, :)
+   complex(sp), allocatable, target, save :: workt_cache(:, :)
    complex(sp), allocatable, target, save :: block_products_cache(:, :, :)
    integer, allocatable, target, save :: hcol_cache(:), hrow_cache(:)
    type(c_ptr), allocatable, target, save :: mkl_a_ptr_cache(:), mkl_b_ptr_cache(:), mkl_c_ptr_cache(:)
    logical, save :: scaled_cache_valid = .false.
    logical, save :: bsr_cache_valid = .false.
+   logical, save :: ortho_cache_valid = .false.
    integer, save :: scaled_cache_nb = 0, scaled_cache_nnmax = 0, scaled_cache_ntype = 0
    integer, save :: scaled_cache_nmax = -1, scaled_cache_kk = 0
+   integer, save :: ortho_cache_nb = 0, ortho_cache_nnmax = 0, ortho_cache_ntype = 0
+   integer, save :: ortho_cache_nmax = -1, ortho_cache_kk = 0
+   real(sp), save :: ortho_cache_inva = -1.0_sp, ortho_cache_b = huge(1.0_sp)
    integer, save :: bsr_cache_nb = 0, bsr_cache_nnmax = 0, bsr_cache_ntype = 0
    integer, save :: bsr_cache_nmax = -1, bsr_cache_kk = 0
    real(sp), save :: scaled_cache_inva = -1.0_sp, scaled_cache_b = huge(1.0_sp)
@@ -54,10 +62,16 @@ contains
    subroutine cheb_fast_reset_cache()
       if (allocated(hee_cache)) deallocate (hee_cache)
       if (allocated(hha_cache)) deallocate (hha_cache)
+      if (allocated(oee_cache)) deallocate (oee_cache)
+      if (allocated(oha_cache)) deallocate (oha_cache)
+      if (allocated(bee_cache)) deallocate (bee_cache)
+      if (allocated(bha_cache)) deallocate (bha_cache)
+      if (allocated(hons_cache)) deallocate (hons_cache)
       if (allocated(hval_cache)) deallocate (hval_cache)
       if (allocated(work0_cache)) deallocate (work0_cache)
       if (allocated(work1_cache)) deallocate (work1_cache)
       if (allocated(work2_cache)) deallocate (work2_cache)
+      if (allocated(workt_cache)) deallocate (workt_cache)
       if (allocated(block_products_cache)) deallocate (block_products_cache)
       if (allocated(hcol_cache)) deallocate (hcol_cache)
       if (allocated(hrow_cache)) deallocate (hrow_cache)
@@ -66,6 +80,7 @@ contains
       if (allocated(mkl_c_ptr_cache)) deallocate (mkl_c_ptr_cache)
       scaled_cache_valid = .false.
       bsr_cache_valid = .false.
+      ortho_cache_valid = .false.
       work_cache_ld = 0
       work_cache_nb = 0
       block_products_cache_nb = 0
@@ -90,6 +105,20 @@ contains
       w1 => work1_cache
       w2 => work2_cache
    end subroutine ensure_work_buffers
+
+   !> Extra (ld, nb) scratch holding the sweep-A result t = (h/a)*x for the
+   !> two-sweep hoh apply. Shares the work-buffer (ld, nb) shape; allocated only
+   !> when hoh is active.
+   subroutine ensure_hoh_buffer(ld_in, nb_in, wt)
+      integer, intent(in) :: ld_in, nb_in
+      complex(sp), pointer, contiguous, intent(out) :: wt(:, :)
+
+      if (.not. allocated(workt_cache) .or. size(workt_cache, 1) /= ld_in .or. size(workt_cache, 2) /= nb_in) then
+         if (allocated(workt_cache)) deallocate (workt_cache)
+         allocate (workt_cache(ld_in, nb_in))
+      end if
+      wt => workt_cache
+   end subroutine ensure_hoh_buffer
 
    subroutine ensure_block_products(nb_in, nblocks_in, block_products)
       integer, intent(in) :: nb_in, nblocks_in
@@ -188,6 +217,98 @@ contains
       end if
    end subroutine ensure_scaled_hamiltonian_sp
 
+   !> Build the fp32 operands for the two-sweep hoh apply, mirroring
+   !> ham_hoh_vec_matmul (recursion.f90). The combine there is
+   !>   y = ( h*x - eeo*(h*x) + (enim + lsham)*x - b*x ) / a
+   !> so the eeo sweep must see the BARE h*x (no on-site enim/lsham/-bI fold).
+   !> We therefore cache four fp32 operands, all consistent with one 1/a scaling:
+   !>   bee/bha = (ee/hall)*inva                 -> sweep A: t = inva*h*x
+   !>   oee/oha = eeo/hallo  (RAW, unscaled)     -> sweep B: eeo*t = inva*eeo*h*x
+   !>   hons    = (enim + lsham - b*I)*inva      -> on-site, applied to x
+   !> Cached independently of the standard scaled-Hamiltonian cache.
+   subroutine ensure_scaled_ortho_sp(ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
+                                     iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
+                                     bee_out, bha_out, oee_out, oha_out, hons_out)
+      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: eeo_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hallo_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+      complex(rp), intent(in) :: enim_in(nb_in, nb_in, ntype_in)
+      integer, intent(in) :: iz_in(kk_in), kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      real(sp), intent(in) :: inva_in, b_in
+      complex(sp), pointer, intent(out) :: bee_out(:, :, :, :), bha_out(:, :, :, :)
+      complex(sp), pointer, intent(out) :: oee_out(:, :, :, :), oha_out(:, :, :, :)
+      complex(sp), pointer, intent(out) :: hons_out(:, :, :)
+      integer :: t_in, k_in, l_in
+      logical :: valid
+
+      valid = ortho_cache_valid &
+         .and. ortho_cache_nb == nb_in &
+         .and. ortho_cache_nnmax == nnmax_in &
+         .and. ortho_cache_ntype == ntype_in &
+         .and. ortho_cache_nmax == nmax_in &
+         .and. ortho_cache_kk == kk_in &
+         .and. ortho_cache_inva == inva_in &
+         .and. ortho_cache_b == b_in
+
+      if (.not. valid) then
+         if (allocated(bee_cache)) deallocate (bee_cache)
+         if (allocated(bha_cache)) deallocate (bha_cache)
+         if (allocated(oee_cache)) deallocate (oee_cache)
+         if (allocated(oha_cache)) deallocate (oha_cache)
+         if (allocated(hons_cache)) deallocate (hons_cache)
+
+         ! Sweep-A bare h, scaled by inva (no on-site fold).
+         allocate (bee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         bee_cache = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
+
+         ! Sweep-B eeo, raw.
+         allocate (oee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         oee_cache = cmplx(real(eeo_in, sp), aimag(eeo_in), sp)
+
+         ! On-site (enim + lsham - b*I)*inva, per type.
+         allocate (hons_cache(nb_in, nb_in, ntype_in))
+         hons_cache = (cmplx(real(enim_in, sp), aimag(enim_in), sp) + &
+                       cmplx(real(lsham_in, sp), aimag(lsham_in), sp))*inva_in
+         do t_in = 1, ntype_in
+            do l_in = 1, nb_in
+               hons_cache(l_in, l_in, t_in) = hons_cache(l_in, l_in, t_in) - b_in*inva_in
+            end do
+         end do
+
+         if (nmax_in > 0) then
+            allocate (bha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+            bha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
+            allocate (oha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+            oha_cache = cmplx(real(hallo_in(:, :, :, 1:nmax_in), sp), aimag(hallo_in(:, :, :, 1:nmax_in)), sp)
+            ! Note: the impurity on-site enim/lsham fold is carried by hons via
+            ! iz(k), identical to the bulk path (ham_hoh_vec_matmul applies
+            ! lsham/enim on-site for both local and bulk regions).
+         end if
+
+         ortho_cache_nb = nb_in
+         ortho_cache_nnmax = nnmax_in
+         ortho_cache_ntype = ntype_in
+         ortho_cache_nmax = nmax_in
+         ortho_cache_kk = kk_in
+         ortho_cache_inva = inva_in
+         ortho_cache_b = b_in
+         ortho_cache_valid = .true.
+      end if
+
+      bee_out => bee_cache
+      oee_out => oee_cache
+      hons_out => hons_cache
+      if (allocated(bha_cache)) then
+         bha_out => bha_cache
+         oha_out => oha_cache
+      else
+         nullify (bha_out)
+         nullify (oha_out)
+      end if
+   end subroutine ensure_scaled_ortho_sp
+
    subroutine ensure_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
       complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
@@ -282,21 +403,34 @@ contains
    !> lsham : (nb, nb, ntype); nn: (kk, nnmax) with nn(k,1)=count; iz: (kk)
    !> mu    : (nb, nb, 2*lld+2) out, identical ordering to mu_n
    subroutine cheb_moments_fast(psi0, ee, hall, lsham, nn, iz, kk, nb, &
-                                nnmax, ntype, nmax, lld, a, b, mu)
+                                nnmax, ntype, nmax, lld, a, b, mu, &
+                                hoh, eeo, hallo, enim)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
       complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
       integer, intent(in) :: nn(kk, nnmax), iz(kk)
       real(rp), intent(in) :: a, b
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
+      logical, intent(in), optional :: hoh
+      complex(rp), intent(in), optional :: eeo(nb, nb, nnmax, ntype)
+      complex(rp), intent(in), optional :: hallo(nb, nb, nnmax, *)
+      complex(rp), intent(in), optional :: enim(nb, nb, ntype)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
+      complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :)
+      complex(sp), pointer :: oee(:, :, :, :), oha(:, :, :, :)
+      complex(sp), pointer :: hons(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
+      complex(sp), pointer, contiguous :: wt(:, :)
       complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
       complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer :: k, l, c, ld, ll
       real(sp) :: inva, a_sp, b_sp
+      logical :: do_hoh
+
+      do_hoh = .false.
+      if (present(hoh)) do_hoh = hoh
 
       ld = nb*kk
       a_sp = real(a, sp)
@@ -307,8 +441,15 @@ contains
       p1 => w1
       p2 => w2
 
-      ! --- 1. scaled operator copies: Ht = (H + lsham - b*I)/a -------------
-      call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
+      if (do_hoh) then
+         ! --- two-sweep hoh operands (bare h, eeo, on-site) + extra buffer ---
+         call ensure_hoh_buffer(ld, nb, wt)
+         call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
+                                     nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+      else
+         ! --- 1. scaled operator copies: Ht = (H + lsham - b*I)/a ----------
+         call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
+      end if
 
       ! --- 2. pack psi0 site-major: p(l + nb*(k-1), c) ---------------------
       !$omp parallel do private(k, c, l) schedule(static)
@@ -324,12 +465,20 @@ contains
       ! --- 3. moments: mu1 = p0^H p0, p1 = Ht p0, mu2 = p0^H p1 ------------
       call cherk_full(nb, ld, p0, mu1_sp)
       mu(:, :, 1) = mu1_sp
-      call apply_step(p0, p0, p1, 1.0_sp, 0.0_sp)
+      if (do_hoh) then
+         call apply_step_hoh(p0, p0, p1, 1.0_sp, 0.0_sp, wt)
+      else
+         call apply_step(p0, p0, p1, 1.0_sp, 0.0_sp)
+      end if
       call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
       mu(:, :, 2) = mu2_sp
 
       do ll = 1, lld
-         call apply_step(p1, p0, p2, 2.0_sp, -1.0_sp)   ! p2 = 2 Ht p1 - p0
+         if (do_hoh) then
+            call apply_step_hoh(p1, p0, p2, 2.0_sp, -1.0_sp, wt) ! p2 = 2 Ht p1 - p0
+         else
+            call apply_step(p1, p0, p2, 2.0_sp, -1.0_sp)   ! p2 = 2 Ht p1 - p0
+         end if
          call cherk_full(nb, ld, p1, dum_sp)            ! dum1 = p1^H p1
          mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
          call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
@@ -426,6 +575,82 @@ contains
          end do
          !$omp end parallel do
       end subroutine apply_step
+
+      !> Two-sweep hoh apply, mirroring ham_hoh_vec_matmul (recursion.f90):
+      !>   sweep A:  t   = (h/a) * x1                  (bee/bha, into wt)
+      !>   sweep B:  acc = t - eeo*t + hons*x1         (oee/oha raw, hons on-site)
+      !>   combine:  y   = alpha*acc + beta*x0
+      !> The 1/a scaling lives in bee/bha and hons; eeo is raw, so eeo*t already
+      !> carries one factor of 1/a. The eeo sweep sees the BARE h*x (no on-site
+      !> enim/lsham/-bI), exactly as in the legacy two-step recursion.
+      subroutine apply_step_hoh(x1, x0, y, alpha, beta, t)
+         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         real(sp), intent(in) :: alpha, beta
+         complex(sp), intent(inout) :: t(ld, nb)   ! sweep-A scratch (= wt)
+         complex(sp) :: acc(nb, nb)
+         integer :: kk_, t_, s_, nbr, nr, r0
+
+         ! --- sweep A: t = (h/a) * x1 ------------------------------------
+         !$omp parallel do private(kk_, t_, s_, nbr, nr, r0, acc) schedule(dynamic, 32)
+         do kk_ = 1, kk
+            acc = (0.0_sp, 0.0_sp)
+            nr = nn(kk_, 1)
+            do s_ = 1, nr
+               if (s_ == 1) then
+                  nbr = kk_
+               else
+                  nbr = nn(kk_, s_)
+                  if (nbr == 0) cycle
+               end if
+               r0 = nb*(nbr - 1)
+               if (kk_ <= nmax) then
+                  call cgemm('N', 'N', nb, nb, nb, cone, bha(:, :, s_, kk_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+               else
+                  t_ = iz(kk_)
+                  call cgemm('N', 'N', nb, nb, nb, cone, bee(:, :, s_, t_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+               end if
+            end do
+            r0 = nb*(kk_ - 1)
+            t(r0 + 1:r0 + nb, :) = acc
+         end do
+         !$omp end parallel do
+
+         ! --- sweep B: acc = t - eeo*t + hons*x1 ; y = alpha*acc + beta*x0
+         !$omp parallel do private(kk_, t_, s_, nbr, nr, r0, acc) schedule(dynamic, 32)
+         do kk_ = 1, kk
+            acc = (0.0_sp, 0.0_sp)
+            nr = nn(kk_, 1)
+            ! - eeo * t  (subtract the orthogonalisation contribution)
+            do s_ = 1, nr
+               if (s_ == 1) then
+                  nbr = kk_
+               else
+                  nbr = nn(kk_, s_)
+                  if (nbr == 0) cycle
+               end if
+               r0 = nb*(nbr - 1)
+               if (kk_ <= nmax) then
+                  call cgemm('N', 'N', nb, nb, nb, -cone, oha(:, :, s_, kk_), nb, t(r0 + 1, 1), ld, cone, acc, nb)
+               else
+                  t_ = iz(kk_)
+                  call cgemm('N', 'N', nb, nb, nb, -cone, oee(:, :, s_, t_), nb, t(r0 + 1, 1), ld, cone, acc, nb)
+               end if
+            end do
+            ! + hons * x1  (on-site enim + lsham - b*I, scaled by 1/a)
+            t_ = iz(kk_)
+            r0 = nb*(kk_ - 1)
+            call cgemm('N', 'N', nb, nb, nb, cone, hons(:, :, t_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+            ! + t(kk_)  (the bare h*x/a contribution for this site)
+            acc = acc + t(r0 + 1:r0 + nb, :)
+            if (beta /= 0.0_sp) then
+               y(r0 + 1:r0 + nb, :) = alpha*acc + beta*x0(r0 + 1:r0 + nb, :)
+            else
+               y(r0 + 1:r0 + nb, :) = alpha*acc
+            end if
+         end do
+         !$omp end parallel do
+      end subroutine apply_step_hoh
 
       !> Hermitian rank-k: C = A^H A via cherk, then fill the upper triangle
       subroutine cherk_full(n, k, Amat, C)

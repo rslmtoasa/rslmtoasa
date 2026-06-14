@@ -49,7 +49,8 @@ int rsrec_cuda_set_periodic_lattice(rsrec_cuda_ctx *ctx, int pbc, int n1,
                                     const double *crd, int nbas);
 int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
                                const void *hall, const void *lsham,
-                               const int *nn, const int *iz);
+                               const int *nn, const int *iz, const void *eeo,
+                               const void *hallo, const void *enim);
 int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
                             const void *v_b);
 

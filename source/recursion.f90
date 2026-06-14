@@ -138,20 +138,35 @@ contains
       real(rp), intent(in) :: a, b
       complex(rp), intent(inout) :: mu(:, :, :)
       character(len=:), allocatable :: backend
+      character(len=256) :: msg
 
       backend = trim(this%control%cheb_backend)
 
-      ! The orthogonalisation (hoh) term is only implemented in the legacy CPU
-      ! driver; the fast kernels operate on the bare h Hamiltonian. Fall back to
-      ! legacy whenever hoh is active, regardless of the requested backend.
-      if (this%hamiltonian%hoh) backend = 'legacy'
-
+      ! The orthogonalisation (hoh) term is now supported natively by the 'fast'
+      ! kernel via a genuine two-sweep apply (h*x then eeo*(h*x)), mirroring the
+      ! legacy recursion. The BSR-based kernels (batched / mkl_batch / mkl_sparse)
+      ! do not yet carry the second sweep, so fall those back to legacy when hoh
+      ! is active. 'legacy' stays available as an explicit choice.
+      if (this%hamiltonian%hoh .and. backend /= 'fast' .and. backend /= 'legacy') then
+         backend = 'legacy'
+      end if
+      msg = 'Chebyshev moment driver backend: '//backend
+      !print *, msg
+      call g_logger%info(msg, __FILE__, __LINE__)
       select case (backend)
       case ('fast')
-         call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-            lld, a, b, mu)
+         if (this%hamiltonian%hoh) then
+            call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu, hoh=.true., eeo=this%hamiltonian%eeo, &
+               hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim)
+         else
+            call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         end if
       case ('batched')
          call cheb_moments_fast_batched(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
             this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
@@ -297,17 +312,20 @@ contains
       gpu_periodic_backend = (backend == gpu_backend_fft .or. backend == gpu_backend_conv)
    end function gpu_periodic_backend
 
-   logical function gpu_plugin_ready(this, feature, require_nsp1)
+   logical function gpu_plugin_ready(this, feature, require_nsp1, allow_hoh)
       class(recursion), intent(in) :: this
       character(len=*), intent(in) :: feature
       logical, intent(in), optional :: require_nsp1
+      logical, intent(in), optional :: allow_hoh
       integer :: backend
-      logical :: nsp1_only
+      logical :: nsp1_only, hoh_ok
 
       gpu_plugin_ready = .false.
       if (.not. gpu_plugin_enabled(this)) return
       nsp1_only = .false.
       if (present(require_nsp1)) nsp1_only = require_nsp1
+      hoh_ok = .false.
+      if (present(allow_hoh)) hoh_ok = allow_hoh
 
       if (.not. rsrec_cuda_plugin_compiled()) then
          call g_logger%warning('gpu_plugin requested for '//trim(feature)// &
@@ -316,7 +334,11 @@ contains
          return
       end if
 
-      if (this%hamiltonian%hoh) then
+      ! hoh is supported on the GPU only via the two-sweep block-ELL Chebyshev
+      ! moment path (allow_hoh from the chebyshev call sites). The structured /
+      ! FFT periodic backend assumes an ee-only Hamiltonian, so hoh is rejected
+      ! there regardless.
+      if (this%hamiltonian%hoh .and. (.not. hoh_ok .or. gpu_periodic_backend(this))) then
          call g_logger%warning('gpu_plugin does not support hoh in '// &
             trim(feature)//'. Falling back to current recursion path.', __FILE__, __LINE__)
          return
@@ -372,13 +394,27 @@ contains
 
       backend = decode_gpu_backend(this%control%gpu_backend)
       if (this%lattice%nmax > 0) then
-         call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
-            this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
-            this%lattice%iz, this%lattice%nmax)
+         if (this%hamiltonian%hoh) then
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+               this%lattice%iz, this%lattice%nmax, eeo=this%hamiltonian%eeo, &
+               hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim)
+         else
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+               this%lattice%iz, this%lattice%nmax)
+         end if
       else
-         call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
-            lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
-            iz=this%lattice%iz, nmax=this%lattice%nmax)
+         if (this%hamiltonian%hoh) then
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
+               iz=this%lattice%iz, nmax=this%lattice%nmax, &
+               eeo=this%hamiltonian%eeo, enim=this%hamiltonian%enim)
+         else
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
+               iz=this%lattice%iz, nmax=this%lattice%nmax)
+         end if
       end if
       call this%gpu_backend%set_periodic_lattice(this%lattice%pbc, this%lattice%n1, &
          this%lattice%n2, this%lattice%n3, this%lattice%a, this%lattice%crd)
@@ -2394,7 +2430,7 @@ contains
       call cheb_fast_reset_cache()
 
       llmax = this%lattice%control%lld
-      if (gpu_plugin_ready(this, 'chebyshev_recur_ij()')) then
+      if (gpu_plugin_ready(this, 'chebyshev_recur_ij()', allow_hoh=.true.)) then
          call gpu_plugin_upload_hamiltonian(this)
          do ij = start_atom, end_atom
             ij_loc = g2l_map(ij)
@@ -3082,7 +3118,7 @@ contains
       b = (emax_win + emin_win)/2.0_rp
       call cheb_fast_reset_cache()
 
-      if (gpu_plugin_ready(this, 'chebyshev_recur()')) then
+      if (gpu_plugin_ready(this, 'chebyshev_recur()', allow_hoh=.true.)) then
          call gpu_plugin_upload_hamiltonian(this)
          do i = start_atom, end_atom
             i_loc = g2l_map(i)

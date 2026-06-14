@@ -80,6 +80,18 @@ struct rsrec_ctx {
     bool have_h = false, have_v = false;
     int ham_ver = 0;
 
+    /* Orthogonalisation (hoh) operands for the two-sweep apply. Uploaded only
+     * when set_hamiltonian receives eeo/hallo/enim. d_ee_bare/d_hall_bare are
+     * the BARE h (no lsham fold), d_eeo/d_hallo the eeo/hallo factor, and
+     * d_hons the on-site (enim + lsham) per type (block-diagonal). The combine
+     *   y = ( h*x - eeo*(h*x) + hons*x - b*x ) / a
+     * mirrors ham_hoh_vec_matmul. fp64 only in this version.                 */
+    zc *d_ee_bare = nullptr, *d_hall_bare = nullptr;
+    zc *d_eeo = nullptr, *d_hallo = nullptr, *d_hons = nullptr;
+    zc *d_thoh = nullptr, *d_ehoh = nullptr, *d_ohoh = nullptr; /* scratch */
+    size_t hoh_scratch_n = 0;
+    bool have_hoh = false;
+
     int cheb_prec = 0;                       /* 0 = fp32 (default), 1 = fp64 */
     fc *f_ee = nullptr, *f_hall = nullptr;   /* (H - b)/a fp32 copies        */
     double f_a = 0.0, f_b = 0.0;
@@ -126,7 +138,10 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_VBq, (void *)c->d_negW, (void *)c->d_c_atom,
                     (void *)c->d_c_nbr, (void *)c->d_cA_H,
                     (void *)c->d_cA_VA, (void *)c->d_cA_VB, (void *)c->d_cB,
-                    (void *)c->d_cC, (void *)c->d_col})
+                    (void *)c->d_cC, (void *)c->d_col,
+                    (void *)c->d_ee_bare, (void *)c->d_hall_bare,
+                    (void *)c->d_eeo, (void *)c->d_hallo, (void *)c->d_hons,
+                    (void *)c->d_thoh, (void *)c->d_ehoh, (void *)c->d_ohoh})
         if (p) cudaFree(p);
     if (c->have_plan) cufftDestroy(c->fft_plan);
     if (c->blas) cublasDestroy(c->blas);
@@ -187,14 +202,22 @@ static void l2_pin(const void *ptr, size_t bytes) {
  * ------------------------------------------------------------------------ */
 extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
                                      const void *hall_, const void *lsham_,
-                                     const int *nn, const int *iz) {
+                                     const int *nn, const int *iz,
+                                     const void *eeo_, const void *hallo_,
+                                     const void *enim_) {
     const cplx *ee = (const cplx *)ee_;
     const cplx *hall = (const cplx *)hall_;
     const cplx *ls = (const cplx *)lsham_;
+    const cplx *eeo = (const cplx *)eeo_;
+    const cplx *hallo = (const cplx *)hallo_;
+    const cplx *enim = (const cplx *)enim_;
     if (!ee || !nn || !iz) FAIL("set_hamiltonian: null input");
     if (c->nmax > 0 && !hall) FAIL("set_hamiltonian: nmax>0 but hall is null");
     const int nb = c->nb, nnmax = c->nnmax;
     const size_t bb = (size_t)nb * nb;
+    const bool hoh = (eeo != nullptr);
+    if (hoh && c->nmax > 0 && !hallo)
+        FAIL("set_hamiltonian: hoh with nmax>0 but hallo is null");
 
     std::vector<cplx> hee(ee, ee + bb * nnmax * c->ntype);
     std::vector<cplx> hha;
@@ -225,6 +248,40 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
     CUCHK(cudaMemcpy(c->d_iz, iz, c->kk * sizeof(int),
                      cudaMemcpyHostToDevice));
     l2_pin(c->d_ee, bb * nnmax * c->ntype * sizeof(zc));
+
+    /* --- two-sweep hoh operands (uploaded raw; combine applies 1/a) ------ */
+    c->have_hoh = false;
+    if (hoh) {
+        /* bare h: ee/hall WITHOUT the lsham fold (the eeo sweep must see the
+         * bare h*x; lsham + enim are carried on-site by d_hons).            */
+        if (!c->d_ee_bare) CUCHK(cudaMalloc(&c->d_ee_bare, bb * nnmax * c->ntype * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_ee_bare, ee, bb * nnmax * c->ntype * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+        if (!c->d_eeo) CUCHK(cudaMalloc(&c->d_eeo, bb * nnmax * c->ntype * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_eeo, eeo, bb * nnmax * c->ntype * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+        if (c->nmax > 0) {
+            if (!c->d_hall_bare) CUCHK(cudaMalloc(&c->d_hall_bare, bb * nnmax * c->nmax * sizeof(zc)));
+            CUCHK(cudaMemcpy(c->d_hall_bare, hall, bb * nnmax * c->nmax * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+            if (!c->d_hallo) CUCHK(cudaMalloc(&c->d_hallo, bb * nnmax * c->nmax * sizeof(zc)));
+            CUCHK(cudaMemcpy(c->d_hallo, hallo, bb * nnmax * c->nmax * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+        }
+        /* on-site (enim + lsham) per type, block-diagonal (bb per type). */
+        std::vector<cplx> hons(bb * c->ntype, cplx(0.0, 0.0));
+        for (int t = 0; t < c->ntype; ++t)
+            for (size_t i = 0; i < bb; ++i) {
+                cplx v(0.0, 0.0);
+                if (enim) v += enim[i + bb * t];
+                if (ls) v += ls[i + bb * t];
+                hons[i + bb * t] = v;
+            }
+        if (!c->d_hons) CUCHK(cudaMalloc(&c->d_hons, bb * c->ntype * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_hons, hons.data(), bb * c->ntype * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+        c->have_hoh = true;
+    }
     c->have_h = true;
     c->ham_ver++;
     return 0;
@@ -1012,6 +1069,102 @@ __global__ void k_combine(size_t n, const zc *__restrict__ t,
         y[i] = make_cuDoubleComplex(alpha * vx, alpha * vy);
 }
 
+/* On-site block-diagonal multiply o = hons[type(k)] * x1, site-major fp64.
+ * One block per atom; hons is (bb per type), x1/o are (ld * ncols).         */
+__global__ void k_onsite_blockmul(int kk, int nb, size_t ld, int ncols,
+                                  const int *__restrict__ iz,
+                                  const zc *__restrict__ hons,
+                                  const zc *__restrict__ x1,
+                                  zc *__restrict__ o) {
+    const int k = blockIdx.x;
+    if (k >= kk) return;
+    const int l = threadIdx.x, cc = threadIdx.y;
+    if (l >= nb || cc >= ncols) return;
+    const size_t bb = (size_t)nb * nb;
+    const zc *H = hons + bb * (size_t)(iz[k] - 1);
+    zc acc = make_cuDoubleComplex(0.0, 0.0);
+    for (int m = 0; m < nb; ++m) {
+        zc h = H[l + nb * m];
+        zc xv = x1[(size_t)m + (size_t)nb * k + ld * cc];
+        acc.x += h.x * xv.x - h.y * xv.y;
+        acc.y += h.x * xv.y + h.y * xv.x;
+    }
+    o[(size_t)l + (size_t)nb * k + ld * cc] = acc;
+}
+
+/* hoh combine: y = alpha*((t - e + o - bsc*x1)*inva) + beta*x0, elementwise.
+ * t = h*x1, e = eeo*(h*x1), o = hons*x1 (all unscaled).                      */
+__global__ void k_combine_hoh(size_t n, const zc *__restrict__ t,
+                              const zc *__restrict__ e,
+                              const zc *__restrict__ o,
+                              const zc *__restrict__ x1,
+                              const zc *__restrict__ x0, zc *__restrict__ y,
+                              double alpha, double beta, double inva,
+                              double bsc) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    double vx = (t[i].x - e[i].x + o[i].x - bsc * x1[i].x) * inva;
+    double vy = (t[i].y - e[i].y + o[i].y - bsc * x1[i].y) * inva;
+    if (beta != 0.0)
+        y[i] = make_cuDoubleComplex(alpha * vx + beta * x0[i].x,
+                                    alpha * vy + beta * x0[i].y);
+    else
+        y[i] = make_cuDoubleComplex(alpha * vx, alpha * vy);
+}
+
+/* Two-sweep hoh step (fp64, block-ELL): mirrors ham_hoh_vec_matmul.
+ *   sweep A: t = h * x1            (bare ee/hall, unscaled)
+ *   sweep B: e = eeo * t           (eeo/hallo, unscaled)
+ *   on-site: o = (enim+lsham)*x1
+ *   combine: y = alpha*((t - e + o - bsc*x1)*inva) + beta*x0
+ * Uses the ctx scratch d_thoh/d_ehoh/d_ohoh (allocated lazily, nfield each). */
+static int step_apply_hoh(rsrec_ctx *c, const zc *x1, const zc *x0, zc *y,
+                          int nrhs, double alpha, double beta, double inva,
+                          double bsc) {
+    const size_t ld = (size_t)c->nb * c->kk;
+    const size_t n = ld * (size_t)nrhs;
+    if (c->hoh_scratch_n < n) {
+        if (c->d_thoh) cudaFree(c->d_thoh);
+        if (c->d_ehoh) cudaFree(c->d_ehoh);
+        if (c->d_ohoh) cudaFree(c->d_ohoh);
+        CUCHK(cudaMalloc(&c->d_thoh, n * sizeof(zc)));
+        CUCHK(cudaMalloc(&c->d_ehoh, n * sizeof(zc)));
+        CUCHK(cudaMalloc(&c->d_ohoh, n * sizeof(zc)));
+        c->hoh_scratch_n = n;
+    }
+    /* sweep A: t = h*x1 (alpha=1,beta=0,inva=1,bsc=0 -> bare apply) */
+    if (step_apply<zc, double>(c, c->d_ee_bare, c->d_hall_bare, c->nmax > 0,
+                               x1, nullptr, c->d_thoh, nrhs,
+                               1.0, 0.0, 1.0, 0.0)) return 1;
+    /* sweep B: e = eeo*t */
+    if (step_apply<zc, double>(c, c->d_eeo, c->d_hallo, c->nmax > 0,
+                               c->d_thoh, nullptr, c->d_ehoh, nrhs,
+                               1.0, 0.0, 1.0, 0.0)) return 1;
+    /* on-site: o = hons*x1 */
+    {
+        dim3 thr(c->nb, nrhs > 1024 / c->nb ? 1024 / c->nb : nrhs);
+        /* loop column slabs so blockDim.y stays within limits */
+        int cs = std::max(1, 1024 / c->nb);
+        for (int c0 = 0; c0 < nrhs; c0 += cs) {
+            int nc = std::min(cs, nrhs - c0);
+            dim3 t2(c->nb, nc);
+            k_onsite_blockmul<<<c->kk, t2>>>(c->kk, c->nb, ld, nc, c->d_iz,
+                                             c->d_hons, x1 + ld * (size_t)c0,
+                                             c->d_ohoh + ld * (size_t)c0);
+            CUCHK(cudaGetLastError());
+        }
+    }
+    /* combine */
+    {
+        const int tpb = 256;
+        k_combine_hoh<<<(int)((n + tpb - 1) / tpb), tpb>>>(
+            n, c->d_thoh, c->d_ehoh, c->d_ohoh, x1, x0, y, alpha, beta, inva,
+            bsc);
+        CUCHK(cudaGetLastError());
+    }
+    return 0;
+}
+
 /* fp64 generalized step (site-major): y = alpha*(Op x1 - bsc x1)*inva +
  * beta*x0. Routes through the structured backend when active (needs tmp).   */
 static int step64(rsrec_ctx *c, int which, const zc *x1, const zc *x0,
@@ -1151,13 +1304,23 @@ static int cheb_engine(rsrec_ctx *c, const void *psi0_h, int ns, int lld,
                            scol, &zero, dmu + slot * bb * ns, nb, smu, ns));
         return 0;
     };
+    /* Matvec dispatch: the two-sweep hoh apply (fp64 only) when active,
+     * otherwise the single-operator step. CT is guaranteed to be zc when
+     * have_hoh (the dispatcher forces the fp64 instantiation).              */
+    auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
+        if (c->have_hoh)
+            return step_apply_hoh(c, (const zc *)x1, (const zc *)x0, (zc *)yv,
+                                  nrhs, (double)al, (double)be, (double)inva,
+                                  (double)bsc);
+        return step_apply<CT, RT>(c, bt, bh, 1, x1, x0, yv, nrhs, al, be,
+                                  inva, bsc);
+    };
+
     if (moments(p0, p0, 0)) return 1;
-    if (step_apply<CT, RT>(c, bt, bh, 1, p0, nullptr, p1, nrhs,
-                           (RT)1, (RT)0, inva, bsc)) return 1;
+    if (matvec(p0, nullptr, p1, (RT)1, (RT)0)) return 1;
     if (moments(p0, p1, 1)) return 1;
     for (int ll = 1; ll <= lld; ++ll) {
-        if (step_apply<CT, RT>(c, bt, bh, 1, p1, p0, p2, nrhs,
-                               (RT)2, (RT)-1, inva, bsc)) return 1;
+        if (matvec(p1, p0, p2, (RT)2, (RT)-1)) return 1;
         if (moments(p1, p1, (size_t)(2 * ll))) return 1;
         if (moments(p2, p1, (size_t)(2 * ll + 1))) return 1;
         CT *t = p0; p0 = p1; p1 = p2; p2 = t;
@@ -1246,6 +1409,12 @@ extern "C" int rsrec_chebyshev_moments_batch(rsrec_ctx *c, const void *psi0,
                                              double b, void *mu) {
     if (!c->have_h) FAIL("chebyshev_moments: Hamiltonian not set");
     if (nstates < 1) FAIL("chebyshev_moments: nstates < 1");
+    /* hoh runs through the two-sweep fp64 block-ELL path only (the fp32 mirror
+     * only covers ee/hall, and the structured backend assumes ee-only). */
+    if (c->have_hoh && (c->cheb_prec == 0 || c->use_struct)) {
+        return cheb_engine<zc, double>(c, psi0, nstates, lld, a, b, mu,
+                                       c->d_ee, c->d_hall, 1.0 / a, b);
+    }
     if (c->cheb_prec == 0 && !c->use_struct) {
         if (ensure_f32_ham(c, a, b)) return 1;
         return cheb_engine<fc, float>(c, psi0, nstates, lld, a, b, mu,

@@ -149,12 +149,14 @@ extern "C" int rsrec_cuda_set_periodic_lattice(rsrec_cuda_ctx *ctx, int pbc,
 extern "C" int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
                                           const void *hall,
                                           const void *lsham, const int *nn,
-                                          const int *iz) {
+                                          const int *iz, const void *eeo,
+                                          const void *hallo, const void *enim) {
     if (!ctx) {
         set_error("rsrec_cuda_set_hamiltonian: null ctx");
         return 1;
     }
-    const int status = rsrec_set_hamiltonian(ctx->inner, ee, hall, lsham, nn, iz);
+    const int status = rsrec_set_hamiltonian(ctx->inner, ee, hall, lsham, nn, iz,
+                                             eeo, hallo, enim);
     if (status != 0) {
         set_error(std::string("rsrec_cuda_set_hamiltonian: ") +
                   rsrec_last_error());
