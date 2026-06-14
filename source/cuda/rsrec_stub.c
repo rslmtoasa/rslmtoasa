@@ -91,6 +91,17 @@ int rsrec_block_dos(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
     return 1;
 }
 
+int rsrec_block_gf_eta(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
+                       const double *a_inf, const double *b_inf, double ef,
+                       const double *eta_re, const double *eta_im, int n_eta,
+                       int natoms, int lld, int sym, void *g0)
+{
+    (void)ctx; (void)a_b; (void)b2_b; (void)a_inf; (void)b_inf; (void)ef;
+    (void)eta_re; (void)eta_im; (void)n_eta; (void)natoms; (void)lld; (void)sym;
+    (void)g0;
+    return 1;
+}
+
 int rsrec_chebyshev_moments(rsrec_ctx *ctx, const void *psi0, int lld,
                             double a, double b, void *mu_out)
 {

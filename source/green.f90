@@ -74,10 +74,12 @@ module green_mod
       procedure :: block_green_gpu
       procedure :: block_green_eta
       procedure :: block_green_ij
+      procedure :: block_green_ij_gpu
       procedure :: block_green_ij_eta
       procedure :: calculate_intersite_gf
       procedure :: calculate_intersite_gf_twoindex
       procedure :: calculate_intersite_gf_eta
+      procedure :: calculate_intersite_gf_eta_gpu
       procedure :: chebyshev_green
       procedure :: chebyshev_green_gpu
       procedure :: chebyshev_green_eta
@@ -389,6 +391,51 @@ contains
       end do
    end subroutine block_green_ij
 
+   !---------------------------------------------------------------------------
+   !> GPU drop-in for block_green_ij: the 4 intersite-pair combos are
+   !> reconstructed on the device over all nv energies in one batched call
+   !> (rsrec_block_dos, natoms=4). Terminator stays on the CPU.
+   !---------------------------------------------------------------------------
+   subroutine block_green_ij_gpu(this, istart)
+      implicit none
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp) :: eta
+      integer :: ll, n, nw, ldim, na, nv, i
+      real(rp), dimension(4) :: a_inf0, b_inf0
+      real(rp), dimension(nb, nb, 4) :: a_inf, b_inf
+      real(rp), dimension(nb, 4) :: a_inf_d, b_inf_d
+      type(rsgpu), save :: gpu_backend
+      logical, save :: first_call = .true.
+
+      ll = this%control%lld
+      ldim = nb
+      na = 4
+      eta = (0.0d0, 0.0d0)
+      nw = 10*ll
+      nv = this%en%channels_ldos + 10
+
+      call this%recursion%get_terminf(this%recursion%a_b(:, :, :, istart), this%recursion%b2_b(:, :, :, istart), &
+                                      na, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
+      do n = 1, na
+         do i = 1, nb
+            a_inf_d(i, n) = a_inf(i, i, n)
+            b_inf_d(i, n) = b_inf(i, i, n)
+         end do
+      end do
+
+      if (first_call) then
+         call gpu_backend%init(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+         first_call = .false.
+      end if
+
+      call gpu_backend%block_dos(this%recursion%a_b(:, :, :, istart:istart + na - 1), &
+                                 this%recursion%b2_b(:, :, :, istart:istart + na - 1), &
+                                 a_inf_d, b_inf_d, this%en%ene(1:nv), eta, &
+                                 this%control%sym_term, this%g0(:, :, 1:nv, 1:na))
+   end subroutine block_green_ij_gpu
+
    subroutine calculate_intersite_gf_twoindex(this)
       use mpi_mod
    use basis_mod, only: nb, norb, spin_off
@@ -446,7 +493,11 @@ contains
          ja_temp = (ia - 1)*4 + 1
          select case (this%control%recur)
          case ('block')
-            call this%block_green_ij(ja_temp)
+            if (this%control%gpu_plugin) then
+               call this%block_green_ij_gpu(ja_temp)
+            else
+               call this%block_green_ij(ja_temp)
+            end if
          case ('chebyshev')
             call this%chebyshev_green_ij(ja_temp)
          end select
@@ -487,6 +538,13 @@ contains
       real(rp), dimension(64) :: x, w
 
       integer :: ia_glob
+
+      ! GPU path: the whole per-pair/per-eta bgreen loop is reconstructed on the
+      ! device in one batched matrix continued fraction.
+      if (this%control%gpu_plugin .and. this%control%recur == 'block') then
+         call this%calculate_intersite_gf_eta_gpu()
+         return
+      end if
 
       ! Find the Gauss Legendre roots and weights
       call gauss_legendre(64, 0.0_rp, 1.0_rp, x, w)
@@ -541,6 +599,105 @@ contains
          end do
       end do
    end subroutine calculate_intersite_gf_eta
+
+   !---------------------------------------------------------------------------
+   !> GPU port of calculate_intersite_gf_eta: the per-pair x per-eta bgreen loop
+   !> (nij x 64 x 4 continued fractions at the Fermi energy) is reconstructed on
+   !> the device in ONE batched call (rsrec_block_gf_eta), over all local pairs.
+   !> The terminator (get_terminf) stays on the CPU; only diagonals go down.
+   !---------------------------------------------------------------------------
+   subroutine calculate_intersite_gf_eta_gpu(this)
+      use mpi_mod
+      implicit none
+      class(green), intent(inout) :: this
+      integer :: ia, ja_temp, j, i, k, c, fermi_point, ia_glob, n_pairs, natoms, ll, ldim, nw
+      complex(rp), dimension(64, nb, nb, 4) :: y
+      real(rp), dimension(64) :: x, w
+      complex(rp), dimension(64) :: eta_list
+      real(rp), allocatable :: a_inf(:, :, :), b_inf(:, :, :), a_inf0(:), b_inf0(:)
+      real(rp), allocatable :: a_inf_d(:, :), b_inf_d(:, :)
+      complex(rp), allocatable :: g0_ef_all(:, :, :, :)
+      ! Static GPU backend (one per program lifetime), as in chebyshev_green_gpu
+      type(rsgpu), save :: gpu_backend
+      logical, save :: first_call = .true.
+
+      ll = this%control%lld
+      ldim = nb
+      nw = 10*ll
+
+      call gauss_legendre(64, 0.0_rp, 1.0_rp, x, w)
+      call this%en%e_mesh()
+      fermi_point = 1
+      do i = 1, this%en%channels_ldos + 10
+         if ((this%en%ene(i) - this%en%fermi) .le. 0.000001d0) fermi_point = i
+      end do
+
+      this%gij_eta = 0.0d0; this%gji_eta = 0.0d0; this%ginmag_eta = 0.0d0; this%giz_eta = 0.0d0; this%giy_eta = 0.0d0; this%gix_eta = 0.0d0
+      this%gjnmag_eta = 0.0d0; this%gjx_eta = 0.0d0; this%gjy_eta = 0.0d0; this%gjz_eta = 0.0d0
+
+      call this%recursion%zsqr()
+
+      ! Gauss-Legendre eta contour (same map as the CPU path: eta = i*(1-x)/x)
+      do k = 1, 64
+         eta_list(k) = cmplx(0.0_rp, (1.0_rp - x(k))/x(k), kind=rp)
+      end do
+
+      ! All local pairs share the contiguous a_b/b2_b layout (4 combos per pair).
+      n_pairs = end_atom - start_atom + 1
+      natoms = n_pairs*4
+      allocate (a_inf(nb, nb, natoms), b_inf(nb, nb, natoms), a_inf0(natoms), b_inf0(natoms))
+      allocate (a_inf_d(nb, natoms), b_inf_d(nb, natoms), g0_ef_all(nb, nb, 64, natoms))
+
+      call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, &
+                                      natoms, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
+      do k = 1, natoms
+         do i = 1, nb
+            a_inf_d(i, k) = a_inf(i, i, k)
+            b_inf_d(i, k) = b_inf(i, i, k)
+         end do
+      end do
+
+      if (first_call) then
+         call gpu_backend%init(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+         first_call = .false.
+      end if
+
+      ! One device call: Gij at the Fermi energy for all (pair x combo) atoms
+      ! and all 64 contour etas -> g0_ef_all(nb,nb,64,natoms).
+      call gpu_backend%block_gf_eta(this%recursion%a_b(:, :, :, 1:natoms), &
+                                    this%recursion%b2_b(:, :, :, 1:natoms), &
+                                    a_inf_d, b_inf_d, this%en%ene(fermi_point), &
+                                    eta_list, this%control%sym_term, g0_ef_all)
+
+      ! Recombine per pair (identical algebra to the CPU loop).
+      do ia_glob = start_atom, end_atom
+         ia = g2l_map(ia_glob)
+         ja_temp = (ia - 1)*4 + 1
+         do c = 1, 4
+            do k = 1, 64
+               y(k, :, :, c) = g0_ef_all(:, :, k, ja_temp + c - 1)
+            end do
+         end do
+         this%gij_eta(:, :, :, ia) = (y(:, :, :, 1) - y(:, :, :, 2) + (1.0d0/i_unit*y(:, :, :, 3) - 1.0d0/i_unit*y(:, :, :, 4)))*0.5d0
+         this%gji_eta(:, :, :, ia) = (y(:, :, :, 1) - y(:, :, :, 2) - (1.0d0/i_unit*y(:, :, :, 3) - 1.0d0/i_unit*y(:, :, :, 4)))*0.5d0
+         do i = 1, norb
+            do j = 1, norb
+               this%Ginmag_eta(:, j, i, iA) = this%Ginmag_eta(:, j, i, iA) + (this%gij_eta(:, j, i, ia) + this%gij_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
+               this%Giz_eta(:, j, i, iA) = this%Giz_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i, ia) - this%gij_eta(:, j +spin_off, i +spin_off, ia))
+               this%Giy_eta(:, j, i, iA) = this%Giy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gij_eta(:, j, i +spin_off, ia) - i_unit*this%gij_eta(:, j +spin_off, i, ia))
+               this%Gix_eta(:, j, i, iA) = this%Gix_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i +spin_off, ia) + this%gij_eta(:, j +spin_off, i, ia))
+               !
+               this%Gjnmag_eta(:, j, i, iA) = this%Gjnmag_eta(:, j, i, iA) + (this%gji_eta(:, j, i, ia) + this%gji_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
+               this%Gjz_eta(:, j, i, iA) = this%Gjz_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i, ia) - this%gji_eta(:, j +spin_off, i +spin_off, ia))
+               this%Gjy_eta(:, j, i, iA) = this%Gjy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gji_eta(:, j, i +spin_off, ia) - i_unit*this%gji_eta(:, j +spin_off, i, ia))
+               this%Gjx_eta(:, j, i, iA) = this%Gjx_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i +spin_off, ia) + this%gji_eta(:, j +spin_off, i, ia))
+            end do
+         end do
+      end do
+
+      deallocate (a_inf, b_inf, a_inf0, b_inf0, a_inf_d, b_inf_d, g0_ef_all)
+   end subroutine calculate_intersite_gf_eta_gpu
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

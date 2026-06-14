@@ -2384,17 +2384,19 @@ static cublasStatus_t blas_getri_batched(cublasHandle_t h, int n, const fc **A,
     return cublasCgetriBatched(h, n, A, lda, piv, C, ldc, info, b);
 }
 
-/* Terminator: Q(i,i) = 0.5*[(E+eta) - a_inf_i - zoff_i], off-diagonals 0.
+/* Terminator: Q(i,i) = 0.5*[(E_e+eta_e) - a_inf_i - zoff_i], off-diagonals 0.
  * zoff_i = sqrt((E-etop)(E-ebot)) with etop/ebot = a_inf_i +/- 2*b_inf_i*f_i;
- * the radicand is real, so zoff is real (radicand>=0) or pure imaginary. */
+ * the radicand is real, so zoff is real (radicand>=0) or pure imaginary.
+ * E and eta vary per sub-batch element e (energies for DOS, etas for the
+ * exchange Gij(E_f)).                                                       */
 template <class CT, class RT>
-__global__ void k_block_term(int nv, int nb, const double *ene, RT eta_re,
-                             RT eta_im, const RT *ainf, const RT *binf,
+__global__ void k_block_term(int m, int nb, const double *ev, const RT *etar,
+                             const RT *etai, const RT *ainf, const RT *binf,
                              int sym, RT a_diag, RT b_diag, CT *Q) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= nv * nb) return;
+    if (idx >= m * nb) return;
     int i = idx % nb, e = idx / nb;
-    RT E = (RT)ene[e];
+    RT E = (RT)ev[e], eta_re = etar[e], eta_im = etai[e];
     RT ai = sym ? a_diag : ainf[i];
     RT bi = sym ? b_diag : binf[i];
     RT f = (!sym && (i == 0 || (nb >= 10 && i == 9))) ? (RT)1.025 : (RT)1;
@@ -2408,28 +2410,28 @@ __global__ void k_block_term(int nv, int nb, const double *ene, RT eta_re,
     Q[(size_t)e * nb * nb + (size_t)i * nb + i] = q;   /* diagonal (i,i) */
 }
 
-/* Qin(i,j,e) = [(i==j)?(E+eta):0] - a_b(i,j) - Q(i,j,e)  (a_b broadcast).   */
+/* Qin(i,j,e) = [(i==j)?(E_e+eta_e):0] - a_b(i,j) - Q(i,j,e)  (a_b broadcast). */
 template <class CT, class RT>
-__global__ void k_block_build(int nv, int nb, const double *ene, RT eta_re,
-                              RT eta_im, const CT *ab, const CT *Q, CT *Qin) {
+__global__ void k_block_build(int m, int nb, const double *ev, const RT *etar,
+                              const RT *etai, const CT *ab, const CT *Q,
+                              CT *Qin) {
     size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     size_t bb = (size_t)nb * nb;
-    if (idx >= (size_t)nv * bb) return;
+    if (idx >= (size_t)m * bb) return;
     int ij = (int)(idx % bb);
     size_t e = idx / bb;
     int i = ij % nb, j = ij / nb;
     CT a = ab[ij];
     CT q = Q[e * bb + ij];
-    RT E = (RT)ene[e];
-    RT dr = (i == j) ? (E + eta_re) : (RT)0;
-    RT di = (i == j) ? eta_im : (RT)0;
+    RT dr = (i == j) ? ((RT)ev[e] + etar[e]) : (RT)0;
+    RT di = (i == j) ? etai[e] : (RT)0;
     CT v;
     v.x = (decltype(v.x))(dr - a.x - q.x);
     v.y = (decltype(v.y))(di - a.y - q.y);
     Qin[e * bb + ij] = v;
 }
 
-/* Copy CT continued-fraction result -> zc output g0 (per energy block).     */
+/* Copy CT continued-fraction result -> zc output g0 (per sub-batch block).   */
 template <class CT>
 __global__ void k_block_store(size_t n, const CT *Q, zc *g0) {
     size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
@@ -2438,48 +2440,61 @@ __global__ void k_block_store(size_t n, const CT *Q, zc *g0) {
     g0[i].y = (double)Q[i].y;
 }
 
+/* Shared block (Haydock) Green-function engine. The continued fraction is
+ * evaluated for a batch of m (E_e, eta_e) points per atom; the level loop is
+ * sequential. DOS passes the energy grid + a constant eta; the exchange Gij
+ * passes a constant E_f + the list of contour etas. g0 layout is always
+ * (nb,nb,m,natoms).                                                          */
 template <class CT, class RT>
-static int block_dos_engine(rsrec_ctx *c, const cplx *a_b, const cplx *b2_b,
-                            const double *a_inf, const double *b_inf,
-                            const double *ene, int nv, double eta_re,
-                            double eta_im, int natoms, int lld, int sym,
-                            cplx *g0) {
+static int block_gf_engine(rsrec_ctx *c, const cplx *a_b, const cplx *b2_b,
+                           const double *a_inf, const double *b_inf,
+                           const double *ev, const double *etr,
+                           const double *eti, int m, int natoms, int lld,
+                           int sym, cplx *g0) {
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb;
-    const RT one_re = (RT)1, zero_re = (RT)0;
     const CT c_one = ct_make<CT>(1, 0), c_zero = ct_make<CT>(0, 0);
     const int tpb = 256;
 
-    double *d_ene;
-    CUCHK(cudaMalloc(&d_ene, nv * sizeof(double)));
-    CUCHK(cudaMemcpy(d_ene, ene, nv * sizeof(double), cudaMemcpyHostToDevice));
+    double *d_ev;
+    RT *d_etr, *d_eti;
+    CUCHK(cudaMalloc(&d_ev, m * sizeof(double)));
+    CUCHK(cudaMalloc(&d_etr, m * sizeof(RT)));
+    CUCHK(cudaMalloc(&d_eti, m * sizeof(RT)));
+    CUCHK(cudaMemcpy(d_ev, ev, m * sizeof(double), cudaMemcpyHostToDevice));
+    {
+        std::vector<RT> hr(m), hi(m);
+        for (int e = 0; e < m; ++e) { hr[e] = (RT)etr[e]; hi[e] = (RT)eti[e]; }
+        CUCHK(cudaMemcpy(d_etr, hr.data(), m * sizeof(RT), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_eti, hi.data(), m * sizeof(RT), cudaMemcpyHostToDevice));
+    }
 
-    /* per-energy batched work buffers (CT) and the broadcast operands        */
+    /* per-element batched work buffers (CT) and the broadcast operands        */
     CT *Q, *Qin, *G, *W, *d_ab, *d_b2;
     RT *d_ainf, *d_binf;
-    CUCHK(cudaMalloc(&Q, (size_t)nv * bb * sizeof(CT)));
-    CUCHK(cudaMalloc(&Qin, (size_t)nv * bb * sizeof(CT)));
-    CUCHK(cudaMalloc(&G, (size_t)nv * bb * sizeof(CT)));
-    CUCHK(cudaMalloc(&W, (size_t)nv * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&Q, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&Qin, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&G, (size_t)m * bb * sizeof(CT)));
+    CUCHK(cudaMalloc(&W, (size_t)m * bb * sizeof(CT)));
     CUCHK(cudaMalloc(&d_ab, (size_t)lld * bb * sizeof(CT)));
     CUCHK(cudaMalloc(&d_b2, (size_t)lld * bb * sizeof(CT)));
     CUCHK(cudaMalloc(&d_ainf, nb * sizeof(RT)));
     CUCHK(cudaMalloc(&d_binf, nb * sizeof(RT)));
     zc *d_g0;
-    CUCHK(cudaMalloc(&d_g0, (size_t)nv * bb * sizeof(zc)));
+    CUCHK(cudaMalloc(&d_g0, (size_t)m * bb * sizeof(zc)));
     int *d_piv, *d_info;
-    CUCHK(cudaMalloc(&d_piv, (size_t)nv * nb * sizeof(int)));
-    CUCHK(cudaMalloc(&d_info, nv * sizeof(int)));
+    CUCHK(cudaMalloc(&d_piv, (size_t)m * nb * sizeof(int)));
+    CUCHK(cudaMalloc(&d_info, m * sizeof(int)));
 
     /* device pointer arrays for the batched LU/inverse (fixed stride bb)      */
     CT **d_Qinp, **d_Gp;
-    CUCHK(cudaMalloc(&d_Qinp, nv * sizeof(CT *)));
-    CUCHK(cudaMalloc(&d_Gp, nv * sizeof(CT *)));
+    CUCHK(cudaMalloc(&d_Qinp, m * sizeof(CT *)));
+    CUCHK(cudaMalloc(&d_Gp, m * sizeof(CT *)));
     {
-        std::vector<CT *> hQ(nv), hG(nv);
-        for (int e = 0; e < nv; ++e) { hQ[e] = Qin + (size_t)e * bb; hG[e] = G + (size_t)e * bb; }
-        CUCHK(cudaMemcpy(d_Qinp, hQ.data(), nv * sizeof(CT *), cudaMemcpyHostToDevice));
-        CUCHK(cudaMemcpy(d_Gp, hG.data(), nv * sizeof(CT *), cudaMemcpyHostToDevice));
+        std::vector<CT *> hQ(m), hG(m);
+        for (int e = 0; e < m; ++e) { hQ[e] = Qin + (size_t)e * bb; hG[e] = G + (size_t)e * bb; }
+        CUCHK(cudaMemcpy(d_Qinp, hQ.data(), m * sizeof(CT *), cudaMemcpyHostToDevice));
+        CUCHK(cudaMemcpy(d_Gp, hG.data(), m * sizeof(CT *), cudaMemcpyHostToDevice));
     }
 
     /* host staging to down-convert a_b/b2_b (cplx) -> CT and a_inf/b_inf      */
@@ -2507,52 +2522,52 @@ static int block_dos_engine(rsrec_ctx *c, const cplx *a_b, const cplx *b2_b,
                                : (RT)b_inf[(size_t)n * nb + 0];
 
         /* terminator (off-diagonals zeroed first) */
-        CUCHK(cudaMemset(Q, 0, (size_t)nv * bb * sizeof(CT)));
-        k_block_term<CT, RT><<<(nv * nb + tpb - 1) / tpb, tpb>>>(
-            nv, nb, d_ene, (RT)eta_re, (RT)eta_im, d_ainf, d_binf, sym,
-            a_diag, b_diag, Q);
+        CUCHK(cudaMemset(Q, 0, (size_t)m * bb * sizeof(CT)));
+        k_block_term<CT, RT><<<(m * nb + tpb - 1) / tpb, tpb>>>(
+            m, nb, d_ev, d_etr, d_eti, d_ainf, d_binf, sym, a_diag, b_diag, Q);
         CUCHK(cudaGetLastError());
 
         /* continued fraction: level lc = lld-1 .. 1 (Fortran ln) */
         for (int lc = lld - 1; lc >= 1; --lc) {
             const CT *ab_l = d_ab + (size_t)(lc - 1) * bb;
             const CT *b2_l = d_b2 + (size_t)(lc - 1) * bb;
-            size_t nfield = (size_t)nv * bb;
+            size_t nfield = (size_t)m * bb;
             k_block_build<CT, RT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(
-                nv, nb, d_ene, (RT)eta_re, (RT)eta_im, ab_l, Q, Qin);
+                m, nb, d_ev, d_etr, d_eti, ab_l, Q, Qin);
             CUCHK(cudaGetLastError());
             /* G = Qin^-1 (batched LU + inverse) */
-            CBCHK(blas_getrf_batched(c->blas, nb, d_Qinp, nb, d_piv, d_info, nv));
+            CBCHK(blas_getrf_batched(c->blas, nb, d_Qinp, nb, d_piv, d_info, m));
             CBCHK(blas_getri_batched(c->blas, nb, (const CT **)d_Qinp, nb,
-                                     d_piv, d_Gp, nb, d_info, nv));
+                                     d_piv, d_Gp, nb, d_info, m));
             /* W = G * b2_l   (b2 broadcast: strideB = 0) */
             CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, nb, nb, nb,
                                &c_one, G, nb, (long long)bb, b2_l, nb, 0,
-                               &c_zero, W, nb, (long long)bb, nv));
+                               &c_zero, W, nb, (long long)bb, m));
             /* Q = b2_l^H * W   (b2 broadcast: strideA = 0) */
             CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, nb,
                                &c_one, b2_l, nb, 0, W, nb, (long long)bb,
-                               &c_zero, Q, nb, (long long)bb, nv));
+                               &c_zero, Q, nb, (long long)bb, m));
         }
 
         /* g0(:,:,:,n) = Q */
-        size_t nfield = (size_t)nv * bb;
+        size_t nfield = (size_t)m * bb;
         k_block_store<CT><<<(int)((nfield + tpb - 1) / tpb), tpb>>>(nfield, Q, d_g0);
         CUCHK(cudaGetLastError());
-        CUCHK(cudaMemcpy(g0 + (size_t)n * nv * bb, d_g0,
+        CUCHK(cudaMemcpy(g0 + (size_t)n * m * bb, d_g0,
                          nfield * sizeof(zc), cudaMemcpyDeviceToHost));
     }
 
-    for (void *p : {(void *)d_ene, (void *)Q, (void *)Qin, (void *)G, (void *)W,
-                    (void *)d_ab, (void *)d_b2, (void *)d_ainf, (void *)d_binf,
-                    (void *)d_g0, (void *)d_piv, (void *)d_info,
-                    (void *)d_Qinp, (void *)d_Gp})
+    for (void *p : {(void *)d_ev, (void *)d_etr, (void *)d_eti, (void *)Q,
+                    (void *)Qin, (void *)G, (void *)W, (void *)d_ab,
+                    (void *)d_b2, (void *)d_ainf, (void *)d_binf, (void *)d_g0,
+                    (void *)d_piv, (void *)d_info, (void *)d_Qinp, (void *)d_Gp})
         if (p) cudaFree(p);
     return 0;
 }
 
-/* a_b/b2_b: (nb,nb,lld,natoms); a_inf/b_inf: (nb,natoms) diagonals; ene: nv;
- * g0 out: (nb,nb,nv,natoms). Precision from c->cheb_prec (0=fp32, 1=fp64). */
+/* DOS: g0(:,:,ie,n) over the nv energies (constant eta). a_b/b2_b:
+ * (nb,nb,lld,natoms); a_inf/b_inf: (nb,natoms) diagonals; g0:(nb,nb,nv,natoms).
+ * Precision from c->cheb_prec (0=fp32, 1=fp64).                              */
 extern "C" int rsrec_block_dos(rsrec_ctx *c, const void *a_b, const void *b2_b,
                                const double *a_inf, const double *b_inf,
                                const double *ene, int nv, double eta_re,
@@ -2561,9 +2576,34 @@ extern "C" int rsrec_block_dos(rsrec_ctx *c, const void *a_b, const void *b2_b,
     if (nv < 1 || natoms < 1 || lld < 1) FAIL("block_dos: bad sizes");
     const cplx *ab = (const cplx *)a_b, *b2 = (const cplx *)b2_b;
     cplx *g0c = (cplx *)g0;
+    std::vector<double> etr(nv, eta_re), eti(nv, eta_im);   /* constant eta   */
     if (c->cheb_prec == 0)
-        return block_dos_engine<fc, float>(c, ab, b2, a_inf, b_inf, ene, nv,
-                                           eta_re, eta_im, natoms, lld, sym, g0c);
-    return block_dos_engine<zc, double>(c, ab, b2, a_inf, b_inf, ene, nv,
-                                        eta_re, eta_im, natoms, lld, sym, g0c);
+        return block_gf_engine<fc, float>(c, ab, b2, a_inf, b_inf, ene,
+                                          etr.data(), eti.data(), nv, natoms,
+                                          lld, sym, g0c);
+    return block_gf_engine<zc, double>(c, ab, b2, a_inf, b_inf, ene,
+                                       etr.data(), eti.data(), nv, natoms, lld,
+                                       sym, g0c);
+}
+
+/* Exchange Gij: g0(:,:,k,n) at the single Fermi energy ef for the n_eta
+ * contour points eta_re[k]+i*eta_im[k] (constant E). Same a_b/b2_b/a_inf/b_inf
+ * layout as block_dos; g0 out: (nb,nb,n_eta,natoms).                         */
+extern "C" int rsrec_block_gf_eta(rsrec_ctx *c, const void *a_b,
+                                  const void *b2_b, const double *a_inf,
+                                  const double *b_inf, double ef,
+                                  const double *eta_re, const double *eta_im,
+                                  int n_eta, int natoms, int lld, int sym,
+                                  void *g0) {
+    if (n_eta < 1 || natoms < 1 || lld < 1) FAIL("block_gf_eta: bad sizes");
+    const cplx *ab = (const cplx *)a_b, *b2 = (const cplx *)b2_b;
+    cplx *g0c = (cplx *)g0;
+    std::vector<double> ev(n_eta, ef);                     /* constant energy */
+    if (c->cheb_prec == 0)
+        return block_gf_engine<fc, float>(c, ab, b2, a_inf, b_inf, ev.data(),
+                                          eta_re, eta_im, n_eta, natoms, lld,
+                                          sym, g0c);
+    return block_gf_engine<zc, double>(c, ab, b2, a_inf, b_inf, ev.data(),
+                                       eta_re, eta_im, n_eta, natoms, lld, sym,
+                                       g0c);
 }

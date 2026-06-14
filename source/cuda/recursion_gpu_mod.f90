@@ -66,6 +66,7 @@ module recursion_gpu_mod
       procedure :: set_precision => rsgpu_set_precision
       procedure :: chebyshev_dos => rsgpu_chebyshev_dos
       procedure :: block_dos => rsgpu_block_dos
+      procedure :: block_gf_eta => rsgpu_block_gf_eta
       procedure :: ham_apply => rsgpu_ham_apply
       procedure :: chebyshev_moments => rsgpu_chebyshev_moments
       procedure :: block_lanczos => rsgpu_block_lanczos
@@ -143,6 +144,16 @@ module recursion_gpu_mod
          type(c_ptr), value :: ctx, a_b, b2_b, a_inf, b_inf, ene, g0
          integer(c_int), value :: nv, natoms, lld, sym
          real(c_double), value :: eta_re, eta_im
+         integer(c_int) :: ierr
+      end function
+
+      function c_rsrec_block_gf_eta(ctx, a_b, b2_b, a_inf, b_inf, ef, &
+                                    eta_re, eta_im, n_eta, natoms, lld, sym, g0) &
+         bind(C, name="rsrec_block_gf_eta") result(ierr)
+         import :: c_ptr, c_int, c_double
+         type(c_ptr), value :: ctx, a_b, b2_b, a_inf, b_inf, eta_re, eta_im, g0
+         integer(c_int), value :: n_eta, natoms, lld, sym
+         real(c_double), value :: ef
          integer(c_int) :: ierr
       end function
 
@@ -336,6 +347,39 @@ contains
                             natoms, lld, isym, c_loc(g0)) /= 0) &
          call die("block_dos")
    end subroutine rsgpu_block_dos
+
+   !> Intersite Gij at the Fermi energy ef for a list of contour etas -- the
+   !> GPU port of the per-pair/per-eta bgreen loop. a_b/b2_b: (nb,nb,lld,natoms);
+   !> a_inf/b_inf: (nb,natoms) diagonals; etas: (n_eta) complex; g0 out:
+   !> (nb,nb,n_eta,natoms).
+   subroutine rsgpu_block_gf_eta(this, a_b, b2_b, a_inf, b_inf, ef, etas, sym, g0)
+      class(rsgpu), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(in), target :: a_b, b2_b
+      real(rp), dimension(:, :), intent(in), target :: a_inf, b_inf
+      real(rp), intent(in) :: ef
+      complex(rp), dimension(:), intent(in) :: etas
+      logical, intent(in) :: sym
+      complex(rp), dimension(:, :, :, :), intent(inout), target :: g0
+      integer(c_int) :: n_eta, natoms, lld, isym
+      real(c_double), allocatable, target :: etr(:), eti(:)
+      integer :: k
+      n_eta = int(size(etas), c_int)
+      lld = int(size(a_b, 3), c_int)
+      natoms = int(size(a_b, 4), c_int)
+      if (size(g0, 3) < n_eta .or. size(g0, 4) < natoms) &
+         call die("block_gf_eta: g0 too small")
+      allocate (etr(n_eta), eti(n_eta))
+      do k = 1, n_eta
+         etr(k) = real(real(etas(k)), c_double)
+         eti(k) = real(aimag(etas(k)), c_double)
+      end do
+      isym = merge(1_c_int, 0_c_int, sym)
+      if (c_rsrec_block_gf_eta(this%ctx, c_loc(a_b), c_loc(b2_b), c_loc(a_inf), &
+                               c_loc(b_inf), real(ef, c_double), c_loc(etr), &
+                               c_loc(eti), n_eta, natoms, lld, isym, c_loc(g0)) /= 0) &
+         call die("block_gf_eta")
+      deallocate (etr, eti)
+   end subroutine rsgpu_block_gf_eta
 
    !> psi_out = (H psi_in - b psi_in)/a  -- drop-in for ham_vec_matmul
    subroutine rsgpu_ham_apply(this, psi_in, psi_out, a, b)

@@ -151,6 +151,17 @@ int rsrec_block_dos(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
                     const double *ene, int nv, double eta_re, double eta_im,
                     int natoms, int lld, int sym, void *g0);
 
+/* --- Block intersite Gij at the Fermi energy (exchange contour) -----------
+ * Same continued fraction as rsrec_block_dos but evaluated at the SINGLE
+ * energy ef for n_eta contour points eta_re[k]+i*eta_im[k] (the GPU port of
+ * the per-pair/per-eta bgreen loop in calculate_intersite_gf_eta). a_b/b2_b
+ * hold the (nb,nb,lld,natoms) intersite-pair coefficients (4 combos per pair);
+ * g0 out: (nb,nb,n_eta,natoms).                                             */
+int rsrec_block_gf_eta(rsrec_ctx *ctx, const void *a_b, const void *b2_b,
+                       const double *a_inf, const double *b_inf, double ef,
+                       const double *eta_re, const double *eta_im, int n_eta,
+                       int natoms, int lld, int sym, void *g0);
+
 /* --- core matvec (exposed mostly for testing / custom drivers) ----------- */
 /* y = (H x - b x)/a   with x, y: (nb, nrhs, kk).  a=1,b=0 gives plain H x.
  * which: 0 = Hamiltonian, 1 = v_a, 2 = v_b (no shift/scale applied to 1,2
