@@ -1011,7 +1011,7 @@ contains
          !   Qx2y2, Q3z2r2
          !--------------------------------------------------------------------
          fnamequad = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbquadene.out"
-         unitquad = rank * 132 + na
+         unitquad = (rank + 1) * 132 + na
 
          open(unit=unitquad, file=fnamequad, status='replace', action='write')
 
@@ -1131,7 +1131,7 @@ contains
          call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
 
          fnameorb = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbene.out"
-         unitorb = rank * 132 + na
+         unitorb = (rank + 1) * 132 + na
          open(unit=unitorb, file=fnameorb, status='replace', action='write')
 
          do ie = 1, this%en%channels_ldos + 10
