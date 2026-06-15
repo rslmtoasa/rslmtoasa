@@ -103,6 +103,12 @@ module reciprocal_mod
       !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
       !> or 'generalized_overlap_kanpur'.
       character(len=32) :: reciprocal_mode
+      !> K-space Hamiltonian order:
+      !>   'first'  -> H(k) = h(k)            (first-order, current behaviour)
+      !>   'second' -> H(k) = E_nu + h(k) - [hoh](k) + L.S   (second-order ASA)
+      !> The second-order path is the seam where the combined correction (CCOR)
+      !> and the "proper" k-space second order (generalized_overlap_kanpur) plug in.
+      character(len=16) :: kspace_ham_order
       !> Kanpur-alignment diagnostics toggle
       logical :: kanpur_diagnostics
       !> Optional H(Gamma) bounds diagnostics
@@ -230,6 +236,8 @@ module reciprocal_mod
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
+      procedure :: fourier_transform_hamiltonian_second_order
+      procedure :: fourier_transform_array
       procedure :: fourier_transform_overlap
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
@@ -434,6 +442,7 @@ contains
       this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
       this%auto_find_fermi = .true.  ! Auto-find Fermi level from DOS (recommended default)
       this%reciprocal_mode = 'ham_only'
+      this%kspace_ham_order = 'auto'
       this%kanpur_diagnostics = .true.
       this%gamma_bounds_diagnostics = .false.
       this%hall_diag_experimental = .false.
@@ -487,6 +496,7 @@ contains
       auto_find_fermi = this%auto_find_fermi
       suppress_internal_logs = this%suppress_internal_logs
       reciprocal_mode = this%reciprocal_mode
+      kspace_ham_order = this%kspace_ham_order
       kanpur_diagnostics = this%kanpur_diagnostics
       gamma_bounds_diagnostics = this%gamma_bounds_diagnostics
       hall_diag_experimental = this%hall_diag_experimental
@@ -552,6 +562,12 @@ contains
          call g_logger%warning("reciprocal_mode must be 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'. Falling back to ham_only.", __FILE__, __LINE__)
          this%reciprocal_mode = 'ham_only'
       end if
+      this%kspace_ham_order = lower(trim(kspace_ham_order))
+      if (this%kspace_ham_order /= 'first' .and. this%kspace_ham_order /= 'second' .and. &
+          this%kspace_ham_order /= 'auto') then
+         call g_logger%warning("kspace_ham_order must be 'auto', 'first', or 'second'. Falling back to auto.", __FILE__, __LINE__)
+         this%kspace_ham_order = 'auto'
+      end if
 
       ! K-path settings
       this%auto_kpath = auto_kpath
@@ -591,6 +607,7 @@ contains
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
       end if
       call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -903,64 +920,151 @@ contains
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
+
+      ! First-order k-space Hamiltonian: H(k) = h(k) = Sum_R ee(R) exp(i*k·R).
+      ! NOTE: This deliberately reproduces the historical first-order behaviour.
+      !       The on-site E_nu (enim) and spin-orbit (lsham) terms are NOT added
+      !       here; they are only included in the second-order path
+      !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
+      call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk_result)
+   end subroutine fourier_transform_hamiltonian
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Generic Bloch sum of a real-space (nb,nb,neigh,ntype) array to k-space.
+   !> mk(k) = Sum_R M_ij(R) exp(i*k·R_ij), summed into the (site_i, site_j)
+   !> orbital block. Used for both h(k) (= ee(k)) and the orthogonalization
+   !> [hoh] factor (= eeo(k)).
+   !>
+   !> This is the single place that owns the site/neighbor -> orbital-block
+   !> mapping for k-space Bloch sums, so the first- and second-order paths
+   !> share identical geometry handling.
+   !---------------------------------------------------------------------------
+   subroutine fourier_transform_array(this, array4d, k_vec, mk_result)
+      class(reciprocal), intent(in) :: this
+      complex(rp), dimension(:, :, :, :), intent(in) :: array4d  ! (nb,nb,neigh,ntype)
+      real(rp), dimension(3), intent(in) :: k_vec
+      complex(rp), dimension(:, :), intent(out) :: mk_result  ! (n_orb*n_sites, n_orb*n_sites)
       ! Local variables
-      integer :: isite, jsite, ntype_i, ntype_j, ineigh, ia, ja, nr
+      integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr
       integer :: i_start, i_end, j_start, j_end
       integer :: n_orb, n_sites
       complex(rp), dimension(:, :), allocatable :: structure_factors  ! (nr_max, ntype)
-      
-      ! Get dimensions
+
       n_orb = nb
       n_sites = this%lattice%nrec
-      
-      ! Allocate structure factors for all types
-      allocate(structure_factors(this%lattice%nn_max, this%lattice%ntype))
-      
-      ! Calculate structure factors for all atom types at this k-point
-      call this%calculate_structure_factors(k_vec, structure_factors)
-      
-      ! Initialize result
-      hk_result = cmplx(0.0_rp, 0.0_rp, rp)
 
-      ! Loop over all sites in the unit cell
-      ! For each i_site → j_site pair, sum over lattice vectors R
+      allocate(structure_factors(this%lattice%nn_max, this%lattice%ntype))
+      call this%calculate_structure_factors(k_vec, structure_factors)
+
+      mk_result = cmplx(0.0_rp, 0.0_rp, rp)
+
+      ! Loop over all sites in the unit cell.
+      ! For each i_site -> j_site pair, sum over lattice vectors R.
       do isite = 1, n_sites
          ntype_i = this%lattice%ib(isite)  ! Type of site i
          ia = this%lattice%atlist(ntype_i) ! Cluster atom for this type
          nr = this%lattice%nn(ia, 1)       ! Number of neighbors
-         
-         ! Orbital block indices for site i (row block)
+
          i_start = (isite - 1) * n_orb + 1
          i_end = isite * n_orb
-         
-         ! Loop over neighbors (which map to j_sites in different cells)
+
          do ineigh = 1, nr
             if (ineigh == 1) then
-               ! On-site: i_site = j_site, R = 0
-               jsite = isite
+               jsite = isite                       ! On-site: R = 0
             else
-               ! Off-site: determine which j_site this neighbor corresponds to
                ja = this%lattice%nn(ia, ineigh)     ! Cluster atom index
                if (ja < 1 .or. ja > this%lattice%kk) cycle
                jsite = this%lattice%iz(ja)          ! Map to unit cell site
                if (jsite < 1 .or. jsite > n_sites) cycle
             end if
-            
-            ! Orbital block indices for site j (column block)
+
             j_start = (jsite - 1) * n_orb + 1
             j_end = jsite * n_orb
-            
-            ! Add H_ij(R) * exp(i*k·R_ij) to the appropriate block
-            ! Structure factor already contains the phase for this neighbor
-            hk_result(i_start:i_end, j_start:j_end) = &
-               hk_result(i_start:i_end, j_start:j_end) + &
-               this%hamiltonian%ee(:, :, ineigh, ntype_i) * structure_factors(ineigh, ntype_i)
+
+            mk_result(i_start:i_end, j_start:j_end) = &
+               mk_result(i_start:i_end, j_start:j_end) + &
+               array4d(:, :, ineigh, ntype_i) * structure_factors(ineigh, ntype_i)
          end do
       end do
 
       deallocate(structure_factors)
-      
-   end subroutine fourier_transform_hamiltonian
+   end subroutine fourier_transform_array
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Build the second-order ASA k-space Hamiltonian for a single k-point:
+   !>
+   !>   H(k) = E_nu + h(k) - [hoh](k) + L.S
+   !>
+   !> where
+   !>   h(k)     = Sum_R ee(R)  exp(i*k·R)        (first-order, off+on-site)
+   !>   eeo(k)   = Sum_R eeo(R) exp(i*k·R),  eeo(R) = ee(R)·obar
+   !>   [hoh](k) = eeo(k) · h(k)                  (= Sum_R' eeo(R-R')·ee(R'))
+   !>   E_nu     = enim (on-site, per type, R=0 only)
+   !>   L.S      = lsham (on-site, per type, R=0 only)
+   !>
+   !> The crucial point relative to the real-space recursion path
+   !> (recursion%ham_hoh_vec_matmul) is that the [hoh] term, which there is a
+   !> *double* real-space convolution eeo ⋆ (ee ⋆ psi) of range 2*nn, becomes a
+   !> simple matrix product eeo(k)·h(k) in k-space. No extended (two-hop)
+   !> neighbor table is needed: the block product automatically spans the full
+   !> two-hop range. This is exactly why the abandoned real-space "flatten"
+   !> approach (branch fable_v1_flat) is unnecessary here.
+   !>
+   !> SEAM FOR FUTURE WORK (combined correction / proper second order):
+   !>   - CCOR adds H_cc(k) = Bloch sum of D(R), Ddot(R) plus the on-site
+   !>     D^(0)·Delta term, accumulated into hk_result exactly like h(k) below.
+   !>   - The "proper" k-space second order (reciprocal_mode =
+   !>     'generalized_overlap_kanpur') adds the Skriver/Andersen combined-
+   !>     correction overlap and Hamiltonian terms; hk_result here is the seam
+   !>     they accumulate into, mirroring how ee/hall is the seam in real space.
+   !---------------------------------------------------------------------------
+   subroutine fourier_transform_hamiltonian_second_order(this, k_vec, hk_result)
+      class(reciprocal), intent(in) :: this
+      real(rp), dimension(3), intent(in) :: k_vec
+      complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
+      ! Local variables
+      integer :: isite, ntype_i, i_start, i_end
+      integer :: n_orb, n_sites, ndim
+      complex(rp), dimension(:, :), allocatable :: hk, eeok, hohk
+
+      n_orb = nb
+      n_sites = this%lattice%nrec
+      ndim = n_orb * n_sites
+
+      allocate(hk(ndim, ndim), eeok(ndim, ndim), hohk(ndim, ndim))
+
+      ! h(k) = Sum_R ee(R) exp(i*k·R)
+      call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk)
+      ! eeo(k) = Sum_R eeo(R) exp(i*k·R)
+      call this%fourier_transform_array(this%hamiltonian%eeo, k_vec, eeok)
+
+      ! [hoh](k) = eeo(k) · h(k)
+      ! GPU: this zgemm (and the two Bloch sums above) are the natural offload
+      ! point; batch over k with a strided-batched cuBLAS zgemm, mirroring the
+      ! existing rsrec_cuda plugin pattern.
+      call zgemm('n', 'n', ndim, ndim, ndim, cone, eeok, ndim, hk, ndim, czero, hohk, ndim)
+
+      ! H(k) = h(k) - [hoh](k)
+      hk_result = hk - hohk
+
+      ! Add on-site (R=0) terms: E_nu (enim) and L.S (lsham), per site/type,
+      ! onto the block diagonal (no phase factor for R=0).
+      do isite = 1, n_sites
+         ntype_i = this%lattice%ib(isite)
+         i_start = (isite - 1) * n_orb + 1
+         i_end = isite * n_orb
+         hk_result(i_start:i_end, i_start:i_end) = &
+            hk_result(i_start:i_end, i_start:i_end) + &
+            this%hamiltonian%enim(:, :, ntype_i) + &
+            this%hamiltonian%lsham(:, :, ntype_i)
+      end do
+
+      deallocate(hk, eeok, hohk)
+   end subroutine fourier_transform_hamiltonian_second_order
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1079,6 +1183,7 @@ contains
       integer :: ik, ik_global, nk, ntype
       character(len=200) :: debug_msg
       logical :: using_kpath, distribute_mesh
+      logical :: use_second_order
       integer :: i, j
 
       ! Determine which k-point set to use
@@ -1127,17 +1232,55 @@ contains
    allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
+      ! Decide first- vs second-order k-space Hamiltonian.
+      ! Resolution of kspace_ham_order:
+      !   'auto'   -> 'second' if hoh is enabled, else 'first' (default)
+      !   'second' -> force second order
+      !   'first'  -> force first order
+      ! Second order requires the orthogonalization arrays (eeo/enim/lsham),
+      ! which are only built when the real-space Hamiltonian was assembled with
+      ! hoh enabled. Fall back to first order with a warning otherwise.
+      select case (trim(this%kspace_ham_order))
+      case ('second')
+         use_second_order = .true.
+      case ('first')
+         use_second_order = .false.
+      case default  ! 'auto'
+         use_second_order = this%hamiltonian%hoh
+         if (use_second_order) then
+            call root_info('build_kspace_hamiltonian: kspace_ham_order=auto and hoh enabled ' // &
+               '-> using second order', __FILE__, __LINE__)
+         end if
+      end select
+      if (use_second_order) then
+         if (.not. this%hamiltonian%hoh .or. .not. allocated(this%hamiltonian%eeo)) then
+            call g_logger%warning('build_kspace_hamiltonian: second-order H(k) requires ' // &
+               'hoh-enabled Hamiltonian (eeo not available). Falling back to first order.', __FILE__, __LINE__)
+            use_second_order = .false.
+         else
+            call root_info('build_kspace_hamiltonian: using SECOND-order H(k) = E_nu + h - hoh + L.S', __FILE__, __LINE__)
+         end if
+      end if
+
       ! Parallelize over k-points (coarse-grained) when OpenMP is available.
 #ifdef _OPENMP
-      !$omp parallel do private(ik, ik_global) shared(this, using_kpath) default(none)
+      !$omp parallel do private(ik, ik_global) shared(this, using_kpath, use_second_order) default(none)
 #endif
       do ik = 1, this%nk_local
          ik_global = local_k_index_to_global(this, ik)
          ! Fourier transform: builds full multi-site H(k)
-         if (using_kpath) then
-            call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
+         if (use_second_order) then
+            if (using_kpath) then
+               call this%fourier_transform_hamiltonian_second_order(this%k_path(:, ik), this%hk_bulk(:, :, ik))
+            else
+               call this%fourier_transform_hamiltonian_second_order(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
+            end if
          else
-            call this%fourier_transform_hamiltonian(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
+            if (using_kpath) then
+               call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
+            else
+               call this%fourier_transform_hamiltonian(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
+            end if
          end if
       end do
 #ifdef _OPENMP

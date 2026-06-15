@@ -42,6 +42,7 @@ character(len=20) :: dos_method            ! 'tetrahedron', 'blochl', or 'gaussi
 logical :: auto_find_fermi                 ! Find Fermi from charge conservation
 logical :: suppress_internal_logs          ! Reduce verbosity (.true. recommended)
 character(len=32) :: reciprocal_mode       ! 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'
+character(len=16) :: kspace_ham_order      ! 'auto' (second if hoh on, else first), 'first' (h(k)), or 'second' (E_nu + h - hoh + L.S)
 logical :: kanpur_diagnostics              ! Print Kanpur-mapping diagnostics
 logical :: gamma_bounds_diagnostics        ! Compute H(Gamma) bounds diagnostics
 logical :: hall_diag_experimental          ! Experimental finite real-space HALL diagonalization
@@ -52,4 +53,5 @@ namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
    n_energy_points, dos_energy_min, dos_energy_max, &
    gaussian_sigma, temperature, total_electrons, dos_method, &
    auto_find_fermi, suppress_internal_logs, reciprocal_mode, &
+   kspace_ham_order, &
    kanpur_diagnostics, gamma_bounds_diagnostics, hall_diag_experimental
