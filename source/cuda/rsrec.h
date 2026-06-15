@@ -135,6 +135,17 @@ int rsrec_chebyshev_dos(rsrec_ctx *ctx, const void *mu, int n_moments,
                         int natoms, const double *ene, int nv,
                         double a, double b, void *g0);
 
+/* --- Chebyshev intersite Gij at the Fermi energy (exchange contour) -------
+ * Same moment contraction as rsrec_chebyshev_dos, but F is supplied by the
+ * caller (n_moments x n_eta, complex) already evaluated at the complex
+ * energies E_f + eta_k -- the Fortran wrapper builds it with complex
+ * acos/sqrt, so no device complex transcendentals are needed. This is the
+ * GPU port of the per-pair/per-eta chebyshev_green_ij_eta loop.
+ *   mu : (nb,nb,n_moments,natoms) complex(rp); natoms = 4*pairs (combos)
+ *   F  : (n_moments,n_eta) complex(rp); g0 out: (nb,nb,n_eta,natoms)        */
+int rsrec_chebyshev_gf_eta(rsrec_ctx *ctx, const void *mu, int n_moments,
+                           int natoms, const void *F, int n_eta, void *g0);
+
 /* --- Block (Haydock) Green-function / DOS reconstruction ------------------
  * GPU port of bgreen() (green.f90): per local atom, the matrix continued
  * fraction G_0(E) = [(E+eta)I - a_l - b_l^H G_{l+1} b_l]^-1 (l=1..lld-1),

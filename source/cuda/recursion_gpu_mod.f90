@@ -54,6 +54,8 @@ module recursion_gpu_mod
    public :: rsgpu
 
    integer, parameter :: rp = selected_real_kind(15, 307)
+   real(rp), parameter :: pi = 3.14159265358979323846_rp
+   complex(rp), parameter :: i_unit = cmplx(0.0_rp, 1.0_rp, kind=rp)
 
    type :: rsgpu
       type(c_ptr) :: ctx = c_null_ptr
@@ -65,6 +67,7 @@ module recursion_gpu_mod
       procedure :: set_grid => rsgpu_set_grid
       procedure :: set_precision => rsgpu_set_precision
       procedure :: chebyshev_dos => rsgpu_chebyshev_dos
+      procedure :: chebyshev_gf_eta => rsgpu_chebyshev_gf_eta
       procedure :: block_dos => rsgpu_block_dos
       procedure :: block_gf_eta => rsgpu_block_gf_eta
       procedure :: ham_apply => rsgpu_ham_apply
@@ -134,6 +137,14 @@ module recursion_gpu_mod
          type(c_ptr), value :: ctx, mu, ene, g0
          integer(c_int), value :: n_mom, natoms, nv
          real(c_double), value :: a, b
+         integer(c_int) :: ierr
+      end function
+
+      function c_rsrec_chebyshev_gf_eta(ctx, mu, n_mom, natoms, f, n_eta, g0) &
+         bind(C, name="rsrec_chebyshev_gf_eta") result(ierr)
+         import :: c_ptr, c_int
+         type(c_ptr), value :: ctx, mu, f, g0
+         integer(c_int), value :: n_mom, natoms, n_eta
          integer(c_int) :: ierr
       end function
 
@@ -323,17 +334,61 @@ contains
          call die("chebyshev_dos")
    end subroutine rsgpu_chebyshev_dos
 
+   !> Chebyshev intersite Gij at the Fermi energy ef for a list of contour
+   !> etas -- GPU port of the per-pair/per-eta chebyshev_green_ij_eta loop.
+   !> The transfer matrix F(i,k) (Jackson kernel * (-i)e^{-i(i-1)acos(z_k)} /
+   !> sqrt(a^2-(ef+eta_k-b)^2), z_k=(ef+eta_k-b)/a) is built here with complex
+   !> intrinsics (matching k_build_F64 / cheb_green_fast), then the moment
+   !> contraction g0=mu*F runs batched on the GPU. mu:(nb,nb,n_mom,natoms);
+   !> etas:(n_eta) complex; g0 out:(nb,nb,n_eta,natoms).
+   subroutine rsgpu_chebyshev_gf_eta(this, mu_n, ef, etas, a, b, g0)
+      class(rsgpu), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(in), target, contiguous :: mu_n
+      real(rp), intent(in) :: ef, a, b
+      complex(rp), dimension(:), intent(in) :: etas
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: g0
+      complex(rp), allocatable, target :: f(:, :)
+      integer(c_int) :: n_mom, natoms, n_eta
+      integer :: i, k
+      real(rp) :: thl, cot, gj, cc
+      complex(rp) :: ze, z, th, pref
+      n_mom = int(size(mu_n, 3), c_int)
+      natoms = int(size(mu_n, 4), c_int)
+      n_eta = int(size(etas), c_int)
+      if (size(g0, 3) < n_eta .or. size(g0, 4) < natoms) &
+         call die("chebyshev_gf_eta: g0 too small")
+      ! Build F(n_mom, n_eta) at the complex energies ef + eta_k.
+      allocate (f(n_mom, n_eta))
+      cot = cos(pi/(n_mom + 1.0_rp))/sin(pi/(n_mom + 1.0_rp))
+      do k = 1, n_eta
+         ze = cmplx(ef, 0.0_rp, kind=rp) + etas(k)
+         z = (ze - b)/a
+         th = acos(z)
+         pref = 1.0_rp/sqrt(a*a - (ze - b)**2)
+         do i = 1, n_mom
+            thl = pi*real(i - 1, rp)/(n_mom + 1.0_rp)
+            gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot)/(n_mom + 1.0_rp)
+            cc = merge(1.0_rp, 2.0_rp, i == 1)
+            f(i, k) = gj*cc*pref*(-i_unit)*exp(-i_unit*real(i - 1, rp)*th)
+         end do
+      end do
+      if (c_rsrec_chebyshev_gf_eta(this%ctx, c_loc(mu_n), n_mom, natoms, &
+                                   c_loc(f), n_eta, c_loc(g0)) /= 0) &
+         call die("chebyshev_gf_eta")
+      deallocate (f)
+   end subroutine rsgpu_chebyshev_gf_eta
+
    !> Block (Haydock) Green / DOS reconstruction -- drop-in for the per-atom
    !> bgreen loop. a_b/b2_b: (nb,nb,lld,natoms); a_inf/b_inf: (nb,natoms)
    !> terminator diagonals; ene: (nv); g0: (nb,nb,nv,natoms) out.
    subroutine rsgpu_block_dos(this, a_b, b2_b, a_inf, b_inf, ene, eta, sym, g0)
       class(rsgpu), intent(inout) :: this
-      complex(rp), dimension(:, :, :, :), intent(in), target :: a_b, b2_b
-      real(rp), dimension(:, :), intent(in), target :: a_inf, b_inf
-      real(rp), dimension(:), intent(in), target :: ene
+      complex(rp), dimension(:, :, :, :), intent(in), target, contiguous :: a_b, b2_b
+      real(rp), dimension(:, :), intent(in), target, contiguous :: a_inf, b_inf
+      real(rp), dimension(:), intent(in), target, contiguous :: ene
       complex(rp), intent(in) :: eta
       logical, intent(in) :: sym
-      complex(rp), dimension(:, :, :, :), intent(inout), target :: g0
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: g0
       integer(c_int) :: nv, natoms, lld, isym
       nv = int(size(ene), c_int)
       lld = int(size(a_b, 3), c_int)
@@ -354,12 +409,12 @@ contains
    !> (nb,nb,n_eta,natoms).
    subroutine rsgpu_block_gf_eta(this, a_b, b2_b, a_inf, b_inf, ef, etas, sym, g0)
       class(rsgpu), intent(inout) :: this
-      complex(rp), dimension(:, :, :, :), intent(in), target :: a_b, b2_b
-      real(rp), dimension(:, :), intent(in), target :: a_inf, b_inf
+      complex(rp), dimension(:, :, :, :), intent(in), target, contiguous :: a_b, b2_b
+      real(rp), dimension(:, :), intent(in), target, contiguous :: a_inf, b_inf
       real(rp), intent(in) :: ef
       complex(rp), dimension(:), intent(in) :: etas
       logical, intent(in) :: sym
-      complex(rp), dimension(:, :, :, :), intent(inout), target :: g0
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: g0
       integer(c_int) :: n_eta, natoms, lld, isym
       real(c_double), allocatable, target :: etr(:), eti(:)
       integer :: k

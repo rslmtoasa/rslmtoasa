@@ -2280,26 +2280,18 @@ __global__ void k_c2z(size_t n, const fc *__restrict__ in,
     if (i < n) out[i] = make_cuDoubleComplex(in[i].x, in[i].y);
 }
 
-extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
-                                   int natoms, const double *ene, int nv,
-                                   double a, double b, void *g0_) {
-    if (n_mom < 1 || natoms < 1 || nv < 1) FAIL("chebyshev_dos: bad sizes");
+/* Shared contraction g0(:,:,col,n) = sum_i mu(:,:,i,n) F(i,col), with F
+ * (device, fp64, n_mom x ncols) broadcast over all atoms (strideB = 0). One
+ * strided-batched gemm per atom-chunk; fp32 (cgemm3m) or fp64 per cheb_prec.
+ * Caller owns d_F64. Used by both the DOS path (real-energy F) and the
+ * exchange Gij(E_f) path (complex-energy/eta F).                            */
+static int cheb_gemm_engine(rsrec_ctx *c, const cplx *mu, int n_mom,
+                            int natoms, const zc *d_F64, int ncols, cplx *g0) {
     const int bb = c->nb * c->nb;
-    const cplx *mu = (const cplx *)mu_;
-    cplx *g0 = (cplx *)g0_;
     const bool f32 = (c->cheb_prec == 0);
     const int tpb = 256;
-
-    /* F (always built in fp64; converted once if needed)                   */
-    double *d_ene; zc *d_F64 = nullptr; fc *d_F32 = nullptr;
-    CUCHK(cudaMalloc(&d_ene, nv * sizeof(double)));
-    CUCHK(cudaMemcpy(d_ene, ene, nv * sizeof(double),
-                     cudaMemcpyHostToDevice));
-    size_t nF = (size_t)n_mom * nv;
-    CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
-    k_build_F64<<<(int)((nF + tpb - 1) / tpb), tpb>>>(n_mom, nv, d_ene,
-                                                      a, b, d_F64);
-    CUCHK(cudaGetLastError());
+    size_t nF = (size_t)n_mom * ncols;
+    fc *d_F32 = nullptr;
     if (f32) {
         CUCHK(cudaMalloc(&d_F32, nF * sizeof(fc)));
         k_z2c<<<(int)((nF + tpb - 1) / tpb), tpb>>>(nF, d_F64, d_F32);
@@ -2308,8 +2300,8 @@ extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
 
     /* atom chunking against free device memory                             */
     size_t per_atom = (size_t)bb * n_mom * sizeof(zc)        /* mu          */
-                    + (size_t)bb * nv * sizeof(zc)           /* g0          */
-                    + (f32 ? ((size_t)bb * n_mom + (size_t)bb * nv)
+                    + (size_t)bb * ncols * sizeof(zc)        /* g0          */
+                    + (f32 ? ((size_t)bb * n_mom + (size_t)bb * ncols)
                                  * sizeof(fc) : 0);
     size_t freeb, totalb;
     cudaMemGetInfo(&freeb, &totalb);
@@ -2318,39 +2310,85 @@ extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
                                                           / per_atom));
     zc *d_mu, *d_g0; fc *d_muf = nullptr, *d_g0f = nullptr;
     CUCHK(cudaMalloc(&d_mu, (size_t)bb * n_mom * chunk * sizeof(zc)));
-    CUCHK(cudaMalloc(&d_g0, (size_t)bb * nv * chunk * sizeof(zc)));
+    CUCHK(cudaMalloc(&d_g0, (size_t)bb * ncols * chunk * sizeof(zc)));
     if (f32) {
         CUCHK(cudaMalloc(&d_muf, (size_t)bb * n_mom * chunk * sizeof(fc)));
-        CUCHK(cudaMalloc(&d_g0f, (size_t)bb * nv * chunk * sizeof(fc)));
+        CUCHK(cudaMalloc(&d_g0f, (size_t)bb * ncols * chunk * sizeof(fc)));
     }
     for (int n0 = 0; n0 < natoms; n0 += chunk) {
         int nc = std::min(chunk, natoms - n0);
-        size_t nmu = (size_t)bb * n_mom * nc, ng = (size_t)bb * nv * nc;
+        size_t nmu = (size_t)bb * n_mom * nc, ng = (size_t)bb * ncols * nc;
         CUCHK(cudaMemcpy(d_mu, mu + (size_t)bb * n_mom * n0,
                          nmu * sizeof(zc), cudaMemcpyHostToDevice));
         if (f32) {
             k_z2c<<<(int)((nmu + tpb - 1) / tpb), tpb>>>(nmu, d_mu, d_muf);
             CUCHK(cudaGetLastError());
-            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, nv,
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, ncols,
                                n_mom, &C_ONE, d_muf, bb,
                                (long long)bb * n_mom, d_F32, n_mom, 0,
-                               &C_ZERO, d_g0f, bb, (long long)bb * nv, nc));
+                               &C_ZERO, d_g0f, bb, (long long)bb * ncols, nc));
             k_c2z<<<(int)((ng + tpb - 1) / tpb), tpb>>>(ng, d_g0f, d_g0);
             CUCHK(cudaGetLastError());
         } else {
-            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, nv,
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_N, CUBLAS_OP_N, bb, ncols,
                                n_mom, &Z_ONE, d_mu, bb,
                                (long long)bb * n_mom, d_F64, n_mom, 0,
-                               &Z_ZERO, d_g0, bb, (long long)bb * nv, nc));
+                               &Z_ZERO, d_g0, bb, (long long)bb * ncols, nc));
         }
-        CUCHK(cudaMemcpy(g0 + (size_t)bb * nv * n0, d_g0, ng * sizeof(zc),
+        CUCHK(cudaMemcpy(g0 + (size_t)bb * ncols * n0, d_g0, ng * sizeof(zc),
                          cudaMemcpyDeviceToHost));
     }
-    for (void *p : {(void *)d_ene, (void *)d_F64, (void *)d_F32,
-                    (void *)d_mu, (void *)d_g0, (void *)d_muf,
-                    (void *)d_g0f})
+    for (void *p : {(void *)d_F32, (void *)d_mu, (void *)d_g0,
+                    (void *)d_muf, (void *)d_g0f})
         if (p) cudaFree(p);
     return 0;
+}
+
+extern "C" int rsrec_chebyshev_dos(rsrec_ctx *c, const void *mu_, int n_mom,
+                                   int natoms, const double *ene, int nv,
+                                   double a, double b, void *g0_) {
+    if (n_mom < 1 || natoms < 1 || nv < 1) FAIL("chebyshev_dos: bad sizes");
+    const cplx *mu = (const cplx *)mu_;
+    cplx *g0 = (cplx *)g0_;
+    const int tpb = 256;
+
+    /* F over the real energy grid (fp64; cheb_gemm_engine down-converts).   */
+    double *d_ene; zc *d_F64;
+    CUCHK(cudaMalloc(&d_ene, nv * sizeof(double)));
+    CUCHK(cudaMemcpy(d_ene, ene, nv * sizeof(double), cudaMemcpyHostToDevice));
+    size_t nF = (size_t)n_mom * nv;
+    CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
+    k_build_F64<<<(int)((nF + tpb - 1) / tpb), tpb>>>(n_mom, nv, d_ene,
+                                                      a, b, d_F64);
+    CUCHK(cudaGetLastError());
+
+    int rc = cheb_gemm_engine(c, mu, n_mom, natoms, d_F64, nv, g0);
+    cudaFree(d_ene);
+    cudaFree(d_F64);
+    return rc;
+}
+
+/* Exchange Gij at the Fermi energy: g0(:,:,k,n) = sum_i mu(:,:,i,n) F(i,k),
+ * where the caller supplies F (n_mom x n_eta, complex) already built at the
+ * complex energies E_f + eta_k (Fortran complex acos/sqrt in the wrapper, so
+ * no device complex transcendentals). g0 out: (nb,nb,n_eta,natoms). This is
+ * the Chebyshev analogue of rsrec_block_gf_eta.                             */
+extern "C" int rsrec_chebyshev_gf_eta(rsrec_ctx *c, const void *mu_, int n_mom,
+                                      int natoms, const void *F_, int n_eta,
+                                      void *g0_) {
+    if (n_mom < 1 || natoms < 1 || n_eta < 1) FAIL("cheb_gf_eta: bad sizes");
+    const cplx *mu = (const cplx *)mu_;
+    cplx *g0 = (cplx *)g0_;
+
+    /* upload the host-built complex F (cplx == zc layout, 16 bytes).        */
+    zc *d_F64;
+    size_t nF = (size_t)n_mom * n_eta;
+    CUCHK(cudaMalloc(&d_F64, nF * sizeof(zc)));
+    CUCHK(cudaMemcpy(d_F64, F_, nF * sizeof(zc), cudaMemcpyHostToDevice));
+
+    int rc = cheb_gemm_engine(c, mu, n_mom, natoms, d_F64, n_eta, g0);
+    cudaFree(d_F64);
+    return rc;
 }
 
 /* ==========================================================================

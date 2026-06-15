@@ -84,6 +84,7 @@ module green_mod
       procedure :: chebyshev_green_gpu
       procedure :: chebyshev_green_eta
       procedure :: chebyshev_green_ij
+      procedure :: chebyshev_green_ij_gpu
       procedure :: chebyshev_green_ij_eta
       procedure :: chebyshev_dos_dispatch
       procedure :: restore_to_default
@@ -499,7 +500,11 @@ contains
                call this%block_green_ij(ja_temp)
             end if
          case ('chebyshev')
-            call this%chebyshev_green_ij(ja_temp)
+            if (this%control%gpu_plugin) then
+               call this%chebyshev_green_ij_gpu(ja_temp)
+            else
+               call this%chebyshev_green_ij(ja_temp)
+            end if
          end select
          if (this%lattice%ijpair(ia, 1) .eq. this%lattice%ijpair(ia, 2)) then
             this%gij(:, :, :, ia) = this%g0(:, :, :, 1)
@@ -539,9 +544,11 @@ contains
 
       integer :: ia_glob
 
-      ! GPU path: the whole per-pair/per-eta bgreen loop is reconstructed on the
-      ! device in one batched matrix continued fraction.
-      if (this%control%gpu_plugin .and. this%control%recur == 'block') then
+      ! GPU path: the whole per-pair/per-eta GF loop (block continued fraction
+      ! or Chebyshev moment contraction) is reconstructed on the device in one
+      ! batched call over all local pairs.
+      if (this%control%gpu_plugin .and. &
+          (this%control%recur == 'block' .or. this%control%recur == 'chebyshev')) then
          call this%calculate_intersite_gf_eta_gpu()
          return
       end if
@@ -635,27 +642,17 @@ contains
       this%gij_eta = 0.0d0; this%gji_eta = 0.0d0; this%ginmag_eta = 0.0d0; this%giz_eta = 0.0d0; this%giy_eta = 0.0d0; this%gix_eta = 0.0d0
       this%gjnmag_eta = 0.0d0; this%gjx_eta = 0.0d0; this%gjy_eta = 0.0d0; this%gjz_eta = 0.0d0
 
-      call this%recursion%zsqr()
+      if (this%control%recur == 'block') call this%recursion%zsqr()
 
       ! Gauss-Legendre eta contour (same map as the CPU path: eta = i*(1-x)/x)
       do k = 1, 64
          eta_list(k) = cmplx(0.0_rp, (1.0_rp - x(k))/x(k), kind=rp)
       end do
 
-      ! All local pairs share the contiguous a_b/b2_b layout (4 combos per pair).
+      ! All local pairs share the contiguous coefficient layout (4 combos/pair).
       n_pairs = end_atom - start_atom + 1
       natoms = n_pairs*4
-      allocate (a_inf(nb, nb, natoms), b_inf(nb, nb, natoms), a_inf0(natoms), b_inf0(natoms))
-      allocate (a_inf_d(nb, natoms), b_inf_d(nb, natoms), g0_ef_all(nb, nb, 64, natoms))
-
-      call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, &
-                                      natoms, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
-      do k = 1, natoms
-         do i = 1, nb
-            a_inf_d(i, k) = a_inf(i, i, k)
-            b_inf_d(i, k) = b_inf(i, i, k)
-         end do
-      end do
+      allocate (g0_ef_all(nb, nb, 64, natoms))
 
       if (first_call) then
          call gpu_backend%init(1, nb, 1, 1, 1)
@@ -665,10 +662,33 @@ contains
 
       ! One device call: Gij at the Fermi energy for all (pair x combo) atoms
       ! and all 64 contour etas -> g0_ef_all(nb,nb,64,natoms).
-      call gpu_backend%block_gf_eta(this%recursion%a_b(:, :, :, 1:natoms), &
-                                    this%recursion%b2_b(:, :, :, 1:natoms), &
-                                    a_inf_d, b_inf_d, this%en%ene(fermi_point), &
-                                    eta_list, this%control%sym_term, g0_ef_all)
+      select case (this%control%recur)
+      case ('block')
+         allocate (a_inf(nb, nb, natoms), b_inf(nb, nb, natoms), a_inf0(natoms), b_inf0(natoms))
+         allocate (a_inf_d(nb, natoms), b_inf_d(nb, natoms))
+         call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, &
+                                         natoms, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
+         do k = 1, natoms
+            do i = 1, nb
+               a_inf_d(i, k) = a_inf(i, i, k)
+               b_inf_d(i, k) = b_inf(i, i, k)
+            end do
+         end do
+         call gpu_backend%block_gf_eta(this%recursion%a_b(:, :, :, 1:natoms), &
+                                       this%recursion%b2_b(:, :, :, 1:natoms), &
+                                       a_inf_d, b_inf_d, this%en%ene(fermi_point), &
+                                       eta_list, this%control%sym_term, g0_ef_all)
+         deallocate (a_inf, b_inf, a_inf0, b_inf0, a_inf_d, b_inf_d)
+      case ('chebyshev')
+         block
+            real(rp) :: a, b, emin_win, emax_win
+            call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+            a = (emax_win - emin_win)/(2 - 0.3_rp)
+            b = (emax_win + emin_win)/2.0_rp
+            call gpu_backend%chebyshev_gf_eta(this%recursion%mu_n(:, :, :, 1:natoms), &
+                                              this%en%ene(fermi_point), eta_list, a, b, g0_ef_all)
+         end block
+      end select
 
       ! Recombine per pair (identical algebra to the CPU loop).
       do ia_glob = start_atom, end_atom
@@ -696,7 +716,7 @@ contains
          end do
       end do
 
-      deallocate (a_inf, b_inf, a_inf0, b_inf0, a_inf_d, b_inf_d, g0_ef_all)
+      deallocate (g0_ef_all)
    end subroutine calculate_intersite_gf_eta_gpu
 
    !---------------------------------------------------------------------------
@@ -1188,6 +1208,41 @@ contains
 
       deallocate (kernel, polycheb, w, wscale)
    end subroutine chebyshev_green_ij
+
+   !---------------------------------------------------------------------------
+   !> GPU drop-in for chebyshev_green_ij: the 4 intersite-pair combos are
+   !> reconstructed on the device over all nv energies in one batched moment
+   !> contraction (rsrec_chebyshev_dos), reusing the on-site Chebyshev engine.
+   !---------------------------------------------------------------------------
+   subroutine chebyshev_green_ij_gpu(this, istart)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), allocatable :: mu_local(:, :, :, :), g0_local(:, :, :, :)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: nv, n_mom
+      type(rsgpu), save :: gpu_backend
+      logical, save :: first_call = .true.
+
+      this%g0 = 0.0d0
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      nv = this%en%channels_ldos + 10
+      n_mom = size(this%recursion%mu_n, 3)
+
+      allocate (mu_local(nb, nb, n_mom, 4), g0_local(nb, nb, nv, 4))
+      mu_local(:, :, :, 1:4) = this%recursion%mu_n(:, :, :, istart:istart + 3)
+
+      if (first_call) then
+         call gpu_backend%init(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+         first_call = .false.
+      end if
+
+      call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local)
+      this%g0(:, :, 1:nv, 1:4) = g0_local(:, :, :, 1:4)
+      deallocate (mu_local, g0_local)
+   end subroutine chebyshev_green_ij_gpu
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
