@@ -78,6 +78,8 @@ module recursion_mod
       complex(rp), dimension(:, :, :), allocatable :: psi_b, pmn_b, hpsi, hohpsi, enupsi, socpsi
       !> Wave functions for recursion hopping (Chebyshev)
       complex(rp), dimension(:, :, :), allocatable :: psi0, psi1, psi2
+      !> Cached full first-order operator blocks for no-hoh fast/GPU CCOR paths
+      complex(rp), dimension(:, :, :, :), allocatable :: ee_ccor_work, hall_ccor_work
       !> Chebyshev moments
       complex(rp), dimension(:, :, :, :), allocatable :: mu_n, mu_ng
       complex(rp), dimension(:, :, :, :, :), allocatable :: mu_nm_stochastic
@@ -156,10 +158,11 @@ contains
       if (this%hamiltonian%hoh .and. backend /= 'fast' .and. backend /= 'legacy') then
          backend = 'legacy'
       end if
-      if (this%hamiltonian%ccor_2c .and. backend /= 'legacy') then
-         call g_logger%warning('ccor_2c is not wired into fast Chebyshev backends; falling back to legacy.', __FILE__, __LINE__)
+      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. backend /= 'legacy') then
+         call g_logger%warning('ccor_2c with hoh is not supported by fast Chebyshev backends; falling back to legacy.', __FILE__, __LINE__)
          backend = 'legacy'
       end if
+      if (this%hamiltonian%ccor_2c .and. backend /= 'legacy') call ensure_ccor_operator_blocks(this)
       msg = 'Chebyshev moment driver backend: '//backend
       !print *, msg
       call g_logger%info(msg, __FILE__, __LINE__)
@@ -171,6 +174,11 @@ contains
                nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
                lld, a, b, mu, hoh=.true., eeo=this%hamiltonian%eeo, &
                hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim)
+         else if (this%hamiltonian%ccor_2c) then
+            call cheb_moments_fast(psi0, this%ee_ccor_work, this%hall_ccor_work, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
          else
             call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
                this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
@@ -178,20 +186,41 @@ contains
                lld, a, b, mu)
          end if
       case ('batched')
-         call cheb_moments_fast_batched(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-            lld, a, b, mu)
+         if (this%hamiltonian%ccor_2c) then
+            call cheb_moments_fast_batched(psi0, this%ee_ccor_work, this%hall_ccor_work, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         else
+            call cheb_moments_fast_batched(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         end if
       case ('mkl_batch')
-         call cheb_moments_fast_mkl_batch(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-            lld, a, b, mu)
+         if (this%hamiltonian%ccor_2c) then
+            call cheb_moments_fast_mkl_batch(psi0, this%ee_ccor_work, this%hall_ccor_work, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         else
+            call cheb_moments_fast_mkl_batch(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         end if
       case ('mkl_sparse')
-         call cheb_moments_fast_mkl_sparse(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-            this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-            nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-            lld, a, b, mu)
+         if (this%hamiltonian%ccor_2c) then
+            call cheb_moments_fast_mkl_sparse(psi0, this%ee_ccor_work, this%hall_ccor_work, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         else
+            call cheb_moments_fast_mkl_sparse(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+               lld, a, b, mu)
+         end if
       case ('legacy')
          call cheb_moments_legacy(this, psi0, lld, a, b, mu)
       case default
@@ -361,8 +390,8 @@ contains
          return
       end if
 
-      if (this%hamiltonian%ccor_2c) then
-         call g_logger%warning('gpu_plugin does not support ccor_2c in '// &
+      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh) then
+         call g_logger%warning('gpu_plugin does not support additive ccor_2c with hoh in '// &
             trim(feature)//'. Falling back to current recursion path.', __FILE__, __LINE__)
          return
       end if
@@ -379,7 +408,6 @@ contains
             '. Falling back to current recursion path.', __FILE__, __LINE__)
          return
       end if
-
       if (gpu_periodic_backend(this)) then
          if (.not. this%lattice%pbc) then
             call g_logger%warning('gpu_backend='//trim(this%control%gpu_backend)// &
@@ -408,6 +436,7 @@ contains
       class(recursion), intent(inout) :: this
       integer :: backend
 
+      if (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh) call ensure_ccor_operator_blocks(this)
       backend = decode_gpu_backend(this%control%gpu_backend)
       if (this%lattice%nmax > 0) then
          if (this%hamiltonian%hoh) then
@@ -415,6 +444,10 @@ contains
                this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                this%lattice%iz, this%lattice%nmax, eeo=this%hamiltonian%eeo, &
                hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim)
+         else if (this%hamiltonian%ccor_2c) then
+            call this%gpu_backend%set_hamiltonian(this%ee_ccor_work, &
+               this%hall_ccor_work, this%hamiltonian%lsham, this%lattice%nn, &
+               this%lattice%iz, this%lattice%nmax)
          else
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
                this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
@@ -426,6 +459,10 @@ contains
                lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
                iz=this%lattice%iz, nmax=this%lattice%nmax, &
                eeo=this%hamiltonian%eeo, enim=this%hamiltonian%enim)
+         else if (this%hamiltonian%ccor_2c) then
+            call this%gpu_backend%set_hamiltonian(this%ee_ccor_work, &
+               lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
+               iz=this%lattice%iz, nmax=this%lattice%nmax)
          else
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
                lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
@@ -436,9 +473,41 @@ contains
          this%lattice%n2, this%lattice%n3, this%lattice%a, this%lattice%crd)
       call this%gpu_backend%set_backend(backend)
       if (backend == gpu_backend_bsr) then
+         if (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh) then
+            call this%sparse_obj%build_bsr_from_operator(this%hall_ccor_work, this%ee_ccor_work)
+         end if
          call this%gpu_backend%upload_bsr(this%sparse_obj)
       end if
    end subroutine gpu_plugin_upload_hamiltonian
+
+   subroutine ensure_ccor_operator_blocks(this)
+      class(recursion), intent(inout) :: this
+
+      if (.not. this%hamiltonian%ccor_2c) return
+      if (this%hamiltonian%hoh) then
+         call g_logger%fatal('ensure_ccor_operator_blocks called for hoh+ccor_2c; use the exact separate-additive path instead.', __FILE__, __LINE__)
+      end if
+
+      if (.not. allocated(this%ee_ccor_work)) then
+         allocate(this%ee_ccor_work(size(this%hamiltonian%ee, 1), size(this%hamiltonian%ee, 2), &
+                                   size(this%hamiltonian%ee, 3), size(this%hamiltonian%ee, 4)))
+      else if (any(shape(this%ee_ccor_work) /= shape(this%hamiltonian%ee))) then
+         deallocate(this%ee_ccor_work)
+         allocate(this%ee_ccor_work(size(this%hamiltonian%ee, 1), size(this%hamiltonian%ee, 2), &
+                                   size(this%hamiltonian%ee, 3), size(this%hamiltonian%ee, 4)))
+      end if
+      this%ee_ccor_work = this%hamiltonian%ee + this%hamiltonian%eecc
+
+      if (.not. allocated(this%hall_ccor_work)) then
+         allocate(this%hall_ccor_work(size(this%hamiltonian%hall, 1), size(this%hamiltonian%hall, 2), &
+                                     size(this%hamiltonian%hall, 3), size(this%hamiltonian%hall, 4)))
+      else if (any(shape(this%hall_ccor_work) /= shape(this%hamiltonian%hall))) then
+         deallocate(this%hall_ccor_work)
+         allocate(this%hall_ccor_work(size(this%hamiltonian%hall, 1), size(this%hamiltonian%hall, 2), &
+                                     size(this%hamiltonian%hall, 3), size(this%hamiltonian%hall, 4)))
+      end if
+      this%hall_ccor_work = this%hamiltonian%hall + this%hamiltonian%hallcc
+   end subroutine ensure_ccor_operator_blocks
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -457,6 +526,8 @@ contains
       if (allocated(this%psi)) call g_safe_alloc%deallocate('recursion.psi', this%psi)
       if (allocated(this%psi1)) call g_safe_alloc%deallocate('recursion.psi1', this%psi1)
       if (allocated(this%psi2)) call g_safe_alloc%deallocate('recursion.psi2', this%psi2)
+      if (allocated(this%ee_ccor_work)) deallocate (this%ee_ccor_work)
+      if (allocated(this%hall_ccor_work)) deallocate (this%hall_ccor_work)
       if (allocated(this%pmn)) call g_safe_alloc%deallocate('recursion.pmn', this%pmn)
       if (allocated(this%v)) call g_safe_alloc%deallocate('recursion.v', this%v)
       if (allocated(this%mu_n)) call g_safe_alloc%deallocate('recursion.mu_n', this%mu_n)
@@ -488,6 +559,8 @@ contains
       if (allocated(this%psi)) deallocate (this%psi)
       if (allocated(this%psi1)) deallocate (this%psi1)
       if (allocated(this%psi2)) deallocate (this%psi2)
+      if (allocated(this%ee_ccor_work)) deallocate (this%ee_ccor_work)
+      if (allocated(this%hall_ccor_work)) deallocate (this%hall_ccor_work)
       if (allocated(this%pmn)) deallocate (this%pmn)
       if (allocated(this%v)) deallocate (this%v)
       if (allocated(this%mu_n)) deallocate (this%mu_n)
@@ -1100,7 +1173,11 @@ contains
 
          ! Fast CPU stochastic kernel (single precision, hoh-aware). Falls back
          ! to the legacy loop below only when cheb_backend='legacy'.
-         if (trim(this%control%cheb_backend) /= 'legacy') then
+         if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
+            call g_logger%warning('ccor_2c with hoh is not supported by fast stochastic Chebyshev; falling back to legacy.', __FILE__, __LINE__)
+         end if
+         if (trim(this%control%cheb_backend) /= 'legacy' .and. &
+             .not. (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh)) then
             if (this%hamiltonian%hoh) then
                call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
@@ -1109,6 +1186,15 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .true., this%hamiltonian%eeo, &
                   this%hamiltonian%hallo, this%hamiltonian%enim, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%vo_a, this%hamiltonian%vo_b)
+            else if (this%hamiltonian%ccor_2c) then
+               call ensure_ccor_operator_blocks(this)
+               call cheb_moments_stochastic_fast(psiref, this%ee_ccor_work, &
+                  this%hall_ccor_work, this%hamiltonian%lsham, this%lattice%nn, &
+                  this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, this%control%cond_ll, a, b, &
+                  this%mu_nm_stochastic(:, :, :, :, i), .false., this%ee_ccor_work, &
+                  this%hall_ccor_work, this%hamiltonian%lsham, this%hamiltonian%v_a, &
+                  this%hamiltonian%v_b, this%hamiltonian%v_a, this%hamiltonian%v_b)
             else
                call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
@@ -1715,11 +1801,12 @@ contains
 
       ! Fast CPU block-Lanczos kernels (haydock_fast) for the inter-site (ij)
       ! moments. cheb_backend: 'fast' -> fp32, 'fast_dp' -> fp64.
-      if (this%hamiltonian%ccor_2c .and. trim(this%control%cheb_backend) /= 'legacy') then
-         call g_logger%warning('ccor_2c is not wired into fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
+      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
+         call g_logger%warning('ccor_2c with hoh is not supported by fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
       end if
       if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis .and. &
-          .not. this%hamiltonian%ccor_2c) then
+          .not. (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh)) then
+         if (this%hamiltonian%ccor_2c) call ensure_ccor_operator_blocks(this)
          do ij = start_atom, end_atom
             ij_loc = g2l_map(ij)
             i = this%lattice%ijpair(ij, 1)
@@ -1761,6 +1848,13 @@ contains
                      this%lattice%ntype, this%lattice%nmax, &
                      trim(this%control%cheb_backend) == 'fast', .true., &
                      this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
+               else if (this%hamiltonian%ccor_2c) then
+                  call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+                     this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham, &
+                     this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                     this%lattice%ntype, this%lattice%nmax, &
+                     trim(this%control%cheb_backend) == 'fast', .false., &
+                     this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham)
                else
                   call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
                      this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
@@ -1967,11 +2061,12 @@ contains
       ! Fast CPU block-Lanczos kernels (haydock_fast). cheb_backend selects:
       !   'fast'    -> fp32 working precision, 'fast_dp' -> fp64. local_axis is
       ! not yet supported in the fast path -> fall through to legacy.
-      if (this%hamiltonian%ccor_2c .and. trim(this%control%cheb_backend) /= 'legacy') then
-         call g_logger%warning('ccor_2c is not wired into fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
+      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
+         call g_logger%warning('ccor_2c with hoh is not supported by fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
       end if
       if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis .and. &
-          .not. this%hamiltonian%ccor_2c) then
+          .not. (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh)) then
+         if (this%hamiltonian%ccor_2c) call ensure_ccor_operator_blocks(this)
          do i = start_atom, end_atom
             j = this%lattice%irec(i)
             call g_logger%info('Fast block recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
@@ -1988,6 +2083,13 @@ contains
                   this%lattice%ntype, this%lattice%nmax, &
                   trim(this%control%cheb_backend) == 'fast', .true., &
                   this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
+            else if (this%hamiltonian%ccor_2c) then
+               call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+                  this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham, &
+                  this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, &
+                  trim(this%control%cheb_backend) == 'fast', .false., &
+                  this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham)
             else
                call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
                   this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
@@ -3232,13 +3334,24 @@ contains
          end if
 
          ! Fast CPU orbital kernel (single precision, hoh-aware).
-         if (trim(this%control%cheb_backend) /= 'legacy') then
+         if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
+            call g_logger%warning('ccor_2c with hoh is not supported by fast orbital Chebyshev; falling back to legacy.', __FILE__, __LINE__)
+         end if
+         if (trim(this%control%cheb_backend) /= 'legacy' .and. &
+             .not. (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh)) then
             if (this%hamiltonian%hoh) then
                call cheb_moments_orbital_fast(left_vec, psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
                   this%lattice%ntype, this%lattice%nmax, this%control%lld, a, b, mu_tmp, &
                   .true., this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
+            else if (this%hamiltonian%ccor_2c) then
+               call ensure_ccor_operator_blocks(this)
+               call cheb_moments_orbital_fast(left_vec, psiref, this%ee_ccor_work, &
+                  this%hall_ccor_work, this%hamiltonian%lsham, this%lattice%nn, &
+                  this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+                  this%lattice%ntype, this%lattice%nmax, this%control%lld, a, b, mu_tmp, &
+                  .false., this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham)
             else
                call cheb_moments_orbital_fast(left_vec, psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &

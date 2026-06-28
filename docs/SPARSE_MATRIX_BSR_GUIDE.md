@@ -221,7 +221,7 @@ nsys profile --trace cuda,nvtx ./bin/rslmto.x < input.nml
 
 1. **Atom Type Indexing:** `block_to_sparse()` assumes `lattice%iz(atom)` maps correctly in bulk region. Verify for multi-type systems.
 
-2. **HOH Terms:** Currently fills from `hall`/`ee` only. Orthogonalization correction (`hallo`/`eeo`) not included in BSR yet. Extend to separate `h_bsr_hoh` if needed.
+2. **Operator Contents:** The default BSR build fills from `hall`/`ee`. GPU CCOR no-`hoh` runs build BSR from the merged `hall+hallcc` and `ee+eecc` operator blocks. Orthogonalization correction (`hallo`/`eeo`) is still stored separately and is not folded into the BSR matrix.
 
 3. **Non-Collinear Magnetism:** BSR layout is element-wise (includes spin structure implicitly). Works with existing array layout.
 

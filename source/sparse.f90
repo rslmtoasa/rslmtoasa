@@ -87,6 +87,7 @@ module sparse_mod
       type(bsr_matrix_c_handle) :: h_c_python
    contains
       procedure :: build_bsr
+      procedure :: build_bsr_from_operator
       procedure :: export_gpu_onemkl
       procedure :: export_gpu_cusparse
       procedure :: export_python_scipy
@@ -167,6 +168,24 @@ contains
           this%hamiltonian%lattice%nn, this%hamiltonian%lattice%iz, &
           this%hamiltonian%lattice%kk, this%hamiltonian%lattice%nmax, nb)
    end subroutine build_bsr
+
+   subroutine build_bsr_from_operator(this, hall, ee)
+      class(sparse), intent(inout) :: this
+      complex(rp), intent(in) :: hall(:,:,:,:), ee(:,:,:,:)
+
+      if (.not. associated(this%hamiltonian)) then
+         print *, 'ERROR: hamiltonian not associated in sparse object'
+         return
+      end if
+
+      call block_to_sparse_from_arrays( &
+          this%h_bsr, hall, ee, &
+          this%hamiltonian%lattice%nn, this%hamiltonian%lattice%iz, &
+          this%hamiltonian%lattice%kk, this%hamiltonian%lattice%nmax, nb)
+
+      this%h_c_gpu%is_initialized = .false.
+      this%h_c_python%is_initialized = .false.
+   end subroutine build_bsr_from_operator
 
    !---------------------------------------------------------------------------
    ! EXPORT ROUTINES
