@@ -156,6 +156,10 @@ contains
       if (this%hamiltonian%hoh .and. backend /= 'fast' .and. backend /= 'legacy') then
          backend = 'legacy'
       end if
+      if (this%hamiltonian%ccor_2c .and. backend /= 'legacy') then
+         call g_logger%warning('ccor_2c is not wired into fast Chebyshev backends; falling back to legacy.', __FILE__, __LINE__)
+         backend = 'legacy'
+      end if
       msg = 'Chebyshev moment driver backend: '//backend
       !print *, msg
       call g_logger%info(msg, __FILE__, __LINE__)
@@ -354,6 +358,12 @@ contains
          call g_logger%warning('gpu_plugin does not support local-axis '// &
             'rotation in '//trim(feature)//'. Falling back to current recursion path.', &
             __FILE__, __LINE__)
+         return
+      end if
+
+      if (this%hamiltonian%ccor_2c) then
+         call g_logger%warning('gpu_plugin does not support ccor_2c in '// &
+            trim(feature)//'. Falling back to current recursion path.', __FILE__, __LINE__)
          return
       end if
 
@@ -730,6 +740,7 @@ contains
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, this%psi2(:, :, k), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
+               if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, 1, k), nb, psi_in(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
             end if
             if (nr >= 2) then
                do ineigh = 2, nr ! Loop on the neighbouring
@@ -737,6 +748,7 @@ contains
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                        if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                         this%idum(k) = 1
                      end if
                   end if
@@ -757,12 +769,14 @@ contains
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, this%psi2(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, psi_in(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
+            if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, 1, ih), nb, psi_in(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                  if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -852,6 +866,7 @@ contains
             nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
             if (this%izero(k) /= 0) then
                locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
+               if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%hallcc(1:nb, 1:nb, 1, k)
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, psi_out(:, :, k), nb)
             end if
             if (nr >= 2) then
@@ -859,7 +874,11 @@ contains
                   nnmap = this%lattice%nn(k, ineigh)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
+                        if (this%hamiltonian%ccor_2c) then
+                           call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k) + this%hamiltonian%hallcc(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
+                        else
+                           call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
+                        end if
                         this%idum(k) = 1
                      end if
                   end if
@@ -877,13 +896,18 @@ contains
          nr = this%lattice%nn(k, 1)
          if (this%izero(k) /= 0) then
             locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
+            if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%eecc(1:nb, 1:nb, 1, ih)
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, psi_in(:, :, k), nb, cone, psi_out(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
+                  if (this%hamiltonian%ccor_2c) then
+                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih) + this%hamiltonian%eecc(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
+                  else
+                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
+                  end if
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -1391,6 +1415,7 @@ contains
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ino), nb, this%psi_b(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ino), nb, this%psi_b(:, :, i), nb, cone, this%socpsi(:, :, i), nb)
+               if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, 1, i), nb, this%psi_b(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
             end if
             if (nr >= 2) then
                do j = 2, nr ! Loop on the neighbouring
@@ -1398,6 +1423,7 @@ contains
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                        if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%enupsi(:, :, i), nb)
                         idum(i) = 1
                      end if
                   end if
@@ -1416,6 +1442,7 @@ contains
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, 1, ih), nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi_b(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi_b(:, :, i), nb, cone, this%socpsi(:, :, i), nb)
+            if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, 1, ih), nb, this%psi_b(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
          end if
          if (nr >= 2) then
             do j = 2, nr ! Loop on the neighbouring
@@ -1423,6 +1450,7 @@ contains
                if (nnmap /= 0) then
                   if (this%izero(nnmap) /= 0) then
                      call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                     if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%enupsi(:, :, i), nb)
                      idum(i) = 1
                   end if
                end if
@@ -1535,6 +1563,7 @@ contains
             nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
             if (this%izero(i) /= 0) then
                locham = this%hamiltonian%hall(:, :, 1, i) + this%hamiltonian%lsham(:, :, ino)
+               if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%hallcc(:, :, 1, i)
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
                !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%hall(:,:,1,i),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
                !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%lsham(:,:,ino),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
@@ -1544,7 +1573,11 @@ contains
                   nnmap = this%lattice%nn(i, j)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                        if (this%hamiltonian%ccor_2c) then
+                           call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i) + this%hamiltonian%hallcc(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                        else
+                           call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, j, i), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                        end if
                         idum(i) = 1
                      end if
                   end if
@@ -1561,6 +1594,7 @@ contains
          nr = this%lattice%nn(i, 1) ! Number of neighbours
          if (this%izero(i) /= 0) then
             locham = this%hamiltonian%ee(:, :, 1, ih) + this%hamiltonian%lsham(:, :, ih)
+            if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%eecc(:, :, 1, ih)
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi_b(:, :, i), nb, cone, this%hpsi(:, :, i), nb)
             !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%ee(:,:,1,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,i),18)
             !call zgemm(´n´,´n´, nb, nb,18,cone,this%hamiltonian%lsham(:,:,ih),18,this%psi_b(:,:,i),18,cone,this%hpsi(:,:,I),18)
@@ -1570,7 +1604,11 @@ contains
                nnmap = this%lattice%nn(i, j)
                if (nnmap /= 0) then
                   if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                     if (this%hamiltonian%ccor_2c) then
+                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih) + this%hamiltonian%eecc(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                     else
+                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, j, ih), nb, this%psi_b(:, :, nnmap), nb, cone, this%hpsi(:, :, i), nb)
+                     end if
                      idum(i) = 1
                   end if
                end if
@@ -1677,7 +1715,11 @@ contains
 
       ! Fast CPU block-Lanczos kernels (haydock_fast) for the inter-site (ij)
       ! moments. cheb_backend: 'fast' -> fp32, 'fast_dp' -> fp64.
-      if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis) then
+      if (this%hamiltonian%ccor_2c .and. trim(this%control%cheb_backend) /= 'legacy') then
+         call g_logger%warning('ccor_2c is not wired into fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
+      end if
+      if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis .and. &
+          .not. this%hamiltonian%ccor_2c) then
          do ij = start_atom, end_atom
             ij_loc = g2l_map(ij)
             i = this%lattice%ijpair(ij, 1)
@@ -1925,7 +1967,11 @@ contains
       ! Fast CPU block-Lanczos kernels (haydock_fast). cheb_backend selects:
       !   'fast'    -> fp32 working precision, 'fast_dp' -> fp64. local_axis is
       ! not yet supported in the fast path -> fall through to legacy.
-      if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis) then
+      if (this%hamiltonian%ccor_2c .and. trim(this%control%cheb_backend) /= 'legacy') then
+         call g_logger%warning('ccor_2c is not wired into fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
+      end if
+      if (trim(this%control%cheb_backend) /= 'legacy' .and. .not. this%hamiltonian%local_axis .and. &
+          .not. this%hamiltonian%ccor_2c) then
          do i = start_atom, end_atom
             j = this%lattice%irec(i)
             call g_logger%info('Fast block recursion on progress for atom '//int2str(j), __FILE__, __LINE__)
@@ -2370,6 +2416,7 @@ contains
             nr = this%lattice%nn(i, 1) ! Number of neighbours of atom i
             if (this%izero(i) /= 0) then
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
+               if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
             end if
             if (nr >= 2) then
@@ -2378,6 +2425,7 @@ contains
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
+                        if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
                         this%idum(i) = 1
                      end if
                   end if
@@ -2396,6 +2444,7 @@ contains
          nr = this%lattice%nn(k, 1)
          if (this%izero(k) /= 0) then
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
+            if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
          end if
          if (nr >= 2) then
@@ -2403,6 +2452,7 @@ contains
                nnmap = this%lattice%nn(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(1, 1, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
+                  if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -2452,6 +2502,7 @@ contains
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%psi1(:, :, i), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%socpsi(:, :, i), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi0(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
+               if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, 1, i), nb, this%psi0(:, :, i), nb, cone, this%enupsi(:, :, i), nb)
             end if
             if (nr >= 2) then
                do ineigh = 2, nr ! Loop on the neighbouring
@@ -2459,6 +2510,7 @@ contains
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, i), nb)
+                        if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, ineigh, i), nb, this%psi0(:, :, nnmap), nb, cone, this%enupsi(:, :, i), nb)
                         this%idum(i) = 1
                      end if
                   end if
@@ -2476,12 +2528,14 @@ contains
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%psi1(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi0(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
+            if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, 1, ih), nb, this%psi0(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%psi1(:, :, k), nb)
+                  if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi0(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -2684,6 +2738,7 @@ contains
             nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
             if (this%izero(k) /= 0) then
                locham = this%hamiltonian%hall(1:nb, 1:nb, 1, k) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
+               if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%hallcc(1:nb, 1:nb, 1, k)
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
             end if
             if (nr >= 2) then
@@ -2691,7 +2746,11 @@ contains
                   nnmap = this%lattice%nn(k, ineigh)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                        if (this%hamiltonian%ccor_2c) then
+                           call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k) + this%hamiltonian%hallcc(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                        else
+                           call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                        end if
                         this%idum(k) = 1
                      end if
                   end if
@@ -2714,13 +2773,18 @@ contains
          nr = this%lattice%nn(k, 1)
          if (this%izero(k) /= 0) then
             locham = this%hamiltonian%ee(1:nb, 1:nb, 1, ih) + this%hamiltonian%lsham(1:nb, 1:nb, ih)
+            if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%eecc(1:nb, 1:nb, 1, ih)
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                  if (this%hamiltonian%ccor_2c) then
+                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih) + this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                  else
+                     call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                  end if
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -2802,6 +2866,7 @@ contains
                call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
                call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
+               if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, 1, k), nb, this%psi1(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
             end if
             if (nr >= 2) then
                do ineigh = 2, nr ! Loop on the neighbouring
@@ -2809,6 +2874,7 @@ contains
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hall(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                        if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%hallcc(:, :, ineigh, k), nb, this%psi1(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                         this%idum(k) = 1
                      end if
                   end if
@@ -2829,12 +2895,14 @@ contains
             call zgemm('n', 'n', nb, nb, nb, cone, locham, nb, this%psi1(:, :, k), nb, cone, this%psi2(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%enim(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
             call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%lsham(:, :, ih), nb, this%psi1(:, :, k), nb, cone, this%socpsi(:, :, k), nb)
+            if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, 1, ih), nb, this%psi1(:, :, k), nb, cone, this%enupsi(:, :, k), nb)
          end if
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
                if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
                   call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%psi2(:, :, k), nb)
+                  if (this%hamiltonian%ccor_2c) call zgemm('n', 'n', nb, nb, nb, cone, this%hamiltonian%eecc(:, :, ineigh, ih), nb, this%psi1(:, :, nnmap), nb, cone, this%enupsi(:, :, k), nb)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -3537,8 +3605,12 @@ contains
                if (this%izero(i) /= 0) then
                   do m = 1, norb ! Loop on the orbital m
                      do l = 1, norb ! Loop on the orbital l
-                        dum(l) = dum(l) + this%hamiltonian%hall(l, m, 1, i)*this%psi(m, i)
-                        dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%hall(l +spin_off, m +spin_off, 1, i)*this%psi(m +spin_off, i)
+                                 dum(l) = dum(l) + this%hamiltonian%hall(l, m, 1, i)*this%psi(m, i)
+                                 dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%hall(l +spin_off, m +spin_off, 1, i)*this%psi(m +spin_off, i)
+                                 if (this%hamiltonian%ccor_2c) then
+                                    dum(l) = dum(l) + this%hamiltonian%hallcc(l, m, 1, i)*this%psi(m, i)
+                                    dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%hallcc(l +spin_off, m +spin_off, 1, i)*this%psi(m +spin_off, i)
+                                 end if
                      end do ! End of loop on orbital m
                   end do ! End of loop on orbital l
                end if
@@ -3551,6 +3623,10 @@ contains
                               do l = 1, norb ! Loop in the orbital l
                                  dum(l) = dum(l) + this%hamiltonian%hall(l, m, j, i)*this%psi(m, nnmap)
                                  dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%hall(l +spin_off, m +spin_off, j, i)*this%psi(m +spin_off, nnmap)
+                                 if (this%hamiltonian%ccor_2c) then
+                                    dum(l) = dum(l) + this%hamiltonian%hallcc(l, m, j, i)*this%psi(m, nnmap)
+                                    dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%hallcc(l +spin_off, m +spin_off, j, i)*this%psi(m +spin_off, nnmap)
+                                 end if
                               end do ! End of loop in orbital m
                            end do ! End of loop in orbital l
                            idum(i) = 1
@@ -3577,6 +3653,10 @@ contains
                   do l = 1, norb ! Loop on the orbital l
                      dum(l) = dum(l) + this%hamiltonian%ee(l, m, 1, ih)*this%psi(m, i)
                      dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%ee(l +spin_off, m +spin_off, 1, ih)*this%psi(m +spin_off, i)
+                     if (this%hamiltonian%ccor_2c) then
+                        dum(l) = dum(l) + this%hamiltonian%eecc(l, m, 1, ih)*this%psi(m, i)
+                        dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%eecc(l +spin_off, m +spin_off, 1, ih)*this%psi(m +spin_off, i)
+                     end if
                   end do ! End of the loop on the orbital l
                end do ! End of loop on the orbital m
             end if
@@ -3590,6 +3670,10 @@ contains
                            do l = 1, norb ! Loop on orbital l
                               dum(l) = dum(l) + this%hamiltonian%ee(l, m, j, ih)*this%psi(m, nnmap)
                               dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%ee(l +spin_off, m +spin_off, j, ih)*this%psi(m +spin_off, nnmap)
+                              if (this%hamiltonian%ccor_2c) then
+                                 dum(l) = dum(l) + this%hamiltonian%eecc(l, m, j, ih)*this%psi(m, nnmap)
+                                 dum(l +spin_off) = dum(l +spin_off) + this%hamiltonian%eecc(l +spin_off, m +spin_off, j, ih)*this%psi(m +spin_off, nnmap)
+                              end if
                            end do ! End of loop on orbital l
                         end do ! End of loop on the orbital m
                         idum(i) = 1

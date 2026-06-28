@@ -20,6 +20,7 @@ program main
 #ifdef OpenMP_Fortran_FOUND
    ! External functions
    integer, external :: omp_get_num_threads
+   integer, external :: omp_get_thread_num
    integer :: nomp
 #endif
 
@@ -35,9 +36,12 @@ program main
 
 #ifdef OpenMP_Fortran_FOUND
    !$omp parallel
-   !$omp master
-   nomp = omp_get_num_threads()
-   !$omp end master
+   !!!!$omp master
+   !!!nomp = omp_get_num_threads()
+   !!!!$omp end master
+   if (omp_get_thread_num() == 0) then
+      nomp = omp_get_num_threads()
+   end if
    !$omp end parallel
 #endif
 

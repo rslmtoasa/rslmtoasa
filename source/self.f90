@@ -864,6 +864,7 @@ contains
       real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
       integer :: ia_loc
       real(rp) :: q_up, q_dn, mz, mtot
+      real(rp), dimension(2) :: kspace_dos_range
       real(rp), allocatable :: kspace_spin_mom(:,:)
       logical :: use_shifted_kmesh
    
@@ -899,10 +900,20 @@ contains
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
          call g_timer%stop('diagonalization')
          call g_timer%start('calculation-of-DOS')
+         kspace_dos_range = [this%en%fermi + this%en%energy_min, this%en%fermi + this%en%energy_max]
+         if (rank == 0) then
+            call g_logger%info('k-space SCF DOS range relative to current Fermi: [' // &
+                               fmt('f10.6', this%en%energy_min) // ', ' // &
+                               fmt('f10.6', this%en%energy_max) // '] Ry; absolute grid: [' // &
+                               fmt('f10.6', kspace_dos_range(1)) // ', ' // &
+                               fmt('f10.6', kspace_dos_range(2)) // '] Ry', __FILE__, __LINE__)
+         end if
          call this%reciprocal_scf_cache%calculate_density_of_states( &
             this%hamiltonian, &
             n_energy_points=this%en%channels_ldos + 10, &
-            energy_range=[this%en%energy_min, this%en%energy_max])
+            energy_range=kspace_dos_range, &
+            fermi_level=this%en%fermi, &
+            auto_find_fermi=.true.)
          if (this%control%nsp >= 2) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call this%compute_kspace_spin_moments_spinor(this%reciprocal_scf_cache, kspace_spin_mom)
@@ -1117,7 +1128,7 @@ contains
       close(125)
 
       open(unit=126, file='magneticdos.out', status='replace', action='write')
-      write(126, '(a)') '# energy dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
+      write(126, '(a)') '# energy_minus_fermi dos_up dos_dw dos_mx dos_my dos_mz dos_nmag'
       do i = 1, reciprocal_obj%n_energy_points
          write(126, '(7f16.5)') reciprocal_obj%dos_energy_grid(i) - reciprocal_obj%fermi_level, &
             dos_up_tot(i), dos_dw_tot(i), dos_mx_tot(i), dos_my_tot(i), dos_mz_tot(i), dos_nmag_tot(i)
@@ -1810,11 +1821,12 @@ contains
       do ISP = 1, NSP
          VRMAX(1) = VRMAX(1) + V(NR, ISP)/NSP
       end do
-      VRMAX(2) = 0.d0
-      if (NSP == 2) then
-         VRMAX(2) = V(NR, 1) - V(NR, 2)
-      end if
-      this%TOTSUMEV = this%TOTSUMEV + atom%potential%SUMEV
+	      VRMAX(2) = 0.d0
+	      if (NSP == 2) then
+	         VRMAX(2) = V(NR, 1) - V(NR, 2)
+	      end if
+	      atom%potential%vrmax(:) = VRMAX(:)
+	      this%TOTSUMEV = this%TOTSUMEV + atom%potential%SUMEV
       OB4PI = 1.d0/(4.d0*PI)
       return
 

@@ -562,12 +562,16 @@ contains
          call g_logger%warning("reciprocal_mode must be 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'. Falling back to ham_only.", __FILE__, __LINE__)
          this%reciprocal_mode = 'ham_only'
       end if
-      this%kspace_ham_order = lower(trim(kspace_ham_order))
-      if (this%kspace_ham_order /= 'first' .and. this%kspace_ham_order /= 'second' .and. &
-          this%kspace_ham_order /= 'auto') then
-         call g_logger%warning("kspace_ham_order must be 'auto', 'first', or 'second'. Falling back to auto.", __FILE__, __LINE__)
-         this%kspace_ham_order = 'auto'
-      end if
+	      this%kspace_ham_order = lower(trim(kspace_ham_order))
+	      if (this%kspace_ham_order == 'proper') then
+	         this%kspace_ham_order = 'second'
+	         call g_logger%warning("kspace_ham_order='proper' is deprecated; using 'second'.", __FILE__, __LINE__)
+	      end if
+	      if (this%kspace_ham_order /= 'first' .and. this%kspace_ham_order /= 'second' .and. &
+	          this%kspace_ham_order /= 'auto') then
+	         call g_logger%warning("kspace_ham_order must be 'auto', 'first', 'second', or deprecated alias 'proper'. Falling back to auto.", __FILE__, __LINE__)
+	         this%kspace_ham_order = 'auto'
+	      end if
 
       ! K-path settings
       this%auto_kpath = auto_kpath
@@ -927,6 +931,15 @@ contains
       !       here; they are only included in the second-order path
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
       call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk_result)
+      if (this%hamiltonian%ccor_2c) then
+         block
+            complex(rp), allocatable :: hcck(:, :)
+            allocate(hcck(size(hk_result, 1), size(hk_result, 2)))
+            call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
+            hk_result(:, :) = hk_result(:, :) + hcck(:, :)
+            deallocate(hcck)
+         end block
+      end if
    end subroutine fourier_transform_hamiltonian
 
    !---------------------------------------------------------------------------
@@ -1029,13 +1042,13 @@ contains
       ! Local variables
       integer :: isite, ntype_i, i_start, i_end
       integer :: n_orb, n_sites, ndim
-      complex(rp), dimension(:, :), allocatable :: hk, eeok, hohk
+      complex(rp), dimension(:, :), allocatable :: hk, eeok, hohk, hcck
 
       n_orb = nb
       n_sites = this%lattice%nrec
       ndim = n_orb * n_sites
 
-      allocate(hk(ndim, ndim), eeok(ndim, ndim), hohk(ndim, ndim))
+      allocate(hk(ndim, ndim), eeok(ndim, ndim), hohk(ndim, ndim), hcck(ndim, ndim))
 
       ! h(k) = Sum_R ee(R) exp(i*k·R)
       call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk)
@@ -1050,6 +1063,10 @@ contains
 
       ! H(k) = h(k) - [hoh](k)
       hk_result = hk - hohk
+      if (this%hamiltonian%ccor_2c) then
+         call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
+         hk_result = hk_result + hcck
+      end if
 
       ! Add on-site (R=0) terms: E_nu (enim) and L.S (lsham), per site/type,
       ! onto the block diagonal (no phase factor for R=0).
@@ -1063,7 +1080,7 @@ contains
             this%hamiltonian%lsham(:, :, ntype_i)
       end do
 
-      deallocate(hk, eeok, hohk)
+      deallocate(hk, eeok, hohk, hcck)
    end subroutine fourier_transform_hamiltonian_second_order
 
    !---------------------------------------------------------------------------
@@ -1286,6 +1303,32 @@ contains
 #ifdef _OPENMP
       !$omp end parallel do
 #endif
+
+      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%ccor_debug .and. this%nk_local > 0) then
+         block
+            complex(rp), allocatable :: hcck_diag(:, :)
+            real(rp) :: max_eecc, max_hcck, max_hk
+            integer :: diag_k_global
+            character(len=300) :: ccor_msg
+
+            allocate(hcck_diag(size(this%hk_bulk, 1), size(this%hk_bulk, 2)))
+            diag_k_global = local_k_index_to_global(this, 1)
+            if (using_kpath) then
+               call this%fourier_transform_array(this%hamiltonian%eecc, this%k_path(:, 1), hcck_diag)
+            else
+               call this%fourier_transform_array(this%hamiltonian%eecc, this%k_points(:, diag_k_global), hcck_diag)
+            end if
+            max_eecc = maxval(abs(this%hamiltonian%eecc))
+            max_hcck = maxval(abs(hcck_diag))
+            max_hk = maxval(abs(this%hk_bulk(:, :, 1)))
+            write(ccor_msg, '(a,i0,a,es12.4,a,es12.4,a,es12.4)') &
+               'CCOR2C k-space diagnostic at local k=1/global k=', diag_k_global, &
+               ': maxabs(eecc)=', max_eecc, ', maxabs(Hcc(k))=', max_hcck, &
+               ', maxabs(H(k))=', max_hk
+            call root_info(trim(ccor_msg), __FILE__, __LINE__)
+            deallocate(hcck_diag)
+         end block
+      end if
 
       call root_info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
       if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
@@ -4199,7 +4242,7 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
 
    call root_info('find_fermi_level_from_dos: Finding Fermi level for ' // &
                   trim(real2str(total_electrons, '(F 8.5)')) // ' electrons at T = ' // &
-                  trim(real2str(this%temperature, '(F 8.5)')) // ' K', __FILE__, __LINE__)
+                  trim(real2str(this%temperature, '(F 8.3)')) // ' K', __FILE__, __LINE__)
 
    if (.not. allocated(this%total_dos)) then
       call g_logger%error('find_fermi_level_from_dos: Total DOS not calculated', __FILE__, __LINE__)
@@ -4328,9 +4371,13 @@ end function integrate_dos_up_to_energy
          write(unit, '(A,F8.5,A)') '# Gaussian sigma: ', this%gaussian_sigma, ' Ry'
       end if
       write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
-      write(unit, '(A,2F10.6,A)') '# Energy range: ', this%dos_energy_range(1), &
+      write(unit, '(A,2F10.6,A)') '# Absolute energy range: ', this%dos_energy_range(1), &
                                    this%dos_energy_range(2), ' Ry'
-      write(unit, '(A)') '# Energy (Ry)    Total DOS'
+      write(unit, '(A,F12.6,A)') '# Fermi level: ', this%fermi_level, ' Ry'
+      write(unit, '(A,2F10.6,A)') '# Printed energy range E-E_F: ', &
+                                   this%dos_energy_range(1) - this%fermi_level, &
+                                   this%dos_energy_range(2) - this%fermi_level, ' Ry'
+      write(unit, '(A)') '# Energy-E_F (Ry)    Total DOS'
 
       ! Write DOS data (energy grid already in Ry)
       do i_energy = 1, this%n_energy_points
@@ -4353,9 +4400,13 @@ end function integrate_dos_up_to_energy
             write(unit, '(A,F8.5,A)') '# Gaussian sigma: ', this%gaussian_sigma, ' Ry'
          end if
          write(unit, '(A,I0)') '# Energy points: ', this%n_energy_points
-         write(unit, '(A,2F10.6,A)') '# Energy range: ', this%dos_energy_range(1), &
+         write(unit, '(A,2F10.6,A)') '# Absolute energy range: ', this%dos_energy_range(1), &
                                       this%dos_energy_range(2), ' Ry'
-         write(unit, '(A)') '# Columns: Energy(Ry), s_up, p_up, d_up, f_up, s_down, p_down, d_down, f_down'
+         write(unit, '(A,F12.6,A)') '# Fermi level: ', this%fermi_level, ' Ry'
+         write(unit, '(A,2F10.6,A)') '# Printed energy range E-E_F: ', &
+                                      this%dos_energy_range(1) - this%fermi_level, &
+                                      this%dos_energy_range(2) - this%fermi_level, ' Ry'
+         write(unit, '(A)') '# Columns: Energy-E_F(Ry), s_up, p_up, d_up, f_up, s_down, p_down, d_down, f_down'
 
          ! Write projected DOS data (energy grid already in Ry)
          do i_energy = 1, this%n_energy_points

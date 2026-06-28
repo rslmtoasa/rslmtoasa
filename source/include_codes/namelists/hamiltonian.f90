@@ -2,6 +2,9 @@ logical :: hoh, local_axis, orb_pol, v_a, v_b
 character(len=20) :: js_alpha, jl_alpha
 real(rp), dimension(3) :: v_alpha, v_beta, q_ss
 real(rp) :: theta_ss
+logical :: ccor_2c, ccor_debug, ccor_strict
+real(rp) :: ccor_elin
+character(len=16) :: ccor_vmt_mode
 real(rp), dimension(:), allocatable :: velocity_scale
 ! Hubbard input units in this namelist:
 ! - hubbard_u / hubbard_j / hubbard_u_impurity / hubbard_j_impurity /
@@ -19,5 +22,6 @@ character(len=16) :: hubbard_u_potential_form
 real(rp) :: bounds_scaling
 character(len=16) :: export
 
-namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, js_alpha, jl_alpha, velocity_scale, q_ss, theta_ss, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
+namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, js_alpha, jl_alpha, velocity_scale, q_ss, theta_ss, ccor_2c, ccor_elin, &
+        ccor_vmt_mode, ccor_debug, ccor_strict, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
         hubbard_u_sc, hubbard_u_impurity, hubbard_j_impurity, hubbard_u_general, hubbard_j_general, bounds_algorithm, bounds_scaling, hubbard_u_potential_form, export
