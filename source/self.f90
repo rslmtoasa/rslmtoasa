@@ -864,7 +864,6 @@ contains
       real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
       integer :: ia_loc
       real(rp) :: q_up, q_dn, mz, mtot
-      real(rp), dimension(2) :: kspace_dos_range
       real(rp), allocatable :: kspace_spin_mom(:,:)
       logical :: use_shifted_kmesh
    
@@ -900,18 +899,10 @@ contains
          call this%reciprocal_scf_cache%diagonalize_hamiltonian()
          call g_timer%stop('diagonalization')
          call g_timer%start('calculation-of-DOS')
-         kspace_dos_range = [this%en%fermi + this%en%energy_min, this%en%fermi + this%en%energy_max]
-         if (rank == 0) then
-            call g_logger%info('k-space SCF DOS range relative to current Fermi: [' // &
-                               fmt('f10.6', this%en%energy_min) // ', ' // &
-                               fmt('f10.6', this%en%energy_max) // '] Ry; absolute grid: [' // &
-                               fmt('f10.6', kspace_dos_range(1)) // ', ' // &
-                               fmt('f10.6', kspace_dos_range(2)) // '] Ry', __FILE__, __LINE__)
-         end if
          call this%reciprocal_scf_cache%calculate_density_of_states( &
             this%hamiltonian, &
             n_energy_points=this%en%channels_ldos + 10, &
-            energy_range=kspace_dos_range, &
+            energy_range=[this%en%energy_min, this%en%energy_max], &
             fermi_level=this%en%fermi, &
             auto_find_fermi=.true.)
          if (this%control%nsp >= 2) then
