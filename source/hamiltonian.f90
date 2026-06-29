@@ -1,4 +1,4 @@
-!------------------------------------------------------------------------------
+ !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
 !
@@ -1830,7 +1830,7 @@ contains
 
 	      hcc(:, :) = czero
 	      hcomp(:, :, :) = czero
-	      lambda_pair(:) = ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin
+	      lambda_pair(:) = (ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin)
 
 	      mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
 	      mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)

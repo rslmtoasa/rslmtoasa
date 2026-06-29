@@ -44,7 +44,7 @@ module reciprocal_mod
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
    use basis_mod, only: nb, norb
-   use mpi_mod, only: rank, ierr, get_mpi_range
+   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
 #ifdef USE_MPI
    use mpi
 #endif
@@ -190,7 +190,7 @@ module reciprocal_mod
       integer :: n_sites
       !> Number of orbital types (s, p, d, f)
       integer :: n_orb_types
-      !> Number of spin components (1 for non-spin-polarized, 2 for spin-polarized)
+      !> Number of spin components (RS-LMTO uses spin-polarized two-component blocks)
       integer :: n_spin_components
 
       ! Tetrahedron method variables
@@ -281,6 +281,7 @@ module reciprocal_mod
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
+      procedure :: ensure_full_mesh_for_spinor_integrations
       procedure :: build_irreducible_tetrahedra
       final     :: destructor
    end type reciprocal
@@ -452,7 +453,7 @@ contains
       this%hall_diag_experimental = .false.
       this%n_sites = 0
       this%n_orb_types = 4  ! s, p, d, f
-      this%n_spin_components = 1  ! Default to non-spin-polarized
+      this%n_spin_components = 2  ! RS-LMTO basis is always spin-polarized
       this%n_tetrahedra = 0
 
       ! Default k-path settings
@@ -2060,7 +2061,7 @@ end subroutine print_hamiltonian_structure
       logical, intent(in), optional :: use_shift
       integer :: shift(3)
       integer :: num_ir_kpoints
-      logical :: do_shift
+      logical :: do_shift, effective_time_reversal
       real(rp), allocatable :: kpoints_frac(:,:), weights(:)
       integer :: i
       integer, allocatable :: full_to_irred(:), irred_to_full(:)
@@ -2076,6 +2077,13 @@ end subroutine print_hamiltonian_structure
 
       ! Store mesh dimensions
       this%nk_mesh = mesh_dims
+      effective_time_reversal = this%use_time_reversal
+      if (associated(this%control)) then
+         if (this%control%nsp >= 3 .and. effective_time_reversal) then
+            effective_time_reversal = .false.
+            call g_logger%info('generate_reduced_kpoint_mesh: Disabled time-reversal reduction for non-collinear calculation; spatial symmetry reduction remains enabled.', __FILE__, __LINE__)
+         end if
+      end if
 
 #ifdef USE_SPGLIB
    if (.not. this%symmetry_analysis%spglib%is_available()) then
@@ -2086,7 +2094,7 @@ end subroutine print_hamiltonian_structure
 
    ! Get irreducible k-points and weights from spglib
    num_ir_kpoints = this%symmetry_analysis%spglib%get_reduced_kpoint_mesh_with_points( &
-                           mesh_dims, shift, kpoints_frac, weights, this%use_time_reversal, &
+                           mesh_dims, shift, kpoints_frac, weights, effective_time_reversal, &
                            full_to_irred, irred_to_full)
 #else
    ! SPGLIB not enabled at compile time: fall back to full mesh
@@ -2249,7 +2257,14 @@ end subroutine print_hamiltonian_structure
       ! Build k-space Hamiltonian and diagonalize if not already done
       if (.not. allocated(this%eigenvalues)) then
          call root_info('calculate_density_of_states: Building and diagonalizing Hamiltonian on k-mesh', __FILE__, __LINE__)
-         
+         if (.not. allocated(this%k_points)) then
+            if (this%use_symmetry_reduction) then
+               call this%generate_reduced_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
+            else
+               call this%generate_mp_mesh()
+            end if
+         end if
+
          ! Build H(k) for all k-points in mesh
          call this%build_kspace_hamiltonian()
          
@@ -2281,6 +2296,12 @@ end subroutine print_hamiltonian_structure
          call g_logger%error('calculate_density_of_states: Unknown DOS method: ' // trim(this%dos_method), __FILE__, __LINE__)
          return
       end select
+
+      if (this%auto_find_fermi .and. this%total_electrons > 0.0_rp) then
+         this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
+         call g_logger%info('calculate_density_of_states: Auto-found Fermi level = ' // &
+                           trim(real2str(this%fermi_level, '(F 10.6)')) // ' Ry', __FILE__, __LINE__)
+      end if
 
       ! Calculate orbital projections and band moments
       call this%project_dos_orbitals()
@@ -2402,6 +2423,29 @@ end subroutine print_hamiltonian_structure
       call this%build_kspace_hamiltonian()
       call this%diagonalize_hamiltonian()
    end subroutine ensure_tetra_symmetry_backend
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Ensure spinor-resolved band integrations use actual full-mesh
+   !> eigenvectors. Irreducible spinor/projector rotations are not available.
+   !---------------------------------------------------------------------------
+   subroutine ensure_full_mesh_for_spinor_integrations(this, context_tag)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context_tag
+      integer :: nk_full_expected
+
+      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+      if (.not. this%use_symmetry_reduction) return
+      if (this%nk_total >= nk_full_expected) return
+
+      call g_logger%info(trim(context_tag) // ': symmetry-reduced spinor/projected integration requires full k mesh; rebuilding full mesh.', __FILE__, __LINE__)
+      call this%generate_mp_mesh()
+      call this%build_kspace_hamiltonian()
+      call this%diagonalize_hamiltonian()
+      if (allocated(this%tetrahedra)) deallocate(this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) deallocate(this%tetrahedron_volumes)
+   end subroutine ensure_full_mesh_for_spinor_integrations
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -2616,7 +2660,9 @@ end subroutine print_hamiltonian_structure
       integer, allocatable :: tet_ir(:, :), tet_mult(:)
       integer :: n_tet_ir
       real(rp) :: tet_weight, dos_integral, nos_integral
-      integer :: nk_full_expected
+      real(rp) :: fermi_count, fermi_error
+      real(rp), allocatable :: local_dos(:), local_nos(:)
+      integer :: nk_full_expected, tet_start, tet_end, tet_count
 
       call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
 
@@ -2644,8 +2690,17 @@ end subroutine print_hamiltonian_structure
       else
          n_tet_ir = this%n_tetrahedra
       end if
+      call get_mpi_range(rank, n_tet_ir, tet_start, tet_end, tet_count, region_tag='tetra')
 
-      do i_tet = 1, n_tet_ir
+!$OMP PARALLEL DEFAULT(NONE) &
+!$OMP& SHARED(this, tet_ir, tet_mult, tet_start, tet_end, nbands, nk_full_expected) &
+!$OMP& PRIVATE(i_tet, i_band, i_corner, e_corners, tet_weight, local_dos, local_nos)
+      allocate(local_dos(this%n_energy_points), local_nos(this%n_energy_points))
+      local_dos = 0.0_rp
+      local_nos = 0.0_rp
+
+!$OMP DO SCHEDULE(DYNAMIC)
+      do i_tet = tet_start, tet_end
          if (allocated(tet_mult)) then
             tet_weight = real(tet_mult(i_tet), rp) / (6.0_rp * real(nk_full_expected, rp))
          else
@@ -2660,11 +2715,27 @@ end subroutine print_hamiltonian_structure
                end if
             end do
             call tetra_add_nos(tet_weight, e_corners, this%dos_energy_grid(1), &
-                               this%dos_energy_grid(this%n_energy_points), this%total_nos, this%n_energy_points)
+                               this%dos_energy_grid(this%n_energy_points), local_nos, this%n_energy_points)
             call tetra_add_dos(tet_weight, e_corners, this%dos_energy_grid(1), &
-                               this%dos_energy_grid(this%n_energy_points), this%total_dos, this%n_energy_points)
+                               this%dos_energy_grid(this%n_energy_points), local_dos, this%n_energy_points)
          end do
       end do
+!$OMP END DO
+
+!$OMP CRITICAL(tetra_dos_accum)
+      this%total_dos = this%total_dos + local_dos
+      this%total_nos = this%total_nos + local_nos
+!$OMP END CRITICAL(tetra_dos_accum)
+
+      deallocate(local_dos, local_nos)
+!$OMP END PARALLEL
+
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%total_dos, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%total_nos, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
+#endif
 
       dos_integral = trapezoidal_integral(this%dos_energy_grid, this%total_dos)
       nos_integral = this%total_nos(this%n_energy_points) - this%total_nos(1)
@@ -2672,6 +2743,16 @@ end subroutine print_hamiltonian_structure
                         trim(real2str(dos_integral, '(F12.6)')) // ', N(Emax)-N(Emin) = ' // &
                         trim(real2str(nos_integral, '(F12.6)')) // ', expected states = ' // &
                         trim(int2str(nbands)), __FILE__, __LINE__)
+
+      if (this%total_electrons > 0.0_rp) then
+         fermi_count = interpolate_grid_value(this%dos_energy_grid, this%total_nos, this%n_energy_points, this%fermi_level)
+         fermi_error = fermi_count - this%total_electrons
+         call g_logger%info('calculate_dos_tetrahedron: N(E_F=' // &
+                           trim(real2str(this%fermi_level, '(F10.6)')) // ' Ry) = ' // &
+                           trim(real2str(fermi_count, '(F12.6)')) // ', target valence = ' // &
+                           trim(real2str(this%total_electrons, '(F12.6)')) // ', error = ' // &
+                           trim(real2str(fermi_error, '(ES12.4)')), __FILE__, __LINE__)
+      end if
 
       if (allocated(tet_ir)) deallocate(tet_ir)
       if (allocated(tet_mult)) deallocate(tet_mult)
@@ -3666,25 +3747,29 @@ end subroutine project_dos_orbitals_gaussian
       class(reciprocal), intent(inout) :: this
 
       ! Local variables
-      integer :: i_energy, i_tet, i_corner, i_band, iorb, i, isite
+      integer :: i_energy, i_tet, i_corner, i_band, iorb, isite
       integer :: i_start, i_end
       integer :: n_orb_per_spin, orb_start, site_orb_start, ik, n_orb_site
       integer :: ie, nbands
+      integer :: tet_start, tet_end, tet_count
       real(rp) :: energy, dos_contrib, orbital_char_avg, orbital_char, de
       real(rp) :: total_dos_integral, proj_dos_integral, norm_factor
       real(rp), dimension(4) :: e_corners, sorted_e, orbital_chars
       real(rp), dimension(4) :: mx_chars, my_chars, mz_chars
       integer :: lstart(4), lend(4)
-      complex(rp) :: psi_element
       real(rp) :: e1, e2, e3, e4, x, C
+      real(rp) :: tet_weight
       real(rp), parameter :: TOL = 1.0e-10_rp
-      integer, allocatable :: tet_ir(:, :), tet_mult(:)
       integer :: n_tet_ir
-      integer :: nk_full_expected
       ! Per-site orbital offsets for mixed atom types
       integer, dimension(:), allocatable :: site_orb_offset
       real(rp) :: mx_char_avg, my_char_avg, mz_char_avg, local_char
       real(rp) :: axis(3)
+      real(rp), allocatable :: site_axes(:, :)
+      real(rp), allocatable :: dos_line(:)
+      real(rp), allocatable :: local_projected_dos(:, :, :, :)
+      real(rp), allocatable :: local_projected_dos_moments(:, :, :, :, :)
+      real(rp), allocatable :: local_dos_mx(:), local_dos_my(:), local_dos_mz(:)
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Starting tetrahedron orbital projection calculation', __FILE__, __LINE__)
 
@@ -3709,15 +3794,7 @@ end subroutine project_dos_orbitals_gaussian
       lstart = [1, 2, 5, 10]
       lend = [1, 4, 9, 16]
 
-      nk_full_expected = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
-      if (this%use_symmetry_reduction .and. this%nk_total < nk_full_expected) then
-         call g_logger%info('project_dos_orbitals_tetrahedron: symmetry-reduced spinor projections require full k mesh; rebuilding full mesh for non-collinear-safe band integrations.', __FILE__, __LINE__)
-         call this%generate_mp_mesh()
-         call this%build_kspace_hamiltonian()
-         call this%diagonalize_hamiltonian()
-         if (allocated(this%tetrahedra)) deallocate(this%tetrahedra)
-         if (allocated(this%tetrahedron_volumes)) deallocate(this%tetrahedron_volumes)
-      end if
+      call this%ensure_full_mesh_for_spinor_integrations('project_dos_orbitals_tetrahedron')
 
       call g_logger%info('project_dos_orbitals_tetrahedron: Projecting onto ' // trim(int2str(this%n_sites)) // &
                         ' site(s)', __FILE__, __LINE__)
@@ -3742,8 +3819,12 @@ end subroutine project_dos_orbitals_gaussian
       this%projected_dos_moments = 0.0_rp
 
       allocate(site_orb_offset(this%n_sites + 1))
+      allocate(site_axes(3, this%n_sites))
       do isite = 1, this%n_sites + 1
          site_orb_offset(isite) = (isite - 1) * n_orb_site
+      end do
+      do isite = 1, this%n_sites
+         call get_site_spin_axis(this, isite, site_axes(:, isite))
       end do
 
       ! Setup tetrahedra if not already done
@@ -3756,16 +3837,34 @@ end subroutine project_dos_orbitals_gaussian
          call g_logger%fatal('project_dos_orbitals_tetrahedron: Invalid DOS energy grid spacing', __FILE__, __LINE__)
       end if
       n_tet_ir = this%n_tetrahedra
+      call get_mpi_range(rank, n_tet_ir, tet_start, tet_end, tet_count, region_tag='projected tetra')
 
-      ! Tetra/band-first traversal with bounded energy windows.
-      do i_tet = 1, merge(n_tet_ir, this%n_tetrahedra, allocated(tet_ir))
+      ! Tetra/band-first traversal with one tetra shape evaluation per band.
+      !$OMP PARALLEL DEFAULT(NONE) &
+      !$OMP SHARED(this, site_orb_offset, site_axes, lstart, lend, n_orb_per_spin, n_tet_ir, &
+      !$OMP        tet_start, tet_end, de) &
+      !$OMP PRIVATE(i_tet, i_band, i_corner, ik, e_corners, sorted_e, e1, e2, e3, e4, i_start, i_end, &
+      !$OMP         i_energy, energy, dos_contrib, x, C, tet_weight, isite, site_orb_start, axis, iorb, &
+      !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_char, orbital_chars, &
+      !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
+      !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz)
+      allocate(dos_line(this%n_energy_points))
+      allocate(local_projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
+      allocate(local_projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
+      allocate(local_dos_mx(this%n_energy_points))
+      allocate(local_dos_my(this%n_energy_points))
+      allocate(local_dos_mz(this%n_energy_points))
+      local_projected_dos = 0.0_rp
+      local_projected_dos_moments = 0.0_rp
+      local_dos_mx = 0.0_rp
+      local_dos_my = 0.0_rp
+      local_dos_mz = 0.0_rp
+
+      !$OMP DO SCHEDULE(DYNAMIC)
+      do i_tet = tet_start, tet_end
          do i_band = 1, size(this%eigenvalues, 1)
             do i_corner = 1, 4
-               if (allocated(tet_ir)) then
-                  ik = tet_ir(i_corner, i_tet)
-               else
-                  ik = this%tetrahedra(i_corner, i_tet)
-               end if
+               ik = this%tetrahedra(i_corner, i_tet)
                e_corners(i_corner) = this%eigenvalues(i_band, ik)
             end do
             call sort4(e_corners, sorted_e)
@@ -3779,10 +3878,45 @@ end subroutine project_dos_orbitals_gaussian
 
             i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
             i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
+            tet_weight = this%tetrahedron_volumes(i_tet)
+
+            dos_line = 0.0_rp
+            do i_energy = i_start, i_end
+               energy = this%dos_energy_grid(i_energy)
+               if (trim(this%dos_method) == 'blochl') then
+                  if (energy <= e1 .or. energy >= e4) cycle
+                  if (energy <= e2) then
+                     dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
+                  else if (energy <= e3) then
+                     C = 1.0_rp / ((e4 - e1) * (e3 - e1))
+                     dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
+                                    3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
+                                    ((e3 - e2) * (e4 - e2)))
+                  else
+                     dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+                  end if
+               else
+                  if (energy < e1 .or. energy >= e4) cycle
+                  if (energy < e2) then
+                     x = energy - e1
+                     dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
+                  else if (energy < e3) then
+                     x = energy - e2
+                     dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
+                                 x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
+                                 x * (3.0_rp * (e1 + e2 - e3 - e4) / &
+                                 ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
+                  else
+                     x = energy - e4
+                     dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
+                  end if
+               end if
+               dos_line(i_energy) = dos_contrib * tet_weight
+            end do
 
             do isite = 1, this%n_sites
                site_orb_start = site_orb_offset(isite)
-               call get_site_spin_axis(this, isite, axis)
+               axis = site_axes(:, isite)
                do iorb = 1, 4
                   orbital_char_avg = 0.0_rp
                   mx_char_avg = 0.0_rp
@@ -3790,11 +3924,7 @@ end subroutine project_dos_orbitals_gaussian
                   mz_char_avg = 0.0_rp
                   if (lstart(iorb) <= n_orb_per_spin) then
                      do i_corner = 1, 4
-                        if (allocated(tet_ir)) then
-                           ik = tet_ir(i_corner, i_tet)
-                        else
-                           ik = this%tetrahedra(i_corner, i_tet)
-                        end if
+                        ik = this%tetrahedra(i_corner, i_tet)
                         call compute_spinor_block_projection(this, ik, i_band, site_orb_start, n_orb_per_spin, &
                                                              lstart(iorb), lend(iorb), orbital_char, mx_chars(i_corner), &
                                                              my_chars(i_corner), mz_chars(i_corner))
@@ -3809,63 +3939,56 @@ end subroutine project_dos_orbitals_gaussian
 
                   local_char = axis(1)*mx_char_avg + axis(2)*my_char_avg + axis(3)*mz_char_avg
                   do i_energy = i_start, i_end
-                     energy = this%dos_energy_grid(i_energy)
-                     if (trim(this%dos_method) == 'blochl') then
-                        if (energy <= e1 .or. energy >= e4) cycle
-                        if (energy <= e2) then
-                           dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
-                        else if (energy <= e3) then
-                           C = 1.0_rp / ((e4 - e1) * (e3 - e1))
-                           dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
-                                          3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
-                                          ((e3 - e2) * (e4 - e2)))
-                        else
-                           dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
-                        end if
-                     else
-                        if (energy < e1 .or. energy >= e4) cycle
-                        if (energy < e2) then
-                           x = energy - e1
-                           dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
-                        else if (energy < e3) then
-                           x = energy - e2
-                           dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
-                                       x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
-                                       x * (3.0_rp * (e1 + e2 - e3 - e4) / &
-                                       ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
-                        else
-                           x = energy - e4
-                           dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
-                        end if
-                     end if
-                     if (allocated(tet_mult)) then
-                        dos_contrib = dos_contrib * real(tet_mult(i_tet), rp) / &
-                           (6.0_rp * real(this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3), rp))
-                     else
-                        dos_contrib = dos_contrib * this%tetrahedron_volumes(i_tet)
-                     end if
-                     this%projected_dos(isite, iorb, 1, i_energy) = this%projected_dos(isite, iorb, 1, i_energy) + &
-                                                                     0.5_rp*(orbital_char_avg + local_char)*dos_contrib
-                     this%projected_dos(isite, iorb, 2, i_energy) = this%projected_dos(isite, iorb, 2, i_energy) + &
-                                                                     0.5_rp*(orbital_char_avg - local_char)*dos_contrib
-                     this%projected_dos_moments(isite, iorb, 1, 1, i_energy) = this%projected_dos_moments(isite, iorb, 1, 1, i_energy) + &
-                                                                                  mx_char_avg*dos_contrib
-                     this%projected_dos_moments(isite, iorb, 1, 2, i_energy) = this%projected_dos_moments(isite, iorb, 1, 2, i_energy) + &
-                                                                                  my_char_avg*dos_contrib
-                     this%projected_dos_moments(isite, iorb, 1, 3, i_energy) = this%projected_dos_moments(isite, iorb, 1, 3, i_energy) + &
-                                                                                  mz_char_avg*dos_contrib
-                     this%dos_mx_tot(i_energy) = this%dos_mx_tot(i_energy) + mx_char_avg*dos_contrib
-                     this%dos_my_tot(i_energy) = this%dos_my_tot(i_energy) + my_char_avg*dos_contrib
-                     this%dos_mz_tot(i_energy) = this%dos_mz_tot(i_energy) + mz_char_avg*dos_contrib
+                     dos_contrib = dos_line(i_energy)
+                     if (dos_contrib == 0.0_rp) cycle
+                     local_projected_dos(isite, iorb, 1, i_energy) = local_projected_dos(isite, iorb, 1, i_energy) + &
+                                                                      0.5_rp*(orbital_char_avg + local_char)*dos_contrib
+                     local_projected_dos(isite, iorb, 2, i_energy) = local_projected_dos(isite, iorb, 2, i_energy) + &
+                                                                      0.5_rp*(orbital_char_avg - local_char)*dos_contrib
+                     local_projected_dos_moments(isite, iorb, 1, 1, i_energy) = &
+                        local_projected_dos_moments(isite, iorb, 1, 1, i_energy) + mx_char_avg*dos_contrib
+                     local_projected_dos_moments(isite, iorb, 1, 2, i_energy) = &
+                        local_projected_dos_moments(isite, iorb, 1, 2, i_energy) + my_char_avg*dos_contrib
+                     local_projected_dos_moments(isite, iorb, 1, 3, i_energy) = &
+                        local_projected_dos_moments(isite, iorb, 1, 3, i_energy) + mz_char_avg*dos_contrib
+                     local_dos_mx(i_energy) = local_dos_mx(i_energy) + mx_char_avg*dos_contrib
+                     local_dos_my(i_energy) = local_dos_my(i_energy) + my_char_avg*dos_contrib
+                     local_dos_mz(i_energy) = local_dos_mz(i_energy) + mz_char_avg*dos_contrib
                   end do
                end do
             end do
          end do
       end do
+      !$OMP END DO
+
+      !$OMP CRITICAL(projected_tetra_accum)
+      this%projected_dos = this%projected_dos + local_projected_dos
+      this%projected_dos_moments = this%projected_dos_moments + local_projected_dos_moments
+      this%dos_mx_tot = this%dos_mx_tot + local_dos_mx
+      this%dos_my_tot = this%dos_my_tot + local_dos_my
+      this%dos_mz_tot = this%dos_mz_tot + local_dos_mz
+      !$OMP END CRITICAL(projected_tetra_accum)
+
+      deallocate(dos_line)
+      deallocate(local_projected_dos)
+      deallocate(local_projected_dos_moments)
+      deallocate(local_dos_mx)
+      deallocate(local_dos_my)
+      deallocate(local_dos_mz)
+      !$OMP END PARALLEL
+
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%projected_dos, product(shape(this%projected_dos)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%projected_dos_moments, product(shape(this%projected_dos_moments)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_mx_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_my_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, this%dos_mz_tot, this%n_energy_points, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      end if
+#endif
 
       deallocate(site_orb_offset)
-      if (allocated(tet_ir)) deallocate(tet_ir)
-      if (allocated(tet_mult)) deallocate(tet_mult)
+      deallocate(site_axes)
 
       ! Normalize projected DOS to match total DOS normalization
       ! When using Blöchl or standard tetrahedron method, the raw DOS needs normalization
@@ -3931,6 +4054,41 @@ end subroutine project_dos_orbitals_gaussian
       end do
    end function trapezoidal_integral
 
+   function interpolate_grid_value(x, y, n, x0) result(y0)
+      integer, intent(in) :: n
+      real(rp), intent(in) :: x(n), y(n), x0
+      real(rp) :: y0
+      integer :: i
+      real(rp) :: dx
+
+      if (n <= 0) then
+         y0 = 0.0_rp
+         return
+      end if
+      if (x0 <= x(1)) then
+         y0 = y(1)
+         return
+      end if
+      if (x0 >= x(n)) then
+         y0 = y(n)
+         return
+      end if
+
+      do i = 1, n - 1
+         if (x(i + 1) >= x0) then
+            dx = x(i + 1) - x(i)
+            if (abs(dx) > tiny(1.0_rp)) then
+               y0 = y(i) + (y(i + 1) - y(i)) * (x0 - x(i)) / dx
+            else
+               y0 = 0.5_rp * (y(i) + y(i + 1))
+            end if
+            return
+         end if
+      end do
+
+      y0 = y(n)
+   end function interpolate_grid_value
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -3981,6 +4139,13 @@ subroutine calculate_band_moments(this)
          call g_logger%warning('calculate_band_moments: auto_find_fermi=.true. but total_electrons<=0; using current Fermi level = ' // &
                               trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
       end if
+   end if
+
+   if (this%use_symmetry_reduction .and. &
+       (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') .and. &
+       this%nk_total < this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)) then
+      call this%ensure_full_mesh_for_spinor_integrations('calculate_band_moments')
+      call this%project_dos_orbitals_tetrahedron()
    end if
 
    if (allocated(this%band_moments)) deallocate(this%band_moments)
@@ -4226,6 +4391,14 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
          return
       end if
       do ie = 1, this%n_energy_points - 1
+         if (this%total_nos(ie) >= total_electrons - 1.0e-10_rp) then
+            fermi_level = this%dos_energy_grid(ie)
+            electrons_at_e = this%total_nos(ie)
+            call root_info('find_fermi_level_from_dos: Found Fermi level from tetra N(E) at HOMO-side plateau ' // &
+                           trim(real2str(fermi_level, '(F 8.5)')) // ' Ry (integrated ' // &
+                           trim(real2str(electrons_at_e, '(F 8.5)')) // ' electrons)', __FILE__, __LINE__)
+            return
+         end if
          if (this%total_nos(ie + 1) >= total_electrons) then
             q1 = this%total_nos(ie)
             q2 = this%total_nos(ie + 1)
@@ -4234,7 +4407,7 @@ function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
             if (abs(q2 - q1) > 1.0e-14_rp) then
                fermi_level = e1 + (total_electrons - q1) * (e2 - e1) / (q2 - q1)
             else
-               fermi_level = 0.5_rp * (e1 + e2)
+               fermi_level = e1
             end if
             step = e2 - e1
             electrons_at_e = q1 + (q2 - q1) * (fermi_level - e1) / max(step, tiny(1.0_rp))
@@ -4629,6 +4802,8 @@ end function integrate_dos_up_to_energy
       integer :: idx_a, idx_b
 
       call root_info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
+
+      call this%ensure_full_mesh_for_spinor_integrations('calculate_ldm_from_eigenvectors')
 
       nbands = size(this%eigenvalues, 1)
       nsites = lattice_obj%nrec
