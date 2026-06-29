@@ -178,9 +178,10 @@ assert ctx, lib.rsrec_last_error().decode()
 nnF = np.asfortranarray(nn)
 rc = lib.rsrec_set_hamiltonian(ctx, P(ee), P(hall), P(lsham),
                                nnF.ctypes.data_as(ct.POINTER(ct.c_int)),
-                               iz.ctypes.data_as(ct.POINTER(ct.c_int)))
+                               iz.ctypes.data_as(ct.POINTER(ct.c_int)),
+                               None, None, None)
 assert rc == 0, lib.rsrec_last_error().decode()
-rc = lib.rsrec_set_velocity(ctx, P(va), P(vb)); assert rc == 0
+rc = lib.rsrec_set_velocity(ctx, P(va), P(vb), None, None); assert rc == 0
 
 def relerr(x, y):
     return np.max(np.abs(x - y)) / max(np.max(np.abs(y)), 1e-300)

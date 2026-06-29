@@ -51,6 +51,9 @@ int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
                                const void *hall, const void *lsham,
                                const int *nn, const int *iz, const void *eeo,
                                const void *hallo, const void *enim);
+int rsrec_cuda_set_hamiltonian_additive(rsrec_cuda_ctx *ctx,
+                                        const void *ee_add,
+                                        const void *hall_add);
 int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
                             const void *v_b, const void *vo_a,
                             const void *vo_b);

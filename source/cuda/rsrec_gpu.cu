@@ -87,13 +87,17 @@ struct rsrec_ctx {
      *   y = ( h*x - eeo*(h*x) + hons*x - b*x ) / a
      * mirrors ham_hoh_vec_matmul. Stored UNSCALED (raw); the 1/a and -b*I
      * scaling is applied in the combine kernel. f_* are fp32 mirrors used by
-     * the default fp32 Chebyshev path (raw down-conversion, no scaling).     */
+     * the default fp32 Chebyshev path (raw down-conversion, no scaling).
+     * d_*_add holds an optional additive operator (CCOR) applied after the
+     * hoh combine, so eeo*h is still formed from bare h.                    */
     zc *d_ee_bare = nullptr, *d_hall_bare = nullptr;
     zc *d_eeo = nullptr, *d_hallo = nullptr, *d_hons = nullptr;
+    zc *d_ee_add = nullptr, *d_hall_add = nullptr;
     fc *f_ee_bare = nullptr, *f_hall_bare = nullptr;
     fc *f_eeo = nullptr, *f_hallo = nullptr, *f_hons = nullptr;
+    fc *f_ee_add = nullptr, *f_hall_add = nullptr;
     int f_hoh_ver = -1;
-    bool have_hoh = false;
+    bool have_hoh = false, have_hadd = false;
 
     /* Velocity orthogonalisation operators for the hoh two-sweep velocity apply
      * (out = v*psi - vo*(h_bare*psi); vo on-site shell-1 is zeroed on upload to
@@ -154,8 +158,10 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_cC, (void *)c->d_col,
                     (void *)c->d_ee_bare, (void *)c->d_hall_bare,
                     (void *)c->d_eeo, (void *)c->d_hallo, (void *)c->d_hons,
+                    (void *)c->d_ee_add, (void *)c->d_hall_add,
                     (void *)c->f_ee_bare, (void *)c->f_hall_bare,
                     (void *)c->f_eeo, (void *)c->f_hallo, (void *)c->f_hons,
+                    (void *)c->f_ee_add, (void *)c->f_hall_add,
                     (void *)c->d_voa, (void *)c->d_vob,
                     (void *)c->f_va, (void *)c->f_vb,
                     (void *)c->f_voa, (void *)c->f_vob})
@@ -268,6 +274,8 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
 
     /* --- two-sweep hoh operands (uploaded raw; combine applies 1/a) ------ */
     c->have_hoh = false;
+    c->have_hadd = false;
+    c->f_hoh_ver = -1;
     if (hoh) {
         /* bare h: ee/hall WITHOUT the lsham fold (the eeo sweep must see the
          * bare h*x; lsham + enim are carried on-site by d_hons).            */
@@ -300,6 +308,38 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
         c->have_hoh = true;
     }
     c->have_h = true;
+    c->ham_ver++;
+    return 0;
+}
+
+extern "C" int rsrec_set_hamiltonian_additive(rsrec_ctx *c,
+                                               const void *ee_add_,
+                                               const void *hall_add_) {
+    if (!c) FAIL("set_hamiltonian_additive: null ctx");
+    if (!c->have_h) FAIL("set_hamiltonian_additive: call set_hamiltonian first");
+    c->have_hadd = false;
+    c->f_hoh_ver = -1;
+    if (!ee_add_) {
+        c->ham_ver++;
+        return 0;
+    }
+    if (c->nmax > 0 && !hall_add_)
+        FAIL("set_hamiltonian_additive: nmax>0 but hall_add is null");
+
+    const cplx *ee_add = (const cplx *)ee_add_;
+    const cplx *hall_add = (const cplx *)hall_add_;
+    const size_t bb = (size_t)c->nb * c->nb;
+    const size_t nee = bb * c->nnmax * c->ntype;
+    const size_t nha = bb * c->nnmax * (size_t)c->nmax;
+    if (!c->d_ee_add) CUCHK(cudaMalloc(&c->d_ee_add, nee * sizeof(zc)));
+    CUCHK(cudaMemcpy(c->d_ee_add, ee_add, nee * sizeof(zc),
+                     cudaMemcpyHostToDevice));
+    if (c->nmax > 0) {
+        if (!c->d_hall_add) CUCHK(cudaMalloc(&c->d_hall_add, nha * sizeof(zc)));
+        CUCHK(cudaMemcpy(c->d_hall_add, hall_add, nha * sizeof(zc),
+                         cudaMemcpyHostToDevice));
+    }
+    c->have_hadd = true;
     c->ham_ver++;
     return 0;
 }
@@ -1212,6 +1252,7 @@ __global__ void k_combine_hoh(size_t n, const CT *__restrict__ t,
 template <class CT, class RT>
 static int step_apply_hoh(rsrec_ctx *c, const CT *bare, const CT *bare_imp,
                           const CT *eeo, const CT *eeo_imp, const CT *hons,
+                          const CT *hadd, const CT *hadd_imp,
                           CT *t, CT *e, CT *o, const CT *x1, const CT *x0,
                           CT *y, int nrhs, RT alpha, RT beta, RT inva,
                           RT bsc) {
@@ -1234,6 +1275,12 @@ static int step_apply_hoh(rsrec_ctx *c, const CT *bare, const CT *bare_imp,
                                                  o + ld * (size_t)c0);
             CUCHK(cudaGetLastError());
         }
+    }
+    /* optional additive CCOR: o = hons*x1 + H_add*x1.  This is deliberately
+     * after the eeo*h sweep so HOH is always constructed from bare h. */
+    if (c->have_hadd) {
+        if (step_apply<CT, RT>(c, hadd, hadd_imp, c->nmax > 0, x1, o, o, nrhs,
+                               (RT)1, (RT)1, (RT)1, (RT)0)) return 1;
     }
     /* combine */
     {
@@ -1382,9 +1429,13 @@ static int ensure_f32_hoh(rsrec_ctx *c) {
     if (!c->f_ee_bare) CUCHK(cudaMalloc(&c->f_ee_bare, nee * sizeof(fc)));
     if (!c->f_eeo) CUCHK(cudaMalloc(&c->f_eeo, nee * sizeof(fc)));
     if (!c->f_hons) CUCHK(cudaMalloc(&c->f_hons, nons * sizeof(fc)));
+    if (c->have_hadd && !c->f_ee_add)
+        CUCHK(cudaMalloc(&c->f_ee_add, nee * sizeof(fc)));
     if (c->nmax > 0) {
         if (!c->f_hall_bare) CUCHK(cudaMalloc(&c->f_hall_bare, nha * sizeof(fc)));
         if (!c->f_hallo) CUCHK(cudaMalloc(&c->f_hallo, nha * sizeof(fc)));
+        if (c->have_hadd && !c->f_hall_add)
+            CUCHK(cudaMalloc(&c->f_hall_add, nha * sizeof(fc)));
     }
     const int tpb = 256;
 #define RSREC_DOWNCONV(N, SRC, DST)                                          \
@@ -1393,9 +1444,15 @@ static int ensure_f32_hoh(rsrec_ctx *c) {
     RSREC_DOWNCONV(nee, c->d_ee_bare, c->f_ee_bare)
     RSREC_DOWNCONV(nee, c->d_eeo, c->f_eeo)
     RSREC_DOWNCONV(nons, c->d_hons, c->f_hons)
+    if (c->have_hadd) {
+        RSREC_DOWNCONV(nee, c->d_ee_add, c->f_ee_add)
+    }
     if (c->nmax > 0) {
         RSREC_DOWNCONV(nha, c->d_hall_bare, c->f_hall_bare)
         RSREC_DOWNCONV(nha, c->d_hallo, c->f_hallo)
+        if (c->have_hadd) {
+            RSREC_DOWNCONV(nha, c->d_hall_add, c->f_hall_add)
+        }
     }
 #undef RSREC_DOWNCONV
     c->f_hoh_ver = c->ham_ver;
@@ -1438,7 +1495,9 @@ static int cheb_engine(rsrec_ctx *c, const void *psi0_h, int ns, int lld,
                        const CT *bt, const CT *bh, RT inva, RT bsc,
                        const CT *h_bare = nullptr, const CT *h_bare_imp = nullptr,
                        const CT *h_eeo = nullptr, const CT *h_eeo_imp = nullptr,
-                       const CT *h_hons = nullptr) {
+                       const CT *h_hons = nullptr,
+                       const CT *h_add = nullptr,
+                       const CT *h_add_imp = nullptr) {
     const int nb = c->nb, kk = c->kk;
     const size_t bb = (size_t)nb * nb;
     const size_t ld = (size_t)nb * kk;
@@ -1490,9 +1549,9 @@ static int cheb_engine(rsrec_ctx *c, const void *psi0_h, int ns, int lld,
     auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
         if (do_hoh)
             return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
-                                          h_eeo_imp, h_hons, t_hoh, e_hoh,
-                                          o_hoh, x1, x0, yv, nrhs, al, be,
-                                          inva, bsc);
+                                          h_eeo_imp, h_hons, h_add, h_add_imp,
+                                          t_hoh, e_hoh, o_hoh, x1, x0, yv,
+                                          nrhs, al, be, inva, bsc);
         return step_apply<CT, RT>(c, bt, bh, 1, x1, x0, yv, nrhs, al, be,
                                   inva, bsc);
     };
@@ -1604,12 +1663,12 @@ extern "C" int rsrec_chebyshev_moments_batch(rsrec_ctx *c, const void *psi0,
             return cheb_engine<fc, float>(
                 c, psi0, nstates, lld, a, b, mu, c->f_ee_bare, c->f_hall_bare,
                 (float)(1.0 / a), (float)b, c->f_ee_bare, c->f_hall_bare,
-                c->f_eeo, c->f_hallo, c->f_hons);
+                c->f_eeo, c->f_hallo, c->f_hons, c->f_ee_add, c->f_hall_add);
         }
         return cheb_engine<zc, double>(
             c, psi0, nstates, lld, a, b, mu, c->d_ee_bare, c->d_hall_bare,
             1.0 / a, b, c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo,
-            c->d_hons);
+            c->d_hons, c->d_ee_add, c->d_hall_add);
     }
     if (c->cheb_prec == 0 && !c->use_struct) {
         if (ensure_f32_ham(c, a, b)) return 1;
@@ -1651,7 +1710,8 @@ template <class CT, class RT>
 static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
                             void *a_b_, void *b2_b_, const CT *bare,
                             const CT *bare_imp, const CT *eeo,
-                            const CT *eeo_imp, const CT *hons) {
+                            const CT *eeo_imp, const CT *hons,
+                            const CT *hadd, const CT *hadd_imp) {
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
     const size_t ld = (size_t)nb * c->kk;
@@ -1699,9 +1759,10 @@ static int block_hoh_engine(rsrec_ctx *c, const void *psi0_, int lld,
     for (int ll = 0; ll < lld - 1; ++ll) {
         /* hpsi = H psi (raw two-sweep hoh apply: t = h*psi; e = eeo*t;
          * o = (enim+lsham)*psi; hpsi = t - e + o)                            */
-        if (step_apply_hoh<CT, RT>(c, bare, bare_imp, eeo, eeo_imp, hons, t_h,
-                                   e_h, o_h, psi, nullptr, hpsi, nb, (RT)1,
-                                   (RT)0, (RT)1, (RT)0))
+        if (step_apply_hoh<CT, RT>(c, bare, bare_imp, eeo, eeo_imp, hons,
+                                   hadd, hadd_imp, t_h, e_h, o_h, psi,
+                                   nullptr, hpsi, nb, (RT)1, (RT)0, (RT)1,
+                                   (RT)0))
             return 1;
         if (gram(psi, hpsi, dAn)) return 1;                       /* A_n     */
         CUCHK(cudaMemcpy(hbb.data(), dAn, bb * sizeof(CT),
@@ -1751,11 +1812,11 @@ extern "C" int rsrec_block_lanczos(rsrec_ctx *c, const void *psi0_, int lld,
             if (ensure_f32_hoh(c)) return 1;
             return block_hoh_engine<fc, float>(
                 c, psi0_, lld, a_b_, b2_b_, c->f_ee_bare, c->f_hall_bare,
-                c->f_eeo, c->f_hallo, c->f_hons);
+                c->f_eeo, c->f_hallo, c->f_hons, c->f_ee_add, c->f_hall_add);
         }
         return block_hoh_engine<zc, double>(
             c, psi0_, lld, a_b_, b2_b_, c->d_ee_bare, c->d_hall_bare,
-            c->d_eeo, c->d_hallo, c->d_hons);
+            c->d_eeo, c->d_hallo, c->d_hons, c->d_ee_add, c->d_hall_add);
     }
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
@@ -1900,6 +1961,7 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
                         const CT *va, const CT *vb,
                         const CT *h_bare, const CT *h_bare_imp,
                         const CT *h_eeo, const CT *h_eeo_imp, const CT *h_hons,
+                        const CT *h_add, const CT *h_add_imp,
                         const CT *voa, const CT *vob) {
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
@@ -1937,8 +1999,9 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
         if (do_hoh)
             return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
-                                          h_eeo_imp, h_hons, ht, he, ho,
-                                          x1, x0, yv, nb, al, be, inva, bsc);
+                                          h_eeo_imp, h_hons, h_add, h_add_imp,
+                                          ht, he, ho, x1, x0, yv, nb, al, be,
+                                          inva, bsc);
         return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nb,
                                   al, be, inva, bsc);
     };
@@ -2029,13 +2092,13 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                     c, psiref_, lld, (float)(1.0 / a), (float)b, mu_,
                     c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
                     c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
-                    c->f_hons, c->f_voa, c->f_vob);
+                    c->f_hons, c->f_ee_add, c->f_hall_add, c->f_voa, c->f_vob);
             }
             return stoch_engine<zc, double>(
                 c, psiref_, lld, 1.0 / a, b, mu_,
                 c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
                 c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
-                c->d_voa, c->d_vob);
+                c->d_ee_add, c->d_hall_add, c->d_voa, c->d_vob);
         }
         if (c->cheb_prec == 0) {
             if (ensure_f32_ham(c, a, b)) return 1;
@@ -2043,12 +2106,12 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
             return stoch_engine<fc, float>(
                 c, psiref_, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
                 c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
-                nullptr, nullptr);
+                nullptr, nullptr, nullptr, nullptr);
         }
         return stoch_engine<zc, double>(
             c, psiref_, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
             c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
-            nullptr, nullptr);
+            nullptr, nullptr, nullptr, nullptr);
     }
 
     /* --- structured/FFT backend: original fp64 step64 path (non-hoh) ----- */
@@ -2135,7 +2198,8 @@ static int orbital_engine(rsrec_ctx *c, const void *left_h, const void *psiref_h
                           const CT *Hop, const CT *Himp,
                           const CT *h_bare, const CT *h_bare_imp,
                           const CT *h_eeo, const CT *h_eeo_imp,
-                          const CT *h_hons) {
+                          const CT *h_hons, const CT *h_add,
+                          const CT *h_add_imp) {
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
     const size_t ld = (size_t)nb * c->kk;
@@ -2159,8 +2223,9 @@ static int orbital_engine(rsrec_ctx *c, const void *left_h, const void *psiref_h
     auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
         if (do_hoh)
             return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
-                                          h_eeo_imp, h_hons, ht, he, ho,
-                                          x1, x0, yv, nb, al, be, inva, bsc);
+                                          h_eeo_imp, h_hons, h_add, h_add_imp,
+                                          ht, he, ho, x1, x0, yv, nb, al, be,
+                                          inva, bsc);
         return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nb,
                                   al, be, inva, bsc);
     };
@@ -2218,22 +2283,22 @@ extern "C" int rsrec_orbital_moments(rsrec_ctx *c, const void *left,
             return orbital_engine<fc, float>(
                 c, left, psiref, lld, (float)(1.0 / a), (float)b, mu_,
                 c->f_ee_bare, c->f_hall_bare, c->f_ee_bare, c->f_hall_bare,
-                c->f_eeo, c->f_hallo, c->f_hons);
+                c->f_eeo, c->f_hallo, c->f_hons, c->f_ee_add, c->f_hall_add);
         }
         return orbital_engine<zc, double>(
             c, left, psiref, lld, 1.0 / a, b, mu_, c->d_ee_bare,
             c->d_hall_bare, c->d_ee_bare, c->d_hall_bare, c->d_eeo,
-            c->d_hallo, c->d_hons);
+            c->d_hallo, c->d_hons, c->d_ee_add, c->d_hall_add);
     }
     if (c->cheb_prec == 0) {
         if (ensure_f32_ham(c, a, b)) return 1;
         return orbital_engine<fc, float>(
             c, left, psiref, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
-            nullptr, nullptr, nullptr, nullptr, nullptr);
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
     }
     return orbital_engine<zc, double>(
         c, left, psiref, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
-        nullptr, nullptr, nullptr, nullptr, nullptr);
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
 /* --------------------------------------------------------------------------

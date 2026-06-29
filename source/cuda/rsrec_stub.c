@@ -38,6 +38,13 @@ int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
     return 1;
 }
 
+int rsrec_set_hamiltonian_additive(rsrec_ctx *ctx, const void *ee_add,
+                                   const void *hall_add)
+{
+    (void)ctx; (void)ee_add; (void)hall_add;
+    return 1;
+}
+
 int rsrec_set_velocity(rsrec_ctx *ctx, const void *v_a, const void *v_b,
                        const void *vo_a, const void *vo_b)
 {

@@ -41,9 +41,9 @@
 !> atoms outside the lightcone carry exactly zero wavefunction, so the
 !> dense GPU sweep returns identical results.
 !>
-!> The hoh path (ham_hoh_vec_matmul / hop_b_hoh) is NOT yet implemented in
-!> the library; drivers correspond to the hoh = .false. branches. Guard the
-!> GPU dispatch with `if (.not. this%hamiltonian%hoh)` until then.
+!> The CUDA library supports the hoh two-sweep block-ELL path when eeo/hallo/enim
+!> are uploaded. Additive CCOR is uploaded separately so hoh is always built
+!> from the bare h operator, then Hcc is applied once afterward.
 !------------------------------------------------------------------------------
 module recursion_gpu_mod
 
@@ -107,10 +107,17 @@ module recursion_gpu_mod
          integer(c_int) :: ierr
       end function
 
-      function c_rsrec_set_velocity(ctx, va, vb) &
+      function c_rsrec_set_hamiltonian_additive(ctx, ee_add, hall_add) &
+         bind(C, name="rsrec_set_hamiltonian_additive") result(ierr)
+         import :: c_ptr, c_int
+         type(c_ptr), value :: ctx, ee_add, hall_add
+         integer(c_int) :: ierr
+      end function
+
+      function c_rsrec_set_velocity(ctx, va, vb, voa, vob) &
          bind(C, name="rsrec_set_velocity") result(ierr)
          import :: c_ptr, c_int
-         type(c_ptr), value :: ctx, va, vb
+         type(c_ptr), value :: ctx, va, vb, voa, vob
          integer(c_int) :: ierr
       end function
 
@@ -249,7 +256,8 @@ contains
       if (.not. c_associated(this%ctx)) call die("init")
    end subroutine rsgpu_init
 
-   subroutine rsgpu_set_hamiltonian(this, ee, hall, lsham, nn, iz, nmax, eeo, hallo, enim)
+   subroutine rsgpu_set_hamiltonian(this, ee, hall, lsham, nn, iz, nmax, eeo, hallo, enim, &
+                                    ee_add, hall_add)
       class(rsgpu), intent(inout) :: this
       complex(rp), dimension(:, :, :, :), intent(in), target :: ee
       complex(rp), dimension(:, :, :, :), intent(in), target, optional :: hall
@@ -260,12 +268,16 @@ contains
       complex(rp), dimension(:, :, :, :), intent(in), target, optional :: eeo
       complex(rp), dimension(:, :, :, :), intent(in), target, optional :: hallo
       complex(rp), dimension(:, :, :), intent(in), target, optional :: enim
-      type(c_ptr) :: p_hall, p_ls, p_eeo, p_hallo, p_enim
+      complex(rp), dimension(:, :, :, :), intent(in), target, optional :: ee_add
+      complex(rp), dimension(:, :, :, :), intent(in), target, optional :: hall_add
+      type(c_ptr) :: p_hall, p_ls, p_eeo, p_hallo, p_enim, p_ee_add, p_hall_add
       p_hall = c_null_ptr
       p_ls = c_null_ptr
       p_eeo = c_null_ptr
       p_hallo = c_null_ptr
       p_enim = c_null_ptr
+      p_ee_add = c_null_ptr
+      p_hall_add = c_null_ptr
       if (present(hall)) p_hall = c_loc(hall)
       if (present(lsham)) p_ls = c_loc(lsham)
       if (present(eeo)) p_eeo = c_loc(eeo)
@@ -274,12 +286,24 @@ contains
       if (c_rsrec_set_hamiltonian(this%ctx, c_loc(ee), p_hall, p_ls, &
                                   c_loc(nn), c_loc(iz), p_eeo, p_hallo, p_enim) /= 0) &
          call die("set_hamiltonian")
+      if (present(ee_add)) then
+         p_ee_add = c_loc(ee_add)
+         if (present(hall_add)) p_hall_add = c_loc(hall_add)
+         if (c_rsrec_set_hamiltonian_additive(this%ctx, p_ee_add, p_hall_add) /= 0) &
+            call die("set_hamiltonian_additive")
+      end if
    end subroutine rsgpu_set_hamiltonian
 
-   subroutine rsgpu_set_velocity(this, v_a, v_b)
+   subroutine rsgpu_set_velocity(this, v_a, v_b, vo_a, vo_b)
       class(rsgpu), intent(inout) :: this
       complex(rp), dimension(:, :, :, :), intent(in), target :: v_a, v_b
-      if (c_rsrec_set_velocity(this%ctx, c_loc(v_a), c_loc(v_b)) /= 0) &
+      complex(rp), dimension(:, :, :, :), intent(in), target, optional :: vo_a, vo_b
+      type(c_ptr) :: p_voa, p_vob
+      p_voa = c_null_ptr
+      p_vob = c_null_ptr
+      if (present(vo_a)) p_voa = c_loc(vo_a)
+      if (present(vo_b)) p_vob = c_loc(vo_b)
+      if (c_rsrec_set_velocity(this%ctx, c_loc(v_a), c_loc(v_b), p_voa, p_vob) /= 0) &
          call die("set_velocity")
    end subroutine rsgpu_set_velocity
 

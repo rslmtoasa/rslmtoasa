@@ -64,6 +64,12 @@ int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
                           const void *eeo, const void *hallo,
                           const void *enim);
 
+/* Optional additive Hamiltonian used by CCOR+HOH.  The two-sweep HOH apply
+ * still forms eeo*(h*x) from the bare h uploaded above; this operator is
+ * applied once afterward as +H_add*x.  Pass NULL to clear it. */
+int rsrec_set_hamiltonian_additive(rsrec_ctx *ctx, const void *ee_add,
+                                   const void *hall_add);
+
 /* Velocity (or current) operators for the stochastic conductivity moments.
  * Same neighbour structure as ee, per-type, no lsham term:
  * v_a, v_b: (nb, nb, nnmax, ntype) complex(rp).

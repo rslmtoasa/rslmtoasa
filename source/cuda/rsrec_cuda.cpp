@@ -166,6 +166,22 @@ extern "C" int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
     return validate_backend(ctx);
 }
 
+extern "C" int rsrec_cuda_set_hamiltonian_additive(rsrec_cuda_ctx *ctx,
+                                                   const void *ee_add,
+                                                   const void *hall_add) {
+    if (!ctx) {
+        set_error("rsrec_cuda_set_hamiltonian_additive: null ctx");
+        return 1;
+    }
+    const int status = rsrec_set_hamiltonian_additive(ctx->inner, ee_add, hall_add);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_set_hamiltonian_additive: ") +
+                  rsrec_last_error());
+        return status;
+    }
+    return validate_backend(ctx);
+}
+
 extern "C" int rsrec_cuda_set_velocity(rsrec_cuda_ctx *ctx, const void *v_a,
                                        const void *v_b, const void *vo_a,
                                        const void *vo_b) {

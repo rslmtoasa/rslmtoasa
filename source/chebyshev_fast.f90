@@ -586,7 +586,7 @@ contains
    !> mu    : (nb, nb, 2*lld+2) out, identical ordering to mu_n
    subroutine cheb_moments_fast(psi0, ee, hall, lsham, nn, iz, kk, nb, &
                                 nnmax, ntype, nmax, lld, a, b, mu, &
-                                hoh, eeo, hallo, enim)
+                                hoh, eeo, hallo, enim, ee_add, hall_add)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
       complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -597,11 +597,14 @@ contains
       complex(rp), intent(in), optional :: eeo(nb, nb, nnmax, ntype)
       complex(rp), intent(in), optional :: hallo(nb, nb, nnmax, *)
       complex(rp), intent(in), optional :: enim(nb, nb, ntype)
+      complex(rp), intent(in), optional :: ee_add(nb, nb, nnmax, ntype)
+      complex(rp), intent(in), optional :: hall_add(nb, nb, nnmax, *)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :)
       complex(sp), pointer :: oee(:, :, :, :), oha(:, :, :, :)
       complex(sp), pointer :: hons(:, :, :)
+      complex(sp), allocatable :: aee(:, :, :, :), aha(:, :, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
       complex(sp), pointer, contiguous :: wt(:, :)
       complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
@@ -610,9 +613,11 @@ contains
       integer :: k, l, c, ld, ll
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
+      logical :: has_add
 
       do_hoh = .false.
       if (present(hoh)) do_hoh = hoh
+      has_add = present(ee_add)
 
       ld = nb*kk
       a_sp = real(a, sp)
@@ -628,6 +633,15 @@ contains
          call ensure_hoh_buffer(ld, nb, wt)
          call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
                                      nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+         if (has_add) then
+            allocate(aee(nb, nb, nnmax, ntype))
+            aee = cmplx(real(ee_add, sp), aimag(ee_add), sp)*inva
+            if (nmax > 0) then
+               if (.not. present(hall_add)) error stop 'cheb_moments_fast: hall_add required when nmax > 0'
+               allocate(aha(nb, nb, nnmax, nmax))
+               aha = cmplx(real(hall_add(:, :, :, 1:nmax), sp), aimag(hall_add(:, :, :, 1:nmax)), sp)*inva
+            end if
+         end if
       else
          ! --- 1. scaled operator copies: Ht = (H + lsham - b*I)/a ----------
          call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
@@ -823,6 +837,7 @@ contains
             t_ = iz(kk_)
             r0 = nb*(kk_ - 1)
             call cgemm('N', 'N', nb, nb, nb, cone, hons(:, :, t_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+            if (has_add) call apply_add_block(kk_, x1, acc)
             ! + t(kk_)  (the bare h*x/a contribution for this site)
             acc = acc + t(r0 + 1:r0 + nb, :)
             if (beta /= 0.0_sp) then
@@ -833,6 +848,30 @@ contains
          end do
          !$omp end parallel do
       end subroutine apply_step_hoh
+
+      subroutine apply_add_block(kk_, x1, acc)
+         integer, intent(in) :: kk_
+         complex(sp), intent(in) :: x1(ld, nb)
+         complex(sp), intent(inout) :: acc(nb, nb)
+         integer :: s_, nbr, nr, r0, t_add
+
+         nr = nn(kk_, 1)
+         do s_ = 1, nr
+            if (s_ == 1) then
+               nbr = kk_
+            else
+               nbr = nn(kk_, s_)
+               if (nbr == 0) cycle
+            end if
+            r0 = nb*(nbr - 1)
+            if (kk_ <= nmax) then
+               call cgemm('N', 'N', nb, nb, nb, cone, aha(:, :, s_, kk_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+            else
+               t_add = iz(kk_)
+               call cgemm('N', 'N', nb, nb, nb, cone, aee(:, :, s_, t_add), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+            end if
+         end do
+      end subroutine apply_add_block
 
       !> Hermitian rank-k: C = A^H A via cherk, then fill the upper triangle
       subroutine cherk_full(n, k, Amat, C)
@@ -1377,7 +1416,8 @@ contains
    !>   and velocity v - vo*(h*.)). Mirrors compute_moments_stochastic.
    subroutine cheb_moments_stochastic_fast(psiref, ee, hall, lsham, nn, iz, kk, nb, &
                                            nnmax, ntype, nmax, cond_ll, a, b, mu_nm, &
-                                           hoh, eeo, hallo, enim, v_a, v_b, vo_a, vo_b)
+                                           hoh, eeo, hallo, enim, v_a, v_b, vo_a, vo_b, &
+                                           ee_add, hall_add)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, cond_ll
       complex(rp), intent(in) :: psiref(nb, nb, kk), ee(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -1389,9 +1429,12 @@ contains
       complex(rp), intent(in) :: enim(nb, nb, ntype)
       complex(rp), intent(in) :: v_a(nb, nb, nnmax, ntype), v_b(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: vo_a(nb, nb, nnmax, ntype), vo_b(nb, nb, nnmax, ntype)
+      complex(rp), intent(in), optional :: ee_add(nb, nb, nnmax, ntype)
+      complex(rp), intent(in), optional :: hall_add(nb, nb, nnmax, *)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :), oee(:, :, :, :), oha(:, :, :, :), hons(:, :, :)
+      complex(sp), allocatable :: aee(:, :, :, :), aha(:, :, :, :)
       complex(sp), pointer :: fva(:, :, :, :), fvb(:, :, :, :), fvoa(:, :, :, :), fvob(:, :, :, :)
       complex(sp), pointer :: fvee(:, :, :, :), fvha(:, :, :, :)
       complex(sp), allocatable :: leftst(:, :, :), p0(:, :), p1(:, :), p2(:, :), rr(:, :)
@@ -1401,16 +1444,27 @@ contains
       integer :: ld, k, c, l, n, m
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
+      logical :: has_add
 
       nullify (hee, hha, bee, bha, oee, oha, hons)
       nullify (fva, fvb, fvoa, fvob, fvee, fvha)
       do_hoh = hoh
+      has_add = present(ee_add)
       ld = nb*kk
       a_sp = real(a, sp); b_sp = real(b, sp); inva = 1.0_sp/a_sp
 
       if (do_hoh) then
          call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
             nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+         if (has_add) then
+            allocate(aee(nb, nb, nnmax, ntype))
+            aee = cmplx(real(ee_add, sp), aimag(ee_add), sp)*inva
+            if (nmax > 0) then
+               if (.not. present(hall_add)) error stop 'cheb_moments_stochastic_fast: hall_add required when nmax > 0'
+               allocate(aha(nb, nb, nnmax, nmax))
+               aha = cmplx(real(hall_add(:, :, :, 1:nmax), sp), aimag(hall_add(:, :, :, 1:nmax)), sp)*inva
+            end if
+         end if
       else
          call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
@@ -1489,10 +1543,24 @@ contains
             call hsweep(bee, bha, x1, x1, wt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
             call hsweep(oee, oha, wt, wt, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
             call combine_hoh_sp(wt, etmp, hons, iz, kk, nb, ntype, ld, x1, x0, y, al, be)
+            if (has_add) then
+               call hsweep_add(x1, etmp)
+               y(:, :) = y(:, :) + al*etmp(:, :)
+            end if
          else
             call hsweep(hee, hha, x1, x0, y, al, be, 1.0_sp, 0.0_sp)
          end if
       end subroutine happly
+
+      subroutine hsweep_add(x1, y)
+         complex(sp), intent(in) :: x1(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         if (allocated(aha)) then
+            call spmv_block_sp(aee, aha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x1, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         else
+            call spmv_block_sp(aee, aee, nn, iz, kk, nb, nnmax, ntype, 0, ld, x1, x1, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         end if
+      end subroutine hsweep_add
 
       !> Velocity apply (raw): y = v*x, hoh -> y = v*x - vo*(h_bare*x).
       subroutine vapply(fv, fvo, x, y)
@@ -1513,7 +1581,7 @@ contains
    !>   Single precision; hoh-aware. Mirrors chebyshev_orbital_mod.
    subroutine cheb_moments_orbital_fast(left, psiref, ee, hall, lsham, nn, iz, kk, nb, &
                                         nnmax, ntype, nmax, lld, a, b, mu, &
-                                        hoh, eeo, hallo, enim)
+                                        hoh, eeo, hallo, enim, ee_add, hall_add)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
       complex(rp), intent(in) :: left(nb, nb, kk), psiref(nb, nb, kk)
       complex(rp), intent(in) :: ee(nb, nb, nnmax, ntype), hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -1523,24 +1591,38 @@ contains
       logical, intent(in) :: hoh
       complex(rp), intent(in) :: eeo(nb, nb, nnmax, ntype), hallo(nb, nb, nnmax, *)
       complex(rp), intent(in) :: enim(nb, nb, ntype)
+      complex(rp), intent(in), optional :: ee_add(nb, nb, nnmax, ntype)
+      complex(rp), intent(in), optional :: hall_add(nb, nb, nnmax, *)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :), oee(:, :, :, :), oha(:, :, :, :), hons(:, :, :)
+      complex(sp), allocatable :: aee(:, :, :, :), aha(:, :, :, :)
       complex(sp), allocatable :: lp(:, :), p0(:, :), p1(:, :), p2(:, :), wt(:, :), etmp(:, :)
       complex(sp) :: dum(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer :: ld, k, c, l, n
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
+      logical :: has_add
 
       nullify (hee, hha, bee, bha, oee, oha, hons)
       do_hoh = hoh
+      has_add = present(ee_add)
       ld = nb*kk
       a_sp = real(a, sp); b_sp = real(b, sp); inva = 1.0_sp/a_sp
 
       if (do_hoh) then
          call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
             nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+         if (has_add) then
+            allocate(aee(nb, nb, nnmax, ntype))
+            aee = cmplx(real(ee_add, sp), aimag(ee_add), sp)*inva
+            if (nmax > 0) then
+               if (.not. present(hall_add)) error stop 'cheb_moments_orbital_fast: hall_add required when nmax > 0'
+               allocate(aha(nb, nb, nnmax, nmax))
+               aha = cmplx(real(hall_add(:, :, :, 1:nmax), sp), aimag(hall_add(:, :, :, 1:nmax)), sp)*inva
+            end if
+         end if
       else
          call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
@@ -1596,10 +1678,24 @@ contains
             call hsweep(bee, bha, x1, x1, wt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
             call hsweep(oee, oha, wt, wt, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
             call combine_hoh_sp(wt, etmp, hons, iz, kk, nb, ntype, ld, x1, x0, y, al, be)
+            if (has_add) then
+               call hsweep_add(x1, etmp)
+               y(:, :) = y(:, :) + al*etmp(:, :)
+            end if
          else
             call hsweep(hee, hha, x1, x0, y, al, be, 1.0_sp, 0.0_sp)
          end if
       end subroutine happly
+
+      subroutine hsweep_add(x1, y)
+         complex(sp), intent(in) :: x1(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
+         if (allocated(aha)) then
+            call spmv_block_sp(aee, aha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x1, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         else
+            call spmv_block_sp(aee, aee, nn, iz, kk, nb, nnmax, ntype, 0, ld, x1, x1, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         end if
+      end subroutine hsweep_add
 
    end subroutine cheb_moments_orbital_fast
 
