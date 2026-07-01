@@ -183,6 +183,35 @@ int hambuild_cuda_set_local_sites(hambuild_ctx *ctx, const int *site_list,
 int hambuild_cuda_build_local_geometry_maps(hambuild_ctx *ctx);
 int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall, void *hallo);
 
+/* --- Phase 3: combined correction (CCOR) H_cc -> eecc / hallcc ----------------
+ *
+ * The clean two-centre recipe (reusing the ham0m path):
+ *   D(R)    = ham0m(sbar,      onsite='none')   4-component
+ *   Ddot(R) = ham0m(-avw^2 sdot,onsite='none')  4-component
+ *   K = Ddot + (ccd_i(:,1)+ccd_j(:,1)) * D
+ *   on-site (m==1) adds ccd_i(:,0) terms with wx0/wx1/mom
+ *   hcpx each; H_cc = lambda(it,jt) * spinor-pack(K)
+ *
+ * ccd and lambda are cheap quantities computed host-side and uploaded (keeps the
+ * VMT / coefficient math on the CPU):
+ *   ccd    : real64 norb*3*kk, col-major (norb, 0:2, site). PER CLUSTER SITE --
+ *            build_ccor_coefficients depends on num(ia)/alpha(ia), so it is
+ *            site-dependent; index by the cluster atom index (ia, jj).
+ *   lambda : real64 ntype*ntype,  col-major (it, jt) energy scale per pair
+ *   sdot   : complex norb*norb*nm_store*ntot (real part used), refreshed per SCF
+ *   avw    : scalar (wav*ang2au, or wav) used in the -avw^2 sdot normalization
+ */
+int hambuild_cuda_set_ccor(hambuild_ctx *ctx, const double *ccd,
+                           const double *lambda, const void *sdot, double avw);
+
+/* Build H_cc over the bulk site list into eecc (nb*nb*nn_max*ntype complex).
+ * Requires geometry maps + set_potential_bulk + set_ccor. */
+int hambuild_cuda_ccor_bulk(hambuild_ctx *ctx, void *eecc);
+
+/* Build H_cc over the local site list into hallcc (nb*nb*nn_max*nmax complex).
+ * Requires local geometry maps + set_potential_bulk + set_ccor. */
+int hambuild_cuda_ccor_local(hambuild_ctx *ctx, void *hallcc);
+
 #ifdef __cplusplus
 }
 #endif

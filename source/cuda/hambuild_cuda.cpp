@@ -50,6 +50,15 @@ extern "C" int hambuild_gpu_launch_bulk_ham(
     int ndi, int kk, int hoh, hbc *d_ee, hbc *d_hxc, int norb, int nb,
     int nn_max, int ntype);
 
+extern "C" int hambuild_gpu_launch_ccor(
+    const double *d_sbar_re, const double *d_sdot_re, int norb_s, int nm_store,
+    int ntot, const hbc *d_wx0, const hbc *d_wx1, const double *d_mom,
+    const double *d_q_ss, double theta_ss, const double *d_ccd,
+    const double *d_lambda, double avw, const hbc *d_v, const hbc *d_vc,
+    const int *d_iz, const int *d_nn, const int *d_atlist, const double *d_cr,
+    const int *d_shell, const int *d_ino, const double *d_vet, int ndi, int kk,
+    hbc *d_out, int norb, int nb, int nn_max, int nsite, int lambda_stride);
+
 struct hambuild_ctx {
     int nb = 0;
     int norb = 0;
@@ -112,6 +121,15 @@ struct hambuild_ctx {
     hbc *d_hall = nullptr, *d_hallo = nullptr, *d_hall_hxc = nullptr; /* hxc scratch */
     std::vector<int> h_local_atlist, h_local_valid;
     bool have_local_geometry = false;
+
+    /* --- Phase 3 CCOR --- */
+    double *d_ccd = nullptr;            /* norb*3*ntype */
+    double *d_lambda = nullptr;         /* ntype*ntype */
+    double *d_sdot_re = nullptr;        /* norb*norb*nm_store*ntot */
+    double ccor_avw = 0.0;
+    bool have_ccor = false;
+    hbc *d_eecc = nullptr;              /* nb*nb*nn_max*ntype */
+    hbc *d_hallcc = nullptr;           /* nb*nb*nn_max*nmax */
 };
 
 static std::string g_hambuild_err;
@@ -210,6 +228,8 @@ extern "C" void hambuild_cuda_destroy(hambuild_ctx *ctx) {
     cudaFree(ctx->d_local_shell); cudaFree(ctx->d_local_ino);
     cudaFree(ctx->d_local_vet); cudaFree(ctx->d_local_hv);
     cudaFree(ctx->d_hall); cudaFree(ctx->d_hallo); cudaFree(ctx->d_hall_hxc);
+    cudaFree(ctx->d_ccd); cudaFree(ctx->d_lambda); cudaFree(ctx->d_sdot_re);
+    cudaFree(ctx->d_eecc); cudaFree(ctx->d_hallcc);
     if (ctx->cublas) cublasDestroy(ctx->cublas);
     delete ctx;
 }
@@ -718,5 +738,106 @@ extern "C" int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall,
     if (hall)  ok = ok && down(hall, ctx->d_hall, lblk * sizeof(hbc));
     if (hoh && hallo) ok = ok && down(hallo, ctx->d_hallo, lblk * sizeof(hbc));
     if (!ok) { set_error("hambuild_cuda_local: copy back failed"); return 1; }
+    return 0;
+}
+
+/* --- Phase 3: CCOR (H_cc) ------------------------------------------------- */
+
+extern "C" int hambuild_cuda_set_ccor(hambuild_ctx *ctx, const double *ccd,
+                                      const double *lambda, const void *sdot,
+                                      double avw) {
+    if (!ctx) { set_error("hambuild_cuda_set_ccor: null ctx"); return 1; }
+    if (!ctx->have_sbar) {
+        set_error("hambuild_cuda_set_ccor: set_sbar first (nm_store/ntot needed)");
+        return 1;
+    }
+    const int norb = ctx->norb, nt = ctx->ntype;
+    const size_t nccd = (size_t)norb * 3 * ctx->kk; /* per cluster site */
+    const size_t nlam = (size_t)nt * nt;
+    const size_t nsd = (size_t)norb * norb * ctx->nm_store * ctx->ntot;
+    bool ok = true;
+    if (!ctx->d_ccd) {
+        ok = ok && dev_alloc((void **)&ctx->d_ccd, nccd * sizeof(double));
+        ok = ok && dev_alloc((void **)&ctx->d_lambda, nlam * sizeof(double));
+        if (!ok) { set_error("hambuild_cuda_set_ccor: alloc failed"); return 1; }
+    }
+    if (!ctx->d_sdot_re) {
+        if (!dev_alloc((void **)&ctx->d_sdot_re, nsd * sizeof(double))) {
+            set_error("hambuild_cuda_set_ccor: sdot alloc failed"); return 1;
+        }
+    }
+    /* Extract real part of sdot (CPU uses real(sdot)). */
+    const double *src = static_cast<const double *>(sdot); /* interleaved re,im */
+    std::vector<double> re(nsd);
+    for (size_t i = 0; i < nsd; ++i) re[i] = src[2 * i];
+    ok = ok && up(ctx->d_ccd, ccd, nccd * sizeof(double));
+    ok = ok && up(ctx->d_lambda, lambda, nlam * sizeof(double));
+    ok = ok && up(ctx->d_sdot_re, re.data(), nsd * sizeof(double));
+    if (!ok) { set_error("hambuild_cuda_set_ccor: upload failed"); return 1; }
+    ctx->ccor_avw = avw;
+    ctx->have_ccor = true;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_ccor_bulk(hambuild_ctx *ctx, void *eecc) {
+    if (!ctx) { set_error("hambuild_cuda_ccor_bulk: null ctx"); return 1; }
+    if (!ctx->have_geometry || !ctx->have_potential_bulk || !ctx->have_sbar ||
+        !ctx->have_ccor) {
+        set_error("hambuild_cuda_ccor_bulk: geometry/potential/sbar/ccor not set");
+        return 1;
+    }
+    const int nb = ctx->nb, norb = ctx->norb, nt = ctx->ntype, nm = ctx->nn_max;
+    const size_t blk = (size_t)nb * nb * nm * nt;
+    if (!ctx->d_eecc) {
+        if (!dev_alloc((void **)&ctx->d_eecc, blk * sizeof(hbc))) {
+            set_error("hambuild_cuda_ccor_bulk: alloc failed"); return 1;
+        }
+    }
+    int rc = hambuild_gpu_launch_ccor(
+        ctx->d_sbar_re, ctx->d_sdot_re, norb, ctx->nm_store, ctx->ntot,
+        ctx->d_wx0, ctx->d_wx1, ctx->d_mom_bulk, ctx->d_q_ss, ctx->theta_ss,
+        ctx->d_ccd, ctx->d_lambda, ctx->ccor_avw, ctx->d_v, ctx->d_vc, ctx->d_iz,
+        ctx->d_nn, ctx->d_atlist, ctx->d_cr, ctx->d_shell, ctx->d_ino,
+        ctx->d_vet, ctx->h_ndi, ctx->kk, ctx->d_eecc, norb, nb, nm, nt, nt);
+    if (rc != 0) {
+        set_error("hambuild_cuda_ccor_bulk: kernel failed (code " +
+                  std::to_string(rc) + ")");
+        return rc;
+    }
+    if (eecc && !down(eecc, ctx->d_eecc, blk * sizeof(hbc))) {
+        set_error("hambuild_cuda_ccor_bulk: copy back failed"); return 1;
+    }
+    return 0;
+}
+
+extern "C" int hambuild_cuda_ccor_local(hambuild_ctx *ctx, void *hallcc) {
+    if (!ctx) { set_error("hambuild_cuda_ccor_local: null ctx"); return 1; }
+    if (!ctx->have_local_geometry || !ctx->have_potential_bulk ||
+        !ctx->have_sbar || !ctx->have_ccor) {
+        set_error("hambuild_cuda_ccor_local: local geometry/potential/sbar/ccor not set");
+        return 1;
+    }
+    const int nb = ctx->nb, norb = ctx->norb, nm = ctx->nn_max, nmax = ctx->nmax;
+    const size_t lblk = (size_t)nb * nb * nm * nmax;
+    if (!ctx->d_hallcc) {
+        if (!dev_alloc((void **)&ctx->d_hallcc, lblk * sizeof(hbc))) {
+            set_error("hambuild_cuda_ccor_local: alloc failed"); return 1;
+        }
+    }
+    int rc = hambuild_gpu_launch_ccor(
+        ctx->d_sbar_re, ctx->d_sdot_re, norb, ctx->nm_store, ctx->ntot,
+        ctx->d_wx0, ctx->d_wx1, ctx->d_mom_bulk, ctx->d_q_ss, ctx->theta_ss,
+        ctx->d_ccd, ctx->d_lambda, ctx->ccor_avw, ctx->d_v, ctx->d_vc, ctx->d_iz,
+        ctx->d_nn, ctx->d_local_atlist, ctx->d_cr, ctx->d_local_shell,
+        ctx->d_local_ino, ctx->d_local_vet, ctx->h_ndi, ctx->kk, ctx->d_hallcc,
+        norb, nb, nm, nmax, ctx->ntype);
+    if (rc != 0) {
+        set_error("hambuild_cuda_ccor_local: kernel failed (code " +
+                  std::to_string(rc) + ")");
+        return rc;
+    }
+    if (hallcc && !down(hallcc, ctx->d_hallcc, lblk * sizeof(hbc))) {
+        set_error("hambuild_cuda_ccor_local: copy back failed"); return 1;
+    }
     return 0;
 }

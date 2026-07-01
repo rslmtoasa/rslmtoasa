@@ -698,3 +698,189 @@ extern "C" int hambuild_gpu_launch_bulk_ham(
     if (HB_GET_LAST_ERR() != HB_SUCCESS) return 2;
     return 0;
 }
+
+/* ===========================================================================
+ * Phase 3: combined correction H_cc (mirror build_ccor_pair_block_noncollinear).
+ *
+ * Per (site s, neighbour m): compute the 4-component D (from sbar) and Ddot
+ * (from -avw^2*sdot) via the same ham0m arithmetic as Phase 2 but with the
+ * on-site band-centre add disabled (onsite='none'); combine with the host-
+ * computed coefficients ccd; add the on-site D^(0) diagonal for m==1; hcpx each
+ * of the 4; then lambda-pack into eecc/hallcc. ccd is (norb, 0:2, ntype) col-
+ * major; lambda is (ntype, ntype) col-major (it,jt). One block per (site,m).
+ * ------------------------------------------------------------------------- */
+__global__ void k_build_ccor(
+    const double *sbar_re, const double *sdot_re, int norb_s, int nm_store,
+    int ntot, const hbc *wx0, const hbc *wx1, const double *mom,
+    const double *q_ss, double theta_ss, const double *ccd, const double *lambda,
+    double avw, const hbc *v, const hbc *vc, const int *iz, const int *nn,
+    const int *atlist, const double *cr, const int *shell, const int *ino,
+    const double *vet, int ndi, int kk, hbc *out, int norb, int nb, int nn_max,
+    int ntype, int lambda_stride) {
+    int t = blockIdx.y;
+    int m = blockIdx.x;
+    if (t >= ntype || m >= nn_max) return;
+    int tid = threadIdx.x;
+    int nn2 = norb * norb;
+
+    int ia = atlist[t] - 1;
+    int nr = nn[ia + ndi * 0];
+    int mapidx = m + nn_max * t;
+    hbc *o = out + (size_t)nb * nb * (m + nn_max * t);
+
+    for (int idx = tid; idx < nb * nb; idx += blockDim.x)
+        o[idx] = make_cuDoubleComplex(0.0, 0.0);
+    __syncthreads();
+    if (m >= nr) return;
+
+    int jj1 = (m == 0) ? (ia + 1) : nn[ia + ndi * m];
+    if (jj1 == 0) return;
+    int jj = jj1 - 1;
+    int it = iz[ia];   /* 1-based */
+    int jt = iz[jj];
+    int sh = shell[mapidx] - 1;
+    int io = ino[mapidx] - 1;
+
+    /* moments (spin-spiral override on ia, matching build_ccor_d_components +
+     * ccor_apply_spin_spiral; ja uses jt's mom unless spiral). */
+    double mia[3], mja[3];
+    const double *momit = mom + 3 * (it - 1);
+    const double *momjt = mom + 3 * (jt - 1);
+    mia[0]=momit[0]; mia[1]=momit[1]; mia[2]=momit[2];
+    mja[0]=momjt[0]; mja[1]=momjt[1]; mja[2]=momjt[2];
+    double qn = q_ss[0]*q_ss[0]+q_ss[1]*q_ss[1]+q_ss[2]*q_ss[2];
+    bool spiral = (sqrt(qn) > 1.0e-5 || fabs(sin(theta_ss)) > 1.0e-8);
+    if (spiral) {
+        const double *ria = cr + 3*ia, *rja = cr + 3*jj;
+        double pia = 2.0*HB_PI*(ria[0]*q_ss[0]+ria[1]*q_ss[1]+ria[2]*q_ss[2]);
+        double pja = 2.0*HB_PI*(rja[0]*q_ss[0]+rja[1]*q_ss[1]+rja[2]*q_ss[2]);
+        double st=sin(theta_ss), ct=cos(theta_ss);
+        mia[0]=cos(pia)*st; mia[1]=sin(pia)*st; mia[2]=ct;
+        mja[0]=cos(pja)*st; mja[1]=sin(pja)*st; mja[2]=ct;
+    }
+    /* mom_i for the on-site D^(0) term (build_ccor_d_components returns mom of it,
+     * then applies spin spiral on ia). */
+    double momi[3] = {mia[0], mia[1], mia[2]};
+
+    double dotp = mia[0]*mja[0]+mia[1]*mja[1]+mia[2]*mja[2];
+    double crs[3] = { mia[1]*mja[2]-mia[2]*mja[1],
+                      mia[2]*mja[0]-mia[0]*mja[2],
+                      mia[0]*mja[1]-mia[1]*mja[0] };
+
+    const hbc *wx0i = wx0 + (size_t)norb*(it-1), *wx1i = wx1 + (size_t)norb*(it-1);
+    const hbc *wx0j = wx0 + (size_t)norb*(jt-1), *wx1j = wx1 + (size_t)norb*(jt-1);
+    /* ccd is per cluster SITE (not per type): ccd[ilm + norb*(c + 3*site)],
+     * c in {0,1,2}. build_ccor_coefficients depends on num(ia)/alpha(ia), so it
+     * is site-dependent; index by ia and jj. */
+    const double *ccdi = ccd + (size_t)norb*3*ia;
+    const double *ccdj = ccd + (size_t)norb*3*jj;
+    double lam = lambda[(it-1) + lambda_stride*(jt-1)];
+
+    /* shared: K1..K4 (nn2 each) + tmp + res */
+    extern __shared__ hbc shc[];
+    hbc *K1=shc, *K2=shc+nn2, *K3=shc+2*nn2, *K4=shc+3*nn2;
+    hbc *tmp=shc+4*nn2, *res=shc+5*nn2;
+
+    for (int idx = tid; idx < nn2; idx += blockDim.x) {
+        int ilm = idx % norb, jlm = idx / norb;
+        /* D from sbar; Ddot from -avw^2 * sdot. Both use the ham0m arithmetic
+         * (onsite='none' -> no CX/CEX add). */
+        double sb = sbar_re[(size_t)jlm + norb_s*((size_t)ilm + norb_s*((size_t)sh + nm_store*(size_t)io))];
+        double sd = -avw*avw*sdot_re[(size_t)jlm + norb_s*((size_t)ilm + norb_s*((size_t)sh + nm_store*(size_t)io))];
+        hbc dcb = make_cuDoubleComplex(sb, 0.0);
+        hbc ddb = make_cuDoubleComplex(sd, 0.0);
+
+        /* coefficient factor (ccd_i(ilm,1)+ccd_j(jlm,1)) */
+        double cf = ccdi[ilm + norb*1] + ccdj[jlm + norb*1];
+
+        /* mdir=4 */
+        hbc D4 = hb_add(hb_mul(hb_mul(wx0i[ilm], dcb), wx0j[jlm]),
+                        hb_scale(hb_mul(hb_mul(wx1i[ilm], dcb), wx1j[jlm]), dotp));
+        hbc Dd4 = hb_add(hb_mul(hb_mul(wx0i[ilm], ddb), wx0j[jlm]),
+                         hb_scale(hb_mul(hb_mul(wx1i[ilm], ddb), wx1j[jlm]), dotp));
+        hbc K4v = hb_add(Dd4, hb_scale(D4, cf));
+        /* mdir=1..3 */
+        hbc *Kp[3] = {K1, K2, K3};
+        for (int mm = 0; mm < 3; ++mm) {
+            hbc Dm = hb_add(hb_scale(hb_mul(hb_mul(wx1i[ilm], dcb), wx0j[jlm]), mia[mm]),
+                            hb_scale(hb_mul(hb_mul(wx0i[ilm], dcb), wx1j[jlm]), mja[mm]));
+            Dm = hb_add(Dm, hb_imul(hb_scale(hb_mul(hb_mul(wx1i[ilm], dcb), wx1j[jlm]), crs[mm])));
+            hbc Ddm = hb_add(hb_scale(hb_mul(hb_mul(wx1i[ilm], ddb), wx0j[jlm]), mia[mm]),
+                             hb_scale(hb_mul(hb_mul(wx0i[ilm], ddb), wx1j[jlm]), mja[mm]));
+            Ddm = hb_add(Ddm, hb_imul(hb_scale(hb_mul(hb_mul(wx1i[ilm], ddb), wx1j[jlm]), crs[mm])));
+            Kp[mm][idx] = hb_add(Ddm, hb_scale(Dm, cf));
+        }
+
+        /* on-site D^(0) diagonal (only same-site shell m==1 -> 0-based m==0) */
+        if (m == 0 && ilm == jlm) {
+            double c0 = ccdi[ilm + norb*0];
+            double w0 = cuCreal(wx0i[ilm]); /* wx0/wx1 are real (stored cmplx(x,0)) */
+            double w1 = cuCreal(wx1i[ilm]);
+            K4v = hb_add(K4v, make_cuDoubleComplex(c0*(w0*w0 + w1*w1), 0.0));
+            for (int mm = 0; mm < 3; ++mm)
+                Kp[mm][idx] = hb_add(Kp[mm][idx],
+                    make_cuDoubleComplex(c0*2.0*w0*w1*momi[mm], 0.0));
+        }
+        K4[idx] = K4v;
+    }
+    __syncthreads();
+
+    /* hcpx cart2sph each K in place */
+    hbc *slabs[4] = {K1, K2, K3, K4};
+    for (int s = 0; s < 4; ++s) {
+        for (int idx = tid; idx < nn2; idx += blockDim.x) {
+            int i = idx % norb, j = idx / norb;
+            hbc acc = make_cuDoubleComplex(0.0, 0.0);
+            for (int b = 0; b < norb; ++b)
+                acc = hb_add(acc, hb_mul(slabs[s][cmidx(i, b, norb)], v[cmidx(b, j, norb)]));
+            tmp[idx] = acc;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < nn2; idx += blockDim.x) {
+            int i = idx % norb, j = idx / norb;
+            hbc acc = make_cuDoubleComplex(0.0, 0.0);
+            for (int a = 0; a < norb; ++a)
+                acc = hb_add(acc, hb_mul(vc[cmidx(i, a, norb)], tmp[cmidx(a, j, norb)]));
+            res[idx] = acc;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < nn2; idx += blockDim.x) slabs[s][idx] = res[idx];
+        __syncthreads();
+    }
+
+    /* lambda-pack: hcc(1:norb,1:norb)=lam*(K4+K3); (off,off)=lam*(K4-K3);
+     * (1:norb,off)=lam*(K1-iK2); (off,1:norb)=lam*(K1+iK2). CPU uses (ilm,jlm)
+     * row/col directly (no j,i swap here -- build_ccor packs kcomp(:,:) as-is). */
+    for (int idx = tid; idx < nn2; idx += blockDim.x) {
+        int ilm = idx % norb, jlm = idx / norb;
+        hbc k1 = K1[cmidx(ilm, jlm, norb)];
+        hbc k2 = K2[cmidx(ilm, jlm, norb)];
+        hbc k3 = K3[cmidx(ilm, jlm, norb)];
+        hbc k4 = K4[cmidx(ilm, jlm, norb)];
+        o[cmidx(ilm, jlm, nb)]             = hb_scale(hb_add(k4, k3), lam);
+        o[cmidx(ilm+norb, jlm+norb, nb)]   = hb_scale(hb_sub(k4, k3), lam);
+        o[cmidx(ilm, jlm+norb, nb)]        = hb_scale(hb_sub(k1, hb_imul(k2)), lam);
+        o[cmidx(ilm+norb, jlm, nb)]        = hb_scale(hb_add(k1, hb_imul(k2)), lam);
+    }
+}
+
+extern "C" int hambuild_gpu_launch_ccor(
+    const double *d_sbar_re, const double *d_sdot_re, int norb_s, int nm_store,
+    int ntot, const hbc *d_wx0, const hbc *d_wx1, const double *d_mom,
+    const double *d_q_ss, double theta_ss, const double *d_ccd,
+    const double *d_lambda, double avw, const hbc *d_v, const hbc *d_vc,
+    const int *d_iz, const int *d_nn, const int *d_atlist, const double *d_cr,
+    const int *d_shell, const int *d_ino, const double *d_vet, int ndi, int kk,
+    hbc *d_out, int norb, int nb, int nn_max, int nsite, int lambda_stride) {
+    int threads = 128;
+    dim3 grid(nn_max, nsite);
+    size_t shmem = (size_t)6 * norb * norb * sizeof(hbc);
+    k_build_ccor<<<grid, threads, shmem>>>(
+        d_sbar_re, d_sdot_re, norb_s, nm_store, ntot, d_wx0, d_wx1, d_mom,
+        d_q_ss, theta_ss, d_ccd, d_lambda, avw, d_v, d_vc, d_iz, d_nn, d_atlist,
+        d_cr, d_shell, d_ino, d_vet, ndi, kk, d_out, norb, nb, nn_max, nsite,
+        lambda_stride);
+    if (HB_DEVICE_SYNC() != HB_SUCCESS) return 1;
+    if (HB_GET_LAST_ERR() != HB_SUCCESS) return 2;
+    return 0;
+}

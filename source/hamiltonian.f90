@@ -417,6 +417,48 @@ contains
    end subroutine assemble_local_gpu
 
    !---------------------------------------------------------------------------
+   !> @brief Gather CCOR inputs (ccd, lambda, avw) host-side and upload them.
+   !>
+   !> ccd and lambda are cheap per-type / per-pair quantities; computing them on
+   !> the CPU with the existing routines keeps the VMT / coefficient math (and
+   !> its representation discipline) exactly as validated. The device kernel then
+   !> only does the D/Ddot ham0m + combine + hcpx + lambda-pack.
+   !---------------------------------------------------------------------------
+   subroutine upload_ccor_inputs_gpu(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nt, it, jt, ia, kk
+      real(rp), dimension(:, :, :), allocatable :: ccd
+      real(rp), dimension(:, :), allocatable :: lambda
+      real(rp) :: avw
+
+      nt = this%lattice%ntype
+      kk = this%lattice%kk
+      allocate(ccd(norb, 0:2, kk), lambda(nt, nt))
+
+      ! Per-SITE coefficients: build_ccor_coefficients depends on num(ia)/alpha(ia),
+      ! so it must be evaluated at each cluster site ia (its type is iz(ia)).
+      ccd = 0.0_rp
+      do ia = 1, kk
+         call build_ccor_coefficients(this, ia, this%lattice%iz(ia), ccd(:, :, ia))
+      end do
+
+      ! Per-pair energy scale.
+      do jt = 1, nt
+         do it = 1, nt
+            lambda(it, jt) = ccor_lambda_scalar(this, it, jt)
+         end do
+      end do
+
+      avw = this%lattice%wav*ang2au
+      if (avw <= tiny(1.0_rp)) avw = this%lattice%wav
+
+      call this%gpu_hambuild%set_sbar(this%lattice%sbar)
+      call this%gpu_hambuild%set_ccor(ccd, lambda, this%lattice%sdot, avw)
+
+      deallocate(ccd, lambda)
+   end subroutine upload_ccor_inputs_gpu
+
+   !---------------------------------------------------------------------------
    !> @brief Upload geometry + build the GPU neigh_map/vet tables (Phase 1.5).
    !>
    !> Runs once (geometry is fixed across SCF). Uploads cr/num/iz/nn/atlist and,
@@ -2055,6 +2097,16 @@ contains
 	      if (.not. this%ccor_2c) return
 	      call validate_ccor_inputs(this)
 
+      ! Phase 3: build H_cc on the GPU (batched over site*neighbour). Geometry
+      ! maps + bulk potential must be resident (build_bulkham ran first). Requires
+      ! sdot (CPU pair block also returns early without it -> eecc stays zero).
+      if (this%use_gpu_hambuild .and. allocated(this%charge%lattice%sdot)) then
+         call upload_ccor_inputs_gpu(this)
+         call this%gpu_hambuild%ccor_bulk(this%eecc)
+      else if (this%use_gpu_hambuild) then
+         ! sdot absent: eecc already zeroed above; nothing to do.
+         continue
+      else
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
          ino = this%charge%lattice%num(ia)
@@ -2072,6 +2124,7 @@ contains
             this%eecc(:, :, m, ntype) = hcc(:, :)
          end do
 	      end do
+      end if
 
 	      if (maxval(abs(this%eecc)) <= tiny(1.0_rp)) then
 	         if (this%ccor_strict) then
@@ -2092,6 +2145,14 @@ contains
       if (.not. this%ccor_2c) return
       call validate_ccor_inputs(this)
 
+      ! Phase 3: build local H_cc on the GPU. Local geometry maps + bulk
+      ! potential must be resident (build_locham ran first). Requires sdot.
+      if (this%use_gpu_hambuild .and. allocated(this%charge%lattice%sdot)) then
+         call upload_ccor_inputs_gpu(this)
+         call this%gpu_hambuild%ccor_local(this%hallcc)
+      else if (this%use_gpu_hambuild) then
+         continue
+      else
       do nlim = 1, this%charge%lattice%nmax
          ino = this%charge%lattice%num(nlim)
          it = this%charge%lattice%iz(nlim)
@@ -2108,6 +2169,7 @@ contains
             this%hallcc(:, :, m, nlim) = hcc(:, :)
          end do
 	      end do
+      end if
 
 	      if (maxval(abs(this%hallcc)) <= tiny(1.0_rp)) then
 	         if (this%ccor_strict) then

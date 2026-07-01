@@ -55,6 +55,9 @@ module hambuild_cuda_plugin_mod
       procedure :: set_local_sites
       procedure :: build_local_geometry_maps
       procedure :: local
+      procedure :: set_ccor
+      procedure :: ccor_bulk
+      procedure :: ccor_local
       procedure :: destroy
    end type hambuild_cuda_backend
 
@@ -196,6 +199,31 @@ module hambuild_cuda_plugin_mod
          type(c_ptr), value :: hall, hallo
          integer(c_int) :: hambuild_cuda_local
       end function hambuild_cuda_local
+
+      function hambuild_cuda_set_ccor(ctx, ccd, lambda, sdot, avw) &
+         bind(C, name='hambuild_cuda_set_ccor')
+         import :: c_int, c_ptr, c_double
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: ccd, lambda, sdot
+         real(c_double), value :: avw
+         integer(c_int) :: hambuild_cuda_set_ccor
+      end function hambuild_cuda_set_ccor
+
+      function hambuild_cuda_ccor_bulk(ctx, eecc) &
+         bind(C, name='hambuild_cuda_ccor_bulk')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: eecc
+         integer(c_int) :: hambuild_cuda_ccor_bulk
+      end function hambuild_cuda_ccor_bulk
+
+      function hambuild_cuda_ccor_local(ctx, hallcc) &
+         bind(C, name='hambuild_cuda_ccor_local')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: hallcc
+         integer(c_int) :: hambuild_cuda_ccor_local
+      end function hambuild_cuda_ccor_local
    end interface
 #endif
 
@@ -470,6 +498,50 @@ contains
       call plugin_absent()
 #endif
    end subroutine local
+
+   !> Upload CCOR inputs: ccd (norb,0:2,ntype), lambda (ntype,ntype), sdot
+   !> (norb,norb,nm_store,ntot; real part used), and the avw normalization scalar.
+   subroutine set_ccor(this, ccd, lambda, sdot, avw)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      real(rp), dimension(:, :, :), intent(in), target, contiguous :: ccd
+      real(rp), dimension(:, :), intent(in), target, contiguous :: lambda
+      complex(rp), dimension(:, :, :, :), intent(in), target, contiguous :: sdot
+      real(rp), intent(in) :: avw
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_set_ccor(this%ctx, c_loc(ccd), c_loc(lambda), &
+         c_loc(sdot), real(avw, c_double))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_ccor')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_ccor
+
+   !> Build H_cc over the bulk sites into eecc (nb,nb,nn_max,ntype).
+   subroutine ccor_bulk(this, eecc)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: eecc
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_ccor_bulk(this%ctx, c_loc(eecc))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_ccor_bulk')
+#else
+      call plugin_absent()
+#endif
+   end subroutine ccor_bulk
+
+   !> Build H_cc over the local sites into hallcc (nb,nb,nn_max,nmax).
+   subroutine ccor_local(this, hallcc)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: hallcc
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_ccor_local(this%ctx, c_loc(hallcc))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_ccor_local')
+#else
+      call plugin_absent()
+#endif
+   end subroutine ccor_local
 
 #ifdef USE_CUDA_PLUGIN
    !> Report a failed C entry point, appending the backend error string.

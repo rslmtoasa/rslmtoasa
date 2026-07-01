@@ -134,3 +134,22 @@ int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall, void *hallo)
     (void)ctx; (void)hoh; (void)hall; (void)hallo;
     return 1;
 }
+
+int hambuild_cuda_set_ccor(hambuild_ctx *ctx, const double *ccd,
+                           const double *lambda, const void *sdot, double avw)
+{
+    (void)ctx; (void)ccd; (void)lambda; (void)sdot; (void)avw;
+    return 1;
+}
+
+int hambuild_cuda_ccor_bulk(hambuild_ctx *ctx, void *eecc)
+{
+    (void)ctx; (void)eecc;
+    return 1;
+}
+
+int hambuild_cuda_ccor_local(hambuild_ctx *ctx, void *hallcc)
+{
+    (void)ctx; (void)hallcc;
+    return 1;
+}
