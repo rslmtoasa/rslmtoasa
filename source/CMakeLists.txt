@@ -37,6 +37,7 @@ add_library(${PROJECT_NAME} STATIC
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90
+    rsk_cuda_plugin.f90
     safe_alloc.f90
     self.f90
     bounds.f90
@@ -85,7 +86,7 @@ if(NOT ENABLE_CUDA_PLUGIN)
     # with the CUDA plugin, so on plain CPU builds we link a no-op stub that
     # makes the symbols resolve and fails cleanly if the gpu_plugin path is
     # ever requested at runtime. No compute kernels are pulled in.
-    target_sources(${PROJECT_NAME} PRIVATE cuda/rsrec_stub.c)
+    target_sources(${PROJECT_NAME} PRIVATE cuda/rsrec_stub.c cuda/rsk_stub.c)
 endif()
 
 if(ENABLE_CUDA_PLUGIN)
@@ -96,6 +97,8 @@ if(ENABLE_CUDA_PLUGIN)
     add_library(rsrec_cuda STATIC
         cuda/rsrec_cuda.cpp
         cuda/rsrec_gpu.cu
+        cuda/rsk_cuda.cpp
+        cuda/rsk_gpu.cu
     )
     target_compile_features(rsrec_cuda PRIVATE cxx_std_11)
     # Link against rsrec_cpp and CUDA runtime libraries

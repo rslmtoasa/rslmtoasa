@@ -235,6 +235,7 @@ module reciprocal_mod
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
       procedure :: build_kspace_hamiltonian
+      procedure :: build_hk_batch_cpu
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
@@ -1183,6 +1184,46 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> CPU reference batch builder for k-space Hamiltonians.
+   !>
+   !> This owns the current per-k-point Fourier-transform loop.  It is kept as a
+   !> behavior-preserving reference seam for the future GPU k-space backend:
+   !> GPU implementations should match this routine for all supported modes
+   !> before diagonalization is moved off host.
+   !---------------------------------------------------------------------------
+   subroutine build_hk_batch_cpu(this, using_kpath, use_second_order)
+      class(reciprocal), intent(inout) :: this
+      logical, intent(in) :: using_kpath
+      logical, intent(in) :: use_second_order
+      integer :: ik, ik_global
+
+#ifdef _OPENMP
+      !$omp parallel do private(ik, ik_global) shared(this, using_kpath, use_second_order) default(none)
+#endif
+      do ik = 1, this%nk_local
+         ik_global = local_k_index_to_global(this, ik)
+         if (use_second_order) then
+            if (using_kpath) then
+               call this%fourier_transform_hamiltonian_second_order(this%k_path(:, ik), this%hk_bulk(:, :, ik))
+            else
+               call this%fourier_transform_hamiltonian_second_order(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
+            end if
+         else
+            if (using_kpath) then
+               call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
+            else
+               call this%fourier_transform_hamiltonian(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
+            end if
+         end if
+      end do
+#ifdef _OPENMP
+      !$omp end parallel do
+#endif
+   end subroutine build_hk_batch_cpu
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Build k-space Hamiltonian for all k-points (bulk contribution)
    !---------------------------------------------------------------------------
    !---------------------------------------------------------------------------
@@ -1202,7 +1243,7 @@ contains
    subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ik, ik_global, nk, ntype
+      integer :: nk, ntype
       character(len=200) :: debug_msg
       logical :: using_kpath, distribute_mesh
       logical :: use_second_order
@@ -1284,30 +1325,17 @@ contains
          end if
       end if
 
-      ! Parallelize over k-points (coarse-grained) when OpenMP is available.
-#ifdef _OPENMP
-      !$omp parallel do private(ik, ik_global) shared(this, using_kpath, use_second_order) default(none)
+      if (this%control%gpu_plugin) then
+#ifdef USE_CUDA_PLUGIN
+         call g_logger%warning('build_kspace_hamiltonian: gpu_plugin requested for k-space, but the rsk CUDA backend ' // &
+            'is scaffold-only in this build. Falling back to CPU H(k) assembly.', __FILE__, __LINE__)
+#else
+         call g_logger%warning('build_kspace_hamiltonian: gpu_plugin requested for k-space, but this executable was ' // &
+            'built without ENABLE_CUDA_PLUGIN. Falling back to CPU H(k) assembly.', __FILE__, __LINE__)
 #endif
-      do ik = 1, this%nk_local
-         ik_global = local_k_index_to_global(this, ik)
-         ! Fourier transform: builds full multi-site H(k)
-         if (use_second_order) then
-            if (using_kpath) then
-               call this%fourier_transform_hamiltonian_second_order(this%k_path(:, ik), this%hk_bulk(:, :, ik))
-            else
-               call this%fourier_transform_hamiltonian_second_order(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
-            end if
-         else
-            if (using_kpath) then
-               call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
-            else
-               call this%fourier_transform_hamiltonian(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
-            end if
-         end if
-      end do
-#ifdef _OPENMP
-      !$omp end parallel do
-#endif
+      end if
+
+      call this%build_hk_batch_cpu(using_kpath, use_second_order)
 
       if (this%hamiltonian%ccor_2c .and. this%hamiltonian%ccor_debug .and. this%nk_local > 0) then
          block
