@@ -15,7 +15,7 @@
  * --- HIP portability hooks ---------------------------------------------------
  * Authored in CUDA. hipify-perl maps cuda* -> hip*; the shim below lets the same
  * source compile under either toolchain. Guard device API calls behind the HB_*
- * aliases rather than raw cuda*/hip* names.
+ * aliases rather than raw cuda or hip names.
  * =========================================================================== */
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(USE_HIP)
