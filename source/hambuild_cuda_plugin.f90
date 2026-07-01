@@ -49,6 +49,9 @@ module hambuild_cuda_plugin_mod
       procedure :: set_geometry_vet
       procedure :: build_geometry_maps
       procedure :: get_geometry_maps
+      procedure :: set_potential_bulk
+      procedure :: set_sbar
+      procedure :: bulk
       procedure :: destroy
    end type hambuild_cuda_backend
 
@@ -137,6 +140,34 @@ module hambuild_cuda_plugin_mod
          type(c_ptr), value :: valid, shell, ino, vet
          integer(c_int) :: hambuild_cuda_get_geometry_maps
       end function hambuild_cuda_get_geometry_maps
+
+      function hambuild_cuda_set_potential_bulk(ctx, wx0, wx1, cx0, cx1, cex0, &
+         cex1, mom, q_ss, theta_ss) &
+         bind(C, name='hambuild_cuda_set_potential_bulk')
+         import :: c_int, c_ptr, c_double
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: wx0, wx1, cx0, cx1, cex0, cex1, mom, q_ss
+         real(c_double), value :: theta_ss
+         integer(c_int) :: hambuild_cuda_set_potential_bulk
+      end function hambuild_cuda_set_potential_bulk
+
+      function hambuild_cuda_set_sbar(ctx, sbar, nm_store, ntot) &
+         bind(C, name='hambuild_cuda_set_sbar')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: sbar
+         integer(c_int), value :: nm_store, ntot
+         integer(c_int) :: hambuild_cuda_set_sbar
+      end function hambuild_cuda_set_sbar
+
+      function hambuild_cuda_bulk(ctx, hoh, ee, hxc, eeo, eeoee) &
+         bind(C, name='hambuild_cuda_bulk')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         integer(c_int), value :: hoh
+         type(c_ptr), value :: ee, hxc, eeo, eeoee
+         integer(c_int) :: hambuild_cuda_bulk
+      end function hambuild_cuda_bulk
    end interface
 #endif
 
@@ -318,6 +349,57 @@ contains
       call plugin_absent()
 #endif
    end subroutine get_geometry_maps
+
+   !> Upload per-type potential vectors for the neighbour Hamiltonian (ham0m_nc).
+   !> wx0..cex1 are (norb, ntype) complex; mom is (3, ntype); q_ss is (3).
+   subroutine set_potential_bulk(this, wx0, wx1, cx0, cx1, cex0, cex1, mom, q_ss, theta_ss)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      complex(rp), dimension(:, :), intent(in), target, contiguous :: wx0, wx1, cx0, cx1, cex0, cex1
+      real(rp), dimension(:, :), intent(in), target, contiguous :: mom
+      real(rp), dimension(3), intent(in), target :: q_ss
+      real(rp), intent(in) :: theta_ss
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_set_potential_bulk(this%ctx, c_loc(wx0), c_loc(wx1), &
+         c_loc(cx0), c_loc(cx1), c_loc(cex0), c_loc(cex1), c_loc(mom), &
+         c_loc(q_ss), real(theta_ss, c_double))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_potential_bulk')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_potential_bulk
+
+   !> Upload the structure constants sbar (refreshed per SCF). sbar is
+   !> (norb, norb, nm_store, ntot) complex; only real(sbar) is used on device.
+   subroutine set_sbar(this, sbar)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      complex(rp), dimension(:, :, :, :), intent(in), target, contiguous :: sbar
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_set_sbar(this%ctx, c_loc(sbar), &
+         int(size(sbar, 3), c_int), int(size(sbar, 4), c_int))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_sbar')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_sbar
+
+   !> Build the bulk neighbour Hamiltonian on-device and copy ee/hxc (and, when
+   !> hoh, eeo/eeoee) back. Arrays are (nb, nb, nn_max, ntype) complex.
+   subroutine bulk(this, hoh, ee, hxc, eeo, eeoee)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      logical, intent(in) :: hoh
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: ee, hxc, eeo, eeoee
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr, hoh_i
+      hoh_i = 0_c_int; if (hoh) hoh_i = 1_c_int
+      ierr = hambuild_cuda_bulk(this%ctx, hoh_i, c_loc(ee), c_loc(hxc), &
+         c_loc(eeo), c_loc(eeoee))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_bulk')
+#else
+      call plugin_absent()
+#endif
+   end subroutine bulk
 
 #ifdef USE_CUDA_PLUGIN
    !> Report a failed C entry point, appending the backend error string.

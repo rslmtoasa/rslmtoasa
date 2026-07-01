@@ -134,6 +134,39 @@ int hambuild_cuda_build_geometry_maps(hambuild_ctx *ctx);
 int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid, int *shell,
                                     int *ino, double *vet);
 
+/* --- Phase 2: bulk/local hot loop (chbar_nc: ham0m_nc + hcpx + pack) ----------
+ *
+ * Per-type potential inputs for the neighbour Hamiltonian (ham0m_nc). All
+ * complex arrays are norb per type, contiguous per type, interleaved re/im:
+ *   wx0, wx1     : overlap-weight combos (up+dn, up-dn)
+ *   cx0, cx1     : band-centre combos    (on-site, non-hoh)
+ *   cex0, cex1   : band-centre combos    (on-site, hoh)
+ *   mom          : real64 3 per type (moment direction; overridden by spiral)
+ * Spin spiral: q_ss (3) and theta_ss (1) scalar; when |q_ss|>1e-5 or
+ * |sin(theta_ss)|>1e-8 the kernel recomputes mom_ia/mom_ja from cr and q_ss.
+ */
+int hambuild_cuda_set_potential_bulk(hambuild_ctx *ctx, const void *wx0,
+                                     const void *wx1, const void *cx0,
+                                     const void *cx1, const void *cex0,
+                                     const void *cex1, const double *mom,
+                                     const double *q_ss, double theta_ss);
+
+/* Upload the (real part of the) structure constants sbar. Refreshed per SCF.
+ * sbar is complex norb*norb*nm_store*num_types, col-major; the kernel uses
+ * real(sbar) matching the CPU real() cast. nm_store = 3rd dim, ntot = 4th dim. */
+int hambuild_cuda_set_sbar(hambuild_ctx *ctx, const void *sbar, int nm_store,
+                           int ntot);
+
+/* Build the bulk neighbour Hamiltonian on-device (batched over type*neighbour),
+ * then pack into ee/hxc and, if hoh, the two hoh matmuls into eeo/eeoee (cuBLAS
+ * ZgemmStridedBatched). obarm must already be resident (from a prior onsite
+ * call with want_obarm). Outputs copied back to the host buffers:
+ *   ee, hxc          : nb*nb*nn_max*ntype complex
+ *   eeo, eeoee       : nb*nb*nn_max*ntype complex (only written when hoh)
+ * eeo/eeoee may be NULL when hoh==0. */
+int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee, void *hxc,
+                       void *eeo, void *eeoee);
+
 #ifdef __cplusplus
 }
 #endif

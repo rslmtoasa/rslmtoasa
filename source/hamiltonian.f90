@@ -310,6 +310,54 @@ contains
    end subroutine assemble_onsite_gpu
 
    !---------------------------------------------------------------------------
+   !> @brief Assemble the bulk neighbour Hamiltonian (ee/eeo/eeoee/hxc) on GPU.
+   !>
+   !> Phase 2. Gathers per-type potential vectors, uploads sbar (per SCF), builds
+   !> obarm on-device (needed for the hoh matmul), then runs the batched
+   !> ham0m_nc + hcpx + pack + (hoh) two cuBLAS gemms. Mirrors build_bulkham's
+   !> chbar_nc loop exactly; CCOR and Hubbard still run on the CPU afterwards on
+   !> the copied-back arrays.
+   !---------------------------------------------------------------------------
+   subroutine assemble_bulk_gpu(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nt, t, m
+      complex(rp), dimension(:, :), allocatable :: wx0, wx1, cx0, cx1, cex0, cex1
+      real(rp), dimension(:, :), allocatable :: mom
+
+      nt = this%lattice%ntype
+      allocate(wx0(norb, nt), wx1(norb, nt), cx0(norb, nt), cx1(norb, nt))
+      allocate(cex0(norb, nt), cex1(norb, nt), mom(3, nt))
+      do t = 1, nt
+         do m = 1, norb
+            wx0(m, t) = this%lattice%symbolic_atoms(t)%potential%wx0(m)
+            wx1(m, t) = this%lattice%symbolic_atoms(t)%potential%wx1(m)
+            cx0(m, t) = this%lattice%symbolic_atoms(t)%potential%cx0(m)
+            cx1(m, t) = this%lattice%symbolic_atoms(t)%potential%cx1(m)
+            cex0(m, t) = this%lattice%symbolic_atoms(t)%potential%cex0(m)
+            cex1(m, t) = this%lattice%symbolic_atoms(t)%potential%cex1(m)
+         end do
+         mom(:, t) = this%lattice%symbolic_atoms(t)%potential%mom(:)
+      end do
+
+      ! Geometry maps must be resident (built once). obarm must be resident for
+      ! the hoh matmul; build the on-site blocks on-device first.
+      if (.not. this%gpu_geometry_ready) then
+         call build_geometry_maps_gpu(this)
+         this%gpu_geometry_ready = .true.
+      end if
+      if (this%hoh) then
+         call assemble_onsite_gpu(this, want_lsham=.false., want_obarm=.true., want_enim=.true.)
+      end if
+
+      call this%gpu_hambuild%set_potential_bulk(wx0, wx1, cx0, cx1, cex0, cex1, &
+         mom, this%q_ss, this%theta_ss)
+      call this%gpu_hambuild%set_sbar(this%lattice%sbar)
+      call this%gpu_hambuild%bulk(this%hoh, this%ee, this%hxc, this%eeo, this%eeoee)
+
+      deallocate(wx0, wx1, cx0, cx1, cex0, cex1, mom)
+   end subroutine assemble_bulk_gpu
+
+   !---------------------------------------------------------------------------
    !> @brief Upload geometry + build the GPU neigh_map/vet tables (Phase 1.5).
    !>
    !> Runs once (geometry is fixed across SCF). Uploads cr/num/iz/nn/atlist and,
@@ -1770,10 +1818,16 @@ contains
          this%gpu_geometry_ready = .true.
       end if
 
+      ! Phase 2: build ee/eeo/eeoee/hxc on the GPU in one batched pass. The CPU
+      ! chbar_nc/pack/hoh block below is skipped; Hubbard add-ins and CCOR still
+      ! run (on the copied-back arrays), matching the CPU control flow.
+      if (this%use_gpu_hambuild) call assemble_bulk_gpu(this)
+
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype) ! Atom number in clust
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
+         if (.not. this%use_gpu_hambuild) then
          !write(123, *)´bulkham´
          ! call g_logger%info('Building Hamiltonian for atom type '//fmt('i5', ntype)//' with '//fmt('i5', nr)//' neighbours', __FILE__, __LINE__)
          call this%chbar_nc(ia, nr, ino, ntype)
@@ -1792,6 +1846,7 @@ contains
                end do ! end of orbital j loop
             end do ! end of orbital i loop
          end do ! end of neighbour number
+         end if ! .not. use_gpu_hambuild (core assembly done on GPU)
          if (this%hubbard_u_general_check) then
             do i = 1, nb
                do j = 1, nb
@@ -1808,7 +1863,7 @@ contains
                end do
             end do
          end if
-         if (this%hoh) then
+         if (this%hoh .and. .not. this%use_gpu_hambuild) then
             call this%build_obarm()
             call this%build_enim()
             do m = 1, nr

@@ -18,8 +18,10 @@
 
 #include <cuComplex.h>
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #include <string>
+#include <vector>
 
 typedef cuDoubleComplex hbc;
 
@@ -37,6 +39,16 @@ extern "C" int hambuild_gpu_launch_geometry_maps(
     const int *d_atlist, const double *d_vet_in, int use_vet_in, int kk,
     int nn_max, int ndi, double alat, double r2, int ntype, double *d_hv_scratch,
     int *d_valid, int *d_shell, int *d_ino, double *d_vet);
+
+extern "C" int hambuild_gpu_launch_bulk_ham(
+    const double *d_sbar_re, int norb_s, int nm_store, int ntot,
+    const hbc *d_wx0, const hbc *d_wx1, const hbc *d_cx0, const hbc *d_cx1,
+    const hbc *d_cex0, const hbc *d_cex1, const double *d_mom,
+    const double *d_q_ss, double theta_ss, const hbc *d_v, const hbc *d_vc,
+    const int *d_iz, const int *d_nn, const int *d_atlist, const double *d_cr,
+    const int *d_valid, const int *d_shell, const int *d_ino, const double *d_vet,
+    int ndi, int kk, int hoh, hbc *d_ee, hbc *d_hxc, int norb, int nb,
+    int nn_max, int ntype);
 
 struct hambuild_ctx {
     int nb = 0;
@@ -75,6 +87,22 @@ struct hambuild_ctx {
     int *d_valid = nullptr, *d_shell = nullptr, *d_ino = nullptr;
     double *d_vet = nullptr;            /* 3*nn_max*ntype */
     bool have_geometry = false;
+
+    /* --- Phase 2 bulk/local hot loop --- */
+    cublasHandle_t cublas = nullptr;
+    hbc *d_wx0 = nullptr, *d_wx1 = nullptr, *d_cx0 = nullptr, *d_cx1 = nullptr;
+    hbc *d_cex0 = nullptr, *d_cex1 = nullptr;
+    double *d_mom_bulk = nullptr;       /* 3*ntype */
+    double *d_q_ss = nullptr;           /* 3 */
+    double theta_ss = 0.0;
+    bool have_potential_bulk = false;
+    double *d_sbar_re = nullptr;        /* norb*norb*nm_store*ntot */
+    int nm_store = 0, ntot = 0;
+    bool have_sbar = false;
+    hbc *d_ee = nullptr, *d_hxc = nullptr, *d_eeo = nullptr, *d_eeoee = nullptr;
+    /* host-side geometry mirror to compute ji for hoh batching */
+    std::vector<int> h_iz, h_nn, h_atlist, h_valid;
+    int h_ndi = 0;
 };
 
 static std::string g_hambuild_err;
@@ -105,6 +133,11 @@ extern "C" hambuild_ctx *hambuild_cuda_create(int nb, int norb, int nnmax,
         return nullptr;
     }
     auto *ctx = new hambuild_ctx();
+    if (cublasCreate(&ctx->cublas) != CUBLAS_STATUS_SUCCESS) {
+        set_error("hambuild_cuda_create: cublasCreate failed");
+        delete ctx;
+        return nullptr;
+    }
     ctx->nb = nb;
     ctx->norb = norb;
     ctx->nnmax = nnmax;
@@ -159,6 +192,12 @@ extern "C" void hambuild_cuda_destroy(hambuild_ctx *ctx) {
     cudaFree(ctx->d_hv_scratch);
     cudaFree(ctx->d_valid); cudaFree(ctx->d_shell); cudaFree(ctx->d_ino);
     cudaFree(ctx->d_vet);
+    cudaFree(ctx->d_wx0); cudaFree(ctx->d_wx1); cudaFree(ctx->d_cx0);
+    cudaFree(ctx->d_cx1); cudaFree(ctx->d_cex0); cudaFree(ctx->d_cex1);
+    cudaFree(ctx->d_mom_bulk); cudaFree(ctx->d_q_ss); cudaFree(ctx->d_sbar_re);
+    cudaFree(ctx->d_ee); cudaFree(ctx->d_hxc); cudaFree(ctx->d_eeo);
+    cudaFree(ctx->d_eeoee);
+    if (ctx->cublas) cublasDestroy(ctx->cublas);
     delete ctx;
 }
 
@@ -283,6 +322,11 @@ extern "C" int hambuild_cuda_set_geometry(hambuild_ctx *ctx, const double *cr,
     ok = ok && up(ctx->d_nn, nn, (size_t)ndi * nn_max * sizeof(int));
     ok = ok && up(ctx->d_atlist, atlist, (size_t)nt * sizeof(int));
     if (!ok) { set_error("hambuild_cuda_set_geometry: upload failed"); return 1; }
+    /* Host mirror of iz/nn/atlist for hoh ji computation (see hambuild_cuda_bulk). */
+    ctx->h_iz.assign(iz, iz + kk);
+    ctx->h_nn.assign(nn, nn + (size_t)ndi * nn_max);
+    ctx->h_atlist.assign(atlist, atlist + nt);
+    ctx->h_ndi = ndi;
     ctx->have_vet_in = false;
     ctx->have_geometry = false; /* maps must be rebuilt */
     return 0;
@@ -320,6 +364,13 @@ extern "C" int hambuild_cuda_build_geometry_maps(hambuild_ctx *ctx) {
                   std::to_string(rc) + ")");
         return rc;
     }
+    /* Mirror valid to host for hoh ji computation. */
+    ctx->h_valid.resize((size_t)ctx->nn_max * ctx->ntype);
+    if (!down(ctx->h_valid.data(), ctx->d_valid,
+              ctx->h_valid.size() * sizeof(int))) {
+        set_error("hambuild_cuda_build_geometry_maps: valid mirror copy failed");
+        return 1;
+    }
     ctx->have_geometry = true;
     return 0;
 }
@@ -339,5 +390,175 @@ extern "C" int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid,
     if (ino)   ok = ok && down(ino, ctx->d_ino, ni * sizeof(int));
     if (vet)   ok = ok && down(vet, ctx->d_vet, 3 * ni * sizeof(double));
     if (!ok) { set_error("hambuild_cuda_get_geometry_maps: copy failed"); return 1; }
+    return 0;
+}
+
+/* --- Phase 2: bulk/local hot loop ---------------------------------------- */
+
+extern "C" int hambuild_cuda_set_potential_bulk(
+    hambuild_ctx *ctx, const void *wx0, const void *wx1, const void *cx0,
+    const void *cx1, const void *cex0, const void *cex1, const double *mom,
+    const double *q_ss, double theta_ss) {
+    if (!ctx) { set_error("hambuild_cuda_set_potential_bulk: null ctx"); return 1; }
+    const int nt = ctx->ntype, norb = ctx->norb;
+    const size_t vbytes = (size_t)norb * nt * sizeof(hbc);
+    bool ok = true;
+    if (!ctx->d_wx0) {
+        ok = ok && dev_alloc((void **)&ctx->d_wx0, vbytes);
+        ok = ok && dev_alloc((void **)&ctx->d_wx1, vbytes);
+        ok = ok && dev_alloc((void **)&ctx->d_cx0, vbytes);
+        ok = ok && dev_alloc((void **)&ctx->d_cx1, vbytes);
+        ok = ok && dev_alloc((void **)&ctx->d_cex0, vbytes);
+        ok = ok && dev_alloc((void **)&ctx->d_cex1, vbytes);
+        ok = ok && dev_alloc((void **)&ctx->d_mom_bulk, 3 * (size_t)nt * sizeof(double));
+        ok = ok && dev_alloc((void **)&ctx->d_q_ss, 3 * sizeof(double));
+        if (!ok) { set_error("hambuild_cuda_set_potential_bulk: alloc failed"); return 1; }
+    }
+    ok = ok && up(ctx->d_wx0, wx0, vbytes);
+    ok = ok && up(ctx->d_wx1, wx1, vbytes);
+    ok = ok && up(ctx->d_cx0, cx0, vbytes);
+    ok = ok && up(ctx->d_cx1, cx1, vbytes);
+    ok = ok && up(ctx->d_cex0, cex0, vbytes);
+    ok = ok && up(ctx->d_cex1, cex1, vbytes);
+    ok = ok && up(ctx->d_mom_bulk, mom, 3 * (size_t)nt * sizeof(double));
+    ok = ok && up(ctx->d_q_ss, q_ss, 3 * sizeof(double));
+    if (!ok) { set_error("hambuild_cuda_set_potential_bulk: upload failed"); return 1; }
+    ctx->theta_ss = theta_ss;
+    ctx->have_potential_bulk = true;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_set_sbar(hambuild_ctx *ctx, const void *sbar,
+                                      int nm_store, int ntot) {
+    if (!ctx) { set_error("hambuild_cuda_set_sbar: null ctx"); return 1; }
+    const int norb = ctx->norb;
+    const size_t n = (size_t)norb * norb * nm_store * ntot;
+    /* Extract the real part on the host (CPU uses real(sbar)); upload as double. */
+    const double *src = static_cast<const double *>(sbar); /* interleaved re,im */
+    std::vector<double> re(n);
+    for (size_t i = 0; i < n; ++i) re[i] = src[2 * i];
+    if (nm_store != ctx->nm_store || ntot != ctx->ntot || !ctx->d_sbar_re) {
+        cudaFree(ctx->d_sbar_re);
+        ctx->d_sbar_re = nullptr;
+        if (!dev_alloc((void **)&ctx->d_sbar_re, n * sizeof(double))) {
+            set_error("hambuild_cuda_set_sbar: alloc failed");
+            return 1;
+        }
+        ctx->nm_store = nm_store;
+        ctx->ntot = ntot;
+    }
+    if (!up(ctx->d_sbar_re, re.data(), n * sizeof(double))) {
+        set_error("hambuild_cuda_set_sbar: upload failed");
+        return 1;
+    }
+    ctx->have_sbar = true;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee,
+                                  void *hxc, void *eeo, void *eeoee) {
+    if (!ctx) { set_error("hambuild_cuda_bulk: null ctx"); return 1; }
+    if (!ctx->have_geometry || !ctx->have_potential_bulk || !ctx->have_sbar) {
+        set_error("hambuild_cuda_bulk: geometry/potential/sbar not set");
+        return 1;
+    }
+    const int nb = ctx->nb, norb = ctx->norb, nt = ctx->ntype, nm = ctx->nn_max;
+    const size_t blk = (size_t)nb * nb * nm * nt;
+    bool ok = true;
+    if (!ctx->d_ee) {
+        ok = ok && dev_alloc((void **)&ctx->d_ee, blk * sizeof(hbc));
+        ok = ok && dev_alloc((void **)&ctx->d_hxc, blk * sizeof(hbc));
+        ok = ok && dev_alloc((void **)&ctx->d_eeo, blk * sizeof(hbc));
+        ok = ok && dev_alloc((void **)&ctx->d_eeoee, blk * sizeof(hbc));
+        if (!ok) { set_error("hambuild_cuda_bulk: output alloc failed"); return 1; }
+    }
+
+    int rc = hambuild_gpu_launch_bulk_ham(
+        ctx->d_sbar_re, norb, ctx->nm_store, ctx->ntot, ctx->d_wx0, ctx->d_wx1,
+        ctx->d_cx0, ctx->d_cx1, ctx->d_cex0, ctx->d_cex1, ctx->d_mom_bulk,
+        ctx->d_q_ss, ctx->theta_ss, ctx->d_v, ctx->d_vc, ctx->d_iz, ctx->d_nn,
+        ctx->d_atlist, ctx->d_cr, ctx->d_valid, ctx->d_shell, ctx->d_ino,
+        ctx->d_vet, ctx->h_ndi, ctx->kk, hoh, ctx->d_ee, ctx->d_hxc, norb, nb,
+        nm, nt);
+    if (rc != 0) {
+        set_error("hambuild_cuda_bulk: ham kernel failed (code " +
+                  std::to_string(rc) + ")");
+        return rc;
+    }
+
+    if (hoh) {
+        /* eeo(:,:,m,t) = ee(:,:,m,t) * obarm(:,:,ji);
+         * eeoee(:,:,m,t) = eeo(:,:,m,t) * ee(:,:,m,t)^H.
+         * ji = iz(jj) with jj = nn(ia,m) (m>0) or ia (m==0); absent -> zero eeo.
+         * ji varies per (t,m), so use cublasZgemmBatched with pointer arrays. */
+        cudaMemset(ctx->d_eeo, 0, blk * sizeof(hbc));
+        cudaMemset(ctx->d_eeoee, 0, blk * sizeof(hbc));
+
+        const int ndi = ctx->h_ndi;
+        std::vector<const hbc *> Aptr, Bptr; std::vector<hbc *> Cptr;
+        std::vector<const hbc *> A2, B2; std::vector<hbc *> C2;
+        const size_t slab = (size_t)nb * nb;
+        for (int t = 0; t < nt; ++t) {
+            int ia = ctx->h_atlist[t] - 1;
+            int nr = ctx->h_nn[ia + (size_t)ndi * 0];
+            for (int m = 0; m < nr; ++m) {
+                int jj = (m == 0) ? (ia + 1) : ctx->h_nn[ia + (size_t)ndi * m];
+                int vld = ctx->h_valid[m + (size_t)nm * t];
+                int ji = 0;
+                if (jj != 0 && vld != 0) ji = ctx->h_iz[jj - 1];
+                if (ji <= 0) continue; /* leave eeo/eeoee zero for this (t,m) */
+                size_t off = slab * (m + (size_t)nm * t);
+                Aptr.push_back(ctx->d_ee + off);
+                Bptr.push_back(ctx->d_obarm + slab * (ji - 1));
+                Cptr.push_back(ctx->d_eeo + off);
+            }
+        }
+        int batch = (int)Aptr.size();
+        if (batch > 0) {
+            const hbc **dA, **dB; hbc **dC;
+            cudaMalloc((void **)&dA, batch * sizeof(hbc *));
+            cudaMalloc((void **)&dB, batch * sizeof(hbc *));
+            cudaMalloc((void **)&dC, batch * sizeof(hbc *));
+            cudaMemcpy(dA, Aptr.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            cudaMemcpy(dB, Bptr.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            cudaMemcpy(dC, Cptr.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            hbc one = make_cuDoubleComplex(1.0, 0.0);
+            hbc zero = make_cuDoubleComplex(0.0, 0.0);
+            /* eeo = ee * obarm  (n,n) */
+            cublasZgemmBatched(ctx->cublas, CUBLAS_OP_N, CUBLAS_OP_N, nb, nb, nb,
+                               &one, dA, nb, dB, nb, &zero, dC, nb, batch);
+            /* eeoee = eeo * ee^H  ('n','c'); reuse eeo(dC) as A2, ee(dA) as B2 */
+            std::vector<hbc *> C2p;
+            for (int t = 0; t < nt; ++t) {
+                int ia = ctx->h_atlist[t] - 1;
+                int nr = ctx->h_nn[ia + (size_t)ndi * 0];
+                for (int m = 0; m < nr; ++m) {
+                    int jj = (m == 0) ? (ia + 1) : ctx->h_nn[ia + (size_t)ndi * m];
+                    int vld = ctx->h_valid[m + (size_t)nm * t];
+                    int ji = 0;
+                    if (jj != 0 && vld != 0) ji = ctx->h_iz[jj - 1];
+                    if (ji <= 0) continue;
+                    size_t off = slab * (m + (size_t)nm * t);
+                    C2p.push_back(ctx->d_eeoee + off);
+                }
+            }
+            hbc **dC2;
+            cudaMalloc((void **)&dC2, batch * sizeof(hbc *));
+            cudaMemcpy(dC2, C2p.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            cublasZgemmBatched(ctx->cublas, CUBLAS_OP_N, CUBLAS_OP_C, nb, nb, nb,
+                               &one, (const hbc **)dC, nb, dA, nb, &zero, dC2, nb,
+                               batch);
+            cudaDeviceSynchronize();
+            cudaFree(dA); cudaFree(dB); cudaFree(dC); cudaFree(dC2);
+        }
+    }
+
+    /* Copy outputs back to host. */
+    ok = true;
+    if (ee)  ok = ok && down(ee, ctx->d_ee, blk * sizeof(hbc));
+    if (hxc) ok = ok && down(hxc, ctx->d_hxc, blk * sizeof(hbc));
+    if (hoh && eeo)   ok = ok && down(eeo, ctx->d_eeo, blk * sizeof(hbc));
+    if (hoh && eeoee) ok = ok && down(eeoee, ctx->d_eeoee, blk * sizeof(hbc));
+    if (!ok) { set_error("hambuild_cuda_bulk: copy back failed"); return 1; }
     return 0;
 }

@@ -90,3 +90,28 @@ int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid, int *shell,
     (void)ctx; (void)valid; (void)shell; (void)ino; (void)vet;
     return 1;
 }
+
+int hambuild_cuda_set_potential_bulk(hambuild_ctx *ctx, const void *wx0,
+                                     const void *wx1, const void *cx0,
+                                     const void *cx1, const void *cex0,
+                                     const void *cex1, const double *mom,
+                                     const double *q_ss, double theta_ss)
+{
+    (void)ctx; (void)wx0; (void)wx1; (void)cx0; (void)cx1; (void)cex0;
+    (void)cex1; (void)mom; (void)q_ss; (void)theta_ss;
+    return 1;
+}
+
+int hambuild_cuda_set_sbar(hambuild_ctx *ctx, const void *sbar, int nm_store,
+                           int ntot)
+{
+    (void)ctx; (void)sbar; (void)nm_store; (void)ntot;
+    return 1;
+}
+
+int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee, void *hxc,
+                       void *eeo, void *eeoee)
+{
+    (void)ctx; (void)hoh; (void)ee; (void)hxc; (void)eeo; (void)eeoee;
+    return 1;
+}

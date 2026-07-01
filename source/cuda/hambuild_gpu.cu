@@ -46,6 +46,9 @@
 
 #include <cuComplex.h>
 
+/* Match the Fortran math_mod pi exactly (bit-for-bit spin-spiral phase). */
+#define HB_PI 3.14159265358979323846
+
 /* Interleaved complex(rp) with rp=real64 maps 1:1 to cuDoubleComplex. */
 typedef cuDoubleComplex hbc;
 
@@ -509,6 +512,188 @@ extern "C" int hambuild_gpu_launch_geometry_maps(
     k_build_geometry_maps<<<grid, threads>>>(
         d_cr, d_num, d_iz, d_nn, d_atlist, d_vet_in, use_vet_in, kk, nn_max, ndi,
         alat, r2, d_hv_scratch, d_valid, d_shell, d_ino, d_vet);
+    if (HB_DEVICE_SYNC() != HB_SUCCESS) return 1;
+    if (HB_GET_LAST_ERR() != HB_SUCCESS) return 2;
+    return 0;
+}
+
+/* ===========================================================================
+ * Phase 2: bulk/local neighbour Hamiltonian (chbar_nc body).
+ *
+ * Mirrors hamiltonian.f90:ham0m_nc + the 4x hcpx in chbar_nc + the spinor pack
+ * in build_bulkham. One thread block per (type t, neighbour m). Threads cover
+ * norb*norb elements.
+ *
+ * hhh(ilm,jlm) = real(sbar(jlm, ilm, shell, ino))  (note transpose + real, as
+ * the CPU hmfind does). shell/ino are 1-based; convert to 0-based here.
+ * ------------------------------------------------------------------------- */
+__global__ void k_build_bulk_ham(
+    const double *sbar_re, int norb_s, int nm_store, int ntot,
+    const hbc *wx0, const hbc *wx1, const hbc *cx0, const hbc *cx1,
+    const hbc *cex0, const hbc *cex1, const double *mom, const double *q_ss,
+    double theta_ss, const hbc *v, const hbc *vc,
+    const int *iz, const int *nn, const int *atlist, const double *cr,
+    const int *valid, const int *shell, const int *ino, const double *vet,
+    int ndi, int kk, int hoh, hbc *ee, hbc *hxc, int norb, int nb, int nn_max,
+    int ntype) {
+    int t = blockIdx.y;         /* atom type (0-based) */
+    int m = blockIdx.x;         /* neighbour (0-based) */
+    if (t >= ntype || m >= nn_max) return;
+    int tid = threadIdx.x;
+    int nn2 = norb * norb;
+
+    int ia = atlist[t] - 1;     /* 0-based cluster atom */
+    int nr = nn[ia + ndi * 0];  /* neighbour count */
+    int mapidx = m + nn_max * t;
+
+    hbc *out_ee = ee + (size_t)nb * nb * (m + nn_max * t);
+    hbc *out_hxc = hxc + (size_t)nb * nb * (m + nn_max * t);
+
+    /* Zero the whole nb x nb output block first (covers absent neighbours). */
+    for (int idx = tid; idx < nb * nb; idx += blockDim.x) {
+        out_ee[idx] = make_cuDoubleComplex(0.0, 0.0);
+        out_hxc[idx] = make_cuDoubleComplex(0.0, 0.0);
+    }
+    __syncthreads();
+
+    if (m >= nr) return;        /* only nr neighbours are meaningful */
+
+    /* jj = nn(ia,m+1); m==0 -> jj=ia (1-based bookkeeping like CPU). */
+    int jj1 = (m == 0) ? (ia + 1) : nn[ia + ndi * m];
+    if (jj1 == 0) return;       /* absent neighbour: leave zeros */
+    int jj = jj1 - 1;
+    int it = iz[ia];            /* 1-based type indices for potential lookup */
+    int jt = iz[jj];
+
+    int sh = shell[mapidx] - 1; /* 0-based sbar shell */
+    int io = ino[mapidx] - 1;   /* 0-based sbar type */
+
+    /* moments (with optional spin-spiral override) */
+    double mia[3], mja[3];
+    const double *momit = mom + 3 * (it - 1);
+    const double *momjt = mom + 3 * (jt - 1);
+    mia[0] = momit[0]; mia[1] = momit[1]; mia[2] = momit[2];
+    mja[0] = momjt[0]; mja[1] = momjt[1]; mja[2] = momjt[2];
+    double qn = q_ss[0]*q_ss[0] + q_ss[1]*q_ss[1] + q_ss[2]*q_ss[2];
+    if (sqrt(qn) > 1.0e-5 || fabs(sin(theta_ss)) > 1.0e-8) {
+        const double *ria = cr + 3 * ia;
+        const double *rja = cr + 3 * jj;
+        double pia = 2.0 * HB_PI * (ria[0]*q_ss[0] + ria[1]*q_ss[1] + ria[2]*q_ss[2]);
+        double pja = 2.0 * HB_PI * (rja[0]*q_ss[0] + rja[1]*q_ss[1] + rja[2]*q_ss[2]);
+        double st = sin(theta_ss), ct = cos(theta_ss);
+        mia[0] = cos(pia)*st; mia[1] = sin(pia)*st; mia[2] = ct;
+        mja[0] = cos(pja)*st; mja[1] = sin(pja)*st; mja[2] = ct;
+    }
+    double dotp = mia[0]*mja[0] + mia[1]*mja[1] + mia[2]*mja[2];
+    double crx = mia[1]*mja[2] - mia[2]*mja[1];
+    double cry = mia[2]*mja[0] - mia[0]*mja[2];
+    double crz = mia[0]*mja[1] - mia[1]*mja[0];
+    double crs[3] = {crx, cry, crz};
+
+    double vx = vet[3*mapidx+0], vy = vet[3*mapidx+1], vz = vet[3*mapidx+2];
+    double vv = sqrt(vx*vx + vy*vy + vz*vz);
+
+    /* per-type potential vectors */
+    const hbc *wx0i = wx0 + (size_t)norb*(it-1), *wx1i = wx1 + (size_t)norb*(it-1);
+    const hbc *wx0j = wx0 + (size_t)norb*(jt-1), *wx1j = wx1 + (size_t)norb*(jt-1);
+    const hbc *cx0i = cx0 + (size_t)norb*(it-1), *cx1i = cx1 + (size_t)norb*(it-1);
+    const hbc *cex0i = cex0 + (size_t)norb*(it-1), *cex1i = cex1 + (size_t)norb*(it-1);
+
+    /* shared: 4 cart matrices (nn2 each) + hcpx tmp (nn2) + hcpx res (nn2) */
+    extern __shared__ hbc shp[];
+    hbc *H1 = shp, *H2 = shp + nn2, *H3 = shp + 2*nn2, *H4 = shp + 3*nn2;
+    hbc *tmp = shp + 4*nn2, *res = shp + 5*nn2;
+
+    /* Build the four cart matrices H(:,:,mdir) exactly as ham0m_nc. Indices:
+     * ilm = row, jlm = col (Fortran hhmag(ilm,jlm,mdir)); we store col-major. */
+    for (int idx = tid; idx < nn2; idx += blockDim.x) {
+        int ilm = idx % norb, jlm = idx / norb;
+        double hh = sbar_re[(size_t)jlm + norb_s*((size_t)ilm + norb_s*((size_t)sh + nm_store*(size_t)io))];
+        hbc hc = make_cuDoubleComplex(hh, 0.0);
+        hbc a = hb_mul(hb_mul(wx0i[ilm], hc), wx0j[jlm]);
+        hbc b = hb_scale(hb_mul(hb_mul(wx1i[ilm], hc), wx1j[jlm]), dotp);
+        hbc H4v = hb_add(a, b);
+        if (vv <= 0.01 && ilm == jlm) {
+            H4v = hb_add(H4v, hoh ? cex0i[ilm] : cx0i[ilm]);
+        }
+        H4[idx] = H4v;
+        hbc w1i_hh_w0j = hb_mul(hb_mul(wx1i[ilm], hc), wx0j[jlm]);
+        hbc w0i_hh_w1j = hb_mul(hb_mul(wx0i[ilm], hc), wx1j[jlm]);
+        hbc w1i_hh_w1j = hb_mul(hb_mul(wx1i[ilm], hc), wx1j[jlm]);
+        hbc *Hm[3] = {H1, H2, H3};
+        for (int mm = 0; mm < 3; ++mm) {
+            hbc term = hb_add(hb_scale(w1i_hh_w0j, mia[mm]),
+                              hb_scale(w0i_hh_w1j, mja[mm]));
+            term = hb_add(term, hb_imul(hb_scale(w1i_hh_w1j, crs[mm])));
+            if (vv <= 0.01 && ilm == jlm) {
+                hbc add = hb_scale(hoh ? cex1i[ilm] : cx1i[ilm], mia[mm]);
+                term = hb_add(term, add);
+            }
+            Hm[mm][idx] = term;
+        }
+    }
+    __syncthreads();
+
+    /* hcpx cart2sph each of the 4 in place (via tmp/res). */
+    hbc *slabs[4] = {H1, H2, H3, H4};
+    for (int s = 0; s < 4; ++s) {
+        for (int idx = tid; idx < nn2; idx += blockDim.x) {
+            int i = idx % norb, j = idx / norb;
+            hbc acc = make_cuDoubleComplex(0.0, 0.0);
+            for (int b = 0; b < norb; ++b)
+                acc = hb_add(acc, hb_mul(slabs[s][cmidx(i, b, norb)], v[cmidx(b, j, norb)]));
+            tmp[idx] = acc;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < nn2; idx += blockDim.x) {
+            int i = idx % norb, j = idx / norb;
+            hbc acc = make_cuDoubleComplex(0.0, 0.0);
+            for (int a = 0; a < norb; ++a)
+                acc = hb_add(acc, hb_mul(vc[cmidx(i, a, norb)], tmp[cmidx(a, j, norb)]));
+            res[idx] = acc;
+        }
+        __syncthreads();
+        for (int idx = tid; idx < nn2; idx += blockDim.x) slabs[s][idx] = res[idx];
+        __syncthreads();
+    }
+
+    /* pack into ee/hxc: CPU indexes hmag(j,i,m,mdir), j=row, i=col. */
+    for (int idx = tid; idx < nn2; idx += blockDim.x) {
+        int j = idx % norb, i = idx / norb;
+        hbc h1 = H1[cmidx(j, i, norb)];
+        hbc h2 = H2[cmidx(j, i, norb)];
+        hbc h3 = H3[cmidx(j, i, norb)];
+        hbc h4 = H4[cmidx(j, i, norb)];
+        hbc h1mih2 = hb_sub(h1, hb_imul(h2));
+        hbc h1pih2 = hb_add(h1, hb_imul(h2));
+        out_ee[cmidx(j, i, nb)]            = hb_add(h4, h3);
+        out_ee[cmidx(j+norb, i+norb, nb)]  = hb_sub(h4, h3);
+        out_ee[cmidx(j, i+norb, nb)]       = h1mih2;
+        out_ee[cmidx(j+norb, i, nb)]       = h1pih2;
+        out_hxc[cmidx(j, i, nb)]           = h3;
+        out_hxc[cmidx(j+norb, i+norb, nb)] = hb_sub(make_cuDoubleComplex(0.0,0.0), h3);
+        out_hxc[cmidx(j, i+norb, nb)]      = h1mih2;
+        out_hxc[cmidx(j+norb, i, nb)]      = h1pih2;
+    }
+}
+
+extern "C" int hambuild_gpu_launch_bulk_ham(
+    const double *d_sbar_re, int norb_s, int nm_store, int ntot,
+    const hbc *d_wx0, const hbc *d_wx1, const hbc *d_cx0, const hbc *d_cx1,
+    const hbc *d_cex0, const hbc *d_cex1, const double *d_mom,
+    const double *d_q_ss, double theta_ss, const hbc *d_v, const hbc *d_vc,
+    const int *d_iz, const int *d_nn, const int *d_atlist, const double *d_cr,
+    const int *d_valid, const int *d_shell, const int *d_ino, const double *d_vet,
+    int ndi, int kk, int hoh, hbc *d_ee, hbc *d_hxc, int norb, int nb,
+    int nn_max, int ntype) {
+    int threads = 128;
+    dim3 grid(nn_max, ntype);
+    size_t shmem = (size_t)6 * norb * norb * sizeof(hbc);
+    k_build_bulk_ham<<<grid, threads, shmem>>>(
+        d_sbar_re, norb_s, nm_store, ntot, d_wx0, d_wx1, d_cx0, d_cx1, d_cex0,
+        d_cex1, d_mom, d_q_ss, theta_ss, d_v, d_vc, d_iz, d_nn, d_atlist, d_cr,
+        d_valid, d_shell, d_ino, d_vet, ndi, kk, hoh, d_ee, d_hxc, norb, nb,
+        nn_max, ntype);
     if (HB_DEVICE_SYNC() != HB_SUCCESS) return 1;
     if (HB_GET_LAST_ERR() != HB_SUCCESS) return 2;
     return 0;
