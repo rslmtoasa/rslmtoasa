@@ -386,3 +386,130 @@ extern "C" int hambuild_gpu_launch_onsite(
     if (HB_GET_LAST_ERR() != HB_SUCCESS) return 2;
     return 0;
 }
+
+/* ===========================================================================
+ * Phase 1.5: geometry maps (clusba filter + hmfind match), once per run.
+ *
+ * Mirrors hamiltonian.f90:chbar_nc's per-(type,neighbour) preamble and
+ * lattice.f90:clusba / hamiltonian.f90:hmfind. One thread block per atom type.
+ *
+ * All integer geometry arrays are the raw 1-based Fortran indices; we subtract 1
+ * where used as a 0-based offset. Column-major throughout:
+ *   cr(3,kk):   cr[i + 3*a]            (a = 0-based cluster atom)
+ *   nn(ndi,nn_max): nn[ia + ndi*(m)]   (ia,m 0-based; nn(ia,1)->m=0 is the count)
+ *
+ * Outputs per (m, type) with column-major (nn_max, ntype):
+ *   valid[m + nn_max*t]  = ni (1 found / 0 not found), 0 when jj==0
+ *   shell[m + nn_max*t]  = m+1 (1-based sbar shell index; matches CPU)
+ *   ino[m + nn_max*t]    = num(ia) (1-based sbar type index)
+ *   vet[3*(m + nn_max*t) + i] = displacement vector components (already *alat)
+ * ------------------------------------------------------------------------- */
+__global__ void k_build_geometry_maps(
+    const double *cr, const int *num, const int *iz, const int *nn,
+    const int *atlist, const double *vet_in, int use_vet_in, int kk, int nn_max,
+    int ndi, double alat, double r2, double *hv_scratch, int *valid, int *shell,
+    int *ino, double *vet) {
+    int t = blockIdx.x;        /* atom type (0-based) */
+    int tid = threadIdx.x;
+
+    int ia = atlist[t] - 1;    /* cluster atom index for this type (0-based) */
+    int numia = num[ia];       /* 1-based sbar type index */
+    int nr = nn[ia + ndi * 0]; /* nn(ia,1): neighbour count */
+
+    /* clusba: build ham_vec for this ia -- the compacted list of displacement
+     * vectors of cluster atoms within r2, in sequential order (index 1 is the
+     * zero self-vector). Stored in a per-block slice of global scratch (3 x kk)
+     * so it scales past the shared-memory limit; this kernel runs once per run.
+     * The sequential compaction (ii=ii+1) is done by a single thread to preserve
+     * the exact ordering hmfind searches. */
+    double *hv = hv_scratch + (size_t)3 * kk * t; /* this block's ham_vec */
+    __shared__ int s_count;
+
+    /* CPU passes cralat = cr*alat to clusba, so ham_vec (and the r2 threshold)
+     * are in alat units. We mirror that: hv holds (cr diff)*alat and r2 is the
+     * same alat^2 threshold the CPU uses. */
+    if (tid == 0) {
+        int ii = 0;            /* 0-based; CPU ii starts at 1 with entry 1 = 0 */
+        hv[3 * ii + 0] = 0.0;
+        hv[3 * ii + 1] = 0.0;
+        hv[3 * ii + 2] = 0.0;
+        for (int a = 0; a < kk; ++a) {
+            double d0 = (cr[3 * a + 0] - cr[3 * ia + 0]) * alat;
+            double d1 = (cr[3 * a + 1] - cr[3 * ia + 1]) * alat;
+            double d2 = (cr[3 * a + 2] - cr[3 * ia + 2]) * alat;
+            double s1 = d0 * d0 + d1 * d1 + d2 * d2;
+            if (s1 < r2 && s1 > 0.0001) {
+                ii += 1;
+                hv[3 * ii + 0] = d0;
+                hv[3 * ii + 1] = d1;
+                hv[3 * ii + 2] = d2;
+            }
+        }
+        s_count = ii + 1; /* number of valid entries (CPU n = ii) */
+    }
+    __syncthreads();
+
+    const double eps = 0.0001;
+    /* Each thread handles a set of neighbours m. */
+    for (int m = tid; m < nr; m += blockDim.x) {
+        int outidx = m + nn_max * t;
+        /* jj = nn(ia, m+1); for m==0 (CPU m==1) jj = ia */
+        int jj;
+        if (m == 0)
+            jj = ia + 1; /* keep 1-based to match nn storage; converted below */
+        else
+            jj = nn[ia + ndi * m];
+
+        shell[outidx] = m + 1;
+        ino[outidx] = numia;
+
+        if (jj == 0) {
+            valid[outidx] = 0;
+            vet[3 * outidx + 0] = 0.0;
+            vet[3 * outidx + 1] = 0.0;
+            vet[3 * outidx + 2] = 0.0;
+            continue;
+        }
+        int jj0 = jj - 1; /* 0-based */
+
+        double v0, v1, v2;
+        if (use_vet_in) {
+            v0 = vet_in[3 * outidx + 0];
+            v1 = vet_in[3 * outidx + 1];
+            v2 = vet_in[3 * outidx + 2];
+        } else {
+            v0 = (cr[3 * jj0 + 0] - cr[3 * ia + 0]) * alat;
+            v1 = (cr[3 * jj0 + 1] - cr[3 * ia + 1]) * alat;
+            v2 = (cr[3 * jj0 + 2] - cr[3 * ia + 2]) * alat;
+        }
+        vet[3 * outidx + 0] = v0;
+        vet[3 * outidx + 1] = v1;
+        vet[3 * outidx + 2] = v2;
+
+        /* hmfind: search ham_vec (s_hv, alat units) for a match to vet (also
+         * alat units); ni=1 if found else 0. */
+        int ni = 0;
+        for (int i = 0; i < s_count; ++i) {
+            double a0 = v0 - hv[3 * i + 0];
+            double a1 = v1 - hv[3 * i + 1];
+            double a2 = v2 - hv[3 * i + 2];
+            if (a0 * a0 + a1 * a1 + a2 * a2 < eps) { ni = 1; break; }
+        }
+        valid[outidx] = ni;
+    }
+}
+
+extern "C" int hambuild_gpu_launch_geometry_maps(
+    const double *d_cr, const int *d_num, const int *d_iz, const int *d_nn,
+    const int *d_atlist, const double *d_vet_in, int use_vet_in, int kk,
+    int nn_max, int ndi, double alat, double r2, int ntype, double *d_hv_scratch,
+    int *d_valid, int *d_shell, int *d_ino, double *d_vet) {
+    int threads = 128;
+    dim3 grid(ntype);
+    k_build_geometry_maps<<<grid, threads>>>(
+        d_cr, d_num, d_iz, d_nn, d_atlist, d_vet_in, use_vet_in, kk, nn_max, ndi,
+        alat, r2, d_hv_scratch, d_valid, d_shell, d_ino, d_vet);
+    if (HB_DEVICE_SYNC() != HB_SUCCESS) return 1;
+    if (HB_GET_LAST_ERR() != HB_SUCCESS) return 2;
+    return 0;
+}

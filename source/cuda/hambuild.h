@@ -91,6 +91,49 @@ int hambuild_cuda_set_potential_onsite(hambuild_ctx *ctx, const double *xi_p,
 int hambuild_cuda_onsite(hambuild_ctx *ctx, void *lsham, void *obarm,
                          void *enim);
 
+/* --- Phase 1.5: geometry maps (once per run; geometry is fixed across SCF) ----
+ *
+ * The per-SCF hot loop gathers from resident tables built here, so the neighbour
+ * search (clusba distance filter + hmfind match) runs once at setup rather than
+ * every SCF. All arrays are Fortran column-major.
+ *
+ * Static geometry upload (integer arrays are 1-based Fortran indices, kept as-is;
+ * the kernels convert to 0-based internally):
+ *   cr     : real64 3*kk   cluster positions (in lattice units; *alat on device)
+ *   num    : int    kk     bravais/structure-constant type per cluster atom
+ *   iz     : int    kk     atom type per cluster atom
+ *   nn     : int    ndi*nn_max  neighbour table (col-major (ndi,nn_max)); nn(ia,1)
+ *                          holds the neighbour count nr for atom ia
+ *   atlist : int    ntype  cluster atom index (ia) for each atom type
+ * Scalars: kk, nn_max, ndi, alat, r2. pbc!=0 selects wrapped coordinate diffs
+ * (currently the non-pbc straight difference is implemented; pbc falls back to
+ * host-provided vet -- see set_geometry_vet).
+ */
+int hambuild_cuda_set_geometry(hambuild_ctx *ctx, const double *cr,
+                               const int *num, const int *iz, const int *nn,
+                               const int *atlist, int kk, int nn_max, int ndi,
+                               double alat, double r2, int pbc);
+
+/* For pbc (or any case where the host already has the exact vet per (type,m)),
+ * upload the precomputed displacement vectors: vet is real64 3*nn_max*ntype,
+ * col-major (3, nn_max, ntype). When provided, the geometry-map builder uses
+ * these directly instead of recomputing the straight coordinate difference. */
+int hambuild_cuda_set_geometry_vet(hambuild_ctx *ctx, const double *vet);
+
+/* Build the resident neigh_map + vet tables from the uploaded geometry (runs the
+ * clusba filter + hmfind match on-device). Must be called after set_geometry
+ * (and set_geometry_vet if pbc) and before the Phase-2 hot loop. */
+int hambuild_cuda_build_geometry_maps(hambuild_ctx *ctx);
+
+/* Validation getter: copy the built maps back to the host.
+ *   valid : int    nn_max*ntype   1 if neighbour found (hmfind ni), else 0
+ *   shell : int    nn_max*ntype   sbar shell index m (1-based, as CPU uses)
+ *   ino   : int    nn_max*ntype   sbar type index num(ia) (1-based)
+ *   vet   : real64 3*nn_max*ntype the displacement vectors used
+ * Any pointer may be NULL. Lets Phase 1.5 be diffed against CPU hmfind exactly. */
+int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid, int *shell,
+                                    int *ino, double *vet);
+
 #ifdef __cplusplus
 }
 #endif

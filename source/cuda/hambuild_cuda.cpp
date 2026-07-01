@@ -23,7 +23,7 @@
 
 typedef cuDoubleComplex hbc;
 
-/* Kernel launcher implemented in hambuild_gpu.cu. */
+/* Kernel launchers implemented in hambuild_gpu.cu. */
 extern "C" int hambuild_gpu_launch_onsite(
     const hbc *d_v, const hbc *d_vc, const hbc *d_lx, const hbc *d_ly,
     const hbc *d_lz, const double *d_xi_p, const double *d_xi_d,
@@ -31,6 +31,12 @@ extern "C" int hambuild_gpu_launch_onsite(
     const hbc *d_cex, const double *d_mom, const double *d_lmom, int orb_pol,
     hbc *d_lsham, hbc *d_obarm, hbc *d_enim, int norb, int nb, int ntype,
     int want_lsham);
+
+extern "C" int hambuild_gpu_launch_geometry_maps(
+    const double *d_cr, const int *d_num, const int *d_iz, const int *d_nn,
+    const int *d_atlist, const double *d_vet_in, int use_vet_in, int kk,
+    int nn_max, int ndi, double alat, double r2, int ntype, double *d_hv_scratch,
+    int *d_valid, int *d_shell, int *d_ino, double *d_vet);
 
 struct hambuild_ctx {
     int nb = 0;
@@ -54,6 +60,21 @@ struct hambuild_ctx {
     bool have_potential = false;
     /* outputs */
     hbc *d_lsham = nullptr, *d_obarm = nullptr, *d_enim = nullptr;
+
+    /* --- Phase 1.5 geometry maps --- */
+    int kk = 0, nn_max = 0, ndi = 0, pbc = 0;
+    double alat = 0.0, r2 = 0.0;
+    double *d_cr = nullptr;             /* 3*kk */
+    int *d_num = nullptr, *d_iz = nullptr; /* kk */
+    int *d_nn = nullptr;                /* ndi*nn_max */
+    int *d_atlist = nullptr;            /* ntype */
+    double *d_vet_in = nullptr;         /* 3*nn_max*ntype (pbc/precomputed) */
+    bool have_vet_in = false;
+    double *d_hv_scratch = nullptr;     /* 3*kk*ntype clusba scratch */
+    /* resident maps: (nn_max, ntype) col-major */
+    int *d_valid = nullptr, *d_shell = nullptr, *d_ino = nullptr;
+    double *d_vet = nullptr;            /* 3*nn_max*ntype */
+    bool have_geometry = false;
 };
 
 static std::string g_hambuild_err;
@@ -133,6 +154,11 @@ extern "C" void hambuild_cuda_destroy(hambuild_ctx *ctx) {
     cudaFree(ctx->d_obx0); cudaFree(ctx->d_obx1);
     cudaFree(ctx->d_cx); cudaFree(ctx->d_cex);
     cudaFree(ctx->d_lsham); cudaFree(ctx->d_obarm); cudaFree(ctx->d_enim);
+    cudaFree(ctx->d_cr); cudaFree(ctx->d_num); cudaFree(ctx->d_iz);
+    cudaFree(ctx->d_nn); cudaFree(ctx->d_atlist); cudaFree(ctx->d_vet_in);
+    cudaFree(ctx->d_hv_scratch);
+    cudaFree(ctx->d_valid); cudaFree(ctx->d_shell); cudaFree(ctx->d_ino);
+    cudaFree(ctx->d_vet);
     delete ctx;
 }
 
@@ -207,5 +233,111 @@ extern "C" int hambuild_cuda_onsite(hambuild_ctx *ctx, void *lsham, void *obarm,
     if (obarm) ok = ok && down(obarm, ctx->d_obarm, blk);
     if (enim)  ok = ok && down(enim, ctx->d_enim, blk);
     if (!ok) { set_error("hambuild_cuda_onsite: device->host copy failed"); return 1; }
+    return 0;
+}
+
+/* --- Phase 1.5: geometry maps -------------------------------------------- */
+
+extern "C" int hambuild_cuda_set_geometry(hambuild_ctx *ctx, const double *cr,
+                                          const int *num, const int *iz,
+                                          const int *nn, const int *atlist,
+                                          int kk, int nn_max, int ndi,
+                                          double alat, double r2, int pbc) {
+    if (!ctx) { set_error("hambuild_cuda_set_geometry: null ctx"); return 1; }
+    if (kk <= 0 || nn_max <= 0 || ndi <= 0) {
+        set_error("hambuild_cuda_set_geometry: bad geometry dimensions");
+        return 1;
+    }
+    const int nt = ctx->ntype;
+    /* (Re)allocate geometry buffers if the dimensions changed. */
+    bool realloc = (kk != ctx->kk || nn_max != ctx->nn_max || ndi != ctx->ndi ||
+                    ctx->d_cr == nullptr);
+    ctx->kk = kk; ctx->nn_max = nn_max; ctx->ndi = ndi;
+    ctx->alat = alat; ctx->r2 = r2; ctx->pbc = pbc;
+    bool ok = true;
+    if (realloc) {
+        cudaFree(ctx->d_cr); cudaFree(ctx->d_num); cudaFree(ctx->d_iz);
+        cudaFree(ctx->d_nn); cudaFree(ctx->d_atlist); cudaFree(ctx->d_vet_in);
+        cudaFree(ctx->d_hv_scratch);
+        cudaFree(ctx->d_valid); cudaFree(ctx->d_shell); cudaFree(ctx->d_ino);
+        cudaFree(ctx->d_vet);
+        ctx->d_cr = ctx->d_vet_in = ctx->d_hv_scratch = ctx->d_vet = nullptr;
+        ctx->d_num = ctx->d_iz = ctx->d_nn = ctx->d_atlist = nullptr;
+        ctx->d_valid = ctx->d_shell = ctx->d_ino = nullptr;
+        ok = ok && dev_alloc((void **)&ctx->d_cr, 3 * (size_t)kk * sizeof(double));
+        ok = ok && dev_alloc((void **)&ctx->d_num, (size_t)kk * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_iz, (size_t)kk * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_nn, (size_t)ndi * nn_max * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_atlist, (size_t)nt * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_vet_in, 3 * (size_t)nn_max * nt * sizeof(double));
+        ok = ok && dev_alloc((void **)&ctx->d_hv_scratch, 3 * (size_t)kk * nt * sizeof(double));
+        ok = ok && dev_alloc((void **)&ctx->d_valid, (size_t)nn_max * nt * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_shell, (size_t)nn_max * nt * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_ino, (size_t)nn_max * nt * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_vet, 3 * (size_t)nn_max * nt * sizeof(double));
+        if (!ok) { set_error("hambuild_cuda_set_geometry: allocation failed"); return 1; }
+    }
+    ok = ok && up(ctx->d_cr, cr, 3 * (size_t)kk * sizeof(double));
+    ok = ok && up(ctx->d_num, num, (size_t)kk * sizeof(int));
+    ok = ok && up(ctx->d_iz, iz, (size_t)kk * sizeof(int));
+    ok = ok && up(ctx->d_nn, nn, (size_t)ndi * nn_max * sizeof(int));
+    ok = ok && up(ctx->d_atlist, atlist, (size_t)nt * sizeof(int));
+    if (!ok) { set_error("hambuild_cuda_set_geometry: upload failed"); return 1; }
+    ctx->have_vet_in = false;
+    ctx->have_geometry = false; /* maps must be rebuilt */
+    return 0;
+}
+
+extern "C" int hambuild_cuda_set_geometry_vet(hambuild_ctx *ctx,
+                                              const double *vet) {
+    if (!ctx) { set_error("hambuild_cuda_set_geometry_vet: null ctx"); return 1; }
+    if (!ctx->d_vet_in) {
+        set_error("hambuild_cuda_set_geometry_vet: call set_geometry first");
+        return 1;
+    }
+    const size_t bytes = 3 * (size_t)ctx->nn_max * ctx->ntype * sizeof(double);
+    if (!up(ctx->d_vet_in, vet, bytes)) {
+        set_error("hambuild_cuda_set_geometry_vet: upload failed");
+        return 1;
+    }
+    ctx->have_vet_in = true;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_build_geometry_maps(hambuild_ctx *ctx) {
+    if (!ctx) { set_error("hambuild_cuda_build_geometry_maps: null ctx"); return 1; }
+    if (!ctx->d_cr) {
+        set_error("hambuild_cuda_build_geometry_maps: geometry not set");
+        return 1;
+    }
+    const int rc = hambuild_gpu_launch_geometry_maps(
+        ctx->d_cr, ctx->d_num, ctx->d_iz, ctx->d_nn, ctx->d_atlist,
+        ctx->d_vet_in, ctx->have_vet_in ? 1 : 0, ctx->kk, ctx->nn_max, ctx->ndi,
+        ctx->alat, ctx->r2, ctx->ntype, ctx->d_hv_scratch, ctx->d_valid,
+        ctx->d_shell, ctx->d_ino, ctx->d_vet);
+    if (rc != 0) {
+        set_error("hambuild_cuda_build_geometry_maps: kernel failed (code " +
+                  std::to_string(rc) + ")");
+        return rc;
+    }
+    ctx->have_geometry = true;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid,
+                                               int *shell, int *ino,
+                                               double *vet) {
+    if (!ctx) { set_error("hambuild_cuda_get_geometry_maps: null ctx"); return 1; }
+    if (!ctx->have_geometry) {
+        set_error("hambuild_cuda_get_geometry_maps: maps not built");
+        return 1;
+    }
+    const size_t ni = (size_t)ctx->nn_max * ctx->ntype;
+    bool ok = true;
+    if (valid) ok = ok && down(valid, ctx->d_valid, ni * sizeof(int));
+    if (shell) ok = ok && down(shell, ctx->d_shell, ni * sizeof(int));
+    if (ino)   ok = ok && down(ino, ctx->d_ino, ni * sizeof(int));
+    if (vet)   ok = ok && down(vet, ctx->d_vet, 3 * ni * sizeof(double));
+    if (!ok) { set_error("hambuild_cuda_get_geometry_maps: copy failed"); return 1; }
     return 0;
 }

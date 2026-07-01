@@ -61,3 +61,32 @@ int hambuild_cuda_onsite(hambuild_ctx *ctx, void *lsham, void *obarm,
     (void)ctx; (void)lsham; (void)obarm; (void)enim;
     return 1;
 }
+
+int hambuild_cuda_set_geometry(hambuild_ctx *ctx, const double *cr,
+                               const int *num, const int *iz, const int *nn,
+                               const int *atlist, int kk, int nn_max, int ndi,
+                               double alat, double r2, int pbc)
+{
+    (void)ctx; (void)cr; (void)num; (void)iz; (void)nn; (void)atlist;
+    (void)kk; (void)nn_max; (void)ndi; (void)alat; (void)r2; (void)pbc;
+    return 1;
+}
+
+int hambuild_cuda_set_geometry_vet(hambuild_ctx *ctx, const double *vet)
+{
+    (void)ctx; (void)vet;
+    return 1;
+}
+
+int hambuild_cuda_build_geometry_maps(hambuild_ctx *ctx)
+{
+    (void)ctx;
+    return 1;
+}
+
+int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid, int *shell,
+                                    int *ino, double *vet)
+{
+    (void)ctx; (void)valid; (void)shell; (void)ino; (void)vet;
+    return 1;
+}

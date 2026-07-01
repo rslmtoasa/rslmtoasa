@@ -21,6 +21,7 @@
 
 module hamiltonian_mod
 
+   use iso_c_binding, only: c_int, c_double
    use mpi_mod, only: rank
    use control_mod
    use symbolic_atom_mod
@@ -127,6 +128,8 @@ module hamiltonian_mod
       !> GPU Hamiltonian-assembly backend (opaque device context lives on the C
       !> side so assembled arrays stay resident for the recursion backend).
       type(hambuild_cuda_backend) :: gpu_hambuild
+      !> Whether the GPU geometry maps (Phase 1.5) have been built this run.
+      logical :: gpu_geometry_ready = .false.
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -305,6 +308,135 @@ contains
 
       deallocate(xi_p, xi_d, rac_eff, mom, lmom_eff, obx0, obx1, cxarr, cexarr)
    end subroutine assemble_onsite_gpu
+
+   !---------------------------------------------------------------------------
+   !> @brief Upload geometry + build the GPU neigh_map/vet tables (Phase 1.5).
+   !>
+   !> Runs once (geometry is fixed across SCF). Uploads cr/num/iz/nn/atlist and,
+   !> for pbc, the host-computed vet; then launches the on-device clusba filter +
+   !> hmfind match. Resident maps feed the Phase-2 hot loop.
+   !---------------------------------------------------------------------------
+   subroutine build_geometry_maps_gpu(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nt, ntype, ia, m, jj, nn_max, ndi
+      integer(c_int), dimension(:), allocatable :: num_i, iz_i, atlist_i
+      integer(c_int), dimension(:, :), allocatable :: nn_i
+      real(rp), dimension(:, :, :), allocatable :: vet_host
+      real(rp), dimension(3) :: vet
+
+      nt = this%lattice%ntype
+      ndi = size(this%lattice%nn, 1)      ! = kk
+      nn_max = size(this%lattice%nn, 2)
+
+      allocate(num_i(this%lattice%kk), iz_i(this%lattice%kk))
+      allocate(atlist_i(nt), nn_i(ndi, nn_max))
+      num_i = int(this%lattice%num, c_int)
+      iz_i = int(this%lattice%iz, c_int)
+      atlist_i = int(this%lattice%atlist(1:nt), c_int)
+      nn_i = int(this%lattice%nn, c_int)
+
+      call this%gpu_hambuild%ensure_context(nb, norb, max(this%lattice%kk, 1), nt, &
+         max(this%lattice%nmax, 0))
+      call this%gpu_hambuild%set_geometry(this%lattice%cr, num_i, iz_i, nn_i, &
+         atlist_i, nn_max, ndi, this%lattice%alat, this%lattice%r2, this%lattice%pbc)
+
+      ! For pbc the displacement uses wrapped coordinates; precompute vet on the
+      ! host exactly as chbar_nc does and upload it so the device match is exact.
+      if (this%lattice%pbc) then
+         allocate(vet_host(3, nn_max, nt))
+         vet_host = 0.0_rp
+         do ntype = 1, nt
+            ia = this%lattice%atlist(ntype)
+            do m = 1, this%lattice%nn(ia, 1)
+               jj = this%lattice%nn(ia, m)
+               if (m == 1) jj = ia
+               if (jj /= 0) then
+                  call this%lattice%f_wrap_coord_diff(this%lattice%kk, &
+                     this%lattice%cr*this%lattice%alat, ia, jj, vet)
+                  vet_host(:, m, ntype) = vet
+               end if
+            end do
+         end do
+         call this%gpu_hambuild%set_geometry_vet(vet_host)
+         deallocate(vet_host)
+      end if
+
+      call this%gpu_hambuild%build_geometry_maps()
+
+      deallocate(num_i, iz_i, atlist_i, nn_i)
+   end subroutine build_geometry_maps_gpu
+
+   !---------------------------------------------------------------------------
+   !> @brief Verify GPU neigh_map/vet against the CPU chbar_nc/hmfind preamble.
+   !>
+   !> Blueprint Phase-1.5 check: the precomputed map must reproduce CPU hmfind's
+   !> (shell m -> sbar index, ni valid flag) and vet for every (ia, m). Runs the
+   !> CPU path into scratch and reports the max discrepancy to the log. Cheap;
+   !> intended as a one-shot self-check when gpu_hambuild is first used.
+   !---------------------------------------------------------------------------
+   subroutine verify_geometry_maps_gpu(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nt, ntype, ia, m, jj, ni, nn_max, ndi
+      integer :: n_valid_mismatch, n_shell_mismatch, n_ino_mismatch
+      integer(c_int), dimension(:, :), allocatable :: g_valid, g_shell, g_ino
+      real(rp), dimension(:, :, :), allocatable :: g_vet
+      real(rp), dimension(3) :: vet
+      real(rp), dimension(norb, norb) :: hhh
+      real(rp), dimension(:, :), allocatable :: ham_vec, cralat
+      real(rp) :: r2, vet_err, e
+      integer :: nn_loc, kk
+
+      nt = this%lattice%ntype
+      ndi = size(this%lattice%nn, 1)
+      nn_max = size(this%lattice%nn, 2)
+      kk = this%lattice%kk
+      r2 = this%lattice%r2
+
+      call build_geometry_maps_gpu(this)
+
+      allocate(g_valid(nn_max, nt), g_shell(nn_max, nt), g_ino(nn_max, nt))
+      allocate(g_vet(3, nn_max, nt))
+      call this%gpu_hambuild%get_geometry_maps(g_valid, g_shell, g_ino, g_vet)
+
+      allocate(cralat(3, kk))
+      cralat = this%lattice%cr(:, 1:kk)*this%lattice%alat
+      n_valid_mismatch = 0; n_shell_mismatch = 0; n_ino_mismatch = 0
+      vet_err = 0.0_rp
+
+      do ntype = 1, nt
+         ia = this%lattice%atlist(ntype)
+         nn_loc = this%lattice%nn(ia, 1)
+         allocate(ham_vec(3, nn_loc))
+         call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_loc, ham_vec)
+         do m = 1, this%lattice%nn(ia, 1)
+            jj = this%lattice%nn(ia, m)
+            if (m == 1) jj = ia
+            if (jj /= 0) then
+               if (this%lattice%pbc) then
+                  call this%lattice%f_wrap_coord_diff(this%lattice%kk, &
+                     this%lattice%cr*this%lattice%alat, ia, jj, vet)
+               else
+                  vet = (this%lattice%cr(:, jj) - this%lattice%cr(:, ia))*this%lattice%alat
+               end if
+               call this%hmfind(vet, this%lattice%nn(ia, 1), hhh, m, ia, m, ni, ham_vec)
+               ! Compare against GPU maps
+               if (g_valid(m, ntype) /= ni) n_valid_mismatch = n_valid_mismatch + 1
+               if (g_shell(m, ntype) /= m) n_shell_mismatch = n_shell_mismatch + 1
+               if (g_ino(m, ntype) /= this%lattice%num(ia)) n_ino_mismatch = n_ino_mismatch + 1
+               e = maxval(abs(g_vet(:, m, ntype) - vet))
+               if (e > vet_err) vet_err = e
+            end if
+         end do
+         deallocate(ham_vec)
+      end do
+
+      call g_logger%info('hambuild Phase-1.5 geometry-map check: valid mismatches='// &
+         fmt('i0', n_valid_mismatch)//' shell='//fmt('i0', n_shell_mismatch)// &
+         ' ino='//fmt('i0', n_ino_mismatch)//' max|vet_err|='//fmt('es12.4', vet_err), &
+         __FILE__, __LINE__)
+
+      deallocate(g_valid, g_shell, g_ino, g_vet, cralat)
+   end subroutine verify_geometry_maps_gpu
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1629,6 +1761,13 @@ contains
       if (this%hubbard_v_check) then
          if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
+      end if
+
+      ! Phase 1.5: build the resident GPU geometry maps once (geometry is fixed
+      ! across SCF) and self-check them against the CPU chbar_nc/hmfind preamble.
+      if (this%use_gpu_hambuild .and. .not. this%gpu_geometry_ready) then
+         call verify_geometry_maps_gpu(this)
+         this%gpu_geometry_ready = .true.
       end if
 
       do ntype = 1, this%charge%lattice%ntype

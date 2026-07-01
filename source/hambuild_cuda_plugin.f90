@@ -1,4 +1,4 @@
-!------------------------------------------------------------------------------
+ !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
 !
@@ -45,6 +45,10 @@ module hambuild_cuda_plugin_mod
       procedure :: set_constants
       procedure :: set_potential_onsite
       procedure :: onsite
+      procedure :: set_geometry
+      procedure :: set_geometry_vet
+      procedure :: build_geometry_maps
+      procedure :: get_geometry_maps
       procedure :: destroy
    end type hambuild_cuda_backend
 
@@ -100,6 +104,39 @@ module hambuild_cuda_plugin_mod
          type(c_ptr), value :: lsham, obarm, enim
          integer(c_int) :: hambuild_cuda_onsite
       end function hambuild_cuda_onsite
+
+      function hambuild_cuda_set_geometry(ctx, cr, num, iz, nn, atlist, kk, &
+         nn_max, ndi, alat, r2, pbc) bind(C, name='hambuild_cuda_set_geometry')
+         import :: c_int, c_ptr, c_double
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: cr, num, iz, nn, atlist
+         integer(c_int), value :: kk, nn_max, ndi, pbc
+         real(c_double), value :: alat, r2
+         integer(c_int) :: hambuild_cuda_set_geometry
+      end function hambuild_cuda_set_geometry
+
+      function hambuild_cuda_set_geometry_vet(ctx, vet) &
+         bind(C, name='hambuild_cuda_set_geometry_vet')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: vet
+         integer(c_int) :: hambuild_cuda_set_geometry_vet
+      end function hambuild_cuda_set_geometry_vet
+
+      function hambuild_cuda_build_geometry_maps(ctx) &
+         bind(C, name='hambuild_cuda_build_geometry_maps')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         integer(c_int) :: hambuild_cuda_build_geometry_maps
+      end function hambuild_cuda_build_geometry_maps
+
+      function hambuild_cuda_get_geometry_maps(ctx, valid, shell, ino, vet) &
+         bind(C, name='hambuild_cuda_get_geometry_maps')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: valid, shell, ino, vet
+         integer(c_int) :: hambuild_cuda_get_geometry_maps
+      end function hambuild_cuda_get_geometry_maps
    end interface
 #endif
 
@@ -215,6 +252,72 @@ contains
       call plugin_absent()
 #endif
    end subroutine onsite
+
+   !> Upload the static geometry (once per run; geometry is fixed across SCF).
+   !> Integer arrays are the raw 1-based Fortran indices; the kernels convert to
+   !> 0-based internally. cr is (3,kk), nn is (ndi,nn_max), etc.
+   subroutine set_geometry(this, cr, num, iz, nn, atlist, nn_max, ndi, alat, r2, pbc)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      real(rp), dimension(:, :), intent(in), target, contiguous :: cr
+      integer(c_int), dimension(:), intent(in), target, contiguous :: num, iz, atlist
+      integer(c_int), dimension(:, :), intent(in), target, contiguous :: nn
+      integer, intent(in) :: nn_max, ndi
+      real(rp), intent(in) :: alat, r2
+      logical, intent(in) :: pbc
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr, pbc_i
+      pbc_i = 0_c_int; if (pbc) pbc_i = 1_c_int
+      ierr = hambuild_cuda_set_geometry(this%ctx, c_loc(cr), c_loc(num), &
+         c_loc(iz), c_loc(nn), c_loc(atlist), int(size(cr, 2), c_int), &
+         int(nn_max, c_int), int(ndi, c_int), real(alat, c_double), &
+         real(r2, c_double), pbc_i)
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_geometry')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_geometry
+
+   !> Upload precomputed displacement vectors (pbc / host-computed vet). vet is
+   !> (3, nn_max, ntype) contiguous; when set, the map builder uses these.
+   subroutine set_geometry_vet(this, vet)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      real(rp), dimension(:, :, :), intent(in), target, contiguous :: vet
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_set_geometry_vet(this%ctx, c_loc(vet))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_geometry_vet')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_geometry_vet
+
+   !> Build the resident neigh_map + vet tables from the uploaded geometry.
+   subroutine build_geometry_maps(this)
+      class(hambuild_cuda_backend), intent(inout) :: this
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_build_geometry_maps(this%ctx)
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_build_geometry_maps')
+#else
+      call plugin_absent()
+#endif
+   end subroutine build_geometry_maps
+
+   !> Copy the built maps back to the host (validation / inspection). Arrays are
+   !> (nn_max, ntype) for valid/shell/ino and (3, nn_max, ntype) for vet.
+   subroutine get_geometry_maps(this, valid, shell, ino, vet)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      integer(c_int), dimension(:, :), intent(inout), target, contiguous :: valid, shell, ino
+      real(rp), dimension(:, :, :), intent(inout), target, contiguous :: vet
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_get_geometry_maps(this%ctx, c_loc(valid), &
+         c_loc(shell), c_loc(ino), c_loc(vet))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_get_geometry_maps')
+#else
+      call plugin_absent()
+#endif
+   end subroutine get_geometry_maps
 
 #ifdef USE_CUDA_PLUGIN
    !> Report a failed C entry point, appending the backend error string.
