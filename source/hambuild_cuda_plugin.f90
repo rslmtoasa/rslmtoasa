@@ -42,6 +42,9 @@ module hambuild_cuda_plugin_mod
    contains
       procedure :: ensure_context
       procedure :: set_backend
+      procedure :: set_constants
+      procedure :: set_potential_onsite
+      procedure :: onsite
       procedure :: destroy
    end type hambuild_cuda_backend
 
@@ -71,6 +74,32 @@ module hambuild_cuda_plugin_mod
          integer(c_int), value :: backend
          integer(c_int) :: hambuild_cuda_set_backend
       end function hambuild_cuda_set_backend
+
+      function hambuild_cuda_set_constants(ctx, v, vc, lx, ly, lz) &
+         bind(C, name='hambuild_cuda_set_constants')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: v, vc, lx, ly, lz
+         integer(c_int) :: hambuild_cuda_set_constants
+      end function hambuild_cuda_set_constants
+
+      function hambuild_cuda_set_potential_onsite(ctx, xi_p, xi_d, rac, obx0, &
+         obx1, cx, cex, mom, lmom, orb_pol) &
+         bind(C, name='hambuild_cuda_set_potential_onsite')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: xi_p, xi_d, rac, obx0, obx1, cx, cex, mom, lmom
+         integer(c_int), value :: orb_pol
+         integer(c_int) :: hambuild_cuda_set_potential_onsite
+      end function hambuild_cuda_set_potential_onsite
+
+      function hambuild_cuda_onsite(ctx, lsham, obarm, enim) &
+         bind(C, name='hambuild_cuda_onsite')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: lsham, obarm, enim
+         integer(c_int) :: hambuild_cuda_onsite
+      end function hambuild_cuda_onsite
    end interface
 #endif
 
@@ -133,6 +162,85 @@ contains
          'executable was built without ENABLE_CUDA_PLUGIN.', __FILE__, __LINE__)
 #endif
    end subroutine set_backend
+
+   !> Upload the basis-dependent constants (hcpx v/vc + cartesian L operators).
+   !> All arrays are (norb x norb) complex, column-major, contiguous targets.
+   subroutine set_constants(this, v, vc, lx, ly, lz)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      complex(rp), dimension(:, :), intent(in), target, contiguous :: v, vc, lx, ly, lz
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_set_constants(this%ctx, c_loc(v), c_loc(vc), &
+         c_loc(lx), c_loc(ly), c_loc(lz))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_constants')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_constants
+
+   !> Upload the per-type on-site potential inputs. Arrays are contiguous
+   !> targets, laid out per type as documented in cuda/hambuild.h. rac and lmom
+   !> must already carry the CPU-precomputed polarization factors (see caller).
+   subroutine set_potential_onsite(this, xi_p, xi_d, rac, obx0, obx1, cx, cex, &
+      mom, lmom, orb_pol)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      real(rp), dimension(:, :), intent(in), target, contiguous :: xi_p, xi_d, rac
+      complex(rp), dimension(:, :), intent(in), target, contiguous :: obx0, obx1
+      complex(rp), dimension(:, :, :), intent(in), target, contiguous :: cx, cex
+      real(rp), dimension(:, :), intent(in), target, contiguous :: mom, lmom
+      logical, intent(in) :: orb_pol
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr, op
+      op = 0_c_int; if (orb_pol) op = 1_c_int
+      ierr = hambuild_cuda_set_potential_onsite(this%ctx, c_loc(xi_p), &
+         c_loc(xi_d), c_loc(rac), c_loc(obx0), c_loc(obx1), c_loc(cx), &
+         c_loc(cex), c_loc(mom), c_loc(lmom), op)
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_potential_onsite')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_potential_onsite
+
+   !> Build the on-site blocks on the GPU and copy them back. Pass unallocated
+   !> optionals to skip a block; here all three are required outputs. Arrays are
+   !> (nb x nb x ntype) complex, contiguous targets.
+   subroutine onsite(this, lsham, obarm, enim)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      complex(rp), dimension(:, :, :), intent(inout), target, contiguous :: lsham, obarm, enim
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_onsite(this%ctx, c_loc(lsham), c_loc(obarm), c_loc(enim))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_onsite')
+#else
+      call plugin_absent()
+#endif
+   end subroutine onsite
+
+#ifdef USE_CUDA_PLUGIN
+   !> Report a failed C entry point, appending the backend error string.
+   subroutine fail(what)
+      character(len=*), intent(in) :: what
+      character(kind=c_char), pointer :: cstr(:)
+      character(len=256) :: msg
+      integer :: i
+      type(c_ptr) :: cptr
+      msg = ''
+      cptr = hambuild_cuda_last_error()
+      if (c_associated(cptr)) then
+         call c_f_pointer(cptr, cstr, [256])
+         do i = 1, 256
+            if (cstr(i) == c_null_char) exit
+            msg(i:i) = cstr(i)
+         end do
+      end if
+      call g_logger%fatal(trim(what)//' failed: '//trim(msg), __FILE__, __LINE__)
+   end subroutine fail
+#endif
+
+   subroutine plugin_absent()
+      call g_logger%fatal('control%gpu_hambuild=.true. requested, but this '// &
+         'executable was built without ENABLE_CUDA_PLUGIN.', __FILE__, __LINE__)
+   end subroutine plugin_absent
 
    !> Release the device context.
    subroutine destroy(this)

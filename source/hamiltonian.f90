@@ -34,7 +34,7 @@ module hamiltonian_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use spectrum_bounds_mod, only: compute_spectrum_bounds, bounds, normalize_bounds_algorithm, select_bounds_interval, apply_bounds_scaling
-   use hambuild_cuda_plugin_mod, only: hambuild_cuda_backend, hambuild_cuda_plugin_compiled
+   use hambuild_cuda_plugin_mod, only: hambuild_cuda_backend, hambuild_cuda_plugin_compiled, HAMBUILD_BACKEND_GPU
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -208,10 +208,11 @@ contains
             'built without ENABLE_CUDA_PLUGIN.', __FILE__, __LINE__)
       end if
 
-      ! Phase 0: no assembly routine is ported yet. As each phase lands, its
-      ! label is switched to return .true. here and the GPU branch is wired in
-      ! the corresponding routine. Warn once so the fallback is visible.
+      ! Ported phases return .true. here; unported routines fall back to the CPU
+      ! path (bit-identical) after a one-time notice.
       select case (trim(routine))
+      case ('build_lsham', 'build_obarm', 'build_enim')  ! Phase 1: on-site blocks
+         active = .true.
       case default
          if (.not. warned) then
             call g_logger%info('gpu_hambuild requested; '//trim(routine)// &
@@ -222,6 +223,88 @@ contains
          active = .false.
       end select
    end function gpu_hambuild_active
+
+   !---------------------------------------------------------------------------
+   !> @brief Assemble the requested on-site blocks (lsham/obarm/enim) on the GPU.
+   !>
+   !> Gathers the basis constants (hcpx v/vc + cartesian L operators) and the
+   !> per-type potential inputs into contiguous buffers, uploads them, launches
+   !> the device kernels, and copies the results into this%lsham/obarm/enim.
+   !> Mirrors build_lsham/build_obarm/build_enim exactly; the CPU routines remain
+   !> the regression oracle (control%gpu_hambuild=.false.).
+   !>
+   !> Because one device call can produce all three blocks, callers pass flags
+   !> for the ones they need; the others are left untouched.
+   !---------------------------------------------------------------------------
+   subroutine assemble_onsite_gpu(this, want_lsham, want_obarm, want_enim)
+      class(hamiltonian), intent(inout) :: this
+      logical, intent(in) :: want_lsham, want_obarm, want_enim
+      integer :: nt, t, m
+      complex(rp), dimension(norb, norb) :: vmat, vcmat
+      real(rp), dimension(:, :), allocatable :: xi_p, xi_d, rac_eff, mom, lmom_eff
+      complex(rp), dimension(:, :), allocatable :: obx0, obx1
+      complex(rp), dimension(:, :, :), allocatable :: cxarr, cexarr
+      complex(rp), dimension(:, :, :), allocatable :: dummy_lsham, dummy_obarm, dummy_enim
+      real(rp) :: xd1
+
+      nt = this%lattice%ntype
+
+      ! Basis constants: same v/vc that hcpx builds, and the cartesian L
+      ! operators (the kernel applies hcpx to them, mirroring build_lsham).
+      call hcpx_transform_matrices(norb, vmat, vcmat)
+
+      allocate(xi_p(2, nt), xi_d(2, nt), rac_eff(2, nt), mom(3, nt), lmom_eff(3, nt))
+      allocate(obx0(norb, nt), obx1(norb, nt))
+      allocate(cxarr(norb, 2, nt), cexarr(norb, 2, nt))
+
+      do t = 1, nt
+         xi_p(:, t) = this%lattice%symbolic_atoms(t)%potential%xi_p(:)
+         xi_d(:, t) = this%lattice%symbolic_atoms(t)%potential%xi_d(:)
+         mom(:, t) = this%lattice%symbolic_atoms(t)%potential%mom(:)
+         lmom_eff(:, t) = 0.0_rp
+         rac_eff(:, t) = 0.0_rp
+         if (this%orb_pol) then
+            xd1 = this%lattice%symbolic_atoms(t)%potential%xi_d(1)
+            ! CPU: rac = sqrt(xi_d(1)*potential%rac); lz_loc = sqrt(xi_d(1)*lmom(3))
+            rac_eff(:, t) = sqrt(xd1*this%lattice%symbolic_atoms(t)%potential%rac(:))
+            lmom_eff(3, t) = sqrt(xd1*this%lattice%symbolic_atoms(t)%potential%lmom(3))
+         end if
+         do m = 1, norb
+            obx0(m, t) = this%lattice%symbolic_atoms(t)%potential%obx0(m)
+            obx1(m, t) = this%lattice%symbolic_atoms(t)%potential%obx1(m)
+            cxarr(m, 1:2, t) = this%lattice%symbolic_atoms(t)%potential%cx(m, 1:2)
+            cexarr(m, 1:2, t) = this%lattice%symbolic_atoms(t)%potential%cex(m, 1:2)
+         end do
+      end do
+
+      call this%gpu_hambuild%ensure_context(nb, norb, max(this%lattice%kk, 1), nt, &
+         max(this%lattice%nmax, 0))
+      call this%gpu_hambuild%set_backend(HAMBUILD_BACKEND_GPU)
+      call this%gpu_hambuild%set_constants(vmat, vcmat, L_x, L_y, L_z)
+      call this%gpu_hambuild%set_potential_onsite(xi_p, xi_d, rac_eff, obx0, obx1, &
+         cxarr, cexarr, mom, lmom_eff, this%orb_pol)
+
+      ! onsite() writes all three; route wanted ones to the real arrays and the
+      ! rest to scratch so we never clobber a block the caller did not request.
+      ! onsite() writes all three outputs; route each to the real array when
+      ! wanted, else to a scratch buffer, so we never clobber a block the caller
+      ! did not request. Scratch is allocated once, sized nb x nb x ntype.
+      allocate(dummy_lsham(nb, nb, nt), dummy_obarm(nb, nb, nt), dummy_enim(nb, nb, nt))
+      if (want_lsham .and. want_obarm .and. want_enim) then
+         call this%gpu_hambuild%onsite(this%lsham, this%obarm, this%enim)
+      else if (want_lsham) then
+         call this%gpu_hambuild%onsite(this%lsham, dummy_obarm, dummy_enim)
+      else if (want_obarm) then
+         call this%gpu_hambuild%onsite(dummy_lsham, this%obarm, dummy_enim)
+      else if (want_enim) then
+         call this%gpu_hambuild%onsite(dummy_lsham, dummy_obarm, this%enim)
+      end if
+      deallocate(dummy_lsham, dummy_obarm, dummy_enim)
+
+      if (want_enim .and. this%local_axis) this%enim_glob = this%enim
+
+      deallocate(xi_p, xi_d, rac_eff, mom, lmom_eff, obx0, obx1, cxarr, cexarr)
+   end subroutine assemble_onsite_gpu
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1321,10 +1404,9 @@ contains
       complex(rp), dimension(2) :: rac
       complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       real(rp) :: lz_loc
-      ! GPU dispatch seam (Phase 1 target). Falls back to the CPU path below
-      ! until the kernels land; see gpu_hambuild_active / the port blueprint.
+      ! GPU dispatch seam (Phase 1). CPU path below is the regression oracle.
       if (gpu_hambuild_active(this, 'build_lsham')) then
-         ! call this%gpu_hambuild%onsite_lsham(...)  ! Phase 1
+         call assemble_onsite_gpu(this, want_lsham=.true., want_obarm=.false., want_enim=.false.)
          return
       end if
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
@@ -1455,9 +1537,9 @@ contains
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
 
-      ! GPU dispatch seam (Phase 1 target); CPU fallback until kernels land.
+      ! GPU dispatch seam (Phase 1); CPU path below is the regression oracle.
       if (gpu_hambuild_active(this, 'build_obarm')) then
-         ! call this%gpu_hambuild%onsite_obarm(...)  ! Phase 1
+         call assemble_onsite_gpu(this, want_lsham=.false., want_obarm=.true., want_enim=.false.)
          return
       end if
 
@@ -1496,9 +1578,9 @@ contains
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
 
-      ! GPU dispatch seam (Phase 1 target); CPU fallback until kernels land.
+      ! GPU dispatch seam (Phase 1); CPU path below is the regression oracle.
       if (gpu_hambuild_active(this, 'build_enim')) then
-         ! call this%gpu_hambuild%onsite_enim(...)  ! Phase 1
+         call assemble_onsite_gpu(this, want_lsham=.false., want_obarm=.false., want_enim=.true.)
          return
       end if
 

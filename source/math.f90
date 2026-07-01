@@ -1644,21 +1644,18 @@ contains
    end function erfc_qe
 
    ! Transform the spd matrix from spherical harmonics/cartesian to cartesian/spherical harmonics
-   subroutine hcpx(ham, transformation)
-      ! Transform between cartesian and spherical-harmonic representations
-      ! Input
-      character(len=*), intent(in) :: transformation
-      complex(rp), dimension(:, :), intent(inout) :: ham
-      ! local variables
-      integer :: i, ii, j, jj, n
+   !> Fill the cart<->sph transform matrices v, vc used by hcpx, for block size
+   !> n. Factored out of hcpx so the GPU hambuild path can upload the exact same
+   !> matrices. For n other than 4 (sp) and 9 (spd) this returns identity (the
+   !> intentional no-op fallback; spdf n=16 has no explicit transform yet).
+   subroutine hcpx_transform_matrices(n, v, vc)
+      integer, intent(in) :: n
+      complex(rp), dimension(n, n), intent(out) :: v, vc
+      integer :: ii
       complex(rp) :: const, cone
-      complex(rp), allocatable :: hesf(:, :), hcart(:, :), v(:, :), vc(:, :), htmp(:, :)
 
-      n = size(ham, 1)
       cone = (1.0d0, 0.0d0)
       const = CMPLX(1.0d0/sqrt(2.0d0), KIND=Kind(.0d0))
-
-      allocate(v(n, n), vc(n, n), hesf(n, n), hcart(n, n), htmp(n, n))
       v = czero
       vc = czero
 
@@ -1732,6 +1729,21 @@ contains
             vc(ii, ii) = cone
          end do
       end if
+   end subroutine hcpx_transform_matrices
+
+   subroutine hcpx(ham, transformation)
+      ! Transform between cartesian and spherical-harmonic representations
+      ! Input
+      character(len=*), intent(in) :: transformation
+      complex(rp), dimension(:, :), intent(inout) :: ham
+      ! local variables
+      integer :: n
+      complex(rp), allocatable :: hesf(:, :), hcart(:, :), v(:, :), vc(:, :), htmp(:, :)
+
+      n = size(ham, 1)
+      allocate(v(n, n), vc(n, n), hesf(n, n), hcart(n, n), htmp(n, n))
+
+      call hcpx_transform_matrices(n, v, vc)
 
       hesf = czero
       hcart = czero

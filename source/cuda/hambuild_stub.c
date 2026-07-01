@@ -35,3 +35,29 @@ int hambuild_cuda_set_backend(hambuild_ctx *ctx, int backend)
     (void)ctx; (void)backend;
     return 1;
 }
+
+int hambuild_cuda_set_constants(hambuild_ctx *ctx, const void *v, const void *vc,
+                                const void *lx, const void *ly, const void *lz)
+{
+    (void)ctx; (void)v; (void)vc; (void)lx; (void)ly; (void)lz;
+    return 1;
+}
+
+int hambuild_cuda_set_potential_onsite(hambuild_ctx *ctx, const double *xi_p,
+                                       const double *xi_d, const double *rac,
+                                       const void *obx0, const void *obx1,
+                                       const void *cx, const void *cex,
+                                       const double *mom, const double *lmom,
+                                       int orb_pol)
+{
+    (void)ctx; (void)xi_p; (void)xi_d; (void)rac; (void)obx0; (void)obx1;
+    (void)cx; (void)cex; (void)mom; (void)lmom; (void)orb_pol;
+    return 1;
+}
+
+int hambuild_cuda_onsite(hambuild_ctx *ctx, void *lsham, void *obarm,
+                         void *enim)
+{
+    (void)ctx; (void)lsham; (void)obarm; (void)enim;
+    return 1;
+}
