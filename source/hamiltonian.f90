@@ -34,6 +34,7 @@ module hamiltonian_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use spectrum_bounds_mod, only: compute_spectrum_bounds, bounds, normalize_bounds_algorithm, select_bounds_interval, apply_bounds_scaling
+   use hambuild_cuda_plugin_mod, only: hambuild_cuda_backend, hambuild_cuda_plugin_compiled
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -118,6 +119,14 @@ module hamiltonian_mod
       type(bounds) :: bounds
       !> Hamiltonian export format: 'none', 'rs2pao', 'python'
       character(len=16) :: export
+      !> Assemble the Hamiltonian arrays on the GPU (hambuild plugin). Mirror of
+      !> control%gpu_hambuild; when .false. the CPU path is bit-identical and is
+      !> the regression oracle for the GPU port. Requires a binary built with
+      !> ENABLE_CUDA_PLUGIN=ON.
+      logical :: use_gpu_hambuild = .false.
+      !> GPU Hamiltonian-assembly backend (opaque device context lives on the C
+      !> side so assembled arrays stay resident for the recursion backend).
+      type(hambuild_cuda_backend) :: gpu_hambuild
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
@@ -174,6 +183,45 @@ contains
       call obj%restore_to_default()
       call obj%build_from_file()
    end function constructor
+
+   !---------------------------------------------------------------------------
+   !> @brief Decide whether a given assembly routine should run on the GPU.
+   !>
+   !> Central dispatch gate for the hambuild GPU port. Returns .true. only when
+   !> the user requested control%gpu_hambuild, the binary was built with the
+   !> plugin, and the named phase has actually been ported. Until a phase lands
+   !> its kernels it is listed as not-yet-ported here, so the caller transparently
+   !> falls back to the (bit-identical) CPU path after a one-time notice.
+   !>
+   !> @param[in] routine  short label of the calling assembly routine
+   !---------------------------------------------------------------------------
+   logical function gpu_hambuild_active(this, routine) result(active)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: routine
+      logical, save :: warned = .false.
+
+      active = .false.
+      if (.not. this%use_gpu_hambuild) return
+
+      if (.not. hambuild_cuda_plugin_compiled()) then
+         call g_logger%fatal('control%gpu_hambuild=.true. but this binary was '// &
+            'built without ENABLE_CUDA_PLUGIN.', __FILE__, __LINE__)
+      end if
+
+      ! Phase 0: no assembly routine is ported yet. As each phase lands, its
+      ! label is switched to return .true. here and the GPU branch is wired in
+      ! the corresponding routine. Warn once so the fallback is visible.
+      select case (trim(routine))
+      case default
+         if (.not. warned) then
+            call g_logger%info('gpu_hambuild requested; '//trim(routine)// &
+               ' not yet ported to GPU, using CPU path (bit-identical).', &
+               __FILE__, __LINE__)
+            warned = .true.
+         end if
+         active = .false.
+      end select
+   end function gpu_hambuild_active
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -721,6 +769,9 @@ contains
       this%hubbard_u_sc_check = .false.
       this%hubbard_v_check = .false.
       this%export = 'none'
+      ! GPU Hamiltonian-assembly path (see docs/HAMILTONIAN_GPU_PORT_BLUEPRINT.md).
+      ! Off by default; the CPU branch below is the regression oracle.
+      this%use_gpu_hambuild = this%control%gpu_hambuild
    end subroutine restore_to_default
 
    !**************************************************************************
@@ -1270,6 +1321,12 @@ contains
       complex(rp), dimension(2) :: rac
       complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       real(rp) :: lz_loc
+      ! GPU dispatch seam (Phase 1 target). Falls back to the CPU path below
+      ! until the kernels land; see gpu_hambuild_active / the port blueprint.
+      if (gpu_hambuild_active(this, 'build_lsham')) then
+         ! call this%gpu_hambuild%onsite_lsham(...)  ! Phase 1
+         return
+      end if
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
       Lx(:, :) = L_x(:, :)
       Ly(:, :) = L_y(:, :)
@@ -1398,6 +1455,12 @@ contains
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
 
+      ! GPU dispatch seam (Phase 1 target); CPU fallback until kernels land.
+      if (gpu_hambuild_active(this, 'build_obarm')) then
+         ! call this%gpu_hambuild%onsite_obarm(...)  ! Phase 1
+         return
+      end if
+
       this%obarm = 0.d00
 
       do ntype = 1, this%lattice%ntype
@@ -1432,6 +1495,12 @@ contains
       complex(rp) :: eu, ed
       integer :: ntype ! Atom type index
       integer :: l, m ! Orbital index
+
+      ! GPU dispatch seam (Phase 1 target); CPU fallback until kernels land.
+      if (gpu_hambuild_active(this, 'build_enim')) then
+         ! call this%gpu_hambuild%onsite_enim(...)  ! Phase 1
+         return
+      end if
 
       this%enim = 0.0d0
 

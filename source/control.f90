@@ -172,6 +172,10 @@ module control_mod
       character(len=9) :: recur
       logical :: cpp_plugin
       logical :: gpu_plugin
+      !> Build the Hamiltonian arrays on the GPU (hambuild plugin). Independent of
+      !> gpu_plugin (which selects the GPU recursion path). Requires a binary built
+      !> with ENABLE_CUDA_PLUGIN=ON.
+      logical :: gpu_hambuild
       character(len=16) :: gpu_backend
       character(len=16) :: cheb_backend
 
@@ -310,6 +314,7 @@ contains
       recur = this%recur
       cpp_plugin = this%cpp_plugin
       gpu_plugin = this%gpu_plugin
+      gpu_hambuild = this%gpu_hambuild
       gpu_backend = this%gpu_backend
       cheb_backend = this%cheb_backend
       random_vec_num = this%random_vec_num
@@ -371,6 +376,7 @@ contains
       this%recur = recur
       this%cpp_plugin = cpp_plugin
       this%gpu_plugin = gpu_plugin
+      this%gpu_hambuild = gpu_hambuild
       this%gpu_backend = gpu_backend
       this%cheb_backend = cheb_backend
       this%random_vec_num = random_vec_num
@@ -459,6 +465,7 @@ contains
       this%recur = 'block'
       this%cpp_plugin = .false.
       this%gpu_plugin = .false.
+      this%gpu_hambuild = .false.
       this%gpu_backend = 'csr'
       this%cheb_backend = 'fast'
       this%fname = ''
@@ -519,6 +526,7 @@ contains
       do_comom = this%do_comom
       cpp_plugin = this%cpp_plugin
       gpu_plugin = this%gpu_plugin
+      gpu_hambuild = this%gpu_hambuild
       gpu_backend = this%gpu_backend
       cheb_backend = this%cheb_backend
 
@@ -580,6 +588,7 @@ contains
       call nml%add('sym_term', this%sym_term)
       call nml%add('cpp_plugin', this%cpp_plugin)
       call nml%add('gpu_plugin', this%gpu_plugin)
+      call nml%add('gpu_hambuild', this%gpu_hambuild)
       call nml%add('gpu_backend', this%gpu_backend)
       call nml%add('cheb_backend', this%cheb_backend)
       call nml%add('ruban', this%ruban)
