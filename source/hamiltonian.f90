@@ -1501,10 +1501,6 @@ contains
                   this%hxc(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            write(131,*) 'm=', m
-            write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
-            write(132,*) 'm=', m
-            write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if (this%hubbard_u_general_check) then
             do i = 1, nb
@@ -1558,7 +1554,6 @@ contains
       if (trim(this%control%recur) == 'chebyshev') then
          call this%compute_hamiltonian_bounds(verbose=.false.)
       end if
-      close (128)
    end subroutine build_bulkham
 
    subroutine build_locham(this)
@@ -1739,20 +1734,11 @@ contains
       end if
    end subroutine validate_ccor_inputs
 
-   subroutine build_ccor_pair_block_scalar(this, ia, ja, it, jt, ino, m, hcc)
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia, ja, it, jt, ino, m
-      complex(rp), dimension(nb, nb), intent(out) :: hcc
-
-      call build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
-   end subroutine build_ccor_pair_block_scalar
-
    subroutine build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
-      class(hamiltonian), intent(in) :: this
+      class(hamiltonian), intent(inout) :: this
       integer, intent(in) :: ia, ja, it, jt, ino, m
       complex(rp), dimension(nb, nb), intent(out) :: hcc
 
-      complex(rp), dimension(norb, norb) :: s_block, sdot_block
       complex(rp), dimension(norb, norb, 4) :: dcomp, ddotcomp, kcomp
       real(rp), dimension(norb, 0:2) :: ccd_i, ccd_j
       real(rp), dimension(3) :: mom_i
@@ -1762,24 +1748,15 @@ contains
       hcc(:, :) = czero
       if (.not. allocated(this%charge%lattice%sdot)) return
 
-      do ilm = 1, norb
-         do jlm = 1, norb
-            s_block(ilm, jlm) = this%charge%lattice%sbar(jlm, ilm, m, ino)
-            sdot_block(ilm, jlm) = normalize_ccor_sdot(this, this%charge%lattice%sdot(jlm, ilm, m, ino))
-         end do
-      end do
-
       call build_ccor_coefficients(this, ia, it, ccd_i)
       call build_ccor_coefficients(this, ja, jt, ccd_j)
-	      call build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
-	      call build_ccor_d_components(this, ia, ja, it, jt, sdot_block, ddotcomp)
+      ! D(R) and Ddot(R) spin decompositions reuse the ham0m_nc kernel with the
+      ! band-centre on-site shift disabled; CCOR supplies its own on-site term.
+      ! The sbar call also returns the spin-spiral moment used by that term.
+      call build_ccor_d_components(this, ia, ja, it, jt, ino, m, .false., dcomp, mom_i)
+      call build_ccor_d_components(this, ia, ja, it, jt, ino, m, .true., ddotcomp)
 
-	      if (trim(this%ccor_vmt_mode) == 'pair_surface') then
-	         call build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
-	         return
-	      end if
-
-	      kcomp(:, :, :) = czero
+      kcomp(:, :, :) = czero
       do ilm = 1, norb
          do jlm = 1, norb
             do idir = 1, 4
@@ -1789,9 +1766,8 @@ contains
          end do
       end do
 
+      ! On-site D^(0) diagonal (present only in the same-site shell).
       if (m == 1) then
-         mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-         call ccor_apply_spin_spiral(this, ia, mom_i)
          do ilm = 1, norb
             kcomp(ilm, ilm, 4) = kcomp(ilm, ilm, 4) + ccd_i(ilm, 0)* &
                (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)**2 + &
@@ -1808,113 +1784,76 @@ contains
          call hcpx(kcomp(:, :, idir), 'cart2sph')
       end do
 
-	      lambda = ccor_vmt_scalar(this) - this%ccor_elin
+      ! Spin-averaged VMT: lambda is a scalar in all modes, so the assembly is
+      ! identical; pair_surface differs only by using the pair (it,jt) endpoints.
+      lambda = ccor_lambda_scalar(this, it, jt)
       hcc(1:norb, 1:norb) = lambda*(kcomp(:, :, 4) + kcomp(:, :, 3))
       hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = lambda*(kcomp(:, :, 4) - kcomp(:, :, 3))
       hcc(1:norb, spin_off + 1:spin_off + norb) = lambda*(kcomp(:, :, 1) - i_unit*kcomp(:, :, 2))
-	      hcc(spin_off + 1:spin_off + norb, 1:norb) = lambda*(kcomp(:, :, 1) + i_unit*kcomp(:, :, 2))
-	   end subroutine build_ccor_pair_block_noncollinear
+      hcc(spin_off + 1:spin_off + norb, 1:norb) = lambda*(kcomp(:, :, 1) + i_unit*kcomp(:, :, 2))
+   end subroutine build_ccor_pair_block_noncollinear
 
-	   subroutine build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
-	      class(hamiltonian), intent(in) :: this
-	      integer, intent(in) :: ia, ja, it, jt, m
-	      complex(rp), dimension(norb, norb, 4), intent(in) :: dcomp, ddotcomp
-	      real(rp), dimension(norb, 0:2), intent(in) :: ccd_i, ccd_j
-	      complex(rp), dimension(nb, nb), intent(out) :: hcc
-
-	      complex(rp), dimension(norb, norb, 4) :: hcomp
-	      complex(rp), dimension(4) :: lambda_i, lambda_j, dloc, ddotloc, term_l, term_r, onsite
-	      real(rp), dimension(2) :: lambda_pair
-	      real(rp), dimension(3) :: mom_i, mom_j
-	      integer :: ilm, jlm, idir
-
-	      hcc(:, :) = czero
-	      hcomp(:, :, :) = czero
-	      lambda_pair(:) = ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin
-
-	      mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-	      mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-	      call ccor_apply_spin_spiral(this, ia, mom_i)
-	      call ccor_apply_spin_spiral(this, ja, mom_j)
-	      call ccor_lambda_components(lambda_pair, mom_i, lambda_i)
-	      call ccor_lambda_components(lambda_pair, mom_j, lambda_j)
-
-	      do ilm = 1, norb
-	         do jlm = 1, norb
-	            dloc(:) = dcomp(ilm, jlm, :)
-	            ddotloc(:) = ddotcomp(ilm, jlm, :)
-
-	            call ccor_spin_product(lambda_i, ddotloc, term_l)
-	            call ccor_spin_product(ddotloc, lambda_j, term_r)
-	            hcomp(ilm, jlm, :) = 0.5_rp*(term_l(:) + term_r(:))
-
-	            call ccor_spin_product(lambda_i, dloc, term_l)
-	            call ccor_spin_product(dloc, lambda_j, term_r)
-	            hcomp(ilm, jlm, :) = hcomp(ilm, jlm, :) + ccd_i(ilm, 1)*term_l(:) + ccd_j(jlm, 1)*term_r(:)
-	         end do
-	      end do
-
-	      if (m == 1) then
-	         do ilm = 1, norb
-	            onsite(:) = czero
-	            onsite(4) = ccd_i(ilm, 0)*(this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)**2 + &
-	                       this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)**2)
-	            do idir = 1, 3
-	               onsite(idir) = ccd_i(ilm, 0)*2.0_rp*this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)* &
-	                              this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*cmplx(mom_i(idir), 0.0_rp, rp)
-	            end do
-	            call ccor_spin_product(lambda_i, onsite, term_l)
-	            hcomp(ilm, ilm, :) = hcomp(ilm, ilm, :) + term_l(:)
-	         end do
-	      end if
-
-	      do idir = 1, 4
-	         call hcpx(hcomp(:, :, idir), 'cart2sph')
-	      end do
-
-	      hcc(1:norb, 1:norb) = hcomp(:, :, 4) + hcomp(:, :, 3)
-	      hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 4) - hcomp(:, :, 3)
-	      hcc(1:norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 1) - i_unit*hcomp(:, :, 2)
-	      hcc(spin_off + 1:spin_off + norb, 1:norb) = hcomp(:, :, 1) + i_unit*hcomp(:, :, 2)
-	   end subroutine build_ccor_pair_surface_block
-
-   subroutine build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
+   !> Spin-averaged CCOR energy scale lambda = <VMT> - E_lin for the given mode.
+   !> pair_surface uses the pair (it,jt) endpoints; the scalar modes ignore them.
+   function ccor_lambda_scalar(this, it, jt) result(lambda)
       class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia, ja, it, jt
-      complex(rp), dimension(norb, norb), intent(in) :: s_block
+      integer, intent(in) :: it, jt
+      real(rp) :: lambda
+      real(rp), dimension(2) :: vmt_spin
+
+      if (trim(this%ccor_vmt_mode) == 'pair_surface') then
+         vmt_spin = ccor_vmt_pair_surface(this, it, jt)
+         lambda = 0.5_rp*(vmt_spin(1) + vmt_spin(2)) - this%ccor_elin
+      else
+         lambda = ccor_vmt_scalar(this) - this%ccor_elin
+      end if
+   end function ccor_lambda_scalar
+
+   !> Cartesian spin decomposition of the bandwidth-weighted structure constant
+   !> D(R) (use_sdot=.false.) or its energy derivative Ddot(R) (use_sdot=.true.)
+   !> for neighbour shell m of type ino. Reuses the small-h kernel ham0m_nc with
+   !> the band-centre on-site shift disabled; CCOR supplies its own on-site term.
+   subroutine build_ccor_d_components(this, ia, ja, it, jt, ino, m, use_sdot, dcomp, mom_out)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: ia, ja, it, jt, ino, m
+      logical, intent(in) :: use_sdot
       complex(rp), dimension(norb, norb, 4), intent(out) :: dcomp
+      real(rp), dimension(3), intent(out), optional :: mom_out
 
-      real(rp), dimension(3) :: mom_i, mom_j
-      complex(rp), dimension(3) :: cross
-      complex(rp) :: dotp
-      integer :: ilm, jlm, idir
+      real(rp), dimension(3) :: vet
+      real(rp), dimension(norb, norb) :: s_real
+      real(rp) :: avw
+      integer :: ilm, jlm
 
-      mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-      mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-      call ccor_apply_spin_spiral(this, ia, mom_i)
-      call ccor_apply_spin_spiral(this, ja, mom_j)
-      dotp = cmplx(dot_product(mom_i, mom_j), 0.0_rp, rp)
-      cross = cmplx(cross_product(mom_i, mom_j), 0.0_rp, rp)
-
-      dcomp(:, :, :) = czero
-      do ilm = 1, norb
-         do jlm = 1, norb
-            dcomp(ilm, jlm, 4) = &
-               this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*s_block(ilm, jlm)* &
-               this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm) + &
-               this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*s_block(ilm, jlm)* &
-               this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*dotp
-            do idir = 1, 3
-               dcomp(ilm, jlm, idir) = &
-                  this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*s_block(ilm, jlm)* &
-                  this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm)*cmplx(mom_i(idir), 0.0_rp, rp) + &
-                  this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*s_block(ilm, jlm)* &
-                  this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cmplx(mom_j(idir), 0.0_rp, rp) + &
-                  i_unit*this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*s_block(ilm, jlm)* &
-                  this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cross(idir)
+      ! sbar/sdot are stored real; the Sdot term carries the -avw^2 normalization.
+      if (use_sdot) then
+         avw = this%charge%lattice%wav*ang2au
+         if (avw <= tiny(1.0_rp)) avw = this%charge%lattice%wav
+         do ilm = 1, norb
+            do jlm = 1, norb
+               s_real(ilm, jlm) = -avw*avw*real(this%charge%lattice%sdot(jlm, ilm, m, ino), rp)
             end do
          end do
-      end do
+      else
+         do ilm = 1, norb
+            do jlm = 1, norb
+               s_real(ilm, jlm) = real(this%charge%lattice%sbar(jlm, ilm, m, ino), rp)
+            end do
+         end do
+      end if
+
+      if (this%lattice%pbc) then
+         call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet)
+      else
+         vet(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+      end if
+      call this%ham0m_nc(ia, ja, it, jt, vet, s_real, onsite='none')
+      dcomp(:, :, :) = this%hhmag(:, :, :)
+
+      if (present(mom_out)) then
+         mom_out = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
+         call ccor_apply_spin_spiral(this, ia, mom_out)
+      end if
    end subroutine build_ccor_d_components
 
    subroutine build_ccor_coefficients(this, ia, itype, ccd)
@@ -1928,10 +1867,9 @@ contains
       ccd(:, :) = 0.0_rp
       avw = this%charge%lattice%wav*ang2au
       if (avw <= tiny(1.0_rp)) avw = this%charge%lattice%wav
-      if (avw <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c requires positive lattice%wav.', __FILE__, __LINE__)
       sw = this%charge%lattice%symbolic_atoms(itype)%potential%ws_r/avw
-      if (sw <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c requires positive ws_r/avw.', __FILE__, __LINE__)
 
+      alpha_idx = this%charge%lattice%num(ia)
       do ilm = 1, norb
          l = orbital_l_from_index(ilm)
          l2p3 = real(2*l + 3, rp)
@@ -1940,18 +1878,13 @@ contains
          dl = sw**(-(2*l - 1))/(0.5_rp*l2m1)
          a = 0.0_rp
          if (allocated(this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha)) then
-            if (lbound(this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha, 1) <= l .and. &
-                ubound(this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha, 1) >= l) then
-               a = this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha(l)
-            end if
+            a = this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha(l)
          else if (allocated(this%charge%lattice%alpha)) then
-            alpha_idx = min(max(1, this%charge%lattice%num(max(1, min(ia, size(this%charge%lattice%num))))), size(this%charge%lattice%alpha, 2))
-            a = this%charge%lattice%alpha(ilm, alpha_idx, max(1, min(ia, size(this%charge%lattice%alpha, 3))))
+            a = this%charge%lattice%alpha(ilm, alpha_idx, ia)
          end if
          adot = 0.0_rp
          if (allocated(this%charge%lattice%alpha_dot)) then
-            alpha_idx = min(max(1, this%charge%lattice%num(max(1, min(ia, size(this%charge%lattice%num))))), size(this%charge%lattice%alpha_dot, 2))
-            adot = this%charge%lattice%alpha_dot(ilm, alpha_idx, max(1, min(ia, size(this%charge%lattice%alpha_dot, 3))))
+            adot = this%charge%lattice%alpha_dot(ilm, alpha_idx, ia)
          end if
          t1 = -sw**(2*l + 3)/(2.0_rp*l2p1*l2p1*l2p3)
          t2 = a*sw*sw/l2p1
@@ -1961,17 +1894,6 @@ contains
          ccd(ilm, 2) = avw*avw*(adot + t1 + t2 + t3)
       end do
    end subroutine build_ccor_coefficients
-
-   function normalize_ccor_sdot(this, sdot_raw) result(sdot_cc)
-      class(hamiltonian), intent(in) :: this
-      complex(rp), intent(in) :: sdot_raw
-      complex(rp) :: sdot_cc
-      real(rp) :: avw
-
-      avw = this%charge%lattice%wav*ang2au
-      if (avw <= tiny(1.0_rp)) avw = this%charge%lattice%wav
-      sdot_cc = -avw*avw*sdot_raw
-   end function normalize_ccor_sdot
 
 	   function ccor_vmt_scalar(this) result(vmt)
 	      class(hamiltonian), intent(in) :: this
@@ -2062,30 +1984,6 @@ contains
 	      if (weight_sum <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c vmad_scalar VMT has zero WS-radius weight.', __FILE__, __LINE__)
 	      vmt = vmt/weight_sum
 	   end function ccor_vmt_scalar_from_vmad
-
-	   subroutine ccor_lambda_components(lambda_pair, mom, lambda_comp)
-	      real(rp), dimension(2), intent(in) :: lambda_pair
-	      real(rp), dimension(3), intent(in) :: mom
-	      complex(rp), dimension(4), intent(out) :: lambda_comp
-	      real(rp) :: lambda0, lambda1
-
-	      lambda0 = 0.5_rp*(lambda_pair(1) + lambda_pair(2))
-	      lambda1 = 0.5_rp*(lambda_pair(1) - lambda_pair(2))
-	      lambda_comp(1) = cmplx(lambda1*mom(1), 0.0_rp, rp)
-	      lambda_comp(2) = cmplx(lambda1*mom(2), 0.0_rp, rp)
-	      lambda_comp(3) = cmplx(lambda1*mom(3), 0.0_rp, rp)
-	      lambda_comp(4) = cmplx(lambda0, 0.0_rp, rp)
-	   end subroutine ccor_lambda_components
-
-	   subroutine ccor_spin_product(a, b, c)
-	      complex(rp), dimension(4), intent(in) :: a, b
-	      complex(rp), dimension(4), intent(out) :: c
-
-	      c(4) = a(4)*b(4) + a(1)*b(1) + a(2)*b(2) + a(3)*b(3)
-	      c(1) = a(4)*b(1) + b(4)*a(1) + i_unit*(a(2)*b(3) - a(3)*b(2))
-	      c(2) = a(4)*b(2) + b(4)*a(2) + i_unit*(a(3)*b(1) - a(1)*b(3))
-	      c(3) = a(4)*b(3) + b(4)*a(3) + i_unit*(a(1)*b(2) - a(2)*b(1))
-	   end subroutine ccor_spin_product
 
 	   subroutine ccor_apply_spin_spiral(this, ia, mom)
       class(hamiltonian), intent(in) :: this
@@ -2425,22 +2323,30 @@ contains
       end do
    end subroutine build_from_paoflow
 
-   subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh)
+   subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh, onsite)
       class(hamiltonian), intent(inout) :: this
       ! Input
       integer, intent(in) :: ia, ja ! Atom sites i and j
       integer, intent(in) :: it, jt ! Type of atom i and j
       real(rp), dimension(3), intent(in) :: vet
       real(rp), dimension(norb, norb), intent(in) :: hhh
+      !> On-site diagonal term: 'h' (default) adds the CX/CEX band-centre shift
+      !> used by the small-h Hamiltonian; 'none' skips it so that callers such as
+      !> the combined correction can supply their own on-site diagonal.
+      character(len=*), intent(in), optional :: onsite
       ! Local Variables
-      integer :: i, j, ilm, jlm, m
+      integer :: ilm, jlm, m
       real(rp), dimension(3) :: mom_ia, mom_ja
       real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
-      complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
+      complex(rp), dimension(3) :: momc_i, momc_j
       complex(rp) :: dot
       real(rp) :: vv
+      logical :: add_onsite
+
+      add_onsite = .true.
+      if (present(onsite)) add_onsite = (trim(onsite) /= 'none')
 
       this%hhmag(:, :, :) = 0.0d0
 
@@ -2460,28 +2366,10 @@ contains
 
       ! Real to complex
       dot = cmplx(dot_product(mom_ia, mom_ja), kind=kind(0.0d0))
-      do i = 1, this%charge%lattice%ntype
-         do j = 1, 3
-            momc(i, j) = cmplx(this%charge%lattice%symbolic_atoms(i)%potential%mom(j), kind=kind(0.0d0))
-         end do
-      end do
-      momc(it, :) = cmplx(mom_ia, kind=kind(0.0d0))
-      momc(jt, :) = cmplx(mom_ja, kind=kind(0.0d0))
+      momc_i = cmplx(mom_ia, kind=kind(0.0d0))
+      momc_j = cmplx(mom_ja, kind=kind(0.0d0))
       cross = cmplx(cross_product(mom_ia, mom_ja), kind=kind(0.0d0))
       hhhc(:, :) = cmplx(hhh(:, :), kind=kind(0.0d0))
-
-      if (size(this%charge%lattice%symbolic_atoms(it)%potential%wx0) < norb) then
-         call g_logger%fatal('wx0(it) too small: type='//int2str(it)// &
-                             ' size='//int2str(size(this%charge%lattice%symbolic_atoms(it)%potential%wx0))// &
-                             ' norb='//int2str(norb)// &
-                             ' lmax='//int2str(this%charge%lattice%symbolic_atoms(it)%potential%lmax), __FILE__, __LINE__)
-      end if
-      if (size(this%charge%lattice%symbolic_atoms(jt)%potential%wx0) < norb) then
-         call g_logger%fatal('wx0(jt) too small: type='//int2str(jt)// &
-                             ' size='//int2str(size(this%charge%lattice%symbolic_atoms(jt)%potential%wx0))// &
-                             ' norb='//int2str(norb)// &
-                             ' lmax='//int2str(this%charge%lattice%symbolic_atoms(jt)%potential%lmax), __FILE__, __LINE__)
-      end if
 
       do ilm = 1, norb
          do jlm = 1, norb
@@ -2495,7 +2383,7 @@ contains
 !      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
 !    end do
 
-      if (vv <= 0.01d0) then
+      if (vv <= 0.01d0 .and. add_onsite) then
          do ilm = 1, norb
             if (this%hoh) then
                this%hhmag(ilm, ilm, 4) = this%hhmag(ilm, ilm, 4) + this%charge%lattice%symbolic_atoms(it)%potential%cex0(ilm)
@@ -2509,20 +2397,21 @@ contains
          do jlm = 1, norb
             do ilm = 1, norb
                this%hhmag(ilm, jlm, m) = &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc(it, m) + &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc(jt, m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc_i(m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc_j(m) + &
                   i_unit*this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cross(m)
             end do
          end do
       end do
 
       if (vv > 0.01d0) return
+      if (.not. add_onsite) return
       do m = 1, 3
          do ilm = 1, norb
             if (this%hoh) then
-               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc(it, m)
+               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc_i(m)
             else
-               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc(it, m)
+               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc_i(m)
             end if
          end do
       end do
