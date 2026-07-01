@@ -358,6 +358,65 @@ contains
    end subroutine assemble_bulk_gpu
 
    !---------------------------------------------------------------------------
+   !> @brief Assemble the local (impurity) neighbour Hamiltonian on GPU.
+   !>
+   !> Phase 2b. Same kernel as the bulk path but the site loop runs over the
+   !> nmax interaction-zone sites (ia = nlim directly). Produces hall and, when
+   !> hoh, hallo (single gemm hall*obarm; no eeoee). Mirrors build_locham's
+   !> chbar_nc loop; CCOR and Hubbard still run on the CPU afterwards.
+   !---------------------------------------------------------------------------
+   subroutine assemble_local_gpu(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nt, t, m, nmax_loc, s
+      complex(rp), dimension(:, :), allocatable :: wx0, wx1, cx0, cx1, cex0, cex1
+      real(rp), dimension(:, :), allocatable :: mom
+      integer(c_int), dimension(:), allocatable :: site_list
+
+      nt = this%lattice%ntype
+      nmax_loc = this%lattice%nmax
+
+      allocate(wx0(norb, nt), wx1(norb, nt), cx0(norb, nt), cx1(norb, nt))
+      allocate(cex0(norb, nt), cex1(norb, nt), mom(3, nt))
+      do t = 1, nt
+         do m = 1, norb
+            wx0(m, t) = this%lattice%symbolic_atoms(t)%potential%wx0(m)
+            wx1(m, t) = this%lattice%symbolic_atoms(t)%potential%wx1(m)
+            cx0(m, t) = this%lattice%symbolic_atoms(t)%potential%cx0(m)
+            cx1(m, t) = this%lattice%symbolic_atoms(t)%potential%cx1(m)
+            cex0(m, t) = this%lattice%symbolic_atoms(t)%potential%cex0(m)
+            cex1(m, t) = this%lattice%symbolic_atoms(t)%potential%cex1(m)
+         end do
+         mom(:, t) = this%lattice%symbolic_atoms(t)%potential%mom(:)
+      end do
+
+      ! Geometry (cr/num/iz/nn/atlist) must be uploaded before set_local_sites;
+      ! reuse the bulk geometry upload (also builds bulk maps, harmless). Build
+      ! once per run.
+      if (.not. this%gpu_geometry_ready) then
+         call build_geometry_maps_gpu(this)
+         this%gpu_geometry_ready = .true.
+      end if
+      allocate(site_list(nmax_loc))
+      do s = 1, nmax_loc
+         site_list(s) = int(s, c_int)
+      end do
+      call this%gpu_hambuild%set_local_sites(site_list)
+      call this%gpu_hambuild%build_local_geometry_maps()
+
+      ! obarm must be resident for the hoh matmul.
+      if (this%hoh) then
+         call assemble_onsite_gpu(this, want_lsham=.false., want_obarm=.true., want_enim=.true.)
+      end if
+
+      call this%gpu_hambuild%set_potential_bulk(wx0, wx1, cx0, cx1, cex0, cex1, &
+         mom, this%q_ss, this%theta_ss)
+      call this%gpu_hambuild%set_sbar(this%lattice%sbar)
+      call this%gpu_hambuild%local(this%hoh, this%hall, this%hallo)
+
+      deallocate(wx0, wx1, cx0, cx1, cex0, cex1, mom, site_list)
+   end subroutine assemble_local_gpu
+
+   !---------------------------------------------------------------------------
    !> @brief Upload geometry + build the GPU neigh_map/vet tables (Phase 1.5).
    !>
    !> Runs once (geometry is fixed across SCF). Uploads cr/num/iz/nn/atlist and,
@@ -1916,10 +1975,17 @@ contains
       end if
 
       call g_timer%start('build local hamiltonian')
+
+      ! Phase 2b: build hall/hallo on the GPU in one batched pass (site loop over
+      ! the nmax interaction-zone sites). The CPU chbar_nc/pack/hoh block is
+      ! skipped; Hubbard add-ins and CCOR still run on the copied-back arrays.
+      if (this%use_gpu_hambuild) call assemble_local_gpu(this)
+
     !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
       do nlim = 1, this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
+         if (.not. this%use_gpu_hambuild) then
          call this%chbar_nc(nlim, nr, ino, nlim)
          do m = 1, nr
             do i = 1, norb
@@ -1931,6 +1997,7 @@ contains
                end do
             end do
          end do
+         end if ! .not. use_gpu_hambuild (core assembly done on GPU)
          if (this%hubbard_u_general_check) then
             do i = 1, nb
                do j = 1, nb
@@ -1947,7 +2014,7 @@ contains
                end do
             end do
          end if
-         if (this%hoh) then
+         if (this%hoh .and. .not. this%use_gpu_hambuild) then
             call this%build_obarm()
             call this%build_enim()
             do m = 1, nr

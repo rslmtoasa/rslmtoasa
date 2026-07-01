@@ -167,6 +167,22 @@ int hambuild_cuda_set_sbar(hambuild_ctx *ctx, const void *sbar, int nm_store,
 int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee, void *hxc,
                        void *eeo, void *eeoee);
 
+/* --- Phase 2b: local (impurity interaction-zone) Hamiltonian ------------------
+ *
+ * Same neighbour Hamiltonian as bulk but the site loop runs over the nmax local
+ * sites (ia = nlim directly, not atlist(type)). Produces hall/hallo:
+ *   hall  = pack(ham0m)                 (like ee, but over nmax sites)
+ *   hallo = hall * obarm(iz(jj))        (one hoh gemm; NO eeoee)
+ *
+ * Provide the local site list (1-based cluster indices, length nmax) once via
+ * set_local_geometry; the maps are built on-device from the resident geometry
+ * (cr/num/iz/nn already uploaded by set_geometry). set_potential_bulk / set_sbar
+ * are shared with the bulk path. hall/hallo are nb*nb*nn_max*nmax complex. */
+int hambuild_cuda_set_local_sites(hambuild_ctx *ctx, const int *site_list,
+                                  int nmax);
+int hambuild_cuda_build_local_geometry_maps(hambuild_ctx *ctx);
+int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall, void *hallo);
+
 #ifdef __cplusplus
 }
 #endif

@@ -115,3 +115,22 @@ int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee, void *hxc,
     (void)ctx; (void)hoh; (void)ee; (void)hxc; (void)eeo; (void)eeoee;
     return 1;
 }
+
+int hambuild_cuda_set_local_sites(hambuild_ctx *ctx, const int *site_list,
+                                  int nmax)
+{
+    (void)ctx; (void)site_list; (void)nmax;
+    return 1;
+}
+
+int hambuild_cuda_build_local_geometry_maps(hambuild_ctx *ctx)
+{
+    (void)ctx;
+    return 1;
+}
+
+int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall, void *hallo)
+{
+    (void)ctx; (void)hoh; (void)hall; (void)hallo;
+    return 1;
+}

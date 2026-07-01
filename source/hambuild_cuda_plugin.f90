@@ -52,6 +52,9 @@ module hambuild_cuda_plugin_mod
       procedure :: set_potential_bulk
       procedure :: set_sbar
       procedure :: bulk
+      procedure :: set_local_sites
+      procedure :: build_local_geometry_maps
+      procedure :: local
       procedure :: destroy
    end type hambuild_cuda_backend
 
@@ -168,6 +171,31 @@ module hambuild_cuda_plugin_mod
          type(c_ptr), value :: ee, hxc, eeo, eeoee
          integer(c_int) :: hambuild_cuda_bulk
       end function hambuild_cuda_bulk
+
+      function hambuild_cuda_set_local_sites(ctx, site_list, nmax) &
+         bind(C, name='hambuild_cuda_set_local_sites')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: site_list
+         integer(c_int), value :: nmax
+         integer(c_int) :: hambuild_cuda_set_local_sites
+      end function hambuild_cuda_set_local_sites
+
+      function hambuild_cuda_build_local_geometry_maps(ctx) &
+         bind(C, name='hambuild_cuda_build_local_geometry_maps')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         integer(c_int) :: hambuild_cuda_build_local_geometry_maps
+      end function hambuild_cuda_build_local_geometry_maps
+
+      function hambuild_cuda_local(ctx, hoh, hall, hallo) &
+         bind(C, name='hambuild_cuda_local')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         integer(c_int), value :: hoh
+         type(c_ptr), value :: hall, hallo
+         integer(c_int) :: hambuild_cuda_local
+      end function hambuild_cuda_local
    end interface
 #endif
 
@@ -400,6 +428,48 @@ contains
       call plugin_absent()
 #endif
    end subroutine bulk
+
+   !> Upload the local (impurity interaction-zone) site list (1-based cluster
+   !> indices, length nmax) and build the local geometry maps on-device.
+   subroutine set_local_sites(this, site_list)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      integer(c_int), dimension(:), intent(in), target, contiguous :: site_list
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_set_local_sites(this%ctx, c_loc(site_list), &
+         int(size(site_list), c_int))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_set_local_sites')
+#else
+      call plugin_absent()
+#endif
+   end subroutine set_local_sites
+
+   subroutine build_local_geometry_maps(this)
+      class(hambuild_cuda_backend), intent(inout) :: this
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_build_local_geometry_maps(this%ctx)
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_build_local_geometry_maps')
+#else
+      call plugin_absent()
+#endif
+   end subroutine build_local_geometry_maps
+
+   !> Build the local neighbour Hamiltonian on-device and copy hall (and, when
+   !> hoh, hallo) back. Arrays are (nb, nb, nn_max, nmax) complex.
+   subroutine local(this, hoh, hall, hallo)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      logical, intent(in) :: hoh
+      complex(rp), dimension(:, :, :, :), intent(inout), target, contiguous :: hall, hallo
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr, hoh_i
+      hoh_i = 0_c_int; if (hoh) hoh_i = 1_c_int
+      ierr = hambuild_cuda_local(this%ctx, hoh_i, c_loc(hall), c_loc(hallo))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_local')
+#else
+      call plugin_absent()
+#endif
+   end subroutine local
 
 #ifdef USE_CUDA_PLUGIN
    !> Report a failed C entry point, appending the backend error string.

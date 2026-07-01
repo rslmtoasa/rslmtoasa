@@ -103,6 +103,15 @@ struct hambuild_ctx {
     /* host-side geometry mirror to compute ji for hoh batching */
     std::vector<int> h_iz, h_nn, h_atlist, h_valid;
     int h_ndi = 0;
+
+    /* --- Phase 2b local (impurity) path (nmax reused from create) --- */
+    int *d_local_atlist = nullptr;      /* nmax (1-based cluster indices) */
+    int *d_local_valid = nullptr, *d_local_shell = nullptr, *d_local_ino = nullptr;
+    double *d_local_vet = nullptr;      /* 3*nn_max*nmax */
+    double *d_local_hv = nullptr;       /* 3*kk*nmax clusba scratch */
+    hbc *d_hall = nullptr, *d_hallo = nullptr, *d_hall_hxc = nullptr; /* hxc scratch */
+    std::vector<int> h_local_atlist, h_local_valid;
+    bool have_local_geometry = false;
 };
 
 static std::string g_hambuild_err;
@@ -197,6 +206,10 @@ extern "C" void hambuild_cuda_destroy(hambuild_ctx *ctx) {
     cudaFree(ctx->d_mom_bulk); cudaFree(ctx->d_q_ss); cudaFree(ctx->d_sbar_re);
     cudaFree(ctx->d_ee); cudaFree(ctx->d_hxc); cudaFree(ctx->d_eeo);
     cudaFree(ctx->d_eeoee);
+    cudaFree(ctx->d_local_atlist); cudaFree(ctx->d_local_valid);
+    cudaFree(ctx->d_local_shell); cudaFree(ctx->d_local_ino);
+    cudaFree(ctx->d_local_vet); cudaFree(ctx->d_local_hv);
+    cudaFree(ctx->d_hall); cudaFree(ctx->d_hallo); cudaFree(ctx->d_hall_hxc);
     if (ctx->cublas) cublasDestroy(ctx->cublas);
     delete ctx;
 }
@@ -560,5 +573,150 @@ extern "C" int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee,
     if (hoh && eeo)   ok = ok && down(eeo, ctx->d_eeo, blk * sizeof(hbc));
     if (hoh && eeoee) ok = ok && down(eeoee, ctx->d_eeoee, blk * sizeof(hbc));
     if (!ok) { set_error("hambuild_cuda_bulk: copy back failed"); return 1; }
+    return 0;
+}
+
+/* --- Phase 2b: local (impurity interaction-zone) Hamiltonian ------------- */
+
+extern "C" int hambuild_cuda_set_local_sites(hambuild_ctx *ctx,
+                                             const int *site_list, int nmax) {
+    if (!ctx) { set_error("hambuild_cuda_set_local_sites: null ctx"); return 1; }
+    if (nmax <= 0) { set_error("hambuild_cuda_set_local_sites: nmax<=0"); return 1; }
+    if (!ctx->d_cr) {
+        set_error("hambuild_cuda_set_local_sites: call set_geometry first");
+        return 1;
+    }
+    const int nm = ctx->nn_max, kk = ctx->kk;
+    bool ok = true;
+    if (nmax != ctx->nmax || !ctx->d_local_atlist) {
+        cudaFree(ctx->d_local_atlist); cudaFree(ctx->d_local_valid);
+        cudaFree(ctx->d_local_shell); cudaFree(ctx->d_local_ino);
+        cudaFree(ctx->d_local_vet); cudaFree(ctx->d_local_hv);
+        cudaFree(ctx->d_hall); cudaFree(ctx->d_hallo); cudaFree(ctx->d_hall_hxc);
+        ctx->d_local_atlist = ctx->d_local_valid = ctx->d_local_shell = nullptr;
+        ctx->d_local_ino = nullptr;
+        ctx->d_local_vet = ctx->d_local_hv = nullptr;
+        ctx->d_hall = ctx->d_hallo = ctx->d_hall_hxc = nullptr;
+        ctx->nmax = nmax;
+        ok = ok && dev_alloc((void **)&ctx->d_local_atlist, (size_t)nmax * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_local_valid, (size_t)nm * nmax * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_local_shell, (size_t)nm * nmax * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_local_ino, (size_t)nm * nmax * sizeof(int));
+        ok = ok && dev_alloc((void **)&ctx->d_local_vet, 3 * (size_t)nm * nmax * sizeof(double));
+        ok = ok && dev_alloc((void **)&ctx->d_local_hv, 3 * (size_t)kk * nmax * sizeof(double));
+        const size_t lblk = (size_t)ctx->nb * ctx->nb * nm * nmax;
+        ok = ok && dev_alloc((void **)&ctx->d_hall, lblk * sizeof(hbc));
+        ok = ok && dev_alloc((void **)&ctx->d_hallo, lblk * sizeof(hbc));
+        ok = ok && dev_alloc((void **)&ctx->d_hall_hxc, lblk * sizeof(hbc));
+        if (!ok) { set_error("hambuild_cuda_set_local_sites: alloc failed"); return 1; }
+    }
+    if (!up(ctx->d_local_atlist, site_list, (size_t)nmax * sizeof(int))) {
+        set_error("hambuild_cuda_set_local_sites: upload failed");
+        return 1;
+    }
+    ctx->h_local_atlist.assign(site_list, site_list + nmax);
+    ctx->have_local_geometry = false;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_build_local_geometry_maps(hambuild_ctx *ctx) {
+    if (!ctx) { set_error("hambuild_cuda_build_local_geometry_maps: null ctx"); return 1; }
+    if (!ctx->d_local_atlist) {
+        set_error("hambuild_cuda_build_local_geometry_maps: local sites not set");
+        return 1;
+    }
+    /* Reuse the geometry-map kernel with the local site list as the "atlist" and
+     * nmax as the "type count". use_vet_in=0 (non-pbc); pbc impurity would need a
+     * local vet upload -- deferred (impurity examples are non-pbc). */
+    const int rc = hambuild_gpu_launch_geometry_maps(
+        ctx->d_cr, ctx->d_num, ctx->d_iz, ctx->d_nn, ctx->d_local_atlist,
+        nullptr, 0, ctx->kk, ctx->nn_max, ctx->h_ndi, ctx->alat, ctx->r2,
+        ctx->nmax, ctx->d_local_hv, ctx->d_local_valid, ctx->d_local_shell,
+        ctx->d_local_ino, ctx->d_local_vet);
+    if (rc != 0) {
+        set_error("hambuild_cuda_build_local_geometry_maps: kernel failed (code " +
+                  std::to_string(rc) + ")");
+        return rc;
+    }
+    ctx->h_local_valid.resize((size_t)ctx->nn_max * ctx->nmax);
+    if (!down(ctx->h_local_valid.data(), ctx->d_local_valid,
+              ctx->h_local_valid.size() * sizeof(int))) {
+        set_error("hambuild_cuda_build_local_geometry_maps: valid mirror failed");
+        return 1;
+    }
+    ctx->have_local_geometry = true;
+    return 0;
+}
+
+extern "C" int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall,
+                                   void *hallo) {
+    if (!ctx) { set_error("hambuild_cuda_local: null ctx"); return 1; }
+    if (!ctx->have_local_geometry || !ctx->have_potential_bulk || !ctx->have_sbar) {
+        set_error("hambuild_cuda_local: local geometry/potential/sbar not set");
+        return 1;
+    }
+    const int nb = ctx->nb, norb = ctx->norb, nm = ctx->nn_max, nmax = ctx->nmax;
+    const size_t lblk = (size_t)nb * nb * nm * nmax;
+
+    /* Reuse the bulk ham kernel over the local site list. hall <- ee slot;
+     * hxc goes to scratch (local path has no hxc output). hoh flag drives the
+     * on-site cx/cex selection identically. */
+    int rc = hambuild_gpu_launch_bulk_ham(
+        ctx->d_sbar_re, norb, ctx->nm_store, ctx->ntot, ctx->d_wx0, ctx->d_wx1,
+        ctx->d_cx0, ctx->d_cx1, ctx->d_cex0, ctx->d_cex1, ctx->d_mom_bulk,
+        ctx->d_q_ss, ctx->theta_ss, ctx->d_v, ctx->d_vc, ctx->d_iz, ctx->d_nn,
+        ctx->d_local_atlist, ctx->d_cr, ctx->d_local_valid, ctx->d_local_shell,
+        ctx->d_local_ino, ctx->d_local_vet, ctx->h_ndi, ctx->kk, hoh,
+        ctx->d_hall, ctx->d_hall_hxc, norb, nb, nm, nmax);
+    if (rc != 0) {
+        set_error("hambuild_cuda_local: ham kernel failed (code " +
+                  std::to_string(rc) + ")");
+        return rc;
+    }
+
+    if (hoh) {
+        /* hallo(:,:,m,nlim) = hall(:,:,m,nlim) * obarm(:,:,ji);  single gemm.
+         * ji = iz(jj), jj = nn(nlim,m) (m>0) or nlim (m==0); absent -> zero. */
+        cudaMemset(ctx->d_hallo, 0, lblk * sizeof(hbc));
+        const int ndi = ctx->h_ndi;
+        std::vector<const hbc *> Aptr, Bptr; std::vector<hbc *> Cptr;
+        const size_t slab = (size_t)nb * nb;
+        for (int s = 0; s < nmax; ++s) {
+            int ia = ctx->h_local_atlist[s] - 1;
+            int nr = ctx->h_nn[ia + (size_t)ndi * 0];
+            for (int m = 0; m < nr; ++m) {
+                int jj = (m == 0) ? (ia + 1) : ctx->h_nn[ia + (size_t)ndi * m];
+                int vld = ctx->h_local_valid[m + (size_t)nm * s];
+                int ji = 0;
+                if (jj != 0 && vld != 0) ji = ctx->h_iz[jj - 1];
+                if (ji <= 0) continue;
+                size_t off = slab * (m + (size_t)nm * s);
+                Aptr.push_back(ctx->d_hall + off);
+                Bptr.push_back(ctx->d_obarm + slab * (ji - 1));
+                Cptr.push_back(ctx->d_hallo + off);
+            }
+        }
+        int batch = (int)Aptr.size();
+        if (batch > 0) {
+            const hbc **dA, **dB; hbc **dC;
+            cudaMalloc((void **)&dA, batch * sizeof(hbc *));
+            cudaMalloc((void **)&dB, batch * sizeof(hbc *));
+            cudaMalloc((void **)&dC, batch * sizeof(hbc *));
+            cudaMemcpy(dA, Aptr.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            cudaMemcpy(dB, Bptr.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            cudaMemcpy(dC, Cptr.data(), batch * sizeof(hbc *), cudaMemcpyHostToDevice);
+            hbc one = make_cuDoubleComplex(1.0, 0.0);
+            hbc zero = make_cuDoubleComplex(0.0, 0.0);
+            cublasZgemmBatched(ctx->cublas, CUBLAS_OP_N, CUBLAS_OP_N, nb, nb, nb,
+                               &one, dA, nb, dB, nb, &zero, dC, nb, batch);
+            cudaDeviceSynchronize();
+            cudaFree(dA); cudaFree(dB); cudaFree(dC);
+        }
+    }
+
+    bool ok = true;
+    if (hall)  ok = ok && down(hall, ctx->d_hall, lblk * sizeof(hbc));
+    if (hoh && hallo) ok = ok && down(hallo, ctx->d_hallo, lblk * sizeof(hbc));
+    if (!ok) { set_error("hambuild_cuda_local: copy back failed"); return 1; }
     return 0;
 }
