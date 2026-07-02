@@ -579,13 +579,87 @@ contains
          deallocate(ham_vec)
       end do
 
-      call g_logger%info('hambuild Phase-1.5 geometry-map check: valid mismatches='// &
+      call g_logger%info('hambuild Phase-1.5 geometry-map check (bulk): valid mismatches='// &
          fmt('i0', n_valid_mismatch)//' shell='//fmt('i0', n_shell_mismatch)// &
          ' ino='//fmt('i0', n_ino_mismatch)//' max|vet_err|='//fmt('es12.4', vet_err), &
          __FILE__, __LINE__)
 
       deallocate(g_valid, g_shell, g_ino, g_vet, cralat)
+
+      ! --- Local (interaction-zone) map check, if there are local sites. ---
+      if (this%lattice%nmax > 0) call verify_local_geometry_maps_gpu(this)
    end subroutine verify_geometry_maps_gpu
+
+   !> Same check as verify_geometry_maps_gpu but for the local site list
+   !> [1..nmax] (build_locham / chbar_nc(nlim,...)). Builds the GPU local maps and
+   !> diffs them against CPU hmfind for every (nlim, m).
+   subroutine verify_local_geometry_maps_gpu(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: nmax_loc, s, ia, m, jj, ni, nn_max, kk
+      integer :: n_valid_mismatch, n_shell_mismatch, n_ino_mismatch
+      integer(c_int), dimension(:, :), allocatable :: g_valid, g_shell, g_ino
+      integer(c_int), dimension(:), allocatable :: site_list
+      real(rp), dimension(:, :, :), allocatable :: g_vet
+      real(rp), dimension(3) :: vet
+      real(rp), dimension(norb, norb) :: hhh
+      real(rp), dimension(:, :), allocatable :: ham_vec, cralat
+      real(rp) :: r2, vet_err, e
+      integer :: nn_loc
+
+      nmax_loc = this%lattice%nmax
+      nn_max = size(this%lattice%nn, 2)
+      kk = this%lattice%kk
+      r2 = this%lattice%r2
+
+      allocate(site_list(nmax_loc))
+      do s = 1, nmax_loc
+         site_list(s) = int(s, c_int)
+      end do
+      call this%gpu_hambuild%set_local_sites(site_list)
+      call this%gpu_hambuild%build_local_geometry_maps()
+
+      allocate(g_valid(nn_max, nmax_loc), g_shell(nn_max, nmax_loc), g_ino(nn_max, nmax_loc))
+      allocate(g_vet(3, nn_max, nmax_loc))
+      call this%gpu_hambuild%get_geometry_maps(g_valid, g_shell, g_ino, g_vet)
+
+      allocate(cralat(3, kk))
+      cralat = this%lattice%cr(:, 1:kk)*this%lattice%alat
+      n_valid_mismatch = 0; n_shell_mismatch = 0; n_ino_mismatch = 0
+      vet_err = 0.0_rp
+
+      do s = 1, nmax_loc
+         ia = s
+         nn_loc = this%lattice%nn(ia, 1)
+         allocate(ham_vec(3, nn_loc))
+         call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_loc, ham_vec)
+         do m = 1, this%lattice%nn(ia, 1)
+            jj = this%lattice%nn(ia, m)
+            if (m == 1) jj = ia
+            if (jj /= 0) then
+               if (this%lattice%pbc) then
+                  call this%lattice%f_wrap_coord_diff(this%lattice%kk, &
+                     this%lattice%cr*this%lattice%alat, ia, jj, vet)
+               else
+                  vet = (this%lattice%cr(:, jj) - this%lattice%cr(:, ia))*this%lattice%alat
+               end if
+               call this%hmfind(vet, this%lattice%nn(ia, 1), hhh, m, ia, m, ni, ham_vec)
+               if (g_valid(m, s) /= ni) n_valid_mismatch = n_valid_mismatch + 1
+               if (g_shell(m, s) /= m) n_shell_mismatch = n_shell_mismatch + 1
+               if (g_ino(m, s) /= this%lattice%num(ia)) n_ino_mismatch = n_ino_mismatch + 1
+               e = maxval(abs(g_vet(:, m, s) - vet))
+               if (e > vet_err) vet_err = e
+            end if
+         end do
+         deallocate(ham_vec)
+      end do
+
+      call g_logger%info('hambuild Phase-1.5 geometry-map check (local): valid mismatches='// &
+         fmt('i0', n_valid_mismatch)//' shell='//fmt('i0', n_shell_mismatch)// &
+         ' ino='//fmt('i0', n_ino_mismatch)//' max|vet_err|='//fmt('es12.4', vet_err), &
+         __FILE__, __LINE__)
+
+      deallocate(g_valid, g_shell, g_ino, g_vet, cralat, site_list)
+   end subroutine verify_local_geometry_maps_gpu
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
