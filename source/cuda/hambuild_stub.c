@@ -129,6 +129,13 @@ int hambuild_cuda_build_local_geometry_maps(hambuild_ctx *ctx)
     return 1;
 }
 
+int hambuild_cuda_get_local_geometry_maps(hambuild_ctx *ctx, int *valid,
+                                          int *shell, int *ino, double *vet)
+{
+    (void)ctx; (void)valid; (void)shell; (void)ino; (void)vet;
+    return 1;
+}
+
 int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall, void *hallo)
 {
     (void)ctx; (void)hoh; (void)hall; (void)hallo;

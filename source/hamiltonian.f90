@@ -620,7 +620,7 @@ contains
 
       allocate(g_valid(nn_max, nmax_loc), g_shell(nn_max, nmax_loc), g_ino(nn_max, nmax_loc))
       allocate(g_vet(3, nn_max, nmax_loc))
-      call this%gpu_hambuild%get_geometry_maps(g_valid, g_shell, g_ino, g_vet)
+      call this%gpu_hambuild%get_local_geometry_maps(g_valid, g_shell, g_ino, g_vet)
 
       allocate(cralat(3, kk))
       cralat = this%lattice%cr(:, 1:kk)*this%lattice%alat

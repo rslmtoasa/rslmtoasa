@@ -426,6 +426,24 @@ extern "C" int hambuild_cuda_get_geometry_maps(hambuild_ctx *ctx, int *valid,
     return 0;
 }
 
+extern "C" int hambuild_cuda_get_local_geometry_maps(hambuild_ctx *ctx,
+                                                     int *valid, int *shell,
+                                                     int *ino, double *vet) {
+    if (!ctx) { set_error("hambuild_cuda_get_local_geometry_maps: null ctx"); return 1; }
+    if (!ctx->have_local_geometry) {
+        set_error("hambuild_cuda_get_local_geometry_maps: local maps not built");
+        return 1;
+    }
+    const size_t ni = (size_t)ctx->nn_max * ctx->nmax;
+    bool ok = true;
+    if (valid) ok = ok && down(valid, ctx->d_local_valid, ni * sizeof(int));
+    if (shell) ok = ok && down(shell, ctx->d_local_shell, ni * sizeof(int));
+    if (ino)   ok = ok && down(ino, ctx->d_local_ino, ni * sizeof(int));
+    if (vet)   ok = ok && down(vet, ctx->d_local_vet, 3 * ni * sizeof(double));
+    if (!ok) { set_error("hambuild_cuda_get_local_geometry_maps: copy failed"); return 1; }
+    return 0;
+}
+
 /* --- Phase 2: bulk/local hot loop ---------------------------------------- */
 
 extern "C" int hambuild_cuda_set_potential_bulk(

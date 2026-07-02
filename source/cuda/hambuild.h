@@ -181,6 +181,8 @@ int hambuild_cuda_bulk(hambuild_ctx *ctx, int hoh, void *ee, void *hxc,
 int hambuild_cuda_set_local_sites(hambuild_ctx *ctx, const int *site_list,
                                   int nmax);
 int hambuild_cuda_build_local_geometry_maps(hambuild_ctx *ctx);
+int hambuild_cuda_get_local_geometry_maps(hambuild_ctx *ctx, int *valid,
+                                          int *shell, int *ino, double *vet);
 int hambuild_cuda_local(hambuild_ctx *ctx, int hoh, void *hall, void *hallo);
 
 /* --- Phase 3: combined correction (CCOR) H_cc -> eecc / hallcc ----------------

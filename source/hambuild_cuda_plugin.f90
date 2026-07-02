@@ -54,6 +54,7 @@ module hambuild_cuda_plugin_mod
       procedure :: bulk
       procedure :: set_local_sites
       procedure :: build_local_geometry_maps
+      procedure :: get_local_geometry_maps
       procedure :: local
       procedure :: set_ccor
       procedure :: ccor_bulk
@@ -190,6 +191,14 @@ module hambuild_cuda_plugin_mod
          type(c_ptr), value :: ctx
          integer(c_int) :: hambuild_cuda_build_local_geometry_maps
       end function hambuild_cuda_build_local_geometry_maps
+
+      function hambuild_cuda_get_local_geometry_maps(ctx, valid, shell, ino, vet) &
+         bind(C, name='hambuild_cuda_get_local_geometry_maps')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         type(c_ptr), value :: valid, shell, ino, vet
+         integer(c_int) :: hambuild_cuda_get_local_geometry_maps
+      end function hambuild_cuda_get_local_geometry_maps
 
       function hambuild_cuda_local(ctx, hoh, hall, hallo) &
          bind(C, name='hambuild_cuda_local')
@@ -482,6 +491,22 @@ contains
       call plugin_absent()
 #endif
    end subroutine build_local_geometry_maps
+
+   !> Copy the built local maps back (validation). Arrays are (nn_max, nmax) for
+   !> valid/shell/ino and (3, nn_max, nmax) for vet.
+   subroutine get_local_geometry_maps(this, valid, shell, ino, vet)
+      class(hambuild_cuda_backend), intent(inout) :: this
+      integer(c_int), dimension(:, :), intent(inout), target, contiguous :: valid, shell, ino
+      real(rp), dimension(:, :, :), intent(inout), target, contiguous :: vet
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: ierr
+      ierr = hambuild_cuda_get_local_geometry_maps(this%ctx, c_loc(valid), &
+         c_loc(shell), c_loc(ino), c_loc(vet))
+      if (ierr /= 0_c_int) call fail('hambuild_cuda_get_local_geometry_maps')
+#else
+      call plugin_absent()
+#endif
+   end subroutine get_local_geometry_maps
 
    !> Build the local neighbour Hamiltonian on-device and copy hall (and, when
    !> hoh, hallo) back. Arrays are (nb, nb, nn_max, nmax) complex.
