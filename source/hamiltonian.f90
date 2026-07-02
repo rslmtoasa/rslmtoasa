@@ -475,14 +475,19 @@ contains
 
       nt = this%lattice%ntype
       ndi = size(this%lattice%nn, 1)      ! = kk
-      nn_max = size(this%lattice%nn, 2)
+      ! The Hamiltonian output arrays (ee/eeo/hall/...) use nn(1,1)+1 as the
+      ! neighbour dimension, NOT size(nn,2)=nm+1. For a bulk crystal these
+      ! coincide (site 1 has the max neighbours), but in an impurity interaction
+      ! zone site 1 may have fewer neighbours than the global max, so they differ.
+      ! Use nn(1,1)+1 so device buffers/strides match ee/hall exactly.
+      nn_max = this%lattice%nn(1, 1) + 1
 
       allocate(num_i(this%lattice%kk), iz_i(this%lattice%kk))
       allocate(atlist_i(nt), nn_i(ndi, nn_max))
       num_i = int(this%lattice%num, c_int)
       iz_i = int(this%lattice%iz, c_int)
       atlist_i = int(this%lattice%atlist(1:nt), c_int)
-      nn_i = int(this%lattice%nn, c_int)
+      nn_i = int(this%lattice%nn(:, 1:nn_max), c_int)
 
       call this%gpu_hambuild%ensure_context(nb, norb, max(this%lattice%kk, 1), nt, &
          max(this%lattice%nmax, 0))
@@ -537,7 +542,7 @@ contains
 
       nt = this%lattice%ntype
       ndi = size(this%lattice%nn, 1)
-      nn_max = size(this%lattice%nn, 2)
+      nn_max = this%lattice%nn(1, 1) + 1   ! match ee/hall neighbour dimension
       kk = this%lattice%kk
       r2 = this%lattice%r2
 
@@ -607,7 +612,7 @@ contains
       integer :: nn_loc
 
       nmax_loc = this%lattice%nmax
-      nn_max = size(this%lattice%nn, 2)
+      nn_max = this%lattice%nn(1, 1) + 1   ! match ee/hall neighbour dimension
       kk = this%lattice%kk
       r2 = this%lattice%r2
 
