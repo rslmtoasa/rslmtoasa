@@ -2354,11 +2354,13 @@ contains
          if (allocated(this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha)) then
             a = this%charge%lattice%symbolic_atoms(itype)%potential%screening_alpha(l)
          else if (allocated(this%charge%lattice%alpha)) then
-            a = this%charge%lattice%alpha(ilm, alpha_idx, ia)
+            ! lattice%alpha is stored (norb, site, type); index by (ilm, site=ia,
+            ! type=num(ia)). alpha_idx = num(ia).
+            a = this%charge%lattice%alpha(ilm, ia, alpha_idx)
          end if
          adot = 0.0_rp
          if (allocated(this%charge%lattice%alpha_dot)) then
-            adot = this%charge%lattice%alpha_dot(ilm, alpha_idx, ia)
+            adot = this%charge%lattice%alpha_dot(ilm, ia, alpha_idx)
          end if
          t1 = -sw**(2*l + 3)/(2.0_rp*l2p1*l2p1*l2p3)
          t2 = a*sw*sw/l2p1
