@@ -33,6 +33,15 @@ module chebyshev_fast_mod
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
 
+   abstract interface
+      subroutine ham_apply_t(x1, x0, y, alpha, beta)
+         import :: sp
+         complex(sp), intent(in) :: x1(:, :), x0(:, :)
+         complex(sp), intent(out) :: y(:, :)
+         real(sp), intent(in) :: alpha, beta
+      end subroutine ham_apply_t
+   end interface
+
    type :: cheb_cache_fingerprint_t
       logical :: valid = .false.
       integer :: nb = 0
@@ -627,6 +636,68 @@ contains
       end if
    end subroutine cheb_cache_ensure_scaled_velocity_sp
 
+   subroutine pack_psi0_sp(psi0, kk, nb, p0)
+      integer, intent(in) :: kk, nb
+      complex(rp), intent(in) :: psi0(nb, nb, kk)
+      complex(sp), intent(out) :: p0(nb*kk, nb)
+      integer :: k, l, c
+
+      !$omp parallel do private(k, c, l) schedule(static)
+      do k = 1, kk
+         do c = 1, nb
+            do l = 1, nb
+               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
+            end do
+         end do
+      end do
+      !$omp end parallel do
+   end subroutine pack_psi0_sp
+
+   !> Hermitian rank-k: C = A^H A via cherk, then fill the upper triangle.
+   subroutine cherk_full_sp(n, kdim, Amat, C)
+      integer, intent(in) :: n, kdim
+      complex(sp), intent(in) :: Amat(kdim, n)
+      complex(sp), intent(out) :: C(n, n)
+      integer :: i, j
+
+      C = (0.0_sp, 0.0_sp)
+      call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
+      do j = 2, n
+         do i = 1, j - 1
+            C(i, j) = conjg(C(j, i))
+         end do
+      end do
+   end subroutine cherk_full_sp
+
+   subroutine cheb_three_term_moments(apply_h, p0, p1, p2, nb, ld, lld, mu)
+      external :: apply_h
+      integer, intent(in) :: nb, ld, lld
+      complex(sp), pointer, intent(inout) :: p0(:, :), p1(:, :), p2(:, :)
+      complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
+      complex(sp), pointer :: ptmp(:, :)
+      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
+      integer :: ll
+
+      call cherk_full_sp(nb, ld, p0, mu1_sp)
+      mu(:, :, 1) = mu1_sp
+      call apply_h(p0, p0, p1, 1.0_sp, 0.0_sp)
+      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+      mu(:, :, 2) = mu2_sp
+
+      do ll = 1, lld
+         call apply_h(p1, p0, p2, 2.0_sp, -1.0_sp)
+         call cherk_full_sp(nb, ld, p1, dum_sp)
+         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+         ptmp => p0
+         p0 => p1
+         p1 => p2
+         p2 => ptmp
+      end do
+   end subroutine cheb_three_term_moments
+
    !> Shared per-shell fp32 block matvec (site-major):
    !>   y = alpha*(acc - bsc*x1)*inva + beta*x0,   acc = sum_neigh Op * x1_block
    !> Op is hee_op[iz(k)] (bulk) for k > nmax_op, hha_op[k] (impurity) otherwise.
@@ -701,6 +772,47 @@ contains
       !$omp end parallel do
    end subroutine combine_hoh_sp
 
+   !> H operator sweep with null-impurity guard (impurity arrays are absent
+   !> when nmax == 0): y = alpha*(Op x1 - bsc x1)*inva + beta*x0.
+   subroutine hsweep_sp(opee, opha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, al, be, inva, bsc)
+      complex(sp), pointer, intent(in) :: opee(:, :, :, :), opha(:, :, :, :)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax, ld
+      complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
+      complex(sp), intent(out) :: y(ld, nb)
+      real(sp), intent(in) :: al, be, inva, bsc
+
+      if (associated(opha)) then
+         call spmv_block_sp(opee, opha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, al, be, inva, bsc)
+      else
+         call spmv_block_sp(opee, opee, nn, iz, kk, nb, nnmax, ntype, 0, ld, x1, x0, y, al, be, inva, bsc)
+      end if
+   end subroutine hsweep_sp
+
+   !> y = alpha*(H~ x1) + beta*x0, hoh-aware (two-sweep).
+   subroutine happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                        ld, x1, x0, y, al, be, wt, etmp)
+      logical, intent(in) :: do_hoh
+      complex(sp), pointer, intent(in) :: hee(:, :, :, :), hha(:, :, :, :)
+      complex(sp), pointer, intent(in) :: bee(:, :, :, :), bha(:, :, :, :)
+      complex(sp), pointer, intent(in) :: oee(:, :, :, :), oha(:, :, :, :)
+      complex(sp), pointer, intent(in) :: hons(:, :, :)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax, ld
+      complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
+      complex(sp), intent(out) :: y(ld, nb)
+      complex(sp), intent(inout) :: wt(ld, nb), etmp(ld, nb)
+      real(sp), intent(in) :: al, be
+
+      if (do_hoh) then
+         call hsweep_sp(bee, bha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x1, wt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         call hsweep_sp(oee, oha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, wt, wt, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+         call combine_hoh_sp(wt, etmp, hons, iz, kk, nb, ntype, ld, x1, x0, y, al, be)
+      else
+         call hsweep_sp(hee, hha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, al, be, 1.0_sp, 0.0_sp)
+      end if
+   end subroutine happly_sp
+
    !> Block Chebyshev moments for one starting state.
    !> psi0  : (nb, nb, kk) starting block state (site or ij sign combos)
    !> ee    : (nb, nb, nnmax, ntype), hall: (nb, nb, nnmax, nmax) (or nmax=0)
@@ -726,10 +838,9 @@ contains
       complex(sp), pointer :: hons(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
       complex(sp), pointer, contiguous :: wt(:, :)
-      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
-      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
-      integer :: k, l, c, ld, ll
+      integer :: ld
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
 
@@ -755,93 +866,22 @@ contains
          call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
 
-      ! --- 2. pack psi0 site-major: p(l + nb*(k-1), c) ---------------------
-      !$omp parallel do private(k, c, l) schedule(static)
-      do k = 1, kk
-         do c = 1, nb
-            do l = 1, nb
-               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
-            end do
-         end do
-      end do
-      !$omp end parallel do
-
-      ! --- 3. moments: mu1 = p0^H p0, p1 = Ht p0, mu2 = p0^H p1 ------------
-      call cherk_full(nb, ld, p0, mu1_sp)
-      mu(:, :, 1) = mu1_sp
-      if (do_hoh) then
-         call apply_step_hoh(p0, p0, p1, 1.0_sp, 0.0_sp, wt)
-      else
-         call apply_step(p0, p0, p1, 1.0_sp, 0.0_sp)
-      end if
-      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
-      mu(:, :, 2) = mu2_sp
-
-      do ll = 1, lld
-         if (do_hoh) then
-            call apply_step_hoh(p1, p0, p2, 2.0_sp, -1.0_sp, wt) ! p2 = 2 Ht p1 - p0
-         else
-            call apply_step(p1, p0, p2, 2.0_sp, -1.0_sp)   ! p2 = 2 Ht p1 - p0
-         end if
-         call cherk_full(nb, ld, p1, dum_sp)            ! dum1 = p1^H p1
-         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
-         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
-         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         ptmp => p0
-         p0 => p1
-         p1 => p2
-         p2 => ptmp
-      end do
+      call pack_psi0_sp(psi0, kk, nb, p0)
+      call cheb_three_term_moments(apply_step_selected, p0, p1, p2, nb, ld, lld, mu)
 
    contains
 
-      subroutine apply_step_manual(x1, x0, y, alpha, beta)
-         complex(sp), intent(in)  :: x1(ld, nb), x0(ld, nb)
+      subroutine apply_step_selected(x1, x0, y, alpha, beta)
+         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
          complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in)     :: alpha, beta
-         complex(sp) :: acc(nb, nb), xm
-         integer :: kk_, t_, s_, nbr, nr, r0, m, cc, l
-         !$omp parallel do private(kk_,t_,s_,nbr,nr,r0,m,cc,l,xm,acc) schedule(dynamic,32)
-         do kk_ = 1, kk
-            acc = (0.0_sp, 0.0_sp)
-            nr = nn(kk_, 1)
-            t_ = iz(kk_)
-            do s_ = 1, nr
-               if (s_ == 1) then
-                  nbr = kk_
-               else
-                  nbr = nn(kk_, s_); if (nbr == 0) cycle
-               end if
-               r0 = nb*(nbr - 1)
-               if (kk_ <= nmax) then          ! acc += hha(:,:,s_,kk_) * x1_block
-                  do cc = 1, nb
-                     do m = 1, nb
-                        xm = x1(r0 + m, cc)
-                        do l = 1, nb          ! contiguous in l -> vectorizes
-                           acc(l, cc) = acc(l, cc) + hha(l, m, s_, kk_)*xm
-                        end do
-                     end do
-                  end do
-               else                            ! acc += hee(:,:,s_,t_) * x1_block
-                  do cc = 1, nb
-                     do m = 1, nb
-                        xm = x1(r0 + m, cc)
-                        do l = 1, nb
-                           acc(l, cc) = acc(l, cc) + hee(l, m, s_, t_)*xm
-                        end do
-                     end do
-                  end do
-               end if
-            end do
-            r0 = nb*(kk_ - 1)
-            if (beta /= 0.0_sp) then
-               y(r0+1:r0+nb, :) = alpha*acc + beta*x0(r0+1:r0+nb, :)
-            else
-               y(r0+1:r0+nb, :) = alpha*acc
-            end if
-         end do
-         !$omp end parallel do
-      end subroutine apply_step_manual
+         real(sp), intent(in) :: alpha, beta
+
+         if (do_hoh) then
+            call apply_step_hoh(x1, x0, y, alpha, beta, wt)
+         else
+            call apply_step(x1, x0, y, alpha, beta)
+         end if
+      end subroutine apply_step_selected
 
       !> y = alpha*(Ht x1) + beta*x0, one fused sweep (site-major arrays)
       subroutine apply_step(x1, x0, y, alpha, beta)
@@ -956,34 +996,6 @@ contains
          !$omp end parallel do
       end subroutine apply_step_hoh
 
-      !> Hermitian rank-k: C = A^H A via cherk, then fill the upper triangle
-      subroutine cherk_full(n, k, Amat, C)
-         integer, intent(in) :: n, k
-         complex(sp), intent(in) :: Amat(k, n)
-         complex(sp), intent(out) :: C(n, n)
-         integer :: i, j
-         C = (0.0_sp, 0.0_sp)
-         call cherk('L', 'C', n, k, 1.0_sp, Amat, k, 0.0_sp, C, n)
-         do j = 2, n
-            do i = 1, j - 1
-               C(i, j) = conjg(C(j, i))
-            end do
-         end do
-      end subroutine cherk_full
-
-      subroutine swapm(x, y)
-         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
-         complex(sp) :: tmp
-         integer :: i, j
-         !$omp parallel do private(i, j, tmp) schedule(static)
-         do j = 1, nb
-            do i = 1, ld
-               tmp = x(i, j); x(i, j) = y(i, j); y(i, j) = tmp
-            end do
-         end do
-         !$omp end parallel do
-      end subroutine swapm
-
    end subroutine cheb_moments_fast
 
    !> Block Chebyshev moments using a scaled single-precision BSR operator.
@@ -1000,12 +1012,11 @@ contains
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
       complex(sp), pointer :: hval(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
-      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :)
       complex(sp), pointer :: block_products(:, :, :)
-      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer, pointer :: hcol(:), hrow(:)
-      integer :: k, l, c, ld, ll, nblocks
+      integer :: ld, nblocks
       real(sp) :: inva, a_sp, b_sp
 
       ld = nb*kk
@@ -1021,34 +1032,8 @@ contains
       nblocks = size(hcol)
       call ensure_block_products(nb, nblocks, block_products)
 
-      !$omp parallel do private(k, c, l) schedule(static)
-      do k = 1, kk
-         do c = 1, nb
-            do l = 1, nb
-               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
-            end do
-         end do
-      end do
-      !$omp end parallel do
-
-      call cherk_full_batched(nb, ld, p0, mu1_sp)
-      mu(:, :, 1) = mu1_sp
-      call apply_step_bsr(p0, p0, p1, 1.0_sp, 0.0_sp)
-      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
-      mu(:, :, 2) = mu2_sp
-
-      do ll = 1, lld
-         call apply_step_bsr(p1, p0, p2, 2.0_sp, -1.0_sp)
-         call cherk_full_batched(nb, ld, p1, dum_sp)
-         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
-         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
-         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         ptmp => p0
-         p0 => p1
-         p1 => p2
-         p2 => ptmp
-      end do
-
+      call pack_psi0_sp(psi0, kk, nb, p0)
+      call cheb_three_term_moments(apply_step_bsr, p0, p1, p2, nb, ld, lld, mu)
 
    contains
 
@@ -1085,35 +1070,6 @@ contains
          !$omp end parallel do
       end subroutine apply_step_bsr
 
-      subroutine cherk_full_batched(n, kdim, Amat, C)
-         integer, intent(in) :: n, kdim
-         complex(sp), intent(in) :: Amat(kdim, n)
-         complex(sp), intent(out) :: C(n, n)
-         integer :: i, j
-         C = (0.0_sp, 0.0_sp)
-         call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
-         do j = 2, n
-            do i = 1, j - 1
-               C(i, j) = conjg(C(j, i))
-            end do
-         end do
-      end subroutine cherk_full_batched
-
-      subroutine swapm_batched(x, y)
-         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
-         complex(sp) :: tmp
-         integer :: i, j
-         !$omp parallel do private(i, j, tmp) schedule(static)
-         do j = 1, nb
-            do i = 1, ld
-               tmp = x(i, j)
-               x(i, j) = y(i, j)
-               y(i, j) = tmp
-            end do
-         end do
-         !$omp end parallel do
-      end subroutine swapm_batched
-
    end subroutine cheb_moments_fast_batched
 
    !> Optional Intel oneMKL cgemm_batch implementation.
@@ -1148,13 +1104,12 @@ contains
 
       complex(sp), pointer :: hval(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
-      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :)
       complex(sp), pointer :: block_products(:, :, :)
-      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer, pointer :: hcol(:), hrow(:)
       type(c_ptr), pointer :: a_ptr(:), b_ptr(:), c_ptrs(:)
-      integer :: k, l, c, ld, ll, nblocks
+      integer :: ld, nblocks
       real(sp) :: inva, a_sp, b_sp
 
       ld = nb*kk
@@ -1172,34 +1127,8 @@ contains
       call ensure_mkl_batch_ptr_arrays(nblocks, a_ptr, b_ptr, c_ptrs)
       call init_mkl_batch_static_ptrs()
 
-      !$omp parallel do private(k, c, l) schedule(static)
-      do k = 1, kk
-         do c = 1, nb
-            do l = 1, nb
-               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
-            end do
-         end do
-      end do
-      !$omp end parallel do
-
-      call cherk_full_mkl_batch(nb, ld, p0, mu1_sp)
-      mu(:, :, 1) = mu1_sp
-      call apply_step_mkl_batch(p0, p0, p1, 1.0_sp, 0.0_sp)
-      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
-      mu(:, :, 2) = mu2_sp
-
-      do ll = 1, lld
-         call apply_step_mkl_batch(p1, p0, p2, 2.0_sp, -1.0_sp)
-         call cherk_full_mkl_batch(nb, ld, p1, dum_sp)
-         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
-         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
-         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         ptmp => p0
-         p0 => p1
-         p1 => p2
-         p2 => ptmp
-      end do
-
+      call pack_psi0_sp(psi0, kk, nb, p0)
+      call cheb_three_term_moments(apply_step_mkl_batch, p0, p1, p2, nb, ld, lld, mu)
 
    contains
 
@@ -1264,34 +1193,6 @@ contains
          !$omp end parallel do
       end subroutine apply_step_mkl_batch
 
-      subroutine cherk_full_mkl_batch(n, kdim, Amat, C)
-         integer, intent(in) :: n, kdim
-         complex(sp), intent(in) :: Amat(kdim, n)
-         complex(sp), intent(out) :: C(n, n)
-         integer :: i, j
-         C = (0.0_sp, 0.0_sp)
-         call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
-         do j = 2, n
-            do i = 1, j - 1
-               C(i, j) = conjg(C(j, i))
-            end do
-         end do
-      end subroutine cherk_full_mkl_batch
-
-      subroutine swapm_mkl_batch(x, y)
-         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
-         complex(sp) :: tmp
-         integer :: i, j
-         !$omp parallel do private(i, j, tmp) schedule(static)
-         do j = 1, nb
-            do i = 1, ld
-               tmp = x(i, j)
-               x(i, j) = y(i, j)
-               y(i, j) = tmp
-            end do
-         end do
-         !$omp end parallel do
-      end subroutine swapm_mkl_batch
 #endif
    end subroutine cheb_moments_fast_mkl_batch
 
@@ -1317,11 +1218,9 @@ contains
       type(matrix_descr) :: descA
       complex(sp), pointer :: hval(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
-      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :), ptmp(:, :)
-      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
-      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
+      complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :)
       integer, pointer :: hcol(:), hrow(:)
-      integer :: status, k, l, c, ld, ll
+      integer :: status, ld
       real(sp) :: inva, a_sp, b_sp
 
       ld = nb*kk
@@ -1350,33 +1249,8 @@ contains
       status = mkl_sparse_optimize(mkl_A)
       call check_mkl_sparse_status(status, 'mkl_sparse_optimize')
 
-      !$omp parallel do private(k, c, l) schedule(static)
-      do k = 1, kk
-         do c = 1, nb
-            do l = 1, nb
-               p0(l + nb*(k - 1), c) = cmplx(real(psi0(l, c, k), sp), aimag(psi0(l, c, k)), sp)
-            end do
-         end do
-      end do
-      !$omp end parallel do
-
-      call cherk_full_mkl(nb, ld, p0, mu1_sp)
-      mu(:, :, 1) = mu1_sp
-      call apply_step_mkl(p0, p0, p1, 1.0_sp, 0.0_sp)
-      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
-      mu(:, :, 2) = mu2_sp
-
-      do ll = 1, lld
-         call apply_step_mkl(p1, p0, p2, 2.0_sp, -1.0_sp)
-         call cherk_full_mkl(nb, ld, p1, dum_sp)
-         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
-         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
-         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         ptmp => p0
-         p0 => p1
-         p1 => p2
-         p2 => ptmp
-      end do
+      call pack_psi0_sp(psi0, kk, nb, p0)
+      call cheb_three_term_moments(apply_step_mkl, p0, p1, p2, nb, ld, lld, mu)
 
       status = mkl_sparse_destroy(mkl_A)
       call check_mkl_sparse_status(status, 'mkl_sparse_destroy')
@@ -1397,35 +1271,6 @@ contains
                                       SPARSE_LAYOUT_COLUMN_MAJOR, x1, nb, ld, beta_c, y, ld)
          call check_mkl_sparse_status(status_mkl, 'mkl_sparse_c_mm')
       end subroutine apply_step_mkl
-
-      subroutine cherk_full_mkl(n, kdim, Amat, C)
-         integer, intent(in) :: n, kdim
-         complex(sp), intent(in) :: Amat(kdim, n)
-         complex(sp), intent(out) :: C(n, n)
-         integer :: i, j
-         C = (0.0_sp, 0.0_sp)
-         call cherk('L', 'C', n, kdim, 1.0_sp, Amat, kdim, 0.0_sp, C, n)
-         do j = 2, n
-            do i = 1, j - 1
-               C(i, j) = conjg(C(j, i))
-            end do
-         end do
-      end subroutine cherk_full_mkl
-
-      subroutine swapm_mkl(x, y)
-         complex(sp), intent(inout) :: x(ld, nb), y(ld, nb)
-         complex(sp) :: tmp
-         integer :: i, j
-         !$omp parallel do private(i, j, tmp) schedule(static)
-         do j = 1, nb
-            do i = 1, ld
-               tmp = x(i, j)
-               x(i, j) = y(i, j)
-               y(i, j) = tmp
-            end do
-         end do
-         !$omp end parallel do
-      end subroutine swapm_mkl
 
       subroutine check_mkl_sparse_status(status_in, routine)
          integer, intent(in) :: status_in
@@ -1553,9 +1398,11 @@ contains
       p1 = p0
       do m = 2, cond_ll
          if (m == 2) then
-            call happly(p1, p1, p2, 1.0_sp, 0.0_sp)
+            call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                           ld, p1, p1, p2, 1.0_sp, 0.0_sp, wt, etmp)
          else
-            call happly(p1, p0, p2, 2.0_sp, -1.0_sp)
+            call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp)
          end if
          p0 = p1; p1 = p2
          leftst(:, :, m) = p1
@@ -1568,9 +1415,11 @@ contains
             p1 = p0
          else if (n == 2) then
             p0 = p1
-            call happly(p0, p0, p1, 1.0_sp, 0.0_sp)
+            call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                           ld, p0, p0, p1, 1.0_sp, 0.0_sp, wt, etmp)
          else
-            call happly(p1, p0, p2, 2.0_sp, -1.0_sp)
+            call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp)
             p0 = p1; p1 = p2
          end if
          call vapply(fva, fvoa, p1, rr)              ! rr = v_a v_n
@@ -1584,34 +1433,6 @@ contains
 
    contains
 
-      !> H operator sweep with null-impurity guard (impurity arrays are absent
-      !> when nmax == 0): y = alpha*(Op x1 - bsc x1)*inva + beta*x0.
-      subroutine hsweep(opee, opha, x1, x0, y, al, be, inva_, bsc_)
-         complex(sp), pointer, intent(in) :: opee(:, :, :, :), opha(:, :, :, :)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in) :: al, be, inva_, bsc_
-         if (associated(opha)) then
-            call spmv_block_sp(opee, opha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, al, be, inva_, bsc_)
-         else
-            call spmv_block_sp(opee, opee, nn, iz, kk, nb, nnmax, ntype, 0, ld, x1, x0, y, al, be, inva_, bsc_)
-         end if
-      end subroutine hsweep
-
-      !> y = alpha*(H~ x1) + beta*x0, hoh-aware (two-sweep).
-      subroutine happly(x1, x0, y, al, be)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in) :: al, be
-         if (do_hoh) then
-            call hsweep(bee, bha, x1, x1, wt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-            call hsweep(oee, oha, wt, wt, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-            call combine_hoh_sp(wt, etmp, hons, iz, kk, nb, ntype, ld, x1, x0, y, al, be)
-         else
-            call hsweep(hee, hha, x1, x0, y, al, be, 1.0_sp, 0.0_sp)
-         end if
-      end subroutine happly
-
       !> Velocity apply (raw): y = v*x, hoh -> y = v*x - vo*(h_bare*x).
       subroutine vapply(fv, fvo, x, y)
          complex(sp), pointer, intent(in) :: fv(:, :, :, :), fvo(:, :, :, :)
@@ -1619,7 +1440,7 @@ contains
          complex(sp), intent(out) :: y(ld, nb)
          call spmv_block_sp(fv, fv, nn, iz, kk, nb, nnmax, ntype, 0, ld, x, x, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
          if (do_hoh) then
-            call hsweep(fvee, fvha, x, x, hwt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
+            call hsweep_sp(fvee, fvha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x, x, hwt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
             call spmv_block_sp(fvo, fvo, nn, iz, kk, nb, nnmax, ntype, 0, ld, hwt, y, y, -1.0_sp, 1.0_sp, 1.0_sp, 0.0_sp)
          end if
       end subroutine vapply
@@ -1681,9 +1502,11 @@ contains
             continue                            ! p1 = psiref
          else if (n == 2) then
             p0 = p1
-            call happly(p0, p0, p1, 1.0_sp, 0.0_sp)
+            call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                           ld, p0, p0, p1, 1.0_sp, 0.0_sp, wt, etmp)
          else
-            call happly(p1, p0, p2, 2.0_sp, -1.0_sp)
+            call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
+                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp)
             p0 = p1; p1 = p2
          end if
          call cgemm('C', 'N', nb, nb, ld, cone, lp, ld, p1, ld, czero, dum, nb)
@@ -1691,34 +1514,6 @@ contains
       end do
 
       deallocate (lp, p0, p1, p2, wt, etmp)
-
-   contains
-
-      subroutine hsweep(opee, opha, x1, x0, y, al, be, inva_, bsc_)
-         complex(sp), pointer, intent(in) :: opee(:, :, :, :), opha(:, :, :, :)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in) :: al, be, inva_, bsc_
-         if (associated(opha)) then
-            call spmv_block_sp(opee, opha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, al, be, inva_, bsc_)
-         else
-            call spmv_block_sp(opee, opee, nn, iz, kk, nb, nnmax, ntype, 0, ld, x1, x0, y, al, be, inva_, bsc_)
-         end if
-      end subroutine hsweep
-
-      subroutine happly(x1, x0, y, al, be)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in) :: al, be
-         if (do_hoh) then
-            call hsweep(bee, bha, x1, x1, wt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-            call hsweep(oee, oha, wt, wt, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-            call combine_hoh_sp(wt, etmp, hons, iz, kk, nb, ntype, ld, x1, x0, y, al, be)
-         else
-            call hsweep(hee, hha, x1, x0, y, al, be, 1.0_sp, 0.0_sp)
-         end if
-      end subroutine happly
-
    end subroutine cheb_moments_orbital_fast
 
 end module chebyshev_fast_mod
