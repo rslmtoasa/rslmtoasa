@@ -337,7 +337,7 @@ Baseline:
 
 Tasks:
 - [x] T1. Extend regression coverage to every backend being merged later.
-- [ ] T2. Dead code removal.
+- [x] T2. Dead code removal.
 - [ ] T3. Repo hygiene.
 - [ ] T4. Unify the Chebyshev CPU kernel family in `chebyshev_fast.f90`.
 - [ ] T5. Replace the module-global cache state with a cache handle type.

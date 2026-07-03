@@ -1078,14 +1078,12 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
             allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) ! Now ct is defined at &lattice
 #endif
             this%iu(1) = 1
             this%ib(1) = 1
             this%irec(1) = 1
-!            this%ct(:) = this%alat + 0.1d0
          end if
          this%a = a
       case ('b2')
@@ -1109,7 +1107,6 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
             allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
@@ -1119,7 +1116,6 @@ contains
             this%ib(2) = 2
             this%irec(1) = 1
             this%irec(2) = 2
-!            this%ct(:) = this%alat + 0.3d0
          end if
          this%a = a
       case ('fcc')
@@ -1140,14 +1136,12 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
             allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(1) = 1
             this%ib(1) = 1
             this%irec(1) = 1
-!            this%ct(:) = this%alat + 0.1d0
          end if
          this%a = a
       case ('fcc2')
@@ -1169,15 +1163,12 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
             allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(:) = [1, 2]
             this%ib(:) = [1, 2]
             this%irec(:) = [1, 2]
-!            this%ct(:) = this%alat - 1.5d0
-!            this%r2 = this%ct(1)**2
          end if
          this%a = a
       case ('fcc3')
@@ -1201,15 +1192,12 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
             allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(1:4) = [1, 2, 3, 4]
             this%ib(1:4) = [1, 2, 3, 4]
             this%irec(1:4) = [1, 2, 3, 4]
-!            this%ct(1:4) = this%alat - 1.5d0
-!            this%r2 = this%ct(1)**2
          end if
          this%a = a
       case ('hcp')
@@ -1237,14 +1225,12 @@ contains
             call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
             call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!            call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
             allocate (this%ib(this%ntot), this%iu(this%ntot), this%irec(this%nrec)) !, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
             this%iu(:) = [1, 2]
             this%ib(:) = [1, 2]
             this%irec(:) = [1, 2]
-!            this%ct(:) = this%alat + 0.1d0
          end if
          this%a = a
       case ('file')
@@ -1905,13 +1891,8 @@ contains
          if (allocated(this%ib)) deallocate (this%ib)
          if (allocated(this%irec)) deallocate (this%irec)
          if (allocated(this%iu)) deallocate (this%iu)
-!         if (allocated(this%ct)) deallocate (this%ct)
-
          allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot))!, this%ct(this%ntype)) Now ct is defined at &lattice
          allocate (this%chargetrf_type(this%nbas))
-
-!         this%ct(:) = 4.0d0 !this%alat + 0.1d0
-!         this%r2 = this%ct(1)**2
 
          do i = 1, this%nrec
             this%irec(i) = ichoicen(this%nbulk + i)
@@ -1928,30 +1909,8 @@ contains
 
       ! Rotate the surface cluster so that z is perpendicular to the plane
       ! Calculate the unit vector normal to the crystallographic plane
-      !axis(:) = [this%dx,this%dy,this%dz]
-
-      !theta = acos(dot_product(axis,[0.0_rp,0.0_rp,1.0_rp]))
-
-      !axis(:) = cross_product(axis(:),[0.0_rp,0.0_rp,1.0_rp])
-
-      !norm = norm2(axis)
-
-      !axis = axis / norm
-
     !! Setup the rotation matrix using Rodrigues´ formula
-      !call setup_rotation_matrix(rotation_matrix, axis, theta)
-
-      !do i = 1, nsurf
-      !   rotated_cr(:,i) = matmul(rotation_matrix(:,:), crsurf(:,i))
-      !   crsurf(:,i) = rotated_cr(:,i)
-      !end do
-
-      !rotated_cr(:,:) = 0.0_rp
     !! Rotate the primitive lattice vectors
-      !do i=1,3
-      !   rotated_cr(:,i) = matmul(rotation_matrix(:,:), this%a(:,i))
-      !   write(*,*) rotated_cr(:,i)
-      !end do
 
       write (10, 10004) nsurf
       do k = 1, nsurf - 1, 2
@@ -3618,20 +3577,8 @@ contains
       do i = 1, nrl
          s_temp(i, i) = s_temp(i, i) + bet(i)
       end do
-!    ia = 0
-!    do i = 1, nrl
-!      do j = 1, i
-!        ia = ia + 1
-!        a(ia) = s(i, j)
-!        if (i == j) then
-!          a(ia) = a(ia) + bet(i)
-!        end if
-!      end do
-!    end do
-!    call chlr2f(a, na, wk, nrl, ndef)
       call DPOTRF('U', nrl, s_temp, nrl, info)
       write (17, 10001) ndef
-!    call chlr2s(a, na, s, nrl, nlm)
       call DPOTRS('U', nrl, nlm, s_temp, nrl, s, nrl, INFO)
       deallocate (s_temp)
       do ilm = 1, nlm
@@ -3648,7 +3595,6 @@ contains
                  R(1, 1)**2 + R(2, 1)**2 + R(3, 1)**2) <= (R2/ncut)) then
             ! Legacy view.sbar printing is emitted in dbar1 where neighbour
             ! atom indices are available from nn(ia,m).
-	    ! write (16, 10002) r(1, ir), r(2, ir), r(3, ir), iclus
             hitc = hitc + 1
             irl0 = (ir - 1)*nlm
             do ilm = 1, nlm
@@ -3659,21 +3605,6 @@ contains
           !!! Changed for ´symmetrizing´ Sbar
           !! NOT NEEDED SINCE WITH LARGER CUTOFF
           !! SBAR IS CALCULATED PROPERLY
-            ! do l = 2, 9
-            !    l2 = l - 1
-            !    do j = 1, l2
-            !       sbar(l, j, ir) = sbar(j, l, ir)
-            !    end do
-            ! end do
-            ! do l = 1, 3
-            !    sbar(l+1, 1, ir) = -sbar(l+1, 1, ir)
-            ! end do
-            ! do l = 5, 9
-            !    do j = 2, 4
-            !       sbar(l, j, ir) = -sbar(l, j, ir)
-            !    end do
-            ! end do
-            !
             do isb = 1, nlm
                write (13) (sbar(isb, jsb, hitc), jsb=1, nlm)
             end do

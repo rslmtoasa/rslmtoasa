@@ -576,17 +576,13 @@ contains
       call g_safe_alloc%allocate('hamiltonian.hallcc_glob', this%hallcc_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.eecc_glob', this%eecc_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      !if (hoh) then
       call g_safe_alloc%allocate('hamiltonian.eeo', this%eeo, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.eeoee', this%eeoee, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.obarm', this%obarm, (/nb, nb, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.enim', this%enim, (/nb, nb, this%charge%lattice%ntype/))
-      !end if
-      !if (local_axis)  then
       call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      !if (hoh) then
       call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/nb, nb, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/nb, nb, this%charge%lattice%ntype/))
@@ -607,8 +603,6 @@ contains
       ! Hubbard-V is indexed by symbolic atom type pair (itype,jtype), not by impurity index.
       call g_safe_alloc%allocate('hamiltonian.hubbard_v', this%hubbard_v, (/max(1, this%charge%lattice%ntype), max(1, this%charge%lattice%ntype), 4, 4/))
       call g_safe_alloc%allocate('hamiltonian.hubbard_v_pot', this%hubbard_v_pot, (/nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
-      !end if
-      !end if
 #else
       allocate (this%lsham(nb, nb, this%charge%lattice%ntype))
       allocate (this%tmat(nb, nb, 3, this%charge%lattice%ntype))
@@ -618,19 +612,15 @@ contains
       allocate (this%hall(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%hallcc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%hxc(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      !if (this%hoh) then
       allocate (this%eeo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%eeoee(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%obarm(nb, nb, this%charge%lattice%ntype))
       allocate (this%enim(nb, nb, this%charge%lattice%ntype))
-      !end if
-      !if (this%local_axis) then
       allocate (this%ee_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%eecc_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hall_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%hallcc_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
-      !if (this%hoh) then
       allocate (this%eeo_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hallo_glob(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
       allocate (this%enim_glob(nb, nb, this%charge%lattice%ntype))
@@ -651,8 +641,6 @@ contains
       ! Hubbard-V is indexed by symbolic atom type pair (itype,jtype), not by impurity index.
       allocate (this%hubbard_v(max(1, this%charge%lattice%ntype), max(1, this%charge%lattice%ntype), 4, 4))
       allocate (this%hubbard_v_pot(nb, nb, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
-      !end if
-      !end if
 #endif
 
       this%lsham(:, :, :) = 0.0d0
@@ -664,24 +652,18 @@ contains
       this%hxc(:, :, :, :) = 0.0d0
       this%ee(:, :, :, :) = 0.0d0
       this%eecc(:, :, :, :) = 0.0d0
-      !if (this%hoh) then
       this%hallo(:, :, :, :) = 0.0d0
       this%eeo(:, :, :, :) = 0.0d0
       this%eeoee(:, :, :, :) = 0.0d0
       this%obarm(:, :, :) = 0.0d0
       this%enim(:, :, :) = 0.0d0
-      !end if
-      !if (this%local_axis) then
       this%hall_glob(:, :, :, :) = 0.0d0
       this%hallcc_glob(:, :, :, :) = 0.0d0
       this%ee_glob(:, :, :, :) = 0.0d0
       this%eecc_glob(:, :, :, :) = 0.0d0
-      !  if (this%hoh) then
       this%hallo_glob(:, :, :, :) = 0.0d0
       this%eeo_glob(:, :, :, :) = 0.0d0
       this%enim_glob(:, :, :) = 0.0d0
-      !  end if
-      !end if
       this%v_a(:, :, :, :) = 0.0d0
       this%v_b(:, :, :, :) = 0.0d0
       this%vo_a(:, :, :, :) = 0.0d0
@@ -2387,37 +2369,10 @@ contains
                      end if
                   end if
                end do
-!          do
-!            read(91,*,iostat=iostat2) idxi, idxj, idxk, orbl, orbm, dumre, dumcmplx
-!            if (iostat2 /= 0) then
-!              exit
-!            end if
-!            iia = orb_to_site(orbl,9)
-!            jja = orb_to_site(orbm,9)
-!
-!            cri_cart(:) = this%charge%lattice%cr(:, iia)
-!            crj_cart(:) = this%charge%lattice%cr(:, jja)
-!
-!            cri_dir(:) = cartesian_to_direct(this%charge%lattice%a,cri_cart)
-!            crj_dir(:) = cartesian_to_direct(this%charge%lattice%a,crj_cart)
-!            if(iia==ia)then
-!              vetpao(:) = cri_dir(:) - (crj_dir(:) + [idxi,idxj,idxk])
-!
-!!              vetpao(:) = this%charge%lattice%cr(:,iia) - this%charge%lattice%cr(:,jja) &
-!!                         + (idxi*this%charge%lattice%a(:,1) + idxj*this%charge%lattice%a(:,2) + idxk*this%charge%lattice%a(:,3))!*this%charge%lattice%alat
-!              if(norm2(vet(:)-vetpao(:))<1.0d-3)then
-!                idxdw(k,:) = [idxi,idxj,idxk]
-!                this%ee(orbl+spin_off-(iia-1)*9, orbm+spin_off-(jja-1)*9,k,ntype) = cmplx(dumre,dumcmplx)/13.605703976
-!              end if
-!            end if
-!          end do
             end if
             write (128, *) 'm=', k, 'Atom=', jj, 'Coordinates=', this%charge%lattice%cr(:, jj), 'Ntype=', ntype, 'Index=', idx(k, :)
             write (128, '(18f10.6)') real(this%EE(1:nb, 1:nb, k, ntype))!*13.605703976
             write (128, *) sum(real(this%ee(:, :, k, ntype)))
-            !write(129,*)´m=´,k, ´Atom=´, jj, ´Coordinates=´, this%charge%lattice%cr(:, jj), ´Ntype=´,ntype, ´Index=´, idx(k,:)
-            !write(129,´(9f10.6)´) real(this%EE(10:18,1:9,k,ntype))*13.605703976
-            !write(129,*) sum(real(this%ee(:,:,k,ntype)))
             rewind (90)
             rewind (91)
             rewind (92)
@@ -2491,9 +2446,6 @@ contains
          end do
       end do
 
-!    do ilm = 1, norb
-!      write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, 4)), jlm=1, 9)
-!    end do
 
       if (vv <= 0.01d0) then
          do ilm = 1, norb
@@ -2527,12 +2479,6 @@ contains
          end do
       end do
 
-      !do m=1, 3
-      !  write(123, *)´m=´, m
-      !  do ilm = 1, norb
-      !    write(123, ´(9f10.6)´) (real(this%hhmag(ilm, jlm, m)), jlm=1, 9)
-      !  end do
-      !end do
    end subroutine ham0m_nc
 
    subroutine chbar_nc(this, ia, nr, ino, ntype)
@@ -2562,13 +2508,9 @@ contains
       nn_max_loc = nr
       call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, ham_vec)
 
-      !do m=1, nr
-      !  print ´(9f10.6)´, real(this%charge%lattice%sbar(:, :, m, ino))
-      !end do
       it = this%charge%lattice%iz(ia)
       do m = 1, nr
          jj = this%charge%lattice%nn(ia, m)
-         !write(123, *)´ia, ii´, ia, m, this%charge%lattice%nn(ia, m)
          if (m == 1) then
             jj = ia
          end if
@@ -2579,9 +2521,6 @@ contains
             else
                vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
             end if
-            !write(123, ´(3f10.6)´) vet(:)
-            !write(123, ´(3f10.6)´) this%charge%lattice%sbarvec(:, m)
-            !write(123, ´(a, 3i4, 3f10.6)´) ´nn ´, IA, m, JJ, VET(:)
             call this%hmfind(vet, nr, hhh, m, ia, m, ni, ham_vec)
             if (ni == 0) then
                this%charge%lattice%nn(ia, m) = 0
@@ -2594,15 +2533,6 @@ contains
          end if
       end do
       if (allocated(ham_vec)) deallocate(ham_vec)
-      !do m=1, nr
-      !  write(123, *)´m=´, m
-      !  do mdir=1, 4
-      !    write(123, *)´mdir=´, mdir
-      !    do i = 1, norb
-      !      write(123, ´(9f10.4)´)(real(this%hmag(i, j, m, mdir)), j=1, 9)
-      !    end do
-      !  end do
-      !end do
    end subroutine chbar_nc
 
    subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ham_vec)
