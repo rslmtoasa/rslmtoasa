@@ -1,0 +1,99 @@
+{
+  "_description": "Regression backend matrix. Each case patches the base test input.nml, runs rslmto.x, and compares Fe_out.nml to references generated from the trusted pre-refactor build.",
+  "cases": [
+    {
+      "name": "bccFe_chebyshev_fast",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_batched",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "batched", "lld": 30 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_mkl_batch",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "requires_cmake_option": "ENABLE_MKL_BATCH",
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 30 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_mkl_sparse",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "requires_cmake_option": "ENABLE_MKL_SPARSE",
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "mkl_sparse", "lld": 30 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_legacy",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "legacy", "lld": 30 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_fast_hoh",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
+        "energy": { "energy_min": -3.0, "energy_max": 1.8 },
+        "hamiltonian": { "hoh": true, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_legacy_hoh",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "legacy", "lld": 50 },
+        "energy": { "energy_min": -3.0, "energy_max": 1.8 },
+        "hamiltonian": { "hoh": true, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_chebyshev_fast_ccor_2c",
+      "base": "bccFe_chebyshev",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
+        "hamiltonian": { "hoh": false, "ccor_2c": true }
+      }
+    },
+    {
+      "name": "bccFe_block_fast_sp",
+      "base": "bccFe_block",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "block", "cheb_backend": "fast", "lld": 16 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    },
+    {
+      "name": "bccFe_block_fast_dp",
+      "base": "bccFe_block",
+      "timeout": 120,
+      "namelists": {
+        "control": { "recur": "block", "cheb_backend": "fast_dp", "lld": 16 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
+    }
+  ]
+}

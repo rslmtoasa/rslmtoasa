@@ -349,12 +349,34 @@ set(TestBinary ${CMAKE_BINARY_DIR}/bin/${PROJECT_BINARY})
 set(TestDIR ${CMAKE_SOURCE_DIR}/tests)
 
 if (RUN_REG_TESTS)
+set(Python3_FIND_VIRTUALENV FIRST)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 set(ThisTestDIR ${TestDIR}/regression/bccFe_lanczos)
 add_test(NAME Lanczos   COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 set(ThisTestDIR ${TestDIR}/regression/bccFe_block)
 add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+
+set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
+file(READ "${REGRESSION_CASES_JSON}" _regression_json)
+string(JSON _regression_n LENGTH "${_regression_json}" "cases")
+math(EXPR _regression_last "${_regression_n} - 1")
+foreach(_i RANGE ${_regression_last})
+  string(JSON _regression_name GET "${_regression_json}" "cases" ${_i} "name")
+  string(JSON _regression_timeout GET "${_regression_json}" "cases" ${_i} "timeout")
+  add_test(NAME "Regression_${_regression_name}"
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/run_matrix.py"
+      "--binary" "${TestBinary}"
+      "--cases-json" "${REGRESSION_CASES_JSON}"
+      "--case-name" "${_regression_name}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/regression"
+      "--references" "${TestDIR}/regression/references"
+  )
+  set_tests_properties("Regression_${_regression_name}" PROPERTIES
+    LABELS "regression;backend" TIMEOUT "${_regression_timeout}")
+endforeach()
 endif (RUN_REG_TESTS)
 
 if (RUN_EXAMPLE_TESTS)

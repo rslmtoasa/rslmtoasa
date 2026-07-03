@@ -1,0 +1,34 @@
+{
+  "name": "Example_density_of_states_bccFe",
+  "case": "density_of_states/bccFe",
+  "timeout": 240,
+  "preserve_outputs": true,
+  "namelists": {
+    "self": {
+      "nstep": 1
+    },
+    "reciprocal": {
+      "nk1": 2,
+      "nk2": 2,
+      "nk3": 2,
+      "n_energy_points": 40
+    },
+    "control": {
+      "nsp": 1,
+      "recur": "block",
+      "lld": 12
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Fe_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r",
+          "vmad"
+        ]
+      }
+    ]
+  }
+}

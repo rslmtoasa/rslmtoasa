@@ -63,11 +63,14 @@ def load_case(cases_json: str, case_name: str) -> dict:
 # Scratch directory setup
 # ---------------------------------------------------------------------------
 
-def setup_scratch(case_dir: str, workdir: str) -> None:
+def setup_scratch(case_dir: str, workdir: str, preserve_outputs: bool = False) -> None:
     if os.path.exists(workdir):
         shutil.rmtree(workdir)
     shutil.copytree(case_dir, workdir)
-    for pattern in ("*_out.nml", "data.nml"):
+    patterns = ["data.nml"]
+    if not preserve_outputs:
+        patterns.append("*_out.nml")
+    for pattern in patterns:
         for path in glob.glob(os.path.join(workdir, pattern)):
             os.remove(path)
 
@@ -334,7 +337,7 @@ def main() -> None:
     case_dir = os.path.join(cases_dir, case["case"])
     workdir = os.path.join(args.scratch_root, args.case_name)
 
-    setup_scratch(case_dir, workdir)
+    setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
     patch_input_nml(workdir, case)
     serial_omp = case.get("omp_threads", None)
     run_binary(binary, workdir, case.get("mpi_procs", 1), serial_omp)

@@ -1,0 +1,35 @@
+{
+  "name": "Example_band_structure_bccFe",
+  "case": "band_structure/bccFe",
+  "timeout": 240,
+  "preserve_outputs": true,
+  "namelists": {
+    "self": {
+      "nstep": 1
+    },
+    "reciprocal": {
+      "nk1": 2,
+      "nk2": 2,
+      "nk3": 2,
+      "n_energy_points": 40,
+      "suppress_internal_logs": true
+    },
+    "control": {
+      "nsp": 1,
+      "recur": "block",
+      "lld": 12
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Fe_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r",
+          "vmad"
+        ]
+      }
+    ]
+  }
+}
