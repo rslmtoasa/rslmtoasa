@@ -17,6 +17,7 @@ module rsrec_cuda_plugin_mod
    public :: rsrec_cuda_backend
    public :: rsrec_cuda_plugin_compiled
    public :: decode_gpu_backend
+   public :: get_gpu_context
 
    type :: rsrec_cuda_backend
       type(c_ptr) :: ctx = c_null_ptr
@@ -33,12 +34,19 @@ module rsrec_cuda_plugin_mod
       procedure :: set_hamiltonian
       procedure :: set_velocity
       procedure :: upload_bsr
+      procedure :: set_precision
+      procedure :: chebyshev_dos
+      procedure :: chebyshev_gf_eta
+      procedure :: block_dos
+      procedure :: block_gf_eta
       procedure :: chebyshev_moments
       procedure :: orbital_moments
       procedure :: block_lanczos
       procedure :: scalar_lanczos
       procedure :: stochastic_moments
    end type rsrec_cuda_backend
+
+   type(rsrec_cuda_backend), target, save :: shared_gpu_context
 
 #ifdef USE_CUDA_PLUGIN
    interface
@@ -124,10 +132,62 @@ module rsrec_cuda_plugin_mod
          real(c_double), value :: a, b
          integer(c_int) :: rsrec_cuda_stochastic_moments
       end function rsrec_cuda_stochastic_moments
+
+      function rsrec_cuda_set_precision(ctx, prec) bind(C, name='rsrec_cuda_set_precision')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx
+         integer(c_int), value :: prec
+         integer(c_int) :: rsrec_cuda_set_precision
+      end function rsrec_cuda_set_precision
+
+      function rsrec_cuda_chebyshev_dos(ctx, mu, n_mom, natoms, ene, nv, a, b, g0) &
+         bind(C, name='rsrec_cuda_chebyshev_dos')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, mu, ene, g0
+         integer(c_int), value :: n_mom, natoms, nv
+         real(c_double), value :: a, b
+         integer(c_int) :: rsrec_cuda_chebyshev_dos
+      end function rsrec_cuda_chebyshev_dos
+
+      function rsrec_cuda_chebyshev_gf_eta(ctx, mu, n_mom, natoms, f, n_eta, g0) &
+         bind(C, name='rsrec_cuda_chebyshev_gf_eta')
+         import :: c_int, c_ptr
+         type(c_ptr), value :: ctx, mu, f, g0
+         integer(c_int), value :: n_mom, natoms, n_eta
+         integer(c_int) :: rsrec_cuda_chebyshev_gf_eta
+      end function rsrec_cuda_chebyshev_gf_eta
+
+      function rsrec_cuda_block_dos(ctx, a_b, b2_b, a_inf, b_inf, ene, nv, &
+                                    eta_re, eta_im, natoms, lld, sym, g0) &
+         bind(C, name='rsrec_cuda_block_dos')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, a_b, b2_b, a_inf, b_inf, ene, g0
+         integer(c_int), value :: nv, natoms, lld, sym
+         real(c_double), value :: eta_re, eta_im
+         integer(c_int) :: rsrec_cuda_block_dos
+      end function rsrec_cuda_block_dos
+
+      function rsrec_cuda_block_gf_eta(ctx, a_b, b2_b, a_inf, b_inf, ef, &
+                                       eta_re, eta_im, n_eta, natoms, lld, sym, g0) &
+         bind(C, name='rsrec_cuda_block_gf_eta')
+         import :: c_double, c_int, c_ptr
+         type(c_ptr), value :: ctx, a_b, b2_b, a_inf, b_inf, eta_re, eta_im, g0
+         integer(c_int), value :: n_eta, natoms, lld, sym
+         real(c_double), value :: ef
+         integer(c_int) :: rsrec_cuda_block_gf_eta
+      end function rsrec_cuda_block_gf_eta
    end interface
 #endif
 
 contains
+
+   function get_gpu_context(kk, nb, nnmax, ntype, nmax) result(ctx)
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax
+      type(rsrec_cuda_backend), pointer :: ctx
+
+      call shared_gpu_context%ensure_context(kk, nb, nnmax, ntype, nmax)
+      ctx => shared_gpu_context
+   end function get_gpu_context
 
    logical function rsrec_cuda_plugin_compiled()
 #ifdef USE_CUDA_PLUGIN
@@ -303,6 +363,116 @@ contains
          call g_logger%fatal('Failed to export BSR data for CUDA backend.', __FILE__, __LINE__)
       end if
    end subroutine upload_bsr
+
+   subroutine set_precision(this, prec)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      integer, intent(in) :: prec
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_set_precision(this%ctx, int(prec, c_int))
+      call check_status(status, 'rsrec_cuda_set_precision')
+#endif
+   end subroutine set_precision
+
+   subroutine chebyshev_dos(this, mu_n, ene, a, b, g0)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: mu_n(:, :, :, :)
+      real(rp), target, contiguous, intent(in) :: ene(:)
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_chebyshev_dos(this%ctx, c_loc(mu_n), int(size(mu_n, 3), c_int), &
+         int(size(mu_n, 4), c_int), c_loc(ene), int(size(ene), c_int), &
+         real(a, c_double), real(b, c_double), c_loc(g0))
+      call check_status(status, 'rsrec_cuda_chebyshev_dos')
+#endif
+   end subroutine chebyshev_dos
+
+   subroutine chebyshev_gf_eta(this, mu_n, ef, etas, a, b, g0)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: mu_n(:, :, :, :)
+      real(rp), intent(in) :: ef, a, b
+      complex(rp), intent(in) :: etas(:)
+      complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      complex(rp), allocatable, target :: f(:, :)
+      complex(rp) :: ze, z, th, pref
+      real(rp) :: thl, cot, gj, cc
+      integer(c_int) :: n_mom, natoms, n_eta, status
+      integer :: i, k
+
+      n_mom = int(size(mu_n, 3), c_int)
+      natoms = int(size(mu_n, 4), c_int)
+      n_eta = int(size(etas), c_int)
+
+      allocate (f(n_mom, n_eta))
+      cot = cos(acos(-1.0_rp)/(n_mom + 1.0_rp))/sin(acos(-1.0_rp)/(n_mom + 1.0_rp))
+      do k = 1, n_eta
+         ze = cmplx(ef, 0.0_rp, kind=rp) + etas(k)
+         z = (ze - b)/a
+         th = acos(z)
+         pref = 1.0_rp/sqrt(a*a - (ze - b)**2)
+         do i = 1, n_mom
+            thl = acos(-1.0_rp)*real(i - 1, rp)/(n_mom + 1.0_rp)
+            gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot)/(n_mom + 1.0_rp)
+            cc = merge(1.0_rp, 2.0_rp, i == 1)
+            f(i, k) = gj*cc*pref*(-cmplx(0.0_rp, 1.0_rp, kind=rp))* &
+                      exp(-cmplx(0.0_rp, 1.0_rp, kind=rp)*real(i - 1, rp)*th)
+         end do
+      end do
+
+      status = rsrec_cuda_chebyshev_gf_eta(this%ctx, c_loc(mu_n), n_mom, natoms, &
+         c_loc(f), n_eta, c_loc(g0))
+      call check_status(status, 'rsrec_cuda_chebyshev_gf_eta')
+      deallocate (f)
+#endif
+   end subroutine chebyshev_gf_eta
+
+   subroutine block_dos(this, a_b, b2_b, a_inf, b_inf, ene, eta, sym, g0)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: a_b(:, :, :, :), b2_b(:, :, :, :)
+      real(rp), target, contiguous, intent(in) :: a_inf(:, :), b_inf(:, :)
+      real(rp), target, contiguous, intent(in) :: ene(:)
+      complex(rp), intent(in) :: eta
+      logical, intent(in) :: sym
+      complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: status
+      status = rsrec_cuda_block_dos(this%ctx, c_loc(a_b), c_loc(b2_b), c_loc(a_inf), &
+         c_loc(b_inf), c_loc(ene), int(size(ene), c_int), real(real(eta), c_double), &
+         real(aimag(eta), c_double), int(size(a_b, 4), c_int), int(size(a_b, 3), c_int), &
+         merge(1_c_int, 0_c_int, sym), c_loc(g0))
+      call check_status(status, 'rsrec_cuda_block_dos')
+#endif
+   end subroutine block_dos
+
+   subroutine block_gf_eta(this, a_b, b2_b, a_inf, b_inf, ef, etas, sym, g0)
+      class(rsrec_cuda_backend), intent(inout) :: this
+      complex(rp), target, contiguous, intent(in) :: a_b(:, :, :, :), b2_b(:, :, :, :)
+      real(rp), target, contiguous, intent(in) :: a_inf(:, :), b_inf(:, :)
+      real(rp), intent(in) :: ef
+      complex(rp), intent(in) :: etas(:)
+      logical, intent(in) :: sym
+      complex(rp), target, contiguous, intent(inout) :: g0(:, :, :, :)
+#ifdef USE_CUDA_PLUGIN
+      real(c_double), allocatable, target :: etr(:), eti(:)
+      integer(c_int) :: status
+      integer :: k
+
+      allocate (etr(size(etas)), eti(size(etas)))
+      do k = 1, size(etas)
+         etr(k) = real(real(etas(k)), c_double)
+         eti(k) = real(aimag(etas(k)), c_double)
+      end do
+      status = rsrec_cuda_block_gf_eta(this%ctx, c_loc(a_b), c_loc(b2_b), c_loc(a_inf), &
+         c_loc(b_inf), real(ef, c_double), c_loc(etr), c_loc(eti), int(size(etas), c_int), &
+         int(size(a_b, 4), c_int), int(size(a_b, 3), c_int), merge(1_c_int, 0_c_int, sym), &
+         c_loc(g0))
+      call check_status(status, 'rsrec_cuda_block_gf_eta')
+      deallocate (etr, eti)
+#endif
+   end subroutine block_gf_eta
 
    subroutine chebyshev_moments(this, psi0, lld, a, b, mu_out)
       class(rsrec_cuda_backend), intent(inout) :: this

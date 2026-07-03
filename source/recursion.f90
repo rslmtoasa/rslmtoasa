@@ -35,7 +35,7 @@ module recursion_mod
    use math_mod
    use string_mod
    use logger_mod, only: g_logger
-   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, &
+   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, &
       rsrec_cuda_plugin_compiled, decode_gpu_backend, gpu_backend_bsr, &
       gpu_backend_conv, gpu_backend_fft
 #ifdef USE_SAFE_ALLOC
@@ -88,7 +88,7 @@ module recursion_mod
       complex(rp), dimension(:, :), allocatable :: v
       !> Variable to save T(H)
       complex(rp), dimension(:, :, :, :, :), allocatable :: t_h
-      type(rsrec_cuda_backend) :: gpu_backend
+      type(rsrec_cuda_backend), pointer :: gpu_backend => null()
    contains
       procedure :: hop
       procedure :: crecal
@@ -423,6 +423,8 @@ contains
 
       if (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh) call ensure_ccor_operator_blocks(this)
       backend = decode_gpu_backend(this%control%gpu_backend)
+      this%gpu_backend => get_gpu_context(this%lattice%kk, nb, size(this%lattice%nn, 2), &
+         this%lattice%ntype, this%lattice%nmax)
       if (this%lattice%nmax > 0) then
          if (this%hamiltonian%hoh) then
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
@@ -527,7 +529,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine destructor(this)
       type(recursion) :: this
-      call this%gpu_backend%destroy()
+      nullify (this%gpu_backend)
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%a)) call g_safe_alloc%deallocate('recursion.a', this%a)
       if (allocated(this%b2)) call g_safe_alloc%deallocate('recursion.b2', this%b2)

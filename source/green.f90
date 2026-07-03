@@ -33,7 +33,7 @@ module green_mod
    use logger_mod, only: g_logger
    use timer_mod, only: g_timer
    use string_mod, only: fmt, int2str, real2str, log2str
-   use recursion_gpu_mod, only: rsgpu
+   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -406,8 +406,7 @@ contains
       real(rp), dimension(4) :: a_inf0, b_inf0
       real(rp), dimension(nb, nb, 4) :: a_inf, b_inf
       real(rp), dimension(nb, 4) :: a_inf_d, b_inf_d
-      type(rsgpu), save :: gpu_backend
-      logical, save :: first_call = .true.
+      type(rsrec_cuda_backend), pointer :: gpu_backend
 
       ll = this%control%lld
       ldim = nb
@@ -425,11 +424,8 @@ contains
          end do
       end do
 
-      if (first_call) then
-         call gpu_backend%init(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-         first_call = .false.
-      end if
+      gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
 
       call gpu_backend%block_dos(this%recursion%a_b(:, :, :, istart:istart + na - 1), &
                                  this%recursion%b2_b(:, :, :, istart:istart + na - 1), &
@@ -624,9 +620,7 @@ contains
       real(rp), allocatable :: a_inf(:, :, :), b_inf(:, :, :), a_inf0(:), b_inf0(:)
       real(rp), allocatable :: a_inf_d(:, :), b_inf_d(:, :)
       complex(rp), allocatable :: g0_ef_all(:, :, :, :)
-      ! Static GPU backend (one per program lifetime), as in chebyshev_green_gpu
-      type(rsgpu), save :: gpu_backend
-      logical, save :: first_call = .true.
+      type(rsrec_cuda_backend), pointer :: gpu_backend
 
       ll = this%control%lld
       ldim = nb
@@ -654,11 +648,8 @@ contains
       natoms = n_pairs*4
       allocate (g0_ef_all(nb, nb, 64, natoms))
 
-      if (first_call) then
-         call gpu_backend%init(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-         first_call = .false.
-      end if
+      gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
 
       ! One device call: Gij at the Fermi energy for all (pair x combo) atoms
       ! and all 64 contour etas -> g0_ef_all(nb,nb,64,natoms).
@@ -776,9 +767,7 @@ contains
       complex(rp), allocatable :: ab_loc(:, :, :, :), b2_loc(:, :, :, :), g0_loc(:, :, :, :)
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10, atoms_per_process) :: dum_g_ef
       real(rp), allocatable :: ainf_d(:, :), binf_d(:, :)
-      ! Static GPU backend (one per program lifetime), as in chebyshev_green_gpu
-      type(rsgpu), save :: gpu_backend
-      logical, save :: first_call = .true.
+      type(rsrec_cuda_backend), pointer :: gpu_backend
 
       ll = this%control%lld
       ldim = nb
@@ -823,11 +812,8 @@ contains
          end do
       end do
 
-      if (first_call) then
-         call gpu_backend%init(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-         first_call = .false.
-      end if
+      gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
 
       call gpu_backend%block_dos(ab_loc, b2_loc, ainf_d, binf_d, &
                                  this%en%ene(1:nv), eta0, this%control%sym_term, g0_loc)
@@ -1185,8 +1171,7 @@ contains
       complex(rp), allocatable :: mu_local(:, :, :, :), g0_local(:, :, :, :)
       real(rp) :: a, b, emin_win, emax_win
       integer :: nv, n_mom
-      type(rsgpu), save :: gpu_backend
-      logical, save :: first_call = .true.
+      type(rsrec_cuda_backend), pointer :: gpu_backend
 
       this%g0 = 0.0d0
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
@@ -1198,11 +1183,8 @@ contains
       allocate (mu_local(nb, nb, n_mom, 4), g0_local(nb, nb, nv, 4))
       mu_local(:, :, :, 1:4) = this%recursion%mu_n(:, :, :, istart:istart + 3)
 
-      if (first_call) then
-         call gpu_backend%init(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-         first_call = .false.
-      end if
+      gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
 
       call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local)
       this%g0(:, :, 1:nv, 1:4) = g0_local(:, :, :, 1:4)
@@ -1362,8 +1344,7 @@ contains
       integer :: ie, i, j, k, l, m, n, nv, n_glob, n_local
       complex(rp), allocatable :: mu_local(:, :, :, :)
       complex(rp), allocatable :: g0_local(:, :, :, :)
-      type(rsgpu), save :: gpu_backend
-      logical, save :: first_call = .true.
+      type(rsrec_cuda_backend), pointer :: gpu_backend
       logical :: do_gpu
 
       do_gpu = this%control%gpu_plugin
@@ -1395,11 +1376,8 @@ contains
                this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
          end do
 
-         if (first_call) then
-            call gpu_backend%init(1, nb, 1, 1, 1)
-            call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-            first_call = .false.
-         end if
+         gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
+         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
 
          call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
                                          this%en%ene(1:nv), a, b,                         &

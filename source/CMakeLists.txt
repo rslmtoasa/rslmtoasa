@@ -33,7 +33,6 @@ add_library(${PROJECT_NAME} STATIC
     precision.f90
     reciprocal.f90
     recursion.f90
-    cuda/recursion_gpu_mod.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90
@@ -76,15 +75,6 @@ if(ENABLE_MKL_SPARSE)
     if(DEFINED ENV{MKLROOT} AND EXISTS "$ENV{MKLROOT}/include/mkl_spblas.f90")
         target_sources(${PROJECT_NAME} PRIVATE "$ENV{MKLROOT}/include/mkl_spblas.f90")
     endif()
-endif()
-
-if(NOT ENABLE_CUDA_PLUGIN)
-    # cuda/recursion_gpu_mod.f90 is compiled unconditionally and binds the
-    # rsrec_* C interface. The real kernels (cuda/rsrec_gpu.cu) are only built
-    # with the CUDA plugin, so on plain CPU builds we link a no-op stub that
-    # makes the symbols resolve and fails cleanly if the gpu_plugin path is
-    # ever requested at runtime. No compute kernels are pulled in.
-    target_sources(${PROJECT_NAME} PRIVATE cuda/rsrec_stub.c)
 endif()
 
 if(ENABLE_CUDA_PLUGIN)

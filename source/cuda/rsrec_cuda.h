@@ -66,6 +66,24 @@ int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j, int lld,
                               double *a_out, double *b2_out);
 int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx, const void *psiref,
                                   int lld, double a, double b, void *mu_nm);
+int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec);
+int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu, int n_moments,
+                             int natoms, const double *ene, int nv,
+                             double a, double b, void *g0);
+int rsrec_cuda_chebyshev_gf_eta(rsrec_cuda_ctx *ctx, const void *mu,
+                                int n_moments, int natoms, const void *F,
+                                int n_eta, void *g0);
+int rsrec_cuda_block_dos(rsrec_cuda_ctx *ctx, const void *a_b,
+                         const void *b2_b, const double *a_inf,
+                         const double *b_inf, const double *ene, int nv,
+                         double eta_re, double eta_im, int natoms, int lld,
+                         int sym, void *g0);
+int rsrec_cuda_block_gf_eta(rsrec_cuda_ctx *ctx, const void *a_b,
+                            const void *b2_b, const double *a_inf,
+                            const double *b_inf, double ef,
+                            const double *eta_re, const double *eta_im,
+                            int n_eta, int natoms, int lld, int sym,
+                            void *g0);
 
 #ifdef __cplusplus
 }

@@ -343,7 +343,7 @@ Tasks:
 - [x] T5. Replace the module-global cache state with a cache handle type.
 - [x] T6. Resolve operator selection once in the dispatcher.
 - [x] T7. Deduplicate `green.f90`'s clone families.
-- [ ] T8. One GPU context layer.
+- [x] T8. One GPU context layer.
 - [ ] T9. Split the four largest modules using Fortran submodules.
 - [ ] T10. Deduplicate the `calculation.f90` p2rs orchestration pairs.
 - [ ] T11. Audit `math.f90`.

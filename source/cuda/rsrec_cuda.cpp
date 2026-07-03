@@ -267,3 +267,83 @@ extern "C" int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx,
     }
     return status;
 }
+
+extern "C" int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec) {
+    if (!ctx) {
+        set_error("rsrec_cuda_set_precision: null ctx");
+        return 1;
+    }
+    const int status = rsrec_set_precision(ctx->inner, prec);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_set_precision: ") + rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu,
+                                        int n_moments, int natoms,
+                                        const double *ene, int nv, double a,
+                                        double b, void *g0) {
+    if (!ctx) {
+        set_error("rsrec_cuda_chebyshev_dos: null ctx");
+        return 1;
+    }
+    const int status =
+        rsrec_chebyshev_dos(ctx->inner, mu, n_moments, natoms, ene, nv, a, b, g0);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_chebyshev_dos: ") + rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_chebyshev_gf_eta(rsrec_cuda_ctx *ctx,
+                                           const void *mu, int n_moments,
+                                           int natoms, const void *F,
+                                           int n_eta, void *g0) {
+    if (!ctx) {
+        set_error("rsrec_cuda_chebyshev_gf_eta: null ctx");
+        return 1;
+    }
+    const int status =
+        rsrec_chebyshev_gf_eta(ctx->inner, mu, n_moments, natoms, F, n_eta, g0);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_chebyshev_gf_eta: ") + rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_block_dos(rsrec_cuda_ctx *ctx, const void *a_b,
+                                    const void *b2_b, const double *a_inf,
+                                    const double *b_inf, const double *ene,
+                                    int nv, double eta_re, double eta_im,
+                                    int natoms, int lld, int sym, void *g0) {
+    if (!ctx) {
+        set_error("rsrec_cuda_block_dos: null ctx");
+        return 1;
+    }
+    const int status = rsrec_block_dos(ctx->inner, a_b, b2_b, a_inf, b_inf, ene,
+                                       nv, eta_re, eta_im, natoms, lld, sym, g0);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_block_dos: ") + rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_block_gf_eta(rsrec_cuda_ctx *ctx, const void *a_b,
+                                       const void *b2_b, const double *a_inf,
+                                       const double *b_inf, double ef,
+                                       const double *eta_re,
+                                       const double *eta_im, int n_eta,
+                                       int natoms, int lld, int sym, void *g0) {
+    if (!ctx) {
+        set_error("rsrec_cuda_block_gf_eta: null ctx");
+        return 1;
+    }
+    const int status =
+        rsrec_block_gf_eta(ctx->inner, a_b, b2_b, a_inf, b_inf, ef, eta_re,
+                           eta_im, n_eta, natoms, lld, sym, g0);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_block_gf_eta: ") + rsrec_last_error());
+    }
+    return status;
+}
