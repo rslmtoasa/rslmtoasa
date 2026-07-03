@@ -159,66 +159,56 @@ contains
       msg = 'Chebyshev moment driver backend: '//backend
       !print *, msg
       call g_logger%info(msg, __FILE__, __LINE__)
-      select case (backend)
-      case ('fast')
-         if (this%hamiltonian%hoh) then
-            call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               lld, a, b, mu, hoh=.true., eeo=this%hamiltonian%eeo, &
-               hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim)
-         else if (this%hamiltonian%ccor_2c) then
-            call cheb_moments_fast(psi0, this%ee_ccor_work, this%hall_ccor_work, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               lld, a, b, mu)
-         else
-            call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               lld, a, b, mu)
-         end if
-      case ('batched')
-         if (this%hamiltonian%ccor_2c) then
-            call cheb_moments_fast_batched(psi0, this%ee_ccor_work, this%hall_ccor_work, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               lld, a, b, mu)
-         else
-            call cheb_moments_fast_batched(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               lld, a, b, mu)
-         end if
-      case ('mkl_batch')
-         if (this%hamiltonian%ccor_2c) then
-            call cheb_moments_fast_mkl_batch(psi0, this%ee_ccor_work, this%hall_ccor_work, &
+      if (this%hamiltonian%ccor_2c .and. backend /= 'legacy') then
+         associate(ee_op => this%ee_ccor_work, hall_op => this%hall_ccor_work)
+            call dispatch_cheb_backend(ee_op, hall_op)
+         end associate
+      else
+         associate(ee_op => this%hamiltonian%ee, hall_op => this%hamiltonian%hall)
+            call dispatch_cheb_backend(ee_op, hall_op)
+         end associate
+      end if
+
+   contains
+
+      subroutine dispatch_cheb_backend(ee_op, hall_op)
+         complex(rp), intent(in), contiguous :: ee_op(:, :, :, :), hall_op(:, :, :, :)
+
+         select case (backend)
+         case ('fast')
+            if (this%hamiltonian%hoh) then
+               call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+                  this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+                  nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+                  lld, a, b, mu, hoh=.true., eeo=this%hamiltonian%eeo, &
+                  hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim)
+            else
+               call cheb_moments_fast(psi0, ee_op, hall_op, &
+                  this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+                  nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+                  lld, a, b, mu)
+            end if
+         case ('batched')
+            call cheb_moments_fast_batched(psi0, ee_op, hall_op, &
                this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
                nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
                lld, a, b, mu)
-         else
-            call cheb_moments_fast_mkl_batch(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+         case ('mkl_batch')
+            call cheb_moments_fast_mkl_batch(psi0, ee_op, hall_op, &
                this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
                nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
                lld, a, b, mu)
-         end if
-      case ('mkl_sparse')
-         if (this%hamiltonian%ccor_2c) then
-            call cheb_moments_fast_mkl_sparse(psi0, this%ee_ccor_work, this%hall_ccor_work, &
+         case ('mkl_sparse')
+            call cheb_moments_fast_mkl_sparse(psi0, ee_op, hall_op, &
                this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
                nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
                lld, a, b, mu)
-         else
-            call cheb_moments_fast_mkl_sparse(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
-               this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
-               nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
-               lld, a, b, mu)
-         end if
-      case ('legacy')
-         call cheb_moments_legacy(this, psi0, lld, a, b, mu)
-      case default
-         call g_logger%fatal('Unknown cheb_backend "'//backend//'"', __FILE__, __LINE__)
-      end select
+         case ('legacy')
+            call cheb_moments_legacy(this, psi0, lld, a, b, mu)
+         case default
+            call g_logger%fatal('Unknown cheb_backend "'//backend//'"', __FILE__, __LINE__)
+         end select
+      end subroutine dispatch_cheb_backend
    end subroutine cheb_moments_cpu
 
    !---------------------------------------------------------------------------
@@ -503,6 +493,32 @@ contains
       end if
       this%hall_ccor_work = this%hamiltonian%hall + this%hamiltonian%hallcc
    end subroutine ensure_ccor_operator_blocks
+
+   subroutine block_lanczos_fast_nohoh(this, llmax, use_ccor)
+      class(recursion), intent(inout) :: this
+      integer, intent(in) :: llmax
+      logical, intent(in) :: use_ccor
+
+      if (use_ccor) then
+         associate(ee_op => this%ee_ccor_work, hall_op => this%hall_ccor_work)
+            call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+               ee_op, hall_op, this%hamiltonian%lsham, &
+               this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+               this%lattice%ntype, this%lattice%nmax, &
+               trim(this%control%cheb_backend) == 'fast', .false., &
+               ee_op, hall_op, this%hamiltonian%lsham)
+         end associate
+      else
+         associate(ee_op => this%hamiltonian%ee, hall_op => this%hamiltonian%hall)
+            call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
+               ee_op, hall_op, this%hamiltonian%lsham, &
+               this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
+               this%lattice%ntype, this%lattice%nmax, &
+               trim(this%control%cheb_backend) == 'fast', .false., &
+               ee_op, hall_op, this%hamiltonian%lsham)
+         end associate
+      end if
+   end subroutine block_lanczos_fast_nohoh
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1589,20 +1605,8 @@ contains
                      this%lattice%ntype, this%lattice%nmax, &
                      trim(this%control%cheb_backend) == 'fast', .true., &
                      this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
-               else if (this%hamiltonian%ccor_2c) then
-                  call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
-                     this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham, &
-                     this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
-                     this%lattice%ntype, this%lattice%nmax, &
-                     trim(this%control%cheb_backend) == 'fast', .false., &
-                     this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham)
                else
-                  call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
-                     this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
-                     this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
-                     this%lattice%ntype, this%lattice%nmax, &
-                     trim(this%control%cheb_backend) == 'fast', .false., &
-                     this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham)
+                  call block_lanczos_fast_nohoh(this, llmax, this%hamiltonian%ccor_2c)
                end if
                do ll = 1, llmax
                   do l = 1, nb
@@ -1761,20 +1765,8 @@ contains
                   this%lattice%ntype, this%lattice%nmax, &
                   trim(this%control%cheb_backend) == 'fast', .true., &
                   this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim)
-            else if (this%hamiltonian%ccor_2c) then
-               call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
-                  this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham, &
-                  this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
-                  this%lattice%ntype, this%lattice%nmax, &
-                  trim(this%control%cheb_backend) == 'fast', .false., &
-                  this%ee_ccor_work, this%hall_ccor_work, this%hamiltonian%lsham)
             else
-               call block_lanczos_fast(this%psi_b, llmax, this%atemp_b, this%b2temp_b, &
-                  this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
-                  this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
-                  this%lattice%ntype, this%lattice%nmax, &
-                  trim(this%control%cheb_backend) == 'fast', .false., &
-                  this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham)
+               call block_lanczos_fast_nohoh(this, llmax, this%hamiltonian%ccor_2c)
             end if
             do ll = 1, llmax
                do l = 1, nb

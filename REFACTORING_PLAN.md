@@ -341,7 +341,7 @@ Tasks:
 - [x] T3. Repo hygiene.
 - [ ] T4. Unify the Chebyshev CPU kernel family in `chebyshev_fast.f90`.
 - [ ] T5. Replace the module-global cache state with a cache handle type.
-- [ ] T6. Resolve operator selection once in the dispatcher.
+- [x] T6. Resolve operator selection once in the dispatcher.
 - [ ] T7. Deduplicate `green.f90`'s clone families.
 - [ ] T8. One GPU context layer.
 - [ ] T9. Split the four largest modules using Fortran submodules.
