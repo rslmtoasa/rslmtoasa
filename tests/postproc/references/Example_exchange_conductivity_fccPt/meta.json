@@ -6,7 +6,8 @@
     "control": {
       "nsp": 2,
       "recur": "chebyshev",
-      "lld": 100
+      "lld": 100,
+      "cheb_backend": "legacy"
     },
     "self": {
       "nstep": 1
@@ -17,6 +18,18 @@
   },
   "checks": {
     "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      },
       {
         "file": "Pt_cond.out",
         "rows": [

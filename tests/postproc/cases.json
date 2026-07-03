@@ -43,7 +43,7 @@
       "case": "conductivity/fccPt",
       "timeout": 600,
       "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100 },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100, "cheb_backend": "legacy" },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
       },
@@ -59,7 +59,7 @@
       "case": "conductivity/fccPt",
       "timeout": 600,
       "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50 },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cheb_backend": "legacy" },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
       },

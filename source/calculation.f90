@@ -1088,6 +1088,9 @@ contains
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
 
+      call green_obj%chebyshev_dos_dispatch()
+      call bands_obj%calculate_fermi()
+
       ! Creating the conductivity object
       conductivity_obj = conductivity(self_obj)
 
@@ -1171,6 +1174,9 @@ contains
    
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
+
+      call green_obj%chebyshev_dos_dispatch()
+      call bands_obj%calculate_fermi()
 
       ! Creating the conductivity object
       conductivity_obj = conductivity(self_obj)

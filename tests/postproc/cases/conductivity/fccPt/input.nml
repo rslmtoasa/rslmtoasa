@@ -31,6 +31,7 @@ nstep = 1
 v_alpha = 0, 1, 0
 v_beta =  1, 0, 0
 js_alpha = 'z'
+hoh = false
 /
 &energy
 fermi = -0.085837
@@ -50,7 +51,4 @@ cond_calctype = 'per_type'
 &mix
 mixtype = 'broyden'
 beta = 0.4
-/
-&hamiltonian
-hoh = false
 /
