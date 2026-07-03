@@ -234,6 +234,14 @@ Ensure MPI libraries are linked correctly:
 
 Check thread affinity and pinning. Use ``OMP_PROC_BIND=CLOSE`` for better locality.
 
+**gfortran warns that chebyshev_fast requires an executable stack**
+
+Some gfortran builds emit an executable-stack warning for
+``chebyshev_fast.f90.o``. This is expected for the current fast Chebyshev
+callback structure and is safe on standard Linux systems. Hardened systems
+that disallow executable stacks may reject the binary; in that case, rebuild
+with the legacy Chebyshev backend for validation runs.
+
 Provenance
 ==========
 

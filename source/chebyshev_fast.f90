@@ -34,10 +34,11 @@ module chebyshev_fast_mod
    real(rp), parameter :: pi = 3.14159265358979323846_rp
 
    abstract interface
-      subroutine ham_apply_t(x1, x0, y, alpha, beta)
+      subroutine ham_apply_t(x1, x0, y, alpha, beta, ld, nb)
          import :: sp
-         complex(sp), intent(in) :: x1(:, :), x0(:, :)
-         complex(sp), intent(out) :: y(:, :)
+         integer, intent(in) :: ld, nb
+         complex(sp), intent(in), target :: x1(ld, nb), x0(ld, nb)
+         complex(sp), intent(out) :: y(ld, nb)
          real(sp), intent(in) :: alpha, beta
       end subroutine ham_apply_t
    end interface
@@ -136,13 +137,6 @@ contains
       this%mkl_ptr = cheb_cache_fingerprint_t()
    end subroutine cheb_cache_reset
 
-   subroutine ensure_work_buffers(ld_in, nb_in, w0, w1, w2)
-      integer, intent(in) :: ld_in, nb_in
-      complex(sp), pointer, intent(out) :: w0(:, :), w1(:, :), w2(:, :)
-
-      call cheb_cache%ensure_work_buffers(ld_in, nb_in, w0, w1, w2)
-   end subroutine ensure_work_buffers
-
    subroutine cheb_cache_ensure_work_buffers(this, ld_in, nb_in, w0, w1, w2)
       class(cheb_cache_t), intent(inout) :: this
       integer, intent(in) :: ld_in, nb_in
@@ -165,13 +159,6 @@ contains
    !> Extra (ld, nb) scratch holding the sweep-A result t = (h/a)*x for the
    !> two-sweep hoh apply. Shares the work-buffer (ld, nb) shape; allocated only
    !> when hoh is active.
-   subroutine ensure_hoh_buffer(ld_in, nb_in, wt)
-      integer, intent(in) :: ld_in, nb_in
-      complex(sp), pointer, contiguous, intent(out) :: wt(:, :)
-
-      call cheb_cache%ensure_hoh_buffer(ld_in, nb_in, wt)
-   end subroutine ensure_hoh_buffer
-
    subroutine cheb_cache_ensure_hoh_buffer(this, ld_in, nb_in, wt)
       class(cheb_cache_t), intent(inout) :: this
       integer, intent(in) :: ld_in, nb_in
@@ -191,13 +178,6 @@ contains
       wt => this%workt_cache
    end subroutine cheb_cache_ensure_hoh_buffer
 
-   subroutine ensure_block_products(nb_in, nblocks_in, block_products)
-      integer, intent(in) :: nb_in, nblocks_in
-      complex(sp), pointer, intent(out) :: block_products(:, :, :)
-
-      call cheb_cache%ensure_block_products(nb_in, nblocks_in, block_products)
-   end subroutine ensure_block_products
-
    subroutine cheb_cache_ensure_block_products(this, nb_in, nblocks_in, block_products)
       class(cheb_cache_t), intent(inout) :: this
       integer, intent(in) :: nb_in, nblocks_in
@@ -214,13 +194,6 @@ contains
 
       block_products => this%block_products_cache
    end subroutine cheb_cache_ensure_block_products
-
-   subroutine ensure_mkl_batch_ptr_arrays(nblocks_in, a_ptr, b_ptr, c_ptrs)
-      integer, intent(in) :: nblocks_in
-      type(c_ptr), pointer, intent(out) :: a_ptr(:), b_ptr(:), c_ptrs(:)
-
-      call cheb_cache%ensure_mkl_batch_ptr_arrays(nblocks_in, a_ptr, b_ptr, c_ptrs)
-   end subroutine ensure_mkl_batch_ptr_arrays
 
    subroutine cheb_cache_ensure_mkl_batch_ptr_arrays(this, nblocks_in, a_ptr, b_ptr, c_ptrs)
       class(cheb_cache_t), intent(inout) :: this
@@ -239,18 +212,6 @@ contains
       b_ptr => this%mkl_b_ptr_cache
       c_ptrs => this%mkl_c_ptr_cache
    end subroutine cheb_cache_ensure_mkl_batch_ptr_arrays
-
-   subroutine ensure_scaled_hamiltonian_sp(ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
-      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-      integer, intent(in) :: iz_in(kk_in), kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-      real(sp), intent(in) :: inva_in, b_in
-      complex(sp), pointer, intent(out) :: hee_out(:, :, :, :), hha_out(:, :, :, :)
-
-      call cheb_cache%ensure_scaled_hamiltonian_sp(ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, &
-         nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
-   end subroutine ensure_scaled_hamiltonian_sp
 
    subroutine cheb_cache_ensure_scaled_hamiltonian_sp(this, ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
       class(cheb_cache_t), intent(inout) :: this
@@ -326,26 +287,6 @@ contains
    !>   oee/oha = eeo/hallo  (RAW, unscaled)     -> sweep B: eeo*t = inva*eeo*h*x
    !>   hons    = (enim + lsham - b*I)*inva      -> on-site, applied to x
    !> Cached independently of the standard scaled-Hamiltonian cache.
-   subroutine ensure_scaled_ortho_sp(ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
-                                     iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
-                                     bee_out, bha_out, oee_out, oha_out, hons_out)
-      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-      complex(rp), intent(in) :: eeo_in(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: hallo_in(nb_in, nb_in, nnmax_in, *)
-      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-      complex(rp), intent(in) :: enim_in(nb_in, nb_in, ntype_in)
-      integer, intent(in) :: iz_in(kk_in), kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-      real(sp), intent(in) :: inva_in, b_in
-      complex(sp), pointer, intent(out) :: bee_out(:, :, :, :), bha_out(:, :, :, :)
-      complex(sp), pointer, intent(out) :: oee_out(:, :, :, :), oha_out(:, :, :, :)
-      complex(sp), pointer, intent(out) :: hons_out(:, :, :)
-
-      call cheb_cache%ensure_scaled_ortho_sp(ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
-         iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
-         bee_out, bha_out, oee_out, oha_out, hons_out)
-   end subroutine ensure_scaled_ortho_sp
-
    subroutine cheb_cache_ensure_scaled_ortho_sp(this, ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
                                                 iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
                                                 bee_out, bha_out, oee_out, oha_out, hons_out)
@@ -429,20 +370,6 @@ contains
          nullify (oha_out)
       end if
    end subroutine cheb_cache_ensure_scaled_ortho_sp
-
-   subroutine ensure_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
-      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
-      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
-      integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
-      integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-      real(sp), intent(in) :: inva_in, b_in
-      complex(sp), pointer, intent(out) :: hval_out(:, :, :)
-      integer, pointer, intent(out) :: hcol_out(:), hrow_out(:)
-
-      call cheb_cache%ensure_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, &
-         nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
-   end subroutine ensure_scaled_bsr_sp
 
    subroutine cheb_cache_ensure_scaled_bsr_sp(this, ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
       class(cheb_cache_t), intent(inout) :: this
@@ -538,25 +465,6 @@ contains
    !> the on-site shell-1 block zeroed (velo_hoh_vec_matmul applies vo off-site
    !> only) and raw ee/hall are mirrored (the velocity hoh sweep uses the BARE,
    !> unscaled h). All raw (no 1/a, no -b*I, no lsham/enim fold).
-   subroutine ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, &
-                                        kk_in, nb_in, nnmax_in, ntype_in, nmax_in, hoh, &
-                                        fva, fvb, fvoa, fvob, fvee, fvha)
-      integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
-      complex(rp), intent(in) :: v_a(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: v_b(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: vo_a(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: vo_b(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: ee(nb_in, nb_in, nnmax_in, ntype_in)
-      complex(rp), intent(in) :: hall(nb_in, nb_in, nnmax_in, *)
-      logical, intent(in) :: hoh
-      complex(sp), pointer, intent(out) :: fva(:, :, :, :), fvb(:, :, :, :)
-      complex(sp), pointer, intent(out) :: fvoa(:, :, :, :), fvob(:, :, :, :)
-      complex(sp), pointer, intent(out) :: fvee(:, :, :, :), fvha(:, :, :, :)
-
-      call cheb_cache%ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, &
-         kk_in, nb_in, nnmax_in, ntype_in, nmax_in, hoh, fva, fvb, fvoa, fvob, fvee, fvha)
-   end subroutine ensure_scaled_velocity_sp
-
    subroutine cheb_cache_ensure_scaled_velocity_sp(this, v_a, v_b, vo_a, vo_b, ee, hall, &
                                                    kk_in, nb_in, nnmax_in, ntype_in, nmax_in, hoh, &
                                                    fva, fvb, fvoa, fvob, fvee, fvha)
@@ -670,7 +578,7 @@ contains
    end subroutine cherk_full_sp
 
    subroutine cheb_three_term_moments(apply_h, p0, p1, p2, nb, ld, lld, mu)
-      external :: apply_h
+      procedure(ham_apply_t) :: apply_h
       integer, intent(in) :: nb, ld, lld
       complex(sp), pointer, intent(inout) :: p0(:, :), p1(:, :), p2(:, :)
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
@@ -681,12 +589,12 @@ contains
 
       call cherk_full_sp(nb, ld, p0, mu1_sp)
       mu(:, :, 1) = mu1_sp
-      call apply_h(p0, p0, p1, 1.0_sp, 0.0_sp)
+      call apply_h(p0, p0, p1, 1.0_sp, 0.0_sp, ld, nb)
       call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
       mu(:, :, 2) = mu2_sp
 
       do ll = 1, lld
-         call apply_h(p1, p0, p2, 2.0_sp, -1.0_sp)
+         call apply_h(p1, p0, p2, 2.0_sp, -1.0_sp, ld, nb)
          call cherk_full_sp(nb, ld, p1, dum_sp)
          mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
          call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
@@ -851,19 +759,19 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      call cheb_cache%ensure_work_buffers(ld, nb, w0, w1, w2)
       p0 => w0
       p1 => w1
       p2 => w2
 
       if (do_hoh) then
          ! --- two-sweep hoh operands (bare h, eeo, on-site) + extra buffer ---
-         call ensure_hoh_buffer(ld, nb, wt)
-         call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
-                                     nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+         call cheb_cache%ensure_hoh_buffer(ld, nb, wt)
+         call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
+                                                nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
       else
          ! --- 1. scaled operator copies: Ht = (H + lsham - b*I)/a ----------
-         call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
+         call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
 
       call pack_psi0_sp(psi0, kk, nb, p0)
@@ -871,22 +779,24 @@ contains
 
    contains
 
-      subroutine apply_step_selected(x1, x0, y, alpha, beta)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
+      subroutine apply_step_selected(x1, x0, y, alpha, beta, ld_apply, nb_apply)
+         integer, intent(in) :: ld_apply, nb_apply
+         complex(sp), intent(in), target :: x1(ld_apply, nb_apply), x0(ld_apply, nb_apply)
+         complex(sp), intent(out) :: y(ld_apply, nb_apply)
          real(sp), intent(in) :: alpha, beta
 
          if (do_hoh) then
             call apply_step_hoh(x1, x0, y, alpha, beta, wt)
          else
-            call apply_step(x1, x0, y, alpha, beta)
+            call apply_step(x1, x0, y, alpha, beta, ld_apply, nb_apply)
          end if
       end subroutine apply_step_selected
 
       !> y = alpha*(Ht x1) + beta*x0, one fused sweep (site-major arrays)
-      subroutine apply_step(x1, x0, y, alpha, beta)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
+      subroutine apply_step(x1, x0, y, alpha, beta, ld_apply, nb_apply)
+         integer, intent(in) :: ld_apply, nb_apply
+         complex(sp), intent(in), target :: x1(ld_apply, nb_apply), x0(ld_apply, nb_apply)
+         complex(sp), intent(out) :: y(ld_apply, nb_apply)
          real(sp), intent(in) :: alpha, beta
          complex(sp) :: acc(nb, nb)
          integer :: kk_, t_, s_, nbr, nr, r0
@@ -1023,14 +933,14 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      call cheb_cache%ensure_work_buffers(ld, nb, w0, w1, w2)
       p0 => w0
       p1 => w1
       p2 => w2
 
-      call ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      call cheb_cache%ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
       nblocks = size(hcol)
-      call ensure_block_products(nb, nblocks, block_products)
+      call cheb_cache%ensure_block_products(nb, nblocks, block_products)
 
       call pack_psi0_sp(psi0, kk, nb, p0)
       call cheb_three_term_moments(apply_step_bsr, p0, p1, p2, nb, ld, lld, mu)
@@ -1038,9 +948,10 @@ contains
    contains
 
       !> y = alpha*(Ht x1) + beta*x0 using one packed GEMM per BSR row.
-      subroutine apply_step_bsr(x1, x0, y, alpha, beta)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
+      subroutine apply_step_bsr(x1, x0, y, alpha, beta, ld_apply, nb_apply)
+         integer, intent(in) :: ld_apply, nb_apply
+         complex(sp), intent(in), target :: x1(ld_apply, nb_apply), x0(ld_apply, nb_apply)
+         complex(sp), intent(out) :: y(ld_apply, nb_apply)
          real(sp), intent(in) :: alpha, beta
          complex(sp) :: acc(nb, nb)
          integer :: row, blk, col, r0
@@ -1116,15 +1027,15 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      call cheb_cache%ensure_work_buffers(ld, nb, w0, w1, w2)
       p0 => w0
       p1 => w1
       p2 => w2
 
-      call ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      call cheb_cache%ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
       nblocks = size(hcol)
-      call ensure_block_products(nb, nblocks, block_products)
-      call ensure_mkl_batch_ptr_arrays(nblocks, a_ptr, b_ptr, c_ptrs)
+      call cheb_cache%ensure_block_products(nb, nblocks, block_products)
+      call cheb_cache%ensure_mkl_batch_ptr_arrays(nblocks, a_ptr, b_ptr, c_ptrs)
       call init_mkl_batch_static_ptrs()
 
       call pack_psi0_sp(psi0, kk, nb, p0)
@@ -1142,10 +1053,11 @@ contains
          !$omp end parallel do
       end subroutine init_mkl_batch_static_ptrs
 
-      subroutine apply_step_mkl_batch(x1, x0, y, alpha, beta)
-         complex(sp), intent(in), target :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
-        real(sp), intent(in) :: alpha, beta
+      subroutine apply_step_mkl_batch(x1, x0, y, alpha, beta, ld_apply, nb_apply)
+         integer, intent(in) :: ld_apply, nb_apply
+         complex(sp), intent(in), target :: x1(ld_apply, nb_apply), x0(ld_apply, nb_apply)
+         complex(sp), intent(out) :: y(ld_apply, nb_apply)
+         real(sp), intent(in) :: alpha, beta
          integer(c_int), parameter :: cblas_col_major = 102_c_int, cblas_no_trans = 111_c_int
          complex(c_float_complex) :: alpha_c(1), beta_c(1)
          complex(sp) :: acc(nb, nb)
@@ -1227,12 +1139,12 @@ contains
       a_sp = real(a, sp)
       b_sp = real(b, sp)
       inva = 1.0_sp/a_sp
-      call ensure_work_buffers(ld, nb, w0, w1, w2)
+      call cheb_cache%ensure_work_buffers(ld, nb, w0, w1, w2)
       p0 => w0
       p1 => w1
       p2 => w2
 
-      call ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
+      call cheb_cache%ensure_scaled_bsr_sp(ee, hall, lsham, nn, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hval, hcol, hrow)
 
       status = mkl_sparse_c_create_bsr(mkl_A, SPARSE_INDEX_BASE_ONE, SPARSE_LAYOUT_COLUMN_MAJOR, &
                                        kk, kk, nb, hrow(1:kk), hrow(2:kk + 1), hcol, hval)
@@ -1257,9 +1169,10 @@ contains
 
    contains
 
-      subroutine apply_step_mkl(x1, x0, y, alpha, beta)
-         complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
+      subroutine apply_step_mkl(x1, x0, y, alpha, beta, ld_apply, nb_apply)
+         integer, intent(in) :: ld_apply, nb_apply
+         complex(sp), intent(in), target :: x1(ld_apply, nb_apply), x0(ld_apply, nb_apply)
+         complex(sp), intent(out) :: y(ld_apply, nb_apply)
          real(sp), intent(in) :: alpha, beta
          complex(sp) :: alpha_c, beta_c
          integer :: status_mkl
@@ -1372,12 +1285,12 @@ contains
       a_sp = real(a, sp); b_sp = real(b, sp); inva = 1.0_sp/a_sp
 
       if (do_hoh) then
-         call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
+         call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
             nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
       else
-         call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
+         call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
-      call ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, kk, nb, nnmax, ntype, nmax, &
+      call cheb_cache%ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, kk, nb, nnmax, ntype, nmax, &
          do_hoh, fva, fvb, fvoa, fvob, fvee, fvha)
 
       allocate (leftst(ld, nb, cond_ll), p0(ld, nb), p1(ld, nb), p2(ld, nb), rr(ld, nb))
@@ -1478,10 +1391,10 @@ contains
       a_sp = real(a, sp); b_sp = real(b, sp); inva = 1.0_sp/a_sp
 
       if (do_hoh) then
-         call ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
+         call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
             nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
       else
-         call ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
+         call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
 
       allocate (lp(ld, nb), p0(ld, nb), p1(ld, nb), p2(ld, nb), wt(ld, nb), etmp(ld, nb))
