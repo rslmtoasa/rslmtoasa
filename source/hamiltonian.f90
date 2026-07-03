@@ -330,17 +330,17 @@ contains
       this%hoh = hoh
       this%local_axis = local_axis
       this%orb_pol = orb_pol
-	      this%ccor_2c = ccor_2c
-	      this%ccor_elin = ccor_elin
-	      this%ccor_vmt_mode = lower(trim(ccor_vmt_mode))
-	      if (len_trim(this%ccor_vmt_mode) == 0) this%ccor_vmt_mode = 'surface_scalar'
-	      this%ccor_debug = ccor_debug
-	      this%ccor_strict = ccor_strict
-	      if (this%ccor_vmt_mode /= 'surface_scalar' .and. this%ccor_vmt_mode /= 'vmad_scalar' .and. &
-	          this%ccor_vmt_mode /= 'pair_surface') then
-	         call g_logger%fatal("Invalid ccor_vmt_mode. Use 'surface_scalar', 'vmad_scalar', or 'pair_surface'.", __FILE__, __LINE__)
-	      end if
-	      this%v_alpha(:) = v_alpha(:)
+         this%ccor_2c = ccor_2c
+         this%ccor_elin = ccor_elin
+         this%ccor_vmt_mode = lower(trim(ccor_vmt_mode))
+         if (len_trim(this%ccor_vmt_mode) == 0) this%ccor_vmt_mode = 'surface_scalar'
+         this%ccor_debug = ccor_debug
+         this%ccor_strict = ccor_strict
+         if (this%ccor_vmt_mode /= 'surface_scalar' .and. this%ccor_vmt_mode /= 'vmad_scalar' .and. &
+             this%ccor_vmt_mode /= 'pair_surface') then
+            call g_logger%fatal("Invalid ccor_vmt_mode. Use 'surface_scalar', 'vmad_scalar', or 'pair_surface'.", __FILE__, __LINE__)
+         end if
+         this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
       this%q_ss(:) = q_ss(:)
       this%theta_ss = theta_ss
@@ -686,9 +686,9 @@ contains
       this%hoh = .false.
       this%local_axis = .false.
       this%orb_pol = .false.
-	      this%ccor_2c = .false.
-	      this%ccor_elin = 0.0_rp
-	      this%ccor_vmt_mode = 'surface_scalar'
+         this%ccor_2c = .false.
+         this%ccor_elin = 0.0_rp
+         this%ccor_vmt_mode = 'surface_scalar'
       this%ccor_debug = .false.
       this%ccor_strict = .false.
       this%v_alpha(:) = [1, 0, 0]
@@ -1626,9 +1626,9 @@ contains
       integer :: ntype, ia, ino, nr, m, jj, it, jt
       complex(rp), dimension(nb, nb) :: hcc
 
-	      this%eecc(:, :, :, :) = czero
-	      if (.not. this%ccor_2c) return
-	      call validate_ccor_inputs(this)
+         this%eecc(:, :, :, :) = czero
+         if (.not. this%ccor_2c) return
+         call validate_ccor_inputs(this)
 
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
@@ -1646,17 +1646,17 @@ contains
             call build_ccor_pair_block_noncollinear(this, ia, jj, it, jt, ino, m, hcc)
             this%eecc(:, :, m, ntype) = hcc(:, :)
          end do
-	      end do
+         end do
 
-	      if (maxval(abs(this%eecc)) <= tiny(1.0_rp)) then
-	         if (this%ccor_strict) then
-	            call g_logger%fatal('ccor_2c built zero bulk Hcc; check lattice%sdot, VMTZ/vrmax, and ccor_elin.', __FILE__, __LINE__)
-	         else if (rank == 0) then
-	            call g_logger%warning('ccor_2c built zero bulk Hcc; k-space/real-space results will be unchanged.', __FILE__, __LINE__)
-	         end if
-	      end if
-	      if (this%ccor_debug) call log_ccor_debug(this, this%eecc, 'bulk')
-	   end subroutine build_ccor_bulk
+         if (maxval(abs(this%eecc)) <= tiny(1.0_rp)) then
+            if (this%ccor_strict) then
+               call g_logger%fatal('ccor_2c built zero bulk Hcc; check lattice%sdot, VMTZ/vrmax, and ccor_elin.', __FILE__, __LINE__)
+            else if (rank == 0) then
+               call g_logger%warning('ccor_2c built zero bulk Hcc; k-space/real-space results will be unchanged.', __FILE__, __LINE__)
+            end if
+         end if
+         if (this%ccor_debug) call log_ccor_debug(this, this%eecc, 'bulk')
+      end subroutine build_ccor_bulk
 
    subroutine build_ccor_local(this)
       class(hamiltonian), intent(inout) :: this
@@ -1682,17 +1682,17 @@ contains
             call build_ccor_pair_block_noncollinear(this, nlim, jj, it, jt, ino, m, hcc)
             this%hallcc(:, :, m, nlim) = hcc(:, :)
          end do
-	      end do
+         end do
 
-	      if (maxval(abs(this%hallcc)) <= tiny(1.0_rp)) then
-	         if (this%ccor_strict) then
-	            call g_logger%fatal('ccor_2c built zero local Hcc; check lattice%sdot, VMTZ/vrmax, and ccor_elin.', __FILE__, __LINE__)
-	         else if (rank == 0) then
-	            call g_logger%warning('ccor_2c built zero local Hcc; local results will be unchanged.', __FILE__, __LINE__)
-	         end if
-	      end if
-	      if (this%ccor_debug) call log_ccor_debug(this, this%hallcc, 'local')
-	   end subroutine build_ccor_local
+         if (maxval(abs(this%hallcc)) <= tiny(1.0_rp)) then
+            if (this%ccor_strict) then
+               call g_logger%fatal('ccor_2c built zero local Hcc; check lattice%sdot, VMTZ/vrmax, and ccor_elin.', __FILE__, __LINE__)
+            else if (rank == 0) then
+               call g_logger%warning('ccor_2c built zero local Hcc; local results will be unchanged.', __FILE__, __LINE__)
+            end if
+         end if
+         if (this%ccor_debug) call log_ccor_debug(this, this%hallcc, 'local')
+      end subroutine build_ccor_local
 
    subroutine validate_ccor_inputs(this)
       class(hamiltonian), intent(in) :: this
@@ -1753,15 +1753,15 @@ contains
 
       call build_ccor_coefficients(this, ia, it, ccd_i)
       call build_ccor_coefficients(this, ja, jt, ccd_j)
-	      call build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
-	      call build_ccor_d_components(this, ia, ja, it, jt, sdot_block, ddotcomp)
+         call build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
+         call build_ccor_d_components(this, ia, ja, it, jt, sdot_block, ddotcomp)
 
-	      if (trim(this%ccor_vmt_mode) == 'pair_surface') then
-	         call build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
-	         return
-	      end if
+         if (trim(this%ccor_vmt_mode) == 'pair_surface') then
+            call build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
+            return
+         end if
 
-	      kcomp(:, :, :) = czero
+         kcomp(:, :, :) = czero
       do ilm = 1, norb
          do jlm = 1, norb
             do idir = 1, 4
@@ -1790,75 +1790,75 @@ contains
          call hcpx(kcomp(:, :, idir), 'cart2sph')
       end do
 
-	      lambda = ccor_vmt_scalar(this) - this%ccor_elin
+         lambda = ccor_vmt_scalar(this) - this%ccor_elin
       hcc(1:norb, 1:norb) = lambda*(kcomp(:, :, 4) + kcomp(:, :, 3))
       hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = lambda*(kcomp(:, :, 4) - kcomp(:, :, 3))
       hcc(1:norb, spin_off + 1:spin_off + norb) = lambda*(kcomp(:, :, 1) - i_unit*kcomp(:, :, 2))
-	      hcc(spin_off + 1:spin_off + norb, 1:norb) = lambda*(kcomp(:, :, 1) + i_unit*kcomp(:, :, 2))
-	   end subroutine build_ccor_pair_block_noncollinear
+         hcc(spin_off + 1:spin_off + norb, 1:norb) = lambda*(kcomp(:, :, 1) + i_unit*kcomp(:, :, 2))
+      end subroutine build_ccor_pair_block_noncollinear
 
-	   subroutine build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
-	      class(hamiltonian), intent(in) :: this
-	      integer, intent(in) :: ia, ja, it, jt, m
-	      complex(rp), dimension(norb, norb, 4), intent(in) :: dcomp, ddotcomp
-	      real(rp), dimension(norb, 0:2), intent(in) :: ccd_i, ccd_j
-	      complex(rp), dimension(nb, nb), intent(out) :: hcc
+      subroutine build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
+         class(hamiltonian), intent(in) :: this
+         integer, intent(in) :: ia, ja, it, jt, m
+         complex(rp), dimension(norb, norb, 4), intent(in) :: dcomp, ddotcomp
+         real(rp), dimension(norb, 0:2), intent(in) :: ccd_i, ccd_j
+         complex(rp), dimension(nb, nb), intent(out) :: hcc
 
-	      complex(rp), dimension(norb, norb, 4) :: hcomp
-	      complex(rp), dimension(4) :: lambda_i, lambda_j, dloc, ddotloc, term_l, term_r, onsite
-	      real(rp), dimension(2) :: lambda_pair
-	      real(rp), dimension(3) :: mom_i, mom_j
-	      integer :: ilm, jlm, idir
+         complex(rp), dimension(norb, norb, 4) :: hcomp
+         complex(rp), dimension(4) :: lambda_i, lambda_j, dloc, ddotloc, term_l, term_r, onsite
+         real(rp), dimension(2) :: lambda_pair
+         real(rp), dimension(3) :: mom_i, mom_j
+         integer :: ilm, jlm, idir
 
-	      hcc(:, :) = czero
-	      hcomp(:, :, :) = czero
-	      lambda_pair(:) = (ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin)
+         hcc(:, :) = czero
+         hcomp(:, :, :) = czero
+         lambda_pair(:) = (ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin)
 
-	      mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-	      mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-	      call ccor_apply_spin_spiral(this, ia, mom_i)
-	      call ccor_apply_spin_spiral(this, ja, mom_j)
-	      call ccor_lambda_components(lambda_pair, mom_i, lambda_i)
-	      call ccor_lambda_components(lambda_pair, mom_j, lambda_j)
+         mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
+         mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
+         call ccor_apply_spin_spiral(this, ia, mom_i)
+         call ccor_apply_spin_spiral(this, ja, mom_j)
+         call ccor_lambda_components(lambda_pair, mom_i, lambda_i)
+         call ccor_lambda_components(lambda_pair, mom_j, lambda_j)
 
-	      do ilm = 1, norb
-	         do jlm = 1, norb
-	            dloc(:) = dcomp(ilm, jlm, :)
-	            ddotloc(:) = ddotcomp(ilm, jlm, :)
+         do ilm = 1, norb
+            do jlm = 1, norb
+               dloc(:) = dcomp(ilm, jlm, :)
+               ddotloc(:) = ddotcomp(ilm, jlm, :)
 
-	            call ccor_spin_product(lambda_i, ddotloc, term_l)
-	            call ccor_spin_product(ddotloc, lambda_j, term_r)
-	            hcomp(ilm, jlm, :) = 0.5_rp*(term_l(:) + term_r(:))
+               call ccor_spin_product(lambda_i, ddotloc, term_l)
+               call ccor_spin_product(ddotloc, lambda_j, term_r)
+               hcomp(ilm, jlm, :) = 0.5_rp*(term_l(:) + term_r(:))
 
-	            call ccor_spin_product(lambda_i, dloc, term_l)
-	            call ccor_spin_product(dloc, lambda_j, term_r)
-	            hcomp(ilm, jlm, :) = hcomp(ilm, jlm, :) + ccd_i(ilm, 1)*term_l(:) + ccd_j(jlm, 1)*term_r(:)
-	         end do
-	      end do
+               call ccor_spin_product(lambda_i, dloc, term_l)
+               call ccor_spin_product(dloc, lambda_j, term_r)
+               hcomp(ilm, jlm, :) = hcomp(ilm, jlm, :) + ccd_i(ilm, 1)*term_l(:) + ccd_j(jlm, 1)*term_r(:)
+            end do
+         end do
 
-	      if (m == 1) then
-	         do ilm = 1, norb
-	            onsite(:) = czero
-	            onsite(4) = ccd_i(ilm, 0)*(this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)**2 + &
-	                       this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)**2)
-	            do idir = 1, 3
-	               onsite(idir) = ccd_i(ilm, 0)*2.0_rp*this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)* &
-	                              this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*cmplx(mom_i(idir), 0.0_rp, rp)
-	            end do
-	            call ccor_spin_product(lambda_i, onsite, term_l)
-	            hcomp(ilm, ilm, :) = hcomp(ilm, ilm, :) + term_l(:)
-	         end do
-	      end if
+         if (m == 1) then
+            do ilm = 1, norb
+               onsite(:) = czero
+               onsite(4) = ccd_i(ilm, 0)*(this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)**2 + &
+                          this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)**2)
+               do idir = 1, 3
+                  onsite(idir) = ccd_i(ilm, 0)*2.0_rp*this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)* &
+                                 this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*cmplx(mom_i(idir), 0.0_rp, rp)
+               end do
+               call ccor_spin_product(lambda_i, onsite, term_l)
+               hcomp(ilm, ilm, :) = hcomp(ilm, ilm, :) + term_l(:)
+            end do
+         end if
 
-	      do idir = 1, 4
-	         call hcpx(hcomp(:, :, idir), 'cart2sph')
-	      end do
+         do idir = 1, 4
+            call hcpx(hcomp(:, :, idir), 'cart2sph')
+         end do
 
-	      hcc(1:norb, 1:norb) = hcomp(:, :, 4) + hcomp(:, :, 3)
-	      hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 4) - hcomp(:, :, 3)
-	      hcc(1:norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 1) - i_unit*hcomp(:, :, 2)
-	      hcc(spin_off + 1:spin_off + norb, 1:norb) = hcomp(:, :, 1) + i_unit*hcomp(:, :, 2)
-	   end subroutine build_ccor_pair_surface_block
+         hcc(1:norb, 1:norb) = hcomp(:, :, 4) + hcomp(:, :, 3)
+         hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 4) - hcomp(:, :, 3)
+         hcc(1:norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 1) - i_unit*hcomp(:, :, 2)
+         hcc(spin_off + 1:spin_off + norb, 1:norb) = hcomp(:, :, 1) + i_unit*hcomp(:, :, 2)
+      end subroutine build_ccor_pair_surface_block
 
    subroutine build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
       class(hamiltonian), intent(in) :: this
@@ -1955,121 +1955,121 @@ contains
       sdot_cc = -avw*avw*sdot_raw
    end function normalize_ccor_sdot
 
-	   function ccor_vmt_scalar(this) result(vmt)
-	      class(hamiltonian), intent(in) :: this
-	      real(rp) :: vmt
-	      real(rp), dimension(2) :: vmt_spin
+      function ccor_vmt_scalar(this) result(vmt)
+         class(hamiltonian), intent(in) :: this
+         real(rp) :: vmt
+         real(rp), dimension(2) :: vmt_spin
 
-	      select case (trim(this%ccor_vmt_mode))
-	      case ('surface_scalar')
-	         vmt_spin = ccor_vmt_global_surface(this)
-	         vmt = 0.5_rp*(vmt_spin(1) + vmt_spin(2))
-	      case ('vmad_scalar')
-	         vmt = ccor_vmt_scalar_from_vmad(this)
-	      case default
-	         call g_logger%fatal('ccor_2c scalar VMT requested with incompatible ccor_vmt_mode.', __FILE__, __LINE__)
-	      end select
-	   end function ccor_vmt_scalar
+         select case (trim(this%ccor_vmt_mode))
+         case ('surface_scalar')
+            vmt_spin = ccor_vmt_global_surface(this)
+            vmt = 0.5_rp*(vmt_spin(1) + vmt_spin(2))
+         case ('vmad_scalar')
+            vmt = ccor_vmt_scalar_from_vmad(this)
+         case default
+            call g_logger%fatal('ccor_2c scalar VMT requested with incompatible ccor_vmt_mode.', __FILE__, __LINE__)
+         end select
+      end function ccor_vmt_scalar
 
-	   function ccor_vmt_global_surface(this) result(vmt_spin)
-	      class(hamiltonian), intent(in) :: this
-	      real(rp), dimension(2) :: vmt_spin
-	      real(rp), dimension(2) :: endpoint
-	      real(rp) :: weight, weight_sum
-	      integer :: itype, nsite, multiplicity
+      function ccor_vmt_global_surface(this) result(vmt_spin)
+         class(hamiltonian), intent(in) :: this
+         real(rp), dimension(2) :: vmt_spin
+         real(rp), dimension(2) :: endpoint
+         real(rp) :: weight, weight_sum
+         integer :: itype, nsite, multiplicity
 
-	      vmt_spin(:) = 0.0_rp
-	      weight_sum = 0.0_rp
-	      nsite = min(this%charge%lattice%nbas, size(this%charge%lattice%iz))
-	      do itype = 1, this%charge%lattice%ntype
-	         multiplicity = count(this%charge%lattice%iz(1:nsite) == itype)
-	         if (multiplicity <= 0) multiplicity = 1
-	         weight = real(multiplicity, rp)*this%charge%lattice%symbolic_atoms(itype)%potential%ws_r**2
-	         endpoint = ccor_vmt_endpoint_surface(this, itype)
-	         vmt_spin(:) = vmt_spin(:) + weight*endpoint(:)
-	         weight_sum = weight_sum + weight
-	      end do
-	      if (weight_sum <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c surface_scalar VMTZ has zero WS-radius weight.', __FILE__, __LINE__)
-	      vmt_spin(:) = vmt_spin(:)/weight_sum
-	   end function ccor_vmt_global_surface
+         vmt_spin(:) = 0.0_rp
+         weight_sum = 0.0_rp
+         nsite = min(this%charge%lattice%nbas, size(this%charge%lattice%iz))
+         do itype = 1, this%charge%lattice%ntype
+            multiplicity = count(this%charge%lattice%iz(1:nsite) == itype)
+            if (multiplicity <= 0) multiplicity = 1
+            weight = real(multiplicity, rp)*this%charge%lattice%symbolic_atoms(itype)%potential%ws_r**2
+            endpoint = ccor_vmt_endpoint_surface(this, itype)
+            vmt_spin(:) = vmt_spin(:) + weight*endpoint(:)
+            weight_sum = weight_sum + weight
+         end do
+         if (weight_sum <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c surface_scalar VMTZ has zero WS-radius weight.', __FILE__, __LINE__)
+         vmt_spin(:) = vmt_spin(:)/weight_sum
+      end function ccor_vmt_global_surface
 
-	   function ccor_vmt_pair_surface(this, itype, jtype) result(vmt_spin)
-	      class(hamiltonian), intent(in) :: this
-	      integer, intent(in) :: itype, jtype
-	      real(rp), dimension(2) :: vmt_spin, vi, vj
-	      real(rp) :: wi, wj
+      function ccor_vmt_pair_surface(this, itype, jtype) result(vmt_spin)
+         class(hamiltonian), intent(in) :: this
+         integer, intent(in) :: itype, jtype
+         real(rp), dimension(2) :: vmt_spin, vi, vj
+         real(rp) :: wi, wj
 
-	      vi = ccor_vmt_endpoint_surface(this, itype)
-	      vj = ccor_vmt_endpoint_surface(this, jtype)
-	      wi = this%charge%lattice%symbolic_atoms(itype)%potential%ws_r**2
-	      wj = this%charge%lattice%symbolic_atoms(jtype)%potential%ws_r**2
-	      if (wi + wj <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c pair_surface VMTZ has zero endpoint WS-radius weight.', __FILE__, __LINE__)
-	      vmt_spin(:) = (wi*vi(:) + wj*vj(:))/(wi + wj)
-	   end function ccor_vmt_pair_surface
+         vi = ccor_vmt_endpoint_surface(this, itype)
+         vj = ccor_vmt_endpoint_surface(this, jtype)
+         wi = this%charge%lattice%symbolic_atoms(itype)%potential%ws_r**2
+         wj = this%charge%lattice%symbolic_atoms(jtype)%potential%ws_r**2
+         if (wi + wj <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c pair_surface VMTZ has zero endpoint WS-radius weight.', __FILE__, __LINE__)
+         vmt_spin(:) = (wi*vi(:) + wj*vj(:))/(wi + wj)
+      end function ccor_vmt_pair_surface
 
-	   function ccor_vmt_endpoint_surface(this, itype) result(vmt_spin)
-	      class(hamiltonian), intent(in) :: this
-	      integer, intent(in) :: itype
-	      real(rp), dimension(2) :: vmt_spin
-	      real(rp) :: avg, diff
+      function ccor_vmt_endpoint_surface(this, itype) result(vmt_spin)
+         class(hamiltonian), intent(in) :: this
+         integer, intent(in) :: itype
+         real(rp), dimension(2) :: vmt_spin
+         real(rp) :: avg, diff
 
-	      avg = this%charge%lattice%symbolic_atoms(itype)%potential%vrmax(1)
-	      diff = this%charge%lattice%symbolic_atoms(itype)%potential%vrmax(2)
-	      if (abs(avg) <= tiny(1.0_rp) .and. abs(diff) <= tiny(1.0_rp) .and. this%ccor_2c) then
-	         if (this%ccor_strict) then
-	            call g_logger%fatal('ccor_2c surface VMTZ requested, but potential%vrmax is zero/unset.', __FILE__, __LINE__)
-	         else if (rank == 0) then
-	            call g_logger%warning('ccor_2c surface VMTZ has zero/unset potential%vrmax; falling back to potential%vmad for this endpoint. Regenerate *_out.nml to persist vrmax for production CCOR.', __FILE__, __LINE__)
-	         end if
-	         avg = this%charge%lattice%symbolic_atoms(itype)%potential%vmad
-	         diff = 0.0_rp
-	      end if
-	      vmt_spin(1) = avg + 0.5_rp*diff
-	      vmt_spin(2) = avg - 0.5_rp*diff
-	   end function ccor_vmt_endpoint_surface
+         avg = this%charge%lattice%symbolic_atoms(itype)%potential%vrmax(1)
+         diff = this%charge%lattice%symbolic_atoms(itype)%potential%vrmax(2)
+         if (abs(avg) <= tiny(1.0_rp) .and. abs(diff) <= tiny(1.0_rp) .and. this%ccor_2c) then
+            if (this%ccor_strict) then
+               call g_logger%fatal('ccor_2c surface VMTZ requested, but potential%vrmax is zero/unset.', __FILE__, __LINE__)
+            else if (rank == 0) then
+               call g_logger%warning('ccor_2c surface VMTZ has zero/unset potential%vrmax; falling back to potential%vmad for this endpoint. Regenerate *_out.nml to persist vrmax for production CCOR.', __FILE__, __LINE__)
+            end if
+            avg = this%charge%lattice%symbolic_atoms(itype)%potential%vmad
+            diff = 0.0_rp
+         end if
+         vmt_spin(1) = avg + 0.5_rp*diff
+         vmt_spin(2) = avg - 0.5_rp*diff
+      end function ccor_vmt_endpoint_surface
 
-	   function ccor_vmt_scalar_from_vmad(this) result(vmt)
-	      class(hamiltonian), intent(in) :: this
-	      real(rp) :: vmt
-	      real(rp) :: weight, weight_sum
-	      integer :: itype
+      function ccor_vmt_scalar_from_vmad(this) result(vmt)
+         class(hamiltonian), intent(in) :: this
+         real(rp) :: vmt
+         real(rp) :: weight, weight_sum
+         integer :: itype
 
-	      vmt = 0.0_rp
-	      weight_sum = 0.0_rp
+         vmt = 0.0_rp
+         weight_sum = 0.0_rp
       do itype = 1, this%charge%lattice%ntype
          weight = this%charge%lattice%symbolic_atoms(itype)%potential%ws_r**2
          vmt = vmt + weight*this%charge%lattice%symbolic_atoms(itype)%potential%vmad
          weight_sum = weight_sum + weight
       end do
-	      if (weight_sum <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c vmad_scalar VMT has zero WS-radius weight.', __FILE__, __LINE__)
-	      vmt = vmt/weight_sum
-	   end function ccor_vmt_scalar_from_vmad
+         if (weight_sum <= tiny(1.0_rp)) call g_logger%fatal('ccor_2c vmad_scalar VMT has zero WS-radius weight.', __FILE__, __LINE__)
+         vmt = vmt/weight_sum
+      end function ccor_vmt_scalar_from_vmad
 
-	   subroutine ccor_lambda_components(lambda_pair, mom, lambda_comp)
-	      real(rp), dimension(2), intent(in) :: lambda_pair
-	      real(rp), dimension(3), intent(in) :: mom
-	      complex(rp), dimension(4), intent(out) :: lambda_comp
-	      real(rp) :: lambda0, lambda1
+      subroutine ccor_lambda_components(lambda_pair, mom, lambda_comp)
+         real(rp), dimension(2), intent(in) :: lambda_pair
+         real(rp), dimension(3), intent(in) :: mom
+         complex(rp), dimension(4), intent(out) :: lambda_comp
+         real(rp) :: lambda0, lambda1
 
-	      lambda0 = 0.5_rp*(lambda_pair(1) + lambda_pair(2))
-	      lambda1 = 0.5_rp*(lambda_pair(1) - lambda_pair(2))
-	      lambda_comp(1) = cmplx(lambda1*mom(1), 0.0_rp, rp)
-	      lambda_comp(2) = cmplx(lambda1*mom(2), 0.0_rp, rp)
-	      lambda_comp(3) = cmplx(lambda1*mom(3), 0.0_rp, rp)
-	      lambda_comp(4) = cmplx(lambda0, 0.0_rp, rp)
-	   end subroutine ccor_lambda_components
+         lambda0 = 0.5_rp*(lambda_pair(1) + lambda_pair(2))
+         lambda1 = 0.5_rp*(lambda_pair(1) - lambda_pair(2))
+         lambda_comp(1) = cmplx(lambda1*mom(1), 0.0_rp, rp)
+         lambda_comp(2) = cmplx(lambda1*mom(2), 0.0_rp, rp)
+         lambda_comp(3) = cmplx(lambda1*mom(3), 0.0_rp, rp)
+         lambda_comp(4) = cmplx(lambda0, 0.0_rp, rp)
+      end subroutine ccor_lambda_components
 
-	   subroutine ccor_spin_product(a, b, c)
-	      complex(rp), dimension(4), intent(in) :: a, b
-	      complex(rp), dimension(4), intent(out) :: c
+      subroutine ccor_spin_product(a, b, c)
+         complex(rp), dimension(4), intent(in) :: a, b
+         complex(rp), dimension(4), intent(out) :: c
 
-	      c(4) = a(4)*b(4) + a(1)*b(1) + a(2)*b(2) + a(3)*b(3)
-	      c(1) = a(4)*b(1) + b(4)*a(1) + i_unit*(a(2)*b(3) - a(3)*b(2))
-	      c(2) = a(4)*b(2) + b(4)*a(2) + i_unit*(a(3)*b(1) - a(1)*b(3))
-	      c(3) = a(4)*b(3) + b(4)*a(3) + i_unit*(a(1)*b(2) - a(2)*b(1))
-	   end subroutine ccor_spin_product
+         c(4) = a(4)*b(4) + a(1)*b(1) + a(2)*b(2) + a(3)*b(3)
+         c(1) = a(4)*b(1) + b(4)*a(1) + i_unit*(a(2)*b(3) - a(3)*b(2))
+         c(2) = a(4)*b(2) + b(4)*a(2) + i_unit*(a(3)*b(1) - a(1)*b(3))
+         c(3) = a(4)*b(3) + b(4)*a(3) + i_unit*(a(1)*b(2) - a(2)*b(1))
+      end subroutine ccor_spin_product
 
-	   subroutine ccor_apply_spin_spiral(this, ia, mom)
+      subroutine ccor_apply_spin_spiral(this, ia, mom)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia
       real(rp), dimension(3), intent(inout) :: mom
@@ -2102,19 +2102,19 @@ contains
       complex(rp), dimension(:, :, :, :), intent(in) :: hcc
       character(len=*), intent(in) :: label
       real(rp), dimension(norb, 0:2) :: ccd
-	      real(rp) :: vmt, lambda, rms_ccd2, max_ccd2, avw
-	      real(rp), dimension(2) :: vmt_spin
+         real(rp) :: vmt, lambda, rms_ccd2, max_ccd2, avw
+         real(rp), dimension(2) :: vmt_spin
       integer :: itype, count_ccd
       character(len=256) :: msg
 
-		      if (this%ccor_vmt_mode == 'surface_scalar' .or. this%ccor_vmt_mode == 'pair_surface') then
-		         vmt_spin = ccor_vmt_global_surface(this)
-		         vmt = 0.5_rp*(vmt_spin(1) + vmt_spin(2))
-		      else
-		         vmt = ccor_vmt_scalar(this)
-		         vmt_spin(:) = vmt
-		      end if
-	      lambda = vmt - this%ccor_elin
+            if (this%ccor_vmt_mode == 'surface_scalar' .or. this%ccor_vmt_mode == 'pair_surface') then
+               vmt_spin = ccor_vmt_global_surface(this)
+               vmt = 0.5_rp*(vmt_spin(1) + vmt_spin(2))
+            else
+               vmt = ccor_vmt_scalar(this)
+               vmt_spin(:) = vmt
+            end if
+         lambda = vmt - this%ccor_elin
       avw = this%charge%lattice%wav*ang2au
       if (avw <= tiny(1.0_rp)) avw = this%charge%lattice%wav
       rms_ccd2 = 0.0_rp
@@ -2127,12 +2127,12 @@ contains
          count_ccd = count_ccd + size(ccd(:, 2))
       end do
       if (count_ccd > 0) rms_ccd2 = sqrt(rms_ccd2/real(count_ccd, rp))
-	      write(msg, '(a,a,a,f14.8,a,a,a,f14.8,a,f14.8,a,f14.8)') 'CCOR2C ', trim(label), &
-	         ' E_lin=', this%ccor_elin, ' VMT mode=', trim(this%ccor_vmt_mode), ' VMT=', vmt, ' lambda=', lambda, ' avw=', avw
-	      call g_logger%info(trim(msg), __FILE__, __LINE__)
-	      write(msg, '(a,a,a,f14.8,a,f14.8)') 'CCOR2C ', trim(label), &
-	         ' VMT_up=', vmt_spin(1), ' VMT_down=', vmt_spin(2)
-	      call g_logger%info(trim(msg), __FILE__, __LINE__)
+         write(msg, '(a,a,a,f14.8,a,a,a,f14.8,a,f14.8,a,f14.8)') 'CCOR2C ', trim(label), &
+            ' E_lin=', this%ccor_elin, ' VMT mode=', trim(this%ccor_vmt_mode), ' VMT=', vmt, ' lambda=', lambda, ' avw=', avw
+         call g_logger%info(trim(msg), __FILE__, __LINE__)
+         write(msg, '(a,a,a,f14.8,a,f14.8)') 'CCOR2C ', trim(label), &
+            ' VMT_up=', vmt_spin(1), ' VMT_down=', vmt_spin(2)
+         call g_logger%info(trim(msg), __FILE__, __LINE__)
       write(msg, '(a,a,a,es12.4,a,es12.4,a,es12.4,a,es12.4)') 'CCOR2C ', trim(label), &
          ' maxabs(S)=', maxval(abs(this%charge%lattice%sbar)), &
          ' maxabs(Sdot_raw)=', maxval(abs(this%charge%lattice%sdot)), &

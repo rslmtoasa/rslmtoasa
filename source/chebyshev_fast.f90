@@ -1013,15 +1013,15 @@ contains
       error stop
 #else
       interface
-         subroutine rslmto_mkl_cgemm_batch_nn(batch_count, m, n, k, alpha, a_array, lda, &
-                                              b_array, ldb, beta, c_array, ldc, status) bind(C, name='rslmto_mkl_cgemm_batch_nn')
+         subroutine cblas_cgemm_batch(layout, transa, transb, m, n, k, alpha, a_array, lda, &
+                                      b_array, ldb, beta, c_array, ldc, group_count, group_size) bind(C, name='cblas_cgemm_batch')
             import :: c_int, c_ptr, c_float_complex
-            integer(c_int), intent(in) :: batch_count, m, n, k, lda, ldb, ldc
-            complex(c_float_complex), intent(in) :: alpha, beta
+            integer(c_int), value :: layout, group_count
+            integer(c_int), intent(in) :: transa(*), transb(*), m(*), n(*), k(*), lda(*), ldb(*), ldc(*), group_size(*)
+            complex(c_float_complex), intent(in) :: alpha(*), beta(*)
             type(c_ptr), intent(in) :: a_array(*), b_array(*)
             type(c_ptr), intent(inout) :: c_array(*)
-            integer(c_int), intent(out) :: status
-         end subroutine rslmto_mkl_cgemm_batch_nn
+         end subroutine cblas_cgemm_batch
       end interface
 
       complex(sp), pointer :: hval(:, :, :)
@@ -1094,16 +1094,13 @@ contains
       subroutine apply_step_mkl_batch(x1, x0, y, alpha, beta)
          complex(sp), intent(in), target :: x1(ld, nb), x0(ld, nb)
          complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in) :: alpha, beta
-         complex(c_float_complex) :: alpha_c, beta_c
+        real(sp), intent(in) :: alpha, beta
+         integer(c_int), parameter :: cblas_col_major = 102_c_int, cblas_no_trans = 111_c_int
+         complex(c_float_complex) :: alpha_c(1), beta_c(1)
          complex(sp) :: acc(nb, nb)
-         integer(c_int) :: batch_count_c, m_c, n_c, k_c, lda_c, ldb_c, ldc_c, status_c
+         integer(c_int) :: group_count_c, group_size_c(1)
+         integer(c_int) :: transa_c(1), transb_c(1), m_c(1), n_c(1), k_c(1), lda_c(1), ldb_c(1), ldc_c(1)
          integer :: block, row, col, r0
-
-         if (nblocks > huge(batch_count_c)) then
-            write (*, '(A)') 'ERROR: mkl_batch backend has too many BSR blocks for the C wrapper.'
-            error stop
-         end if
 
          !$omp parallel do private(block, col, r0) schedule(static)
          do block = 1, nblocks
@@ -1113,22 +1110,21 @@ contains
          end do
          !$omp end parallel do
 
-         batch_count_c = int(nblocks, c_int)
-         m_c = int(nb, c_int)
-         n_c = int(nb, c_int)
-         k_c = int(nb, c_int)
-         lda_c = int(nb, c_int)
-         ldb_c = int(ld, c_int)
-         ldc_c = int(nb, c_int)
-         alpha_c = cmplx(1.0_sp, 0.0_sp, c_float_complex)
-         beta_c = cmplx(0.0_sp, 0.0_sp, c_float_complex)
+         group_count_c = 1_c_int
+         group_size_c(1) = int(nblocks, c_int)
+         transa_c(1) = cblas_no_trans
+         transb_c(1) = cblas_no_trans
+         m_c(1) = int(nb, c_int)
+         n_c(1) = int(nb, c_int)
+         k_c(1) = int(nb, c_int)
+         lda_c(1) = int(nb, c_int)
+         ldb_c(1) = int(ld, c_int)
+         ldc_c(1) = int(nb, c_int)
+         alpha_c(1) = cmplx(1.0_sp, 0.0_sp, c_float_complex)
+         beta_c(1) = cmplx(0.0_sp, 0.0_sp, c_float_complex)
 
-         call rslmto_mkl_cgemm_batch_nn(batch_count_c, m_c, n_c, k_c, alpha_c, a_ptr, lda_c, &
-                                        b_ptr, ldb_c, beta_c, c_ptrs, ldc_c, status_c)
-         if (status_c /= 0_c_int) then
-            write (*, '(A,I0)') 'ERROR: rslmto_mkl_cgemm_batch_nn failed with status ', status_c
-            error stop
-         end if
+         call cblas_cgemm_batch(cblas_col_major, transa_c, transb_c, m_c, n_c, k_c, alpha_c, a_ptr, lda_c, &
+                                b_ptr, ldb_c, beta_c, c_ptrs, ldc_c, group_count_c, group_size_c)
 
          !$omp parallel do private(row, block, r0, acc) schedule(dynamic, 32)
          do row = 1, kk

@@ -68,7 +68,6 @@ if(ENABLE_MKL_BATCH OR ENABLE_MKL_SPARSE)
 endif()
 
 if(ENABLE_MKL_BATCH)
-    target_sources(${PROJECT_NAME} PRIVATE chebyshev_mkl_batch.cpp)
     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MKL_BATCH)
 endif()
 
