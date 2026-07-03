@@ -478,17 +478,94 @@ contains
    end subroutine calculate_intersite_gf_twoindex
 
    subroutine calculate_intersite_gf(this)
+      class(green), intent(inout) :: this
+
+      ! Deprecated wrapper retained for type-bound callers; use calculate_intersite_gf_core.
+      call calculate_intersite_gf_core(this, .false.)
+   end subroutine calculate_intersite_gf
+
+   subroutine calculate_intersite_gf_eta(this)
+      class(green), intent(inout) :: this
+
+      ! Deprecated wrapper retained for type-bound callers; use calculate_intersite_gf_core.
+      call calculate_intersite_gf_core(this, .true.)
+   end subroutine calculate_intersite_gf_eta
+
+   subroutine calculate_intersite_gf_core(this, eta_mode)
       use mpi_mod
       implicit none
       class(green), intent(inout) :: this
-      integer :: ia, ja_temp, j, i, ia_glob
+      logical, intent(in) :: eta_mode
+      integer :: ia, ja_temp, j, i, ia_glob, fermi_point
+      complex(rp), dimension(nb, nb, 4) :: g0_ef
+      complex(rp) :: eta
+      complex(rp), dimension(64, nb, nb, 4) :: y
+      real(rp) :: res, t
+      real(rp), dimension(64) :: x, w
+
+      if (eta_mode) then
+         if (this%control%gpu_plugin .and. &
+             (this%control%recur == 'block' .or. this%control%recur == 'chebyshev')) then
+            call this%calculate_intersite_gf_eta_gpu()
+            return
+         end if
+
+         call gauss_legendre(64, 0.0_rp, 1.0_rp, x, w)
+         call this%en%e_mesh()
+
+         do i = 1, this%en%channels_ldos + 10
+            if ((this%en%ene(i) - this%en%fermi) .le. 0.000001d0) fermi_point = i
+         end do
+
+         write (*, *) this%en%fermi, fermi_point
+         this%gij_eta = 0.0d0; this%gji_eta = 0.0d0; this%ginmag_eta = 0.0d0; this%giz_eta = 0.0d0; this%giy_eta = 0.0d0; this%gix_eta = 0.0d0
+         this%gjnmag_eta = 0.0d0; this%gjx_eta = 0.0d0; this%gjy_eta = 0.0d0; this%gjz_eta = 0.0d0
+
+         if (this%control%recur == 'block') call this%recursion%zsqr()
+
+         do ia_glob = start_atom, end_atom
+            ia = g2l_map(ia_glob)
+            ja_temp = (ia - 1)*4 + 1
+            y = (0.0_rp, 0.0_rp)
+            do i = 1, 64
+               eta = (0.0_rp, 0.0_rp)
+               g0_ef = (0.0_rp, 0.0_rp)
+               res = (1 - x(i))/x(i)
+               eta = cmplx(0.0_rp, res)
+               select case (this%control%recur)
+               case ('block')
+                  call this%block_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
+               case ('chebyshev')
+                  call this%chebyshev_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
+               end select
+               y(i, :, :, :) = g0_ef(:, :, :)
+            end do
+            this%gij_eta(:, :, :, ia) = y(:, :, :, 1) - y(:, :, :, 2) + (1.0d0/i_unit*y(:, :, :, 3) - 1.0d0/i_unit*y(:, :, :, 4))
+            this%gji_eta(:, :, :, ia) = y(:, :, :, 1) - y(:, :, :, 2) - (1.0d0/i_unit*y(:, :, :, 3) - 1.0d0/i_unit*y(:, :, :, 4))
+
+            this%gij_eta(:, :, :, ia) = this%gij_eta(:, :, :, ia)*0.5d0
+            this%gji_eta(:, :, :, ia) = this%gji_eta(:, :, :, ia)*0.5d0
+            do i = 1, norb
+               do j = 1, norb
+                  this%Ginmag_eta(:, j, i, iA) = this%Ginmag_eta(:, j, i, iA) + (this%gij_eta(:, j, i, ia) + this%gij_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
+                  this%Giz_eta(:, j, i, iA) = this%Giz_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i, ia) - this%gij_eta(:, j +spin_off, i +spin_off, ia))
+                  this%Giy_eta(:, j, i, iA) = this%Giy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gij_eta(:, j, i +spin_off, ia) - i_unit*this%gij_eta(:, j +spin_off, i, ia))
+                  this%Gix_eta(:, j, i, iA) = this%Gix_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i +spin_off, ia) + this%gij_eta(:, j +spin_off, i, ia))
+                  this%Gjnmag_eta(:, j, i, iA) = this%Gjnmag_eta(:, j, i, iA) + (this%gji_eta(:, j, i, ia) + this%gji_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
+                  this%Gjz_eta(:, j, i, iA) = this%Gjz_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i, ia) - this%gji_eta(:, j +spin_off, i +spin_off, ia))
+                  this%Gjy_eta(:, j, i, iA) = this%Gjy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gji_eta(:, j, i +spin_off, ia) - i_unit*this%gji_eta(:, j +spin_off, i, ia))
+                  this%Gjx_eta(:, j, i, iA) = this%Gjx_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i +spin_off, ia) + this%gji_eta(:, j +spin_off, i, ia))
+               end do
+            end do
+         end do
+         return
+      end if
 
       this%gij = 0.0d0; this%gji = 0.0d0; this%ginmag = 0.0d0; this%giz = 0.0d0; this%giy = 0.0d0; this%gix = 0.0d0
       this%gjnmag = 0.0d0; this%gjx = 0.0d0; this%gjy = 0.0d0; this%gjz = 0.0d0
 
       if (this%control%recur == 'block') call this%recursion%zsqr()
 
-      !do ia=1,this%lattice%njij
       do ia_glob = start_atom, end_atom
          ia = g2l_map(ia_glob)
          ja_temp = (ia - 1)*4 + 1
@@ -518,94 +595,17 @@ contains
          do i = 1, norb
             do j = 1, norb
                this%Ginmag(j, i, :, iA) = this%Ginmag(j, i, :, iA) + (this%gij(j, i, :, ia) + this%gij(j +spin_off, i +spin_off, :, ia))*0.5d0
-               this%Giz(j, i, :, iA) = this%Giz(j, i, :, iA) + 0.5d0*(this%gij(j, i, :, ia) - this%gij(j +spin_off, i +spin_off, :, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Giy(j, i, :, iA) = this%Giy(j, i, :, iA) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, ia) - i_unit*this%gij(j +spin_off, i, :, ia))  !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Gix(j, i, :, iA) = this%Gix(j, i, :, iA) + 0.5d0*(this%gij(j, i +spin_off, :, ia) + this%gij(j +spin_off, i, :, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
-               !
+               this%Giz(j, i, :, iA) = this%Giz(j, i, :, iA) + 0.5d0*(this%gij(j, i, :, ia) - this%gij(j +spin_off, i +spin_off, :, ia))
+               this%Giy(j, i, :, iA) = this%Giy(j, i, :, iA) + 0.5d0*(i_unit*this%gij(j, i +spin_off, :, ia) - i_unit*this%gij(j +spin_off, i, :, ia))
+               this%Gix(j, i, :, iA) = this%Gix(j, i, :, iA) + 0.5d0*(this%gij(j, i +spin_off, :, ia) + this%gij(j +spin_off, i, :, ia))
                this%Gjnmag(j, i, :, iA) = this%Gjnmag(j, i, :, iA) + (this%gji(j, i, :, ia) + this%gji(j +spin_off, i +spin_off, :, ia))*0.5d0
-               this%Gjz(j, i, :, iA) = this%Gjz(j, i, :, iA) + 0.5d0*(this%gji(j, i, :, ia) - this%gji(j +spin_off, i +spin_off, :, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjy(j, i, :, iA) = this%Gjy(j, i, :, iA) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, ia) - i_unit*this%gji(j +spin_off, i, :, ia))   !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjx(j, i, :, iA) = this%Gjx(j, i, :, iA) + 0.5d0*(this%gji(j, i +spin_off, :, ia) + this%gji(j +spin_off, i, :, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
+               this%Gjz(j, i, :, iA) = this%Gjz(j, i, :, iA) + 0.5d0*(this%gji(j, i, :, ia) - this%gji(j +spin_off, i +spin_off, :, ia))
+               this%Gjy(j, i, :, iA) = this%Gjy(j, i, :, iA) + 0.5d0*(i_unit*this%gji(j, i +spin_off, :, ia) - i_unit*this%gji(j +spin_off, i, :, ia))
+               this%Gjx(j, i, :, iA) = this%Gjx(j, i, :, iA) + 0.5d0*(this%gji(j, i +spin_off, :, ia) + this%gji(j +spin_off, i, :, ia))
             end do
          end do
       end do
-   end subroutine calculate_intersite_gf
-
-   subroutine calculate_intersite_gf_eta(this)
-      use mpi_mod
-      implicit none
-      class(green), intent(inout) :: this
-      integer :: ia, ja_temp, j, i, fermi_point
-      complex(rp), dimension(nb, nb, 4) :: g0_ef
-      complex(rp) :: eta
-      complex(rp), dimension(64, nb, nb, 4) :: y
-      real(rp) :: res, t
-      real(rp), dimension(64) :: x, w
-
-      integer :: ia_glob
-
-      ! GPU path: the whole per-pair/per-eta GF loop (block continued fraction
-      ! or Chebyshev moment contraction) is reconstructed on the device in one
-      ! batched call over all local pairs.
-      if (this%control%gpu_plugin .and. &
-          (this%control%recur == 'block' .or. this%control%recur == 'chebyshev')) then
-         call this%calculate_intersite_gf_eta_gpu()
-         return
-      end if
-
-      ! Find the Gauss Legendre roots and weights
-      call gauss_legendre(64, 0.0_rp, 1.0_rp, x, w)
-
-      call this%en%e_mesh()
-
-      do i = 1, this%en%channels_ldos + 10
-         if ((this%en%ene(i) - this%en%fermi) .le. 0.000001d0) fermi_point = i
-      end do
-
-      write (*, *) this%en%fermi, fermi_point
-      this%gij_eta = 0.0d0; this%gji_eta = 0.0d0; this%ginmag_eta = 0.0d0; this%giz_eta = 0.0d0; this%giy_eta = 0.0d0; this%gix_eta = 0.0d0
-      this%gjnmag_eta = 0.0d0; this%gjx_eta = 0.0d0; this%gjy_eta = 0.0d0; this%gjz_eta = 0.0d0
-
-      if (this%control%recur == 'block') call this%recursion%zsqr()
-
-      !do ia=1,this%lattice%njij
-      do ia_glob = start_atom, end_atom
-         ia = g2l_map(ia_glob)
-         ja_temp = (ia - 1)*4 + 1
-         y = (0.0_rp, 0.0_rp)
-         do i = 1, 64
-            eta = (0.0_rp, 0.0_rp)
-            g0_ef = (0.0_rp, 0.0_rp)
-            res = (1 - x(i))/x(i)
-            eta = cmplx(0.0_rp, res)
-            select case (this%control%recur)
-            case ('block')
-               call this%block_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
-            case ('chebyshev')
-               call this%chebyshev_green_ij_eta(ja_temp, eta, fermi_point, g0_ef)
-            end select
-            y(i, :, :, :) = g0_ef(:, :, :)
-         end do
-         this%gij_eta(:, :, :, ia) = y(:, :, :, 1) - y(:, :, :, 2) + (1.0d0/i_unit*y(:, :, :, 3) - 1.0d0/i_unit*y(:, :, :, 4))
-         this%gji_eta(:, :, :, ia) = y(:, :, :, 1) - y(:, :, :, 2) - (1.0d0/i_unit*y(:, :, :, 3) - 1.0d0/i_unit*y(:, :, :, 4))
-
-         this%gij_eta(:, :, :, ia) = this%gij_eta(:, :, :, ia)*0.5d0
-         this%gji_eta(:, :, :, ia) = this%gji_eta(:, :, :, ia)*0.5d0
-         do i = 1, norb
-            do j = 1, norb
-               this%Ginmag_eta(:, j, i, iA) = this%Ginmag_eta(:, j, i, iA) + (this%gij_eta(:, j, i, ia) + this%gij_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
-               this%Giz_eta(:, j, i, iA) = this%Giz_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i, ia) - this%gij_eta(:, j +spin_off, i +spin_off, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Giy_eta(:, j, i, iA) = this%Giy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gij_eta(:, j, i +spin_off, ia) - i_unit*this%gij_eta(:, j +spin_off, i, ia))  !+Ginmag(k,j,i,iIA)*0.5d0
-               this%Gix_eta(:, j, i, iA) = this%Gix_eta(:, j, i, iA) + 0.5d0*(this%gij_eta(:, j, i +spin_off, ia) + this%gij_eta(:, j +spin_off, i, ia))        !+Ginmag(k,j,i,iIA)*0.5d0
-               !
-               this%Gjnmag_eta(:, j, i, iA) = this%Gjnmag_eta(:, j, i, iA) + (this%gji_eta(:, j, i, ia) + this%gji_eta(:, j +spin_off, i +spin_off, ia))*0.5d0
-               this%Gjz_eta(:, j, i, iA) = this%Gjz_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i, ia) - this%gji_eta(:, j +spin_off, i +spin_off, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjy_eta(:, j, i, iA) = this%Gjy_eta(:, j, i, iA) + 0.5d0*(i_unit*this%gji_eta(:, j, i +spin_off, ia) - i_unit*this%gji_eta(:, j +spin_off, i, ia))   !+Gjnmag(k,j,i,iIA)*0.5d0
-               this%Gjx_eta(:, j, i, iA) = this%Gjx_eta(:, j, i, iA) + 0.5d0*(this%gji_eta(:, j, i +spin_off, ia) + this%gji_eta(:, j +spin_off, i, ia))         !+Gjnmag(k,j,i,iIA)*0.5d0
-            end do
-         end do
-      end do
-   end subroutine calculate_intersite_gf_eta
+   end subroutine calculate_intersite_gf_core
 
    !---------------------------------------------------------------------------
    !> GPU port of calculate_intersite_gf_eta: the per-pair x per-eta bgreen loop
@@ -727,41 +727,13 @@ contains
    !---------------------------------------------------------------------------
    subroutine block_green_eta(this, eta, fermi_point, g_ef)
       use mpi_mod
-      implicit none
       class(green), intent(inout) :: this
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
       complex(rp), dimension(nb, nb, atoms_per_process), intent(inout) :: g_ef
-      !
-      !
-      integer :: nw
-      integer :: ll
-      integer :: ldim
-      real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
-      real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
-      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10, atoms_per_process) :: dum_g_ef
-      integer :: n, n_glob
-      !
-      !
-      ! Definitions so it is not necessary to change the code
-      ll = this%control%lld
-      ldim = nb
 
-      ! Unchanged code
-      nw = 10*ll
-
-      ! Calculate terminator coefficients
-      call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, atoms_per_process, &
-                                      ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
-
-      do n_glob = start_atom, end_atom
-         n = g2l_map(n_glob)
-
-         call this%bgreen(dum_g_ef(:, :, :, n), n, fermi_point, 1, a_inf(:, :, n), b_inf(:, :, n), eta)
-         g_ef(:, :, n) = dum_g_ef(:, :, fermi_point, n)
-
-      end do
-
+      ! Deprecated wrapper retained for type-bound callers; use block_green_core.
+      call block_green_core(this, eta, fermi_point, g_ef)
    end subroutine block_green_eta
 
    !---------------------------------------------------------------------------
@@ -770,44 +742,10 @@ contains
    !> Calculates the Greens function
    !---------------------------------------------------------------------------
    subroutine block_green(this)
-      use mpi_mod
-      implicit none
       class(green), intent(inout) :: this
-      !
-      integer :: nw
-      integer :: ll
-      integer :: ldim
-      complex(rp) :: eta
-      real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
-      real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
-      integer :: n, n_glob
-      !
-      ! GPU path: reconstruct the block continued fraction on the device.
-      if (this%control%gpu_plugin) then
-         call this%block_green_gpu()
-         return
-      end if
-      !
-      ! Definitions so it is not necessary to change the code
-      ll = this%control%lld
-      ldim = nb
-      !na = this%lattice%nrec
-      eta = (0.0d0, 0.0d0)
 
-      ! Unchanged code
-      nw = 10*ll
-
-      ! Calculate terminator coefficients
-      call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, atoms_per_process, &
-                                      ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
-
-      ! print *, "AB check:", shape(this%g0)
-      do n_glob = start_atom, end_atom
-         n = g2l_map(n_glob)
-
-         call this%bgreen(this%g0(:, :, :, n), n, 1, this%en%channels_ldos + 10, a_inf(:, :, n), b_inf(:, :, n), eta)
-      end do
-
+      ! Deprecated wrapper retained for type-bound callers; use block_green_core.
+      call block_green_core(this)
    end subroutine block_green
 
    !---------------------------------------------------------------------------
@@ -818,15 +756,25 @@ contains
    !> legacy path if the GPU plugin is unavailable (handled inside the backend).
    !---------------------------------------------------------------------------
    subroutine block_green_gpu(this)
+      class(green), intent(inout) :: this
+
+      ! Deprecated wrapper retained for type-bound callers; use block_green_core.
+      call block_green_core(this)
+   end subroutine block_green_gpu
+
+   subroutine block_green_core(this, eta, fermi_point, g_ef)
       use mpi_mod
       implicit none
       class(green), intent(inout) :: this
-      !
+      complex(rp), intent(in), optional :: eta
+      integer, intent(in), optional :: fermi_point
+      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout), optional :: g_ef
       integer :: nw, ll, ldim, nv, n_loc, n, n_glob, k, i
-      complex(rp) :: eta
+      complex(rp) :: eta0
       real(rp), dimension(this%lattice%nrec) :: a_inf0, b_inf0
       real(rp), dimension(nb, nb, this%lattice%nrec) :: a_inf, b_inf
       complex(rp), allocatable :: ab_loc(:, :, :, :), b2_loc(:, :, :, :), g0_loc(:, :, :, :)
+      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10, atoms_per_process) :: dum_g_ef
       real(rp), allocatable :: ainf_d(:, :), binf_d(:, :)
       ! Static GPU backend (one per program lifetime), as in chebyshev_green_gpu
       type(rsgpu), save :: gpu_backend
@@ -834,13 +782,30 @@ contains
 
       ll = this%control%lld
       ldim = nb
-      eta = (0.0d0, 0.0d0)
+      eta0 = (0.0d0, 0.0d0)
+      if (present(eta)) eta0 = eta
       nw = 10*ll
       nv = this%en%channels_ldos + 10
 
-      ! Terminator coefficients on the CPU (a_inf/b_inf), as in block_green.
       call this%recursion%get_terminf(this%recursion%a_b, this%recursion%b2_b, &
                                       atoms_per_process, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
+
+      if (present(eta)) then
+         do n_glob = start_atom, end_atom
+            n = g2l_map(n_glob)
+            call this%bgreen(dum_g_ef(:, :, :, n), n, fermi_point, 1, a_inf(:, :, n), b_inf(:, :, n), eta0)
+            g_ef(:, :, n) = dum_g_ef(:, :, fermi_point, n)
+         end do
+         return
+      end if
+
+      if (.not. this%control%gpu_plugin) then
+         do n_glob = start_atom, end_atom
+            n = g2l_map(n_glob)
+            call this%bgreen(this%g0(:, :, :, n), n, 1, nv, a_inf(:, :, n), b_inf(:, :, n), eta0)
+         end do
+         return
+      end if
 
       ! Gather this rank's local atoms into contiguous batch buffers (mirrors the
       ! n = g2l_map(n_glob) indexing of block_green's bgreen loop).
@@ -865,7 +830,7 @@ contains
       end if
 
       call gpu_backend%block_dos(ab_loc, b2_loc, ainf_d, binf_d, &
-                                 this%en%ene(1:nv), eta, this%control%sym_term, g0_loc)
+                                 this%en%ene(1:nv), eta0, this%control%sym_term, g0_loc)
 
       ! Scatter back to the local g0 slots.
       do n_glob = start_atom, end_atom
@@ -875,7 +840,7 @@ contains
       end do
 
       deallocate (ab_loc, b2_loc, g0_loc, ainf_d, binf_d)
-   end subroutine block_green_gpu
+   end subroutine block_green_core
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1322,50 +1287,10 @@ contains
    !> Uses the moments form the Chebyshev recursions to calculate the onsite GF
    !---------------------------------------------------------------------------
    subroutine chebyshev_green(this)
-      use mpi_mod
       class(green), intent(inout) :: this
-      ! Local variables
-      complex(rp), allocatable :: mu_local(:, :, :, :)
-      complex(rp), allocatable :: g0_local(:, :, :, :)
-      real(rp) :: a, b, emin_win, emax_win
-      integer :: n, n_glob, n_local, nv
 
-      this%g0 = 0.0d0
-
-      ! Defining rescaling coeficients
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-
-      ! Number of DOS points
-      nv = this%en%channels_ldos + 10
-
-      n_local = end_atom - start_atom + 1
-      if (n_local <= 0) return
-
-      allocate (mu_local(nb, nb, size(this%recursion%mu_n, 3), n_local))
-      allocate (g0_local(nb, nb, nv, n_local))
-
-      do n_glob = start_atom, end_atom
-         n = g2l_map(n_glob)
-         mu_local(:, :, :, n) = this%recursion%mu_n(:, :, :, n)
-      end do
-
-      call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
-
-      do n_glob = start_atom, end_atom
-         n = g2l_map(n_glob)
-         this%g0(:, :, 1:nv, n) = g0_local(:, :, :, n)
-      end do
-
-      deallocate (g0_local, mu_local)
-!!! ! MPI moved to moment section
-!!! #ifdef USE_MPI
-!!!     call g_timer%start(´MPI DOS communication´)
-!!!     call MPI_Allgather(this%g0(:,:,:,start_atom:end_atom), (end_atom-start_atom+1)*nv*nb*nb, MPI_DOUBLE_COMPLEX, &
-!!!                        this%g0, (end_atom-start_atom+1)*nv*nb*nb, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD, ierr)
-!!!     call g_timer%stop(´MPI DOS communication´)
-!!! #endif
+      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
+      call chebyshev_green_core(this, use_gpu=this%control%gpu_plugin)
    end subroutine chebyshev_green
 
    !---------------------------------------------------------------------------
@@ -1374,64 +1299,10 @@ contains
    !> Falls back to CPU BLAS if GPU unavailable
    !---------------------------------------------------------------------------
    subroutine chebyshev_green_gpu(this)
-      use mpi_mod
       class(green), intent(inout) :: this
 
-      ! Local variables
-      real(rp), dimension(this%control%lld*2+2) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10) :: wscale
-      real(rp) :: a, b, emin_win, emax_win
-      integer :: ie, i, j, k, l, m, n, nv, n_glob
-
-      ! Static GPU backend (one per program lifetime)
-      type(rsgpu), save :: gpu_backend
-      logical, save :: first_call = .true.
-
-      this%g0 = 0.0d0
-
-      ! === Setup (identical to legacy path) ===
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-
-      wscale(:) = (this%en%ene(:) - b)/a
-
-      ! Number of DOS points
-      nv = this%en%channels_ldos + 10
-
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
-
-      ! === Kernel application loop (identical to legacy path) ===
-      do n_glob = start_atom, end_atom
-         n = g2l_map(n_glob)
-
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
-            end do
-         end do
-
-         this%recursion%mu_ng(:, :, 2:size(kernel), n) = &
-            this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
-      end do
-
-      ! === Initialize GPU backend (first call only) ===
-      if (first_call) then
-         call gpu_backend%init(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-         first_call = .false.
-      end if
-
-      ! === DOS reconstruction via GPU GEMM (one call replaces entire ie/i/l/m loop nest) ===
-      ! Transfer matrix F(i,ie) absorbs Jackson kernel, ×2 coeff, phase, and prefactor
-      ! Then G₀ = moments · F via cublasZgemmStridedBatched (GPU) or cgemm (CPU fallback)
-      ! Automatic fallback to CPU if GPU unavailable
-      call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
-                                      this%en%ene(1:nv), a, b,                         &
-                                      this%g0(:, :, 1:nv, start_atom:end_atom))
-
+      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
+      call chebyshev_green_core(this, use_gpu=.true.)
    end subroutine chebyshev_green_gpu
 
    !---------------------------------------------------------------------------
@@ -1443,20 +1314,18 @@ contains
    subroutine chebyshev_dos_dispatch(this)
       class(green), intent(inout) :: this
 
-      ! Try GPU path first (if compiled and enabled)
       if (this%control%gpu_plugin) then
          if (this%control%nsp > 4) then
             call g_logger%warning('gpu_plugin requested for Chebyshev DOS, '// &
                'but nsp > 4. Using legacy path.', __FILE__, __LINE__)
-            call this%chebyshev_green()
+            call chebyshev_green_core(this, use_gpu=.false.)
             return
          end if
-         call this%chebyshev_green_gpu()
+         call chebyshev_green_core(this, use_gpu=.true.)
          return
       end if
 
-      ! Fall back to legacy path
-      call this%chebyshev_green()
+      call chebyshev_green_core(this, use_gpu=.false.)
 
    end subroutine chebyshev_dos_dispatch
 
@@ -1469,30 +1338,99 @@ contains
    subroutine chebyshev_green_eta(this, eta, fermi_point, g_ef)
       use mpi_mod
       class(green), intent(inout) :: this
-      !complex(rp), dimension(nb, nb,this%lattice%nrec), intent(inout) :: g_ef
       complex(rp), dimension(nb, nb, atoms_per_process), intent(inout) :: g_ef
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
+
+      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
+      call chebyshev_green_core(this, eta, fermi_point, g_ef)
+   end subroutine chebyshev_green_eta
+
+   subroutine chebyshev_green_core(this, eta, fermi_point, g_ef, use_gpu)
+      use mpi_mod
+      class(green), intent(inout) :: this
+      complex(rp), intent(in), optional :: eta
+      integer, intent(in), optional :: fermi_point
+      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout), optional :: g_ef
+      logical, intent(in), optional :: use_gpu
       ! Local variables
       real(rp), dimension(this%control%lld*2 + 2) :: kernel
       real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
       complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n, nv
-      integer :: n_glob
+      integer :: ie, i, j, k, l, m, n, nv, n_glob, n_local
+      complex(rp), allocatable :: mu_local(:, :, :, :)
+      complex(rp), allocatable :: g0_local(:, :, :, :)
+      type(rsgpu), save :: gpu_backend
+      logical, save :: first_call = .true.
+      logical :: do_gpu
 
-      g_ef = 0.0d0
+      do_gpu = this%control%gpu_plugin
+      if (present(use_gpu)) do_gpu = use_gpu
+      if (present(eta)) then
+         g_ef = 0.0d0
+      else
+         this%g0 = 0.0d0
+      end if
 
       ! Defining rescaling coeficients
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
 
-      wscale(:) = (this%en%ene(:) - b)/a
-
       ! Number of DOS points
       nv = this%en%channels_ldos + 10
+
+      if (.not. present(eta) .and. do_gpu) then
+         call jackson_kernel((this%control%lld)*2 + 2, kernel)
+         do n_glob = start_atom, end_atom
+            n = g2l_map(n_glob)
+            do l = 1, nb
+               do m = 1, nb
+                  this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
+               end do
+            end do
+            this%recursion%mu_ng(:, :, 2:size(kernel), n) = &
+               this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
+         end do
+
+         if (first_call) then
+            call gpu_backend%init(1, nb, 1, 1, 1)
+            call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+            first_call = .false.
+         end if
+
+         call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
+                                         this%en%ene(1:nv), a, b,                         &
+                                         this%g0(:, :, 1:nv, start_atom:end_atom))
+         return
+      end if
+
+      if (.not. present(eta)) then
+         n_local = end_atom - start_atom + 1
+         if (n_local <= 0) return
+
+         allocate (mu_local(nb, nb, size(this%recursion%mu_n, 3), n_local))
+         allocate (g0_local(nb, nb, nv, n_local))
+
+         do n_glob = start_atom, end_atom
+            n = g2l_map(n_glob)
+            mu_local(:, :, :, n) = this%recursion%mu_n(:, :, :, n)
+         end do
+
+         call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
+
+         do n_glob = start_atom, end_atom
+            n = g2l_map(n_glob)
+            this%g0(:, :, 1:nv, n) = g0_local(:, :, :, n)
+         end do
+
+         deallocate (g0_local, mu_local)
+         return
+      end if
+
+      wscale(:) = (this%en%ene(:) - b)/a
 
       ! Calculating the Jackson Kernel
       call jackson_kernel((this%control%lld)*2 + 2, kernel)
@@ -1535,7 +1473,7 @@ contains
          end do
          !$omp end parallel do
       end do  ! End loop on self-consistent atoms
-   end subroutine chebyshev_green_eta
+   end subroutine chebyshev_green_core
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
