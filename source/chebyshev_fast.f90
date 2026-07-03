@@ -32,97 +32,126 @@ module chebyshev_fast_mod
    integer, parameter :: sp = selected_real_kind(6, 37)
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
-   complex(sp), allocatable, target, save :: hee_cache(:, :, :, :), hha_cache(:, :, :, :)
-   complex(sp), allocatable, target, save :: oee_cache(:, :, :, :), oha_cache(:, :, :, :)
-   complex(sp), allocatable, target, save :: bee_cache(:, :, :, :), bha_cache(:, :, :, :)
-   complex(sp), allocatable, target, save :: hons_cache(:, :, :)
-   ! Raw fp32 mirrors for the conductivity/orbital fast kernels: velocity
-   ! operators (fva/fvb), their hoh ortho (fvoa/fvob, on-site shell zeroed) and
-   ! raw ee/hall (fvee/fvha) used by the velocity hoh two-sweep.
-   complex(sp), allocatable, target, save :: fva_cache(:, :, :, :), fvb_cache(:, :, :, :)
-   complex(sp), allocatable, target, save :: fvoa_cache(:, :, :, :), fvob_cache(:, :, :, :)
-   complex(sp), allocatable, target, save :: fvee_cache(:, :, :, :), fvha_cache(:, :, :, :)
-   logical, save :: vel_cache_valid = .false.
-   integer, save :: vel_cache_nb = 0, vel_cache_nnmax = 0, vel_cache_ntype = 0
-   integer, save :: vel_cache_nmax = -1, vel_cache_kk = 0
-   logical, save :: vel_cache_hoh = .false.
-   complex(sp), allocatable, target, save :: hval_cache(:, :, :)
-   complex(sp), allocatable, target, save :: work0_cache(:, :), work1_cache(:, :), work2_cache(:, :)
-   complex(sp), allocatable, target, save :: workt_cache(:, :)
-   complex(sp), allocatable, target, save :: block_products_cache(:, :, :)
-   integer, allocatable, target, save :: hcol_cache(:), hrow_cache(:)
-   type(c_ptr), allocatable, target, save :: mkl_a_ptr_cache(:), mkl_b_ptr_cache(:), mkl_c_ptr_cache(:)
-   logical, save :: scaled_cache_valid = .false.
-   logical, save :: bsr_cache_valid = .false.
-   logical, save :: ortho_cache_valid = .false.
-   integer, save :: scaled_cache_nb = 0, scaled_cache_nnmax = 0, scaled_cache_ntype = 0
-   integer, save :: scaled_cache_nmax = -1, scaled_cache_kk = 0
-   integer, save :: ortho_cache_nb = 0, ortho_cache_nnmax = 0, ortho_cache_ntype = 0
-   integer, save :: ortho_cache_nmax = -1, ortho_cache_kk = 0
-   real(sp), save :: ortho_cache_inva = -1.0_sp, ortho_cache_b = huge(1.0_sp)
-   integer, save :: bsr_cache_nb = 0, bsr_cache_nnmax = 0, bsr_cache_ntype = 0
-   integer, save :: bsr_cache_nmax = -1, bsr_cache_kk = 0
-   real(sp), save :: scaled_cache_inva = -1.0_sp, scaled_cache_b = huge(1.0_sp)
-   real(sp), save :: bsr_cache_inva = -1.0_sp, bsr_cache_b = huge(1.0_sp)
-   integer, save :: work_cache_ld = 0, work_cache_nb = 0
-   integer, save :: block_products_cache_nb = 0, block_products_cache_nblocks = 0
-   integer, save :: mkl_ptr_cache_nblocks = 0
+
+   type :: cheb_cache_fingerprint_t
+      logical :: valid = .false.
+      integer :: nb = 0
+      integer :: nnmax = 0
+      integer :: ntype = 0
+      integer :: nmax = -1
+      integer :: kk = 0
+      integer :: ld = 0
+      integer :: nblocks = 0
+      real(sp) :: inva = -1.0_sp
+      real(sp) :: b = huge(1.0_sp)
+      logical :: hoh = .false.
+   end type cheb_cache_fingerprint_t
+
+   type :: cheb_cache_t
+      complex(sp), pointer :: hee_cache(:, :, :, :) => null(), hha_cache(:, :, :, :) => null()
+      complex(sp), pointer :: oee_cache(:, :, :, :) => null(), oha_cache(:, :, :, :) => null()
+      complex(sp), pointer :: bee_cache(:, :, :, :) => null(), bha_cache(:, :, :, :) => null()
+      complex(sp), pointer :: hons_cache(:, :, :) => null()
+      ! Raw fp32 mirrors for the conductivity/orbital fast kernels: velocity
+      ! operators (fva/fvb), their hoh ortho (fvoa/fvob, on-site shell zeroed) and
+      ! raw ee/hall (fvee/fvha) used by the velocity hoh two-sweep.
+      complex(sp), pointer :: fva_cache(:, :, :, :) => null(), fvb_cache(:, :, :, :) => null()
+      complex(sp), pointer :: fvoa_cache(:, :, :, :) => null(), fvob_cache(:, :, :, :) => null()
+      complex(sp), pointer :: fvee_cache(:, :, :, :) => null(), fvha_cache(:, :, :, :) => null()
+      complex(sp), pointer :: hval_cache(:, :, :) => null()
+      complex(sp), pointer :: work0_cache(:, :) => null(), work1_cache(:, :) => null(), work2_cache(:, :) => null()
+      complex(sp), pointer :: workt_cache(:, :) => null()
+      complex(sp), pointer :: block_products_cache(:, :, :) => null()
+      integer, pointer :: hcol_cache(:) => null(), hrow_cache(:) => null()
+      type(c_ptr), pointer :: mkl_a_ptr_cache(:) => null(), mkl_b_ptr_cache(:) => null(), mkl_c_ptr_cache(:) => null()
+      type(cheb_cache_fingerprint_t) :: scaled
+      type(cheb_cache_fingerprint_t) :: bsr
+      type(cheb_cache_fingerprint_t) :: ortho
+      type(cheb_cache_fingerprint_t) :: vel
+      type(cheb_cache_fingerprint_t) :: work
+      type(cheb_cache_fingerprint_t) :: block_products
+      type(cheb_cache_fingerprint_t) :: mkl_ptr
+   contains
+      procedure :: reset => cheb_cache_reset
+      procedure :: ensure_work_buffers => cheb_cache_ensure_work_buffers
+      procedure :: ensure_hoh_buffer => cheb_cache_ensure_hoh_buffer
+      procedure :: ensure_block_products => cheb_cache_ensure_block_products
+      procedure :: ensure_mkl_batch_ptr_arrays => cheb_cache_ensure_mkl_batch_ptr_arrays
+      procedure :: ensure_scaled_hamiltonian_sp => cheb_cache_ensure_scaled_hamiltonian_sp
+      procedure :: ensure_scaled_ortho_sp => cheb_cache_ensure_scaled_ortho_sp
+      procedure :: ensure_scaled_bsr_sp => cheb_cache_ensure_scaled_bsr_sp
+      procedure :: ensure_scaled_velocity_sp => cheb_cache_ensure_scaled_velocity_sp
+   end type cheb_cache_t
+
+   type(cheb_cache_t), save :: cheb_cache
 
 contains
 
    subroutine cheb_fast_reset_cache()
-      if (allocated(hee_cache)) deallocate (hee_cache)
-      if (allocated(hha_cache)) deallocate (hha_cache)
-      if (allocated(oee_cache)) deallocate (oee_cache)
-      if (allocated(oha_cache)) deallocate (oha_cache)
-      if (allocated(bee_cache)) deallocate (bee_cache)
-      if (allocated(bha_cache)) deallocate (bha_cache)
-      if (allocated(hons_cache)) deallocate (hons_cache)
-      if (allocated(fva_cache)) deallocate (fva_cache)
-      if (allocated(fvb_cache)) deallocate (fvb_cache)
-      if (allocated(fvoa_cache)) deallocate (fvoa_cache)
-      if (allocated(fvob_cache)) deallocate (fvob_cache)
-      if (allocated(fvee_cache)) deallocate (fvee_cache)
-      if (allocated(fvha_cache)) deallocate (fvha_cache)
-      if (allocated(hval_cache)) deallocate (hval_cache)
-      if (allocated(work0_cache)) deallocate (work0_cache)
-      if (allocated(work1_cache)) deallocate (work1_cache)
-      if (allocated(work2_cache)) deallocate (work2_cache)
-      if (allocated(workt_cache)) deallocate (workt_cache)
-      if (allocated(block_products_cache)) deallocate (block_products_cache)
-      if (allocated(hcol_cache)) deallocate (hcol_cache)
-      if (allocated(hrow_cache)) deallocate (hrow_cache)
-      if (allocated(mkl_a_ptr_cache)) deallocate (mkl_a_ptr_cache)
-      if (allocated(mkl_b_ptr_cache)) deallocate (mkl_b_ptr_cache)
-      if (allocated(mkl_c_ptr_cache)) deallocate (mkl_c_ptr_cache)
-      scaled_cache_valid = .false.
-      bsr_cache_valid = .false.
-      ortho_cache_valid = .false.
-      vel_cache_valid = .false.
-      work_cache_ld = 0
-      work_cache_nb = 0
-      block_products_cache_nb = 0
-      block_products_cache_nblocks = 0
-      mkl_ptr_cache_nblocks = 0
+      call cheb_cache%reset()
    end subroutine cheb_fast_reset_cache
+
+   subroutine cheb_cache_reset(this)
+      class(cheb_cache_t), intent(inout) :: this
+
+      if (associated(this%hee_cache)) deallocate (this%hee_cache)
+      if (associated(this%hha_cache)) deallocate (this%hha_cache)
+      if (associated(this%oee_cache)) deallocate (this%oee_cache)
+      if (associated(this%oha_cache)) deallocate (this%oha_cache)
+      if (associated(this%bee_cache)) deallocate (this%bee_cache)
+      if (associated(this%bha_cache)) deallocate (this%bha_cache)
+      if (associated(this%hons_cache)) deallocate (this%hons_cache)
+      if (associated(this%fva_cache)) deallocate (this%fva_cache)
+      if (associated(this%fvb_cache)) deallocate (this%fvb_cache)
+      if (associated(this%fvoa_cache)) deallocate (this%fvoa_cache)
+      if (associated(this%fvob_cache)) deallocate (this%fvob_cache)
+      if (associated(this%fvee_cache)) deallocate (this%fvee_cache)
+      if (associated(this%fvha_cache)) deallocate (this%fvha_cache)
+      if (associated(this%hval_cache)) deallocate (this%hval_cache)
+      if (associated(this%work0_cache)) deallocate (this%work0_cache)
+      if (associated(this%work1_cache)) deallocate (this%work1_cache)
+      if (associated(this%work2_cache)) deallocate (this%work2_cache)
+      if (associated(this%workt_cache)) deallocate (this%workt_cache)
+      if (associated(this%block_products_cache)) deallocate (this%block_products_cache)
+      if (associated(this%hcol_cache)) deallocate (this%hcol_cache)
+      if (associated(this%hrow_cache)) deallocate (this%hrow_cache)
+      if (associated(this%mkl_a_ptr_cache)) deallocate (this%mkl_a_ptr_cache)
+      if (associated(this%mkl_b_ptr_cache)) deallocate (this%mkl_b_ptr_cache)
+      if (associated(this%mkl_c_ptr_cache)) deallocate (this%mkl_c_ptr_cache)
+      this%scaled = cheb_cache_fingerprint_t()
+      this%bsr = cheb_cache_fingerprint_t()
+      this%ortho = cheb_cache_fingerprint_t()
+      this%vel = cheb_cache_fingerprint_t()
+      this%work = cheb_cache_fingerprint_t()
+      this%block_products = cheb_cache_fingerprint_t()
+      this%mkl_ptr = cheb_cache_fingerprint_t()
+   end subroutine cheb_cache_reset
 
    subroutine ensure_work_buffers(ld_in, nb_in, w0, w1, w2)
       integer, intent(in) :: ld_in, nb_in
       complex(sp), pointer, intent(out) :: w0(:, :), w1(:, :), w2(:, :)
 
-      if (.not. allocated(work0_cache) .or. work_cache_ld /= ld_in .or. work_cache_nb /= nb_in) then
-         if (allocated(work0_cache)) deallocate (work0_cache)
-         if (allocated(work1_cache)) deallocate (work1_cache)
-         if (allocated(work2_cache)) deallocate (work2_cache)
-         allocate (work0_cache(ld_in, nb_in), work1_cache(ld_in, nb_in), work2_cache(ld_in, nb_in))
-         work_cache_ld = ld_in
-         work_cache_nb = nb_in
+      call cheb_cache%ensure_work_buffers(ld_in, nb_in, w0, w1, w2)
+   end subroutine ensure_work_buffers
+
+   subroutine cheb_cache_ensure_work_buffers(this, ld_in, nb_in, w0, w1, w2)
+      class(cheb_cache_t), intent(inout) :: this
+      integer, intent(in) :: ld_in, nb_in
+      complex(sp), pointer, intent(out) :: w0(:, :), w1(:, :), w2(:, :)
+
+      if (.not. associated(this%work0_cache) .or. this%work%ld /= ld_in .or. this%work%nb /= nb_in) then
+         if (associated(this%work0_cache)) deallocate (this%work0_cache)
+         if (associated(this%work1_cache)) deallocate (this%work1_cache)
+         if (associated(this%work2_cache)) deallocate (this%work2_cache)
+         allocate (this%work0_cache(ld_in, nb_in), this%work1_cache(ld_in, nb_in), this%work2_cache(ld_in, nb_in))
+         this%work%ld = ld_in
+         this%work%nb = nb_in
       end if
 
-      w0 => work0_cache
-      w1 => work1_cache
-      w2 => work2_cache
-   end subroutine ensure_work_buffers
+      w0 => this%work0_cache
+      w1 => this%work1_cache
+      w2 => this%work2_cache
+   end subroutine cheb_cache_ensure_work_buffers
 
    !> Extra (ld, nb) scratch holding the sweep-A result t = (h/a)*x for the
    !> two-sweep hoh apply. Shares the work-buffer (ld, nb) shape; allocated only
@@ -130,55 +159,92 @@ contains
    subroutine ensure_hoh_buffer(ld_in, nb_in, wt)
       integer, intent(in) :: ld_in, nb_in
       complex(sp), pointer, contiguous, intent(out) :: wt(:, :)
+
+      call cheb_cache%ensure_hoh_buffer(ld_in, nb_in, wt)
+   end subroutine ensure_hoh_buffer
+
+   subroutine cheb_cache_ensure_hoh_buffer(this, ld_in, nb_in, wt)
+      class(cheb_cache_t), intent(inout) :: this
+      integer, intent(in) :: ld_in, nb_in
+      complex(sp), pointer, contiguous, intent(out) :: wt(:, :)
       logical :: need
 
       ! NOTE: Fortran does not short-circuit .or., so size() must not be
       ! evaluated on an unallocated array. Test allocation status separately.
       need = .true.
-      if (allocated(workt_cache)) then
-         need = (size(workt_cache, 1) /= ld_in .or. size(workt_cache, 2) /= nb_in)
+      if (associated(this%workt_cache)) then
+         need = (size(this%workt_cache, 1) /= ld_in .or. size(this%workt_cache, 2) /= nb_in)
       end if
       if (need) then
-         if (allocated(workt_cache)) deallocate (workt_cache)
-         allocate (workt_cache(ld_in, nb_in))
+         if (associated(this%workt_cache)) deallocate (this%workt_cache)
+         allocate (this%workt_cache(ld_in, nb_in))
       end if
-      wt => workt_cache
-   end subroutine ensure_hoh_buffer
+      wt => this%workt_cache
+   end subroutine cheb_cache_ensure_hoh_buffer
 
    subroutine ensure_block_products(nb_in, nblocks_in, block_products)
       integer, intent(in) :: nb_in, nblocks_in
       complex(sp), pointer, intent(out) :: block_products(:, :, :)
 
-      if (.not. allocated(block_products_cache) &
-          .or. block_products_cache_nb /= nb_in &
-          .or. block_products_cache_nblocks /= nblocks_in) then
-         if (allocated(block_products_cache)) deallocate (block_products_cache)
-         allocate (block_products_cache(nb_in, nb_in, nblocks_in))
-         block_products_cache_nb = nb_in
-         block_products_cache_nblocks = nblocks_in
+      call cheb_cache%ensure_block_products(nb_in, nblocks_in, block_products)
+   end subroutine ensure_block_products
+
+   subroutine cheb_cache_ensure_block_products(this, nb_in, nblocks_in, block_products)
+      class(cheb_cache_t), intent(inout) :: this
+      integer, intent(in) :: nb_in, nblocks_in
+      complex(sp), pointer, intent(out) :: block_products(:, :, :)
+
+      if (.not. associated(this%block_products_cache) &
+          .or. this%block_products%nb /= nb_in &
+          .or. this%block_products%nblocks /= nblocks_in) then
+         if (associated(this%block_products_cache)) deallocate (this%block_products_cache)
+         allocate (this%block_products_cache(nb_in, nb_in, nblocks_in))
+         this%block_products%nb = nb_in
+         this%block_products%nblocks = nblocks_in
       end if
 
-      block_products => block_products_cache
-   end subroutine ensure_block_products
+      block_products => this%block_products_cache
+   end subroutine cheb_cache_ensure_block_products
 
    subroutine ensure_mkl_batch_ptr_arrays(nblocks_in, a_ptr, b_ptr, c_ptrs)
       integer, intent(in) :: nblocks_in
       type(c_ptr), pointer, intent(out) :: a_ptr(:), b_ptr(:), c_ptrs(:)
 
-      if (.not. allocated(mkl_a_ptr_cache) .or. mkl_ptr_cache_nblocks /= nblocks_in) then
-         if (allocated(mkl_a_ptr_cache)) deallocate (mkl_a_ptr_cache)
-         if (allocated(mkl_b_ptr_cache)) deallocate (mkl_b_ptr_cache)
-         if (allocated(mkl_c_ptr_cache)) deallocate (mkl_c_ptr_cache)
-         allocate (mkl_a_ptr_cache(nblocks_in), mkl_b_ptr_cache(nblocks_in), mkl_c_ptr_cache(nblocks_in))
-         mkl_ptr_cache_nblocks = nblocks_in
-      end if
-
-      a_ptr => mkl_a_ptr_cache
-      b_ptr => mkl_b_ptr_cache
-      c_ptrs => mkl_c_ptr_cache
+      call cheb_cache%ensure_mkl_batch_ptr_arrays(nblocks_in, a_ptr, b_ptr, c_ptrs)
    end subroutine ensure_mkl_batch_ptr_arrays
 
+   subroutine cheb_cache_ensure_mkl_batch_ptr_arrays(this, nblocks_in, a_ptr, b_ptr, c_ptrs)
+      class(cheb_cache_t), intent(inout) :: this
+      integer, intent(in) :: nblocks_in
+      type(c_ptr), pointer, intent(out) :: a_ptr(:), b_ptr(:), c_ptrs(:)
+
+      if (.not. associated(this%mkl_a_ptr_cache) .or. this%mkl_ptr%nblocks /= nblocks_in) then
+         if (associated(this%mkl_a_ptr_cache)) deallocate (this%mkl_a_ptr_cache)
+         if (associated(this%mkl_b_ptr_cache)) deallocate (this%mkl_b_ptr_cache)
+         if (associated(this%mkl_c_ptr_cache)) deallocate (this%mkl_c_ptr_cache)
+         allocate (this%mkl_a_ptr_cache(nblocks_in), this%mkl_b_ptr_cache(nblocks_in), this%mkl_c_ptr_cache(nblocks_in))
+         this%mkl_ptr%nblocks = nblocks_in
+      end if
+
+      a_ptr => this%mkl_a_ptr_cache
+      b_ptr => this%mkl_b_ptr_cache
+      c_ptrs => this%mkl_c_ptr_cache
+   end subroutine cheb_cache_ensure_mkl_batch_ptr_arrays
+
    subroutine ensure_scaled_hamiltonian_sp(ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
+      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+      integer, intent(in) :: iz_in(kk_in), kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      real(sp), intent(in) :: inva_in, b_in
+      complex(sp), pointer, intent(out) :: hee_out(:, :, :, :), hha_out(:, :, :, :)
+
+      call cheb_cache%ensure_scaled_hamiltonian_sp(ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, &
+         nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
+   end subroutine ensure_scaled_hamiltonian_sp
+
+   subroutine cheb_cache_ensure_scaled_hamiltonian_sp(this, ee_in, hall_in, lsham_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hee_out, hha_out)
+      class(cheb_cache_t), intent(inout) :: this
       complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
       complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
@@ -188,59 +254,59 @@ contains
       integer :: t_in, k_in, l_in
       logical :: valid
 
-      valid = scaled_cache_valid &
-         .and. scaled_cache_nb == nb_in &
-         .and. scaled_cache_nnmax == nnmax_in &
-         .and. scaled_cache_ntype == ntype_in &
-         .and. scaled_cache_nmax == nmax_in &
-         .and. scaled_cache_kk == kk_in &
-         .and. scaled_cache_inva == inva_in &
-         .and. scaled_cache_b == b_in
+      valid = this%scaled%valid &
+         .and. this%scaled%nb == nb_in &
+         .and. this%scaled%nnmax == nnmax_in &
+         .and. this%scaled%ntype == ntype_in &
+         .and. this%scaled%nmax == nmax_in &
+         .and. this%scaled%kk == kk_in &
+         .and. this%scaled%inva == inva_in &
+         .and. this%scaled%b == b_in
 
       if (.not. valid) then
-         if (allocated(hee_cache)) deallocate (hee_cache)
-         if (allocated(hha_cache)) deallocate (hha_cache)
+         if (associated(this%hee_cache)) deallocate (this%hee_cache)
+         if (associated(this%hha_cache)) deallocate (this%hha_cache)
 
-         allocate (hee_cache(nb_in, nb_in, nnmax_in, ntype_in))
-         hee_cache = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
+         allocate (this%hee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         this%hee_cache = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
          do t_in = 1, ntype_in
-            hee_cache(:, :, 1, t_in) = hee_cache(:, :, 1, t_in) + &
+            this%hee_cache(:, :, 1, t_in) = this%hee_cache(:, :, 1, t_in) + &
                cmplx(real(lsham_in(:, :, t_in), sp), aimag(lsham_in(:, :, t_in)), sp)*inva_in
             do l_in = 1, nb_in
-               hee_cache(l_in, l_in, 1, t_in) = hee_cache(l_in, l_in, 1, t_in) - b_in*inva_in
+               this%hee_cache(l_in, l_in, 1, t_in) = this%hee_cache(l_in, l_in, 1, t_in) - b_in*inva_in
             end do
          end do
 
          if (nmax_in > 0) then
-            allocate (hha_cache(nb_in, nb_in, nnmax_in, nmax_in))
-            hha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
+            allocate (this%hha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+            this%hha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
             do k_in = 1, nmax_in
                t_in = iz_in(k_in)
-               hha_cache(:, :, 1, k_in) = hha_cache(:, :, 1, k_in) + &
+               this%hha_cache(:, :, 1, k_in) = this%hha_cache(:, :, 1, k_in) + &
                   cmplx(real(lsham_in(:, :, t_in), sp), aimag(lsham_in(:, :, t_in)), sp)*inva_in
                do l_in = 1, nb_in
-                  hha_cache(l_in, l_in, 1, k_in) = hha_cache(l_in, l_in, 1, k_in) - b_in*inva_in
+                  this%hha_cache(l_in, l_in, 1, k_in) = this%hha_cache(l_in, l_in, 1, k_in) - b_in*inva_in
                end do
             end do
          end if
 
-         scaled_cache_nb = nb_in
-         scaled_cache_nnmax = nnmax_in
-         scaled_cache_ntype = ntype_in
-         scaled_cache_nmax = nmax_in
-         scaled_cache_kk = kk_in
-         scaled_cache_inva = inva_in
-         scaled_cache_b = b_in
-         scaled_cache_valid = .true.
+         this%scaled%nb = nb_in
+         this%scaled%nnmax = nnmax_in
+         this%scaled%ntype = ntype_in
+         this%scaled%nmax = nmax_in
+         this%scaled%kk = kk_in
+         this%scaled%inva = inva_in
+         this%scaled%b = b_in
+         this%scaled%valid = .true.
       end if
 
-      hee_out => hee_cache
-      if (allocated(hha_cache)) then
-         hha_out => hha_cache
+      hee_out => this%hee_cache
+      if (associated(this%hha_cache)) then
+         hha_out => this%hha_cache
       else
          nullify (hha_out)
       end if
-   end subroutine ensure_scaled_hamiltonian_sp
+   end subroutine cheb_cache_ensure_scaled_hamiltonian_sp
 
    !> Build the fp32 operands for the two-sweep hoh apply, mirroring
    !> ham_hoh_vec_matmul (recursion.f90). The combine there is
@@ -265,76 +331,112 @@ contains
       complex(sp), pointer, intent(out) :: bee_out(:, :, :, :), bha_out(:, :, :, :)
       complex(sp), pointer, intent(out) :: oee_out(:, :, :, :), oha_out(:, :, :, :)
       complex(sp), pointer, intent(out) :: hons_out(:, :, :)
+
+      call cheb_cache%ensure_scaled_ortho_sp(ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
+         iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
+         bee_out, bha_out, oee_out, oha_out, hons_out)
+   end subroutine ensure_scaled_ortho_sp
+
+   subroutine cheb_cache_ensure_scaled_ortho_sp(this, ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
+                                                iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
+                                                bee_out, bha_out, oee_out, oha_out, hons_out)
+      class(cheb_cache_t), intent(inout) :: this
+      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: eeo_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hallo_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+      complex(rp), intent(in) :: enim_in(nb_in, nb_in, ntype_in)
+      integer, intent(in) :: iz_in(kk_in), kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      real(sp), intent(in) :: inva_in, b_in
+      complex(sp), pointer, intent(out) :: bee_out(:, :, :, :), bha_out(:, :, :, :)
+      complex(sp), pointer, intent(out) :: oee_out(:, :, :, :), oha_out(:, :, :, :)
+      complex(sp), pointer, intent(out) :: hons_out(:, :, :)
       integer :: t_in, k_in, l_in
       logical :: valid
 
-      valid = ortho_cache_valid &
-         .and. ortho_cache_nb == nb_in &
-         .and. ortho_cache_nnmax == nnmax_in &
-         .and. ortho_cache_ntype == ntype_in &
-         .and. ortho_cache_nmax == nmax_in &
-         .and. ortho_cache_kk == kk_in &
-         .and. ortho_cache_inva == inva_in &
-         .and. ortho_cache_b == b_in
+      valid = this%ortho%valid &
+         .and. this%ortho%nb == nb_in &
+         .and. this%ortho%nnmax == nnmax_in &
+         .and. this%ortho%ntype == ntype_in &
+         .and. this%ortho%nmax == nmax_in &
+         .and. this%ortho%kk == kk_in &
+         .and. this%ortho%inva == inva_in &
+         .and. this%ortho%b == b_in
 
       if (.not. valid) then
-         if (allocated(bee_cache)) deallocate (bee_cache)
-         if (allocated(bha_cache)) deallocate (bha_cache)
-         if (allocated(oee_cache)) deallocate (oee_cache)
-         if (allocated(oha_cache)) deallocate (oha_cache)
-         if (allocated(hons_cache)) deallocate (hons_cache)
+         if (associated(this%bee_cache)) deallocate (this%bee_cache)
+         if (associated(this%bha_cache)) deallocate (this%bha_cache)
+         if (associated(this%oee_cache)) deallocate (this%oee_cache)
+         if (associated(this%oha_cache)) deallocate (this%oha_cache)
+         if (associated(this%hons_cache)) deallocate (this%hons_cache)
 
          ! Sweep-A bare h, scaled by inva (no on-site fold).
-         allocate (bee_cache(nb_in, nb_in, nnmax_in, ntype_in))
-         bee_cache = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
+         allocate (this%bee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         this%bee_cache = cmplx(real(ee_in, sp), aimag(ee_in), sp)*inva_in
 
          ! Sweep-B eeo, raw.
-         allocate (oee_cache(nb_in, nb_in, nnmax_in, ntype_in))
-         oee_cache = cmplx(real(eeo_in, sp), aimag(eeo_in), sp)
+         allocate (this%oee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         this%oee_cache = cmplx(real(eeo_in, sp), aimag(eeo_in), sp)
 
          ! On-site (enim + lsham - b*I)*inva, per type.
-         allocate (hons_cache(nb_in, nb_in, ntype_in))
-         hons_cache = (cmplx(real(enim_in, sp), aimag(enim_in), sp) + &
+         allocate (this%hons_cache(nb_in, nb_in, ntype_in))
+         this%hons_cache = (cmplx(real(enim_in, sp), aimag(enim_in), sp) + &
                        cmplx(real(lsham_in, sp), aimag(lsham_in), sp))*inva_in
          do t_in = 1, ntype_in
             do l_in = 1, nb_in
-               hons_cache(l_in, l_in, t_in) = hons_cache(l_in, l_in, t_in) - b_in*inva_in
+               this%hons_cache(l_in, l_in, t_in) = this%hons_cache(l_in, l_in, t_in) - b_in*inva_in
             end do
          end do
 
          if (nmax_in > 0) then
-            allocate (bha_cache(nb_in, nb_in, nnmax_in, nmax_in))
-            bha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
-            allocate (oha_cache(nb_in, nb_in, nnmax_in, nmax_in))
-            oha_cache = cmplx(real(hallo_in(:, :, :, 1:nmax_in), sp), aimag(hallo_in(:, :, :, 1:nmax_in)), sp)
+            allocate (this%bha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+            this%bha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
+            allocate (this%oha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+            this%oha_cache = cmplx(real(hallo_in(:, :, :, 1:nmax_in), sp), aimag(hallo_in(:, :, :, 1:nmax_in)), sp)
             ! Note: the impurity on-site enim/lsham fold is carried by hons via
             ! iz(k), identical to the bulk path (ham_hoh_vec_matmul applies
             ! lsham/enim on-site for both local and bulk regions).
          end if
 
-         ortho_cache_nb = nb_in
-         ortho_cache_nnmax = nnmax_in
-         ortho_cache_ntype = ntype_in
-         ortho_cache_nmax = nmax_in
-         ortho_cache_kk = kk_in
-         ortho_cache_inva = inva_in
-         ortho_cache_b = b_in
-         ortho_cache_valid = .true.
+         this%ortho%nb = nb_in
+         this%ortho%nnmax = nnmax_in
+         this%ortho%ntype = ntype_in
+         this%ortho%nmax = nmax_in
+         this%ortho%kk = kk_in
+         this%ortho%inva = inva_in
+         this%ortho%b = b_in
+         this%ortho%valid = .true.
       end if
 
-      bee_out => bee_cache
-      oee_out => oee_cache
-      hons_out => hons_cache
-      if (allocated(bha_cache)) then
-         bha_out => bha_cache
-         oha_out => oha_cache
+      bee_out => this%bee_cache
+      oee_out => this%oee_cache
+      hons_out => this%hons_cache
+      if (associated(this%bha_cache)) then
+         bha_out => this%bha_cache
+         oha_out => this%oha_cache
       else
          nullify (bha_out)
          nullify (oha_out)
       end if
-   end subroutine ensure_scaled_ortho_sp
+   end subroutine cheb_cache_ensure_scaled_ortho_sp
 
    subroutine ensure_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+      complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
+      complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
+      integer, intent(in) :: nn_in(kk_in, nnmax_in), iz_in(kk_in)
+      integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      real(sp), intent(in) :: inva_in, b_in
+      complex(sp), pointer, intent(out) :: hval_out(:, :, :)
+      integer, pointer, intent(out) :: hcol_out(:), hrow_out(:)
+
+      call cheb_cache%ensure_scaled_bsr_sp(ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, &
+         nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+   end subroutine ensure_scaled_bsr_sp
+
+   subroutine cheb_cache_ensure_scaled_bsr_sp(this, ee_in, hall_in, lsham_in, nn_in, iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, hval_out, hcol_out, hrow_out)
+      class(cheb_cache_t), intent(inout) :: this
       complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
       complex(rp), intent(in) :: lsham_in(nb_in, nb_in, ntype_in)
@@ -346,19 +448,19 @@ contains
       integer :: atom, neighbor_idx, neighbor, block_col, block_idx, nblocks, num_neighbors, ih, l_in
       logical :: valid
 
-      valid = bsr_cache_valid &
-         .and. bsr_cache_nb == nb_in &
-         .and. bsr_cache_nnmax == nnmax_in &
-         .and. bsr_cache_ntype == ntype_in &
-         .and. bsr_cache_nmax == nmax_in &
-         .and. bsr_cache_kk == kk_in &
-         .and. bsr_cache_inva == inva_in &
-         .and. bsr_cache_b == b_in
+      valid = this%bsr%valid &
+         .and. this%bsr%nb == nb_in &
+         .and. this%bsr%nnmax == nnmax_in &
+         .and. this%bsr%ntype == ntype_in &
+         .and. this%bsr%nmax == nmax_in &
+         .and. this%bsr%kk == kk_in &
+         .and. this%bsr%inva == inva_in &
+         .and. this%bsr%b == b_in
 
       if (.not. valid) then
-         if (allocated(hval_cache)) deallocate (hval_cache)
-         if (allocated(hcol_cache)) deallocate (hcol_cache)
-         if (allocated(hrow_cache)) deallocate (hrow_cache)
+         if (associated(this%hval_cache)) deallocate (this%hval_cache)
+         if (associated(this%hcol_cache)) deallocate (this%hcol_cache)
+         if (associated(this%hrow_cache)) deallocate (this%hrow_cache)
 
          nblocks = 0
          do atom = 1, kk_in
@@ -368,9 +470,9 @@ contains
             end do
          end do
 
-         allocate (hval_cache(nb_in, nb_in, nblocks), hcol_cache(nblocks), hrow_cache(kk_in + 1))
+         allocate (this%hval_cache(nb_in, nb_in, nblocks), this%hcol_cache(nblocks), this%hrow_cache(kk_in + 1))
          block_idx = 0
-         hrow_cache(1) = 1
+         this%hrow_cache(1) = 1
 
          do atom = 1, kk_in
             num_neighbors = nn_in(atom, 1)
@@ -385,42 +487,42 @@ contains
 
                block_idx = block_idx + 1
                if (nmax_in > 0 .and. atom <= nmax_in) then
-                  hval_cache(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
+                  this%hval_cache(:, :, block_idx) = cmplx(real(hall_in(:, :, neighbor_idx, atom), sp), &
                                                       aimag(hall_in(:, :, neighbor_idx, atom)), sp)*inva_in
                   ih = iz_in(atom)
                else
                   ih = iz_in(atom)
-                  hval_cache(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
+                  this%hval_cache(:, :, block_idx) = cmplx(real(ee_in(:, :, neighbor_idx, ih), sp), &
                                                       aimag(ee_in(:, :, neighbor_idx, ih)), sp)*inva_in
                end if
 
                if (neighbor_idx == 1) then
-                  hval_cache(:, :, block_idx) = hval_cache(:, :, block_idx) + &
+                  this%hval_cache(:, :, block_idx) = this%hval_cache(:, :, block_idx) + &
                      cmplx(real(lsham_in(:, :, ih), sp), aimag(lsham_in(:, :, ih)), sp)*inva_in
                   do l_in = 1, nb_in
-                     hval_cache(l_in, l_in, block_idx) = hval_cache(l_in, l_in, block_idx) - b_in*inva_in
+                     this%hval_cache(l_in, l_in, block_idx) = this%hval_cache(l_in, l_in, block_idx) - b_in*inva_in
                   end do
                end if
-               hcol_cache(block_idx) = block_col
+               this%hcol_cache(block_idx) = block_col
             end do
-            if (atom < kk_in) hrow_cache(atom + 1) = block_idx + 1
+            if (atom < kk_in) this%hrow_cache(atom + 1) = block_idx + 1
          end do
-         hrow_cache(kk_in + 1) = nblocks + 1
+         this%hrow_cache(kk_in + 1) = nblocks + 1
 
-         bsr_cache_nb = nb_in
-         bsr_cache_nnmax = nnmax_in
-         bsr_cache_ntype = ntype_in
-         bsr_cache_nmax = nmax_in
-         bsr_cache_kk = kk_in
-         bsr_cache_inva = inva_in
-         bsr_cache_b = b_in
-         bsr_cache_valid = .true.
+         this%bsr%nb = nb_in
+         this%bsr%nnmax = nnmax_in
+         this%bsr%ntype = ntype_in
+         this%bsr%nmax = nmax_in
+         this%bsr%kk = kk_in
+         this%bsr%inva = inva_in
+         this%bsr%b = b_in
+         this%bsr%valid = .true.
       end if
 
-      hval_out => hval_cache
-      hcol_out => hcol_cache
-      hrow_out => hrow_cache
-   end subroutine ensure_scaled_bsr_sp
+      hval_out => this%hval_cache
+      hcol_out => this%hcol_cache
+      hrow_out => this%hrow_cache
+   end subroutine cheb_cache_ensure_scaled_bsr_sp
 
    !> Raw fp32 mirrors of the velocity operators for the conductivity/orbital
    !> fast kernels. v_a/v_b are copied as-is; for hoh, vo_a/vo_b are copied with
@@ -441,69 +543,89 @@ contains
       complex(sp), pointer, intent(out) :: fva(:, :, :, :), fvb(:, :, :, :)
       complex(sp), pointer, intent(out) :: fvoa(:, :, :, :), fvob(:, :, :, :)
       complex(sp), pointer, intent(out) :: fvee(:, :, :, :), fvha(:, :, :, :)
+
+      call cheb_cache%ensure_scaled_velocity_sp(v_a, v_b, vo_a, vo_b, ee, hall, &
+         kk_in, nb_in, nnmax_in, ntype_in, nmax_in, hoh, fva, fvb, fvoa, fvob, fvee, fvha)
+   end subroutine ensure_scaled_velocity_sp
+
+   subroutine cheb_cache_ensure_scaled_velocity_sp(this, v_a, v_b, vo_a, vo_b, ee, hall, &
+                                                   kk_in, nb_in, nnmax_in, ntype_in, nmax_in, hoh, &
+                                                   fva, fvb, fvoa, fvob, fvee, fvha)
+      class(cheb_cache_t), intent(inout) :: this
+      integer, intent(in) :: kk_in, nb_in, nnmax_in, ntype_in, nmax_in
+      complex(rp), intent(in) :: v_a(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: v_b(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: vo_a(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: vo_b(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: ee(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in) :: hall(nb_in, nb_in, nnmax_in, *)
+      logical, intent(in) :: hoh
+      complex(sp), pointer, intent(out) :: fva(:, :, :, :), fvb(:, :, :, :)
+      complex(sp), pointer, intent(out) :: fvoa(:, :, :, :), fvob(:, :, :, :)
+      complex(sp), pointer, intent(out) :: fvee(:, :, :, :), fvha(:, :, :, :)
       logical :: valid
       integer :: t_in
 
-      valid = vel_cache_valid &
-         .and. vel_cache_nb == nb_in &
-         .and. vel_cache_nnmax == nnmax_in &
-         .and. vel_cache_ntype == ntype_in &
-         .and. vel_cache_nmax == nmax_in &
-         .and. vel_cache_kk == kk_in &
-         .and. (vel_cache_hoh .eqv. hoh)
+      valid = this%vel%valid &
+         .and. this%vel%nb == nb_in &
+         .and. this%vel%nnmax == nnmax_in &
+         .and. this%vel%ntype == ntype_in &
+         .and. this%vel%nmax == nmax_in &
+         .and. this%vel%kk == kk_in &
+         .and. (this%vel%hoh .eqv. hoh)
 
       if (.not. valid) then
-         if (allocated(fva_cache)) deallocate (fva_cache)
-         if (allocated(fvb_cache)) deallocate (fvb_cache)
-         if (allocated(fvoa_cache)) deallocate (fvoa_cache)
-         if (allocated(fvob_cache)) deallocate (fvob_cache)
-         if (allocated(fvee_cache)) deallocate (fvee_cache)
-         if (allocated(fvha_cache)) deallocate (fvha_cache)
+         if (associated(this%fva_cache)) deallocate (this%fva_cache)
+         if (associated(this%fvb_cache)) deallocate (this%fvb_cache)
+         if (associated(this%fvoa_cache)) deallocate (this%fvoa_cache)
+         if (associated(this%fvob_cache)) deallocate (this%fvob_cache)
+         if (associated(this%fvee_cache)) deallocate (this%fvee_cache)
+         if (associated(this%fvha_cache)) deallocate (this%fvha_cache)
 
-         allocate (fva_cache(nb_in, nb_in, nnmax_in, ntype_in))
-         allocate (fvb_cache(nb_in, nb_in, nnmax_in, ntype_in))
-         fva_cache = cmplx(real(v_a, sp), aimag(v_a), sp)
-         fvb_cache = cmplx(real(v_b, sp), aimag(v_b), sp)
+         allocate (this%fva_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         allocate (this%fvb_cache(nb_in, nb_in, nnmax_in, ntype_in))
+         this%fva_cache = cmplx(real(v_a, sp), aimag(v_a), sp)
+         this%fvb_cache = cmplx(real(v_b, sp), aimag(v_b), sp)
 
          if (hoh) then
-            allocate (fvoa_cache(nb_in, nb_in, nnmax_in, ntype_in))
-            allocate (fvob_cache(nb_in, nb_in, nnmax_in, ntype_in))
-            fvoa_cache = cmplx(real(vo_a, sp), aimag(vo_a), sp)
-            fvob_cache = cmplx(real(vo_b, sp), aimag(vo_b), sp)
-            fvoa_cache(:, :, 1, :) = (0.0_sp, 0.0_sp)   ! on-site vo excluded
-            fvob_cache(:, :, 1, :) = (0.0_sp, 0.0_sp)
-            allocate (fvee_cache(nb_in, nb_in, nnmax_in, ntype_in))
-            fvee_cache = cmplx(real(ee, sp), aimag(ee), sp)
+            allocate (this%fvoa_cache(nb_in, nb_in, nnmax_in, ntype_in))
+            allocate (this%fvob_cache(nb_in, nb_in, nnmax_in, ntype_in))
+            this%fvoa_cache = cmplx(real(vo_a, sp), aimag(vo_a), sp)
+            this%fvob_cache = cmplx(real(vo_b, sp), aimag(vo_b), sp)
+            this%fvoa_cache(:, :, 1, :) = (0.0_sp, 0.0_sp)   ! on-site vo excluded
+            this%fvob_cache(:, :, 1, :) = (0.0_sp, 0.0_sp)
+            allocate (this%fvee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+            this%fvee_cache = cmplx(real(ee, sp), aimag(ee), sp)
             if (nmax_in > 0) then
-               allocate (fvha_cache(nb_in, nb_in, nnmax_in, nmax_in))
-               fvha_cache = cmplx(real(hall(:, :, :, 1:nmax_in), sp), aimag(hall(:, :, :, 1:nmax_in)), sp)
+               allocate (this%fvha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+               this%fvha_cache = cmplx(real(hall(:, :, :, 1:nmax_in), sp), aimag(hall(:, :, :, 1:nmax_in)), sp)
             end if
          end if
 
-         vel_cache_nb = nb_in
-         vel_cache_nnmax = nnmax_in
-         vel_cache_ntype = ntype_in
-         vel_cache_nmax = nmax_in
-         vel_cache_kk = kk_in
-         vel_cache_hoh = hoh
-         vel_cache_valid = .true.
+         this%vel%nb = nb_in
+         this%vel%nnmax = nnmax_in
+         this%vel%ntype = ntype_in
+         this%vel%nmax = nmax_in
+         this%vel%kk = kk_in
+         this%vel%hoh = hoh
+         this%vel%valid = .true.
       end if
 
-      fva => fva_cache
-      fvb => fvb_cache
-      if (allocated(fvoa_cache)) then
-         fvoa => fvoa_cache
-         fvob => fvob_cache
-         fvee => fvee_cache
+      fva => this%fva_cache
+      fvb => this%fvb_cache
+      if (associated(this%fvoa_cache)) then
+         fvoa => this%fvoa_cache
+         fvob => this%fvob_cache
+         fvee => this%fvee_cache
       else
          nullify (fvoa); nullify (fvob); nullify (fvee)
       end if
-      if (allocated(fvha_cache)) then
-         fvha => fvha_cache
+      if (associated(this%fvha_cache)) then
+         fvha => this%fvha_cache
       else
          nullify (fvha)
       end if
-   end subroutine ensure_scaled_velocity_sp
+   end subroutine cheb_cache_ensure_scaled_velocity_sp
 
    !> Shared per-shell fp32 block matvec (site-major):
    !>   y = alpha*(acc - bsc*x1)*inva + beta*x0,   acc = sum_neigh Op * x1_block
