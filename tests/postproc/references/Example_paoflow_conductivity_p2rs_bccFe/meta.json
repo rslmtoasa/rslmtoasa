@@ -1,0 +1,36 @@
+{
+  "name": "Example_paoflow_conductivity_p2rs_bccFe",
+  "case": "paoflow/bccFe_conductivity",
+  "timeout": 300,
+  "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 30,
+      "cond_ll": 30
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "Fe_cond.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

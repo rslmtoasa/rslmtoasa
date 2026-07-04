@@ -1,0 +1,35 @@
+{
+  "name": "Example_paoflow2rs_bccFe",
+  "case": "paoflow/bccFe",
+  "timeout": 300,
+  "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 21
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

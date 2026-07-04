@@ -1,0 +1,43 @@
+{
+  "name": "Example_paoflow_exchange_p2rs_bccFe",
+  "case": "paoflow/bccFe_exchange",
+  "timeout": 300,
+  "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 21
+    },
+    "self": {
+      "nstep": 1
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "jij.out",
+        "rows": [
+          1,
+          2
+        ],
+        "cols": [
+          6,
+          7
+        ]
+      },
+      {
+        "file": "dij.out",
+        "rows": [
+          1,
+          2
+        ],
+        "cols": [
+          6,
+          7,
+          8
+        ]
+      }
+    ]
+  }
+}

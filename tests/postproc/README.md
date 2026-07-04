@@ -137,4 +137,20 @@ python3 tests/run_test.py \
 2. Add an entry to `cases.json`.
 3. Generate its reference: `python3 tests/generate_references.py ... --case <TestName>`.
 4. Commit both the new case directory and `references/<TestName>/`.
+
+## `paoflow/` cases: provenance of `paoham.dat`
+
+`cases/paoflow/bccFe{,_exchange,_conductivity}/paoham.dat` is not a real
+PAOFLOW export — no small PAOFLOW input file existed anywhere in the repo
+when `post_processing = 'paoflow2rs'`/`'exchange_p2rs'`/`'conductivity_p2rs'`
+coverage was added (Phase 2, P1). It was generated once from a trusted build
+by running the ordinary bulk bccFe SCF case (`cases/bulk/bccFe`) with
+`&hamiltonian export = 'python'`, which calls
+`hamiltonian%export_rs_tb_all()` → `export_rs_paoflow_legacy()` (the
+`legacy7` record format in `hamiltonian_paoflow_io.f90`) to write
+`rs_tb_paoham.dat` — exactly the format `build_from_paoflow_opt()` reads
+back in. That file was copied in as `paoham.dat` and is committed as test
+data (same `Fe.nml`/lattice geometry as `cases/bulk/bccFe`, so its neighbor
+topology stays valid for all three `_p2rs` routes). Regenerate it the same
+way if the exported hopping format ever changes.
 5. Re-run CMake (configure step re-reads `cases.json` automatically).
