@@ -3,6 +3,7 @@
   "cases": [
     {
       "name": "Example_exchange_bccFe",
+      "quick": true,
       "case": "exchange/bccFe",
       "timeout": 300,
       "omp_threads": 2,
@@ -72,6 +73,7 @@
     },
     {
       "name": "Example_band_structure_bccFe",
+      "quick": true,
       "case": "band_structure/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
@@ -151,6 +153,7 @@
     },
     {
       "name": "Example_paoflow2rs_bccFe",
+      "quick": true,
       "case": "paoflow/bccFe",
       "timeout": 300,
       "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",

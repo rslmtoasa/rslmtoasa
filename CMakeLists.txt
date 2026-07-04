@@ -397,6 +397,15 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
       continue()
     endif()
 
+    # Cases marked "quick": true get an extra label so CI can select a small
+    # representative subset for pull_request runs (see tests.yml) without
+    # needing a second cases.json.
+    string(JSON _quick ERROR_VARIABLE _quick_err GET "${_json}" "cases" ${_i} "quick")
+    set(_quick_label "")
+    if (NOT _quick_err AND ${_quick})
+      set(_quick_label ";quick")
+    endif()
+
     set(_cmd
       "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/run_test.py"
       "--binary"       "${TestBinary}"
@@ -420,14 +429,14 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
       endif()
       add_test(NAME "${_name}" COMMAND ${_default_cmd})
       set_tests_properties("${_name}" PROPERTIES
-        LABELS "example;${SUITE};${_recur}" TIMEOUT "${_timeout}")
+        LABELS "example;${SUITE};${_recur}${_quick_label}" TIMEOUT "${_timeout}")
     else()
       string(JSON _mpi_procs GET "${_json}" "cases" ${_i} "mpi_procs")
 
       set(_serial_cmd ${_cmd} "--force-serial")
       add_test(NAME "${_name}" COMMAND ${_serial_cmd})
       set_tests_properties("${_name}" PROPERTIES
-        LABELS "example;${SUITE};${_recur};launch_serial" TIMEOUT "${_timeout}")
+        LABELS "example;${SUITE};${_recur};launch_serial${_quick_label}" TIMEOUT "${_timeout}")
 
       if (ENABLE_MPI)
         set(_mpi_cmd ${_cmd} "--mpi-enabled" "--scratch-name" "${_name}_mpi")

@@ -38,3 +38,32 @@ GitHub-hosted CI runners have no GPU, so GPU coverage splits into three tiers:
    the committed CPU references). Treat this as the manual pre-release step
    before shipping a build meant to run on GPU hardware; it is not wired into
    any CI-required check.
+
+## CI trigger and matrix hygiene
+
+- **Triggers:** `binaries.yml` builds on `push`/`pull_request`/`release`.
+  `tests.yml` runs the example/regression matrix three ways: via
+  `workflow_run` after a successful `binaries.yml` push build (downloads the
+  built binary), directly on `pull_request` (builds from source itself,
+  since there's no upstream artifact yet for an unmerged PR), and nightly on
+  `schedule` (also self-built). Both workflows have `concurrency` groups with
+  `cancel-in-progress: true` so superseded pushes/PR updates don't queue up
+  redundant runs.
+- **Quick vs. full:** `pull_request` runs only cases tagged `"quick": true`
+  in `cases.json` (~10 representative cases across bulk/surface/impurity/
+  k-space/exchange/paoflow/hubbard, picked to keep total runtime under a
+  couple of minutes) via `ctest --label-regex quick`. Every other trigger
+  (push, nightly schedule, manual dispatch) runs the full matrix
+  (`--label-regex example`). This keeps PR turnaround fast while nothing
+  rots — the nightly run still exercises every case every day.
+- **Windows:** `binaries.yml` builds a Windows binary but never tested it.
+  The `windows_quick` job in `tests.yml` runs the same quick subset under
+  MSYS2 (mirroring `binaries.yml`'s Windows build steps, with
+  `mingw-w64-x86_64-python`/`-python-pip` added for `f90nml`), with
+  `ENABLE_MPI=OFF` to avoid MSYS2 MPI toolchain coupling issues (same as the
+  Windows build job). This job carries `continue-on-error: true`: it was
+  authored and validated on Linux only (no Windows runner was available to
+  verify MSYS2 path/toolchain behavior end-to-end), so a first-run failure
+  there should not block the rest of CI. If it turns out to need real
+  iteration to get green, the fallback is to drop it and document Windows as
+  build-only instead.
