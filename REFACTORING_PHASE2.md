@@ -23,8 +23,10 @@ after every task.
 - [x] P2 — `launch_modes: ["serial", "mpi"]` schema; applied to one bulk
       (Pt2MnGa block), the surface (fccCu001), the impurity (B2FeCo), one
       chebyshev (Pt2MnGa chebyshev).
-- [ ] P1 — Close workflow coverage gaps (lanczos, spin dynamics, paoflow,
-      orbital moments, hubbard, k-space ccor/hoh, export paths).
+- [x] P1 — Close workflow coverage gaps: lanczos (nsp2 NaN bug found, see
+      tests/KNOWN_ISSUES.md), spin dynamics (blocked, see KNOWN_ISSUES.md,
+      no test added), paoflow (all 3 routes), orbital moments, hubbard,
+      k-space ccor_2c/reciprocal-hoh, export paths (rs2pao/python).
 - [ ] P3 — GPU/MKL coverage strategy (MKL CI job, CUDA compile-only job,
       `tests/run_gpu_matrix.sh`).
 - [ ] P5 — CI trigger/matrix hygiene (`pull_request` trigger, Windows test
