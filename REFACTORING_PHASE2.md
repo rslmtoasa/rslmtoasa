@@ -42,7 +42,10 @@ after every task.
 - [x] P8 — `docs/DEVELOPER_MAP.md` (all 7 sections, every pointer verified
       against the code) + repo-root `CLAUDE.md`.
 - [x] P6 — Reference-update workflow documentation in `tests/README.md`.
-- [ ] P9 — Execute the T11 math-audit deletions.
+- [x] P9 — Executed the T11 math-audit deletions: 26 confirmed-uncalled
+      routines removed from `math.f90`, plus `erf_qe`/`erfc_qe` (became
+      dead as a direct consequence). 818 lines removed, clean rebuild,
+      full matrix green.
 - [ ] P10 — Housekeeping (R2 doc check, move planning docs to `docs/dev/`,
       MKL fatal negative test).
 - [ ] P11 — Python-binding awareness lens (standing, applied throughout;
