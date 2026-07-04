@@ -984,7 +984,7 @@ contains
    end subroutine cheb_moments_fast_batched
 
    !> Optional Intel oneMKL cgemm_batch implementation.
-   !> Compiled with -DUSE_MKL_BATCH and CMake option ENABLE_MKL_BATCH=ON.
+   !> Compiled with -DUSE_MKL_BATCH and CMake option ENABLE_MKL_KERNELS=ON.
    subroutine cheb_moments_fast_mkl_batch(psi0, ee, hall, lsham, nn, iz, kk, nb, &
                                           nnmax, ntype, nmax, lld, a, b, mu)
 #ifdef USE_MKL_BATCH
@@ -998,7 +998,7 @@ contains
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
 
 #ifndef USE_MKL_BATCH
-      write (*, '(A)') 'ERROR: cheb_backend=mkl_batch requires CMake option ENABLE_MKL_BATCH=ON.'
+      write (*, '(A)') 'ERROR: cheb_backend=mkl_batch requires CMake option ENABLE_MKL_KERNELS=ON.'
       error stop
 #else
       interface
@@ -1109,7 +1109,7 @@ contains
    end subroutine cheb_moments_fast_mkl_batch
 
    !> Optional Intel oneMKL Inspector-Executor Sparse BLAS implementation.
-   !> Compiled with -DUSE_MKL_SPARSE.
+   !> Compiled with -DUSE_MKL_SPARSE and CMake option ENABLE_MKL_KERNELS=ON.
    subroutine cheb_moments_fast_mkl_sparse(psi0, ee, hall, lsham, nn, iz, kk, nb, &
                                            nnmax, ntype, nmax, lld, a, b, mu)
 #ifdef USE_MKL_SPARSE
@@ -1123,7 +1123,7 @@ contains
       complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
 
 #ifndef USE_MKL_SPARSE
-      write (*, '(A)') 'ERROR: cheb_backend=mkl_sparse requires CMake option ENABLE_MKL_SPARSE=ON.'
+      write (*, '(A)') 'ERROR: cheb_backend=mkl_sparse requires CMake option ENABLE_MKL_KERNELS=ON.'
       error stop
 #else
       type(sparse_matrix_t) :: mkl_A
