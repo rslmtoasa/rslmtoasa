@@ -13,6 +13,31 @@ the case-file format and how to add cases:
 - [`postproc/README.md`](postproc/README.md) — example post-processing suite (exchange,
   conductivity, bands, DOS, orbital moments, PAOFLOW import).
 
+## Regenerating references
+
+Each suite's `references/<TestName>/ref.json` (or `.nml` for the legacy
+regression baselines) is a **committed value**, not a cache — a test failure
+means the code changed, not that the reference is stale. Only regenerate a
+reference when you *intend* the physics/output to change, e.g. a deliberate
+numerical improvement, a namelist default change, or adding a brand-new case
+that has no reference yet. The workflow:
+
+1. Build a **trusted** binary — one you have independently verified is
+   correct for the change you're making (not just "it compiles").
+2. Regenerate: `python3 tests/generate_references.py --binary <path> --cases-json <suite>/cases.json --references-dir <suite>/references [--case <TestName> ...]`.
+   Omit `--case` to regenerate every case in that suite.
+3. **Review the diff of the reference files like any other code change.**
+   A `ref.json` diff is a physics/behavior diff — read it with the same
+   scrutiny as a source diff, not as machine-generated noise to skip past.
+   If a value moved and you can't explain why, that's a bug to find, not a
+   reference to accept.
+4. Commit the reference update in the same commit as (or immediately
+   following) the change that caused it, with a commit message explaining
+   *why* the values moved.
+
+Never regenerate references to make an unexplained failure go away — that
+converts a real regression into a silently-accepted one.
+
 ## GPU coverage strategy
 
 GitHub-hosted CI runners have no GPU, so GPU coverage splits into three tiers:
