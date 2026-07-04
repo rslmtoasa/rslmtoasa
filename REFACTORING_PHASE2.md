@@ -41,7 +41,7 @@ after every task.
       `lattice_*`, `green.f90`/`calculation.f90` gaps, `reciprocal_*`.
 - [x] P8 — `docs/DEVELOPER_MAP.md` (all 7 sections, every pointer verified
       against the code) + repo-root `CLAUDE.md`.
-- [ ] P6 — Reference-update workflow documentation in `tests/README.md`.
+- [x] P6 — Reference-update workflow documentation in `tests/README.md`.
 - [ ] P9 — Execute the T11 math-audit deletions.
 - [ ] P10 — Housekeeping (R2 doc check, move planning docs to `docs/dev/`,
       MKL fatal negative test).
