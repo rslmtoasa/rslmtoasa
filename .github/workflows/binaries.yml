@@ -3,6 +3,10 @@ name: Build binaries on all platforms (beta)
 #on: [release]
 on: [release, push, pull_request]
 
+concurrency:
+  group: binaries-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build_binaries:
     name: Build binaries on ${{ matrix.os }} ${{ matrix.icon}}

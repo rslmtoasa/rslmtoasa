@@ -1,11 +1,14 @@
 name: Example tests
 
 # Triggered automatically after the build workflow completes successfully.
-# Can also be triggered manually by providing a build workflow run ID.
+# Also runs directly on pull_request (building from source itself, since
+# there is no upstream build-workflow artifact yet for an unmerged PR), and
+# can be triggered manually by providing a build workflow run ID.
 on:
   workflow_run:
     workflows: ["Build binaries on all platforms (beta)"]
     types: [completed]
+  pull_request:
   workflow_dispatch:
     inputs:
       run_id:
@@ -15,14 +18,19 @@ on:
         description: "Git ref/SHA to test (defaults to triggering run head SHA when empty)"
         required: false
 
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test on ${{ matrix.os }} ${{ matrix.icon }}
 
     # For workflow_run: only proceed if the build succeeded.
-    # For workflow_dispatch: always run (user chose the run ID explicitly).
+    # For pull_request / workflow_dispatch: always run.
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       github.event.workflow_run.conclusion == 'success'
 
     strategy:
@@ -41,7 +49,8 @@ jobs:
         with:
           # workflow_run: pin to the exact commit that triggered the build workflow.
           # workflow_dispatch: allow overriding via input.ref; if empty, use run head SHA.
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+          # pull_request: default checkout ref (the PR merge commit) is correct as-is.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || (github.event_name != 'pull_request' && github.event.workflow_run.head_sha || '') }}
 
       # -----------------------------------------------------------------------
       # System dependencies — mirrors the build workflow so cmake can configure
@@ -80,8 +89,12 @@ jobs:
 
       # -----------------------------------------------------------------------
       # Download pre-built binary from the build workflow
+      # (skipped for pull_request: there is no upstream build-workflow
+      # artifact for an unmerged PR, so we build from source instead - see
+      # "Build from source" below)
       # -----------------------------------------------------------------------
       - name: Resolve build workflow run ID
+        if: github.event_name != 'pull_request'
         id: run_id
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -91,6 +104,7 @@ jobs:
           fi
 
       - name: Show workflow provenance
+        if: github.event_name != 'pull_request'
         run: |
           echo "event_name=${{ github.event_name }}"
           echo "dispatch.run_id=${{ inputs.run_id || 'n/a' }}"
@@ -103,6 +117,7 @@ jobs:
           echo "run_test_marker=$(grep -n "\[run_test\]" tests/run_test.py | head -n 1 || true)"
 
       - name: Download binary artifact
+        if: github.event_name != 'pull_request'
         uses: actions/download-artifact@v8
         with:
           name: rslmto.${{ runner.os }}.${{ matrix.arch }}
@@ -111,7 +126,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # -----------------------------------------------------------------------
-      # Configure CMake (registers tests; no build step needed)
+      # Configure CMake (registers tests; for workflow_run/workflow_dispatch
+      # this only needs to register tests against the downloaded binary, no
+      # build step. For pull_request there is no upstream binary, so build
+      # from source below.)
       # -----------------------------------------------------------------------
       - name: Configure CMake
         run: |
@@ -120,6 +138,10 @@ jobs:
             -DRUN_REG_TESTS=ON \
             -DRUN_EXAMPLE_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Build from source (pull_request) ${{ matrix.icon }}
+        if: github.event_name == 'pull_request'
+        run: cmake --build build --parallel
 
       - name: Select MPI launcher
         run: |
@@ -145,6 +167,7 @@ jobs:
 
       # Place the pre-built binary where CMake expects it
       - name: Stage pre-built binary
+        if: github.event_name != 'pull_request'
         run: |
           mkdir -p build/bin
           cp dist/rslmto.* build/bin/rslmto.x
@@ -303,6 +326,7 @@ jobs:
 
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       github.event.workflow_run.conclusion == 'success'
 
     runs-on: ubuntu-latest
@@ -310,7 +334,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || (github.event_name != 'pull_request' && github.event.workflow_run.head_sha || '') }}
 
       - name: Install system dependencies
         run: |
@@ -371,6 +395,7 @@ jobs:
 
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       github.event.workflow_run.conclusion == 'success'
 
     runs-on: ubuntu-latest
@@ -378,7 +403,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || (github.event_name != 'pull_request' && github.event.workflow_run.head_sha || '') }}
 
       - name: Install system dependencies
         run: |
