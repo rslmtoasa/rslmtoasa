@@ -5,8 +5,8 @@ Start here, then read:
 - **[`docs/DEVELOPER_MAP.md`](docs/DEVELOPER_MAP.md)** — entry points, class
   chains, kernel inventory, testing map. The fastest way to find where a
   workflow lives.
-- **[`REFACTORING_PLAN.md`](REFACTORING_PLAN.md)** — Phase 1 ground rules and
-  task history (structural refactor, now complete).
+- **[`docs/dev/REFACTORING_PLAN.md`](docs/dev/REFACTORING_PLAN.md)** — Phase 1
+  ground rules and task history (structural refactor, now complete).
 - **[`REFACTORING_PHASE2.md`](REFACTORING_PHASE2.md)** — current phase: test
   coverage, CI, documentation. Check its progress checklist before starting
   work.

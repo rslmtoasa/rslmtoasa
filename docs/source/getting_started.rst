@@ -236,11 +236,29 @@ Check thread affinity and pinning. Use ``OMP_PROC_BIND=CLOSE`` for better locali
 
 **gfortran warns that chebyshev_fast requires an executable stack**
 
-Some gfortran builds emit an executable-stack warning for
-``chebyshev_fast.f90.o``. This is expected for the current fast Chebyshev
-callback structure and is safe on standard Linux systems. Hardened systems
-that disallow executable stacks may reject the binary; in that case, rebuild
-with the legacy Chebyshev backend for validation runs.
+Some gfortran builds emit a linker warning like::
+
+   requires executable stack (because the .note.GNU-stack section is executable)
+
+for ``chebyshev_fast.f90.o``. **Cause:** ``chebyshev_fast.f90`` implements
+its Chebyshev backends (fast/batched/MKL) as *internal* (nested) subroutines
+passed as actual arguments to the shared ``cheb_three_term_moments`` driver
+(the ``ham_apply_t`` callback interface — see ``docs/DEVELOPER_MAP.md``,
+section 3, for the callback interface). Passing an internal procedure as an
+argument is gfortran's classic trigger for a "trampoline": the compiler
+generates a small executable code stub on the stack at runtime to capture
+the host procedure's context, which is why the object file's ``.note.GNU-stack``
+section ends up executable. This is expected for the current callback
+structure and is safe on standard Linux systems.
+
+**Symptom on hardened systems:** systems that disallow executable stacks
+(e.g. SELinux/PaX-hardened kernels, some HPC cluster login/compute nodes
+with W^X enforcement) may refuse to execute the resulting binary outright,
+or crash it at the first call into the trampoline-using code path
+(a segfault inside ``chebyshev_fast``-backed recursion, not at startup). If
+you hit this, rebuild with the legacy Chebyshev backend
+(``cheb_backend='legacy'``) for validation runs, which does not use nested
+procedures as callback arguments.
 
 Provenance
 ==========
