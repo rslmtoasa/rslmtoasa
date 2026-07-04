@@ -23,7 +23,7 @@
       "name": "bccFe_chebyshev_mkl_batch",
       "base": "bccFe_chebyshev",
       "timeout": 300,
-      "requires_cmake_option": "ENABLE_MKL_BATCH",
+      "requires_cmake_option": "ENABLE_MKL_KERNELS",
       "namelists": {
         "control": { "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 30 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
@@ -33,7 +33,7 @@
       "name": "bccFe_chebyshev_mkl_sparse",
       "base": "bccFe_chebyshev",
       "timeout": 300,
-      "requires_cmake_option": "ENABLE_MKL_SPARSE",
+      "requires_cmake_option": "ENABLE_MKL_KERNELS",
       "namelists": {
         "control": { "recur": "chebyshev", "cheb_backend": "mkl_sparse", "lld": 30 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
