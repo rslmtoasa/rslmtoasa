@@ -278,6 +278,38 @@
       }
     },
     {
+      "name": "Example_bulk_bccFe_export_rs2pao",
+      "case": "bulk/bccFe",
+      "timeout": 300,
+      "_note": "smoke test for hamiltonian%export select-case (calculation.f90 pre_processing_bravais) - checks the exported file exists and parses",
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false, "export": "rs2pao" }
+      },
+      "checks": {
+        "text": [
+          { "file": "rs2paoham.dat", "rows": [1], "cols": [6, 7] }
+        ]
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_export_python",
+      "case": "bulk/bccFe",
+      "timeout": 300,
+      "_note": "smoke test for hamiltonian%export select-case (calculation.f90 pre_processing_bravais) - checks the exported file exists and parses",
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false, "export": "python" }
+      },
+      "checks": {
+        "text": [
+          { "file": "rs_tb_paoham.dat", "rows": [1], "cols": [6, 7] }
+        ]
+      }
+    },
+    {
       "name": "Example_surface_fccCu001_block_hoh",
       "case": "surface/fccCu001",
       "timeout": 300,
