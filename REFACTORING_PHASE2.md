@@ -32,8 +32,11 @@ after every task.
       cases were silently skipping unconditionally since T12 collapsed the
       option names), CUDA compile-only CI job, `tests/run_gpu_matrix.sh`
       validated end-to-end on real GPU hardware.
-- [ ] P5 — CI trigger/matrix hygiene (`pull_request` trigger, Windows test
-      job, nightly-full vs PR-quick split).
+- [x] P5 — CI trigger/matrix hygiene: `pull_request` trigger (self-build
+      path, no upstream artifact for unmerged PRs), concurrency groups,
+      "quick" label + nightly-full/PR-quick split, best-effort Windows
+      test job (`continue-on-error`, unverified — no Windows runner
+      available here; see tests/README.md for the documented fallback).
 - [ ] P7 — Docstring blocks for `recursion.f90`, `hamiltonian_*`,
       `lattice_*`, `green.f90`/`calculation.f90` gaps, `reciprocal_*`.
 - [ ] P8 — `docs/DEVELOPER_MAP.md`.
