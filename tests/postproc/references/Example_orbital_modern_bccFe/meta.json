@@ -1,0 +1,39 @@
+{
+  "name": "Example_orbital_modern_bccFe",
+  "case": "orbital/bccFe",
+  "timeout": 300,
+  "_note": "rc shrunk to 20 (from the usual 80) - chebyshev_orbital_mod loops over every cluster atom, so cluster size dominates runtime",
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 20
+    },
+    "self": {
+      "nstep": 1
+    },
+    "lattice": {
+      "rc": 20
+    },
+    "energy": {
+      "channels_ldos": 200
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "fort.50",
+        "rows": [
+          50,
+          100,
+          150
+        ],
+        "cols": [
+          1,
+          2,
+          3
+        ]
+      }
+    ]
+  }
+}
