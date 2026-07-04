@@ -72,26 +72,32 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
 endif()
 
 if(ENABLE_MKL_KERNELS)
+    add_library(rslmto_mkl_kernels INTERFACE)
+    target_compile_definitions(rslmto_mkl_kernels INTERFACE USE_MKL_BATCH USE_MKL_SPARSE)
     if(DEFINED ENV{MKLROOT})
-        target_include_directories(${PROJECT_NAME} PRIVATE "$ENV{MKLROOT}/include")
+        target_include_directories(rslmto_mkl_kernels INTERFACE "$ENV{MKLROOT}/include")
         if(EXISTS "$ENV{MKLROOT}/include/intel64/lp64")
-            target_include_directories(${PROJECT_NAME} PRIVATE "$ENV{MKLROOT}/include/intel64/lp64")
+            target_include_directories(rslmto_mkl_kernels INTERFACE "$ENV{MKLROOT}/include/intel64/lp64")
         endif()
         if(EXISTS "$ENV{MKLROOT}/include/intel64/ilp64")
-            target_include_directories(${PROJECT_NAME} PRIVATE "$ENV{MKLROOT}/include/intel64/ilp64")
+            target_include_directories(rslmto_mkl_kernels INTERFACE "$ENV{MKLROOT}/include/intel64/ilp64")
         endif()
     endif()
-endif()
-
-if(ENABLE_MKL_KERNELS)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MKL_BATCH)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MKL_SPARSE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE rslmto_mkl_kernels)
     if(DEFINED ENV{MKLROOT} AND EXISTS "$ENV{MKLROOT}/include/mkl_spblas.f90")
         target_sources(${PROJECT_NAME} PRIVATE "$ENV{MKLROOT}/include/mkl_spblas.f90")
     endif()
 endif()
 
 if(ENABLE_CUDA_PLUGIN)
+    add_library(rslmto_cuda_plugin_options INTERFACE)
+    target_compile_features(rslmto_cuda_plugin_options INTERFACE cxx_std_11)
+    target_link_libraries(rslmto_cuda_plugin_options INTERFACE
+        CUDA::cudart CUDA::cusparse CUDA::cufft CUDA::cublas)
+    if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+        target_link_libraries(rslmto_cuda_plugin_options INTERFACE OpenMP::OpenMP_CXX)
+    endif()
+
     # rsrec_cuda is a backend dispatcher that provides rsrec_cuda_* interface
     # for backward compatibility with rsrec_cuda_plugin.f90; internally dispatches to
     # rsrec_cpu.cpp (CPU) or rsrec_gpu.cu (GPU) based on backend selection.
@@ -100,17 +106,12 @@ if(ENABLE_CUDA_PLUGIN)
         cuda/rsrec_cuda.cpp
         cuda/rsrec_gpu.cu
     )
-    target_compile_features(rsrec_cuda PRIVATE cxx_std_11)
-    # Link against rsrec_cpp and CUDA runtime libraries
-    target_link_libraries(rsrec_cuda CUDA::cudart CUDA::cusparse CUDA::cufft CUDA::cublas)
-    if(ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-        target_link_libraries(rsrec_cuda OpenMP::OpenMP_CXX)
-    endif()
-    target_link_libraries(${PROJECT_NAME} rsrec_cuda)
+    target_link_libraries(rsrec_cuda PUBLIC rslmto_cuda_plugin_options)
+    target_link_libraries(${PROJECT_NAME} PRIVATE rsrec_cuda)
     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CUDA_PLUGIN)
 endif()
 
 add_subdirectory(./include_codes/abspinlib)
-target_link_libraries(${PROJECT_NAME} abspinlib)
+target_link_libraries(${PROJECT_NAME} PRIVATE abspinlib)
 add_subdirectory(./include_codes/strux_lib)
-target_link_libraries(${PROJECT_NAME} strux_lib)
+target_link_libraries(${PROJECT_NAME} PRIVATE strux_lib)

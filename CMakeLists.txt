@@ -340,10 +340,13 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(ThisTestDIR ${TestDIR}/regression/bccFe_lanczos)
 add_test(NAME Lanczos   COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+set_tests_properties(Lanczos PROPERTIES LABELS "regression;baseline")
 set(ThisTestDIR ${TestDIR}/regression/bccFe_block)
 add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+set_tests_properties(Block PROPERTIES LABELS "regression;baseline")
 set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
+set_tests_properties(Chebyshev PROPERTIES LABELS "regression;baseline")
 
 set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
 file(READ "${REGRESSION_CASES_JSON}" _regression_json)

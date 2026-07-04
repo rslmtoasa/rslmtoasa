@@ -348,4 +348,4 @@ Tasks:
 - [x] T10. Deduplicate the `calculation.f90` p2rs orchestration pairs.
 - [x] T11. Audit `math.f90`.
 - [x] T12. Simplify the kernel option matrix.
-- [ ] T13. CMake target hygiene.
+- [x] T13. CMake target hygiene.
