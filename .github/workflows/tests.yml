@@ -292,3 +292,122 @@ jobs:
         run: |
           echo "Tests failed — see summary above for details."
           exit 1
+
+  # ---------------------------------------------------------------------------
+  # MKL: builds from source with ENABLE_MKL_KERNELS=ON and runs only the MKL
+  # regression cases plus one MKL example case — the first time mkl_batch/
+  # mkl_sparse actually execute in CI rather than silently skipping.
+  # ---------------------------------------------------------------------------
+  mkl:
+    name: MKL kernels (Ubuntu)
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -y install ninja-build cmake gfortran
+
+      - name: Install Intel oneAPI MKL
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get -y install intel-oneapi-mkl-devel
+
+      - name: Export Intel oneAPI environment
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          echo "MKLROOT=$MKLROOT" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install f90nml
+
+      - name: Configure CMake with MKL kernels
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_MKL_KERNELS=ON \
+            -DBLA_VENDOR=Intel10_64lp \
+            -DRUN_REG_TESTS=ON \
+            -DRUN_EXAMPLE_TESTS=ON \
+            -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run MKL regression + example cases
+        run: |
+          ctest --test-dir build \
+            -R "mkl_batch|mkl_sparse" \
+            --output-on-failure \
+            --parallel 1 \
+            -V
+
+  # ---------------------------------------------------------------------------
+  # CUDA (compile-only): builds the CUDA recursion plugin with no GPU present,
+  # then runs the CPU regression subset against that binary (plugin compiled
+  # in but unused). Catches interface drift between rsrec_cuda_plugin.f90,
+  # rsrec_cuda.h and rsrec_gpu.cu without needing GPU hardware in CI.
+  # ---------------------------------------------------------------------------
+  cuda_compile:
+    name: CUDA plugin (compile-only, Ubuntu)
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build cmake gfortran g++ nvidia-cuda-toolkit
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install f90nml
+
+      - name: Configure CMake with CUDA plugin
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_CUDA_PLUGIN=ON \
+            -DRUN_REG_TESTS=ON \
+            -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run CPU regression subset
+        run: |
+          ctest --test-dir build \
+            --label-regex backend \
+            --output-on-failure \
+            --parallel 1 \
+            -V

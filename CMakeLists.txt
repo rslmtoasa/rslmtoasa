@@ -389,6 +389,14 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
     string(JSON _recur   GET "${_json}" "cases" ${_i} "namelists" "control" "recur")
     string(JSON _timeout GET "${_json}" "cases" ${_i} "timeout")
 
+    # Cases requiring an optional CMake feature (e.g. ENABLE_MKL_KERNELS) are
+    # skipped entirely when that feature is off, mirroring the regression
+    # matrix's requires_cmake_option gate in run_matrix.py.
+    string(JSON _req_opt ERROR_VARIABLE _req_opt_err GET "${_json}" "cases" ${_i} "requires_cmake_option")
+    if (NOT _req_opt_err AND NOT ${_req_opt})
+      continue()
+    endif()
+
     set(_cmd
       "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/run_test.py"
       "--binary"       "${TestBinary}"
