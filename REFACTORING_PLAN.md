@@ -344,7 +344,7 @@ Tasks:
 - [x] T6. Resolve operator selection once in the dispatcher.
 - [x] T7. Deduplicate `green.f90`'s clone families.
 - [x] T8. One GPU context layer.
-- [ ] T9. Split the four largest modules using Fortran submodules.
+- [x] T9. Split the four largest modules using Fortran submodules.
 - [ ] T10. Deduplicate the `calculation.f90` p2rs orchestration pairs.
 - [ ] T11. Audit `math.f90`.
 - [ ] T12. Simplify the kernel option matrix.

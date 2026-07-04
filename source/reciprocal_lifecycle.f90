@@ -1,0 +1,576 @@
+submodule (reciprocal_mod) reciprocal_lifecycle
+   implicit none
+
+contains
+
+   module subroutine root_info(message, file_name, line_no)
+      character(len=*), intent(in) :: message, file_name
+      integer, intent(in) :: line_no
+
+      if (rank == 0) call g_logger%info(message, file_name, line_no)
+   end subroutine root_info
+
+   module function constructor(hamiltonian_obj) result(obj)
+      type(reciprocal) :: obj
+      type(hamiltonian), target, intent(in) :: hamiltonian_obj
+
+      obj%hamiltonian => hamiltonian_obj
+      obj%lattice => hamiltonian_obj%lattice
+      obj%control => hamiltonian_obj%lattice%control
+
+      call obj%restore_to_default()
+      call obj%build_from_file()  ! Read parameters from input.nml
+      call obj%generate_reciprocal_vectors()
+      call obj%set_basis_sizes()
+      call obj%symmetry_analysis%initialize(obj%lattice)
+      
+      ! Auto-calculate total electrons from valence if not set in input.
+      ! For bulk systems nbulk can be zero; nbulk_bulk is the correct valence span.
+      if (obj%total_electrons <= 1.0e-3_rp) then
+         if (obj%lattice%nbulk_bulk > 0) then
+            obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nbulk_bulk)%element%valence), rp)
+         else if (obj%lattice%nrec > 0) then
+            obj%total_electrons = real(sum(obj%lattice%symbolic_atoms(1:obj%lattice%nrec)%element%valence), rp)
+            if (rank == 0) call g_logger%warning('reciprocal%constructor: nbulk_bulk<=0, using nrec span for total_electrons.', __FILE__, __LINE__)
+         end if
+         call root_info('reciprocal%constructor: Auto-calculated total_electrons = ' // trim(real2str(obj%total_electrons)) // ' from valence', __FILE__, __LINE__)
+      end if
+   end function constructor
+
+   module subroutine destructor(this)
+      type(reciprocal) :: this
+#ifdef USE_SAFE_ALLOC
+      if (allocated(this%k_points)) call g_safe_alloc%deallocate('reciprocal.k_points', this%k_points)
+      if (allocated(this%k_weights)) call g_safe_alloc%deallocate('reciprocal.k_weights', this%k_weights)
+      if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
+      if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
+      if (allocated(this%hk_bulk)) call g_safe_alloc%deallocate('reciprocal.hk_bulk', this%hk_bulk)
+      if (allocated(this%hk_so)) call g_safe_alloc%deallocate('reciprocal.hk_so', this%hk_so)
+      if (allocated(this%hk_total)) call g_safe_alloc%deallocate('reciprocal.hk_total', this%hk_total)
+      if (allocated(this%sk_overlap)) call g_safe_alloc%deallocate('reciprocal.sk_overlap', this%sk_overlap)
+      if (allocated(this%basis_size)) call g_safe_alloc%deallocate('reciprocal.basis_size', this%basis_size)
+      if (allocated(this%k_path)) call g_safe_alloc%deallocate('reciprocal.k_path', this%k_path)
+      if (allocated(this%k_labels)) call g_safe_alloc%deallocate('reciprocal.k_labels', this%k_labels)
+      if (allocated(this%k_distances)) call g_safe_alloc%deallocate('reciprocal.k_distances', this%k_distances)
+      if (allocated(this%eigenvalues)) call g_safe_alloc%deallocate('reciprocal.eigenvalues', this%eigenvalues)
+      if (allocated(this%eigenvalues_path)) call g_safe_alloc%deallocate('reciprocal.eigenvalues_path', this%eigenvalues_path)
+      if (allocated(this%eigenvectors)) call g_safe_alloc%deallocate('reciprocal.eigenvectors', this%eigenvectors)
+      if (allocated(this%eigenvectors_path)) call g_safe_alloc%deallocate('reciprocal.eigenvectors_path', this%eigenvectors_path)
+      ! DOS arrays
+      if (allocated(this%dos_energy_grid)) call g_safe_alloc%deallocate('reciprocal.dos_energy_grid', this%dos_energy_grid)
+      if (allocated(this%total_dos)) call g_safe_alloc%deallocate('reciprocal.total_dos', this%total_dos)
+      if (allocated(this%total_nos)) call g_safe_alloc%deallocate('reciprocal.total_nos', this%total_nos)
+      if (allocated(this%projected_dos)) call g_safe_alloc%deallocate('reciprocal.projected_dos', this%projected_dos)
+      if (allocated(this%band_moments)) call g_safe_alloc%deallocate('reciprocal.band_moments', this%band_moments)
+      if (allocated(this%dos_mx_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mx_tot', this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) call g_safe_alloc%deallocate('reciprocal.dos_my_tot', this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mz_tot', this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) call g_safe_alloc%deallocate('reciprocal.projected_dos_moments', this%projected_dos_moments)
+      if (allocated(this%tetrahedra)) call g_safe_alloc%deallocate('reciprocal.tetrahedra', this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
+      if (allocated(this%ham_vec_type)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type', this%ham_vec_type)
+      if (allocated(this%ham_vec_type_direct)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct)
+#else
+      if (allocated(this%k_points)) deallocate (this%k_points)
+      if (allocated(this%k_weights)) deallocate (this%k_weights)
+      if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
+      if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
+      if (allocated(this%hk_bulk)) deallocate (this%hk_bulk)
+      if (allocated(this%hk_so)) deallocate (this%hk_so)
+      if (allocated(this%hk_total)) deallocate (this%hk_total)
+      if (allocated(this%sk_overlap)) deallocate (this%sk_overlap)
+      if (allocated(this%basis_size)) deallocate (this%basis_size)
+      if (allocated(this%k_path)) deallocate (this%k_path)
+      if (allocated(this%k_labels)) deallocate (this%k_labels)
+      if (allocated(this%k_distances)) deallocate (this%k_distances)
+   if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+   if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      ! DOS arrays
+      if (allocated(this%dos_energy_grid)) deallocate (this%dos_energy_grid)
+      if (allocated(this%total_dos)) deallocate (this%total_dos)
+      if (allocated(this%total_nos)) deallocate (this%total_nos)
+      if (allocated(this%projected_dos)) deallocate (this%projected_dos)
+      if (allocated(this%band_moments)) deallocate (this%band_moments)
+      if (allocated(this%dos_mx_tot)) deallocate (this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) deallocate (this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) deallocate (this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) deallocate (this%projected_dos_moments)
+      if (allocated(this%tetrahedra)) deallocate (this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) deallocate (this%tetrahedron_volumes)
+      if (allocated(this%ham_vec_type)) deallocate (this%ham_vec_type)
+      if (allocated(this%ham_vec_type_direct)) deallocate (this%ham_vec_type_direct)
+      if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
+      if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+#endif
+   end subroutine destructor
+
+   module subroutine restore_to_default(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Default k-point mesh settings
+      this%nk_mesh = [8, 8, 8]  ! Default 8x8x8 mesh
+      this%nk_total = 0
+      this%nk_local = 0
+      this%k_start = 1
+      this%k_end = 0
+      this%k_mesh_distributed_active = .false.
+      this%use_time_reversal = .true.
+      this%strict_symmetry_checks = .false.
+      this%dump_symmetry_kmap = .false.
+      this%tetra_symmetry_mode = 'irreducible_native'
+      this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
+      this%include_so = .false.
+      this%max_orbs = nb
+
+   ! By default suppress internal verbose prints (can be enabled by user)
+   this%suppress_internal_logs = .true.
+
+      ! Initialize reciprocal lattice to zero
+      this%reciprocal_vectors = 0.0_rp
+      this%reciprocal_volume = 0.0_rp
+
+      ! Default DOS settings
+      ! All energy values in Ry (consistent with Hamiltonian)
+      this%n_energy_points = 1000
+      this%dos_energy_range = [-1.0_rp, 1.0_rp]  ! Default energy range in Ry
+      this%dos_method = 'tetrahedron'  ! Default to tetrahedron method
+      this%gaussian_sigma = 0.01_rp  ! Default Gaussian smearing in Ry
+      this%temperature = 300.0_rp  ! Default temperature in Kelvin
+      this%fermi_level = 0.0_rp  ! Default Fermi level
+      this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
+      this%auto_find_fermi = .true.  ! Auto-find Fermi level from DOS (recommended default)
+      this%reciprocal_mode = 'ham_only'
+      this%kspace_ham_order = 'auto'
+      this%kanpur_diagnostics = .true.
+      this%gamma_bounds_diagnostics = .false.
+      this%hall_diag_experimental = .false.
+      this%n_sites = 0
+      this%n_orb_types = 4  ! s, p, d, f
+      this%n_spin_components = 2  ! RS-LMTO basis is always spin-polarized
+      this%n_tetrahedra = 0
+
+      ! Default k-path settings
+      this%auto_kpath = .true.  ! Use automatic k-path generation by default
+      this%nk_per_segment = 40  ! Default 40 k-points per segment
+      this%override_space_group = 0  ! 0 = auto-detect
+      this%custom_kpath_spec = ''  ! Empty = use automatic
+      this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
+   end subroutine restore_to_default
+
+   module subroutine build_from_file(this)
+      class(reciprocal), intent(inout) :: this
+
+      ! Reading process variables
+      integer :: iostatus, funit
+
+      ! Include namelist declarations for reciprocal module
+      include 'include_codes/namelists/reciprocal.f90'
+      include 'include_codes/namelists/kpath.f90'
+
+      ! Save previous values (from defaults or previous read)
+      nk1 = this%nk_mesh(1)
+      nk2 = this%nk_mesh(2)
+      nk3 = this%nk_mesh(3)
+      k_offset_x = this%k_offset(1)
+      k_offset_y = this%k_offset(2)
+      k_offset_z = this%k_offset(3)
+      use_symmetry_reduction = this%use_symmetry_reduction
+      use_time_reversal = this%use_time_reversal
+      strict_symmetry_checks = this%strict_symmetry_checks
+      dump_symmetry_kmap = this%dump_symmetry_kmap
+      tetra_symmetry_mode = this%tetra_symmetry_mode
+      use_shift = .false.  ! Derived from k_offset
+      n_energy_points = this%n_energy_points
+      dos_energy_min = this%dos_energy_range(1)
+      dos_energy_max = this%dos_energy_range(2)
+      gaussian_sigma = this%gaussian_sigma
+      temperature = this%temperature
+      dos_method = this%dos_method
+      auto_find_fermi = this%auto_find_fermi
+      suppress_internal_logs = this%suppress_internal_logs
+      reciprocal_mode = this%reciprocal_mode
+      kspace_ham_order = this%kspace_ham_order
+      kanpur_diagnostics = this%kanpur_diagnostics
+      gamma_bounds_diagnostics = this%gamma_bounds_diagnostics
+      hall_diag_experimental = this%hall_diag_experimental
+      
+      ! K-path settings
+      auto_kpath = this%auto_kpath
+      nk_per_segment = this%nk_per_segment
+      override_space_group = this%override_space_group
+      custom_kpath_spec = this%custom_kpath_spec
+
+      ! Read reciprocal namelist
+      open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
+      if (iostatus /= 0) then
+         call g_logger%fatal('file '//trim(this%control%fname)//' not found', __FILE__, __LINE__)
+      end if
+
+      read (funit, nml=reciprocal, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+         ! Namelist not found or error - use defaults
+         call root_info('reciprocal namelist not found in input file, using defaults', __FILE__, __LINE__)
+      end if
+      
+      ! Read kpath namelist
+      rewind(funit)
+      read (funit, nml=kpath, iostat=iostatus)
+      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
+         ! Namelist not found or error - use defaults
+         call root_info('kpath namelist not found in input file, using defaults', __FILE__, __LINE__)
+      end if
+      close (funit)
+
+      ! Assign values back to type members
+      this%nk_mesh = [nk1, nk2, nk3]
+      this%k_offset = [k_offset_x, k_offset_y, k_offset_z]
+      this%use_symmetry_reduction = use_symmetry_reduction
+      this%use_time_reversal = use_time_reversal
+      this%strict_symmetry_checks = strict_symmetry_checks
+      this%dump_symmetry_kmap = dump_symmetry_kmap
+      this%tetra_symmetry_mode = lower(trim(tetra_symmetry_mode))
+      if (this%tetra_symmetry_mode /= 'full_expand_ref' .and. &
+          this%tetra_symmetry_mode /= 'irreducible_native') then
+         call g_logger%warning("reciprocal%build_from_file: tetra_symmetry_mode must be 'full_expand_ref' or 'irreducible_native'. Falling back to irreducible_native.", __FILE__, __LINE__)
+         this%tetra_symmetry_mode = 'irreducible_native'
+      end if
+      this%n_energy_points = n_energy_points
+      this%dos_energy_range = [dos_energy_min, dos_energy_max]
+      this%gaussian_sigma = gaussian_sigma
+      this%temperature = temperature
+      this%dos_method = dos_method
+      this%auto_find_fermi = auto_find_fermi
+      this%suppress_internal_logs = suppress_internal_logs
+      this%reciprocal_mode = lower(trim(reciprocal_mode))
+      this%kanpur_diagnostics = kanpur_diagnostics
+      this%gamma_bounds_diagnostics = gamma_bounds_diagnostics
+      this%hall_diag_experimental = hall_diag_experimental
+      if (this%reciprocal_mode == 'generalized_overlap') then
+         this%reciprocal_mode = 'generalized_overlap_proxy'
+         call g_logger%warning("reciprocal_mode='generalized_overlap' is deprecated alias; using 'generalized_overlap_proxy'.", __FILE__, __LINE__)
+      end if
+      if (this%reciprocal_mode /= 'ham_only' .and. &
+          this%reciprocal_mode /= 'generalized_overlap_proxy' .and. &
+          this%reciprocal_mode /= 'generalized_overlap_kanpur') then
+         call g_logger%warning("reciprocal_mode must be 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'. Falling back to ham_only.", __FILE__, __LINE__)
+         this%reciprocal_mode = 'ham_only'
+      end if
+	      this%kspace_ham_order = lower(trim(kspace_ham_order))
+	      if (this%kspace_ham_order == 'proper') then
+	         this%kspace_ham_order = 'second'
+	         call g_logger%warning("kspace_ham_order='proper' is deprecated; using 'second'.", __FILE__, __LINE__)
+	      end if
+	      if (this%kspace_ham_order /= 'first' .and. this%kspace_ham_order /= 'second' .and. &
+	          this%kspace_ham_order /= 'auto') then
+	         call g_logger%warning("kspace_ham_order must be 'auto', 'first', 'second', or deprecated alias 'proper'. Falling back to auto.", __FILE__, __LINE__)
+	         this%kspace_ham_order = 'auto'
+	      end if
+
+      ! K-path settings
+      this%auto_kpath = auto_kpath
+      this%nk_per_segment = nk_per_segment
+      this%override_space_group = override_space_group
+      this%custom_kpath_spec = custom_kpath_spec
+
+      ! Log what was read
+      call root_info('reciprocal%build_from_file: Read k-mesh = ' // &
+                     trim(int2str(nk1)) // ' x ' // trim(int2str(nk2)) // ' x ' // trim(int2str(nk3)), &
+                     __FILE__, __LINE__)
+      
+      ! if (sum(abs(this%k_offset)) > 1.0e-8_rp) then
+      !    call g_logger%info('reciprocal%build_from_file: k-offset = [' // &
+      !                      trim(real2str(k_offset_x, '(F8.4)')) // ', ' // &
+      !                      trim(real2str(k_offset_y, '(F8.4)')) // ', ' // &
+      !                      trim(real2str(k_offset_z, '(F8.4)')) // ']', &
+      !                      __FILE__, __LINE__)
+      ! end if
+      
+      if (this%use_symmetry_reduction) then
+         call root_info('reciprocal%build_from_file: Symmetry reduction enabled', __FILE__, __LINE__)
+      end if
+      if (this%use_time_reversal) then
+         call root_info('reciprocal%build_from_file: use_time_reversal = true', __FILE__, __LINE__)
+      else
+         call root_info('reciprocal%build_from_file: use_time_reversal = false', __FILE__, __LINE__)
+      end if
+      if (this%strict_symmetry_checks) then
+         call root_info('reciprocal%build_from_file: strict_symmetry_checks = true', __FILE__, __LINE__)
+      else
+         call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
+      end if
+      call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
+      
+      if (this%auto_kpath) then
+         call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
+      end if
+      call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
+   end subroutine build_from_file
+
+   module subroutine set_kpoint_mesh(this, nk1, nk2, nk3)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: nk1, nk2, nk3
+
+      this%nk_mesh = [nk1, nk2, nk3]
+      call g_logger%info('reciprocal%set_kpoint_mesh: Set k-point mesh to ' // &
+         trim(int2str(nk1)) // 'x' // trim(int2str(nk2)) // 'x' // trim(int2str(nk3)), __FILE__, __LINE__)
+   end subroutine set_kpoint_mesh
+
+   module subroutine generate_reciprocal_vectors(this)
+      class(reciprocal), intent(inout) :: this
+      ! Local variables
+      real(rp), dimension(3, 3) :: real_vectors
+      real(rp) :: det
+      integer :: i
+
+      ! Get real-space lattice vectors from lattice%a
+      real_vectors = this%lattice%a
+
+      ! Calculate determinant (volume of unit cell)
+      det = real_vectors(1, 1) * (real_vectors(2, 2) * real_vectors(3, 3) - real_vectors(2, 3) * real_vectors(3, 2)) &
+          - real_vectors(1, 2) * (real_vectors(2, 1) * real_vectors(3, 3) - real_vectors(2, 3) * real_vectors(3, 1)) &
+          + real_vectors(1, 3) * (real_vectors(2, 1) * real_vectors(3, 2) - real_vectors(2, 2) * real_vectors(3, 1))
+
+      ! Calculate reciprocal lattice vectors: b_i = 2π * (a_j × a_k) / V
+      ! b1 = 2π * (a2 × a3) / V
+      this%reciprocal_vectors(1, 1) = two_pi * (real_vectors(2, 2) * real_vectors(3, 3) - real_vectors(2, 3) * real_vectors(3, 2)) / det
+      this%reciprocal_vectors(2, 1) = two_pi * (real_vectors(2, 3) * real_vectors(3, 1) - real_vectors(2, 1) * real_vectors(3, 3)) / det
+      this%reciprocal_vectors(3, 1) = two_pi * (real_vectors(2, 1) * real_vectors(3, 2) - real_vectors(2, 2) * real_vectors(3, 1)) / det
+
+      ! b2 = 2π * (a3 × a1) / V
+      this%reciprocal_vectors(1, 2) = two_pi * (real_vectors(3, 2) * real_vectors(1, 3) - real_vectors(3, 3) * real_vectors(1, 2)) / det
+      this%reciprocal_vectors(2, 2) = two_pi * (real_vectors(3, 3) * real_vectors(1, 1) - real_vectors(3, 1) * real_vectors(1, 3)) / det
+      this%reciprocal_vectors(3, 2) = two_pi * (real_vectors(3, 1) * real_vectors(1, 2) - real_vectors(3, 2) * real_vectors(1, 1)) / det
+
+      ! b3 = 2π * (a1 × a2) / V
+      this%reciprocal_vectors(1, 3) = two_pi * (real_vectors(1, 2) * real_vectors(2, 3) - real_vectors(1, 3) * real_vectors(2, 2)) / det
+      this%reciprocal_vectors(2, 3) = two_pi * (real_vectors(1, 3) * real_vectors(2, 1) - real_vectors(1, 1) * real_vectors(2, 3)) / det
+      this%reciprocal_vectors(3, 3) = two_pi * (real_vectors(1, 1) * real_vectors(2, 2) - real_vectors(1, 2) * real_vectors(2, 1)) / det
+
+      this%reciprocal_volume = (two_pi)**3 / abs(det)
+
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal lattice vectors generated', __FILE__, __LINE__)
+      
+      ! Debug output - but use info level for now since debug is not enabled
+      call root_info('reciprocal%generate_reciprocal_vectors: Real cell volume = ' // real2str(det), __FILE__, __LINE__)
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal b1 = [' // &
+         real2str(this%reciprocal_vectors(1, 1)) // ', ' // real2str(this%reciprocal_vectors(2, 1)) // ', ' // &
+         real2str(this%reciprocal_vectors(3, 1)) // ']', __FILE__, __LINE__)
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal b2 = [' // &
+         real2str(this%reciprocal_vectors(1, 2)) // ', ' // real2str(this%reciprocal_vectors(2, 2)) // ', ' // &
+         real2str(this%reciprocal_vectors(3, 2)) // ']', __FILE__, __LINE__)
+      call root_info('reciprocal%generate_reciprocal_vectors: Reciprocal b3 = [' // &
+         real2str(this%reciprocal_vectors(1, 3)) // ', ' // real2str(this%reciprocal_vectors(2, 3)) // ', ' // &
+         real2str(this%reciprocal_vectors(3, 3)) // ']', __FILE__, __LINE__)
+   end subroutine generate_reciprocal_vectors
+
+   module subroutine generate_mp_mesh(this)
+      class(reciprocal), intent(inout) :: this
+      ! Local variables
+      integer :: ik, ix, iy, iz, nk_irred
+      real(rp) :: kx, ky, kz
+      real(rp), parameter :: tol = 1.0e-8_rp
+      integer :: shift(3), nfull
+      real(rp), allocatable :: kpoints_full(:,:)
+
+      this%nk_total = this%nk_mesh(1) * this%nk_mesh(2) * this%nk_mesh(3)
+
+      ! Allocate k-point arrays
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('reciprocal.k_points', this%k_points, [3, this%nk_total])
+      call g_safe_alloc%allocate('reciprocal.k_weights', this%k_weights, [this%nk_total])
+#else
+       if (allocated(this%k_points)) deallocate(this%k_points)
+       if (allocated(this%k_weights)) deallocate(this%k_weights)
+      allocate(this%k_points(3, this%nk_total))
+      allocate(this%k_weights(this%nk_total))
+#endif
+      if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
+      if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+      allocate(this%full_to_irred_k(this%nk_total))
+      allocate(this%irred_to_full_k(this%nk_total))
+
+      shift = [0, 0, 0]
+      if (abs(this%k_offset(1)) > tol) shift(1) = 1
+      if (abs(this%k_offset(2)) > tol) shift(2) = 1
+      if (abs(this%k_offset(3)) > tol) shift(3) = 1
+
+#ifdef USE_SPGLIB
+      if (this%symmetry_analysis%spglib%is_available()) then
+         nfull = this%symmetry_analysis%spglib%get_full_kpoint_mesh_with_points(this%nk_mesh, shift, kpoints_full)
+         if (nfull == this%nk_total) then
+            this%k_points = kpoints_full
+            this%k_weights = 1.0_rp / real(this%nk_total, rp)
+            do ik = 1, this%nk_total
+               this%full_to_irred_k(ik) = ik
+               this%irred_to_full_k(ik) = ik
+            end do
+            deallocate(kpoints_full)
+            call g_logger%info('reciprocal%generate_mp_mesh: Generated full mesh via spglib grid convention (' // &
+                               trim(int2str(this%nk_total)) // ' k-points)', __FILE__, __LINE__)
+            return
+         end if
+         if (allocated(kpoints_full)) deallocate(kpoints_full)
+      end if
+#endif
+
+      ! Fallback: internal MP mesh formula
+      ik = 0
+      do iz = 1, this%nk_mesh(3)
+         do iy = 1, this%nk_mesh(2)
+            do ix = 1, this%nk_mesh(1)
+               ik = ik + 1
+               kx = (2.0_rp * ix - this%nk_mesh(1) - 1.0_rp) / (2.0_rp * this%nk_mesh(1)) + this%k_offset(1)
+               ky = (2.0_rp * iy - this%nk_mesh(2) - 1.0_rp) / (2.0_rp * this%nk_mesh(2)) + this%k_offset(2)
+               kz = (2.0_rp * iz - this%nk_mesh(3) - 1.0_rp) / (2.0_rp * this%nk_mesh(3)) + this%k_offset(3)
+               this%k_points(1, ik) = kx
+               this%k_points(2, ik) = ky
+               this%k_points(3, ik) = kz
+               this%k_weights(ik) = 1.0_rp / real(this%nk_total, rp)
+               this%full_to_irred_k(ik) = ik
+               this%irred_to_full_k(ik) = ik
+            end do
+         end do
+      end do
+
+      call root_info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
+   end subroutine generate_mp_mesh
+
+   module subroutine set_basis_sizes(this)
+      class(reciprocal), intent(inout) :: this
+      ! Local variables
+      integer :: ntype
+      character(len=10) :: basis_type
+
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('reciprocal.basis_size', this%basis_size, [this%lattice%ntype])
+#else
+    if (allocated(this%basis_size)) deallocate(this%basis_size)
+      allocate(this%basis_size(this%lattice%ntype))
+#endif
+
+      ! Determine basis size for each atom type from active global basis.
+      do ntype = 1, this%lattice%ntype
+         this%basis_size(ntype) = norb
+      end do
+
+      this%max_orbs = nb
+
+      call root_info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orbs)), __FILE__, __LINE__)
+   end subroutine set_basis_sizes
+
+   module subroutine build_neighbor_vectors(this)
+      class(reciprocal), intent(inout) :: this
+      ! Local variables
+      integer :: ntype, ia, nr, nn_max_loc, kk
+      real(rp) :: r2
+      real(rp), dimension(3, this%lattice%kk) :: cralat
+
+      if (allocated(this%ham_vec_type) .and. allocated(this%ham_vec_type_direct)) then
+         if (size(this%ham_vec_type, 1) == 3 .and. &
+             size(this%ham_vec_type, 2) == this%lattice%nn_max .and. &
+             size(this%ham_vec_type, 3) == this%lattice%ntype) then
+            return
+         end if
+      end if
+
+      call root_info('reciprocal%build_neighbor_vectors: Building neighbor vectors for each atom type', __FILE__, __LINE__)
+
+      r2 = this%lattice%r2
+      kk = this%lattice%kk
+      cralat(1:3, 1:kk) = this%lattice%cr(1:3, 1:kk) * this%lattice%alat
+
+      ! Allocate storage for all atom types
+      ! Use nn_max as maximum neighbors
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('reciprocal.ham_vec_type', this%ham_vec_type, &
+                                 [3, this%lattice%nn_max, this%lattice%ntype])
+      call g_safe_alloc%allocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct, &
+                                 [3, this%lattice%nn_max, this%lattice%ntype])
+#else
+      if (allocated(this%ham_vec_type)) deallocate(this%ham_vec_type)
+      allocate(this%ham_vec_type(3, this%lattice%nn_max, this%lattice%ntype))
+      if (allocated(this%ham_vec_type_direct)) deallocate(this%ham_vec_type_direct)
+      allocate(this%ham_vec_type_direct(3, this%lattice%nn_max, this%lattice%ntype))
+#endif
+
+      this%ham_vec_type = 0.0_rp
+      this%ham_vec_type_direct = 0.0_rp
+
+      ! Build neighbor vectors for each atom type
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)
+         nn_max_loc = nr
+
+         ! Use clusba directly - no need for lattice%sbarvec storage here
+         ! We're building type-specific ham_vec_type arrays instead
+         call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, &
+                                  this%ham_vec_type(:, 1:nr, ntype))
+
+         ! Update nr with actual number of neighbors found
+         nr = nn_max_loc
+
+         ! Convert to fractional coordinates for ham_vec_type_direct
+         ! Note: ham_vec_type from clusba is already in absolute Cartesian units (cralat = cr * alat)
+         do nn_max_loc = 1, nr
+            if (this%lattice%a_cart_inv_ready) then
+               ! a_cart_inv expects input in units of alat, so divide by alat
+               this%ham_vec_type_direct(:, nn_max_loc, ntype) = &
+                  matmul(this%lattice%a_cart_inv, this%ham_vec_type(:, nn_max_loc, ntype) ) !/ this%lattice%alat
+            else
+               ! Fallback: use inverse of lattice vectors directly.
+               this%ham_vec_type_direct(:, nn_max_loc, ntype) = &
+                  matmul(inverse_3x3(this%lattice%a), this%ham_vec_type(:, nn_max_loc, ntype) / this%lattice%alat)
+            end if
+         end do
+
+         call root_info('reciprocal%build_neighbor_vectors: Built ' // trim(int2str(nr)) // &
+                        ' neighbor vectors for atom type ' // trim(int2str(ntype)), __FILE__, __LINE__)
+         
+      end do
+
+      call root_info('reciprocal%build_neighbor_vectors: Completed neighbor vector build for all types', __FILE__, __LINE__)
+
+   end subroutine build_neighbor_vectors
+
+   module subroutine setup_k_mesh_distribution(this, nk_global, enable_distribution)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: nk_global
+      logical, intent(in) :: enable_distribution
+      integer :: local_count
+      integer :: ik
+
+      if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
+      if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
+
+      if (enable_distribution) then
+         call get_mpi_range(rank, nk_global, this%k_start, this%k_end, local_count, this%k_l2g_map, this%k_g2l_map, 'k')
+         this%nk_local = local_count
+         this%k_mesh_distributed_active = .true.
+      else
+         this%k_start = 1
+         this%k_end = nk_global
+         this%nk_local = nk_global
+         this%k_mesh_distributed_active = .false.
+         allocate(this%k_l2g_map(this%nk_local))
+         allocate(this%k_g2l_map(nk_global))
+         do ik = 1, nk_global
+            this%k_l2g_map(ik) = ik
+            this%k_g2l_map(ik) = ik
+         end do
+      end if
+   end subroutine setup_k_mesh_distribution
+
+   module integer function local_k_index_to_global(this, ik_local) result(ik_global)
+      class(reciprocal), intent(in) :: this
+      integer, intent(in) :: ik_local
+
+      if (allocated(this%k_l2g_map) .and. ik_local >= 1 .and. ik_local <= size(this%k_l2g_map)) then
+         ik_global = this%k_l2g_map(ik_local)
+      else
+         ik_global = ik_local
+      end if
+   end function local_k_index_to_global
+
+end submodule reciprocal_lifecycle

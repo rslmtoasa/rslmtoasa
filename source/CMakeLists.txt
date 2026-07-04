@@ -21,7 +21,15 @@ add_library(${PROJECT_NAME} STATIC
     #hamiltonian_base_mod.f90
     #hamiltonian_cpu_mod.f90
     hamiltonian.f90
+    hamiltonian_build.f90
+    hamiltonian_ccor.f90
+    hamiltonian_paoflow_io.f90
+    hamiltonian_hubbard.f90
     lattice.f90
+    lattice_lifecycle.f90
+    lattice_cluster.f90
+    lattice_strux.f90
+    lattice_print.f90
     # lists.f90
     logger.f90
     math.f90
@@ -32,7 +40,16 @@ add_library(${PROJECT_NAME} STATIC
     potential.f90
     precision.f90
     reciprocal.f90
+    reciprocal_lifecycle.f90
+    reciprocal_fourier.f90
+    reciprocal_bands.f90
+    reciprocal_dos.f90
+    reciprocal_projection.f90
     recursion.f90
+    recursion_core.f90
+    recursion_haydock.f90
+    recursion_chebyshev.f90
+    recursion_transport.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90
