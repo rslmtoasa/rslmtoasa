@@ -746,6 +746,143 @@ contains
 
    end subroutine post_processing_paoflow2rs
 
+   subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
+                                             stochastic_moments, control_obj, lattice_obj, charge_obj, mix_obj, &
+                                             energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
+      class(calculation), intent(in) :: this
+      logical, intent(in) :: use_paoflow
+      logical, intent(in) :: use_exchange_pairs
+      logical, intent(in) :: energy_mesh_before_hamiltonian
+      logical, intent(in) :: stochastic_moments
+      type(control), target, intent(inout) :: control_obj
+      type(lattice), target, intent(inout) :: lattice_obj
+      type(charge), target, intent(inout) :: charge_obj
+      type(mix), target, intent(inout) :: mix_obj
+      type(energy), target, intent(inout) :: energy_obj
+      type(hamiltonian), target, intent(inout) :: hamiltonian_obj
+      type(recursion), target, intent(inout) :: recursion_obj
+      type(dos), target, intent(inout) :: dos_obj
+      type(green), target, intent(inout) :: green_obj
+      type(bands), target, intent(inout) :: bands_obj
+      integer :: i
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+
+      call g_timer%start('pre-processing')
+      if (use_paoflow) then
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%structb(.false.)
+      else
+         select case (control_obj%calctype)
+         case ('B')
+            call lattice_obj%build_data()
+            call lattice_obj%bravais()
+            call lattice_obj%structb(.true.)
+         case ('S')
+            call lattice_obj%build_data()
+            call lattice_obj%bravais()
+            call lattice_obj%build_surf_full()
+            call lattice_obj%structb(.true.)
+         case ('I')
+            call lattice_obj%build_data()
+            call lattice_obj%bravais()
+            call lattice_obj%build_surf_full()
+            call lattice_obj%newclu()
+            call lattice_obj%structb(.true.)
+         end select
+      end if
+
+      call lattice_obj%atomlist()
+      if (use_exchange_pairs) then
+         call get_mpi_variables(rank, lattice_obj%njij)
+      else
+         call get_mpi_variables(rank, lattice_obj%ntype)
+      end if
+
+      charge_obj = charge(lattice_obj)
+      if (use_paoflow) then
+         call charge_obj%bulkmat()
+      else
+         select case (control_obj%calctype)
+         case ('B')
+            call charge_obj%bulkmat()
+         case ('S')
+            call charge_obj%build_alelay
+            call charge_obj%surfmat
+         case ('I')
+            call charge_obj%impmad()
+         end select
+      end if
+      call g_timer%stop('pre-processing')
+
+      mix_obj = mix(lattice_obj, charge_obj)
+      energy_obj = energy(lattice_obj)
+      if (energy_mesh_before_hamiltonian) call energy_obj%e_mesh()
+
+      hamiltonian_obj = hamiltonian(charge_obj)
+      if (use_paoflow) then
+         select case (control_obj%calctype)
+         case ('B')
+            call hamiltonian_obj%build_from_paoflow_opt()
+         case ('S')
+            call g_logger%fatal('Surface calculation not implemented!', __FILE__, __LINE__)
+         case ('I')
+            call g_logger%fatal('Imputiry calculation not implemented!', __FILE__, __LINE__)
+         end select
+      else
+         select case (control_obj%calctype)
+         case ('B')
+            do i = 1, lattice_obj%nrec
+               call lattice_obj%symbolic_atoms(i)%build_pot()
+            end do
+            if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham
+            call hamiltonian_obj%build_bulkham()
+         case ('S')
+            do i = 1, lattice_obj%ntype
+               call lattice_obj%symbolic_atoms(i)%build_pot()
+            end do
+            if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham
+            call hamiltonian_obj%build_bulkham()
+         case ('I')
+            do i = 1, lattice_obj%ntype
+               call lattice_obj%symbolic_atoms(i)%build_pot()
+            end do
+            if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham
+            call hamiltonian_obj%build_bulkham()
+            call hamiltonian_obj%build_locham()
+         end select
+      end if
+
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
+      if (stochastic_moments) call recursion_obj%compute_moments_stochastic()
+      dos_obj = dos(recursion_obj, energy_obj)
+      green_obj = green(dos_obj)
+      bands_obj = bands(green_obj)
+      if (.not. energy_mesh_before_hamiltonian) call energy_obj%e_mesh()
+   end subroutine prepare_post_processing_stack
+
+   subroutine run_intersite_moments(control_obj, recursion_obj)
+      type(control), intent(in) :: control_obj
+      type(recursion), intent(inout) :: recursion_obj
+
+      select case (control_obj%recur)
+      case ('block')
+         call recursion_obj%recur_b_ij()
+      case ('chebyshev')
+         call recursion_obj%chebyshev_recur_ij()
+      end select
+   end subroutine run_intersite_moments
+
+   subroutine finish_conductivity_moments(green_obj, bands_obj)
+      type(green), intent(inout) :: green_obj
+      type(bands), intent(inout) :: bands_obj
+
+      call green_obj%chebyshev_dos_dispatch()
+      call bands_obj%calculate_fermi()
+   end subroutine finish_conductivity_moments
+
    subroutine post_processing_exchange_p2rs(this)
       class(calculation), intent(in) :: this
 
@@ -761,80 +898,15 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
-      real(rp), dimension(6) :: QSL
-      integer :: i, ia
 
-      ! Constructing control object
-      control_obj = control(this%fname)
-
-      ! Constructing lattice object
-      lattice_obj = lattice(control_obj)
-
-      ! Running the pre-calculation
-      call g_timer%start('pre-processing')
-      call lattice_obj%build_data()
-      call lattice_obj%bravais()
-      call lattice_obj%structb(.false.)
-
-      ! Creating the symbolic_atom object
-      call lattice_obj%atomlist()
-
-      ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%njij)
-
-      ! Constructing the charge object
-      charge_obj = charge(lattice_obj)
-      call charge_obj%bulkmat()
-      call g_timer%stop('pre-processing')
-
-      ! Constructing mixing object
-      mix_obj = mix(lattice_obj, charge_obj)
-
-      ! Creating the energy object
-      energy_obj = energy(lattice_obj)
-
-      ! Creating hamiltonian object
-      hamiltonian_obj = hamiltonian(charge_obj)
-      select case (control_obj%calctype)
-      case ('B')
-         call hamiltonian_obj%build_from_paoflow_opt()
-      case ('S')
-         call g_logger%fatal('Surface calculation not implemented!', __FILE__, __LINE__)
-      case ('I')
-         call g_logger%fatal('Imputiry calculation not implemented!', __FILE__, __LINE__)
-      end select
-
-      ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-
-      ! Creating density of states object
-      dos_obj = dos(recursion_obj, energy_obj)
-
-      ! Creating Green function object
-      green_obj = green(dos_obj)
-
-      ! Creating bands object
-      bands_obj = bands(green_obj)
-      ! Calculate the Fermi energy
-      call energy_obj%e_mesh()
-
-      ! Creating the self object
+      call prepare_post_processing_stack(this, .true., .true., .false., .false., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj)
       self_obj = self(bands_obj, mix_obj)
-
-      ! Creating the exchange object
       exchange_obj = exchange(bands_obj)
 
-      ! Calculating the recursion coefficients
-      select case (control_obj%recur)
-      case ('block')
-         call recursion_obj%recur_b_ij()
-      case ('chebyshev')
-         call recursion_obj%chebyshev_recur_ij()
-      end select
-
-      ! Calculating the intersite GFs
+      call run_intersite_moments(control_obj, recursion_obj)
       call green_obj%calculate_intersite_gf_eta()
-      ! Calculate the heisenberg exhange Jij
       call exchange_obj%calculate_exchange_gauss_legendre()
    end subroutine post_processing_exchange_p2rs
 
@@ -844,7 +916,6 @@ contains
       type(control), target :: control_obj
       type(lattice), target :: lattice_obj
       type(energy), target :: energy_obj
-      type(self), target :: self_obj
       type(charge), target :: charge_obj
       type(hamiltonian), target :: hamiltonian_obj
       type(recursion), target :: recursion_obj
@@ -853,127 +924,25 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
-      real(rp), dimension(6) :: QSL
       integer :: i
 
-      ! Constructing control object
-      control_obj = control(this%fname)
-
-      ! Constructing lattice object
-      lattice_obj = lattice(control_obj)
-
-      ! Running the pre-calculation
-      call g_timer%start('pre-processing')
-      select case (control_obj%calctype)
-      case ('B')
-         call lattice_obj%build_data()
-         call lattice_obj%bravais()
-         call lattice_obj%structb(.true.)
-      case ('S')
-         call lattice_obj%build_data()
-         call lattice_obj%bravais()
-         call lattice_obj%build_surf_full()
-         call lattice_obj%structb(.true.)
-      case ('I')
-         call lattice_obj%build_data()
-         call lattice_obj%bravais()
-         call lattice_obj%build_surf_full()
-         call lattice_obj%newclu()
-         call lattice_obj%structb(.true.)
-      end select
-      ! Creating the symbolic_atom object
-      call lattice_obj%atomlist()
-
-      ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%njij)
-
-      ! Constructing the charge object
-      charge_obj = charge(lattice_obj)
-
-      select case (control_obj%calctype)
-      case ('B')
-         call charge_obj%bulkmat()
-      case ('S')
-         call charge_obj%build_alelay
-         call charge_obj%surfmat
-      case ('I')
-         call charge_obj%impmad()
-      end select
-      call g_timer%stop('pre-processing')
-
-      ! Constructing mixing object
-      mix_obj = mix(lattice_obj, charge_obj)
-
-      ! Creating the energy object
-      energy_obj = energy(lattice_obj)
-      call energy_obj%e_mesh()
-
-      ! Creating hamiltonian object
-      hamiltonian_obj = hamiltonian(charge_obj)
-      select case (control_obj%calctype)
-      case ('B')
-         do i = 1, lattice_obj%nrec
-            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
-         end do
-         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
-      case ('S')
-         do i = 1, lattice_obj%ntype
-            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
-         end do
-         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian for the surface
-      case ('I')
-         do i = 1, lattice_obj%ntype
-            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
-         end do
-         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
-         call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
-      end select
-
-      ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-
-      ! Creating density of states object
-      dos_obj = dos(recursion_obj, energy_obj)
-
-      ! Creating Green function object
-      green_obj = green(dos_obj)
-
-      ! Creating bands object
-      bands_obj = bands(green_obj)
-
-      ! Creating the exchange object
+      call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj)
       exchange_obj = exchange(bands_obj)
 
-      ! Calculating the orthogonal parameters
       do i = 1, lattice_obj%ntype
          call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
       end do
 
-      ! Calculating the recursion coefficients
-      select case (control_obj%recur)
-      case ('block')
-         call recursion_obj%recur_b_ij()
-      case ('chebyshev')
-         call recursion_obj%chebyshev_recur_ij()
-      end select
-
-      ! Calculating the intersite GFs
+      call run_intersite_moments(control_obj, recursion_obj)
       call green_obj%calculate_intersite_gf()
       call green_obj%calculate_intersite_gf_twoindex()
-      ! Calculate the heisenberg exhange Jij
       if ((lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0)) then
          call exchange_obj%calculate_exchange()
          call exchange_obj%calculate_exchange_twoindex()
-         !call exchange_obj%calculate_gilbert_damping()
-         !call exchange_obj%calculate_moment_of_inertia()
-         ! call exchange_obj%calculate_jij_auxgreen()
-         !else if ((lattice_obj%njijk.ne.0)) then
-         !  call exchange_obj%calculate_jijk()
       end if
-   end subroutine
+   end subroutine post_processing_exchange
 
 
    subroutine post_processing_conductivity(this)
@@ -990,110 +959,14 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
-      type(exchange), target :: exchange_obj
       type(conductivity), target :: conductivity_obj
-      real(rp), dimension(6) :: QSL
-      integer :: i
 
-      ! Constructing control object
-      control_obj = control(this%fname)
-
-      ! Constructing lattice object
-      lattice_obj = lattice(control_obj)
-
-      ! Running the pre-calculation
-      call g_timer%start('pre-processing')
-      select case (control_obj%calctype)
-      case ('B')
-         call lattice_obj%build_data()
-         call lattice_obj%bravais()
-         call lattice_obj%structb(.true.)
-      case ('S')
-         call lattice_obj%build_data()
-         call lattice_obj%bravais()
-         call lattice_obj%build_surf_full()
-         call lattice_obj%structb(.true.)
-      case ('I')
-         call lattice_obj%build_data()
-         call lattice_obj%bravais()
-         call lattice_obj%build_surf_full()
-         call lattice_obj%newclu()
-         call lattice_obj%structb(.true.)
-      end select
-      ! Creating the symbolic_atom object
-      call lattice_obj%atomlist()
-
-      ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%ntype)
-
-      ! Constructing the charge object
-      charge_obj = charge(lattice_obj)
-
-      select case (control_obj%calctype)
-      case ('B')
-         call charge_obj%bulkmat()
-      case ('S')
-         call charge_obj%build_alelay
-         call charge_obj%surfmat
-      case ('I')
-         call charge_obj%impmad()
-      end select
-      call g_timer%stop('pre-processing')
-
-      ! Constructing mixing object
-      mix_obj = mix(lattice_obj, charge_obj)
-
-      ! Creating the energy object
-      energy_obj = energy(lattice_obj)
-      call energy_obj%e_mesh()
-
-      ! Creating hamiltonian object
-      hamiltonian_obj = hamiltonian(charge_obj)
-      select case (control_obj%calctype)
-      case ('B')
-         do i = 1, lattice_obj%nrec
-            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
-         end do
-         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
-      case ('S')
-         do i = 1, lattice_obj%ntype
-            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
-         end do
-         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian for the surface
-      case ('I')
-         do i = 1, lattice_obj%ntype
-            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
-         end do
-         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
-         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
-         call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
-      end select
-
-      ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-      
-      call recursion_obj%compute_moments_stochastic()
-
-      ! Creating density of states object
-      dos_obj = dos(recursion_obj, energy_obj)
-
-      ! Creating Green function object
-      green_obj = green(dos_obj)
-
-      ! Creating bands object
-      bands_obj = bands(green_obj)
-   
-      ! Creating the self object
+      call prepare_post_processing_stack(this, .false., .false., .true., .true., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj)
       self_obj = self(bands_obj, mix_obj)
-
-      call green_obj%chebyshev_dos_dispatch()
-      call bands_obj%calculate_fermi()
-
-      ! Creating the conductivity object
+      call finish_conductivity_moments(green_obj, bands_obj)
       conductivity_obj = conductivity(self_obj)
-
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
    end subroutine post_processing_conductivity
@@ -1113,74 +986,14 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
-      type(exchange), target :: exchange_obj
       type(conductivity), target :: conductivity_obj
-      real(rp), dimension(6) :: QSL
-      integer :: i
 
-      ! Constructing control object
-      control_obj = control(this%fname)
-
-      ! Constructing lattice object
-      lattice_obj = lattice(control_obj)
-
-      ! Running the pre-calculation
-      call g_timer%start('pre-processing')
-      call lattice_obj%build_data()
-      call lattice_obj%bravais()
-      call lattice_obj%structb(.false.)
-      ! Creating the symbolic_atom object
-      call lattice_obj%atomlist()
-
-      ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%ntype)
-
-      ! Constructing the charge object
-      charge_obj = charge(lattice_obj)
-      call charge_obj%bulkmat()
-      call g_timer%stop('pre-processing')
-
-      ! Constructing mixing object
-      mix_obj = mix(lattice_obj, charge_obj)
-
-      ! Creating the energy object
-      energy_obj = energy(lattice_obj)
-      call energy_obj%e_mesh()
-
-      ! Creating hamiltonian object
-      hamiltonian_obj = hamiltonian(charge_obj)
-      select case (control_obj%calctype)
-      case ('B')
-         call hamiltonian_obj%build_from_paoflow_opt()
-      case ('S')
-         call g_logger%fatal('Surface calculation not implemented!', __FILE__, __LINE__)
-      case ('I')
-         call g_logger%fatal('Imputiry calculation not implemented!', __FILE__, __LINE__)
-      end select
-
-      ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-      
-      call recursion_obj%compute_moments_stochastic()
-
-      ! Creating density of states object
-      dos_obj = dos(recursion_obj, energy_obj)
-
-      ! Creating Green function object
-      green_obj = green(dos_obj)
-
-      ! Creating bands object
-      bands_obj = bands(green_obj)
-   
-      ! Creating the self object
+      call prepare_post_processing_stack(this, .true., .false., .true., .true., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj)
       self_obj = self(bands_obj, mix_obj)
-
-      call green_obj%chebyshev_dos_dispatch()
-      call bands_obj%calculate_fermi()
-
-      ! Creating the conductivity object
+      call finish_conductivity_moments(green_obj, bands_obj)
       conductivity_obj = conductivity(self_obj)
-
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
    end subroutine post_processing_conductivity_p2rs
