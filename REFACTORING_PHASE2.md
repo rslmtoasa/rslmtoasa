@@ -27,8 +27,11 @@ after every task.
       tests/KNOWN_ISSUES.md), spin dynamics (blocked, see KNOWN_ISSUES.md,
       no test added), paoflow (all 3 routes), orbital moments, hubbard,
       k-space ccor_2c/reciprocal-hoh, export paths (rs2pao/python).
-- [ ] P3 — GPU/MKL coverage strategy (MKL CI job, CUDA compile-only job,
-      `tests/run_gpu_matrix.sh`).
+- [x] P3 — GPU/MKL coverage strategy: MKL CI job (found and fixed a stale
+      T12 option-name bug along the way — mkl_batch/mkl_sparse regression
+      cases were silently skipping unconditionally since T12 collapsed the
+      option names), CUDA compile-only CI job, `tests/run_gpu_matrix.sh`
+      validated end-to-end on real GPU hardware.
 - [ ] P5 — CI trigger/matrix hygiene (`pull_request` trigger, Windows test
       job, nightly-full vs PR-quick split).
 - [ ] P7 — Docstring blocks for `recursion.f90`, `hamiltonian_*`,
