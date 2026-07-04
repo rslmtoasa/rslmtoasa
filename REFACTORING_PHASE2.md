@@ -46,8 +46,15 @@ after every task.
       routines removed from `math.f90`, plus `erf_qe`/`erfc_qe` (became
       dead as a direct consequence). 818 lines removed, clean rebuild,
       full matrix green.
-- [ ] P10 — Housekeeping (R2 doc check, move planning docs to `docs/dev/`,
-      MKL fatal negative test).
+- [x] P10 — Housekeeping: R2 executable-stack note expanded to explain the
+      gfortran-trampoline cause (`chebyshev_fast.f90`'s internal-procedure
+      callbacks); planning docs moved to `docs/dev/`; MKL fatal-with-hint
+      behavior verified manually (both `mkl_batch` and `mkl_sparse` exit 1
+      with a clear "requires CMake option ENABLE_MKL_KERNELS=ON" message
+      against a fresh `-DENABLE_MKL_KERNELS=OFF` build) rather than adding
+      an automated negative test — that would need a new "expect-fatal"
+      case type plus an inverse `requires_cmake_option`-style gate (skip
+      when the option *is* on), more than the "if trivial" bar the doc set.
 - [ ] P11 — Python-binding awareness lens (standing, applied throughout;
       final blocker list recorded in the developer map).
 
