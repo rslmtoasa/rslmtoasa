@@ -38,13 +38,33 @@ the same section/key structure as the namelist file itself.
 }
 ```
 
-| Field       | Required | Description                                                            |
-|-------------|----------|------------------------------------------------------------------------|
-| `name`      | yes      | Unique test name, used as the CTest test name and scratch subdirectory |
-| `case`      | yes      | Path to case input files relative to `cases/`                          |
-| `timeout`   | yes      | CTest timeout in seconds (240 for block, 600 for chebyshev)            |
-| `namelists` | yes      | Dict of namelist sections -> key/value pairs to patch into `input.nml` |
-| `checks`    | no       | What to compare against stored references (see below)                  |
+| Field          | Required | Description                                                                               |
+|----------------|----------|-------------------------------------------------------------------------------------------|
+| `name`         | yes      | Unique test name, used as the CTest test name and scratch subdirectory                    |
+| `case`         | yes      | Path to case input files relative to `cases/`                                             |
+| `timeout`      | yes      | CTest timeout in seconds (300 for block, 600 for chebyshev)                               |
+| `namelists`    | yes      | Dict of namelist sections -> key/value pairs to patch into `input.nml`                    |
+| `checks`       | no       | What to compare against stored references (see below)                                     |
+| `mpi_procs`    | no       | MPI rank count for this case (only honored when CMake is configured with `ENABLE_MPI=ON`) |
+| `launch_modes` | no       | `["serial", "mpi"]` to register a serial/MPI pair sharing one reference (see below)       |
+
+**Serial-vs-MPI consistency (`launch_modes`):**
+
+A case with `mpi_procs` set normally runs *only* under MPI (when `ENABLE_MPI=ON`),
+so a rank-decomposition bug that changes results relative to serial execution
+would not be caught. Adding `"launch_modes": ["serial", "mpi"]` to a case
+registers **two** CTest entries instead of one:
+
+- `<TestName>` — forced serial (`mpi_procs=1`), regardless of `--mpi-enabled`.
+- `<TestName>_mpi` — runs with the case's `mpi_procs`, registered only when
+  `ENABLE_MPI=ON`, with the CTest `PROCESSORS` property set so ctest
+  scheduling accounts for the rank count.
+
+Both variants compare against the **same** `references/<TestName>/ref.json` —
+the point is to confirm MPI decomposition reproduces the serial result, not to
+maintain two sets of references. This is applied to a representative subset
+(one bulk, the surface, the impurity, one chebyshev case) rather than every
+MPI-capable case — KISS, CI minutes are finite.
 
 **`namelists` conventions:**
 

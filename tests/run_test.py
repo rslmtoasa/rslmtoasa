@@ -322,6 +322,14 @@ def main() -> None:
     parser.add_argument("--cases-json", required=True, help="Path to cases.json manifest")
     parser.add_argument("--case-name", required=True, help="Name of the case to run")
     parser.add_argument("--scratch-root", required=True, help="Root directory for scratch runs")
+    parser.add_argument("--scratch-name", default=None,
+                        help="Scratch subdirectory name (defaults to --case-name); "
+                             "use to avoid collisions between launch-mode variants of one case")
+    parser.add_argument("--ref-name", default=None,
+                        help="Reference subdirectory name (defaults to --case-name); "
+                             "set to the base case name so a serial/mpi pair shares one reference")
+    parser.add_argument("--force-serial", action="store_true",
+                        help="Force mpi_procs=1 regardless of case mpi_procs or --mpi-enabled")
 
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--compare-ref", metavar="REF_DIR", help="Compare output against stored reference")
@@ -337,12 +345,14 @@ def main() -> None:
     binary = os.path.abspath(args.binary)
     cases_dir = os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
     case_dir = os.path.join(cases_dir, case["case"])
-    workdir = os.path.join(args.scratch_root, args.case_name)
+    scratch_name = args.scratch_name or args.case_name
+    ref_name = args.ref_name or args.case_name
+    workdir = os.path.join(args.scratch_root, scratch_name)
 
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
     patch_input_nml(workdir, case)
     serial_omp = case.get("omp_threads", None)
-    mpi_procs = case.get("mpi_procs", 1) if args.mpi_enabled else 1
+    mpi_procs = 1 if args.force_serial else (case.get("mpi_procs", 1) if args.mpi_enabled else 1)
     run_binary(binary, workdir, mpi_procs, serial_omp)
     check_log(workdir, args.case_name)
 
@@ -350,11 +360,11 @@ def main() -> None:
         abs_tol = case.get("abs_tol", args.abs_tol)
         rel_tol = case.get("rel_tol", args.rel_tol)
         compare_ref(
-            workdir, args.case_name, args.compare_ref,
+            workdir, ref_name, args.compare_ref,
             case.get("checks", {}), abs_tol, rel_tol,
         )
     elif args.gen_ref:
-        save_ref(workdir, args.case_name, args.gen_ref, case)
+        save_ref(workdir, ref_name, args.gen_ref, case)
     else:
         print(f"PASS [{args.case_name}]")
 

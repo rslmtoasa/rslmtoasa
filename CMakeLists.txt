@@ -395,20 +395,40 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
       "--cases-json"   "${CASES_JSON}"
       "--case-name"    "${_name}"
       "--scratch-root" "${SCRATCH_ROOT}"
+      "--compare-ref"  "${REFS_DIR}"
+      "--abs-tol"      "${EXAMPLE_REF_ABS_TOL}"
+      "--rel-tol"      "${EXAMPLE_REF_REL_TOL}"
     )
 
-    list(APPEND _cmd
-      "--compare-ref" "${REFS_DIR}"
-      "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
-      "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
-    )
-    if (ENABLE_MPI)
-      list(APPEND _cmd "--mpi-enabled")
+    # Cases listing "launch_modes": ["serial", "mpi"] register a serial/MPI
+    # pair that shares one reference, so a rank-decomposition bug shows up as
+    # a mismatch against the same values the serial run is held to.
+    string(JSON _n_modes ERROR_VARIABLE _modes_err LENGTH "${_json}" "cases" ${_i} "launch_modes")
+
+    if (_modes_err)
+      set(_default_cmd ${_cmd})
+      if (ENABLE_MPI)
+        list(APPEND _default_cmd "--mpi-enabled")
+      endif()
+      add_test(NAME "${_name}" COMMAND ${_default_cmd})
+      set_tests_properties("${_name}" PROPERTIES
+        LABELS "example;${SUITE};${_recur}" TIMEOUT "${_timeout}")
+    else()
+      string(JSON _mpi_procs GET "${_json}" "cases" ${_i} "mpi_procs")
+
+      set(_serial_cmd ${_cmd} "--force-serial")
+      add_test(NAME "${_name}" COMMAND ${_serial_cmd})
+      set_tests_properties("${_name}" PROPERTIES
+        LABELS "example;${SUITE};${_recur};launch_serial" TIMEOUT "${_timeout}")
+
+      if (ENABLE_MPI)
+        set(_mpi_cmd ${_cmd} "--mpi-enabled" "--scratch-name" "${_name}_mpi")
+        add_test(NAME "${_name}_mpi" COMMAND ${_mpi_cmd})
+        set_tests_properties("${_name}_mpi" PROPERTIES
+          LABELS "example;${SUITE};${_recur};launch_mpi" TIMEOUT "${_timeout}"
+          PROCESSORS "${_mpi_procs}")
+      endif()
     endif()
-
-    add_test(NAME "${_name}" COMMAND ${_cmd})
-    set_tests_properties("${_name}" PROPERTIES
-      LABELS "example;${SUITE};${_recur}" TIMEOUT "${_timeout}")
   endforeach()
 endfunction()
 

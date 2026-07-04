@@ -231,6 +231,7 @@
       "case": "surface/fccCu001",
       "timeout": 300,
       "mpi_procs": 2,
+      "launch_modes": ["serial", "mpi"],
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -248,6 +249,7 @@
       "case": "impurity/B2FeCo",
       "timeout": 300,
       "mpi_procs": 2,
+      "launch_modes": ["serial", "mpi"],
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -265,6 +267,7 @@
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
       "mpi_procs": 4,
+      "launch_modes": ["serial", "mpi"],
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -303,6 +306,7 @@
       "case": "bulk/Pt2MnGa",
       "timeout": 600,
       "mpi_procs": 4,
+      "launch_modes": ["serial", "mpi"],
       "namelists": {
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50  },
         "self":        { "nstep": 1 },
