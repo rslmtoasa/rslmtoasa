@@ -6,7 +6,46 @@ definition/end lines and comment-only lines are excluded, but same-name
 procedures in other modules can still collide because Fortran is
 case-insensitive. No routines were deleted in T11.
 
-## Uncalled Candidates
+## P9 update (Phase 2): deletions executed
+
+All 26 routines in the "Uncalled Candidates" table below were removed from
+`source/math.f90` (719 lines). Before deleting, re-verified every entry
+against the full source tree (not just the T11 scope) and specifically
+checked for generic-interface/`module procedure` references, since a name
+absent from direct call sites can still be live through an interface block —
+`math.f90` has no `interface`/`generic` blocks at all, so none of these were
+reachable that way. The two entries the audit itself flagged as needing a
+closer look before trusting the raw grep count were re-checked by hand:
+
+- `sph2cart`: all 8 text hits are the string literal `'sph2cart'` passed to
+  `hcpx(..., 'sph2cart')` in `hamiltonian_paoflow_io.f90` — a mode argument,
+  not a call to the `sph2cart` function. Confirmed dead, deleted.
+- `trace`: all 3 text hits are inside comments/adjacent words ("orbital
+  trace", "trace cap") in `bands.f90`/`exchange.f90`, not calls. Confirmed
+  dead, deleted.
+
+The three "Additional likely-unused routines with ambiguous text hits"
+(`inverse`, `cartesian_to_direct`, `direct_to_cartesian`) were **not**
+deleted — the audit's own hedged language for those ("apparent hits are
+comments... only the function result declaration was found") reflects lower
+confidence than the 0-count "Uncalled Candidates" table, and P9 only
+approved the latter. They remain candidates for a future, separately
+verified pass.
+
+**Transitive orphans found and also removed:** the "Duplicate/Overlap Notes"
+section below already noted that `erf_qe`/`erfc_qe` were only called by the
+now-deleted QE smearing family (`theta_function`, `delta_function`,
+`integrated_delta_function`). Re-grepped after deleting that family:
+zero remaining external references to either. Removed both (99 lines) as a
+direct, mechanical consequence of the approved deletions — not a new
+independent audit finding, just following through on what this document
+already predicted would happen.
+
+Verified after all deletions: clean rebuild, full regression + example
+matrix green (bit-identical results expected and observed, since these were
+confirmed-dead code paths, not behavior changes).
+
+## Uncalled Candidates (all removed, see above)
 
 These had no live call/use sites in the search scope:
 
@@ -61,9 +100,11 @@ Additional likely-unused routines with ambiguous text hits:
 - `fermi_function`/`fermi_function_derivative` overlap conceptually with the
   live `fermifun`/`dfermifun` pair, but their signatures differ.
 - The QE smearing helpers (`theta_function`, `delta_function`,
-  `integrated_delta_function`, `erf_qe`, `erfc_qe`) are internally related.
-  The top-level smearing helpers are unused; `erf_qe` and `erfc_qe` are only
-  called by that unused family.
+  `integrated_delta_function`, `erf_qe`, `erfc_qe`) were internally related:
+  the top-level smearing helpers were unused, and `erf_qe`/`erfc_qe` were
+  only called by that unused family — so once P9 removed the top-level
+  three, `erf_qe`/`erfc_qe` became dead too and were removed as well (see
+  "P9 update" above).
 
 ## Live Low-Count Routines
 
