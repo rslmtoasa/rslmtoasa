@@ -1,0 +1,42 @@
+{
+  "name": "Example_density_of_states_bccFe_reciprocal_hoh",
+  "case": "density_of_states/bccFe",
+  "timeout": 300,
+  "preserve_outputs": true,
+  "_note": "k-space DOS with hoh=.true. (reciprocal-mode hoh); checks dos_kspace.dat, see ccor_2c sibling case note",
+  "namelists": {
+    "self": {
+      "nstep": 1
+    },
+    "reciprocal": {
+      "nk1": 2,
+      "nk2": 2,
+      "nk3": 2,
+      "n_energy_points": 40
+    },
+    "control": {
+      "nsp": 1,
+      "recur": "block",
+      "lld": 12
+    },
+    "hamiltonian": {
+      "hoh": true
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "dos_kspace.dat",
+        "rows": [
+          15,
+          21,
+          30
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}
