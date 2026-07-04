@@ -117,6 +117,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DENABLE_MPI=ON \
+            -DRUN_REG_TESTS=ON \
             -DRUN_EXAMPLE_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
 
@@ -152,8 +153,24 @@ jobs:
       # -----------------------------------------------------------------------
       # Run tests
       # -----------------------------------------------------------------------
+      - name: Run regression backend tests ${{ matrix.icon }}
+        id: ctest_backend
+        env:
+          # Apply OpenMP threading only to non-MPI runs; MPI remains pinned to 1 in run_binary.sh.
+          RSLMTO_OMP_THREADS_SERIAL: "2"
+        run: |
+          ctest --test-dir build \
+            --label-regex backend \
+            --output-on-failure \
+            --output-junit "${{ github.workspace }}/backend_results.xml" \
+            --parallel 1 \
+            -V 2>&1 | tee ctest_backend_output.txt
+          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        # Always proceed to summary and upload steps even on failure
+        continue-on-error: true
+
       - name: Run example tests ${{ matrix.icon }}
-        id: ctest
+        id: ctest_example
         env:
           # Apply OpenMP threading only to non-MPI runs; MPI remains pinned to 1 in run_binary.sh.
           RSLMTO_OMP_THREADS_SERIAL: "2"
@@ -169,7 +186,7 @@ jobs:
         continue-on-error: true
 
       - name: Dump per-case runner logs on failure
-        if: steps.ctest.outputs.ctest_exit != '0'
+        if: steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
         run: |
           echo "ctest failed; printing per-case testrun.log files"
           find build/Testing -type f -name testrun.log | sort | while read -r f; do
@@ -192,59 +209,64 @@ jobs:
           python3 - << 'PYEOF'
           import os, xml.etree.ElementTree as ET
 
-          xml_path = os.path.join(os.environ["GITHUB_WORKSPACE"], "results.xml")
           summary_path = os.environ["GITHUB_STEP_SUMMARY"]
 
-          if not os.path.exists(xml_path):
+          def write_section(title, xml_name):
+              xml_path = os.path.join(os.environ["GITHUB_WORKSPACE"], xml_name)
+
+              if not os.path.exists(xml_path):
+                  with open(summary_path, "a") as f:
+                      f.write(f"## {title}\n\nNo results file found.\n")
+                  return
+
+              tree = ET.parse(xml_path)
+              root = tree.getroot()
+              suite = root.find("testsuite") or root
+
+              passed, failed, skipped = [], [], []
+              for tc in suite.findall("testcase"):
+                  name = tc.attrib.get("name", "?")
+                  time = float(tc.attrib.get("time", 0))
+                  label = f"`{name}` ({time:.1f}s)"
+                  if tc.find("failure") is not None or tc.find("error") is not None:
+                      el = tc.find("failure") if tc.find("failure") is not None else tc.find("error")
+                      msg = el.text or ""
+                      failed.append((label, msg.strip()))
+                  elif tc.find("skipped") is not None:
+                      skipped.append(label)
+                  else:
+                      passed.append(label)
+
+              total = len(passed) + len(failed) + len(skipped)
+              status = "✅ All passed" if not failed else f"❌ {len(failed)} failed"
+
+              lines = [
+                  f"## {title} — {status}",
+                  "",
+                  f"**{len(passed)}/{total} passed**"
+                  + (f", {len(failed)} failed" if failed else "")
+                  + (f", {len(skipped)} skipped" if skipped else ""),
+                  "",
+              ]
+
+              if failed:
+                  lines += ["### ❌ Failed", "", "| Test | Output |", "|------|--------|"]
+                  for label, msg in failed:
+                      # Truncate long messages for readability
+                      short = msg.replace("\n", " ").replace("|", "\\|")[:200]
+                      lines.append(f"| {label} | {short} |")
+                  lines.append("")
+
+              if passed:
+                  lines += ["### ✅ Passed", "", "| Test |", "|------|"]
+                  lines += [f"| {t} |" for t in passed]
+                  lines.append("")
+
               with open(summary_path, "a") as f:
-                  f.write("## Example tests\n\nNo results file found.\n")
-              raise SystemExit(0)
+                  f.write("\n".join(lines) + "\n")
 
-          tree = ET.parse(xml_path)
-          root = tree.getroot()
-          suite = root.find("testsuite") or root
-
-          passed, failed, skipped = [], [], []
-          for tc in suite.findall("testcase"):
-              name = tc.attrib.get("name", "?")
-              time = float(tc.attrib.get("time", 0))
-              label = f"`{name}` ({time:.1f}s)"
-              if tc.find("failure") is not None or tc.find("error") is not None:
-                  el = tc.find("failure") if tc.find("failure") is not None else tc.find("error")
-                  msg = el.text or ""
-                  failed.append((label, msg.strip()))
-              elif tc.find("skipped") is not None:
-                  skipped.append(label)
-              else:
-                  passed.append(label)
-
-          total = len(passed) + len(failed) + len(skipped)
-          status = "✅ All passed" if not failed else f"❌ {len(failed)} failed"
-
-          lines = [
-              f"## Example tests — {status}",
-              "",
-              f"**{len(passed)}/{total} passed**"
-              + (f", {len(failed)} failed" if failed else "")
-              + (f", {len(skipped)} skipped" if skipped else ""),
-              "",
-          ]
-
-          if failed:
-              lines += ["### ❌ Failed", "", "| Test | Output |", "|------|--------|"]
-              for label, msg in failed:
-                  # Truncate long messages for readability
-                  short = msg.replace("\n", " ").replace("|", "\\|")[:200]
-                  lines.append(f"| {label} | {short} |")
-              lines.append("")
-
-          if passed:
-              lines += ["### ✅ Passed", "", "| Test |", "|------|"]
-              lines += [f"| {t} |" for t in passed]
-              lines.append("")
-
-          with open(summary_path, "a") as f:
-              f.write("\n".join(lines) + "\n")
+          write_section("Regression backend tests", "backend_results.xml")
+          write_section("Example tests", "results.xml")
           PYEOF
 
       # -----------------------------------------------------------------------
@@ -256,6 +278,8 @@ jobs:
         with:
           name: test_logs.${{ runner.os }}.${{ matrix.arch }}
           path: |
+            ctest_backend_output.txt
+            backend_results.xml
             ctest_output.txt
             results.xml
           if-no-files-found: ignore
@@ -264,7 +288,7 @@ jobs:
       # Propagate failure after summary and upload are done
       # -----------------------------------------------------------------------
       - name: Check test outcome
-        if: steps.ctest.outputs.ctest_exit != '0'
+        if: steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
         run: |
           echo "Tests failed — see summary above for details."
           exit 1

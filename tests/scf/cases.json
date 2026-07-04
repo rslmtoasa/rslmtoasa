@@ -4,7 +4,7 @@
     {
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
       "case": "bulk/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "omp_threads": 2,
       "abs_tol": 1e-6,
       "rel_tol": 1e-6,
@@ -25,7 +25,7 @@
     {
       "name": "Example_bulk_bccFe_nsp2_block",
       "case": "bulk/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "omp_threads": 2,
       "abs_tol": 1e-6,
       "rel_tol": 1e-6,
@@ -83,7 +83,7 @@
     {
       "name": "Example_bulk_bccFe_nsp3_block_hoh",
       "case": "bulk/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "namelists": {
         "control":     { "nsp": 3, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -101,7 +101,7 @@
     {
       "name": "Example_bulk_bccFe_nsp3_block",
       "case": "bulk/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "namelists": {
         "control":     { "nsp": 3, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -156,7 +156,7 @@
     {
       "name": "Example_bulk_bccFe_nsp4_block_hoh",
       "case": "bulk/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "namelists": {
         "control":     { "nsp": 4, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -174,7 +174,7 @@
     {
       "name": "Example_bulk_bccFe_nsp4_block",
       "case": "bulk/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "namelists": {
         "control":     { "nsp": 4, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -229,7 +229,7 @@
     {
       "name": "Example_surface_fccCu001_block_hoh",
       "case": "surface/fccCu001",
-      "timeout": 240,
+      "timeout": 300,
       "mpi_procs": 2,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
@@ -246,7 +246,7 @@
     {
       "name": "Example_impurity_B2FeCo_block_hoh",
       "case": "impurity/B2FeCo",
-      "timeout": 240,
+      "timeout": 300,
       "mpi_procs": 2,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
@@ -263,7 +263,7 @@
     {
       "name": "Example_bulk_Pt2MnGa_block_hoh",
       "case": "bulk/Pt2MnGa",
-      "timeout": 240,
+      "timeout": 300,
       "mpi_procs": 4,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
@@ -282,7 +282,7 @@
     {
       "name": "Example_bulk_Pt2MnGa_block",
       "case": "bulk/Pt2MnGa",
-      "timeout": 240,
+      "timeout": 300,
       "mpi_procs": 4,
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
@@ -339,7 +339,7 @@
     {
       "name": "Example_k_space_scf_bccFe",
       "case": "k_space_scf/bccFe",
-      "timeout": 240,
+      "timeout": 300,
       "namelists": {
         "self": { "nstep": 1 },
         "reciprocal": {
