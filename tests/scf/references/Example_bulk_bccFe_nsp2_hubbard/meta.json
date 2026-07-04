@@ -1,0 +1,52 @@
+{
+  "name": "Example_bulk_bccFe_nsp2_hubbard",
+  "case": "bulk/bccFe_hubbard",
+  "timeout": 300,
+  "_note": "hubbard_u_general(1,3)/hubbard_j_general(1,3) set directly in input.nml (smoke-and-compare, not physics)",
+  "namelists": {
+    "control": {
+      "nsp": 2,
+      "recur": "block",
+      "lld": 21
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Fe_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ],
+        "arrays": {
+          "mom": [
+            3
+          ],
+          "hubbard_u": [
+            3
+          ]
+        }
+      }
+    ],
+    "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}
