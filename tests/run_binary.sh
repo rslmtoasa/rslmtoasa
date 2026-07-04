@@ -36,7 +36,8 @@ if [ "$mpi_procs" -gt 1 ]; then
         exit 3
     fi
 
-    if [ "$mpi_launcher" = "mpirun" ] || [ "$mpi_launcher" = "mpirun.openmpi" ]; then
+    launcher_version="$("$mpi_launcher" --version 2>&1 || true)"
+    if printf '%s\n' "$launcher_version" | grep -qi 'Open MPI'; then
         run_cmd=("$mpi_launcher" --oversubscribe -n "$mpi_procs" "$binary")
     else
         run_cmd=("$mpi_launcher" -n "$mpi_procs" "$binary")

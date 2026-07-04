@@ -2,6 +2,8 @@
   "name": "Example_exchange_bccFe_hoh",
   "case": "exchange/bccFe",
   "timeout": 240,
+  "abs_tol": 0.0001,
+  "rel_tol": 0.0001,
   "namelists": {
     "control": {
       "nsp": 2,

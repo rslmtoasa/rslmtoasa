@@ -329,6 +329,8 @@ def main() -> None:
 
     parser.add_argument("--abs-tol", type=float, default=1e-6)
     parser.add_argument("--rel-tol", type=float, default=1e-6)
+    parser.add_argument("--mpi-enabled", action="store_true",
+                        help="Honor case mpi_procs entries. Without this, cases run serially.")
     args = parser.parse_args()
 
     case = load_case(args.cases_json, args.case_name)
@@ -340,7 +342,8 @@ def main() -> None:
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
     patch_input_nml(workdir, case)
     serial_omp = case.get("omp_threads", None)
-    run_binary(binary, workdir, case.get("mpi_procs", 1), serial_omp)
+    mpi_procs = case.get("mpi_procs", 1) if args.mpi_enabled else 1
+    run_binary(binary, workdir, mpi_procs, serial_omp)
     check_log(workdir, args.case_name)
 
     if args.compare_ref:

@@ -406,6 +406,9 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
       "--abs-tol"     "${EXAMPLE_REF_ABS_TOL}"
       "--rel-tol"     "${EXAMPLE_REF_REL_TOL}"
     )
+    if (ENABLE_MPI)
+      list(APPEND _cmd "--mpi-enabled")
+    endif()
 
     add_test(NAME "${_name}" COMMAND ${_cmd})
     set_tests_properties("${_name}" PROPERTIES
