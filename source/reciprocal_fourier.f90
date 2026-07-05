@@ -3,6 +3,10 @@ submodule (reciprocal_mod) reciprocal_fourier
 
 contains
 
+   !> @brief Calculate exp(i k.R) factors for each neighbor/type.
+   !> @param[in] this Reciprocal object containing neighbor-vector tables.
+   !> @param[in] k_vec k-point vector in reciprocal coordinates.
+   !> @param[out] structure_factors Phase factors indexed by neighbor and atom type.
    module subroutine calculate_structure_factors(this, k_vec, structure_factors)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -42,6 +46,12 @@ contains
       end do
    end subroutine calculate_structure_factors
 
+   !> @brief Fourier transform first-order real-space Hamiltonian blocks.
+   !> @details Forms H(k)=sum_R h(R) exp(i k.R), preserving the historical
+   !>          first-order path without onsite e_nu or spin-orbit terms.
+   !> @param[in] this Reciprocal object containing real-space Hamiltonian data.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] hk_result Packed k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian(this, k_vec, hk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -64,6 +74,13 @@ contains
       end if
    end subroutine fourier_transform_hamiltonian
 
+   !> @brief Fourier transform an arbitrary neighbor/type block array.
+   !> @details Applies the reciprocal neighbor map to a (orbital, orbital,
+   !>          neighbor, type) array and packs the result into site-major matrix form.
+   !> @param[in] this Reciprocal object containing neighbor-vector tables.
+   !> @param[in] array4d Real-space block array indexed by orbital, neighbor, and type.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] mk_result Packed k-space matrix.
    module subroutine fourier_transform_array(this, array4d, k_vec, mk_result)
       class(reciprocal), intent(in) :: this
       complex(rp), dimension(:, :, :, :), intent(in) :: array4d  ! (nb,nb,neigh,ntype)
@@ -115,6 +132,12 @@ contains
       deallocate(structure_factors)
    end subroutine fourier_transform_array
 
+   !> @brief Fourier transform the second-order ASA k-space Hamiltonian.
+   !> @details Assembles onsite e_nu, first-order hopping, HOH, optional CCOR,
+   !>          and spin-orbit contributions according to kspace_ham_order.
+   !> @param[in] this Reciprocal object containing Hamiltonian and correction blocks.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] hk_result Packed second-order k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian_second_order(this, k_vec, hk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -163,6 +186,12 @@ contains
       deallocate(hk, eeok, hohk, hcck)
    end subroutine fourier_transform_hamiltonian_second_order
 
+   !> @brief Fourier transform overlap blocks into S(k).
+   !> @details Builds the reciprocal-space overlap matrix used by generalized
+   !>          eigenproblem modes and overlap diagnostics.
+   !> @param[in] this Reciprocal object containing overlap and neighbor data.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] sk_result Packed k-space overlap matrix.
    module subroutine fourier_transform_overlap(this, k_vec, sk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -210,6 +239,10 @@ contains
       deallocate(overlap_block, structure_factors)
    end subroutine fourier_transform_overlap
 
+   !> @brief Build H(k) for every active mesh or path k-point.
+   !> @details Allocates hk_bulk/hk_total as needed, dispatches first- or
+   !>          second-order Fourier transforms, and applies local k ownership.
+   !> @param[inout] this Reciprocal object receiving k-space Hamiltonian arrays.
    module subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -359,6 +392,8 @@ contains
       end if
    end subroutine build_kspace_hamiltonian
 
+   !> @brief Build S(k) for every active mesh or path k-point.
+   !> @param[inout] this Reciprocal object receiving sk_overlap arrays.
    module subroutine build_kspace_overlap(this)
       class(reciprocal), intent(inout) :: this
       integer :: ik, ik_global, nk
@@ -401,6 +436,8 @@ contains
       call root_info('reciprocal%build_kspace_overlap: Built S(k) overlap proxy.', __FILE__, __LINE__)
    end subroutine build_kspace_overlap
 
+!> @brief Diagnose onsite spin-diagonal blocks for multisite Hamiltonians.
+!> @param[in] this Reciprocal object containing hk_total or hk_bulk data.
 module subroutine check_multisite_hamiltonian_diagonal(this)
    class(reciprocal), intent(in) :: this
    integer :: isite, iorb, ispin
@@ -460,6 +497,9 @@ module subroutine check_multisite_hamiltonian_diagonal(this)
    
 end subroutine check_multisite_hamiltonian_diagonal
 
+!> @brief Check Hermiticity of one k-space Hamiltonian matrix.
+!> @param[in] this Reciprocal object containing k-space Hamiltonian data.
+!> @param[in] ik k-point index to inspect.
 module subroutine check_hamiltonian_hermiticity(this, ik)
    class(reciprocal), intent(in) :: this
    integer, intent(in) :: ik
@@ -492,6 +532,9 @@ module subroutine check_hamiltonian_hermiticity(this, ik)
    end if
 end subroutine check_hamiltonian_hermiticity
 
+!> @brief Print block-structure diagnostics for one k-space Hamiltonian.
+!> @param[in] this Reciprocal object containing k-space Hamiltonian data.
+!> @param[in] ik k-point index to inspect.
 module subroutine print_hamiltonian_structure(this, ik)
    class(reciprocal), intent(in) :: this
    integer, intent(in) :: ik
@@ -537,6 +580,10 @@ module subroutine print_hamiltonian_structure(this, ik)
    
 end subroutine print_hamiltonian_structure
 
+   !> @brief Return a basis label from the configured orbital count.
+   !> @param[in] this Reciprocal object containing basis_size metadata.
+   !> @param[in] ntype Atom type index.
+   !> @return Basis label such as sp, spd, or spdf.
    module function get_basis_type_from_size(this, ntype) result(basis_type)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ntype

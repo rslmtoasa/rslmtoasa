@@ -6,6 +6,20 @@ submodule (reciprocal_mod) reciprocal_dos
 
 contains
 
+   !> @brief Calculate reciprocal-space density of states.
+   !> @details Configures the energy grid and DOS method, ensures eigenvalues are
+   !>          available, evaluates total/projected DOS, moments, and writes output.
+   !> @param[inout] this Reciprocal object receiving DOS and moment arrays.
+   !> @param[in] ham Hamiltonian object for k-space construction if needed.
+   !> @param[in] n_energy_points Optional number of DOS grid points.
+   !> @param[in] energy_range Optional energy window.
+   !> @param[in] method Optional DOS method selector.
+   !> @param[in] gaussian_sigma Optional Gaussian broadening.
+   !> @param[in] temperature Optional Fermi-Dirac temperature.
+   !> @param[in] fermi_level Optional fixed Fermi level.
+   !> @param[in] total_electrons Optional electron count for automatic Fermi search.
+   !> @param[in] auto_find_fermi Optional flag enabling Fermi-level search.
+   !> @param[in] output_file Optional DOS output file.
    module subroutine calculate_density_of_states(this, ham, n_energy_points, energy_range, method, gaussian_sigma, temperature, fermi_level, total_electrons, auto_find_fermi, output_file)
       class(reciprocal), intent(inout) :: this
       class(hamiltonian), intent(in) :: ham
@@ -100,6 +114,9 @@ contains
       call root_info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_density_of_states
 
+   !> @brief Validate full-to-irreducible k-point symmetry maps.
+   !> @param[inout] this Reciprocal object containing symmetry maps and weights.
+   !> @param[in] context_tag Diagnostic label for the caller/context.
    module subroutine validate_symmetry_kmap(this, context_tag)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context_tag
@@ -153,6 +170,9 @@ contains
       deallocate(counts)
    end subroutine validate_symmetry_kmap
 
+   !> @brief Write symmetry k-point maps for diagnostics.
+   !> @param[inout] this Reciprocal object containing symmetry maps.
+   !> @param[in] filename Output file name.
    module subroutine write_symmetry_kmap_dump(this, filename)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: filename
@@ -170,6 +190,10 @@ contains
       close(u)
    end subroutine write_symmetry_kmap_dump
 
+   !> @brief Ensure the configured tetrahedron symmetry backend is usable.
+   !> @details Expands or preserves the k-mesh as needed for scalar tetrahedron
+   !>          DOS versus spinor/projection integrations.
+   !> @param[inout] this Reciprocal object whose mesh/backend state may be updated.
    module subroutine ensure_tetra_symmetry_backend(this)
       class(reciprocal), intent(inout) :: this
       integer :: nk_full_expected
@@ -196,6 +220,9 @@ contains
       call this%diagonalize_hamiltonian()
    end subroutine ensure_tetra_symmetry_backend
 
+   !> @brief Ensure spinor integrations operate on a full k-mesh.
+   !> @param[inout] this Reciprocal object whose eigenvalues/eigenvectors may be expanded.
+   !> @param[in] context_tag Diagnostic label for the caller/context.
    module subroutine ensure_full_mesh_for_spinor_integrations(this, context_tag)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context_tag
@@ -213,6 +240,11 @@ contains
       if (allocated(this%tetrahedron_volumes)) deallocate(this%tetrahedron_volumes)
    end subroutine ensure_full_mesh_for_spinor_integrations
 
+   !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
+   !> @param[inout] this Reciprocal object containing symmetry maps and mesh dimensions.
+   !> @param[out] tet_ir Irreducible tetrahedron corner indices.
+   !> @param[out] tet_mult Multiplicity of each irreducible tetrahedron.
+   !> @param[out] n_tet_ir Number of irreducible tetrahedra.
    module subroutine build_irreducible_tetrahedra(this, tet_ir, tet_mult, n_tet_ir)
       class(reciprocal), intent(inout) :: this
       integer, allocatable, intent(out) :: tet_ir(:, :)
@@ -299,6 +331,9 @@ contains
       end subroutine sort4_int
    end subroutine build_irreducible_tetrahedra
 
+   !> @brief Select tetrahedron corner offsets for the current mesh geometry.
+   !> @param[in] this Reciprocal object providing reciprocal lattice geometry.
+   !> @param[out] tetra_cut Six tetrahedra per mesh cell, stored as corner offsets.
    module subroutine get_tetra_cut_offsets(this, tetra_cut)
       class(reciprocal), intent(in) :: this
       integer, intent(out) :: tetra_cut(3, 4, 6)
@@ -368,6 +403,8 @@ contains
       end subroutine mirror_tetra_cut
    end subroutine get_tetra_cut_offsets
 
+   !> @brief Build the DOS energy grid from the configured range and size.
+   !> @param[inout] this Reciprocal object receiving dos_energy_grid.
    module subroutine setup_dos_energy_grid(this)
       class(reciprocal), intent(inout) :: this
 
@@ -394,6 +431,10 @@ contains
                      __FILE__, __LINE__)
    end subroutine setup_dos_energy_grid
 
+   !> @brief Calculate total DOS using the tetrahedron method.
+   !> @details Accumulates DOS and integrated NOS over full or irreducible
+   !>          tetrahedra, respecting MPI partitioning where active.
+   !> @param[inout] this Reciprocal object receiving total_dos and total_nos.
    module subroutine calculate_dos_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
 
@@ -503,6 +544,11 @@ contains
       call g_logger%info('calculate_dos_tetrahedron: Tetrahedron DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_tetrahedron
 
+   !> @brief Evaluate linear-tetrahedron DOS contribution at one energy.
+   !> @param[in] this Reciprocal object providing method context.
+   !> @param[in] energy Energy where the contribution is evaluated.
+   !> @param[in] e_sorted Sorted tetrahedron corner energies.
+   !> @return DOS contribution for one tetrahedron.
    module function tetrahedron_dos_contribution(this, energy, e_sorted) result(dos)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: energy
@@ -546,6 +592,11 @@ contains
 
    end function tetrahedron_dos_contribution
 
+   !> @brief Evaluate Bloechl-corrected tetrahedron DOS contribution.
+   !> @param[in] this Reciprocal object providing method context.
+   !> @param[in] energy Energy where the contribution is evaluated.
+   !> @param[in] e_sorted Sorted tetrahedron corner energies.
+   !> @return Corrected DOS contribution for one tetrahedron.
    module function blochl_dos_contribution(this, energy, e_sorted) result(dos)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: energy
@@ -594,6 +645,10 @@ contains
 
    end function blochl_dos_contribution
 
+   !> @brief Sort a real array while tracking original indices.
+   !> @param[in] arr Values to sort.
+   !> @param[out] sorted Sorted values.
+   !> @param[out] indices Original indices corresponding to sorted values.
    module subroutine sort_real_array(arr, sorted, indices)
       real(rp), dimension(:), intent(in) :: arr
       real(rp), dimension(:), intent(out) :: sorted
@@ -624,6 +679,9 @@ contains
       end do
    end subroutine sort_real_array
 
+   !> @brief Sort four real values in ascending order.
+   !> @param[in] arr_in Four input values.
+   !> @param[out] arr_out Sorted output values.
    module subroutine sort4(arr_in, arr_out)
       real(rp), dimension(4), intent(in) :: arr_in
       real(rp), dimension(4), intent(out) :: arr_out
@@ -667,6 +725,13 @@ contains
       arr_out(4) = a4
    end subroutine sort4
 
+   !> @brief Add one tetrahedron's integrated-state contribution to a grid.
+   !> @param[in] volwgt Tetrahedron volume/weight factor.
+   !> @param[in] ecorn_in Tetrahedron corner energies.
+   !> @param[in] emin Lower grid energy.
+   !> @param[in] emax Upper grid energy.
+   !> @param[inout] nos Integrated number-of-states grid.
+   !> @param[in] npts Number of grid points.
    module subroutine tetra_add_nos(volwgt, ecorn_in, emin, emax, nos, npts)
       real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
       integer, intent(in) :: npts
@@ -730,6 +795,13 @@ contains
       end do
    end subroutine tetra_add_nos
 
+   !> @brief Add one tetrahedron's DOS contribution to a grid.
+   !> @param[in] volwgt Tetrahedron volume/weight factor.
+   !> @param[in] ecorn_in Tetrahedron corner energies.
+   !> @param[in] emin Lower grid energy.
+   !> @param[in] emax Upper grid energy.
+   !> @param[inout] dos DOS grid.
+   !> @param[in] npts Number of grid points.
    module subroutine tetra_add_dos(volwgt, ecorn_in, emin, emax, dos, npts)
       real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
       integer, intent(in) :: npts
@@ -782,6 +854,10 @@ contains
       end if
    end subroutine tetra_add_dos
 
+!> @brief Calculate total DOS with Gaussian broadening.
+!> @details Smears all eigenvalues over the DOS energy grid using the configured
+!>          or adaptive sigma and k-point weights.
+!> @param[inout] this Reciprocal object receiving total_dos.
 module subroutine calculate_dos_gaussian(this)
    class(reciprocal), intent(inout) :: this
 
@@ -894,6 +970,8 @@ module subroutine calculate_dos_gaussian(this)
    call root_info('calculate_dos_gaussian: Gaussian DOS calculation completed', __FILE__, __LINE__)
 end subroutine calculate_dos_gaussian
 
+   !> @brief Calculate total DOS with the Bloechl tetrahedron method.
+   !> @param[inout] this Reciprocal object receiving total_dos.
    module subroutine calculate_dos_blochl(this)
       class(reciprocal), intent(inout) :: this
 
@@ -902,6 +980,8 @@ end subroutine calculate_dos_gaussian
       call g_logger%info('calculate_dos_blochl: Blöchl-compatible scalar DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_dos_blochl
 
+   !> @brief Build full-mesh tetrahedron connectivity.
+   !> @param[inout] this Reciprocal object receiving tetrahedra and volumes.
    module subroutine setup_tetrahedra(this)
       class(reciprocal), intent(inout) :: this
 
@@ -962,6 +1042,8 @@ end subroutine calculate_dos_gaussian
                         'x' // trim(int2str(nk3)) // ' k-mesh', __FILE__, __LINE__)
    end subroutine setup_tetrahedra
 
+   !> @brief Expand irreducible-k eigenvalues/eigenvectors to the full mesh.
+   !> @param[inout] this Reciprocal object whose eigen arrays are expanded.
    module subroutine expand_eigenvalues_to_full_mesh(this)
       class(reciprocal), intent(inout) :: this
       integer :: ik_full, nk_full, nk_irred, nbands, ik_irred
@@ -1049,6 +1131,8 @@ end subroutine calculate_dos_gaussian
       call g_logger%info('expand_eigenvalues_to_full_mesh: Expansion complete using explicit full_to_irred map', __FILE__, __LINE__)
    end subroutine expand_eigenvalues_to_full_mesh
 
+   !> @brief Calculate tetrahedron DOS using symmetry-aware mesh handling.
+   !> @param[inout] this Reciprocal object receiving total DOS on the chosen backend.
    module subroutine calculate_dos_tetrahedron_with_symmetry(this)
       class(reciprocal), intent(inout) :: this
       
@@ -1060,6 +1144,15 @@ end subroutine calculate_dos_gaussian
       call this%calculate_dos_tetrahedron()
    end subroutine calculate_dos_tetrahedron_with_symmetry
 
+   !> @brief Convert 3D mesh coordinates to a periodic flat k-point index.
+   !> @param[in] this Reciprocal object providing helper context.
+   !> @param[in] i Mesh coordinate along axis 1.
+   !> @param[in] j Mesh coordinate along axis 2.
+   !> @param[in] k Mesh coordinate along axis 3.
+   !> @param[in] nk1 Mesh size along axis 1.
+   !> @param[in] nk2 Mesh size along axis 2.
+   !> @param[in] nk3 Mesh size along axis 3.
+   !> @return One-based periodic flat k-point index.
    module function get_kpoint_index(this, i, j, k, nk1, nk2, nk3) result(idx)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: i, j, k, nk1, nk2, nk3
@@ -1074,6 +1167,9 @@ end subroutine calculate_dos_gaussian
       idx = ii + (jj-1)*nk1 + (kk-1)*nk1*nk2
    end function get_kpoint_index
 
+   !> @brief Estimate a Gaussian DOS broadening from k-point density.
+   !> @param[in] this Reciprocal object containing mesh and reciprocal volume.
+   !> @return Adaptive Gaussian sigma.
    module function calculate_adaptive_sigma(this) result(sigma)
       class(reciprocal), intent(in) :: this
       real(rp) :: sigma
@@ -1109,6 +1205,8 @@ end subroutine calculate_dos_gaussian
             ' Ry for ' // trim(int2str(nk_total)) // ' k-points', __FILE__, __LINE__)
    end function calculate_adaptive_sigma
 
+   !> @brief Print total and spin-resolved DOS occupation diagnostics.
+   !> @param[in] this Reciprocal object containing DOS and projected DOS arrays.
    module subroutine print_total_and_spin_dos(this)
       class(reciprocal), intent(in) :: this
 
@@ -1198,6 +1296,10 @@ end subroutine calculate_dos_gaussian
       deallocate(fermi_dist, energy_grid, integrand_up, integrand_dn)
    end subroutine print_total_and_spin_dos
 
+!> @brief Find the Fermi level matching a target electron count.
+!> @param[in] this Reciprocal object containing DOS/NOS information.
+!> @param[in] total_electrons Target number of electrons.
+!> @return Fermi level in the reciprocal DOS energy units.
 module function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
    class(reciprocal), intent(in) :: this
    real(rp), intent(in) :: total_electrons
@@ -1313,6 +1415,11 @@ module function find_fermi_level_from_dos(this, total_electrons) result(fermi_le
                   __FILE__, __LINE__)
 end function find_fermi_level_from_dos
 
+!> @brief Integrate DOS occupation up to an energy with Fermi weighting.
+!> @param[in] this Reciprocal object containing DOS grid data.
+!> @param[in] energy Trial Fermi energy.
+!> @param[in] kT Thermal energy used in Fermi weighting.
+!> @return Integrated electron count.
 module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
    class(reciprocal), intent(in) :: this
    real(rp), intent(in) :: energy, kT
@@ -1353,6 +1460,9 @@ module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
    end do
 end function integrate_dos_up_to_energy
 
+   !> @brief Write total and projected DOS data to output files.
+   !> @param[in] this Reciprocal object containing DOS arrays.
+   !> @param[in] filename Primary total-DOS output file.
    module subroutine write_dos_to_file(this, filename)
       class(reciprocal), intent(in) :: this
       character(len=*), intent(in) :: filename
@@ -1465,6 +1575,9 @@ end function integrate_dos_up_to_energy
       call root_info('write_dos_to_file: DOS written to file', __FILE__, __LINE__)
    end subroutine write_dos_to_file
 
+   !> @brief Calculate band energy from integrated DOS moments.
+   !> @param[in] this Reciprocal object containing band_moments.
+   !> @return Band energy accumulated over projected channels.
    module function calculate_band_energy_from_moments(this) result(eband)
       class(reciprocal), intent(in) :: this
       real(rp) :: eband
@@ -1488,6 +1601,11 @@ end function integrate_dos_up_to_energy
       
    end function calculate_band_energy_from_moments
 
+   !> @brief Evaluate one normalized Gaussian smearing weight.
+   !> @param[in] this Reciprocal object containing gaussian_sigma/adaptive settings.
+   !> @param[in] grid_energy Energy-grid point.
+   !> @param[in] eigenvalue Eigenvalue to smear.
+   !> @return Gaussian weight at grid_energy.
    module function calculate_gaussian_weight_single(this, grid_energy, eigenvalue) result(weight)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: grid_energy, eigenvalue
@@ -1507,6 +1625,10 @@ end function integrate_dos_up_to_energy
       end if
    end function calculate_gaussian_weight_single
 
+   !> @brief Sort four tetrahedron eigenvalues and return their permutation.
+   !> @param[in] e_in Input corner eigenvalues.
+   !> @param[out] e_sorted Sorted corner eigenvalues.
+   !> @param[out] sort_idx Original indices corresponding to sorted values.
    module pure subroutine sort_eigenvalues(e_in, e_sorted, sort_idx)
       real(rp), dimension(4), intent(in) :: e_in
       real(rp), dimension(4), intent(out) :: e_sorted

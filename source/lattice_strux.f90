@@ -3,6 +3,12 @@ submodule (lattice_mod) lattice_strux
 
 contains
 
+   !> @brief Build neighbor maps and structure constants.
+   !> @details Constructs the neighbor table around representative atoms, then
+   !>          either computes screened structure constants or only prepares the
+   !>          neighbor geometry depending on do_str.
+   !> @param[inout] this Lattice object receiving nn/sbar/sdot/sbarvec state.
+   !> @param[in] do_str If true, compute structure constants after neighbor mapping.
    module subroutine structb(this, do_str)
       class(lattice), intent(inout) :: this
       logical, intent(in) :: do_str
@@ -104,6 +110,10 @@ contains
 10005 format(7x, i7)
    end subroutine structb
 
+   !> @brief Allocate storage for strux structure constants.
+   !> @param[inout] this Lattice object whose sbar/sdot/alpha storage is reset.
+   !> @param[in] sbar_dim Orbital dimension of each structure-constant block.
+   !> @param[in] nm Number of neighbor slots to store.
    module subroutine init_strux_storage(this, sbar_dim, nm)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: sbar_dim, nm
@@ -130,6 +140,10 @@ contains
       this%alpha_dot(:, :, :) = 0.0_rp
    end subroutine init_strux_storage
 
+   !> @brief Return default l-resolved screening constants.
+   !> @param[in] this Lattice object providing context for the pure helper.
+   !> @param[in] nl Number of angular-momentum channels requested.
+   !> @return Default screening-alpha array of length nl.
    module pure function default_screening_alpha(this, nl) result(alpha_default)
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl
@@ -143,6 +157,9 @@ contains
       end do
    end function default_screening_alpha
 
+   !> @brief Convert the screening string to a strux-library mode code.
+   !> @param[in] this Lattice object containing the screening option.
+   !> @return STRUX_LMTO47_IALPHA_* selector used by strux_compute.
    module integer function strux_mode(this)
       class(lattice), intent(in) :: this
       character(len=:), allocatable :: screening_mode
@@ -160,6 +177,10 @@ contains
       end select
    end function strux_mode
 
+   !> @brief Load symbolic-atom data needed by strux helpers.
+   !> @details Lazily populates this%symbolic_atoms from the control input when
+   !>          muffin-tin radii or species labels are required.
+   !> @param[inout] this Lattice object whose symbolic_atoms cache may be filled.
    module subroutine load_symbolic_atoms_if_needed(this)
       class(lattice), intent(inout) :: this
       
@@ -180,6 +201,11 @@ contains
       end if
    end subroutine load_symbolic_atoms_if_needed
 
+   !> @brief Build species muffin-tin radii for strux input.
+   !> @param[inout] this Lattice object providing symbolic-atom data.
+   !> @param[in] nspec Number of distinct species.
+   !> @param[in] species_labels Atomic/species labels to map.
+   !> @param[out] rmt Muffin-tin radius for each species.
    module subroutine build_rmt(this, nspec, species_labels, rmt)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: nspec
@@ -203,6 +229,12 @@ contains
       end do
    end subroutine build_rmt
 
+   !> @brief Build hard-core radii for strux sigma screening.
+   !> @param[in] this Lattice object containing screening_sigma settings.
+   !> @param[in] nl Number of angular-momentum channels.
+   !> @param[in] nspec Number of distinct species.
+   !> @param[in] rmt Muffin-tin radii for each species.
+   !> @param[out] hcr Hard-core radii indexed by l channel and species.
    module subroutine build_hcr(this, nl, nspec, rmt, hcr)
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl, nspec
@@ -217,6 +249,16 @@ contains
       end do
    end subroutine build_hcr
 
+   !> @brief Assemble alpha, hard-core, and muffin-tin arrays for strux_compute.
+   !> @details Combines manual/default screening inputs with per-species radius
+   !>          data in the layout expected by the local strux library.
+   !> @param[inout] this Lattice object providing screening and symbolic-atom data.
+   !> @param[in] nspec Number of species in the strux solve cluster.
+   !> @param[in] nl Number of angular-momentum channels.
+   !> @param[in] species_labels Species labels in strux order.
+   !> @param[out] alpha_in Screening constants in strux l/species layout.
+   !> @param[out] hcr Hard-core radii in strux l/species layout.
+   !> @param[out] rmt Muffin-tin radii by species.
    module subroutine build_strux_inputs(this, nspec, nl, species_labels, alpha_in, hcr, rmt)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: nspec, nl
@@ -245,6 +287,11 @@ contains
       end do
    end subroutine build_strux_inputs
 
+   !> @brief Compute screened structure constants through the strux backend.
+   !> @details Maps the RS-LMTO cluster and basis labels into strux input,
+   !>          calls strux_compute, and remaps the returned screened constants
+   !>          and optional derivatives back into lattice storage.
+   !> @param[inout] this Lattice object receiving sbar/sdot/alpha data.
    module subroutine structb_strux(this)
       class(lattice), intent(inout) :: this
 
@@ -503,6 +550,12 @@ contains
       deallocate(pos, cralat, ips, lmxb, rmt, alpha_in, hcr, orb_map, species_labels)
    end subroutine structb_strux
 
+   !> @brief Write one strux structure-constant neighbor block for diagnostics.
+   !> @param[in] this Lattice object containing sbar and neighbor vectors.
+   !> @param[in] nl2 Block dimension to write.
+   !> @param[in] m Neighbor slot.
+   !> @param[in] ii Representative atom/type index.
+   !> @param[in] jclus Cluster atom index associated with the block.
    module subroutine write_strux_block(this, nl2, m, ii, jclus)
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl2, m, ii, jclus
@@ -530,6 +583,10 @@ contains
       if (this%strux_want_sdot) flush(15)
    end subroutine write_strux_block
 
+   !> @brief Write stored neighbor vectors to a diagnostic unit.
+   !> @param[in] iunit Output unit.
+   !> @param[in] sbarvec Neighbor vectors to dump.
+   !> @param[in] nt Number of active vectors.
    module subroutine write_neighbor_vector_dump(iunit, sbarvec, nt)
       integer, intent(in) :: iunit, nt
       real(rp), intent(in) :: sbarvec(:, :)
@@ -541,6 +598,10 @@ contains
       end do
    end subroutine write_neighbor_vector_dump
 
+   !> @brief Return the representative cluster atom for an inequivalent type.
+   !> @param[in] this Lattice object containing irec/iu mappings.
+   !> @param[in] ii Inequivalent atom/type index.
+   !> @return Cluster atom index used as representative for ii.
    module integer function representative_atom_index(this, ii)
       class(lattice), intent(in) :: this
       integer, intent(in) :: ii
@@ -570,6 +631,10 @@ contains
       end if
    end function representative_atom_index
 
+   !> @brief Return the primitive-basis label associated with a cluster atom.
+   !> @param[in] this Lattice object containing primitive and cluster labels.
+   !> @param[in] ia Cluster atom index.
+   !> @return Primitive-cell basis label for ia.
    module integer function primitive_basis_label(this, ia)
       class(lattice), intent(in) :: this
       integer, intent(in) :: ia
@@ -598,6 +663,19 @@ contains
       end if
    end function primitive_basis_label
 
+   !> @brief Find a strux pair table entry matching a target neighbor vector.
+   !> @details Searches lattice translations and basis-pair labels for the
+   !>          pair whose Cartesian displacement matches vec_target within tol.
+   !> @param[in] nttab Number of pair-table entries.
+   !> @param[in] iax Pair translation/index table from strux.
+   !> @param[in] plat Primitive lattice vectors.
+   !> @param[in] pos Basis positions.
+   !> @param[in] alat Lattice parameter used to scale vectors.
+   !> @param[in] ib Source basis label.
+   !> @param[in] jb Target basis label.
+   !> @param[in] vec_target Target displacement vector.
+   !> @param[in] tol Matching tolerance.
+   !> @return Matching pair-table index, or zero if no match is found.
    module integer function find_pair_by_vector(nttab, iax, plat, pos, alat, ib, jb, vec_target, tol)
       integer, intent(in) :: nttab, ib, jb
       integer, intent(in) :: iax(:,:)
@@ -630,6 +708,13 @@ contains
       if (best_i /= 0) find_pair_by_vector = best_i
    end function find_pair_by_vector
 
+   !> @brief Find a cluster neighbor atom by displacement vector.
+   !> @param[in] this Lattice object containing cluster metadata.
+   !> @param[in] ia Source cluster atom.
+   !> @param[in] vec_target Target displacement in lattice-scaled coordinates.
+   !> @param[in] cralat Cluster coordinates scaled by the lattice parameter.
+   !> @param[in] tol Matching tolerance.
+   !> @return Cluster atom index matching the displacement, or zero if not found.
    module integer function find_neighbor_atom_by_vector(this, ia, vec_target, cralat, tol)
       class(lattice), intent(in) :: this
       integer, intent(in) :: ia
@@ -649,6 +734,9 @@ contains
       end do
    end function find_neighbor_atom_by_vector
 
+   !> @brief Build the orbital-order map between RS-LMTO and strux layouts.
+   !> @param[in] norb Number of orbitals in the active basis.
+   !> @param[out] orb_map Mapping from local orbital index to strux orbital index.
    module subroutine build_orbital_map(norb, orb_map)
       integer, intent(in) :: norb
       integer, intent(out) :: orb_map(16)
@@ -662,6 +750,19 @@ contains
       end do
    end subroutine build_orbital_map
 
+   !> @brief Build one legacy screened-structure-constant block.
+   !> @details Forms a local cluster around atom ia and drives the legacy
+   !>          CLUSBA/MICHA screening path used by the non-strux backend.
+   !> @param[inout] this Lattice object receiving legacy sbar data.
+   !> @param[in] ia Center atom index.
+   !> @param[in] r2 Cluster cutoff radius squared.
+   !> @param[in] wav Wigner-Seitz radius.
+   !> @param[in] crd Cluster coordinates.
+   !> @param[in] nat Number of atoms in crd.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[in] np Number of primitive atoms/neighbor entries.
+   !> @param[in] nr Number of local-cluster vectors.
+   !> @param[in] ii Inequivalent atom/type index.
    module subroutine dbar1(this, ia, r2, wav, crd, nat, ndi, np, nr, ii)
       implicit none
       class(lattice), intent(inout) :: this
@@ -739,6 +840,17 @@ contains
 10002 format(3f8.4)
    end subroutine dbar1
 
+   !> @brief Collect local cluster vectors within a cutoff.
+   !> @details Selects neighbors around atom ia from crd, sorted by distance, for
+   !>          use in the legacy structure-constant screening routines.
+   !> @param[inout] this Lattice object providing helper context.
+   !> @param[in] r2 Cutoff radius squared.
+   !> @param[in] crd Candidate cluster coordinates.
+   !> @param[in] ia Center atom index.
+   !> @param[in] nat Number of candidate atoms.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[inout] n Number of vectors found.
+   !> @param[inout] sbarvec_out Optional output neighbor-vector storage.
    module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out)
       implicit none
       class(lattice), intent(inout) :: this
@@ -792,6 +904,22 @@ contains
       n = ii
    end subroutine clusba
 
+   !> @brief Run the legacy MICHA screening construction.
+   !> @details Builds raw structure constants, applies shell decomposition and
+   !>          Cholesky-style screening, and accumulates screened sbar blocks.
+   !> @param[in] rws Wigner-Seitz radius.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[in] nlm Orbital block dimension.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[in] na Length of screening-coefficient storage.
+   !> @param[inout] sbar Screened structure constants.
+   !> @param[inout] a Screening coefficient work array.
+   !> @param[inout] wk Work array.
+   !> @param[inout] bet Screening beta work array.
+   !> @param[inout] s Raw structure-constant work matrix.
+   !> @param[in] iclus Center-cluster index.
+   !> @param[in] r2 Cutoff radius squared.
    module subroutine micha(rws, r, nr, nlm, nrl, na, sbar, a, wk, bet, s, iclus, r2)
       implicit none
       ! Inputs              .
@@ -833,6 +961,13 @@ contains
       call SHLDCH(r, nr, nlm, nrl, s, a, na, q, bet, wk, sbar, iclus, r2)
    end subroutine micha
 
+   !> @brief Build raw canonical structure constants for a local cluster.
+   !> @param[in] w Distance scaling factor.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[inout] s Raw structure-constant matrix.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[in] nlm Orbital block dimension.
    module subroutine STREZE(w, r, nr, s, nrl, nlm)
       implicit none
       ! Input
@@ -869,6 +1004,20 @@ contains
       end do
    end subroutine streze
 
+   !> @brief Apply shell decomposition and screening to legacy structure constants.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[in] nlm Orbital block dimension.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[inout] s Raw/screened structure-constant work matrix.
+   !> @param[inout] a Screening coefficient work array.
+   !> @param[in] na Length of a.
+   !> @param[in] q Angular-momentum shell weights.
+   !> @param[inout] bet Screening beta work array.
+   !> @param[inout] wk Work array.
+   !> @param[inout] sbar Screened structure constants.
+   !> @param[in] iclus Center-cluster index.
+   !> @param[in] r2 Cutoff radius squared.
    module subroutine shldch(r, nr, nlm, nrl, s, a, na, q, bet, wk, sbar, iclus, r2)
       implicit none
       !parameter for cutoff of sbar construction
@@ -955,6 +1104,10 @@ contains
 10003 format(9f10.4)
    end subroutine shldch
 
+   !> @brief Evaluate canonical structure-constant angular blocks.
+   !> @param[in] w Distance scaling factor.
+   !> @param[in] dr Displacement vector.
+   !> @param[out] sc 16-by-16 orbital structure-constant block.
    module subroutine canso(w, dr, sc)
       implicit none
       ! Input
@@ -1200,6 +1353,12 @@ contains
       end do
    end subroutine canso
 
+   !> @brief Factor a packed real symmetric matrix for legacy screening.
+   !> @param[inout] c Packed matrix/coefficient storage.
+   !> @param[in] na Length of c.
+   !> @param[inout] w Work/vector storage.
+   !> @param[in] n Matrix order.
+   !> @param[out] ndef Number of non-positive/deficient pivots detected.
    module subroutine chlr2f(c, na, w, n, ndef)
       implicit none
       ! Input
@@ -1250,6 +1409,12 @@ contains
 10000 format(" CHLR2F:    N=", i4, "    NDEF=", i4)
    end subroutine chlr2f
 
+   !> @brief Solve against a packed Cholesky factor for legacy screening.
+   !> @param[in] c Packed factor storage.
+   !> @param[in] na Length of c.
+   !> @param[inout] v Right-hand sides overwritten by solved vectors.
+   !> @param[in] n Matrix order.
+   !> @param[in] m Number of right-hand sides.
    module subroutine chlr2s(c, na, v, n, m)
       implicit none
       ! Input
@@ -1285,6 +1450,9 @@ contains
       end do
    end subroutine chlr2s
 
+   !> @brief Map an LM orbital index to angular-momentum quantum number l.
+   !> @param[in] ilm One-based LM orbital index.
+   !> @return Angular-momentum shell index for ilm.
    module function LL(ilm)
       implicit none
       ! Input
@@ -1299,6 +1467,14 @@ contains
       LL = lla(ilm)
    end function LL
 
+   !> @brief Write the neighbor-map table in legacy text format.
+   !> @param[in] IM Output unit.
+   !> @param[in] IZP Atomic numbers/labels for printed atoms.
+   !> @param[in] NN Neighbor table.
+   !> @param[in] NO Atom type labels.
+   !> @param[in] ND Number of atoms in NO/IZP.
+   !> @param[in] NM Number of neighbor slots.
+   !> @param[in] NTOT Number of representative atoms.
    module subroutine outmap(IM, IZP, NN, NO, ND, NM, NTOT)
       implicit none
       ! Input
@@ -1333,6 +1509,13 @@ contains
 10002 format(29x, 16i5)
    end subroutine outmap
 
+   !> @brief Classify a neighbor-shell pair by distance cutoff.
+   !> @param[in] I First shell/type index.
+   !> @param[in] J Second shell/type index.
+   !> @param[in] R2 Squared distance between sites.
+   !> @param[in] DD Distance tolerance or shell spacing.
+   !> @param[in] CT Shell cutoff radii.
+   !> @return Legacy neighbor-shell map value.
    module integer function mapa(I, J, R2, DD, CT)
       implicit none
       ! Input

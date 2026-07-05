@@ -155,16 +155,33 @@ module hamiltonian_mod
 
 
    interface
+   !> @brief Construct a Hamiltonian object from an initialized charge object.
+   !> @details Wires the Hamiltonian to charge, lattice, and control state, resets
+   !>          all owned arrays/flags, then reads the &hamiltonian namelist. This
+   !>          object supplies real-space hopping blocks to recursion and k-space
+   !>          Fourier paths.
+   !> @param[in] charge_obj Charge object containing lattice and potential state.
+   !> @return Initialized Hamiltonian object.
    module function constructor(charge_obj) result(obj)
       type(hamiltonian) :: obj
       type(charge), target, intent(in) :: charge_obj
 
    end function constructor
 
+   !> @brief Finalize a Hamiltonian object.
+   !> @details Releases spin-orbit, hopping, overlap, velocity, Hubbard, CCOR,
+   !>          export, and cache arrays owned by the object.
+   !> @param[inout] this Hamiltonian object being finalized.
    module subroutine destructor(this)
       type(hamiltonian) :: this
    end subroutine destructor
 
+   !> @brief Read the &hamiltonian namelist and install Hamiltonian options.
+   !> @details Parses HOH, local-axis rotation, CCOR, velocity directions, spectral
+   !>          bounds, export mode, and Hubbard U/J/V inputs. Hubbard inputs are
+   !>          accepted in eV and converted to internal Ry units.
+   !> @param[inout] this Hamiltonian object whose control%fname selects the input file.
+   !> @note This is a true input boundary and may raise fatal diagnostics for invalid options.
    module subroutine build_from_file(this)
       class(hamiltonian), intent(inout) :: this
 
@@ -181,11 +198,22 @@ module hamiltonian_mod
 
    end subroutine build_from_file
 
+   !> @brief Reset Hamiltonian flags, arrays, and cached bounds to defaults.
+   !> @details Restores namelist-controlled options to their baseline values and
+   !>          clears allocatable storage so a constructor can rebuild the object
+   !>          for the current lattice/control state.
+   !> @param[inout] this Hamiltonian object to reset.
    module subroutine restore_to_default(this)
       class(hamiltonian) :: this
 
    end subroutine restore_to_default
 
+   !> @brief Build real-space orbital-current operator blocks.
+   !> @details Forms orbital velocity operators from angular-momentum matrices and
+   !>          real-space hopping geometry for orbital transport and orbital torque
+   !>          workflows.
+   !> @param[inout] this Hamiltonian object; fills jl_a/jl_b-style operator arrays.
+   !> @note Uses the same site/neighbor layout as ee/hall velocity blocks.
    module subroutine build_realspace_orbital_velocity_operators(this)
       class(hamiltonian), intent(inout) :: this
    
@@ -196,6 +224,10 @@ module hamiltonian_mod
 
    end subroutine build_realspace_orbital_velocity_operators
 
+   !> @brief Build real-space spin-current operator blocks.
+   !> @details Combines spin matrices with the velocity-operator layout so
+   !>          stochastic conductivity can evaluate spin-current correlations.
+   !> @param[inout] this Hamiltonian object; fills js_a and related spin-current arrays.
    module subroutine build_realspace_spin_operators(this)
       class(hamiltonian), intent(inout) :: this
    
@@ -206,6 +238,10 @@ module hamiltonian_mod
       ! Derive dimension from your velocity array:
    end subroutine build_realspace_spin_operators
 
+   !> @brief Build real-space spin-torque operator blocks.
+   !> @details Forms torque-current operators from spin operators and local
+   !>          Hamiltonian/SOC blocks for spin-torque response calculations.
+   !> @param[inout] this Hamiltonian object; fills js_a/jso_a torque arrays.
    module subroutine build_realspace_spin_torque_operators(this)
       class(hamiltonian), intent(inout) :: this
 
@@ -217,6 +253,10 @@ module hamiltonian_mod
       ! Derive dimension from your velocity array:
    end subroutine build_realspace_spin_torque_operators
 
+   !> @brief Build real-space orbital-torque operator blocks.
+   !> @details Forms orbital torque-current operators from angular-momentum
+   !>          matrices and local Hamiltonian/SOC blocks for orbital response.
+   !> @param[inout] this Hamiltonian object; fills jl_a/jlo_a torque arrays.
    module subroutine build_realspace_orbital_torque_operators(this)
       class(hamiltonian), intent(inout) :: this
 
@@ -229,6 +269,11 @@ module hamiltonian_mod
       ! Derive dimension from your velocity array:
    end subroutine build_realspace_orbital_torque_operators
 
+   !> @brief Build charge velocity operators in real-space hopping layout.
+   !> @details Projects bond displacement vectors onto v_alpha/v_beta directions
+   !>          and weights hopping blocks to form v_a/v_b for Kubo conductivity.
+   !> @param[inout] this Hamiltonian object; fills v_a, v_b, vo_a, and vo_b.
+   !> @note Honors velocity_scale and the HOH companion-operator layout.
    module subroutine build_realspace_velocity_operators(this)
       ! Arguments
       class(hamiltonian), intent(inout) :: this
@@ -243,6 +288,11 @@ module hamiltonian_mod
       ! Initialize velocity operators to zero
    end subroutine build_realspace_velocity_operators
 
+   !> @brief Build onsite spin-orbit coupling Hamiltonian blocks.
+   !> @details Converts angular-momentum operators to the LMTO basis and combines
+   !>          them with per-type SOC strengths to populate lsham for real-space
+   !>          and reciprocal Hamiltonian construction.
+   !> @param[inout] this Hamiltonian object; fills lsham(:,:,itype).
    module subroutine build_lsham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
@@ -255,6 +305,10 @@ module hamiltonian_mod
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
    end subroutine build_lsham
 
+   !> @brief Build the collinear spin-orbit torque operator.
+   !> @details Evaluates the commutator-style torque operator T=[o,H_so] in the
+   !>          spin-orbital basis for workflows that need magnetic torques.
+   !> @param[inout] this Hamiltonian object; fills tmat.
    module subroutine torque_operator_collinear(this)
       !
       class(hamiltonian), intent(inout) :: this
@@ -266,6 +320,10 @@ module hamiltonian_mod
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
    end subroutine torque_operator_collinear
 
+   !> @brief Build overlap-bar matrices for the orthogonal representation.
+   !> @details Converts potential/overlap information from symbolic atoms into
+   !>          onsite obarm blocks used by HOH and representation transforms.
+   !> @param[inout] this Hamiltonian object; fills obarm(:,:,itype).
    module subroutine build_obarm(this)
       implicit none
       class(hamiltonian), intent(inout) :: this
@@ -277,6 +335,10 @@ module hamiltonian_mod
 
    end subroutine build_obarm
 
+   !> @brief Build onsite e_nu center matrices.
+   !> @details Assembles spin-resolved gravity-center/e_nu blocks from symbolic
+   !>          atom potentials for the orthogonalized Hamiltonian correction.
+   !> @param[inout] this Hamiltonian object; fills enim(:,:,itype).
    module subroutine build_enim(this)
       implicit none
       class(hamiltonian), intent(inout) :: this
@@ -290,6 +352,12 @@ module hamiltonian_mod
 
    end subroutine build_enim
 
+   !> @brief Build bulk real-space Hamiltonian hopping blocks.
+   !> @details Assembles ee, eeo, and related per-type neighbor blocks from the
+   !>          lattice structure constants and symbolic-atom potentials. Real-space
+   !>          recursion and reciprocal Fourier transforms consume these blocks.
+   !> @param[inout] this Hamiltonian object; fills bulk hopping arrays.
+   !> @note Also prepares optional Hubbard/CCOR contributions when enabled.
    module subroutine build_bulkham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
@@ -298,6 +366,10 @@ module hamiltonian_mod
 
    end subroutine build_bulkham
 
+   !> @brief Build local-cluster Hamiltonian hopping blocks.
+   !> @details Assembles hall/hallo blocks for impurity or surface local regions
+   !>          where atom-specific local geometry replaces bulk type blocks.
+   !> @param[inout] this Hamiltonian object; fills local hopping arrays.
    module subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
@@ -305,6 +377,12 @@ module hamiltonian_mod
 
    end subroutine build_locham
 
+   !> @brief Add two-centre combined-correction blocks to the bulk Hamiltonian.
+   !> @details Builds CCOR contributions for each bulk atom type and neighbor
+   !>          shell, using scalar or noncollinear pair-block helpers as required
+   !>          by the magnetic state.
+   !> @param[inout] this Hamiltonian object; fills eecc.
+   !> @note validate_ccor_inputs must accept the current CCOR mode before use.
    module subroutine build_ccor_bulk(this)
       class(hamiltonian), intent(inout) :: this
       integer :: ntype, ia, ino, nr, m, jj, it, jt
@@ -312,6 +390,10 @@ module hamiltonian_mod
 
    end subroutine build_ccor_bulk
 
+   !> @brief Add two-centre combined-correction blocks to local Hamiltonian regions.
+   !> @details Builds CCOR contributions for local/surface/impurity neighbor
+   !>          blocks in the same layout as hall, preserving local atom indexing.
+   !> @param[inout] this Hamiltonian object; fills hallcc.
    module subroutine build_ccor_local(this)
       class(hamiltonian), intent(inout) :: this
       integer :: nlim, ino, nr, m, jj, it, jt
@@ -319,11 +401,27 @@ module hamiltonian_mod
 
    end subroutine build_ccor_local
 
+   !> @brief Validate the current CCOR namelist and lattice state.
+   !> @details Checks that two-centre combined-correction parameters are meaningful
+   !>          for the active calculation and emits warnings or fatal diagnostics
+   !>          according to ccor_strict.
+   !> @param[in] this Hamiltonian object with CCOR flags and lattice state.
    module subroutine validate_ccor_inputs(this)
       class(hamiltonian), intent(in) :: this
 
    end subroutine validate_ccor_inputs
 
+   !> @brief Build one scalar-relativistic CCOR pair block.
+   !> @details Computes the two-centre combined-correction hopping contribution
+   !>          between atom sites ia/ja and types it/jt for neighbor index m.
+   !> @param[in] this Hamiltonian object containing potentials and CCOR settings.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] ino Bravais/type index used by the target Hamiltonian layout.
+   !> @param[in] m Neighbor-shell index.
+   !> @param[out] hcc CCOR block in spin-orbital basis.
    module subroutine build_ccor_pair_block_scalar(this, ia, ja, it, jt, ino, m, hcc)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, ja, it, jt, ino, m
@@ -331,6 +429,17 @@ module hamiltonian_mod
 
    end subroutine build_ccor_pair_block_scalar
 
+   !> @brief Build one noncollinear CCOR pair block.
+   !> @details Computes spin-dependent two-centre combined-correction terms using
+   !>          local moments, D components, and VMT coefficients for the atom pair.
+   !> @param[in] this Hamiltonian object containing potentials and magnetic state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] ino Bravais/type index used by the target Hamiltonian layout.
+   !> @param[in] m Neighbor-shell index.
+   !> @param[out] hcc CCOR block in spin-orbital basis.
    module subroutine build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, ja, it, jt, ino, m
@@ -345,6 +454,21 @@ module hamiltonian_mod
 
    end subroutine build_ccor_pair_block_noncollinear
 
+      !> @brief Build the surface-mode noncollinear CCOR pair block.
+      !> @details Combines endpoint and pair VMT terms with D and D-dot components
+      !>          for surfaces or local regions where global bulk assumptions do
+      !>          not apply.
+      !> @param[in] this Hamiltonian object containing CCOR mode and moments.
+      !> @param[in] ia Site index of the source atom.
+      !> @param[in] ja Site index of the neighbor atom.
+      !> @param[in] it Atom type of ia.
+      !> @param[in] jt Atom type of ja.
+      !> @param[in] m Neighbor-shell index.
+      !> @param[in] dcomp Spin decomposed D matrix components.
+      !> @param[in] ddotcomp Spin decomposed D-dot matrix components.
+      !> @param[in] ccd_i Combined-correction coefficients for type it.
+      !> @param[in] ccd_j Combined-correction coefficients for type jt.
+      !> @param[out] hcc CCOR block in spin-orbital basis.
       module subroutine build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
          class(hamiltonian), intent(in) :: this
          integer, intent(in) :: ia, ja, it, jt, m
@@ -360,6 +484,16 @@ module hamiltonian_mod
 
    end subroutine build_ccor_pair_surface_block
 
+   !> @brief Decompose a structure-constant block into CCOR D components.
+   !> @details Projects the orbital structure block onto scalar and spin-vector
+   !>          components used by noncollinear CCOR pair-block construction.
+   !> @param[in] this Hamiltonian object containing moments and spin-spiral state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] s_block Structure-constant block in orbital basis.
+   !> @param[out] dcomp Decomposed D components.
    module subroutine build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, ja, it, jt
@@ -373,6 +507,13 @@ module hamiltonian_mod
 
    end subroutine build_ccor_d_components
 
+   !> @brief Compute orbital-resolved CCOR coefficients for one atom type.
+   !> @details Evaluates the energy-linearized combined-correction coefficients
+   !>          from potential parameters for the specified site/type.
+   !> @param[in] this Hamiltonian object containing symbolic-atom potentials.
+   !> @param[in] ia Site index used for local moment/context.
+   !> @param[in] itype Atom type whose coefficients are requested.
+   !> @param[out] ccd Coefficients indexed by orbital and angular channel.
    module subroutine build_ccor_coefficients(this, ia, itype, ccd)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, itype
@@ -383,6 +524,12 @@ module hamiltonian_mod
 
    end subroutine build_ccor_coefficients
 
+   !> @brief Normalize a CCOR spin-dot product.
+   !> @details Applies the selected CCOR normalization convention to a raw
+   !>          spin-product scalar before it enters pair-block construction.
+   !> @param[in] this Hamiltonian object with CCOR normalization settings.
+   !> @param[in] sdot_raw Raw complex spin-dot value.
+   !> @return Normalized spin-dot value.
    module function normalize_ccor_sdot(this, sdot_raw) result(sdot_cc)
       class(hamiltonian), intent(in) :: this
       complex(rp), intent(in) :: sdot_raw
@@ -391,6 +538,12 @@ module hamiltonian_mod
 
    end function normalize_ccor_sdot
 
+      !> @brief Return the scalar VMT value for CCOR.
+      !> @details Selects the configured scalar VMT strategy and reduces any
+      !>          spin-resolved surface estimate to the scalar value needed by
+      !>          scalar CCOR blocks.
+      !> @param[in] this Hamiltonian object with ccor_vmt_mode.
+      !> @return Scalar VMT value in internal units.
       module function ccor_vmt_scalar(this) result(vmt)
          class(hamiltonian), intent(in) :: this
          real(rp) :: vmt
@@ -398,6 +551,11 @@ module hamiltonian_mod
 
    end function ccor_vmt_scalar
 
+      !> @brief Compute a global spin-resolved surface VMT estimate.
+      !> @details Averages endpoint surface VMT values over symbolic atom types and
+      !>          multiplicities to provide one spin-resolved correction scale.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @return Spin-resolved VMT pair.
       module function ccor_vmt_global_surface(this) result(vmt_spin)
          class(hamiltonian), intent(in) :: this
          real(rp), dimension(2) :: vmt_spin
@@ -407,6 +565,13 @@ module hamiltonian_mod
 
    end function ccor_vmt_global_surface
 
+      !> @brief Compute a pair-specific spin-resolved surface VMT estimate.
+      !> @details Blends endpoint VMT values for two atom types with pair weights
+      !>          for pair_surface CCOR mode.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @param[in] itype First atom type.
+      !> @param[in] jtype Second atom type.
+      !> @return Spin-resolved VMT pair.
       module function ccor_vmt_pair_surface(this, itype, jtype) result(vmt_spin)
          class(hamiltonian), intent(in) :: this
          integer, intent(in) :: itype, jtype
@@ -415,6 +580,12 @@ module hamiltonian_mod
 
    end function ccor_vmt_pair_surface
 
+      !> @brief Compute an endpoint spin-resolved surface VMT estimate.
+      !> @details Extracts the local surface VMT proxy for one symbolic atom type
+      !>          from the available potential data.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @param[in] itype Atom type whose endpoint value is requested.
+      !> @return Spin-resolved VMT pair.
       module function ccor_vmt_endpoint_surface(this, itype) result(vmt_spin)
          class(hamiltonian), intent(in) :: this
          integer, intent(in) :: itype
@@ -423,6 +594,11 @@ module hamiltonian_mod
 
    end function ccor_vmt_endpoint_surface
 
+      !> @brief Compute a scalar CCOR VMT estimate from Madelung potentials.
+      !> @details Averages available vmad-like potential information over atom
+      !>          types for the vmad_scalar CCOR mode.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @return Scalar VMT value in internal units.
       module function ccor_vmt_scalar_from_vmad(this) result(vmt)
          class(hamiltonian), intent(in) :: this
          real(rp) :: vmt
@@ -431,6 +607,12 @@ module hamiltonian_mod
 
    end function ccor_vmt_scalar_from_vmad
 
+      !> @brief Expand spin-resolved lambda values into Pauli components.
+      !> @details Converts the up/down lambda pair and local moment direction into
+      !>          scalar/vector components used by noncollinear CCOR algebra.
+      !> @param[in] lambda_pair Spin-resolved lambda values.
+      !> @param[in] mom Local magnetic moment direction.
+      !> @param[out] lambda_comp Scalar and vector lambda components.
       module subroutine ccor_lambda_components(lambda_pair, mom, lambda_comp)
          real(rp), dimension(2), intent(in) :: lambda_pair
          real(rp), dimension(3), intent(in) :: mom
@@ -439,12 +621,24 @@ module hamiltonian_mod
 
    end subroutine ccor_lambda_components
 
+      !> @brief Multiply two scalar/vector spin-component tuples.
+      !> @details Applies Pauli-matrix product algebra to compact four-component
+      !>          spin decompositions used by noncollinear CCOR construction.
+      !> @param[in] a Left scalar/vector spin tuple.
+      !> @param[in] b Right scalar/vector spin tuple.
+      !> @param[out] c Product tuple.
       module subroutine ccor_spin_product(a, b, c)
          complex(rp), dimension(4), intent(in) :: a, b
          complex(rp), dimension(4), intent(out) :: c
 
    end subroutine ccor_spin_product
 
+      !> @brief Apply the spin-spiral rotation to a local moment for CCOR.
+      !> @details Rotates the supplied magnetic moment according to the atom
+      !>          position and spin-spiral q/theta parameters before pair-block use.
+      !> @param[in] this Hamiltonian object containing lattice and spin-spiral state.
+      !> @param[in] ia Site index whose position sets the spin-spiral phase.
+      !> @param[inout] mom Moment vector to rotate in place.
       module subroutine ccor_apply_spin_spiral(this, ia, mom)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia
@@ -453,12 +647,23 @@ module hamiltonian_mod
 
    end subroutine ccor_apply_spin_spiral
 
+   !> @brief Return angular momentum l from a packed orbital index.
+   !> @details Maps the LMTO orbital index ilm to its shell quantum number for
+   !>          coefficient lookup and export helpers.
+   !> @param[in] ilm Packed orbital index.
+   !> @return Angular momentum shell l.
    module integer pure function orbital_l_from_index(ilm) result(l)
       integer, intent(in) :: ilm
       integer :: lp1
 
    end function orbital_l_from_index
 
+   !> @brief Emit diagnostics for generated CCOR blocks.
+   !> @details Summarizes CCOR coefficient and block magnitudes for debugging the
+   !>          two-centre correction without changing Hamiltonian data.
+   !> @param[in] this Hamiltonian object containing CCOR settings.
+   !> @param[in] hcc CCOR block array to summarize.
+   !> @param[in] label Human-readable label for the diagnostic message.
    module subroutine log_ccor_debug(this, hcc, label)
       class(hamiltonian), intent(in) :: this
       complex(rp), dimension(:, :, :, :), intent(in) :: hcc
@@ -471,6 +676,12 @@ module hamiltonian_mod
 
    end subroutine log_ccor_debug
 
+   !> @brief Export the real-space Hamiltonian in legacy PAOFLOW layout.
+   !> @details Writes hopping records with lattice-cell indices and global orbital
+   !>          numbers so external PAOFLOW-style tooling can consume the RS-LMTO
+   !>          real-space Hamiltonian.
+   !> @param[inout] this Hamiltonian object containing built hopping blocks.
+   !> @note This is the legacy export entry point; export_rs_tb_all is the newer dispatcher.
    module subroutine rs2pao(this)
       implicit none
       class(hamiltonian), intent(inout) :: this
@@ -484,6 +695,11 @@ module hamiltonian_mod
       complex(rp), dimension(nb, nb) :: dum
    end subroutine rs2pao
 
+   !> @brief Import a PAOFLOW-format real-space Hamiltonian from paoham.dat.
+   !> @details Reads legacy seven-column hopping records and fills the bulk
+   !>          Hamiltonian blocks for PAOFLOW-to-real-space post-processing routes.
+   !> @param[inout] this Hamiltonian object; replaces bulk hopping arrays from file data.
+   !> @note PAOFLOW import is used by paoflow2rs, exchange_p2rs, and conductivity_p2rs.
    module subroutine build_from_paoflow_opt(this)
       implicit none
       type hamData
@@ -494,6 +710,10 @@ module hamiltonian_mod
       class(hamiltonian), intent(inout) :: this
    end subroutine build_from_paoflow_opt
 
+   !> @brief Import a PAOFLOW-format real-space Hamiltonian with the legacy reader.
+   !> @details Maps PAOFLOW orbital/cell records back onto RS-LMTO neighbor blocks.
+   !>          Kept for compatibility with older import paths.
+   !> @param[inout] this Hamiltonian object; fills bulk hopping arrays from file data.
    module subroutine build_from_paoflow(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
@@ -506,6 +726,17 @@ module hamiltonian_mod
 
    end subroutine build_from_paoflow
 
+   !> @brief Build a noncollinear spin-orbital hopping block from orbital data.
+   !> @details Lifts an orbital hopping/structure block hhh into the spin-orbital
+   !>          basis using the local moments of atom sites ia and ja, including
+   !>          spin-spiral phase handling where enabled.
+   !> @param[inout] this Hamiltonian object containing magnetic moment state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] vet Bond vector between the sites.
+   !> @param[in] hhh Orbital hopping/structure block.
    module subroutine ham0m_nc(this, ia, ja, it, jt, vet, hhh)
       class(hamiltonian), intent(inout) :: this
       ! Input
@@ -525,6 +756,15 @@ module hamiltonian_mod
 
    end subroutine ham0m_nc
 
+   !> @brief Build noncollinear local hopping data for one cluster atom.
+   !> @details Walks the neighbor list around atom ia, obtains orbital hopping
+   !>          blocks, converts them with ham0m_nc, and stores the resulting local
+   !>          Hamiltonian/field data.
+   !> @param[inout] this Hamiltonian object; updates local noncollinear arrays.
+   !> @param[in] ia Cluster atom index.
+   !> @param[in] nr Number of neighbors considered.
+   !> @param[in] ino Bravais/type index for ia.
+   !> @param[in] ntype Atom type index.
    module subroutine chbar_nc(this, ia, nr, ino, ntype)
       class(hamiltonian), intent(inout) :: this
       ! Input
@@ -544,6 +784,18 @@ module hamiltonian_mod
 
    end subroutine chbar_nc
 
+   !> @brief Find the orbital hopping block matching a neighbor vector.
+   !> @details Searches the precomputed neighbor/hopping table for the vector vet
+   !>          and returns the matching orbital block and neighbor index.
+   !> @param[inout] this Hamiltonian object containing lattice tolerances.
+   !> @param[in] vet Candidate neighbor vector.
+   !> @param[in] nr Number of neighbors in the search list.
+   !> @param[inout] hhh Orbital hopping block output.
+   !> @param[in] m Neighbor counter being resolved.
+   !> @param[in] ia Cluster atom index.
+   !> @param[in] jn Neighbor-list index.
+   !> @param[out] ni Matched neighbor index.
+   !> @param[in] ham_vec Precomputed neighbor vectors.
    module subroutine hmfind(this, vet, nr, hhh, m, ia, jn, ni, ham_vec)
       class(hamiltonian), intent(inout) :: this
       ! Input
@@ -562,18 +814,41 @@ module hamiltonian_mod
 
    end subroutine hmfind
 
+   !> @brief Convert a global orbital index to site and local-orbital indices.
+   !> @details Used by PAOFLOW import/export helpers to translate flat orbital
+   !>          numbering into RS-LMTO site-major layout.
+   !> @param[in] orb Global orbital index.
+   !> @param[out] i_out Site index.
+   !> @param[out] ia_out Local orbital index on the site.
+   !> @param[in] n_atoms Number of atoms in the exported/imported cell.
+   !> @param[in] max_orbital Number of orbitals per atom in the flat layout.
    module subroutine orb2site(orb, i_out, ia_out, n_atoms, max_orbital)
       integer, intent(in) :: orb, n_atoms, max_orbital
       integer, intent(out) :: i_out, ia_out
 
    end subroutine orb2site
 
+   !> @brief Convert site and local-orbital indices to a global orbital index.
+   !> @details Used by PAOFLOW import/export helpers to write flat orbital
+   !>          numbering from RS-LMTO site-major data.
+   !> @param[in] i_in Site index.
+   !> @param[in] ia_in Local orbital index on the site.
+   !> @param[out] orb_out Global orbital index.
+   !> @param[in] n_atoms Number of atoms in the exported/imported cell.
+   !> @param[in] max_orbital Number of orbitals per atom in the flat layout.
    module subroutine site2orb(i_in, ia_in, orb_out, n_atoms, max_orbital)
       integer, intent(in) :: i_in, ia_in, n_atoms, max_orbital
       integer, intent(out) :: orb_out
 
    end subroutine site2orb
 
+   !> @brief Rotate Hamiltonian blocks into a local magnetic axis.
+   !> @details Saves global hopping/SOC data and rotates spin blocks so a local
+   !>          moment direction can be treated as the quantization axis in legacy
+   !>          recursion paths.
+   !> @param[inout] this Hamiltonian object; updates rotated block arrays.
+   !> @param[in] m_loc Local magnetic moment direction.
+   !> @note Call rotate_from_local_axis to restore the global representation.
    module subroutine rotate_to_local_axis(this, m_loc)
       use math_mod, only: rotmag_loc
       class(hamiltonian), intent(inout) :: this
@@ -584,6 +859,11 @@ module hamiltonian_mod
       ! Rotate Hamiltonian to local axis if wanted
    end subroutine rotate_to_local_axis
 
+   !> @brief Restore Hamiltonian blocks from a local-axis rotation.
+   !> @details Rotates local-axis Hamiltonian data back to the global spin frame
+   !>          after an atom-specific recursion calculation.
+   !> @param[inout] this Hamiltonian object; restores global block arrays.
+   !> @param[in] m_loc Local magnetic moment direction used for the rotation.
    module subroutine rotate_from_local_axis(this, m_loc)
       use math_mod, only: rotmag_loc
       class(hamiltonian), intent(inout) :: this
@@ -594,6 +874,12 @@ module hamiltonian_mod
       ! Rotate Hamiltonian to local axis if wanted
    end subroutine rotate_from_local_axis
 
+   !> @brief Compute onsite Hubbard-U/J potential corrections.
+   !> @details Builds the spin-orbital onsite correction from symbolic-atom
+   !>          Hubbard inputs, including Liechtenstein and ACBN0-style forms and
+   !>          optional self-consistent U channels.
+   !> @param[inout] this Hamiltonian object; fills hubbard_u_pot and related masks.
+   !> @note Results are added by the Hamiltonian builders, not by this routine directly.
    module subroutine calculate_hubbard_u_potential_general(this)
       class(hamiltonian), intent(inout) :: this
 
@@ -617,6 +903,11 @@ module hamiltonian_mod
       end type int_array
    end subroutine calculate_hubbard_u_potential_general
 
+   !> @brief Compute intersite Hubbard-V potential corrections.
+   !> @details Builds pair-dependent correction blocks from hubbard_v inputs and
+   !>          approximate local occupations for later inclusion in real-space
+   !>          hopping construction.
+   !> @param[inout] this Hamiltonian object; fills hubbard_v_pot.
    module subroutine calculate_hubbard_v_potential(this)
       class(hamiltonian), intent(inout) :: this
 
@@ -628,6 +919,12 @@ module hamiltonian_mod
 
    end subroutine calculate_hubbard_v_potential
 
+   !> @brief Estimate spectral bounds for Chebyshev scaling.
+   !> @details Computes or selects Hamiltonian energy bounds according to the
+   !>          configured bounds algorithm and scaling factor. Chebyshev recursion
+   !>          uses these bounds to map H into [-1,1].
+   !> @param[inout] this Hamiltonian object; updates this%bounds.
+   !> @param[in] verbose Optional flag enabling diagnostic logging.
    module subroutine compute_hamiltonian_bounds(this, verbose)
       class(hamiltonian), intent(inout) :: this
       logical, intent(in), optional :: verbose
@@ -644,6 +941,15 @@ module hamiltonian_mod
 
    end subroutine compute_hamiltonian_bounds
 
+   !> @brief Export real-space tight-binding data in all selected formats.
+   !> @details Dispatcher for metadata and hopping-record writers used by the
+   !>          hamiltonian export namelist option. Supports PAOFLOW legacy and
+   !>          Python-friendly real-space records.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] basename Optional output basename.
+   !> @param[in] tol Optional threshold for skipping tiny records.
+   !> @param[in] include_lsham Optional flag to include onsite SOC blocks.
+   !> @param[in] transform_sph2cart Optional flag to transform orbital basis.
    module subroutine export_rs_tb_all(this, basename, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -657,6 +963,11 @@ module hamiltonian_mod
    
    end subroutine export_rs_tb_all
 
+   !> @brief Write metadata for real-space tight-binding exports.
+   !> @details Records atom/orbital layout information needed to interpret the
+   !>          exported hopping records.
+   !> @param[in] this Hamiltonian object containing lattice and basis metadata.
+   !> @param[in] filename Metadata output path.
    module subroutine export_rs_tb_metadata(this, filename)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -666,6 +977,14 @@ module hamiltonian_mod
    
    end subroutine export_rs_tb_metadata
 
+   !> @brief Write PAOFLOW legacy-format hopping records.
+   !> @details Emits the seven-column record layout read by build_from_paoflow_opt:
+   !>          cell index, global orbital indices, and complex hopping value.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] filename Output path.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
    module subroutine export_rs_paoflow_legacy(this, filename, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -677,6 +996,14 @@ module hamiltonian_mod
    
    end subroutine export_rs_paoflow_legacy
 
+   !> @brief Write Python-friendly real-space hopping records.
+   !> @details Emits hopping records plus metadata conventions intended for direct
+   !>          parsing by scripts and post-processing tools.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] filename Output path.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
    module subroutine export_rs_tb_hoppings(this, filename, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -688,6 +1015,16 @@ module hamiltonian_mod
    
    end subroutine export_rs_tb_hoppings
 
+   !> @brief Write real-space hopping records to an open unit.
+   !> @details Shared implementation for legacy PAOFLOW and Python export modes,
+   !>          walking local/bulk neighbor blocks and optionally transforming basis
+   !>          or adding onsite spin-orbit terms.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] u Open output unit.
+   !> @param[in] mode Record format selector.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
    module subroutine write_rs_tb_records(this, u, mode, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -704,6 +1041,16 @@ module hamiltonian_mod
    
    end subroutine write_rs_tb_records
 
+   !> @brief Resolve a neighbor into integer lattice-cell indices.
+   !> @details Matches a real-space neighbor displacement against lattice
+   !>          translations so exported hopping records can carry PAOFLOW-style
+   !>          integer cell offsets.
+   !> @param[in] this Hamiltonian object containing lattice vectors and coordinates.
+   !> @param[in] ia Source atom index.
+   !> @param[in] jj Neighbor-list entry.
+   !> @param[out] idx Integer lattice-cell offset.
+   !> @param[out] found True when a matching offset was found within tolerance.
+   !> @param[in] tol Matching tolerance.
    module subroutine rs_neighbor_lattice_index(this, ia, jj, idx, found, tol)
       implicit none
       class(hamiltonian), intent(in) :: this

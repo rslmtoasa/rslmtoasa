@@ -2,6 +2,12 @@ submodule(hamiltonian_mod) hamiltonian_ccor
 
 contains
 
+   !> @brief Add two-centre combined-correction blocks to the bulk Hamiltonian.
+   !> @details Builds CCOR contributions for each bulk atom type and neighbor
+   !>          shell, using scalar or noncollinear pair-block helpers as required
+   !>          by the magnetic state.
+   !> @param[inout] this Hamiltonian object; fills eecc.
+   !> @note validate_ccor_inputs must accept the current CCOR mode before use.
    module subroutine build_ccor_bulk(this)
       class(hamiltonian), intent(inout) :: this
       integer :: ntype, ia, ino, nr, m, jj, it, jt
@@ -39,6 +45,10 @@ contains
          if (this%ccor_debug) call log_ccor_debug(this, this%eecc, 'bulk')
       end subroutine build_ccor_bulk
 
+   !> @brief Add two-centre combined-correction blocks to local Hamiltonian regions.
+   !> @details Builds CCOR contributions for local/surface/impurity neighbor
+   !>          blocks in the same layout as hall, preserving local atom indexing.
+   !> @param[inout] this Hamiltonian object; fills hallcc.
    module subroutine build_ccor_local(this)
       class(hamiltonian), intent(inout) :: this
       integer :: nlim, ino, nr, m, jj, it, jt
@@ -75,6 +85,11 @@ contains
          if (this%ccor_debug) call log_ccor_debug(this, this%hallcc, 'local')
       end subroutine build_ccor_local
 
+   !> @brief Validate the current CCOR namelist and lattice state.
+   !> @details Checks that two-centre combined-correction parameters are meaningful
+   !>          for the active calculation and emits warnings or fatal diagnostics
+   !>          according to ccor_strict.
+   !> @param[in] this Hamiltonian object with CCOR flags and lattice state.
    module subroutine validate_ccor_inputs(this)
       class(hamiltonian), intent(in) :: this
 
@@ -102,6 +117,17 @@ contains
       end if
    end subroutine validate_ccor_inputs
 
+   !> @brief Build one scalar-relativistic CCOR pair block.
+   !> @details Computes the two-centre combined-correction hopping contribution
+   !>          between atom sites ia/ja and types it/jt for neighbor index m.
+   !> @param[in] this Hamiltonian object containing potentials and CCOR settings.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] ino Bravais/type index used by the target Hamiltonian layout.
+   !> @param[in] m Neighbor-shell index.
+   !> @param[out] hcc CCOR block in spin-orbital basis.
    module subroutine build_ccor_pair_block_scalar(this, ia, ja, it, jt, ino, m, hcc)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, ja, it, jt, ino, m
@@ -110,6 +136,17 @@ contains
       call build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
    end subroutine build_ccor_pair_block_scalar
 
+   !> @brief Build one noncollinear CCOR pair block.
+   !> @details Computes spin-dependent two-centre combined-correction terms using
+   !>          local moments, D components, and VMT coefficients for the atom pair.
+   !> @param[in] this Hamiltonian object containing potentials and magnetic state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] ino Bravais/type index used by the target Hamiltonian layout.
+   !> @param[in] m Neighbor-shell index.
+   !> @param[out] hcc CCOR block in spin-orbital basis.
    module subroutine build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, ja, it, jt, ino, m
@@ -178,6 +215,21 @@ contains
          hcc(spin_off + 1:spin_off + norb, 1:norb) = lambda*(kcomp(:, :, 1) + i_unit*kcomp(:, :, 2))
       end subroutine build_ccor_pair_block_noncollinear
 
+      !> @brief Build the surface-mode noncollinear CCOR pair block.
+      !> @details Combines endpoint and pair VMT terms with D and D-dot components
+      !>          for surfaces or local regions where global bulk assumptions do
+      !>          not apply.
+      !> @param[in] this Hamiltonian object containing CCOR mode and moments.
+      !> @param[in] ia Site index of the source atom.
+      !> @param[in] ja Site index of the neighbor atom.
+      !> @param[in] it Atom type of ia.
+      !> @param[in] jt Atom type of ja.
+      !> @param[in] m Neighbor-shell index.
+      !> @param[in] dcomp Spin decomposed D matrix components.
+      !> @param[in] ddotcomp Spin decomposed D-dot matrix components.
+      !> @param[in] ccd_i Combined-correction coefficients for type it.
+      !> @param[in] ccd_j Combined-correction coefficients for type jt.
+      !> @param[out] hcc CCOR block in spin-orbital basis.
       module subroutine build_ccor_pair_surface_block(this, ia, ja, it, jt, m, dcomp, ddotcomp, ccd_i, ccd_j, hcc)
          class(hamiltonian), intent(in) :: this
          integer, intent(in) :: ia, ja, it, jt, m
@@ -241,6 +293,16 @@ contains
          hcc(spin_off + 1:spin_off + norb, 1:norb) = hcomp(:, :, 1) + i_unit*hcomp(:, :, 2)
       end subroutine build_ccor_pair_surface_block
 
+   !> @brief Decompose a structure-constant block into CCOR D components.
+   !> @details Projects the orbital structure block onto scalar and spin-vector
+   !>          components used by noncollinear CCOR pair-block construction.
+   !> @param[in] this Hamiltonian object containing moments and spin-spiral state.
+   !> @param[in] ia Site index of the source atom.
+   !> @param[in] ja Site index of the neighbor atom.
+   !> @param[in] it Atom type of ia.
+   !> @param[in] jt Atom type of ja.
+   !> @param[in] s_block Structure-constant block in orbital basis.
+   !> @param[out] dcomp Decomposed D components.
    module subroutine build_ccor_d_components(this, ia, ja, it, jt, s_block, dcomp)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, ja, it, jt
@@ -280,6 +342,13 @@ contains
       end do
    end subroutine build_ccor_d_components
 
+   !> @brief Compute orbital-resolved CCOR coefficients for one atom type.
+   !> @details Evaluates the energy-linearized combined-correction coefficients
+   !>          from potential parameters for the specified site/type.
+   !> @param[in] this Hamiltonian object containing symbolic-atom potentials.
+   !> @param[in] ia Site index used for local moment/context.
+   !> @param[in] itype Atom type whose coefficients are requested.
+   !> @param[out] ccd Coefficients indexed by orbital and angular channel.
    module subroutine build_ccor_coefficients(this, ia, itype, ccd)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia, itype
@@ -325,6 +394,12 @@ contains
       end do
    end subroutine build_ccor_coefficients
 
+   !> @brief Normalize a CCOR spin-dot product.
+   !> @details Applies the selected CCOR normalization convention to a raw
+   !>          spin-product scalar before it enters pair-block construction.
+   !> @param[in] this Hamiltonian object with CCOR normalization settings.
+   !> @param[in] sdot_raw Raw complex spin-dot value.
+   !> @return Normalized spin-dot value.
    module function normalize_ccor_sdot(this, sdot_raw) result(sdot_cc)
       class(hamiltonian), intent(in) :: this
       complex(rp), intent(in) :: sdot_raw
@@ -336,6 +411,12 @@ contains
       sdot_cc = -avw*avw*sdot_raw
    end function normalize_ccor_sdot
 
+      !> @brief Return the scalar VMT value for CCOR.
+      !> @details Selects the configured scalar VMT strategy and reduces any
+      !>          spin-resolved surface estimate to the scalar value needed by
+      !>          scalar CCOR blocks.
+      !> @param[in] this Hamiltonian object with ccor_vmt_mode.
+      !> @return Scalar VMT value in internal units.
       module function ccor_vmt_scalar(this) result(vmt)
          class(hamiltonian), intent(in) :: this
          real(rp) :: vmt
@@ -352,6 +433,11 @@ contains
          end select
       end function ccor_vmt_scalar
 
+      !> @brief Compute a global spin-resolved surface VMT estimate.
+      !> @details Averages endpoint surface VMT values over symbolic atom types and
+      !>          multiplicities to provide one spin-resolved correction scale.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @return Spin-resolved VMT pair.
       module function ccor_vmt_global_surface(this) result(vmt_spin)
          class(hamiltonian), intent(in) :: this
          real(rp), dimension(2) :: vmt_spin
@@ -374,6 +460,13 @@ contains
          vmt_spin(:) = vmt_spin(:)/weight_sum
       end function ccor_vmt_global_surface
 
+      !> @brief Compute a pair-specific spin-resolved surface VMT estimate.
+      !> @details Blends endpoint VMT values for two atom types with pair weights
+      !>          for pair_surface CCOR mode.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @param[in] itype First atom type.
+      !> @param[in] jtype Second atom type.
+      !> @return Spin-resolved VMT pair.
       module function ccor_vmt_pair_surface(this, itype, jtype) result(vmt_spin)
          class(hamiltonian), intent(in) :: this
          integer, intent(in) :: itype, jtype
@@ -388,6 +481,12 @@ contains
          vmt_spin(:) = (wi*vi(:) + wj*vj(:))/(wi + wj)
       end function ccor_vmt_pair_surface
 
+      !> @brief Compute an endpoint spin-resolved surface VMT estimate.
+      !> @details Extracts the local surface VMT proxy for one symbolic atom type
+      !>          from the available potential data.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @param[in] itype Atom type whose endpoint value is requested.
+      !> @return Spin-resolved VMT pair.
       module function ccor_vmt_endpoint_surface(this, itype) result(vmt_spin)
          class(hamiltonian), intent(in) :: this
          integer, intent(in) :: itype
@@ -409,6 +508,11 @@ contains
          vmt_spin(2) = avg - 0.5_rp*diff
       end function ccor_vmt_endpoint_surface
 
+      !> @brief Compute a scalar CCOR VMT estimate from Madelung potentials.
+      !> @details Averages available vmad-like potential information over atom
+      !>          types for the vmad_scalar CCOR mode.
+      !> @param[in] this Hamiltonian object containing symbolic atoms.
+      !> @return Scalar VMT value in internal units.
       module function ccor_vmt_scalar_from_vmad(this) result(vmt)
          class(hamiltonian), intent(in) :: this
          real(rp) :: vmt
@@ -426,6 +530,12 @@ contains
          vmt = vmt/weight_sum
       end function ccor_vmt_scalar_from_vmad
 
+      !> @brief Expand spin-resolved lambda values into Pauli components.
+      !> @details Converts the up/down lambda pair and local moment direction into
+      !>          scalar/vector components used by noncollinear CCOR algebra.
+      !> @param[in] lambda_pair Spin-resolved lambda values.
+      !> @param[in] mom Local magnetic moment direction.
+      !> @param[out] lambda_comp Scalar and vector lambda components.
       module subroutine ccor_lambda_components(lambda_pair, mom, lambda_comp)
          real(rp), dimension(2), intent(in) :: lambda_pair
          real(rp), dimension(3), intent(in) :: mom
@@ -440,6 +550,12 @@ contains
          lambda_comp(4) = cmplx(lambda0, 0.0_rp, rp)
       end subroutine ccor_lambda_components
 
+      !> @brief Multiply two scalar/vector spin-component tuples.
+      !> @details Applies Pauli-matrix product algebra to compact four-component
+      !>          spin decompositions used by noncollinear CCOR construction.
+      !> @param[in] a Left scalar/vector spin tuple.
+      !> @param[in] b Right scalar/vector spin tuple.
+      !> @param[out] c Product tuple.
       module subroutine ccor_spin_product(a, b, c)
          complex(rp), dimension(4), intent(in) :: a, b
          complex(rp), dimension(4), intent(out) :: c
@@ -450,6 +566,12 @@ contains
          c(3) = a(4)*b(3) + b(4)*a(3) + i_unit*(a(1)*b(2) - a(2)*b(1))
       end subroutine ccor_spin_product
 
+      !> @brief Apply the spin-spiral rotation to a local moment for CCOR.
+      !> @details Rotates the supplied magnetic moment according to the atom
+      !>          position and spin-spiral q/theta parameters before pair-block use.
+      !> @param[in] this Hamiltonian object containing lattice and spin-spiral state.
+      !> @param[in] ia Site index whose position sets the spin-spiral phase.
+      !> @param[inout] mom Moment vector to rotate in place.
       module subroutine ccor_apply_spin_spiral(this, ia, mom)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia
@@ -464,6 +586,11 @@ contains
       end if
    end subroutine ccor_apply_spin_spiral
 
+   !> @brief Return angular momentum l from a packed orbital index.
+   !> @details Maps the LMTO orbital index ilm to its shell quantum number for
+   !>          coefficient lookup and export helpers.
+   !> @param[in] ilm Packed orbital index.
+   !> @return Angular momentum shell l.
    module integer pure function orbital_l_from_index(ilm) result(l)
       integer, intent(in) :: ilm
       integer :: lp1
@@ -478,6 +605,12 @@ contains
       l = lmax_basis
    end function orbital_l_from_index
 
+   !> @brief Emit diagnostics for generated CCOR blocks.
+   !> @details Summarizes CCOR coefficient and block magnitudes for debugging the
+   !>          two-centre correction without changing Hamiltonian data.
+   !> @param[in] this Hamiltonian object containing CCOR settings.
+   !> @param[in] hcc CCOR block array to summarize.
+   !> @param[in] label Human-readable label for the diagnostic message.
    module subroutine log_ccor_debug(this, hcc, label)
       class(hamiltonian), intent(in) :: this
       complex(rp), dimension(:, :, :, :), intent(in) :: hcc

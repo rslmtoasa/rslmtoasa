@@ -2,6 +2,18 @@ submodule(recursion_mod) recursion_chebyshev
 
 contains
 
+   !> @brief Dispatch Chebyshev moment generation to the configured CPU backend.
+   !> @details Builds moments mu_n = <psi0|T_n((H-b)/a)|psi0> for the real-space
+   !>          Chebyshev SCF and DOS workflows. The selector honors the requested
+   !>          fast, batched, MKL, or legacy backend, with fallbacks for HOH and
+   !>          combined ccor_2c/HOH cases that are not implemented in every kernel.
+   !> @param[inout] this Recursion object; may populate ccor operator work arrays.
+   !> @param[in] psi0 Starting block state, stored site-major as (nb,nb,nsite).
+   !> @param[in] lld Number of Chebyshev recursion steps requested.
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
+   !> @param[inout] mu Moment tensor (nb,nb,nmoment) for one starting state.
+   !> @note Logs the selected backend and may reuse fast-kernel caches.
    module subroutine cheb_moments_cpu(this, psi0, lld, a, b, mu)
       class(recursion), intent(inout) :: this
       complex(rp), intent(in) :: psi0(:, :, :)
@@ -85,6 +97,19 @@ contains
       end subroutine dispatch_cheb_backend
    end subroutine cheb_moments_cpu
 
+   !> @brief Compute Chebyshev moments with the original light-cone recursion.
+   !> @details Applies the three-term Chebyshev recurrence explicitly through
+   !>          cheb_0th_mom, cheb_1st_mom[_hoh], and chebyshev_recur_ll[_hoh].
+   !>          This path remains the reference implementation for cases not
+   !>          covered by the optimized CPU or GPU backends.
+   !> @param[inout] this Recursion object holding Hamiltonian, light-cone maps,
+   !>                temporary wavefunctions, and output moment buffers.
+   !> @param[in] psi0 Starting block state, stored site-major as (nb,nb,nsite).
+   !> @param[in] lld Number of Chebyshev recursion steps requested.
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
+   !> @param[inout] mu Moment tensor (nb,nb,nmoment) for one starting state.
+   !> @note Rebuilds this%izero from the support of psi0 and mutates psi0/psi1/psi2.
    module subroutine cheb_moments_legacy(this, psi0, lld, a, b, mu)
       class(recursion), intent(inout) :: this
       complex(rp), intent(in) :: psi0(:, :, :)
@@ -133,6 +158,15 @@ contains
       end do
    end subroutine cheb_moments_legacy
 
+   !> @brief Return the energy window used to scale Chebyshev Hamiltonians.
+   !> @details Uses Hamiltonian spectral bounds when they have been computed,
+   !>          otherwise falls back to the namelist energy mesh. DOS and Green
+   !>          reconstruction call this so that moment generation and evaluation
+   !>          use the same affine map H -> (H-b)/a.
+   !> @param[inout] this Recursion object with control, energy, and Hamiltonian bounds.
+   !> @param[out] emin Lower edge of the scaling window.
+   !> @param[out] emax Upper edge of the scaling window.
+   !> @note Emits an informational log describing the chosen source of bounds.
    module subroutine resolve_chebyshev_window(this, emin, emax)
       class(recursion), intent(inout) :: this
       real(rp), intent(out) :: emin, emax
@@ -156,6 +190,11 @@ contains
       end if
    end subroutine resolve_chebyshev_window
 
+   !> @brief Accumulate the zeroth Chebyshev moment for one reference block.
+   !> @details Computes <psiref|T_0|psiref> over the current light cone and stores
+   !>          the result in cheb_mom_temp for the legacy Chebyshev driver.
+   !> @param[inout] this Recursion object; writes cheb_mom_temp.
+   !> @param[in] psiref Reference block state, site-major as (nb,nb,nsite).
    module subroutine cheb_0th_mom(this, psiref)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(nb, nb, this%lattice%kk), intent(in) :: psiref
@@ -175,6 +214,14 @@ contains
       end do
    end subroutine cheb_0th_mom
 
+   !> @brief Accumulate the first Chebyshev moment without HOH correction.
+   !> @details Applies the scaled Hamiltonian (H-b)/a once to the reference block
+   !>          and stores <psiref|T_1|psiref> in cheb_mom_temp. This seeds the
+   !>          legacy three-term Chebyshev recurrence.
+   !> @param[inout] this Recursion object; mutates psi1, idum, and cheb_mom_temp.
+   !> @param[in] psiref Reference block state, site-major as (nb,nb,nsite).
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
    module subroutine cheb_1st_mom(this, psiref, a, b)
       class(recursion), intent(inout) :: this
       real(rp), intent(in) :: a, b ! scale and shift
@@ -250,6 +297,13 @@ contains
       end do
    end subroutine cheb_1st_mom
 
+   !> @brief Accumulate the first Chebyshev moment with HOH correction.
+   !> @details Applies the scaled h - H O H + e_nu + l.s operator once to the
+   !>          reference block and stores the T_1 projection in cheb_mom_temp.
+   !> @param[inout] this Recursion object; uses psi1/psi2/hoh scratch and maps.
+   !> @param[in] psiref Reference block state, site-major as (nb,nb,nsite).
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
    module subroutine cheb_1st_mom_hoh(this, psiref, a, b)
       class(recursion), intent(inout) :: this
       real(rp), intent(in) :: a, b ! scale and shift
@@ -380,6 +434,14 @@ contains
       end do
    end subroutine cheb_1st_mom_hoh
 
+   !> @brief Advance one no-HOH legacy Chebyshev recursion level.
+   !> @details Applies the scaled Hamiltonian and the double-trick recurrence to
+   !>          produce the next pair of moments for a single starting block.
+   !> @param[inout] this Recursion object; mutates psi0/psi1/psi2 and light-cone maps.
+   !> @param[inout] mu Moment tensor for the active starting block.
+   !> @param[in] ll Current recursion level.
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
    module subroutine chebyshev_recur_ll(this, mu, ll, a, b)
       class(recursion), intent(inout) :: this
       complex(rp), intent(inout) :: mu(:, :, :)
@@ -495,6 +557,15 @@ contains
       end if
    end subroutine chebyshev_recur_ll
 
+   !> @brief Advance one HOH-aware legacy Chebyshev recursion level.
+   !> @details Uses the two-sweep orthogonalized Hamiltonian action in the
+   !>          Chebyshev three-term recurrence, producing the next moments for
+   !>          a single starting block.
+   !> @param[inout] this Recursion object; mutates psi0/psi1/psi2/hohpsi and maps.
+   !> @param[inout] mu Moment tensor for the active starting block.
+   !> @param[in] ll Current recursion level.
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
    module subroutine chebyshev_recur_ll_hoh(this, mu, ll, a, b)
       class(recursion), intent(inout) :: this
       complex(rp), intent(inout) :: mu(:, :, :)
@@ -660,6 +731,12 @@ contains
       end if
    end subroutine chebyshev_recur_ll_hoh
 
+   !> @brief Generate onsite Chebyshev moments for real-space SCF and DOS.
+   !> @details For each recursion atom, initializes an orbital block state and
+   !>          computes mu_n moments of T_n((H-b)/a). The Green/DOS layer later
+   !>          applies kernels and reconstructs spectral quantities from mu_n.
+   !> @param[inout] this Recursion object; fills local slices of mu_n.
+   !> @note Work is MPI-partitioned and may dispatch to the CUDA plugin or fast CPU backends.
    module subroutine chebyshev_recur(this)
       use mpi_mod
       class(recursion), intent(inout) :: this

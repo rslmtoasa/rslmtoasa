@@ -2,6 +2,12 @@ submodule(hamiltonian_mod) hamiltonian_paoflow_io
 
 contains
 
+   !> @brief Export the real-space Hamiltonian in legacy PAOFLOW layout.
+   !> @details Writes hopping records with lattice-cell indices and global orbital
+   !>          numbers so external PAOFLOW-style tooling can consume the RS-LMTO
+   !>          real-space Hamiltonian.
+   !> @param[inout] this Hamiltonian object containing built hopping blocks.
+   !> @note This is the legacy export entry point; export_rs_tb_all is the newer dispatcher.
    module subroutine rs2pao(this)
       implicit none
       class(hamiltonian), intent(inout) :: this
@@ -63,6 +69,11 @@ contains
       close (92)
    end subroutine rs2pao
 
+   !> @brief Import a PAOFLOW-format real-space Hamiltonian from paoham.dat.
+   !> @details Reads legacy seven-column hopping records and fills the bulk
+   !>          Hamiltonian blocks for PAOFLOW-to-real-space post-processing routes.
+   !> @param[inout] this Hamiltonian object; replaces bulk hopping arrays from file data.
+   !> @note PAOFLOW import is used by paoflow2rs, exchange_p2rs, and conductivity_p2rs.
    module subroutine build_from_paoflow_opt(this)
       implicit none
       type hamData
@@ -146,6 +157,10 @@ contains
       call g_timer%stop('Hamiltonian allocation')
    end subroutine build_from_paoflow_opt
 
+   !> @brief Import a PAOFLOW-format real-space Hamiltonian with the legacy reader.
+   !> @details Maps PAOFLOW orbital/cell records back onto RS-LMTO neighbor blocks.
+   !>          Kept for compatibility with older import paths.
+   !> @param[inout] this Hamiltonian object; fills bulk hopping arrays from file data.
    module subroutine build_from_paoflow(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
@@ -233,6 +248,15 @@ contains
       end do
    end subroutine build_from_paoflow
 
+   !> @brief Export real-space tight-binding data in all selected formats.
+   !> @details Dispatcher for metadata and hopping-record writers used by the
+   !>          hamiltonian export namelist option. Supports PAOFLOW legacy and
+   !>          Python-friendly real-space records.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] basename Optional output basename.
+   !> @param[in] tol Optional threshold for skipping tiny records.
+   !> @param[in] include_lsham Optional flag to include onsite SOC blocks.
+   !> @param[in] transform_sph2cart Optional flag to transform orbital basis.
    module subroutine export_rs_tb_all(this, basename, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -261,6 +285,11 @@ contains
       call export_rs_paoflow_legacy(this, trim(base)//'_paoham.dat', eps, add_lsham, do_sph2cart)
    end subroutine export_rs_tb_all
 
+   !> @brief Write metadata for real-space tight-binding exports.
+   !> @details Records atom/orbital layout information needed to interpret the
+   !>          exported hopping records.
+   !> @param[in] this Hamiltonian object containing lattice and basis metadata.
+   !> @param[in] filename Metadata output path.
    module subroutine export_rs_tb_metadata(this, filename)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -296,6 +325,14 @@ contains
       close(u)
    end subroutine export_rs_tb_metadata
 
+   !> @brief Write PAOFLOW legacy-format hopping records.
+   !> @details Emits the seven-column record layout read by build_from_paoflow_opt:
+   !>          cell index, global orbital indices, and complex hopping value.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] filename Output path.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
    module subroutine export_rs_paoflow_legacy(this, filename, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -314,6 +351,14 @@ contains
       close(u)
    end subroutine export_rs_paoflow_legacy
 
+   !> @brief Write Python-friendly real-space hopping records.
+   !> @details Emits hopping records plus metadata conventions intended for direct
+   !>          parsing by scripts and post-processing tools.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] filename Output path.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
    module subroutine export_rs_tb_hoppings(this, filename, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -335,6 +380,16 @@ contains
       close(u)
    end subroutine export_rs_tb_hoppings
 
+   !> @brief Write real-space hopping records to an open unit.
+   !> @details Shared implementation for legacy PAOFLOW and Python export modes,
+   !>          walking local/bulk neighbor blocks and optionally transforming basis
+   !>          or adding onsite spin-orbit terms.
+   !> @param[in] this Hamiltonian object containing built hopping blocks.
+   !> @param[in] u Open output unit.
+   !> @param[in] mode Record format selector.
+   !> @param[in] tol Threshold for skipping tiny records.
+   !> @param[in] include_lsham Include onsite SOC blocks in the output.
+   !> @param[in] transform_sph2cart Transform orbital blocks before writing.
    module subroutine write_rs_tb_records(this, u, mode, tol, include_lsham, transform_sph2cart)
       implicit none
       class(hamiltonian), intent(in) :: this
@@ -406,6 +461,16 @@ contains
       end do
    end subroutine write_rs_tb_records
 
+   !> @brief Resolve a neighbor into integer lattice-cell indices.
+   !> @details Matches a real-space neighbor displacement against lattice
+   !>          translations so exported hopping records can carry PAOFLOW-style
+   !>          integer cell offsets.
+   !> @param[in] this Hamiltonian object containing lattice vectors and coordinates.
+   !> @param[in] ia Source atom index.
+   !> @param[in] jj Neighbor-list entry.
+   !> @param[out] idx Integer lattice-cell offset.
+   !> @param[out] found True when a matching offset was found within tolerance.
+   !> @param[in] tol Matching tolerance.
    module subroutine rs_neighbor_lattice_index(this, ia, jj, idx, found, tol)
       implicit none
       class(hamiltonian), intent(in) :: this

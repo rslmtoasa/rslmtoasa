@@ -3,6 +3,10 @@ submodule (lattice_mod) lattice_print
 
 contains
 
+   !> @brief Print the complete lattice state in the legacy diagnostic format.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
    module subroutine print_state_full(this, unit, file)
       class(lattice), intent(in) :: this
 
@@ -200,6 +204,10 @@ contains
 
    end subroutine print_state_full
 
+   !> @brief Print the compact lattice state in the legacy diagnostic format.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
    module subroutine print_state(this, unit, file)
       implicit none
       class(lattice), intent(in) :: this
@@ -266,6 +274,12 @@ contains
 
    end subroutine print_state
 
+   !> @brief Print lattice state as a generated namelist.
+   !> @details Emits the current lattice configuration with namelist_generator
+   !>          so diagnostics can be compared with input-facing settings.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
    module subroutine print_state_formatted(this, unit, file)
       class(lattice), intent(in) :: this
 

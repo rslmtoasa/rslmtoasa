@@ -2,6 +2,12 @@ submodule(hamiltonian_mod) hamiltonian_hubbard
 
 contains
 
+   !> @brief Compute onsite Hubbard-U/J potential corrections.
+   !> @details Builds the spin-orbital onsite correction from symbolic-atom
+   !>          Hubbard inputs, including Liechtenstein and ACBN0-style forms and
+   !>          optional self-consistent U channels.
+   !> @param[inout] this Hamiltonian object; fills hubbard_u_pot and related masks.
+   !> @note Results are added by the Hamiltonian builders, not by this routine directly.
    module subroutine calculate_hubbard_u_potential_general(this)
       class(hamiltonian), intent(inout) :: this
 
@@ -343,6 +349,11 @@ contains
       end do
    end subroutine calculate_hubbard_u_potential_general
 
+   !> @brief Compute intersite Hubbard-V potential corrections.
+   !> @details Builds pair-dependent correction blocks from hubbard_v inputs and
+   !>          approximate local occupations for later inclusion in real-space
+   !>          hopping construction.
+   !> @param[inout] this Hamiltonian object; fills hubbard_v_pot.
    module subroutine calculate_hubbard_v_potential(this)
       class(hamiltonian), intent(inout) :: this
 

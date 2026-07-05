@@ -3,6 +3,11 @@ submodule (lattice_mod) lattice_lifecycle
 
 contains
 
+   !> @brief Construct a lattice object from an initialized control object.
+   !> @details Wires the lattice to the run control state, restores default
+   !>          geometry/structure-constant storage, and reads lattice input.
+   !> @param[in] control_obj Control object that owns the input-file name and run options.
+   !> @return Initialized lattice object.
    module function constructor(control_obj) result(obj)
       type(lattice) :: obj
       type(control), target, intent(in) :: control_obj
@@ -13,6 +18,10 @@ contains
       call obj%build_from_file()
    end function constructor
 
+   !> @brief Finalize a lattice object.
+   !> @details Releases cluster, neighbor, surface, impurity, screening, and
+   !>          structure-constant arrays owned by the object.
+   !> @param[inout] this Lattice object being finalized.
    module subroutine destructor(this)
       type(lattice) :: this
 #ifdef USE_SAFE_ALLOC
@@ -80,6 +89,13 @@ contains
 #endif
    end subroutine destructor
 
+   !> @brief Read the &lattice namelist and build derived lattice data.
+   !> @details Parses bulk/surface/impurity geometry, cluster cutoffs, periodic
+   !>          boundary flags, and strux-screening options, then prepares
+   !>          primitive-cell and cluster state for later stages.
+   !> @param[inout] this Lattice object to populate.
+   !> @param[in] fname Optional input file; defaults to this%control%fname.
+   !> @note This is an input boundary and may raise fatal diagnostics for invalid options.
    module subroutine build_from_file(this, fname)
       class(lattice), intent(inout) :: this
       character(len=*), intent(in), optional :: fname
@@ -458,6 +474,11 @@ contains
 
    end subroutine build_from_file
 
+   !> @brief Rebuild lattice state from already installed lattice members.
+   !> @details Reuses current geometry and namelist-derived settings to run the
+   !>          same cluster, primitive-cell, and structure setup normally reached
+   !>          from build_from_file.
+   !> @param[inout] this Lattice object whose current members provide the input state.
    module subroutine build_from_lattice(this)
       class(lattice), intent(inout) :: this
       integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus, nsite_guess
@@ -628,6 +649,11 @@ contains
       this%a = a
    end subroutine build_from_lattice
 
+   !> @brief Compute primitive-cell derived quantities.
+   !> @details Converts lattice vectors to internal units, computes cell volume
+   !>          and Wigner-Seitz radius, and prepares inverse Cartesian lattice
+   !>          data used by periodic wrapping and neighbor searches.
+   !> @param[inout] this Lattice object whose a/alat/celldm state is updated.
    module subroutine build_data(this)
       class(lattice), intent(inout) :: this
       !> Local variables
@@ -842,6 +868,11 @@ contains
       call g_timer%stop('build_data')
    end subroutine build_data
 
+   !> @brief Reset lattice members to their default values.
+   !> @details Clears allocatable storage and restores scalar defaults; with the
+   !>          optional full flag it also clears persistent input-facing state.
+   !> @param[inout] this Lattice object to reset.
+   !> @param[in] full Optional flag requesting a full reset.
    module subroutine restore_to_default(this, full)
       class(lattice) :: this
       logical, intent(in), optional :: full
@@ -915,6 +946,11 @@ contains
 
    end subroutine restore_to_default
 
+   !> @brief Build the bulk Bravais cluster.
+   !> @details Expands primitive-cell sites through lattice translations, cuts
+   !>          them by the configured radius, and fills bulk cluster coordinates,
+   !>          atomic labels, and optional Morton ordering.
+   !> @param[inout] this Lattice object receiving cr/iz/num/no cluster state.
    module subroutine bravais(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -1046,6 +1082,11 @@ contains
       call g_timer%stop('bravais')
    end subroutine bravais
 
+   !> @brief Reorder the bulk cluster by Morton space-filling-curve key.
+   !> @details Sorts cluster atoms in normalized Cartesian space to improve
+   !>          locality for real-space recursion kernels while preserving the
+   !>          per-atom coordinate/type arrays as a consistent permutation.
+   !> @param[inout] this Lattice object whose bulk cluster arrays are reordered.
    module subroutine morton_reorder_bulk(this)
       class(lattice), intent(inout) :: this
       integer :: kk, i, n
@@ -1109,6 +1150,12 @@ contains
       call g_logger%info('lattice%bravais: bulk cluster reordered along Morton (Z-order) curve', __FILE__, __LINE__)
    end subroutine morton_reorder_bulk
 
+   !> @brief Encode a 3D integer grid coordinate as a Morton key.
+   !> @param[in] x Grid coordinate on the first axis.
+   !> @param[in] y Grid coordinate on the second axis.
+   !> @param[in] z Grid coordinate on the third axis.
+   !> @param[in] nbits Number of bits to interleave from each coordinate.
+   !> @return Interleaved 64-bit Morton code.
    module pure function morton_encode3(x, y, z, nbits) result(code)
       integer, intent(in) :: x, y, z, nbits
       integer(8) :: code
@@ -1121,6 +1168,12 @@ contains
       end do
    end function morton_encode3
 
+   !> @brief Sort an integer permutation by associated Morton keys.
+   !> @details Uses an in-place heapsort so key and permutation arrays are kept
+   !>          synchronized without extra sorting dependencies.
+   !> @param[inout] key Keys to sort in ascending order.
+   !> @param[inout] perm Permutation entries carried with each key.
+   !> @param[in] n Number of active entries in key and perm.
    module subroutine sort_by_key(key, perm, n)
       integer(8), intent(inout) :: key(:)
       integer, intent(inout) :: perm(:)
@@ -1163,6 +1216,10 @@ contains
       end subroutine sift_down
    end subroutine sort_by_key
 
+   !> @brief Count reduced basis/species entries from the cluster atom labels.
+   !> @details Computes nbas/reduced_nbas-style counts used by charge and
+   !>          Hamiltonian setup after the cluster atom types are known.
+   !> @param[inout] this Lattice object whose basis counters are updated.
    module subroutine calculate_nbas(this)
       implicit none
       class(lattice) :: this
@@ -1209,6 +1266,8 @@ contains
 
    end subroutine calculate_nbas
 
+   !> @brief Check lattice option consistency after input parsing.
+   !> @param[inout] this Lattice object whose options are validated.
    module subroutine check_all(this)
       implicit none
       class(lattice) :: this

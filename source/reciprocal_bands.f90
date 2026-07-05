@@ -3,6 +3,10 @@ submodule (reciprocal_mod) reciprocal_bands
 
 contains
 
+   !> @brief Diagonalize the active k-space Hamiltonians.
+   !> @details Solves standard or generalized eigenproblems depending on
+   !>          reciprocal_mode and stores eigenvalues/eigenvectors for bands and DOS.
+   !> @param[inout] this Reciprocal object receiving eigenvalue/eigenvector arrays.
    module subroutine diagonalize_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       
@@ -116,6 +120,8 @@ contains
       call root_info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)
    end subroutine diagonalize_hamiltonian
 
+   !> @brief Print mapping diagnostics for the Kanpur generalized-overlap path.
+   !> @param[in] this Reciprocal object containing basis and overlap metadata.
    module subroutine print_kanpur_mapping(this)
       class(reciprocal), intent(in) :: this
       call root_info('Kanpur mapping: reciprocal_mode=' // trim(this%reciprocal_mode), __FILE__, __LINE__)
@@ -130,6 +136,10 @@ contains
       call root_info('Kanpur mapping: non-orthogonality treatment is approximation-level diagnostic.', __FILE__, __LINE__)
    end subroutine print_kanpur_mapping
 
+   !> @brief Check Hermiticity and basic diagnostics for an overlap matrix.
+   !> @param[in] this Reciprocal object providing diagnostic context.
+   !> @param[in] ik k-point index associated with s_k.
+   !> @param[in] s_k Overlap matrix to inspect.
    module subroutine check_overlap_properties(this, ik, s_k)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik
@@ -149,6 +159,8 @@ contains
       end if
    end subroutine check_overlap_properties
 
+   !> @brief Run H(Gamma) spectral-bound diagnostics.
+   !> @param[inout] this Reciprocal object used to build and bound the Gamma matrix.
    module subroutine run_gamma_bounds_diagnostics(this)
       class(reciprocal), intent(inout) :: this
       complex(rp), allocatable :: h_gamma(:, :)
@@ -172,6 +184,10 @@ contains
       deallocate(h_gamma)
    end subroutine run_gamma_bounds_diagnostics
 
+   !> @brief Diagonalize the experimental real-space HALL matrix.
+   !> @details Builds a finite local-cluster matrix from HALL blocks and prints
+   !>          eigenvalue diagnostics for exploratory comparison only.
+   !> @param[inout] this Reciprocal object providing Hamiltonian and lattice state.
    module subroutine diagonalize_hall_experimental(this)
       class(reciprocal), intent(inout) :: this
       integer :: nsites, n_orb, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
@@ -224,6 +240,12 @@ contains
       deallocate(hall_mat, evals, rwork, work)
    end subroutine diagonalize_hall_experimental
 
+   !> @brief Calculate and write a band structure along a crystal-specific path.
+   !> @param[inout] this Reciprocal object used to generate path eigenvalues.
+   !> @param[in] ham Hamiltonian object for k-space construction.
+   !> @param[in] crystal_type Crystal/path selector.
+   !> @param[in] npts_per_segment Number of interpolation points per path segment.
+   !> @param[in] output_file Optional band-output file name.
    module subroutine calculate_band_structure(this, ham, crystal_type, npts_per_segment, output_file)
       class(reciprocal), intent(inout) :: this
       class(hamiltonian), intent(in) :: ham
@@ -336,6 +358,13 @@ contains
       call g_logger%info('calculate_band_structure: K-path information written to ' // trim(filename), __FILE__, __LINE__)
    end subroutine calculate_band_structure
 
+   !> @brief Calculate and write a symmetry-derived band structure.
+   !> @details Uses symmetry analysis or custom path settings to generate the
+   !>          high-symmetry path before building and diagonalizing H(k).
+   !> @param[inout] this Reciprocal object used to generate path eigenvalues.
+   !> @param[in] ham Hamiltonian object for k-space construction.
+   !> @param[in] npts_per_segment Optional number of interpolation points per segment.
+   !> @param[in] output_file Optional band-output file name.
    module subroutine calculate_band_structure_auto(this, ham, npts_per_segment, output_file)
       class(reciprocal), intent(inout) :: this
       class(hamiltonian), intent(in) :: ham
@@ -446,6 +475,12 @@ contains
       call g_logger%info('calculate_band_structure_auto: K-path information written to ' // trim(filename), __FILE__, __LINE__)
    end subroutine calculate_band_structure_auto
 
+   !> @brief Generate a symmetry-reduced k-point mesh.
+   !> @details Builds irreducible k-points, weights, and full/irreducible maps
+   !>          using the configured symmetry and time-reversal settings.
+   !> @param[inout] this Reciprocal object receiving reduced-mesh data.
+   !> @param[in] mesh_dims Full mesh dimensions.
+   !> @param[in] use_shift Optional flag selecting shifted-grid generation.
    module subroutine generate_reduced_kpoint_mesh(this, mesh_dims, use_shift)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: mesh_dims(3)
@@ -561,6 +596,10 @@ contains
       if (this%dump_symmetry_kmap) call this%write_symmetry_kmap_dump('symmetry_kmap.dat')
    end subroutine generate_reduced_kpoint_mesh
 
+   !> @brief Write a complex matrix and its k-point label to a text file.
+   !> @param[in] matrix Matrix to dump.
+   !> @param[in] filename Output file name.
+   !> @param[in] k_point k-point associated with the matrix.
    module subroutine dump_complex_matrix(matrix, filename, k_point)
       complex(rp), dimension(:, :), intent(in) :: matrix
       character(len=*), intent(in) :: filename

@@ -2,6 +2,13 @@ submodule(recursion_mod) recursion_haydock
 
 contains
 
+   !> @brief Apply one block-Lanczos Hamiltonian hop with HOH correction.
+   !> @details Forms H|Psi_ll> for the block recursion using the two-sweep
+   !>          h - H O H + e_nu + l.s operator, accumulates the block alpha
+   !>          coefficient, and updates the active light cone.
+   !> @param[inout] this Recursion object; mutates hpsi/hohpsi/pmn_b/atemp_b.
+   !> @param[in] ll Current recursion level whose alpha block is produced.
+   !> @note Used by the legacy block recursion path for SCF and intersite workflows.
    module subroutine hop_b_hoh(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -149,6 +156,13 @@ contains
       this%atemp_b(:, :, ll) = summ
    end subroutine
 
+   !> @brief Apply one block-Lanczos Hamiltonian hop without HOH correction.
+   !> @details Forms H|Psi_ll> from local and bulk real-space hopping blocks,
+   !>          accumulates the block alpha coefficient, and prepares pmn_b for
+   !>          the orthogonalization step in crecal_b.
+   !> @param[inout] this Recursion object; mutates hpsi/pmn_b/atemp_b and maps.
+   !> @param[in] ll Current recursion level whose alpha block is produced.
+   !> @note Includes ccor_2c contributions when enabled.
    module subroutine hop_b(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -249,6 +263,12 @@ contains
       this%atemp_b(:, :, ll) = summ
    end subroutine hop_b
 
+   !> @brief Generate block-Lanczos coefficients for the selected recursion atoms.
+   !> @details Computes the block tridiagonal Haydock coefficients A_n and B_n
+   !>          for each atom in lattice%irec. Real-space SCF and block Green's
+   !>          functions consume the resulting a_b/b2_b and diagonal a/b2 views.
+   !> @param[inout] this Recursion object; fills local slices of a_b, b2_b, a, and b2.
+   !> @note Work is partitioned over MPI ranks and may use CUDA or haydock_fast.
    module subroutine recur_b(this)
       use mpi_mod
       class(recursion), intent(inout) :: this
@@ -381,6 +401,12 @@ contains
       end do
    end subroutine recur_b
 
+   !> @brief Advance the legacy block-Lanczos recurrence for one starting block.
+   !> @details Orthogonalizes H|Psi_n> against the current and previous block
+   !>          states, diagonalizes the residual norm matrix to obtain B_{n+1},
+   !>          and stores temporary A_n/B_n blocks for the caller.
+   !> @param[inout] this Recursion object with psi_b initialized for one atom or pair.
+   !> @note Uses LAPACK zheev and mutates psi_b, pmn_b, atemp_b, and b2temp_b.
    module subroutine crecal_b(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -487,6 +513,12 @@ contains
       this%b2temp_b(:, :, llmax) = sum_b(:, :)
    end subroutine crecal_b
 
+   !> @brief Replace stored block B^2 coefficients by their matrix square roots.
+   !> @details Diagonalizes each Hermitian B2_b block and overwrites it with the
+   !>          positive square-root matrix B. Block Green's-function reconstruction
+   !>          calls this before continued-fraction evaluation.
+   !> @param[inout] this Recursion object; overwrites local B2_b slices.
+   !> @note Uses MPI partition sizes and LAPACK zheev; no collective communication occurs here.
    module subroutine zsqr(this)
       use mpi_mod
       implicit none
@@ -532,6 +564,18 @@ contains
       end do
    end subroutine zsqr
 
+   !> @brief Estimate scalar terminator coefficients for continued fractions.
+   !> @details Reduces finite Lanczos alpha/beta sequences to asymptotic constants
+   !>          used by Green-function terminators. The result approximates the tail
+   !>          of the recursion beyond the explicitly computed ll levels.
+   !> @param[inout] this Recursion object; provides access to bpopt/emami helpers.
+   !> @param[inout] alpha Recursion alpha coefficients, shape (np,ll).
+   !> @param[in] beta Recursion beta coefficients, shape (np,ll).
+   !> @param[inout] ll Number of available recursion levels.
+   !> @param[in] np Number of scalar coefficient channels.
+   !> @param[inout] nw Work-array size used by the legacy terminator routine.
+   !> @param[out] alpha_inf Asymptotic alpha per channel.
+   !> @param[out] beta_inf Asymptotic beta per channel.
    module subroutine get_cinf(this, alpha, beta, ll, np, nw, alpha_inf, beta_inf)
       implicit none
       class(recursion), intent(inout) :: this
@@ -590,6 +634,21 @@ contains
       end do
    end subroutine get_cinf
 
+   !> @brief Estimate block terminators for Haydock continued fractions.
+   !> @details Converts complex block recursion coefficients to real scalar
+   !>          channel sequences, calls get_cinf, sanitizes NaNs, and returns
+   !>          diagonal/off-diagonal terminator matrices for block Green functions.
+   !> @param[inout] this Recursion object; only helper state is used.
+   !> @param[in] Acoef_b Block alpha coefficients, shape (ldim,ldim,ll,na).
+   !> @param[in] B2coef_b Block beta/B coefficients, shape (ldim,ldim,ll,na).
+   !> @param[in] na Number of atoms or intersite phase combinations.
+   !> @param[in] ll Number of recursion levels.
+   !> @param[in] ldim Block dimension, usually nb.
+   !> @param[inout] nw Legacy work-array size.
+   !> @param[out] a_inf Matrix terminator alpha values.
+   !> @param[out] b_inf Matrix terminator beta values.
+   !> @param[out] a_inf0 Site-averaged diagonal alpha terminator.
+   !> @param[out] b_inf0 Site-averaged diagonal beta terminator.
    module subroutine get_terminf(this, Acoef_b, B2coef_b, na, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
       implicit none
       class(recursion), intent(inout) :: this
@@ -669,6 +728,11 @@ contains
       end do
    end subroutine get_terminf
 
+   !> @brief Precompute light-cone support maps for Chebyshev recursion levels.
+   !> @details Propagates the active-site mask one neighbor shell per level and
+   !>          stores the result in izeroll(:,ll). Legacy Chebyshev routines use
+   !>          this map to avoid visiting sites outside the reachable support.
+   !> @param[inout] this Recursion object; fills izeroll.
    module subroutine create_ll_map(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -697,6 +761,13 @@ contains
       end do
    end subroutine create_ll_map
 
+   !> @brief Apply one scalar Lanczos Hamiltonian hop.
+   !> @details Forms H|psi_ll> over the current light cone, accumulates the scalar
+   !>          alpha coefficient for each orbital channel, and prepares pmn for
+   !>          the scalar Haydock recurrence.
+   !> @param[inout] this Recursion object; mutates v, pmn, atemp, and izero.
+   !> @param[in] ll Current recursion level whose alpha coefficient is produced.
+   !> @note This legacy scalar path is used by control%recur='lanczos'.
    module subroutine hop(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -821,6 +892,12 @@ contains
       end select
    end subroutine hop
 
+   !> @brief Advance the legacy scalar Lanczos recurrence for one orbital seed.
+   !> @details Iteratively calls hop, subtracts the alpha projection, normalizes
+   !>          the residual, and stores temporary scalar alpha/beta coefficients
+   !>          for the caller.
+   !> @param[inout] this Recursion object with psi initialized for one atom/orbital.
+   !> @note Mutates psi, pmn, atemp, and b2temp.
    module subroutine crecal(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -878,6 +955,12 @@ contains
       this%b2temp(llmax) = summ
    end subroutine crecal
 
+   !> @brief Generate scalar Lanczos coefficients for selected recursion atoms.
+   !> @details Runs the Haydock scalar recursion for each orbital of every atom in
+   !>          lattice%irec, filling a and b2 for the legacy lanczos Green-function
+   !>          path used by real-space SCF and DOS.
+   !> @param[inout] this Recursion object; fills local slices of a and b2.
+   !> @note Work is MPI-partitioned and may dispatch to the scalar CUDA kernel for nsp=1.
    module subroutine recur(this)
       use mpi_mod
       class(recursion), intent(inout) :: this
@@ -940,6 +1023,17 @@ contains
     !!!end do
    end subroutine
 
+   !> @brief Optimize scalar terminator constants from a finite coefficient chain.
+   !> @details Legacy Beer-Pettifor-style helper used by get_cinf to estimate the
+   !>          asymptotic alpha and beta values that close a continued fraction.
+   !> @param[inout] this Recursion object; no persistent state is modified.
+   !> @param[in] ll Number of coefficients in the input arrays.
+   !> @param[in] a Alpha coefficient sequence.
+   !> @param[in] rb Beta coefficient sequence.
+   !> @param[in] n Number of coefficients to use in the fit.
+   !> @param[out] ainf Estimated asymptotic alpha.
+   !> @param[out] rbinf Estimated asymptotic beta.
+   !> @param[out] ifail Legacy status flag from the optimizer.
    module subroutine bpopt(this, ll, a, rb, n, ainf, rbinf, ifail)
       class(recursion), intent(inout) :: this
       ! Input
@@ -983,6 +1077,17 @@ contains
       ! write(700, *) AINF, RBINF
    end subroutine bpopt
 
+   !> @brief Estimate band edges from scalar recursion coefficients.
+   !> @details Legacy helper for terminator construction that scans a finite
+   !>          continued-fraction coefficient set and returns approximate spectral
+   !>          bounds.
+   !> @param[inout] this Recursion object; no persistent state is modified.
+   !> @param[in] nl Number of recursion levels in the coefficient arrays.
+   !> @param[in] as Alpha coefficient sequence.
+   !> @param[in] bs Beta coefficient sequence.
+   !> @param[in] n Number of coefficients to use.
+   !> @param[out] emax Estimated upper spectral edge.
+   !> @param[out] emin Estimated lower spectral edge.
    module subroutine emami(this, nl, as, bs, n, emax, emin)
       class(recursion), intent(inout) :: this
       ! Input

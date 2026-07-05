@@ -3,6 +3,10 @@ submodule (lattice_mod) lattice_cluster
 
 contains
 
+   !> @brief Prepare surface-layer cluster metadata from a bulk cluster.
+   !> @details Builds layer z positions and surface index arrays used by the
+   !>          buildsurf path before selecting the active surface atoms.
+   !> @param[inout] this Lattice object whose surface helper arrays are filled.
    module subroutine build_clusup(this)
       class(lattice), intent(inout) :: this
       character(len=10) :: surftype
@@ -100,6 +104,11 @@ contains
       this%surftype = clean_str(this%surftype)
    end subroutine build_clusup
 
+   !> @brief Build the full surface cluster representation.
+   !> @details Selects atoms by surface orientation and layer bounds, identifies
+   !>          unique layer/type representatives, and installs the full surface
+   !>          coordinate/type arrays for downstream surface calculations.
+   !> @param[inout] this Lattice object receiving the full surface cluster.
    module subroutine build_surf_full(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -319,6 +328,11 @@ contains
       close (20)
    end subroutine build_surf_full
 
+   !> @brief Build the legacy compact surface cluster.
+   !> @details Chooses representative atoms from the bulk cluster for each
+   !>          requested surface layer and writes the compact surface cluster
+   !>          arrays consumed by newclu/buildsurf workflows.
+   !> @param[inout] this Lattice object receiving compact surface state.
    module subroutine build_surf(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -414,6 +428,11 @@ contains
       close (10)
    end subroutine build_surf
 
+   !> @brief Build an impurity/local cluster from a bulk or surface host.
+   !> @details Combines host cluster coordinates with impurity inclusions,
+   !>          creates local atom/type maps, and builds neighbor tables for
+   !>          impurity and defect calculations.
+   !> @param[inout] this Lattice object receiving impurity cluster arrays.
    module subroutine newclu(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -656,6 +675,10 @@ contains
 10004 format(3x, "II =", i7)
    end subroutine newclu
 
+   !> @brief Build atom-list metadata for self-consistent atom types.
+   !> @details Fills atlist/chargetrf_type-style mappings used by impurity and
+   !>          local-cluster charge transfer paths.
+   !> @param[inout] this Lattice object whose atom-list arrays are updated.
    module subroutine atomlist(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -706,6 +729,20 @@ contains
       end do
    end subroutine atomlist
 
+   !> @brief Select cluster atoms inside a primitive-cell volume.
+   !> @details Tests positions relative to a central atom against the three
+   !>          primitive vectors and returns the atom indices that lie inside.
+   !> @param[inout] this Lattice object providing volume-test helper methods.
+   !> @param[in] cr Cluster coordinates.
+   !> @param[in] num Cluster atom labels.
+   !> @param[in] num_atoms Number of atoms in cr/num.
+   !> @param[in] central_atom Index of the atom used as the volume origin.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[in] plane_constant Boundary tolerance/plane constant.
+   !> @param[out] atoms_in_volume Atom indices found inside the volume.
+   !> @param[out] atom_count Number of returned atoms.
    module subroutine check_atoms_in_volume(this, cr, num, num_atoms, central_atom, a1, a2, a3, plane_constant, atoms_in_volume, atom_count)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
@@ -743,6 +780,13 @@ contains
    
    end subroutine check_atoms_in_volume
 
+   !> @brief Test whether a relative position is inside a primitive parallelepiped.
+   !> @param[inout] this Lattice object providing the type-bound helper context.
+   !> @param[in] relative_pos Position measured from the cell origin.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[out] inside True if the point is inside the primitive volume.
    module subroutine check_within_volume(this, relative_pos, a1, a2, a3, inside)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: relative_pos(3), a1(3), a2(3), a3(3)
@@ -785,6 +829,11 @@ contains
                  w >= 0.0_rp .and. w <= 1.0_rp)
    end subroutine check_within_volume
 
+   !> @brief Return unique integer structure/type labels.
+   !> @param[inout] this Lattice object providing the type-bound helper context.
+   !> @param[in] num Input labels.
+   !> @param[in] num_atoms Number of active labels.
+   !> @param[out] unique_nums Unique labels in first-seen order.
    module subroutine find_unique_struct(this, num, num_atoms, unique_nums)
        class(lattice), intent(inout) :: this
        integer, intent(in) :: num(:), num_atoms
@@ -819,6 +868,19 @@ contains
        deallocate(temp_nums)
    end subroutine find_unique_struct
 
+   !> @brief Identify symmetry-unique atoms inside a primitive volume.
+   !> @details Removes atoms related by primitive translations from an input
+   !>          volume selection and returns one representative per unique site.
+   !> @param[inout] this Lattice object providing helper context.
+   !> @param[in] cr Cluster coordinates.
+   !> @param[in] num_atoms Number of atoms in cr.
+   !> @param[in] atoms_in_volume Candidate atom indices.
+   !> @param[in] atom_count Number of candidate atoms.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[out] unique_atoms Representative atom indices.
+   !> @param[out] unique_atom_count Number of representatives.
    module subroutine identify_unique_atoms(this, cr, num_atoms, atoms_in_volume, atom_count, a1, a2, a3, unique_atoms, unique_atom_count)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
@@ -871,6 +933,22 @@ contains
        deallocate(temp_unique_atoms)
    end subroutine identify_unique_atoms
 
+   !> @brief Build representative neighbor vectors for each atom type.
+   !> @details Compares cluster coordinates around representative atoms and
+   !>          fills neighbor maps plus displacement sets used by structb.
+   !> @param[inout] this Lattice object providing tolerance and helper context.
+   !> @param[in] crd Cluster coordinates.
+   !> @param[in] no Atom type labels for cluster atoms.
+   !> @param[in] iu Representative atom indices.
+   !> @param[inout] nn Neighbor table to fill.
+   !> @param[in] nat Number of cluster atoms.
+   !> @param[in] ntot Number of representative atoms.
+   !> @param[in] nomx Number of representative/type slots.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[in] nnmx Maximum neighbor slots.
+   !> @param[inout] set Neighbor displacement vectors.
+   !> @param[inout] idnn Neighbor identifier list.
+   !> @param[out] ret Return/status vector used by legacy callers.
    module subroutine remd(this, crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
       implicit none
       ! Inputs
@@ -957,6 +1035,13 @@ contains
 10003 format(" TYPE NO  NOT FOUND ")
    end subroutine remd
 
+   !> @brief Compute the minimum-image coordinate difference between two atoms.
+   !> @param[inout] this Lattice object containing periodic-boundary settings.
+   !> @param[in] Natom Number of atoms in coord.
+   !> @param[in] coord Atomic coordinates.
+   !> @param[in] i_atom First atom index.
+   !> @param[in] j_atom Second atom index.
+   !> @param[out] cdiff Minimum-image displacement from i_atom to j_atom.
    module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff)
       implicit none
       class(lattice), intent(inout) :: this
@@ -1002,6 +1087,20 @@ contains
       !
    end subroutine f_wrap_coord_diff
 
+   !> @brief Build the atom neighbor table using shell cutoffs.
+   !> @details Uses spatial binning and optional periodic wrapping to find
+   !>          neighbors within the configured cutoff shells and populate NN.
+   !> @param[inout] this Lattice object containing cell/PBC state.
+   !> @param[inout] ct Shell cutoff radii.
+   !> @param[in] crd Atomic coordinates.
+   !> @param[in] ndim Coordinate leading dimension.
+   !> @param[in] nat Number of atoms.
+   !> @param[in] izp Atomic numbers/labels.
+   !> @param[inout] nn Neighbor table.
+   !> @param[in] nd Number of atoms represented in nn.
+   !> @param[inout] nm Maximum/actual neighbor slots.
+   !> @param[in] ngbr Legacy neighbor-shell classification function.
+   !> @param[in] ntot Number of representative atoms.
    module subroutine nncal(this,ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
       implicit none
       class(lattice), intent(inout) :: this
@@ -1296,6 +1395,13 @@ contains
       end subroutine sort_integer_list
    end subroutine
 
+   !> @brief Read legacy cluster coordinate records from a unit.
+   !> @param[in] alat Lattice parameter used for coordinate scaling.
+   !> @param[in] nndim Maximum number of cluster atoms.
+   !> @param[inout] cr Coordinate array to fill.
+   !> @param[inout] iz Atomic numbers/labels.
+   !> @param[inout] n Atom-number labels.
+   !> @param[in] ip Input unit.
    module subroutine leia(alat, nndim, cr, iz, n, ip)
       implicit none
       ! Input
@@ -1321,6 +1427,12 @@ contains
       return
    end subroutine
 
+   !> @brief Sort a legacy matrix block by its first column.
+   !> @param[in] nl First active row/starting index.
+   !> @param[in] ndim Leading dimension of m.
+   !> @param[inout] m Matrix block to sort.
+   !> @param[in] nd Number of columns.
+   !> @param[in] nt Number of active rows.
    module subroutine bubble(nl, ndim, m, nd, nt)
       implicit none
       ! Inputs
@@ -1360,6 +1472,18 @@ contains
       end do
    end subroutine bubble
 
+   !> @brief Cut translated primitive-cell atoms to a spherical cluster.
+   !> @param[in] i Center atom index.
+   !> @param[in] l Number of candidate atoms.
+   !> @param[in] ndim Array capacity.
+   !> @param[in] crd Candidate coordinates.
+   !> @param[out] cr Coordinates that survive the cut.
+   !> @param[in] izp Candidate atomic labels.
+   !> @param[out] iz Atomic labels that survive the cut.
+   !> @param[out] num Atom-number labels that survive the cut.
+   !> @param[in] no Candidate atom-number labels.
+   !> @param[in] rs Cut radius.
+   !> @param[out] ii Number of atoms that survived the cut.
    module subroutine cut(i, l, ndim, crd, cr, izp, iz, num, no, rs, ii)
       ! Inputs
       real(rp), intent(in) :: rs

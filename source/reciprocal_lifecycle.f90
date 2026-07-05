@@ -3,6 +3,10 @@ submodule (reciprocal_mod) reciprocal_lifecycle
 
 contains
 
+   !> @brief Print a root-rank informational message with source location.
+   !> @param[in] message Message text.
+   !> @param[in] file_name Source file name for diagnostics.
+   !> @param[in] line_no Source line number for diagnostics.
    module subroutine root_info(message, file_name, line_no)
       character(len=*), intent(in) :: message, file_name
       integer, intent(in) :: line_no
@@ -10,6 +14,11 @@ contains
       if (rank == 0) call g_logger%info(message, file_name, line_no)
    end subroutine root_info
 
+   !> @brief Construct a reciprocal-space object from an initialized Hamiltonian.
+   !> @details Wires reciprocal state to the Hamiltonian, lattice, and control
+   !>          objects, restores defaults, and reads the &reciprocal namelist.
+   !> @param[in] hamiltonian_obj Hamiltonian object providing real-space blocks and lattice state.
+   !> @return Initialized reciprocal-space object.
    module function constructor(hamiltonian_obj) result(obj)
       type(reciprocal) :: obj
       type(hamiltonian), target, intent(in) :: hamiltonian_obj
@@ -37,6 +46,10 @@ contains
       end if
    end function constructor
 
+   !> @brief Finalize a reciprocal-space object.
+   !> @details Releases k-point, reciprocal-vector, Hamiltonian, overlap, band,
+   !>          DOS, tetrahedron, symmetry-map, and projection arrays.
+   !> @param[inout] this Reciprocal object being finalized.
    module subroutine destructor(this)
       type(reciprocal) :: this
 #ifdef USE_SAFE_ALLOC
@@ -104,6 +117,10 @@ contains
 #endif
    end subroutine destructor
 
+   !> @brief Reset reciprocal-space settings and owned storage to defaults.
+   !> @details Restores k-mesh, solver-mode, DOS, band-path, symmetry, and
+   !>          diagnostic options to baseline values and clears allocatables.
+   !> @param[inout] this Reciprocal object to reset.
    module subroutine restore_to_default(this)
       class(reciprocal), intent(inout) :: this
 
@@ -157,6 +174,11 @@ contains
       this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
    end subroutine restore_to_default
 
+   !> @brief Read the &reciprocal namelist and install reciprocal-space options.
+   !> @details Parses k-mesh, Fourier mode, band/DOS controls, symmetry options,
+   !>          tetrahedron settings, and diagnostics from this%control%fname.
+   !> @param[inout] this Reciprocal object whose input-facing options are populated.
+   !> @note This is an input boundary and may raise fatal diagnostics for invalid options.
    module subroutine build_from_file(this)
       class(reciprocal), intent(inout) :: this
 
@@ -307,6 +329,11 @@ contains
       call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
    end subroutine build_from_file
 
+   !> @brief Set Monkhorst-Pack mesh dimensions.
+   !> @param[inout] this Reciprocal object whose nk_mesh is updated.
+   !> @param[in] nk1 Number of k-points along reciprocal axis 1.
+   !> @param[in] nk2 Number of k-points along reciprocal axis 2.
+   !> @param[in] nk3 Number of k-points along reciprocal axis 3.
    module subroutine set_kpoint_mesh(this, nk1, nk2, nk3)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: nk1, nk2, nk3
@@ -316,6 +343,10 @@ contains
          trim(int2str(nk1)) // 'x' // trim(int2str(nk2)) // 'x' // trim(int2str(nk3)), __FILE__, __LINE__)
    end subroutine set_kpoint_mesh
 
+   !> @brief Generate reciprocal lattice vectors from the real-space lattice.
+   !> @details Computes the reciprocal basis and reciprocal-cell volume from
+   !>          lattice%a and lattice%alat for later k-point and Fourier work.
+   !> @param[inout] this Reciprocal object receiving reciprocal_vectors and volume.
    module subroutine generate_reciprocal_vectors(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -364,6 +395,10 @@ contains
          real2str(this%reciprocal_vectors(3, 3)) // ']', __FILE__, __LINE__)
    end subroutine generate_reciprocal_vectors
 
+   !> @brief Generate the configured Monkhorst-Pack k-point mesh.
+   !> @details Builds full or symmetry-reduced fractional k-points, weights, and
+   !>          optional MPI ownership metadata according to reciprocal settings.
+   !> @param[inout] this Reciprocal object receiving k_points/k_weights state.
    module subroutine generate_mp_mesh(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -436,6 +471,10 @@ contains
       call root_info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
    end subroutine generate_mp_mesh
 
+   !> @brief Determine per-type basis sizes for reciprocal matrices.
+   !> @details Maps each lattice atom type to sp/spd/spdf orbital counts used
+   !>          when packing site-major k-space Hamiltonian and projection blocks.
+   !> @param[inout] this Reciprocal object whose basis_size/max_orbs are updated.
    module subroutine set_basis_sizes(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -459,6 +498,10 @@ contains
       call root_info('reciprocal%set_basis_sizes: Basis sizes set: max_orb_channels = ' // trim(int2str(this%max_orbs)), __FILE__, __LINE__)
    end subroutine set_basis_sizes
 
+   !> @brief Build real-space neighbor vectors used by Fourier transforms.
+   !> @details Converts lattice neighbor geometry into Cartesian and direct
+   !>          per-type R-vector tables aligned with Hamiltonian neighbor slots.
+   !> @param[inout] this Reciprocal object receiving ham_vec_type arrays.
    module subroutine build_neighbor_vectors(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -534,6 +577,10 @@ contains
 
    end subroutine build_neighbor_vectors
 
+   !> @brief Configure MPI ownership for a k-point set.
+   !> @param[inout] this Reciprocal object receiving local/global k maps.
+   !> @param[in] nk_global Number of global k-points.
+   !> @param[in] enable_distribution If true, distribute k-points over MPI ranks.
    module subroutine setup_k_mesh_distribution(this, nk_global, enable_distribution)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: nk_global
@@ -562,6 +609,10 @@ contains
       end if
    end subroutine setup_k_mesh_distribution
 
+   !> @brief Convert a local k-point index to a global k-point index.
+   !> @param[in] this Reciprocal object containing distribution maps.
+   !> @param[in] ik_local Local k-point index.
+   !> @return Global k-point index.
    module integer function local_k_index_to_global(this, ik_local) result(ik_global)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik_local

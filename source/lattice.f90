@@ -401,16 +401,32 @@ module lattice_mod
 
 
    interface
+   !> @brief Construct a lattice object from an initialized control object.
+   !> @details Wires the lattice to the run control state, restores default
+   !>          geometry/structure-constant storage, and reads lattice input.
+   !> @param[in] control_obj Control object that owns the input-file name and run options.
+   !> @return Initialized lattice object.
    module function constructor(control_obj) result(obj)
       type(lattice) :: obj
       type(control), target, intent(in) :: control_obj
 
    end function constructor
 
+   !> @brief Finalize a lattice object.
+   !> @details Releases cluster, neighbor, surface, impurity, screening, and
+   !>          structure-constant arrays owned by the object.
+   !> @param[inout] this Lattice object being finalized.
    module subroutine destructor(this)
       type(lattice) :: this
    end subroutine destructor
 
+   !> @brief Read the &lattice namelist and build derived lattice data.
+   !> @details Parses bulk/surface/impurity geometry, cluster cutoffs, periodic
+   !>          boundary flags, and strux-screening options, then prepares
+   !>          primitive-cell and cluster state for later stages.
+   !> @param[inout] this Lattice object to populate.
+   !> @param[in] fname Optional input file; defaults to this%control%fname.
+   !> @note This is an input boundary and may raise fatal diagnostics for invalid options.
    module subroutine build_from_file(this, fname)
       class(lattice), intent(inout) :: this
       character(len=*), intent(in), optional :: fname
@@ -421,6 +437,11 @@ module lattice_mod
 
    end subroutine build_from_file
 
+   !> @brief Rebuild lattice state from already installed lattice members.
+   !> @details Reuses current geometry and namelist-derived settings to run the
+   !>          same cluster, primitive-cell, and structure setup normally reached
+   !>          from build_from_file.
+   !> @param[inout] this Lattice object whose current members provide the input state.
    module subroutine build_from_lattice(this)
       class(lattice), intent(inout) :: this
       integer :: nbulk_bulk, ntot, nbas, nrec, funit, iostatus, nsite_guess
@@ -434,6 +455,11 @@ module lattice_mod
       logical :: strux_want_sdot
    end subroutine build_from_lattice
 
+   !> @brief Compute primitive-cell derived quantities.
+   !> @details Converts lattice vectors to internal units, computes cell volume
+   !>          and Wigner-Seitz radius, and prepares inverse Cartesian lattice
+   !>          data used by periodic wrapping and neighbor searches.
+   !> @param[inout] this Lattice object whose a/alat/celldm state is updated.
    module subroutine build_data(this)
       class(lattice), intent(inout) :: this
       !> Local variables
@@ -442,12 +468,22 @@ module lattice_mod
 
    end subroutine build_data
 
+   !> @brief Reset lattice members to their default values.
+   !> @details Clears allocatable storage and restores scalar defaults; with the
+   !>          optional full flag it also clears persistent input-facing state.
+   !> @param[inout] this Lattice object to reset.
+   !> @param[in] full Optional flag requesting a full reset.
    module subroutine restore_to_default(this, full)
       class(lattice) :: this
       logical, intent(in), optional :: full
 
    end subroutine restore_to_default
 
+   !> @brief Build the bulk Bravais cluster.
+   !> @details Expands primitive-cell sites through lattice translations, cuts
+   !>          them by the configured radius, and fills bulk cluster coordinates,
+   !>          atomic labels, and optional Morton ordering.
+   !> @param[inout] this Lattice object receiving cr/iz/num/no cluster state.
    module subroutine bravais(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -461,6 +497,11 @@ module lattice_mod
 
    end subroutine bravais
 
+   !> @brief Reorder the bulk cluster by Morton space-filling-curve key.
+   !> @details Sorts cluster atoms in normalized Cartesian space to improve
+   !>          locality for real-space recursion kernels while preserving the
+   !>          per-atom coordinate/type arrays as a consistent permutation.
+   !> @param[inout] this Lattice object whose bulk cluster arrays are reordered.
    module subroutine morton_reorder_bulk(this)
       class(lattice), intent(inout) :: this
       integer :: kk, i, n
@@ -475,12 +516,24 @@ module lattice_mod
 
    end subroutine morton_reorder_bulk
 
+   !> @brief Encode a 3D integer grid coordinate as a Morton key.
+   !> @param[in] x Grid coordinate on the first axis.
+   !> @param[in] y Grid coordinate on the second axis.
+   !> @param[in] z Grid coordinate on the third axis.
+   !> @param[in] nbits Number of bits to interleave from each coordinate.
+   !> @return Interleaved 64-bit Morton code.
    module pure function morton_encode3(x, y, z, nbits) result(code)
       integer, intent(in) :: x, y, z, nbits
       integer(8) :: code
       integer :: b
    end function morton_encode3
 
+   !> @brief Sort an integer permutation by associated Morton keys.
+   !> @details Uses an in-place heapsort so key and permutation arrays are kept
+   !>          synchronized without extra sorting dependencies.
+   !> @param[inout] key Keys to sort in ascending order.
+   !> @param[inout] perm Permutation entries carried with each key.
+   !> @param[in] n Number of active entries in key and perm.
    module subroutine sort_by_key(key, perm, n)
       integer(8), intent(inout) :: key(:)
       integer, intent(inout) :: perm(:)
@@ -492,6 +545,10 @@ module lattice_mod
       ! Build heap then sift down (standard heapsort, O(n log n)).
    end subroutine sort_by_key
 
+   !> @brief Prepare surface-layer cluster metadata from a bulk cluster.
+   !> @details Builds layer z positions and surface index arrays used by the
+   !>          buildsurf path before selecting the active surface atoms.
+   !> @param[inout] this Lattice object whose surface helper arrays are filled.
    module subroutine build_clusup(this)
       class(lattice), intent(inout) :: this
       character(len=10) :: surftype
@@ -503,6 +560,11 @@ module lattice_mod
 
    end subroutine build_clusup
 
+   !> @brief Build the full surface cluster representation.
+   !> @details Selects atoms by surface orientation and layer bounds, identifies
+   !>          unique layer/type representatives, and installs the full surface
+   !>          coordinate/type arrays for downstream surface calculations.
+   !> @param[inout] this Lattice object receiving the full surface cluster.
    module subroutine build_surf_full(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -526,6 +588,11 @@ module lattice_mod
       ! Initial definitions
    end subroutine build_surf_full
 
+   !> @brief Build the legacy compact surface cluster.
+   !> @details Chooses representative atoms from the bulk cluster for each
+   !>          requested surface layer and writes the compact surface cluster
+   !>          arrays consumed by newclu/buildsurf workflows.
+   !> @param[inout] this Lattice object receiving compact surface state.
    module subroutine build_surf(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -538,6 +605,11 @@ module lattice_mod
 
    end subroutine build_surf
 
+   !> @brief Build an impurity/local cluster from a bulk or surface host.
+   !> @details Combines host cluster coordinates with impurity inclusions,
+   !>          creates local atom/type maps, and builds neighbor tables for
+   !>          impurity and defect calculations.
+   !> @param[inout] this Lattice object receiving impurity cluster arrays.
    module subroutine newclu(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -554,6 +626,12 @@ module lattice_mod
       ! Set clust variables
    end subroutine newclu
 
+   !> @brief Build neighbor maps and structure constants.
+   !> @details Constructs the neighbor table around representative atoms, then
+   !>          either computes screened structure constants or only prepares the
+   !>          neighbor geometry depending on do_str.
+   !> @param[inout] this Lattice object receiving nn/sbar/sdot/sbarvec state.
+   !> @param[in] do_str If true, compute structure constants after neighbor mapping.
    module subroutine structb(this, do_str)
       class(lattice), intent(inout) :: this
       logical, intent(in) :: do_str
@@ -571,12 +649,20 @@ module lattice_mod
 
    end subroutine structb
 
+   !> @brief Allocate storage for strux structure constants.
+   !> @param[inout] this Lattice object whose sbar/sdot/alpha storage is reset.
+   !> @param[in] sbar_dim Orbital dimension of each structure-constant block.
+   !> @param[in] nm Number of neighbor slots to store.
    module subroutine init_strux_storage(this, sbar_dim, nm)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: sbar_dim, nm
 
    end subroutine init_strux_storage
 
+   !> @brief Return default l-resolved screening constants.
+   !> @param[in] this Lattice object providing context for the pure helper.
+   !> @param[in] nl Number of angular-momentum channels requested.
+   !> @return Default screening-alpha array of length nl.
    module pure function default_screening_alpha(this, nl) result(alpha_default)
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl
@@ -586,12 +672,19 @@ module lattice_mod
 
    end function default_screening_alpha
 
+   !> @brief Convert the screening string to a strux-library mode code.
+   !> @param[in] this Lattice object containing the screening option.
+   !> @return STRUX_LMTO47_IALPHA_* selector used by strux_compute.
    module integer function strux_mode(this)
       class(lattice), intent(in) :: this
       character(len=:), allocatable :: screening_mode
 
    end function strux_mode
 
+   !> @brief Load symbolic-atom data needed by strux helpers.
+   !> @details Lazily populates this%symbolic_atoms from the control input when
+   !>          muffin-tin radii or species labels are required.
+   !> @param[inout] this Lattice object whose symbolic_atoms cache may be filled.
    module subroutine load_symbolic_atoms_if_needed(this)
       class(lattice), intent(inout) :: this
       
@@ -600,6 +693,11 @@ module lattice_mod
 
    end subroutine load_symbolic_atoms_if_needed
 
+   !> @brief Build species muffin-tin radii for strux input.
+   !> @param[inout] this Lattice object providing symbolic-atom data.
+   !> @param[in] nspec Number of distinct species.
+   !> @param[in] species_labels Atomic/species labels to map.
+   !> @param[out] rmt Muffin-tin radius for each species.
    module subroutine build_rmt(this, nspec, species_labels, rmt)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: nspec
@@ -609,6 +707,12 @@ module lattice_mod
 
    end subroutine build_rmt
 
+   !> @brief Build hard-core radii for strux sigma screening.
+   !> @param[in] this Lattice object containing screening_sigma settings.
+   !> @param[in] nl Number of angular-momentum channels.
+   !> @param[in] nspec Number of distinct species.
+   !> @param[in] rmt Muffin-tin radii for each species.
+   !> @param[out] hcr Hard-core radii indexed by l channel and species.
    module subroutine build_hcr(this, nl, nspec, rmt, hcr)
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl, nspec
@@ -618,6 +722,16 @@ module lattice_mod
 
    end subroutine build_hcr
 
+   !> @brief Assemble alpha, hard-core, and muffin-tin arrays for strux_compute.
+   !> @details Combines manual/default screening inputs with per-species radius
+   !>          data in the layout expected by the local strux library.
+   !> @param[inout] this Lattice object providing screening and symbolic-atom data.
+   !> @param[in] nspec Number of species in the strux solve cluster.
+   !> @param[in] nl Number of angular-momentum channels.
+   !> @param[in] species_labels Species labels in strux order.
+   !> @param[out] alpha_in Screening constants in strux l/species layout.
+   !> @param[out] hcr Hard-core radii in strux l/species layout.
+   !> @param[out] rmt Muffin-tin radii by species.
    module subroutine build_strux_inputs(this, nspec, nl, species_labels, alpha_in, hcr, rmt)
       class(lattice), intent(inout) :: this
       integer, intent(in) :: nspec, nl
@@ -630,6 +744,11 @@ module lattice_mod
 
    end subroutine build_strux_inputs
 
+   !> @brief Compute screened structure constants through the strux backend.
+   !> @details Maps the RS-LMTO cluster and basis labels into strux input,
+   !>          calls strux_compute, and remaps the returned screened constants
+   !>          and optional derivatives back into lattice storage.
+   !> @param[inout] this Lattice object receiving sbar/sdot/alpha data.
    module subroutine structb_strux(this)
       class(lattice), intent(inout) :: this
 
@@ -651,6 +770,12 @@ module lattice_mod
 
    end subroutine structb_strux
 
+   !> @brief Write one strux structure-constant neighbor block for diagnostics.
+   !> @param[in] this Lattice object containing sbar and neighbor vectors.
+   !> @param[in] nl2 Block dimension to write.
+   !> @param[in] m Neighbor slot.
+   !> @param[in] ii Representative atom/type index.
+   !> @param[in] jclus Cluster atom index associated with the block.
    module subroutine write_strux_block(this, nl2, m, ii, jclus)
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl2, m, ii, jclus
@@ -660,6 +785,10 @@ module lattice_mod
       !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
    end subroutine write_strux_block
 
+   !> @brief Write stored neighbor vectors to a diagnostic unit.
+   !> @param[in] iunit Output unit.
+   !> @param[in] sbarvec Neighbor vectors to dump.
+   !> @param[in] nt Number of active vectors.
    module subroutine write_neighbor_vector_dump(iunit, sbarvec, nt)
       integer, intent(in) :: iunit, nt
       real(rp), intent(in) :: sbarvec(:, :)
@@ -667,18 +796,39 @@ module lattice_mod
 
    end subroutine write_neighbor_vector_dump
 
+   !> @brief Return the representative cluster atom for an inequivalent type.
+   !> @param[in] this Lattice object containing irec/iu mappings.
+   !> @param[in] ii Inequivalent atom/type index.
+   !> @return Cluster atom index used as representative for ii.
    module integer function representative_atom_index(this, ii)
       class(lattice), intent(in) :: this
       integer, intent(in) :: ii
 
    end function representative_atom_index
 
+   !> @brief Return the primitive-basis label associated with a cluster atom.
+   !> @param[in] this Lattice object containing primitive and cluster labels.
+   !> @param[in] ia Cluster atom index.
+   !> @return Primitive-cell basis label for ia.
    module integer function primitive_basis_label(this, ia)
       class(lattice), intent(in) :: this
       integer, intent(in) :: ia
 
    end function primitive_basis_label
 
+   !> @brief Find a strux pair table entry matching a target neighbor vector.
+   !> @details Searches lattice translations and basis-pair labels for the
+   !>          pair whose Cartesian displacement matches vec_target within tol.
+   !> @param[in] nttab Number of pair-table entries.
+   !> @param[in] iax Pair translation/index table from strux.
+   !> @param[in] plat Primitive lattice vectors.
+   !> @param[in] pos Basis positions.
+   !> @param[in] alat Lattice parameter used to scale vectors.
+   !> @param[in] ib Source basis label.
+   !> @param[in] jb Target basis label.
+   !> @param[in] vec_target Target displacement vector.
+   !> @param[in] tol Matching tolerance.
+   !> @return Matching pair-table index, or zero if no match is found.
    module integer function find_pair_by_vector(nttab, iax, plat, pos, alat, ib, jb, vec_target, tol)
       integer, intent(in) :: nttab, ib, jb
       integer, intent(in) :: iax(:,:)
@@ -690,6 +840,13 @@ module lattice_mod
 
    end function find_pair_by_vector
 
+   !> @brief Find a cluster neighbor atom by displacement vector.
+   !> @param[in] this Lattice object containing cluster metadata.
+   !> @param[in] ia Source cluster atom.
+   !> @param[in] vec_target Target displacement in lattice-scaled coordinates.
+   !> @param[in] cralat Cluster coordinates scaled by the lattice parameter.
+   !> @param[in] tol Matching tolerance.
+   !> @return Cluster atom index matching the displacement, or zero if not found.
    module integer function find_neighbor_atom_by_vector(this, ia, vec_target, cralat, tol)
       class(lattice), intent(in) :: this
       integer, intent(in) :: ia
@@ -700,6 +857,9 @@ module lattice_mod
 
    end function find_neighbor_atom_by_vector
 
+   !> @brief Build the orbital-order map between RS-LMTO and strux layouts.
+   !> @param[in] norb Number of orbitals in the active basis.
+   !> @param[out] orb_map Mapping from local orbital index to strux orbital index.
    module subroutine build_orbital_map(norb, orb_map)
       integer, intent(in) :: norb
       integer, intent(out) :: orb_map(16)
@@ -709,6 +869,10 @@ module lattice_mod
 
    end subroutine build_orbital_map
 
+   !> @brief Build atom-list metadata for self-consistent atom types.
+   !> @details Fills atlist/chargetrf_type-style mappings used by impurity and
+   !>          local-cluster charge transfer paths.
+   !> @param[inout] this Lattice object whose atom-list arrays are updated.
    module subroutine atomlist(this)
       class(lattice), intent(inout) :: this
       ! Local variables
@@ -717,6 +881,20 @@ module lattice_mod
 
    end subroutine atomlist
 
+   !> @brief Select cluster atoms inside a primitive-cell volume.
+   !> @details Tests positions relative to a central atom against the three
+   !>          primitive vectors and returns the atom indices that lie inside.
+   !> @param[inout] this Lattice object providing volume-test helper methods.
+   !> @param[in] cr Cluster coordinates.
+   !> @param[in] num Cluster atom labels.
+   !> @param[in] num_atoms Number of atoms in cr/num.
+   !> @param[in] central_atom Index of the atom used as the volume origin.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[in] plane_constant Boundary tolerance/plane constant.
+   !> @param[out] atoms_in_volume Atom indices found inside the volume.
+   !> @param[out] atom_count Number of returned atoms.
    module subroutine check_atoms_in_volume(this, cr, num, num_atoms, central_atom, a1, a2, a3, plane_constant, atoms_in_volume, atom_count)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
@@ -731,6 +909,13 @@ module lattice_mod
        ! Initialize array for atoms inside the primitive cell volume
    end subroutine check_atoms_in_volume
 
+   !> @brief Test whether a relative position is inside a primitive parallelepiped.
+   !> @param[inout] this Lattice object providing the type-bound helper context.
+   !> @param[in] relative_pos Position measured from the cell origin.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[out] inside True if the point is inside the primitive volume.
    module subroutine check_within_volume(this, relative_pos, a1, a2, a3, inside)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: relative_pos(3), a1(3), a2(3), a3(3)
@@ -741,6 +926,11 @@ module lattice_mod
        ! Calculate dot products between the vectors
    end subroutine check_within_volume
 
+   !> @brief Return unique integer structure/type labels.
+   !> @param[inout] this Lattice object providing the type-bound helper context.
+   !> @param[in] num Input labels.
+   !> @param[in] num_atoms Number of active labels.
+   !> @param[out] unique_nums Unique labels in first-seen order.
    module subroutine find_unique_struct(this, num, num_atoms, unique_nums)
        class(lattice), intent(inout) :: this
        integer, intent(in) :: num(:), num_atoms
@@ -752,6 +942,19 @@ module lattice_mod
        ! Allocate temporary array for unique numbers
    end subroutine find_unique_struct
 
+   !> @brief Identify symmetry-unique atoms inside a primitive volume.
+   !> @details Removes atoms related by primitive translations from an input
+   !>          volume selection and returns one representative per unique site.
+   !> @param[inout] this Lattice object providing helper context.
+   !> @param[in] cr Cluster coordinates.
+   !> @param[in] num_atoms Number of atoms in cr.
+   !> @param[in] atoms_in_volume Candidate atom indices.
+   !> @param[in] atom_count Number of candidate atoms.
+   !> @param[in] a1 First primitive vector.
+   !> @param[in] a2 Second primitive vector.
+   !> @param[in] a3 Third primitive vector.
+   !> @param[out] unique_atoms Representative atom indices.
+   !> @param[out] unique_atom_count Number of representatives.
    module subroutine identify_unique_atoms(this, cr, num_atoms, atoms_in_volume, atom_count, a1, a2, a3, unique_atoms, unique_atom_count)
        class(lattice), intent(inout) :: this
        real(rp), intent(in) :: cr(3, num_atoms), a1(3), a2(3), a3(3)
@@ -766,6 +969,19 @@ module lattice_mod
        ! Initialize temporary array for unique atoms list
    end subroutine identify_unique_atoms
 
+   !> @brief Build one legacy screened-structure-constant block.
+   !> @details Forms a local cluster around atom ia and drives the legacy
+   !>          CLUSBA/MICHA screening path used by the non-strux backend.
+   !> @param[inout] this Lattice object receiving legacy sbar data.
+   !> @param[in] ia Center atom index.
+   !> @param[in] r2 Cluster cutoff radius squared.
+   !> @param[in] wav Wigner-Seitz radius.
+   !> @param[in] crd Cluster coordinates.
+   !> @param[in] nat Number of atoms in crd.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[in] np Number of primitive atoms/neighbor entries.
+   !> @param[in] nr Number of local-cluster vectors.
+   !> @param[in] ii Inequivalent atom/type index.
    module subroutine dbar1(this, ia, r2, wav, crd, nat, ndi, np, nr, ii)
       implicit none
       class(lattice), intent(inout) :: this
@@ -788,6 +1004,17 @@ module lattice_mod
 
    end subroutine dbar1
 
+   !> @brief Collect local cluster vectors within a cutoff.
+   !> @details Selects neighbors around atom ia from crd, sorted by distance, for
+   !>          use in the legacy structure-constant screening routines.
+   !> @param[inout] this Lattice object providing helper context.
+   !> @param[in] r2 Cutoff radius squared.
+   !> @param[in] crd Candidate cluster coordinates.
+   !> @param[in] ia Center atom index.
+   !> @param[in] nat Number of candidate atoms.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[inout] n Number of vectors found.
+   !> @param[inout] sbarvec_out Optional output neighbor-vector storage.
    module subroutine clusba(this, r2, crd, ia, nat, ndi, n, sbarvec_out)
       implicit none
       class(lattice), intent(inout) :: this
@@ -805,6 +1032,22 @@ module lattice_mod
 
    end subroutine clusba
 
+   !> @brief Run the legacy MICHA screening construction.
+   !> @details Builds raw structure constants, applies shell decomposition and
+   !>          Cholesky-style screening, and accumulates screened sbar blocks.
+   !> @param[in] rws Wigner-Seitz radius.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[in] nlm Orbital block dimension.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[in] na Length of screening-coefficient storage.
+   !> @param[inout] sbar Screened structure constants.
+   !> @param[inout] a Screening coefficient work array.
+   !> @param[inout] wk Work array.
+   !> @param[inout] bet Screening beta work array.
+   !> @param[inout] s Raw structure-constant work matrix.
+   !> @param[in] iclus Center-cluster index.
+   !> @param[in] r2 Cutoff radius squared.
    module subroutine micha(rws, r, nr, nlm, nrl, na, sbar, a, wk, bet, s, iclus, r2)
       implicit none
       ! Inputs              .
@@ -826,6 +1069,13 @@ module lattice_mod
 
    end subroutine micha
 
+   !> @brief Build raw canonical structure constants for a local cluster.
+   !> @param[in] w Distance scaling factor.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[inout] s Raw structure-constant matrix.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[in] nlm Orbital block dimension.
    module subroutine STREZE(w, r, nr, s, nrl, nlm)
       implicit none
       ! Input
@@ -845,6 +1095,20 @@ module lattice_mod
       intrinsic SQRT
    end subroutine streze
 
+   !> @brief Apply shell decomposition and screening to legacy structure constants.
+   !> @param[in] r Local cluster vectors.
+   !> @param[in] nr Number of local cluster vectors.
+   !> @param[in] nlm Orbital block dimension.
+   !> @param[in] nrl Reduced screening dimension.
+   !> @param[inout] s Raw/screened structure-constant work matrix.
+   !> @param[inout] a Screening coefficient work array.
+   !> @param[in] na Length of a.
+   !> @param[in] q Angular-momentum shell weights.
+   !> @param[inout] bet Screening beta work array.
+   !> @param[inout] wk Work array.
+   !> @param[inout] sbar Screened structure constants.
+   !> @param[in] iclus Center-cluster index.
+   !> @param[in] r2 Cutoff radius squared.
    module subroutine shldch(r, nr, nlm, nrl, s, a, na, q, bet, wk, sbar, iclus, r2)
       implicit none
       !parameter for cutoff of sbar construction
@@ -868,6 +1132,10 @@ module lattice_mod
       !integer, external :: LL
    end subroutine shldch
 
+   !> @brief Evaluate canonical structure-constant angular blocks.
+   !> @param[in] w Distance scaling factor.
+   !> @param[in] dr Displacement vector.
+   !> @param[out] sc 16-by-16 orbital structure-constant block.
    module subroutine canso(w, dr, sc)
       implicit none
       ! Input
@@ -889,6 +1157,12 @@ module lattice_mod
       !     f-orbitals (10-16): fz3, fxz2, fyz2, fz(x2-y2), fxyz, fx3, fy3
    end subroutine canso
 
+   !> @brief Factor a packed real symmetric matrix for legacy screening.
+   !> @param[inout] c Packed matrix/coefficient storage.
+   !> @param[in] na Length of c.
+   !> @param[inout] w Work/vector storage.
+   !> @param[in] n Matrix order.
+   !> @param[out] ndef Number of non-positive/deficient pivots detected.
    module subroutine chlr2f(c, na, w, n, ndef)
       implicit none
       ! Input
@@ -905,6 +1179,12 @@ module lattice_mod
 
    end subroutine chlr2f
 
+   !> @brief Solve against a packed Cholesky factor for legacy screening.
+   !> @param[in] c Packed factor storage.
+   !> @param[in] na Length of c.
+   !> @param[inout] v Right-hand sides overwritten by solved vectors.
+   !> @param[in] n Matrix order.
+   !> @param[in] m Number of right-hand sides.
    module subroutine chlr2s(c, na, v, n, m)
       implicit none
       ! Input
@@ -918,6 +1198,9 @@ module lattice_mod
 
    end subroutine chlr2s
 
+   !> @brief Map an LM orbital index to angular-momentum quantum number l.
+   !> @param[in] ilm One-based LM orbital index.
+   !> @return Angular-momentum shell index for ilm.
    module function LL(ilm)
       implicit none
       ! Input
@@ -929,6 +1212,22 @@ module lattice_mod
       ! Data Declarations
    end function LL
 
+   !> @brief Build representative neighbor vectors for each atom type.
+   !> @details Compares cluster coordinates around representative atoms and
+   !>          fills neighbor maps plus displacement sets used by structb.
+   !> @param[inout] this Lattice object providing tolerance and helper context.
+   !> @param[in] crd Cluster coordinates.
+   !> @param[in] no Atom type labels for cluster atoms.
+   !> @param[in] iu Representative atom indices.
+   !> @param[inout] nn Neighbor table to fill.
+   !> @param[in] nat Number of cluster atoms.
+   !> @param[in] ntot Number of representative atoms.
+   !> @param[in] nomx Number of representative/type slots.
+   !> @param[in] ndi Leading dimension/capacity of crd.
+   !> @param[in] nnmx Maximum neighbor slots.
+   !> @param[inout] set Neighbor displacement vectors.
+   !> @param[inout] idnn Neighbor identifier list.
+   !> @param[out] ret Return/status vector used by legacy callers.
    module subroutine remd(this, crd, no, iu, nn, nat, ntot, nomx, ndi, nnmx, set, idnn, ret)
       implicit none
       ! Inputs
@@ -948,6 +1247,14 @@ module lattice_mod
       !-BUILDS VECTORS SET(3, NOMX, NNMX) CONNECTING NEIGHBORS OF EACH TYPE NO-
    end subroutine remd
 
+   !> @brief Write the neighbor-map table in legacy text format.
+   !> @param[in] IM Output unit.
+   !> @param[in] IZP Atomic numbers/labels for printed atoms.
+   !> @param[in] NN Neighbor table.
+   !> @param[in] NO Atom type labels.
+   !> @param[in] ND Number of atoms in NO/IZP.
+   !> @param[in] NM Number of neighbor slots.
+   !> @param[in] NTOT Number of representative atoms.
    module subroutine outmap(IM, IZP, NN, NO, ND, NM, NTOT)
       implicit none
       ! Input
@@ -962,6 +1269,13 @@ module lattice_mod
 
    end subroutine outmap
 
+   !> @brief Classify a neighbor-shell pair by distance cutoff.
+   !> @param[in] I First shell/type index.
+   !> @param[in] J Second shell/type index.
+   !> @param[in] R2 Squared distance between sites.
+   !> @param[in] DD Distance tolerance or shell spacing.
+   !> @param[in] CT Shell cutoff radii.
+   !> @return Legacy neighbor-shell map value.
    module integer function mapa(I, J, R2, DD, CT)
       implicit none
       ! Input
@@ -974,6 +1288,13 @@ module lattice_mod
 
    end function mapa
 
+   !> @brief Compute the minimum-image coordinate difference between two atoms.
+   !> @param[inout] this Lattice object containing periodic-boundary settings.
+   !> @param[in] Natom Number of atoms in coord.
+   !> @param[in] coord Atomic coordinates.
+   !> @param[in] i_atom First atom index.
+   !> @param[in] j_atom Second atom index.
+   !> @param[out] cdiff Minimum-image displacement from i_atom to j_atom.
    module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff)
       implicit none
       class(lattice), intent(inout) :: this
@@ -989,6 +1310,20 @@ module lattice_mod
       !
    end subroutine f_wrap_coord_diff
 
+   !> @brief Build the atom neighbor table using shell cutoffs.
+   !> @details Uses spatial binning and optional periodic wrapping to find
+   !>          neighbors within the configured cutoff shells and populate NN.
+   !> @param[inout] this Lattice object containing cell/PBC state.
+   !> @param[inout] ct Shell cutoff radii.
+   !> @param[in] crd Atomic coordinates.
+   !> @param[in] ndim Coordinate leading dimension.
+   !> @param[in] nat Number of atoms.
+   !> @param[in] izp Atomic numbers/labels.
+   !> @param[inout] nn Neighbor table.
+   !> @param[in] nd Number of atoms represented in nn.
+   !> @param[inout] nm Maximum/actual neighbor slots.
+   !> @param[in] ngbr Legacy neighbor-shell classification function.
+   !> @param[in] ntot Number of representative atoms.
    module subroutine nncal(this,ct, crd, ndim, nat, izp, nn, nd, nm, ngbr, ntot)
       implicit none
       class(lattice), intent(inout) :: this
@@ -1019,6 +1354,13 @@ module lattice_mod
 
    end subroutine
 
+   !> @brief Read legacy cluster coordinate records from a unit.
+   !> @param[in] alat Lattice parameter used for coordinate scaling.
+   !> @param[in] nndim Maximum number of cluster atoms.
+   !> @param[inout] cr Coordinate array to fill.
+   !> @param[inout] iz Atomic numbers/labels.
+   !> @param[inout] n Atom-number labels.
+   !> @param[in] ip Input unit.
    module subroutine leia(alat, nndim, cr, iz, n, ip)
       implicit none
       ! Input
@@ -1032,6 +1374,12 @@ module lattice_mod
 
    end subroutine
 
+   !> @brief Sort a legacy matrix block by its first column.
+   !> @param[in] nl First active row/starting index.
+   !> @param[in] ndim Leading dimension of m.
+   !> @param[inout] m Matrix block to sort.
+   !> @param[in] nd Number of columns.
+   !> @param[in] nt Number of active rows.
    module subroutine bubble(nl, ndim, m, nd, nt)
       implicit none
       ! Inputs
@@ -1044,6 +1392,18 @@ module lattice_mod
 
    end subroutine bubble
 
+   !> @brief Cut translated primitive-cell atoms to a spherical cluster.
+   !> @param[in] i Center atom index.
+   !> @param[in] l Number of candidate atoms.
+   !> @param[in] ndim Array capacity.
+   !> @param[in] crd Candidate coordinates.
+   !> @param[out] cr Coordinates that survive the cut.
+   !> @param[in] izp Candidate atomic labels.
+   !> @param[out] iz Atomic labels that survive the cut.
+   !> @param[out] num Atom-number labels that survive the cut.
+   !> @param[in] no Candidate atom-number labels.
+   !> @param[in] rs Cut radius.
+   !> @param[out] ii Number of atoms that survived the cut.
    module subroutine cut(i, l, ndim, crd, cr, izp, iz, num, no, rs, ii)
       ! Inputs
       real(rp), intent(in) :: rs
@@ -1061,12 +1421,18 @@ module lattice_mod
 
    end subroutine cut
 
+   !> @brief Check lattice option consistency after input parsing.
+   !> @param[inout] this Lattice object whose options are validated.
    module subroutine check_all(this)
       implicit none
       class(lattice) :: this
 
    end subroutine check_all
 
+   !> @brief Count reduced basis/species entries from the cluster atom labels.
+   !> @details Computes nbas/reduced_nbas-style counts used by charge and
+   !>          Hamiltonian setup after the cluster atom types are known.
+   !> @param[inout] this Lattice object whose basis counters are updated.
    module subroutine calculate_nbas(this)
       implicit none
       class(lattice) :: this
@@ -1076,6 +1442,10 @@ module lattice_mod
 
    end subroutine calculate_nbas
 
+   !> @brief Print the complete lattice state in the legacy diagnostic format.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
    module subroutine print_state_full(this, unit, file)
       class(lattice), intent(in) :: this
 
@@ -1085,6 +1455,10 @@ module lattice_mod
 
    end subroutine print_state_full
 
+   !> @brief Print the compact lattice state in the legacy diagnostic format.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
    module subroutine print_state(this, unit, file)
       implicit none
       class(lattice), intent(in) :: this
@@ -1095,6 +1469,12 @@ module lattice_mod
 
    end subroutine print_state
 
+   !> @brief Print lattice state as a generated namelist.
+   !> @details Emits the current lattice configuration with namelist_generator
+   !>          so diagnostics can be compared with input-facing settings.
+   !> @param[in] this Lattice object to print.
+   !> @param[in] unit Optional output unit.
+   !> @param[in] file Optional output file path.
    module subroutine print_state_formatted(this, unit, file)
       class(lattice), intent(in) :: this
 

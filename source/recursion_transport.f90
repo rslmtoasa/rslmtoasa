@@ -2,6 +2,16 @@ submodule(recursion_mod) recursion_transport
 
 contains
 
+   !> @brief Apply a real-space velocity-like operator to a Chebyshev block state.
+   !> @details Multiplies psi_in by the supplied operator blocks v_op over the
+   !>          current light cone. Conductivity and spin/orbital response moments
+   !>          use this for v_a and v_b insertions when HOH is inactive.
+   !> @param[inout] this Recursion object; updates idum to the propagated support.
+   !> @param[in] c_or_n BLAS transpose selector for the operator blocks.
+   !> @param[in] v_op Operator blocks in the real-space hopping layout.
+   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[out] psi_out Output block state in the same layout.
+   !> @note The local-Hamiltonian velocity path is intentionally not implemented.
    module subroutine velo_vec_matmul(this, c_or_n, v_op, psi_in, psi_out)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :, :), intent(in) :: v_op
@@ -43,6 +53,16 @@ contains
       !$omp end parallel do
    end subroutine velo_vec_matmul
 
+   !> @brief Apply a velocity-like operator with the HOH two-sweep correction.
+   !> @details Computes the response-operator action used by stochastic
+   !>          conductivity moments when the orthogonalized Hamiltonian correction
+   !>          is active, including the companion vo_op sweep through H psi.
+   !> @param[inout] this Recursion object; uses psi1/psi2/hohpsi scratch arrays.
+   !> @param[in] v_op Primary velocity or torque operator blocks.
+   !> @param[in] vo_op Orthogonalization partner blocks for the HOH correction.
+   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[out] psi_out Output block state in the same layout.
+   !> @note Mutates izero/idum while propagating the active light cone.
    module subroutine velo_hoh_vec_matmul(this, v_op, vo_op, psi_in, psi_out)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
@@ -115,6 +135,16 @@ contains
 
    end subroutine velo_hoh_vec_matmul
 
+   !> @brief Apply the scaled Hamiltonian with HOH correction to a block state.
+   !> @details Forms ((H-b)/a) psi_in using the two-sweep h - H O H + e_nu + l.s
+   !>          representation. Chebyshev stochastic transport uses this as the
+   !>          recurrence operator when hamiltonian%hoh is enabled.
+   !> @param[inout] this Recursion object; uses HOH scratch arrays and light-cone maps.
+   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[out] psi_out Scaled Hamiltonian action in the same layout.
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
+   !> @note Mutates izero/idum to the support reached by the Hamiltonian action.
    module subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
@@ -247,6 +277,16 @@ contains
       this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
    end subroutine ham_hoh_vec_matmul
 
+   !> @brief Apply the scaled no-HOH Hamiltonian to a block state.
+   !> @details Forms ((H-b)/a) psi_in over the local and bulk real-space hopping
+   !>          blocks. This is the legacy Chebyshev recurrence operator for
+   !>          stochastic conductivity and related response moments.
+   !> @param[inout] this Recursion object; updates idum to the propagated support.
+   !> @param[in] psi_in Input block state, site-major as (nb,nb,nsite).
+   !> @param[out] psi_out Scaled Hamiltonian action in the same layout.
+   !> @param[in] a Hamiltonian scaling half-width.
+   !> @param[in] b Hamiltonian scaling center.
+   !> @note Includes ccor_2c blocks when hamiltonian%ccor_2c is set.
    module subroutine ham_vec_matmul(this, psi_in, psi_out, a, b)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
@@ -323,6 +363,14 @@ contains
       psi_out(:, :, :) = psi_out(:, :, :)/a 
    end subroutine ham_vec_matmul
 
+   !> @brief Compute two-index stochastic Chebyshev moments for transport.
+   !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
+   !>          spin, orbital, accumulation, and torque conductivity routes. The
+   !>          starting states are either representative atom types or random
+   !>          vectors, selected by control%cond_calctype.
+   !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
+   !> @note Builds the required real-space velocity/torque operators and may
+   !>       dispatch to GPU or fast CPU stochastic kernels.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -629,6 +677,12 @@ contains
 
    end subroutine compute_moments_stochastic
 
+   !> @brief Generate block-Lanczos coefficients for intersite atom pairs.
+   !> @details Runs four phase-combination recursions per pair so downstream Green
+   !>          function code can reconstruct G_ij for exchange and conductivity.
+   !>          MPI ranks split lattice%ijpair, storing local results in a_b/b2_b.
+   !> @param[inout] this Recursion object; fills pair-local block coefficients.
+   !> @note May dispatch to CUDA or haydock_fast before falling back to legacy loops.
    module subroutine recur_b_ij(this)
       use mpi_mod
       class(recursion), intent(inout) :: this
@@ -835,6 +889,12 @@ contains
       !end do
    end subroutine recur_b_ij
 
+   !> @brief Generate Chebyshev moments for intersite atom pairs.
+   !> @details Runs four phase-combination moment recursions per ij pair so
+   !>          green%chebyshev_green_ij can reconstruct intersite Green functions
+   !>          for exchange and conductivity workflows.
+   !> @param[inout] this Recursion object; fills pair-local slices of mu_n.
+   !> @note Work is MPI-partitioned and may dispatch to CUDA.
    module subroutine chebyshev_recur_ij(this)
       use mpi_mod
       class(recursion), intent(inout) :: this
@@ -935,6 +995,15 @@ contains
       end do
    end subroutine chebyshev_recur_ij
 
+   !> @brief Compute Chebyshev orbital-moment response data.
+   !> @details Builds angular-momentum operator insertions and evaluates
+   !>          Chebyshev moment/Green-function contractions for the
+   !>          post_processing_orbital_modern workflow. The route is always
+   !>          Chebyshev and loops over cluster atoms rather than only nrec atoms.
+   !> @param[inout] this Recursion object; allocates temporary orbital moments
+   !>                and uses mu_n-style Chebyshev work arrays.
+   !> @note MPI ranks split the atom loop; the physically meaningful orbital data
+   !>       are accumulated in the orbital-moment arrays built inside this routine.
    module subroutine chebyshev_orbital_mod(this)
       use mpi_mod
       class(recursion), intent(inout) :: this

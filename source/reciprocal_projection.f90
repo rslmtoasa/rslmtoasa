@@ -6,6 +6,8 @@ submodule (reciprocal_mod) reciprocal_projection
 
 contains
 
+   !> @brief Dispatch projected-DOS calculation for the active DOS method.
+   !> @param[inout] this Reciprocal object receiving projected DOS arrays.
    module subroutine project_dos_orbitals(this)
       class(reciprocal), intent(inout) :: this
 
@@ -19,6 +21,10 @@ contains
       end if
    end subroutine project_dos_orbitals
 
+!> @brief Calculate orbital- and spin-projected DOS with Gaussian broadening.
+!> @details Projects eigenvector weights onto site/orbital/spin channels and
+!>          accumulates both scalar and directional spin DOS components.
+!> @param[inout] this Reciprocal object receiving projected DOS arrays.
 module subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
    integer :: ik, ik_global, ib, ie, iorb, i, isite
@@ -196,6 +202,10 @@ module subroutine project_dos_orbitals_gaussian(this)
    deallocate(site_orb_offset)
 end subroutine project_dos_orbitals_gaussian
 
+   !> @brief Return the local spin axis for a projected-DOS site.
+   !> @param[in] this Reciprocal object containing lattice magnetic moments.
+   !> @param[in] isite Site index in the reciprocal packing.
+   !> @param[out] axis Normalized local spin axis.
    module subroutine get_site_spin_axis(this, isite, axis)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: isite
@@ -218,6 +228,8 @@ end subroutine project_dos_orbitals_gaussian
    end subroutine get_site_spin_axis
 
 #ifdef USE_MPI
+   !> @brief Synchronize lattice local-density-matrix data across MPI ranks.
+   !> @param[inout] lattice_obj Lattice object whose ldm-like storage is synchronized.
    module subroutine sync_lattice_ldm(lattice_obj)
       use lattice_mod
       type(lattice), intent(inout) :: lattice_obj
@@ -258,6 +270,18 @@ end subroutine project_dos_orbitals_gaussian
    end subroutine sync_lattice_ldm
 #endif
 
+   !> @brief Project one spinor eigenvector block onto scalar and vector weights.
+   !> @param[in] this Reciprocal object containing eigenvectors.
+   !> @param[in] ik k-point index.
+   !> @param[in] ib Band index.
+   !> @param[in] site_orb_start First orbital index for the site block.
+   !> @param[in] n_orb_per_spin Number of orbital channels per spin.
+   !> @param[in] i_first First local orbital index in the projection range.
+   !> @param[in] i_last Last local orbital index in the projection range.
+   !> @param[out] total_char Scalar projected character.
+   !> @param[out] mx_char Projected x spin moment character.
+   !> @param[out] my_char Projected y spin moment character.
+   !> @param[out] mz_char Projected z spin moment character.
    module subroutine compute_spinor_block_projection(this, ik, ib, site_orb_start, n_orb_per_spin, i_first, i_last, &
                                               total_char, mx_char, my_char, mz_char)
       class(reciprocal), intent(in) :: this
@@ -291,6 +315,10 @@ end subroutine project_dos_orbitals_gaussian
       end do
    end subroutine compute_spinor_block_projection
 
+   !> @brief Calculate projected DOS with tetrahedron integration.
+   !> @details Averages orbital/spinor projection weights over tetrahedron
+   !>          corners and accumulates scalar plus directional projected DOS.
+   !> @param[inout] this Reciprocal object receiving projected DOS arrays.
    module subroutine project_dos_orbitals_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
 
@@ -573,6 +601,10 @@ end subroutine project_dos_orbitals_gaussian
       call g_logger%info('project_dos_orbitals_tetrahedron: Tetrahedron orbital projection calculation completed', __FILE__, __LINE__)
    end subroutine project_dos_orbitals_tetrahedron
 
+   !> @brief Integrate tabulated data with the trapezoidal rule.
+   !> @param[in] x Grid coordinates.
+   !> @param[in] y Values on the grid.
+   !> @return Trapezoidal integral over the grid.
    module function trapezoidal_integral(x, y) result(integral)
       real(rp), dimension(:), intent(in) :: x, y
       real(rp) :: integral
@@ -597,6 +629,12 @@ end subroutine project_dos_orbitals_gaussian
       end do
    end function trapezoidal_integral
 
+   !> @brief Linearly interpolate a tabulated grid value.
+   !> @param[in] x Grid coordinates.
+   !> @param[in] y Values on the grid.
+   !> @param[in] n Number of grid points.
+   !> @param[in] x0 Coordinate where y is requested.
+   !> @return Interpolated value at x0.
    module function interpolate_grid_value(x, y, n, x0) result(y0)
       integer, intent(in) :: n
       real(rp), intent(in) :: x(n), y(n), x0
@@ -632,6 +670,10 @@ end subroutine project_dos_orbitals_gaussian
       y0 = y(n)
    end function interpolate_grid_value
 
+!> @brief Calculate zeroth, first, and second DOS band moments.
+!> @details Integrates projected DOS channels with Fermi weighting to produce
+!>          occupation, first-energy, and second-energy moments.
+!> @param[inout] this Reciprocal object receiving band_moments.
 module subroutine calculate_band_moments(this)
    class(reciprocal), intent(inout) :: this
 
@@ -786,6 +828,9 @@ module subroutine calculate_band_moments(this)
    call g_logger%info('calculate_band_moments: Completed', __FILE__, __LINE__)
 end subroutine calculate_band_moments
 
+   !> @brief Reconstruct lattice local density matrices from projected DOS moments.
+   !> @param[inout] this Reciprocal object containing projected DOS/moments.
+   !> @param[inout] lattice_obj Lattice object receiving local density matrices.
    module subroutine calculate_ldm_from_projected_dos(this, lattice_obj)
       use lattice_mod
       class(reciprocal), intent(inout) :: this
@@ -818,6 +863,11 @@ end subroutine calculate_band_moments
       
    end subroutine calculate_ldm_from_projected_dos
 
+   !> @brief Reconstruct lattice local density matrices directly from eigenvectors.
+   !> @details Accumulates occupied spinor density matrices over k-points and
+   !>          bands, then synchronizes the lattice result across MPI ranks.
+   !> @param[inout] this Reciprocal object containing eigenvectors and occupations.
+   !> @param[inout] lattice_obj Lattice object receiving local density matrices.
    module subroutine calculate_ldm_from_eigenvectors(this, lattice_obj)
       use lattice_mod
       class(reciprocal), intent(inout) :: this

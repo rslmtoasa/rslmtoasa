@@ -292,28 +292,50 @@ module reciprocal_mod
 
 
    interface
+   !> @brief Print a root-rank informational message with source location.
+   !> @param[in] message Message text.
+   !> @param[in] file_name Source file name for diagnostics.
+   !> @param[in] line_no Source line number for diagnostics.
    module subroutine root_info(message, file_name, line_no)
       character(len=*), intent(in) :: message, file_name
       integer, intent(in) :: line_no
 
    end subroutine root_info
 
+   !> @brief Construct a reciprocal-space object from an initialized Hamiltonian.
+   !> @details Wires reciprocal state to the Hamiltonian, lattice, and control
+   !>          objects, restores defaults, and reads the &reciprocal namelist.
+   !> @param[in] hamiltonian_obj Hamiltonian object providing real-space blocks and lattice state.
+   !> @return Initialized reciprocal-space object.
    module function constructor(hamiltonian_obj) result(obj)
       type(reciprocal) :: obj
       type(hamiltonian), target, intent(in) :: hamiltonian_obj
 
    end function constructor
 
+   !> @brief Finalize a reciprocal-space object.
+   !> @details Releases k-point, reciprocal-vector, Hamiltonian, overlap, band,
+   !>          DOS, tetrahedron, symmetry-map, and projection arrays.
+   !> @param[inout] this Reciprocal object being finalized.
    module subroutine destructor(this)
       type(reciprocal) :: this
    end subroutine destructor
 
+   !> @brief Reset reciprocal-space settings and owned storage to defaults.
+   !> @details Restores k-mesh, solver-mode, DOS, band-path, symmetry, and
+   !>          diagnostic options to baseline values and clears allocatables.
+   !> @param[inout] this Reciprocal object to reset.
    module subroutine restore_to_default(this)
       class(reciprocal), intent(inout) :: this
 
       ! Default k-point mesh settings
    end subroutine restore_to_default
 
+   !> @brief Read the &reciprocal namelist and install reciprocal-space options.
+   !> @details Parses k-mesh, Fourier mode, band/DOS controls, symmetry options,
+   !>          tetrahedron settings, and diagnostics from this%control%fname.
+   !> @param[inout] this Reciprocal object whose input-facing options are populated.
+   !> @note This is an input boundary and may raise fatal diagnostics for invalid options.
    module subroutine build_from_file(this)
       class(reciprocal), intent(inout) :: this
 
@@ -323,12 +345,21 @@ module reciprocal_mod
       ! Include namelist declarations for reciprocal module
    end subroutine build_from_file
 
+   !> @brief Set Monkhorst-Pack mesh dimensions.
+   !> @param[inout] this Reciprocal object whose nk_mesh is updated.
+   !> @param[in] nk1 Number of k-points along reciprocal axis 1.
+   !> @param[in] nk2 Number of k-points along reciprocal axis 2.
+   !> @param[in] nk3 Number of k-points along reciprocal axis 3.
    module subroutine set_kpoint_mesh(this, nk1, nk2, nk3)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: nk1, nk2, nk3
 
    end subroutine set_kpoint_mesh
 
+   !> @brief Generate reciprocal lattice vectors from the real-space lattice.
+   !> @details Computes the reciprocal basis and reciprocal-cell volume from
+   !>          lattice%a and lattice%alat for later k-point and Fourier work.
+   !> @param[inout] this Reciprocal object receiving reciprocal_vectors and volume.
    module subroutine generate_reciprocal_vectors(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -339,6 +370,10 @@ module reciprocal_mod
       ! Get real-space lattice vectors from lattice%a
    end subroutine generate_reciprocal_vectors
 
+   !> @brief Generate the configured Monkhorst-Pack k-point mesh.
+   !> @details Builds full or symmetry-reduced fractional k-points, weights, and
+   !>          optional MPI ownership metadata according to reciprocal settings.
+   !> @param[inout] this Reciprocal object receiving k_points/k_weights state.
    module subroutine generate_mp_mesh(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -350,6 +385,10 @@ module reciprocal_mod
 
    end subroutine generate_mp_mesh
 
+   !> @brief Determine per-type basis sizes for reciprocal matrices.
+   !> @details Maps each lattice atom type to sp/spd/spdf orbital counts used
+   !>          when packing site-major k-space Hamiltonian and projection blocks.
+   !> @param[inout] this Reciprocal object whose basis_size/max_orbs are updated.
    module subroutine set_basis_sizes(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -358,6 +397,10 @@ module reciprocal_mod
 
    end subroutine set_basis_sizes
 
+   !> @brief Build real-space neighbor vectors used by Fourier transforms.
+   !> @details Converts lattice neighbor geometry into Cartesian and direct
+   !>          per-type R-vector tables aligned with Hamiltonian neighbor slots.
+   !> @param[inout] this Reciprocal object receiving ham_vec_type arrays.
    module subroutine build_neighbor_vectors(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -367,6 +410,10 @@ module reciprocal_mod
 
    end subroutine build_neighbor_vectors
 
+   !> @brief Calculate exp(i k.R) factors for each neighbor/type.
+   !> @param[in] this Reciprocal object containing neighbor-vector tables.
+   !> @param[in] k_vec k-point vector in reciprocal coordinates.
+   !> @param[out] structure_factors Phase factors indexed by neighbor and atom type.
    module subroutine calculate_structure_factors(this, k_vec, structure_factors)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -379,6 +426,12 @@ module reciprocal_mod
       ! Loop over all atom types
    end subroutine calculate_structure_factors
 
+   !> @brief Fourier transform first-order real-space Hamiltonian blocks.
+   !> @details Forms H(k)=sum_R h(R) exp(i k.R), preserving the historical
+   !>          first-order path without onsite e_nu or spin-orbit terms.
+   !> @param[in] this Reciprocal object containing real-space Hamiltonian data.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] hk_result Packed k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian(this, k_vec, hk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -391,6 +444,13 @@ module reciprocal_mod
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
    end subroutine fourier_transform_hamiltonian
 
+   !> @brief Fourier transform an arbitrary neighbor/type block array.
+   !> @details Applies the reciprocal neighbor map to a (orbital, orbital,
+   !>          neighbor, type) array and packs the result into site-major matrix form.
+   !> @param[in] this Reciprocal object containing neighbor-vector tables.
+   !> @param[in] array4d Real-space block array indexed by orbital, neighbor, and type.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] mk_result Packed k-space matrix.
    module subroutine fourier_transform_array(this, array4d, k_vec, mk_result)
       class(reciprocal), intent(in) :: this
       complex(rp), dimension(:, :, :, :), intent(in) :: array4d  ! (nb,nb,neigh,ntype)
@@ -404,6 +464,12 @@ module reciprocal_mod
 
    end subroutine fourier_transform_array
 
+   !> @brief Fourier transform the second-order ASA k-space Hamiltonian.
+   !> @details Assembles onsite e_nu, first-order hopping, HOH, optional CCOR,
+   !>          and spin-orbit contributions according to kspace_ham_order.
+   !> @param[in] this Reciprocal object containing Hamiltonian and correction blocks.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] hk_result Packed second-order k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian_second_order(this, k_vec, hk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -415,6 +481,12 @@ module reciprocal_mod
 
    end subroutine fourier_transform_hamiltonian_second_order
 
+   !> @brief Fourier transform overlap blocks into S(k).
+   !> @details Builds the reciprocal-space overlap matrix used by generalized
+   !>          eigenproblem modes and overlap diagnostics.
+   !> @param[in] this Reciprocal object containing overlap and neighbor data.
+   !> @param[in] k_vec k-point vector.
+   !> @param[out] sk_result Packed k-space overlap matrix.
    module subroutine fourier_transform_overlap(this, k_vec, sk_result)
       class(reciprocal), intent(in) :: this
       real(rp), dimension(3), intent(in) :: k_vec
@@ -427,6 +499,10 @@ module reciprocal_mod
 
    end subroutine fourier_transform_overlap
 
+   !> @brief Configure MPI ownership for a k-point set.
+   !> @param[inout] this Reciprocal object receiving local/global k maps.
+   !> @param[in] nk_global Number of global k-points.
+   !> @param[in] enable_distribution If true, distribute k-points over MPI ranks.
    module subroutine setup_k_mesh_distribution(this, nk_global, enable_distribution)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: nk_global
@@ -436,12 +512,20 @@ module reciprocal_mod
 
    end subroutine setup_k_mesh_distribution
 
+   !> @brief Convert a local k-point index to a global k-point index.
+   !> @param[in] this Reciprocal object containing distribution maps.
+   !> @param[in] ik_local Local k-point index.
+   !> @return Global k-point index.
    module integer function local_k_index_to_global(this, ik_local) result(ik_global)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik_local
 
    end function local_k_index_to_global
 
+   !> @brief Build H(k) for every active mesh or path k-point.
+   !> @details Allocates hk_bulk/hk_total as needed, dispatches first- or
+   !>          second-order Fourier transforms, and applies local k ownership.
+   !> @param[inout] this Reciprocal object receiving k-space Hamiltonian arrays.
    module subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
@@ -454,6 +538,8 @@ module reciprocal_mod
       ! Determine which k-point set to use
    end subroutine build_kspace_hamiltonian
 
+   !> @brief Build S(k) for every active mesh or path k-point.
+   !> @param[inout] this Reciprocal object receiving sk_overlap arrays.
    module subroutine build_kspace_overlap(this)
       class(reciprocal), intent(inout) :: this
       integer :: ik, ik_global, nk
@@ -461,6 +547,8 @@ module reciprocal_mod
 
    end subroutine build_kspace_overlap
 
+!> @brief Diagnose onsite spin-diagonal blocks for multisite Hamiltonians.
+!> @param[in] this Reciprocal object containing hk_total or hk_bulk data.
 module subroutine check_multisite_hamiltonian_diagonal(this)
    class(reciprocal), intent(in) :: this
    integer :: isite, iorb, ispin
@@ -470,6 +558,9 @@ module subroutine check_multisite_hamiltonian_diagonal(this)
    
 end subroutine check_multisite_hamiltonian_diagonal
 
+!> @brief Check Hermiticity of one k-space Hamiltonian matrix.
+!> @param[in] this Reciprocal object containing k-space Hamiltonian data.
+!> @param[in] ik k-point index to inspect.
 module subroutine check_hamiltonian_hermiticity(this, ik)
    class(reciprocal), intent(in) :: this
    integer, intent(in) :: ik
@@ -480,6 +571,9 @@ module subroutine check_hamiltonian_hermiticity(this, ik)
    
 end subroutine check_hamiltonian_hermiticity
 
+!> @brief Print block-structure diagnostics for one k-space Hamiltonian.
+!> @param[in] this Reciprocal object containing k-space Hamiltonian data.
+!> @param[in] ik k-point index to inspect.
 module subroutine print_hamiltonian_structure(this, ik)
    class(reciprocal), intent(in) :: this
    integer, intent(in) :: ik
@@ -491,6 +585,10 @@ module subroutine print_hamiltonian_structure(this, ik)
    
 end subroutine print_hamiltonian_structure
 
+   !> @brief Return a basis label from the configured orbital count.
+   !> @param[in] this Reciprocal object containing basis_size metadata.
+   !> @param[in] ntype Atom type index.
+   !> @return Basis label such as sp, spd, or spdf.
    module function get_basis_type_from_size(this, ntype) result(basis_type)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ntype
@@ -498,6 +596,10 @@ end subroutine print_hamiltonian_structure
 
    end function get_basis_type_from_size
 
+   !> @brief Diagonalize the active k-space Hamiltonians.
+   !> @details Solves standard or generalized eigenproblems depending on
+   !>          reciprocal_mode and stores eigenvalues/eigenvectors for bands and DOS.
+   !> @param[inout] this Reciprocal object receiving eigenvalue/eigenvector arrays.
    module subroutine diagonalize_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       
@@ -514,10 +616,16 @@ end subroutine print_hamiltonian_structure
       ! Check prerequisites
    end subroutine diagonalize_hamiltonian
 
+   !> @brief Print mapping diagnostics for the Kanpur generalized-overlap path.
+   !> @param[in] this Reciprocal object containing basis and overlap metadata.
    module subroutine print_kanpur_mapping(this)
       class(reciprocal), intent(in) :: this
    end subroutine print_kanpur_mapping
 
+   !> @brief Check Hermiticity and basic diagnostics for an overlap matrix.
+   !> @param[in] this Reciprocal object providing diagnostic context.
+   !> @param[in] ik k-point index associated with s_k.
+   !> @param[in] s_k Overlap matrix to inspect.
    module subroutine check_overlap_properties(this, ik, s_k)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik
@@ -526,6 +634,8 @@ end subroutine print_hamiltonian_structure
       real(rp) :: max_herm
    end subroutine check_overlap_properties
 
+   !> @brief Run H(Gamma) spectral-bound diagnostics.
+   !> @param[inout] this Reciprocal object used to build and bound the Gamma matrix.
    module subroutine run_gamma_bounds_diagnostics(this)
       class(reciprocal), intent(inout) :: this
       complex(rp), allocatable :: h_gamma(:, :)
@@ -534,6 +644,10 @@ end subroutine print_hamiltonian_structure
 
    end subroutine run_gamma_bounds_diagnostics
 
+   !> @brief Diagonalize the experimental real-space HALL matrix.
+   !> @details Builds a finite local-cluster matrix from HALL blocks and prints
+   !>          eigenvalue diagnostics for exploratory comparison only.
+   !> @param[inout] this Reciprocal object providing Hamiltonian and lattice state.
    module subroutine diagonalize_hall_experimental(this)
       class(reciprocal), intent(inout) :: this
       integer :: nsites, n_orb, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
@@ -543,6 +657,12 @@ end subroutine print_hamiltonian_structure
 
    end subroutine diagonalize_hall_experimental
 
+   !> @brief Calculate and write a band structure along a crystal-specific path.
+   !> @param[inout] this Reciprocal object used to generate path eigenvalues.
+   !> @param[in] ham Hamiltonian object for k-space construction.
+   !> @param[in] crystal_type Crystal/path selector.
+   !> @param[in] npts_per_segment Number of interpolation points per path segment.
+   !> @param[in] output_file Optional band-output file name.
    module subroutine calculate_band_structure(this, ham, crystal_type, npts_per_segment, output_file)
       class(reciprocal), intent(inout) :: this
       class(hamiltonian), intent(in) :: ham
@@ -556,6 +676,13 @@ end subroutine print_hamiltonian_structure
 
    end subroutine calculate_band_structure
 
+   !> @brief Calculate and write a symmetry-derived band structure.
+   !> @details Uses symmetry analysis or custom path settings to generate the
+   !>          high-symmetry path before building and diagonalizing H(k).
+   !> @param[inout] this Reciprocal object used to generate path eigenvalues.
+   !> @param[in] ham Hamiltonian object for k-space construction.
+   !> @param[in] npts_per_segment Optional number of interpolation points per segment.
+   !> @param[in] output_file Optional band-output file name.
    module subroutine calculate_band_structure_auto(this, ham, npts_per_segment, output_file)
       class(reciprocal), intent(inout) :: this
       class(hamiltonian), intent(in) :: ham
@@ -570,6 +697,12 @@ end subroutine print_hamiltonian_structure
 
    end subroutine calculate_band_structure_auto
 
+   !> @brief Generate a symmetry-reduced k-point mesh.
+   !> @details Builds irreducible k-points, weights, and full/irreducible maps
+   !>          using the configured symmetry and time-reversal settings.
+   !> @param[inout] this Reciprocal object receiving reduced-mesh data.
+   !> @param[in] mesh_dims Full mesh dimensions.
+   !> @param[in] use_shift Optional flag selecting shifted-grid generation.
    module subroutine generate_reduced_kpoint_mesh(this, mesh_dims, use_shift)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: mesh_dims(3)
@@ -583,6 +716,10 @@ end subroutine print_hamiltonian_structure
 
    end subroutine generate_reduced_kpoint_mesh
 
+   !> @brief Write a complex matrix and its k-point label to a text file.
+   !> @param[in] matrix Matrix to dump.
+   !> @param[in] filename Output file name.
+   !> @param[in] k_point k-point associated with the matrix.
    module subroutine dump_complex_matrix(matrix, filename, k_point)
       complex(rp), dimension(:, :), intent(in) :: matrix
       character(len=*), intent(in) :: filename
@@ -593,6 +730,20 @@ end subroutine print_hamiltonian_structure
 
    end subroutine dump_complex_matrix
 
+   !> @brief Calculate reciprocal-space density of states.
+   !> @details Configures the energy grid and DOS method, ensures eigenvalues are
+   !>          available, evaluates total/projected DOS, moments, and writes output.
+   !> @param[inout] this Reciprocal object receiving DOS and moment arrays.
+   !> @param[in] ham Hamiltonian object for k-space construction if needed.
+   !> @param[in] n_energy_points Optional number of DOS grid points.
+   !> @param[in] energy_range Optional energy window.
+   !> @param[in] method Optional DOS method selector.
+   !> @param[in] gaussian_sigma Optional Gaussian broadening.
+   !> @param[in] temperature Optional Fermi-Dirac temperature.
+   !> @param[in] fermi_level Optional fixed Fermi level.
+   !> @param[in] total_electrons Optional electron count for automatic Fermi search.
+   !> @param[in] auto_find_fermi Optional flag enabling Fermi-level search.
+   !> @param[in] output_file Optional DOS output file.
    module subroutine calculate_density_of_states(this, ham, n_energy_points, energy_range, method, gaussian_sigma, temperature, fermi_level, total_electrons, auto_find_fermi, output_file)
       class(reciprocal), intent(inout) :: this
       class(hamiltonian), intent(in) :: ham
@@ -611,6 +762,9 @@ end subroutine print_hamiltonian_structure
 
    end subroutine calculate_density_of_states
 
+   !> @brief Validate full-to-irreducible k-point symmetry maps.
+   !> @param[inout] this Reciprocal object containing symmetry maps and weights.
+   !> @param[in] context_tag Diagnostic label for the caller/context.
    module subroutine validate_symmetry_kmap(this, context_tag)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context_tag
@@ -620,6 +774,9 @@ end subroutine print_hamiltonian_structure
 
    end subroutine validate_symmetry_kmap
 
+   !> @brief Write symmetry k-point maps for diagnostics.
+   !> @param[inout] this Reciprocal object containing symmetry maps.
+   !> @param[in] filename Output file name.
    module subroutine write_symmetry_kmap_dump(this, filename)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: filename
@@ -627,6 +784,10 @@ end subroutine print_hamiltonian_structure
 
    end subroutine write_symmetry_kmap_dump
 
+   !> @brief Ensure the configured tetrahedron symmetry backend is usable.
+   !> @details Expands or preserves the k-mesh as needed for scalar tetrahedron
+   !>          DOS versus spinor/projection integrations.
+   !> @param[inout] this Reciprocal object whose mesh/backend state may be updated.
    module subroutine ensure_tetra_symmetry_backend(this)
       class(reciprocal), intent(inout) :: this
       integer :: nk_full_expected
@@ -634,6 +795,9 @@ end subroutine print_hamiltonian_structure
 
    end subroutine ensure_tetra_symmetry_backend
 
+   !> @brief Ensure spinor integrations operate on a full k-mesh.
+   !> @param[inout] this Reciprocal object whose eigenvalues/eigenvectors may be expanded.
+   !> @param[in] context_tag Diagnostic label for the caller/context.
    module subroutine ensure_full_mesh_for_spinor_integrations(this, context_tag)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context_tag
@@ -641,6 +805,11 @@ end subroutine print_hamiltonian_structure
 
    end subroutine ensure_full_mesh_for_spinor_integrations
 
+   !> @brief Build irreducible tetrahedra and multiplicities from full-mesh cuts.
+   !> @param[inout] this Reciprocal object containing symmetry maps and mesh dimensions.
+   !> @param[out] tet_ir Irreducible tetrahedron corner indices.
+   !> @param[out] tet_mult Multiplicity of each irreducible tetrahedron.
+   !> @param[out] n_tet_ir Number of irreducible tetrahedra.
    module subroutine build_irreducible_tetrahedra(this, tet_ir, tet_mult, n_tet_ir)
       class(reciprocal), intent(inout) :: this
       integer, allocatable, intent(out) :: tet_ir(:, :)
@@ -656,6 +825,9 @@ end subroutine print_hamiltonian_structure
 
    end subroutine build_irreducible_tetrahedra
 
+   !> @brief Select tetrahedron corner offsets for the current mesh geometry.
+   !> @param[in] this Reciprocal object providing reciprocal lattice geometry.
+   !> @param[out] tetra_cut Six tetrahedra per mesh cell, stored as corner offsets.
    module subroutine get_tetra_cut_offsets(this, tetra_cut)
       class(reciprocal), intent(in) :: this
       integer, intent(out) :: tetra_cut(3, 4, 6)
@@ -667,6 +839,8 @@ end subroutine print_hamiltonian_structure
 
    end subroutine get_tetra_cut_offsets
 
+   !> @brief Build the DOS energy grid from the configured range and size.
+   !> @param[inout] this Reciprocal object receiving dos_energy_grid.
    module subroutine setup_dos_energy_grid(this)
       class(reciprocal), intent(inout) :: this
 
@@ -676,6 +850,10 @@ end subroutine print_hamiltonian_structure
 
    end subroutine setup_dos_energy_grid
 
+   !> @brief Calculate total DOS using the tetrahedron method.
+   !> @details Accumulates DOS and integrated NOS over full or irreducible
+   !>          tetrahedra, respecting MPI partitioning where active.
+   !> @param[inout] this Reciprocal object receiving total_dos and total_nos.
    module subroutine calculate_dos_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
 
@@ -691,6 +869,11 @@ end subroutine print_hamiltonian_structure
 
    end subroutine calculate_dos_tetrahedron
 
+   !> @brief Evaluate linear-tetrahedron DOS contribution at one energy.
+   !> @param[in] this Reciprocal object providing method context.
+   !> @param[in] energy Energy where the contribution is evaluated.
+   !> @param[in] e_sorted Sorted tetrahedron corner energies.
+   !> @return DOS contribution for one tetrahedron.
    module function tetrahedron_dos_contribution(this, energy, e_sorted) result(dos)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: energy
@@ -704,6 +887,11 @@ end subroutine print_hamiltonian_structure
       ! Tetrahedron volume factor (adjusted for correct normalization)
    end function tetrahedron_dos_contribution
 
+   !> @brief Evaluate Bloechl-corrected tetrahedron DOS contribution.
+   !> @param[in] this Reciprocal object providing method context.
+   !> @param[in] energy Energy where the contribution is evaluated.
+   !> @param[in] e_sorted Sorted tetrahedron corner energies.
+   !> @return Corrected DOS contribution for one tetrahedron.
    module function blochl_dos_contribution(this, energy, e_sorted) result(dos)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: energy
@@ -716,6 +904,10 @@ end subroutine print_hamiltonian_structure
 
    end function blochl_dos_contribution
 
+   !> @brief Sort a real array while tracking original indices.
+   !> @param[in] arr Values to sort.
+   !> @param[out] sorted Sorted values.
+   !> @param[out] indices Original indices corresponding to sorted values.
    module subroutine sort_real_array(arr, sorted, indices)
       real(rp), dimension(:), intent(in) :: arr
       real(rp), dimension(:), intent(out) :: sorted
@@ -727,6 +919,9 @@ end subroutine print_hamiltonian_structure
 
    end subroutine sort_real_array
 
+   !> @brief Sort four real values in ascending order.
+   !> @param[in] arr_in Four input values.
+   !> @param[out] arr_out Sorted output values.
    module subroutine sort4(arr_in, arr_out)
       real(rp), dimension(4), intent(in) :: arr_in
       real(rp), dimension(4), intent(out) :: arr_out
@@ -734,6 +929,13 @@ end subroutine print_hamiltonian_structure
 
    end subroutine sort4
 
+   !> @brief Add one tetrahedron's integrated-state contribution to a grid.
+   !> @param[in] volwgt Tetrahedron volume/weight factor.
+   !> @param[in] ecorn_in Tetrahedron corner energies.
+   !> @param[in] emin Lower grid energy.
+   !> @param[in] emax Upper grid energy.
+   !> @param[inout] nos Integrated number-of-states grid.
+   !> @param[in] npts Number of grid points.
    module subroutine tetra_add_nos(volwgt, ecorn_in, emin, emax, nos, npts)
       real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
       integer, intent(in) :: npts
@@ -746,6 +948,13 @@ end subroutine print_hamiltonian_structure
 
    end subroutine tetra_add_nos
 
+   !> @brief Add one tetrahedron's DOS contribution to a grid.
+   !> @param[in] volwgt Tetrahedron volume/weight factor.
+   !> @param[in] ecorn_in Tetrahedron corner energies.
+   !> @param[in] emin Lower grid energy.
+   !> @param[in] emax Upper grid energy.
+   !> @param[inout] dos DOS grid.
+   !> @param[in] npts Number of grid points.
    module subroutine tetra_add_dos(volwgt, ecorn_in, emin, emax, dos, npts)
       real(rp), intent(in) :: volwgt, ecorn_in(4), emin, emax
       integer, intent(in) :: npts
@@ -758,6 +967,10 @@ end subroutine print_hamiltonian_structure
 
    end subroutine tetra_add_dos
 
+!> @brief Calculate total DOS with Gaussian broadening.
+!> @details Smears all eigenvalues over the DOS energy grid using the configured
+!>          or adaptive sigma and k-point weights.
+!> @param[inout] this Reciprocal object receiving total_dos.
 module subroutine calculate_dos_gaussian(this)
    class(reciprocal), intent(inout) :: this
 
@@ -770,11 +983,15 @@ module subroutine calculate_dos_gaussian(this)
    ! Debug: Check eigenvalue range
 end subroutine calculate_dos_gaussian
 
+   !> @brief Calculate total DOS with the Bloechl tetrahedron method.
+   !> @param[inout] this Reciprocal object receiving total_dos.
    module subroutine calculate_dos_blochl(this)
       class(reciprocal), intent(inout) :: this
 
    end subroutine calculate_dos_blochl
 
+   !> @brief Build full-mesh tetrahedron connectivity.
+   !> @param[inout] this Reciprocal object receiving tetrahedra and volumes.
    module subroutine setup_tetrahedra(this)
       class(reciprocal), intent(inout) :: this
 
@@ -785,6 +1002,8 @@ end subroutine calculate_dos_gaussian
 
    end subroutine setup_tetrahedra
 
+   !> @brief Expand irreducible-k eigenvalues/eigenvectors to the full mesh.
+   !> @param[inout] this Reciprocal object whose eigen arrays are expanded.
    module subroutine expand_eigenvalues_to_full_mesh(this)
       class(reciprocal), intent(inout) :: this
       integer :: ik_full, nk_full, nk_irred, nbands, ik_irred
@@ -794,11 +1013,22 @@ end subroutine calculate_dos_gaussian
       
    end subroutine expand_eigenvalues_to_full_mesh
 
+   !> @brief Calculate tetrahedron DOS using symmetry-aware mesh handling.
+   !> @param[inout] this Reciprocal object receiving total DOS on the chosen backend.
    module subroutine calculate_dos_tetrahedron_with_symmetry(this)
       class(reciprocal), intent(inout) :: this
       
    end subroutine calculate_dos_tetrahedron_with_symmetry
 
+   !> @brief Convert 3D mesh coordinates to a periodic flat k-point index.
+   !> @param[in] this Reciprocal object providing helper context.
+   !> @param[in] i Mesh coordinate along axis 1.
+   !> @param[in] j Mesh coordinate along axis 2.
+   !> @param[in] k Mesh coordinate along axis 3.
+   !> @param[in] nk1 Mesh size along axis 1.
+   !> @param[in] nk2 Mesh size along axis 2.
+   !> @param[in] nk3 Mesh size along axis 3.
+   !> @return One-based periodic flat k-point index.
    module function get_kpoint_index(this, i, j, k, nk1, nk2, nk3) result(idx)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: i, j, k, nk1, nk2, nk3
@@ -807,6 +1037,9 @@ end subroutine calculate_dos_gaussian
       ! Apply periodic boundary conditions
    end function get_kpoint_index
 
+   !> @brief Estimate a Gaussian DOS broadening from k-point density.
+   !> @param[in] this Reciprocal object containing mesh and reciprocal volume.
+   !> @return Adaptive Gaussian sigma.
    module function calculate_adaptive_sigma(this) result(sigma)
       class(reciprocal), intent(in) :: this
       real(rp) :: sigma
@@ -816,11 +1049,17 @@ end subroutine calculate_dos_gaussian
       ! Calculate Brillouin zone k-point density
    end function calculate_adaptive_sigma
 
+   !> @brief Dispatch projected-DOS calculation for the active DOS method.
+   !> @param[inout] this Reciprocal object receiving projected DOS arrays.
    module subroutine project_dos_orbitals(this)
       class(reciprocal), intent(inout) :: this
 
    end subroutine project_dos_orbitals
 
+!> @brief Calculate orbital- and spin-projected DOS with Gaussian broadening.
+!> @details Projects eigenvector weights onto site/orbital/spin channels and
+!>          accumulates both scalar and directional spin DOS components.
+!> @param[inout] this Reciprocal object receiving projected DOS arrays.
 module subroutine project_dos_orbitals_gaussian(this)
    class(reciprocal), intent(inout) :: this
    integer :: ik, ik_global, ib, ie, iorb, i, isite
@@ -841,6 +1080,10 @@ module subroutine project_dos_orbitals_gaussian(this)
 
 end subroutine project_dos_orbitals_gaussian
 
+   !> @brief Return the local spin axis for a projected-DOS site.
+   !> @param[in] this Reciprocal object containing lattice magnetic moments.
+   !> @param[in] isite Site index in the reciprocal packing.
+   !> @param[out] axis Normalized local spin axis.
    module subroutine get_site_spin_axis(this, isite, axis)
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: isite
@@ -850,6 +1093,8 @@ end subroutine project_dos_orbitals_gaussian
 
    end subroutine get_site_spin_axis
 
+   !> @brief Synchronize lattice local-density-matrix data across MPI ranks.
+   !> @param[inout] lattice_obj Lattice object whose ldm-like storage is synchronized.
    module subroutine sync_lattice_ldm(lattice_obj)
       use lattice_mod
       type(lattice), intent(inout) :: lattice_obj
@@ -859,6 +1104,18 @@ end subroutine project_dos_orbitals_gaussian
 
    end subroutine sync_lattice_ldm
 
+   !> @brief Project one spinor eigenvector block onto scalar and vector weights.
+   !> @param[in] this Reciprocal object containing eigenvectors.
+   !> @param[in] ik k-point index.
+   !> @param[in] ib Band index.
+   !> @param[in] site_orb_start First orbital index for the site block.
+   !> @param[in] n_orb_per_spin Number of orbital channels per spin.
+   !> @param[in] i_first First local orbital index in the projection range.
+   !> @param[in] i_last Last local orbital index in the projection range.
+   !> @param[out] total_char Scalar projected character.
+   !> @param[out] mx_char Projected x spin moment character.
+   !> @param[out] my_char Projected y spin moment character.
+   !> @param[out] mz_char Projected z spin moment character.
    module subroutine compute_spinor_block_projection(this, ik, ib, site_orb_start, n_orb_per_spin, i_first, i_last, &
                                               total_char, mx_char, my_char, mz_char)
       class(reciprocal), intent(in) :: this
@@ -871,6 +1128,10 @@ end subroutine project_dos_orbitals_gaussian
 
    end subroutine compute_spinor_block_projection
 
+   !> @brief Calculate projected DOS with tetrahedron integration.
+   !> @details Averages orbital/spinor projection weights over tetrahedron
+   !>          corners and accumulates scalar plus directional projected DOS.
+   !> @param[inout] this Reciprocal object receiving projected DOS arrays.
    module subroutine project_dos_orbitals_tetrahedron(this)
       class(reciprocal), intent(inout) :: this
 
@@ -901,6 +1162,10 @@ end subroutine project_dos_orbitals_gaussian
 
    end subroutine project_dos_orbitals_tetrahedron
 
+   !> @brief Integrate tabulated data with the trapezoidal rule.
+   !> @param[in] x Grid coordinates.
+   !> @param[in] y Values on the grid.
+   !> @return Trapezoidal integral over the grid.
    module function trapezoidal_integral(x, y) result(integral)
       real(rp), dimension(:), intent(in) :: x, y
       real(rp) :: integral
@@ -911,6 +1176,12 @@ end subroutine project_dos_orbitals_gaussian
 
    end function trapezoidal_integral
 
+   !> @brief Linearly interpolate a tabulated grid value.
+   !> @param[in] x Grid coordinates.
+   !> @param[in] y Values on the grid.
+   !> @param[in] n Number of grid points.
+   !> @param[in] x0 Coordinate where y is requested.
+   !> @return Interpolated value at x0.
    module function interpolate_grid_value(x, y, n, x0) result(y0)
       integer, intent(in) :: n
       real(rp), intent(in) :: x(n), y(n), x0
@@ -920,6 +1191,10 @@ end subroutine project_dos_orbitals_gaussian
 
    end function interpolate_grid_value
 
+!> @brief Calculate zeroth, first, and second DOS band moments.
+!> @details Integrates projected DOS channels with Fermi weighting to produce
+!>          occupation, first-energy, and second-energy moments.
+!> @param[inout] this Reciprocal object receiving band_moments.
 module subroutine calculate_band_moments(this)
    class(reciprocal), intent(inout) :: this
 
@@ -934,6 +1209,8 @@ module subroutine calculate_band_moments(this)
 
 end subroutine calculate_band_moments
 
+   !> @brief Print total and spin-resolved DOS occupation diagnostics.
+   !> @param[in] this Reciprocal object containing DOS and projected DOS arrays.
    module subroutine print_total_and_spin_dos(this)
       class(reciprocal), intent(in) :: this
 
@@ -947,6 +1224,10 @@ end subroutine calculate_band_moments
 
    end subroutine print_total_and_spin_dos
 
+!> @brief Find the Fermi level matching a target electron count.
+!> @param[in] this Reciprocal object containing DOS/NOS information.
+!> @param[in] total_electrons Target number of electrons.
+!> @return Fermi level in the reciprocal DOS energy units.
 module function find_fermi_level_from_dos(this, total_electrons) result(fermi_level)
    class(reciprocal), intent(in) :: this
    real(rp), intent(in) :: total_electrons
@@ -961,6 +1242,11 @@ module function find_fermi_level_from_dos(this, total_electrons) result(fermi_le
 
 end function find_fermi_level_from_dos
 
+!> @brief Integrate DOS occupation up to an energy with Fermi weighting.
+!> @param[in] this Reciprocal object containing DOS grid data.
+!> @param[in] energy Trial Fermi energy.
+!> @param[in] kT Thermal energy used in Fermi weighting.
+!> @return Integrated electron count.
 module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
    class(reciprocal), intent(in) :: this
    real(rp), intent(in) :: energy, kT
@@ -972,6 +1258,9 @@ module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
 
 end function integrate_dos_up_to_energy
 
+   !> @brief Write total and projected DOS data to output files.
+   !> @param[in] this Reciprocal object containing DOS arrays.
+   !> @param[in] filename Primary total-DOS output file.
    module subroutine write_dos_to_file(this, filename)
       class(reciprocal), intent(in) :: this
       character(len=*), intent(in) :: filename
@@ -983,6 +1272,9 @@ end function integrate_dos_up_to_energy
 
    end subroutine write_dos_to_file
 
+   !> @brief Calculate band energy from integrated DOS moments.
+   !> @param[in] this Reciprocal object containing band_moments.
+   !> @return Band energy accumulated over projected channels.
    module function calculate_band_energy_from_moments(this) result(eband)
       class(reciprocal), intent(in) :: this
       real(rp) :: eband
@@ -990,6 +1282,11 @@ end function integrate_dos_up_to_energy
       
    end function calculate_band_energy_from_moments
 
+   !> @brief Evaluate one normalized Gaussian smearing weight.
+   !> @param[in] this Reciprocal object containing gaussian_sigma/adaptive settings.
+   !> @param[in] grid_energy Energy-grid point.
+   !> @param[in] eigenvalue Eigenvalue to smear.
+   !> @return Gaussian weight at grid_energy.
    module function calculate_gaussian_weight_single(this, grid_energy, eigenvalue) result(weight)
       class(reciprocal), intent(in) :: this
       real(rp), intent(in) :: grid_energy, eigenvalue
@@ -1000,6 +1297,10 @@ end function integrate_dos_up_to_energy
 
    end function calculate_gaussian_weight_single
 
+   !> @brief Sort four tetrahedron eigenvalues and return their permutation.
+   !> @param[in] e_in Input corner eigenvalues.
+   !> @param[out] e_sorted Sorted corner eigenvalues.
+   !> @param[out] sort_idx Original indices corresponding to sorted values.
    module pure subroutine sort_eigenvalues(e_in, e_sorted, sort_idx)
       real(rp), dimension(4), intent(in) :: e_in
       real(rp), dimension(4), intent(out) :: e_sorted
@@ -1013,6 +1314,9 @@ end function integrate_dos_up_to_energy
       ! Initialize
    end subroutine sort_eigenvalues
 
+   !> @brief Reconstruct lattice local density matrices from projected DOS moments.
+   !> @param[inout] this Reciprocal object containing projected DOS/moments.
+   !> @param[inout] lattice_obj Lattice object receiving local density matrices.
    module subroutine calculate_ldm_from_projected_dos(this, lattice_obj)
       use lattice_mod
       class(reciprocal), intent(inout) :: this
@@ -1026,6 +1330,11 @@ end function integrate_dos_up_to_energy
       
    end subroutine calculate_ldm_from_projected_dos
 
+   !> @brief Reconstruct lattice local density matrices directly from eigenvectors.
+   !> @details Accumulates occupied spinor density matrices over k-points and
+   !>          bands, then synchronizes the lattice result across MPI ranks.
+   !> @param[inout] this Reciprocal object containing eigenvectors and occupations.
+   !> @param[inout] lattice_obj Lattice object receiving local density matrices.
    module subroutine calculate_ldm_from_eigenvectors(this, lattice_obj)
       use lattice_mod
       class(reciprocal), intent(inout) :: this

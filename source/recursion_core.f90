@@ -2,6 +2,15 @@ submodule(recursion_mod) recursion_core
 
 contains
 
+   !> @brief Construct a recursion object from Hamiltonian, energy, and sparse helpers.
+   !> @details The recursion object is the real-space spectral kernel used by SCF,
+   !>          DOS, exchange, conductivity, and orbital-moment workflows. It stores
+   !>          pointers to the upstream objects and allocates the coefficient and
+   !>          moment arrays sized by the active lattice/control state.
+   !> @param[in] hamiltonian_obj Hamiltonian object providing real-space blocks.
+   !> @param[in] energy_obj Energy mesh used by DOS and Green reconstruction.
+   !> @param[in] sparse_obj Sparse algebra helper for legacy kernels.
+   !> @return Initialized recursion object.
    module function constructor(hamiltonian_obj, energy_obj, sparse_obj) result(obj)
       type(recursion) :: obj
       type(hamiltonian), target, intent(in) :: hamiltonian_obj
@@ -18,12 +27,23 @@ contains
       call obj%restore_to_default()
    end function constructor
 
+   !> @brief Test whether the CUDA recursion plugin was requested and compiled in.
+   !> @details Centralizes the build-time and namelist checks before GPU-specific
+   !>          recursion paths attempt to acquire or upload a backend context.
+   !> @param[in] this Recursion object whose control flags select plugin usage.
+   !> @return True when GPU dispatch is allowed by both build and input state.
    module logical function gpu_plugin_enabled(this)
       class(recursion), intent(in) :: this
 
       gpu_plugin_enabled = this%control%gpu_plugin
    end function gpu_plugin_enabled
 
+   !> @brief Test whether the selected GPU backend expects periodic/k-space data.
+   !> @details Separates real-space BSR/convolution recursion backends from GPU
+   !>          backends intended for periodic representations so callers can avoid
+   !>          uploading incompatible Hamiltonian layouts.
+   !> @param[in] this Recursion object whose control flags encode the GPU backend.
+   !> @return True for periodic GPU backend selectors.
    module logical function gpu_periodic_backend(this)
       class(recursion), intent(in) :: this
       integer :: backend
@@ -32,6 +52,16 @@ contains
       gpu_periodic_backend = (backend == gpu_backend_fft .or. backend == gpu_backend_conv)
    end function gpu_periodic_backend
 
+   !> @brief Decide whether a named recursion feature may run on the GPU plugin.
+   !> @details Applies feature-level guards such as scalar-only spin support,
+   !>          optional HOH support, backend compatibility, and plugin availability.
+   !>          Callers use this before choosing CUDA paths for Lanczos, block
+   !>          Lanczos, Chebyshev, stochastic, and intersite workflows.
+   !> @param[in] this Recursion object with control/Hamiltonian state.
+   !> @param[in] feature Human-readable feature name for logs and diagnostics.
+   !> @param[in] require_nsp1 Optional guard for scalar-relativistic-only kernels.
+   !> @param[in] allow_hoh Optional guard declaring whether HOH is supported.
+   !> @return True when the GPU plugin can be used for the requested feature.
    module logical function gpu_plugin_ready(this, feature, require_nsp1, allow_hoh)
       class(recursion), intent(in) :: this
       character(len=*), intent(in) :: feature
@@ -113,6 +143,13 @@ contains
       gpu_plugin_ready = .true.
    end function gpu_plugin_ready
 
+   !> @brief Ensure the CUDA backend has the current real-space Hamiltonian uploaded.
+   !> @details Acquires the shared plugin context and transfers the Hamiltonian in
+   !>          the layout required by the selected real-space GPU backend. The GPU
+   !>          context owns its own fingerprinting, so repeated calls with unchanged
+   !>          inputs are cheap.
+   !> @param[inout] this Recursion object; sets this%gpu_backend when available.
+   !> @note Fatal diagnostics are raised by the backend when a requested upload is unsupported.
    module subroutine gpu_plugin_upload_hamiltonian(this)
       class(recursion), intent(inout) :: this
       integer :: backend
@@ -163,6 +200,12 @@ contains
       end if
    end subroutine gpu_plugin_upload_hamiltonian
 
+   !> @brief Build cached first-order ccor_2c Hamiltonian blocks for fast kernels.
+   !> @details Combines the ordinary and ccor_2c real-space operator blocks into
+   !>          work arrays used by no-HOH Chebyshev, block-Lanczos, and transport
+   !>          kernels that expect one effective hopping operator.
+   !> @param[inout] this Recursion object; populates ee_ccor_work and hall_ccor_work.
+   !> @note The cached arrays are reused across moment calls until the recursion object is reset.
    module subroutine ensure_ccor_operator_blocks(this)
       class(recursion), intent(inout) :: this
 
@@ -192,6 +235,14 @@ contains
       this%hall_ccor_work = this%hamiltonian%hall + this%hamiltonian%hallcc
    end subroutine ensure_ccor_operator_blocks
 
+   !> @brief Run the optimized no-HOH block-Lanczos kernel for one starting block.
+   !> @details Wraps haydock_fast for the common block-recursion path where the
+   !>          Hamiltonian is represented by a single hopping sweep. The caller has
+   !>          initialized psi_b and copies atemp_b/b2temp_b into public coefficient
+   !>          arrays after this routine returns.
+   !> @param[inout] this Recursion object with current starting block in psi_b.
+   !> @param[in] llmax Number of block-Lanczos steps.
+   !> @param[in] use_ccor Use cached ccor_2c operator blocks instead of raw blocks.
    module subroutine block_lanczos_fast_nohoh(this, llmax, use_ccor)
       class(recursion), intent(inout) :: this
       integer, intent(in) :: llmax
@@ -218,6 +269,10 @@ contains
       end if
    end subroutine block_lanczos_fast_nohoh
 
+   !> @brief Finalize a recursion object.
+   !> @details Releases allocatable coefficient, wavefunction, moment, work, and
+   !>          helper arrays owned by the object when it leaves scope.
+   !> @param[inout] this Recursion object being finalized.
    module subroutine destructor(this)
       type(recursion) :: this
       nullify (this%gpu_backend)
@@ -290,6 +345,13 @@ contains
 #endif
    end subroutine destructor
 
+   !> @brief Reset recursion-owned pointers, buffers, and backend state.
+   !> @details Restores the object to a reusable baseline before construction or
+   !>          teardown. A full reset also releases large coefficient, moment, and
+   !>          wavefunction arrays so a new lattice/control shape can be installed.
+   !> @param[inout] this Recursion object to reset.
+   !> @param[in] full Optional flag requesting deallocation of all owned arrays.
+   !> @note Clears the CUDA backend pointer association but does not own the plugin context.
    module subroutine restore_to_default(this, full)
       class(recursion) :: this
       logical, intent(in), optional :: full
