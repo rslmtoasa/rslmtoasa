@@ -738,7 +738,7 @@ contains
       real(rp), intent(inout) :: nos(npts)
 
       integer :: i, i0(4), m
-      real(rp) :: ecorn(4), de, e1, e2, e3, e4
+      real(rp) :: ecorn(4), de, e1, e2, e3, e4, seg_tol
       real(rp) :: c0, c1, c2, c3, x, x0
       real(rp), parameter :: tol = 1.0e-12_rp
 
@@ -752,6 +752,15 @@ contains
       e1 = ecorn(1); e2 = ecorn(2); e3 = ecorn(3); e4 = ecorn(4)
       de = (emax - emin) / real(npts - 1, rp)
       if (de <= 0.0_rp) return
+      ! A segment whose own corner-to-corner width is far below the grid resolution
+      ! is numerically degenerate at this resolution: the piecewise polynomial is only
+      ! valid inside that (here vanishing) width, and its boundary-value limit as the
+      ! width -> 0 is exactly zero (e.g. segment 1: (E-e1)^3/[(e2-e1)(e3-e1)(e4-e1)]
+      ! at E=e2 reduces to (e2-e1)^2/[(e3-e1)(e4-e1)] -> 0). Grid-index rounding can
+      ! still assign such a segment one non-empty bin whose grid point sits far outside
+      ! the true (sub-bin) domain, which is what makes the ill-conditioned denominator
+      ! dangerous; skipping the segment is the correct limit, not an approximation.
+      seg_tol = max(1.0e-10_rp, 1.0e-6_rp*de)
 
       do m = 1, 4
          if (ecorn(m) <= emin) then
@@ -763,7 +772,7 @@ contains
          end if
       end do
 
-      if (i0(1) < i0(2) .and. abs((e2-e1)*(e3-e1)*(e4-e1)) > tol) then
+      if (i0(1) < i0(2) .and. (e2-e1) > seg_tol .and. abs((e2-e1)*(e3-e1)*(e4-e1)) > tol) then
          c3 = volwgt / ((e2-e1)*(e3-e1)*(e4-e1))
          x0 = emin - e1 - de
          do i = i0(1), i0(2) - 1
@@ -771,7 +780,7 @@ contains
             nos(i) = nos(i) + c3*x*x*x
          end do
       end if
-      if (i0(2) < i0(3) .and. abs((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2)) > tol) then
+      if (i0(2) < i0(3) .and. (e3-e2) > seg_tol .and. abs((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2)) > tol) then
          c3 = volwgt*(e1+e2-e3-e4)/((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2))
          c2 = volwgt*3.0_rp/((e3-e1)*(e4-e1))
          c1 = c2*(e2-e1)
@@ -782,7 +791,7 @@ contains
             nos(i) = nos(i) + c0 + x*(c1 + x*(c2 + x*c3))
          end do
       end if
-      if (i0(3) < i0(4) .and. abs((e4-e3)*(e4-e2)*(e4-e1)) > tol) then
+      if (i0(3) < i0(4) .and. (e4-e3) > seg_tol .and. abs((e4-e3)*(e4-e2)*(e4-e1)) > tol) then
          c3 = volwgt/((e4-e3)*(e4-e2)*(e4-e1))
          x0 = emin - e4 - de
          do i = i0(3), i0(4) - 1
@@ -808,7 +817,7 @@ contains
       real(rp), intent(inout) :: dos(npts)
 
       integer :: i, i0(4), m
-      real(rp) :: ecorn(4), de, e1, e2, e3, e4
+      real(rp) :: ecorn(4), de, e1, e2, e3, e4, seg_tol
       real(rp) :: c1, c2, c3, x
       real(rp), parameter :: tol = 1.0e-12_rp
 
@@ -818,6 +827,10 @@ contains
 
       de = (emax - emin) / real(npts - 1, rp)
       if (de <= 0.0_rp) return
+      ! See tetra_add_nos for the justification: a segment narrower than the grid
+      ! resolution is treated as degenerate (its own boundary-value limit is zero),
+      ! rather than letting grid-index rounding evaluate the polynomial out of range.
+      seg_tol = max(1.0e-10_rp, 1.0e-6_rp*de)
 
       do m = 1, 4
          if (ecorn(m) < emin) then
@@ -829,14 +842,14 @@ contains
          end if
       end do
 
-      if (i0(1) < i0(2) .and. abs((e2-e1)*(e3-e1)*(e4-e1)) > tol) then
+      if (i0(1) < i0(2) .and. (e2-e1) > seg_tol .and. abs((e2-e1)*(e3-e1)*(e4-e1)) > tol) then
          c3 = volwgt*3.0_rp/((e2-e1)*(e3-e1)*(e4-e1))
          do i = i0(1), i0(2) - 1
             x = emin - e1 + real(i - 1, rp) * de
             dos(i) = dos(i) + c3*x*x
          end do
       end if
-      if (i0(2) < i0(3) .and. abs((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2)) > tol) then
+      if (i0(2) < i0(3) .and. (e3-e2) > seg_tol .and. abs((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2)) > tol) then
          c3 = volwgt*3.0_rp*(e1+e2-e3-e4)/((e3-e1)*(e4-e1)*(e3-e2)*(e4-e2))
          c2 = volwgt*6.0_rp/((e3-e1)*(e4-e1))
          c1 = c2*(e2-e1)*0.5_rp
@@ -845,7 +858,7 @@ contains
             dos(i) = dos(i) + c1 + x*(c2 + x*c3)
          end do
       end if
-      if (i0(3) < i0(4) .and. abs((e4-e3)*(e4-e2)*(e4-e1)) > tol) then
+      if (i0(3) < i0(4) .and. (e4-e3) > seg_tol .and. abs((e4-e3)*(e4-e2)*(e4-e1)) > tol) then
          c3 = volwgt*3.0_rp/((e4-e3)*(e4-e2)*(e4-e1))
          do i = i0(3), i0(4) - 1
             x = emin - e4 + real(i - 1, rp) * de
