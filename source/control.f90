@@ -187,7 +187,7 @@ module control_mod
       !> Type of conductivity to be calculated
       !>
       !> Allowed values: 'charge', 'spin' and 'orbital'. Default: 'charge'
-      character(len=30) :: cond_type
+      character(len=30) :: cond_type, linear_in, linear_out
 
       !> Calculation type of the conductivity tensor
       !> 
@@ -315,6 +315,8 @@ contains
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
       cond_type = this%cond_type
+      linear_in = this%linear_in
+      linear_out = this%linear_out
       cond_calctype = this%cond_calctype
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
@@ -376,6 +378,8 @@ contains
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
       this%cond_type = cond_type
+      this%linear_in = linear_in
+      this%linear_out = linear_out
       this%cond_calctype = cond_calctype
 
       ! Read optional constraints namelist and move values into the control object
@@ -467,6 +471,8 @@ contains
       this%random_vec_num = 1
       this%cond_ll = 200
       this%cond_type = 'charge'
+      this%linear_in = 'charge'
+      this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
       ! default constraints settings
       this%constraints_enable = .false.
