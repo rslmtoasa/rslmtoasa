@@ -56,7 +56,73 @@ after every task.
       case type plus an inverse `requires_cmake_option`-style gate (skip
       when the option *is* on), more than the "if trivial" bar the doc set.
 - [ ] P11 — Python-binding awareness lens (standing, applied throughout;
-      final blocker list recorded in the developer map).
+      final blocker list recorded in the developer map — do one more pass
+      once P7 is done, in case docstring-writing surfaces new blockers).
+
+---
+
+## P7 sub-checklist (one file per session/commit)
+
+**For a fresh session picking this up:** read `CLAUDE.md` first (five
+ground rules + pointers), then this checklist, then jump straight to
+"Part C — Documentation" below for the docstring convention and rules. Pick
+the **first unchecked file**, write docstrings for its undocumented public
+and type-bound procedures, run the regression + example matrix (ground rule
+1), commit with `docs(P7): <file>` (or a name for the group if you did
+several small files together), check its box here, and stop — that's one
+session's worth of work. No code changes mixed into these commits (pure
+comments). Counts below are from a live `grep`, current as of the last
+person to update this line — if they don't match the file anymore, trust
+the file.
+
+Priority order (per Part C below): `recursion.f90` → the four
+`hamiltonian_*` submodule files → `lattice_*` submodule files → `green.f90`
+gaps → `calculation.f90` gaps → `reciprocal_*`. The two module-level
+contracts (`ham_apply_t`, `cheb_cache_t`, both in `chebyshev_fast.f90`) can
+be done as their own small commit whenever convenient — they're two type/
+interface doc blocks, not a per-routine pass.
+
+- [ ] `recursion.f90` — ~0/36 routines documented.
+- [ ] `hamiltonian_build.f90` — ~0/23 routines documented.
+- [ ] `hamiltonian_ccor.f90` — ~0/18 routines documented.
+- [ ] `hamiltonian_hubbard.f90` — ~0/2 routines documented (small — good
+      first "warm-up" file for a fresh session, or bundle with
+      `hamiltonian_paoflow_io.f90`).
+- [ ] `hamiltonian_paoflow_io.f90` — ~0/9 routines documented.
+- [ ] `lattice.f90` — ~0/49 routines documented. Large — consider whether
+      to split into two commits (e.g. constructor/lifecycle procedures vs.
+      geometry/query procedures) if it doesn't fit one session comfortably.
+- [ ] `lattice_cluster.f90` — ~0/16 routines documented.
+- [ ] `lattice_lifecycle.f90` — ~0/12 routines documented.
+- [ ] `lattice_print.f90` — ~0/3 routines documented (small).
+- [ ] `lattice_strux.f90` — ~0/20 routines documented.
+- [ ] `green.f90` gaps — 18/27 documented per the original count; find and
+      fill the ~9 undocumented ones, don't touch the 18 that already have
+      blocks.
+- [ ] `calculation.f90` gaps — 13/23 documented per the original count;
+      same approach — fill gaps only. Note: many procedures here are the
+      `pre_processing_*`/`post_processing_*` pipeline entry points
+      described in `docs/DEVELOPER_MAP.md` section 1-2; use that map to get
+      the "why"/"which workflow calls it" right without re-deriving it from
+      scratch.
+- [ ] `reciprocal.f90` — ~0/70 routines documented. Largest file in this
+      list — very likely needs 2-3 commits of its own. Split however makes
+      sense once you can see the file's internal grouping (e.g. by
+      lifecycle vs. Fourier/k-mesh vs. band/DOS helpers if it's not already
+      split that way at the submodule level).
+- [ ] `reciprocal_bands.f90` — ~0/9 routines documented.
+- [ ] `reciprocal_dos.f90` — ~0/30 routines documented.
+- [ ] `reciprocal_fourier.f90` — ~0/11 routines documented. This is the
+      ccor_2c/hoh k-space entry point (`docs/DEVELOPER_MAP.md` section 2) —
+      worth getting the physics notes right here in particular.
+- [ ] `reciprocal_lifecycle.f90` — ~0/11 routines documented.
+- [ ] `reciprocal_projection.f90` — ~0/11 routines documented.
+- [ ] `ham_apply_t` + `cheb_cache_t` module-level contracts
+      (`chebyshev_fast.f90`) — semantics of `alpha`/`beta` (y = α·H·x1 +
+      β·x0), and the cache's fingerprint-invalidation/single-rank-assumption
+      semantics (see `docs/DEVELOPER_MAP.md` section 3 for what's already
+      known about these — turn that into proper `!>` blocks on the actual
+      type/interface declarations).
 
 ---
 
