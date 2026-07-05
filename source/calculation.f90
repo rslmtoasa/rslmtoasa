@@ -644,6 +644,7 @@ contains
       case ('python')
          call hamiltonian_obj%export_rs_tb_all()
       end select
+      call bands_obj%calculate_orbital_quadrupoles()
       !call bands_obj%calculate_moments_gauss_legendre()
    end subroutine pre_processing_bravais
 
