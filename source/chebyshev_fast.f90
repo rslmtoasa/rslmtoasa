@@ -33,16 +33,6 @@ module chebyshev_fast_mod
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
 
-   abstract interface
-      subroutine ham_apply_t(x1, x0, y, alpha, beta, ld, nb)
-         import :: sp
-         integer, intent(in) :: ld, nb
-         complex(sp), intent(in), target :: x1(ld, nb), x0(ld, nb)
-         complex(sp), intent(out) :: y(ld, nb)
-         real(sp), intent(in) :: alpha, beta
-      end subroutine ham_apply_t
-   end interface
-
    type :: cheb_cache_fingerprint_t
       logical :: valid = .false.
       integer :: nb = 0
@@ -577,35 +567,6 @@ contains
       end do
    end subroutine cherk_full_sp
 
-   subroutine cheb_three_term_moments(apply_h, p0, p1, p2, nb, ld, lld, mu)
-      procedure(ham_apply_t) :: apply_h
-      integer, intent(in) :: nb, ld, lld
-      complex(sp), pointer, intent(inout) :: p0(:, :), p1(:, :), p2(:, :)
-      complex(rp), intent(out) :: mu(nb, nb, 2*lld + 2)
-      complex(sp), pointer :: ptmp(:, :)
-      complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
-      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
-      integer :: ll
-
-      call cherk_full_sp(nb, ld, p0, mu1_sp)
-      mu(:, :, 1) = mu1_sp
-      call apply_h(p0, p0, p1, 1.0_sp, 0.0_sp, ld, nb)
-      call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
-      mu(:, :, 2) = mu2_sp
-
-      do ll = 1, lld
-         call apply_h(p1, p0, p2, 2.0_sp, -1.0_sp, ld, nb)
-         call cherk_full_sp(nb, ld, p1, dum_sp)
-         mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
-         call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
-         mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
-         ptmp => p0
-         p0 => p1
-         p1 => p2
-         p2 => ptmp
-      end do
-   end subroutine cheb_three_term_moments
-
    !> Shared per-shell fp32 block matvec (site-major):
    !>   y = alpha*(acc - bsc*x1)*inva + beta*x0,   acc = sum_neigh Op * x1_block
    !> Op is hee_op[iz(k)] (bulk) for k > nmax_op, hha_op[k] (impurity) otherwise.
@@ -775,9 +736,33 @@ contains
       end if
 
       call pack_psi0_sp(psi0, kk, nb, p0)
-      call cheb_three_term_moments(apply_step_selected, p0, p1, p2, nb, ld, lld, mu)
+      call run_three_term_selected()
 
    contains
+
+      subroutine run_three_term_selected()
+         complex(sp), pointer :: ptmp(:, :)
+         complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+         integer :: ll
+
+         call cherk_full_sp(nb, ld, p0, mu1_sp)
+         mu(:, :, 1) = mu1_sp
+         call apply_step_selected(p0, p0, p1, 1.0_sp, 0.0_sp, ld, nb)
+         call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+         mu(:, :, 2) = mu2_sp
+
+         do ll = 1, lld
+            call apply_step_selected(p1, p0, p2, 2.0_sp, -1.0_sp, ld, nb)
+            call cherk_full_sp(nb, ld, p1, dum_sp)
+            mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+            call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+            mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+            ptmp => p0
+            p0 => p1
+            p1 => p2
+            p2 => ptmp
+         end do
+      end subroutine run_three_term_selected
 
       subroutine apply_step_selected(x1, x0, y, alpha, beta, ld_apply, nb_apply)
          integer, intent(in) :: ld_apply, nb_apply
@@ -943,9 +928,33 @@ contains
       call cheb_cache%ensure_block_products(nb, nblocks, block_products)
 
       call pack_psi0_sp(psi0, kk, nb, p0)
-      call cheb_three_term_moments(apply_step_bsr, p0, p1, p2, nb, ld, lld, mu)
+      call run_three_term_bsr()
 
    contains
+
+      subroutine run_three_term_bsr()
+         complex(sp), pointer :: ptmp(:, :)
+         complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+         integer :: ll
+
+         call cherk_full_sp(nb, ld, p0, mu1_sp)
+         mu(:, :, 1) = mu1_sp
+         call apply_step_bsr(p0, p0, p1, 1.0_sp, 0.0_sp, ld, nb)
+         call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+         mu(:, :, 2) = mu2_sp
+
+         do ll = 1, lld
+            call apply_step_bsr(p1, p0, p2, 2.0_sp, -1.0_sp, ld, nb)
+            call cherk_full_sp(nb, ld, p1, dum_sp)
+            mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+            call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+            mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+            ptmp => p0
+            p0 => p1
+            p1 => p2
+            p2 => ptmp
+         end do
+      end subroutine run_three_term_bsr
 
       !> y = alpha*(Ht x1) + beta*x0 using one packed GEMM per BSR row.
       subroutine apply_step_bsr(x1, x0, y, alpha, beta, ld_apply, nb_apply)
@@ -1039,9 +1048,33 @@ contains
       call init_mkl_batch_static_ptrs()
 
       call pack_psi0_sp(psi0, kk, nb, p0)
-      call cheb_three_term_moments(apply_step_mkl_batch, p0, p1, p2, nb, ld, lld, mu)
+      call run_three_term_mkl_batch()
 
    contains
+
+      subroutine run_three_term_mkl_batch()
+         complex(sp), pointer :: ptmp(:, :)
+         complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+         integer :: ll
+
+         call cherk_full_sp(nb, ld, p0, mu1_sp)
+         mu(:, :, 1) = mu1_sp
+         call apply_step_mkl_batch(p0, p0, p1, 1.0_sp, 0.0_sp, ld, nb)
+         call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+         mu(:, :, 2) = mu2_sp
+
+         do ll = 1, lld
+            call apply_step_mkl_batch(p1, p0, p2, 2.0_sp, -1.0_sp, ld, nb)
+            call cherk_full_sp(nb, ld, p1, dum_sp)
+            mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+            call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+            mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+            ptmp => p0
+            p0 => p1
+            p1 => p2
+            p2 => ptmp
+         end do
+      end subroutine run_three_term_mkl_batch
 
       subroutine init_mkl_batch_static_ptrs()
          integer :: block
@@ -1131,6 +1164,7 @@ contains
       complex(sp), pointer :: hval(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
       complex(sp), pointer :: p0(:, :), p1(:, :), p2(:, :)
+      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer, pointer :: hcol(:), hrow(:)
       integer :: status, ld
       real(sp) :: inva, a_sp, b_sp
@@ -1162,12 +1196,36 @@ contains
       call check_mkl_sparse_status(status, 'mkl_sparse_optimize')
 
       call pack_psi0_sp(psi0, kk, nb, p0)
-      call cheb_three_term_moments(apply_step_mkl, p0, p1, p2, nb, ld, lld, mu)
+      call run_three_term_mkl()
 
       status = mkl_sparse_destroy(mkl_A)
       call check_mkl_sparse_status(status, 'mkl_sparse_destroy')
 
    contains
+
+      subroutine run_three_term_mkl()
+         complex(sp), pointer :: ptmp(:, :)
+         complex(sp) :: mu1_sp(nb, nb), mu2_sp(nb, nb), dum_sp(nb, nb)
+         integer :: ll
+
+         call cherk_full_sp(nb, ld, p0, mu1_sp)
+         mu(:, :, 1) = mu1_sp
+         call apply_step_mkl(p0, p0, p1, 1.0_sp, 0.0_sp, ld, nb)
+         call cgemm('C', 'N', nb, nb, ld, cone, p0, ld, p1, ld, czero, mu2_sp, nb)
+         mu(:, :, 2) = mu2_sp
+
+         do ll = 1, lld
+            call apply_step_mkl(p1, p0, p2, 2.0_sp, -1.0_sp, ld, nb)
+            call cherk_full_sp(nb, ld, p1, dum_sp)
+            mu(:, :, 2*ll + 1) = 2.0_sp*dum_sp - mu1_sp
+            call cgemm('C', 'N', nb, nb, ld, cone, p2, ld, p1, ld, czero, dum_sp, nb)
+            mu(:, :, 2*ll + 2) = 2.0_sp*dum_sp - mu2_sp
+            ptmp => p0
+            p0 => p1
+            p1 => p2
+            p2 => ptmp
+         end do
+      end subroutine run_three_term_mkl
 
       subroutine apply_step_mkl(x1, x0, y, alpha, beta, ld_apply, nb_apply)
          integer, intent(in) :: ld_apply, nb_apply
