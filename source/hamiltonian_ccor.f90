@@ -157,6 +157,9 @@ contains
       real(rp), dimension(norb, 0:2) :: ccd_i, ccd_j
       real(rp), dimension(3) :: mom_i
       real(rp) :: lambda
+      real(rp) :: alpha_ss
+      real(rp), dimension(3) :: vet_ss
+      complex(rp), dimension(norb, norb) :: kx_ss, ky_ss
       integer :: ilm, jlm, idir
 
       hcc(:, :) = czero
@@ -208,6 +211,21 @@ contains
          call hcpx(kcomp(:, :, idir), 'cart2sph')
       end do
 
+      ! Generalized Bloch theorem bond rotation (see ham0m_nc, hamiltonian_build.f90,
+      ! for the full derivation): rotate the transverse (x,y) Pauli components by the
+      ! bond phase q.dR_ij; leaves the scalar/z components untouched and reduces to the
+      ! identity on-site (ja == ia) and whenever q_ss = 0.
+      if (this%lattice%pbc) then
+         call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
+      else
+         vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+      end if
+      alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
+      kx_ss = kcomp(:, :, 1)
+      ky_ss = kcomp(:, :, 2)
+      kcomp(:, :, 1) = kx_ss*cos(alpha_ss) - ky_ss*sin(alpha_ss)
+      kcomp(:, :, 2) = kx_ss*sin(alpha_ss) + ky_ss*cos(alpha_ss)
+
          lambda = ccor_vmt_scalar(this) - this%ccor_elin
       hcc(1:norb, 1:norb) = lambda*(kcomp(:, :, 4) + kcomp(:, :, 3))
       hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = lambda*(kcomp(:, :, 4) - kcomp(:, :, 3))
@@ -241,6 +259,9 @@ contains
          complex(rp), dimension(4) :: lambda_i, lambda_j, dloc, ddotloc, term_l, term_r, onsite
          real(rp), dimension(2) :: lambda_pair
          real(rp), dimension(3) :: mom_i, mom_j
+         real(rp) :: alpha_ss
+         real(rp), dimension(3) :: vet_ss
+         complex(rp), dimension(norb, norb) :: hx_ss, hy_ss
          integer :: ilm, jlm, idir
 
          hcc(:, :) = czero
@@ -286,6 +307,18 @@ contains
          do idir = 1, 4
             call hcpx(hcomp(:, :, idir), 'cart2sph')
          end do
+
+         ! Generalized Bloch theorem bond rotation (see ham0m_nc, hamiltonian_build.f90).
+         if (this%lattice%pbc) then
+            call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
+         else
+            vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
+         end if
+         alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
+         hx_ss = hcomp(:, :, 1)
+         hy_ss = hcomp(:, :, 2)
+         hcomp(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)
+         hcomp(:, :, 2) = hx_ss*sin(alpha_ss) + hy_ss*cos(alpha_ss)
 
          hcc(1:norb, 1:norb) = hcomp(:, :, 4) + hcomp(:, :, 3)
          hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 4) - hcomp(:, :, 3)
@@ -566,22 +599,23 @@ contains
          c(3) = a(4)*b(3) + b(4)*a(3) + i_unit*(a(1)*b(2) - a(2)*b(1))
       end subroutine ccor_spin_product
 
-      !> @brief Apply the spin-spiral rotation to a local moment for CCOR.
-      !> @details Rotates the supplied magnetic moment according to the atom
-      !>          position and spin-spiral q/theta parameters before pair-block use.
-      !> @param[in] this Hamiltonian object containing lattice and spin-spiral state.
-      !> @param[in] ia Site index whose position sets the spin-spiral phase.
+      !> @brief Apply the spin-spiral cone tilt to a local moment for CCOR.
+      !> @details Generalized Bloch theorem: the cone angle is a purely local
+      !>          (on-site) quantity, common to every site -- no azimuthal
+      !>          q-dependence here. The q-dependent bond rotation is applied
+      !>          separately, in the pair-block builders (build_ccor_pair_block_noncollinear,
+      !>          build_ccor_pair_surface_block), using the actual bond vector.
+      !> @param[in] this Hamiltonian object containing spin-spiral state.
+      !> @param[in] ia Unused; retained for call-site compatibility.
       !> @param[inout] mom Moment vector to rotate in place.
       module subroutine ccor_apply_spin_spiral(this, ia, mom)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: ia
       real(rp), dimension(3), intent(inout) :: mom
-      real(rp), dimension(3) :: r_ia
 
       if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
-         r_ia = this%charge%lattice%cr(:, ia)
-         mom(1) = cos(2.0_rp*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
-         mom(2) = sin(2.0_rp*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom(1) = sin(this%theta_ss)
+         mom(2) = 0.0_rp
          mom(3) = cos(this%theta_ss)
       end if
    end subroutine ccor_apply_spin_spiral

@@ -187,8 +187,12 @@ contains
          end if
          this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
-      this%q_ss(:) = q_ss(:)
-      this%theta_ss = theta_ss
+      ! q_ss is given in the &hamiltonian namelist in units of pi/alat (so q_ss=1.0
+      ! along a direction is the zone boundary at pi/alat); theta_ss is given in
+      ! degrees. Convert to the internal convention used by ham0m_nc/hamiltonian_ccor.f90
+      ! (phase = 2*pi*q_ss_internal.(bond/alat), theta_ss_internal in radians).
+      this%q_ss(:) = q_ss(:) !/ 2.0_rp 
+      this%theta_ss = theta_ss * pi / 180.0_rp
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
@@ -1366,12 +1370,13 @@ contains
       ! Local Variables
       integer :: i, j, ilm, jlm, m
       real(rp), dimension(3) :: mom_ia, mom_ja
-      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
       complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
       complex(rp) :: dot
       real(rp) :: vv
+      real(rp) :: alpha_ss
+      complex(rp), dimension(norb, norb) :: hx_ss, hy_ss
 
       this%hhmag(:, :, :) = 0.0d0
 
@@ -1379,14 +1384,14 @@ contains
       mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
       mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
       if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
-         r_ia = this%charge%lattice%cr(:, ia)
-         r_ja = this%charge%lattice%cr(:, ja)
-         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
-         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         ! Generalized Bloch theorem: the cone angle is a purely local (on-site)
+         ! quantity, common to both sites of the pair -- no azimuthal q-dependence
+         ! here. The q-dependent bond rotation is applied below, using the actual
+         ! bond vector vet (not the sites' absolute, possibly-wrapped positions).
+         mom_ia(1) = sin(this%theta_ss)
+         mom_ia(2) = 0.0d0
          mom_ia(3) = cos(this%theta_ss)
-         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
-         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
-         mom_ja(3) = cos(this%theta_ss)
+         mom_ja = mom_ia
       end if
 
       ! Real to complex
@@ -1443,6 +1448,18 @@ contains
             end do
          end do
       end do
+
+      ! Generalized Bloch theorem bond rotation: H_ij -> U(q.dR_ij) H_ij U(q.dR_ij)^dagger,
+      ! U the SU(2) z-rotation. Acting on a Hermitian spin block this leaves the scalar (4)
+      ! and z (3) Pauli components untouched and rotates the transverse (x,y) components (1,2)
+      ! by the bond angle -- using the true bond vector vet, not the sites' absolute positions.
+      ! Reduces to the identity for the on-site pair (vet = 0) and whenever q_ss = 0.
+      alpha_ss = 2.0d0*pi*dot_product(vet, this%q_ss)/this%charge%lattice%alat
+      print *,vet
+      hx_ss = this%hhmag(:, :, 1)
+      hy_ss = this%hhmag(:, :, 2)
+      this%hhmag(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)
+      this%hhmag(:, :, 2) = hx_ss*sin(alpha_ss) + hy_ss*cos(alpha_ss)
 
       if (vv > 0.01d0) return
       do m = 1, 3

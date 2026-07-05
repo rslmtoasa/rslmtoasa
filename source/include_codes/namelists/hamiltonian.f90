@@ -1,6 +1,12 @@
 logical :: hoh, local_axis, orb_pol, v_a, v_b
 character(len=20) :: js_alpha, jl_alpha
-real(rp), dimension(3) :: v_alpha, v_beta, q_ss
+real(rp), dimension(3) :: v_alpha, v_beta
+! Generalized Bloch theorem spin-spiral input units in this namelist:
+! - q_ss is given in units of pi/alat (q_ss=1.0 along a direction is the zone
+!   boundary at pi/alat); theta_ss (cone angle from the z axis) is given in degrees.
+! Internal Hamiltonian storage (hamiltonian%q_ss, hamiltonian%theta_ss) uses the
+! phase convention 2*pi*q_ss_internal and radians, respectively -- see build_from_file.
+real(rp), dimension(3) :: q_ss
 real(rp) :: theta_ss
 logical :: ccor_2c, ccor_debug, ccor_strict
 real(rp) :: ccor_elin
