@@ -191,7 +191,7 @@ contains
       ! along a direction is the zone boundary at pi/alat); theta_ss is given in
       ! degrees. Convert to the internal convention used by ham0m_nc/hamiltonian_ccor.f90
       ! (phase = 2*pi*q_ss_internal.(bond/alat), theta_ss_internal in radians).
-      this%q_ss(:) = q_ss(:) !/ 2.0_rp 
+      this%q_ss(:) = q_ss(:) / 2.0_rp
       this%theta_ss = theta_ss * pi / 180.0_rp
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
