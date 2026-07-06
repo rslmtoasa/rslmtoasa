@@ -16,6 +16,7 @@ add_library(${PROJECT_NAME} STATIC
     energy.f90
     exchange.f90
     face.F90
+    frozen_magnon.f90
     globals.f90
     green.f90
     #hamiltonian_base_mod.f90

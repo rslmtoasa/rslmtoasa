@@ -44,6 +44,7 @@ shared Fortran state.
 | `post_processing` | `'paoflow2rs'` | `post_processing_paoflow2rs` | Base PAOFLOW import path: builds the lattice normally but replaces `hamiltonian%build_bulkham()` with `hamiltonian%build_from_paoflow_opt()` (reads `paoham.dat`). |
 | `post_processing` | `'orbital_modern'` | `post_processing_orbital_modern` | Orbital moments via `recursion%chebyshev_orbital_mod()` — always Chebyshev, regardless of `control%recur`. Loops over *every* atom in the cluster (`this%lattice%kk`), so runtime scales with cluster size, not recursion depth. |
 | `post_processing` | `'band_structure'` / `'density_of_states'` | (see `prepare_post_processing_stack` callers) | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
+| `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`frozen_magnon_mod`, `source/frozen_magnon.f90`), writing `E(q)`, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point and reuses that potential for a single-iteration band-energy pass at every other q (magnetic force theorem); `mode='scf'` re-converges at every q. Single-acoustic-branch dispersion only — see `docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md` T5. |
 
 `exchange_p2rs`/`conductivity_p2rs`/`paoflow2rs` all funnel through the
 shared helper `prepare_post_processing_stack(this, use_paoflow, ...)` in

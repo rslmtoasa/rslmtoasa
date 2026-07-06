@@ -39,6 +39,7 @@ module calculation_mod
    use conductivity_mod
    use reciprocal_mod
    use mix_mod
+   use frozen_magnon_mod
    use math_mod
    use precision_mod, only: rp
    use string_mod, only: sl, fmt, real2str
@@ -91,6 +92,7 @@ module calculation_mod
       procedure, private :: post_processing_orbital_modern
       procedure, private :: post_processing_band_structure
       procedure, private :: post_processing_density_of_states
+      procedure, private :: post_processing_frozen_magnon
       procedure :: process
       final :: destructor
    end type calculation
@@ -216,6 +218,8 @@ contains
          call this%post_processing_band_structure()
       case ('density_of_states')
          call this%post_processing_density_of_states()
+      case ('frozen_magnon')
+         call this%post_processing_frozen_magnon()
       end select
    end subroutine
 
@@ -1170,7 +1174,87 @@ contains
            reciprocal_obj%auto_find_fermi, 'dos_kspace.dat')
    end subroutine post_processing_density_of_states
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Frozen-magnon post-processing: sweeps &hamiltonian's q_ss over a
+   !> user-supplied list of points (see &frozen_magnon namelist) and reports
+   !> the adiabatic magnon dispersion.
+   !> @details For each q in the sweep, the Hamiltonian is rebuilt with that
+   !> q_ss and the potential is either fully re-converged (mode='scf') or, for
+   !> mode='mft' (the magnetic force theorem default), converged once at the
+   !> reference point q_ss_list(:,1) and then re-evaluated with a single
+   !> band-energy pass (self%nstep=1) at every other q, reusing the reference
+   !> potential unchanged. The dispersion omega(q) = 4*(E(q)-E(q_ref)) /
+   !> (M_tot*sin^2(theta_ss)) is the single-acoustic-branch generalization of
+   !> the Halilov frozen-magnon formula to multiple sublattices: M_tot is the
+   !> reference point's total moment summed over sublattices, correct because
+   !> every sublattice shares the same global (q_ss, theta_ss) cant (the
+   !> uniform-cant ansatz already built into ham0m_nc/hamiltonian_ccor.f90).
+   !> Independent per-sublattice magnon branches (e.g. optic modes in an
+   !> antiferromagnetic cell) are out of scope; only the acoustic branch is
+   !> captured here.
+   !---------------------------------------------------------------------------
+   subroutine post_processing_frozen_magnon(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(self), target :: self_obj
+      type(frozen_magnon) :: fm_obj
+      real(rp), allocatable :: etot_q(:), mtot_q(:, :), omega_q(:)
+      real(rp) :: sin2theta
+      character(len=200) :: fmt_str
+      integer :: iq, i, newunit
 
+      fm_obj = frozen_magnon(this%fname)
+
+      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj)
+
+      allocate (etot_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
+
+      do iq = 1, fm_obj%n_q
+         hamiltonian_obj%q_ss(:) = fm_obj%q_ss_list(:, iq)
+
+         self_obj = self(bands_obj, mix_obj)
+         if (fm_obj%mode == 'mft' .and. iq > 1) self_obj%nstep = 1
+         call self_obj%run()
+
+         etot_q(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+         do i = 1, lattice_obj%nrec
+            mtot_q(i, iq) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
+         end do
+      end do
+
+      sin2theta = sin(hamiltonian_obj%theta_ss)**2
+      if (sin2theta < 1.0e-8_rp) then
+         call g_logger%fatal('[calculation.post_processing_frozen_magnon]: '// &
+                             'theta_ss must be nonzero (a finite cone angle) to define omega(q)', __FILE__, __LINE__)
+      end if
+      do iq = 1, fm_obj%n_q
+         omega_q(iq) = 4.0_rp*(etot_q(iq) - etot_q(1))/(sum(mtot_q(:, 1))*sin2theta)
+      end do
+
+      open (newunit=newunit, file=trim(fm_obj%output_file), status='replace', action='write')
+      write (newunit, '(A)') '# Frozen-magnon sweep (calculation%post_processing = "frozen_magnon")'
+      write (newunit, '(A)') '# q_ss units: pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point'
+      write (newunit, '(A,I0)') '# Number of sublattices (nrec): ', lattice_obj%nrec
+      write (newunit, '(A)') '# Format: q1 q2 q3 etot mtot_1 .. mtot_nrec omega'
+      write (fmt_str, '(A,I0,A)') '(3F12.6,1X,ES16.8E3,1X,', lattice_obj%nrec, '(ES16.8E3,1X),ES16.8E3)'
+      do iq = 1, fm_obj%n_q
+         write (newunit, fmt_str) fm_obj%q_ss_list(:, iq), etot_q(iq), mtot_q(:, iq), omega_q(iq)
+      end do
+      close (newunit)
+   end subroutine post_processing_frozen_magnon
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1201,10 +1285,12 @@ contains
           .and. post_processing /= 'conductivity_p2rs' &
           .and. post_processing /= 'orbital_modern' &
           .and. post_processing /= 'band_structure' &
-          .and. post_processing /= 'density_of_states') then 
+          .and. post_processing /= 'density_of_states' &
+          .and. post_processing /= 'frozen_magnon') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'density_of_states'", __FILE__, __LINE__)
+                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'density_of_states'," // &
+                             " 'frozen_magnon'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

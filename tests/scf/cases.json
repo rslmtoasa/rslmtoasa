@@ -334,6 +334,18 @@
       }
     },
     {
+      "name": "Example_frozen_magnon_bccFe",
+      "case": "frozen_magnon/bccFe",
+      "timeout": 300,
+      "_note": "T5: frozen_magnon post-processing sweep (mode='mft', 3 q-points from q_points.dat, theta_ss=90deg, units pi/alat). Checks frozen_magnon.dat rows/cols. See docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md T5.",
+      "namelists": {},
+      "checks": {
+        "text": [
+          { "file": "frozen_magnon.dat", "rows": [5, 6, 7], "cols": [3, 4, 5, 6] }
+        ]
+      }
+    },
+    {
       "name": "Example_bulk_bccFe_export_rs2pao",
       "case": "bulk/bccFe",
       "timeout": 300,
