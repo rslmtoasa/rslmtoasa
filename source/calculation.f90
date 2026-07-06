@@ -1186,9 +1186,11 @@ contains
    !> reference point q_ss_list(:,1) and then re-evaluated with a single
    !> band-energy pass (self%nstep=1) at every other q, reusing the reference
    !> potential unchanged. The dispersion omega(q) = 4*(E(q)-E(q_ref)) /
-   !> (M_tot*sin^2(theta_ss)) is the single-acoustic-branch generalization of
-   !> the Halilov frozen-magnon formula to multiple sublattices: M_tot is the
-   !> reference point's total moment summed over sublattices, correct because
+   !> (M_tot*sin^2(theta_ss)) uses the band energy for mode='mft' and the
+   !> total energy for mode='scf'. This is the single-acoustic-branch
+   !> generalization of the Halilov frozen-magnon formula to multiple
+   !> sublattices: M_tot is the reference point's total moment summed over
+   !> sublattices, correct because
    !> every sublattice shares the same global (q_ss, theta_ss) cant (the
    !> uniform-cant ansatz already built into ham0m_nc/hamiltonian_ccor.f90).
    !> Independent per-sublattice magnon branches (e.g. optic modes in an
@@ -1209,8 +1211,9 @@ contains
       type(mix), target :: mix_obj
       type(self), target :: self_obj
       type(frozen_magnon) :: fm_obj
-      real(rp), allocatable :: etot_q(:), mtot_q(:, :), omega_q(:)
+      real(rp), allocatable :: etot_q(:), eband_q(:), mtot_q(:, :), omega_q(:), q_ss_cart(:, :)
       real(rp) :: sin2theta
+      real(rp), dimension(3, 3) :: direct_to_cart
       character(len=200) :: fmt_str
       integer :: iq, i, newunit
 
@@ -1220,16 +1223,28 @@ contains
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
 
-      allocate (etot_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
+      allocate (q_ss_cart(3, fm_obj%n_q))
+      if (fm_obj%q_coordinates == 'direct') then
+         direct_to_cart = transpose(inverse_3x3(lattice_obj%a))
+         do iq = 1, fm_obj%n_q
+            q_ss_cart(:, iq) = matmul(direct_to_cart, fm_obj%q_ss_list(:, iq))
+         end do
+      else
+         q_ss_cart(:, :) = fm_obj%q_ss_list(:, :)
+      end if
+
+      allocate (etot_q(fm_obj%n_q), eband_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
 
       do iq = 1, fm_obj%n_q
-         hamiltonian_obj%q_ss(:) = fm_obj%q_ss_list(:, iq)
+         hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
 
          self_obj = self(bands_obj, mix_obj)
          if (fm_obj%mode == 'mft' .and. iq > 1) self_obj%nstep = 1
          call self_obj%run()
 
          etot_q(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+         if (.not. self_obj%use_kspace) call bands_obj%calculate_band_energy()
+         eband_q(iq) = bands_obj%eband
          do i = 1, lattice_obj%nrec
             mtot_q(i, iq) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
          end do
@@ -1241,17 +1256,23 @@ contains
                              'theta_ss must be nonzero (a finite cone angle) to define omega(q)', __FILE__, __LINE__)
       end if
       do iq = 1, fm_obj%n_q
-         omega_q(iq) = 4.0_rp*(etot_q(iq) - etot_q(1))/(sum(mtot_q(:, 1))*sin2theta)
+         if (fm_obj%mode == 'mft') then
+            omega_q(iq) = 4.0_rp*(eband_q(iq) - eband_q(1))/(sum(mtot_q(:, 1))*sin2theta)
+         else
+            omega_q(iq) = 4.0_rp*(etot_q(iq) - etot_q(1))/(sum(mtot_q(:, 1))*sin2theta)
+         end if
       end do
 
       open (newunit=newunit, file=trim(fm_obj%output_file), status='replace', action='write')
       write (newunit, '(A)') '# Frozen-magnon sweep (calculation%post_processing = "frozen_magnon")'
-      write (newunit, '(A)') '# q_ss units: pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point'
+      write (newunit, '(A)') '# q_ss units: Cartesian 2*pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point'
+      write (newunit, '(A,A)') '# q_file coordinates: ', trim(fm_obj%q_coordinates)
+      write (newunit, '(A)') '# omega uses eband in mode="mft" and etot in mode="scf"'
       write (newunit, '(A,I0)') '# Number of sublattices (nrec): ', lattice_obj%nrec
-      write (newunit, '(A)') '# Format: q1 q2 q3 etot mtot_1 .. mtot_nrec omega'
-      write (fmt_str, '(A,I0,A)') '(3F12.6,1X,ES16.8E3,1X,', lattice_obj%nrec, '(ES16.8E3,1X),ES16.8E3)'
+      write (newunit, '(A)') '# Format: q1 q2 q3 etot eband mtot_1 .. mtot_nrec omega'
+      write (fmt_str, '(A,I0,A)') '(3F12.6,1X,2(ES16.8E3,1X),', lattice_obj%nrec, '(ES16.8E3,1X),ES16.8E3)'
       do iq = 1, fm_obj%n_q
-         write (newunit, fmt_str) fm_obj%q_ss_list(:, iq), etot_q(iq), mtot_q(:, iq), omega_q(iq)
+         write (newunit, fmt_str) q_ss_cart(:, iq), etot_q(iq), eband_q(iq), mtot_q(:, iq), omega_q(iq)
       end do
       close (newunit)
    end subroutine post_processing_frozen_magnon

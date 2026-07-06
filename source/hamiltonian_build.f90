@@ -187,11 +187,11 @@ contains
          end if
          this%v_alpha(:) = v_alpha(:)
       this%v_beta(:) = v_beta(:)
-      ! q_ss is given in the &hamiltonian namelist in units of pi/alat (so q_ss=1.0
-      ! along a direction is the zone boundary at pi/alat); theta_ss is given in
-      ! degrees. Convert to the internal convention used by ham0m_nc/hamiltonian_ccor.f90
-      ! (phase = 2*pi*q_ss_internal.(bond/alat), theta_ss_internal in radians).
-      this%q_ss(:) = q_ss(:) / 2.0_rp
+      ! q_ss is given in the &hamiltonian namelist in Cartesian units of 2*pi/alat
+      ! (q_ss=0.5 along a simple cubic direction is the zone boundary at pi/alat);
+      ! theta_ss is given in degrees. The Hamiltonian phase convention is
+      ! phase = 2*pi*q_ss.(bond/alat), with theta_ss stored internally in radians.
+      this%q_ss(:) = q_ss(:)
       this%theta_ss = theta_ss * pi / 180.0_rp
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
@@ -1455,7 +1455,6 @@ contains
       ! by the bond angle -- using the true bond vector vet, not the sites' absolute positions.
       ! Reduces to the identity for the on-site pair (vet = 0) and whenever q_ss = 0.
       alpha_ss = 2.0d0*pi*dot_product(vet, this%q_ss)/this%charge%lattice%alat
-      print *,vet
       hx_ss = this%hhmag(:, :, 1)
       hy_ss = this%hhmag(:, :, 2)
       this%hhmag(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)

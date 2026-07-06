@@ -2,7 +2,7 @@
   "name": "Example_bulk_bccFe_nsp4_block_spiral_qminus",
   "case": "bulk/bccFe",
   "timeout": 300,
-  "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,-0.10) [units: pi/alat, degrees]. Paired with _qplus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
+  "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,-0.05) [units: 2*pi/alat, degrees]. Paired with _qplus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
   "namelists": {
     "control": {
       "nsp": 4,
@@ -17,7 +17,7 @@
       "q_ss": [
         0.0,
         0.0,
-        -0.1
+        -0.05
       ],
       "theta_ss": 90.0
     }

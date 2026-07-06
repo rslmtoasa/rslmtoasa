@@ -9,10 +9,12 @@
 !
 ! DESCRIPTION:
 !> @brief Sweep configuration for the `frozen_magnon` post-processing mode.
-!> @details Holds the list of spin-spiral `q_ss` points (units of pi/alat,
-!>          matching &hamiltonian's q_ss) to evaluate, either from a compact
-!>          external text file or the legacy namelist q_ss_list, the execution
-!>          mode ('scf': full SCF at every point; 'mft': full SCF at the
+!> @details Holds the list of spin-spiral `q_ss` points to evaluate, either
+!>          from a compact external text file or the legacy namelist q_ss_list,
+!>          plus the q-coordinate convention ('cartesian': Cartesian units of
+!>          2*pi/alat, matching &hamiltonian q_ss; 'direct': reciprocal-lattice
+!>          coordinates), the execution mode ('scf': full SCF at every point;
+!>          'mft': full SCF at the
 !>          reference point only, single-iteration band-energy pass for the
 !>          rest), and the output filename. The sweep itself is driven from
 !>          calculation.f90::post_processing_frozen_magnon, which owns the
@@ -37,12 +39,13 @@ module frozen_magnon_mod
       character(len=10) :: mode
       !> Number of q-points in the sweep (>= 2: reference + at least one q)
       integer :: n_q
-      !> Sweep points, shape (3, n_q), units of pi/alat. Column 1 is the
-      !> reference point.
+      !> Sweep points as read, shape (3, n_q). Column 1 is the reference point.
       real(rp), dimension(:, :), allocatable :: q_ss_list
       !> Optional external q-point file. If set, it replaces n_q_points/q_ss_list.
       character(len=sl) :: q_file
-      !> Output data file (one row per q: q1 q2 q3 etot mtot_1..mtot_nrec omega)
+      !> 'cartesian' (2*pi/alat) or 'direct' (reciprocal lattice coordinates).
+      character(len=16) :: q_coordinates
+      !> Output data file (one row per q: q1 q2 q3 etot eband mtot_1..mtot_nrec omega)
       character(len=sl) :: output_file
    contains
       procedure :: build_from_file
@@ -82,6 +85,7 @@ contains
       this%mode = 'mft'
       this%n_q = 0
       this%q_file = ''
+      this%q_coordinates = 'cartesian'
       this%output_file = 'frozen_magnon.dat'
    end subroutine restore_to_default
 
@@ -104,6 +108,7 @@ contains
       mode = this%mode
       output_file = this%output_file
       q_file = this%q_file
+      q_coordinates = this%q_coordinates
       n_q_points = 0
       q_ss_list = 0.0_rp
 
@@ -128,6 +133,12 @@ contains
 
       this%output_file = output_file
       this%q_file = trim(q_file)
+      this%q_coordinates = lower(trim(q_coordinates))
+      if (len_trim(this%q_coordinates) == 0) this%q_coordinates = 'cartesian'
+      if (this%q_coordinates /= 'cartesian' .and. this%q_coordinates /= 'direct') then
+         call g_logger%fatal("[frozen_magnon.build_from_file]: q_coordinates must be 'cartesian' or 'direct'", &
+                              __FILE__, __LINE__)
+      end if
 
       if (len_trim(this%q_file) > 0) then
          call read_q_points_file(this, trim(this%q_file))
