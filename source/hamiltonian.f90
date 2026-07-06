@@ -99,6 +99,8 @@ module hamiltonian_mod
       procedure :: build_realspace_spin_soc_torque_operators
       procedure :: build_realspace_orbital_velocity_operators
       procedure :: build_realspace_orbital_torque_operators
+      procedure :: build_realspace_quadrupole_velocity_operators
+      procedure :: build_realspace_quadrupole_accumulation_operators
       procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
@@ -476,7 +478,218 @@ contains
 
    end subroutine select_orbital_operator
 
- 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select orbital quadrupole / OAP operator from a component label.
+   !>
+   !> Definitions:
+   !>   Qxx = Lx^2
+   !>   Qyy = Ly^2
+   !>   Qzz = Lz^2
+   !>   Qxy = 1/2 {Lx,Ly}
+   !>   Qyz = 1/2 {Ly,Lz}
+   !>   Qzx = 1/2 {Lz,Lx}
+   !>   Qx2y2  = Qxx - Qyy
+   !>   Q3z2r2 = 2 Qzz - Qxx - Qyy
+   !>
+   !> The math_mod L matrices are transformed from Cartesian to spherical basis
+   !> before forming products, exactly as done for orbital accumulation/current.
+   !---------------------------------------------------------------------------
+   subroutine select_quadrupole_operator(pol, Q_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(18, 18), intent(out) :: Q_op
+
+      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(9, 9) :: Q9
+      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2
+
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      Lx2 = matmul(mLx, mLx)
+      Ly2 = matmul(mLy, mLy)
+      Lz2 = matmul(mLz, mLz)
+
+      Q9(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+
+      case('Qxx', 'qxx', 'xx')
+         Q9 = Lx2
+
+      case('Qyy', 'qyy', 'yy')
+         Q9 = Ly2
+
+      case('Qzz', 'qzz', 'zz')
+         Q9 = Lz2
+
+      case('Qxy', 'qxy', 'xy')
+         Q9 = 0.5_rp * (matmul(mLx, mLy) + matmul(mLy, mLx))
+
+      case('Qyz', 'qyz', 'yz')
+         Q9 = 0.5_rp * (matmul(mLy, mLz) + matmul(mLz, mLy))
+
+      case('Qzx', 'qzx', 'zx', 'Qxz', 'qxz', 'xz')
+         Q9 = 0.5_rp * (matmul(mLz, mLx) + matmul(mLx, mLz))
+
+      case('Qx2y2', 'qx2y2', 'x2y2')
+         Q9 = Lx2 - Ly2
+
+      case('Q3z2r2', 'q3z2r2', '3z2r2')
+         Q9 = 2.0_rp * Lz2 - Lx2 - Ly2
+
+      case default
+         call g_logger%fatal('Invalid quadrupole component: '//trim(pol), __FILE__, __LINE__)
+
+      end select
+
+      ! Clean tiny numerical anti-Hermitian noise.
+      Q9 = 0.5_rp * (Q9 + transpose(conjg(Q9)))
+
+      Q_op(:, :) = (0.0_rp, 0.0_rp)
+
+      ! spin-up block
+      Q_op(1:9, 1:9) = Q9(:, :)
+
+      ! spin-down block
+      Q_op(10:18, 10:18) = Q9(:, :)
+
+      write(*,*) 'Selected Q component = ', trim(pol), ' norm = ', sqrt(real(sum(conjg(Q_op)*Q_op), rp))
+      write(*,*) 'Hermiticity check Q = ', maxval(abs(Q_op - transpose(conjg(Q_op))))
+
+   end subroutine select_quadrupole_operator 
+
+   !**************************************************************************
+   !> @brief Build local quadrupole/OAP accumulation operator.
+   !>
+   !> This is a purely on-site operator:
+   !>
+   !>      Q_mu
+   !>
+   !> It is placed only in the m = 1 block for each atom type.
+   !> The result is stored in jl_a / jlo_a as temporary containers.
+   !**************************************************************************
+   subroutine build_realspace_quadrupole_accumulation_operators(this, pol)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
+
+      integer :: ntype
+      integer :: hblocksize
+      complex(rp), allocatable :: Q_op(:, :)
+
+      hblocksize = size(this%v_a, 1)
+
+      allocate(Q_op(hblocksize, hblocksize))
+
+      this%jl_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      call select_quadrupole_operator(pol, Q_op)
+
+      do ntype = 1, this%charge%lattice%ntype
+         this%jl_a(:, :, 1, ntype) = Q_op(:, :)
+      end do
+
+      deallocate(Q_op)
+
+   end subroutine build_realspace_quadrupole_accumulation_operators
+
+
+   !**************************************************************************
+   !> @brief Build quadrupole/OAP-current operator j^Q = 1/2 {Q_pol, v_slot}.
+   !>
+   !> pol selects the quadrupole component:
+   !>   Qxx, Qyy, Qzz, Qxy, Qyz, Qzx, Qx2y2, Q3z2r2
+   !>
+   !> velocity_slot selects the spatial velocity operator:
+   !>   'a' -> use v_a / vo_a
+   !>   'b' -> use v_b / vo_b
+   !>
+   !> The result is stored in jl_a / jlo_a as temporary containers.
+   !**************************************************************************
+   subroutine build_realspace_quadrupole_velocity_operators(this, pol, velocity_slot)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
+      character(len=*), intent(in) :: velocity_slot
+
+      integer :: ntype, ia, nr, m
+      integer :: hblocksize
+      complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), Q_op(:, :)
+
+      hblocksize = size(this%v_a, 1)
+
+      allocate(tmp1(hblocksize, hblocksize))
+      allocate(tmp2(hblocksize, hblocksize))
+      allocate(Q_op(hblocksize, hblocksize))
+
+      this%jl_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      call select_quadrupole_operator(pol, Q_op)
+
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+
+         ! As in orbital-current operator, the velocity operator is off-site.
+         ! Therefore use m = 2, ..., nr.
+         do m = 2, nr
+
+            tmp1(:, :) = (0.0_rp, 0.0_rp)
+            tmp2(:, :) = (0.0_rp, 0.0_rp)
+
+            select case(trim(velocity_slot))
+
+            case('a')
+               tmp1 = matmul(Q_op, this%v_a(:, :, m, ntype))
+               tmp2 = matmul(this%v_a(:, :, m, ntype), Q_op)
+
+            case('b')
+               tmp1 = matmul(Q_op, this%v_b(:, :, m, ntype))
+               tmp2 = matmul(this%v_b(:, :, m, ntype), Q_op)
+
+            case default
+               call g_logger%fatal('Invalid velocity slot in build_realspace_quadrupole_velocity_operators: '//trim(velocity_slot), __FILE__, __LINE__)
+
+            end select
+
+            this%jl_a(:, :, m, ntype) = 0.5_rp * (tmp1 + tmp2)
+
+            if (this%hoh) then
+               tmp1(:, :) = (0.0_rp, 0.0_rp)
+               tmp2(:, :) = (0.0_rp, 0.0_rp)
+
+               select case(trim(velocity_slot))
+
+               case('a')
+                  tmp1 = matmul(Q_op, this%vo_a(:, :, m, ntype))
+                  tmp2 = matmul(this%vo_a(:, :, m, ntype), Q_op)
+
+               case('b')
+                  tmp1 = matmul(Q_op, this%vo_b(:, :, m, ntype))
+                  tmp2 = matmul(this%vo_b(:, :, m, ntype), Q_op)
+
+               case default
+                  call g_logger%fatal('Invalid HOH velocity slot in build_realspace_quadrupole_velocity_operators: '//trim(velocity_slot), __FILE__, __LINE__)
+
+               end select
+
+               this%jlo_a(:, :, m, ntype) = 0.5_rp * (tmp1 + tmp2)
+            end if
+
+         end do
+      end do
+
+      deallocate(tmp1, tmp2, Q_op)
+
+   end subroutine build_realspace_quadrupole_velocity_operators
+
    !**************************************************************************
    !> @brief Build spin-current operator j^S = 1/2 {S_pol, v_slot}.
    !>

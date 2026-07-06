@@ -286,6 +286,8 @@ contains
    !>   spin_soc_torque
    !>   soc_spin_torque
    !>   orbital_torque
+   !>   quadrupole
+   !>   quadrupole_accumulation
    !>
    !> Notes:
    !>   - js_a, jso_a, jl_a, and jlo_a are used only as temporary containers.
@@ -396,6 +398,31 @@ contains
          end select
 
       !-----------------------------------------------------------------------
+      ! Quadrupole/OAP-current operator:
+      !
+      !   j^Q_pol = 1/2 {Q_pol, v_slot}
+      !
+      ! For slot = 'a', the quadrupole current is built from v_a / vo_a.
+      ! For slot = 'b', the quadrupole current is built from v_b / vo_b.
+      !
+      ! The result is first stored in jl_a / jlo_a as temporary containers,
+      ! then copied into the requested Kubo slot.
+      !-----------------------------------------------------------------------
+      case('quadrupole', 'oap')
+
+         call this%hamiltonian%build_realspace_quadrupole_velocity_operators(pol, slot)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+         end select
+   
+      !-----------------------------------------------------------------------
       ! Spin accumulation:
       !
       !   local S_pol operator
@@ -497,6 +524,28 @@ contains
             do ntype = 1, this%lattice%ntype
                this%hamiltonian%v_b(:, :, 1, ntype) = L_op(:, :)
             end do
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Quadrupole/OAP accumulation:
+      !
+      !   local Q_pol operator
+      !
+      ! This is a local on-site operator. Therefore only the m = 1 block is
+      ! filled for each atom type.
+      !-----------------------------------------------------------------------
+      case('quadrupole_accumulation', 'oap_accumulation')
+
+         call this%hamiltonian%build_realspace_quadrupole_accumulation_operators(pol)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
          end select
 
       !-----------------------------------------------------------------------
