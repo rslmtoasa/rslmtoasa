@@ -1,0 +1,6 @@
+# Python dependencies for building the Sphinx documentation.
+# Used by the docs CI (.github/workflows/docs.yml) and for local builds:
+#   pip install -r docs/requirements.txt
+#   make -C docs html
+sphinx>=7.0
+sphinx-rtd-theme>=2.0
