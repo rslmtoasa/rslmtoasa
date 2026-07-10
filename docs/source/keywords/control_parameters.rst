@@ -409,9 +409,9 @@ recur
 
 **Purpose:** Selects the recursion algorithm used to compute the Green's function
 
-**Allowed values:** ``'lanczos'``, ``'chebyshev'``
+**Allowed values:** ``'lanczos'``, ``'chebyshev'``, ``'block'``
 
-**Default:** ``'lanczos'``
+**Default:** ``'block'``
 
 **Example:**
 
@@ -421,15 +421,80 @@ recur
 
 **Notes:**
 
-- ``'lanczos'``: Tridiagonalises the Hamiltonian exactly up to the cutoff
-  ``llsp``/``lld``.  Preferred for small clusters and impurity calculations.
+- ``'lanczos'``: Scalar Lanczos recursion — tridiagonalises the Hamiltonian
+  up to the cutoff ``llsp``/``lld``.  Preferred for small clusters and
+  impurity calculations.
+- ``'block'``: Block-Lanczos recursion, processing several starting vectors
+  together (fast kernels in ``haydock_fast.f90``).  This is the default
+  production path.
 - ``'chebyshev'``: Expands the Green's function in Chebyshev polynomials with
   stochastic trace evaluation (controlled by ``random_vec_num``).  More
-  efficient for large disordered systems.
+  efficient for large disordered systems; fast kernels in
+  ``chebyshev_fast.f90``, optionally offloaded to the GPU (see ``gpu_plugin``).
 
-**Related code:** ``source/recursion.f90``
+**Related code:** ``source/recursion.f90`` (+ ``recursion_core`` /
+``recursion_haydock`` / ``recursion_chebyshev`` submodules)
 
-**See also:** :ref:`theory/recursion_method`
+**See also:** :ref:`theory/recursion_method`, :ref:`theory/gpu_acceleration`
+
+gpu_plugin
+----------
+
+**Type:** Logical
+
+**Default:** ``.false.``
+
+**Purpose:** Offload the supported recursion kernels to an NVIDIA GPU via the
+CUDA plugin.
+
+**Example:**
+
+.. code-block:: fortran
+
+   gpu_plugin = .true.
+
+**Notes:**
+
+- Requires a build configured with ``ENABLE_CUDA_PLUGIN=ON`` and an available
+  CUDA device.  When the plugin is not compiled in or no device is present,
+  the run falls back to the CPU path (this keyword is then ignored).
+- Covers Chebyshev, block-Lanczos, scalar Lanczos (``nsp=1`` only), stochastic,
+  intersite and orbital-moment kernels — bypassing the CPU fast backends.
+
+**Related code:** ``source/rsrec_cuda_plugin.f90``, ``source/recursion_core.f90``
+
+**See also:** :ref:`theory/gpu_acceleration`
+
+gpu_backend
+-----------
+
+**Type:** Character string
+
+**Default:** ``'csr'``
+
+**Purpose:** Selects the on-device sparse storage / matvec strategy used by the
+CUDA plugin (only relevant when ``gpu_plugin = .true.``).
+
+**Allowed values:** ``'csr'``, ``'bsr'``, ``'fft'``, ``'conv'``
+
+**Notes:**
+
+- ``'csr'`` / ``'bsr'``: compressed / block sparse row matvec (``'bsr'`` is
+  usually faster for the dense per-atom orbital blocks).
+- ``'fft'`` / ``'conv'``: periodic operator apply; **require a fully periodic
+  lattice** (``pbc=.true.`` with ``b1``/``b2``/``b3``), otherwise the run
+  warns and falls back to the CPU path.
+- An unrecognized value is non-fatal (warning + CPU fallback).
+
+**Related code:** ``source/rsrec_cuda_plugin.f90::decode_gpu_backend()``
+
+**See also:** :ref:`theory/gpu_acceleration`
+
+.. note::
+
+   The combined-correction (``ccor_2c``) and H-O-H (``hoh``) Hamiltonian
+   switches live in the ``&hamiltonian`` namelist, not ``&control`` — see
+   :ref:`keywords/hamiltonian_parameters`.
 
 calctype
 --------

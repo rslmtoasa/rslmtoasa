@@ -18,6 +18,7 @@ Table of Contents
    kspace_modes
    green_functions
    recursion_method
+   gpu_acceleration
    scf_cycle
    spin_dynamics
    constraining_fields
@@ -60,6 +61,7 @@ Key Features
 - **Electronic transport** properties (conductivity, magnetotransport)
 - **Magnetic impurities** and defects
 - **Hybrid OpenMP/MPI parallelization** for HPC systems
+- **Optional GPU acceleration** of the recursion kernels (CUDA plugin)
 - **Density mixing** strategies (linear, Broyden)
 
 Further Reading
