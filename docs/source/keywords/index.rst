@@ -13,6 +13,7 @@ Quick Navigation
    :maxdepth: 2
 
    control_parameters
+   hamiltonian_parameters
    lattice_geometry
    basis_parameters
    energy_mesh

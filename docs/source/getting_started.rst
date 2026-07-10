@@ -37,8 +37,8 @@ Clone the Repository
 
 .. code-block:: bash
 
-   git clone https://github.com/rslmto/rslmto_devel.git
-   cd rslmto_devel
+   git clone https://github.com/rslmtoasa/rslmtoasa.git
+   cd rslmtoasa
 
 Create a Build Directory
 ------------------------
@@ -81,19 +81,31 @@ Key CMake Options
 .. table::
    :align: left
 
-   +---------------------------+-----------------------------------+---------+
-   | Option                    | Description                       | Default |
-   +===========================+===================================+=========+
-   | ENABLE_OPENMP             | Enable OpenMP parallelization     | ON      |
-   +---------------------------+-----------------------------------+---------+
-   | ENABLE_MPI                | Enable MPI parallelization        | OFF     |
-   +---------------------------+-----------------------------------+---------+
-   | COLOR                     | Enable colored terminal output    | ON      |
-   +---------------------------+-----------------------------------+---------+
-   | ENABLE_FLUSH              | Flush print output to files       | OFF     |
-   +---------------------------+-----------------------------------+---------+
-   | RUN_REG_TESTS             | Run regression tests              | OFF     |
-   +---------------------------+-----------------------------------+---------+
+   +---------------------------+-------------------------------------------+---------+
+   | Option                    | Description                               | Default |
+   +===========================+===========================================+=========+
+   | ENABLE_OPENMP             | Enable OpenMP parallelization             | ON      |
+   +---------------------------+-------------------------------------------+---------+
+   | ENABLE_MPI                | Enable MPI parallelization                | OFF     |
+   +---------------------------+-------------------------------------------+---------+
+   | ENABLE_LIBXC              | Use libXC exchange-correlation functionals| OFF     |
+   +---------------------------+-------------------------------------------+---------+
+   | ENABLE_SPGLIB             | Use spglib for symmetry / k-path          | ON      |
+   +---------------------------+-------------------------------------------+---------+
+   | ENABLE_CUDA_PLUGIN        | Build the CUDA recursion plugin backend   | OFF     |
+   +---------------------------+-------------------------------------------+---------+
+   | ENABLE_MKL_KERNELS        | Build MKL Chebyshev kernels (batch/sparse)| OFF     |
+   +---------------------------+-------------------------------------------+---------+
+   | COLOR                     | Enable colored terminal output            | ON      |
+   +---------------------------+-------------------------------------------+---------+
+   | ENABLE_FLUSH              | Flush print output to files               | OFF     |
+   +---------------------------+-------------------------------------------+---------+
+   | RUN_REG_TESTS             | Run regression tests                      | OFF     |
+   +---------------------------+-------------------------------------------+---------+
+   | RUN_EXAMPLE_TESTS         | Run fast example-based SCF tests          | OFF     |
+   +---------------------------+-------------------------------------------+---------+
+
+For GPU acceleration via the CUDA plugin, see :ref:`theory/gpu_acceleration`.
 
 Compile
 -------

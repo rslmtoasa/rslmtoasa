@@ -55,6 +55,9 @@ pip-wheel-metadata/
 # Jupyter
 .ipynb_checkpoints
 
+# Sphinx documentation build output
+/docs/_build/
+
 # Logs
 *.log
 *.out

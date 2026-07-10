@@ -4,6 +4,15 @@
 Module Overview
 =======================================
 
+.. note::
+
+   The modules ``lattice``, ``hamiltonian``, ``recursion``, and ``reciprocal``
+   declare their derived type and procedure interfaces in a parent file
+   (e.g. ``hamiltonian.f90``) and carry the implementations in Fortran
+   submodules (``hamiltonian_build.f90``, ``hamiltonian_ccor.f90``, ...). The
+   type and its public interface are documented here against the parent
+   module; see :ref:`code_structure` for the full submodule breakdown.
+
 Core Modules
 ============
 
@@ -138,9 +147,9 @@ Mode behavior:
 
 Major procedures:
 
-- ``process()`` - Main SCF loop
-- ``iterate()`` - Single iteration
-- ``converge_scf()`` - Check convergence
+- ``run()`` - Main SCF loop
+- ``is_converged()`` - Check convergence
+- ``report()`` - Write iteration/convergence report
 
 Key members:
 

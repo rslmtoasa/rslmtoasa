@@ -62,7 +62,7 @@ Indices and Tables
 Quick Links
 ===========
 
-- `GitHub Repository <https://github.com/rslmto/rslmto_devel>`_
+- `GitHub Repository <https://github.com/rslmtoasa/rslmtoasa>`_
 - `DFT Fundamentals <https://theory.physics.umass.edu/kieron/>`_
 - `LMTO Reviews <https://doi.org/10.1103/RevModPhys.84.1419>`_
 
@@ -73,15 +73,15 @@ If you use RS-LMTO-ASA in your research, please cite:
 
 .. code-block:: bibtex
 
-   @article{rslmto2024,
+   @article{rslmto2026,
      title={RS-LMTO-ASA: A Massively Parallel Real-Space LMTO Code},
      author={Development Team},
      journal={To be published},
-     year={2024}
+     year={2026}
    }
 
 .. note::
 
    This documentation is automatically generated from the source code.
    For the latest development version, visit the 
-   `GitHub repository <https://github.com/rslmto/rslmto_devel>`_.
+   `GitHub repository <https://github.com/rslmtoasa/rslmtoasa>`_.
