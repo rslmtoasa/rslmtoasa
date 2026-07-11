@@ -613,7 +613,17 @@ contains
       integer, intent(in) :: ia
       real(rp), dimension(3), intent(inout) :: mom
 
-      if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
+      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
+         if (ia >= 1 .and. ia <= size(this%charge%lattice%iz)) then
+            if (this%charge%lattice%iz(ia) <= size(this%theta_ss_sublattice)) then
+               mom(1) = sin(this%theta_ss_sublattice(this%charge%lattice%iz(ia))) * &
+                        cos(this%phi_ss_sublattice(this%charge%lattice%iz(ia)))
+               mom(2) = sin(this%theta_ss_sublattice(this%charge%lattice%iz(ia))) * &
+                        sin(this%phi_ss_sublattice(this%charge%lattice%iz(ia)))
+               mom(3) = cos(this%theta_ss_sublattice(this%charge%lattice%iz(ia)))
+            end if
+         end if
+      else if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
          mom(1) = sin(this%theta_ss)
          mom(2) = 0.0_rp
          mom(3) = cos(this%theta_ss)

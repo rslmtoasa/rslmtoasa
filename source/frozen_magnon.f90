@@ -37,6 +37,8 @@ module frozen_magnon_mod
       character(len=sl) :: fname
       !> 'scf' or 'mft' (magnetic force theorem / single-shot)
       character(len=10) :: mode
+      !> 'acoustic' for the legacy single branch, 'auto' for sublattice branches
+      character(len=16) :: branch_mode
       !> Number of q-points in the sweep (>= 2: reference + at least one q)
       integer :: n_q
       !> Sweep points as read, shape (3, n_q). Column 1 is the reference point.
@@ -47,6 +49,13 @@ module frozen_magnon_mod
       character(len=16) :: q_coordinates
       !> Output data file (one row per q: q1 q2 q3 etot eband mtot_1..mtot_nrec omega)
       character(len=sl) :: output_file
+      !> Small cone angle for finite-difference auto-branch probes (input in degrees,
+      !> stored in radians). Must stay in the near-harmonic regime (Sandratskii et al.,
+      !> PRB 111, 184436 (2025) use ~5-30 deg); <=0 selects the 20 deg default. This is
+      !> NOT the flat-spiral theta_ss -- a large probe angle breaks the acoustic sum rule.
+      real(rp) :: theta_probe
+      !> Minimum absolute reference moment for active auto-branch sublattices
+      real(rp) :: active_moment_threshold
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -83,10 +92,13 @@ contains
       class(frozen_magnon), intent(inout) :: this
 
       this%mode = 'mft'
+      this%branch_mode = 'acoustic'
       this%n_q = 0
       this%q_file = ''
       this%q_coordinates = 'cartesian'
       this%output_file = 'frozen_magnon.dat'
+      this%theta_probe = -1.0_rp
+      this%active_moment_threshold = 1.0e-6_rp
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -106,9 +118,12 @@ contains
       include 'include_codes/namelists/frozen_magnon.f90'
 
       mode = this%mode
+      branch_mode = this%branch_mode
       output_file = this%output_file
       q_file = this%q_file
       q_coordinates = this%q_coordinates
+      theta_probe = this%theta_probe
+      active_moment_threshold = this%active_moment_threshold
       n_q_points = 0
       q_ss_list = 0.0_rp
 
@@ -131,7 +146,20 @@ contains
          call g_logger%fatal("[frozen_magnon.build_from_file]: mode must be 'mft' or 'scf'", __FILE__, __LINE__)
       end if
 
+      this%branch_mode = lower(trim(branch_mode))
+      if (len_trim(this%branch_mode) == 0) this%branch_mode = 'acoustic'
+      if (this%branch_mode /= 'acoustic' .and. this%branch_mode /= 'auto') then
+         call g_logger%fatal("[frozen_magnon.build_from_file]: branch_mode must be 'acoustic' or 'auto'", &
+                              __FILE__, __LINE__)
+      end if
       this%output_file = output_file
+      this%theta_probe = theta_probe
+      if (this%theta_probe > 0.0_rp) this%theta_probe = this%theta_probe*3.14159265358979323846_rp/180.0_rp
+      this%active_moment_threshold = active_moment_threshold
+      if (this%active_moment_threshold < 0.0_rp) then
+         call g_logger%fatal('[frozen_magnon.build_from_file]: active_moment_threshold must be non-negative', &
+                              __FILE__, __LINE__)
+      end if
       this%q_file = trim(q_file)
       this%q_coordinates = lower(trim(q_coordinates))
       if (len_trim(this%q_coordinates) == 0) this%q_coordinates = 'cartesian'

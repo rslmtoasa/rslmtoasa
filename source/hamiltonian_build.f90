@@ -544,6 +544,8 @@ contains
       this%v_beta(:) = [1, 0, 0]
       this%q_ss(:) = [0.0_rp, 0.0_rp, 0.0_rp]
       this%theta_ss = 0.0_rp
+      if (allocated(this%theta_ss_sublattice)) deallocate (this%theta_ss_sublattice)
+      if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_u_potential_form = 'liechtenstein'
@@ -1207,10 +1209,10 @@ contains
                   this%hxc(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            write(131,*) 'm=', m
-            write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
-            write(132,*) 'm=', m
-            write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
+            ! write(131,*) 'm=', m
+            ! write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
+            ! write(132,*) 'm=', m
+            ! write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if (this%hubbard_u_general_check) then
             do i = 1, nb
@@ -1383,7 +1385,16 @@ contains
       vv = norm2(vet)
       mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
       mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-      if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
+      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
+         if (it <= size(this%theta_ss_sublattice) .and. jt <= size(this%theta_ss_sublattice)) then
+            mom_ia(1) = sin(this%theta_ss_sublattice(it))*cos(this%phi_ss_sublattice(it))
+            mom_ia(2) = sin(this%theta_ss_sublattice(it))*sin(this%phi_ss_sublattice(it))
+            mom_ia(3) = cos(this%theta_ss_sublattice(it))
+            mom_ja(1) = sin(this%theta_ss_sublattice(jt))*cos(this%phi_ss_sublattice(jt))
+            mom_ja(2) = sin(this%theta_ss_sublattice(jt))*sin(this%phi_ss_sublattice(jt))
+            mom_ja(3) = cos(this%theta_ss_sublattice(jt))
+         end if
+      else if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
          ! Generalized Bloch theorem: the cone angle is a purely local (on-site)
          ! quantity, common to both sites of the pair -- no azimuthal q-dependence
          ! here. The q-dependent bond rotation is applied below, using the actual

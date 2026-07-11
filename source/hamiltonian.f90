@@ -96,6 +96,7 @@ module hamiltonian_mod
       character(len=10) :: js_alpha, jl_alpha
       real(rp), dimension(3) :: v_alpha, v_beta, q_ss
       real(rp) :: theta_ss
+      real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
       !> Sparse Real Space Hamiltonian (dense legacy format)

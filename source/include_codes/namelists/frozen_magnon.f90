@@ -21,10 +21,14 @@
 ! selects how many of those columns are actually used.
 integer, parameter :: frozen_magnon_max_q = 500
 character(len=10) :: mode
+character(len=16) :: branch_mode
 character(len=sl) :: output_file
 character(len=sl) :: q_file
 character(len=16) :: q_coordinates
 integer :: n_q_points
+real(rp) :: theta_probe
+real(rp) :: active_moment_threshold
 real(rp), dimension(3, frozen_magnon_max_q) :: q_ss_list
 
-namelist /frozen_magnon/ mode, output_file, q_file, q_coordinates, n_q_points, q_ss_list
+namelist /frozen_magnon/ mode, branch_mode, output_file, q_file, q_coordinates, n_q_points, q_ss_list, &
+   theta_probe, active_moment_threshold

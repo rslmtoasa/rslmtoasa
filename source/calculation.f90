@@ -42,7 +42,7 @@ module calculation_mod
    use frozen_magnon_mod
    use math_mod
    use precision_mod, only: rp
-   use string_mod, only: sl, fmt, real2str
+   use string_mod, only: sl, fmt, real2str, int2str
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init
@@ -1211,11 +1211,9 @@ contains
       type(mix), target :: mix_obj
       type(self), target :: self_obj
       type(frozen_magnon) :: fm_obj
-      real(rp), allocatable :: etot_q(:), eband_q(:), mtot_q(:, :), omega_q(:), q_ss_cart(:, :)
-      real(rp) :: sin2theta
+      real(rp), allocatable :: q_ss_cart(:, :)
       real(rp), dimension(3, 3) :: direct_to_cart
-      character(len=200) :: fmt_str
-      integer :: iq, i, newunit
+      integer :: iq
 
       fm_obj = frozen_magnon(this%fname)
 
@@ -1232,6 +1230,28 @@ contains
       else
          q_ss_cart(:, :) = fm_obj%q_ss_list(:, :)
       end if
+
+      if (fm_obj%branch_mode == 'auto') then
+         call post_processing_frozen_magnon_auto(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, &
+                                                mix_obj, self_obj, energy_obj)
+      else
+         call post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, &
+                                                    mix_obj, self_obj)
+      end if
+   end subroutine post_processing_frozen_magnon
+
+   subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj)
+      type(frozen_magnon), intent(in) :: fm_obj
+      real(rp), intent(in) :: q_ss_cart(:, :)
+      type(lattice), target, intent(inout) :: lattice_obj
+      type(hamiltonian), target, intent(inout) :: hamiltonian_obj
+      type(bands), target, intent(inout) :: bands_obj
+      type(mix), target, intent(inout) :: mix_obj
+      type(self), target, intent(inout) :: self_obj
+      real(rp), allocatable :: etot_q(:), eband_q(:), mtot_q(:, :), omega_q(:)
+      real(rp) :: sin2theta
+      character(len=200) :: fmt_str
+      integer :: iq, i, newunit
 
       allocate (etot_q(fm_obj%n_q), eband_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
 
@@ -1275,7 +1295,318 @@ contains
          write (newunit, fmt_str) q_ss_cart(:, iq), etot_q(iq), eband_q(iq), mtot_q(:, iq), omega_q(iq)
       end do
       close (newunit)
-   end subroutine post_processing_frozen_magnon
+   end subroutine post_processing_frozen_magnon_acoustic
+
+   !> @brief Multi-sublattice adiabatic magnon branches via the direct GBT frozen-magnon
+   !>        method (Essenberger et al., PRB 84, 174425 (2011), Eqs. 24-27; Sandratskii,
+   !>        Carva & Silkin, PRB 111, 184436 (2025)).
+   !> @details For each q the magnon dynamical matrix is the second derivative of the
+   !>        frozen-magnon energy surface with respect to the sublattice cone angles,
+   !>        Re[J~_uv^q] = (1/M_u M_v) d^2 E_q/dtheta_u dtheta_v |_0 (Eq. 26), and the
+   !>        magnon energies are the eigenvalues of the real symmetric matrix
+   !>        sqrt(M_u M_v) Re[J~_uv^q] (Eq. 21). The energy surface is evaluated with the
+   !>        magnetic force theorem: the band energy at the FIXED converged reference
+   !>        potential, with the moment directions rotated to the spiral/tilt config
+   !>        (imposed through the GBT Hamiltonian's q_ss + per-sublattice theta/phi). The
+   !>        q-dependence enters through the GBT bond phase already carried by the
+   !>        Hamiltonian, so the matrix is real symmetric (no separate azimuthal-phase
+   !>        probe) and the Goldstone/acoustic mode is exact at Gamma by construction
+   !>        (the Weiss field is intrinsic to the diagonal of the energy surface).
+   !>        Works for the k-space (primary) and real-space recursion band-energy paths.
+   !>        Assumptions: near-harmonic tilt angle (theta_probe ~ 5-30 deg); Hermitian/real
+   !>        treatment appropriate for collinear FM/ferri references without SOC (the
+   !>        antisymmetric DMI part is neglected).
+   subroutine post_processing_frozen_magnon_auto(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, energy_obj)
+      type(frozen_magnon), intent(in) :: fm_obj
+      real(rp), intent(in) :: q_ss_cart(:, :)
+      type(lattice), target, intent(inout) :: lattice_obj
+      type(hamiltonian), target, intent(inout) :: hamiltonian_obj
+      type(bands), target, intent(inout) :: bands_obj
+      type(mix), target, intent(inout) :: mix_obj
+      type(self), target, intent(inout) :: self_obj
+      type(energy), target, intent(inout) :: energy_obj
+      type(reciprocal) :: recip_obj
+      complex(rp), allocatable :: omega_mat(:, :), eigvec(:, :)
+      real(rp), allocatable :: eval(:), mtot_ref(:), ref_theta(:), ref_phi(:), single_energy(:)
+      real(rp), allocatable :: active_moment(:)
+      integer, allocatable :: active_rec(:), active_type(:)
+      real(rp) :: etot_ref, energy_ref, theta_probe, dmz_fac, e_pair, off
+      logical :: use_kspace
+      integer :: iq, iact, jact, nactive, irec, branch, newunit_branch, newunit_modes
+
+      ! theta_probe: SMALL cone angle for the harmonic finite-difference probes that
+      ! build the magnon dynamical matrix. Must stay in the near-harmonic regime
+      ! (Sandratskii PRB 111, 184436, Fig. 5: theta ~ 5-30 deg, 20 typical). It is
+      ! deliberately decoupled from the flat-spiral theta_ss (typically 90 deg).
+      theta_probe = fm_obj%theta_probe
+      if (theta_probe <= 0.0_rp) theta_probe = 20.0_rp*pi/180.0_rp
+      ! Magnon energy is normalized to omega = Delta E / Delta m_z (Eq. 1 of PRB 111,
+      ! 184436). For a rigid tilt of sublattice mu by theta_probe, Delta m_z =
+      ! M_mu (1 - cos theta_probe); dmz_fac is the per-unit-moment factor.
+      dmz_fac = 1.0_rp - cos(theta_probe)
+      if (dmz_fac < 1.0e-10_rp) then
+         call g_logger%fatal('[calculation.post_processing_frozen_magnon_auto]: theta_probe must define a finite cone angle', &
+                             __FILE__, __LINE__)
+      end if
+
+      ! Reference sublattice axes from the collinear ground state (theta=0 up, pi down).
+      allocate (ref_theta(lattice_obj%ntype), ref_phi(lattice_obj%ntype), mtot_ref(lattice_obj%nrec))
+      call set_reference_sublattice_angles(lattice_obj, ref_theta, ref_phi)
+
+      ! --- Converge the collinear reference potential; it is held FIXED afterwards. ---
+      if (allocated(hamiltonian_obj%theta_ss_sublattice)) deallocate (hamiltonian_obj%theta_ss_sublattice)
+      if (allocated(hamiltonian_obj%phi_ss_sublattice)) deallocate (hamiltonian_obj%phi_ss_sublattice)
+      hamiltonian_obj%theta_ss = 0.0_rp
+      hamiltonian_obj%q_ss(:) = 0.0_rp
+      self_obj = self(bands_obj, mix_obj)
+      call self_obj%run()
+      use_kspace = self_obj%use_kspace
+      etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+
+      ! Reference moments (fixed) and the set of active magnetic sublattices.
+      do irec = 1, lattice_obj%nrec
+         mtot_ref(irec) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + irec)%potential%mtot
+      end do
+      nactive = count(abs(mtot_ref(:)) >= fm_obj%active_moment_threshold)
+      if (nactive <= 0) then
+         call g_logger%fatal('[calculation.post_processing_frozen_magnon_auto]: no active magnetic sublattices above threshold', &
+                             __FILE__, __LINE__)
+      end if
+      allocate (active_rec(nactive), active_type(nactive), active_moment(nactive))
+      iact = 0
+      do irec = 1, lattice_obj%nrec
+         if (abs(mtot_ref(irec)) >= fm_obj%active_moment_threshold) then
+            iact = iact + 1
+            active_rec(iact) = irec
+            active_type(iact) = lattice_obj%nbulk + irec
+            active_moment(iact) = abs(mtot_ref(irec))
+         end if
+      end do
+
+      ! --- Force-theorem evaluator: build a k-space mesh once if in k-space mode. ---
+      if (use_kspace) then
+         recip_obj = reciprocal(hamiltonian_obj)
+         if (.not. allocated(recip_obj%k_points)) then
+            if (recip_obj%use_symmetry_reduction) then
+               call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                           sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+            else
+               call recip_obj%generate_mp_mesh()
+            end if
+         end if
+      end if
+
+      ! Reference band energy (collinear) via the force theorem at the fixed potential;
+      ! q-independent (no transverse components), so evaluated once and reused.
+      if (allocated(hamiltonian_obj%theta_ss_sublattice)) deallocate (hamiltonian_obj%theta_ss_sublattice)
+      if (allocated(hamiltonian_obj%phi_ss_sublattice)) deallocate (hamiltonian_obj%phi_ss_sublattice)
+      hamiltonian_obj%theta_ss = 0.0_rp
+      hamiltonian_obj%q_ss(:) = 0.0_rp
+      energy_ref = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+
+      open (newunit=newunit_branch, file='frozen_magnon_branches.dat', status='replace', action='write')
+      open (newunit=newunit_modes, file='frozen_magnon_modes.dat', status='replace', action='write')
+      call write_frozen_magnon_auto_headers(newunit_branch, newunit_modes, fm_obj, q_ss_cart, theta_probe, &
+                                            active_rec, active_type, active_moment, etot_ref, energy_ref)
+
+      allocate (omega_mat(nactive, nactive), eigvec(nactive, nactive), eval(nactive), single_energy(nactive))
+      do iq = 1, fm_obj%n_q
+         hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+         omega_mat(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
+
+         ! Diagonal: single-sublattice tilt. d^2E/dtheta_i^2 / M_i, in omega = dE/dm_z units.
+         do iact = 1, nactive
+            call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, [iact])
+            single_energy(iact) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+            omega_mat(iact, iact) = cmplx((single_energy(iact) - energy_ref)/(active_moment(iact)*dmz_fac), &
+                                          0.0_rp, kind=rp)
+         end do
+
+         ! Off-diagonal: two-sublattice tilt at the NATURAL GBT spiral phase (the q-phase
+         ! is carried by the Hamiltonian's bond rotation, so no azimuthal-phase probe is
+         ! needed). Cross second derivative d^2E/dtheta_i dtheta_j, real symmetric:
+         !   omega_ij = (E_ij - E_i - E_j + E_ref) / [2 (1-cos theta) sqrt(M_i M_j)].
+         do iact = 1, nactive - 1
+            do jact = iact + 1, nactive
+               call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, [iact, jact])
+               e_pair = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+               off = (e_pair - single_energy(iact) - single_energy(jact) + energy_ref) / &
+                     (2.0_rp*dmz_fac*sqrt(active_moment(iact)*active_moment(jact)))
+               omega_mat(iact, jact) = cmplx(off, 0.0_rp, kind=rp)
+               omega_mat(jact, iact) = cmplx(off, 0.0_rp, kind=rp)
+            end do
+         end do
+
+         ! Magnon energies = eigenvalues of the real symmetric matrix (Goldstone exact at
+         ! Gamma by construction; no ad-hoc sum-rule correction).
+         eigvec(:, :) = omega_mat(:, :)
+         call diagonalize_frozen_magnon_matrix(eigvec, eval)
+         do branch = 1, nactive
+            write (newunit_branch, '(3F12.6,1X,I6,1X,ES16.8E3,1X,I6)') q_ss_cart(:, iq), branch, eval(branch), nactive
+            do iact = 1, nactive
+               write (newunit_modes, '(3F12.6,1X,I6,1X,I6,1X,I6,1X,ES16.8E3,1X,ES16.8E3,1X,ES16.8E3)') &
+                  q_ss_cart(:, iq), branch, iact, active_rec(iact), abs(eigvec(iact, branch)), &
+                  atan2(aimag(eigvec(iact, branch)), real(eigvec(iact, branch))), active_moment(iact)
+            end do
+         end do
+      end do
+      close (newunit_branch)
+      close (newunit_modes)
+
+      if (allocated(hamiltonian_obj%theta_ss_sublattice)) deallocate (hamiltonian_obj%theta_ss_sublattice)
+      if (allocated(hamiltonian_obj%phi_ss_sublattice)) deallocate (hamiltonian_obj%phi_ss_sublattice)
+   end subroutine post_processing_frozen_magnon_auto
+
+   subroutine set_reference_sublattice_angles(lattice_obj, ref_theta, ref_phi)
+      type(lattice), intent(in) :: lattice_obj
+      real(rp), intent(out) :: ref_theta(:), ref_phi(:)
+      integer :: itype
+
+      ref_phi(:) = 0.0_rp
+      do itype = 1, size(ref_theta)
+         if (lattice_obj%symbolic_atoms(itype)%potential%mom(3) < 0.0_rp) then
+            ref_theta(itype) = pi
+         else
+            ref_theta(itype) = 0.0_rp
+         end if
+      end do
+   end subroutine set_reference_sublattice_angles
+
+   !> @brief Impose small cone tilts on the selected active sublattices.
+   !> @details All sublattices start on their reference axis (theta=0 up / pi down);
+   !>        the ones listed in active_probe are tilted by theta_probe toward the xy-plane
+   !>        at azimuth ref_phi (the natural relative spiral phase between sublattices is
+   !>        supplied by the GBT bond rotation via q_ss, not here).
+   subroutine set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, active_probe)
+      type(hamiltonian), intent(inout) :: hamiltonian_obj
+      real(rp), intent(in) :: ref_theta(:), ref_phi(:), theta_probe
+      integer, intent(in) :: active_type(:), active_probe(:)
+      integer :: iprobe, itype
+
+      if (allocated(hamiltonian_obj%theta_ss_sublattice)) deallocate (hamiltonian_obj%theta_ss_sublattice)
+      if (allocated(hamiltonian_obj%phi_ss_sublattice)) deallocate (hamiltonian_obj%phi_ss_sublattice)
+      allocate (hamiltonian_obj%theta_ss_sublattice(size(ref_theta)))
+      allocate (hamiltonian_obj%phi_ss_sublattice(size(ref_phi)))
+      hamiltonian_obj%theta_ss_sublattice(:) = ref_theta(:)
+      hamiltonian_obj%phi_ss_sublattice(:) = ref_phi(:)
+
+      do iprobe = 1, size(active_probe)
+         itype = active_type(active_probe(iprobe))
+         if (ref_theta(itype) > 0.5_rp*pi) then
+            hamiltonian_obj%theta_ss_sublattice(itype) = pi - theta_probe
+            hamiltonian_obj%phi_ss_sublattice(itype) = ref_phi(itype) + pi
+         else
+            hamiltonian_obj%theta_ss_sublattice(itype) = theta_probe
+            hamiltonian_obj%phi_ss_sublattice(itype) = ref_phi(itype)
+         end if
+      end do
+   end subroutine set_probe_angles
+
+   !> @brief Magnetic force theorem: band energy at the FIXED reference potential for the
+   !>        current spiral/tilt config (set on the hamiltonian via q_ss + theta/phi_ss_sublattice).
+   !> @details Rebuilds only the Hamiltonian (rotated moment directions, fixed potential
+   !>        parameters) and evaluates the single-particle band energy through the k-space
+   !>        (build/diagonalize/DOS -> band energy from moments) or real-space recursion
+   !>        (recursion -> Green -> fermi -> band energy) path. No charge/potential update
+   !>        is done, so the reference potential is held fixed across every probe -- this is
+   !>        the Liechtenstein/MFT energy surface whose second derivatives give the magnon
+   !>        matrix (Essenberger PRB 84, 174425, Eq. 26).
+   function frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace) result(e_band)
+      type(bands), target, intent(inout) :: bands_obj
+      type(reciprocal), intent(inout) :: recip_obj
+      type(energy), intent(in) :: energy_obj
+      logical, intent(in) :: use_kspace
+      real(rp) :: e_band
+
+      associate (ham => bands_obj%recursion%hamiltonian, rec => bands_obj%recursion, &
+                 grn => bands_obj%green, ctl => bands_obj%lattice%control)
+         if (ctl%nsp == 2 .or. ctl%nsp == 4) call ham%build_lsham()
+         call ham%build_bulkham()
+         if (use_kspace) then
+            call recip_obj%build_kspace_hamiltonian()
+            call recip_obj%diagonalize_hamiltonian()
+            call recip_obj%calculate_density_of_states(ham, n_energy_points=energy_obj%channels_ldos + 10, &
+                 energy_range=[energy_obj%energy_min, energy_obj%energy_max], fermi_level=energy_obj%fermi, &
+                 auto_find_fermi=.true.)
+            e_band = recip_obj%calculate_band_energy_from_moments()
+         else
+            select case (ctl%recur)
+            case ('block')
+               call rec%recur_b()
+               call rec%zsqr()
+               call grn%block_green()
+            case ('chebyshev')
+               call rec%chebyshev_recur()
+               call grn%chebyshev_dos_dispatch()
+            case ('lanczos')
+               call rec%recur()
+               call grn%sgreen()
+            end select
+            call bands_obj%calculate_fermi()
+            call bands_obj%calculate_band_energy()
+            e_band = bands_obj%eband
+         end if
+      end associate
+   end function frozen_magnon_probe_energy
+
+   subroutine diagonalize_frozen_magnon_matrix(mat, eval)
+      complex(rp), intent(inout) :: mat(:, :)
+      real(rp), intent(out) :: eval(:)
+      complex(rp), allocatable :: work(:)
+      real(rp), allocatable :: rwork(:)
+      integer :: n, lwork, info
+      external :: zheev
+
+      n = size(mat, 1)
+      if (size(mat, 2) /= n .or. size(eval) /= n) then
+         call g_logger%fatal('[calculation.diagonalize_frozen_magnon_matrix]: inconsistent matrix dimensions', &
+                             __FILE__, __LINE__)
+      end if
+      lwork = max(1, 2*n - 1)
+      allocate (work(lwork), rwork(max(1, 3*n - 2)))
+      call zheev('V', 'U', n, mat, n, eval, work, lwork, rwork, info)
+      if (info /= 0) then
+         call g_logger%fatal('[calculation.diagonalize_frozen_magnon_matrix]: zheev failed with info='// &
+                             int2str(info), __FILE__, __LINE__)
+      end if
+      deallocate (work, rwork)
+   end subroutine diagonalize_frozen_magnon_matrix
+
+   subroutine write_frozen_magnon_auto_headers(branch_unit, modes_unit, fm_obj, q_ss_cart, theta_probe, active_rec, &
+                                               active_type, active_moment, etot_ref, eband_ref)
+      integer, intent(in) :: branch_unit, modes_unit
+      type(frozen_magnon), intent(in) :: fm_obj
+      real(rp), intent(in) :: q_ss_cart(:, :), theta_probe, active_moment(:), etot_ref, eband_ref
+      integer, intent(in) :: active_rec(:), active_type(:)
+      integer :: i
+
+      write (branch_unit, '(A)') '# Frozen-magnon auto branches (calculation%post_processing = "frozen_magnon")'
+      write (branch_unit, '(A)') '# branch_mode: auto'
+      write (branch_unit, '(A,A)') '# q_file coordinates: ', trim(fm_obj%q_coordinates)
+      write (branch_unit, '(A)') '# q_ss units: Cartesian 2*pi/alat'
+      write (branch_unit, '(A,ES16.8E3)') '# theta_probe(rad): ', theta_probe
+      write (branch_unit, '(A,ES16.8E3)') '# active_moment_threshold: ', fm_obj%active_moment_threshold
+      write (branch_unit, '(A,ES16.8E3)') '# reference_etot: ', etot_ref
+      write (branch_unit, '(A,ES16.8E3)') '# reference_eband: ', eband_ref
+      write (branch_unit, '(A,I0)') '# active_sublattices: ', size(active_rec)
+      do i = 1, size(active_rec)
+         write (branch_unit, '(A,I0,A,I0,A,I0,A,ES16.8E3)') '# active ', i, ' rec=', active_rec(i), &
+            ' type=', active_type(i), ' moment=', active_moment(i)
+      end do
+      write (branch_unit, '(A)') '# Format: q1 q2 q3 branch omega nactive'
+
+      write (modes_unit, '(A)') '# Frozen-magnon auto branch eigenvectors'
+      write (modes_unit, '(A)') '# branch_mode: auto'
+      write (modes_unit, '(A,A)') '# q_file coordinates: ', trim(fm_obj%q_coordinates)
+      write (modes_unit, '(A)') '# q_ss units: Cartesian 2*pi/alat'
+      write (modes_unit, '(A,ES16.8E3)') '# theta_probe(rad): ', theta_probe
+      write (modes_unit, '(A,ES16.8E3)') '# active_moment_threshold: ', fm_obj%active_moment_threshold
+      do i = 1, size(active_rec)
+         write (modes_unit, '(A,I0,A,I0,A,I0,A,ES16.8E3)') '# active ', i, ' rec=', active_rec(i), &
+            ' type=', active_type(i), ' moment=', active_moment(i)
+      end do
+      write (modes_unit, '(A)') '# Format: q1 q2 q3 branch active_index sublattice_index amplitude phase moment'
+   end subroutine write_frozen_magnon_auto_headers
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
