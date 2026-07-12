@@ -71,6 +71,12 @@ module hamiltonian_mod
       logical :: hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
+      !> Spin-spiral handled in k-space (GBT). When true, ham0m_nc does NOT rotate
+      !> the site moments by the q_ss spiral phase (that real-space, absolute-position
+      !> construction is not translationally invariant and would be wrong for a Bloch
+      !> sum); the spiral is instead applied as a twist in the reciprocal module.
+      !> When false (default), q_ss rotates the moments -> real-space spin spiral.
+      logical :: gbt_kspace
       !> Add orbital polarization to Hamiltonian
       logical :: orb_pol
       !> Optional two-centre combined correction

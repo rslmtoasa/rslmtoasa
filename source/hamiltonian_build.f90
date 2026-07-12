@@ -126,6 +126,7 @@ contains
       v_beta(:) = this%v_beta(:)
       q_ss(:) = this%q_ss(:)
       theta_ss = this%theta_ss
+      gbt_kspace = this%gbt_kspace
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
@@ -193,6 +194,7 @@ contains
       ! phase = 2*pi*q_ss.(bond/alat), with theta_ss stored internally in radians.
       this%q_ss(:) = q_ss(:)
       this%theta_ss = theta_ss * pi / 180.0_rp
+      this%gbt_kspace = gbt_kspace
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
@@ -544,6 +546,7 @@ contains
       this%v_beta(:) = [1, 0, 0]
       this%q_ss(:) = [0.0_rp, 0.0_rp, 0.0_rp]
       this%theta_ss = 0.0_rp
+      this%gbt_kspace = .false.
       if (allocated(this%theta_ss_sublattice)) deallocate (this%theta_ss_sublattice)
       if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
       this%js_alpha = 'z'
@@ -1372,6 +1375,7 @@ contains
       ! Local Variables
       integer :: ilm, jlm, m
       real(rp), dimension(3) :: mom_ia, mom_ja
+      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
       complex(rp), dimension(3) :: momc_i, momc_j
@@ -1383,12 +1387,18 @@ contains
       vv = norm2(vet)
 
       ! General non-collinear pair block: H_ij = W(m_i) . hhh . W(m_j) with
-      ! W(m) = wx0 + wx1 (sigma.m). The moment directions come from the atoms'
-      ! self-consistent moments, or from per-sublattice cone angles when set.
-      ! No spin-spiral (q_ss) phase is applied in this routine: for k-space GBT the
-      ! spiral is a post-assembly twist in the reciprocal module; for real-space
-      ! spirals the site moments are set explicitly (supercell). q_ss = 0 paths are
-      ! therefore bit-identical to the collinear / noncollinear-FM code.
+      ! W(m) = wx0 + wx1 (sigma.m). The two site moment directions are set
+      ! explicitly here; the block itself is the plain non-collinear construction
+      ! (no spinor gauge / GBT twist). Three ways to set the moments:
+      !   (1) default: the atoms' self-consistent moments;
+      !   (2) per-sublattice cone angles theta/phi_ss_sublattice;
+      !   (3) a spin spiral from q_ss/theta_ss: the physical lab-frame moments
+      !       m(r) = R_z(2 pi q.r) m0 at the atoms' absolute (cluster) positions.
+      ! Case (3) is the correct real-space spiral (the recursion cluster carries the
+      ! explicit spiral; GBT is unnecessary in real space). For k-space GBT the
+      ! spiral must instead be applied as a translationally-invariant twist in the
+      ! reciprocal module -- absolute positions are not valid there. q_ss = 0 stays
+      ! bit-identical to the collinear / noncollinear-FM code.
       mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
       mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
       if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
@@ -1400,6 +1410,19 @@ contains
             mom_ja(2) = sin(this%theta_ss_sublattice(jt))*sin(this%phi_ss_sublattice(jt))
             mom_ja(3) = cos(this%theta_ss_sublattice(jt))
          end if
+      else if ((.not. this%gbt_kspace) .and. &
+               (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp)) then
+         ! Real-space spin spiral: rotate the site moments by the spiral phase at the
+         ! atoms' absolute positions. Skipped when gbt_kspace is set -- there the
+         ! spiral is a translationally-invariant twist applied in the reciprocal module.
+         r_ia = this%charge%lattice%cr(:, ia)
+         r_ja = this%charge%lattice%cr(:, ja)
+         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
+         mom_ia(3) = cos(this%theta_ss)
+         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
+         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
+         mom_ja(3) = cos(this%theta_ss)
       end if
 
       ! Real to complex. The two pair moments are passed as explicit local vectors

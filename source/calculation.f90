@@ -1261,10 +1261,13 @@ contains
       ! Reference point (row 1): converge the flat-spiral cone potential once. Its
       ! magnitudes/moments define the normalization and, in mft mode, are held FIXED
       ! for every q (magnetic force theorem).
-      hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
       self_obj = self(bands_obj, mix_obj)
-      call self_obj%run()
       use_kspace = self_obj%use_kspace
+      ! k-space runs use the GBT twist (reciprocal module), so ham0m_nc must NOT
+      ! rotate the moments by q_ss; real-space runs do the rotation (explicit spiral).
+      hamiltonian_obj%gbt_kspace = use_kspace
+      hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
+      call self_obj%run()
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
       do i = 1, lattice_obj%nrec
          mtot_q(i, :) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
@@ -1396,6 +1399,7 @@ contains
       hamiltonian_obj%theta_ss = 0.0_rp
       hamiltonian_obj%q_ss(:) = 0.0_rp
       self_obj = self(bands_obj, mix_obj)
+      hamiltonian_obj%gbt_kspace = self_obj%use_kspace
       call self_obj%run()
       use_kspace = self_obj%use_kspace
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
