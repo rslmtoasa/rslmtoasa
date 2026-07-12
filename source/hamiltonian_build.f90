@@ -1370,19 +1370,25 @@ contains
       real(rp), dimension(3), intent(in) :: vet
       real(rp), dimension(norb, norb), intent(in) :: hhh
       ! Local Variables
-      integer :: i, j, ilm, jlm, m
+      integer :: ilm, jlm, m
       real(rp), dimension(3) :: mom_ia, mom_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
-      complex(rp), dimension(this%charge%lattice%ntype, 3) :: momc
+      complex(rp), dimension(3) :: momc_i, momc_j
       complex(rp) :: dot
       real(rp) :: vv
-      real(rp) :: alpha_ss
-      complex(rp), dimension(norb, norb) :: hx_ss, hy_ss
 
       this%hhmag(:, :, :) = 0.0d0
 
       vv = norm2(vet)
+
+      ! General non-collinear pair block: H_ij = W(m_i) . hhh . W(m_j) with
+      ! W(m) = wx0 + wx1 (sigma.m). The moment directions come from the atoms'
+      ! self-consistent moments, or from per-sublattice cone angles when set.
+      ! No spin-spiral (q_ss) phase is applied in this routine: for k-space GBT the
+      ! spiral is a post-assembly twist in the reciprocal module; for real-space
+      ! spirals the site moments are set explicitly (supercell). q_ss = 0 paths are
+      ! therefore bit-identical to the collinear / noncollinear-FM code.
       mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
       mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
       if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
@@ -1394,26 +1400,14 @@ contains
             mom_ja(2) = sin(this%theta_ss_sublattice(jt))*sin(this%phi_ss_sublattice(jt))
             mom_ja(3) = cos(this%theta_ss_sublattice(jt))
          end if
-      else if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
-         ! Generalized Bloch theorem: the cone angle is a purely local (on-site)
-         ! quantity, common to both sites of the pair -- no azimuthal q-dependence
-         ! here. The q-dependent bond rotation is applied below, using the actual
-         ! bond vector vet (not the sites' absolute, possibly-wrapped positions).
-         mom_ia(1) = sin(this%theta_ss)
-         mom_ia(2) = 0.0d0
-         mom_ia(3) = cos(this%theta_ss)
-         mom_ja = mom_ia
       end if
 
-      ! Real to complex
+      ! Real to complex. The two pair moments are passed as explicit local vectors
+      ! (never through a type-indexed array): for an elemental crystal it == jt and
+      ! a shared array would alias m_i and m_j onto the same slot (audit item E3).
       dot = cmplx(dot_product(mom_ia, mom_ja), kind=kind(0.0d0))
-      do i = 1, this%charge%lattice%ntype
-         do j = 1, 3
-            momc(i, j) = cmplx(this%charge%lattice%symbolic_atoms(i)%potential%mom(j), kind=kind(0.0d0))
-         end do
-      end do
-      momc(it, :) = cmplx(mom_ia, kind=kind(0.0d0))
-      momc(jt, :) = cmplx(mom_ja, kind=kind(0.0d0))
+      momc_i = cmplx(mom_ia, kind=kind(0.0d0))
+      momc_j = cmplx(mom_ja, kind=kind(0.0d0))
       cross = cmplx(cross_product(mom_ia, mom_ja), kind=kind(0.0d0))
       hhhc(:, :) = cmplx(hhh(:, :), kind=kind(0.0d0))
 
@@ -1453,31 +1447,20 @@ contains
          do jlm = 1, norb
             do ilm = 1, norb
                this%hhmag(ilm, jlm, m) = &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc(it, m) + &
-                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc(jt, m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx0(jlm))*momc_i(m) + &
+                  (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm))*momc_j(m) + &
                   i_unit*this%charge%lattice%symbolic_atoms(it)%potential%wx1(ilm)*hhhc(ilm, jlm)*this%charge%lattice%symbolic_atoms(jt)%potential%wx1(jlm)*cross(m)
             end do
          end do
       end do
 
-      ! Generalized Bloch theorem bond rotation: H_ij -> U(q.dR_ij) H_ij U(q.dR_ij)^dagger,
-      ! U the SU(2) z-rotation. Acting on a Hermitian spin block this leaves the scalar (4)
-      ! and z (3) Pauli components untouched and rotates the transverse (x,y) components (1,2)
-      ! by the bond angle -- using the true bond vector vet, not the sites' absolute positions.
-      ! Reduces to the identity for the on-site pair (vet = 0) and whenever q_ss = 0.
-      alpha_ss = 2.0d0*pi*dot_product(vet, this%q_ss)/this%charge%lattice%alat
-      hx_ss = this%hhmag(:, :, 1)
-      hy_ss = this%hhmag(:, :, 2)
-      this%hhmag(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)
-      this%hhmag(:, :, 2) = hx_ss*sin(alpha_ss) + hy_ss*cos(alpha_ss)
-
       if (vv > 0.01d0) return
       do m = 1, 3
          do ilm = 1, norb
             if (this%hoh) then
-               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc(it, m)
+               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cex1(ilm)*momc_i(m)
             else
-               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc(it, m)
+               this%hhmag(ilm, ilm, m) = this%hhmag(ilm, ilm, m) + this%charge%lattice%symbolic_atoms(it)%potential%cx1(ilm)*momc_i(m)
             end if
          end do
       end do
