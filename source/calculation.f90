@@ -1236,11 +1236,11 @@ contains
                                                 mix_obj, self_obj, energy_obj)
       else
          call post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, &
-                                                    mix_obj, self_obj)
+                                                    mix_obj, self_obj, energy_obj)
       end if
    end subroutine post_processing_frozen_magnon
 
-   subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj)
+   subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, energy_obj)
       type(frozen_magnon), intent(in) :: fm_obj
       real(rp), intent(in) :: q_ss_cart(:, :)
       type(lattice), target, intent(inout) :: lattice_obj
@@ -1248,27 +1248,64 @@ contains
       type(bands), target, intent(inout) :: bands_obj
       type(mix), target, intent(inout) :: mix_obj
       type(self), target, intent(inout) :: self_obj
+      type(energy), target, intent(inout) :: energy_obj
+      type(reciprocal) :: recip_obj
       real(rp), allocatable :: etot_q(:), eband_q(:), mtot_q(:, :), omega_q(:)
-      real(rp) :: sin2theta
+      real(rp) :: sin2theta, etot_ref
+      logical :: use_kspace
       character(len=200) :: fmt_str
       integer :: iq, i, newunit
 
       allocate (etot_q(fm_obj%n_q), eband_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
 
-      do iq = 1, fm_obj%n_q
-         hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
-
-         self_obj = self(bands_obj, mix_obj)
-         if (fm_obj%mode == 'mft' .and. iq > 1) self_obj%nstep = 1
-         call self_obj%run()
-
-         etot_q(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
-         if (.not. self_obj%use_kspace) call bands_obj%calculate_band_energy()
-         eband_q(iq) = bands_obj%eband
-         do i = 1, lattice_obj%nrec
-            mtot_q(i, iq) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
-         end do
+      ! Reference point (row 1): converge the flat-spiral cone potential once. Its
+      ! magnitudes/moments define the normalization and, in mft mode, are held FIXED
+      ! for every q (magnetic force theorem).
+      hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
+      self_obj = self(bands_obj, mix_obj)
+      call self_obj%run()
+      use_kspace = self_obj%use_kspace
+      etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+      do i = 1, lattice_obj%nrec
+         mtot_q(i, :) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
       end do
+
+      if (fm_obj%mode == 'mft') then
+         ! Force theorem: rebuild ONLY the Hamiltonian per q and take the band energy
+         ! at the fixed reference potential (frozen_magnon_probe_energy). Running a
+         ! single self-consistency step here instead would mix the potential once per
+         ! q, letting the reference random-walk across the sweep -- so E(q) would fail
+         ! to return to its value at symmetry-equivalent q (e.g. the two Gamma points).
+         if (use_kspace) then
+            recip_obj = reciprocal(hamiltonian_obj)
+            if (.not. allocated(recip_obj%k_points)) then
+               if (recip_obj%use_symmetry_reduction) then
+                  call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+               else
+                  call recip_obj%generate_mp_mesh()
+               end if
+            end if
+         end if
+         do iq = 1, fm_obj%n_q
+            hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+            eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+            etot_q(iq) = etot_ref   ! potential frozen; total energy not re-evaluated
+         end do
+      else
+         ! scf: fully self-consistent spiral at each q (each q independently relaxed).
+         do iq = 1, fm_obj%n_q
+            hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+            self_obj = self(bands_obj, mix_obj)
+            call self_obj%run()
+            etot_q(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+            if (.not. self_obj%use_kspace) call bands_obj%calculate_band_energy()
+            eband_q(iq) = bands_obj%eband
+            do i = 1, lattice_obj%nrec
+               mtot_q(i, iq) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
+            end do
+         end do
+      end if
 
       sin2theta = sin(hamiltonian_obj%theta_ss)**2
       if (sin2theta < 1.0e-8_rp) then
