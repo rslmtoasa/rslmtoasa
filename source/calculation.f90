@@ -92,6 +92,7 @@ module calculation_mod
       procedure, private :: post_processing_orbital_modern
       procedure, private :: post_processing_band_structure
       procedure, private :: post_processing_density_of_states
+      procedure, private :: post_processing_kspace_green
       procedure, private :: post_processing_frozen_magnon
       procedure :: process
       final :: destructor
@@ -218,6 +219,8 @@ contains
          call this%post_processing_band_structure()
       case ('density_of_states')
          call this%post_processing_density_of_states()
+      case ('kspace_green')
+         call this%post_processing_kspace_green()
       case ('frozen_magnon')
          call this%post_processing_frozen_magnon()
       end select
@@ -1176,6 +1179,130 @@ contains
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
+   !> @brief B2 validation driver (C1/C3): cross-check the k-space Lehmann
+   !>        on-site Green's function against the real-space recursion route.
+   !> @details Runs BOTH routes on the same converged potential and compares the
+   !>        on-site density of states rho(E) = -1/pi * Im Tr G_ii(E), built from
+   !>        the SAME green%gij on-site block for each route (convention 5: the
+   !>        full-resolvent nb x nb block, not the -i*pi*rho spectral form). This
+   !>        is the route-agnosticism acceptance for backend E: the strict-Lehmann
+   !>        k-space engine must reproduce the recursion on-site spectral function
+   !>        (C1 representation) with the B1 bond/phase convention (C3, on-site
+   !>        phase = 1). The recursion route fills green%gij at the on-site
+   !>        self-pair (ijpair(:,1)==ijpair(:,2)); we snapshot its on-site DOS,
+   !>        then reciprocal%fill_green overwrites green%gij from the k-space
+   !>        eigenpairs and we recompute the same trace. Report-only: writes
+   !>        kspace_green_c1.dat with both traces and difference/spectral-weight
+   !>        metrics; the acceptance tolerance is a maintainer gate. Regression is
+   !>        untouched -- this is a new post_processing key, off by default.
+   !---------------------------------------------------------------------------
+   subroutine post_processing_kspace_green(this)
+      use sigma_provider_mod, only: sigma_zero
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(reciprocal), target :: reciprocal_obj
+      type(sigma_zero) :: sigma
+      real(rp), allocatable :: dos_rs(:), dos_le(:)
+      integer :: i, ie, ne, nblk, p0, newunit, ib
+      real(rp) :: max_abs_diff, rms_diff, int_rs, int_le, de
+      complex(rp) :: tr
+
+      call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
+                                         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
+                                         green_obj, bands_obj)
+      do i = 1, lattice_obj%ntype
+         call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
+      end do
+
+      ! --- Real-space recursion route: fill green%gij (on-site = self pair). ---
+      call run_intersite_moments(control_obj, recursion_obj)
+      call green_obj%calculate_intersite_gf()
+
+      ! Locate an on-site self-pair (ijpair(p,1) == ijpair(p,2)) to read G_ii from.
+      p0 = 0
+      do i = 1, lattice_obj%njij
+         if (lattice_obj%ijpair(i, 1) == lattice_obj%ijpair(i, 2)) then
+            p0 = i
+            exit
+         end if
+      end do
+      if (p0 == 0) then
+         call g_logger%fatal('[calculation.post_processing_kspace_green]: no on-site self-pair '// &
+                             '(ijpair(:,1)==ijpair(:,2)) in the &lattice ijpair list; add e.g. ijpair(1,:)=1,1.', &
+                             __FILE__, __LINE__)
+      end if
+
+      ne = green_obj%en%channels_ldos + 10
+      nblk = size(green_obj%gij, 1)
+      allocate (dos_rs(ne), dos_le(ne))
+      do ie = 1, ne
+         tr = (0.0_rp, 0.0_rp)
+         do ib = 1, nblk
+            tr = tr + green_obj%gij(ib, ib, ie, p0)
+         end do
+         dos_rs(ie) = -aimag(tr)/pi
+      end do
+
+      ! --- k-space Lehmann route: overwrite green%gij from the eigenpairs. ---
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ mesh (backend E requirement)
+      call reciprocal_obj%fill_green(green_obj, sigma)
+      do ie = 1, ne
+         tr = (0.0_rp, 0.0_rp)
+         do ib = 1, nblk
+            tr = tr + green_obj%gij(ib, ib, ie, p0)
+         end do
+         dos_le(ie) = -aimag(tr)/pi
+      end do
+
+      ! --- Compare + report (report-only; tolerance is a maintainer gate). ---
+      max_abs_diff = 0.0_rp; rms_diff = 0.0_rp; int_rs = 0.0_rp; int_le = 0.0_rp
+      do ie = 1, ne
+         max_abs_diff = max(max_abs_diff, abs(dos_le(ie) - dos_rs(ie)))
+         rms_diff = rms_diff + (dos_le(ie) - dos_rs(ie))**2
+      end do
+      rms_diff = sqrt(rms_diff/real(ne, rp))
+      do ie = 2, ne
+         de = green_obj%en%ene(ie) - green_obj%en%ene(ie - 1)
+         int_rs = int_rs + 0.5_rp*de*(dos_rs(ie) + dos_rs(ie - 1))
+         int_le = int_le + 0.5_rp*de*(dos_le(ie) + dos_le(ie - 1))
+      end do
+
+      if (rank == 0) then
+         open (newunit=newunit, file='kspace_green_c1.dat', status='replace', action='write')
+         write (newunit, '(A)') '# B2 C1/C3 validation: on-site DOS rho(E) = -1/pi Im Tr G_ii(E)'
+         write (newunit, '(A)') '# recursion (RS) vs k-space Lehmann, same green%gij on-site block'
+         write (newunit, '(A,I0,A,I0,A,I0,A,I0,A)') '# k-mesh ', reciprocal_obj%nk_mesh(1), ' x ', &
+            reciprocal_obj%nk_mesh(2), ' x ', reciprocal_obj%nk_mesh(3), '  (', reciprocal_obj%nk_total, ' points)'
+         write (newunit, '(A,ES14.6,A)') '# green_eta = ', reciprocal_obj%green_eta, ' Ry'
+         write (newunit, '(A,ES14.6)') '# max|dos_lehmann - dos_rs| = ', max_abs_diff
+         write (newunit, '(A,ES14.6)') '# rms  dos_lehmann - dos_rs  = ', rms_diff
+         write (newunit, '(A,ES14.6,A,ES14.6)') '# spectral weight   RS = ', int_rs, '   Lehmann = ', int_le
+         write (newunit, '(A)') '#     E(Ry)          dos_rs        dos_lehmann         diff'
+         do ie = 1, ne
+            write (newunit, '(4ES16.8)') green_obj%en%ene(ie), dos_rs(ie), dos_le(ie), dos_le(ie) - dos_rs(ie)
+         end do
+         close (newunit)
+         call g_logger%info('[kspace_green] C1 on-site DOS cross-check: max|diff|='// &
+                            trim(real2str(max_abs_diff))//' rms='//trim(real2str(rms_diff))// &
+                            ' weight_RS='//trim(real2str(int_rs))//' weight_Lehmann='//trim(real2str(int_le)), &
+                            __FILE__, __LINE__)
+      end if
+
+      deallocate (dos_rs, dos_le)
+   end subroutine post_processing_kspace_green
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
    !> @brief
    !> Frozen-magnon post-processing: sweeps &hamiltonian's q_ss over a
    !> user-supplied list of points (see &frozen_magnon namelist) and reports
@@ -1679,11 +1806,12 @@ contains
           .and. post_processing /= 'orbital_modern' &
           .and. post_processing /= 'band_structure' &
           .and. post_processing /= 'density_of_states' &
+          .and. post_processing /= 'kspace_green' &
           .and. post_processing /= 'frozen_magnon') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'density_of_states'," // &
-                             " 'frozen_magnon'", __FILE__, __LINE__)
+                             " 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

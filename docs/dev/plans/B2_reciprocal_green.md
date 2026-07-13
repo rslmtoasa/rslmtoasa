@@ -136,11 +136,23 @@ lines 260–300 (consumer shape only).
       `RUN_UNIT_TESTS=ON`) pins the 1-band chain on-site closed form (8.7e-16),
       the intersite `e^{ik·ΔR}` phase/C3 (4.2e-16), and the 1/N_k
       normalization/C4 (2e-12). Regression 10/10 bit-identical (fill path not
-      production-wired). **Remaining:** the LMTO-integration C1/C3 (bcc-Fe
-      on-site block vs the RS route at large broadening, elementwise) needs a
-      driver that runs both routes — folded into the B2.5 dispatch (that is the
-      first task that actually invokes `fill_green`).
+      production-wired). **LMTO-integration C1/C3 DONE** via a production
+      `post_processing='kspace_green'` driver (`calculation.f90`) + example
+      `example/exchange/bccFe_kspace_green`: runs BOTH routes on the same
+      converged bcc-Fe potential and reports the on-site DOS
+      `-1/pi Im Tr G_ii(E)` from the same `green%gij` on-site block (DOS-level
+      cross-check, maintainer's choice). Both routes -> C4 sum rule weight ≈ nb=18
+      and agree in shape; report-only (`kspace_green_c1.dat`), tolerance is a
+      maintainer gate. **Side bug fixed:** `chebyshev_recur_ij` lacked the
+      block-path on-site (i==j) special case -> `G_ii` came out ×0.5 (start
+      `1/sqrt2|i>`, norm²=½, moments quadratic). Fixed in both CPU+GPU branches;
+      latent for i≠j J_ij, no golden affected. **FOLLOW-UP:** re-verify this
+      normalization when extending on-site → true intersite `G_ij` (i≠j).
 - [ ] B2.3 eta ladder + torque + C2
 - [ ] B2.4 backend D + Σ=0 invariant
-- [ ] B2.5 dispatch + DOS regression + Γ-only identity
+- [~] B2.5 dispatch + DOS regression + Γ-only identity — **partial:**
+      `post_processing='kspace_green'` validation driver + example landed (the
+      first production caller of `fill_green`); still to do: the `gf_route`
+      namelist key, the two-route DOS regression case, and the Γ-only supercell
+      identity.
 - [ ] B2.6 J_ij/damping zero-change run + convergence (G-B2-2 signed)

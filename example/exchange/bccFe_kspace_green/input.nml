@@ -1,0 +1,64 @@
+&calculation
+! B2 validation driver: cross-checks the k-space Lehmann on-site Green's
+! function against the real-space recursion route (convention C1/C3).
+! Writes kspace_green_c1.dat with the on-site DOS from both routes.
+!pre_process = 'bravais'
+post_processing = 'kspace_green'
+verbose = T
+/
+&lattice
+ndim = 50000
+rc = 080
+alat = 2.86120
+crystal_sym = 'bcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+
+! On-site self-pair: the driver reads green%gij at ijpair(:,1)==ijpair(:,2)
+! and builds rho(E) = -1/pi Im Tr G_ii(E) for both routes.
+njij = 1
+ijpair(1, :) = 1, 1
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&reciprocal
+! Backend E (strict Lehmann) needs the FULL unreduced BZ mesh; the driver
+! calls generate_mp_mesh() so the mesh is unreduced regardless of this flag.
+nk1 = 16
+nk2 = 16
+nk3 = 16
+use_symmetry_reduction = .false.
+green_backend = 'lehmann'
+! Retarded broadening z = E + i*green_eta for the Lehmann resolvent. Chosen
+! comparable to the recursion terminator broadening so the two on-site DOS
+! traces are compared on an equal footing (gate G-B2-1 contour convention).
+green_eta = 0.02
+dos_method = 'tetrahedron'
+/
+&energy
+fermi = -0.069291
+energy_min = -1.2
+energy_max = 1.2
+channels_ldos = 300
+/
+&control
+calctype = 'B'
+nsp = 2
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/

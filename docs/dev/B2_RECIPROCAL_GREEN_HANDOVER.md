@@ -5,12 +5,30 @@ Branch: `fable_v2`. Start a fresh session from here.
 ## TL;DR
 
 Milestone **B2** (k-space Green's-function engine, flagship) is underway. **B2.1
-is done; gate G-B2-1 is signed. B2.2 backend-E kernel + wiring have now landed**
-with the pure-math known-answer pins passing to machine precision. The next task
-is the **LMTO-integration C1/C3** (bcc-Fe on-site block vs the RS route,
-elementwise) — folded into **B2.5** since that dispatch is the first thing to
-actually call `fill_green`. Nothing is wired into a production path yet, so
-regression is **10/10 bit-identical** and must stay that way at feature-off.
+is done; gate G-B2-1 is signed. B2.2 backend-E kernel + wiring landed** with the
+pure-math pins at machine precision. **The LMTO-integration C1/C3 now landed too**
+as a production `post_processing='kspace_green'` validation driver (DOS-level
+cross-check, maintainer's choice) + a dedicated example
+(`example/exchange/bccFe_kspace_green`). It runs BOTH routes on the same
+converged bcc-Fe potential and reports the on-site DOS
+`rho(E) = -1/pi Im Tr G_ii(E)` from the same `green%gij` on-site block. **Result:
+both routes satisfy the C4 sum rule (weight -> nb=18) and agree in shape;** the
+residual is k-mesh/broadening ripple (B2.6 convergence territory). Report-only —
+the acceptance tolerance is a maintainer gate.
+
+**Bug found + fixed this session (via the driver):** the chebyshev intersite
+recursion `chebyshev_recur_ij` was **missing the on-site (i==j) special case** the
+block path `recur_b_ij` has, so an on-site self-pair started from `1/sqrt2|i>`
+(norm^2=1/2) and — moments being quadratic in psi0 — delivered `G_ii` at **exactly
+half amplitude**. Fixed in both CPU and GPU branches
+(`source/recursion_transport.f90`) by mirroring the block guard. Latent for normal
+J_ij (i!=j) runs; no existing golden uses chebyshev intersite/on-site pairs, so
+regression stays bit-identical. **FOLLOW-UP (maintainer note): re-check this
+1/sqrt2 normalization factor once we proceed from G_ii to the true intersite
+G_ij** (i!=j) — the 4-phase combination there must reproduce the correct amplitude.
+
+The next task is **B2.3** (eta ladder + torque `ginmag`/`gi{x,y,z}` + C2 local
+frames). Regression must stay **10/10 bit-identical** at feature-off.
 
 ### B2.2 landed this session
 
