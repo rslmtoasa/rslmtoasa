@@ -36,6 +36,9 @@ module reciprocal_mod
    use lattice_mod
    use hamiltonian_mod
    use charge_mod
+   use energy_mod, only: energy
+   use green_mod, only: green
+   use sigma_provider_mod, only: sigma_provider, sigma_zero
    use spectrum_bounds_mod, only: bounds, compute_spectrum_bounds
    use precision_mod, only: rp
    use math_mod
@@ -231,6 +234,12 @@ module reciprocal_mod
       !> Neighbor vectors in fractional coordinates [3, nn_max, ntype]
       real(rp), dimension(:, :, :), allocatable :: ham_vec_type_direct
 
+      ! k-space Green's-function engine (milestone B2, reciprocal_green)
+      !> Retarded broadening for the k-space Green contour z = E + i*green_eta (Ry)
+      real(rp) :: green_eta
+      !> Backend selector for fill_green: 'lehmann' (E, Sigma=0) or 'dyson' (D)
+      character(len=16) :: green_backend
+
    contains
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
@@ -285,6 +294,9 @@ module reciprocal_mod
       procedure :: ensure_tetra_symmetry_backend
       procedure :: ensure_full_mesh_for_spinor_integrations
       procedure :: build_irreducible_tetrahedra
+      ! k-space Green's-function engine (milestone B2)
+      procedure :: fill_green
+      procedure :: build_green_contour
       final     :: destructor
    end type reciprocal
 
@@ -1375,6 +1387,28 @@ end function integrate_dos_up_to_energy
       integer :: idx_a, idx_b
 
    end subroutine calculate_ldm_from_eigenvectors
+
+   ! k-space Green's-function engine (milestone B2, submodule reciprocal_green)
+
+   !> @brief Build the retarded complex-energy contour z = E + i*green_eta.
+   !> @param[in]  this      Reciprocal object (supplies green_eta broadening).
+   !> @param[in]  en        Energy object holding the prepared real-axis grid.
+   !> @param[out] z_contour Allocated retarded contour, size = size(en%ene).
+   module subroutine build_green_contour(this, en, z_contour)
+      class(reciprocal), intent(in) :: this
+      class(energy), intent(in) :: en
+      complex(rp), allocatable, intent(out) :: z_contour(:)
+   end subroutine build_green_contour
+
+   !> @brief Fill the canonical `green` arrays from the k-space engine.
+   !> @param[inout] this      Reciprocal object (k-mesh, H(k) machinery).
+   !> @param[inout] green_obj Green object whose arrays are populated in place.
+   !> @param[in]    sigma     Self-energy provider (sigma_zero for backend E).
+   module subroutine fill_green(this, green_obj, sigma)
+      class(reciprocal), intent(inout) :: this
+      type(green), intent(inout) :: green_obj
+      class(sigma_provider), intent(in) :: sigma
+   end subroutine fill_green
 
    end interface
 

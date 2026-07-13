@@ -46,6 +46,7 @@ add_library(${PROJECT_NAME} STATIC
     reciprocal_bands.f90
     reciprocal_dos.f90
     reciprocal_projection.f90
+    reciprocal_green.f90
     recursion.f90
     recursion_core.f90
     recursion_haydock.f90
@@ -55,6 +56,7 @@ add_library(${PROJECT_NAME} STATIC
     report.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
+    sigma_provider.f90
     self.f90
     bounds.f90
     spglib_interface.f90
