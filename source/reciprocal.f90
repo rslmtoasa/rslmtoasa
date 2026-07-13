@@ -238,6 +238,7 @@ module reciprocal_mod
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
+      procedure :: fourier_transform_gbt
       procedure :: fourier_transform_hamiltonian_second_order
       procedure :: fourier_transform_array
       procedure :: fourier_transform_overlap
@@ -443,6 +444,16 @@ module reciprocal_mod
       !       here; they are only included in the second-order path
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
    end subroutine fourier_transform_hamiltonian
+
+   !> @brief Generalized-Bloch-theorem spin-spiral k-space Hamiltonian.
+   !> @param[in] this Reciprocal object with the collinear reference Hamiltonian.
+   !> @param[in] k_vec k-point vector (fractional coordinates).
+   !> @param[out] hk_result Packed GBT k-space Hamiltonian matrix.
+   module subroutine fourier_transform_gbt(this, k_vec, hk_result)
+      class(reciprocal), intent(in) :: this
+      real(rp), dimension(3), intent(in) :: k_vec
+      complex(rp), dimension(:, :), intent(out) :: hk_result
+   end subroutine fourier_transform_gbt
 
    !> @brief Fourier transform an arbitrary neighbor/type block array.
    !> @details Applies the reciprocal neighbor map to a (orbital, orbital,
