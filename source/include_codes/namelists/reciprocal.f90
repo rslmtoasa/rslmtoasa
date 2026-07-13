@@ -47,6 +47,10 @@ logical :: kanpur_diagnostics              ! Print Kanpur-mapping diagnostics
 logical :: gamma_bounds_diagnostics        ! Compute H(Gamma) bounds diagnostics
 logical :: hall_diag_experimental          ! Experimental finite real-space HALL diagonalization
 
+! k-space Green's-function engine (milestone B2, reciprocal_green)
+real :: green_eta                          ! Retarded broadening for z = E + i*green_eta (Ry, default 0.01)
+character(len=16) :: green_backend         ! fill_green backend: 'lehmann' (E, Sigma=0) or 'dyson' (D)
+
 namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
    use_symmetry_reduction, use_time_reversal, strict_symmetry_checks, use_shift, &
    dump_symmetry_kmap, tetra_symmetry_mode, &
@@ -54,4 +58,5 @@ namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
    gaussian_sigma, temperature, total_electrons, dos_method, &
    auto_find_fermi, suppress_internal_logs, reciprocal_mode, &
    kspace_ham_order, &
-   kanpur_diagnostics, gamma_bounds_diagnostics, hall_diag_experimental
+   kanpur_diagnostics, gamma_bounds_diagnostics, hall_diag_experimental, &
+   green_eta, green_backend

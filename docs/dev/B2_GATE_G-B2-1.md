@@ -1,8 +1,23 @@
 # Gate G-B2-1 — energy-contour / grid convention for `reciprocal_green`
 
-**Status:** OPEN — awaiting maintainer (Anders) sign-off before task B2.2.
+**Status:** SIGNED (Anders, 2026-07-13). Decisions folded into code; B2.2 may
+proceed. Original questions and their resolutions are kept below for the record.
 **Task:** B2.1 (module skeleton + `sigma_provider` + contour adoption).
 **Branch:** `fable_v2`.
+
+## Maintainer decisions (2026-07-13)
+
+1. **`green_eta` default 0.01 Ry, exposed as input.** Now a `&reciprocal`
+   namelist key (`green_eta`), seeded from the 0.01 Ry default. `green_backend`
+   ('lehmann'|'dyson') exposed alongside it.
+2. **On-site vs intersite reference (C1).** Both `Gii` (on-site) and `Gij`
+   (intersite) are `2*norb x 2*norb` (= `nb x nb`) blocks built by block
+   recursion or Chebyshev — i.e. the **full complex resolvent block**, same
+   dimension for both. So the B2.2 C1 test compares the Lehmann on-site block
+   against that full-resolvent on-site block (real + imaginary) at large
+   broadening. The `-i*pi*rho` form in `sgreen` is the DOS-derived on-site GF
+   (moments/charge), NOT the C1 reference — do not use it for the elementwise
+   match.
 
 ## What you are signing
 

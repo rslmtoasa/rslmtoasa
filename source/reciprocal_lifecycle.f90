@@ -221,7 +221,9 @@ contains
       kanpur_diagnostics = this%kanpur_diagnostics
       gamma_bounds_diagnostics = this%gamma_bounds_diagnostics
       hall_diag_experimental = this%hall_diag_experimental
-      
+      green_eta = this%green_eta
+      green_backend = this%green_backend
+
       ! K-path settings
       auto_kpath = this%auto_kpath
       nk_per_segment = this%nk_per_segment
@@ -273,6 +275,13 @@ contains
       this%kanpur_diagnostics = kanpur_diagnostics
       this%gamma_bounds_diagnostics = gamma_bounds_diagnostics
       this%hall_diag_experimental = hall_diag_experimental
+      this%green_eta = green_eta
+      this%green_backend = lower(trim(green_backend))
+      if (this%green_backend /= 'lehmann' .and. this%green_backend /= 'dyson') then
+         call g_logger%warning("reciprocal%build_from_file: green_backend must be " // &
+            "'lehmann' or 'dyson'. Falling back to lehmann.", __FILE__, __LINE__)
+         this%green_backend = 'lehmann'
+      end if
       if (this%reciprocal_mode == 'generalized_overlap') then
          this%reciprocal_mode = 'generalized_overlap_proxy'
          call g_logger%warning("reciprocal_mode='generalized_overlap' is deprecated alias; using 'generalized_overlap_proxy'.", __FILE__, __LINE__)
