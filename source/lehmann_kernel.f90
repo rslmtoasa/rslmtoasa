@@ -38,11 +38,12 @@
 !------------------------------------------------------------------------------
 module lehmann_kernel_mod
    use precision_mod, only: rp
-   use math_mod, only: two_pi
+   use math_mod, only: two_pi, i_unit
    implicit none
 
    private
    public :: lehmann_pair_block
+   public :: pauli_decompose_block
 
 contains
 
@@ -103,5 +104,39 @@ contains
 
       gblk = gblk/real(nk, rp)
    end subroutine lehmann_pair_block
+
+   !> @brief Pauli (charge, x, y, z) decomposition of a spin-block resolvent.
+   !> @details Splits one pair's 2*norb x 2*norb block into the torque-resolved
+   !>          orbital sub-blocks the recursion route stores, using the exact
+   !>          spin algebra of `green.f90::calculate_intersite_gf_core`:
+   !>            gnmag = 0.5 (G_uu + G_dd)   (charge / non-magnetic)
+   !>            gz    = 0.5 (G_uu - G_dd)
+   !>            gy    = 0.5 (i G_ud - i G_du)
+   !>            gx    = 0.5 (G_ud + G_du)
+   !>          where u/d are the spin-up/down orbital sub-blocks separated by
+   !>          `spin_off` (= norb in normal mode). The orbital loop range is taken
+   !>          from the output block size (norb). The third index (energy or eta)
+   !>          is a passive spectator, so the same routine serves both the
+   !>          energy-grid blocks and the Fermi-eta ladder blocks.
+   !> @param[in]  gblk     Spin block, shape (>=2*spin_off, >=2*spin_off, ns).
+   !> @param[in]  spin_off Spin-down orbital offset (norb in normal mode).
+   !> @param[out] gnmag    Charge/non-magnetic sub-block, shape (norb, norb, ns).
+   !> @param[out] gz,gy,gx x/y/z torque sub-blocks, same shape as gnmag.
+   subroutine pauli_decompose_block(gblk, spin_off, gnmag, gz, gy, gx)
+      complex(rp), intent(in) :: gblk(:, :, :)
+      integer, intent(in) :: spin_off
+      complex(rp), intent(out) :: gnmag(:, :, :), gz(:, :, :), gy(:, :, :), gx(:, :, :)
+      integer :: i, j, norb_l
+
+      norb_l = size(gnmag, 1)
+      do i = 1, norb_l
+         do j = 1, norb_l
+            gnmag(j, i, :) = 0.5_rp*(gblk(j, i, :) + gblk(j + spin_off, i + spin_off, :))
+            gz(j, i, :) = 0.5_rp*(gblk(j, i, :) - gblk(j + spin_off, i + spin_off, :))
+            gy(j, i, :) = 0.5_rp*(i_unit*gblk(j, i + spin_off, :) - i_unit*gblk(j + spin_off, i, :))
+            gx(j, i, :) = 0.5_rp*(gblk(j, i + spin_off, :) + gblk(j + spin_off, i, :))
+         end do
+      end do
+   end subroutine pauli_decompose_block
 
 end module lehmann_kernel_mod

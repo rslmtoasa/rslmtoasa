@@ -27,8 +27,42 @@ regression stays bit-identical. **FOLLOW-UP (maintainer note): re-check this
 1/sqrt2 normalization factor once we proceed from G_ii to the true intersite
 G_ij** (i!=j) — the 4-phase combination there must reproduce the correct amplitude.
 
-The next task is **B2.3** (eta ladder + torque `ginmag`/`gi{x,y,z}` + C2 local
-frames). Regression must stay **10/10 bit-identical** at feature-off.
+**B2.3 landed this session** (eta ladder + torque + C2 rotation). Regression stays
+**10/10 bit-identical**; the collinear `kspace_green` C1 output is byte-identical
+(C2 is a no-op at `local_axis=.false.`). The next task is **B2.4** (backend D +
+the Σ=0 ≡ backend E invariant). See the B2.3 section below for the one OPEN item.
+
+### B2.3 landed this session
+
+- `source/lehmann_kernel.f90` — new public `pauli_decompose_block`: the
+  dependency-free (charge,x,y,z) spin-block decomposition
+  `gnmag=½(G_uu+G_dd)`, `gz=½(G_uu−G_dd)`, `gy=½(iG_ud−iG_du)`, `gx=½(G_ud+G_du)`,
+  reused for BOTH the energy-grid blocks and the Fermi-eta ladder. Pinned by a new
+  `UnitLehmannChain` Test 4 (transcription guard on signs + i-factor, 1.1e-16).
+- `reciprocal_green.f90::fill_green_lehmann` now also fills:
+  - **`gij_eta`/`gji_eta`** (the 64-point Fermi ladder) as strict-Lehmann blocks
+    at `z = ene(fermi_point) + i·(1−x)/x` — the same `bgreen` eta contour
+    (`z=e(ei)+eta`) and `gauss_legendre(64,0,1)` roots the recursion route uses.
+    Stored eta-index-leading `(64,nb,nb,pair)`; only when the arrays are
+    allocated. `wgl` weights belong to the consumer, not the fill.
+  - **Torque families** `ginmag`/`gi{x,y,z}` (+`gj*` and the `*_eta` partners) via
+    `pauli_decompose_block`. `store_eta_torque` transposes the eta axis to front.
+  - **C2 local frames** — `rotate_stack_local` wraps `rotmag_loc` (which computes
+    `R†·B·R`, the exact transform `rotate_to_local_axis` applies to the
+    Hamiltonian). Gated on `hamiltonian%local_axis`; the moment is
+    `symbolic_atoms(pair_glob)%potential%mom` — the SAME index expression the
+    recursion loop (`recursion_haydock.f90:367`) uses, so the frame matches by
+    construction (R is the same spin rotation on every site → commutes with
+    site-block extraction → rotating the global block ≡ solving in the rotated
+    frame).
+
+**OPEN (maintainer / next session): C2 has NO end-to-end numerical cross-check.**
+It is consistent-by-construction but unvalidated: there is no noncollinear
+regression fixture, and `fill_green` is not yet dispatched for a noncollinear
+route (that is B2.5). When a noncollinear case exists, add the plan's C2
+acceptance test (G_ii spin structure, k-space vs RS). Also **still open from
+B2.2**: re-verify the `1/√2` normalization when extending on-site → true
+intersite `G_ij` (i≠j).
 
 ### B2.2 landed this session
 

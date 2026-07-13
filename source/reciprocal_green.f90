@@ -41,8 +41,9 @@
 !>   * repr.   : screened/auxiliary LMTO blocks, pre-`auxiliary_gij`.
 !------------------------------------------------------------------------------
 submodule(reciprocal_mod) reciprocal_green
-   use lehmann_kernel_mod, only: lehmann_pair_block
+   use lehmann_kernel_mod, only: lehmann_pair_block, pauli_decompose_block
    use mpi_mod, only: start_atom, end_atom, g2l_map
+   use basis_mod, only: spin_off
    implicit none
 
 contains
@@ -115,7 +116,7 @@ contains
       if (allocated(z_contour)) deallocate (z_contour)
    end subroutine fill_green
 
-   !> @brief Backend E core: fill gij/gji by the strict Lehmann representation.
+   !> @brief Backend E core: fill gij/gji, the eta ladder, and torque families.
    !> @details For every intersite pair the recursion route tracks
    !>          (`lattice%ijpair`, indexed as in `calculate_intersite_gf_core`),
    !>          accumulate the true nb x nb resolvent block directly from the
@@ -126,9 +127,31 @@ contains
    !>          atoms and psi_i the site-i sub-block of the eigenvector (rows
    !>          (site-1)*nb+1 .. site*nb, matching the H(k) block layout in
    !>          `reciprocal_fourier`). No 4-phase machinery: backend E fills the
-   !>          intersite block directly. The torque-resolved families
-   !>          (`ginmag`/`gi{x,y,z}`) and the `gij_eta` ladder are derived from
-   !>          these blocks in B2.3.
+   !>          intersite block directly.
+   !>
+   !>          B2.3 additions (all mirroring `calculate_intersite_gf_core` so the
+   !>          consumers -- exchange, damping -- run unchanged):
+   !>          * C2 local spin frames. When `hamiltonian%local_axis` is set, the
+   !>            recursion route rotates the whole Hamiltonian by R (aligning the
+   !>            central atom's moment to +z) before solving, delivering
+   !>            G_local = R^dagger G_global R. The k-space eigenpairs are solved
+   !>            ONCE in the global frame and reused; because R is the same spin
+   !>            rotation on every site it commutes with site-block extraction, so
+   !>            the identical local block is obtained by rotating each pair's
+   !>            global block: G_local = R^dagger G_global R. That is exactly what
+   !>            `rotmag_loc` computes; we reuse it VERBATIM with the SAME moment
+   !>            source the recursion loop uses
+   !>            (`symbolic_atoms(pair_glob)%potential%mom`), so the frame matches
+   !>            by construction. Off (`local_axis=.false.`) leaves the global
+   !>            frame untouched -- collinear runs are unaffected.
+   !>          * `gij_eta`/`gji_eta` ladder: the 64-point Gauss-Legendre Fermi
+   !>            ladder evaluated at z = ene(fermi_point) + i*(1-x)/x, matching
+   !>            `bgreen`'s eta contour (z = e(ei) + eta) and the `x,w` roots of
+   !>            `gauss_legendre(64, 0, 1)`. Stored with the eta index leading,
+   !>            `(64, nb, nb, pair)`, as the recursion route stores it.
+   !>          * Torque-resolved families `ginmag`/`gi{x,y,z}` (+ `gj*` and the
+   !>            `*_eta` partners) derived from the filled blocks by the exact
+   !>            Pauli spin-block algebra of `calculate_intersite_gf_core`.
    !>
    !>          Preconditions (B2.2 scope): the k-mesh is the full, unreduced BZ
    !>          and is NOT distributed over MPI ranks (each rank holds all k), and
@@ -144,11 +167,15 @@ contains
       type(green), intent(inout) :: green_obj
       complex(rp), intent(in) :: z_contour(:)
 
-      integer :: nk, ne, ik, ikg
+      integer :: nk, ne, ik, ikg, ie, i, j, fermi_point
       integer :: pair, pair_glob, i_cl, j_cl, site_i, site_j, ioff, joff
+      logical :: do_eta, local_axis
       real(rp), allocatable :: kfrac(:, :)
-      real(rp) :: dcart(3), dr(3)
-      complex(rp), allocatable :: gblk(:, :, :)
+      real(rp) :: dcart(3), dr(3), mom_i(3)
+      real(rp) :: xgl(64), wgl(64)
+      complex(rp), allocatable :: gblk(:, :, :), gblk_eta(:, :, :)
+      complex(rp), allocatable :: z_eta(:)
+      complex(rp), allocatable :: tnmag(:, :, :), tz(:, :, :), ty(:, :, :), tx(:, :, :)
 
       ! Ensure the eigenpairs exist (one Hermitian solve per k, reused for all
       ! energies and pairs).
@@ -170,6 +197,7 @@ contains
          return
       end if
       ne = size(z_contour)
+      local_axis = this%hamiltonian%local_axis
 
       ! Fractional k-points for the (undistributed) mesh.
       allocate (kfrac(3, nk))
@@ -180,6 +208,38 @@ contains
 
       allocate (gblk(nb, nb, ne))
 
+      ! Eta ladder: the Fermi-point continued-fraction ladder of the recursion
+      ! route, here evaluated as strict-Lehmann blocks at 64 broadenings. Filled
+      ! only when the target arrays exist (they are needed by the noncollinear
+      ! exchange/damping consumers via green%gij_eta_to_gij).
+      do_eta = allocated(green_obj%gij_eta) .and. allocated(green_obj%gji_eta)
+      if (do_eta) then
+         call gauss_legendre(64, 0.0_rp, 1.0_rp, xgl, wgl)
+         fermi_point = 1
+         do i = 1, size(green_obj%en%ene)
+            if ((green_obj%en%ene(i) - green_obj%en%fermi) .le. 0.000001_rp) fermi_point = i
+         end do
+         allocate (z_eta(64), gblk_eta(nb, nb, 64))
+         allocate (tnmag(norb, norb, 64), tz(norb, norb, 64), ty(norb, norb, 64), tx(norb, norb, 64))
+         do i = 1, 64
+            z_eta(i) = cmplx(green_obj%en%ene(fermi_point), (1.0_rp - xgl(i))/xgl(i), rp)
+         end do
+         green_obj%gij_eta = (0.0_rp, 0.0_rp); green_obj%gji_eta = (0.0_rp, 0.0_rp)
+         if (allocated(green_obj%ginmag_eta)) then
+            green_obj%ginmag_eta = (0.0_rp, 0.0_rp); green_obj%gjnmag_eta = (0.0_rp, 0.0_rp)
+            green_obj%gix_eta = (0.0_rp, 0.0_rp); green_obj%giy_eta = (0.0_rp, 0.0_rp)
+            green_obj%giz_eta = (0.0_rp, 0.0_rp); green_obj%gjx_eta = (0.0_rp, 0.0_rp)
+            green_obj%gjy_eta = (0.0_rp, 0.0_rp); green_obj%gjz_eta = (0.0_rp, 0.0_rp)
+         end if
+      end if
+
+      if (allocated(green_obj%ginmag)) then
+         green_obj%ginmag = (0.0_rp, 0.0_rp); green_obj%gjnmag = (0.0_rp, 0.0_rp)
+         green_obj%gix = (0.0_rp, 0.0_rp); green_obj%giy = (0.0_rp, 0.0_rp)
+         green_obj%giz = (0.0_rp, 0.0_rp); green_obj%gjx = (0.0_rp, 0.0_rp)
+         green_obj%gjy = (0.0_rp, 0.0_rp); green_obj%gjz = (0.0_rp, 0.0_rp)
+      end if
+
       do pair_glob = start_atom, end_atom
          pair = g2l_map(pair_glob)
          i_cl = this%lattice%ijpair(pair_glob, 1)
@@ -188,6 +248,11 @@ contains
          site_j = this%lattice%iz(j_cl)
          ioff = (site_i - 1)*nb
          joff = (site_j - 1)*nb
+
+         ! C2 local frame: rotate by the pair's central-atom moment, exactly as
+         ! the recursion route does (rotate_to_local_axis(symbolic_atoms(i)%mom)
+         ! with i = pair_glob = start_atom..end_atom).
+         if (local_axis) mom_i = this%lattice%symbolic_atoms(pair_glob)%potential%mom(1:3)
 
          ! dR_ij = R_i - R_j in fractional coordinates. cr is in units of alat,
          ! so absolute cartesian = cr*alat and a_cart_inv maps that to
@@ -202,15 +267,97 @@ contains
          ! G_ij (on-site block when site_i == site_j and dR = 0).
          call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
                                  dr, ioff, joff, nb, gblk)
+         if (local_axis) call rotate_stack_local(mom_i, gblk)
          green_obj%gij(:, :, :, pair) = gblk
 
          ! G_ji: swap the site blocks and negate the bond vector (dR_ji = -dR_ij).
          call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
                                  -dr, joff, ioff, nb, gblk)
+         if (local_axis) call rotate_stack_local(mom_i, gblk)
          green_obj%gji(:, :, :, pair) = gblk
+
+         ! Non-eta torque families from the (rotated) blocks -- the exact Pauli
+         ! spin-block decomposition of calculate_intersite_gf_core.
+         if (allocated(green_obj%ginmag)) then
+            call pauli_decompose_block(green_obj%gij(:, :, :, pair), spin_off, &
+               green_obj%ginmag(:, :, :, pair), green_obj%giz(:, :, :, pair), &
+               green_obj%giy(:, :, :, pair), green_obj%gix(:, :, :, pair))
+            call pauli_decompose_block(green_obj%gji(:, :, :, pair), spin_off, &
+               green_obj%gjnmag(:, :, :, pair), green_obj%gjz(:, :, :, pair), &
+               green_obj%gjy(:, :, :, pair), green_obj%gjx(:, :, :, pair))
+         end if
+
+         if (do_eta) then
+            call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
+                                    dr, ioff, joff, nb, gblk_eta)
+            if (local_axis) call rotate_stack_local(mom_i, gblk_eta)
+            do ie = 1, 64
+               green_obj%gij_eta(ie, :, :, pair) = gblk_eta(:, :, ie)
+            end do
+            if (allocated(green_obj%ginmag_eta)) then
+               call pauli_decompose_block(gblk_eta, spin_off, tnmag, tz, ty, tx)
+               call store_eta_torque(tnmag, tz, ty, tx, green_obj%ginmag_eta(:, :, :, pair), &
+                  green_obj%giz_eta(:, :, :, pair), green_obj%giy_eta(:, :, :, pair), &
+                  green_obj%gix_eta(:, :, :, pair))
+            end if
+
+            call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
+                                    -dr, joff, ioff, nb, gblk_eta)
+            if (local_axis) call rotate_stack_local(mom_i, gblk_eta)
+            do ie = 1, 64
+               green_obj%gji_eta(ie, :, :, pair) = gblk_eta(:, :, ie)
+            end do
+            if (allocated(green_obj%ginmag_eta)) then
+               call pauli_decompose_block(gblk_eta, spin_off, tnmag, tz, ty, tx)
+               call store_eta_torque(tnmag, tz, ty, tx, green_obj%gjnmag_eta(:, :, :, pair), &
+                  green_obj%gjz_eta(:, :, :, pair), green_obj%gjy_eta(:, :, :, pair), &
+                  green_obj%gjx_eta(:, :, :, pair))
+            end if
+         end if
       end do
 
+      if (allocated(z_eta)) deallocate (z_eta)
+      if (allocated(gblk_eta)) deallocate (gblk_eta)
+      if (allocated(tnmag)) deallocate (tnmag, tz, ty, tx)
       deallocate (kfrac, gblk)
    end subroutine fill_green_lehmann
+
+   !> @brief Store energy-3rd torque sub-blocks into the eta-leading arrays.
+   !> @details The green object stores the Fermi-eta ladder with the eta index
+   !>          FIRST (`(64, norb, norb, pair)`), whereas `pauli_decompose_block`
+   !>          produces the standard energy-3rd layout `(norb, norb, 64)`. This
+   !>          transposes the eta axis to the front for each component.
+   subroutine store_eta_torque(tnmag, tz, ty, tx, gnmag_eta, gz_eta, gy_eta, gx_eta)
+      complex(rp), intent(in) :: tnmag(:, :, :), tz(:, :, :), ty(:, :, :), tx(:, :, :)
+      complex(rp), intent(out) :: gnmag_eta(:, :, :), gz_eta(:, :, :), gy_eta(:, :, :), gx_eta(:, :, :)
+      integer :: ie, ne
+
+      ne = size(tnmag, 3)
+      do ie = 1, ne
+         gnmag_eta(ie, :, :) = tnmag(:, :, ie)
+         gz_eta(ie, :, :) = tz(:, :, ie)
+         gy_eta(ie, :, :) = ty(:, :, ie)
+         gx_eta(ie, :, :) = tx(:, :, ie)
+      end do
+   end subroutine store_eta_torque
+
+   !> @brief Rotate a stack of nb x nb blocks into a site-local spin frame.
+   !> @details Thin wrapper around `rotmag_loc` (math_mod): returns R^dagger B R
+   !>          for every slice, with R the spin rotation aligning `mom` to +z.
+   !>          This is the SAME primitive `rotate_to_local_axis` applies to the
+   !>          Hamiltonian, so a Green's-function block rotated here matches the
+   !>          recursion route's local-frame block (C2).
+   subroutine rotate_stack_local(mom, blk)
+      real(rp), intent(in) :: mom(3)
+      complex(rp), intent(inout) :: blk(:, :, :)
+      complex(rp), allocatable :: tmp(:, :, :)
+      integer :: ns
+
+      ns = size(blk, 3)
+      allocate (tmp(nb, nb, ns))
+      tmp = blk
+      call rotmag_loc(blk, tmp, ns, mom)
+      deallocate (tmp)
+   end subroutine rotate_stack_local
 
 end submodule reciprocal_green

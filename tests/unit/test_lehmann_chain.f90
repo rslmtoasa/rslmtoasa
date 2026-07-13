@@ -21,8 +21,8 @@
 !------------------------------------------------------------------------------
 program test_lehmann_chain
    use precision_mod, only: rp
-   use math_mod, only: pi
-   use lehmann_kernel_mod, only: lehmann_pair_block
+   use math_mod, only: pi, i_unit
+   use lehmann_kernel_mod, only: lehmann_pair_block, pauli_decompose_block
    implicit none
 
    integer, parameter :: nk = 512
@@ -95,6 +95,38 @@ program test_lehmann_chain
    err = abs(z_contour(1)*gblk(1, 1, 1) - (1.0_rp, 0.0_rp))
    write (*, '(a,es12.4)') 'Test 3 (normalization z*G->1)  err     = ', err
    if (err > tol_norm) failed = .true.
+
+   ! --- Test 4: Pauli (charge,x,y,z) decomposition transcription guard. -------
+   ! Build a one-orbital spin block from known (c,x,y,z) via the standard
+   ! assembly G = [[c+z, x-i y],[x+i y, c-z]] (up=orb1, dn=orb1+spin_off) and
+   ! check pauli_decompose_block recovers each component -- pins the signs and
+   ! the i factor of the torque algebra shared by gij and the eta ladder.
+   block
+      complex(rp) :: blk(2, 2, 2), gnmag(1, 1, 2), gz(1, 1, 2), gy(1, 1, 2), gx(1, 1, 2)
+      complex(rp) :: c(2), sx(2), sy(2), sz(2)
+      integer :: s
+
+      c = [cmplx(0.7_rp, -0.2_rp, rp), cmplx(-1.1_rp, 0.4_rp, rp)]
+      sx = [cmplx(0.3_rp, 0.5_rp, rp), cmplx(1.2_rp, -0.9_rp, rp)]
+      sy = [cmplx(-0.6_rp, 0.1_rp, rp), cmplx(0.4_rp, 0.7_rp, rp)]
+      sz = [cmplx(0.9_rp, -0.3_rp, rp), cmplx(-0.5_rp, 0.2_rp, rp)]
+      do s = 1, 2
+         blk(1, 1, s) = c(s) + sz(s)
+         blk(2, 2, s) = c(s) - sz(s)
+         blk(1, 2, s) = sx(s) - i_unit*sy(s)
+         blk(2, 1, s) = sx(s) + i_unit*sy(s)
+      end do
+      call pauli_decompose_block(blk, 1, gnmag, gz, gy, gx)
+      max_err = 0.0_rp
+      do s = 1, 2
+         max_err = max(max_err, abs(gnmag(1, 1, s) - c(s)))
+         max_err = max(max_err, abs(gx(1, 1, s) - sx(s)))
+         max_err = max(max_err, abs(gy(1, 1, s) - sy(s)))
+         max_err = max(max_err, abs(gz(1, 1, s) - sz(s)))
+      end do
+      write (*, '(a,es12.4)') 'Test 4 (Pauli decomposition)   max_err = ', max_err
+      if (max_err > tol_onsite) failed = .true.
+   end block
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
