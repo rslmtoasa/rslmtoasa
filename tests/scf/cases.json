@@ -338,7 +338,7 @@
       "case": "frozen_magnon/bccFe",
       "timeout": 300,
       "_note": "T5: frozen_magnon post-processing sweep (mode='mft', 3 q-points from q_points.dat, theta_ss=90deg, units 2*pi/alat). Checks frozen_magnon.dat q/etot/eband/moment/omega columns. See docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md T5.",
-      "namelists": {},
+      "namelists": { "control": { "recur": "block" } },
       "checks": {
         "text": [
           { "file": "frozen_magnon.dat", "rows": [7, 8, 9], "cols": [3, 4, 5, 6, 7] }
@@ -350,7 +350,7 @@
       "case": "frozen_magnon/bccFe_auto",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon MFT smoke test on single-sublattice bccFe. Checks branch and eigenvector output files.",
-      "namelists": {},
+      "namelists": { "control": { "recur": "block" } },
       "checks": {
         "text": [
           { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
@@ -363,7 +363,7 @@
       "case": "frozen_magnon/bccFe_auto_scf",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon SCF smoke test on single-sublattice bccFe. Checks total-energy branch and eigenvector output files.",
-      "namelists": {},
+      "namelists": { "control": { "recur": "block" } },
       "checks": {
         "text": [
           { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
