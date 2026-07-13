@@ -127,7 +127,19 @@ lines 260–300 (consumer shape only).
       `docs/dev/B2_GATE_G-B2-1.md`). `sigma_provider.f90`,
       `reciprocal_green.f90` (contour + dispatcher), type fields + defaults,
       CMake registration; regression 10/10 bit-identical.
-- [ ] B2.2 backend E + C1/C3/C4
+- [~] B2.2 backend E + C1/C3/C4 — **kernel + wiring landed; pure-math pins
+      PASS to machine precision.** `source/lehmann_kernel.f90`
+      (`lehmann_pair_block`, dependency-free numerical core);
+      `reciprocal_green.f90::fill_green_lehmann` wires eigenpairs + pair→site
+      map + bond vectors and fills `gij/gji` (on-site = i==j pair).
+      `tests/unit/test_lehmann_chain.f90` (ctest `UnitLehmannChain`, gate
+      `RUN_UNIT_TESTS=ON`) pins the 1-band chain on-site closed form (8.7e-16),
+      the intersite `e^{ik·ΔR}` phase/C3 (4.2e-16), and the 1/N_k
+      normalization/C4 (2e-12). Regression 10/10 bit-identical (fill path not
+      production-wired). **Remaining:** the LMTO-integration C1/C3 (bcc-Fe
+      on-site block vs the RS route at large broadening, elementwise) needs a
+      driver that runs both routes — folded into the B2.5 dispatch (that is the
+      first task that actually invokes `fill_green`).
 - [ ] B2.3 eta ladder + torque + C2
 - [ ] B2.4 backend D + Σ=0 invariant
 - [ ] B2.5 dispatch + DOS regression + Γ-only identity

@@ -49,6 +49,7 @@ option(COLOR "Color printouts" ON)
 option(RUN_REG_TESTS "Run regression tests" OFF)
 option(ENABLE_SPGLIB "Enable spglib for symmetry operations and k-path generation" ON)
 option(RUN_EXAMPLE_TESTS "Run fast example-based SCF tests" OFF)
+option(RUN_UNIT_TESTS "Build and run standalone Fortran unit tests" OFF)
 set(EXAMPLE_REF_ABS_TOL "1e-4" CACHE STRING "Absolute tolerance for example reference comparisons")
 set(EXAMPLE_REF_REL_TOL "1e-5" CACHE STRING "Relative tolerance for example reference comparisons")
 mark_as_advanced(ENABLE_FLUSH fortran_module_directory fortran_output_directory CMAKE_OSX_*)
@@ -367,6 +368,31 @@ foreach(_i RANGE ${_regression_last})
     LABELS "regression;backend" TIMEOUT "${_regression_timeout}")
 endforeach()
 endif (RUN_REG_TESTS)
+
+##############################################################################################
+# Standalone Fortran unit tests (known-answer, no external fixtures)
+##############################################################################################
+if (RUN_UNIT_TESTS)
+  # Each test is a small program linked against the project library. Link the
+  # same conditional MPI/OpenMP libraries as the main binary.
+  function(add_fortran_unit_test _name _source)
+    add_executable(${_name} ${_source})
+    if(ENABLE_OPENMP AND ENABLE_MPI AND OpenMP_Fortran_FOUND AND MPI_Fortran_FOUND)
+      target_link_libraries(${_name} ${COMMON_LIBRARIES} ${MPI_Fortran_LIBRARIES} OpenMP::OpenMP_Fortran)
+    elseif(ENABLE_OPENMP AND OpenMP_Fortran_FOUND)
+      target_link_libraries(${_name} ${COMMON_LIBRARIES} OpenMP::OpenMP_Fortran)
+    elseif(ENABLE_MPI AND MPI_Fortran_FOUND)
+      target_link_libraries(${_name} ${COMMON_LIBRARIES} ${MPI_Fortran_LIBRARIES})
+    else()
+      target_link_libraries(${_name} ${COMMON_LIBRARIES})
+    endif()
+    set_target_properties(${_name} PROPERTIES LINKER_LANGUAGE "Fortran")
+    add_test(NAME ${_name} COMMAND ${_name})
+    set_tests_properties(${_name} PROPERTIES LABELS "unit")
+  endfunction()
+
+  add_fortran_unit_test(UnitLehmannChain ${TestDIR}/unit/test_lehmann_chain.f90)
+endif (RUN_UNIT_TESTS)
 
 if (RUN_EXAMPLE_TESTS)
 

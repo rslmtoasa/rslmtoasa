@@ -41,6 +41,8 @@
 !>   * repr.   : screened/auxiliary LMTO blocks, pre-`auxiliary_gij`.
 !------------------------------------------------------------------------------
 submodule(reciprocal_mod) reciprocal_green
+   use lehmann_kernel_mod, only: lehmann_pair_block
+   use mpi_mod, only: start_atom, end_atom, g2l_map
    implicit none
 
 contains
@@ -98,8 +100,9 @@ contains
 
       select case (trim(this%green_backend))
       case ('lehmann')
-         call g_logger%error('reciprocal%fill_green: backend E (lehmann) not ' // &
-            'implemented yet -- lands in task B2.2.', __FILE__, __LINE__)
+         ! Backend E (strict Lehmann, Sigma = 0). sigma is accepted for a
+         ! uniform filler signature but unused here (it enters backend D only).
+         call fill_green_lehmann(this, green_obj, z_contour)
       case ('dyson')
          ! sigma is the provider backend D will invert against (B2.4).
          call g_logger%error('reciprocal%fill_green: backend D (dyson) not ' // &
@@ -111,5 +114,103 @@ contains
 
       if (allocated(z_contour)) deallocate (z_contour)
    end subroutine fill_green
+
+   !> @brief Backend E core: fill gij/gji by the strict Lehmann representation.
+   !> @details For every intersite pair the recursion route tracks
+   !>          (`lattice%ijpair`, indexed as in `calculate_intersite_gf_core`),
+   !>          accumulate the true nb x nb resolvent block directly from the
+   !>          k-space eigenpairs via `lehmann_pair_block`:
+   !>            G_ij(z) = (1/N_k) sum_{k,n} e^{i k.dR_ij} psi_i psi_j^dagger
+   !>                                                       / (z - eps_nk),
+   !>          with dR_ij = R_i - R_j the bond vector between the pair's cluster
+   !>          atoms and psi_i the site-i sub-block of the eigenvector (rows
+   !>          (site-1)*nb+1 .. site*nb, matching the H(k) block layout in
+   !>          `reciprocal_fourier`). No 4-phase machinery: backend E fills the
+   !>          intersite block directly. The torque-resolved families
+   !>          (`ginmag`/`gi{x,y,z}`) and the `gij_eta` ladder are derived from
+   !>          these blocks in B2.3.
+   !>
+   !>          Preconditions (B2.2 scope): the k-mesh is the full, unreduced BZ
+   !>          and is NOT distributed over MPI ranks (each rank holds all k), and
+   !>          the standard (orthonormal) eigenproblem is used so the Lehmann
+   !>          completeness sum_n psi_i psi_j^dagger = delta_ij holds. Symmetry-
+   !>          star averaging and k-parallel reduction attach with the B2.5
+   !>          dispatch / B4 parallelization.
+   !> @param[inout] this      Reciprocal object (H(k) + eigenpairs).
+   !> @param[inout] green_obj Green object whose gij/gji are populated in place.
+   !> @param[in]    z_contour Retarded complex-energy contour (size = ne).
+   subroutine fill_green_lehmann(this, green_obj, z_contour)
+      class(reciprocal), intent(inout) :: this
+      type(green), intent(inout) :: green_obj
+      complex(rp), intent(in) :: z_contour(:)
+
+      integer :: nk, ne, ik, ikg
+      integer :: pair, pair_glob, i_cl, j_cl, site_i, site_j, ioff, joff
+      real(rp), allocatable :: kfrac(:, :)
+      real(rp) :: dcart(3), dr(3)
+      complex(rp), allocatable :: gblk(:, :, :)
+
+      ! Ensure the eigenpairs exist (one Hermitian solve per k, reused for all
+      ! energies and pairs).
+      if (.not. allocated(this%eigenvectors) .or. .not. allocated(this%eigenvalues)) then
+         call this%build_kspace_hamiltonian()
+         call this%diagonalize_hamiltonian()
+      end if
+      if (.not. allocated(this%eigenvectors)) then
+         call g_logger%error('fill_green_lehmann: eigenvectors unavailable after ' // &
+            'diagonalization.', __FILE__, __LINE__)
+         return
+      end if
+
+      nk = size(this%eigenvalues, 2)
+      if (nk /= this%nk_total) then
+         call g_logger%error('fill_green_lehmann: backend E requires an undistributed ' // &
+            'k-mesh (nk_local /= nk_total); k-parallel Lehmann lands with B2.5 dispatch.', &
+            __FILE__, __LINE__)
+         return
+      end if
+      ne = size(z_contour)
+
+      ! Fractional k-points for the (undistributed) mesh.
+      allocate (kfrac(3, nk))
+      do ik = 1, nk
+         ikg = local_k_index_to_global(this, ik)
+         kfrac(:, ik) = this%k_points(:, ikg)
+      end do
+
+      allocate (gblk(nb, nb, ne))
+
+      do pair_glob = start_atom, end_atom
+         pair = g2l_map(pair_glob)
+         i_cl = this%lattice%ijpair(pair_glob, 1)
+         j_cl = this%lattice%ijpair(pair_glob, 2)
+         site_i = this%lattice%iz(i_cl)
+         site_j = this%lattice%iz(j_cl)
+         ioff = (site_i - 1)*nb
+         joff = (site_j - 1)*nb
+
+         ! dR_ij = R_i - R_j in fractional coordinates. cr is in units of alat,
+         ! so absolute cartesian = cr*alat and a_cart_inv maps that to
+         ! fractional -- the same table/sign as build_neighbor_vectors (C3).
+         dcart = (this%lattice%cr(:, i_cl) - this%lattice%cr(:, j_cl))*this%lattice%alat
+         if (this%lattice%a_cart_inv_ready) then
+            dr = matmul(this%lattice%a_cart_inv, dcart)
+         else
+            dr = matmul(inverse_3x3(this%lattice%a), dcart/this%lattice%alat)
+         end if
+
+         ! G_ij (on-site block when site_i == site_j and dR = 0).
+         call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
+                                 dr, ioff, joff, nb, gblk)
+         green_obj%gij(:, :, :, pair) = gblk
+
+         ! G_ji: swap the site blocks and negate the bond vector (dR_ji = -dR_ij).
+         call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
+                                 -dr, joff, ioff, nb, gblk)
+         green_obj%gji(:, :, :, pair) = gblk
+      end do
+
+      deallocate (kfrac, gblk)
+   end subroutine fill_green_lehmann
 
 end submodule reciprocal_green

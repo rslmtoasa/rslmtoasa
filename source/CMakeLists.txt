@@ -27,6 +27,7 @@ add_library(${PROJECT_NAME} STATIC
     hamiltonian_paoflow_io.f90
     hamiltonian_hubbard.f90
     lattice.f90
+    lehmann_kernel.f90
     lattice_lifecycle.f90
     lattice_cluster.f90
     lattice_strux.f90
