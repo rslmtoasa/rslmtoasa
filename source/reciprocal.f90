@@ -239,6 +239,7 @@ module reciprocal_mod
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
       procedure :: fourier_transform_gbt
+      procedure :: fourier_transform_gbt_array
       procedure :: fourier_transform_hamiltonian_second_order
       procedure :: fourier_transform_array
       procedure :: fourier_transform_overlap
@@ -454,6 +455,18 @@ module reciprocal_mod
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result
    end subroutine fourier_transform_gbt
+
+   !> @brief GBT Fourier transform for one spinor neighbor/type block array.
+   !> @param[in] this Reciprocal object with neighbor-vector tables.
+   !> @param[in] array4d Spinor block array indexed by orbital, neighbor, and type.
+   !> @param[in] k_vec k-point vector (fractional coordinates).
+   !> @param[out] mk_result Packed GBT k-space matrix.
+   module subroutine fourier_transform_gbt_array(this, array4d, k_vec, mk_result)
+      class(reciprocal), intent(in) :: this
+      complex(rp), dimension(:, :, :, :), intent(in) :: array4d
+      real(rp), dimension(3), intent(in) :: k_vec
+      complex(rp), dimension(:, :), intent(out) :: mk_result
+   end subroutine fourier_transform_gbt_array
 
    !> @brief Fourier transform an arbitrary neighbor/type block array.
    !> @details Applies the reciprocal neighbor map to a (orbital, orbital,
