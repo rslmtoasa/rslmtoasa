@@ -936,6 +936,16 @@ contains
                   asign = (1.0d0, 0.0d0)*one_over_sqrt_two
                   bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
                end select
+               ! On-site self-pair (i==j): both writes below target atom i, so a
+               ! 1/sqrt2 start would leave norm^2=1/2 and halve G_ii (moments are
+               ! quadratic in psi0). Use unit weight for reci=1 and skip the other
+               ! phases -- mirrors the block path recur_b_ij.
+               if ((reci .eq. 1) .and. (i .eq. j)) then
+                  asign = (1.0d0, 0.0d0)
+                  bsign = (1.0d0, 0.0d0)
+               else if (i .eq. j) then
+                  cycle
+               end if
                do l = 1, nb
                   this%psi0(l, l, i) = asign
                   this%psi0(l, l, j) = bsign
@@ -977,6 +987,17 @@ contains
                asign = (1.0d0, 0.0d0)*one_over_sqrt_two
                bsign = (0.0d0, -1.0d0)*one_over_sqrt_two
             end select
+
+            ! On-site self-pair (i==j): both writes below target atom i, so a
+            ! 1/sqrt2 start would leave norm^2=1/2 and halve G_ii (moments are
+            ! quadratic in psi0). Use unit weight for reci=1 and skip the other
+            ! phases -- mirrors the block path recur_b_ij.
+            if ((reci .eq. 1) .and. (i .eq. j)) then
+               asign = (1.0d0, 0.0d0)
+               bsign = (1.0d0, 0.0d0)
+            else if (i .eq. j) then
+               cycle
+            end if
 
             do l = 1, nb
                this%psi0(l, l, i) = asign
