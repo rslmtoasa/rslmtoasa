@@ -1,4 +1,4 @@
-# B2 `reciprocal_green` — session handover (2026-07-13)
+# B2 `reciprocal_green` — session handover (2026-07-14)
 
 Branch: `fable_v2`. Start a fresh session from here.
 
@@ -117,13 +117,15 @@ the canonical arrays IS the route-agnosticism — no adapter layer, no
 
 ## Commits made this session (on `fable_v2`)
 
-- `5e78e9c` feat(reciprocal_green): B2.1 skeleton, `sigma_provider`, contour
-  adoption.
-- `4312133` fix(tests): gave the three `Example_frozen_magnon_bccFe*` cases a
-  `control` namelist so `RUN_EXAMPLE_TESTS=ON` configures (was a pre-existing B1
-  test-data bug that blocked cmake). They now register as ctest #32–34.
-- `5809022` feat(reciprocal_green): exposed `green_eta`/`green_backend` as
-  `&reciprocal` namelist inputs; recorded gate G-B2-1 resolution.
+- `fe870d3` feat(reciprocal_green): B2.3 eta ladder + torque families (+ the
+  initial, later-reverted C2 rotation).
+- `7e9ac2c` fix(reciprocal_green): B2.3 C2 — RS intersite `gij` is global-frame,
+  drop the rotation; add the Mn3Sn NC validation example + the `m_z` metric.
+
+Earlier B2.1/B2.2 commits (prior sessions): `5e78e9c` (B2.1 skeleton +
+`sigma_provider` + contour), `5809022` (`green_eta`/`green_backend` namelist +
+G-B2-1), `def7d8b` (B2.2 Lehmann kernel + wiring), `dff1369` (chebyshev on-site
+×0.5 fix), `a61748d` (B2.5 kspace_green C1/C3 driver + bccFe example).
 
 ## What exists now (B2.1)
 
@@ -159,40 +161,51 @@ the canonical arrays IS the route-agnosticism — no adapter layer, no
    `sgreen` (`g0`, `green.f90:892`) is the DOS-derived on-site GF for
    moments/charge — **NOT** the C1 reference.
 
-## Next task: B2.2 [OPUS] — backend E core + C1/C3/C4
+## Next task: B2.4 [OPUS] — backend D (Dyson) + the Σ=0 ≡ E invariant
 
-Fill `gij/gji` and the on-site blocks by strict Lehmann. Acceptance tests (write
-first, never loosen a tolerance):
+Backends E (Lehmann) and the LMTO-integration C1/C3 + B2.3 (eta ladder, torque,
+spin-frame) are done. **B2.4 is the direct-Dyson backend.** Implement
+`fill_green_dyson` in `source/reciprocal_green.f90` (dispatched from `fill_green`'s
+`case ('dyson')`, which today just raises "not implemented"):
 
-- **1-band chain** `H(k) = −2t·cos k` vs closed-form `G(z)` to 1e-10 (pure math,
-  no LMTO machinery — the cleanest unit test).
-- **C1**: on-site block vs RS route at large broadening, bcc Fe, elementwise
-  (against the full-resolvent block — see convention 5).
-- **C3** (phase/bond): reuse B1's `e^{ik·ΔR}` bond convention **verbatim** — the
-  spiral phase in `reciprocal_fourier.f90::fourier_transform_gbt_array` uses
-  `2π·q·R_direct` with `ham_vec_type_direct`; the Lehmann `e^{ik·ΔR}` must use
-  the same neighbor-vector table and sign.
-- **C4** (normalization): 1/N_k, spin factor per `nsp`, physical `fermi`; sum
-  rule ∫DOS dE = electron count.
+- Per `(k, z)`: `G(k,z) = [ z·S(k) − H(k) − Σ(z) ]⁻¹` via LAPACK `zgetrf`/`zgetrs`
+  on the full `nb·nsite × nb·nsite` matrix. Stream over `(k, z)` — never
+  materialize all `(k,z)` at once (design §1.4).
+- Accumulate into the **same** `gij/gji` (+ eta ladder + torque) arrays, reusing
+  the **exact pair→site map + bond-vector + `e^{ik·ΔR_ij}` inverse-transform +
+  1/N_k** machinery already in `fill_green_lehmann` (factor the shared per-pair
+  block-extraction + phase accumulation out of the Lehmann filler so both
+  backends call it; the only difference is E sums eigenpairs, D inverts a matrix
+  per `(k,z)`). Then run the **same** `pauli_decompose_block` torque step.
+- Σ via the `sigma_provider` argument already threaded through `fill_green`
+  (`sigma_zero` gives Σ=0). B8/B10 later supply real providers.
 
-**Normative RS references to read (do not guess index order):**
-- `green.f90::calculate_intersite_gf_core` (lines ~490–604): the 4-phase `gij`
-  combination `gij = 0.5·[g0(1) − g0(2) + (1/i)(g0(3) − g0(4))]` and the torque
-  decomposition (lines ~586–601). Backend E fills the true intersite block
-  directly (no 4-phase machinery), but the **torque components** (`ginmag`,
-  `gi{x,y,z}`) are derived from `gij` by exactly that spin-block algebra — that
-  part is B2.3, but read it now so B2.2's `gij` layout matches.
-- `green.f90::bgreen` (from line 1461): the resolvent contour and block layout.
-- Eigenpairs per k: reuse `reciprocal_bands.f90` (`zheev` machinery) — B4 later
-  swaps in a batched GPU eigensolver transparently.
+**Overlap S(k):** confirm the convention FIRST. Backend E used the *orthonormal*
+eigenproblem, i.e. it implicitly assumed **S = I** (screened/auxiliary LMTO). So
+the Σ=0 invariant `D ≡ E` only holds if backend D also uses `S = I` (i.e.
+`[z·I − H(k)]⁻¹`). `reciprocal_fourier.f90::build_kspace_overlap` exists for the
+`generalized_overlap_proxy` mode — decide whether B2.4 supports only `S=I` (match
+E) or also the generalized case, and pin it in a doc-test. Do **not** guess.
 
-## Session kit for B2.2 (per the token-lean protocol)
+**Acceptance test (write first, never loosen):** a permanent unit/CI invariant
+**D with Σ=0 ≡ E** to solver tolerance (~1e-9 elementwise). Two fixtures: the
+1-band chain (extend `tests/unit/test_lehmann_chain.f90` or a sibling
+`test_dyson_equivalence.f90`) and one small bcc-Fe `H(k)`. Regression must stay
+**10/10 bit-identical** (fill path still not wired to the recursion route).
 
-`docs/dev/plans/B2_reciprocal_green.md` §1.2–1.3; repo `CLAUDE.md`;
-`source/reciprocal_green.f90` (B2.1); `source/reciprocal_bands.f90` lines 1–240;
-`green.f90` restore_to_default (arrays, lines ~195–320) and
-`calculate_intersite_gf_core`; the B1 phase convention in
-`reciprocal_fourier.f90`. Do **not** read the whole repo; prefer targeted grep.
+## Session kit for B2.4 (per the token-lean protocol)
+
+`docs/dev/plans/B2_reciprocal_green.md` §1.2 and §2 (task B2.4); repo `CLAUDE.md`;
+`source/reciprocal_green.f90` (the `fill_green` dispatcher + `fill_green_lehmann`
+pair/bond/phase machinery to share); `source/lehmann_kernel.f90` (phase
+convention + `pauli_decompose_block`); `source/sigma_provider.f90` (the interface);
+`source/reciprocal_fourier.f90::build_kspace_hamiltonian`/`build_kspace_overlap`
+(H(k), S(k)); `tests/unit/test_lehmann_chain.f90` (test pattern). Do **not** read
+the whole repo; prefer targeted grep.
+
+After B2.4: finish **B2.5** (the `gf_route` namelist key, the two-route DOS
+regression case, and the Γ-only supercell identity) and **B2.6** (J_ij/damping
+through the filled arrays + N_k convergence, gate G-B2-2).
 
 ## Build & test
 
