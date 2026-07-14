@@ -27,10 +27,13 @@ regression stays bit-identical. **FOLLOW-UP (maintainer note): re-check this
 1/sqrt2 normalization factor once we proceed from G_ii to the true intersite
 G_ij** (i!=j) — the 4-phase combination there must reproduce the correct amplitude.
 
-**B2.3 landed this session** (eta ladder + torque + C2 rotation). Regression stays
-**10/10 bit-identical**; the collinear `kspace_green` C1 output is byte-identical
-(C2 is a no-op at `local_axis=.false.`). The next task is **B2.4** (backend D +
-the Σ=0 ≡ backend E invariant). See the B2.3 section below for the one OPEN item.
+**B2.3 landed this session** (eta ladder + torque families; C2 resolved). The C2
+"local frame" premise turned out to be wrong — the RS intersite `gij` is stored
+in the GLOBAL spin frame, so backend E fills it directly (no rotation), validated
+on a genuine NC background (Mn3Sn, m_z agrees to 4.2e-4). Regression stays
+**10/10 bit-identical**; the collinear `kspace_green` C1 output is byte-identical.
+The next task is **B2.4** (backend D + the Σ=0 ≡ backend E invariant). See the
+B2.3 section below.
 
 ### B2.3 landed this session
 
@@ -47,22 +50,24 @@ the Σ=0 ≡ backend E invariant). See the B2.3 section below for the one OPEN i
     allocated. `wgl` weights belong to the consumer, not the fill.
   - **Torque families** `ginmag`/`gi{x,y,z}` (+`gj*` and the `*_eta` partners) via
     `pauli_decompose_block`. `store_eta_torque` transposes the eta axis to front.
-  - **C2 local frames** — `rotate_stack_local` wraps `rotmag_loc` (which computes
-    `R†·B·R`, the exact transform `rotate_to_local_axis` applies to the
-    Hamiltonian). Gated on `hamiltonian%local_axis`; the moment is
-    `symbolic_atoms(pair_glob)%potential%mom` — the SAME index expression the
-    recursion loop (`recursion_haydock.f90:367`) uses, so the frame matches by
-    construction (R is the same spin rotation on every site → commutes with
-    site-block extraction → rotating the global block ≡ solving in the rotated
-    frame).
+  - **C2 spin frame — RESOLVED, and the plan's premise was WRONG.** The
+    intersite recursion `recur_b_ij` (recursion_transport.f90) **never** rotates
+    to local axes — `local_axis` there only gates GPU eligibility; ONLY the
+    on-site DOS recursion `recursion_haydock` rotates. So the RS `gij`/`gji`
+    arrays (the ones the contract fills) are stored in the **GLOBAL** spin frame.
+    Backend E fills the global-frame block directly (no rotation). Verified on a
+    genuine NC background (new example `example/exchange/Mn3Sn`, 120° AFM): the
+    driver now also reports the z-projected spin DOS `m_z`, which agrees between
+    routes to **4.2e-4** on an off-axis Mn site (moment (-0.5,0.866,0), both
+    m_z≈0 in-plane). An early version that rotated ONLY the k-space block into
+    the local frame broke this (m_z diff → ~20). A pointer comment in
+    `reciprocal_green.f90` records the future option (rotate BOTH routes' GF for
+    a local-frame comparison); the intersite i≠j frame is an open question, out
+    of scope. Driver also calls `rotate_from_local_axis` to restore global `ee`
+    before the k-space build (safety net).
 
-**OPEN (maintainer / next session): C2 has NO end-to-end numerical cross-check.**
-It is consistent-by-construction but unvalidated: there is no noncollinear
-regression fixture, and `fill_green` is not yet dispatched for a noncollinear
-route (that is B2.5). When a noncollinear case exists, add the plan's C2
-acceptance test (G_ii spin structure, k-space vs RS). Also **still open from
-B2.2**: re-verify the `1/√2` normalization when extending on-site → true
-intersite `G_ij` (i≠j).
+**Still open from B2.2:** re-verify the `1/√2` normalization when extending
+on-site → true intersite `G_ij` (i≠j).
 
 ### B2.2 landed this session
 

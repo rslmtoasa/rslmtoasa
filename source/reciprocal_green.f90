@@ -131,19 +131,22 @@ contains
    !>
    !>          B2.3 additions (all mirroring `calculate_intersite_gf_core` so the
    !>          consumers -- exchange, damping -- run unchanged):
-   !>          * C2 local spin frames. When `hamiltonian%local_axis` is set, the
-   !>            recursion route rotates the whole Hamiltonian by R (aligning the
-   !>            central atom's moment to +z) before solving, delivering
-   !>            G_local = R^dagger G_global R. The k-space eigenpairs are solved
-   !>            ONCE in the global frame and reused; because R is the same spin
-   !>            rotation on every site it commutes with site-block extraction, so
-   !>            the identical local block is obtained by rotating each pair's
-   !>            global block: G_local = R^dagger G_global R. That is exactly what
-   !>            `rotmag_loc` computes; we reuse it VERBATIM with the SAME moment
-   !>            source the recursion loop uses
-   !>            (`symbolic_atoms(pair_glob)%potential%mom`), so the frame matches
-   !>            by construction. Off (`local_axis=.false.`) leaves the global
-   !>            frame untouched -- collinear runs are unaffected.
+   !>          * Spin frame (C2). Backend E fills the SAME frame the recursion
+   !>            route stores the intersite blocks in, which is the GLOBAL spin
+   !>            frame: the intersite recursion `recur_b_ij` (recursion_transport)
+   !>            never rotates to local axes (`local_axis` there only gates GPU
+   !>            eligibility -- ONLY the on-site DOS recursion `recursion_haydock`
+   !>            rotates). Confirmed on a genuine noncollinear background (Mn3Sn,
+   !>            120 deg): the on-site z-projected spin DOS m_z from both routes
+   !>            agrees to ~4e-4 with NO rotation, and an early experiment that
+   !>            rotated only the k-space block into the local frame broke the
+   !>            match (m_z diff -> ~20). So backend E delivers the global-frame
+   !>            block directly. NOTE (future): if a local-frame comparison is ever
+   !>            wanted, BOTH the RS and the k-space Green's functions must be
+   !>            rotated (via the same `rotmag_loc` primitive `rotate_to_local_axis`
+   !>            applies to the Hamiltonian) -- rotating only one side is wrong.
+   !>            The intersite i/=j case (i and j moments in different directions)
+   !>            is an open question and deliberately out of scope here.
    !>          * `gij_eta`/`gji_eta` ladder: the 64-point Gauss-Legendre Fermi
    !>            ladder evaluated at z = ene(fermi_point) + i*(1-x)/x, matching
    !>            `bgreen`'s eta contour (z = e(ei) + eta) and the `x,w` roots of
@@ -169,9 +172,9 @@ contains
 
       integer :: nk, ne, ik, ikg, ie, i, j, fermi_point
       integer :: pair, pair_glob, i_cl, j_cl, site_i, site_j, ioff, joff
-      logical :: do_eta, local_axis
+      logical :: do_eta
       real(rp), allocatable :: kfrac(:, :)
-      real(rp) :: dcart(3), dr(3), mom_i(3)
+      real(rp) :: dcart(3), dr(3)
       real(rp) :: xgl(64), wgl(64)
       complex(rp), allocatable :: gblk(:, :, :), gblk_eta(:, :, :)
       complex(rp), allocatable :: z_eta(:)
@@ -197,7 +200,6 @@ contains
          return
       end if
       ne = size(z_contour)
-      local_axis = this%hamiltonian%local_axis
 
       ! Fractional k-points for the (undistributed) mesh.
       allocate (kfrac(3, nk))
@@ -249,11 +251,6 @@ contains
          ioff = (site_i - 1)*nb
          joff = (site_j - 1)*nb
 
-         ! C2 local frame: rotate by the pair's central-atom moment, exactly as
-         ! the recursion route does (rotate_to_local_axis(symbolic_atoms(i)%mom)
-         ! with i = pair_glob = start_atom..end_atom).
-         if (local_axis) mom_i = this%lattice%symbolic_atoms(pair_glob)%potential%mom(1:3)
-
          ! dR_ij = R_i - R_j in fractional coordinates. cr is in units of alat,
          ! so absolute cartesian = cr*alat and a_cart_inv maps that to
          ! fractional -- the same table/sign as build_neighbor_vectors (C3).
@@ -264,16 +261,15 @@ contains
             dr = matmul(inverse_3x3(this%lattice%a), dcart/this%lattice%alat)
          end if
 
-         ! G_ij (on-site block when site_i == site_j and dR = 0).
+         ! G_ij (on-site block when site_i == site_j and dR = 0). Delivered in the
+         ! GLOBAL spin frame -- the same frame recur_b_ij stores the RS gij in.
          call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
                                  dr, ioff, joff, nb, gblk)
-         if (local_axis) call rotate_stack_local(mom_i, gblk)
          green_obj%gij(:, :, :, pair) = gblk
 
          ! G_ji: swap the site blocks and negate the bond vector (dR_ji = -dR_ij).
          call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
                                  -dr, joff, ioff, nb, gblk)
-         if (local_axis) call rotate_stack_local(mom_i, gblk)
          green_obj%gji(:, :, :, pair) = gblk
 
          ! Non-eta torque families from the (rotated) blocks -- the exact Pauli
@@ -290,7 +286,6 @@ contains
          if (do_eta) then
             call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
                                     dr, ioff, joff, nb, gblk_eta)
-            if (local_axis) call rotate_stack_local(mom_i, gblk_eta)
             do ie = 1, 64
                green_obj%gij_eta(ie, :, :, pair) = gblk_eta(:, :, ie)
             end do
@@ -303,7 +298,6 @@ contains
 
             call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
                                     -dr, joff, ioff, nb, gblk_eta)
-            if (local_axis) call rotate_stack_local(mom_i, gblk_eta)
             do ie = 1, 64
                green_obj%gji_eta(ie, :, :, pair) = gblk_eta(:, :, ie)
             end do
@@ -341,23 +335,15 @@ contains
       end do
    end subroutine store_eta_torque
 
-   !> @brief Rotate a stack of nb x nb blocks into a site-local spin frame.
-   !> @details Thin wrapper around `rotmag_loc` (math_mod): returns R^dagger B R
-   !>          for every slice, with R the spin rotation aligning `mom` to +z.
-   !>          This is the SAME primitive `rotate_to_local_axis` applies to the
-   !>          Hamiltonian, so a Green's-function block rotated here matches the
-   !>          recursion route's local-frame block (C2).
-   subroutine rotate_stack_local(mom, blk)
-      real(rp), intent(in) :: mom(3)
-      complex(rp), intent(inout) :: blk(:, :, :)
-      complex(rp), allocatable :: tmp(:, :, :)
-      integer :: ns
-
-      ns = size(blk, 3)
-      allocate (tmp(nb, nb, ns))
-      tmp = blk
-      call rotmag_loc(blk, tmp, ns, mom)
-      deallocate (tmp)
-   end subroutine rotate_stack_local
+   ! NOTE (spin frame / future local-frame option): backend E delivers gij/gji in
+   ! the GLOBAL spin frame, matching the RS intersite blocks -- the intersite
+   ! recursion `recur_b_ij` never rotates to local axes (only the on-site DOS
+   ! recursion `recursion_haydock` does). If a LOCAL-frame comparison is ever
+   ! wanted, rotate BOTH routes' Green's functions with the same primitive
+   ! `rotate_to_local_axis` uses on the Hamiltonian, e.g. per block:
+   !   call rotmag_loc(blk_rotated, blk_global, size(blk, 3), mom)   ! = R^dagger B R
+   ! with mom the block's central-atom moment. Rotating only the k-space side is
+   ! wrong: an early Mn3Sn (120 deg NC) experiment that did so broke the m_z match
+   ! (~4e-4 -> ~20). The intersite i/=j case (i, j moments differ) is open.
 
 end submodule reciprocal_green

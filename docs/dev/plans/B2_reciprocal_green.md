@@ -148,8 +148,8 @@ lines 260–300 (consumer shape only).
       `1/sqrt2|i>`, norm²=½, moments quadratic). Fixed in both CPU+GPU branches;
       latent for i≠j J_ij, no golden affected. **FOLLOW-UP:** re-verify this
       normalization when extending on-site → true intersite `G_ij` (i≠j).
-- [~] B2.3 eta ladder + torque + C2 — **code landed; C2 numerical
-      cross-check DEFERRED (no noncollinear fixture yet).**
+- [x] B2.3 eta ladder + torque + C2 (spin frame) — **DONE, validated on a
+      genuine NC background (Mn3Sn, 120 deg).**
       `fill_green_lehmann` now also fills the 64-point `gij_eta`/`gji_eta` Fermi
       ladder (Lehmann blocks at `z = ene(fermi_point) + i*(1-x)/x`, the same
       `bgreen` eta contour + `gauss_legendre(64,0,1)` roots the recursion route
@@ -157,18 +157,24 @@ lines 260–300 (consumer shape only).
       the `*_eta` partners). The Pauli (charge,x,y,z) spin-block decomposition
       was extracted to `lehmann_kernel_mod::pauli_decompose_block` (dependency-
       free, reused for both energy-grid and eta blocks) and pinned by a new
-      `UnitLehmannChain` Test 4 (transcription guard, 1.1e-16). **C2 local
-      frames** reuse `rotmag_loc` verbatim (it computes `R^dagger G R`, the exact
-      transform `rotate_to_local_axis` applies to the Hamiltonian) gated on
-      `hamiltonian%local_axis`, with the SAME moment source the recursion loop
-      uses (`symbolic_atoms(pair_glob)%potential%mom`), so the local frame
-      matches by construction. Regression 10/10 bit-identical; the collinear
-      `kspace_green` example C1 output is byte-identical (C2 is a no-op when
-      `local_axis=.false.`). **OPEN (maintainer): the noncollinear C2 acceptance
-      test (G_ii spin structure, k-space vs RS) is not yet run — no noncollinear
-      regression fixture exists and `fill_green` is not yet dispatched for a
-      noncollinear route (B2.5). C2 is consistent-by-construction but not
-      numerically cross-validated end-to-end.**
+      `UnitLehmannChain` Test 4 (transcription guard, 1.1e-16).
+      **C2 RESOLVED — the plan's premise was wrong.** The intersite recursion
+      `recur_b_ij` (recursion_transport.f90) **never** rotates to local axes
+      (`local_axis` there only gates GPU eligibility; only the on-site DOS
+      recursion `recursion_haydock` rotates), so the RS `gij`/`gji` arrays are
+      stored in the **GLOBAL** spin frame. An early implementation that rotated
+      only the k-space block into the local frame BROKE the match on Mn3Sn
+      (m_z diff 4e-4 -> ~20). Backend E therefore fills the global-frame block
+      directly (no rotation); the driver's on-site z-projected spin DOS m_z
+      agrees between routes to **4.2e-4** on an off-axis Mn site (moment
+      (-0.5,0.866,0), both m_z ~ 0 as expected in-plane). Validation via a new
+      NC example `example/exchange/Mn3Sn` (8³ mesh, local_axis off) + the extended
+      `post_processing='kspace_green'` driver (now also reports m_z and the
+      on-site block diff; `rotate_from_local_axis` restores global ee as a safety
+      net). A future LOCAL-frame comparison would have to rotate BOTH routes'
+      GF (pointer comment left in `reciprocal_green.f90`); the intersite i/=j
+      frame (i, j moments differ) is an open question, deliberately out of scope.
+      Regression 10/10 bit-identical; collinear `kspace_green` C1 byte-identical.
 - [ ] B2.4 backend D + Σ=0 invariant
 - [~] B2.5 dispatch + DOS regression + Γ-only identity — **partial:**
       `post_processing='kspace_green'` validation driver + example landed (the

@@ -1179,7 +1179,7 @@ contains
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
-   !> @brief B2 validation driver (C1/C3): cross-check the k-space Lehmann
+   !> @brief B2 validation driver (C1/C3 + C2): cross-check the k-space Lehmann
    !>        on-site Green's function against the real-space recursion route.
    !> @details Runs BOTH routes on the same converged potential and compares the
    !>        on-site density of states rho(E) = -1/pi * Im Tr G_ii(E), built from
@@ -1189,12 +1189,27 @@ contains
    !>        k-space engine must reproduce the recursion on-site spectral function
    !>        (C1 representation) with the B1 bond/phase convention (C3, on-site
    !>        phase = 1). The recursion route fills green%gij at the on-site
-   !>        self-pair (ijpair(:,1)==ijpair(:,2)); we snapshot its on-site DOS,
+   !>        self-pair (ijpair(:,1)==ijpair(:,2)); we snapshot its on-site block,
    !>        then reciprocal%fill_green overwrites green%gij from the k-space
-   !>        eigenpairs and we recompute the same trace. Report-only: writes
+   !>        eigenpairs and we recompute the same quantities. Report-only: writes
    !>        kspace_green_c1.dat with both traces and difference/spectral-weight
    !>        metrics; the acceptance tolerance is a maintainer gate. Regression is
    !>        untouched -- this is a new post_processing key, off by default.
+   !>
+   !>        C2 (spin frame): the charge DOS -1/pi Im Tr G_ii is invariant under
+   !>        G -> R^dagger G R, so it cannot see the spin frame at all. We ALSO
+   !>        report the z-projected spin DOS m_z(E) = -1/pi Im[Tr G_uu - Tr G_dd],
+   !>        which IS frame-sensitive, as a noncollinear cross-check. The key
+   !>        finding (verified on Mn3Sn, 120 deg NC): the INTERSITE recursion
+   !>        `recur_b_ij` never rotates to local axes (only the on-site DOS
+   !>        recursion does), so the RS gij is stored in the GLOBAL spin frame.
+   !>        Backend E therefore fills the global-frame block directly and m_z from
+   !>        both routes agrees to ~4e-4 (for an in-plane moment both are ~0). If a
+   !>        LOCAL-frame comparison were wanted, BOTH routes' G would have to be
+   !>        rotated by the same rotmag_loc primitive -- rotating only one side is
+   !>        wrong (it drove m_z diff to ~20). We still restore the global ee
+   !>        before the k-space build (rotate_from_local_axis) as a safety net in
+   !>        case any on-site recursion left hamiltonian%ee rotated.
    !---------------------------------------------------------------------------
    subroutine post_processing_kspace_green(this)
       use sigma_provider_mod, only: sigma_zero
@@ -1211,10 +1226,12 @@ contains
       type(mix), target :: mix_obj
       type(reciprocal), target :: reciprocal_obj
       type(sigma_zero) :: sigma
-      real(rp), allocatable :: dos_rs(:), dos_le(:)
-      integer :: i, ie, ne, nblk, p0, newunit, ib
+      real(rp), allocatable :: dos_rs(:), dos_le(:), mz_rs(:), mz_le(:)
+      complex(rp), allocatable :: blk_rs(:, :, :), blk_le(:, :, :)
+      integer :: i, ie, ne, nblk, norb_h, p0, newunit
       real(rp) :: max_abs_diff, rms_diff, int_rs, int_le, de
-      complex(rp) :: tr
+      real(rp) :: max_mz_diff, max_blk_diff
+      real(rp) :: onsite_mom(3)
 
       call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
@@ -1228,11 +1245,19 @@ contains
       call green_obj%calculate_intersite_gf()
 
       ! Locate an on-site self-pair (ijpair(p,1) == ijpair(p,2)) to read G_ii from.
+      ! Prefer one whose moment is OFF the global z axis so the C2 local-frame
+      ! rotation is actually exercised (an on-site block has a single, unambiguous
+      ! moment -- the intersite i/=j frame question is deliberately out of scope).
+      ! Falls back to the first on-site pair (e.g. collinear bcc Fe, all along z).
       p0 = 0
       do i = 1, lattice_obj%njij
          if (lattice_obj%ijpair(i, 1) == lattice_obj%ijpair(i, 2)) then
-            p0 = i
-            exit
+            if (p0 == 0) p0 = i
+            onsite_mom = lattice_obj%symbolic_atoms(i)%potential%mom(1:3)
+            if (onsite_mom(1)**2 + onsite_mom(2)**2 > 1.0e-8_rp) then
+               p0 = i
+               exit
+            end if
          end if
       end do
       if (p0 == 0) then
@@ -1243,31 +1268,32 @@ contains
 
       ne = green_obj%en%channels_ldos + 10
       nblk = size(green_obj%gij, 1)
-      allocate (dos_rs(ne), dos_le(ne))
-      do ie = 1, ne
-         tr = (0.0_rp, 0.0_rp)
-         do ib = 1, nblk
-            tr = tr + green_obj%gij(ib, ib, ie, p0)
-         end do
-         dos_rs(ie) = -aimag(tr)/pi
-      end do
+      norb_h = nblk/2   ! spin-up orbitals 1..norb_h, spin-down norb_h+1..nblk
+      allocate (dos_rs(ne), dos_le(ne), mz_rs(ne), mz_le(ne))
+      allocate (blk_rs(nblk, nblk, ne), blk_le(nblk, nblk, ne))
+      blk_rs = green_obj%gij(:, :, :, p0)
+      call onsite_dos_mz(blk_rs, norb_h, dos_rs, mz_rs)
+
+      ! Restore the global-frame ee: the recursion route rotates hamiltonian%ee in
+      ! place under local_axis and never calls rotate_from_local_axis, so H(k)
+      ! must be rebuilt from the restored global representation (no-op collinear).
+      onsite_mom = lattice_obj%symbolic_atoms(p0)%potential%mom(1:3)
+      call hamiltonian_obj%rotate_from_local_axis(onsite_mom)
 
       ! --- k-space Lehmann route: overwrite green%gij from the eigenpairs. ---
       reciprocal_obj = reciprocal(hamiltonian_obj)
       call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ mesh (backend E requirement)
       call reciprocal_obj%fill_green(green_obj, sigma)
-      do ie = 1, ne
-         tr = (0.0_rp, 0.0_rp)
-         do ib = 1, nblk
-            tr = tr + green_obj%gij(ib, ib, ie, p0)
-         end do
-         dos_le(ie) = -aimag(tr)/pi
-      end do
+      blk_le = green_obj%gij(:, :, :, p0)
+      call onsite_dos_mz(blk_le, norb_h, dos_le, mz_le)
 
       ! --- Compare + report (report-only; tolerance is a maintainer gate). ---
       max_abs_diff = 0.0_rp; rms_diff = 0.0_rp; int_rs = 0.0_rp; int_le = 0.0_rp
+      max_mz_diff = 0.0_rp; max_blk_diff = 0.0_rp
       do ie = 1, ne
          max_abs_diff = max(max_abs_diff, abs(dos_le(ie) - dos_rs(ie)))
+         max_mz_diff = max(max_mz_diff, abs(mz_le(ie) - mz_rs(ie)))
+         max_blk_diff = max(max_blk_diff, maxval(abs(blk_le(:, :, ie) - blk_rs(:, :, ie))))
          rms_diff = rms_diff + (dos_le(ie) - dos_rs(ie))**2
       end do
       rms_diff = sqrt(rms_diff/real(ne, rp))
@@ -1279,27 +1305,58 @@ contains
 
       if (rank == 0) then
          open (newunit=newunit, file='kspace_green_c1.dat', status='replace', action='write')
-         write (newunit, '(A)') '# B2 C1/C3 validation: on-site DOS rho(E) = -1/pi Im Tr G_ii(E)'
-         write (newunit, '(A)') '# recursion (RS) vs k-space Lehmann, same green%gij on-site block'
+         write (newunit, '(A)') '# B2 C1/C3/C2 validation: on-site G_ii(E), recursion (RS) vs k-space Lehmann'
+         write (newunit, '(A)') '# dos = -1/pi Im Tr G_ii ; mz = -1/pi Im (Tr G_uu - Tr G_dd)  (global z; gij stored global frame)'
          write (newunit, '(A,I0,A,I0,A,I0,A,I0,A)') '# k-mesh ', reciprocal_obj%nk_mesh(1), ' x ', &
             reciprocal_obj%nk_mesh(2), ' x ', reciprocal_obj%nk_mesh(3), '  (', reciprocal_obj%nk_total, ' points)'
          write (newunit, '(A,ES14.6,A)') '# green_eta = ', reciprocal_obj%green_eta, ' Ry'
-         write (newunit, '(A,ES14.6)') '# max|dos_lehmann - dos_rs| = ', max_abs_diff
-         write (newunit, '(A,ES14.6)') '# rms  dos_lehmann - dos_rs  = ', rms_diff
+         write (newunit, '(A,3F10.6)') '# on-site moment = ', onsite_mom
+         write (newunit, '(A,ES14.6)') '# C1  max|dos_lehmann - dos_rs|      = ', max_abs_diff
+         write (newunit, '(A,ES14.6)') '#     rms dos_lehmann - dos_rs       = ', rms_diff
+         write (newunit, '(A,ES14.6)') '# C2  max|mz_lehmann - mz_rs|        = ', max_mz_diff
+         write (newunit, '(A,ES14.6)') '# C2  max|G_ii^lehmann - G_ii^rs|    = ', max_blk_diff
          write (newunit, '(A,ES14.6,A,ES14.6)') '# spectral weight   RS = ', int_rs, '   Lehmann = ', int_le
-         write (newunit, '(A)') '#     E(Ry)          dos_rs        dos_lehmann         diff'
+         write (newunit, '(A)') '#     E(Ry)          dos_rs        dos_lehmann       dos_diff          mz_rs         mz_lehmann'
          do ie = 1, ne
-            write (newunit, '(4ES16.8)') green_obj%en%ene(ie), dos_rs(ie), dos_le(ie), dos_le(ie) - dos_rs(ie)
+            write (newunit, '(6ES16.8)') green_obj%en%ene(ie), dos_rs(ie), dos_le(ie), &
+               dos_le(ie) - dos_rs(ie), mz_rs(ie), mz_le(ie)
          end do
          close (newunit)
          call g_logger%info('[kspace_green] C1 on-site DOS cross-check: max|diff|='// &
                             trim(real2str(max_abs_diff))//' rms='//trim(real2str(rms_diff))// &
                             ' weight_RS='//trim(real2str(int_rs))//' weight_Lehmann='//trim(real2str(int_le)), &
                             __FILE__, __LINE__)
+         call g_logger%info('[kspace_green] C2 spin-structure cross-check (both routes '// &
+                            'global frame): max|mz_diff|='//trim(real2str(max_mz_diff))// &
+                            ' max|block_diff|='//trim(real2str(max_blk_diff))// &
+                            ' (block_diff is single-element ripple at coarse mesh)', &
+                            __FILE__, __LINE__)
       end if
 
-      deallocate (dos_rs, dos_le)
+      deallocate (dos_rs, dos_le, mz_rs, mz_le, blk_rs, blk_le)
    end subroutine post_processing_kspace_green
+
+   !> @brief On-site charge DOS and z-projected spin DOS from a G_ii block.
+   !> @details dos(E)=-1/pi Im Tr G ; mz(E)=-1/pi Im (Tr G_uu - Tr G_dd), with the
+   !>          spin-up orbitals in rows 1..norb and spin-down in norb+1..2*norb.
+   subroutine onsite_dos_mz(blk, norb, dos, mz)
+      complex(rp), intent(in) :: blk(:, :, :)
+      integer, intent(in) :: norb
+      real(rp), intent(out) :: dos(:), mz(:)
+      integer :: ie, ib, ne
+      complex(rp) :: tr_up, tr_dn
+
+      ne = size(blk, 3)
+      do ie = 1, ne
+         tr_up = (0.0_rp, 0.0_rp); tr_dn = (0.0_rp, 0.0_rp)
+         do ib = 1, norb
+            tr_up = tr_up + blk(ib, ib, ie)
+            tr_dn = tr_dn + blk(ib + norb, ib + norb, ie)
+         end do
+         dos(ie) = -aimag(tr_up + tr_dn)/pi
+         mz(ie) = -aimag(tr_up - tr_dn)/pi
+      end do
+   end subroutine onsite_dos_mz
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
