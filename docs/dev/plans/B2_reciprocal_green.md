@@ -175,7 +175,25 @@ lines 260–300 (consumer shape only).
       GF (pointer comment left in `reciprocal_green.f90`); the intersite i/=j
       frame (i, j moments differ) is an open question, deliberately out of scope.
       Regression 10/10 bit-identical; collinear `kspace_green` C1 byte-identical.
-- [ ] B2.4 backend D + Σ=0 invariant
+- [x] B2.4 backend D (Dyson) + Σ=0 invariant — **DONE.**
+      `source/dyson_kernel.f90` (`dyson_kspace_inverse`, dependency-free LAPACK
+      `zgetrf`/`zgetri` core; **S=I pinned** — backend E's `zheev` is orthonormal,
+      so D≡E holds only for S=I; generalized S(k) deferred). `reciprocal_green.f90`
+      gained `fill_green_dyson`, dispatched from `fill_green`'s `case('dyson')`
+      (was a stub): streams **one nmat×nmat inversion per (k,z)** and distributes
+      the sub-blocks to **every** pair with the same 1/N_k inverse-Bloch phase +
+      pair→site map + `pauli_decompose_block` torque step as backend E (§1.4 — no
+      re-inversion per pair, no full-(k,z) materialization). Σ enters block-diagonal
+      via the provider (`build_sigma_full`); `sigma_zero` ⇒ backend E. Shared
+      machinery factored out (`pair_geometry`, `build_fermi_eta_contour`) — the
+      Lehmann filler now calls them, byte-identical output (both example data
+      tables unchanged). **Acceptance (permanent CI):** `UnitDysonEquivalence`
+      (ctest, `RUN_UNIT_TESTS=ON`): 1-band chain Dyson vs closed form (on-site
+      7.8e-16, intersite 1.8e-16), a small multiband H(k) D≡E block with a nonzero
+      bond phase (6.7e-16), and a Σ=s₀·I sign pin (9.9e-16). **End-to-end** D≡E on
+      real H(k) wired into the `kspace_green` driver: bcc-Fe `max|gij_dyson −
+      gij_lehmann|` = 4.7e-11 (4096 k, all pairs), Mn3Sn NC = 3.8e-13. Regression
+      10/10 bit-identical.
 - [~] B2.5 dispatch + DOS regression + Γ-only identity — **partial:**
       `post_processing='kspace_green'` validation driver + example landed (the
       first production caller of `fill_green`); still to do: the `gf_route`

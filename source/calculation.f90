@@ -1228,9 +1228,10 @@ contains
       type(sigma_zero) :: sigma
       real(rp), allocatable :: dos_rs(:), dos_le(:), mz_rs(:), mz_le(:)
       complex(rp), allocatable :: blk_rs(:, :, :), blk_le(:, :, :)
+      complex(rp), allocatable :: gij_le(:, :, :, :)
       integer :: i, ie, ne, nblk, norb_h, p0, newunit
       real(rp) :: max_abs_diff, rms_diff, int_rs, int_le, de
-      real(rp) :: max_mz_diff, max_blk_diff
+      real(rp) :: max_mz_diff, max_blk_diff, max_dyson_diff
       real(rp) :: onsite_mom(3)
 
       call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
@@ -1287,6 +1288,19 @@ contains
       blk_le = green_obj%gij(:, :, :, p0)
       call onsite_dos_mz(blk_le, norb_h, dos_le, mz_le)
 
+      ! --- Backend D (Dyson, Sigma=0) cross-check on the real H(k). ---------------
+      ! The permanent B2.4 invariant "D with Sigma=0 == E" over EVERY pair (the
+      ! full gij array, so the intersite e^{ik.dR} phase is exercised, not just
+      ! the on-site block). Both routes use S=I (backend E's zheev is orthonormal,
+      ! so backend D inverts z*I - H(k)); the difference is solver-tolerance ripple.
+      allocate (gij_le(nblk, nblk, ne, size(green_obj%gij, 4)))
+      gij_le = green_obj%gij
+      reciprocal_obj%green_backend = 'dyson'
+      call reciprocal_obj%fill_green(green_obj, sigma)
+      max_dyson_diff = maxval(abs(green_obj%gij - gij_le))
+      green_obj%gij = gij_le   ! restore backend-E result for the report below
+      deallocate (gij_le)
+
       ! --- Compare + report (report-only; tolerance is a maintainer gate). ---
       max_abs_diff = 0.0_rp; rms_diff = 0.0_rp; int_rs = 0.0_rp; int_le = 0.0_rp
       max_mz_diff = 0.0_rp; max_blk_diff = 0.0_rp
@@ -1315,6 +1329,7 @@ contains
          write (newunit, '(A,ES14.6)') '#     rms dos_lehmann - dos_rs       = ', rms_diff
          write (newunit, '(A,ES14.6)') '# C2  max|mz_lehmann - mz_rs|        = ', max_mz_diff
          write (newunit, '(A,ES14.6)') '# C2  max|G_ii^lehmann - G_ii^rs|    = ', max_blk_diff
+         write (newunit, '(A,ES14.6)') '# B2.4 max|gij^dyson - gij^lehmann|  = ', max_dyson_diff
          write (newunit, '(A,ES14.6,A,ES14.6)') '# spectral weight   RS = ', int_rs, '   Lehmann = ', int_le
          write (newunit, '(A)') '#     E(Ry)          dos_rs        dos_lehmann       dos_diff          mz_rs         mz_lehmann'
          do ie = 1, ne
@@ -1330,6 +1345,10 @@ contains
                             'global frame): max|mz_diff|='//trim(real2str(max_mz_diff))// &
                             ' max|block_diff|='//trim(real2str(max_blk_diff))// &
                             ' (block_diff is single-element ripple at coarse mesh)', &
+                            __FILE__, __LINE__)
+         call g_logger%info('[kspace_green] B2.4 backend-D (Dyson, Sigma=0) == backend-E '// &
+                            '(Lehmann) cross-check: max|gij_dyson - gij_lehmann|='// &
+                            trim(real2str(max_dyson_diff))//' (solver-tolerance invariant)', &
                             __FILE__, __LINE__)
       end if
 

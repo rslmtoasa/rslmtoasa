@@ -392,6 +392,7 @@ if (RUN_UNIT_TESTS)
   endfunction()
 
   add_fortran_unit_test(UnitLehmannChain ${TestDIR}/unit/test_lehmann_chain.f90)
+  add_fortran_unit_test(UnitDysonEquivalence ${TestDIR}/unit/test_dyson_equivalence.f90)
 endif (RUN_UNIT_TESTS)
 
 if (RUN_EXAMPLE_TESTS)

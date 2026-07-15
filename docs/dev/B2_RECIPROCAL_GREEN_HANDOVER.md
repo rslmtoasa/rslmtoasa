@@ -1,4 +1,4 @@
-# B2 `reciprocal_green` — session handover (2026-07-14)
+# B2 `reciprocal_green` — session handover (2026-07-15)
 
 Branch: `fable_v2`. Start a fresh session from here.
 
@@ -27,13 +27,58 @@ regression stays bit-identical. **FOLLOW-UP (maintainer note): re-check this
 1/sqrt2 normalization factor once we proceed from G_ii to the true intersite
 G_ij** (i!=j) — the 4-phase combination there must reproduce the correct amplitude.
 
-**B2.3 landed this session** (eta ladder + torque families; C2 resolved). The C2
-"local frame" premise turned out to be wrong — the RS intersite `gij` is stored
-in the GLOBAL spin frame, so backend E fills it directly (no rotation), validated
-on a genuine NC background (Mn3Sn, m_z agrees to 4.2e-4). Regression stays
-**10/10 bit-identical**; the collinear `kspace_green` C1 output is byte-identical.
-The next task is **B2.4** (backend D + the Σ=0 ≡ backend E invariant). See the
-B2.3 section below.
+**B2.4 landed this session** (backend D / direct Dyson + the permanent Σ=0 ≡ E
+invariant). New `source/dyson_kernel.f90` (`dyson_kspace_inverse`, dependency-free
+LAPACK inverse), `fill_green_dyson` in `reciprocal_green.f90` dispatched from the
+formerly-stub `case('dyson')`, shared machinery factored out (`pair_geometry`,
+`build_fermi_eta_contour`) so the Lehmann filler stays byte-identical. **S=I is
+pinned** (backend E's `zheev` is orthonormal ⇒ D≡E holds only for S=I). Unit
+invariant `UnitDysonEquivalence` passes at ~1e-16; end-to-end D≡E on real H(k)
+(wired into the `kspace_green` driver) is 4.7e-11 (bcc-Fe) / 3.8e-13 (Mn3Sn NC).
+Regression **10/10 bit-identical**. The next task is **B2.5** (finish the
+`gf_route` namelist dispatch + the two-route DOS regression case + Γ-only
+supercell identity). See the B2.4 section below.
+
+### B2.4 landed this session
+
+- `source/dyson_kernel.f90` — module `dyson_kernel_mod`, public
+  `dyson_kspace_inverse(hk, z, sigma_full, gk)`: forms `A = z·I − H(k) − Σ` and
+  returns `A⁻¹` via `zgetrf`/`zgetri` (same factor/inverse pair the RS route uses
+  in `green.f90`). Dependency-free (only `precision_mod` + LAPACK) so the
+  equivalence test needs no LMTO machinery. **S=I is pinned in the module header:**
+  backend E diagonalizes the STANDARD Hermitian eigenproblem (`diagonalize_hamiltonian`
+  → `zheev`, not `zhegv`), i.e. it assumes an orthonormal basis; the D≡E invariant
+  therefore holds only when D also uses S=I. Generalized S(k)
+  (`reciprocal_mode='generalized_overlap_proxy'`, `sk_overlap`) is deliberately
+  **out of scope** — adding it here would break the invariant unless backend E is
+  first re-cast as a generalized eigenproblem. Do not add S(k) without also
+  generalizing E.
+- `reciprocal_green.f90::fill_green_dyson` — the backend-D filler, dispatched from
+  `fill_green`'s `case('dyson')` (previously a not-implemented stub). **Streams
+  one nb·nsite × nb·nsite inversion per (k,z)** and distributes the sub-blocks to
+  **every** pair (design §1.4 — never re-invert per pair, never materialize all
+  (k,z)). Reuses the **exact** pair→site map, bond vector, `e^{i2π k·dR_ij}`
+  inverse-Bloch phase, 1/N_k factor, and `pauli_decompose_block` torque step as
+  backend E. Σ enters block-diagonal via the provider (`build_sigma_full` places
+  each site's `get_sigma(z,isite,·)` block on the diagonal); `sigma_zero` ⇒ Σ=0
+  ⇒ backend E. Fills gij/gji + the eta ladder + torque families exactly as the
+  Lehmann filler.
+- **Shared machinery factored out** (handover ask): `pair_geometry`
+  (pair→ioff/joff/dR) and `build_fermi_eta_contour` (the 64-pt Gauss-Legendre
+  Fermi ladder). `fill_green_lehmann` now calls both — pure code motion, its
+  numeric output is **byte-identical** (both example C1 data tables unchanged).
+- **Acceptance test (permanent CI):** `tests/unit/test_dyson_equivalence.f90`
+  (ctest `UnitDysonEquivalence`, `RUN_UNIT_TESTS=ON`). Four pins, all ~1e-16:
+  (1) 1-band chain on-site Dyson vs closed form; (2) intersite m=2 phase vs
+  closed form; (3) small **multiband** H(k) (2 sites × 2 orb, nmat=4) intersite
+  block with a nonzero bond phase, **Dyson route ≡ Lehmann route** (eigenpairs
+  from `zheev`); (4) a **Σ=s₀·I sign pin** — Dyson at `z` must equal Lehmann at
+  `z−s₀` (`A = z·I − H − Σ`), so a sign error in how Σ enters is caught.
+- **End-to-end D≡E on real H(k)** wired into the `post_processing='kspace_green'`
+  driver (`calculation.f90`): after the Lehmann fill it re-fills with
+  `green_backend='dyson'` and reports `max|gij_dyson − gij_lehmann|` over the FULL
+  gij (all pairs → intersite phase exercised). bcc-Fe = **4.7e-11**, Mn3Sn NC =
+  **3.8e-13**. Report-only (`kspace_green_c1.dat`, `out.kgf`; both untracked).
 
 ### B2.3 landed this session
 
@@ -117,10 +162,13 @@ the canonical arrays IS the route-agnosticism — no adapter layer, no
 
 ## Commits made this session (on `fable_v2`)
 
-- `fe870d3` feat(reciprocal_green): B2.3 eta ladder + torque families (+ the
-  initial, later-reverted C2 rotation).
-- `7e9ac2c` fix(reciprocal_green): B2.3 C2 — RS intersite `gij` is global-frame,
-  drop the rotation; add the Mn3Sn NC validation example + the `m_z` metric.
+- `feat(reciprocal_green): B2.4 backend D (direct Dyson) + Σ=0 ≡ E invariant` —
+  `dyson_kernel.f90`, `fill_green_dyson` + shared `pair_geometry`/
+  `build_fermi_eta_contour`, `UnitDysonEquivalence`, driver end-to-end D≡E check.
+
+Prior-session B2.3 commits: `fe870d3` (eta ladder + torque families + the
+initial, later-reverted C2 rotation), `7e9ac2c` (C2 — RS intersite `gij` is
+global-frame, drop the rotation; Mn3Sn NC example + `m_z` metric).
 
 Earlier B2.1/B2.2 commits (prior sessions): `5e78e9c` (B2.1 skeleton +
 `sigma_provider` + contour), `5809022` (`green_eta`/`green_backend` namelist +
@@ -161,51 +209,46 @@ G-B2-1), `def7d8b` (B2.2 Lehmann kernel + wiring), `dff1369` (chebyshev on-site
    `sgreen` (`g0`, `green.f90:892`) is the DOS-derived on-site GF for
    moments/charge — **NOT** the C1 reference.
 
-## Next task: B2.4 [OPUS] — backend D (Dyson) + the Σ=0 ≡ E invariant
+## Next task: B2.5 [SONNET] — finish namelist dispatch + regression cases
 
-Backends E (Lehmann) and the LMTO-integration C1/C3 + B2.3 (eta ladder, torque,
-spin-frame) are done. **B2.4 is the direct-Dyson backend.** Implement
-`fill_green_dyson` in `source/reciprocal_green.f90` (dispatched from `fill_green`'s
-`case ('dyson')`, which today just raises "not implemented"):
+Backends **E (Lehmann) and D (Dyson) are both done**, plus the C1/C3/C2 pins,
+the eta ladder + torque families, and the permanent D≡E invariant. What remains
+of B2.5 (the driver + example already landed; see the checklist `[~]`):
 
-- Per `(k, z)`: `G(k,z) = [ z·S(k) − H(k) − Σ(z) ]⁻¹` via LAPACK `zgetrf`/`zgetrs`
-  on the full `nb·nsite × nb·nsite` matrix. Stream over `(k, z)` — never
-  materialize all `(k,z)` at once (design §1.4).
-- Accumulate into the **same** `gij/gji` (+ eta ladder + torque) arrays, reusing
-  the **exact pair→site map + bond-vector + `e^{ik·ΔR_ij}` inverse-transform +
-  1/N_k** machinery already in `fill_green_lehmann` (factor the shared per-pair
-  block-extraction + phase accumulation out of the Lehmann filler so both
-  backends call it; the only difference is E sums eigenpairs, D inverts a matrix
-  per `(k,z)`). Then run the **same** `pauli_decompose_block` torque step.
-- Σ via the `sigma_provider` argument already threaded through `fill_green`
-  (`sigma_zero` gives Σ=0). B8/B10 later supply real providers.
+- **`gf_route = recursion | lehmann | dyson`** control key in the post-processing
+  dispatch (`calculation.f90`) so a production SCF/postproc run can select the
+  k-space filler instead of the recursion route (today only the `kspace_green`
+  validation driver calls `fill_green`). `green_backend='lehmann'|'dyson'` already
+  exists on the `reciprocal` type + namelist; the missing piece is routing a real
+  consumer (exchange/DOS) through `fill_green` behind the new key.
+- **Two-route DOS regression case:** bcc-Fe k-space DOS vs recursion DOS as a
+  permanent cross-validation (the maintainer-gated tolerance from B2.6 applies).
+- **Γ-only supercell identity:** Γ-only Lehmann on an N-site supercell ≡ the
+  real-space cluster result (blueprint validation item 2 — a self-contained
+  identity worth having as a test).
 
-**Overlap S(k):** confirm the convention FIRST. Backend E used the *orthonormal*
-eigenproblem, i.e. it implicitly assumed **S = I** (screened/auxiliary LMTO). So
-the Σ=0 invariant `D ≡ E` only holds if backend D also uses `S = I` (i.e.
-`[z·I − H(k)]⁻¹`). `reciprocal_fourier.f90::build_kspace_overlap` exists for the
-`generalized_overlap_proxy` mode — decide whether B2.4 supports only `S=I` (match
-E) or also the generalized case, and pin it in a doc-test. Do **not** guess.
+Then **B2.6** [SONNET/OPUS]: run `exchange.f90` + damping on the Lehmann/Dyson-
+filled arrays with **zero consumer changes** (that is the acceptance), plus the
+J_ij(R) vs N_k convergence study; **gate G-B2-2** (Anders signs default meshes +
+documented accuracy). Doc: `docs/dev/reciprocal_green_convergence.md`.
 
-**Acceptance test (write first, never loosen):** a permanent unit/CI invariant
-**D with Σ=0 ≡ E** to solver tolerance (~1e-9 elementwise). Two fixtures: the
-1-band chain (extend `tests/unit/test_lehmann_chain.f90` or a sibling
-`test_dyson_equivalence.f90`) and one small bcc-Fe `H(k)`. Regression must stay
-**10/10 bit-identical** (fill path still not wired to the recursion route).
+**Open thread from B2.2 (still not closed):** re-verify the `1/√2` normalization
+when extending on-site → true intersite `G_ij` (i≠j) on the recursion side — see
+the `chebyshev_recur_ij` note below. Backend E/D fill i≠j directly (no 4-phase),
+so this is a recursion-route concern, not a k-space one.
 
-## Session kit for B2.4 (per the token-lean protocol)
+**Overlap note carried forward:** backend D pins **S=I** (matches backend E's
+orthonormal `zheev`). If a future task wants generalized S(k), backend E must be
+re-cast as a generalized eigenproblem FIRST, then both re-validated — do not add
+`sk_overlap` to `dyson_kspace_inverse` in isolation (it would silently break D≡E).
 
-`docs/dev/plans/B2_reciprocal_green.md` §1.2 and §2 (task B2.4); repo `CLAUDE.md`;
-`source/reciprocal_green.f90` (the `fill_green` dispatcher + `fill_green_lehmann`
-pair/bond/phase machinery to share); `source/lehmann_kernel.f90` (phase
-convention + `pauli_decompose_block`); `source/sigma_provider.f90` (the interface);
-`source/reciprocal_fourier.f90::build_kspace_hamiltonian`/`build_kspace_overlap`
-(H(k), S(k)); `tests/unit/test_lehmann_chain.f90` (test pattern). Do **not** read
-the whole repo; prefer targeted grep.
+## Session kit for B2.5 (per the token-lean protocol)
 
-After B2.4: finish **B2.5** (the `gf_route` namelist key, the two-route DOS
-regression case, and the Γ-only supercell identity) and **B2.6** (J_ij/damping
-through the filled arrays + N_k convergence, gate G-B2-2).
+`docs/dev/plans/B2_reciprocal_green.md` §2 (task B2.5); repo `CLAUDE.md`;
+`source/calculation.f90` (post-processing dispatch + the `kspace_green` driver as
+the existing `fill_green` caller); `source/reciprocal_green.f90` (the finished
+`fill_green` / `fill_green_lehmann` / `fill_green_dyson`); an existing `&namelist`
+as a template. Do **not** read the whole repo; prefer targeted grep.
 
 ## Build & test
 
