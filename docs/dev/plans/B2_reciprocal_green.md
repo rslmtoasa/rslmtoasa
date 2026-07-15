@@ -194,9 +194,34 @@ lines 260–300 (consumer shape only).
       real H(k) wired into the `kspace_green` driver: bcc-Fe `max|gij_dyson −
       gij_lehmann|` = 4.7e-11 (4096 k, all pairs), Mn3Sn NC = 3.8e-13. Regression
       10/10 bit-identical.
-- [~] B2.5 dispatch + DOS regression + Γ-only identity — **partial:**
-      `post_processing='kspace_green'` validation driver + example landed (the
-      first production caller of `fill_green`); still to do: the `gf_route`
-      namelist key, the two-route DOS regression case, and the Γ-only supercell
-      identity.
-- [ ] B2.6 J_ij/damping zero-change run + convergence (G-B2-2 signed)
+- [x] B2.5 dispatch + DOS regression + Γ-only identity — **DONE.**
+      **`gf_route = recursion | lehmann | dyson`** key added to the `&calculation`
+      namelist (`calculation` type field + `restore_to_default`='recursion' +
+      `check_gf_route` validation). Wired into `post_processing_exchange`: the
+      default `recursion` reproduces the legacy path byte-for-byte (regression
+      10/10 bit-identical), while `lehmann`/`dyson` fill the SAME canonical arrays
+      from `reciprocal%fill_green` (backend E/D), reading mesh/eta from the
+      `&reciprocal` namelist and overriding its `green_backend`. `reciprocal_obj`
+      is kept at subroutine scope so its spglib-owning finalizer runs exactly as
+      in `post_processing_kspace_green` (a nested helper double-freed on return).
+      **Γ-only supercell identity + two-route DOS** landed as a permanent,
+      dependency-free unit test `tests/unit/test_gamma_supercell.f90` (ctest
+      `UnitGammaSupercell`, `RUN_UNIT_TESTS=ON`): a periodic 1-band ring proves
+      (1) Γ-only supercell Lehmann ≡ cluster resolvent `[zI−H_sc]⁻¹`
+      (`dyson_kspace_inverse`) 1.3e-15; (2) Γ-only supercell ≡ primitive-cell
+      full-BZ Lehmann (the folding identity) 1.7e-15; (3) two-route DOS
+      `−1/π Im Tr G` (Lehmann site-summed vs Dyson trace) agree 6.2e-15 with the
+      integrated weight → Nsc (C4). The **real-material bcc-Fe** two-route DOS
+      cross-validation already ships as the `kspace_green` driver (report-only,
+      weight → nb=18); its *elementwise* acceptance tolerance stays under gate
+      **G-B2-2** (B2.6). **B2.6 entry point:** running `post_processing='exchange'`
+      with `gf_route='lehmann'` reaches `fill_green` cleanly, then
+      `calculate_exchange` crashes reading the intersite torque families
+      (Ginmag/Gj{x,y,z}) — arrays the DOS driver never exercised. Producing
+      correct J_ij on the k-space arrays (and re-verifying the 1/√2 intersite
+      normalization) is B2.6's acceptance, not this dispatch key's.
+- [ ] B2.6 J_ij/damping zero-change run + convergence (G-B2-2 signed) — **START
+      HERE:** `gf_route='lehmann'`/`'dyson'` on `post_processing='exchange'`
+      currently crashes in `calculate_exchange` on the k-space-filled torque
+      families (see B2.5 entry). Fix the consumer/fill so exchange runs unchanged,
+      then the J_ij(R) vs N_k convergence study + gate G-B2-2.

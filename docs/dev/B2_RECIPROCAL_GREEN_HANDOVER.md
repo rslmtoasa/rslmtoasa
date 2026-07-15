@@ -2,6 +2,37 @@
 
 Branch: `fable_v2`. Start a fresh session from here.
 
+## LATEST (B2.5 landed 2026-07-15) — next is B2.6
+
+**B2.5 is done.** The `gf_route = recursion | lehmann | dyson` dispatch key was
+added to the `&calculation` namelist (`calculation` type field +
+`restore_to_default`='recursion' + `check_gf_route` validation) and wired into
+`post_processing_exchange`: default `recursion` is byte-identical (regression
+10/10), `lehmann`/`dyson` fill the SAME canonical arrays via
+`reciprocal%fill_green`, reading mesh/eta from `&reciprocal` and overriding its
+`green_backend`. `reciprocal_obj` is kept at **subroutine scope** — a first cut
+used a nested helper and the reciprocal (spglib-owning) finalizer **double-freed
+on helper return**; the `post_processing_kspace_green` pattern (subroutine-scope
+`reciprocal_obj`) is the proven-safe one.
+
+The Γ-only supercell identity + a two-route DOS cross-check landed as a new
+dependency-free unit test `tests/unit/test_gamma_supercell.f90` (ctest
+`UnitGammaSupercell`): periodic 1-band ring, (1) Γ-only supercell Lehmann ≡
+cluster resolvent `[zI−H]⁻¹` 1.3e-15, (2) Γ-only supercell ≡ primitive full-BZ
+Lehmann (folding) 1.7e-15, (3) two-route DOS `−1/π Im Tr G` (Lehmann vs Dyson)
+6.2e-15 + weight→Nsc (C4). The **real-material** bcc-Fe two-route DOS ships as
+the `kspace_green` driver (report-only, weight→18); its elementwise tolerance
+stays under gate **G-B2-2**.
+
+**B2.6 starts from a live bug:** `post_processing='exchange'` +
+`gf_route='lehmann'` reaches `fill_green` cleanly, then **`calculate_exchange`
+crashes** reading the intersite torque families (Ginmag/Gj{x,y,z}) — arrays the
+DOS driver never exercised. Making exchange produce correct J_ij on the k-space
+arrays (and re-verifying the `1/√2` intersite normalization) is B2.6's
+acceptance. Regression stayed 10/10 bit-identical; `UnitGammaSupercell`,
+`UnitLehmannChain`, `UnitDysonEquivalence` all pass; `kspace_green` driver still
+EXIT=0.
+
 ## TL;DR
 
 Milestone **B2** (k-space Green's-function engine, flagship) is underway. **B2.1

@@ -67,6 +67,17 @@ module calculation_mod
       !> ´none´ (default)
       character(len=sl) :: post_processing
 
+      !> Green's-function route for the intersite G_ij consumers (B2.5 dispatch).
+      !> Selects HOW green%gij (+ the torque/eta families) is filled before an
+      !> intersite consumer (exchange) runs -- the same canonical arrays, either
+      !> route, so consumers are untouched by construction. Options:
+      !> ´recursion´ (default) : real-space recursion (bit-identical legacy path)
+      !> ´lehmann´             : k-space eigenpair / strict-Lehmann engine (Sigma=0)
+      !> ´dyson´               : k-space direct Dyson inversion (Sigma via provider)
+      !> The k-space routes read their mesh/eta from the &reciprocal namelist and
+      !> override its green_backend with this key.
+      character(len=sl) :: gf_route
+
       !> Controller for preprocessing verbosity.
       !>
       !> Controller for preprocessing verbosity. If true, call the subroutines:
@@ -147,6 +158,7 @@ contains
       pre_processing = this%pre_processing
       processing = this%processing
       post_processing = this%post_processing
+      gf_route = this%gf_route
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -165,12 +177,15 @@ contains
       call check_processing(trim(processing))
       ! Post-processing
       call check_post_processing(trim(post_processing))
+      ! Green's-function route (B2.5 dispatch)
+      call check_gf_route(trim(gf_route))
 
       this%verbose = verbose
       this%fname = fname
       this%pre_processing = pre_processing
       this%processing = processing
       this%post_processing = post_processing
+      this%gf_route = gf_route
 
       close (funit)
    end subroutine build_from_file
@@ -919,6 +934,7 @@ contains
    end subroutine post_processing_exchange_p2rs
 
    subroutine post_processing_exchange(this)
+      use sigma_provider_mod, only: sigma_zero
       class(calculation), intent(in) :: this
 
       type(control), target :: control_obj
@@ -932,6 +948,8 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(exchange), target :: exchange_obj
+      type(reciprocal), target :: reciprocal_obj
+      type(sigma_zero) :: sigma
       integer :: i
 
       call prepare_post_processing_stack(this, .false., .true., .true., .false., control_obj, lattice_obj, &
@@ -943,8 +961,38 @@ contains
          call lattice_obj%symbolic_atoms(i)%predls(lattice_obj%wav*ang2au)
       end do
 
-      call run_intersite_moments(control_obj, recursion_obj)
-      call green_obj%calculate_intersite_gf()
+      ! Fill green%gij (+ the torque families) via the selected route (B2.5
+      ! dispatch): the real-space recursion route (default, bit-identical legacy
+      ! path) or the k-space engine (reciprocal%fill_green, backend E/D). Both
+      ! populate the SAME canonical arrays the consumers below read, so the
+      ! downstream code is untouched by construction. The k-space routes read
+      ! their mesh/eta from the &reciprocal namelist and override its
+      ! green_backend with gf_route; they fill the global-frame blocks directly
+      ! (C2 resolution: the intersite recursion never rotates to local axes), so
+      ! calculate_intersite_gf_twoindex and the exchange consumers run unchanged.
+      ! reciprocal_obj is kept at subroutine scope (not a nested helper) so its
+      ! spglib-owning finalizer runs exactly as in post_processing_kspace_green.
+      ! The zero-consumer-change exchange/damping acceptance is task B2.6.
+      select case (trim(this%gf_route))
+      case ('recursion')
+         call run_intersite_moments(control_obj, recursion_obj)
+         call green_obj%calculate_intersite_gf()
+      case ('lehmann', 'dyson')
+         ! The k-space fill of the canonical arrays is validated end-to-end by
+         ! the `post_processing='kspace_green'` driver (on-site DOS + D==E). Note
+         ! (B2.6): the exchange consumer additionally reads the intersite torque
+         ! families (Ginmag/Gj{x,y,z}); producing correct J_ij on the k-space
+         ! arrays -- and re-verifying the 1/sqrt2 intersite normalization -- is
+         ! the acceptance work of task B2.6, not of this dispatch key.
+         call g_logger%info('[calculation.post_processing_exchange]: gf_route='// &
+                            trim(this%gf_route)//' -- filling green%gij from the k-space '// &
+                            'engine (reciprocal%fill_green); the exchange consumer on '// &
+                            'k-space-filled arrays is the B2.6 validation target.', __FILE__, __LINE__)
+         reciprocal_obj = reciprocal(hamiltonian_obj)
+         reciprocal_obj%green_backend = trim(this%gf_route)
+         call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ (backend E requirement)
+         call reciprocal_obj%fill_green(green_obj, sigma)
+      end select
       call green_obj%calculate_intersite_gf_twoindex()
       if ((lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0)) then
          call exchange_obj%calculate_exchange()
@@ -1862,6 +1910,7 @@ contains
       this%pre_processing = 'none'
       this%processing = 'none'
       this%post_processing = 'none'
+      this%gf_route = 'recursion'
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1890,6 +1939,24 @@ contains
                              " 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Check availability for the intersite Green's-function route (B2.5)
+   !
+   !> @param gf_route Route selector. Allowed: ´recursion´, ´lehmann´, ´dyson´
+   !---------------------------------------------------------------------------
+   subroutine check_gf_route(gf_route)
+      character(len=*), intent(in) :: gf_route
+      if (gf_route /= 'recursion' &
+          .and. gf_route /= 'lehmann' &
+          .and. gf_route /= 'dyson') then
+         call g_logger%fatal('[calculation.check_gf_route]: '// &
+                             "calculation%gf_route must be one of: 'recursion', 'lehmann', 'dyson'", &
+                             __FILE__, __LINE__)
+      end if
+   end subroutine check_gf_route
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
