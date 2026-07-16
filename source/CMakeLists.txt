@@ -9,6 +9,7 @@ add_library(${PROJECT_NAME} STATIC
     charge.f90
     chebyshev_fast.f90
     haydock_fast.f90
+    bsf_kernel.f90
     conductivity.f90
     control.f90
     density_of_states.f90
@@ -49,6 +50,7 @@ add_library(${PROJECT_NAME} STATIC
     reciprocal_dos.f90
     reciprocal_projection.f90
     reciprocal_green.f90
+    reciprocal_bsf.f90
     recursion.f90
     recursion_core.f90
     recursion_haydock.f90

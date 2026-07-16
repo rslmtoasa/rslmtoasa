@@ -102,6 +102,7 @@ module calculation_mod
       procedure, private :: post_processing_conductivity
       procedure, private :: post_processing_orbital_modern
       procedure, private :: post_processing_band_structure
+      procedure, private :: post_processing_bsf
       procedure, private :: post_processing_density_of_states
       procedure, private :: post_processing_kspace_green
       procedure, private :: post_processing_frozen_magnon
@@ -232,6 +233,8 @@ contains
          call this%post_processing_orbital_modern()
       case ('band_structure')
          call this%post_processing_band_structure()
+      case ('bsf')
+         call this%post_processing_bsf()
       case ('density_of_states')
          call this%post_processing_density_of_states()
       case ('kspace_green')
@@ -1202,6 +1205,41 @@ contains
       call reciprocal_obj%calculate_band_structure(hamiltonian_obj, 'auto', reciprocal_obj%nk_per_segment, 'band_structure.dat')
    end subroutine post_processing_band_structure
 
+   !> @brief Bloch spectral function A(k,E) post-processing (milestone B3).
+   !> @details Builds the same stack as post_processing_band_structure (the BSF is a
+   !>          thin consumer of the B2 k-space Green's function on the band path),
+   !>          then delegates to reciprocal%calculate_bsf. Broadening is the
+   !>          &reciprocal green_eta; the energy grid/range are n_energy_points /
+   !>          dos_energy_range; the path density is nk_per_segment. With sigma=0 the
+   !>          resolvent equals backend E; a non-zero Sigma provider (B8/B10) would
+   !>          broaden A(k,E) through the same routine unchanged.
+   subroutine post_processing_bsf(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(reciprocal), target :: reciprocal_obj
+      integer :: i
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.true.)
+      call lattice_obj%atomlist()
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      hamiltonian_obj = hamiltonian(charge_obj)
+      do i = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(i)%build_pot()
+      end do
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      call reciprocal_obj%calculate_bsf('bsf.dat')
+   end subroutine post_processing_bsf
+
    subroutine post_processing_density_of_states(this)
       class(calculation), intent(in) :: this
       type(control), target :: control_obj
@@ -1937,12 +1975,13 @@ contains
           .and. post_processing /= 'conductivity_p2rs' &
           .and. post_processing /= 'orbital_modern' &
           .and. post_processing /= 'band_structure' &
+          .and. post_processing /= 'bsf' &
           .and. post_processing /= 'density_of_states' &
           .and. post_processing /= 'kspace_green' &
           .and. post_processing /= 'frozen_magnon') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
-                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'density_of_states'," // &
+                             " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
                              " 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing

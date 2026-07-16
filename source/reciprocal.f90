@@ -297,6 +297,7 @@ module reciprocal_mod
       ! k-space Green's-function engine (milestone B2)
       procedure :: fill_green
       procedure :: build_green_contour
+      procedure :: calculate_bsf
       final     :: destructor
    end type reciprocal
 
@@ -1409,6 +1410,14 @@ end function integrate_dos_up_to_energy
       type(green), intent(inout) :: green_obj
       class(sigma_provider), intent(in) :: sigma
    end subroutine fill_green
+
+   !> @brief Compute and write the Bloch spectral function A(k,E) along the path.
+   !> @param[inout] this        Reciprocal object (H(k) machinery, k-path, grids).
+   !> @param[in]    output_file Optional base output filename (default 'bsf.dat').
+   module subroutine calculate_bsf(this, output_file)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in), optional :: output_file
+   end subroutine calculate_bsf
 
    end interface
 
