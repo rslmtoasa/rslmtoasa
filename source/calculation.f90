@@ -1026,10 +1026,39 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(conductivity), target :: conductivity_obj
+      type(reciprocal), target :: reciprocal_obj
+      logical :: rec_moments
+      real(rp) :: emin_win, emax_win, a_scale, b_scale
 
-      call prepare_post_processing_stack(this, .false., .false., .true., .true., control_obj, lattice_obj, &
+      ! Route the Chebyshev transport moments (mu_nm_stochastic) through the
+      ! selected producer (B5.1 dispatch). 'recursion' (default) fills them
+      ! stochastically inside the prepared stack -- the bit-identical legacy
+      ! path. 'lehmann'/'dyson' fill the SAME array EXACTLY from the k-space
+      ! eigenpairs (reciprocal%fill_moments), so calculate_conductivity_tensor
+      ! runs unchanged. exact-vs-recursion on the same crystal is the direct KPM
+      ! error bound (see docs/dev/route_agnostic_estimators.md).
+      rec_moments = (trim(this%gf_route) == 'recursion')
+      call prepare_post_processing_stack(this, .false., .false., .true., rec_moments, control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
+      if (.not. rec_moments) then
+         ! Exact k-space moments on the SAME Chebyshev window the recursion route
+         ! and gamma_nm use (resolve_chebyshev_window -> a, b). The reciprocal
+         ! object is kept at subroutine scope (spglib-owning finalizer) like the
+         ! exchange/BSF drivers. Sigma=0: 'lehmann' and 'dyson' coincide here.
+         call g_logger%info('[calculation.post_processing_conductivity]: gf_route='// &
+                            trim(this%gf_route)//' -- filling mu_nm_stochastic from the '// &
+                            'exact k-space moment generator (reciprocal%fill_moments); '// &
+                            'conductivity runs unchanged on the k-space-filled moments.', &
+                            __FILE__, __LINE__)
+         call recursion_obj%resolve_chebyshev_window(emin_win, emax_win)
+         a_scale = (emax_win - emin_win)/(2.0_rp - 0.3_rp)
+         b_scale = (emax_win + emin_win)/2.0_rp
+         reciprocal_obj = reciprocal(hamiltonian_obj)
+         reciprocal_obj%green_backend = trim(this%gf_route)
+         call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ
+         call reciprocal_obj%fill_moments(recursion_obj%mu_nm_stochastic, a_scale, b_scale)
+      end if
       self_obj = self(bands_obj, mix_obj)
       call finish_conductivity_moments(green_obj, bands_obj)
       conductivity_obj = conductivity(self_obj)

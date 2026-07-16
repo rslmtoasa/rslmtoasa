@@ -30,6 +30,7 @@ add_library(${PROJECT_NAME} STATIC
     hamiltonian_hubbard.f90
     lattice.f90
     lehmann_kernel.f90
+    moment_kernel.f90
     lattice_lifecycle.f90
     lattice_cluster.f90
     lattice_strux.f90
@@ -51,6 +52,7 @@ add_library(${PROJECT_NAME} STATIC
     reciprocal_projection.f90
     reciprocal_green.f90
     reciprocal_bsf.f90
+    reciprocal_moments.f90
     recursion.f90
     recursion_core.f90
     recursion_haydock.f90

@@ -296,6 +296,7 @@ module reciprocal_mod
       procedure :: build_irreducible_tetrahedra
       ! k-space Green's-function engine (milestone B2)
       procedure :: fill_green
+      procedure :: fill_moments
       procedure :: build_green_contour
       procedure :: calculate_bsf
       final     :: destructor
@@ -1410,6 +1411,17 @@ end function integrate_dos_up_to_energy
       type(green), intent(inout) :: green_obj
       class(sigma_provider), intent(in) :: sigma
    end subroutine fill_green
+
+   !> @brief Fill mu_nm_stochastic from the k-space eigenpairs (exact moments).
+   !> @param[inout] this Reciprocal object (H(k) machinery, k-mesh, velocities).
+   !> @param[out]   mu   Allocated (nb,nb,cond_ll,cond_ll,ntype) moment array.
+   !> @param[in]    a    Chebyshev window scale (recursion route's window).
+   !> @param[in]    b    Chebyshev window shift.
+   module subroutine fill_moments(this, mu, a, b)
+      class(reciprocal), intent(inout) :: this
+      complex(rp), allocatable, intent(out) :: mu(:, :, :, :, :)
+      real(rp), intent(in) :: a, b
+   end subroutine fill_moments
 
    !> @brief Compute and write the Bloch spectral function A(k,E) along the path.
    !> @param[inout] this        Reciprocal object (H(k) machinery, k-path, grids).

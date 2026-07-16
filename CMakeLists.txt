@@ -395,6 +395,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitDysonEquivalence ${TestDIR}/unit/test_dyson_equivalence.f90)
   add_fortran_unit_test(UnitGammaSupercell ${TestDIR}/unit/test_gamma_supercell.f90)
   add_fortran_unit_test(UnitBsfSumRule ${TestDIR}/unit/test_bsf_sumrule.f90)
+  add_fortran_unit_test(UnitMomentKernel ${TestDIR}/unit/test_moment_kernel.f90)
 endif (RUN_UNIT_TESTS)
 
 if (RUN_EXAMPLE_TESTS)
