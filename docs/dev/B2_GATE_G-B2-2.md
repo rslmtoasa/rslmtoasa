@@ -1,6 +1,6 @@
 # Gate G-B2-2 — default meshes + documented accuracy for k-space exchange
 
-**Status:** OPEN — awaiting Anders. **Task:** B2.6 (J_ij/damping through the
+**Status:** Signed by Anders 16-07-26. **Task:** B2.6 (J_ij/damping through the
 Lehmann/Dyson-filled arrays + convergence). **Branch:** `fable_v2`.
 **Backing evidence:** `docs/dev/reciprocal_green_convergence.md` (the J vs N_k / η
 study), commit `c83e1ca`.
@@ -53,10 +53,12 @@ study), commit `c83e1ca`.
    η → 0 / N_k → ∞ limit (expensive, and currently gated by the backend-E
    full-unreduced-undistributed-BZ requirement — no symmetry reduction / k-parallel
    yet; those attach with B4). Pick A or B (or "A now, B when B4 lands").
+   Answer: Pick A for now.
 
 2. **Promote the recommended `green_eta`/`nk` to type defaults**, or leave them
    user-set with the study as guidance? (I recommend leaving them user-set and
    pointing the docs at this gate + the study.)
+   Answer: Leave them user set but with eta=0.02 Ry as default.
 
 3. **Damping eta-route:** the same `gij_eta` + torque ladder that exchange uses is
    filled identically by both backends, so `calculate_gilbert_damping` should run on
@@ -64,6 +66,7 @@ study), commit `c83e1ca`.
    in B2.6 (exchange was the acceptance target). Do you want that as a follow-up
    before the gate signs, or is the exchange acceptance + the shared-fill argument
    sufficient?
+   Answer: Assume it behaves as exchange. We will test this later.
 
 ## How to sign
 

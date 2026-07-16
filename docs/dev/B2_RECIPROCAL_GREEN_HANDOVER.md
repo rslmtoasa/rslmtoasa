@@ -2,7 +2,17 @@
 
 Branch: `fable_v2`. Start a fresh session from here.
 
-## LATEST (B2.6 landed 2026-07-16) — gate G-B2-2 awaits Anders
+## LATEST (B2.6 DONE 2026-07-16) — gate G-B2-2 SIGNED
+
+**B2.6 is complete. Milestone B2 is done (all six tasks + both gates signed).**
+Gate **G-B2-2 signed (Anders, 2026-07-16)**, `docs/dev/B2_GATE_G-B2-2.md`.
+Decisions folded in: (A) the k-space exchange ships as a *documented
+broadening-defined estimator* at η=0.02 Ry (recursion-matching η→0/N_k→∞ deferred
+to post-B4); **`green_eta` type default moved 0.01 → 0.02 Ry** in
+`reciprocal_lifecycle.f90::restore_to_default` (keys stay user-set, verified
+regression 10/10 bit-identical — no regression case touches the k-space path);
+damping assumed to behave as exchange (shared `gij_eta`/torque fill) and will be
+exercised in a later cross-check. The rest of B2.6 below.
 
 **B2.6 is done (code); gate G-B2-2 is Anders' to sign.** The reported "crash"
 (`post_processing='exchange'` + `gf_route='lehmann'` crashing in

@@ -220,8 +220,12 @@ lines 260–300 (consumer shape only).
       (Ginmag/Gj{x,y,z}) — arrays the DOS driver never exercised. Producing
       correct J_ij on the k-space arrays (and re-verifying the 1/√2 intersite
       normalization) is B2.6's acceptance, not this dispatch key's.
-- [~] B2.6 J_ij/damping zero-change run + convergence — **CODE DONE; gate G-B2-2
-      awaits Anders.** `post_processing='exchange'` + `gf_route='lehmann'|'dyson'`
+- [x] B2.6 J_ij/damping zero-change run + convergence — **DONE; gate G-B2-2
+      SIGNED (Anders, 2026-07-16).** Decisions: (A) ship the k-space exchange as a
+      documented broadening-defined estimator at η=0.02 Ry (recursion-matching
+      η→0/N_k→∞ deferred to post-B4); `green_eta` type default moved 0.01→0.02 Ry
+      (keys stay user-set); damping assumed to behave as exchange (shared fill),
+      to be exercised later. `post_processing='exchange'` + `gf_route='lehmann'|'dyson'`
       runs `calculate_exchange`/`calculate_exchange_twoindex` **unchanged** on the
       k-space-filled arrays and returns a physical `J_ij` (isotropic J, zero DMI on
       collinear bcc Fe); the reported "crash" does not reproduce on the current

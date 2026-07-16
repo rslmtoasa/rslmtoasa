@@ -174,9 +174,12 @@ contains
       this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
 
       ! k-space Green's-function engine (milestone B2, reciprocal_green).
-      ! green_eta is the retarded broadening for z = E + i*green_eta; the
-      ! namelist wiring lands in B2.5. The value is part of gate G-B2-1.
-      this%green_eta = 0.01_rp        ! Ry; matches the default DOS smearing scale
+      ! green_eta is the retarded broadening for z = E + i*green_eta (namelist key
+      ! in &reciprocal). Default set to 0.02 Ry by gate G-B2-2 (Anders, 2026-07-16):
+      ! the documented working point where the Lehmann/Dyson exchange J k-converges
+      ! to ~1% by a 16^3 mesh (docs/dev/reciprocal_green_convergence.md). Supersedes
+      ! the 0.01 Ry placeholder from gate G-B2-1.
+      this%green_eta = 0.02_rp        ! Ry; gate G-B2-2 working point (was 0.01, G-B2-1)
       this%green_backend = 'lehmann'  ! backend E (Sigma = 0) by default
    end subroutine restore_to_default
 
