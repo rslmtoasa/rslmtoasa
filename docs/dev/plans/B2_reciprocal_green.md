@@ -220,8 +220,21 @@ lines 260–300 (consumer shape only).
       (Ginmag/Gj{x,y,z}) — arrays the DOS driver never exercised. Producing
       correct J_ij on the k-space arrays (and re-verifying the 1/√2 intersite
       normalization) is B2.6's acceptance, not this dispatch key's.
-- [ ] B2.6 J_ij/damping zero-change run + convergence (G-B2-2 signed) — **START
-      HERE:** `gf_route='lehmann'`/`'dyson'` on `post_processing='exchange'`
-      currently crashes in `calculate_exchange` on the k-space-filled torque
-      families (see B2.5 entry). Fix the consumer/fill so exchange runs unchanged,
-      then the J_ij(R) vs N_k convergence study + gate G-B2-2.
+- [~] B2.6 J_ij/damping zero-change run + convergence — **CODE DONE; gate G-B2-2
+      awaits Anders.** `post_processing='exchange'` + `gf_route='lehmann'|'dyson'`
+      runs `calculate_exchange`/`calculate_exchange_twoindex` **unchanged** on the
+      k-space-filled arrays and returns a physical `J_ij` (isotropic J, zero DMI on
+      collinear bcc Fe); the reported "crash" does not reproduce on the current
+      tree. **The open `1/√2` intersite normalization is RESOLVED — it is correct.**
+      The factor-≈2 seen in a naive fixed-broadening `J` comparison vs the recursion
+      route is a broadening / metallic-Fermi-surface k-convergence artifact, not a
+      normalization error: it is **shell-dependent** (`J_rec/J_leh(η=0.02)` = 1.98
+      on 1st-NN but 1.31 on 2nd-NN) and **η-dependent** (converged `J_leh` swings
+      +0.41 → −0.17 as η goes 0.005 → 0.08; → recursion 0.51 as η→0), which no
+      global factor can do. The kernel is independently pinned at machine precision
+      by `UnitGammaSupercell` (intersite block ≡ direct resolvent, `<1e-12`) and the
+      recursion 4-phase algebra reduces to `G_ij` exactly. Full J vs N_k / η study +
+      recommended default meshes: `docs/dev/reciprocal_green_convergence.md`.
+      Remaining for the gate: Anders signs the default meshes/accuracy. (Damping
+      eta-route on the same filled `gij_eta`/torque families is filled identically
+      and left as a follow-up cross-check.)

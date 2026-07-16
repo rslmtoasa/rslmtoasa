@@ -2,7 +2,33 @@
 
 Branch: `fable_v2`. Start a fresh session from here.
 
-## LATEST (B2.5 landed 2026-07-15) — next is B2.6
+## LATEST (B2.6 landed 2026-07-16) — gate G-B2-2 awaits Anders
+
+**B2.6 is done (code); gate G-B2-2 is Anders' to sign.** The reported "crash"
+(`post_processing='exchange'` + `gf_route='lehmann'` crashing in
+`calculate_exchange`) **does not reproduce** on the current tree: exchange runs
+**unchanged** on the k-space-filled arrays (`gij/gji` + torque families
+`Ginmag`/`Gi{x,y,z}`) and returns a physical `J_ij` (isotropic J, DMI ≈ 1e-16 on
+collinear bcc Fe). No source fix to the exchange path was needed — only the stale
+B2.5 comment on the `lehmann`/`dyson` branch was updated.
+
+**The open `1/√2` intersite normalization is RESOLVED — it is correct.** The
+factor-≈2 one sees comparing a fixed-broadening Lehmann `J` against the
+(near-sharp) recursion `J` is a **broadening / metallic-Fermi-surface k-convergence
+artifact, not a normalization error**: it is **shell-dependent**
+(`J_rec/J_leh(η=0.02)` = 1.98 on 1st-NN, 1.31 on 2nd-NN) and **η-dependent**
+(converged `J_leh` swings +0.41 → −0.17 as η goes 0.005 → 0.08, and climbs back
+toward the recursion 0.51 as η → 0). No global factor does that. The kernel is
+independently pinned at machine precision by `UnitGammaSupercell` (intersite block
+≡ direct resolvent, `<1e-12`) and the recursion 4-phase algebra reduces to `G_ij`
+exactly (`gij = ½[(g0₁−g0₂)+(1/i)(g0₃−g0₄)] = G_ij`, unit-norm starts). Full J vs
+N_k / η study + recommended default meshes (16³ @ η=0.02 for ~1%):
+`docs/dev/reciprocal_green_convergence.md`. Regression **10/10 bit-identical**;
+`UnitGammaSupercell`/`UnitLehmannChain`/`UnitDysonEquivalence` all pass.
+**Remaining:** Anders signs default meshes/accuracy (gate G-B2-2); the damping
+eta-route cross-check on the same filled `gij_eta` is a natural follow-up.
+
+## PRIOR (B2.5 landed 2026-07-15)
 
 **B2.5 is done.** The `gf_route = recursion | lehmann | dyson` dispatch key was
 added to the `&calculation` namelist (`calculation` type field +
@@ -24,12 +50,13 @@ Lehmann (folding) 1.7e-15, (3) two-route DOS `−1/π Im Tr G` (Lehmann vs Dyson
 the `kspace_green` driver (report-only, weight→18); its elementwise tolerance
 stays under gate **G-B2-2**.
 
-**B2.6 starts from a live bug:** `post_processing='exchange'` +
-`gf_route='lehmann'` reaches `fill_green` cleanly, then **`calculate_exchange`
-crashes** reading the intersite torque families (Ginmag/Gj{x,y,z}) — arrays the
-DOS driver never exercised. Making exchange produce correct J_ij on the k-space
-arrays (and re-verifying the `1/√2` intersite normalization) is B2.6's
-acceptance. Regression stayed 10/10 bit-identical; `UnitGammaSupercell`,
+**B2.6 note (the B2.5-era "live bug" is closed):** the B2.5 handover flagged
+`post_processing='exchange'` + `gf_route='lehmann'` as crashing in
+`calculate_exchange` on the intersite torque families. It **does not reproduce** on
+the current tree — exchange runs unchanged and returns physical J_ij (see the
+LATEST section above and `docs/dev/reciprocal_green_convergence.md`). The
+`1/√2` intersite normalization is verified correct (broadening/k-convergence, not a
+factor). Regression stayed 10/10 bit-identical; `UnitGammaSupercell`,
 `UnitLehmannChain`, `UnitDysonEquivalence` all pass; `kspace_green` driver still
 EXIT=0.
 

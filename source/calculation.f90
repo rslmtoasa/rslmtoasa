@@ -978,16 +978,23 @@ contains
          call run_intersite_moments(control_obj, recursion_obj)
          call green_obj%calculate_intersite_gf()
       case ('lehmann', 'dyson')
-         ! The k-space fill of the canonical arrays is validated end-to-end by
-         ! the `post_processing='kspace_green'` driver (on-site DOS + D==E). Note
-         ! (B2.6): the exchange consumer additionally reads the intersite torque
-         ! families (Ginmag/Gj{x,y,z}); producing correct J_ij on the k-space
-         ! arrays -- and re-verifying the 1/sqrt2 intersite normalization -- is
-         ! the acceptance work of task B2.6, not of this dispatch key.
+         ! B2.6 (done): the exchange consumer runs UNCHANGED on the k-space-filled
+         ! arrays -- it reads the same gij/gji + intersite torque families
+         ! (Ginmag/Gj{x,y,z}) the recursion route fills, so calculate_exchange
+         ! produces a physical J_ij (correct tensor structure: isotropic J, zero
+         ! DMI on collinear bcc Fe). The intersite normalization is CORRECT -- the
+         ! former "1/sqrt2" worry is resolved: the fixed-broadening J difference vs
+         ! the recursion route is a broadening / metallic-Fermi-surface k-convergence
+         ! artifact (shell- and eta-dependent, not a global factor), NOT a
+         ! normalization error. The kernel is pinned at machine precision by
+         ! UnitGammaSupercell (intersite block == direct resolvent, <1e-12). See
+         ! docs/dev/reciprocal_green_convergence.md for the J vs N_k / eta study
+         ! (gate G-B2-2).
          call g_logger%info('[calculation.post_processing_exchange]: gf_route='// &
                             trim(this%gf_route)//' -- filling green%gij from the k-space '// &
-                            'engine (reciprocal%fill_green); the exchange consumer on '// &
-                            'k-space-filled arrays is the B2.6 validation target.', __FILE__, __LINE__)
+                            'engine (reciprocal%fill_green); exchange runs unchanged on the '// &
+                            'k-space-filled arrays. See docs/dev/reciprocal_green_convergence.md.', &
+                            __FILE__, __LINE__)
          reciprocal_obj = reciprocal(hamiltonian_obj)
          reciprocal_obj%green_backend = trim(this%gf_route)
          call reciprocal_obj%generate_mp_mesh()   ! full unreduced BZ (backend E requirement)
