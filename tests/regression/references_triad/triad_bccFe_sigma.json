@@ -1,0 +1,11 @@
+{
+  "dyson": {
+    "sigma_xx": 3.235054
+  },
+  "lehmann": {
+    "sigma_xx": 3.235054
+  },
+  "recursion": {
+    "sigma_xx": 3.239956
+  }
+}

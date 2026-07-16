@@ -1,0 +1,62 @@
+&calculation
+! B5.2 J_ij route triad base input. The runner (run_triad.py) patches
+! calculation%gf_route to recursion | lehmann | dyson and reciprocal%green_backend
+! accordingly; the exchange consumer runs UNCHANGED on the arrays each route fills.
+post_processing = 'exchange'
+gf_route = 'recursion'
+verbose = T
+/
+&lattice
+ndim = 50000
+rc = 080
+alat = 2.86120
+crystal_sym = 'bcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+! 1st- and 2nd-NN shells: atom 1 (0,0,0) -> 335 (a/2,a/2,a/2), 336 (0,0,a).
+njij = 2
+ijpair(1, :) = 1, 335
+ijpair(2, :) = 1, 336
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&reciprocal
+! Backend E (strict Lehmann) needs the FULL unreduced BZ. 12^3 is a CI-tractable
+! mesh; J_ij is NOT k-converged here (see docs/dev/reciprocal_green_convergence.md
+! Table A) -- the triad pins route agreement (lehmann==dyson) and reproducibility,
+! not the converged physical J.
+nk1 = 12
+nk2 = 12
+nk3 = 12
+use_symmetry_reduction = .false.
+green_backend = 'lehmann'
+green_eta = 0.02
+dos_method = 'tetrahedron'
+/
+&energy
+fermi = -0.069291
+energy_min = -1.2
+energy_max = 1.2
+channels_ldos = 300
+/
+&control
+calctype = 'B'
+nsp = 2
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/

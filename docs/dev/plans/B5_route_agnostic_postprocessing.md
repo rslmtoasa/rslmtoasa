@@ -59,7 +59,7 @@ envelopes:
 
 ## 4. Checklist
 - [x] B5.1 exact moments + KPM error bound test **(2026-07-16)**
-- [ ] B5.2 J_ij + σ triads pinned
+- [x] B5.2 J_ij + σ triads pinned **(2026-07-16)**
 - [ ] B5.3 damping audit + α triad (scope decision if needed)
 
 ### B5.1 notes (done)

@@ -367,6 +367,28 @@ foreach(_i RANGE ${_regression_last})
   set_tests_properties("Regression_${_regression_name}" PROPERTIES
     LABELS "regression;backend" TIMEOUT "${_regression_timeout}")
 endforeach()
+
+# B5.2 route-agnostic estimator triads (recursion vs lehmann vs dyson). Each case
+# runs one observable three ways and checks the documented agreement envelopes
+# (docs/dev/route_agnostic_estimators.md).
+set(TRIAD_CASES_JSON "${TestDIR}/regression/triad_cases.json")
+file(READ "${TRIAD_CASES_JSON}" _triad_json)
+string(JSON _triad_n LENGTH "${_triad_json}" "cases")
+math(EXPR _triad_last "${_triad_n} - 1")
+foreach(_i RANGE ${_triad_last})
+  string(JSON _triad_name GET "${_triad_json}" "cases" ${_i} "name")
+  string(JSON _triad_timeout GET "${_triad_json}" "cases" ${_i} "timeout")
+  add_test(NAME "Triad_${_triad_name}"
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/run_triad.py"
+      "--binary" "${TestBinary}"
+      "--cases-json" "${TRIAD_CASES_JSON}"
+      "--case-name" "${_triad_name}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/triad"
+      "--references" "${TestDIR}/regression/references_triad"
+  )
+  set_tests_properties("Triad_${_triad_name}" PROPERTIES
+    LABELS "regression;triad" TIMEOUT "${_triad_timeout}")
+endforeach()
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

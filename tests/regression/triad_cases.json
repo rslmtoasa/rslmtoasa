@@ -1,0 +1,28 @@
+{
+  "_description": "B5.2 route-agnostic estimator triads. Each case runs one bcc-Fe observable via gf_route = recursion | lehmann | dyson on the SAME converged potential and checks the documented agreement envelopes (see docs/dev/route_agnostic_estimators.md). Run with tests/regression/run_triad.py.",
+  "cases": [
+    {
+      "name": "triad_bccFe_jij",
+      "base": "triad_bccFe_exchange",
+      "observable": "jij",
+      "timeout": 900,
+      "lehmann_dyson_tol": 1.0e-5,
+      "recursion_vs_lehmann_ratio": [0.35, 1.15],
+      "golden_rtol": 1.0e-2,
+      "golden_atol": 1.0e-4,
+      "_note": "J_ij(1st-NN),(2nd-NN) at 12^3, eta=0.02. recursion~=2x lehmann on 1st-NN (broadening artifact, NOT normalization; B2.6). lehmann==dyson is the tight pin."
+    },
+    {
+      "name": "triad_bccFe_sigma",
+      "base": "triad_bccFe_conductivity",
+      "observable": "sigma",
+      "fermi": -0.069099,
+      "timeout": 900,
+      "lehmann_dyson_tol": 1.0e-6,
+      "recursion_vs_lehmann_ratio": [0.97, 1.03],
+      "golden_rtol": 1.0e-2,
+      "golden_atol": 1.0e-4,
+      "_note": "Diagonal sigma_xx near E_F at 6^3, cond_ll=30. Exact k-space moments match the recursion moments to ~0.15% (tight envelope). lehmann==dyson bit-identical (same Sigma=0 eigenpair moment path)."
+    }
+  ]
+}
