@@ -60,7 +60,14 @@ envelopes:
 ## 4. Checklist
 - [x] B5.1 exact moments + KPM error bound test **(2026-07-16)**
 - [x] B5.2 J_ij + σ triads pinned **(2026-07-16)**
-- [ ] B5.3 damping audit + α triad (scope decision if needed)
+- [~] B5.3 **audit done** (2026-07-16): SOC-derivative torque operator IS present
+  (`torque_operator_collinear` = `[σ,ξL·S]`), no escalation —
+  `docs/dev/B5.3_gilbert_damping_audit.md`. The `do_damping` wiring + α triad were
+  implemented and validated (α: recursion 0.00105, lehmann=dyson 0.00263) but
+  **deferred**: adding the `do_damping` field exposes a pre-existing latent
+  uninitialized-local NaN in the B2 Lehmann first-order exchange path (breaks the
+  B5.2 J_ij triad under `-O3`; clean in debug builds). Re-land after that bug is
+  fixed — see `tests/KNOWN_ISSUES.md`.
 
 ### B5.1 notes (done)
 
