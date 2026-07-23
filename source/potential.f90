@@ -94,6 +94,9 @@ module potential_mod
       real(rp) :: sumec, sumev, etot, utot, ekin, rhoeps
 	      ! Madelung potential
 	      real(rp) :: vmad
+	      !> l=1 (z) dipole charge moment Q_{10} of the sphere (surface electrostatics, B6).
+	      !> Derived each SCF step from the on-site density matrix; zero in the bulk limit.
+	      real(rp) :: q10
 	      !> Sphere-boundary potential used to construct the muffin-tin zero.
 	      !> vrmax(1) is the spin average; vrmax(2) is up-down.
 	      real(rp), dimension(2) :: vrmax
@@ -771,6 +774,7 @@ contains
       this%ekin = 0.0d0
       this%rhoeps = 0.0d0
 	      this%vmad = 0.0d0
+	      this%q10 = 0.0d0
 	      this%vrmax(:) = 0.0d0
 	      this%pl(:, :) = 0.0d0
       this%ql(:, :, :) = 0.0d0
@@ -970,6 +974,7 @@ contains
       call nml%add('ql', this%ql)
       call nml%add('lmax', this%lmax)
 	      call nml%add('vmad', this%vmad)
+	      call nml%add('q10', this%q10)
 	      call nml%add('vrmax', this%vrmax)
 	      call nml%add('mom', this%mom)
       call nml%add('lmom', this%lmom)

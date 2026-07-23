@@ -214,6 +214,10 @@ module self_mod
       ! TODO
       real(rp), dimension(:, :), allocatable :: vtn, vzt
       real(rp), dimension(:, :, :), allocatable :: fun2
+      !> Signed normalized radial partial-wave amplitude per (mesh, l+1, spin),
+      !> exported from NEWRHO for the B6 multipole (l=1 dipole) radial matrix
+      !> elements. Runs parallel to fun2 (which stores the |amplitude|^2 density).
+      real(rp), dimension(:, :, :), allocatable :: phi_amp
 
       ! TODO
       real(rp), dimension(:), allocatable :: bxc
@@ -304,6 +308,7 @@ contains
       if (allocated(this%vtn)) call g_safe_alloc%deallocate('self.vtn', this%vtn)
       if (allocated(this%vzt)) call g_safe_alloc%deallocate('self.vzt', this%vzt)
       if (allocated(this%fun2)) call g_safe_alloc%deallocate('self.fun2', this%fun2)
+      if (allocated(this%phi_amp)) call g_safe_alloc%deallocate('self.phi_amp', this%phi_amp)
 #else
       if (allocated(this%ws)) deallocate (this%ws)
       if (allocated(this%mixmag)) deallocate (this%mixmag)
@@ -535,12 +540,15 @@ contains
       call g_safe_alloc%allocate('self.vtn', this%vtn, (/8001, 2/))
       call g_safe_alloc%allocate('self.vzt', this%vzt, (/8001, 2/))
       call g_safe_alloc%allocate('self.fun2', this%fun2, (/8001, nfun_l, 2/))
+      call g_safe_alloc%allocate('self.phi_amp', this%phi_amp, (/8001, nfun_l, 2/))
 #else
       nfun_l = max(3, this%control%lmax + 1)
       allocate (this%bxc(this%lattice%nrec))
       allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
+      allocate (this%phi_amp(8001, nfun_l, 2))
 #endif
       this%fun2(:, :, :) = 0.0_rp
+      this%phi_amp(:, :, :) = 0.0_rp
 
    end subroutine restore_to_default
 
@@ -1564,6 +1572,7 @@ contains
       allocate (rho, mold=rho_in)
       allocate (rofi(size(rho_in(:, 1))))
       if (allocated(this%fun2)) this%fun2(:, :, :) = 0.0_rp
+      if (allocated(this%phi_amp)) this%phi_amp(:, :, :) = 0.0_rp
 
       nr = size(rofi)
       B_fsm = merge(-atom%mag_cfield(3), real(0.0, rp), this%lattice%control%do_comom)
@@ -2012,6 +2021,11 @@ contains
                   !-------- FUN2 GIVES the probability density and NOT the charge density---
                   !----of valence orbital LP1(s, p or d) with spin ISP at point r=IR----
                   this%FUN2(IR, LP1, ISP) = (GFAC*G(IR)**2 + G(JR)**2)
+                  !-------- Signed large-component amplitude u_l(r) = r*phi_l(r) for the
+                  !----B6 (l=1 dipole) radial matrix elements. Stored parallel to FUN2 so
+                  !----phi_s, phi_p, phi_d coexist across LP1 for cross-l products. The
+                  !----small component G(JR) is a relativistic correction not needed here.
+                  this%phi_amp(IR, LP1, ISP) = G(IR)
                end do
             end if
             !------------BEGIN-ORBITAL CONT. TO HYPERFINE FIELD------------
