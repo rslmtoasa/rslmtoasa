@@ -64,10 +64,12 @@ envelopes:
   (`torque_operator_collinear` = `[σ,ξL·S]`), no escalation —
   `docs/dev/B5.3_gilbert_damping_audit.md`. The `do_damping` wiring + α triad were
   implemented and validated (α: recursion 0.00105, lehmann=dyson 0.00263) but
-  **deferred**: adding the `do_damping` field exposes a pre-existing latent
-  uninitialized-local NaN in the B2 Lehmann first-order exchange path (breaks the
-  B5.2 J_ij triad under `-O3`; clean in debug builds). Re-land after that bug is
-  fixed — see `tests/KNOWN_ISSUES.md`.
+  **deferred**: adding the `do_damping` field exposed the NaN blocker below.
+  **Blocker RESOLVED 2026-07-23** (commit 8b42928): the NaN was a `simpson_f`
+  out-of-bounds read (NOT an uninitialized local as first thought), fixed and
+  confirmed on the Linux `-O3` trigger layout — see `tests/KNOWN_ISSUES.md`.
+  **Remaining B5.3 work:** re-land the `do_damping` wiring + α triad now that the
+  layout perturbation is safe.
 
 ### B5.1 notes (done)
 

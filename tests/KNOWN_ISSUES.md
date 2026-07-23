@@ -25,47 +25,47 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
 - **Found:** Phase 2, P1 (adding lanczos coverage to the SCF example suite —
   this combination had zero prior test coverage under any phase).
 
-## Lehmann first-order exchange: latent uninitialized-local NaN in `J_ij` (layout-sensitive)
+## [RESOLVED 2026-07-23, commit 8b42928] Exchange `J_ij` NaN — `simpson_f` out-of-bounds read
 
-- **Symptom:** `post_processing='exchange'` + `gf_route='lehmann'` (or `'dyson'`)
-  on the first-order H(k) path can produce `J_ij = NaN` (the whole exchange
-  tensor diagonal NaN, off-diagonal 0) under the optimized `-O3` build. It is a
-  **heisenbug**: the same source is clean under any instrumented build
-  (`-finit-real=snan -ffpe-trap=invalid` runs clean, no trap; a `-O0`/debug build
-  is clean), and clean in the `-O3` build until an *unrelated* memory-layout change
-  perturbs it (discovered because adding a `logical` field to the `calculation`
-  derived type — the B5.3 `do_damping` flag — flipped it from clean to NaN).
-- **Scope:** the **recursion** route is always clean; the **SOC / second-order**
-  Lehmann path (`kspace_ham_order='second'`, e.g. the Gilbert-damping α triad) is
-  clean; only the **first-order** Lehmann `J_ij` NaNs, and only for certain memory
-  layouts. All `green` intersite/torque/eta arrays are zeroed at allocation
-  (`green.f90:285–321`), so the culprit is an **uninitialized local variable**
-  (not a `green` array) somewhere in the Lehmann exchange path —
-  `reciprocal_green.f90::fill_green_lehmann`, `exchange.f90::calculate_exchange`,
-  or `green.f90::auxiliary_gij`/`predls`.
-- **Reproduce (confirmed):** on the `-O3` build, perturb the `calculation`
-  derived-type layout, then run the first-order Lehmann exchange:
-  1. In `source/calculation.f90`, add one field to the `calculation` type, e.g.
-     `logical :: pad_dummy` right after the `gf_route` declaration (the confirmed
-     trigger was the B5.3 `do_damping` field; the field is never read, so this is a
-     pure layout perturbation). `cd build && make -j4`.
-  2. In a scratch dir: `cp tests/regression/triad_bccFe_exchange/{Fe.nml,input.nml} .`
-     then `sed -i "s/gf_route = 'recursion'/gf_route = 'lehmann'/" input.nml` and run
-     `build/bin/rslmto.x | grep "Jij between pair"`.
-  - **Clean:** `Jij between pair 1 and 335 is 0.25473806601203008`.
-  - **Bug:** `Jij between pair 1 and 335 is NaN` (whole exchange-tensor diagonal
-    NaN, off-diagonal 0). Revert the added field to return to clean.
-- **Debug tip:** the bug is invisible to `-O0`/`-finit-real=snan`/`-fcheck` builds
-  (they all run clean), so it must be chased on the `-O3` binary — e.g.
-  `valgrind --track-origins=yes build/bin/rslmto.x` on the NaN-triggering layout,
-  which reports the uninitialized read at the memory level regardless of the value.
-- **Test impact:** the B5.2 `triad_bccFe_jij` triad passes on the current `-O3`
-  build layout, but is **fragile** — any future change to the `calculation`
-  type's layout can trip it. It also **blocks B5.3**: the `do_damping` wiring +
-  Gilbert-damping α triad are implemented and validated (see
-  `docs/dev/B5.3_gilbert_damping_audit.md`) but deferred until this is fixed,
-  because landing them re-triggers the NaN.
-- **Found:** B5.3 (Gilbert-damping wiring), 2026-07-16.
+- **Was filed as:** "Lehmann first-order exchange: latent uninitialized-local NaN
+  in `J_ij` (layout-sensitive)", found during B5.3 (2026-07-16). **The
+  uninitialized-local diagnosis was wrong** — see the actual root cause below.
+- **Symptom (as observed):** `post_processing='exchange'` + `gf_route='lehmann'`
+  (or `'dyson'`) could produce `J_ij = NaN` under `-O3`, presenting as a
+  heisenbug: clean under `-O0`/`-finit-real=snan`/`-fcheck`, and clean under `-O3`
+  until an unrelated `calculation`-type layout change (the B5.3 `do_damping`
+  `logical`) flipped it to NaN.
+- **Actual root cause:** a **one-element out-of-bounds heap read in
+  `math.f90::simpson_f`**, not an uninitialized local, and **not**
+  Lehmann-specific — it was latent in the recursion route too, masked by heap
+  layout. The Fermi/dFermi branches declared their arrays `dimension(NPTS+10)`
+  and looped `I = 2, NPTS+9, 2`, reading index `NPTS+10`. Callers pass arrays of
+  length `en%channels_ldos+10`, but `NPTS = en%nv1 = channels_ldos+1` (every real
+  input has even `channels_ldos`), so the true extent is `NPTS+9` and the loop
+  read one element past the end of every integrand and of `en%ene`. The garbage
+  byte read as a NaN bit-pattern under some heap layouts and as a finite/near-zero
+  value under others — hence the layout sensitivity and the false "uninitialized"
+  signature. `-finit-real=snan`/`-fcheck=bounds` miss it because the read is legal
+  against the callee's *declared* `NPTS+10` dummy; only past the *actual*
+  allocation. Valgrind on Linux `-O3` pinned it: *"Invalid read of size 8 at
+  math.f90:1128 … 0 bytes after a block of size 2480"* (= 310 doubles =
+  `channels_ldos+10`), origins `energy.f90::e_mesh` and the `exchange` integrand
+  allocations.
+- **Fix:** declare the `simpson_f` dummies `dimension(NPTS+9)` (the true extent)
+  and cap the Fermi/dFermi loops at `NPTS+8`, so the last index read is `NPTS+9`
+  (in bounds). Drops one Simpson triple whose Fermi weight is ~0; integrals shift
+  only ~1e-6 (recursion `J_ij` 1_335: 0.5078779 → 0.5078765; lehmann/dyson move at
+  machine epsilon; the B5.2 σ triad is unchanged to 6 dp). The `triad_bccFe_jij`
+  golden was regenerated on the fixed build; `triad_bccFe_sigma` was unchanged.
+- **Confirmed:** on the Linux `-O3` + `pad_dummy` trigger layout (where it
+  originally NaN'd), `valgrind --track-origins=yes` went from 1509 errors / 37
+  contexts to **1 error / 1 context** — the sole remainder being the unrelated
+  pre-existing `clusba` read at `lattice_strux.f90:889` (a separate issue). On
+  gfortran-13 the pre-fix and post-fix recursion values are identical, confirming
+  the result no longer depends on the out-of-bounds byte.
+- **Unblocks:** the deferred B5.3 `do_damping` wiring + Gilbert-damping α triad
+  (`docs/dev/B5.3_gilbert_damping_audit.md`) can now re-land — the layout
+  perturbation that re-triggered the NaN no longer does.
 
 ## `frozen_magnon` `branch_mode = 'auto'`: multi-sublattice acoustic magnon not gapless at Γ
 
