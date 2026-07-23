@@ -14,6 +14,7 @@ add_library(${PROJECT_NAME} STATIC
     control.f90
     density_of_states.f90
     dyson_kernel.f90
+    electrostatics_multipole.f90
     element.f90
     energy.f90
     exchange.f90
