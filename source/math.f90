@@ -1112,7 +1112,13 @@ contains
       real(rp), intent(in) :: EF, T
       logical, intent(in) :: fermi, dfermi
       real(rp), intent(out) :: AINT
-      real(rp), dimension(NPTS + 10), intent(in) :: Y, Ene
+      ! Callers always pass arrays of length en%channels_ldos+10, while NPTS is
+      ! en%nv1 = channels_ldos+1 (even channels_ldos), so the true extent is
+      ! NPTS+9, not NPTS+10. The Fermi loops therefore run to NPTS+8 and read at
+      ! most Y(NPTS+9)/Ene(NPTS+9) -- in bounds. (The old NPTS+10 declaration and
+      ! NPTS+9 bound read one element past the allocation; that garbage read is
+      ! the source of the layout-sensitive J_ij NaN, KNOWN_ISSUES 2026-07-16.)
+      real(rp), dimension(NPTS + 9), intent(in) :: Y, Ene
       ! Local variables
       integer :: I
       real(rp) :: H
@@ -1124,11 +1130,11 @@ contains
       kBT = kB*T + 1.0d-15
       !
       if (fermi) then
-         do I = 2, NPTS + 9, 2
+         do I = 2, NPTS + 8, 2
             AINT = AINT + Y(I - 1)*fermifun(Ene(i - 1), Ef, kBT) + 4.d0*Y(I)*fermifun(Ene(i), Ef, kBT) + Y(I + 1)*fermifun(Ene(i + 1), Ef, kBT)
          end do
       else if (dfermi) then
-         do I = 2, NPTS + 9, 2
+         do I = 2, NPTS + 8, 2
             AINT = AINT + Y(I - 1)*dfermifun(Ene(i - 1), Ef, kBT) + 4.d0*Y(I)*dfermifun(Ene(i), Ef, kBT) + Y(I + 1)*dfermifun(Ene(i + 1), Ef, kBT)
          end do
       else
