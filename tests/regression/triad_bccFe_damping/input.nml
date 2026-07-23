@@ -36,13 +36,15 @@ database = './'
 label(1) = 'Fe'
 /
 &hamiltonian
-! hoh is set PER ROUTE by run_triad.py (route_overrides in triad_cases.json):
-! the k-space routes need hoh=.true. so second-order H(k)=E_nu+h-hoh+L.S carries
-! SOC in the Green's function (else it falls back to first order, SOC-free G --
-! an incomplete Kamberský damping); recursion uses hoh=.false. and gets L.S from
-! the real-space build (hoh=.true. NaNs the on-site recursion J_ij -- see
-! tests/KNOWN_ISSUES.md). This value is the default for a bare run.
-hoh = .false.
+! hoh=.true. on ALL routes so SOC enters the Green's function like-for-like:
+! the k-space routes get it via second-order H(k)=E_nu+h-hoh+L.S (kspace_ham_order
+! ='second'), the recursion route via the real-space L.S build. Without hoh the
+! k-space H(k) falls back to first order and its GF is SOC-free (an incomplete
+! Kamberský damping). NOTE: hoh + chebyshev needs an energy window wide enough to
+! bracket the full spectrum -- energy_max below is set generously; too narrow a
+! window makes the Chebyshev moments diverge to NaN (a standard input constraint,
+! not a code bug).
+hoh = .true.
 /
 &reciprocal
 ! Backend E (strict Lehmann) needs the FULL unreduced BZ. 12^3 is CI-tractable;
@@ -60,7 +62,9 @@ dos_method = 'tetrahedron'
 &energy
 fermi = -0.069291
 energy_min = -1.2
-energy_max = 1.2
+! energy_max widened to bracket the full hoh spectrum for the Chebyshev route
+! (a narrower window -> NaN moments; see the &hamiltonian note).
+energy_max = 2.4
 channels_ldos = 300
 /
 &control

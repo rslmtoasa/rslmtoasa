@@ -30,15 +30,10 @@
       "observable": "alpha",
       "timeout": 900,
       "lehmann_dyson_tol": 1.0e-5,
-      "recursion_vs_lehmann_ratio": [1.8, 3.0],
+      "recursion_vs_lehmann_ratio": [1.4, 2.4],
       "golden_rtol": 1.0e-2,
       "golden_atol": 1.0e-4,
-      "route_overrides": {
-        "recursion": {"hamiltonian": {"hoh": false}},
-        "lehmann": {"hamiltonian": {"hoh": true}},
-        "dyson": {"hamiltonian": {"hoh": true}}
-      },
-      "_note": "On-site Gilbert damping alpha=0.5(alpha_xx+alpha_yy) on bcc Fe with SOC (Fe.nml xi_p/xi_d), 12^3, eta=0.02. SOC enters G via second-order H(k)=...+L.S (k-space, needs hoh=T) or the real-space L.S (recursion, hoh=F; hoh=T NaNs on-site recursion J_ij, KNOWN_ISSUES). lehmann==dyson is the tight Sigma=0 pin; lehmann~=2.4x recursion is the broadening/k-mesh band (like J_ij, not a normalization diff)."
+      "_note": "On-site Gilbert damping alpha=0.5(alpha_xx+alpha_yy) on bcc Fe with SOC (Fe.nml xi_p/xi_d), 12^3, eta=0.02, hoh=T on all routes (like-for-like SOC in G: second-order H(k)+L.S for k-space, real-space L.S for recursion). energy_max is widened so the Chebyshev route's moments don't diverge. lehmann==dyson is the tight Sigma=0 pin; lehmann~=1.9x recursion is the broadening/k-mesh band (like J_ij, not a normalization diff)."
     }
   ]
 }

@@ -70,13 +70,14 @@ envelopes:
   - `do_damping` flag wired into `post_processing_exchange`
     (route-agnostic on `green%gij`; default `.false.` = bit-identical legacy);
     fixed the `spin_i` uninitialized-accumulator in `calculate_gilbert_damping`.
-  - α triad `triad_bccFe_damping` pinned with **true SOC in G** on both routes:
-    recursion 0.001050 (real-space L·S, `hoh=.false.`), lehmann=dyson 0.002528
-    (second-order H(k) + L·S, `hoh=.true.` per-route override). The lehmann≡dyson
-    Σ=0 pin holds; lehmann≈2.4× recursion is the broadening/k-mesh band (like
-    J_ij). Note: this corrects the audit's provisional k-space α (0.00263) which
-    was measured on the first-order-fallback path (SOC-free G). A separate
-    `hoh=.true.` on-site recursion NaN was found and logged (KNOWN_ISSUES).
+  - α triad `triad_bccFe_damping` pinned with **true SOC in G** on all routes,
+    `hoh=.true.` uniformly (k-space: second-order H(k)+L·S; recursion: real-space
+    L·S): recursion 0.001341, lehmann=dyson 0.002528. The lehmann≡dyson Σ=0 pin
+    holds; lehmann≈1.9× recursion is the broadening/k-mesh band (like J_ij). Note:
+    this corrects the audit's provisional k-space α (0.00263), measured on the
+    first-order-fallback path (SOC-free G). (hoh + chebyshev needs an energy
+    window wide enough to bracket the spectrum — energy_max=2.4 — else the moments
+    diverge to NaN; a standard input constraint, not a bug.)
 
 ### B5.1 notes (done)
 
