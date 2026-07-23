@@ -1,0 +1,75 @@
+&calculation
+! B5.3 Gilbert-damping route triad base input. run_triad.py patches
+! calculation%gf_route (recursion | lehmann | dyson) + reciprocal%green_backend;
+! calculate_gilbert_damping consumes the SAME green%gij the J_ij consumer reads,
+! so the alpha triad runs through the identical route dispatch as the J_ij triad.
+! SOC is carried by this case's potential (Fe.nml xi_p/xi_d, from the SCF bccFe
+! reference) -- alpha is identically zero without it. The k-space routes need
+! kspace_ham_order='second' (the only path that adds L.S to H(k)).
+post_processing = 'exchange'
+gf_route = 'recursion'
+do_damping = T
+verbose = T
+/
+&lattice
+ndim = 50000
+rc = 080
+alat = 2.86120
+crystal_sym = 'bcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+! On-site pair (1,1) -> the on-site Gilbert damping alpha reported by the audit.
+njij = 1
+ijpair(1, :) = 1, 1
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&hamiltonian
+! hoh is set PER ROUTE by run_triad.py (route_overrides in triad_cases.json):
+! the k-space routes need hoh=.true. so second-order H(k)=E_nu+h-hoh+L.S carries
+! SOC in the Green's function (else it falls back to first order, SOC-free G --
+! an incomplete Kamberský damping); recursion uses hoh=.false. and gets L.S from
+! the real-space build (hoh=.true. NaNs the on-site recursion J_ij -- see
+! tests/KNOWN_ISSUES.md). This value is the default for a bare run.
+hoh = .false.
+/
+&reciprocal
+! Backend E (strict Lehmann) needs the FULL unreduced BZ. 12^3 is CI-tractable;
+! alpha is NOT k-converged here -- the triad pins route agreement (lehmann==dyson)
+! and the recursion-vs-lehmann broadening band, not the converged physical alpha.
+nk1 = 12
+nk2 = 12
+nk3 = 12
+use_symmetry_reduction = .false.
+green_backend = 'lehmann'
+green_eta = 0.02
+kspace_ham_order = 'second'
+dos_method = 'tetrahedron'
+/
+&energy
+fermi = -0.069291
+energy_min = -1.2
+energy_max = 1.2
+channels_ldos = 300
+/
+&control
+calctype = 'B'
+nsp = 2
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/

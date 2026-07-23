@@ -4,6 +4,27 @@ Bugs surfaced while closing test-matrix coverage gaps (Phase 2, P1). Recorded
 here rather than fixed in place, per the "no further structural refactoring"
 rule for this phase — each entry is a candidate for a future bug-fix task.
 
+## `hoh = .true.` NaNs the on-site (i==i) recursion `J_ij` / Gilbert damping
+
+- **Symptom:** with `&hamiltonian hoh = .true.` and the recursion route
+  (`gf_route='recursion'`, default), the **on-site pair** `ijpair = 1,1`
+  produces `J_ij = NaN` (and hence the on-site Gilbert damping α = NaN), on bcc Fe
+  with SOC. The **intersite** pairs are unaffected, and the **k-space** routes
+  (lehmann/dyson) with `hoh=.true.` are fine — that is the intended second-order
+  H(k) = E_nu + h − hoh + L·S path.
+- **Scope / workaround:** the recursion route does **not** need `hoh` — it carries
+  L·S in the real-space Hamiltonian build (`build_lsham`, on `nsp=2`), so it gets
+  SOC in the Green's function with `hoh=.false.` (on-site α = 0.001050 on the B5.3
+  triad, clean). Only the k-space routes need `hoh=.true.` (else their H(k) falls
+  back to first order and the GF is SOC-free). The `triad_bccFe_damping` case
+  therefore sets `hoh` **per route** via `run_triad.py` `route_overrides`
+  (recursion→false, lehmann/dyson→true).
+- **Likely area:** the on-site (R=0, i==i) branch of the recursion intersite-GF /
+  higher-order-hopping assembly under `hoh` (`green%calculate_intersite_gf` /
+  `recursion` HOH path) — the intersite path is clean, so it is specific to the
+  self-pair with the orthogonalization arrays active.
+- **Found:** B5.3 (Gilbert-damping α triad construction), 2026-07-23.
+
 ## `recur = 'lanczos'` + `nsp = 2` produces NaN DOS and `lmom`
 
 - **Symptom:** with `control%recur = 'lanczos'` and `control%nsp = 2`, every

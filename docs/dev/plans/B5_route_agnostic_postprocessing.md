@@ -60,16 +60,23 @@ envelopes:
 ## 4. Checklist
 - [x] B5.1 exact moments + KPM error bound test **(2026-07-16)**
 - [x] B5.2 J_ij + σ triads pinned **(2026-07-16)**
-- [~] B5.3 **audit done** (2026-07-16): SOC-derivative torque operator IS present
-  (`torque_operator_collinear` = `[σ,ξL·S]`), no escalation —
-  `docs/dev/B5.3_gilbert_damping_audit.md`. The `do_damping` wiring + α triad were
-  implemented and validated (α: recursion 0.00105, lehmann=dyson 0.00263) but
-  **deferred**: adding the `do_damping` field exposed the NaN blocker below.
-  **Blocker RESOLVED 2026-07-23** (commit 8b42928): the NaN was a `simpson_f`
-  out-of-bounds read (NOT an uninitialized local as first thought), fixed and
-  confirmed on the Linux `-O3` trigger layout — see `tests/KNOWN_ISSUES.md`.
-  **Remaining B5.3 work:** re-land the `do_damping` wiring + α triad now that the
-  layout perturbation is safe.
+- [x] B5.3 **done** (audit 2026-07-16; re-land 2026-07-23):
+  - Audit: SOC-derivative torque operator IS present
+    (`torque_operator_collinear` = `[σ,ξL·S]`), no escalation —
+    `docs/dev/B5.3_gilbert_damping_audit.md`.
+  - NaN blocker RESOLVED (commit 8b42928): it was a `simpson_f` out-of-bounds
+    read (NOT an uninitialized local), fixed + valgrind-confirmed on the Linux
+    `-O3` trigger layout — `tests/KNOWN_ISSUES.md`.
+  - `do_damping` flag wired into `post_processing_exchange`
+    (route-agnostic on `green%gij`; default `.false.` = bit-identical legacy);
+    fixed the `spin_i` uninitialized-accumulator in `calculate_gilbert_damping`.
+  - α triad `triad_bccFe_damping` pinned with **true SOC in G** on both routes:
+    recursion 0.001050 (real-space L·S, `hoh=.false.`), lehmann=dyson 0.002528
+    (second-order H(k) + L·S, `hoh=.true.` per-route override). The lehmann≡dyson
+    Σ=0 pin holds; lehmann≈2.4× recursion is the broadening/k-mesh band (like
+    J_ij). Note: this corrects the audit's provisional k-space α (0.00263) which
+    was measured on the first-order-fallback path (SOC-free G). A separate
+    `hoh=.true.` on-site recursion NaN was found and logged (KNOWN_ISSUES).
 
 ### B5.1 notes (done)
 

@@ -676,6 +676,7 @@ contains
             tmati(:, :, :) = this%hamiltonian%tmat(:, :, :, this%lattice%iz(i))
             tmatj(:, :, :) = this%hamiltonian%tmat(:, :, :, this%lattice%iz(j))
             ! Calculate the spin magnetic moment of the i-th atom
+            spin_i = 0.0_rp   ! per-pair accumulator; feeds 1/spin_i in `factor` below
             do k = 0, lmaxi ! azimuthal quantum number index
                spin_i = spin_i + this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 1) - &
                         this%symbolic_atom(this%lattice%iz(i))%potential%ql(1, k, 2)

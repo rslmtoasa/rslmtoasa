@@ -78,6 +78,16 @@ module calculation_mod
       !> override its green_backend with this key.
       character(len=sl) :: gf_route
 
+      !> Gilbert-damping switch for the exchange post-processing (B5.3).
+      !> When .true., `post_processing_exchange` also evaluates the on-site
+      !> Kamberský torque-correlation Gilbert damping (`calculate_gilbert_damping`)
+      !> from the same `green%gij` the J_ij consumer reads -- so it runs through
+      !> whichever `gf_route` filled those arrays (recursion / lehmann / dyson),
+      !> route-agnostic by construction. Requires SOC in the potential (xi_p/xi_d)
+      !> and, for the k-space routes, kspace_ham_order='second'. Default .false.
+      !> (bit-identical legacy: the damping routine is not invoked).
+      logical :: do_damping
+
       !> Controller for preprocessing verbosity.
       !>
       !> Controller for preprocessing verbosity. If true, call the subroutines:
@@ -160,6 +170,7 @@ contains
       processing = this%processing
       post_processing = this%post_processing
       gf_route = this%gf_route
+      do_damping = this%do_damping
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -187,6 +198,7 @@ contains
       this%processing = processing
       this%post_processing = post_processing
       this%gf_route = gf_route
+      this%do_damping = do_damping
 
       close (funit)
    end subroutine build_from_file
@@ -1007,6 +1019,14 @@ contains
       if ((lattice_obj%njij .ne. 0) .and. (lattice_obj%njijk .eq. 0)) then
          call exchange_obj%calculate_exchange()
          call exchange_obj%calculate_exchange_twoindex()
+      end if
+      ! B5.3: on-site Kamberský torque-correlation Gilbert damping, off by
+      ! default. Consumes the same green%gij just filled by gf_route, so it is
+      ! route-agnostic (recursion / lehmann / dyson) by construction. Needs SOC
+      ! in the potential (xi_p/xi_d); the k-space routes additionally need
+      ! kspace_ham_order='second'.
+      if (this%do_damping) then
+         call exchange_obj%calculate_gilbert_damping()
       end if
    end subroutine post_processing_exchange
 
@@ -1985,6 +2005,7 @@ contains
       this%processing = 'none'
       this%post_processing = 'none'
       this%gf_route = 'recursion'
+      this%do_damping = .false.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

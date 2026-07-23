@@ -57,10 +57,25 @@ def setup_workdir(base_dir: Path, workdir: Path) -> None:
             path.unlink()
 
 
-def run_route(binary: Path, base_dir: Path, workdir: Path, route: str, timeout: int) -> str:
+def _merge(a: dict, b: dict) -> dict:
+    # Shallow-nested merge of namelist patch dicts (one level of &namelist).
+    out = {nml: dict(keys) for nml, keys in a.items()}
+    for nml, keys in b.items():
+        out.setdefault(nml, {}).update(keys)
+    return out
+
+
+def run_route(binary: Path, base_dir: Path, workdir: Path, route: str, timeout: int,
+              route_overrides: dict | None = None) -> str:
     setup_workdir(base_dir, workdir)
+    patch = ROUTE_PATCH[route]
+    # Optional per-route namelist overrides from the case (e.g. the damping triad
+    # needs hoh=.true. for the k-space routes so second-order H(k) carries L.S,
+    # but hoh=.false. for recursion which gets L.S from the real-space build).
+    if route_overrides and route in route_overrides:
+        patch = _merge(patch, route_overrides[route])
     tmp = workdir / "input.nml.tmp"
-    f90nml.patch(str(workdir / "input.nml"), ROUTE_PATCH[route], str(tmp))
+    f90nml.patch(str(workdir / "input.nml"), patch, str(tmp))
     tmp.replace(workdir / "input.nml")
     result = subprocess.run(
         [str(binary)], cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -104,11 +119,30 @@ def extract_sigma(workdir: Path, fermi: float) -> dict[str, float]:
     return {"sigma_xx": best[1]}
 
 
+def extract_alpha(workdir: Path) -> dict[str, float]:
+    # On-site Gilbert damping alpha = 0.5*(xx+yy), column 12 of alldampings.out
+    # (cols: #i #j xx xy xz yx yy yz zx zy zz 0.5*(xx+yy) Dist rx ry rz).
+    path = workdir / "alldampings.out"
+    if not path.exists():
+        raise SystemExit("ERROR: alldampings.out not produced (do_damping off, or nsp!=2?)")
+    out: dict[str, float] = {}
+    for line in path.read_text().splitlines():
+        cols = line.split()
+        if len(cols) < 12 or not cols[0].lstrip("-").isdigit():
+            continue
+        out[f"{int(cols[0])}_{int(cols[1])}"] = float(cols[11])
+    if not out:
+        raise SystemExit("ERROR: no numeric pair rows in alldampings.out")
+    return out
+
+
 def extract(case: dict, workdir: Path, log: str) -> dict[str, float]:
     if case["observable"] == "jij":
         return extract_jij(workdir, log)
     if case["observable"] == "sigma":
         return extract_sigma(workdir, float(case["fermi"]))
+    if case["observable"] == "alpha":
+        return extract_alpha(workdir)
     raise SystemExit(f"ERROR: unknown observable {case['observable']!r}")
 
 
@@ -132,9 +166,10 @@ def main() -> int:
     base_dir = tests_dir / case["base"]
     scratch = Path(args.scratch_root).resolve() / name
 
+    route_overrides = case.get("route_overrides")
     values: dict[str, dict[str, float]] = {}
     for route in ("recursion", "lehmann", "dyson"):
-        log = run_route(binary, base_dir, scratch / route, route, timeout)
+        log = run_route(binary, base_dir, scratch / route, route, timeout, route_overrides)
         values[route] = extract(case, scratch / route, log)
 
     ref_dir = Path(args.references).resolve()
