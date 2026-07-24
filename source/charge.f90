@@ -625,15 +625,48 @@ contains
       end do
    end subroutine imppot
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Self-consistent surface Madelung potential from the layer charge
+   !> distribution (Skriver-Rosengaard, Phys. Rev. B 43, 9538).
+   !>
+   !> @details
+   !> The electrostatic potential shift felt by layer i is a lattice sum over
+   !> the multipole moments of all layers j, coupled through the generalized
+   !> 2D Madelung matrices built in madl2d:
+   !>
+   !>   dV_i = (1/S) * sum_j [ M_ss(i,j) Q0(j)  +  M_sz(i,j) Q10(j) + ... ]
+   !>
+   !> where
+   !>   * MONOPOLE term  M_ss = this%dss, driven by the layer charge transfer
+   !>     Q0(j) = tdq(j) = sum over the layer's atoms of dq (occupation-valence).
+   !>     This is the standard ASA surface electrostatics and the only term
+   !>     active in the monopole-only (default) mode.
+   !>   * DIPOLE term (B6, optional) M_sz = this%dsz, driven by the layer l=1
+   !>     (z) dipole moment Q10(j) = tq10(j), aggregated from potential%q10
+   !>     (computed in electrostatics_multipole%compute_dipole_moments). It
+   !>     corrects the work function / surface dipole of broken-symmetry
+   !>     systems and is added ADDITIVELY next to the monopole term, gated on
+   !>     control%dipole_electrostatics. In the bulk limit Q10 -> 0 so the
+   !>     dipole term vanishes and the result reduces to the monopole potential.
+   !>
+   !> The potential is referenced to the deep-bulk layer (vbulk) so that the
+   !> converged shift dV_i -> 0 in the interior. Higher (l=2) multipole
+   !> matrices (ds3z2, dsx2y2, dsxy, dzz, dz3z2) are already built by madl2d
+   !> but not consumed here.
+   !---------------------------------------------------------------------------
    subroutine surfpot(this)
       class(charge), intent(inout) :: this
       ! Local variables
       integer :: I, IB, IBAS, ICLAS, IEX, INEQ, IQ, J, JQ, NQ, NRLX, i_all, i_stat
       real(rp) :: DIF, SUM1, SUMM, SUMN, VBULK, VM1, VMAD1, VMARD, VMN, wsm, twooverwsm, wsms
       real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TDQ, VM, qst
+      real(rp), dimension(this%lattice%nrec + this%lattice%nbas) :: TQ10 ! B6: per-layer l=1 dipole moments
       real(rp), dimension(:, :), allocatable :: DSS
       integer, parameter :: npot = 5000
       integer :: init, atomrec, k
+      logical :: dipole_on ! B6: dipole electrostatics enabled?
 
       !this%vmix = 0.6d0
       wsm = this%lattice%wav*ang2au
@@ -651,11 +684,15 @@ contains
       qst(:) = 0.0d0
       dif = 0.0d0
       atomrec = 0.0d0
+      tq10(:) = 0.0d0
+      dipole_on = this%lattice%control%dipole_electrostatics
       do iclas = 1, this%lattice%nlay
          tdq(iclas) = 0.0d0
          do k = 1, this%lattice%natoms_layer(iclas)
             atomrec = atomrec + 1
             tdq(iclas) = tdq(iclas) + this%dq(atomrec)
+            ! B6: per-layer aggregated l=1 dipole moment, parallel to tdq.
+            if (dipole_on) tq10(iclas) = tq10(iclas) + this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%q10
          end do
          qst(iclas) = tdq(iclas)/this%lattice%natoms_layer(iclas)
          dif = tdq(iclas) + dif
@@ -667,13 +704,18 @@ contains
       if (abs(tdq(iex)) > 0.5d0) then
          if (rank == 0) call g_logger%warning('Too much charge in the external layer!', __FILE__, __LINE__)
       end if
-      ! Calculate the potential for a given charge distribution
+      ! Calculate the Madelung potential of each layer from the layer charge
+      ! distribution: summ = sum_j [ monopole M_ss(i,j) Q0(j) + dipole M_sz(i,j) Q10(j) ].
       do ibas = 1, this%lattice%nlay
          summ = 0.0d0
          do j = 1, nrlx
             iq = init + ibas
             jq = init + j
+            ! Monopole contribution (always): dss = M_ss, tdq = layer charge Q0.
             summ = summ + this%dss(iq, jq)*tdq(j) !- twooverwsm*tdq(j) + twooverwsm*qst(j)
+            ! Dipole contribution (B6, optional): dsz = M_sz, tq10 = layer l=1
+            ! moment Q10. Additive; identically zero when disabled or in bulk.
+            if (dipole_on) summ = summ + this%dsz(iq, jq)*tq10(j)
          end do
          vm(ibas) = (summ/wsms) !+ twooverwsm*qst(t)
       end do
@@ -684,6 +726,11 @@ contains
          jq = init + j
          sum1 = sum1 + this%dss(1, jq)*tdq(j)! - twooverwsm*tdq(j) + twooverwsm*qst(j)
          sumn = sumn + this%dss(this%lattice%nbas, jq)*tdq(j) !- twooverwsm*tdq(j) + twooverwsm*qst(j)
+         ! B6: dipole contribution to the reference (surface / bulk) potentials.
+         if (dipole_on) then
+            sum1 = sum1 + this%dsz(1, jq)*tq10(j)
+            sumn = sumn + this%dsz(this%lattice%nbas, jq)*tq10(j)
+         end if
       end do
       if (rank == 0) call g_logger%info('sum1= '//real2str(sum1)//' sumn= '//real2str(sumn), __FILE__, __LINE__)
       vm1 = (sum1/wsms)
@@ -702,9 +749,22 @@ contains
             & vmard*this%vmix + this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1 - this%vmix)
          end do
       end do
+      ! Report per-class monopole charge transfer, l=1 dipole moment (B6), and
+      ! the resulting mixed Madelung shift VMAD (which now carries both the
+      ! monopole and, when enabled, the dipole contribution).
       do iclas = 1, this%lattice%nrec
-         if (rank == 0) call g_logger%info('Class '//fmt('i4', iclas)//' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))//' VMAD= '&
-                             &//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+         if (rank == 0) then
+            if (dipole_on) then
+               call g_logger%info('Class '//fmt('i4', iclas)// &
+                  ' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))// &
+                  ' Q10= '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%q10)// &
+                  ' VMAD= '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+            else
+               call g_logger%info('Class '//fmt('i4', iclas)// &
+                  ' Chg. Transfer= '//fmt('f10.6', this%dq(iclas))// &
+                  ' VMAD= '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad), __FILE__, __LINE__)
+            end if
+         end if
       end do
    end subroutine surfpot
 

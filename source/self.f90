@@ -40,6 +40,7 @@ module self_mod
    use hamiltonian_mod
    use mix_mod
    use reciprocal_mod
+   use electrostatics_multipole_mod, only: compute_dipole_moments
    use math_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
@@ -1066,7 +1067,18 @@ contains
       !=========================================================================
       call this%bands%calculate_moments()
       call this%mix%save_to('new')
-   
+
+      !=========================================================================
+      !        CALCULATE l=1 DIPOLE CHARGE MOMENTS (B6, surface only)
+      !=========================================================================
+      ! Uses the just-computed on-site density matrix (g0) and the radial
+      ! partial waves exported by NEWRHO in the previous SCF iteration
+      ! (standard SCF lag; identical at convergence). Result -> potential%q10,
+      ! consumed by charge%surfpot below. Bulk-limit / disabled => q10 = 0.
+      if (this%control%dipole_electrostatics) then
+         call compute_dipole_moments(this%bands, this%phi_amp, this%control%dipole_mix)
+      end if
+
       call g_timer%stop('calculation-of-DOS')
    end subroutine run_dos
 

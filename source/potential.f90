@@ -92,16 +92,16 @@ module potential_mod
       real(rp) :: ws_r
       ! Energy variables
       real(rp) :: sumec, sumev, etot, utot, ekin, rhoeps
-	      ! Madelung potential
-	      real(rp) :: vmad
-	      !> l=1 (z) dipole charge moment Q_{10} of the sphere (surface electrostatics, B6).
-	      !> Derived each SCF step from the on-site density matrix; zero in the bulk limit.
-	      real(rp) :: q10
-	      !> Sphere-boundary potential used to construct the muffin-tin zero.
-	      !> vrmax(1) is the spin average; vrmax(2) is up-down.
-	      real(rp), dimension(2) :: vrmax
-	      ! Spin-orbit coupling coefficients and Racah parameters
-	      real(rp), dimension(2) :: xi_p, xi_d, rac
+      ! Madelung potential
+      real(rp) :: vmad
+      !> l=1 (z) dipole charge moment Q_{10} of the sphere (surface electrostatics, B6).
+      !> Derived each SCF step from the on-site density matrix; zero in the bulk limit.
+      real(rp) :: q10
+      !> Sphere-boundary potential used to construct the muffin-tin zero.
+      !> vrmax(1) is the spin average; vrmax(2) is up-down.
+      real(rp), dimension(2) :: vrmax
+      ! Spin-orbit coupling coefficients and Racah parameters
+      real(rp), dimension(2) :: xi_p, xi_d, rac
       ! Hyperfine fields
       real(rp), dimension(2) :: hyper_field(2)
       !> Hubbard parameters
@@ -248,9 +248,9 @@ contains
       ekin = this%ekin
       rhoeps = this%rhoeps
       lmax = this%lmax
-	      vmad = this%vmad
-	      vrmax = this%vrmax
-	      xi_p = this%xi_p
+          vmad = this%vmad
+          vrmax = this%vrmax
+          xi_p = this%xi_p
       xi_d = this%xi_d
       rac = this%rac
 
@@ -400,9 +400,9 @@ contains
       this%ekin = ekin
       this%rhoeps = rhoeps
       this%lmax = lmax
-	      this%vmad = vmad
-	      this%vrmax = vrmax
-	      this%xi_p = xi_p
+          this%vmad = vmad
+          this%vrmax = vrmax
+          this%xi_p = xi_p
       this%xi_d = xi_d
       this%rac = rac
 
@@ -773,10 +773,10 @@ contains
       this%utot = 0.0d0
       this%ekin = 0.0d0
       this%rhoeps = 0.0d0
-	      this%vmad = 0.0d0
-	      this%q10 = 0.0d0
-	      this%vrmax(:) = 0.0d0
-	      this%pl(:, :) = 0.0d0
+       this%vmad = 0.0d0
+       this%q10 = 0.0d0
+       this%vrmax(:) = 0.0d0
+       this%pl(:, :) = 0.0d0
       this%ql(:, :, :) = 0.0d0
       this%cx(:, :) = 0.0d0
       this%wx(:, :) = 0.0d0
@@ -841,9 +841,9 @@ contains
       utot = this%utot
       ekin = this%ekin
       rhoeps = this%rhoeps
-	      vmad = this%vmad
-	      vrmax = this%vrmax
-	      lmax = this%lmax
+          vmad = this%vmad
+          vrmax = this%vrmax
+          lmax = this%lmax
       ws_r = this%ws_r
       c = this%c
       enu = this%enu
@@ -973,10 +973,10 @@ contains
       call nml%add('ws_r', this%ws_r)
       call nml%add('ql', this%ql)
       call nml%add('lmax', this%lmax)
-	      call nml%add('vmad', this%vmad)
-	      call nml%add('q10', this%q10)
-	      call nml%add('vrmax', this%vrmax)
-	      call nml%add('mom', this%mom)
+       call nml%add('vmad', this%vmad)
+       call nml%add('q10', this%q10)
+       call nml%add('vrmax', this%vrmax)
+       call nml%add('mom', this%mom)
       call nml%add('lmom', this%lmom)
       call nml%add('xi_p', this%xi_p)
       call nml%add('xi_d', this%xi_d)
@@ -1112,10 +1112,10 @@ contains
                                    this%etot, &
                                    this%utot, &
                                    this%ekin, &
-	                                   this%rhoeps, &
-	                                   this%vmad, &
-	                                   pack(this%vrmax, .true.), &
-	                                   this%mtot/)
+                                       this%rhoeps, &
+                                       this%vmad, &
+                                       pack(this%vrmax, .true.), &
+                                       this%mtot/)
       return
 
    end subroutine flatten_potential_full
@@ -1178,10 +1178,10 @@ contains
                    + 1 & ! etot
                    + 1 & ! utot
                    + 1 & ! ekin
-	                   + 1 & ! rhoeps
-	                   + 1 & ! vmad
-	                   + size(this%vrmax) &
-	                   + 1 !mtot
+                       + 1 & ! rhoeps
+                       + 1 & ! vmad
+                       + size(this%vrmax) &
+                       + 1 !mtot
 
    end function sizeof_potential_full
 
@@ -1464,16 +1464,16 @@ contains
       d_size = 1
       this%rhoeps = flat_array(d_pos)
       d_pos = d_pos + d_size
-	      ! vmad
-	      d_size = 1
-	      this%vmad = flat_array(d_pos)
-	      d_pos = d_pos + d_size
-	      ! vrmax
-	      d_size = size(this%vrmax)
-	      this%vrmax = reshape(flat_array(d_pos:d_pos + d_size), shape(this%vrmax))
-	      d_pos = d_pos + d_size
-	      ! mtot
-	      d_size = 1
+      ! vmad
+      d_size = 1
+      this%vmad = flat_array(d_pos)
+      d_pos = d_pos + d_size
+      ! vrmax
+      d_size = size(this%vrmax)
+      this%vrmax = reshape(flat_array(d_pos:d_pos + d_size), shape(this%vrmax))
+      d_pos = d_pos + d_size
+      ! mtot
+      d_size = 1
       this%mtot = flat_array(d_pos)
 
       return

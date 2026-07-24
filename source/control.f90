@@ -172,6 +172,12 @@ module control_mod
       character(len=9) :: recur
       logical :: cpp_plugin
       logical :: gpu_plugin
+      !> Enable l=1 dipole surface electrostatics (B6). Default .false. -> the
+      !> Madelung problem stays monopole-only and results are bit-identical.
+      logical :: dipole_electrostatics
+      !> Linear mixing factor for the B6 dipole moment across SCF steps. The
+      !> dipole feeds back into the potential, so it needs damping; default 0.1.
+      real(rp) :: dipole_mix
       character(len=16) :: gpu_backend
       character(len=16) :: cheb_backend
 
@@ -288,6 +294,8 @@ contains
       lmax = this%lmax
       calctype = this%calctype
       hyperfine = this%hyperfine
+      dipole_electrostatics = this%dipole_electrostatics
+      dipole_mix = this%dipole_mix
       sym_term = this%sym_term
       llsp = this%llsp
       lld = this%lld
@@ -410,6 +418,8 @@ contains
 
       ! Mandatory statements
       this%hyperfine = hyperfine
+      this%dipole_electrostatics = dipole_electrostatics
+      this%dipole_mix = dipole_mix
       this%sym_term = sym_term
       this%calctype = calctype
       this%nsp = nsp
@@ -463,6 +473,8 @@ contains
       this%recur = 'block'
       this%cpp_plugin = .false.
       this%gpu_plugin = .false.
+      this%dipole_electrostatics = .false.
+      this%dipole_mix = 0.5d0
       this%gpu_backend = 'csr'
       this%cheb_backend = 'fast'
       this%fname = ''
@@ -512,6 +524,8 @@ contains
       svac = this%svac
       calctype = this%calctype
       hyperfine = this%hyperfine
+      dipole_electrostatics = this%dipole_electrostatics
+      dipole_mix = this%dipole_mix
       sym_term = this%sym_term
       txc = this%txc
       blockrec = this%blockrec
@@ -583,6 +597,8 @@ contains
       call nml%add('conca', this%conca)
       call nml%add('concb', this%concb)
       call nml%add('hyperfine', this%hyperfine)
+      call nml%add('dipole_electrostatics', this%dipole_electrostatics)
+      call nml%add('dipole_mix', this%dipole_mix)
       call nml%add('sym_term', this%sym_term)
       call nml%add('cpp_plugin', this%cpp_plugin)
       call nml%add('gpu_plugin', this%gpu_plugin)
