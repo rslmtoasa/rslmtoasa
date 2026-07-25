@@ -615,6 +615,18 @@ contains
          totq(jj) = tdq(i)
       end do
 
+      ! Capture the previous iteration's vmad BEFORE the loop below overwrites
+      ! it, mirroring bulkpot (which captures VMAD0 in its own separate loop).
+      ! Reading it afterwards made the mixing below a no-op -- it reduced to
+      ! x*vmix + x*(1-vmix) == x, with verr identically zero -- so impurity
+      ! runs converged unmixed. B7.4's alignment solver leans on this hook to
+      ! damp the capacitor-like soft mode, so it must be live.
+      ! This changes neither a matrix element nor a charge-scaling convention:
+      ! at the default vmix = 1.0 the result is bit-identical.
+      do iclas = 1, this%lattice%nrec
+         vmad0(iclas) = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad
+      end do
+
       do jbas = 1, this%lattice%nrec
          ss = 0.0d0
          do n = 1, nrx
@@ -624,17 +636,7 @@ contains
          this%symbolic_atom(this%lattice%nbulk + jbas)%potential%vmad = ss + this%symbolic_atom(this%lattice%chargetrf_type(jbas))%potential%vmad
       end do
 
-      ! NOTE (B7.0, reported not fixed): vmad0 is read here, AFTER the loop
-      ! above has already overwritten vmad, so the mixing below reduces to
-      ! x*vmix + x*(1-vmix) == x and verr is identically zero -- the Madelung
-      ! mixing hook is a no-op. bulkpot captures its VMAD0 in a separate loop
-      ! BEFORE touching vmad and is correct; surfpot reads the stored previous
-      ! value and is correct. Impurity runs therefore converge unmixed, which
-      ! works in practice. Left as-is per the G-B7-1 sign-off (do not change
-      ! conventions in working routines); B7.4 needs this hook live before the
-      ! alignment solver can lean on it. See docs/dev/CONVENTIONS_MADELUNG.md.
       do iclas = 1, this%lattice%nrec
-         vmad0(iclas) = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad
          this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad = &
          & this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad*this%vmix + vmad0(iclas)*(1 - this%vmix)
          verr = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad - vmad0(iclas)
@@ -1238,6 +1240,37 @@ contains
    !> @brief
    !> Calculates the matrix elements for the electrostatic potential from
    !> information in ´clust´, ´size´ and ´self´.
+   !>
+   !> @warning DO NOT USE THIS ROUTINE AS THE TEMPLATE FOR `interfacemat`.
+   !>          USE `surfmat` INSTEAD. (B7.0 / G-B7-1 finding.)
+   !>
+   !> `impmad` and `surfmat` build their matrices in two DIFFERENT unit
+   !> conventions. Each is self-consistent with its own contraction, so
+   !> neither is wrong in place -- but they are off from each other by
+   !> exactly one factor of S, and mixing them silently produces a plausible
+   !> wrong answer:
+   !>
+   !>   impmad  (here)   : absolute units. Off-diagonal `2*dd` = 2/r, on-site
+   !>                      `2/wsimp(ii)` = 2/w, both in 1/bohr. `imppot`
+   !>                      contracts this%amad BARE -- there is no /wsms at
+   !>                      the call site -- landing directly in Rydberg.
+   !>   surfmat          : the kernel's 1/S convention. On-site term is
+   !>                      `2*(sws*alat*ang2au/wssurf(i))` = 2*(S/w_i), which
+   !>                      is DIMENSIONLESS and equals exactly 2 for uniform w.
+   !>                      `surfpot` restores Rydberg by dividing by wsms.
+   !>
+   !> For fccCu001 (S = 2.6690 bohr, uniform w): impmad gives 2/w = 0.749346,
+   !> surfmat gives 2*(S/w) = 2.000000 -- a ratio of exactly S.
+   !>
+   !> Two further reasons to prefer `surfmat` for interface work:
+   !>   * `impmad` sets `wsimp(:) = lattice%wav`, a single system-wide average
+   !>     ("Set as if all the atoms have the same WS radius. Can be improved
+   !>     later."), whereas `surfmat`'s `wssurf` is genuinely PER-SITE. B7
+   !>     needs per-site w across two regions.
+   !>   * `impmad` builds a real-space 3D cluster sum; the interface geometry
+   !>     needs the 2D layer kernel that `surfmat`/`madl2d` provide.
+   !>
+   !> See docs/dev/CONVENTIONS_MADELUNG.md (C0, C1, C2).
    !---------------------------------------------------------------------------
    subroutine impmad(this)
       implicit none
