@@ -1456,9 +1456,12 @@ contains
                ! progra
                ! ma seja abortado.
                if (erfcp == 0) then
+                  ! ERFCP underflowed to exactly zero, so EXPP*ERFCP = 0 and the
+                  ! diverging EXPP need never be formed. The general branch below
+                  ! then reduces to EXF = EXPM*ERFCM and EXH = -EXPM*ERFCM = -EXF.
                   expm = exp(-dgi*qppz)
                   exf = expm*erfcm
-                  exh = -exh
+                  exh = -exf
                else
                   EXPP = EXP(DGI*QPPZ)
                   EXPM = 1./EXPP
