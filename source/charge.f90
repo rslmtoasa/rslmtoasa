@@ -1537,8 +1537,10 @@ contains
             this%DSX2Y2(JQ, IQ) = QRMDL
             this%DSXY(IQ, JQ) = QIMDL
             this%DSXY(JQ, IQ) = QIMDL
-            this%DZZ(IQ, JQ) = FACZZ*Q0MDL
-            this%DZZ(JQ, IQ) = FACZZ*Q0MDL
+            ! DZZ is deliberately NOT set here: it is built below from the
+            ! already-TWOS-scaled DS3Z2. Setting it from the unscaled Q0MDL at
+            ! this point was a dead assignment (unconditionally overwritten),
+            ! and a trap for whoever turns l = 2 on. See CONVENTIONS_MADELUNG.md.
             this%DZ3Z2(IQ, JQ) = G0MDL
             this%DZ3Z2(JQ, IQ) = -G0MDL
             !
@@ -1562,6 +1564,16 @@ contains
       end do
       !
       !     Plate-condenser matrix
+      !
+      !     Built here but consumed nowhere. This is the applied-bias / electric
+      !     field hook (B7 §6): with alignment entering as a target potential
+      !     step, a bias is target_step = contact_potential + eV, and PM is the
+      !     matching kernel. Two caveats for whoever activates it:
+      !       * PM carries the SAME lower-triangular gauge choice as AM, so it
+      !         needs the same treatment (see CONVENTIONS_MADELUNG.md, C3);
+      !       * a biased or field-exposed slab is a charged-slab problem, so the
+      !         Q = 0 precondition no longer rescues the gauge and the setup
+      !         needs its own compensation story.
       !
       do JQ = 1, this%lattice%nbas
          do IQ = 1, this%lattice%nbas
