@@ -860,6 +860,19 @@ contains
    !> The kernel itself is reused UNCHANGED: `dss`/`dsz` as built by `madl2d`
    !> via `surfmat` are correct two-sided (CONVENTIONS C3, C4).
    !>
+   !> @note **There is deliberately no separate `interfacemat`.** The B7 plan
+   !>       names one, and CONVENTIONS C8 requires that it mimic `surfmat`
+   !>       rather than `impmad` (the two differ by exactly one factor of S).
+   !>       The strongest form of "mimic `surfmat`" is to *reuse* it: this
+   !>       routine consumes precisely what `build_alelay` + `surfmat` already
+   !>       produce -- `dss`, `dsz`, `sws`, `qz`, `wssurf` and the region
+   !>       registry -- all of which are geometry-general and already correct
+   !>       two-sided. Writing a near-duplicate builder would add a second
+   !>       copy of the kernel to keep in sync and a second chance to drift
+   !>       into `impmad`'s convention, for no capability gain. If a genuinely
+   !>       two-sided geometry ever needs different STRUCTURE CONSTANTS, that
+   !>       belongs in the cluster builder (B7.5), not in a parallel kernel.
+   !>
    !> @note The alignment shift V_r (B7 §1.3) is B7.4's responsibility and is
    !>       read here from `this%region_shift` as data. With a single region, or
    !>       before B7.4 lands, it is identically zero and this routine reduces to
