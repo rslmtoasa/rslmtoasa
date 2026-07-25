@@ -32,7 +32,7 @@ module charge_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
-   use region_registry_mod, only: region_registry
+   use region_registry_mod, only: region_registry, region_descriptor, region_kind_vacuum
    implicit none
 
    private
@@ -109,6 +109,15 @@ module charge_mod
       !> Built from the same buildsurf cluster data surfpot itself reads
       !> (qz, wssurf, nbas, nlay); see build_region_registry.
       type(region_registry) :: regions
+
+      !> B7.3/B7.4: per-region alignment shift V_r (B7 §1.3), a single scalar
+      !> per region applied identically to frozen and active sites of that
+      !> region. Region A is the gauge anchor (V_A == 0) and only differences
+      !> are physical: V_B - V_A is the contact potential. This is a change of
+      !> REFERENCE LEVEL, not a relaxation -- frozen sites remain frozen, at a
+      !> shifted value. B7.4 owns solving for it; until then it is zero and
+      !> interfacepot reduces to the deviation-variable form of surfpot.
+      real(rp), dimension(:), allocatable :: region_shift
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -121,6 +130,10 @@ module charge_mod
       procedure :: impmad
       procedure :: imppot
       procedure :: build_region_registry
+      procedure :: interfacepot
+      procedure :: compensation_sites
+      procedure :: boundary_nef
+      procedure :: overlap_diagnostic
       procedure :: print_state
       procedure :: print_state_full
       procedure :: print_state_formatted
@@ -791,6 +804,323 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Two-sided deviation-variable electrostatics for the interface geometry
+   !> (B7.3): `imppot`'s reference bookkeeping on `surfpot`'s 2D kernel.
+   !>
+   !> @details
+   !> `surfpot` is the one-sided (surface) path and remains the permanent
+   !> regression oracle -- it is NOT modified. This routine is the two-sided
+   !> generalization, and differs from it in five deliberate ways:
+   !>
+   !> 1. **Deviation variables throughout** (B7 §1.4, §2.4; CONVENTIONS C7).
+   !>    `surfpot` sums raw `dq` over the active layers, which for a
+   !>    non-homogeneous bulk with legitimately charged sites never converges to
+   !>    a deviation. Here every charge entering the Madelung sum is
+   !>
+   !>        dq_i = q_i - q_bulk(region(i), type(i))
+   !>
+   !>    i.e. `imppot`'s definition generalized from a single host to the region
+   !>    registry. This is what makes the two-sided sums truncate on BOTH sides
+   !>    and be absolutely convergent, and what makes polar hosts and ordered
+   !>    alloys correct: their built-in charge transfer lives in the reference,
+   !>    not in dq.
+   !>
+   !> 2. **The moments Q and P**, computed and reported every iteration:
+   !>
+   !>        Q = sum_i dq_i                 -> must vanish (no residual field)
+   !>        P = sum_i dq_i z_i + sum_i dp_i -> the potential step
+   !>
+   !>    Q = 0 is a precondition on KERNEL VALIDITY, not merely on physics
+   !>    (CONVENTIONS C3): the `AM` half-space gauge differs from the symmetric
+   !>    kernel by (2*pi/A)[P - z_i*Q], which is a global constant -- and so
+   !>    cancels from any dV difference -- if and only if Q = 0. If Q /= 0 the
+   !>    gauge injects a spurious uniform field. Hence the explicit check.
+   !>
+   !> 3. **Two-sided probes.** `surfpot` probes deep vacuum (`dss(1,.)`) and
+   !>    deep bulk (`dss(nbas,.)`) and reports `vmad1 = vm1 - vbulk`. Here the
+   !>    same probes are evaluated at the deep site of EACH region, so the step
+   !>    is the interface dipole barrier (A|B) or the work function (A|vacuum).
+   !>
+   !> 4. **Localized, N(E_F)-weighted compensation** (B7 §1.5). The residual
+   !>    `sum_active dq` is placed at the defined boundary sites, weighted by the
+   !>    side-resolved N(E_F) of the boundary buffer layers: metallic leads
+   !>    receive charge proportional to N(E_F); vacuum/insulating receives
+   !>    NOTHING. This gives ~50/50 for two similar metals and collapses to
+   !>    "everything into the metal" for metal|vacuum, so the surface case needs
+   !>    no separate branch. It deliberately does NOT inherit `imppot`'s smear
+   !>    (`tdq(j) = -dif/nsum` over every frozen site): in a 3D impurity cluster
+   !>    that is a roughly isotropic shell with sum dq*z = 0 by symmetry, but in
+   !>    layered geometry the same smear has a nonzero first moment and a lever
+   !>    arm of the full slab thickness, landing directly on the work function.
+   !>
+   !> 5. **Per-site w** from the registry, following `surfmat`'s `wssurf`
+   !>    pattern. NOT `impmad`'s `wsimp`, which is a system-wide average AND in
+   !>    a different unit convention (see the @warning on `impmad`).
+   !>
+   !> The kernel itself is reused UNCHANGED: `dss`/`dsz` as built by `madl2d`
+   !> via `surfmat` are correct two-sided (CONVENTIONS C3, C4).
+   !>
+   !> @note The alignment shift V_r (B7 §1.3) is B7.4's responsibility and is
+   !>       read here from `this%region_shift` as data. With a single region, or
+   !>       before B7.4 lands, it is identically zero and this routine reduces to
+   !>       the deviation-variable form of `surfpot`.
+   !---------------------------------------------------------------------------
+   subroutine interfacepot(this)
+      class(charge), intent(inout) :: this
+      ! Local variables
+      integer :: ibas, iclas, iq, j, jq, k, atomrec, nsite, ireg
+      integer :: ideep_lo, ideep_hi
+      real(rp) :: summ, wsms, qtot, ptot, step, resid
+      real(rp) :: v_lo, v_hi, nef_lo, nef_hi, wgt_lo, wgt_hi
+      real(rp), dimension(this%lattice%nbas) :: tdq, tq10, vm, zsite, wsite
+      logical :: dipole_on
+
+      nsite = this%lattice%nbas
+      wsms = this%sws*this%lattice%alat*ang2au
+      dipole_on = this%lattice%control%dipole_electrostatics
+
+      ! Registry supplies z and w as data (B7 §2.10: relaxed-z is then a
+      ! parameter change, not a rewrite).
+      if (this%regions%nsite == nsite) then
+         zsite(1:nsite) = this%regions%z(1:nsite)
+         wsite(1:nsite) = this%regions%w(1:nsite)
+      else
+         zsite(1:nsite) = this%qz(1:nsite)
+         wsite(1:nsite) = this%wssurf(1:nsite)
+      end if
+
+      tdq(:) = 0.0d0
+      tq10(:) = 0.0d0
+
+      ! --- 1. Deviation charges on the active sites -------------------------
+      ! dq_i - q_bulk(reference type), never an absolute charge.
+      atomrec = 0
+      do iclas = 1, this%lattice%nlay
+         do k = 1, this%lattice%natoms_layer(iclas)
+            atomrec = atomrec + 1
+            if (atomrec > nsite) exit
+            tdq(atomrec) = this%dq(atomrec)
+            if (this%lattice%chargetrf_type(atomrec) > 0) then
+               tdq(atomrec) = tdq(atomrec) - this%bulk_charge(this%lattice%chargetrf_type(atomrec))
+            end if
+            if (dipole_on) tq10(atomrec) = this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%q10
+         end do
+      end do
+
+      ! --- 2. Localized, N(E_F)-weighted compensation (§1.5) ----------------
+      resid = sum(tdq(1:nsite))
+      call this%compensation_sites(ideep_lo, ideep_hi, nef_lo, nef_hi)
+      if (nef_lo + nef_hi > 0.0d0) then
+         wgt_lo = nef_lo/(nef_lo + nef_hi)
+         wgt_hi = nef_hi/(nef_lo + nef_hi)
+      else
+         wgt_lo = 0.5d0
+         wgt_hi = 0.5d0
+      end if
+      if (ideep_lo >= 1 .and. ideep_lo <= nsite) tdq(ideep_lo) = tdq(ideep_lo) - resid*wgt_lo
+      if (ideep_hi >= 1 .and. ideep_hi <= nsite) tdq(ideep_hi) = tdq(ideep_hi) - resid*wgt_hi
+
+      ! --- 3. The moments Q and P (§1.4), reported every iteration ----------
+      qtot = 0.0d0
+      ptot = 0.0d0
+      do j = 1, nsite
+         qtot = qtot + tdq(j)
+         ptot = ptot + zsite(j)*tdq(j)
+         if (dipole_on) ptot = ptot + tq10(j)
+      end do
+
+      if (rank == 0) then
+         call g_logger%info('interfacepot: Q= '//fmt('es12.4', qtot)// &
+                            ' P= '//fmt('es12.4', ptot)// &
+                            ' residual= '//fmt('es12.4', resid), __FILE__, __LINE__)
+      end if
+
+      ! Q = 0 is a KERNEL PRECONDITION, not just physics (C3): a nonzero Q makes
+      ! the half-space AM gauge inject a spurious uniform field of (2*pi/A)*Q.
+      if (abs(qtot) > 1.0d-8) then
+         if (rank == 0) call g_logger%warning('interfacepot: sum of deviation charges Q= '// &
+            fmt('es12.4', qtot)//' is not zero; the AM half-space gauge is only valid at Q=0 '// &
+            '(see CONVENTIONS_MADELUNG.md C3). A spurious uniform field is being injected.', &
+            __FILE__, __LINE__)
+      end if
+
+      ! --- 4. Madelung potential, kernel reused unchanged -------------------
+      do ibas = 1, nsite
+         summ = 0.0d0
+         do j = 1, nsite
+            iq = ibas
+            jq = j
+            summ = summ + this%dss(iq, jq)*tdq(j)
+            if (dipole_on) summ = summ + this%dsz(iq, jq)*tq10(j)
+         end do
+         vm(ibas) = summ/wsms
+      end do
+
+      ! --- 5. Two-sided deep probes and the step ----------------------------
+      v_lo = vm(1)
+      v_hi = vm(nsite)
+      step = v_hi - v_lo
+      if (rank == 0) then
+         call g_logger%info('interfacepot: deep-probe potentials v_lo= '//fmt('f12.6', v_lo)// &
+                            ' v_hi= '//fmt('f12.6', v_hi)// &
+                            ' step= '//fmt('f12.6', step), __FILE__, __LINE__)
+      end if
+
+      ! --- 6. Write back, referenced to the low-z deep probe, with the region
+      !        alignment shift V_r added per B7 §1.3. V_r is B7.4's unknown and
+      !        is zero until that lands.
+      atomrec = 0
+      do ibas = 1, this%lattice%nlay
+         do k = 1, this%lattice%natoms_layer(ibas)
+            atomrec = atomrec + 1
+            if (atomrec > nsite) exit
+            ! vm is indexed per SITE (matching the kernel's row index), not per
+            ! layer -- atomrec is the site counter, ibas only walks the layers.
+            ireg = 1
+            if (this%regions%nsite == nsite) ireg = this%regions%region_id(atomrec)
+            this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad = &
+               (vm(atomrec) - v_lo + this%region_shift(ireg))*this%vmix + &
+               this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1.0d0 - this%vmix)
+         end do
+      end do
+
+      call this%overlap_diagnostic(zsite, wsite, nsite)
+   end subroutine interfacepot
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Locates the two compensation sites and their boundary N(E_F) weights
+   !> (B7 §1.5).
+   !>
+   !> @details
+   !> Compensation is placed at the innermost frozen site of each side, weighted
+   !> by the side-resolved N(E_F) of the boundary buffer layers -- the linear
+   !> response answer for partitioning screening charge between two reservoirs.
+   !> A vacuum/insulating boundary has N(E_F) ~ 0 and receives NOTHING, which is
+   !> why the surface case needs no separate branch: a nonzero residual means the
+   !> active zone failed to screen, and the remaining screening happens where
+   !> there are states to do it.
+   !>
+   !> Real spill-out is NOT compensation: charge outside the surface plane is
+   !> carried by ACTIVE empty spheres as genuine self-consistent dq. If there is
+   !> not enough charge outside, the fix is more active empty spheres -- placing
+   !> compensation in the vacuum does not perturb the work function, it SETS it.
+   !---------------------------------------------------------------------------
+   subroutine compensation_sites(this, ideep_lo, ideep_hi, nef_lo, nef_hi)
+      class(charge), intent(inout) :: this
+      integer, intent(out) :: ideep_lo, ideep_hi
+      real(rp), intent(out) :: nef_lo, nef_hi
+      integer :: i, nsite
+
+      nsite = this%lattice%nbas
+      ideep_lo = 1
+      ideep_hi = nsite
+
+      if (this%regions%nsite == nsite) then
+         ! Innermost frozen site on each side: the last frozen row before the
+         ! active zone (low z) and the first frozen row after it (high z).
+         do i = 1, nsite
+            if (this%regions%active(i)) exit
+            ideep_lo = i
+         end do
+         ideep_hi = nsite
+         do i = nsite, 1, -1
+            if (this%regions%active(i)) exit
+            ideep_hi = i
+         end do
+      end if
+
+      ! Side-resolved N(E_F) of the boundary buffer layers. Recursion provides
+      ! these for free; until that plumbing lands, fall back to the vacuum test
+      ! below so metal|vacuum still behaves correctly.
+      nef_lo = this%boundary_nef(ideep_lo)
+      nef_hi = this%boundary_nef(ideep_hi)
+   end subroutine compensation_sites
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Side-resolved N(E_F) at a boundary buffer site, used as the compensation
+   !> weight (B7 §1.5). Vacuum/empty-sphere sites return ~0 so they receive no
+   !> compensation charge.
+   !---------------------------------------------------------------------------
+   function boundary_nef(this, isite) result(nef)
+      class(charge), intent(inout) :: this
+      integer, intent(in) :: isite
+      real(rp) :: nef
+      integer :: ia
+      type(region_descriptor) :: desc
+
+      nef = 0.0d0
+      if (isite < 1 .or. isite > this%lattice%nbas) return
+
+      ! A vacuum region carries no states at E_F by construction.
+      if (this%regions%nsite == this%lattice%nbas) then
+         desc = this%regions%region_of(isite)
+         if (desc%kind == region_kind_vacuum) return
+      end if
+
+      ! Otherwise use the site's valence as a stand-in density of states scale.
+      ! B7.7 replaces this with the recursion-supplied N(E_F) of the boundary
+      ! buffer layer; the weighting rule and its normalization are unchanged by
+      ! that substitution.
+      ia = this%lattice%nbulk + isite
+      if (ia >= 1 .and. ia <= size(this%symbolic_atom)) then
+         nef = max(this%symbolic_atom(ia)%element%valence, 0.0d0)
+      end if
+   end function boundary_nef
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Sphere-overlap diagnostic (B7 §2.9). Diagnostic ONLY -- per maintainer
+   !> instruction the ASA volume-filling problem at an interface with unequal w
+   !> is not to be solved here.
+   !>
+   !> @details
+   !> With unequal w across the interface the ASA volume-filling condition cannot
+   !> hold on both sides. This reports the per-layer ratio of summed sphere
+   !> volume to the cell volume and warns above a threshold, converting a silent
+   !> error into a message.
+   !---------------------------------------------------------------------------
+   subroutine overlap_diagnostic(this, zsite, wsite, nsite)
+      class(charge), intent(inout) :: this
+      integer, intent(in) :: nsite
+      real(rp), dimension(:), intent(in) :: zsite, wsite
+      real(rp) :: wmin, wmax, ratio
+      integer :: i
+
+      if (nsite < 1) return
+
+      wmin = wsite(1)
+      wmax = wsite(1)
+      do i = 2, nsite
+         wmin = min(wmin, wsite(i))
+         wmax = max(wmax, wsite(i))
+      end do
+
+      if (wmin <= 0.0d0) return
+      ratio = wmax/wmin
+
+      if (rank == 0) then
+         call g_logger%info('interfacepot: Wigner-Seitz radii span w_min= '//fmt('f10.6', wmin)// &
+                            ' w_max= '//fmt('f10.6', wmax)//' ratio= '//fmt('f8.4', ratio), &
+                            __FILE__, __LINE__)
+         if (ratio > 1.15d0) then
+            call g_logger%warning('interfacepot: Wigner-Seitz radii differ by more than 15% '// &
+               'across the cluster (ratio '//fmt('f8.4', ratio)//'). The ASA volume-filling '// &
+               'condition cannot hold on both sides; sphere overlap is significant and the '// &
+               'shared l>=1 multipole normalization may be a poor compromise (see '// &
+               'CONVENTIONS_MADELUNG.md C5). This is a diagnostic, not a correction.', &
+               __FILE__, __LINE__)
+         end if
+      end if
+   end subroutine overlap_diagnostic
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Calculates the matrix elements for the electrostatic potential from
    !> information in ´clust´ and ´self´.
    !---------------------------------------------------------------------------
@@ -942,6 +1272,12 @@ contains
       call this%regions%build_from_buildsurf(this%lattice%nbas, this%lattice%nlay, &
                                               this%qz, this%wssurf, &
                                               this%lattice%chargetrf_type, buildsurf_init)
+
+      ! Per-region alignment shift V_r (B7 §1.3). Zero until B7.4 solves for it;
+      ! region A stays the gauge anchor at exactly zero regardless.
+      if (allocated(this%region_shift)) deallocate (this%region_shift)
+      allocate (this%region_shift(max(this%regions%nregion, 1)))
+      this%region_shift(:) = 0.0d0
    end subroutine build_region_registry
 
    !---------------------------------------------------------------------------
