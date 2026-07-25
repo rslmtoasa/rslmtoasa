@@ -316,17 +316,51 @@ is that documentation. New interface code uses the canonical definition only.
 
 ---
 
-## Open item not covered by this contract
+## C8 — `impmad` and `surfmat` are in different unit conventions
 
-`imppot`'s Madelung mixing is a **no-op** (§2.2): `vmad0(iclas)` is read *after*
-the overwrite, so `verr` is identically zero and the mix does nothing.
-`bulkpot` and `surfpot` are both correct. Impurity runs therefore converge
-unmixed, which evidently works in practice — but the interface path introduces a
-capacitor-like soft mode in the alignment, so this hook must be live before B7.4
-leans on it.
+**Directive: `interfacemat` mimics `surfmat`, never `impmad`.**
 
-This is a **bug fix, not a convention**, so it is deliberately not given a C-number.
-It remains open as B7.0 item 3.
+The two builders differ by **exactly one factor of `S`**. Each is
+self-consistent with its own contraction, so **neither is a bug in place** —
+but mixing them silently produces a plausible wrong answer.
+
+| builder | units | on-site term | consumed by |
+|---|---|---|---|
+| `impmad` | **absolute** (1/bohr) | `2/wsimp(ii)` = `2/w` | `imppot`, contracting `this%amad` **bare** — no `/wsms` |
+| `surfmat` | **the `1/S` convention** | `2*(sws*alat*ang2au/wssurf(i))` = `2·(S/w_i)`, dimensionless | `surfpot`, which restores Rydberg via `/wsms` |
+
+For fccCu001 (`S = 2.6690 bohr`, uniform `w`): `2/w = 0.749346` versus
+`2·(S/w) = 2.000000` — a ratio of exactly `S`.
+
+Two further reasons `surfmat` is the right template for interface work:
+
+- `impmad` sets `wsimp(:) = lattice%wav`, a single system-wide average, with
+  the in-code comment *"Set as if all the atoms have the same WS radius. Can be
+  improved later."* `surfmat`'s `wssurf` is genuinely **per-site**, which B7
+  needs across two regions.
+- `impmad` builds a **3D real-space cluster sum**; the interface geometry needs
+  the **2D layer kernel** that `surfmat`/`madl2d` provide.
+
+- **Flagged by:** a visible `@warning` block on `impmad` in `charge.f90`.
+- **Action:** none to either routine. B7.3's `interfacemat` follows `surfmat`.
+
+---
+
+## C9 — `imppot`'s Madelung mixing *(§2.2 — was dead, now live)*
+
+`vmad0(iclas)` was read *after* the contraction loop had already overwritten
+`vmad`, so the mix reduced to `x*vmix + x*(1-vmix) == x` and `verr` was
+identically zero. `bulkpot` (which captures `VMAD0` in a separate prior loop)
+and `surfpot` were both already correct.
+
+**Fixed in `eeecae9`** — `vmad0` is now captured before the overwrite, mirroring
+`bulkpot`. Maintainer-approved on the grounds that the sign-off's concern was
+convention and charge-scaling drift, not mixing: this changes **neither a matrix
+element nor a scaling convention**, and at the default `vmix = 1.0` the
+arithmetic is bit-identical, which is why the impurity regression is unchanged.
+
+B7.4's alignment solver needs this hook live to damp the capacitor-like soft
+mode in the alignment.
 
 ---
 
@@ -334,7 +368,7 @@ It remains open as B7.0 item 3.
 
 | gate | covers | status |
 |---|---|---|
-| **G-B7-1** | C0–C6 | x Anders |
+| **G-B7-1** | C0–C6, C8, C9 | x Anders |
 | **G-B7-4** | C7 (canonical charge variable) | x Anders |
 
 ### Sign-off note:
@@ -396,9 +430,13 @@ implicit:
 
 | item | status | note |
 | --- | --- | --- |
-| `imppot` dead Madelung mixing (§2.2) | **uncommitted, in working tree** | Fix makes `verr` live (was identically zero). Impurity regression passes; behaviour-neutral at the default `vmix = 1.0`. **This edits a working routine, so it needs your call.** B7.4 needs the hook live |
-| `impmad` `wsimp(:) = lattice%wav` | reported only | Not per-site. `surfmat`'s `wssurf` is the better pattern for new code |
+| `imppot` dead Madelung mixing (§2.2) | **RESOLVED — reinstated** (`eeecae9`) | Maintainer approved: the concern was convention/scaling drift, not mixing. Bit-identical at the default `vmix = 1.0`; B7.4 needs the hook live |
+| `impmad` vs `surfmat` conventions | **RESOLVED — flagged** (`eeecae9`) | Maintainer directive: mimic `surfmat` for `interfacemat`. Visible `@warning` added to `impmad`; see C8 |
+| `surfpot` rewiring | **RESOLVED — keep as-is** | Maintainer confirmed: `surfpot` stays untouched; all new work wires into `interfacepot` |
 | Shared l ≥ 1 moment normalization | reported only | Revisit in B7.7 if a two-region case shows dipole error |
 
-Remaining B7.0 work after signature: **none that is unblocked.** Item 5 is
-withdrawn; item 3 (`imppot` mixing) awaits the decision above.
+**B7.0 is complete.** Item 5 (`SWS` extraction) is withdrawn (C5); item 3
+(`imppot` mixing) is done (C9); items 1, 2, 4 and 7 were completed or resolved
+as no-ops. B7.1 (region registry) has also landed. The next unblocked tasks are
+**B7.2** (vacuum parameter generator) and **B7.3** (`interfacepot` /
+`interfacemat`, following `surfmat` per C8).
