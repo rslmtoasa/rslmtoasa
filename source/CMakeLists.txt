@@ -54,6 +54,7 @@ add_library(${PROJECT_NAME} STATIC
     reciprocal_green.f90
     reciprocal_bsf.f90
     reciprocal_moments.f90
+    region_registry.f90
     recursion.f90
     recursion_core.f90
     recursion_haydock.f90

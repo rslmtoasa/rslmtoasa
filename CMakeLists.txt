@@ -420,6 +420,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitMomentKernel ${TestDIR}/unit/test_moment_kernel.f90)
   add_fortran_unit_test(UnitMadl2dExhGuard ${TestDIR}/unit/test_madl2d_exh_guard.f90)
   add_fortran_unit_test(UnitMadelungConventions ${TestDIR}/unit/test_madelung_conventions.f90)
+  add_fortran_unit_test(UnitRegionRegistry ${TestDIR}/unit/test_region_registry.f90)
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE
