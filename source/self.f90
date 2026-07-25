@@ -253,7 +253,30 @@ module self_mod
       procedure, private :: rhocor
       procedure, private :: vxc0sp
       procedure, private :: racsi
-      procedure, private :: potpar
+      !> @note B7.2: visibility widened from `private` to public. This is
+      !> an ACCESS SPECIFIER CHANGE ONLY -- not one character of POTPAR's
+      !> body, nor of the radial solver it drives (RSEQSR/PHDFSR/RSQSR1/
+      !> RSQSR2/FCTP/FCTP0/GINTSR), has been touched, so behaviour is
+      !> bit-identical.
+      !>
+      !> Reason: B7 §1.6 requires the vacuum-lead parameter generator
+      !> (source/vacuum_lead.f90) to produce empty-lattice parameters with
+      !> *the code's own radial solver driven at V(r) = const*, explicitly
+      !> NOT by hand-coded spherical-Bessel expressions -- so that the
+      !> representation, the gamma/o convention, the E_nu convention and
+      !> the normalization come out automatically consistent with every
+      !> other parameter set in the code. POTPAR is the only entry point
+      !> that produces that set, and the entire solver beneath it is
+      !> module-private, so the alternative was duplicating ~600 lines of
+      !> physics-dense legacy code into a parallel copy that could silently
+      !> drift out of convention. That is precisely the failure mode §1.6
+      !> is written to prevent.
+      !>
+      !> POTPAR references no component of `self` whatsoever -- it reads
+      !> only its `atom`, `V` and `ROFI` arguments -- so exposing it
+      !> implies no SCF context and grants no access to `self`'s state.
+      !> @endnote
+      procedure :: potpar
       procedure, private :: write_kspace_scf_dos_outputs
       procedure, private :: compute_kspace_spin_moments_spinor
       final :: destructor
