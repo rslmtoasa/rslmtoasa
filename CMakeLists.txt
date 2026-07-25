@@ -422,6 +422,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitMadelungConventions ${TestDIR}/unit/test_madelung_conventions.f90)
   add_fortran_unit_test(UnitRegionRegistry ${TestDIR}/unit/test_region_registry.f90)
   add_fortran_unit_test(UnitInterfaceAlignmentOracle ${TestDIR}/unit/test_interface_alignment_oracle.f90)
+  add_fortran_unit_test(UnitVacuumLead ${TestDIR}/unit/test_vacuum_lead.f90)
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE
