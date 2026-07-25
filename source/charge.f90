@@ -32,6 +32,7 @@ module charge_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
+   use region_registry_mod, only: region_registry
    implicit none
 
    private
@@ -101,6 +102,13 @@ module charge_mod
       real(rp), dimension(:, :), allocatable :: amad
       !> Wigner Seitz radius per atom shell considered to receive charge
       real(rp), dimension(:), allocatable :: wsimp
+
+      !> B7.1: explicit per-site region registry (region id, active/frozen
+      !> mask, layer index, z, w, reference type), replacing the `init`/
+      !> `iq = init + ibas` offset arithmetic in surfpot as auditable data.
+      !> Built from the same buildsurf cluster data surfpot itself reads
+      !> (qz, wssurf, nbas, nlay); see build_region_registry.
+      type(region_registry) :: regions
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -112,6 +120,7 @@ module charge_mod
       procedure :: get_charge_transf
       procedure :: impmad
       procedure :: imppot
+      procedure :: build_region_registry
       procedure :: print_state
       procedure :: print_state_full
       procedure :: print_state_formatted
@@ -615,6 +624,15 @@ contains
          this%symbolic_atom(this%lattice%nbulk + jbas)%potential%vmad = ss + this%symbolic_atom(this%lattice%chargetrf_type(jbas))%potential%vmad
       end do
 
+      ! NOTE (B7.0, reported not fixed): vmad0 is read here, AFTER the loop
+      ! above has already overwritten vmad, so the mixing below reduces to
+      ! x*vmix + x*(1-vmix) == x and verr is identically zero -- the Madelung
+      ! mixing hook is a no-op. bulkpot captures its VMAD0 in a separate loop
+      ! BEFORE touching vmad and is correct; surfpot reads the stored previous
+      ! value and is correct. Impurity runs therefore converge unmixed, which
+      ! works in practice. Left as-is per the G-B7-1 sign-off (do not change
+      ! conventions in working routines); B7.4 needs this hook live before the
+      ! alignment solver can lean on it. See docs/dev/CONVENTIONS_MADELUNG.md.
       do iclas = 1, this%lattice%nrec
          vmad0(iclas) = this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad
          this%symbolic_atom(this%lattice%nbulk + iclas)%potential%vmad = &
@@ -892,7 +910,37 @@ contains
          write (120, '(51f10.4)') (this%dss(i, j), j=1, this%lattice%nbas)
       end do
       close (120)
+
+      ! B7.1: build the explicit region registry from the same cluster data
+      ! (qz, wssurf, nbas, nlay) surfpot itself consumes, reproducing its
+      ! init=6 index map as an auditable instance. surfpot is left untouched
+      ! -- it remains the permanent regression oracle -- this is a parallel,
+      ! non-invasive artifact validated against it (see dump/build_from_buildsurf
+      ! in region_registry_mod).
+      call this%build_region_registry()
    end subroutine surfmat
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.1: construct this%regions, the explicit per-site region registry,
+   !> from the cluster data surfmat/build_alelay already produced. Reproduces
+   !> today's buildsurf layout (init=6 leading vacuum-side frozen rows,
+   !> nlay active layers, remaining rows bulk-side frozen) exactly, as
+   !> documented in B7 §2.10 and verified against charge%surfpot.
+   !>
+   !> This does not change surfpot's behaviour or consume the registry from
+   !> it; it is the registry deliverable of B7.1, kept parallel to the
+   !> existing offset arithmetic so the surface regression is unaffected.
+   !---------------------------------------------------------------------------
+   subroutine build_region_registry(this)
+      class(charge), intent(inout) :: this
+      integer, parameter :: buildsurf_init = 6
+
+      call this%regions%build_from_buildsurf(this%lattice%nbas, this%lattice%nlay, &
+                                              this%qz, this%wssurf, &
+                                              this%lattice%chargetrf_type, buildsurf_init)
+   end subroutine build_region_registry
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

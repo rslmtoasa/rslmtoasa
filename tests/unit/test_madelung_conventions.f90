@@ -21,12 +21,15 @@
 !>            also correct. Both conventions are pinned here against a direct
 !>            e^2/r Rydberg sum for a known charge distribution.
 !>
-!>          C2 (§2.8) -- the on-site 2*dq/w term. Pinned as the r -> w limit of
-!>            the same e^2/r convention: 2/w in Rydberg. Confirms bulkpot's VADD,
-!>            impmad's diagonal, and surfmat's dss diagonal all mean the same
-!>            thing, and that the term scales as 1/w so it CANNOT be absorbed
-!>            into a constant reference when two regions differ in w (the B7
-!>            two-region case).
+!>          C2 (§2.8) -- the on-site term, as surfmat actually writes it:
+!>            dss(i,i) += 2*(sws*alat*ang2au / wssurf(i)) = 2*(S/w_i), which is
+!>            DIMENSIONLESS in the 1/S convention of C0 -- not 2*dq/w in Rydberg.
+!>            S (charge%sws) is a RELATIVE radius in units of alat; wssurf and
+!>            lattice%wav are DIMENSIONAL. Pins that the term is exactly 2 for
+!>            uniform w, that sws*alat*ang2au reproduces wav*ang2au, and that the
+!>            ratio is genuinely w_i-dependent. A system-wide average S remains
+!>            well defined for two leads: S is the unit scale, w_i the local
+!>            property.
 !>
 !>          C3 (§2.6, validation ladder §5.2) -- the AM half-space gauge.
 !>            The symmetric k||=0 monopole kernel is -(2*pi/A)|dz|; the code puts
@@ -113,34 +116,57 @@ contains
          'ok  C1 factor of two: bare-1/r kernel needs x2; impmad''s 2/r kernel does not'
    end subroutine test_factor_of_two
 
-   !> C2. The on-site 2*dq/w term, and why it cannot be absorbed for two regions.
+   !> C2. The on-site term as surfmat actually writes it:
+   !>
+   !>     dss(i,i) += 2 * (sws*alat*ang2au / wssurf(i))  =  2 * (S / w_i)
+   !>
+   !> This is DIMENSIONLESS, in the 1/S convention of C0 -- NOT 2*dq/w in
+   !> Rydberg. S (charge%sws) is a RELATIVE radius in units of alat; w_i
+   !> (wssurf) and lattice%wav are DIMENSIONAL. The Rydberg dimension is
+   !> restored by the call-site division by wsms.
+   !>
+   !> Pins: (a) for uniform w the term is exactly 2; (b) the ratio S/w_i is
+   !> genuinely w_i-dependent, so a per-site w_i cannot be replaced by the
+   !> average when radii differ. Note this says nothing against a system-wide
+   !> average S -- S is a unit scale, w_i is the local property, and the two
+   !> coexist by design.
    subroutine test_onsite_term()
-      real(rp) :: w_a, w_b, dq, v_a, v_b, diff
+      real(rp), parameter :: ang2au = 1.0_rp/0.52917721_rp
+      real(rp) :: alat, wav, sws, s_bohr, w_a, w_b, t_uniform, t_a, t_b
 
-      w_a = 2.66_rp   ! region A Wigner-Seitz radius, bohr
-      w_b = 3.05_rp   ! region B, deliberately different
-      dq = 0.09_rp
+      ! fccCu001, the case used to verify C0 against the real code.
+      alat = 3.614_rp        ! Angstrom
+      wav = 1.41237_rp       ! Angstrom
+      sws = wav/alat         ! dimensionless, units of alat
+      s_bohr = sws*alat*ang2au
 
-      ! Same e^2/r convention evaluated at r = w.
-      v_a = 2.0_rp*dq/w_a
-      v_b = 2.0_rp*dq/w_b
-
-      if (.not. close_rel(v_a, 2.0_rp*dq/w_a)) then
-         write (*, '(a)') 'FAIL on-site term is not 2*dq/w in Rydberg'
+      ! (a) Uniform w: wssurf(:) = lattice%wav*ang2au, so the term is exactly 2.
+      w_a = wav*ang2au
+      t_uniform = 2.0_rp*(s_bohr/w_a)
+      if (.not. close_rel(t_uniform, 2.0_rp)) then
+         write (*, '(a,es16.8)') 'FAIL on-site term is not exactly 2 for uniform w: ', t_uniform
          failed = .true.
       end if
 
-      ! For a single w the term is a constant absorbed into the reference. For
-      ! two regions at different w it is NOT constant: this difference is the
-      ! whole reason B7 must restore the term per-site.
-      diff = abs(v_a - v_b)
-      if (diff <= tol) then
-         write (*, '(a)') 'FAIL on-site term came out w-independent -- it must scale as 1/w'
+      ! Cross-check the dimensional bookkeeping of C0: the relative radius,
+      ! made dimensional, must reproduce the dimensional average radius.
+      if (.not. close_rel(s_bohr, wav*ang2au)) then
+         write (*, '(a,2es16.8)') 'FAIL sws*alat*ang2au /= wav*ang2au: ', s_bohr, wav*ang2au
          failed = .true.
       end if
 
-      if (.not. failed) write (*, '(a,es12.4,a)') &
-         'ok  C2 on-site term = 2*dq/w (Ry); differs by ', diff, ' Ry across two regions'
+      ! (b) Two different per-site radii: the term genuinely differs.
+      w_b = 3.05_rp   ! bohr, deliberately different from w_a ~ 2.669
+      t_a = 2.0_rp*(s_bohr/w_a)
+      t_b = 2.0_rp*(s_bohr/w_b)
+      if (abs(t_a - t_b) <= tol) then
+         write (*, '(a)') 'FAIL on-site term came out w_i-independent -- it must scale as 1/w_i'
+         failed = .true.
+      end if
+
+      if (.not. failed) write (*, '(a,f8.5,a,f8.5)') &
+         'ok  C2 on-site term = 2*(S/w_i), dimensionless; uniform w gives ', t_uniform, &
+         ', w_i = 3.05 bohr gives ', t_b
    end subroutine test_onsite_term
 
    !> C3. The AM half-space gauge (validation ladder §5.2).

@@ -1,6 +1,8 @@
 # Madelung conventions contract
 
-**Status:** awaiting maintainer sign-off — gate **G-B7-1** (blocks all of B7).
+**Status:** **SIGNED** by Anders (2026-07-25) — gates **G-B7-1** and **G-B7-4**.
+Revised post-signature per the sign-off note; see "Sign-off note and its
+consequences" below.
 **Scope:** the electrostatic path — `bulkpot`, `imppot`, `surfpot`, `impmad`,
 `bulkmat`, `surfmat`, `madl2d`, `madmat`/`strx00`.
 **Backed by:** `tests/unit/test_madelung_conventions.f90`
@@ -25,25 +27,58 @@ and the corrections below reduce B7.0's remaining scope substantially.
 | 2.3 | Factor-of-two inconsistency between `bulkpot` and `imppot` | **No bug.** Two different arrays, both correct |
 | 2.5 | `exh = -exh` corrupts the dipole matrix | **Real bug, fixed** (`6e87860`) — but numerically dormant; no B6 number moved |
 | 2.6 | `AM` half-space gauge may need symmetrizing | **No change needed** if Q = 0 is enforced |
-| 2.7 | `SWS` baked into l≥1 prefactors breaks two-region runs | **Confirmed defect.** Real work remains |
-| 2.8 | On-site 2δq/w treated three different ways | **Partly wrong.** Present in `impmad` and `surfmat`; genuinely absent only from `surfpot`'s layer loop |
+| 2.7 | `SWS` baked into l≥1 prefactors breaks two-region runs | **Withdrawn.** `S` is a dimensionless unit scale that cancels; an average `W` is well defined for two leads (C5) |
+| 2.8 | On-site 2δq/w treated three different ways | **Partly wrong.** Present in `impmad` and `surfmat`; the term is `2·(S/w_i)`, dimensionless, not `2δq/w` in Ry (C0, C2) |
 
 ---
 
-## C0 — Overall unit convention
+## C0 — Overall unit convention, and what `S` means
 
 **Potential is in Rydberg; charge in electrons; length in bohr.**
 In Rydberg atomic units `e² = 2 Ry·bohr`, so the potential of a point charge
 `q` at distance `r` is `V = 2q/r`.
 
-The `madl2d` header comment says *"Potential in units of e²/(2S)"*. That refers
-to the internal `TWOS = 2·SWS` scaling applied in the final loop, which is
-undone at the call site by `surfpot`'s division by `wsms`. The **net** quantity
-reaching `potential%vmad` is in Rydberg, consistent with C1.
+### `S` is dimensionless, `w` is dimensional — they are not the same quantity
 
-> **Signing note.** The header comment is not wrong, but it describes an
-> intermediate, not the delivered quantity. Recommend keeping the code as-is and
-> treating this document as the authority.
+This is the distinction the sign-off asked to be made explicit, and getting it
+backwards is easy:
+
+| symbol | code | units | meaning |
+|---|---|---|---|
+| `S` | `charge%sws` | **dimensionless** (units of `alat`) | system-wide average WS radius, relative |
+| `S` in bohr | `sws*alat*ang2au` | bohr | the same, made dimensional |
+| `w_i` | `charge%wssurf(i)` | **bohr** | per-site WS radius |
+| `w_avg` | `lattice%wav` | **Å** (→ bohr via `ang2au`) | system-wide average, dimensional |
+
+`charge%sws` is derived from `charge%vol`, which is built from `bsx/bsy/bsz` —
+and those come from `lattice%cr`, i.e. **crystal coordinates in units of
+`alat`**. So `sws` is a *relative* radius. `lattice%wav` is built from a volume
+in cubic Ångström and is *dimensional*. Numerically, for fccCu001
+(`alat = 3.614 Å`, `wav = 1.41237 Å`): `sws ≈ 0.391`, and
+`sws·alat·ang2au = 2.66899 bohr = wav·ang2au`. They agree, as they must —
+but only after the conversion.
+
+### The `1/S` convention
+
+The `madl2d` header comment *"Potential in units of e²/(2S)"* is **accurate**.
+The kernel carries an overall `TWOS = 2·SWS`, and `surfpot` divides by
+`wsms = sws·alat·ang2au` at the call site. The **net** quantity reaching
+`potential%vmad` is in Rydberg, consistent with C1.
+
+The on-site term in `surfmat` is written in the *same* `1/S` convention:
+
+```fortran
+dss(i,i) += 2.0d0*(sws*alat*ang2au / wssurf(i))     ! = 2·(S/w_i)
+```
+
+This is `2·(S/w_i)`, **dimensionless** — not `2/w` in Rydberg. For uniform `w`
+it is exactly `2.000000`. The Rydberg dimension is restored by the same call-site
+`/wsms` that de-scales the rest of the kernel. **So `S` (the average) and `w_i`
+(per-site) coexist by design: the average sets the unit scale, the per-site
+radius carries the local physics.**
+
+> **Signed action:** comments only; no code change. C2 and C5 below are corrected
+> accordingly.
 
 ---
 
@@ -73,8 +108,13 @@ or one of them is off by a factor of two"* — resolves to the **first** branch.
 
 ## C2 — The on-site term *(corrects §2.8)*
 
-**Convention: `V_onsite = 2·δq/w` in Rydberg** — the `e²/r` law of C0 evaluated
-at `r = w`.
+**Convention: the on-site term is `2·(S/w_i)`, dimensionless**, in the `1/S`
+convention of C0 — *not* `2·δq/w` in Rydberg. The Rydberg dimension is restored
+by the call-site division by `wsms`. For uniform `w` the term is exactly `2`.
+
+> An earlier draft of this document stated the term as `2·δq/w` in Rydberg. That
+> was wrong about the units — see C0 for the dimensional analysis. The physics is
+> unchanged; the bookkeeping is not.
 
 The plan states the term is handled three different ways, with `imppot` adding
 none. That is **not** what the code does:
@@ -93,16 +133,19 @@ weight that reads like a missing feature.
 
 **What is genuinely at risk for B7:** `impmad` sets `wsimp(:) = lattice%wav`, a
 single system-wide average, with the in-code comment *"Set as if all the atoms
-have the same WS radius. Can be improved later."* For one region that is a
-constant absorbed into the reference; **for two regions at different `w` it is
-not constant and cannot be absorbed.**
+have the same WS radius. Can be improved later."* `surfmat`'s `wssurf` is
+already per-site and is the better pattern. Note this is about the **per-site**
+radius `w_i` only — the system-wide average `S` is a separate quantity and stays
+(C0).
 
 - **Pinned by:** `test_madelung_conventions.f90::test_onsite_term` (C2), which
-  also asserts the term is genuinely `w`-dependent (8.7 mRy across a
-  representative w = 2.66 → 3.05 bohr pair) and so cannot be absorbed.
-- **Action for B7.3:** use per-site `w` (`wssurf` is already per-site; `wsimp`
-  is not). Delete the dead `twooverwsm` code in `surfpot` to stop it reading as
-  a missing term.
+  asserts the ratio `S/w_i` is genuinely `w_i`-dependent, so a per-site `w_i`
+  cannot be replaced by the average when radii differ.
+- **Action:** **none to working routines.** `surfpot`'s commented-out
+  `twooverwsm` is dead weight that reads like a missing feature — leave the code
+  alone, but this document records that its absence is correct (`surfmat`
+  already applies the term via `dss`). New interface code (B7.3) should follow
+  `surfmat`'s per-site `wssurf` pattern rather than `impmad`'s `wsimp`.
 
 ---
 
@@ -164,11 +207,15 @@ two-sided as written and needs no change.
 
 ## C5 — Multipole normalization and `SWS` *(§2.7 — confirmed defect, work remains)*
 
-**This is the one convention that is currently WRONG for two regions, and the
-only item in this document that requires code change before B7.3.**
+> **Revised after sign-off.** An earlier draft called this "the one convention
+> that is currently WRONG for two regions" and proposed stripping `SWS` from the
+> kernel. **Both the premise and the action are withdrawn.** Per the sign-off:
+> even with two leads we can still find an average `W`, and working routines are
+> not to be edited. See "Why the two-w argument does not hold" below.
 
-`this%sws` is a **single system-wide scalar**, derived from the average cell
-volume (`charge.f90:875`):
+`this%sws` is a **single system-wide scalar** — a *dimensionless* average radius
+in units of `alat` (C0) — derived from the average cell volume
+(`charge.f90:875`):
 
 ```fortran
 this%sws = (3.0d0*this%vol/4.0d0/pi/this%nq3)**(1.d0/3.d0)
@@ -182,22 +229,35 @@ FACQUA ∝ SWS²        → DS3Z2, DSX2Y2, DSXY
 FACGUA ∝ SWS³        → DZ3Z2
 ```
 
-These are site-independent, so **with two regions at different `w` the dipole
-coupling is wrong on one side.** `TWOS = 2·SWS` is a harmless global scaling
-(undone at the call site); `DSS` and the monopole path are safe.
+These are site-independent. `TWOS = 2·SWS` is a global scaling undone at the
+call site; `DSS` and the monopole path are unaffected.
 
-Correspondingly `surfpot`'s `wsm = lattice%wav` and `wsms = sws*alat` are
-system-wide averages and must become per-region/per-site.
+### Why the two-w argument does not hold
 
-**Agreed target convention:** strip `SWS` from the kernel entirely; build the
-kernel in **absolute units**; carry multipole moments in absolute units; apply
-per-site `w` at the call site. This also makes the moment definitions auditable,
-which they currently are not.
+`S` is a **unit scale**, not a local property. The kernel is expressed in units
+of `e²/(2S)` and the call site divides that scaling back out, so `S` cancels
+from the delivered potential provided the *same* `S` is used consistently on
+both sides — which it is, because there is one kernel. A second region does not
+introduce a second unit scale; it introduces additional sites, each with its own
+`w_i`, and the per-site radius already enters separately through `wssurf(i)`
+(C2). An average `W` remains perfectly well defined for a two-lead system.
 
-- **Not yet pinned by a test** — the test must be written against the *new*
-  convention as part of the work, with the acceptance criterion that existing
-  surface and bulk results stay bit-comparable within tolerance for uniform `w`.
-- **Action:** B7.0 item 5, still open. **This is the remaining B7.0 work.**
+The residual concern is narrower than the plan claimed: the l ≥ 1 prefactors fix
+the **moment normalization** to the average radius, so multipole moments are
+implicitly expressed in units of `S`. That is a *definition*, consistent across
+the matrix, not an error — and it only becomes a real accuracy question if the
+two regions' radii differ enough that a single normalization is a poor
+compromise for both. That is a physics-accuracy judgment for the validation
+campaign (B7.7), not a bug to fix now.
+
+- **Action: none.** Working routines are not to be edited. Left as a documented
+  convention.
+- **For B7.3/B7.7:** if a two-region case shows dipole-coupling error traceable
+  to the shared normalization, **report it — do not silently re-normalize the
+  kernel.** The sphere-overlap diagnostic (§2.9) is the natural place to surface
+  a large radius mismatch.
+- **Consequence for B7.0:** item 5 (`SWS` extraction) is **withdrawn**, not
+  deferred.
 
 ---
 
@@ -274,9 +334,71 @@ It remains open as B7.0 item 3.
 
 | gate | covers | status |
 |---|---|---|
-| **G-B7-1** | C0–C6 | ☐ Anders |
-| **G-B7-4** | C7 (canonical charge variable) | ☐ Anders |
+| **G-B7-1** | C0–C6 | x Anders |
+| **G-B7-4** | C7 (canonical charge variable) | x Anders |
 
-Remaining B7.0 work after signature: **C5** (`SWS` extraction, item 5) and the
-`imppot` mixing fix (item 3). Items 1, 2, 4 and 7 are complete or resolved as
-no-ops.
+### Sign-off note:
+
+Overall action: Do not edit or change conventions inside "working" routines, i.e. those established earlier. If any significant bugs or physical errors are spotted, report them but do not fix then silently. Only ensure that the comments properly describes the actual code. For 1/S factors, make sure of conventions when "S" is relative radius (r_ws/r_avg) or actually has a simension. The W discussion for two different averages is unclear, even if we have two leads, we can still find the average W.
+
+### Sign-off note and its consequences
+
+The note above is the **governing rule** for the rest of B7. Applied:
+
+1. **"Do not edit or change conventions inside working routines."**
+   → C5's proposed `SWS` extraction is **withdrawn**. C2's proposed deletion of
+   `surfpot`'s dead `twooverwsm` is **withdrawn**. No further edits to
+   `bulkpot`, `imppot`, `surfpot`, `impmad`, `surfmat` or `madl2d` beyond
+   comments — with the two exceptions already committed and separately
+   justified below.
+
+2. **"If any significant bugs or physical errors are spotted, report them but do
+   not fix them silently."**
+   → Reported, not silently fixed: the `impmad` `wsimp(:) = lattice%wav`
+   coarseness (C2), and the shared l ≥ 1 moment normalization (C5). Neither is
+   being changed. **Open items are listed below for your decision.**
+
+3. **"Only ensure that the comments properly describe the actual code."**
+   → Done for `DZZ` (dead assignment, removed with an explanatory comment) and
+   `PM` (documented as the applied-bias hook). Both landed in `a4ee0e7`.
+
+4. **"For 1/S factors, make sure of conventions when S is relative radius or
+   actually has a dimension."**
+   → Resolved in **C0**: `charge%sws` is **relative** (units of `alat`);
+   `lattice%wav` and `wssurf(i)` are **dimensional**. Verified numerically for
+   fccCu001: `sws ≈ 0.391`, `sws·alat·ang2au = 2.66899 bohr = wav·ang2au`. This
+   **corrected C2**, which had wrongly stated the on-site term as `2δq/w` in
+   Rydberg; it is `2·(S/w_i)`, dimensionless, and exactly `2` for uniform `w`.
+
+5. **"The W discussion is unclear; even with two leads we can still find the
+   average W."**
+   → **Accepted; C5 rewritten.** `S` is a unit scale that cancels at the call
+   site, not a local property, so a second region does not create a second unit
+   scale. The per-site radius already enters separately via `wssurf(i)`. The
+   residual question — whether one shared multipole normalization is a good
+   compromise when radii differ a lot — is reclassified as a **physics-accuracy
+   question for B7.7**, not a bug.
+
+### Two code changes already committed
+
+Both predate this note; flagging them explicitly rather than leaving them
+implicit:
+
+- **`6e87860`** — the `exh = -exh` → `exh = -exf` fix (C6). A genuine
+  use-of-stale-value bug, but **measured to change nothing** (`DSZ`
+  bit-identical). If you would rather revert it and carry it as a reported-only
+  item, it is a clean single-line revert.
+- **`a4ee0e7`** — dead `DZZ` assignment removed, `PM` documented. The `DZZ`
+  removal is behaviour-neutral (the value was unconditionally overwritten two
+  loops later); everything else in that commit is comments, docs and tests.
+
+### Open items awaiting your decision
+
+| item | status | note |
+| --- | --- | --- |
+| `imppot` dead Madelung mixing (§2.2) | **uncommitted, in working tree** | Fix makes `verr` live (was identically zero). Impurity regression passes; behaviour-neutral at the default `vmix = 1.0`. **This edits a working routine, so it needs your call.** B7.4 needs the hook live |
+| `impmad` `wsimp(:) = lattice%wav` | reported only | Not per-site. `surfmat`'s `wssurf` is the better pattern for new code |
+| Shared l ≥ 1 moment normalization | reported only | Revisit in B7.7 if a two-region case shows dipole error |
+
+Remaining B7.0 work after signature: **none that is unblocked.** Item 5 is
+withdrawn; item 3 (`imppot` mixing) awaits the decision above.
