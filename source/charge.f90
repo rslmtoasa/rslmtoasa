@@ -919,10 +919,10 @@ contains
       class(charge), intent(inout) :: this
       ! Local variables
       integer :: ibas, iclas, iq, j, jq, k, atomrec, nsite, ireg
-      integer :: ideep_lo, ideep_hi, iref
+      integer :: ideep_lo, ideep_hi, iref, itype, iprobe
       real(rp) :: summ, wsms, qtot, ptot, step, resid
       real(rp) :: v_lo, v_hi, nef_lo, nef_hi, wgt_lo, wgt_hi
-      real(rp) :: vmad_ref
+      real(rp) :: vmad_ref, v_ref
       real(rp), dimension(this%lattice%nbas) :: tdq, tq10, vm, zsite, wsite
       logical :: dipole_on
 
@@ -1025,6 +1025,23 @@ contains
       ! --- 5b. Alignment solve (B7.4): one mixed fixed-point step on V_r ----
       call this%align_regions(vm, nsite)
 
+      ! The write-back below is referenced to the ANCHOR region's deep probe,
+      ! not to `v_lo`. The two are different points in general: `v_lo` is site 1,
+      ! which for the buildsurf layout is deep VACUUM, while the anchor is the
+      ! first frozen non-vacuum region (bulk). Referencing the write-back to one
+      ! point while solving the fixed point against another would leave a
+      ! constant offset between them that the solver cannot see and cannot
+      ! remove -- the alignment would converge, correctly, to the wrong zero.
+      ! `v_lo` remains the reported work function / dipole-barrier probe above,
+      ! which is what it is for.
+      v_ref = v_lo
+      iref = this%fermi_pinned_region()
+      if (iref < 1) iref = this%regions%gauge_anchor()
+      if (this%regions%nsite == nsite .and. iref >= 1) then
+         iprobe = this%regions%deep_probe_site(iref)
+         if (iprobe >= 1 .and. iprobe <= nsite) v_ref = vm(iprobe)
+      end if
+
       ! --- 6. Write back (B7 §1.3) ------------------------------------------
       !        vmad(i) = dV(i) + vmad_bulk(region(i), type(i)) + V_region(i)
       !
@@ -1048,13 +1065,13 @@ contains
 
             ! Region reference on-site Madelung potential, per site type.
             vmad_ref = 0.0d0
-            iref = this%lattice%chargetrf_type(atomrec)
-            if (iref >= 1 .and. iref <= size(this%symbolic_atom)) then
-               vmad_ref = this%symbolic_atom(iref)%potential%vmad
+            itype = this%lattice%chargetrf_type(atomrec)
+            if (itype >= 1 .and. itype <= size(this%symbolic_atom)) then
+               vmad_ref = this%symbolic_atom(itype)%potential%vmad
             end if
 
             this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad = &
-               (vm(atomrec) - v_lo + vmad_ref + this%region_shift(ireg))*this%vmix + &
+               (vm(atomrec) - v_ref + vmad_ref + this%region_shift(ireg))*this%vmix + &
                this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1.0d0 - this%vmix)
          end do
       end do

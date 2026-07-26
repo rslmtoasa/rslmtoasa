@@ -66,6 +66,7 @@ program test_alignment_solver
    call test_initial_guess_is_only_a_guess()
    call test_consistency_check()
    call test_deep_probe_site()
+   call test_writeback_reference_is_the_anchor()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -418,6 +419,64 @@ contains
       if (.not. failed) write (*, '(a)') &
          'ok  deep probe is each region''s extreme site away from the interface, chosen from z'
    end subroutine test_deep_probe_site
+
+   !> 7. The write-back reference and the fixed-point reference must be the
+   !> SAME point.
+   !>
+   !> `interfacepot` reports `v_lo = vm(1)` as the work function / dipole
+   !> barrier probe, and for the buildsurf layout site 1 is deep VACUUM. The
+   !> alignment fixed point, however, drives dV(deep-r) + V_r towards
+   !> dV(deep-ANCHOR), and the anchor is the first frozen non-vacuum region.
+   !>
+   !> Referencing the write-back to one point while solving against the other
+   !> leaves a constant offset between them that the solver cannot see and
+   !> cannot remove: the alignment converges, correctly, to the wrong zero. That
+   !> is the same class of failure as the one this whole gate exists to prevent
+   !> -- plausible, converged, and wrong -- so it is pinned here.
+   !>
+   !> The property asserted: for the buildsurf layout the anchor's deep probe is
+   !> NOT site 1, so the two references genuinely differ and the distinction is
+   !> not vacuous.
+   subroutine test_writeback_reference_is_the_anchor()
+      type(region_registry) :: reg
+      integer, parameter :: nbas = 49, nlay = 6, init = 6
+      real(rp), dimension(nbas) :: z, w
+      integer :: ianchor, iprobe, i
+
+      do i = 1, nbas
+         z(i) = real(i, rp)*0.7_rp
+         w(i) = 2.669_rp
+      end do
+      call reg%build_from_buildsurf(nbas, nlay, z, w, init=init)
+
+      ianchor = reg%gauge_anchor()
+      iprobe = reg%deep_probe_site(ianchor)
+
+      if (iprobe < 1 .or. iprobe > nbas) then
+         write (*, '(a,i0)') 'FAIL anchor has no deep probe site: ', iprobe
+         failed = .true.
+         return
+      end if
+
+      ! The distinction must not be vacuous: if the anchor's probe WERE site 1,
+      ! referencing to v_lo would accidentally be right and this test would
+      ! prove nothing.
+      if (iprobe == 1) then
+         write (*, '(a)') 'FAIL test is vacuous: anchor probe coincides with v_lo (site 1)'
+         failed = .true.
+      end if
+
+      ! Site 1 is deep vacuum in this layout -- the point that is NOT the
+      ! alignment reference.
+      if (reg%region(reg%region_id(1))%kind /= region_kind_vacuum) then
+         write (*, '(a)') 'FAIL buildsurf site 1 is not vacuum; the premise has changed'
+         failed = .true.
+      end if
+
+      if (.not. failed) write (*, '(a,i0,a,i0,a)') &
+         'ok  write-back references the anchor probe (site ', iprobe, &
+         '), not v_lo (site 1, vacuum) -- ', iprobe - 1, ' sites apart'
+   end subroutine test_writeback_reference_is_the_anchor
 
    pure function close_abs(a, b) result(ok)
       real(rp), intent(in) :: a, b
