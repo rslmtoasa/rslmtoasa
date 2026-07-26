@@ -534,21 +534,26 @@ half-space with Q = 0 enforced), the factor-of-two question in §2.3, the
 multipole moment normalization after `SWS` extraction, and the sign convention
 for the l = 1 moment. Anders signs.
 
-### G-B7-2 — Absolute-zero / `vmad` persistence contract
+### G-B7-2 — Absolute-zero / `vmad` persistence contract — ✅ **SIGNED** 2026-07-26
 The answer to §2.1, written down: which quantities a converged bulk run must
 persist for its parameters to be usable as a frozen region (potential zero
-convention, w, Madelung convention, E_F). The interface reader must **refuse
-to run** on a parameter set that predates the contract. Silent misalignment
+convention, w, Madelung convention, E_F). ~~The interface reader must **refuse
+to run** on a parameter set that predates the contract.~~ Silent misalignment
 produces a plausible but wrong dipole barrier — the worst failure mode
 available to us. Anders signs.
 
-> **Drafted, awaiting signature:** [`CONTRACT_FROZEN_REGION.md`](../CONTRACT_FROZEN_REGION.md)
-> (B7.4). `vmad` **is** persisted, so no new field is required and §3.2 reads as
-> an assertion. Three decisions are open and flagged there: whether the reader
-> should refuse on a pre-contract set (needs a version stamp that does not exist
-> today — proposed for B7.5), and the two uncalibrated alarm thresholds
-> (proposed to revisit in B7.7 with the first A|B benchmark). Nothing currently
-> refuses to run.
+> **Signed:** [`CONTRACT_FROZEN_REGION.md`](../CONTRACT_FROZEN_REGION.md) (B7.4).
+>
+> - `vmad` **is** persisted and is sufficient; **no new persisted field is
+>   introduced anywhere in B7**, and §3.2 reads as an assertion.
+> - **The refuse-to-run requirement struck through above is OVERRIDDEN.**
+>   Backwards compatibility wins: no version stamp, no timestamping, option (b)
+>   permanently — *"and will not do (a) later either"*. **B7.5 must not add a
+>   stamp.** Detection is the `align_regions` consistency check, which catches
+>   the actual mismatched zero rather than a proxy for it. Accepted residual
+>   risk: that check is silent when `E_F` is not supplied for both regions.
+> - `alignment_check_tol = 5 mRy` and `deep_drift_tol = 1e-3 e` accepted "for
+>   now"; still uncalibrated, revisit in B7.7 with G-B7-3.
 
 ### G-B7-3 — Compensation weight profile
 The default weight profile and its localization width (§1.5). Anders signs
@@ -641,7 +646,14 @@ region, compensation profile, Fermi mode, bias placeholder (§6). Workflow
 chain bulk-A → bulk-B (→ vacuum generator) → interface, mirroring
 bulk → surf → imp.
 
-*Kit:* B7.1–B7.4; existing `buildsurf` namelist as template.
+> **Do not add a parameter-set version stamp**, in the namelist or anywhere
+> else. G-B7-2 decided this permanently on backwards-compatibility grounds —
+> see `CONTRACT_FROZEN_REGION.md` §4.1. Old `*_out.nml` files must keep working.
+> The Fermi mode entry maps onto `charge%fix_fermi_to_region`, which B7.4
+> already reads from the `charge` namelist; the default is free E_F.
+
+*Kit:* B7.1–B7.4; existing `buildsurf` namelist as template; the G-B7-2
+contract.
 
 ### B7.6 [SONNET] — Example cases and documentation
 A | A identity; A | vacuum (reproducing a `buildsurf` case); A | B metallic;
@@ -745,10 +757,11 @@ nearly free.
 - [x] **B7.3** two-sided deviation electrostatics + localized compensation +
       Q/P reporting + overlap diagnostic *(no separate `interfacemat`: it
       reuses `surfmat`'s matrices, maintainer-confirmed)*
-- [x] **B7.4** alignment solver + offset-δ oracle → **G-B7-2** *(solver landed;
-      `UnitAlignmentSolver` drives the production fixed point to exactly −δ.
-      Gate contract drafted in `CONTRACT_FROZEN_REGION.md`, **awaiting
-      signature** — three open decisions flagged there)*
+- [x] **B7.4** alignment solver + offset-δ oracle → **G-B7-2 ✅ signed
+      2026-07-26** *(`UnitAlignmentSolver` drives the production fixed point to
+      exactly −δ. Contract: `CONTRACT_FROZEN_REGION.md`. The reader does **not**
+      refuse on old parameter sets — backwards compatibility, decided
+      permanently)*
 - [ ] **B7.5** `buildinterface` path + namelist (`buildsurf` untouched)
 - [ ] **B7.6** examples + honest documentation
 - [ ] **B7.7** vacuum-lead vs empty-sphere comparison + compensation

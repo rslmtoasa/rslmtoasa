@@ -1,6 +1,8 @@
 # Frozen-region parameter contract — gate G-B7-2
 
-**Status:** **AWAITING SIGNATURE** (Anders). Drafted 2026-07-26 as part of B7.4.
+**Status:** **SIGNED** by Anders (2026-07-26) — gate **G-B7-2**. Drafted as part
+of B7.4. Revised post-signature per the sign-off note; see "Sign-off note and
+its consequences" below.
 **Scope:** what a converged calculation must persist for its parameters to be
 usable as a *frozen region* in an interface run (B7 §1.1, §1.3, §3 G-B7-2).
 **Backed by:** `tests/unit/test_alignment_solver.f90` (`UnitAlignmentSolver`)
@@ -8,9 +10,10 @@ for the alignment machinery; the persistence facts below are verified against
 `source/potential.f90` and recorded in `CONVENTIONS_MADELUNG.md` C0–C9.
 
 > B7 §3 requires an agent reaching a gate to **stop and escalate** rather than
-> choose. This document is the escalation: the findings are stated, a default is
-> proposed for each open decision, and nothing in the code depends on the
-> unsigned parts. **§4 is the part that needs your decision.**
+> choose. This document was that escalation. It is now **signed**: §4's three
+> decisions are resolved, and per B7 §3 they are **pinned and never re-derived
+> in a later session**. The most consequential is 4.1 — **backwards
+> compatibility wins; no version stamp is ever introduced.**
 
 ---
 
@@ -108,20 +111,32 @@ B7 §3 G-B7-2 says the reader *"must **refuse to run** on a parameter set that
 predates the contract."* Implementing that literally requires a version stamp
 in the persisted potential, which does not exist today.
 
-| option | cost | consequence |
-|---|---|---|
-| **(a) Add a contract-version stamp** to the persisted potential; refuse on absent or older. | a new persisted field + reader/writer; every existing `*_out.nml` becomes "pre-contract" and must be regenerated | matches the plan literally; loudest possible failure |
-| **(b) Rely on the consistency check alone** (implemented): warn loudly when the converged fixed point disagrees with the analytic contact potential beyond `alignment_check_tol`. | none — already in `align_regions` | catches a *mismatched zero* regardless of provenance, but only when `E_F` is supplied for both regions, and warns rather than refuses |
-| **(c) Both.** | as (a) | belt and braces |
+| option | cost | consequence | verdict |
+|---|---|---|---|
+| **(a) Add a contract-version stamp** to the persisted potential; refuse on absent or older. | a new persisted field + reader/writer; every existing `*_out.nml` becomes "pre-contract" and must be regenerated | matches the plan literally; loudest possible failure | **REJECTED** — breaks backwards compatibility. Not now, not at B7.5, not later |
+| **(b) Rely on the consistency check alone** (implemented): warn loudly when the converged fixed point disagrees with the analytic contact potential beyond `alignment_check_tol`. | none — already in `align_regions` | catches a *mismatched zero* regardless of provenance, but only when `E_F` is supplied for both regions, and warns rather than refuses | **CHOSEN** |
+| **(c) Both.** | as (a) | belt and braces | **REJECTED** — contains (a) |
 
-**Proposed default: (b) for now, (a) when B7.5 lands.** The reasoning: (b)
-catches the actual failure — two sets on different zeros — rather than a proxy
-for it, and it costs nothing. But (b) is silent when `E_F` is not supplied, and
-the plan's insistence on refusal is well founded given the failure mode. B7.5
-introduces the `buildinterface` namelist and is the natural place to add a
-stamp, since it is already defining the region-parameter-path syntax.
+**DECIDED — (b), permanently.** *Backwards compatibility wins.* No version
+stamp, no timestamping, and **not (a) later either** — this is not a deferral,
+it is a rejection, and B7.5 must not reintroduce it.
 
-**This is your call, not mine.** Nothing currently refuses to run.
+The reasoning behind the decision: every existing `*_out.nml` in every user's
+working directory is a valid parameter set, and a stamp would declare all of
+them "pre-contract" overnight. That cost is real and immediate; the failure it
+guards against is hypothetical and already has a detector. (b) catches the
+actual failure — two sets on different zeros — rather than a proxy for it.
+
+**The residual risk, stated so it is not forgotten:** (b) is silent when `E_F`
+is not supplied for both regions, since the consistency check has nothing to
+compare against. That gap is now accepted, not overlooked. It is also
+narrowable without any format change — supplying `E_F` per region is already
+supported and already gates the check — so the mitigation, if one is ever
+wanted, is documentation urging users to supply it, not a stamp.
+
+*(My original proposal was "(b) now, (a) at B7.5". That was overridden, and the
+override is the better call: I had weighted the plan's literal wording above
+the cost to existing users' data.)*
 
 ### 4.2 Is `alignment_check_tol = 5 mRy` the right alarm threshold?
 
@@ -175,8 +190,50 @@ re-derived in a later session:
 
 | gate | covers | status |
 |---|---|---|
-| **G-B7-2** | §1 (`vmad` persistence), §2 (required quantities), §4 (open decisions) | ☐ Anders |
+| **G-B7-2** | §1 (`vmad` persistence), §2 (required quantities), §4 (open decisions) | X Anders |
 
 ### Sign-off note:
 
-<!-- Anders: decisions on §4.1, §4.2, §4.3 here. -->
+Vmad persists and is enough for keeping track of potpars and other entities from SCF bulk to interface setups.
+
+We should be backwards compatible, i.e. do not introduce any timestamping or other measures for 4.1 i.e. we go with option (b) and will not do (a) later either.
+
+The proposed tolerances are fine for now.
+
+### Sign-off note and its consequences
+
+The note above is the **governing rule** on parameter-set compatibility for the
+rest of B7. Applied:
+
+1. **"Vmad persists and is enough."**
+   → §1 and §2 are confirmed as written. No new persisted field is introduced
+   anywhere in B7. `vmad` is *the* absolute reference carried from a converged
+   bulk run into an interface setup, and it is sufficient for the potential
+   parameters and everything else that has to travel with a frozen region.
+
+2. **"Be backwards compatible — no timestamping or other measures; option (b),
+   and not (a) later either."**
+   → §4.1 resolved to **(b) permanently**. The plan's literal instruction that
+   the reader *"must refuse to run on a parameter set that predates the
+   contract"* (B7 §3, G-B7-2) is **overridden by this sign-off**: there is no
+   version stamp, so there is no notion of "predates the contract" in the file
+   format, and nothing refuses to run. **B7.5 must not add one** — that task's
+   kit mentions the namelist as a natural home for such a stamp, and it is
+   hereby not.
+   → The accepted residual risk is recorded in §4.1: the consistency check is
+   silent when `E_F` is not supplied for both regions. The mitigation, if ever
+   wanted, is documentation encouraging users to supply `E_F` — never a format
+   change.
+
+3. **"The proposed tolerances are fine for now."**
+   → `alignment_check_tol = 5 mRy` and `deep_drift_tol = 1e-3 e` stand as
+   shipped. "For now" is retained deliberately: both are still uncalibrated
+   against a real two-region run, and B7.7 remains the place to revisit them
+   alongside the buffer-thickness data G-B7-3 needs. Neither is pinned by a
+   test asserting its *value*, only its *behaviour*, so changing them later
+   breaks nothing.
+
+**Consequence for the B7 plan text.** B7 §3's G-B7-2 paragraph and §7's
+checklist entry both still describe the refuse-to-run requirement. They are
+superseded by this document and annotated accordingly; the plan is the
+proposal, this is the decision.
