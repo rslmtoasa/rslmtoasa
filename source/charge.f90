@@ -1141,7 +1141,8 @@ contains
       if (.not. allocated(this%region_shift)) return
 
       ! With a free Fermi level the anchor is the registry's own choice (the
-      ! first non-vacuum region). Pinning E_F to a region makes THAT region the
+      ! first frozen, non-vacuum region -- see gauge_anchor for why both
+      ! qualifiers matter). Pinning E_F to a region makes THAT region the
       ! anchor: the two statements "E_F is region r's Fermi level" and "region r
       ! carries no alignment shift" are the same statement, since E_F - V_r =
       ! E_F^(r). Anchoring anywhere else would double-count the pin.
