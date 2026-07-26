@@ -63,6 +63,16 @@ module region_registry_mod
       character(len=32) :: name = ''
       !> .true. if sites of this region are held frozen (never updated).
       logical :: frozen = .false.
+      !> B7.4: the region's own converged Fermi level, in the absolute energy
+      !> scale its frozen parameter set was generated on (Ry). Used ONLY for
+      !> the analytic initial guess V_r = E_F^(A) - E_F^(r) and for the
+      !> consistency check against the converged fixed point (B7 §1.3) --
+      !> never as the load-bearing determination, because that would require a
+      !> cross-run absolute energy scale the code does not yet guarantee
+      !> (§2.1, G-B7-2). `fermi_known` says whether it was actually supplied;
+      !> when .false. the guess is skipped and the check is not performed.
+      real(rp) :: fermi = 0.0_rp
+      logical :: fermi_known = .false.
    end type region_descriptor
 
    !> Explicit per-site region registry, dimension nbas.
@@ -101,6 +111,12 @@ module region_registry_mod
       procedure :: dump => region_registry_dump
       procedure :: is_active => region_registry_is_active
       procedure :: region_of => region_registry_region_of
+      !> B7.4 alignment solver (B7 §1.3). See the procedure headers.
+      procedure :: gauge_anchor => alignment_gauge_anchor
+      procedure :: initial_guess => alignment_initial_guess
+      procedure :: align_update => alignment_update
+      procedure :: consistency_check => alignment_consistency_check
+      procedure :: deep_probe_site => region_registry_deep_probe_site
       final :: region_registry_destructor
    end type region_registry
 
@@ -108,7 +124,277 @@ module region_registry_mod
       procedure :: region_registry_constructor
    end interface region_registry
 
+   public :: alignment_gauge_anchor
+   public :: alignment_initial_guess
+   public :: alignment_update
+   public :: alignment_consistency_check
+
 contains
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: the gauge anchor region -- the one whose alignment shift is held
+   !> identically zero (B7 §1.3).
+   !>
+   !> @details
+   !> Only DIFFERENCES of the region shifts are physical:
+   !>
+   !>     V_B - V_A = E_F^(A) - E_F^(B)      (the contact potential)
+   !>
+   !> so the shifts are fixed only up to one overall gauge, and one region must
+   !> be pinned or the fixed point has a flat direction.
+   !>
+   !> The anchor is the **first frozen, non-vacuum region** -- "region A" in the
+   !> plan's notation. Both qualifiers are load-bearing:
+   !>
+   !>  - **Frozen.** The residual driving the fixed point is "deep inside region
+   !>    r the site must BE neutral bulk r", which is a statement about a
+   !>    reference parameter set. An active region has no frozen reference to be
+   !>    -- it is what relaxes -- so it cannot carry the gauge. For the
+   !>    buildsurf layout (vacuum, active, bulk) this is what makes the anchor
+   !>    the bulk region rather than the active layers that happen to precede
+   !>    it in registry order.
+   !>  - **Non-vacuum.** Vacuum carries no states at E_F, so "deep vacuum is
+   !>    neutral bulk vacuum" is not a condition that can drive a residual;
+   !>    anchoring there would pin the gauge to the one region that cannot
+   !>    report on it.
+   !>
+   !> Returns 0 for an empty registry (no region to anchor).
+   !---------------------------------------------------------------------------
+   pure integer function alignment_gauge_anchor(this) result(ianchor)
+      class(region_registry), intent(in) :: this
+      integer :: ir
+
+      ianchor = 0
+      do ir = 1, this%nregion
+         if (this%region(ir)%kind == region_kind_vacuum) cycle
+         if (.not. this%region(ir)%frozen) cycle
+         ianchor = ir
+         return
+      end do
+
+      ! No frozen non-vacuum region: fall back to any non-vacuum region, then
+      ! to the first region, so the gauge is always pinned rather than left
+      ! free. A flat direction in the fixed point is worse than an imperfect
+      ! anchor choice.
+      do ir = 1, this%nregion
+         if (this%region(ir)%kind /= region_kind_vacuum) then
+            ianchor = ir
+            return
+         end if
+      end do
+      if (this%nregion > 0) ianchor = 1
+   end function alignment_gauge_anchor
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: the deep-probe site of a region -- the site at which "deep inside
+   !> region r the site must BE neutral bulk r" is evaluated (B7 §1.3).
+   !>
+   !> @details
+   !> `surfpot` probes `dss(1,.)` for deep vacuum and `dss(nbas,.)` for deep
+   !> bulk -- the two extreme rows, which for the one-sided buildsurf layout
+   !> are exactly the deepest frozen sites of the two ends. Generalized to the
+   !> registry, the deep probe of region r is its extreme site in z, taken away
+   !> from the interface: the MINIMUM-z site for a region lying below the
+   !> active zone and the MAXIMUM-z site for one lying above it.
+   !>
+   !> Determining which side a region is on from z rather than from its index
+   !> is deliberate -- registry order is a bookkeeping choice, z is physics, and
+   !> the two need not agree once a genuinely two-sided builder (B7.5) exists.
+   !> The comparison is against the mean z of the region's own sites versus the
+   !> mean z of the whole cluster.
+   !>
+   !> Returns 0 if the region has no sites.
+   !---------------------------------------------------------------------------
+   pure integer function region_registry_deep_probe_site(this, ireg) result(isite)
+      class(region_registry), intent(in) :: this
+      integer, intent(in) :: ireg
+      real(rp) :: zsum_reg, zsum_all, zmean_reg, zmean_all, zbest
+      integer :: i, nreg_sites
+      logical :: below
+
+      isite = 0
+      if (ireg < 1 .or. ireg > this%nregion) return
+      if (this%nsite < 1) return
+
+      zsum_reg = 0.0_rp
+      nreg_sites = 0
+      zsum_all = 0.0_rp
+      do i = 1, this%nsite
+         zsum_all = zsum_all + this%z(i)
+         if (this%region_id(i) == ireg) then
+            zsum_reg = zsum_reg + this%z(i)
+            nreg_sites = nreg_sites + 1
+         end if
+      end do
+      if (nreg_sites == 0) return
+
+      zmean_reg = zsum_reg/real(nreg_sites, rp)
+      zmean_all = zsum_all/real(this%nsite, rp)
+      below = (zmean_reg <= zmean_all)
+
+      ! Extreme site of the region, on the side away from the cluster centre.
+      zbest = 0.0_rp
+      do i = 1, this%nsite
+         if (this%region_id(i) /= ireg) cycle
+         if (isite == 0) then
+            isite = i
+            zbest = this%z(i)
+         else if (below) then
+            if (this%z(i) < zbest) then
+               isite = i
+               zbest = this%z(i)
+            end if
+         else
+            if (this%z(i) > zbest) then
+               isite = i
+               zbest = this%z(i)
+            end if
+         end if
+      end do
+   end function region_registry_deep_probe_site
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: the analytic initial guess for the region alignment shifts,
+   !> V_r = E_F^(anchor) - E_F^(r) (B7 §1.3).
+   !>
+   !> @details
+   !> This is an INITIAL GUESS ONLY, never the determination. B7 §1.3 is
+   !> explicit about why: the closed form requires a reliable cross-run
+   !> absolute energy scale, which the code does not currently guarantee
+   !> (§2.1). Used as a starting point it usually saves several iterations;
+   !> used as the answer it would silently produce a plausible but wrong dipole
+   !> barrier -- the worst failure mode available to this work package.
+   !>
+   !> Regions whose `fermi_known` is .false. get a zero guess (the solver then
+   !> starts from the gauge and converges anyway, just more slowly). The anchor
+   !> is always exactly zero by construction.
+   !---------------------------------------------------------------------------
+   pure subroutine alignment_initial_guess(this, ianchor, shift)
+      class(region_registry), intent(in) :: this
+      integer, intent(in) :: ianchor
+      real(rp), dimension(:), intent(out) :: shift
+      integer :: ir
+
+      shift(:) = 0.0_rp
+      if (ianchor < 1 .or. ianchor > this%nregion) return
+      if (.not. this%region(ianchor)%fermi_known) return
+
+      do ir = 1, this%nregion
+         if (ir == ianchor) cycle
+         if (.not. this%region(ir)%fermi_known) cycle
+         shift(ir) = this%region(ianchor)%fermi - this%region(ir)%fermi
+      end do
+   end subroutine alignment_initial_guess
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: one mixed fixed-point update of the region alignment shifts from
+   !> the deep-probe residuals (B7 §1.3).
+   !>
+   !> @details
+   !> Deep inside region r the site must BE neutral bulk r. The residual that
+   !> expresses this is the deep-probe difference
+   !>
+   !>     resid_r = -[ (dV(deep-r) + V_r) - (dV(deep-anchor) + V_anchor) ]
+   !>
+   !> and the update is the ordinary SCF mix
+   !>
+   !>     V_r <- V_r + vmix * resid_r
+   !>
+   !> mixed exactly as `surfpot` mixes any other SCF quantity. `vmix` is the
+   !> damping the alignment needs: the two-region system has a capacitor-like
+   !> soft mode (a small charge transfer moves the whole relative level), so
+   !> the undamped update overshoots.
+   !>
+   !> The anchor is forced to exactly zero AFTER the update rather than merely
+   !> skipped, so no accumulation of round-off can let the gauge drift. That
+   !> matters: a drifting anchor is exactly the negative control the §5.3
+   !> oracle uses to prove the test has teeth.
+   !>
+   !> @param[in]     probe   dV at the deep probe site of each region.
+   !> @param[in]     vmix    SCF mixing parameter.
+   !> @param[in,out] shift   region shifts V_r, updated in place.
+   !> @param[out]    maxresid  largest |residual| over the non-anchor regions,
+   !>                          for the caller's convergence report.
+   !---------------------------------------------------------------------------
+   pure subroutine alignment_update(this, ianchor, probe, vmix, shift, maxresid)
+      class(region_registry), intent(in) :: this
+      integer, intent(in) :: ianchor
+      real(rp), dimension(:), intent(in) :: probe
+      real(rp), intent(in) :: vmix
+      real(rp), dimension(:), intent(inout) :: shift
+      real(rp), intent(out) :: maxresid
+      real(rp) :: probe_anchor, resid
+      integer :: ir
+
+      maxresid = 0.0_rp
+      if (ianchor < 1 .or. ianchor > this%nregion) return
+
+      probe_anchor = probe(ianchor) + shift(ianchor)
+
+      do ir = 1, this%nregion
+         if (ir == ianchor) cycle
+         resid = -((probe(ir) + shift(ir)) - probe_anchor)
+         shift(ir) = shift(ir) + vmix*resid
+         maxresid = max(maxresid, abs(resid))
+      end do
+
+      ! Re-pin the gauge exactly, never by accumulation.
+      shift(ianchor) = 0.0_rp
+   end subroutine alignment_update
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: compare the converged alignment fixed point against the analytic
+   !> value E_F^(anchor) - E_F^(r) (B7 §1.3).
+   !>
+   !> @details
+   !> This converts the most fragile ingredient in the work package -- the
+   !> cross-run absolute energy scale -- from load-bearing into a DIAGNOSTIC.
+   !> The fixed point is the answer; the analytic value is the check. If they
+   !> disagree beyond `tol`, the absolute-zero bookkeeping (G-B7-2) is broken
+   !> and the caller must warn loudly, because a silent misalignment produces a
+   !> plausible but wrong dipole barrier.
+   !>
+   !> Returns the largest discrepancy over regions with a known Fermi level,
+   !> and `checked = .false.` if no region could be checked at all.
+   !---------------------------------------------------------------------------
+   pure subroutine alignment_consistency_check(this, ianchor, shift, worst, iworst, checked)
+      class(region_registry), intent(in) :: this
+      integer, intent(in) :: ianchor
+      real(rp), dimension(:), intent(in) :: shift
+      real(rp), intent(out) :: worst
+      integer, intent(out) :: iworst
+      logical, intent(out) :: checked
+      real(rp) :: analytic, diff
+      integer :: ir
+
+      worst = 0.0_rp
+      iworst = 0
+      checked = .false.
+      if (ianchor < 1 .or. ianchor > this%nregion) return
+      if (.not. this%region(ianchor)%fermi_known) return
+
+      do ir = 1, this%nregion
+         if (ir == ianchor) cycle
+         if (.not. this%region(ir)%fermi_known) cycle
+         analytic = this%region(ianchor)%fermi - this%region(ir)%fermi
+         diff = abs(shift(ir) - analytic)
+         checked = .true.
+         if (diff > worst) then
+            worst = diff
+            iworst = ir
+         end if
+      end do
+   end subroutine alignment_consistency_check
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

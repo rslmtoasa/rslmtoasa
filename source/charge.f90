@@ -118,6 +118,29 @@ module charge_mod
       !> shifted value. B7.4 owns solving for it; until then it is zero and
       !> interfacepot reduces to the deviation-variable form of surfpot.
       real(rp), dimension(:), allocatable :: region_shift
+
+      !> B7.4: .true. once the alignment solver has seeded region_shift from
+      !> the analytic guess. Subsequent iterations continue the mixed fixed
+      !> point rather than re-seeding, which would discard convergence.
+      logical :: alignment_started = .false.
+      !> B7.4: residual below which the alignment fixed point is considered
+      !> converged, and the analytic consistency check (G-B7-2) is performed.
+      real(rp) :: alignment_tol = 1.0d-6
+      !> B7.4: how far the converged fixed point may disagree with the analytic
+      !> contact potential E_F(anchor) - E_F(region) before the run warns that
+      !> the absolute-zero bookkeeping is broken (B7 §1.3, G-B7-2). Generous
+      !> by design: this is a "something is structurally wrong" alarm, not a
+      !> precision test.
+      real(rp) :: alignment_check_tol = 5.0d-3
+      !> B7.4: deviation charge at a frozen anchor-region site above which the
+      !> active zone is reported as too thin (B7 §1.3).
+      real(rp) :: deep_drift_tol = 1.0d-3
+      !> B7.4: which region the Fermi level is pinned to, or empty for the
+      !> default free E_F from cluster neutrality (B7 §1.3). Setting it to a
+      !> region name reduces the interface path exactly to today's surface
+      !> behaviour, and is the correct setting when reproducing `buildsurf`
+      !> results.
+      character(len=32) :: fix_fermi_to_region = ''
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -131,6 +154,9 @@ module charge_mod
       procedure :: imppot
       procedure :: build_region_registry
       procedure :: interfacepot
+      procedure :: align_regions
+      procedure :: deep_drift_diagnostic
+      procedure :: fermi_pinned_region
       procedure :: compensation_sites
       procedure :: boundary_nef
       procedure :: overlap_diagnostic
@@ -290,6 +316,7 @@ contains
       gz = this%gz
       gt = this%gt
       vmix = this%vmix
+      fix_fermi_to_region = this%fix_fermi_to_region
 
       if (.not. allocated(this%wssurf) .or. size(this%wssurf) .ne. this%lattice%nbas) then
 #ifdef USE_SAFE_ALLOC
@@ -453,6 +480,7 @@ contains
       this%gz = gz
       this%gt = gt
       this%vmix = vmix
+      this%fix_fermi_to_region = fix_fermi_to_region
       call move_alloc(wssurf, this%wssurf)
    end subroutine build_from_file
 
@@ -475,6 +503,9 @@ contains
 
       this%dq(:) = 0.0d0
       this%vmix = 1.0d0
+      ! B7.4: free Fermi level is the default (B7 §1.3).
+      this%fix_fermi_to_region = ''
+      this%alignment_started = .false.
       ! For surfmat
       this%wssurf(:) = this%lattice%wav*ang2au
 
@@ -873,18 +904,25 @@ contains
    !>       two-sided geometry ever needs different STRUCTURE CONSTANTS, that
    !>       belongs in the cluster builder (B7.5), not in a parallel kernel.
    !>
-   !> @note The alignment shift V_r (B7 §1.3) is B7.4's responsibility and is
-   !>       read here from `this%region_shift` as data. With a single region, or
-   !>       before B7.4 lands, it is identically zero and this routine reduces to
-   !>       the deviation-variable form of `surfpot`.
+   !> 6. **The region alignment shift V_r** (B7 §1.3, B7.4), solved as an SCF
+   !>    fixed point on the deep-probe residual and added to `vmad` alongside
+   !>    the region reference:
+   !>
+   !>        vmad(i) = dV(i) + vmad_bulk(region(i), type(i)) + V_region(i)
+   !>
+   !>    See `align_regions` for why this is a fixed point rather than the
+   !>    closed form V_r = E_F - E_F^(r). With a single region the anchor gauge
+   !>    makes V_r identically zero and this routine reduces to the
+   !>    deviation-variable form of `surfpot`.
    !---------------------------------------------------------------------------
    subroutine interfacepot(this)
       class(charge), intent(inout) :: this
       ! Local variables
       integer :: ibas, iclas, iq, j, jq, k, atomrec, nsite, ireg
-      integer :: ideep_lo, ideep_hi
+      integer :: ideep_lo, ideep_hi, iref
       real(rp) :: summ, wsms, qtot, ptot, step, resid
       real(rp) :: v_lo, v_hi, nef_lo, nef_hi, wgt_lo, wgt_hi
+      real(rp) :: vmad_ref
       real(rp), dimension(this%lattice%nbas) :: tdq, tq10, vm, zsite, wsite
       logical :: dipole_on
 
@@ -919,6 +957,11 @@ contains
             if (dipole_on) tq10(atomrec) = this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%q10
          end do
       end do
+
+      ! --- 1b. Deep-A charge-drift diagnostic (B7 §1.3, B7.4) ---------------
+      ! Evaluated on the raw deviation charges, BEFORE compensation, which
+      ! would otherwise mask exactly the drift being looked for.
+      call this%deep_drift_diagnostic(tdq, nsite)
 
       ! --- 2. Localized, N(E_F)-weighted compensation (§1.5) ----------------
       resid = sum(tdq(1:nsite))
@@ -979,9 +1022,20 @@ contains
                             ' step= '//fmt('f12.6', step), __FILE__, __LINE__)
       end if
 
-      ! --- 6. Write back, referenced to the low-z deep probe, with the region
-      !        alignment shift V_r added per B7 §1.3. V_r is B7.4's unknown and
-      !        is zero until that lands.
+      ! --- 5b. Alignment solve (B7.4): one mixed fixed-point step on V_r ----
+      call this%align_regions(vm, nsite)
+
+      ! --- 6. Write back (B7 §1.3) ------------------------------------------
+      !        vmad(i) = dV(i) + vmad_bulk(region(i), type(i)) + V_region(i)
+      !
+      !        The three terms are the deviation potential, the region's own
+      !        converged on-site reference, and the alignment shift. The middle
+      !        term is `imppot`'s per-class add-back generalized from a single
+      !        host to the region registry -- without it, a polar host or an
+      !        ordered alloy is silently treated as non-polar (B7 §2.1). The
+      !        last term is what makes two independently converged parameter
+      !        sets share one absolute scale; with a single region it is zero
+      !        by the anchor gauge.
       atomrec = 0
       do ibas = 1, this%lattice%nlay
          do k = 1, this%lattice%natoms_layer(ibas)
@@ -991,14 +1045,282 @@ contains
             ! layer -- atomrec is the site counter, ibas only walks the layers.
             ireg = 1
             if (this%regions%nsite == nsite) ireg = this%regions%region_id(atomrec)
+
+            ! Region reference on-site Madelung potential, per site type.
+            vmad_ref = 0.0d0
+            iref = this%lattice%chargetrf_type(atomrec)
+            if (iref >= 1 .and. iref <= size(this%symbolic_atom)) then
+               vmad_ref = this%symbolic_atom(iref)%potential%vmad
+            end if
+
             this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad = &
-               (vm(atomrec) - v_lo + this%region_shift(ireg))*this%vmix + &
+               (vm(atomrec) - v_lo + vmad_ref + this%region_shift(ireg))*this%vmix + &
                this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1.0d0 - this%vmix)
          end do
       end do
 
       call this%overlap_diagnostic(zsite, wsite, nsite)
    end subroutine interfacepot
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4 alignment solver: one mixed fixed-point step on the per-region
+   !> alignment shifts V_r (B7 §1.3).
+   !>
+   !> @details
+   !> **The problem.** Each bulk calculation carries its own potential zero.
+   !> Region A's frozen parameter set implicitly asserts one absolute energy
+   !> scale; region B's asserts another. Freezing both at their independently
+   !> converged values with no relative shift imposes
+   !>
+   !>     contact potential == 0
+   !>
+   !> whether or not that is true. The run converges, looks entirely plausible,
+   !> and reports a wrong dipole barrier and wrong charge transfer. This is the
+   !> highest correctness risk in B7 precisely because the failure is silent.
+   !>
+   !> **The physical requirement.** Deep inside region r the site must BE
+   !> neutral bulk r. On a common absolute scale that is E_F - V_r = E_F^(r),
+   !> so the shifts are fixed up to one overall gauge and only differences are
+   !> physical: V_B - V_A is the contact potential.
+   !>
+   !> **Why a fixed point and not the closed form.** V_r = E_F - E_F^(r) would
+   !> be a one-line answer, but it requires a reliable cross-run absolute energy
+   !> scale that the code does not currently guarantee (B7 §2.1, gate G-B7-2).
+   !> Instead the residual
+   !>
+   !>     V_r(out) = dV(deep-r) - dV(deep-anchor)
+   !>
+   !> is driven to zero as an ordinary SCF quantity, mixed with `vmix` -- the
+   !> same probe `surfpot` already evaluates one-sided, evaluated on both sides.
+   !> At convergence deep-r sees exactly the potential it needs to be bulk r,
+   !> and no cross-run reference was required. The analytic value is then used
+   !> for two things only: the initial guess (usually good enough to save
+   !> several iterations) and a CONSISTENCY CHECK. That is what converts the
+   !> most fragile ingredient in this work package from load-bearing into a
+   !> diagnostic.
+   !>
+   !> **Damping.** `vmix` is not decoration. Two regions separated by an active
+   !> zone form a capacitor-like soft mode -- a small charge transfer moves the
+   !> whole relative level -- so the undamped update overshoots. This is the
+   !> mixing hook that `imppot` had dead and that was reinstated in `eeecae9`
+   !> for exactly this reason.
+   !>
+   !> @param[in] vm     dV per site, as computed by the Madelung kernel.
+   !> @param[in] nsite  number of cluster sites.
+   !---------------------------------------------------------------------------
+   subroutine align_regions(this, vm, nsite)
+      class(charge), intent(inout) :: this
+      integer, intent(in) :: nsite
+      real(rp), dimension(:), intent(in) :: vm
+      integer :: ianchor, ir, iprobe, iworst
+      real(rp) :: maxresid, worst
+      logical :: checked
+      real(rp), dimension(:), allocatable :: probe
+
+      if (this%regions%nsite /= nsite) return
+      if (this%regions%nregion < 1) return
+      if (.not. allocated(this%region_shift)) return
+
+      ! With a free Fermi level the anchor is the registry's own choice (the
+      ! first non-vacuum region). Pinning E_F to a region makes THAT region the
+      ! anchor: the two statements "E_F is region r's Fermi level" and "region r
+      ! carries no alignment shift" are the same statement, since E_F - V_r =
+      ! E_F^(r). Anchoring anywhere else would double-count the pin.
+      ianchor = this%fermi_pinned_region()
+      if (ianchor < 1) ianchor = this%regions%gauge_anchor()
+      if (ianchor < 1) return
+
+      ! First entry: seed from the analytic guess where region Fermi levels are
+      ! known. Subsequent iterations continue from the mixed fixed point.
+      if (.not. this%alignment_started) then
+         call this%regions%initial_guess(ianchor, this%region_shift)
+         this%alignment_started = .true.
+         if (rank == 0) then
+            if (len_trim(this%fix_fermi_to_region) > 0) then
+               call g_logger%info('align_regions: Fermi level pinned to region '// &
+                                  trim(this%regions%region(ianchor)%name)// &
+                                  ', which is therefore the gauge anchor (V == 0)', __FILE__, __LINE__)
+            else
+               call g_logger%info('align_regions: free Fermi level from cluster neutrality; '// &
+                                  'gauge anchor is region '//fmt('i4', ianchor)//' ('// &
+                                  trim(this%regions%region(ianchor)%name)//'), V_anchor == 0', &
+                                  __FILE__, __LINE__)
+            end if
+         end if
+      end if
+
+      ! Deep probe of each region: dV at the region's extreme site away from
+      ! the interface, the registry generalization of surfpot's dss(1,.) /
+      ! dss(nbas,.) pair.
+      allocate (probe(this%regions%nregion))
+      probe(:) = 0.0d0
+      do ir = 1, this%regions%nregion
+         iprobe = this%regions%deep_probe_site(ir)
+         if (iprobe >= 1 .and. iprobe <= nsite) probe(ir) = vm(iprobe)
+      end do
+
+      call this%regions%align_update(ianchor, probe, this%vmix, this%region_shift, maxresid)
+
+      if (rank == 0) then
+         do ir = 1, this%regions%nregion
+            if (ir == ianchor) cycle
+            call g_logger%info('align_regions: V('//trim(this%regions%region(ir)%name)// &
+                               ')= '//fmt('f12.6', this%region_shift(ir))// &
+                               ' Ry, deep probe dV= '//fmt('f12.6', probe(ir)), __FILE__, __LINE__)
+         end do
+         call g_logger%info('align_regions: max alignment residual= '// &
+                            fmt('es12.4', maxresid), __FILE__, __LINE__)
+      end if
+
+      ! Consistency check against the analytic contact potential. A converged
+      ! fixed point that disagrees with E_F^(A) - E_F^(r) beyond the threshold
+      ! means the absolute-zero bookkeeping is broken (G-B7-2), and the run must
+      ! say so loudly rather than report a plausible wrong barrier.
+      if (maxresid < this%alignment_tol) then
+         call this%regions%consistency_check(ianchor, this%region_shift, worst, iworst, checked)
+         if (checked .and. worst > this%alignment_check_tol .and. rank == 0) then
+            call g_logger%warning('align_regions: converged alignment shift for region '// &
+               trim(this%regions%region(iworst)%name)//' disagrees with the analytic contact '// &
+               'potential E_F(anchor) - E_F(region) by '//fmt('f12.6', worst)//' Ry, which '// &
+               'exceeds the '//fmt('f8.4', this%alignment_check_tol)//' Ry threshold. The '// &
+               'absolute-zero bookkeeping across the two parameter sets is inconsistent (see '// &
+               'B7 gate G-B7-2). The fixed point is still the answer, but one of the frozen '// &
+               'parameter sets is on a different potential zero than it claims, so treat the '// &
+               'reported dipole barrier as unvalidated.', __FILE__, __LINE__)
+         end if
+      end if
+
+      deallocate (probe)
+   end subroutine align_regions
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: resolve `fix_fermi_to_region` to a region id (B7 §1.3).
+   !>
+   !> @details
+   !> **The default is a FREE Fermi level**, determined by charge neutrality of
+   !> the cluster as in supercell mode, combined with the internal gauge fix
+   !> V_anchor == 0. The two unknowns (E_F, V_B) are then determined by two
+   !> conditions (cluster neutrality, deep-B bulk residual), and there is no
+   !> flat direction. That is the maintainer decision recorded in B7 §1.3, and
+   !> it is why this returns 0 when the option is unset.
+   !>
+   !> Setting it to a region name pins E_F to that region's own converged Fermi
+   !> level instead, which reduces the interface path exactly to today's
+   !> surface behaviour (`fix_fermi = .true.` for calctype 'S'), and is the
+   !> correct setting when reproducing `buildsurf` results.
+   !>
+   !> Returns 0 for free E_F; otherwise the region id. Matching is
+   !> case-insensitive on the region name. An unmatched non-empty name is a
+   !> user input error and is reported as fatal -- this is a true boundary
+   !> (namelist input), so the check belongs here.
+   !---------------------------------------------------------------------------
+   function fermi_pinned_region(this) result(ireg)
+      class(charge), intent(inout) :: this
+      integer :: ireg
+      integer :: ir
+      character(len=32) :: want, have
+
+      ireg = 0
+      if (len_trim(this%fix_fermi_to_region) == 0) return
+
+      want = this%fix_fermi_to_region
+      call lower_case(want)
+      do ir = 1, this%regions%nregion
+         have = this%regions%region(ir)%name
+         call lower_case(have)
+         if (trim(have) == trim(want)) then
+            ireg = ir
+            return
+         end if
+      end do
+
+      call g_logger%fatal('fix_fermi_to_region = "'//trim(this%fix_fermi_to_region)// &
+         '" does not name any region in the registry. Leave it empty for the default '// &
+         'free Fermi level from cluster neutrality (B7 §1.3).', __FILE__, __LINE__)
+   end function fermi_pinned_region
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Lower-case a string in place, for case-insensitive region-name matching.
+   !---------------------------------------------------------------------------
+   pure subroutine lower_case(s)
+      character(len=*), intent(inout) :: s
+      integer :: i, ic
+
+      do i = 1, len(s)
+         ic = iachar(s(i:i))
+         if (ic >= iachar('A') .and. ic <= iachar('Z')) s(i:i) = achar(ic + 32)
+      end do
+   end subroutine lower_case
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.4: deep-A charge-drift diagnostic (B7 §1.3).
+   !>
+   !> @details
+   !> With a free Fermi level, "deep-A is neutral bulk" is NOT imposed -- it is
+   !> a consequence of the buffer being thick enough. The two unknowns (E_F and
+   !> V_B) are determined by two conditions (cluster neutrality and the deep-B
+   !> residual), which leaves nothing pinning the deep-A charge directly.
+   !>
+   !> So it has to be watched. A nonzero deviation charge at the INNERMOST
+   !> FROZEN sites -- the ones adjacent to the active zone, where drift shows up
+   !> first -- means the active zone is too thin, and it means the gauge is
+   !> inconsistent, because the anchor region is no longer the bulk it is
+   !> assumed to be. Reported every iteration.
+   !>
+   !> Evaluated on the raw deviation charges before compensation: compensation
+   !> is placed at exactly these boundary sites (§1.5), so running this
+   !> afterwards would measure the compensation instead of the drift.
+   !---------------------------------------------------------------------------
+   subroutine deep_drift_diagnostic(this, tdq, nsite)
+      class(charge), intent(inout) :: this
+      integer, intent(in) :: nsite
+      real(rp), dimension(:), intent(in) :: tdq
+      integer :: i, ianchor, idrift
+      real(rp) :: drift
+
+      if (this%regions%nsite /= nsite) return
+      ! Same anchor as align_regions -- the drift being watched is the drift of
+      ! the region the gauge is pinned to.
+      ianchor = this%fermi_pinned_region()
+      if (ianchor < 1) ianchor = this%regions%gauge_anchor()
+      if (ianchor < 1) return
+
+      ! Largest deviation charge on any frozen site of the anchor region.
+      drift = 0.0d0
+      idrift = 0
+      do i = 1, nsite
+         if (this%regions%region_id(i) /= ianchor) cycle
+         if (this%regions%active(i)) cycle
+         if (abs(tdq(i)) > abs(drift)) then
+            drift = tdq(i)
+            idrift = i
+         end if
+      end do
+      if (idrift == 0) return
+
+      if (rank == 0) then
+         call g_logger%info('align_regions: deep-'//trim(this%regions%region(ianchor)%name)// &
+                            ' charge drift= '//fmt('es12.4', drift)//' at site '// &
+                            fmt('i5', idrift), __FILE__, __LINE__)
+         if (abs(drift) > this%deep_drift_tol) then
+            call g_logger%warning('align_regions: deviation charge '//fmt('es12.4', drift)// &
+               ' at frozen anchor-region site '//fmt('i5', idrift)//' exceeds the '// &
+               fmt('es10.2', this%deep_drift_tol)//' threshold. With a free Fermi level '// &
+               '"deep-anchor is neutral bulk" is not imposed, only inherited from a thick '// &
+               'enough buffer -- so this means the active zone is too thin AND that the '// &
+               'alignment gauge is inconsistent. Widen the active zone (B7 §1.3).', &
+               __FILE__, __LINE__)
+         end if
+      end if
+   end subroutine deep_drift_diagnostic
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
