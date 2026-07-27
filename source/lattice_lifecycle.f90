@@ -185,6 +185,10 @@ contains
       ! Surface initialization
       surftype = this%surftype
       nlay = this%nlay
+      ! B7.5: frozen-boundary layer counts for the two-sided (calctype='L')
+      ! interface geometry. Zero for every other calctype.
+      nlay_a = this%nlay_a
+      nlay_b = this%nlay_b
       ntype = this%ntype
       call move_alloc(this%ct, ct)
       call move_alloc(this%screening_alpha, screening_alpha)
@@ -437,6 +441,8 @@ contains
       ! Surface initialization
       this%surftype = surftype
       this%nlay = nlay
+      this%nlay_a = nlay_a
+      this%nlay_b = nlay_b
 
       ! Exchange calculation initialization
       call move_alloc(ijpair, this%ijpair)
@@ -864,7 +870,8 @@ contains
          this%wav = (this%vol/((16.0d0/3.0d0)*atan(1.0d0)*this%ntot))**(1.0d0/3.0d0)
          write (*, *) 'wav', this%wav
       end if
-      if (this%control%calctype == 'B' .or. this%control%calctype == 'S') this%nmax = 0
+      if (this%control%calctype == 'B' .or. this%control%calctype == 'S' &
+          .or. this%control%calctype == 'L') this%nmax = 0
       call g_timer%stop('build_data')
    end subroutine build_data
 
@@ -882,6 +889,8 @@ contains
       this%nclu = 0
       this%surftype = 'none'
       this%nlay = 0
+      this%nlay_a = 0
+      this%nlay_b = 0
       this%ntype = 0
       this%nbas = 0
       this%wav = 0

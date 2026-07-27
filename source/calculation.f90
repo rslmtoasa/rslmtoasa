@@ -57,6 +57,8 @@ module calculation_mod
       !> ´buildsurf´ : Builds the surface clust
       !> ´newclubulk´ : Builds the imputiry clust from the bluk clust
       !> ´newclusurf´ : Builds the impurity clust from the surface clust
+      !> ´buildinterface´ : Builds the two-sided (region A | active | region B)
+      !>   layered/interface clust (calctype='L', B7.5)
       character(len=sl) :: pre_processing
 
       !> Processing. Options are
@@ -104,6 +106,7 @@ module calculation_mod
       procedure, private :: pre_processing_buildsurf
       procedure, private :: pre_processing_newclubulk
       procedure, private :: pre_processing_newclusurf
+      procedure, private :: pre_processing_buildinterface
       procedure, private :: processing_sd
       procedure, private :: post_processing_paoflow2rs
       procedure, private :: post_processing_exchange
@@ -221,6 +224,8 @@ contains
          call this%pre_processing_newclubulk()
       case ('newclusurf')
          call this%pre_processing_newclusurf()
+      case ('buildinterface')
+         call this%pre_processing_buildinterface()
       end select
 
       ! Processing
@@ -603,6 +608,105 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> Pre-process for the layered/interface calculation (B7.5): region A |
+   !> active zone | region B, calctype='L'. Mirrors pre_processing_buildsurf;
+   !> buildsurf itself is untouched and remains the permanent regression
+   !> oracle for the one-sided (vacuum|active|bulk) case (B7 §4 B7.5).
+   !>
+   !> Workflow chain: bulk-A -> bulk-B (-> vacuum generator) -> interface,
+   !> mirroring bulk -> surf -> imp. Region A's and region B's converged
+   !> parameter sets (potential%vmad included, CONTRACT_FROZEN_REGION.md) are
+   !> loaded together through the existing &atoms database=/label(:)
+   !> mechanism -- both sets of _out.nml files in one working directory,
+   !> exactly as newclusurf/newclubulk already combine host + impurity
+   !> labels. No parameter-set version stamp is added anywhere (G-B7-2,
+   !> CONTRACT_FROZEN_REGION.md §4.1) -- old *_out.nml files keep working.
+   !---------------------------------------------------------------------------
+   subroutine pre_processing_buildinterface(this)
+      class(calculation), intent(in) :: this
+
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(self), target :: self_obj
+      type(energy), target :: energy_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+
+      ! Constructing control object
+      control_obj = control(this%fname)
+      ! Constructing lattice object
+      lattice_obj = lattice(control_obj)
+
+      ! Running the pre-calculation
+      call g_timer%start('pre-processing')
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%build_interface_full()
+      call lattice_obj%structb(.true.)
+
+      ! Creating the symbolic_atom object
+      call lattice_obj%atomlist()
+
+      ! Initialize basis dimension parameters from lmax
+      call basis_init(lattice_obj%symbolic_atoms(1)%potential%lmax)
+
+      ! Initializing MPI lookup tables and info.
+      call get_mpi_variables(rank, lattice_obj%nrec)
+
+      ! Constructing the charge object
+      charge_obj = charge(lattice_obj)
+      ! Region reference charges (B7 §1.4, §2.4): bulk_charge per type, from
+      ! the loaded symbolic atoms' occupation vs valence -- imppot's
+      ! definition, generalized to two regions instead of one host.
+      call charge_obj%get_charge_transf
+      call charge_obj%build_alelay
+      call charge_obj%surfmat
+      ! surfmat (reused unchanged, B7 §2.10) ends by building a ONE-SIDED
+      ! (vacuum|active|bulk) registry via build_region_registry. Overwrite it
+      ! with the genuinely two-sided registry (B7 §1.2, §4 B7.1/B7.5) before
+      ! anything else reads charge_obj%regions.
+      call charge_obj%build_interface_registry()
+      call g_timer%stop('pre-processing')
+      ! Constructing mixing object
+      mix_obj = mix(lattice_obj, charge_obj)
+
+      ! Creating the energy object
+      energy_obj = energy(lattice_obj)
+
+      ! Creating hamiltonian object
+      hamiltonian_obj = hamiltonian(charge_obj)
+
+      ! Creating recursion object
+      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
+
+      ! Creating density of states object
+      dos_obj = dos(recursion_obj, energy_obj)
+
+      ! Creating Green function object
+      green_obj = green(dos_obj)
+
+      ! Creating bands object
+      bands_obj = bands(green_obj)
+
+      ! Creating the self object
+      self_obj = self(bands_obj, mix_obj)
+      call g_timer%start('self-consistency')
+      call self_obj%run()
+      call g_timer%stop('self-consistency')
+
+      call save_state(lattice_obj%symbolic_atoms)
+
+      call self_obj%report()
+   end subroutine pre_processing_buildinterface
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Pre-process for bravais calculation
    !---------------------------------------------------------------------------
    subroutine pre_processing_bravais(this)
@@ -829,6 +933,13 @@ contains
             call lattice_obj%build_surf_full()
             call lattice_obj%newclu()
             call lattice_obj%structb(.true.)
+         case ('L')
+            ! B7.5: build_interface_full instead of build_surf_full -- the
+            ! two-sided counterpart. Mirrors pre_processing_buildinterface.
+            call lattice_obj%build_data()
+            call lattice_obj%bravais()
+            call lattice_obj%build_interface_full()
+            call lattice_obj%structb(.true.)
          end select
       end if
 
@@ -851,6 +962,15 @@ contains
             call charge_obj%surfmat
          case ('I')
             call charge_obj%impmad()
+         case ('L')
+            ! B7.5: same Madelung matrices as 'S' (no interfacemat exists, by
+            ! design), plus the region reference charges and the genuinely
+            ! two-sided registry that overwrites surfmat's one-sided one.
+            ! Mirrors pre_processing_buildinterface.
+            call charge_obj%get_charge_transf
+            call charge_obj%build_alelay
+            call charge_obj%surfmat
+            call charge_obj%build_interface_registry()
          end select
       end if
       call g_timer%stop('pre-processing')
@@ -868,6 +988,8 @@ contains
             call g_logger%fatal('Surface calculation not implemented!', __FILE__, __LINE__)
          case ('I')
             call g_logger%fatal('Imputiry calculation not implemented!', __FILE__, __LINE__)
+         case ('L')
+            call g_logger%fatal('Layered/interface calculation not implemented!', __FILE__, __LINE__)
          end select
       else
          select case (control_obj%calctype)
@@ -890,6 +1012,15 @@ contains
             if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham
             call hamiltonian_obj%build_bulkham()
             call hamiltonian_obj%build_locham()
+         case ('L')
+            ! B7.5: identical to 'S' -- see the same clause in self.f90's
+            ! run_recursion for why the loop runs to ntype and there is no
+            ! build_locham.
+            do i = 1, lattice_obj%ntype
+               call lattice_obj%symbolic_atoms(i)%build_pot()
+            end do
+            if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham
+            call hamiltonian_obj%build_bulkham()
          end select
       end if
 
@@ -1157,6 +1288,12 @@ contains
          call lattice_obj%build_surf_full()
          call lattice_obj%newclu()
          call lattice_obj%structb(.true.)
+      case ('L')
+         ! B7.5: two-sided counterpart of 'S'.
+         call lattice_obj%build_data()
+         call lattice_obj%bravais()
+         call lattice_obj%build_interface_full()
+         call lattice_obj%structb(.true.)
       end select
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
@@ -1175,6 +1312,13 @@ contains
          call charge_obj%surfmat
       case ('I')
          call charge_obj%impmad()
+      case ('L')
+         ! B7.5: 'S' matrices plus region reference charges and the two-sided
+         ! registry overwriting surfmat's one-sided one.
+         call charge_obj%get_charge_transf
+         call charge_obj%build_alelay
+         call charge_obj%surfmat
+         call charge_obj%build_interface_registry()
       end select
       call g_timer%stop('pre-processing')
 
@@ -1207,11 +1351,18 @@ contains
          if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
          call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
          call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
+      case ('L')
+         ! B7.5: identical to 'S'; no build_locham (nmax = 0 for 'L').
+         do i = 1, lattice_obj%ntype
+            call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
+         end do
+         if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham ! Calculate the spin-orbit coupling Hamiltonian
+         call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian for the interface
       end select
 
       ! Creating recursion object
       recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-      
+
       call recursion_obj%chebyshev_orbital_mod()
 
       ! Creating density of states object
@@ -2060,7 +2211,7 @@ contains
    !> Check availability for pre-processing
    !
    !> @param[in] pre_processing Type of pre-processing. Allowed values:
-   !> ´bravais´, ´buildsurf´, ´newclubulk´, ´newclusurf´, ´none´
+   !> ´bravais´, ´buildsurf´, ´newclubulk´, ´newclusurf´, ´buildinterface´, ´none´
    !---------------------------------------------------------------------------
    subroutine check_pre_processing(pre_processing)
       character(len=*), intent(in) :: pre_processing
@@ -2068,10 +2219,11 @@ contains
           .and. pre_processing /= 'bravais' &
           .and. pre_processing /= 'buildsurf' &
           .and. pre_processing /= 'newclubulk' &
-          .and. pre_processing /= 'newclusurf') then
+          .and. pre_processing /= 'newclusurf' &
+          .and. pre_processing /= 'buildinterface') then
          call g_logger%fatal("[calculation.check_pre_processing]:"// &
                              "calculation%pre_processing must be one of: ''none'', ''bravais'', "// &
-                             "''buildsurf'', ''newclusurf'', ''newcluimp''", __FILE__, __LINE__)
+                             "''buildsurf'', ''newclusurf'', ''newcluimp'', ''buildinterface''", __FILE__, __LINE__)
       end if
    end subroutine check_pre_processing
 

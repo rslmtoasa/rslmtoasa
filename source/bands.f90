@@ -505,7 +505,11 @@ contains
       ! Calculate the Fermi enery
       ef_mag = this%en%fermi
       this%en%chebfermi = this%en%fermi
-      if (.not. (this%en%fix_fermi) .and. this%control%calctype == 'B') then
+      ! B7 §1.3: 'L' (layered/interface) defaults to free E_F from cluster
+      ! neutrality, same determination as 'B', gated the same way on fix_fermi
+      ! rather than being calctype-exclusive to bulk.
+      if (.not. (this%en%fix_fermi) .and. &
+          (this%control%calctype == 'B' .or. this%control%calctype == 'L')) then
          e1_mag = ef_mag
          call this%fermi(ef_mag, this%en%edel, ik1_mag, this%en%energy_min, this%en%channels_ldos + 10, this%dtot, ifail, this%qqv, e1_mag)
          e1 = this%en%fermi

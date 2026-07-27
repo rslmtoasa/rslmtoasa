@@ -141,6 +141,20 @@ module charge_mod
       !> behaviour, and is the correct setting when reproducing `buildsurf`
       !> results.
       character(len=32) :: fix_fermi_to_region = ''
+
+      !> B7.5: layered/interface (calctype='L') region widths, in active
+      !> layers, on the A side and the B side of the active zone.
+      integer :: nlay_a = 0
+      integer :: nlay_b = 0
+      !> B7.5: optional per-region source E_F (Ry), feeding
+      !> region_descriptor%fermi/%fermi_known for the alignment initial guess
+      !> and consistency check (B7 §1.3). Sentinel: not supplied.
+      real(rp) :: fermi_a = huge(1.0_rp)
+      real(rp) :: fermi_b = huge(1.0_rp)
+      !> B7.5: compensation weight profile selector (B7 §1.5, G-B7-3).
+      character(len=32) :: compensation_profile = 'nef_weighted'
+      !> B7 §6 hook: applied bias (Ry), inactive placeholder.
+      real(rp) :: bias = 0.0_rp
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -153,6 +167,7 @@ module charge_mod
       procedure :: impmad
       procedure :: imppot
       procedure :: build_region_registry
+      procedure :: build_interface_registry
       procedure :: interfacepot
       procedure :: align_regions
       procedure :: deep_drift_diagnostic
@@ -317,6 +332,12 @@ contains
       gt = this%gt
       vmix = this%vmix
       fix_fermi_to_region = this%fix_fermi_to_region
+      nlay_a = this%nlay_a
+      nlay_b = this%nlay_b
+      fermi_a = this%fermi_a
+      fermi_b = this%fermi_b
+      compensation_profile = this%compensation_profile
+      bias = this%bias
 
       if (.not. allocated(this%wssurf) .or. size(this%wssurf) .ne. this%lattice%nbas) then
 #ifdef USE_SAFE_ALLOC
@@ -481,6 +502,12 @@ contains
       this%gt = gt
       this%vmix = vmix
       this%fix_fermi_to_region = fix_fermi_to_region
+      this%nlay_a = nlay_a
+      this%nlay_b = nlay_b
+      this%fermi_a = fermi_a
+      this%fermi_b = fermi_b
+      this%compensation_profile = compensation_profile
+      this%bias = bias
       call move_alloc(wssurf, this%wssurf)
    end subroutine build_from_file
 
@@ -506,6 +533,15 @@ contains
       ! B7.4: free Fermi level is the default (B7 §1.3).
       this%fix_fermi_to_region = ''
       this%alignment_started = .false.
+      ! B7.5: layered/interface defaults; nlay_a/nlay_b must be set by the
+      ! &charge namelist for calctype='L' -- there is no geometry-derived
+      ! fallback the way surfmat's nlay is (B7 §4 B7.5).
+      this%nlay_a = 0
+      this%nlay_b = 0
+      this%fermi_a = huge(1.0_rp)
+      this%fermi_b = huge(1.0_rp)
+      this%compensation_profile = 'nef_weighted'
+      this%bias = 0.0_rp
       ! For surfmat
       this%wssurf(:) = this%lattice%wav*ang2au
 
@@ -1621,10 +1657,30 @@ contains
    subroutine build_region_registry(this)
       class(charge), intent(inout) :: this
       integer, parameter :: buildsurf_init = 6
+      integer, dimension(:), allocatable :: reference_type_site
+      integer :: i, nrf
+
+      ! this%lattice%chargetrf_type is sized nbas for 'S' (build_surf_full),
+      ! which build_from_buildsurf's reference_type(1:nbas) copy assumes --
+      ! but surfmat (and this routine) run unconditionally for EVERY calctype
+      ! that reaches it, including 'L', where chargetrf_type is TYPE-indexed
+      ! (dimension nrec, build_interface_full's convention) and can be smaller
+      ! than nbas. build_interface_registry overwrites this%regions right
+      ! after for 'L', but only if this call doesn't crash first. Expand
+      ! defensively exactly as build_interface_registry does.
+      allocate (reference_type_site(max(this%lattice%nbas, 1)))
+      nrf = size(this%lattice%chargetrf_type)
+      if (nrf < 1) then
+         reference_type_site(:) = 0
+      else
+         do i = 1, this%lattice%nbas
+            reference_type_site(i) = this%lattice%chargetrf_type(mod(i - 1, nrf) + 1)
+         end do
+      end if
 
       call this%regions%build_from_buildsurf(this%lattice%nbas, this%lattice%nlay, &
                                               this%qz, this%wssurf, &
-                                              this%lattice%chargetrf_type, buildsurf_init)
+                                              reference_type_site, buildsurf_init)
 
       ! Per-region alignment shift V_r (B7 §1.3). Zero until B7.4 solves for it;
       ! region A stays the gauge anchor at exactly zero regardless.
@@ -1632,6 +1688,63 @@ contains
       allocate (this%region_shift(max(this%regions%nregion, 1)))
       this%region_shift(:) = 0.0d0
    end subroutine build_region_registry
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.5: construct this%regions as a genuinely two-sided registry (region
+   !> A, active zone, region B) for the calctype='L' (layered/interface)
+   !> path, from the same 2D cluster data (qz, wssurf, nbas) `surfmat`
+   !> already produces -- the cluster builder for 'L' is geometry-general
+   !> (B7 §2.10: madl2d runs off arbitrary QPPZ pairs) so no new Madelung
+   !> setup is needed, only a different region partition of the same rows.
+   !>
+   !> `nlay_a`/`nlay_b` (row counts of the two frozen boundaries) and the
+   !> optional `fermi_a`/`fermi_b` come from the &charge namelist (B7.5); the
+   !> active-zone width is whatever remains: nbas - nlay_a - nlay_b.
+   !---------------------------------------------------------------------------
+   subroutine build_interface_registry(this)
+      class(charge), intent(inout) :: this
+      integer :: nlay_active, i, nrf
+      integer, dimension(:), allocatable :: reference_type_site
+
+      nlay_active = this%lattice%nbas - this%nlay_a - this%nlay_b
+      if (nlay_active < 0) then
+         call g_logger%fatal('build_interface_registry: nlay_a + nlay_b exceeds nbas -- '// &
+                              'check the &charge namelist nlay_a/nlay_b against lattice%nbas', &
+                              __FILE__, __LINE__)
+      end if
+
+      ! this%lattice%chargetrf_type is TYPE-indexed (dimension nrec, one entry
+      ! per representative active type -- build_interface_full's convention,
+      ! matching build_surf_full/interfacepot). region_registry_build_from_
+      ! interface wants a PER-SITE array of length nbas (region_registry.f90
+      ! reference_type(1:nbas) = reference_type(1:nbas)). build_surf_full's
+      ! nbas happens to equal its chargetrf_type size so this was never an
+      ! issue for 'S'; here nbas > nrec in general, so expand by cycling
+      ! through the type-indexed values -- adequate for the registry's own
+      ! use (fermi_a/fermi_b consistency check, dump), which never re-derives
+      ! per-site charge from this copy; interfacepot reads
+      ! lattice%chargetrf_type directly and is unaffected by this expansion.
+      allocate (reference_type_site(max(this%lattice%nbas, 1)))
+      nrf = size(this%lattice%chargetrf_type)
+      if (nrf < 1) then
+         reference_type_site(:) = 0
+      else
+         do i = 1, this%lattice%nbas
+            reference_type_site(i) = this%lattice%chargetrf_type(mod(i - 1, nrf) + 1)
+         end do
+      end if
+
+      call this%regions%build_from_interface(this%lattice%nbas, this%nlay_a, nlay_active, &
+                                              this%qz, this%wssurf, reference_type_site, &
+                                              this%fermi_a, this%fermi_b)
+
+      ! Per-region alignment shift V_r (B7 §1.3); region A is the gauge anchor.
+      if (allocated(this%region_shift)) deallocate (this%region_shift)
+      allocate (this%region_shift(max(this%regions%nregion, 1)))
+      this%region_shift(:) = 0.0d0
+   end subroutine build_interface_registry
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

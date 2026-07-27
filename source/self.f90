@@ -794,6 +794,8 @@ contains
             call this%charge%surfpot()
          case ('I')
             call this%charge%imppot()
+         case ('L')
+            call this%charge%interfacepot()
          end select
    
          !=========================================================================
@@ -865,6 +867,17 @@ contains
          if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
          call this%hamiltonian%build_locham()
+      case ('L')
+         ! B7.5: identical to 'S'. The loop runs to ntype, not nrec, because the
+         ! frozen reference types need built potentials too -- for 'L' those are
+         ! both regions' types (ntype = 2*nbulk_bulk + nlay, lattice_cluster.f90).
+         ! No build_locham: nmax = 0 for 'L' (lattice_lifecycle.f90), so the
+         ! solver consumes ee, not hall.
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
+         call this%hamiltonian%build_bulkham()
       end select
    
       if (this%use_kspace) then

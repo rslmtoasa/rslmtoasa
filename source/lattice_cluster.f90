@@ -101,6 +101,38 @@ contains
 !         this%r2 = this%ct(1)**2
       end if
 
+      ! B7.5: the two-sided (calctype='L') counterpart of the 'S' block above.
+      ! Two FROZEN reference regions instead of one, so the frozen-type count is
+      ! the sum of both regions' bulk types rather than a single nbulk_bulk:
+      !
+      !   ntype = nbulk_A + nbulk_B + nlay     (A types, B types, active layers)
+      !   nbulk = nbulk_A + nbulk_B            (all frozen reference types)
+      !   nrec  = ntype - nbulk = nlay         (the self-consistent classes)
+      !
+      ! nbulk is what charge%bulk_charge is dimensioned on (charge.f90:525),
+      ! so it MUST cover both regions or the deviation bookkeeping in
+      ! interfacepot indexes past the end of the reference table.
+      !
+      ! Both regions draw from the SAME &atoms label(:) list -- region A's
+      ! types first, then region B's -- exactly as newclusurf/newclubulk
+      ! combine host + impurity labels. nbulk_bulk counts ONE region's types,
+      ! so a symmetric A|B (same material both sides, two independently
+      ! converged parameter sets) has 2*nbulk_bulk frozen types.
+      if (this%control%calctype == 'L') then
+         this%ntype = 2*this%nbulk_bulk + this%nlay
+         this%nbulk = 2*this%nbulk_bulk
+         this%nrec = this%ntype - this%nbulk
+         this%nbas = 51
+#ifdef USE_SAFE_ALLOC
+         call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%nbulk/))
+         call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
+         call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
+         call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+#else
+         allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot))
+#endif
+      end if
+
       this%surftype = clean_str(this%surftype)
    end subroutine build_clusup
 
@@ -327,6 +359,379 @@ contains
       close (10)
       close (20)
    end subroutine build_surf_full
+
+   !> @brief Build the two-sided (region A | active | region B) interface cluster.
+   !> @details B7.5, calctype='L'. The two-sided counterpart of build_surf_full.
+   !>
+   !> Layer selection is IDENTICAL to build_surf_full: atoms are binned into
+   !> layers by projecting onto the surface normal [dx,dy,dz] and matching
+   !> against the z ladder. Nothing about the Bravais data, the structure
+   !> constants or the Green-function machinery changes -- B7 §0.2 is explicit
+   !> that the recursion is unaware of regions and needs no changes.
+   !>
+   !> The ONE structural difference is the layer->type map. build_surf_full has
+   !> a single frozen reference (bulk, on the high-z side) and hand-set empty
+   !> spheres on the other; here BOTH ends are frozen references drawn from two
+   !> independently converged parameter sets:
+   !>
+   !>     layers 1 .. nlay_a                     region A, frozen
+   !>     layers nlay_a+1 .. nlay_a+nlay         active zone, self-consistent
+   !>     layers nlay_a+nlay+1 .. +nlay_b        region B, frozen
+   !>
+   !> Type indices follow the &atoms label(:) order that `atomlist` /
+   !> `load_symbolic_atoms_if_needed` consume, which is
+   !>
+   !>     [ 1 .. nbulk_A ] [ nbulk_A+1 .. nbulk ] [ nbulk+1 .. ntype ]
+   !>       region A types   region B types         active-layer types
+   !>
+   !> i.e. the two frozen blocks first (in region order), then one new type per
+   !> active layer. That is the same shape newclu produces for host+impurity
+   !> (frozen host types below nbulk, self-consistent classes above), which is
+   !> why `atomlist` needs no change: it walks ib(1..nbulk) then irec(1..nrec).
+   !>
+   !> `chargetrf_type(i)` is the frozen reference TYPE that site i reverts to.
+   !> Region-A sites point into the region-A block, region-B sites into the
+   !> region-B block. This is what charge%get_charge_transf/bulk_charge and
+   !> interfacepot's deviation bookkeeping consume (B7 §1.4): every charge is a
+   !> deviation from the LOCAL region reference, never an absolute charge, which
+   !> is exactly what makes the two-sided Madelung sums truncate on both sides.
+   !> @param[inout] this Lattice object receiving the interface cluster.
+   module subroutine build_interface_full(this)
+      class(lattice), intent(inout) :: this
+      ! Local variables
+      integer :: i, j, k, natoms, nsurf, nlay_tot, ilay, itype_a, itype_b
+      integer :: nbulk_a, nbulk_b, maxType, ireccount
+      real(rp), dimension(:, :), allocatable :: crsurf
+      real(rp), dimension(:), allocatable :: crh, z
+      integer, dimension(:), allocatable :: atomType, crystalType, typesurf, crystalsurf
+      integer, dimension(:), allocatable :: uniqueTypes, ichoicen, ichoicetypen
+      integer, dimension(:), allocatable :: nTypesForCurrentLayer, layer_of_site
+      integer, dimension(:), allocatable :: chargetrf_type_tmp
+      !> Closest-so-far distance PER TYPE. build_surf_full keeps a single
+      !> per-layer scalar and relies on its frozen representatives coming from
+      !> early (low-index) layers, so the last-wins behaviour is harmless
+      !> there. Here region B's representatives come from the DEEPEST layers,
+      !> scanned last, so last-wins put the final site index into ib -- past
+      !> this%kk after the nsurf parity truncation below, and geometrically far
+      !> off-centre for the active type. Tracking the minimum per type makes
+      !> "representative" mean closest-to-origin, as intended.
+      real(rp), dimension(:), allocatable :: disi_min
+      real(rp) :: new, one, ds, ds2, disi
+      integer :: n, ilo
+      logical :: isUnique, isopen
+      !> Extra layers of bulk-like margin below region A, mirroring
+      !> build_surf_full's 15-layer margin past its own frozen (bulk) side
+      !> (zmax = ds2 + 15*zstep). Without it region A's representative atom
+      !> sits at the edge of the selected cluster and its neighbor shell gets
+      !> truncated (e.g. 14 neighbors instead of fcc's 19) -- remd then fails
+      !> to find a symmetric partner ("VECTOR NOT FOUND"). Layers 1..margin
+      !> are selected (for neighbor-shell depth) but assigned to no region.
+      integer, parameter :: margin = 15
+
+      natoms = this%kk
+
+      ! Region type-block widths. Both regions are described by the same
+      ! &lattice nbulk_bulk today (symmetric A|B, or A|B with equally many
+      ! inequivalent sites per cell), so the frozen-type count is the sum of
+      ! both regions' bulk types. `build_clusup` is never actually called by
+      ! any pre_processing_* path (verified: build_surf_full sets its own
+      ! nbulk/ntype/nrec directly for the same reason, at lattice_cluster.f90
+      ! ~line 304, rather than relying on build_clusup's parallel 'S' block),
+      ! so this MUST be set here rather than assumed from a prior step.
+      nbulk_a = this%nbulk_bulk
+      nbulk_b = this%nbulk_bulk
+      this%nbulk = nbulk_a + nbulk_b
+      if (nbulk_b < 1) then
+         call g_logger%fatal('lattice%build_interface_full: region B has no frozen types '// &
+                             '(nbulk_bulk= '//fmt('I0', this%nbulk_bulk)// &
+                             '). calctype=''L'' needs two frozen reference regions.', __FILE__, __LINE__)
+      end if
+
+      if (this%nlay_a < 1 .or. this%nlay_b < 1) then
+         call g_logger%fatal('lattice%build_interface_full: nlay_a and nlay_b must both be >= 1 '// &
+                             'for calctype=''L'' (got nlay_a= '//fmt('I0', this%nlay_a)// &
+                             ', nlay_b= '//fmt('I0', this%nlay_b)//'). Set them in &lattice.', &
+                             __FILE__, __LINE__)
+      end if
+
+      nlay_tot = this%nlay_a + this%nlay + this%nlay_b
+
+      inquire (unit=10, opened=isopen)
+      if (isopen) then
+         call g_logger%fatal('lattice%build_interface_full, file clust: Unit 10 is already open', __FILE__, __LINE__)
+      else
+         open (unit=10, file='clust')
+      end if
+      inquire (unit=20, opened=isopen)
+      if (isopen) then
+         call g_logger%fatal('lattice%build_interface_full, file surfclu.out: Unit 20 is already open', __FILE__, __LINE__)
+      else
+         open (unit=20, file='surfclu.out')
+      end if
+
+      ! Surface-normal Miller indices, exactly as build_surf_full reads them.
+      select case (this%crystal_sym)
+      case ('hcp')
+         read (this%surftype, *) this%dx, this%dy, this%dz, this%dw
+         if ((this%dz) .ne. (-1*(this%dx + this%dy))) then
+            this%dz = -1*(this%dx + this%dy)
+            call g_logger%fatal('Hexagonal Miller indices not right. Does it should be ['// &
+                                fmt('I0', this%dx)//fmt('I0', this%dy)//fmt('I0', this%dz)//fmt('I0', this%dw)//']?', &
+                                __FILE__, __LINE__)
+         end if
+         this%dx = (2*this%dx + this%dy)
+         this%dy = (this%dx + 2*this%dy)
+         this%dz = this%dw
+      case default
+         read (this%surftype, *) this%dx, this%dy, this%dz
+      end select
+
+      allocate (crsurf(3, this%kk), crh(this%kk), typesurf(this%kk), crystalsurf(this%kk))
+      allocate (uniqueTypes(this%kk), ichoicen(this%kk), ichoicetypen(this%kk))
+      allocate (layer_of_site(this%kk))
+      ! Per-type closest-so-far tracker, spanning ALL layers (not reset per
+      ! layer): a type's representative is the closest site anywhere in its
+      ! region. ichoicen/ichoicetypen are zeroed so an unclaimed type is
+      ! detectable rather than holding allocation garbage.
+      allocate (disi_min(this%kk))
+      disi_min(:) = huge(1.0_rp)
+      ichoicen(:) = 0
+      ichoicetypen(:) = 0
+
+      ! Interlayer spacing along the normal, identical to build_surf_full.
+      ds = 1000.0d0
+      ds2 = 1000.0d0
+      do i = 1, this%kk
+         do j = 1, this%kk
+            new = this%dx*this%cr(1, i) + this%dy*this%cr(2, i) + this%dz*this%cr(3, i)
+            one = this%dx*this%cr(1, j) + this%dy*this%cr(2, j) + this%dz*this%cr(3, j)
+            if ((abs(new - one) .gt. 1.d-6) .and. (abs(new - one) .le. ds)) then
+               ds = abs(new - one)
+            end if
+            if ((abs(new) .le. ds2)) then
+               ds2 = abs(new)
+            end if
+         end do
+      end do
+
+      this%zstep = ds
+      ! The layer ladder is centred so that the ACTIVE zone starts at layer
+      ! margin+nlay_a+1. Layers 1..margin are selected (for neighbor-shell
+      ! depth below region A) but assigned to no region; region A occupies
+      ! margin+1..margin+nlay_a.
+      this%zmin = ds2 - (this%nlay_a + margin)*this%zstep
+      this%zmax = this%zmin + (margin + nlay_tot + 20)*this%zstep
+
+      n = int((this%zmax - this%zmin)/this%zstep) + 1
+
+      allocate (z(n))
+      allocate (nTypesForCurrentLayer(n))
+      do i = 1, n
+         z(i) = this%zmin + ((i - 1)*this%zstep)
+      end do
+      call move_alloc(z, this%z)
+
+      maxType = 0
+      call move_alloc(this%iz, atomType)
+      call move_alloc(this%num, crystalType)
+
+      ! Type index cursors into the two frozen blocks.
+      itype_a = 0
+      itype_b = 0
+      ! Active-layer types start immediately above both frozen blocks.
+      maxType = this%nbulk
+
+      ! chargetrf_type (type-indexed, one entry per active type) is filled
+      ! DURING this loop as each new active type is discovered, but its final
+      ! size (nrec = ntype - nbulk) is only known once the loop finishes.
+      ! Size generously (natoms is an upper bound on distinct active types)
+      ! and copy the real 1..nrec range into this%chargetrf_type afterward.
+      allocate (chargetrf_type_tmp(max(natoms, 1)))
+      chargetrf_type_tmp(:) = 0
+
+      nsurf = 0
+      do i = 1, n
+         nTypesForCurrentLayer(i) = 0
+         ! Layer index relative to region A's first layer. ilo <= 0 is the
+         ! below-region-A margin: selected (for neighbor-shell depth) but
+         ! assigned to no region, exactly mirroring the unused margin
+         ! build_surf_full carries past its own frozen side.
+         ilo = i - margin
+         do k = 1, natoms
+            crh(k) = dot_product([this%dx, this%dy, this%dz], this%cr(:, k))
+            if (abs(crh(k) - this%z(i)) < 1.0d-6) then
+               nsurf = nsurf + 1
+               crsurf(:, nsurf) = this%cr(:, k)
+               layer_of_site(nsurf) = ilo
+               crystalsurf(nsurf) = crystalType(k)
+
+               if (ilo <= 0) then
+                  ! ---- Below-region-A margin: not part of any region. Given
+                  ! a placeholder region-A type so downstream arrays stay
+                  ! well-defined; interfacepot never visits these layers
+                  ! because natoms_layer/chargetrf_type only cover
+                  ! ilo in [1, nlay_a+nlay+nlay_b].
+                  typesurf(nsurf) = max(1, itype_a)
+                  if (typesurf(nsurf) == 0) typesurf(nsurf) = 1
+               else if (ilo <= this%nlay_a) then
+                  ! ---- Region A: frozen. Reverts to a region-A reference type.
+                  ! Cycles through region A's inequivalent sites so a
+                  ! multi-sublattice reference (B2, ordered alloy) keeps each
+                  ! sublattice on its own frozen parameter set.
+                  itype_a = mod(itype_a, nbulk_a) + 1
+                  typesurf(nsurf) = itype_a
+               else if (ilo <= this%nlay_a + this%nlay) then
+                  ! ---- Active zone: one new self-consistent type per layer,
+                  ! per distinct underlying atom type, exactly as
+                  ! build_surf_full numbers its active layers.
+                  ilay = ilo - this%nlay_a
+                  isUnique = .true.
+                  do j = 1, nTypesForCurrentLayer(i)
+                     if (atomType(k) == uniqueTypes(j)) then
+                        isUnique = .false.
+                        exit
+                     end if
+                  end do
+                  if (isUnique) then
+                     nTypesForCurrentLayer(i) = nTypesForCurrentLayer(i) + 1
+                     uniqueTypes(nTypesForCurrentLayer(i)) = atomType(k)
+                     maxType = maxType + 1
+                     typesurf(nsurf) = maxType
+                     ! chargetrf_type is TYPE-indexed (dimension nrec, mirroring
+                     ! build_surf_full's nbas-sized array): fill it once, when
+                     ! this active type is first discovered, per B7 §1.4 --
+                     ! sites in the lower half of the active zone reference
+                     ! region A, the upper half region B.
+                     if (ilay <= (this%nlay + 1)/2) then
+                        chargetrf_type_tmp(maxType - this%nbulk) = mod(maxType, max(nbulk_a, 1)) + 1
+                     else
+                        chargetrf_type_tmp(maxType - this%nbulk) = nbulk_a + mod(maxType, max(nbulk_b, 1)) + 1
+                     end if
+                  else
+                     typesurf(nsurf) = maxType - nTypesForCurrentLayer(i) + &
+                                       findloc(uniqueTypes, atomType(k), dim=1)
+                  end if
+                  disi = norm2(crsurf(:, nsurf))
+                  if (disi < disi_min(typesurf(nsurf))) then
+                     disi_min(typesurf(nsurf)) = disi
+                     ichoicen(typesurf(nsurf)) = nsurf
+                     ichoicetypen(typesurf(nsurf)) = typesurf(nsurf)
+                  end if
+               else
+                  ! ---- Region B: frozen. Reverts to a region-B reference type,
+                  ! which lives in the SECOND block, offset by nbulk_a.
+                  itype_b = mod(itype_b, nbulk_b) + 1
+                  typesurf(nsurf) = nbulk_a + itype_b
+               end if
+
+               ! Representative site per frozen type, for ib/iu. Margin layers
+               ! (ilo <= 0) are excluded -- they carry a placeholder type, not
+               ! a real frozen reference, and must not become its representative.
+               if (ilo >= 1 .and. (ilo <= this%nlay_a .or. ilo > this%nlay_a + this%nlay)) then
+                  disi = norm2(crsurf(:, nsurf))
+                  if (disi < disi_min(typesurf(nsurf))) then
+                     disi_min(typesurf(nsurf)) = disi
+                     ichoicen(typesurf(nsurf)) = nsurf
+                     ichoicetypen(typesurf(nsurf)) = typesurf(nsurf)
+                  end if
+               end if
+            end if
+         end do
+      end do
+
+      ! natoms_layer is consumed by interfacepot as the per-ACTIVE-layer
+      ! REPRESENTATIVE-TYPE count (charge.f90:986, :1094; atomrec walks it to
+      ! index this%dq, which is sized nrec = ntype-nbulk = one type per
+      ! distinct sublattice per layer -- NOT the raw site count). Take it
+      ! directly from nTypesForCurrentLayer, exactly as build_surf_full does
+      ! (lattice_cluster.f90:295, natoms_layer = nTypesForCurrentLayer), just
+      ! re-indexed from the raw layer index i to the active-layer index ilay.
+      if (allocated(this%natoms_layer)) deallocate (this%natoms_layer)
+      allocate (this%natoms_layer(max(this%nlay, 1)))
+      this%natoms_layer(:) = 0
+      do ilay = 1, this%nlay
+         i = ilay + margin + this%nlay_a
+         if (i >= 1 .and. i <= n) this%natoms_layer(ilay) = nTypesForCurrentLayer(i)
+      end do
+
+      this%ntype = maxType
+      this%nrec = this%ntype - this%nbulk
+
+      write (20, *) 'B7.5 interface cluster (calctype=L)'
+      write (20, *) 'nbulk_a, nbulk_b:', nbulk_a, nbulk_b
+      write (20, *) 'nlay_a, nlay, nlay_b:', this%nlay_a, this%nlay, this%nlay_b
+      write (20, *) 'ntype, nbulk, nrec:', this%ntype, this%nbulk, this%nrec
+      write (20, *) 'Sites per active layer:', this%natoms_layer(:)
+      write (20, *) 'Layers are:', this%z
+      write (20, *) 'Step is:', this%zstep, this%zmax, this%zmin
+
+      if (allocated(this%chargetrf_type)) deallocate (this%chargetrf_type)
+      if (allocated(this%ib)) deallocate (this%ib)
+      if (allocated(this%irec)) deallocate (this%irec)
+      if (allocated(this%iu)) deallocate (this%iu)
+      allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot))
+
+      ! chargetrf_type: TYPE-indexed (dimension nrec), the frozen reference
+      ! type each ACTIVE TYPE reverts to -- mirroring build_surf_full's
+      ! nbas-sized array and matching how interfacepot/imppot actually index
+      ! it: this%lattice%chargetrf_type(atomrec), where atomrec is the
+      ! representative-type counter (1..nrec) interfacepot walks via
+      ! natoms_layer, not a raw site index (B7 §1.4). Filled during the main
+      ! assembly loop above (chargetrf_type_tmp), copied here now that nrec is
+      ! known.
+      allocate (this%chargetrf_type(max(this%nrec, 1)))
+      this%chargetrf_type(:) = 0
+      if (this%nrec >= 1) this%chargetrf_type(1:this%nrec) = chargetrf_type_tmp(1:this%nrec)
+      deallocate (chargetrf_type_tmp)
+
+      do i = 1, this%nrec
+         this%irec(i) = ichoicen(this%nbulk + i)
+      end do
+      do i = 1, this%nbulk
+         this%ib(ichoicetypen(i)) = ichoicen(i)
+      end do
+      do i = 1, this%ntot
+         this%iu(ichoicetypen(i)) = ichoicen(i)
+      end do
+
+      ! nbas here is NOT the selected-cluster site count (nsurf) -- it is how
+      ! many 2D-cell layers charge%set2d synthesizes for the Madelung sum
+      ! (charge.f90:2686-2745), built purely from the 2D lattice vectors and
+      ! the bulk basis (qx3/qy3/qz3), entirely independent of this%cr/iz.
+      ! set2d requires that count to split evenly (NLAMA/NLAMB) around a
+      ! z=0 reference layer it finds by construction; build_surf_full
+      ! satisfies this with a small FIXED constant (49/51) regardless of
+      ! nlay, never the full selected-cluster size. Using nsurf here (or any
+      ! margin-inclusive count) desyncs that split and set2d indexes past its
+      ! array bound. Mirror build_surf_full: a small constant, large enough to
+      ! cover every real physical layer (region A + active + region B) with
+      ! room either side, and ODD so NLAMA/NLAMB split without truncation.
+      this%nbas = max(49, 2*(this%nlay_a + this%nlay + this%nlay_b) + 1)
+      if (mod(this%nbas, 2) == 0) this%nbas = this%nbas + 1
+
+      if (int(nsurf/2) /= nsurf/2.d0) nsurf = nsurf - 1
+
+      write (10, 10004) nsurf
+      do k = 1, nsurf - 1, 2
+         write (10, 10002) &
+            crsurf(1, k), crsurf(2, k), crsurf(3, k), typesurf(k), crystalsurf(k), &
+            crsurf(1, k + 1), crsurf(2, k + 1), crsurf(3, k + 1), typesurf(k + 1), crystalsurf(k + 1)
+      end do
+
+      deallocate (crh, uniqueTypes, layer_of_site, disi_min)
+      deallocate (this%cr)
+
+      call move_alloc(crsurf, this%cr)
+      call move_alloc(typesurf, this%iz)
+      call move_alloc(crystalsurf, this%num)
+
+      this%kk = nsurf
+
+10002 format(3f14.6, 2i4, 3f14.6, 2i4)
+10004 format(3x, "II =", i7)
+      close (10)
+      close (20)
+   end subroutine build_interface_full
 
    !> @brief Build the legacy compact surface cluster.
    !> @details Chooses representative atoms from the bulk cluster for each
@@ -966,6 +1371,7 @@ contains
       integer :: i, ii, iii, imax, inn, ino, j, jj, jnn, jsz, k, la, lk, lm, m, n
       real(rp) :: a1, a2, a3, aaa, eps
       !-BUILDS VECTORS SET(3, NOMX, NNMX) CONNECTING NEIGHBORS OF EACH TYPE NO-
+
       do i = 1, ntot
          la = iu(i)
          jsz = nn(la, 1)
@@ -987,7 +1393,8 @@ contains
             lm = no(ino)
             if (n == lm) goto 1000
          end do
-         write (17, 10003)
+         print *, 'Atom type', n, 'not found in representative atoms'
+         stop
 1000     imax = nn(ino, 1)
          do iii = 1, imax
             idnn(iii) = 0

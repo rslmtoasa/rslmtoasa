@@ -36,6 +36,7 @@ shared Fortran state.
 | `pre_processing` | `'buildsurf'` | `pre_processing_buildsurf` | Surface SCF (`calctype='S'`). `build_surf_full()`, no `newclu()`. |
 | `pre_processing` | `'newclubulk'` | `pre_processing_newclubulk` | Impurity-in-bulk (`calctype='I'`, bulk host). `newclu()`, no `build_surf_full()`. |
 | `pre_processing` | `'newclusurf'` | `pre_processing_newclusurf` | Impurity-in-surface. `build_surf_full()` + `newclu()`. **No example/test input anywhere uses this route** (see `tests/KNOWN_ISSUES.md`). |
+| `pre_processing` | `'buildinterface'` | `pre_processing_buildinterface` | Two-sided layered/interface SCF (`calctype='L'`, B7.5). `build_interface_full()` (region A \| active \| region B), then `surfmat()` (kernel reused unchanged) with its one-sided registry overwritten by `charge%build_interface_registry()`. Per-iteration Madelung update is `charge%interfacepot`, not `surfpot` (`self.f90` dispatch). `buildsurf` itself is untouched and remains the permanent one-sided regression oracle. |
 | `processing` | `'sd'` | `processing_sd` | Spin dynamics. **Known bug:** its pre-processing block is hardcoded to the `newclusurf` sequence regardless of the case's actual route — see `tests/KNOWN_ISSUES.md`. |
 | `post_processing` | `'exchange'` | `post_processing_exchange` | Real-space intersite J_ij/D_ij. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |

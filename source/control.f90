@@ -141,6 +141,7 @@ module control_mod
       !> - \ref calctype \f$= B\f$: bulk
       !> - \ref calctype \f$= I\f$: impurity
       !> - \ref calctype \f$= S\f$: surface
+      !> - \ref calctype \f$= L\f$: layered (two-sided interface/lead geometry, B7.5)
       character :: calctype
 
       !> Calculate hyperfine field
@@ -631,8 +632,9 @@ contains
       class(control) :: this
       if (this%calctype /= 'B' &
           .and. this%calctype /= 'S' &
-          .and. this%calctype /= 'I') then
-         call g_logger%fatal('lattice%calctype must be one of: ''B'', ''S'', ''I''")', __FILE__, __LINE__)
+          .and. this%calctype /= 'I' &
+          .and. this%calctype /= 'L') then
+         call g_logger%fatal('lattice%calctype must be one of: ''B'', ''S'', ''I'', ''L''")', __FILE__, __LINE__)
       end if
       if (this%recur /= 'lanczos' &
           .and. this%recur /= 'chebyshev' &

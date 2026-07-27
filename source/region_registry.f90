@@ -108,6 +108,7 @@ module region_registry_mod
    contains
       procedure :: restore_to_default => region_registry_restore_to_default
       procedure :: build_from_buildsurf => region_registry_build_from_buildsurf
+      procedure :: build_from_interface => region_registry_build_from_interface
       procedure :: dump => region_registry_dump
       procedure :: is_active => region_registry_is_active
       procedure :: region_of => region_registry_region_of
@@ -553,6 +554,131 @@ contains
          this%layer_index(i) = 0
       end do
    end subroutine region_registry_build_from_buildsurf
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.5: build a genuinely two-sided registry -- region A (frozen, low-z),
+   !> an active zone, region B (frozen, high-z) -- for the calctype='L'
+   !> (layered/interface) path (B7 §1.2, §4 B7.5).
+   !>
+   !> @details
+   !> Generalizes `build_from_buildsurf`'s single-frozen-reference layout to
+   !> two independent frozen regions, which is the one structural difference
+   !> B7 §1.1-§1.3 requires: two potential zeros that must be aligned (B7.4),
+   !> not one. The index map is analogous but symmetric:
+   !>
+   !>   - rows 1..nlay_a                    region A, frozen
+   !>   - rows nlay_a+1..nlay_a+nlay_active  the active zone
+   !>   - rows nlay_a+nlay_active+1..nbas    region B, frozen
+   !>
+   !> Both frozen regions are `region_kind_lead_a`/`region_kind_lead_b` (B7.1
+   !> reserved these precisely for this constructor). Sites are held frozen
+   !> exactly as vacuum/bulk are in `build_from_buildsurf` -- the charge loop
+   !> in `interfacepot` only ever touches sites the registry marks active.
+   !>
+   !> `fermi_a`/`fermi_b` are OPTIONAL: passing a value <= `fermi_sentinel`
+   !> (the huge() default `charge%fermi_a`/`fermi_b` restore to) means "not
+   !> supplied", exactly as CONTRACT_FROZEN_REGION.md §2 requires -- E_F is
+   !> the one quantity a frozen region may legitimately omit, and
+   !> `region_descriptor%fermi_known` gates every use of it (initial guess,
+   !> consistency check) so an absent value degrades gracefully rather than
+   !> injecting a bogus zero.
+   !>
+   !> @param[in] nbas         Total sites in the cluster.
+   !> @param[in] nlay_a       Frozen region-A row count (leading rows).
+   !> @param[in] nlay_active  Active-zone row count, following region A.
+   !> @param[in] z            Per-site z coordinate, dimension(nbas).
+   !> @param[in] w            Per-site Wigner-Seitz radius, dimension(nbas).
+   !> @param[in] reference_type  Per-site frozen-reference class index,
+   !>                    dimension(nbas) (lattice%chargetrf_type). Optional.
+   !> @param[in] fermi_a      Region A source E_F (Ry). Optional; a value
+   !>                    <= fermi_sentinel means "not supplied".
+   !> @param[in] fermi_b      Region B source E_F (Ry). Same convention.
+   !> @param[in] fermi_sentinel  Threshold below which fermi_a/fermi_b count
+   !>                    as supplied. Optional, default huge(1.0_rp)/2 (any
+   !>                    ordinary Ry value is far below it; only the exact
+   !>                    huge() default sentinel is excluded).
+   !---------------------------------------------------------------------------
+   subroutine region_registry_build_from_interface(this, nbas, nlay_a, nlay_active, z, w, &
+                                                     reference_type, fermi_a, fermi_b, fermi_sentinel)
+      class(region_registry), intent(inout) :: this
+      integer, intent(in) :: nbas
+      integer, intent(in) :: nlay_a
+      integer, intent(in) :: nlay_active
+      real(rp), dimension(:), intent(in) :: z
+      real(rp), dimension(:), intent(in) :: w
+      integer, dimension(:), intent(in), optional :: reference_type
+      real(rp), intent(in), optional :: fermi_a
+      real(rp), intent(in), optional :: fermi_b
+      real(rp), intent(in), optional :: fermi_sentinel
+      real(rp) :: sentinel_
+      integer :: i
+      integer, parameter :: reg_a = 1
+      integer, parameter :: reg_active = 2
+      integer, parameter :: reg_b = 3
+
+      sentinel_ = huge(1.0_rp)/2.0_rp
+      if (present(fermi_sentinel)) sentinel_ = fermi_sentinel
+
+      call this%restore_to_default()
+
+      this%nsite = nbas
+      this%nregion = 3
+
+      deallocate (this%region)
+      allocate (this%region(this%nregion))
+      this%region(reg_a) = region_descriptor(kind=region_kind_lead_a, name='A', frozen=.true.)
+      this%region(reg_active) = region_descriptor(kind=region_kind_active, name='active', frozen=.false.)
+      this%region(reg_b) = region_descriptor(kind=region_kind_lead_b, name='B', frozen=.true.)
+
+      if (present(fermi_a)) then
+         if (fermi_a < sentinel_) then
+            this%region(reg_a)%fermi = fermi_a
+            this%region(reg_a)%fermi_known = .true.
+         end if
+      end if
+      if (present(fermi_b)) then
+         if (fermi_b < sentinel_) then
+            this%region(reg_b)%fermi = fermi_b
+            this%region(reg_b)%fermi_known = .true.
+         end if
+      end if
+
+      deallocate (this%region_id, this%active, this%layer_index, this%z, this%w, this%reference_type)
+      allocate (this%region_id(nbas))
+      allocate (this%active(nbas))
+      allocate (this%layer_index(nbas))
+      allocate (this%z(nbas))
+      allocate (this%w(nbas))
+      allocate (this%reference_type(nbas))
+
+      this%z(1:nbas) = z(1:nbas)
+      this%w(1:nbas) = w(1:nbas)
+      this%reference_type(:) = 0
+      if (present(reference_type)) this%reference_type(1:nbas) = reference_type(1:nbas)
+
+      ! Rows 1..nlay_a: region A, frozen.
+      do i = 1, min(nlay_a, nbas)
+         this%region_id(i) = reg_a
+         this%active(i) = .false.
+         this%layer_index(i) = 0
+      end do
+
+      ! Rows nlay_a+1..nlay_a+nlay_active: the active zone.
+      do i = nlay_a + 1, min(nlay_a + nlay_active, nbas)
+         this%region_id(i) = reg_active
+         this%active(i) = .true.
+         this%layer_index(i) = i - nlay_a
+      end do
+
+      ! Rows nlay_a+nlay_active+1..nbas: region B, frozen.
+      do i = nlay_a + nlay_active + 1, nbas
+         this%region_id(i) = reg_b
+         this%active(i) = .false.
+         this%layer_index(i) = 0
+      end do
+   end subroutine region_registry_build_from_interface
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

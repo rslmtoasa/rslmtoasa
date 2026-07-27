@@ -317,6 +317,20 @@ module lattice_mod
       !> Number of layers
       integer :: nlay
 
+      !> B7.5 (calctype='L'): number of FROZEN atomic layers of region A (the
+      !> low-z semi-infinite reference) and of region B (the high-z one). The
+      !> active zone is whatever lies between them, so the layer stack is
+      !>     nlay_a  frozen A | nlay  active | nlay_b  frozen B
+      !> and the total layer count is nlay_a + nlay + nlay_b.
+      !>
+      !> These are the LATTICE-side copies, read from the &lattice namelist.
+      !> `charge%nlay_a`/`nlay_b` (from &charge) are the row counts the region
+      !> registry partitions on and are deliberately kept separate: they count
+      !> SITES (registry rows), while these count LAYERS. For a one-atom-per-
+      !> layer cluster the two coincide; in general they do not, and conflating
+      !> them would silently mis-place the A/active boundary.
+      integer :: nlay_a, nlay_b
+
       !> TODO
       !> Surface indexes
       integer :: dx, dy, dz, dw
@@ -367,6 +381,7 @@ module lattice_mod
       procedure :: build_clusup
       procedure :: build_surf
       procedure :: build_surf_full
+      procedure :: build_interface_full
       procedure :: newclu
       procedure :: structb
       procedure :: atomlist
@@ -587,6 +602,20 @@ module lattice_mod
 
       ! Initial definitions
    end subroutine build_surf_full
+
+   !> @brief Build the two-sided (region A | active | region B) interface cluster.
+   !> @details The calctype='L' counterpart of build_surf_full: instead of one
+   !>          vacuum boundary and one bulk boundary, it places two independent
+   !>          FROZEN semi-infinite references around a central active zone.
+   !>          Layers are selected by projecting onto the surface normal exactly
+   !>          as build_surf_full does; the only structural difference is the
+   !>          layer->type assignment, which now draws region-A types from the
+   !>          leading block of the &atoms label list and region-B types from
+   !>          the trailing block.
+   !> @param[inout] this Lattice object receiving the interface cluster.
+   module subroutine build_interface_full(this)
+      class(lattice), intent(inout) :: this
+   end subroutine build_interface_full
 
    !> @brief Build the legacy compact surface cluster.
    !> @details Chooses representative atoms from the bulk cluster for each

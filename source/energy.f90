@@ -168,6 +168,14 @@ contains
          ! this%fermi = readed from bulk calculation
          this%fix_fermi = .true.
          this%channels_ldos = 6000
+      case ('L')
+         this%energy_min = -1.5
+         this%energy_max = 0.5
+         ! B7 §1.3: default is FREE E_F from cluster neutrality (unlike 'S'/'I'),
+         ! combined with the region-registry gauge anchor V_A = 0. Pinning E_F to
+         ! one region instead is charge%fix_fermi_to_region, read independently.
+         this%fix_fermi = .false.
+         this%channels_ldos = 6000
       end select
    end subroutine restore_to_default
 
