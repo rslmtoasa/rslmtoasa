@@ -124,6 +124,50 @@ The optional `"checks"` dict describes what to extract from the output and compa
 
 ---
 
+## Cross-calctype oracle (fcc Cu)
+
+Four cases describe **the same physical atom** — Cu in bulk fcc Cu — reached by
+three different code paths, so they function as an oracle for each other rather
+than only as stored-value regressions:
+
+| Test | `calctype` | Route |
+| --- | --- | --- |
+| `Example_bulk_fccCu_chebyshev` | `B` | `bravais` |
+| `Example_impurity_fccCu_chebyshev` | `I` | `newclubulk` — Cu "impurity" on a Cu host |
+| `Example_interface_fccCu001_chebyshev` | `L` | `buildinterface` — one Cu (001) layer between Cu regions |
+| `Example_interface_fccCu111_chebyshev` | `L` | `buildinterface` — same, (111) |
+
+All four share one converged Cu parameter set (`vmad ~ 0`), and all pin
+`fermi = -0.089874` with `fix_fermi = .true.`. **The pinned Fermi level is load
+bearing:** without it each route determines E_F independently, the energy meshes
+shift relative to one another, and a pointwise DOS comparison compares different
+grids rather than different physics. With it, all four emit an identical mesh
+(2009 rows, −1.40838 … 2.10469), so `*_dos.out` rows are directly comparable.
+
+Cross-checking the committed references (`etot`, and `*_dos.out` col 2):
+
+- `etot` agrees to ~1e-8 Ry across all four; `ws_r` is exact.
+- `L001` reproduces bulk **exactly** at every sampled row.
+- `I` deviates from bulk by ≤1e-5 — the print precision of the `.out` files.
+- **`L111` deviates by 2.05e-3 at row 1200** (near the d-band peak), ~200×
+  larger than `I` or `L001`. This is a real, orientation-specific residual, not
+  a tolerance artifact. It is *not* explained, and is deliberately captured
+  rather than tolerated away — the reference pins the current value so any
+  change in it is visible. See `tests/KNOWN_ISSUES.md`.
+
+This suite compares each case against its own stored reference; it does not
+assert B ≡ I ≡ L programmatically. When touching the Hamiltonian build, the
+recursion, or any `calctype` dispatch, compare the four references to each other
+by hand — that comparison is what catches a route-specific bug, and it is how
+the B7.5 zero-DOS and representative-site bugs were found.
+
+**Do not compare converged output from two directories that started from
+different parameters or different E_F.** That is not a reference pair, and it
+produces differences (~0.26 in the DOS peak region) that have nothing to do with
+the code path under test.
+
+---
+
 ## Adding a new test case
 
 1. **Create the case directory** `cases/<system>/` with `input.nml` and any

@@ -1,0 +1,54 @@
+! Cu impurity in an fcc Cu host (calctype='I') -- the impurity half of the
+! cross-calctype oracle described in tests/scf/README.md.
+!
+! A Cu "impurity" on a Cu host is the same atom as the host, so the impurity
+! site must reproduce bulk fcc Cu. Paired with
+! Example_interface_fccCu111_chebyshev, this pins the same physics down three
+! independent code paths (bulk / impurity / interface).
+!
+! fermi/fix_fermi are pinned to the converged bulk value so all three routes
+! sample an identical energy mesh.
+&calculation
+pre_processing = 'newclubulk'
+verbose = T
+/
+&lattice
+rc = 30
+alat = 3.614
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.41237
+ntype = 2
+nclu = 1
+ct(:) = 2*4.0d0
+r2 = 16.00d0
+inclu(1, :) = 0.0, 0.0, 0.0
+/
+&atoms
+database = './'
+label(1) = 'A'
+label(2) = 'Ac1'
+/
+&self
+nstep = 1
+/
+&energy
+fermi = -0.089874
+energy_min = -1.5
+energy_max = 2.0
+channels_ldos = 2000
+fix_fermi = .true.
+/
+&control
+calctype = 'I'
+nsp = 1
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.0020
+mixtype = 'broyden'
+/

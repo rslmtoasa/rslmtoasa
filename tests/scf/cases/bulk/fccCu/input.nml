@@ -1,0 +1,52 @@
+! Bulk fcc Cu (calctype='B') -- the reference leg of the cross-calctype
+! oracle described in tests/scf/README.md.
+!
+! Paired with Example_impurity_fccCu_chebyshev and
+! Example_interface_fccCu111_chebyshev: all three describe the same physical
+! atom (Cu in bulk fcc Cu) reached by three different code paths, so their
+! site DOS and potential parameters must agree.
+!
+! fermi/fix_fermi are pinned to the converged value so all three routes sample
+! an identical energy mesh; without that the meshes shift relative to one
+! another and a pointwise DOS comparison is meaningless.
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 30
+alat = 3.614
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.41237
+ntype = 1
+ct(1) = 4.0d0
+r2 = 16.00d0
+/
+&atoms
+database = './'
+label(1) = 'Cu'
+/
+&self
+nstep = 1
+/
+&energy
+fermi = -0.089874
+energy_min = -1.5
+energy_max = 2.0
+channels_ldos = 2000
+fix_fermi = .true.
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.0020
+mixtype = 'broyden'
+/

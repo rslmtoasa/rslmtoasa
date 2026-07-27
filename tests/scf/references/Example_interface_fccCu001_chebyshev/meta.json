@@ -1,0 +1,56 @@
+{
+  "name": "Example_interface_fccCu001_chebyshev",
+  "case": "interface/fccCu001",
+  "timeout": 900,
+  "omp_threads": 2,
+  "abs_tol": 1e-06,
+  "rel_tol": 1e-06,
+  "namelists": {
+    "control": {
+      "recur": "chebyshev"
+    },
+    "self": {
+      "nstep": 1
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Ac1_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r",
+          "vmad"
+        ]
+      }
+    ],
+    "text": [
+      {
+        "file": "Ac1_dos.out",
+        "rows": [
+          400,
+          800,
+          1200,
+          1600
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      },
+      {
+        "file": "totaldos.out",
+        "rows": [
+          400,
+          800,
+          1200,
+          1600
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

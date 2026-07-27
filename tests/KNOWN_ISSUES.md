@@ -145,3 +145,35 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   `pre_processing_*` subroutine rather than hardcoding one).
 - **Found:** Phase 2, P1 (adding spin-dynamics coverage — `processing_sd`
   had zero prior test coverage under any phase).
+
+## `calctype = 'L'` (111) site DOS deviates ~2e-3 from bulk; (001) is exact
+
+- **Symptom:** in the cross-calctype fcc Cu oracle (see
+  `tests/scf/README.md`, "Cross-calctype oracle"), a single Cu layer treated
+  as an interface between Cu regions must reproduce bulk fcc Cu, because every
+  region is the same material starting from the same parameter set with
+  `vmad ~ 0`. `surftype = '0 0 1'` does so **exactly** — zero difference at
+  every sampled DOS row. `surftype = '1 1 1'` deviates by **2.05e-3** at
+  row 1200 (E = 0.686, near the d-band peak), against a peak DOS of 48.3.
+  `Example_interface_fccCu001_chebyshev` vs
+  `Example_interface_fccCu111_chebyshev`.
+- **Not the cause:** the TB-LMTO Hamiltonian. Instrumenting `build_bulkham`
+  and `build_locham` with a geometry-keyed dump (per-neighbour displacement
+  vector plus the hopping block's Frobenius norm, matched across calctypes by
+  vector rather than by neighbour index) shows the on-site block and all 19
+  fcc neighbour hoppings **bit-identical** across `B`/`I`/`L`. `etot` also
+  agrees to ~1e-8 Ry and `ws_r` exactly, for both orientations.
+- **Therefore:** the residual is downstream of the Hamiltonian, and is
+  specific to the 111 surface normal. Candidates not yet investigated: the
+  layer ladder / `zstep` determination in `build_interface_full` for a
+  non-cubic normal (`dx,dy,dz` are transformed for hcp/111 cases before the
+  layer scan), the resulting selected-cluster boundary, or the
+  representative-site choice interacting with 111's different in-plane
+  periodicity.
+- **Deliberately captured, not tolerated away:** the committed reference pins
+  the current 111 values, so any change to this residual shows up as a test
+  failure rather than passing silently. Do not widen `abs_tol`/`rel_tol` to
+  make the two orientations agree.
+- **Found:** B7.5 (`calctype='L'` wiring, commit `97f1e0e`). The earlier
+  validation used 001 only and reported agreement at print precision; the 111
+  deviation surfaced when both orientations were added to the suite.

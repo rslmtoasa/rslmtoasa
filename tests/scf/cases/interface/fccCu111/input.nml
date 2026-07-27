@@ -1,0 +1,66 @@
+! B7.5 layered/interface mode (calctype='L') -- homogeneous-Cu oracle.
+!
+! A single fcc Cu (111) layer treated as the ACTIVE zone between two frozen
+! Cu reference regions (A below, B above). Because all three regions are the
+! same material and start from the same converged parameter set with
+! vmad ~ 0, the active atom is physically indistinguishable from bulk fcc Cu.
+! Its DOS and potential parameters must therefore reproduce both
+! Example_bulk_fccCu_chebyshev and Example_impurity_fccCu_chebyshev -- the
+! same physics reached by three different code paths (bulk / impurity /
+! interface). See tests/scf/README.md "Cross-calctype oracle".
+!
+! fermi/fix_fermi are pinned to the converged bulk value so all three routes
+! sample an identical energy mesh; without that the meshes shift relative to
+! one another and a pointwise DOS comparison is meaningless.
+&calculation
+pre_processing = 'buildinterface'
+verbose = T
+/
+&lattice
+rc = 30
+alat = 3.614
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.41237
+nbulk_bulk = 1
+nlay = 1
+nlay_a = 1
+nlay_b = 1
+surftype = '1 1 1'
+ntype = 3
+ct(:) = 3*4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'A'
+label(2) = 'B'
+label(3) = 'Ac1'
+/
+&self
+nstep = 1
+/
+&energy
+fermi = -0.089874
+energy_min = -1.5
+energy_max = 2.0
+channels_ldos = 2000
+fix_fermi = .true.
+/
+&control
+calctype = 'L'
+nsp = 1
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.0020
+mixtype = 'broyden'
+/
+&charge
+nlay_a = 1
+nlay_b = 1
+/
