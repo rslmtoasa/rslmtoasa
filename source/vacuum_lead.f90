@@ -79,9 +79,26 @@
 !>
 !> ## Scope
 !>
-!> **Self-contained. Nothing here is wired into any SCF path.** No
-!> electrostatics, no decimation, no boundary self-energy, no k-space
-!> route, no interface geometry. Consumers arrive with B7.3/B7.5.
+!> The generator proper (`generate`, `band_onset`, `check_fermi_margin`) is
+!> self-contained: no electrostatics, no decimation, no boundary
+!> self-energy, no k-space route, no interface geometry.
+!>
+!> `refresh_vacuum_region` (B7.6) is the one SCF-facing entry point. It
+!> installs a generated set onto the frozen vacuum types of a running
+!> `calctype='L'` interface calculation, and re-installs it whenever the
+!> alignment solver moves the vacuum level. That is what makes the vacuum
+!> level self-consistent rather than a hand-set knob -- one of the two ad
+!> hoc knobs §1.6 says the vacuum lead exists to remove.
+!>
+!> ## Why the SCF entry point lives HERE and not in `charge`
+!>
+!> Dependency direction. `vacuum_lead` needs `self%potpar` to generate, so
+!> it depends on `self_mod`; `self_mod` in turn depends on `charge_mod`.
+!> Putting the refresh in `charge` would therefore close a cycle
+!> (charge -> vacuum_lead -> self -> charge). `charge` does NOT depend on
+!> `self`, so the reverse edge added here (vacuum_lead -> charge) is
+!> acyclic. The alternative -- driving the refresh from `self.f90` itself --
+!> is closed off by the Phase-1 fence on that file.
 !------------------------------------------------------------------------------
 module vacuum_lead_mod
    use precision_mod, only: rp
@@ -89,6 +106,9 @@ module vacuum_lead_mod
    use string_mod, only: real2str, int2str
    use self_mod, only: self
    use symbolic_atom_mod, only: symbolic_atom
+   use charge_mod, only: charge
+   use region_registry_mod, only: region_kind_vacuum
+   use mpi_mod, only: rank
    implicit none
 
    private
@@ -113,6 +133,11 @@ module vacuum_lead_mod
    !> `generate` for why the atomic path's uniform `pnu = l + 1.5` is not
    !> usable here.
    real(rp), parameter, public :: vacuum_lead_dnu_step = 0.5_rp
+
+   !> B7.6: the SCF-facing entry point. See the routine for why it lives in
+   !> this module rather than in `charge` (dependency direction) or in
+   !> `self.f90` (Phase-1 fence).
+   public :: refresh_vacuum_region
 
    !---------------------------------------------------------------------------
    !> Frozen potential-parameter set of an empty-sphere lattice.
@@ -561,5 +586,129 @@ contains
          end do
       end do
    end subroutine vacuum_lead_dump
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.6: generate the vacuum region's frozen parameter set at the current
+   !> vacuum level and install it on the vacuum types. The one SCF-facing
+   !> entry point of this module.
+   !>
+   !> @details
+   !> **What makes this self-consistent.** The vacuum level is not a user
+   !> input. It is the alignment shift the B7.4 solver already maintains for
+   !> every non-anchor region, `charge%region_shift(vacuum)` -- the potential
+   !> at which deep vacuum sees zero deviation field. Calling this once per
+   !> SCF iteration, right after `interfacepot` has updated that shift,
+   !> regenerates the empty-lattice parameters at the new level and re-freezes
+   !> them. On the first iteration the shift is still zero, which is exactly
+   !> the "generate once from a given vacuum level" behaviour, so the one-shot
+   !> case falls out as iteration 0 rather than needing its own branch.
+   !>
+   !> **Why regenerating is cheap.** One `potpar` call on a single Z = 0 atom
+   !> over one radial mesh, against a full recursion per iteration. The cost
+   !> is not worth optimizing away, and skipping it when the shift has barely
+   !> moved would introduce a staleness threshold nobody could calibrate.
+   !>
+   !> **Why the parameters must be re-installed rather than shifted in place.**
+   !> A rigid shift of V0 shifts `enu`, `C` and `VL` by exactly that amount and
+   !> leaves `srdel`, `qpar`, `ppar` invariant -- that is pinned by test 3 of
+   !> `tests/unit/test_vacuum_lead.f90`. Re-running the generator reproduces
+   !> that relation by construction instead of asserting it, which keeps the
+   !> invariance a *checkable property* of the solver rather than an
+   !> assumption baked into the caller.
+   !>
+   !> **Frozen means frozen.** Installing a shifted set is a change of
+   !> reference level, not a relaxation (B7 §1.3): the vacuum sites never
+   !> acquire self-consistent charge, and `boundary_nef` returns zero for them
+   !> so they receive no compensation charge either (§1.5).
+   !>
+   !> @param[inout] vac       The vacuum parameter set, regenerated in place.
+   !> @param[inout] solver    A `self` instance driving `potpar`.
+   !> @param[inout] charge_obj The charge object owning the region registry and
+   !>                          the alignment shifts.
+   !> @param[inout] atoms     The run's symbolic atoms. The vacuum types'
+   !>                          `potential` entries are overwritten.
+   !> @param[in] nbulk_a      Number of region-A frozen types; the vacuum types
+   !>                          occupy slots `nbulk_a+1 .. nbulk`.
+   !> @param[in] nbulk        Total frozen-type count.
+   !> @param[in] fermi        Current E_F (Ry), for the band-onset margin check.
+   !---------------------------------------------------------------------------
+   subroutine refresh_vacuum_region(vac, solver, charge_obj, atoms, nbulk_a, nbulk, fermi)
+      type(vacuum_lead), intent(inout) :: vac
+      type(self), intent(inout) :: solver
+      class(charge), intent(inout) :: charge_obj
+      class(symbolic_atom), dimension(:), intent(inout) :: atoms
+      integer, intent(in) :: nbulk_a, nbulk
+      real(rp), intent(in) :: fermi
+
+      real(rp) :: v0, ws_r
+      integer :: it, l, isp, ivac_region, isite
+
+      ! --- The vacuum level: the alignment shift of the vacuum region -------
+      ! Region B is the vacuum region on this path; find it by KIND rather than
+      ! by index, so this keeps working if the registry layout ever changes.
+      v0 = 0.0_rp
+      ivac_region = 0
+      do it = 1, charge_obj%regions%nregion
+         if (charge_obj%regions%region(it)%kind == region_kind_vacuum) then
+            ivac_region = it
+            exit
+         end if
+      end do
+      if (ivac_region < 1) return
+      if (allocated(charge_obj%region_shift)) then
+         if (ivac_region <= size(charge_obj%region_shift)) v0 = charge_obj%region_shift(ivac_region)
+      end if
+
+      ! --- The empty-sphere radius, from a vacuum site of the registry ------
+      ! `w` is carried per site as registry data (B7.1), in the dimensional
+      ! bohr convention this module documents in its C0 note.
+      ws_r = 0.0_rp
+      do isite = 1, charge_obj%regions%nsite
+         if (charge_obj%regions%region_id(isite) == ivac_region) then
+            ws_r = charge_obj%regions%w(isite)
+            exit
+         end if
+      end do
+      if (ws_r <= 0.0_rp) then
+         call g_logger%fatal('refresh_vacuum_region: the vacuum region has no positive '// &
+                             'Wigner-Seitz radius in the registry (got '//real2str(ws_r)// &
+                             ' bohr). charge%wssurf must be populated before the vacuum '// &
+                             'parameters can be generated.', __FILE__, __LINE__)
+      end if
+
+      call vac%generate(solver, ws_r, v0, lmax=atoms(1)%potential%lmax)
+
+      ! --- Install onto the vacuum types ------------------------------------
+      do it = nbulk_a + 1, nbulk
+         if (it < 1 .or. it > size(atoms)) cycle
+         atoms(it)%potential%ws_r = vac%ws_r
+         do isp = 1, 2
+            do l = 0, vac%lmax
+               atoms(it)%potential%enu(l, isp) = vac%enu(l, isp)
+               atoms(it)%potential%c(l, isp) = vac%c(l, isp)
+               atoms(it)%potential%vl(l, isp) = vac%vl(l, isp)
+               atoms(it)%potential%srdel(l, isp) = vac%srdel(l, isp)
+               atoms(it)%potential%qpar(l, isp) = vac%qpar(l, isp)
+               atoms(it)%potential%ppar(l, isp) = vac%ppar(l, isp)
+               atoms(it)%potential%pnu(l, isp) = vac%pnu(l)
+            end do
+         end do
+      end do
+
+      ! --- The honest-limitation warning (§1.6) -----------------------------
+      ! Not fatal: a small margin degrades accuracy rather than invalidating
+      ! the run, and the user may be probing exactly that regime deliberately.
+      ! Silence is the failure mode worth avoiding.
+      if (rank == 0) then
+         if (.not. vac%check_fermi_margin(fermi)) then
+            call g_logger%warning('refresh_vacuum_region: the vacuum band onset is close to '// &
+                                  'E_F at vacuum level V0= '//real2str(v0)//' Ry. See the '// &
+                                  'preceding vacuum_lead warning; B7 §1.6 documents why an '// &
+                                  'empty-lattice ASA reference degrades there.', __FILE__, __LINE__)
+         end if
+      end if
+   end subroutine refresh_vacuum_region
 
 end module vacuum_lead_mod

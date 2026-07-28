@@ -32,10 +32,21 @@ module charge_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off
-   use region_registry_mod, only: region_registry, region_descriptor, region_kind_vacuum
+   use region_registry_mod, only: region_registry, region_descriptor, region_kind_vacuum, &
+                                  region_kind_lead_b
    implicit none
 
    private
+
+   !> B7.6: signature of the per-iteration hook `interfacepot` invokes after
+   !> updating the alignment shifts. Argument-free by design -- the one
+   !> implementation closes over everything it needs at installation time, and
+   !> keeping the signature empty means `charge` never grows a compile-time
+   !> dependency on what the hook actually does.
+   abstract interface
+      subroutine charge_iteration_hook()
+      end subroutine charge_iteration_hook
+   end interface
 
    !> Module´s main structure
    type, public :: charge
@@ -118,6 +129,24 @@ module charge_mod
       !> shifted value. B7.4 owns solving for it; until then it is zero and
       !> interfacepot reduces to the deviation-variable form of surfpot.
       real(rp), dimension(:), allocatable :: region_shift
+
+      !> B7.6: optional per-iteration hook, invoked at the end of
+      !> `interfacepot` once `region_shift` has been updated. Its one production
+      !> use is regenerating the vacuum region's frozen parameters at the newly
+      !> solved vacuum level (A | vacuum), which is what makes that level
+      !> self-consistent instead of a hand-set knob.
+      !>
+      !> **Why a callback and not a direct call.** The generator needs
+      !> `self%potpar`, so `vacuum_lead_mod` depends on `self_mod`, which
+      !> depends on `charge_mod`. A direct call from here would close that
+      !> cycle; driving it from `self.f90` is impossible for the same reason
+      !> (and is fenced besides). An opaque callback set by `calculation.f90`,
+      !> which sits above all three, inverts the dependency: `charge` calls
+      !> back without knowing what it is calling.
+      !>
+      !> Null on every path except `buildinterface` with region_b_kind =
+      !> 'vacuum', where `pre_processing_buildinterface` installs it.
+      procedure(charge_iteration_hook), pointer, nopass :: on_alignment_updated => null()
 
       !> B7.4: .true. once the alignment solver has seeded region_shift from
       !> the analytic guess. Subsequent iterations continue the mixed fixed
@@ -954,7 +983,7 @@ contains
    subroutine interfacepot(this)
       class(charge), intent(inout) :: this
       ! Local variables
-      integer :: ibas, iclas, iq, j, jq, k, atomrec, nsite, ireg
+      integer :: ibas, iclas, iq, j, jq, k, atomrec, nsite, ireg, irow
       integer :: ideep_lo, ideep_hi, iref, itype, iprobe
       real(rp) :: summ, wsms, qtot, ptot, step, resid
       real(rp) :: v_lo, v_hi, nef_lo, nef_hi, wgt_lo, wgt_hi
@@ -981,16 +1010,41 @@ contains
 
       ! --- 1. Deviation charges on the active sites -------------------------
       ! dq_i - q_bulk(reference type), never an absolute charge.
+      !
+      ! TWO INDEX SPACES, and conflating them was a real bug (fixed here):
+      !
+      !   atomrec  1..nrec  the ACTIVE TYPE counter. Indexes this%dq,
+      !                     lattice%chargetrf_type, and symbolic_atom(nbulk+.).
+      !   irow     1..nbas  the MADELUNG ROW. Indexes tdq/tq10/vm and every
+      !                     registry array (region_id, active, z, w).
+      !
+      ! They are not the same: the active zone starts at registry row
+      ! nlay_a+1, because rows 1..nlay_a are region A's frozen boundary
+      ! (region_registry.f90's build_from_interface index map). Writing the
+      ! first active site's charge to tdq(1) put it on a FROZEN row, which by
+      ! construction must carry exactly zero deviation (B7 §2.10) -- and then
+      ! `compensation_sites` returned ideep_lo = 1, the same row, so step 2
+      ! subtracted the whole residual from it and the two cancelled exactly.
+      ! Net tdq was identically zero on every row, vm == 0, and Q, P, step and
+      ! every deep probe came out exactly zero for ANY interface run, leaving
+      ! the alignment fixed point solving against nothing.
+      !
+      ! It hid because the shipped oracle is the A|A identity, whose correct
+      ! answer IS zero for all five reported quantities -- a spuriously zero
+      ! result is indistinguishable from a right one there. That is precisely
+      ! why B7 §5.3 specifies the real oracle as A-against-A-with-a-rigid-
+      ! offset rather than plain A|A.
       atomrec = 0
       do iclas = 1, this%lattice%nlay
          do k = 1, this%lattice%natoms_layer(iclas)
             atomrec = atomrec + 1
-            if (atomrec > nsite) exit
-            tdq(atomrec) = this%dq(atomrec)
+            irow = this%nlay_a + atomrec
+            if (irow > nsite) exit
+            tdq(irow) = this%dq(atomrec)
             if (this%lattice%chargetrf_type(atomrec) > 0) then
-               tdq(atomrec) = tdq(atomrec) - this%bulk_charge(this%lattice%chargetrf_type(atomrec))
+               tdq(irow) = tdq(irow) - this%bulk_charge(this%lattice%chargetrf_type(atomrec))
             end if
-            if (dipole_on) tq10(atomrec) = this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%q10
+            if (dipole_on) tq10(irow) = this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%q10
          end do
       end do
 
@@ -1093,11 +1147,13 @@ contains
       do ibas = 1, this%lattice%nlay
          do k = 1, this%lattice%natoms_layer(ibas)
             atomrec = atomrec + 1
-            if (atomrec > nsite) exit
-            ! vm is indexed per SITE (matching the kernel's row index), not per
-            ! layer -- atomrec is the site counter, ibas only walks the layers.
+            ! Same two index spaces as step 1: `atomrec` addresses the active
+            ! TYPE (dq, chargetrf_type, symbolic_atom), `irow` the Madelung ROW
+            ! (vm, region_id). The active zone starts at row nlay_a+1.
+            irow = this%nlay_a + atomrec
+            if (irow > nsite) exit
             ireg = 1
-            if (this%regions%nsite == nsite) ireg = this%regions%region_id(atomrec)
+            if (this%regions%nsite == nsite) ireg = this%regions%region_id(irow)
 
             ! Region reference on-site Madelung potential, per site type.
             vmad_ref = 0.0d0
@@ -1107,12 +1163,20 @@ contains
             end if
 
             this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad = &
-               (vm(atomrec) - v_ref + vmad_ref + this%region_shift(ireg))*this%vmix + &
+               (vm(irow) - v_ref + vmad_ref + this%region_shift(ireg))*this%vmix + &
                this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1.0d0 - this%vmix)
          end do
       end do
 
       call this%overlap_diagnostic(zsite, wsite, nsite)
+
+      ! B7.6: the alignment shifts are now current for this iteration. Any
+      ! frozen region whose parameters DEPEND on its own shift must be
+      ! regenerated here, after the solve and before the next recursion
+      ! consumes them. Vacuum is the one such region: its parameters are an
+      ! empty lattice rigidly shifted to the vacuum level, and the vacuum
+      ! level is precisely its alignment shift (B7 §1.3, §1.6).
+      if (associated(this%on_alignment_updated)) call this%on_alignment_updated()
    end subroutine interfacepot
 
    !---------------------------------------------------------------------------
@@ -1454,7 +1518,19 @@ contains
       ! B7.7 replaces this with the recursion-supplied N(E_F) of the boundary
       ! buffer layer; the weighting rule and its normalization are unchanged by
       ! that substitution.
-      ia = this%lattice%nbulk + isite
+      !
+      ! `isite` is a MADELUNG ROW (1..nbas), not an active-type index, so it
+      ! must NOT be used as `nbulk + isite` -- that addresses the active-type
+      ! block (nbulk+1..ntype) and for a boundary row is simply out of range.
+      ! It then returned 0 for BOTH sides, the caller fell into its 50/50
+      ! fallback, and vacuum silently received half the compensation charge --
+      ! the exact error B7 §1.5 warns about ("compensation placed there does
+      ! not perturb the work function, it SETS it"). Frozen boundary rows carry
+      ! a REFERENCE TYPE instead, which the registry records per site.
+      ia = 0
+      if (this%regions%nsite == this%lattice%nbas) then
+         if (allocated(this%regions%reference_type)) ia = this%regions%reference_type(isite)
+      end if
       if (ia >= 1 .and. ia <= size(this%symbolic_atom)) then
          nef = max(this%symbolic_atom(ia)%element%valence, 0.0d0)
       end if
@@ -1705,8 +1781,41 @@ contains
    !---------------------------------------------------------------------------
    subroutine build_interface_registry(this)
       class(charge), intent(inout) :: this
-      integer :: nlay_active, i, nrf
+      integer :: nlay_active, i, nrf, kind_b
       integer, dimension(:), allocatable :: reference_type_site
+
+      ! Geometry-derived default: CENTRE the active zone in the Madelung stack.
+      !
+      ! The active layers' deviation charge lands on rows nlay_a+1 .. nlay_a+nlay
+      ! (interfacepot step 1). The two deep probes are the extreme rows of the
+      ! frozen regions, so an off-centre split puts one probe adjacent to the
+      ! charge and the other ~nbas rows away -- and the alignment solver then
+      ! correctly reports a nonzero V_B for a geometry that is *physically*
+      ! symmetric, because the ROW layout it was handed is not. Measured on
+      ! fccCu111_AA (nbas=49, one active layer): nlay_a=nlay_b=1 gives
+      ! V(B) = -0.0109 Ry, nlay_a=nlay_b=24 gives V(B) = 0 exactly, as the
+      ! A | A identity requires.
+      !
+      ! Defaulting to the centred split makes the common case right without the
+      ! user computing (nbas - nlay)/2. Explicit &charge values still win, so
+      ! deliberately asymmetric stacks stay expressible.
+      if (this%nlay_a <= 0 .and. this%nlay_b <= 0) then
+         this%nlay_a = max((this%lattice%nbas - this%lattice%nlay)/2, 1)
+         this%nlay_b = this%lattice%nbas - this%lattice%nlay - this%nlay_a
+         if (this%nlay_b < 1) then
+            this%nlay_a = max(this%lattice%nbas - this%lattice%nlay - 1, 1)
+            this%nlay_b = 1
+         end if
+         if (rank == 0) then
+            call g_logger%info('build_interface_registry: &charge nlay_a/nlay_b not set; '// &
+                               'centring the active zone in the '//fmt('i0', this%lattice%nbas)// &
+                               '-row Madelung stack: nlay_a= '//fmt('i0', this%nlay_a)// &
+                               ' nlay_b= '//fmt('i0', this%nlay_b)//'. An off-centre split '// &
+                               'makes the two deep probes asymmetric and yields a nonzero '// &
+                               'alignment shift for a physically symmetric cell.', &
+                               __FILE__, __LINE__)
+         end if
+      end if
 
       nlay_active = this%lattice%nbas - this%nlay_a - this%nlay_b
       if (nlay_active < 0) then
@@ -1715,30 +1824,47 @@ contains
                               __FILE__, __LINE__)
       end if
 
-      ! this%lattice%chargetrf_type is TYPE-indexed (dimension nrec, one entry
-      ! per representative active type -- build_interface_full's convention,
-      ! matching build_surf_full/interfacepot). region_registry_build_from_
-      ! interface wants a PER-SITE array of length nbas (region_registry.f90
-      ! reference_type(1:nbas) = reference_type(1:nbas)). build_surf_full's
-      ! nbas happens to equal its chargetrf_type size so this was never an
-      ! issue for 'S'; here nbas > nrec in general, so expand by cycling
-      ! through the type-indexed values -- adequate for the registry's own
-      ! use (fermi_a/fermi_b consistency check, dump), which never re-derives
-      ! per-site charge from this copy; interfacepot reads
-      ! lattice%chargetrf_type directly and is unaffected by this expansion.
+      ! Per-site reference type, dimension nbas. Each row gets the frozen type
+      ! it reverts to, which differs by region:
+      !
+      !   rows 1..nlay_a          region A's own frozen types (1..nbulk_a)
+      !   active rows             lattice%chargetrf_type, the per-active-type
+      !                           reference build_interface_full assigned
+      !   rows ..nbas             region B's frozen types (nbulk_a+1..nbulk)
+      !
+      ! The frozen rows matter beyond bookkeeping: `boundary_nef` reads this to
+      ! weight the compensation split by side-resolved N(E_F) (B7 §1.5), so a
+      ! boundary row carrying no valid type collapses that weighting to 50/50
+      ! and puts half the compensation charge into vacuum.
       allocate (reference_type_site(max(this%lattice%nbas, 1)))
+      reference_type_site(:) = 0
       nrf = size(this%lattice%chargetrf_type)
-      if (nrf < 1) then
-         reference_type_site(:) = 0
-      else
-         do i = 1, this%lattice%nbas
-            reference_type_site(i) = this%lattice%chargetrf_type(mod(i - 1, nrf) + 1)
-         end do
-      end if
+      do i = 1, this%lattice%nbas
+         if (i <= this%nlay_a) then
+            ! Region A frozen rows: cycle its own inequivalent types.
+            reference_type_site(i) = mod(i - 1, max(this%lattice%nbulk_bulk, 1)) + 1
+         else if (i > this%nlay_a + nlay_active) then
+            ! Region B frozen rows: the second frozen block, offset past A.
+            ! For a vacuum region B that block is the single empty-sphere type.
+            reference_type_site(i) = this%lattice%nbulk_bulk + &
+                                     mod(i - this%nlay_a - nlay_active - 1, &
+                                         max(this%lattice%nbulk - this%lattice%nbulk_bulk, 1)) + 1
+         else if (nrf >= 1) then
+            ! Active rows: the reference each active type reverts to.
+            reference_type_site(i) = this%lattice%chargetrf_type(mod(i - this%nlay_a - 1, nrf) + 1)
+         end if
+      end do
+
+      ! B7.6: region B is vacuum when &lattice region_b_kind says so. The kind
+      ! is what activates the vacuum-aware behaviour already written into the
+      ! consumers: gauge_anchor skips it when choosing the alignment anchor,
+      ! and boundary_nef returns zero so it receives no compensation charge.
+      kind_b = region_kind_lead_b
+      if (trim(this%lattice%region_b_kind) == 'vacuum') kind_b = region_kind_vacuum
 
       call this%regions%build_from_interface(this%lattice%nbas, this%nlay_a, nlay_active, &
                                               this%qz, this%wssurf, reference_type_site, &
-                                              this%fermi_a, this%fermi_b)
+                                              this%fermi_a, this%fermi_b, kind_b=kind_b)
 
       ! Per-region alignment shift V_r (B7 §1.3); region A is the gauge anchor.
       if (allocated(this%region_shift)) deallocate (this%region_shift)

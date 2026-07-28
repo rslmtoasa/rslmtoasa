@@ -189,6 +189,7 @@ contains
       ! interface geometry. Zero for every other calctype.
       nlay_a = this%nlay_a
       nlay_b = this%nlay_b
+      region_b_kind = this%region_b_kind
       ntype = this%ntype
       call move_alloc(this%ct, ct)
       call move_alloc(this%screening_alpha, screening_alpha)
@@ -443,6 +444,24 @@ contains
       this%nlay = nlay
       this%nlay_a = nlay_a
       this%nlay_b = nlay_b
+
+      ! B7.6: region B's physical kind. A true input boundary, so the check
+      ! belongs here (Phase-1 rule 3) rather than at the call sites, which then
+      ! only ever see one of the two valid values. A silent fallback would be
+      ! the worst option available: a misspelt 'vaccum' would run the metallic
+      ! path and report a plausible wrong barrier, which is precisely the
+      ! failure mode B7 §1.3 exists to prevent.
+      region_b_kind = lower(region_b_kind)
+      select case (trim(region_b_kind))
+      case ('metal', 'vacuum')
+         this%region_b_kind = region_b_kind
+      case default
+         call g_logger%fatal('lattice: unknown &lattice region_b_kind='''// &
+                             trim(region_b_kind)//'''. Valid values are ''metal'' '// &
+                             '(region B is a second metallic reference, loaded from &atoms '// &
+                             'label(:)) and ''vacuum'' (region B is semi-infinite vacuum, '// &
+                             'parameters generated per run by vacuum_lead).', __FILE__, __LINE__)
+      end select
 
       ! Exchange calculation initialization
       call move_alloc(ijpair, this%ijpair)
@@ -891,6 +910,7 @@ contains
       this%nlay = 0
       this%nlay_a = 0
       this%nlay_b = 0
+      this%region_b_kind = 'metal'
       this%ntype = 0
       this%nbas = 0
       this%wav = 0

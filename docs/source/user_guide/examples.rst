@@ -17,6 +17,7 @@ All examples are located in the ``example/`` directory of the RS-LMTO-ASA distri
 - :doc:`examples/bulk_bccfe` - Body-centered cubic iron (magnetic bulk)
 - :doc:`examples/bulk_mn3sn` - Mn₃Sn kagome antiferromagnet (non-collinear magnetism)
 - :doc:`examples/surface_fcccu001` - Cu(001) surface (semi-infinite system)
+- :doc:`examples/interface_fcccu111` - Cu(111) layered interface (two frozen regions, ``calctype = 'L'``)
 - :doc:`examples/impurity_b2feco` - Fe impurity in B2 FeCo (embedded cluster)
 - :doc:`examples/kspace_scf_bccfe` - K-space-enabled SCF template for bcc Fe
 
@@ -60,6 +61,7 @@ The following sections explain each example in detail.
    examples/bulk_bccfe
    examples/bulk_mn3sn
    examples/surface_fcccu001
+   examples/interface_fcccu111
    examples/impurity_b2feco
    examples/kspace_scf_bccfe
 

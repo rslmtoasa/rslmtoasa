@@ -331,6 +331,26 @@ module lattice_mod
       !> them would silently mis-place the A/active boundary.
       integer :: nlay_a, nlay_b
 
+      !> B7.6 (calctype='L'): what region B physically IS. Two values:
+      !>
+      !>   'metal'  (default) region B is a second metallic reference, loaded
+      !>            from its own converged parameter set through &atoms
+      !>            label(:), exactly as region A is. This is the A | B
+      !>            geometry and the pre-B7.6 behaviour.
+      !>   'vacuum' region B is semi-infinite vacuum. Its frozen parameters
+      !>            are NOT read from a label; they are generated per run by
+      !>            `vacuum_lead` from the empty-sphere radius and the vacuum
+      !>            level (B7 §1.6), and regenerated whenever the alignment
+      !>            solver moves that level. This is the A | vacuum geometry.
+      !>
+      !> The distinction is confined to where region B's frozen parameters
+      !> COME FROM and to the region kind the registry records. Layer binning,
+      !> structure constants and the recursion are unaware of it -- B7 §0.2 is
+      !> explicit that the Green-function machinery is region-agnostic and
+      !> that a vacuum Green function is an ordinary one whose frozen
+      !> parameters happen to describe an empty lattice.
+      character(len=16) :: region_b_kind
+
       !> TODO
       !> Surface indexes
       integer :: dx, dy, dz, dw

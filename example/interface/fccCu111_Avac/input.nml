@@ -1,0 +1,153 @@
+! ===========================================================================
+! B7.6 example 3 -- A | vacuum, fcc Cu(111), with the GENERATED vacuum lead
+! ===========================================================================
+!
+! A surface, built on the layered (calctype='L') path: one fcc Cu(111) active
+! layer with a frozen Cu reference below it and SEMI-INFINITE VACUUM above.
+!
+! WHAT MAKES THIS DIFFERENT FROM ../fccCu111_AA
+!
+! In the A | A and A | B geometries both frozen regions are metals, and both
+! parameter sets are read from &atoms label(:) files produced by earlier
+! converged bulk runs. Here region B is vacuum, and its frozen parameters are
+! not read from anywhere -- they are GENERATED, per run, by
+! source/vacuum_lead.f90:
+!
+!   &lattice region_b_kind = 'vacuum'
+!
+! An empty sphere of the run's own Wigner-Seitz radius, holding a constant
+! potential, is set up as an ordinary Z = 0 atom and pushed through the code's
+! own radial solver (self%potpar). The representation, the gamma/o convention,
+! the E_nu convention and the normalization therefore come out automatically
+! consistent with every other parameter set in the run -- which is the whole
+! reason B7 §1.6 insists on the solver rather than hand-coded spherical-Bessel
+! expressions. The analytic Bessel result is the test ORACLE
+! (tests/unit/test_vacuum_lead.f90), never the implementation.
+!
+! THE VACUUM LEVEL IS SELF-CONSISTENT, NOT A KNOB
+!
+! The constant potential V0 inside those empty spheres is the vacuum level,
+! and it is not an input. It is the alignment shift the B7.4 solver already
+! maintains for every non-anchor region: the level at which deep vacuum sees
+! zero deviation field. Each SCF iteration, `interfacepot` solves for it and
+! then regenerates the vacuum parameters at the new value (the
+! `on_alignment_updated` hook). Iteration 0 runs at V0 = 0, which is exactly
+! the old "generate once from a given vacuum level" behaviour -- it arrives
+! here as the first step of the self-consistent scheme rather than as a
+! separate code path.
+!
+! Removing that hand-set knob is one of the two things B7 §1.6 says the vacuum
+! lead is actually FOR. The other is a well-defined vacuum level. Note what is
+! deliberately NOT claimed: see the next section.
+!
+! WHAT THIS EXAMPLE WILL *NOT* SHOW, AND WHY THAT IS THE POINT
+!
+! It will not move the converged surface numbers much. For a good metal the
+! evanescent decay constant is kappa = sqrt(Phi) ~ 0.54 bohr^-1 at Phi ~ 4 eV,
+! so vacuum tails die within ~2 AA. THAT is why one or two hand-set empty-
+! sphere layers already worked. B7 §1.6 is explicit that the acceptance
+! criterion for the vacuum lead is REDUCED SENSITIVITY TO THE VACUUM LAYER
+! COUNT, not a changed answer.
+!
+! So if you diff this against example/surface/fccCu111/Single and find close
+! agreement, that is the expected result, not a null result. A large
+! disagreement would be the thing worth investigating.
+!
+! The regime where the vacuum lead genuinely earns its keep is elsewhere:
+! vacuum-gap interlayer exchange, tunnelling barriers, and low-DOS spacers,
+! where the tail is the physics rather than a boundary detail.
+!
+! ONE LIMITATION, STATED HONESTLY (B7 §1.6)
+!
+! LMTO-ASA reproduces empty-lattice free-electron dispersion only over a
+! limited window above the band bottom. The frozen vacuum parameters are
+! meaningful only while E_F sits well below the vacuum band onset. That holds
+! comfortably for ordinary metals such as Cu; it is uncomfortable for very low
+! work functions. The run checks the margin every time it regenerates and warns
+! when it is thin -- if you see that warning, treat vacuum-side results with
+! corresponding caution rather than ignoring it.
+!
+! BUFFER WIDTH -- the two nlay_a/nlay_b pairs
+!
+! Same trap as in ../fccCu111_AA, and worth re-reading there in full:
+!   &lattice nlay_a/nlay_b  count ATOMIC LAYERS -- the frozen-buffer knob.
+!   &charge  nlay_a/nlay_b  count ROWS of the synthetic 2D Madelung stack.
+! Raise the &lattice pair to thicken the buffer; leave the &charge pair UNSET
+! so the active zone is centred in the Madelung stack automatically.
+!
+! RELATION TO THE OTHER EXAMPLES
+!
+!   ../fccCu111_AA              A | A identity (both boundaries metallic)
+!   ../fccCu111_AB_misaligned   alignment solver vs an injected offset
+!   this one                    A | vacuum, generated vacuum lead
+!   ../../surface/fccCu111/Single   the same surface via 'buildsurf', which
+!                               B7 leaves untouched as the permanent
+!                               regression oracle for this geometry.
+! ===========================================================================
+&calculation
+pre_processing = 'buildinterface'
+verbose = T
+/
+&lattice
+rc = 30
+alat = 3.614
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.41237
+nbulk_bulk = 1            ! inequivalent sites per cell in region A
+nlay = 1                  ! active layers
+nlay_a = 1                ! frozen region A width, in ATOMIC LAYERS
+nlay_b = 1                ! vacuum width, in ATOMIC LAYERS
+region_b_kind = 'vacuum'  ! <-- region B is vacuum; its parameters are
+                          !     generated per run, not read from a label.
+surftype = '1 1 1'
+ntype = 3                 ! A + vacuum + one type per active layer
+ct(:) = 3*4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+! Label order is load bearing: frozen blocks first in region order, then one
+! self-consistent type per active layer.
+!
+! Vac.nml is a SLOT, not a data source. Its potential parameters are
+! overwritten by the generator before the first recursion and again after
+! every alignment update; only its element block (Z = 0, no valence) is
+! meaningful. It exists because the &atoms reader requires a file per label.
+label(1) = 'A'            ! frozen region A reference (bulk Cu)
+label(2) = 'Vac'          ! vacuum slot -- parameters generated, see above
+label(3) = 'Ac1'          ! active layer 1
+/
+&self
+nstep = 30
+/
+&energy
+fermi = -0.089874
+energy_min = -1.5
+energy_max = 2.0
+channels_ldos = 2000
+fix_fermi = .true.
+/
+&control
+calctype = 'L'            ! layered / interface
+nsp = 1
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.0020
+mixtype = 'broyden'
+/
+&charge
+! ROW counts in the synthetic Madelung stack -- NOT atomic layers, and
+! deliberately separate from the &lattice entries above.
+!
+! LEFT UNSET ON PURPOSE. The active zone must be CENTRED in the stack, or the
+! two deep probes sit at very different distances from the active charge and
+! the alignment solver reports a nonzero V_B for a physically symmetric cell.
+! Unset, build_interface_registry centres it automatically -- (nbas - nlay)/2
+! either side. Set these only for a deliberately asymmetric stack.
+/

@@ -2,6 +2,7 @@ real(rp) :: zmin, zmax, zstep, wav, vol, rc, r2, celldm, alat
 integer :: njij, njijk, reduced_nbas, ntype, ntot, nrec, nmax, nlay, nlay_a, nlay_b, ndim, npe, nclu, nbulk_bulk, nbulk, nbas, kk, dx, dy, dz, dw, n1, n2, n3
 character(len=4) :: crystal_sym
 character(len=10) :: surftype
+character(len=16) :: region_b_kind
 character(len=16) :: strux_backend, screening
 logical :: pbc, b1, b2, b3, morton_sfc
 integer, dimension(:, :), allocatable :: ijpair
@@ -19,4 +20,4 @@ namelist /lattice/ a, z, ct, primcell, inclu, crsurf, crd, cr, njij, njijk, &
    reduced_nbas, ntype, ntot, nrec, nmax, nlay, nlay_a, nlay_b, ndim, npe, nclu, &
    nbulk_bulk, nbulk, nbas, kk, dx, dy, dz, dw, crystal_sym, surftype, ijpair, ijktrio, &
    b1, b2, b3, pbc, morton_sfc, n1, n2, n3, strux_backend, screening, strux_want_sdot, &
-   strux_solve_scale, screening_alpha, screening_sigma
+   strux_solve_scale, screening_alpha, screening_sigma, region_b_kind

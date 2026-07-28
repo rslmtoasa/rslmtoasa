@@ -1,0 +1,121 @@
+! ===========================================================================
+! B7.6 example 2 -- deliberately misaligned A | B, fcc Cu(111)
+!                   A NEGATIVE CONTROL. This run is SUPPOSED to warn.
+! ===========================================================================
+!
+! Geometry is identical to ../fccCu111_AA: one active fcc Cu(111) layer
+! between two frozen Cu reference regions. The ONLY difference is that this
+! input DECLARES the two regions to sit on different absolute energy scales,
+!
+!     fermi_a = -0.089874     ! the true converged Cu value
+!     fermi_b = -0.109874     ! a lie: 20 mRy below it
+!
+! while both regions are in fact loaded from the SAME converged Cu parameter
+! set. So the declared contact potential (20 mRy) and the physical one (zero,
+! because the two regions are the same material) disagree by construction.
+!
+! WHAT THIS EXAMPLE DEMONSTRATES
+!
+! B7 §1.3 identifies silent misalignment as the highest correctness risk in
+! the whole work package: each bulk calculation carries its own potential
+! zero, and freezing two of them side by side with no relative shift silently
+! imposes "contact potential == 0" whether or not that is true. The run
+! converges, looks plausible, and reports a wrong dipole barrier.
+!
+! G-B7-2 (docs/dev/CONTRACT_FROZEN_REGION.md) decided NOT to defend against
+! this by refusing to run on old parameter sets -- backwards compatibility
+! won, permanently, and no version stamp exists anywhere. The defence is
+! instead the align_regions CONSISTENCY CHECK, which compares the converged
+! fixed point against the analytic contact potential E_F(A) - E_F(B).
+!
+! This example exists to show that that check has teeth. Running it prints,
+! every iteration:
+!
+!   <warning> align_regions: converged alignment shift for region B disagrees
+!   with the analytic contact potential E_F(anchor) - E_F(region) by
+!   0.020000 Ry, which exceeds the 0.0050 Ry threshold. ...  treat the
+!   reported dipole barrier as unvalidated.
+!
+! 0.020000 Ry is exactly the injected discrepancy, recovered.
+!
+! WHY THE SOLVER "IGNORES" fermi_b, AND WHY THAT IS CORRECT
+!
+! fermi_a/fermi_b do NOT set the alignment. They only (i) seed the initial
+! guess and (ii) drive this consistency check. The alignment itself is solved
+! as an SCF fixed point on the deep-probe residual, precisely because B7 §1.3
+! declines to trust a cross-run absolute energy scale.
+!
+! So here the seeded shift V(B) = +0.020 Ry is driven back toward the value
+! the physics actually supports -- near zero, because the two regions really
+! are the same material -- and the declared 20 mRy survives only as the
+! reported discrepancy. The fixed point is the answer; the declared Fermi
+! levels are the check. That is the intended division of labour.
+!
+! THE ACCEPTED RESIDUAL RISK
+!
+! The check is SILENT when fermi_a/fermi_b are not both supplied: with no
+! declared Fermi levels there is nothing to compare the fixed point against.
+! Delete the two entries from &charge below and the warning disappears while
+! the run is no less wrong. G-B7-2 accepted this knowingly. Supply
+! fermi_a/fermi_b whenever both regions' converged E_F are known.
+!
+! Runtime: ~15 s per SCF iteration on one core.
+! ===========================================================================
+&calculation
+pre_processing = 'buildinterface'
+verbose = T
+/
+&lattice
+rc = 30
+alat = 3.614
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.41237
+nbulk_bulk = 1
+nlay = 1
+nlay_a = 1
+nlay_b = 1
+surftype = '1 1 1'
+ntype = 3
+ct(:) = 3*4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'A'
+label(2) = 'B'
+label(3) = 'Ac1'
+/
+&self
+nstep = 30
+/
+&energy
+fermi = -0.089874
+energy_min = -1.5
+energy_max = 2.0
+channels_ldos = 2000
+fix_fermi = .true.
+/
+&control
+calctype = 'L'
+nsp = 1
+lld = 150
+recur = 'chebyshev'
+/
+&mix
+beta = 0.0020
+mixtype = 'broyden'
+/
+&charge
+! ROW counts in the synthetic Madelung stack -- NOT atomic layers, and
+! deliberately separate from the &lattice entries above.
+!
+! LEFT UNSET ON PURPOSE. The active zone must be CENTRED in the stack, or the
+! two deep probes sit at very different distances from the active charge and
+! the alignment solver reports a nonzero V_B for a physically symmetric cell.
+! Unset, build_interface_registry centres it automatically -- (nbas - nlay)/2
+! either side. Set these only for a deliberately asymmetric stack.
+/

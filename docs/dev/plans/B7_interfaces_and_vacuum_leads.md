@@ -114,7 +114,12 @@ parameters. This is why every charge entering the electrostatics must be a
 - **A | B** — a metallic interface. Two metallic boundaries.
 - **A | vacuum-gap | B** — two metallic boundaries with an *active* vacuum
   region between them. This is the tunneling / vacuum-gap IEC geometry and it
-  requires no machinery beyond A | B.
+  requires no machinery beyond A | B. **In practice: run the ordinary
+  `A | active | B` path and populate the active zone with empty spheres.**
+  They are then self-consistent, which is what a tunnelling barrier needs — a
+  dedicated four-region layout would freeze the gap and be strictly worse.
+  The same construction carries over to atoms embedded in an active vacuum
+  region (nanowires in vacuum) through the impurity scheme.
 - **A | spacer | A** — the interlayer-exchange geometry; three regions, of
   which the spacer may be active throughout.
 
@@ -663,9 +668,23 @@ surface numbers, and what it *is* for.
 
 *Kit:* B7.1–B7.5.
 
-### B7.7 [OPUS] — Physics validation campaign
+### B7.7 [IN PERSON — not an assistant task] — Physics validation campaign
 The ladder in §5.5–§5.7, including the Fe/Cr and Co/Cu IEC benchmarks with the
 LL-convergence study on the oscillation period (§1.7).
+
+> **Maintainer decision, 2026-07-28: this is to be done by hand, not delegated
+> to a coding assistant.** The work is judgment — deciding what constitutes
+> acceptable agreement with published values, whether a period discrepancy is
+> physics or insufficient chain length (§1.7 warns explicitly against calling
+> it a bug before the LL study exists), and where the tolerances of G-B7-3
+> should sit. None of that is construction, and an assistant producing numbers
+> without owning that judgment would be actively misleading. Suitable as a
+> student project.
+>
+> The four open items listed in the §7 checklist are the concrete agenda.
+> Note item 2 in particular: the `nlay > 1` divergence is **untriaged**, and
+> the deck that produced it was hand-built by an assistant and is a live
+> suspect — build a trustworthy multi-layer deck before treating it as a bug.
 
 *Kit:* all of the above; existing IEC post-processing.
 
@@ -743,6 +762,54 @@ nearly free.
 
 ## 7. Checklist
 
+**Status at a glance** (2026-07-28). **B7.0–B7.6 complete — B7 is done as an
+engineering package.** Every geometry in §1.2 is reachable and every mechanism
+is implemented. What remains is B7.7, the physics validation campaign, which
+per maintainer decision (2026-07-28) is **to be done in person, not by an
+assistant** — it is judgment about agreement with literature, not construction.
+Suitable as a student project.
+
+| geometry (§1.2) | status |
+|---|---|
+| `A \| A` identity | works, exact |
+| `A \| B` metallic | works |
+| `A \| vacuum` | **works** — generated vacuum lead, self-consistent V0 |
+| `A \| vacuum-gap \| B` | **works** — it *is* `A \| active \| B` with empty spheres in the active zone |
+
+| gate | state |
+|---|---|
+| G-B7-1 Madelung conventions | ✅ signed 2026-07-25 |
+| G-B7-4 canonical charge variable | ✅ signed 2026-07-25 |
+| G-B7-2 absolute-zero / `vmad` | ✅ signed 2026-07-26 |
+| G-B7-3 compensation weight profile | ⬜ unsigned — needs B7.7 data |
+
+**Open items carried into B7.7** — all of them validation, none of them
+construction. Accepted deliberately: test coverage of the layered
+electrostatics is incomplete (item 4), and the maintainer has accepted that
+gap for now, to be filled once B7.7 is validated in person. Order to take them:
+
+1. **The ~21% gap** between the layered barrier (−0.0977 Ry, converged) and the
+   one-sided `buildsurf` route (−0.1236 Ry) on the same fcc Cu(111) system.
+   Same sign and magnitude; the two probe different points of the profile, so
+   a discrepancy is expected — its *size* is not yet accounted for.
+2. **`A | vacuum` diverges at `nlay > 1`** (step ~ −334 Ry at three active
+   layers, while `A | A` at three layers stays sane). **Untriaged, and the
+   hand-built test deck is a live suspect** — see `tests/KNOWN_ISSUES.md`. If
+   real, it is compensation weighting across multiple active rows, which is
+   G-B7-3 territory.
+3. **`alignment_check_tol` / `deep_drift_tol` are still uncalibrated**, accepted
+   "for now" under G-B7-2. The drift warning is known to fire on runs where the
+   identity holds exactly.
+4. **No regression case pins the layered electrostatics.** The committed
+   `tests/scf` interface cases run at `nstep = 1`, where the output namelist is
+   written before `interfacepot` produces a nonzero `vmad` (~1e-15 in the
+   references), so they are insensitive to the entire charge-row /
+   compensation / alignment path. An `nstep = 4` case was tried and does *not*
+   fix this — `vmad` in the persisted file stays ~1e-15 because it is written
+   before `interfacepot` each iteration. Pinning these quantities needs a check
+   against the **log output** (`Q`, `P`, `step`, `V(B)`) rather than the output
+   namelist, which the current harness does not support.
+
 - [x] **B7.0** audit + `exh` fix + B6 re-validation + `vmad` persistence
       answered + `imppot` mixing fixed + factor of two pinned + ~~`SWS`
       extracted~~ + on-site term restored → **G-B7-1**, **G-B7-4** *(both
@@ -762,7 +829,92 @@ nearly free.
       exactly −δ. Contract: `CONTRACT_FROZEN_REGION.md`. The reader does **not**
       refuse on old parameter sets — backwards compatibility, decided
       permanently)*
-- [ ] **B7.5** `buildinterface` path + namelist (`buildsurf` untouched)
-- [ ] **B7.6** examples + honest documentation
+- [x] **B7.5** `buildinterface` path + namelist (`buildsurf` untouched)
+- [x] **B7.6** examples + honest documentation — **COMPLETE.** Delivered: `example/interface/fccCu111_AA` (the A | A
+      identity — `Q`, `P`, `step`, `V(B)` and the alignment residual all `0`)
+      and `example/interface/fccCu111_AB_misaligned` (a negative control that
+      recovers an injected 20 mRy misalignment and fires the G-B7-2 consistency
+      warning).
+
+      > ⚠️ **That original A | A verification was vacuous.** It was measured
+      > while the electrostatics were identically zero (see the FIXED box
+      > below), so *every* geometry reported those five zeros. The identity
+      > does still hold post-fix, and now for a meaningful reason — but the
+      > "verified exact over 30 iterations" claim as originally written proved
+      > nothing. This is §5.3's point restated: **an oracle whose expected
+      > answer is zero cannot detect a bug that produces zero.**
+
+      User documentation:
+      `docs/source/user_guide/examples/interface_fcccu111.rst`, covering §1.6
+      and §1.7 honestly.
+      **`A | vacuum` DELIVERED (vacuum-lead wiring).** `&lattice
+      region_b_kind = 'vacuum'` makes region B a vacuum region end to end:
+      `build_from_interface` takes `kind_b`, `build_interface_registry` passes
+      `region_kind_vacuum`, `build_interface_full` reserves one empty-sphere
+      type instead of drawing region B from an `&atoms` label, and
+      `refresh_vacuum_region` generates the frozen set per run — regenerating
+      it every iteration at the solved vacuum level, so **V0 is self-consistent
+      rather than a hand-set knob** (one of the two ad hoc knobs §1.6 says the
+      vacuum lead exists to remove). The one-shot case is iteration 0, not a
+      separate path. Example: `example/interface/fccCu111_Avac`. Unit test:
+      `tests/unit/test_vacuum_region_wiring.f90` (5 assertions; the vacuum kind
+      and name, frozen-ness, `gauge_anchor` skipping vacuum, the metallic
+      default being unchanged, and the rigid-shift property the per-iteration
+      regeneration relies on).
+
+      The hook is a procedure pointer on `charge` installed by
+      `calculation.f90`. That indirection is forced: `vacuum_lead` needs
+      `self%potpar`, so it depends on `self_mod`, which depends on
+      `charge_mod` — a direct call from `charge` would close a cycle, and
+      driving it from `self.f90` is impossible for the same reason (and fenced
+      besides). **No `self.f90` change was needed.**
+
+      **`A | vacuum-gap | B` needs no new machinery** — maintainer-confirmed
+      2026-07-28, and §1.2 said so all along ("two metallic boundaries with an
+      *active* vacuum region between them ... requires no machinery beyond
+      A | B"). It is the existing `A | active | B` path with empty spheres
+      populating the active zone. An earlier note in this file claiming it
+      needed a four-region layout was wrong: a four-region layout would make
+      the gap *frozen*, which is worse — as an active region the empty spheres
+      relax self-consistently, which is what a tunnelling barrier requires.
+      The same construction generalizes to atoms embedded in an active vacuum
+      region (nanowires in vacuum) via the impurity scheme.
+
+      > ✅ **FIXED: the interface electrostatics were identically zero.**
+      > Three index-space bugs, all now corrected. (1) `interfacepot` conflated
+      > `atomrec` (active TYPE, 1..nrec) with the Madelung ROW (1..nbas): the
+      > active zone starts at row `nlay_a+1`, so the charge landed on region A's
+      > frozen boundary row, and `compensation_sites` then subtracted the whole
+      > residual from that same row — exact cancellation, `tdq ≡ 0`, `vm ≡ 0`,
+      > and the alignment fixed point solving against nothing. (2)
+      > `boundary_nef` used the same wrong mapping (`nbulk + isite`), returned 0
+      > on *both* sides, and the N(E_F) weighting fell back to 50/50 — putting
+      > **half the compensation charge into vacuum**, exactly what §1.5 warns
+      > "does not perturb the work function, it SETS it". (3) `reference_type`
+      > was filled by cycling active-type values over all rows, leaving frozen
+      > boundary rows without a valid type, which is what made (2) silent.
+      >
+      > Reproduced on a pristine tree at `a582b16`, so it predated this work
+      > (B7.3/B7.5). The `A | A` identity masked it perfectly — its correct
+      > answer *is* zero for all five reported quantities — which is precisely
+      > the trap §5.3 anticipated when it specified the real oracle as
+      > A-against-A-with-a-rigid-offset rather than plain `A | A`.
+      >
+      > **After the fix:** `A | A` identity still exact (`Q`, `P`, `step`,
+      > `V(B)` all 0); `A | vacuum` gives `P = -1.12e-2`, `step = -0.0949` Ry.
+      > Buffer-width convergence `1/1 → 2/2 → 4/4` = `-0.0949 → -0.0977 →
+      > -0.0977` Ry: converged by width 2, stable to 5 digits at 4 — a real
+      > quantity, not a buffer artefact. Cross-check vs the one-sided
+      > `buildsurf` route on the same system: `-0.1236` Ry vs `-0.0977` Ry, same
+      > sign and magnitude, **~21% apart — closing that gap is a B7.7 item.**
+      >
+      > **Also added:** the active zone is now centred in the Madelung stack by
+      > default. An off-centre `&charge nlay_a/nlay_b` split makes the two deep
+      > probes asymmetric and yields a nonzero `V_B` for a physically symmetric
+      > cell (measured: 1/1 → `V(B) = -0.0109` Ry; centred 24/24 → exactly 0).
+      > Leaving the pair unset derives `(nbas - nlay)/2` either side and logs
+      > it. **This supersedes the earlier B7.6 note advising `&charge` = 1**,
+      > which was written while the electrostatics were dead.
+
 - [ ] **B7.7** vacuum-lead vs empty-sphere comparison + compensation
       insensitivity → **G-B7-3** + IEC benchmarks with LL convergence

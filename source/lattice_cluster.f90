@@ -439,7 +439,19 @@ contains
       ! ~line 304, rather than relying on build_clusup's parallel 'S' block),
       ! so this MUST be set here rather than assumed from a prior step.
       nbulk_a = this%nbulk_bulk
-      nbulk_b = this%nbulk_bulk
+      if (trim(this%region_b_kind) == 'vacuum') then
+         ! B7.6, A | vacuum: vacuum is ONE empty-sphere type regardless of how
+         ! many inequivalent sites region A's cell has. An empty lattice has a
+         ! single site type by construction -- there is nothing to be
+         ! inequivalent about -- so nbulk_bulk, which describes region A's
+         ! crystal, must not be applied to it. The type still occupies a slot
+         ! in the frozen block exactly as a metallic reference would; only its
+         ! parameters come from `vacuum_lead` instead of an &atoms label
+         ! (filled in pre_processing_buildinterface, after atomlist).
+         nbulk_b = 1
+      else
+         nbulk_b = this%nbulk_bulk
+      end if
       this%nbulk = nbulk_a + nbulk_b
       if (nbulk_b < 1) then
          call g_logger%fatal('lattice%build_interface_full: region B has no frozen types '// &

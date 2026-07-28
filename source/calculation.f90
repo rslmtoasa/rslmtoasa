@@ -40,6 +40,7 @@ module calculation_mod
    use reciprocal_mod
    use mix_mod
    use frozen_magnon_mod
+   use vacuum_lead_mod, only: vacuum_lead, refresh_vacuum_region
    use math_mod
    use precision_mod, only: rp
    use string_mod, only: sl, fmt, real2str, int2str
@@ -49,6 +50,27 @@ module calculation_mod
    implicit none
 
    private
+
+   !---------------------------------------------------------------------------
+   ! B7.6 -- state backing the vacuum-refresh hook.
+   !
+   ! `charge%on_alignment_updated` is argument-free (see the abstract interface
+   ! in charge.f90 for why), so the data the refresh needs is held here and the
+   ! hook procedure closes over it. Module scope rather than procedure scope
+   ! because the hook outlives `pre_processing_buildinterface`'s stack frame:
+   ! it fires from inside `self%run()`, per SCF iteration.
+   !
+   ! Only ever populated on the `buildinterface` path with region_b_kind =
+   ! 'vacuum'; a run that is not A | vacuum never installs the hook and never
+   ! touches these.
+   !---------------------------------------------------------------------------
+   type(vacuum_lead), save :: vacuum_state
+   type(self), pointer :: vacuum_solver => null()
+   type(charge), pointer :: vacuum_charge => null()
+   class(symbolic_atom), dimension(:), pointer :: vacuum_atoms => null()
+   integer, save :: vacuum_nbulk_a = 0
+   integer, save :: vacuum_nbulk = 0
+   type(energy), pointer :: vacuum_energy => null()
 
    type, public :: calculation
       !> Pre-processing. Options are:
@@ -695,6 +717,35 @@ contains
 
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
+
+      ! B7.6, A | vacuum: region B's frozen parameters are GENERATED, not read
+      ! from an &atoms label. Install the refresh hook and run it once now, so
+      ! the very first recursion sees real empty-lattice parameters rather than
+      ! the defaults the unlabelled type was constructed with. The initial call
+      ! runs at region_shift = 0, i.e. the vacuum level is the anchor's zero;
+      ! every later call, driven from interfacepot, uses the solved level. That
+      ! is the "generate once" behaviour arriving as iteration 0 of the
+      ! self-consistent scheme rather than as a separate code path.
+      if (trim(lattice_obj%region_b_kind) == 'vacuum') then
+         vacuum_solver => self_obj
+         vacuum_charge => charge_obj
+         vacuum_atoms => lattice_obj%symbolic_atoms
+         vacuum_energy => energy_obj
+         vacuum_nbulk_a = lattice_obj%nbulk_bulk
+         vacuum_nbulk = lattice_obj%nbulk
+         vacuum_state = vacuum_lead(lattice_obj%symbolic_atoms(1)%potential%lmax)
+
+         charge_obj%on_alignment_updated => vacuum_refresh_hook
+         call vacuum_refresh_hook()
+         if (rank == 0) then
+            call g_logger%info('buildinterface: region B is VACUUM. Its frozen parameters '// &
+                               'are generated per run by vacuum_lead and regenerated each '// &
+                               'iteration at the solved vacuum level (B7 §1.6).', &
+                               __FILE__, __LINE__)
+            call vacuum_state%dump()
+         end if
+      end if
+
       call g_timer%start('self-consistency')
       call self_obj%run()
       call g_timer%stop('self-consistency')
@@ -703,6 +754,27 @@ contains
 
       call self_obj%report()
    end subroutine pre_processing_buildinterface
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> B7.6: the vacuum-refresh hook. Installed on
+   !> `charge%on_alignment_updated` for A | vacuum runs and fired by
+   !> `interfacepot` once per SCF iteration, after the alignment solver has
+   !> updated the vacuum level.
+   !>
+   !> Argument-free by the hook's interface contract; the data it needs is the
+   !> module state above, populated at installation time.
+   !---------------------------------------------------------------------------
+   subroutine vacuum_refresh_hook()
+      if (.not. associated(vacuum_solver)) return
+      if (.not. associated(vacuum_charge)) return
+      if (.not. associated(vacuum_atoms)) return
+
+      call refresh_vacuum_region(vacuum_state, vacuum_solver, vacuum_charge, &
+                                 vacuum_atoms, vacuum_nbulk_a, vacuum_nbulk, &
+                                 vacuum_energy%fermi)
+   end subroutine vacuum_refresh_hook
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

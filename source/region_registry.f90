@@ -601,7 +601,8 @@ contains
    !>                    huge() default sentinel is excluded).
    !---------------------------------------------------------------------------
    subroutine region_registry_build_from_interface(this, nbas, nlay_a, nlay_active, z, w, &
-                                                     reference_type, fermi_a, fermi_b, fermi_sentinel)
+                                                     reference_type, fermi_a, fermi_b, fermi_sentinel, &
+                                                     kind_b)
       class(region_registry), intent(inout) :: this
       integer, intent(in) :: nbas
       integer, intent(in) :: nlay_a
@@ -612,14 +613,31 @@ contains
       real(rp), intent(in), optional :: fermi_a
       real(rp), intent(in), optional :: fermi_b
       real(rp), intent(in), optional :: fermi_sentinel
+      !> Region B's kind. Optional; defaults to `region_kind_lead_b` (the
+      !> metallic A | B geometry). Pass `region_kind_vacuum` for A | vacuum
+      !> (B7.6): that is what makes `gauge_anchor` skip region B when choosing
+      !> the alignment anchor, and what makes `charge%boundary_nef` return zero
+      !> so vacuum receives NO compensation charge (B7 §1.5 -- compensation
+      !> placed in vacuum does not perturb the work function, it SETS it).
+      integer, intent(in), optional :: kind_b
       real(rp) :: sentinel_
-      integer :: i
+      integer :: i, kind_b_
+      character(len=8) :: name_b
       integer, parameter :: reg_a = 1
       integer, parameter :: reg_active = 2
       integer, parameter :: reg_b = 3
 
       sentinel_ = huge(1.0_rp)/2.0_rp
       if (present(fermi_sentinel)) sentinel_ = fermi_sentinel
+
+      kind_b_ = region_kind_lead_b
+      if (present(kind_b)) kind_b_ = kind_b
+      ! Name region B for what it is. This string is what every alignment and
+      ! diagnostic message prints, and it is also what `fix_fermi_to_region`
+      ! matches on -- pinning E_F to vacuum is not meaningful, so calling the
+      ! region 'vacuum' rather than 'B' keeps that user-facing name honest.
+      name_b = 'B'
+      if (kind_b_ == region_kind_vacuum) name_b = 'vacuum'
 
       call this%restore_to_default()
 
@@ -630,7 +648,7 @@ contains
       allocate (this%region(this%nregion))
       this%region(reg_a) = region_descriptor(kind=region_kind_lead_a, name='A', frozen=.true.)
       this%region(reg_active) = region_descriptor(kind=region_kind_active, name='active', frozen=.false.)
-      this%region(reg_b) = region_descriptor(kind=region_kind_lead_b, name='B', frozen=.true.)
+      this%region(reg_b) = region_descriptor(kind=kind_b_, name=name_b, frozen=.true.)
 
       if (present(fermi_a)) then
          if (fermi_a < sentinel_) then

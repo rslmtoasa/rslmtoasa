@@ -177,3 +177,178 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
 - **Found:** B7.5 (`calctype='L'` wiring, commit `97f1e0e`). The earlier
   validation used 001 only and reported agreement at print precision; the 111
   deviation surfaced when both orientations were added to the suite.
+
+## `calctype = 'L'`: raising `&charge nlay_a/nlay_b` breaks the alignment fixed point
+
+- **Symptom:** in the `A | A` identity geometry (`example/interface/fccCu111_AA`,
+  two frozen Cu regions around one active Cu layer, all from the same converged
+  parameter set), the alignment solver must converge to `V(B) = 0`. Raising the
+  **`&charge`** row counts breaks that; raising the **`&lattice`** layer counts
+  does not. Single-variable runs, 5 iterations each:
+
+  | `&lattice nlay_a/nlay_b` | `&charge nlay_a/nlay_b` | converged `V(B)` | identity |
+  | --- | --- | --- | --- |
+  | 1 / 1 | 1 / 1 | `0.000000` Ry | holds |
+  | 4 / 4 | 1 / 1 | `0.000000` Ry | holds |
+  | 1 / 1 | 4 / 4 | `-0.4498` Ry | broken |
+
+- **The two knobs are different, and only one is the buffer width.**
+  `&lattice nlay_a/nlay_b` count **atomic layers** and are the correct way to
+  widen the frozen buffer — that is what `build_interface_full` bins sites into
+  (`lattice_cluster.f90:576-624`), and widening it is harmless.
+  `&charge nlay_a/nlay_b` count **rows of the synthetic 2D Madelung stack**,
+  whose size is a fixed constant (`this%nbas = max(49, ...)`,
+  `lattice_cluster.f90:709`) deliberately decoupled from the physical layer
+  count so `set2d`'s NLAMA/NLAMB split stays balanced.
+  `build_interface_registry` computes `nlay_active = nbas - nlay_a - nlay_b`
+  over those rows (`charge.f90:1711`), so raising them relabels *interior*
+  Madelung rows — rows carrying real deviation charge — as frozen boundary and
+  moves the deep probe onto a charged row.
+- **Consequence for users:** widen the frozen buffer with `&lattice`, and leave
+  `&charge nlay_a/nlay_b` at 1 unless the Madelung row partition is genuinely
+  what you mean to change. The source comments at `lattice.f90:320-331` already
+  state that the two are deliberately separate (LAYERS vs SITES); the trap is
+  that the names are identical.
+- **Still open:** the `align_regions` "widen the active zone" drift warning
+  fires even in the `&lattice`-widened runs where the identity holds exactly, so
+  it is noisier than its wording implies. Whether the deep-probe drift threshold
+  should be recalibrated is a B7.7 question (G-B7-3 revisits the tolerances).
+- **Found:** B7.6 (examples and documentation). Documented for users in
+  `docs/source/user_guide/examples/interface_fcccu111.rst`.
+
+## `calctype = 'L'`: no vacuum region, and `vacuum_lead` has no caller
+
+**RESOLVED for `A | vacuum`** (B7.6 wiring). `&lattice region_b_kind = 'vacuum'`
+now makes region B a vacuum region: `build_from_interface` takes a `kind_b`
+argument, `build_interface_registry` passes `region_kind_vacuum`, and
+`refresh_vacuum_region` generates the frozen parameters per run and regenerates
+them each iteration at the solved vacuum level. Example:
+`example/interface/fccCu111_Avac`.
+
+**Still open:** `A | vacuum-gap | B`. That needs a genuine four-region layout
+(`lead_a | active-vacuum | active | lead_b`) and a rework of the type-block
+arithmetic in `build_interface_full`, which still hardcodes three regions.
+
+- **Original symptom:** two of the four geometries B7 §1.2 scopes for the
+  layered path — `A | vacuum` and `A | vacuum-gap | B` — could not be
+  constructed.
+- **Original cause (no vacuum region):** `region_registry_build_from_interface`
+  hardcoded kinds `lead_a`, `active`, `lead_b`; nothing on the `buildinterface`
+  route could assign `region_kind_vacuum`.
+- **Original cause (generator unwired):** `source/vacuum_lead.f90` was a tested
+  component with no consumer — its only mention outside its own file and
+  `CMakeLists.txt` was a comment in `self.f90:263`.
+- **Found:** B7.6 (examples and documentation).
+
+## `calctype = 'L'`: interface electrostatics were identically zero — **FIXED**
+
+**RESOLVED.** Three separate index-space bugs made `Q`, `P`, `step` and every
+deep probe come out exactly zero for every layered run. All three are fixed;
+this entry is kept because the failure mode is instructive and because the
+committed `tests/scf` interface references were generated while it was active.
+
+1. **Active charge written to a frozen row.** `interfacepot` conflated two
+   index spaces: `atomrec` (1..nrec, the active TYPE counter — indexes `dq`,
+   `chargetrf_type`, `symbolic_atom(nbulk+.)`) and the Madelung ROW (1..nbas,
+   which is what `tdq`/`tq10`/`vm` and every registry array are indexed by).
+   The active zone starts at row `nlay_a+1`, so writing to `tdq(atomrec)` put
+   the charge on region A's frozen boundary row. `compensation_sites` then
+   returned `ideep_lo` = that same row and subtracted the whole residual from
+   it — exact cancellation, `tdq ≡ 0`, `vm ≡ 0`. Fixed with an explicit
+   `irow = nlay_a + atomrec` in both the charge loop and the write-back.
+2. **`boundary_nef` used the same wrong mapping** (`nbulk + isite` with
+   `isite` a Madelung row), which is out of range for a boundary row. It
+   returned 0 for *both* sides, so the N(E_F) compensation weighting collapsed
+   to the 50/50 fallback and **vacuum silently received half the compensation
+   charge** — exactly what B7 §1.5 warns about ("compensation placed there
+   does not perturb the work function, it SETS it"). Now reads the registry's
+   per-site reference type.
+3. **`reference_type` was filled by cycling active-type values across all
+   rows**, so frozen boundary rows carried no valid type — which is what made
+   (2) silent. Now assigned per region: region A's types on its rows, region
+   B's (or the single vacuum type) on its rows, `chargetrf_type` on active rows.
+
+**Also added: the active zone is now centred in the Madelung stack by default.**
+The active charge occupies rows `nlay_a+1 .. nlay_a+nlay`, and the deep probes
+are the extreme frozen rows either side. An off-centre split puts one probe
+adjacent to the charge and the other ~`nbas` rows away, so the solver correctly
+reports a nonzero `V_B` for a physically symmetric cell. Measured on
+fccCu111_AA (nbas=49, one active layer): `&charge` 1/1 → `V(B) = -0.0109` Ry;
+centred 24/24 → exactly 0. Leaving `&charge nlay_a/nlay_b` unset now derives
+`(nbas - nlay)/2` either side and logs the choice. Explicit values still win.
+
+**Why it hid:** the shipped oracle is the `A | A` identity, whose *correct*
+answer is exactly zero for all five reported quantities — a spuriously zero
+result is indistinguishable from a right one. B7 §5.3 anticipated precisely
+this and specifies the real oracle as A-against-A-with-a-rigid-offset; the
+shipped example did not honour that.
+
+**Verification after the fix:**
+
+| case | Q | P | step | V(B / vacuum) |
+| --- | --- | --- | --- | --- |
+| `A \| A` identity | 0 | 0 | 0 | 0 |
+| `A \| vacuum` | 0 | -1.12e-2 | -0.0949 Ry | +0.0949 Ry |
+
+The identity still holds exactly; the surface now produces a real dipole
+barrier where it previously produced none. **Buffer-width convergence** (`&lattice nlay_a`/`nlay_b`, fcc Cu(111)):
+
+| buffer | step |
+| --- | --- |
+| 1 / 1 | -0.0949 Ry |
+| 2 / 2 | -0.0977 Ry |
+| 4 / 4 | -0.0977 Ry |
+
+Converged by width 2 and stable to five digits at width 4 — the barrier is a
+real converged quantity, not a buffer artefact.
+
+Cross-check against the independent one-sided `buildsurf` route on the same
+system: `buildsurf` gives `vmad1 = vm1 - vbulk = -0.1236` Ry against the
+interface route's converged `-0.0977` Ry — same sign and magnitude, ~21%
+apart. The two probe different points of the same profile (`buildsurf` uses
+rows 1 and `nbas`; the interface route uses the frozen-region extremes), so
+exact agreement is not expected, but closing that gap is a B7.7 item.
+
+**Consequence for the committed references:** `tests/scf` interface cases pass
+unchanged because they pin DOS and moments, not electrostatic quantities. Any
+future reference regeneration will capture genuinely different `vmad` values.
+
+- **Found:** B7.6 (vacuum-lead wiring), while checking why the generated vacuum
+  lead produced no measurable dipole barrier.
+
+
+## `calctype = 'L'`: `A | vacuum` diverges with more than one active layer — UNTRIAGED
+
+- **Symptom:** with `&lattice nlay = 3` (three active layers) on the
+  `A | vacuum` geometry, the reported potential step and the active atoms'
+  `vmad` come out physically impossible — hundreds of Rydberg:
+
+  | case, `nlay = 3` | step | `vmad`, active layers 1 / 2 / 3 |
+  | --- | --- | --- |
+  | `A \| A` metallic | `0.0002` Ry | `-1.6e-4`, `-1.8e-3`, `-4e-15` |
+  | `A \| vacuum` | **`-334` Ry** | **`167`, `56`, `0.38`** |
+
+  The metallic three-layer case is sane, so whatever this is, it involves the
+  vacuum region specifically. At `nlay = 1` both geometries are well behaved
+  (`A | vacuum` gives a converged `step = -0.0977` Ry).
+- **NOT YET DIAGNOSED, and the test deck is a live suspect.** The three-layer
+  decks above were hand-built by editing `ntype`, `ct(:)` and the `&atoms`
+  `label(:)` list of the one-layer examples and copying `Ac1.nml` to `Ac2.nml`
+  / `Ac3.nml`. That is exactly the kind of setup that can be silently wrong —
+  in particular the active-layer type block and `chargetrf_type` assignment
+  (`build_interface_full`) were not independently verified for `nlay > 1` on
+  the vacuum path. **Do not treat this as a confirmed code bug until a
+  known-good multi-layer deck reproduces it.**
+- **If it is real, the likely area** is the compensation weighting across
+  multiple active rows: with one active row the compensation sites sit
+  symmetrically either side of it, and with three they do not. That is
+  precisely the machinery G-B7-3 exists to sign off, so a genuine finding here
+  belongs to B7.7 rather than to a spot fix.
+- **First triage steps** (in order): build a multi-layer deck from
+  `buildsurf`'s own working three-layer surface case rather than by hand;
+  confirm `chargetrf_type` and the layer→type map for `nlay > 1`; then dump
+  `tdq` per row to see whether the divergence enters through the charge, the
+  compensation, or the kernel.
+- **Found:** B7.6 (vacuum-lead wiring), while probing whether the new
+  electrostatics path had multi-layer coverage. Not investigated further —
+  out of scope for the wiring task.
