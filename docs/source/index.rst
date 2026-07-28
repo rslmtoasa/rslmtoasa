@@ -26,6 +26,7 @@ Table of Contents
    :caption: Introduction
 
    getting_started
+   code_features
    code_structure
 
 .. toctree::
