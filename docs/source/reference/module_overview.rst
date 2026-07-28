@@ -134,6 +134,47 @@ Mode behavior:
 - ``kspace_ham_order='first'``: first-order ``h(k) + H_LS`` with optional Bloch-summed CCOR.
 - ``kspace_ham_order='proper'``: deprecated alias for ``second``.
 
+**reciprocal_green.f90** (submodule of ``reciprocal``, B2)
+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 0
+
+   * - **Type**
+     - submodule of ``reciprocal``
+   * - **Purpose**
+     - k-space Green's-function engine: fills the same ``green%gij``/``gji``,
+       ``gij_eta`` ladder, and torque arrays the real-space recursion route
+       fills, from two backends, so downstream consumers (exchange, damping,
+       conductivity) are route-agnostic.
+
+Major procedures:
+
+- ``fill_green(green_obj, mesh, pairs, sigma_provider)`` - populate the
+  Green's-function arrays via ``green_backend='lehmann'`` or ``'dyson'``
+  (see :ref:`keywords/output_options` for ``gf_route``/``green_backend``/``green_eta``)
+
+Related files:
+
+- ``sigma_provider.f90`` - abstract self-energy provider interface
+  (``sigma_zero`` is the only concrete implementation so far; the
+  interface exists so a future CPA/DMFT Σ(z) provider slots in without
+  changing ``fill_green``'s call sites)
+- ``lehmann_kernel.f90`` - strict Lehmann representation kernel (Σ=0, one
+  eigensolve per k, amortized over energies and pairs)
+- ``dyson_kernel.f90`` - direct Dyson inversion kernel
+  (:math:`[zS-H(k)-\Sigma(z)]^{-1}`, batched per (k, z)); also underlies
+  ``reciprocal_bsf.f90`` below
+- ``moment_kernel.f90`` / **reciprocal_moments.f90** (submodule of
+  ``reciprocal``, B5.1) - exact k-space Chebyshev moment generator
+  (``fill_moments``) feeding the existing KPM conductivity pipeline with
+  moments computed exactly from eigenpairs instead of recursion
+
+See ``docs/dev/plans/B2_reciprocal_green.md`` for the convention checklist
+(phase/bond convention, local spin frames, normalization) and
+``docs/dev/plans/B5_route_agnostic_postprocessing.md`` for the moment
+generator and the Jij/damping/conductivity triad tests.
+
 **self.f90**
 
 .. list-table::
@@ -267,6 +308,48 @@ Key members:
 
 - J matrix elements between atoms
 
+**reciprocal_bsf.f90** (submodule of ``reciprocal``, B3)
+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 0
+
+   * - **Type**
+     - submodule of ``reciprocal``
+   * - **Purpose**
+     - Bloch spectral function :math:`A(k,E) = -(1/\pi)\,\text{Im}\,\text{Tr}\,G(k,E+i\eta)`
+       along the canonical high-symmetry k-path, using the same
+       ``dyson_kspace_inverse`` primitive as ``reciprocal_green.f90``'s
+       backend D.
+
+Major procedures:
+
+- ``calculate_bsf(output_file)`` - drives the k-path sweep and writes
+  total/spin-up/spin-down traces (``post_processing='bsf'``, see
+  :ref:`keywords/output_options`)
+
+Related files:
+
+- ``bsf_kernel.f90`` - the trace kernel (``bsf_spectral_trace``)
+
+**frozen_magnon.f90** (B1)
+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 0
+
+   * - **Type**
+     - frozen_magnon
+   * - **Purpose**
+     - Namelist type + lifecycle for the frozen-magnon E(q)/:math:`\omega`\ (q)
+       sweep (``post_processing='frozen_magnon'``); the sweep driver itself
+       lives in ``calculation.f90``
+       (``post_processing_frozen_magnon[_acoustic|_auto]``).
+
+See :ref:`keywords/frozen_magnon` for the full parameter reference and
+``docs/dev/plans/B1_gbt_frozen_magnons.md`` for the underlying
+generalized-Bloch-theorem fix.
+
 **conductivity.f90**
 
 .. table::
@@ -320,6 +403,41 @@ Utility Modules
 - Charge density management
 - Potential updates
 - Madelung corrections
+- B7: ``interfacepot``/``align_regions`` — two-sided deviation-variable
+  electrostatics for interface (``calctype='L'``) clusters, reusing
+  ``surfmat``'s Madelung matrices rather than a separate interface matrix
+  (see ``docs/dev/plans/B7_interfaces_and_vacuum_leads.md``)
+
+**region_registry.f90** (B7)
+
+- Explicit per-site region bookkeeping (``region_registry``,
+  ``region_descriptor`` types: kinds vacuum/bulk/active/lead_a/lead_b),
+  replacing magic-offset arithmetic previously in ``charge%surfpot``
+- Alignment solver: ``alignment_gauge_anchor``, ``alignment_initial_guess``,
+  ``alignment_update``, ``alignment_consistency_check`` — fixed-point
+  solve for each frozen region's offset V_r, gauge-anchored to the first
+  frozen non-vacuum region (gate G-B7-2, ``docs/dev/CONTRACT_FROZEN_REGION.md``)
+
+**vacuum_lead.f90** (B7)
+
+- Generates frozen potential parameters for a semi-infinite vacuum
+  (empty-sphere) lattice by running the code's own radial solver at
+  constant V(r), replacing hand-set empty-sphere stacks
+- Validated against an analytic spherical-Bessel oracle
+  (``tests/unit/test_vacuum_lead.f90``)
+- Consumed via ``&lattice region_b_kind='vacuum'``
+  (see :ref:`keywords/lattice_geometry`)
+
+**electrostatics_multipole.f90** (B6)
+
+- ``compute_dipole_moments`` — l=1 (z) dipole moment Q₁₀ per atom from
+  on-site cross-orbital density-matrix elements (s-p_z, p_z-d_z²) and
+  exported radial partial-wave amplitudes, with SCF mixing
+- Feeds ``charge.f90``'s Madelung potential shift via the pre-existing
+  ``dsz`` dipole-monopole matrix (no new lattice-sum machinery — narrower
+  in scope than the original blueprint; see
+  ``docs/dev/plans/B6_surface_electrostatics.md``)
+- Gated by ``&control dipole_electrostatics`` (see :ref:`keywords/control_parameters`)
 
 **mix.f90**
 
