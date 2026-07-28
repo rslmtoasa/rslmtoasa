@@ -501,27 +501,39 @@ calctype
 
 **Type:** Character string
 
-**Purpose:** Selects the top-level calculation to perform after SCF convergence
+**Purpose:** Selects the cluster/embedding topology the run is built on —
+**not** which post-SCF property is computed (that is ``post_processing``,
+see :ref:`keywords/output_options`).
 
-**Allowed values:** ``'bulk'``, ``'surface'``, ``'bands'``, ``'exchange'``,
-``'conductivity'``, ``'dos'``
+**Allowed values:** ``'B'`` (bulk), ``'S'`` (surface), ``'I'`` (impurity),
+``'L'`` (layered/interface — ``buildinterface``, B7)
 
-**Default:** ``'bulk'``
+**Default:** ``'B'``
 
 **Example:**
 
 .. code-block:: fortran
 
-   calctype = 'exchange'
+   calctype = 'L'
 
 **Notes:**
 
-- Determines which post-SCF module is invoked.
-- ``'exchange'``: compute Heisenberg exchange parameters :math:`J_{ij}`.
-- ``'conductivity'``: compute the Kubo-Bastin conductivity tensor.
-- ``'bands'``: compute band structure along a k-path.
+- ``'B'``: ordinary bulk/supercell cluster (``bravais`` pre-processing).
+- ``'S'``: one-sided surface/slab cluster (``buildsurf``).
+- ``'I'``: an impurity cluster embedded in a bulk or surface host
+  (``newclubulk``/``newclusurf``).
+- ``'L'``: interface/layered cluster with two frozen reference regions
+  (``buildinterface``, B7 — see :doc:`../user_guide/examples/interface_fcccu111`
+  for ``region_b_kind='metal'``/``'vacuum'`` and the alignment machinery).
+- Consumed throughout ``lattice_cluster.f90``, ``calculation.f90``,
+  ``bands.f90``, and ``energy.f90``; validated in
+  ``control.f90::check_all`` (fatal on any other value).
+- This entry previously listed post-processing values (``'bulk'``,
+  ``'surface'``, ``'bands'``, ``'exchange'``, ``'conductivity'``, ``'dos'``)
+  which do not correspond to ``calctype`` at all — those are
+  ``post_processing`` values; see :ref:`keywords/output_options`.
 
-**Related code:** ``source/calculation.f90``
+**Related code:** ``source/control.f90::check_all()``, ``source/lattice_cluster.f90``
 
 do_asd
 ------
@@ -689,6 +701,64 @@ ruban
 
 **Purpose:** Ruban-Abrikosov concentration parameter; a positive value activates
 CPA-like alloy averaging.
+
+dipole_electrostatics (B6)
+--------------------------
+
+**Type:** Logical
+
+**Default:** ``.false.``
+
+**Purpose:** Activate l=1 (dipole) surface/interface electrostatics —
+extends the monopole-only ASA Madelung problem with a per-atom dipole
+moment Q₁₀, fed into the potential shift via the existing (previously
+unused) dipole-monopole Madelung matrix ``dsz``.
+
+**Example:**
+
+.. code-block:: fortran
+
+   dipole_electrostatics = .true.
+
+**Notes:**
+
+- With this ``.false.`` (the default), behavior is bit-identical to the
+  code without the feature — this is the regression contract for B6.
+- No new lattice-sum machinery: reuses the ``dsz``/``dzz`` Madelung
+  matrices that were already computed but previously unfed. Narrower in
+  scope than the original B6 blueprint (no 2D/3D Ewald to l≤2) — see
+  ``docs/dev/plans/B6_surface_electrostatics.md`` for what shipped vs.
+  what was originally planned.
+- No literature (Skriver–Rosengaard) work-function validation has been
+  performed yet — gate G-B6-1 is open.
+- The computed moment is exported per atom as ``potential%q10`` (see
+  the ``&potential`` output namelist).
+
+**Related code:** ``source/electrostatics_multipole.f90``
+(``compute_dipole_moments``), ``source/charge.f90`` (``surfpot``)
+
+dipole_mix (B6)
+---------------
+
+**Type:** Real
+
+**Default:** ``0.5``
+
+**Purpose:** SCF mixing fraction for the dipole moment Q₁₀ between
+iterations, analogous to charge mixing (``mixing``/``alpha``): ``q10_new
+= dipole_mix * q10_computed + (1 - dipole_mix) * q10_old``.
+
+**Example:**
+
+.. code-block:: fortran
+
+   dipole_mix = 0.3
+
+**Notes:**
+
+- Only relevant when ``dipole_electrostatics = .true.``.
+
+**Related code:** ``source/electrostatics_multipole.f90``
 
 hyperfine
 ---------

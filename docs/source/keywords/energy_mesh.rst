@@ -157,6 +157,91 @@ fix_fermi
 - For isolated impurity: often .true.
 - Allows exploration of non-physical electron counts
 
+fix_fermi_to_region (B7, calctype='L')
+---------------------------------------
+
+**Type:** Character string
+
+**Purpose:** Pin the Fermi level to a named frozen region instead of the
+default free E_F from cluster charge neutrality, for an interface
+(``calctype='L'``) run.
+
+**Default:** ``''`` (empty — free E_F)
+
+**Example:**
+
+.. code-block:: fortran
+
+   fix_fermi_to_region = 'A'
+
+**Notes:**
+
+- In ``&charge`` namelist (not ``&energy`` — grouped here with
+  ``fix_fermi`` for discoverability since they're the same kind of
+  decision).
+- Companion to ``fermi_a``/``fermi_b`` below when checking two-sided
+  alignment consistency.
+
+**Related code:** ``source/charge.f90``, ``docs/dev/CONTRACT_FROZEN_REGION.md``
+
+fermi_a, fermi_b (B7, calctype='L')
+-------------------------------------
+
+**Type:** Real (Ry)
+
+**Purpose:** Optional per-region source Fermi level for the interface
+alignment consistency check (``align_regions``, gate G-B7-2).
+
+**Default:** ``huge(1.0)`` (sentinel — not supplied)
+
+**Example:**
+
+.. code-block:: fortran
+
+   fermi_a = -0.0899
+   fermi_b = -0.0899
+
+**Notes:**
+
+- In ``&charge`` namelist. Leave unset unless you are supplying
+  independently-converged source E_F values for each region to
+  cross-check the alignment solver.
+
+**Related code:** ``source/charge.f90``, ``docs/dev/CONTRACT_FROZEN_REGION.md``
+
+compensation_profile, bias (B7, calctype='L')
+------------------------------------------------
+
+**Type:** Character string / Real (Ry)
+
+**Purpose:** ``compensation_profile`` selects the charge-compensation
+weighting scheme used by ``interfacepot`` when balancing the two-sided
+electrostatics (B7 §1.5, gate G-B7-3 — tolerance calibration still open,
+see ``tests/KNOWN_ISSUES.md``). ``bias`` is a B7 §6 hook for an applied
+bias (``target_step = contact_potential + bias``); namelist plumbing only,
+not yet wired to a physical effect.
+
+**Allowed values (compensation_profile):** ``'nef_weighted'`` (the only
+implemented profile — side-resolved :math:`N(E_F)` weighting)
+
+**Default:** ``compensation_profile = 'nef_weighted'``, ``bias = 0.0``
+
+**Example:**
+
+.. code-block:: fortran
+
+   compensation_profile = 'nef_weighted'
+   bias = 0.0
+
+**Notes:**
+
+- In ``&charge`` namelist.
+- ``bias`` is exposed now so it is a namelist choice rather than a future
+  new code path, but it is inactive until a dedicated task wires it to
+  the PM kernel — do not expect it to do anything yet.
+
+**Related code:** ``source/charge.f90`` (``interfacepot``)
+
 edel
 ----
 

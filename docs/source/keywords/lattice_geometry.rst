@@ -202,6 +202,81 @@ Total sphere volume should be close to crystal volume:
 
    N_{\text{atoms}} \times \frac{4}{3}\pi r_{\text{WS}}^3 \approx V_{\text{cell}}
 
+Layered / interface geometry (calctype='L', B7)
+================================================
+
+These ``&lattice`` keys apply only when ``calctype='L'`` (interface mode,
+``buildinterface`` — see :ref:`keywords/control_parameters`); they are
+ignored otherwise.
+
+nlay_a, nlay_b
+--------------
+
+**Type:** Integer
+
+**Purpose:** Number of *atomic layers* in region A / region B of an
+interface cluster, counted from the interface outward.
+
+**Default:** ``0`` (both)
+
+**Example:**
+
+.. code-block:: fortran
+
+   nlay_a = 4
+   nlay_b = 4
+
+**Notes:**
+
+- These count physical atomic layers in ``&lattice`` — a different thing
+  from the ``&charge`` namelist's own ``nlay_a``/``nlay_b``, which count
+  *synthetic Madelung rows* for the electrostatics solve. **Raising the
+  ``&charge`` pair without raising this one breaks alignment** (observed:
+  V(B) off by ~0.45 Ry) — see ``tests/KNOWN_ISSUES.md`` and
+  ``docs/dev/plans/B7_interfaces_and_vacuum_leads.md``.
+- Only the *first frozen non-vacuum* layer in each region is used as the
+  gauge anchor for the alignment solver (``align_regions``,
+  ``source/region_registry.f90``).
+
+**Related code:** ``source/lattice_cluster.f90``, ``source/region_registry.f90``
+
+region_b_kind
+-------------
+
+**Type:** Character string
+
+**Purpose:** Physical kind of region B in an interface (``calctype='L'``)
+cluster.
+
+**Allowed values:** ``'metal'`` (region B is a second metallic reference,
+loaded from ``&atoms label(:)``), ``'vacuum'`` (region B is semi-infinite
+vacuum, with frozen potential parameters generated per run by
+``vacuum_lead`` rather than hand-set empty spheres — B7.2/B7.6)
+
+**Default:** ``'metal'``
+
+**Example:**
+
+.. code-block:: fortran
+
+   region_b_kind = 'vacuum'
+
+**Notes:**
+
+- Case-insensitive; an unrecognized value is **fatal** at namelist read
+  (deliberately — a misspelling like ``'vaccum'`` would otherwise silently
+  fall through to the metallic path and report a plausible-looking wrong
+  barrier height; see ``source/lattice_lifecycle.f90``, B7.6 comment).
+- With ``'vacuum'``, ``vacuum_lead.f90`` generates the frozen empty-sphere
+  potential parameters by running the code's own radial solver at constant
+  V(r), validated against an analytic spherical-Bessel oracle
+  (``tests/unit/test_vacuum_lead.f90``).
+- See :doc:`../user_guide/examples/interface_fcccu111` for a worked
+  ``A|vacuum`` example and the alignment-convergence behavior with buffer
+  width.
+
+**Related code:** ``source/vacuum_lead.f90``, ``source/lattice_lifecycle.f90``
+
 Related Structural Parameters
 =============================
 

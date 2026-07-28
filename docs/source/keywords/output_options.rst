@@ -122,6 +122,12 @@ post_processing
    +--------------------+---------------------------------------+
    | 'orbital_modern'   | Orbital-moment post-processing        |
    +--------------------+---------------------------------------+
+   | 'bsf'              | Bloch spectral function A(k,E) (B3)   |
+   +--------------------+---------------------------------------+
+   | 'kspace_green'     | k-space Green's-function driver (B2)  |
+   +--------------------+---------------------------------------+
+   | 'frozen_magnon'    | Frozen-magnon E(q)/omega(q) sweep (B1)|
+   +--------------------+---------------------------------------+
 
 **Default:** 'none'
 
@@ -143,6 +149,144 @@ post_processing
 - 'band_structure': ``band_structure.dat``
 - 'exchange': ``exchange.dat``, ``exchange_expanded.dat``
 - 'conductivity': ``conductivity_tensor.dat``, ``conductivity_scalar.dat``
+- 'bsf': ``bsf.dat`` (see ``source/reciprocal_bsf.f90::calculate_bsf()``)
+- 'frozen_magnon': the file named by ``&frozen_magnon output_file``
+  (default ``frozen_magnon.dat``), plus ``frozen_magnon_branches.dat``/
+  ``frozen_magnon_modes.dat`` when ``branch_mode='auto'`` — see
+  :ref:`keywords/frozen_magnon`.
+
+gf_route
+--------
+
+**Type:** Character string
+
+**Purpose:** Selects which engine fills the ``green%gij``/``gji`` (and
+``gij_eta`` torque-ladder) arrays consumed by exchange, damping, and
+conductivity post-processing (B2/B5) — a route-agnostic dispatch key so
+those consumers do not need to know which engine produced the Green's
+function.
+
+**Allowed values:** ``'recursion'`` (real-space Haydock/Chebyshev, the
+original route), ``'lehmann'`` (k-space, strict Lehmann representation,
+:math:`\Sigma=0`, B2 backend E), ``'dyson'`` (k-space, direct Dyson
+inversion :math:`[zS-H(k)-\Sigma]^{-1}`, B2 backend D)
+
+**Default:** ``'recursion'``
+
+**Example:**
+
+.. code-block:: fortran
+
+   gf_route = 'lehmann'
+
+**Notes:**
+
+- In ``&calculation`` namelist.
+- At ``gf_route='recursion'`` this is a pure no-op relative to pre-B2
+  behavior — bit-identical output.
+- At ``'lehmann'``/``'dyson'`` the exchange/damping/conductivity pipeline
+  is unchanged; only the Green's-function producer differs. See
+  ``green_backend``/``green_eta`` (:ref:`keywords/hamiltonian_parameters`)
+  for the k-space engine's own settings, and
+  ``docs/dev/plans/B2_reciprocal_green.md`` /
+  ``docs/dev/route_agnostic_estimators.md`` for the accepted convergence
+  envelopes (Lehmann-route J_ij/damping are broadening-defined at the
+  documented ``green_eta`` default, not identical to the recursion route).
+
+**Related code:** ``source/calculation.f90::check_gf_route()``
+
+do_damping
+----------
+
+**Type:** Logical
+
+**Purpose:** Enable Gilbert-damping (:math:`\alpha`) evaluation in the
+exchange post-processing pipeline (B5.3), via the SOC-derivative
+torque-correlation route already present in the ``gij_eta`` ladder.
+
+**Default:** ``.false.``
+
+**Example:**
+
+.. code-block:: fortran
+
+   do_damping = .true.
+
+**Notes:**
+
+- In ``&calculation`` namelist.
+- Runs on whichever Green's function ``gf_route`` filled — recursion,
+  Lehmann, or Dyson — with no separate wiring per route.
+
+**Related code:** ``source/calculation.f90`` (search ``do_damping``)
+
+green_backend
+-------------
+
+**Type:** Character string
+
+**Purpose:** Selects the k-space engine ``gf_route='lehmann'``/``'dyson'``
+dispatches to when filling ``green%gij``/``gji`` (B2, ``reciprocal_green.f90``).
+
+**Allowed values:** ``'lehmann'`` (strict Lehmann representation,
+:math:`\Sigma=0`; one diagonalization per k-point, all energies and pairs
+amortized), ``'dyson'`` (direct Dyson inversion
+:math:`[zS-H(k)-\Sigma(z)]^{-1}` per (k, z); required once :math:`\Sigma \neq 0`,
+e.g. a future CPA/DMFT provider)
+
+**Default:** ``'lehmann'``
+
+**Example:**
+
+.. code-block:: fortran
+
+   green_backend = 'dyson'
+
+**Notes:**
+
+- In ``&reciprocal`` namelist (not ``&calculation`` — ``gf_route`` is set
+  in ``&calculation`` and internally assigns ``reciprocal%green_backend``
+  to match; see ``source/calculation.f90`` lines ~1217, ~1281).
+- With :math:`\Sigma=0`, ``'dyson'`` reproduces ``'lehmann'`` to solver
+  tolerance — a permanent consistency check (gate G-B2-1, see
+  ``docs/dev/plans/B2_reciprocal_green.md``).
+
+**Related code:** ``source/reciprocal_green.f90``, ``source/lehmann_kernel.f90``,
+``source/dyson_kernel.f90``
+
+green_eta
+---------
+
+**Type:** Real (Ry)
+
+**Purpose:** Retarded broadening :math:`\eta` for the k-space Green's
+function :math:`z = E + i\eta` (B2). Larger :math:`\eta` gives faster
+k-mesh convergence of intersite quantities (J_ij, damping) at the cost of
+a broadening-defined (not recursion-matching) estimator.
+
+**Default:** ``0.02`` Ry
+
+**Example:**
+
+.. code-block:: fortran
+
+   green_eta = 0.02
+
+**Notes:**
+
+- In ``&reciprocal`` namelist.
+- ``0.02`` Ry is the accepted working point from gate **G-B2-2**
+  (signed 2026-07-16): documented as giving ~1% k-mesh convergence of
+  J_ij at a 16³ mesh. Supersedes an earlier ``0.01`` Ry placeholder from
+  gate G-B2-1. See ``docs/dev/B2_GATE_G-B2-2.md`` and
+  ``docs/dev/reciprocal_green_convergence.md`` for the convergence study
+  behind this number.
+- The :math:`\eta \to 0`, :math:`N_k \to \infty` limit is deliberately not
+  the shipped default — it is expensive and currently gated by the
+  backend-E full-unreduced-BZ requirement (no symmetry reduction / k-mesh
+  parallelism yet; attaches with B4, not started).
+
+**Related code:** ``source/reciprocal_lifecycle.f90`` (``restore_to_default``)
 
 pre_processing
 ---------------

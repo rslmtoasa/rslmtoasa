@@ -23,6 +23,7 @@ Quick Navigation
    constraints
    spin_dynamics
    element_parameters
+   frozen_magnon
 
 Parameters by Namelist
 ======================
@@ -66,6 +67,10 @@ Element database (atomic number, core/valence split, quantum numbers). See :ref:
 **&conductivity**
 
 Chebyshev expansion depth for transport calculations. See :ref:`reference/conductivity_module`.
+
+**&frozen_magnon**
+
+Frozen-magnon E(q)/omega(q) sweep configuration (B1). See :ref:`keywords/frozen_magnon`.
 
 Quick Reference Table
 =====================
@@ -127,16 +132,19 @@ Alphabetical Listing (All Parameters)
 
 **B**
 
+- ``bias`` - Applied bias hook for interface potential step, B7 §6 (plumbing only, not yet wired)
 - ``blockrec`` - Block recursion flag
 - ``broyden_history`` - Number of previous densities to keep (Broyden mixing)
 - ``b_stochastic`` - Stochastic field array (ASD)
 
 **C**
 
-- ``calctype`` - Top-level calculation type
+- ``calctype`` - Cluster/embedding topology: 'B'/'S'/'I'/'L' (bulk/surface/impurity/interface) —
+  **not** the post-SCF property, see ``post_processing``
 - ``center_band`` - LMTO orbital center energy
 - ``channels_ldos`` - Number of energy mesh points
 - ``cold`` - Cold start (ASA potential extraction)
+- ``compensation_profile`` - Charge-compensation weighting for interface electrostatics (B7)
 - ``cond_calctype`` - Conductivity sub-type
 - ``cond_ll`` - Conductivity Chebyshev cutoff (in &control)
 - ``cond_type`` - Conductivity formulation
@@ -151,9 +159,12 @@ Alphabetical Listing (All Parameters)
 
 **D**
 
+- ``dipole_electrostatics`` - Enable l=1 dipole surface/interface electrostatics (B6)
+- ``dipole_mix`` - SCF mixing fraction for the dipole moment Q10 (B6)
 - ``do_asd`` - Enable atomistic spin dynamics
 - ``do_cochg`` - Enable co-charge correction
 - ``do_comom`` - Enable co-moment correction
+- ``do_damping`` - Enable Gilbert-damping evaluation in exchange post-processing (B5)
 - ``dq_tol`` - Charge density convergence tolerance
 - ``dt`` - ASD time step
 
@@ -166,9 +177,21 @@ Alphabetical Listing (All Parameters)
 
 - ``f_core`` - Number of f-core electrons
 - ``fermi`` - Fermi energy (initial guess or fixed)
+- ``fermi_a``, ``fermi_b`` - Per-region source Fermi level for interface alignment check (B7)
 - ``fix_fermi`` - Fix Fermi level to value
+- ``fix_fermi_to_region`` - Pin Fermi level to a named frozen region (B7, calctype='L')
 - ``fix_soc`` - Fix spin-orbit coupling magnitude
 - ``freeze`` - Freeze SCF potential
+
+**G**
+
+- ``gbt_kspace`` - Bloch-sum the GBT spiral block for spiral bands (B1)
+- ``gf_route`` - Route selector for Green's-function producer: recursion/lehmann/dyson (B2/B5)
+- ``green_backend`` - k-space Green's-function backend: lehmann/dyson (B2)
+- ``green_eta`` - Retarded broadening for the k-space Green's function (B2)
+
+**H**
+
 - ``hyperfine`` - Compute hyperfine coupling constants
 
 **I**
@@ -195,6 +218,8 @@ Alphabetical Listing (All Parameters)
 **N**
 
 - ``nbulk`` - Number of bulk atoms in cluster
+- ``nlay_a``, ``nlay_b`` - Layer counts for interface regions A/B (B7, calctype='L'; also a
+  separate, differently-scoped &charge pair of the same name — see :ref:`keywords/lattice_geometry`)
 - ``nlim`` - Cluster size control
 - ``nsp`` - Type of calculation (relativistic, collinear/non-collinear)
 - ``nstep`` - Number of SCF steps
@@ -210,11 +235,17 @@ Alphabetical Listing (All Parameters)
 - ``orbital_polarization`` - Enable orbital polarization correction
 - ``orb_pol`` - Include orbital polarization
 
+**Q**
+
+- ``q_ss`` - Spin-spiral wavevector (Cartesian units of 2*pi/alat)
+- ``q10`` - Computed l=1 dipole moment per atom, output only (B6)
+
 **R**
 
 - ``random_vec_num`` - Number of stochastic vectors for moment calculation
 - ``r2`` - Cluster cutoff radius squared
 - ``recur`` - Recursion algorithm (lanczos/chebyshev)
+- ``region_b_kind`` - Physical kind of interface region B: metal/vacuum (B7, calctype='L')
 - ``rigid_band`` - Rigid band shift
 - ``ruban`` - Ruban-Abrikosov alloy concentration parameter
 
@@ -233,6 +264,7 @@ Alphabetical Listing (All Parameters)
 - ``t_i`` - ASD initial simulation time
 - ``temperature`` - Electronic temperature (Kelvin)
 - ``terminator`` - Recursion terminator type
+- ``theta_ss`` - Spin-spiral cone angle (degrees)
 - ``txc`` - Exchange-correlation functional type
 
 **V**

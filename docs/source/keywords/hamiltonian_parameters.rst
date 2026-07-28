@@ -127,11 +127,23 @@ enforces stricter consistency checks on the CCOR inputs.
 Spin-spiral / non-collinear
 ===========================
 
-- ``q_ss`` (real(3), default ``[0,0,0]``) — spin-spiral wavevector.
-- ``theta_ss`` (real, default ``0``) — spin-spiral cone angle.
+- ``q_ss`` (real(3), default ``[0,0,0]``) — spin-spiral wavevector, in
+  Cartesian units of :math:`2\pi/\text{alat}` (``q_ss=0.5`` along a cubic
+  axis is the zone boundary at :math:`\pi/\text{alat}`).
+- ``theta_ss`` (real, default ``0``) — spin-spiral cone angle, degrees in
+  the namelist (converted to radians internally).
 - ``v_alpha`` / ``v_beta`` (real(3)) — quantization-axis vectors.
 - ``js_alpha`` / ``jl_alpha`` (character, default ``'z'``) — spin / orbital
   projection axes.
+- ``gbt_kspace`` (logical, default ``.false.``) — B1: Bloch-sum the
+  generalized-Bloch-theorem spiral bond block :math:`K(\Delta R)` through
+  the ``reciprocal_fourier.f90`` machinery for spiral band structures,
+  instead of (or in addition to) the real-space frozen-magnon route. The
+  bond-vector-phase/half-angle-rotation fix itself (the actual B1 bug fix)
+  is always active for ``q_ss /= 0``; this flag only controls whether the
+  reciprocal-space Bloch sum of :math:`K(\Delta R)` is also computed. See
+  ``docs/dev/plans/B1_gbt_frozen_magnons.md`` §1.3/§1.6 and
+  :ref:`keywords/frozen_magnon`.
 
 Hamiltonian export
 ==================
