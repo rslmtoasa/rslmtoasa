@@ -395,6 +395,8 @@ endif (RUN_REG_TESTS)
 # Standalone Fortran unit tests (known-answer, no external fixtures)
 ##############################################################################################
 if (RUN_UNIT_TESTS)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
   # Each test is a small program linked against the project library. Link the
   # same conditional MPI/OpenMP libraries as the main binary.
   function(add_fortran_unit_test _name _source)
@@ -425,6 +427,9 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitVacuumLead ${TestDIR}/unit/test_vacuum_lead.f90)
   add_fortran_unit_test(UnitVacuumRegionWiring ${TestDIR}/unit/test_vacuum_region_wiring.f90)
   add_fortran_unit_test(UnitAlignmentSolver ${TestDIR}/unit/test_alignment_solver.f90)
+  add_test(NAME UnitGbtOracles
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
+  set_tests_properties(UnitGbtOracles PROPERTIES LABELS "unit;gbt")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE
