@@ -35,6 +35,9 @@ contains
 
       ! Local variables
       character(len=100) :: filename
+      character(len=360) :: energy_message
+      real(rp) :: canonical_eband, dos_eband, projected_eband, dos_electrons, kT
+      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
       call root_info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
 
@@ -82,6 +85,18 @@ contains
          end if
       end if
 
+      ! Projected tetrahedron diagnostics require eigenvectors on the full
+      ! uniform mesh.  Establish that mesh before the source-of-truth FD
+      ! occupations and DOS are evaluated so no later projection rebuild can
+      ! invalidate or mix spectra from two meshes.
+      if (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') then
+         call this%ensure_full_mesh_for_spinor_integrations('calculate_density_of_states')
+      end if
+
+      ! EF, electron count, and the source-of-truth EBAND are properties of
+      ! eigenvalues/weights/occupations, not of the chosen DOS output grid.
+      canonical_eband = this%calculate_canonical_band_energy(this%auto_find_fermi)
+
       ! Calculate DOS based on method
       select case (trim(this%dos_method))
       case ('tetrahedron')
@@ -98,15 +113,22 @@ contains
          return
       end select
 
-      if (this%auto_find_fermi .and. this%total_electrons > 0.0_rp) then
-         this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
-         call g_logger%info('calculate_density_of_states: Auto-found Fermi level = ' // &
-                           trim(real2str(this%fermi_level, '(F 10.6)')) // ' Ry', __FILE__, __LINE__)
-      end if
-
       ! Calculate orbital projections and band moments
       call this%project_dos_orbitals()
       call this%calculate_band_moments()
+
+      ! Grid/projection routes are diagnostics only.  They intentionally run
+      ! after the canonical result and never feed EF or EBAND back into it.
+      kT = max(this%temperature*kB_Ry_per_K, 1.0e-10_rp)
+      dos_electrons = this%integrate_dos_up_to_energy(this%fermi_level, kT)
+      dos_eband = this%calculate_band_energy_from_total_dos()
+      projected_eband = this%calculate_band_energy_from_moments()
+      write(energy_message, '(A,ES16.8,A,ES16.8,A,ES12.4,A,ES16.8,A,ES12.4,A,ES16.8,A,ES12.4)') &
+         'k-space energy cross-checks: canonical EBAND=', canonical_eband, &
+         ', total-DOS EBAND=', dos_eband, ', delta=', dos_eband - canonical_eband, &
+         ', projected m0*m1=', projected_eband, ', delta=', projected_eband - canonical_eband, &
+         ', DOS N=', dos_electrons, ', deltaN=', dos_electrons - this%canonical_electron_count
+      call root_info(trim(energy_message), __FILE__, __LINE__)
 
       ! Write results to file
       call this%write_dos_to_file(filename)
@@ -1613,6 +1635,47 @@ end function integrate_dos_up_to_energy
       end do
       
    end function calculate_band_energy_from_moments
+
+   !> @brief Diagnostic total-DOS band-energy integral.
+   !> @details This is deliberately not canonical: it inherits the selected
+   !>          output window, grid, and broadening and exists only to quantify
+   !>          their integration error against the occupied-eigenvalue sum.
+   module function calculate_band_energy_from_total_dos(this) result(eband)
+      class(reciprocal), intent(in) :: this
+      real(rp) :: eband
+
+      integer :: ie
+      real(rp) :: e1, e2, f1, f2, kT, arg1, arg2, delta_e
+      real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
+
+      eband = 0.0_rp
+      if (.not. allocated(this%total_dos) .or. .not. allocated(this%dos_energy_grid)) return
+      kT = max(this%temperature*kB_Ry_per_K, 1.0e-10_rp)
+
+      do ie = 1, size(this%dos_energy_grid) - 1
+         e1 = this%dos_energy_grid(ie)
+         e2 = this%dos_energy_grid(ie + 1)
+         arg1 = (e1 - this%fermi_level)/kT
+         arg2 = (e2 - this%fermi_level)/kT
+         if (arg1 >= 50.0_rp) then
+            f1 = 0.0_rp
+         else if (arg1 <= -50.0_rp) then
+            f1 = 1.0_rp
+         else
+            f1 = 1.0_rp/(exp(arg1) + 1.0_rp)
+         end if
+         if (arg2 >= 50.0_rp) then
+            f2 = 0.0_rp
+         else if (arg2 <= -50.0_rp) then
+            f2 = 1.0_rp
+         else
+            f2 = 1.0_rp/(exp(arg2) + 1.0_rp)
+         end if
+         delta_e = e2 - e1
+         eband = eband + 0.5_rp*delta_e*(e1*this%total_dos(ie)*f1 + &
+                                         e2*this%total_dos(ie + 1)*f2)
+      end do
+   end function calculate_band_energy_from_total_dos
 
    !> @brief Evaluate one normalized Gaussian smearing weight.
    !> @param[in] this Reciprocal object containing gaussian_sigma/adaptive settings.

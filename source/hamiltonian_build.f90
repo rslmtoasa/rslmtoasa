@@ -1,4 +1,7 @@
 submodule(hamiltonian_mod) hamiltonian_build
+   use magnetic_representation_mod, only: periodic_nc, gbt_single_q, explicit_texture, &
+      normalize_magnetic_representation, select_endpoint_moments, texture_bulk_reuse_is_valid
+   use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear
 
 contains
 
@@ -55,6 +58,7 @@ contains
       if (allocated(this%h_sparse)) call g_safe_alloc%deallocate('hamiltonian.h_sparse', this%h_sparse)
       if (allocated(this%velocity_scale)) call g_safe_alloc%deallocate('hamiltonian.velocity_scale', this%velocity_scale)
       if (allocated(this%hxc)) call g_safe_alloc%deallocate('hamiltonian.hxc', this%hxc)
+      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
 #else
       if (allocated(this%lsham)) deallocate (this%lsham)
       if (allocated(this%tmat)) deallocate (this%tmat)
@@ -83,6 +87,7 @@ contains
       if (allocated(this%h_sparse)) deallocate(this%h_sparse)
       if (allocated(this%velocity_scale)) deallocate(this%velocity_scale)
       if (allocated(this%hxc)) deallocate(this%hxc)
+      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
       if (allocated(this%hubbard_u_pot)) deallocate(this%hubbard_u_pot)
       if (allocated(this%hubbard_u_impurity)) deallocate(this%hubbard_u_impurity)
       if (allocated(this%hubbard_j_impurity)) deallocate(this%hubbard_j_impurity)
@@ -127,6 +132,7 @@ contains
       q_ss(:) = this%q_ss(:)
       theta_ss = this%theta_ss
       gbt_kspace = this%gbt_kspace
+      magnetic_representation = this%magnetic_representation
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
@@ -195,6 +201,25 @@ contains
       this%q_ss(:) = q_ss(:)
       this%theta_ss = theta_ss * pi / 180.0_rp
       this%gbt_kspace = gbt_kspace
+      this%magnetic_representation = normalize_magnetic_representation(magnetic_representation)
+      if (len_trim(this%magnetic_representation) == 0) this%magnetic_representation = periodic_nc
+      select case (trim(this%magnetic_representation))
+      case (periodic_nc, gbt_single_q, explicit_texture)
+         continue
+      case default
+         call g_logger%fatal("Invalid magnetic_representation. Use 'periodic_nc', 'gbt_single_q', or 'explicit_texture'.", &
+                             __FILE__, __LINE__)
+      end select
+      if (this%gbt_kspace) then
+         if (trim(this%magnetic_representation) == periodic_nc) then
+            this%magnetic_representation = gbt_single_q
+            if (rank == 0) call g_logger%warning('gbt_kspace is deprecated; selecting magnetic_representation=gbt_single_q.', &
+                                                 __FILE__, __LINE__)
+         end if
+         ! Compatibility is resolved once at input. Solver code must not use it
+         ! as a Hamiltonian-physics selector.
+         this%gbt_kspace = .false.
+      end if
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
@@ -547,6 +572,8 @@ contains
       this%q_ss(:) = [0.0_rp, 0.0_rp, 0.0_rp]
       this%theta_ss = 0.0_rp
       this%gbt_kspace = .false.
+      this%magnetic_representation = periodic_nc
+      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
       if (allocated(this%theta_ss_sublattice)) deallocate (this%theta_ss_sublattice)
       if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
       this%js_alpha = 'z'
@@ -1182,6 +1209,14 @@ contains
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
 
+      if (trim(this%magnetic_representation) == explicit_texture) then
+         call this%prepare_explicit_texture_moments()
+         call validate_explicit_texture_bulk_reuse(this)
+      else if (trim(this%magnetic_representation) == gbt_single_q) then
+         call this%build_gbt_bulkham()
+         return
+      end if
+
       if (this%hubbard_u_general_check) then
          if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
@@ -1272,6 +1307,193 @@ contains
       close (128)
    end subroutine build_bulkham
 
+   !> Build the first-order GBT operator from raw directed strux-lib S blocks.
+   !> The persistent orbital-sized lattice%sbar is read only. Each bond is lifted
+   !> into a temporary spinor block, linked, and contracted with fixed collinear
+   !> rotating-frame potential factors before ee is stored.
+   module subroutine build_gbt_bulkham(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: ntype, ia, ino, nr, m, jj, it, jt, i, j, nn_max_loc, dump_unit
+      real(rp) :: sign_i, sign_j, theta_i, theta_j, phi_i, phi_j
+      real(rp) :: vet(3)
+      real(rp), allocatable :: cralat(:, :), ham_vec(:, :)
+      complex(rp) :: link(2, 2)
+      complex(rp) :: eye2(2, 2)
+      complex(rp) :: raw_orb(norb, norb), linked_spin(nb, nb), pair_spin(nb, nb)
+      real(rp) :: max_q0_common_link_error
+      real(rp), parameter :: term_tolerance = 1.0e-14_rp
+
+      if (trim(lower(this%lattice%strux_backend)) /= 'strux_lib') then
+         call g_logger%fatal("gbt_single_q requires strux_backend='strux_lib'; the legacy backend is unsupported.", &
+                             __FILE__, __LINE__)
+      end if
+      if (this%hoh) then
+         call g_logger%fatal('gbt_single_q with HOH/eeo is guarded until primitive-factor covariance is proved.', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%ccor_2c) then
+         call g_logger%fatal('gbt_single_q with CCOR is guarded until the S/Sdot composite audit is complete.', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%hubbard_v_check) then
+         call g_logger%fatal('gbt_single_q with intersite Hubbard-V is unsupported.', __FILE__, __LINE__)
+      end if
+      if (this%local_axis) then
+         call g_logger%fatal('gbt_single_q with local_axis is not yet audited; the rotating-frame operator must remain explicit.', &
+                             __FILE__, __LINE__)
+      end if
+      if (allocated(this%lsham)) then
+         if (maxval(abs(this%lsham)) > term_tolerance) then
+            call g_logger%fatal('gbt_single_q with SOC is unsupported.', __FILE__, __LINE__)
+         end if
+      end if
+
+      if (this%hubbard_u_general_check) call this%calculate_hubbard_u_potential_general()
+      this%ee = cmplx(0.0_rp, 0.0_rp, rp)
+      this%hxc = cmplx(0.0_rp, 0.0_rp, rp)
+      eye2 = cmplx(0.0_rp, 0.0_rp, rp)
+      eye2(1, 1) = cmplx(1.0_rp, 0.0_rp, rp)
+      eye2(2, 2) = eye2(1, 1)
+      max_q0_common_link_error = 0.0_rp
+
+      dump_unit = -1
+      if (rank == 0) then
+         open(newunit=dump_unit, file='gbt_bonds.out', status='replace', action='write')
+         write(dump_unit, '(a)') '# directed raw/gauged S bonds; q in Cartesian 2*pi/alat, d in Cartesian length'
+      end if
+
+      allocate(cralat(3, this%lattice%kk))
+      cralat = this%lattice%cr(:, 1:this%lattice%kk)*this%lattice%alat
+
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         ino = this%lattice%num(ia)
+         nr = this%lattice%nn(ia, 1)
+         allocate(ham_vec(3, nr))
+         nn_max_loc = nr
+         call this%lattice%clusba(this%lattice%r2, cralat, ia, this%lattice%kk, this%lattice%kk, nn_max_loc, ham_vec)
+         it = this%lattice%iz(ia)
+
+         do m = 1, nr
+            if (m == 1) then
+               jj = ia
+               vet = 0.0_rp
+            else
+               jj = this%lattice%nn(ia, m)
+               if (jj <= 0 .or. jj > this%lattice%kk) cycle
+               vet = ham_vec(:, m)
+            end if
+            jt = this%lattice%iz(jj)
+
+            if (size(this%lattice%symbolic_atoms(it)%potential%wx0) < norb .or. &
+                size(this%lattice%symbolic_atoms(it)%potential%wx1) < norb .or. &
+                size(this%lattice%symbolic_atoms(jt)%potential%wx0) < norb .or. &
+                size(this%lattice%symbolic_atoms(jt)%potential%wx1) < norb) then
+               call g_logger%fatal('GBT collinear potential factors are smaller than the active orbital basis.', &
+                                   __FILE__, __LINE__)
+            end if
+
+            call gbt_endpoint_angles(this, it, theta_i, phi_i, sign_i)
+            call gbt_endpoint_angles(this, jt, theta_j, phi_j, sign_j)
+            call gbt_endpoint_link(this%q_ss, vet, this%lattice%alat, theta_i, phi_i, theta_j, phi_j, link)
+            if (maxval(abs(this%q_ss)) <= 1.0e-14_rp .and. &
+                abs(theta_i - theta_j) <= 1.0e-14_rp .and. abs(phi_i - phi_j) <= 1.0e-14_rp) then
+               max_q0_common_link_error = max(max_q0_common_link_error, maxval(abs(link - eye2)))
+            end if
+
+            do i = 1, norb
+               do j = 1, norb
+                  raw_orb(i, j) = this%lattice%sbar(j, i, m, ino)
+               end do
+            end do
+            call gbt_lift_orbital_block(raw_orb, link, linked_spin)
+            if (rank == 0) then
+               write(dump_unit, '(a,5i8,a,3es24.15,a,3es24.15)') 'bond ', ntype, m, ia, jj, ino, &
+                  ' q=', this%q_ss, ' d=', vet
+               write(dump_unit, '(a,8es24.15)') 'link ', link(1, 1), link(1, 2), link(2, 1), link(2, 2)
+               do i = 1, norb
+                  do j = 1, norb
+                     write(dump_unit, '(a,2i6,10es24.15)') 'S ', i, j, raw_orb(i, j), &
+                        linked_spin(i, j), linked_spin(i, j + spin_off), &
+                        linked_spin(i + spin_off, j), linked_spin(i + spin_off, j + spin_off)
+                  end do
+               end do
+            end if
+            call gbt_contract_collinear(linked_spin, &
+               this%lattice%symbolic_atoms(it)%potential%wx0(1:norb), &
+               this%lattice%symbolic_atoms(it)%potential%wx1(1:norb), &
+               this%lattice%symbolic_atoms(jt)%potential%wx0(1:norb), &
+               this%lattice%symbolic_atoms(jt)%potential%wx1(1:norb), sign_i, sign_j, pair_spin)
+
+            if (norm2(vet) <= 0.01_rp) then
+               do i = 1, norb
+                  pair_spin(i, i) = pair_spin(i, i) + &
+                     this%lattice%symbolic_atoms(it)%potential%cx0(i) + &
+                     sign_i*this%lattice%symbolic_atoms(it)%potential%cx1(i)
+                  pair_spin(i + spin_off, i + spin_off) = pair_spin(i + spin_off, i + spin_off) + &
+                     this%lattice%symbolic_atoms(it)%potential%cx0(i) - &
+                     sign_i*this%lattice%symbolic_atoms(it)%potential%cx1(i)
+               end do
+            end if
+
+            call hcpx(pair_spin(1:norb, 1:norb), 'cart2sph')
+            call hcpx(pair_spin(1:norb, norb + 1:nb), 'cart2sph')
+            call hcpx(pair_spin(norb + 1:nb, 1:norb), 'cart2sph')
+            call hcpx(pair_spin(norb + 1:nb, norb + 1:nb), 'cart2sph')
+            this%ee(:, :, m, ntype) = pair_spin
+         end do
+         deallocate(ham_vec)
+
+         if (this%hubbard_u_general_check) then
+            do i = 1, nb
+               do j = 1, nb
+                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + &
+                     cmplx(this%hubbard_u_pot(i, j, ntype), 0.0_rp, kind=rp)
+               end do
+            end do
+         end if
+      end do
+      deallocate(cralat)
+      if (rank == 0) close(dump_unit)
+      if (rank == 0 .and. maxval(abs(this%q_ss)) <= 1.0e-14_rp) then
+         call g_logger%info('GBT q=0 common-frame max|G-I|='// &
+                            trim(real2str(max_q0_common_link_error, '(ES12.4)')), __FILE__, __LINE__)
+      end if
+
+      if (trim(this%control%recur) == 'chebyshev') call this%compute_hamiltonian_bounds(verbose=.false.)
+   end subroutine build_gbt_bulkham
+
+   subroutine validate_explicit_texture_bulk_reuse(this)
+      class(hamiltonian), intent(in) :: this
+
+      if (.not. texture_bulk_reuse_is_valid(this%lattice%iz(1:this%lattice%kk), &
+                                             this%lattice%atlist(1:this%lattice%ntype), &
+                                             this%texture_moments, 1.0e-12_rp)) then
+         call g_logger%fatal('explicit_texture cannot reuse a per-type bulk block for different moments; use per-site local storage or a true magnetic supercell.', &
+                             __FILE__, __LINE__)
+      end if
+   end subroutine validate_explicit_texture_bulk_reuse
+
+   subroutine gbt_endpoint_angles(this, itype, theta, phi, axis_sign)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: itype
+      real(rp), intent(out) :: theta, phi, axis_sign
+
+      axis_sign = 1.0_rp
+      if (this%lattice%symbolic_atoms(itype)%potential%mom(3) < 0.0_rp) axis_sign = -1.0_rp
+      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice) .and. &
+          itype <= size(this%theta_ss_sublattice) .and. itype <= size(this%phi_ss_sublattice)) then
+         theta = this%theta_ss_sublattice(itype)
+         phi = this%phi_ss_sublattice(itype)
+      else if (axis_sign > 0.0_rp) then
+         theta = this%theta_ss
+         phi = 0.0_rp
+      else
+         theta = acos(-1.0_rp) - this%theta_ss
+         phi = acos(-1.0_rp)
+      end if
+   end subroutine gbt_endpoint_angles
+
    !> @brief Build local-cluster Hamiltonian hopping blocks.
    !> @details Assembles hall/hallo blocks for impurity or surface local regions
    !>          where atom-specific local geometry replaces bulk type blocks.
@@ -1289,6 +1511,12 @@ contains
          if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
+
+      if (trim(this%magnetic_representation) == gbt_single_q) then
+         call g_logger%fatal('gbt_single_q representation boundary is active, but the primitive S-level assembler is not installed.', &
+                             __FILE__, __LINE__)
+      end if
+      if (trim(this%magnetic_representation) == explicit_texture) call this%prepare_explicit_texture_moments()
 
       call g_timer%start('build local hamiltonian')
     !!$omp parallel do private(nlim, nr, ino, m, i, j, ji, ja, this)
@@ -1375,54 +1603,30 @@ contains
       ! Local Variables
       integer :: ilm, jlm, m
       real(rp), dimension(3) :: mom_ia, mom_ja
-      real(rp), dimension(3) :: r_ia, r_ja
       complex(rp), dimension(3) :: cross
       complex(rp), dimension(norb, norb) :: hhhc
       complex(rp), dimension(3) :: momc_i, momc_j
       complex(rp) :: dot
       real(rp) :: vv
+      logical :: valid
 
       this%hhmag(:, :, :) = 0.0d0
 
       vv = norm2(vet)
 
-      ! General non-collinear pair block: H_ij = W(m_i) . hhh . W(m_j) with
-      ! W(m) = wx0 + wx1 (sigma.m). The two site moment directions are set
-      ! explicitly here; the block itself is the plain non-collinear construction
-      ! (no spinor gauge / GBT twist). Three ways to set the moments:
-      !   (1) default: the atoms' self-consistent moments;
-      !   (2) per-sublattice cone angles theta/phi_ss_sublattice;
-      !   (3) a spin spiral from q_ss/theta_ss: the physical lab-frame moments
-      !       m(r) = R_z(2 pi q.r) m0 at the atoms' absolute (cluster) positions.
-      ! Case (3) is the correct real-space spiral (the recursion cluster carries the
-      ! explicit spiral; GBT is unnecessary in real space). For k-space GBT the
-      ! spiral must instead be applied as a translationally-invariant twist in the
-      ! reciprocal module -- absolute positions are not valid there. q_ss = 0 stays
-      ! bit-identical to the collinear / noncollinear-FM code.
-      mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-      mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
-         if (it <= size(this%theta_ss_sublattice) .and. jt <= size(this%theta_ss_sublattice)) then
-            mom_ia(1) = sin(this%theta_ss_sublattice(it))*cos(this%phi_ss_sublattice(it))
-            mom_ia(2) = sin(this%theta_ss_sublattice(it))*sin(this%phi_ss_sublattice(it))
-            mom_ia(3) = cos(this%theta_ss_sublattice(it))
-            mom_ja(1) = sin(this%theta_ss_sublattice(jt))*cos(this%phi_ss_sublattice(jt))
-            mom_ja(2) = sin(this%theta_ss_sublattice(jt))*sin(this%phi_ss_sublattice(jt))
-            mom_ja(3) = cos(this%theta_ss_sublattice(jt))
-         end if
-      else if ((.not. this%gbt_kspace) .and. &
-               (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp)) then
-         ! Real-space spin spiral: rotate the site moments by the spiral phase at the
-         ! atoms' absolute positions. Skipped when gbt_kspace is set -- there the
-         ! spiral is a translationally-invariant twist applied in the reciprocal module.
-         r_ia = this%charge%lattice%cr(:, ia)
-         r_ja = this%charge%lattice%cr(:, ja)
-         mom_ia(1) = cos(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
-         mom_ia(2) = sin(2.0d0*pi*dot_product(r_ia, this%q_ss))*sin(this%theta_ss)
-         mom_ia(3) = cos(this%theta_ss)
-         mom_ja(1) = cos(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
-         mom_ja(2) = sin(2.0d0*pi*dot_product(r_ja, this%q_ss))*sin(this%theta_ss)
-         mom_ja(3) = cos(this%theta_ss)
+      ! Ordinary q-agnostic NC/texture pair construction. GBT is dispatched
+      ! above this pipeline and may never enter ham0m_nc.
+      if (trim(this%magnetic_representation) == gbt_single_q) then
+         call g_logger%fatal('gbt_single_q must not enter ham0m_nc.', __FILE__, __LINE__)
+      end if
+      if (trim(this%magnetic_representation) == explicit_texture) then
+         call select_endpoint_moments(this%magnetic_representation, ia, ja, &
+            this%charge%lattice%symbolic_atoms(it)%potential%mom(:), &
+            this%charge%lattice%symbolic_atoms(jt)%potential%mom(:), this%texture_moments, mom_ia, mom_ja, valid)
+         if (.not. valid) call g_logger%fatal('explicit_texture endpoint moment lookup failed.', __FILE__, __LINE__)
+      else
+         mom_ia = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
+         mom_ja = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
       end if
 
       ! Real to complex. The two pair moments are passed as explicit local vectors
@@ -1610,6 +1814,58 @@ contains
       !    write(123, ´(9f10.6)´)(hhh(ilm, jlm), jlm=1, 9)
       !end do
    end subroutine hmfind
+
+   module subroutine set_texture_moments(this, moments)
+      class(hamiltonian), intent(inout) :: this
+      real(rp), intent(in) :: moments(:, :)
+
+      if (size(moments, 1) /= 3) then
+         call g_logger%fatal('set_texture_moments expects shape (3,nsite).', __FILE__, __LINE__)
+      end if
+      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
+      allocate(this%texture_moments(3, size(moments, 2)))
+      this%texture_moments = moments
+   end subroutine set_texture_moments
+
+   module subroutine clear_texture_moments(this)
+      class(hamiltonian), intent(inout) :: this
+      if (allocated(this%texture_moments)) deallocate(this%texture_moments)
+   end subroutine clear_texture_moments
+
+   module subroutine prepare_explicit_texture_moments(this)
+      class(hamiltonian), intent(inout) :: this
+      integer :: ia, it
+      real(rp) :: theta, phi, phase
+
+      if (allocated(this%texture_moments)) then
+         if (size(this%texture_moments, 1) == 3 .and. size(this%texture_moments, 2) >= this%lattice%kk) return
+         deallocate(this%texture_moments)
+      end if
+      allocate(this%texture_moments(3, this%lattice%kk))
+
+      do ia = 1, this%lattice%kk
+         it = this%lattice%iz(ia)
+         this%texture_moments(:, ia) = this%lattice%symbolic_atoms(it)%potential%mom(:)
+      end do
+
+      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
+         do ia = 1, this%lattice%kk
+            it = this%lattice%iz(ia)
+            if (it < 1 .or. it > size(this%theta_ss_sublattice) .or. it > size(this%phi_ss_sublattice)) cycle
+            theta = this%theta_ss_sublattice(it)
+            phi = this%phi_ss_sublattice(it)
+            this%texture_moments(:, ia) = [sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta)]
+         end do
+      else if (norm2(this%q_ss) > 1.0e-12_rp .or. abs(sin(this%theta_ss)) > 1.0e-12_rp) then
+         do ia = 1, this%lattice%kk
+            phase = 2.0_rp*pi*(this%q_ss(1)*this%lattice%cr(1, ia) + &
+                               this%q_ss(2)*this%lattice%cr(2, ia) + &
+                               this%q_ss(3)*this%lattice%cr(3, ia))
+            this%texture_moments(:, ia) = [sin(this%theta_ss)*cos(phase), &
+                                           sin(this%theta_ss)*sin(phase), cos(this%theta_ss)]
+         end do
+      end if
+   end subroutine prepare_explicit_texture_moments
 
    !> @brief Convert a global orbital index to site and local-orbital indices.
    !> @details Used by PAOFLOW import/export helpers to translate flat orbital

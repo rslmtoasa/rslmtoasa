@@ -427,6 +427,19 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitVacuumLead ${TestDIR}/unit/test_vacuum_lead.f90)
   add_fortran_unit_test(UnitVacuumRegionWiring ${TestDIR}/unit/test_vacuum_region_wiring.f90)
   add_fortran_unit_test(UnitAlignmentSolver ${TestDIR}/unit/test_alignment_solver.f90)
+  add_fortran_unit_test(UnitKspaceOccupations ${TestDIR}/unit/test_kspace_occupations.f90)
+  add_fortran_unit_test(UnitMagneticRepresentation ${TestDIR}/unit/test_magnetic_representation.f90)
+  set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
+  add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
+  set_tests_properties(UnitGbtStructure PROPERTIES LABELS "unit;gbt;wp4")
+  set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2")
+  if(ENABLE_MPI AND MPI_Fortran_FOUND)
+    add_test(NAME UnitKspaceOccupations_mpi
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+              $<TARGET_FILE:UnitKspaceOccupations> ${MPIEXEC_POSTFLAGS})
+    set_tests_properties(UnitKspaceOccupations_mpi PROPERTIES
+      LABELS "unit;gbt;wp2;mpi" PROCESSORS 2)
+  endif()
   add_test(NAME UnitGbtOracles
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
   set_tests_properties(UnitGbtOracles PROPERTIES LABELS "unit;gbt")

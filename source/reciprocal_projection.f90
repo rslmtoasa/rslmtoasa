@@ -705,21 +705,11 @@ module subroutine calculate_band_moments(this)
       end if
    end if
 
-   ! Auto-find Fermi level if requested
-   if (this%auto_find_fermi .and. this%total_electrons > 0.0_rp) then
-      this%fermi_level = this%find_fermi_level_from_dos(this%total_electrons)
-      call g_logger%info('calculate_band_moments: Auto-found Fermi level = ' // &
-                        trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
-   else
-      if (.not. this%auto_find_fermi) then
-         call g_logger%info('calculate_band_moments: Using pre-set Fermi level = ' // &
-                           trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry (auto_find disabled)', &
-                           __FILE__, __LINE__)
-      else
-         call g_logger%warning('calculate_band_moments: auto_find_fermi=.true. but total_electrons<=0; using current Fermi level = ' // &
-                              trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
-      end if
-   end if
+   ! EF is already canonical here: calculate_density_of_states solves it from
+   ! eigenvalues/k weights before any DOS projection.  This routine must never
+   ! replace it with a grid/window-dependent DOS root.
+   call g_logger%info('calculate_band_moments: Using canonical/fixed Fermi level = ' // &
+                      trim(real2str(this%fermi_level, '(F 8.5)')) // ' Ry', __FILE__, __LINE__)
 
    if (this%use_symmetry_reduction .and. &
        (trim(this%dos_method) == 'tetrahedron' .or. trim(this%dos_method) == 'blochl') .and. &
@@ -739,7 +729,7 @@ module subroutine calculate_band_moments(this)
    energy_grid_ry = this%dos_energy_grid  ! Already in Ry
 
    ! Boltzmann constant: kB = 6.3336814e-6 Ry/K
-   kT = this%temperature * 6.3336814e-6_rp  ! Ry/K
+   kT = max(this%temperature * 6.3336814e-6_rp, 1.0e-10_rp)  ! Ry/K; canonical FD floor
    
    call g_logger%info('calculate_band_moments: kT = ' // trim(real2str(kT, '(ES12.5)')) // &
                      ' Ry at T = ' // trim(real2str(this%temperature, '(F8.2)')) // ' K', &

@@ -15,15 +15,20 @@ Recommended model classes:
 | WP6 term audits | frontier coding model (`gpt-5.6-sol`) | xhigh | up to three parallel agents after WP5 |
 | WP9 validation | balanced model for runners; frontier model for diagnosis | high/xhigh | parallel cases, centralized interpretation |
 
-Dependency graph:
+Dependency graph (revised after the WP2 representation-boundary finding):
 
 ```text
-WP0 -> WP1 -> WP2 -> WP3 -> WP4 -> WP5
-                                  |
-                                  +-> WP6a HOH/overlap --+
-                                  +-> WP6b CCOR ---------+-> WP7 -> WP8 -> WP9 -> WP10
-                                  +-> WP6c Hubbard/ops --+
+WP0 -> WP1 -> WP2/G2E -> WP3 -> WP4/G2O -> final G2 -> WP5
+                                                          |
+                                                          +-> WP6a HOH/overlap --+
+                                                          +-> WP6b CCOR ---------+-> WP7 -> WP8 -> WP9 -> WP10
+                                                          +-> WP6c Hubbard/ops --+
 ```
+
+`G2E` is the already implemented canonical-energy evidence. `G2O` is the
+production operator/frame slice that could not be meaningfully tested through
+the legacy double-representation path. Only WP3 and WP4 are allowed before
+final G2 closes; this is a gate repair, not permission to begin later work.
 
 Rules:
 
@@ -107,6 +112,11 @@ Route frozen_magnon_probe_energy through this canonical EBAND. Keep total-DOS in
 
 Test electron conservation, DOS-grid/window independence, q=0 global-rotation invariance, and agreement with converged total-DOS integration.
 
+For the rotating-frame q=0 test, equality with the collinear operator is the
+expected result. Pair it with a finite-q or relative-sublattice operator check
+that fails if the probe was simply disabled. Report G2E and G2O separately if
+the operator migration is not yet complete.
+
 Completion checklist:
 - [ ] Canonical electron count is implemented.
 - [ ] Canonical eigenvalue EBAND is implemented.
@@ -117,57 +127,160 @@ Completion checklist:
 - [ ] G2 PASS/FAIL is stated.
 ```
 
+## Next-session combined task — Implement GBT on primitive S/Sdot
+
+**Suggested agent:** `gpt-5.6-sol`, xhigh reasoning; sequential work only.
+
+This is the only permitted gate-repair task while final G2 remains open. It
+executes WP3 and WP4 in order and stops at their gates; it does not authorize
+WP5/6 cleanup unless explicitly requested after acceptance.
+
+```text
+Implement the GBT on S-level according to
+GBT_RS_LMTO_completion_blueprint.md, completing WP3 and then WP4.
+
+Fixed architecture:
+- periodic_nc and explicit_texture retain the general q-agnostic moment logic
+  in ham0m_nc;
+- gbt_single_q uses a fixed collinear rotating-frame potential (normally +z
+  for a ferromagnet);
+- q, cone, and sublattice reference orientations enter only through the
+  endpoint link on primitive directed S and Sdot blocks;
+- do not rotate potential parameters or completed ee/Hamiltonians;
+- recursion and reciprocal solvers must eventually consume the same operator.
+
+First implement the explicit representation split. Preserve the user's
+MX/MY/MZ and local_axis behavior, restore/retain safety checks, and ensure GBT
+does not enter ham0m_nc's ordinary NC/texture rotation branches.
+
+Require strux_backend='strux_lib' for gbt_single_q and fail early for the
+legacy structure backend. Do not double or replace persistent lattice%sbar or
+lattice%sdot. Keep the existing hmfind -> chbar_nc -> ham0m_nc path unchanged
+for periodic_nc/explicit_texture. Add a parallel GBT-collinear path that fetches
+raw complex orbital S/Sdot, builds a temporary nb x nb linked spinor structure
+block, and contracts it with diagonal collinear rotating-frame potential
+factors. strux_want_sdot is required only for a supported Sdot consumer.
+
+Then implement one pure endpoint-frame/link helper using the complete physical
+bond and the blueprint convention:
+G_ab=(U_a0)^dagger Rz(q.d) U_b0.
+Apply it to raw S and, where enabled and audited, Sdot before LMTO contraction.
+Keep raw lattice S/Sdot unchanged. Build first-order ee from the gauged
+primitive block and collinear potential parameters. Do not post-rotate ee,
+eeo, eecc, or H(k).
+
+Do not assume higher-order paths are already clean: reciprocal code still
+reconstructs eeo/eecc, and CCOR still contains sublattice-angle logic. Keep
+GBT+HOH/CCOR explicitly guarded unless their primitive-factor covariance is
+proved in this task. Do not delete reciprocal GBT until the S-level oracle and
+production first-order path pass; WP5 owns final deletion.
+
+Tests must include independent dense spin matrices, raw/gauged bond dumps,
+reverse-bond Hermiticity, the Stoner k+/-q/2 identity, q<->-q, non-cubic phase
+units, q=0 common-cone identity, and a finite-q or relative-sublattice case that
+cannot pass as a no-op. Rerun canonical electron/EBAND, DOS-independence, MPI,
+MX/MY/MZ periodic-NC, local_axis, and fixed-potential frozen-magnon checks.
+
+Stop and report after G3/G4 and G2O evidence. Do not start WP5 or reinterpret
+physical bcc-Fe dispersion if any operator gate fails.
+
+Completion checklist:
+- [ ] Representation mode is explicit and independent of solver selection.
+- [ ] periodic_nc/explicit_texture retain general ham0m_nc behavior.
+- [ ] gbt_single_q uses collinear rotating-frame potential parameters.
+- [ ] One helper owns endpoint frames, q.d, and the S/Sdot link.
+- [ ] Raw S/Sdot are preserved; gauging precedes LMTO contractions.
+- [ ] gbt_single_q rejects the legacy structure backend early.
+- [ ] Persistent SBAR/SDOT layouts and the existing NC call chain are unchanged.
+- [ ] A parallel complex nb x nb GBT-collinear assembler is tested.
+- [ ] No potential or completed-Hamiltonian GBT rotation remains on the tested path.
+- [ ] Unsupported HOH/CCOR/overlap combinations fail early.
+- [ ] q=0 identity and non-no-op finite-q/relative-sublattice tests pass.
+- [ ] Ordinary NC, local_axis, canonical EBAND, and MPI regressions pass.
+- [ ] G3, G4, G2O, and final G2 recommendations are stated separately.
+```
+
 ## WP3 — Separate periodic NC, GBT, and explicit textures
 
 **Suggested agent:** `gpt-5.6-sol` or `gpt-5.6-terra`, high reasoning.
 
 ```text
-Implement WP3 after G2 passes.
+Implement WP3 after G2E passes as the first half of the documented G2 operator
+repair. Do not start WP4 until G3 passes.
 
 Introduce explicit magnetic representation modes:
 periodic_nc, gbt_single_q, explicit_texture.
 
-Extract ham0m_nc's ordinary wx0/wx1 dot/cross Pauli algebra into a q-agnostic pair kernel with explicit endpoint moments. Add a site-indexed moment provider for explicit_texture. Route build_bulkham/build_locham so arbitrary textures use per-site blocks; reject per-type reuse unless represented as a true magnetic supercell.
+Preserve the existing hmfind -> chbar_nc -> ham0m_nc path for ordinary NC and
+textures. Extracting its wx0/wx1 algebra is optional and may not change its
+interface or behavior. Add a site-indexed moment provider for explicit_texture.
+Route build_bulkham/build_locham so arbitrary textures use per-site blocks;
+reject per-type reuse unless represented as a true magnetic supercell. In
+gbt_single_q, select a separate collinear rotating-frame path and do not
+consume q/cone angles in ham0m_nc.
 
-Do not add the new GBT phase yet. Preserve local_axis rotation and all ordinary NC behavior.
+Add the per-sublattice reference-frame API but do not add the new GBT phase yet.
+Preserve local_axis rotation, bounds checks, and all ordinary NC behavior.
 
 Test two same-species sites with different moments and a small skyrmion-like texture.
 
 Completion checklist:
-- [ ] Three representation modes are explicit.
-- [ ] q-agnostic NC pair kernel is extracted.
-- [ ] Explicit textures obtain moments by site identity.
-- [ ] Invalid per-type texture reuse is rejected.
-- [ ] Existing periodic-NC/local-axis regressions pass.
-- [ ] Same-species and skyrmion-like tests pass.
-- [ ] API/compatibility notes and G3 PASS/FAIL are reported.
+- [x] Three representation modes are explicit.
+- [x] Existing NC pair path remains q-agnostic; any extraction preserves its interface/behavior.
+- [x] Existing hmfind/chbar_nc/ham0m_nc interfaces and NC behavior are preserved.
+- [x] Explicit textures obtain moments by site identity.
+- [x] GBT reference potential is explicitly collinear in the rotating frame.
+- [x] q/cone inputs do not enter ham0m_nc in GBT mode.
+- [x] Invalid per-type texture reuse is rejected.
+- [x] Existing periodic-NC/local-axis regressions pass.
+- [x] Same-species and skyrmion-like tests pass.
+- [x] API/compatibility notes and G3 PASS/FAIL are reported.
 ```
 
-## WP4 — Single GBT bond kernel
+## WP4 — Primitive S/Sdot GBT link
 
 **Suggested agent:** `gpt-5.6-sol`, xhigh reasoning; integrator physics review required.
 
 ```text
-Implement WP4 after G3 passes, following the physical-displacement convention in the blueprint.
+Implement WP4 after G3 passes, following the physical-displacement and
+rotating-frame conventions in the blueprint.
 
 Add one gbt_bond_phase helper. In gbt_single_q only:
-1. resolve rotating-frame reference moments m_i0,m_j0;
+1. resolve endpoint reference frames U_a0,U_b0;
 2. compute alpha from the complete directed Cartesian bond;
-3. assemble H_pair[m_i0,Rz(alpha)m_j0];
-4. right-multiply by D(alpha) using half-angle Pauli formulas and temporaries.
+3. construct G_ab=(U_a0)^dagger Rz(alpha) U_b0;
+4. apply G_ab to primitive S and audited Sdot blocks before LMTO contraction;
+5. assemble with unchanged collinear rotating-frame potential parameters.
 
-Use the same reference-axis resolver for onsite pair terms, enim, and obarm. Do not phase explicit_texture. Bypass new arithmetic when GBT/cone inputs are inactive. No other code may calculate q·bond.
+Support only strux_backend='strux_lib'; reject the legacy backend before
+Hamiltonian construction. Keep persistent sbar/sdot orbital-sized and raw.
+Use a per-bond temporary nb x nb spinor structure block and a new collinear
+LMTO assembler parallel to ham0m_nc. Do not widen the existing NC interfaces.
+Require strux_want_sdot only when an audited enabled term consumes Sdot.
 
-Run dense, shifted-k, reverse-bond, q↔-q, theta=0, q=0 rotation, and non-cubic tests.
+Keep raw S/Sdot unchanged. Onsite potential terms remain collinear and carry no
+translational phase. Do not phase periodic_nc or explicit_texture. Do not
+rotate potential parameters, ee, or H(k) afterward. Bypass new arithmetic when
+GBT is inactive. No other code may calculate q·bond.
+
+Run dense structure-link, shifted-k, reverse-bond, q↔-q, theta=0, q=0
+rotating-frame reduction, non-cubic, and non-no-op finite-q/relative-sublattice
+tests. Rerun G2O after G4.
 
 Completion checklist:
-- [ ] One phase helper owns every q·bond calculation.
-- [ ] Complete physical-displacement convention is used.
-- [ ] Endpoint moments and half-angle phase are correct.
-- [ ] Onsite axes are consistent.
-- [ ] periodic_nc and explicit_texture remain ungauged.
-- [ ] All required algebraic/invariance tests pass.
-- [ ] G4 PASS/FAIL and maximum errors are reported.
+- [x] One phase helper owns every q·bond calculation.
+- [x] Complete physical-displacement convention is used.
+- [x] Endpoint frames and half-angle structure link are correct.
+- [x] Raw S/Sdot are preserved and gauged before contraction.
+- [x] Legacy structure backend fails early for GBT.
+- [x] SBAR/SDOT storage is not doubled.
+- [x] q=0 GBT-collinear assembly matches ham0m_nc at mom=+z for unequal endpoints.
+- [x] Potential parameters and completed Hamiltonians are not GBT-rotated.
+- [x] Onsite terms remain in the collinear rotating frame.
+- [x] periodic_nc and explicit_texture remain ungauged.
+- [x] All required algebraic/invariance tests pass.
+- [x] A non-no-op test prevents false q=0 acceptance.
+- [x] G4, G2O, final G2 PASS/FAIL and maximum errors are reported.
 ```
 
 ## WP5 — Remove reciprocal GBT and unify solvers
@@ -177,7 +290,11 @@ Completion checklist:
 ```text
 Implement WP5 after G4 passes.
 
-Delete fourier_transform_gbt_array/fourier_transform_gbt implementations, interfaces, and calls. Remove gbt_kspace conditionals from reciprocal Hamiltonian assembly. Both solvers must consume the same already-built real-space bonds; reciprocal space uses only the ordinary Fourier transform.
+Delete fourier_transform_gbt_array/fourier_transform_gbt implementations,
+interfaces, and calls, including reconstruction of eeo/eecc. Remove
+gbt_kspace conditionals from reciprocal Hamiltonian assembly. Both solvers must
+consume the same operator built from linked primitive structure blocks;
+reciprocal space uses only the ordinary Fourier transform.
 
 Invalidate all q/cone/reference-axis/potential-dependent caches before rebuilding Hamiltonians, eigensystems, DOS, or densities. Keep gbt_kspace only as a deprecated, non-physical input if immediate removal would break inputs.
 
@@ -242,7 +359,12 @@ Completion checklist:
 ```text
 Audit the remaining WP6 terms after G5: Hubbard-U/V, constraining fields, velocity, torque, derivative/downfolded terms, and SOC.
 
-For each term classify onsite/bond/composite and state its frame. Onsite terms use the common rotating reference axis with no translational phase. Gauge directed intersite terms at their primitive factor. Derive velocity/torque from the completed gauged operator and verify k finite differences. Keep nonzero-q GBT+SOC fatal.
+For each term classify onsite/bond/composite and state its frame. GBT onsite
+terms remain in the collinear rotating frame with no translational phase;
+ordinary NC/texture onsite terms retain their explicitly selected local frame.
+Gauge directed intersite terms at their primitive factor. Derive
+velocity/torque from the completed gauged operator and verify k finite
+differences. Keep nonzero-q GBT+SOC fatal.
 
 Preserve periodic_nc and explicit_texture behavior. Unsupported terms must fail before SCF.
 

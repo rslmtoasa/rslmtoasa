@@ -187,7 +187,15 @@ module reciprocal_mod
       real(rp) :: fermi_level
       !> Total number of valence electrons for Fermi level finding
       real(rp) :: total_electrons
-      !> Flag to automatically find Fermi level from DOS
+      !> Projection-free electron count from the current eigenvalue occupations.
+      real(rp) :: canonical_electron_count
+      !> Projection-free occupied-eigenvalue band energy for the current spectrum.
+      real(rp) :: canonical_band_energy
+      !> Global raw k-weight sum used by the canonical normalization contract.
+      real(rp) :: canonical_weight_sum
+      !> True only after the current eigensystem has been evaluated canonically.
+      logical :: canonical_energy_valid
+      !> Flag to automatically find Fermi level from the current eigensystem
       logical :: auto_find_fermi
       !> Number of sites for projections
       integer :: n_sites
@@ -280,7 +288,11 @@ module reciprocal_mod
       procedure :: project_dos_orbitals_gaussian
       procedure :: project_dos_orbitals_tetrahedron
       procedure :: calculate_band_moments
-   procedure :: print_total_and_spin_dos
+      procedure :: print_total_and_spin_dos
+      procedure :: evaluate_eigenvalue_occupations
+      procedure :: find_fermi_level_from_eigenvalues
+      procedure :: calculate_canonical_band_energy
+      procedure :: calculate_band_energy_from_total_dos
       procedure :: calculate_band_energy_from_moments
       procedure :: calculate_adaptive_sigma
       procedure :: find_fermi_level_from_dos
@@ -289,6 +301,7 @@ module reciprocal_mod
       procedure :: calculate_gaussian_weight_single
       procedure :: write_dos_to_file
       procedure :: restore_to_default
+      procedure :: invalidate_spectral_cache
       procedure :: build_from_file
       procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
@@ -823,6 +836,13 @@ end subroutine print_hamiltonian_structure
 
    end subroutine calculate_density_of_states
 
+   !> @brief Invalidate eigensystem, DOS, projection, and canonical-energy state.
+   !> @details K-point geometry and weights are retained so a frozen-potential
+   !>          probe can rebuild on the same mesh without reusing stale spectra.
+   module subroutine invalidate_spectral_cache(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine invalidate_spectral_cache
+
    !> @brief Validate full-to-irreducible k-point symmetry maps.
    !> @param[inout] this Reciprocal object containing symmetry maps and weights.
    !> @param[in] context_tag Diagnostic label for the caller/context.
@@ -1285,6 +1305,33 @@ end subroutine calculate_band_moments
 
    end subroutine print_total_and_spin_dos
 
+!> @brief Evaluate normalized Fermi-Dirac electron count and eigenvalue EBAND.
+!> @details Each rank accumulates only its owned eigenvalues.  The three raw
+!>          sums (weight, occupation, energy) are reduced together exactly once
+!>          when the mesh is distributed, then occupation and energy are divided
+!>          by the explicit global weight sum.
+   module subroutine evaluate_eigenvalue_occupations(this, fermi_level, electron_count, band_energy, weight_sum)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: fermi_level
+      real(rp), intent(out) :: electron_count, band_energy
+      real(rp), intent(out), optional :: weight_sum
+   end subroutine evaluate_eigenvalue_occupations
+
+!> @brief Find EF directly from eigenvalues, k weights, and Fermi occupations.
+   module function find_fermi_level_from_eigenvalues(this, total_electrons) result(fermi_level)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: total_electrons
+      real(rp) :: fermi_level
+   end function find_fermi_level_from_eigenvalues
+
+!> @brief Set/validate EF and return the canonical occupied-eigenvalue EBAND.
+   module function calculate_canonical_band_energy(this, find_fermi, electron_count) result(eband)
+      class(reciprocal), intent(inout) :: this
+      logical, intent(in), optional :: find_fermi
+      real(rp), intent(out), optional :: electron_count
+      real(rp) :: eband
+   end function calculate_canonical_band_energy
+
 !> @brief Find the Fermi level matching a target electron count.
 !> @param[in] this Reciprocal object containing DOS/NOS information.
 !> @param[in] total_electrons Target number of electrons.
@@ -1342,6 +1389,12 @@ end function integrate_dos_up_to_energy
       integer :: isite, iorb, ispin
       
    end function calculate_band_energy_from_moments
+
+   !> @brief Diagnostic integral of E*D_total(E)*f(E) on the configured DOS grid.
+   module function calculate_band_energy_from_total_dos(this) result(eband)
+      class(reciprocal), intent(in) :: this
+      real(rp) :: eband
+   end function calculate_band_energy_from_total_dos
 
    !> @brief Evaluate one normalized Gaussian smearing weight.
    !> @param[in] this Reciprocal object containing gaussian_sigma/adaptive settings.

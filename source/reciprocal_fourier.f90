@@ -375,6 +375,11 @@ contains
 
       call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
       call this%force_full_bz_for_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
+      ! The Hamiltonian may have changed between SCF/frozen-magnon probes while
+      ! the reciprocal object and k mesh are intentionally reused.  Invalidate
+      ! every spectrum-derived object before rebuilding so no old eigenpairs,
+      ! DOS moments, or canonical energy can survive the probe boundary.
+      call this%invalidate_spectral_cache()
 
       ! Determine which k-point set to use
       using_kpath = .false.

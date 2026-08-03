@@ -1,4 +1,5 @@
 submodule (reciprocal_mod) reciprocal_bands
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
 contains
@@ -19,7 +20,7 @@ contains
       real(rp), dimension(:), allocatable :: rwork
       character(len=100) :: info_msg
       logical :: use_generalized
-      real(rp) :: max_herm, matrix_scale
+      real(rp) :: max_herm, max_herm_all, matrix_scale
       character(len=256) :: herm_msg
 
       ! Check prerequisites
@@ -49,8 +50,10 @@ contains
       ! zheev/zhegv read only one triangle.  Check the completed matrices
       ! first, otherwise a broken lower triangle (notably the old finite-q GBT
       ! reconstruction) would be silently discarded by LAPACK.
+      max_herm_all = 0.0_rp
       do ik = 1, nk
          max_herm = maxval(abs(this%hk_bulk(:, :, ik) - transpose(conjg(this%hk_bulk(:, :, ik)))) )
+         max_herm_all = max(max_herm_all, max_herm)
          matrix_scale = max(1.0_rp, maxval(abs(this%hk_bulk(:, :, ik))))
          if (max_herm > 1.0e-10_rp*matrix_scale) then
             write(herm_msg, '(A,I0,A,ES12.4,A,ES12.4)') 'H(k) is non-Hermitian before eigensolution at k=', ik, &
@@ -58,6 +61,10 @@ contains
             call g_logger%fatal('diagonalize_hamiltonian: '//trim(herm_msg), __FILE__, __LINE__)
          end if
       end do
+      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+         write(herm_msg, '(A,ES12.4)') 'GBT pre-eigensolver max|H-H^H|=', max_herm_all
+         call root_info(trim(herm_msg), __FILE__, __LINE__)
+      end if
       if (allocated(this%sk_overlap)) then
          do ik = 1, size(this%sk_overlap, 3)
             max_herm = maxval(abs(this%sk_overlap(:, :, ik) - transpose(conjg(this%sk_overlap(:, :, ik)))) )

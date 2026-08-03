@@ -38,6 +38,7 @@ module hamiltonian_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: nb, norb, spin_off, lmax_basis
+   use magnetic_representation_mod, only: magnetic_representation_len
    implicit none
 
    private
@@ -71,12 +72,14 @@ module hamiltonian_mod
       logical :: hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
-      !> Spin-spiral handled in k-space (GBT). When true, ham0m_nc does NOT rotate
-      !> the site moments by the q_ss spiral phase (that real-space, absolute-position
-      !> construction is not translationally invariant and would be wrong for a Bloch
-      !> sum); the spiral is instead applied as a twist in the reciprocal module.
-      !> When false (default), q_ss rotates the moments -> real-space spin spiral.
+      !> Deprecated compatibility input. It is translated once into
+      !> magnetic_representation='gbt_single_q' and then cleared; solver code must
+      !> not use it to select Hamiltonian physics.
       logical :: gbt_kspace
+      !> Magnetic representation, independent of the real/reciprocal solver.
+      character(len=magnetic_representation_len) :: magnetic_representation
+      !> Site-indexed moments used only by explicit_texture.
+      real(rp), dimension(:, :), allocatable :: texture_moments
       !> Add orbital polarization to Hamiltonian
       logical :: orb_pol
       !> Optional two-centre combined correction
@@ -128,6 +131,7 @@ module hamiltonian_mod
    contains
       procedure :: build_lsham
       procedure :: build_bulkham
+      procedure :: build_gbt_bulkham
       procedure :: build_locham
       procedure :: build_ccor_bulk
       procedure :: build_ccor_local
@@ -146,6 +150,9 @@ module hamiltonian_mod
       procedure :: chbar_nc
       procedure :: ham0m_nc
       procedure :: hmfind
+      procedure :: set_texture_moments
+      procedure :: clear_texture_moments
+      procedure :: prepare_explicit_texture_moments
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: rotate_to_local_axis
@@ -372,6 +379,10 @@ module hamiltonian_mod
       integer :: ntype
 
    end subroutine build_bulkham
+
+   module subroutine build_gbt_bulkham(this)
+      class(hamiltonian), intent(inout) :: this
+   end subroutine build_gbt_bulkham
 
    !> @brief Build local-cluster Hamiltonian hopping blocks.
    !> @details Assembles hall/hallo blocks for impurity or surface local regions
@@ -820,6 +831,19 @@ module hamiltonian_mod
       integer :: i, ilm, jlm
 
    end subroutine hmfind
+
+   module subroutine set_texture_moments(this, moments)
+      class(hamiltonian), intent(inout) :: this
+      real(rp), intent(in) :: moments(:, :)
+   end subroutine set_texture_moments
+
+   module subroutine clear_texture_moments(this)
+      class(hamiltonian), intent(inout) :: this
+   end subroutine clear_texture_moments
+
+   module subroutine prepare_explicit_texture_moments(this)
+      class(hamiltonian), intent(inout) :: this
+   end subroutine prepare_explicit_texture_moments
 
    !> @brief Convert a global orbital index to site and local-orbital indices.
    !> @details Used by PAOFLOW import/export helpers to translate flat orbital

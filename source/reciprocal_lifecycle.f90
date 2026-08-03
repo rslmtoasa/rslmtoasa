@@ -1,4 +1,5 @@
 submodule (reciprocal_mod) reciprocal_lifecycle
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
 contains
@@ -96,8 +97,8 @@ contains
       if (allocated(this%k_path)) deallocate (this%k_path)
       if (allocated(this%k_labels)) deallocate (this%k_labels)
       if (allocated(this%k_distances)) deallocate (this%k_distances)
-   if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
-   if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+      if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
       ! DOS arrays
       if (allocated(this%dos_energy_grid)) deallocate (this%dos_energy_grid)
       if (allocated(this%total_dos)) deallocate (this%total_dos)
@@ -155,7 +156,11 @@ contains
       this%temperature = 300.0_rp  ! Default temperature in Kelvin
       this%fermi_level = 0.0_rp  ! Default Fermi level
       this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
-      this%auto_find_fermi = .true.  ! Auto-find Fermi level from DOS (recommended default)
+      this%canonical_electron_count = 0.0_rp
+      this%canonical_band_energy = 0.0_rp
+      this%canonical_weight_sum = 0.0_rp
+      this%canonical_energy_valid = .false.
+      this%auto_find_fermi = .true.  ! Auto-find Fermi level from eigenvalue occupations
       this%reciprocal_mode = 'ham_only'
       this%kspace_ham_order = 'auto'
       this%kanpur_diagnostics = .true.
@@ -182,6 +187,55 @@ contains
       this%green_eta = 0.02_rp        ! Ry; gate G-B2-2 working point (was 0.01, G-B2-1)
       this%green_backend = 'lehmann'  ! backend E (Sigma = 0) by default
    end subroutine restore_to_default
+
+   !> @brief Invalidate every spectrum-derived cache while retaining the k mesh.
+   !> @details Frozen-magnon and SCF probes change the Hamiltonian repeatedly.
+   !>          Keeping k_points/k_weights is safe, but eigenpairs, DOS arrays,
+   !>          projections, tetrahedra, and their canonical energy are not.
+   module subroutine invalidate_spectral_cache(this)
+      class(reciprocal), intent(inout) :: this
+
+#ifdef USE_SAFE_ALLOC
+      if (allocated(this%hk_bulk)) call g_safe_alloc%deallocate('reciprocal.hk_bulk', this%hk_bulk)
+      if (allocated(this%hk_so)) call g_safe_alloc%deallocate('reciprocal.hk_so', this%hk_so)
+      if (allocated(this%hk_total)) call g_safe_alloc%deallocate('reciprocal.hk_total', this%hk_total)
+      if (allocated(this%sk_overlap)) call g_safe_alloc%deallocate('reciprocal.sk_overlap', this%sk_overlap)
+      if (allocated(this%eigenvalues)) call g_safe_alloc%deallocate('reciprocal.eigenvalues', this%eigenvalues)
+      if (allocated(this%eigenvectors)) call g_safe_alloc%deallocate('reciprocal.eigenvectors', this%eigenvectors)
+      if (allocated(this%total_dos)) call g_safe_alloc%deallocate('reciprocal.total_dos', this%total_dos)
+      if (allocated(this%total_nos)) call g_safe_alloc%deallocate('reciprocal.total_nos', this%total_nos)
+      if (allocated(this%projected_dos)) call g_safe_alloc%deallocate('reciprocal.projected_dos', this%projected_dos)
+      if (allocated(this%band_moments)) call g_safe_alloc%deallocate('reciprocal.band_moments', this%band_moments)
+      if (allocated(this%dos_mx_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mx_tot', this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) call g_safe_alloc%deallocate('reciprocal.dos_my_tot', this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mz_tot', this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) call g_safe_alloc%deallocate('reciprocal.projected_dos_moments', this%projected_dos_moments)
+      if (allocated(this%tetrahedra)) call g_safe_alloc%deallocate('reciprocal.tetrahedra', this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
+#else
+      if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
+      if (allocated(this%hk_so)) deallocate(this%hk_so)
+      if (allocated(this%hk_total)) deallocate(this%hk_total)
+      if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
+      if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+      if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      if (allocated(this%total_dos)) deallocate(this%total_dos)
+      if (allocated(this%total_nos)) deallocate(this%total_nos)
+      if (allocated(this%projected_dos)) deallocate(this%projected_dos)
+      if (allocated(this%band_moments)) deallocate(this%band_moments)
+      if (allocated(this%dos_mx_tot)) deallocate(this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) deallocate(this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) deallocate(this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) deallocate(this%projected_dos_moments)
+      if (allocated(this%tetrahedra)) deallocate(this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) deallocate(this%tetrahedron_volumes)
+#endif
+
+      this%canonical_electron_count = 0.0_rp
+      this%canonical_band_energy = 0.0_rp
+      this%canonical_weight_sum = 0.0_rp
+      this%canonical_energy_valid = .false.
+   end subroutine invalidate_spectral_cache
 
    !> @brief Read the &reciprocal namelist and install reciprocal-space options.
    !> @details Parses k-mesh, Fourier mode, band/DOS controls, symmetry options,
@@ -364,7 +418,7 @@ contains
 
       has_nonzero_q_gbt = .false.
       if (.not. associated(this%hamiltonian)) return
-      has_nonzero_q_gbt = this%hamiltonian%gbt_kspace .and. &
+      has_nonzero_q_gbt = trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
                           maxval(abs(this%hamiltonian%q_ss)) > q_tolerance
    end function has_nonzero_q_gbt
 
@@ -373,31 +427,32 @@ contains
       character(len=*), intent(in) :: context
       real(rp), parameter :: term_tolerance = 1.0e-12_rp
 
-      if (.not. this%has_nonzero_q_gbt()) return
+      if (.not. associated(this%hamiltonian)) return
+      if (trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) return
 
       ! These operators have no audited finite-q bond-gauge transformation.
       ! Fail before the legacy post-Fourier GBT reconstruction can silently
       ! produce a plausible-looking, but invalid, spectrum.
       if (this%hamiltonian%ccor_2c) then
-         call g_logger%fatal(trim(context)//': nonzero-q GBT with CCOR is unsupported (WP0 guard).', &
+         call g_logger%fatal(trim(context)//': GBT with CCOR is unsupported until the primitive-factor audit.', &
                              __FILE__, __LINE__)
       end if
       if (this%hamiltonian%hubbard_v_check) then
-         call g_logger%fatal(trim(context)//': nonzero-q GBT with intersite Hubbard-V is unsupported (WP0 guard).', &
+         call g_logger%fatal(trim(context)//': GBT with intersite Hubbard-V is unsupported.', &
                              __FILE__, __LINE__)
       end if
       if (this%hamiltonian%hoh) then
-         call g_logger%fatal(trim(context)//': nonzero-q GBT with HOH/overlap products is unsupported (WP0 guard).', &
+         call g_logger%fatal(trim(context)//': GBT with HOH/overlap products is unsupported until WP6.', &
                              __FILE__, __LINE__)
       end if
       if (trim(this%reciprocal_mode) /= 'ham_only') then
-         call g_logger%fatal(trim(context)//': nonzero-q GBT with reciprocal_mode='// &
-                             trim(this%reciprocal_mode)//' is unsupported; only ham_only is classified (WP0 guard).', &
+         call g_logger%fatal(trim(context)//': GBT with reciprocal_mode='// &
+                             trim(this%reciprocal_mode)//' is unsupported; only ham_only is classified.', &
                              __FILE__, __LINE__)
       end if
       if (allocated(this%hamiltonian%lsham)) then
          if (maxval(abs(this%hamiltonian%lsham)) > term_tolerance) then
-            call g_logger%fatal(trim(context)//': nonzero-q GBT with SOC is unsupported (WP0 guard).', &
+            call g_logger%fatal(trim(context)//': GBT with SOC is unsupported.', &
                                 __FILE__, __LINE__)
          end if
       end if

@@ -1040,7 +1040,10 @@ contains
          end if
          call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
 
-         this%bands%eband = this%reciprocal_scf_cache%calculate_band_energy_from_moments()
+         ! Canonical k-space EBAND is the projection-free occupied-eigenvalue
+         ! sum computed with the same occupations that set EF/electron count.
+         ! Projected m0*m1 remains a DOS diagnostic inside reciprocal_dos.
+         this%bands%eband = this%reciprocal_scf_cache%canonical_band_energy
 
          call this%mix%save_to('new')
          call g_timer%stop('calculation-of-DOS')

@@ -47,6 +47,7 @@ module calculation_mod
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
    private
@@ -1831,9 +1832,10 @@ contains
       ! for every q (magnetic force theorem).
       self_obj = self(bands_obj, mix_obj)
       use_kspace = self_obj%use_kspace
-      ! k-space runs use the GBT twist (reciprocal module), so ham0m_nc must NOT
-      ! rotate the moments by q_ss; real-space runs do the rotation (explicit spiral).
-      hamiltonian_obj%gbt_kspace = use_kspace
+      ! GBT is a magnetic representation shared by both solvers. The deprecated
+      ! gbt_kspace flag has no physics role on this path.
+      hamiltonian_obj%magnetic_representation = gbt_single_q
+      hamiltonian_obj%gbt_kspace = .false.
       hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
       call self_obj%run()
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
@@ -1850,7 +1852,14 @@ contains
          if (use_kspace) then
             recip_obj = reciprocal(hamiltonian_obj)
             if (.not. allocated(recip_obj%k_points)) then
-               if (recip_obj%use_symmetry_reduction) then
+               ! Every probe in one force-theorem difference must use the same
+               ! integration contract.  If the sweep contains finite q, make
+               ! the q=0 reference use the full chemical BZ as well.
+               if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+                  recip_obj%use_symmetry_reduction = .false.
+                  recip_obj%use_time_reversal = .false.
+                  call recip_obj%generate_mp_mesh()
+               else if (recip_obj%use_symmetry_reduction) then
                   call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
                                                               sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
                else
@@ -1967,7 +1976,8 @@ contains
       hamiltonian_obj%theta_ss = 0.0_rp
       hamiltonian_obj%q_ss(:) = 0.0_rp
       self_obj = self(bands_obj, mix_obj)
-      hamiltonian_obj%gbt_kspace = self_obj%use_kspace
+      hamiltonian_obj%magnetic_representation = gbt_single_q
+      hamiltonian_obj%gbt_kspace = .false.
       call self_obj%run()
       use_kspace = self_obj%use_kspace
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
@@ -1996,7 +2006,11 @@ contains
       if (use_kspace) then
          recip_obj = reciprocal(hamiltonian_obj)
          if (.not. allocated(recip_obj%k_points)) then
-            if (recip_obj%use_symmetry_reduction) then
+            if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+               recip_obj%use_symmetry_reduction = .false.
+               recip_obj%use_time_reversal = .false.
+               call recip_obj%generate_mp_mesh()
+            else if (recip_obj%use_symmetry_reduction) then
                call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
                                                            sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
             else
@@ -2115,7 +2129,7 @@ contains
    !>        current spiral/tilt config (set on the hamiltonian via q_ss + theta/phi_ss_sublattice).
    !> @details Rebuilds only the Hamiltonian (rotated moment directions, fixed potential
    !>        parameters) and evaluates the single-particle band energy through the k-space
-   !>        (build/diagonalize/DOS -> band energy from moments) or real-space recursion
+   !>        (build/diagonalize -> normalized eigenvalue occupations and EBAND) or real-space recursion
    !>        (recursion -> Green -> fermi -> band energy) path. No charge/potential update
    !>        is done, so the reference potential is held fixed across every probe -- this is
    !>        the Liechtenstein/MFT energy surface whose second derivatives give the magnon
@@ -2134,10 +2148,10 @@ contains
          if (use_kspace) then
             call recip_obj%build_kspace_hamiltonian()
             call recip_obj%diagonalize_hamiltonian()
-            call recip_obj%calculate_density_of_states(ham, n_energy_points=energy_obj%channels_ldos + 10, &
-                 energy_range=[energy_obj%energy_min, energy_obj%energy_max], fermi_level=energy_obj%fermi, &
-                 auto_find_fermi=.true.)
-            e_band = recip_obj%calculate_band_energy_from_moments()
+            ! MFT must not depend on DOS window/grid/projections.  This solves
+            ! EF from the target electron count and uses exactly those Fermi
+            ! occupations in sum_k,n w_k f_nk epsilon_nk.
+            e_band = recip_obj%calculate_canonical_band_energy(find_fermi=.true.)
          else
             select case (ctl%recur)
             case ('block')
