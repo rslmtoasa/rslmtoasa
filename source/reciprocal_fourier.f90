@@ -373,6 +373,9 @@ contains
       logical :: use_second_order
       integer :: i, j
 
+      call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
+      call this%force_full_bz_for_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
+
       ! Determine which k-point set to use
       using_kpath = .false.
       if (allocated(this%k_path)) then

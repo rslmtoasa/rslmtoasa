@@ -306,6 +306,17 @@ contains
 	         this%kspace_ham_order = 'auto'
 	      end if
 
+      ! WP0: a finite-q spin spiral breaks the crystal symmetries used for an
+      ! irreducible wedge (and, in general, time reversal).  Keep the chemical
+      ! cell, but always integrate its *full* BZ.  The same enforcement is made
+      ! immediately before an H(k) build because frozen-magnon sweeps mutate q.
+      if (this%has_nonzero_q_gbt()) then
+         this%use_symmetry_reduction = .false.
+         this%use_time_reversal = .false.
+         call root_info('reciprocal%build_from_file: nonzero-q GBT forces the full chemical BZ; '// &
+                        'symmetry and time-reversal reduction disabled.', __FILE__, __LINE__)
+      end if
+
       ! K-path settings
       this%auto_kpath = auto_kpath
       this%nk_per_segment = nk_per_segment
@@ -346,6 +357,68 @@ contains
       call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
       call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
    end subroutine build_from_file
+
+   module logical function has_nonzero_q_gbt(this)
+      class(reciprocal), intent(in) :: this
+      real(rp), parameter :: q_tolerance = 1.0e-12_rp
+
+      has_nonzero_q_gbt = .false.
+      if (.not. associated(this%hamiltonian)) return
+      has_nonzero_q_gbt = this%hamiltonian%gbt_kspace .and. &
+                          maxval(abs(this%hamiltonian%q_ss)) > q_tolerance
+   end function has_nonzero_q_gbt
+
+   module subroutine validate_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: context
+      real(rp), parameter :: term_tolerance = 1.0e-12_rp
+
+      if (.not. this%has_nonzero_q_gbt()) return
+
+      ! These operators have no audited finite-q bond-gauge transformation.
+      ! Fail before the legacy post-Fourier GBT reconstruction can silently
+      ! produce a plausible-looking, but invalid, spectrum.
+      if (this%hamiltonian%ccor_2c) then
+         call g_logger%fatal(trim(context)//': nonzero-q GBT with CCOR is unsupported (WP0 guard).', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%hamiltonian%hubbard_v_check) then
+         call g_logger%fatal(trim(context)//': nonzero-q GBT with intersite Hubbard-V is unsupported (WP0 guard).', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%hamiltonian%hoh) then
+         call g_logger%fatal(trim(context)//': nonzero-q GBT with HOH/overlap products is unsupported (WP0 guard).', &
+                             __FILE__, __LINE__)
+      end if
+      if (trim(this%reciprocal_mode) /= 'ham_only') then
+         call g_logger%fatal(trim(context)//': nonzero-q GBT with reciprocal_mode='// &
+                             trim(this%reciprocal_mode)//' is unsupported; only ham_only is classified (WP0 guard).', &
+                             __FILE__, __LINE__)
+      end if
+      if (allocated(this%hamiltonian%lsham)) then
+         if (maxval(abs(this%hamiltonian%lsham)) > term_tolerance) then
+            call g_logger%fatal(trim(context)//': nonzero-q GBT with SOC is unsupported (WP0 guard).', &
+                                __FILE__, __LINE__)
+         end if
+      end if
+   end subroutine validate_nonzero_q_gbt
+
+   module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context
+
+      if (.not. this%has_nonzero_q_gbt()) return
+
+      this%use_symmetry_reduction = .false.
+      this%use_time_reversal = .false.
+
+      ! A band path is not a BZ integration mesh.  Do not replace it here;
+      ! the finite-q mesh callers below are forced through generate_mp_mesh.
+      if (allocated(this%k_path)) return
+
+      call root_info(trim(context)//': nonzero-q GBT rebuilding the full chemical BZ mesh.', __FILE__, __LINE__)
+      call this%generate_mp_mesh()
+   end subroutine force_full_bz_for_nonzero_q_gbt
 
    !> @brief Set Monkhorst-Pack mesh dimensions.
    !> @param[inout] this Reciprocal object whose nk_mesh is updated.

@@ -19,6 +19,8 @@ contains
       real(rp), dimension(:), allocatable :: rwork
       character(len=100) :: info_msg
       logical :: use_generalized
+      real(rp) :: max_herm, matrix_scale
+      character(len=256) :: herm_msg
 
       ! Check prerequisites
       if (.not. allocated(this%hk_bulk)) then
@@ -42,6 +44,30 @@ contains
             call g_logger%warning('diagonalize_hamiltonian: S(k) unavailable, falling back to ham_only.', __FILE__, __LINE__)
             use_generalized = .false.
          end if
+      end if
+
+      ! zheev/zhegv read only one triangle.  Check the completed matrices
+      ! first, otherwise a broken lower triangle (notably the old finite-q GBT
+      ! reconstruction) would be silently discarded by LAPACK.
+      do ik = 1, nk
+         max_herm = maxval(abs(this%hk_bulk(:, :, ik) - transpose(conjg(this%hk_bulk(:, :, ik)))) )
+         matrix_scale = max(1.0_rp, maxval(abs(this%hk_bulk(:, :, ik))))
+         if (max_herm > 1.0e-10_rp*matrix_scale) then
+            write(herm_msg, '(A,I0,A,ES12.4,A,ES12.4)') 'H(k) is non-Hermitian before eigensolution at k=', ik, &
+               ': max|H-H^H|=', max_herm, ', scale=', matrix_scale
+            call g_logger%fatal('diagonalize_hamiltonian: '//trim(herm_msg), __FILE__, __LINE__)
+         end if
+      end do
+      if (allocated(this%sk_overlap)) then
+         do ik = 1, size(this%sk_overlap, 3)
+            max_herm = maxval(abs(this%sk_overlap(:, :, ik) - transpose(conjg(this%sk_overlap(:, :, ik)))) )
+            matrix_scale = max(1.0_rp, maxval(abs(this%sk_overlap(:, :, ik))))
+            if (max_herm > 1.0e-10_rp*matrix_scale) then
+               write(herm_msg, '(A,I0,A,ES12.4,A,ES12.4)') 'O(k) is non-Hermitian before eigensolution at k=', ik, &
+                  ': max|O-O^H|=', max_herm, ', scale=', matrix_scale
+               call g_logger%fatal('diagonalize_hamiltonian: '//trim(herm_msg), __FILE__, __LINE__)
+            end if
+         end do
       end if
 
       if (this%kanpur_diagnostics) call this%print_kanpur_mapping()
@@ -494,6 +520,14 @@ contains
 
       do_shift = .false.
       if (present(use_shift)) do_shift = use_shift
+
+      if (this%has_nonzero_q_gbt()) then
+         this%use_symmetry_reduction = .false.
+         this%use_time_reversal = .false.
+         call root_info('generate_reduced_kpoint_mesh: nonzero-q GBT forces the full chemical BZ.', __FILE__, __LINE__)
+         call this%generate_mp_mesh()
+         return
+      end if
 
       if (do_shift) then
          shift = [1, 1, 1]  ! Offset by half a mesh spacing

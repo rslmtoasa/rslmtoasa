@@ -257,6 +257,9 @@ module reciprocal_mod
       procedure :: check_multisite_hamiltonian_diagonal
       procedure :: build_kspace_overlap
       procedure :: diagonalize_hamiltonian
+      procedure :: has_nonzero_q_gbt
+      procedure :: validate_nonzero_q_gbt
+      procedure :: force_full_bz_for_nonzero_q_gbt
       procedure :: print_kanpur_mapping
       procedure :: check_overlap_properties
       procedure :: run_gamma_bounds_diagnostics
@@ -653,6 +656,26 @@ end subroutine print_hamiltonian_structure
 
       ! Check prerequisites
    end subroutine diagonalize_hamiltonian
+
+   !> @brief Return whether the legacy reciprocal GBT path has a finite q vector.
+   !> @details WP0 treats this state specially: only the bare first-order
+   !>          operator is permitted while the bond-gauge implementation is pending.
+   module logical function has_nonzero_q_gbt(this)
+      class(reciprocal), intent(in) :: this
+   end function has_nonzero_q_gbt
+
+   !> @brief Reject nonzero-q GBT combinations whose operator transformation is unverified.
+   !> @param[in] context Caller name included in fatal diagnostics.
+   module subroutine validate_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: context
+   end subroutine validate_nonzero_q_gbt
+
+   !> @brief Disable symmetry/time-reversal reduction and rebuild a full chemical BZ mesh for finite-q GBT.
+   module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context
+   end subroutine force_full_bz_for_nonzero_q_gbt
 
    !> @brief Print mapping diagnostics for the Kanpur generalized-overlap path.
    !> @param[in] this Reciprocal object containing basis and overlap metadata.

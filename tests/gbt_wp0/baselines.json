@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "purpose": "WP0 evidence ledger; values marked diagnostic must never be used as GBT physics references.",
+  "baselines": [
+    {
+      "name": "collinear_bulk_q0",
+      "input": "tests/scf/cases/bulk/bccFe/input.nml + Example_bulk_bccFe_nsp2_block overrides",
+      "output": "tests/scf/references/Example_bulk_bccFe_nsp2_block/ref.json",
+      "result": { "etot_ry": -2541.9818992061555, "mom_z": 1.0 },
+      "classification": "golden_ordinary_q0"
+    },
+    {
+      "name": "periodic_nc_bulk_q0",
+      "input": "tests/scf/cases/bulk/bccFe/input.nml + Example_bulk_bccFe_nsp4_block overrides",
+      "output": "tests/scf/references/Example_bulk_bccFe_nsp4_block/ref.json",
+      "result": { "etot_ry": -2541.9818992061555, "mom_z": 0.9999999999999996 },
+      "classification": "golden_periodic_nc_q0"
+    },
+    {
+      "name": "explicit_texture_q050_supercell",
+      "input": "example/bulk/bccFe/q050/super/FM/input.nml",
+      "output": "example/bulk/bccFe/q050/super/FM/Fe{1,2,3,4}_out.nml",
+      "result": {
+        "site_etot_ry": [
+          -2541.9814920214894,
+          -2541.9814919811238,
+          -2541.9814919366772,
+          -2541.9814918777261
+        ]
+      },
+      "classification": "diagnostic_explicit_texture"
+    },
+    {
+      "name": "real_space_mft",
+      "input": "example/bulk/bccFe/bccFe_gamma_h/frozen_magnon.dat",
+      "output": "example/bulk/bccFe/bccFe_gamma_h/frozen_magnon.dat",
+      "result": { "q_cart_2pi_over_alat": [0.01, 0.01, 0.0], "eband_ry": -1.99664723, "omega": 2.02165721e-05 },
+      "classification": "diagnostic_rs_mft"
+    },
+    {
+      "name": "legacy_kspace_gbt",
+      "input": "example/bulk/bccFe/q050/gbt/KS/input.nml",
+      "output": "example/bulk/bccFe/q050/gbt/KS/{Fe_out.nml,report.out}",
+      "result": { "etot_ry": -2541.9697460049274, "eband_ry": -2.1382627426 },
+      "classification": "diagnostic_known_wrong_gbt_not_golden"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "_description": "WP0 diagnostic-only launch manifests. They are not ordinary regression references: the bare case proves full-BZ enforcement, while the guarded cases must stop explicitly at finite q.",
+  "cases": [
+    {
+      "name": "legacy_finite_q_gbt",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "channels_ldos": 60 },
+        "reciprocal": {
+          "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": true,
+          "use_time_reversal": true,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "finite_q_gbt_soc_guard",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "control": { "nsp": 4, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "channels_ldos": 60 },
+        "reciprocal": {
+          "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": true,
+          "use_time_reversal": true,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": { "hoh": false }
+      }
+    }
+  ]
+}
