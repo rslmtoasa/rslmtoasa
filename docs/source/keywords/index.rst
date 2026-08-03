@@ -185,7 +185,7 @@ Alphabetical Listing (All Parameters)
 
 **G**
 
-- ``gbt_kspace`` - Bloch-sum the GBT spiral block for spiral bands (B1)
+- ``gbt_kspace`` - Deprecated, ignored compatibility input; use ``magnetic_representation='gbt_single_q'``
 - ``gf_route`` - Route selector for Green's-function producer: recursion/lehmann/dyson (B2/B5)
 - ``green_backend`` - k-space Green's-function backend: lehmann/dyson (B2)
 - ``green_eta`` - Retarded broadening for the k-space Green's function (B2)

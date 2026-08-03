@@ -1,0 +1,54 @@
+&calculation
+post_processing = 'kspace_green'
+verbose = T
+/
+&lattice
+rc = 80
+alat = 2.86120
+crystal_sym = 'bcc'
+wav = 1.40880
+njij = 1
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+ijpair(1, :) = 1, 1
+strux_backend = 'strux_lib'
+strux_want_sdot = .false.
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 0
+/
+&energy
+fermi = -0.042265
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 300
+/
+&control
+calctype = 'B'
+nsp = 3
+lld = 20
+recur = 'block'
+/
+&mix
+beta = 0.01
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+magnetic_representation = 'gbt_single_q'
+q_ss = 0.0, 0.0, 0.05
+theta_ss = 20.0
+/
+&reciprocal
+nk1 = 8
+nk2 = 8
+nk3 = 8
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+green_eta = 0.02
+/

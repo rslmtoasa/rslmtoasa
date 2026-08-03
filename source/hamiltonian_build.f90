@@ -211,13 +211,10 @@ contains
                              __FILE__, __LINE__)
       end select
       if (this%gbt_kspace) then
-         if (trim(this%magnetic_representation) == periodic_nc) then
-            this%magnetic_representation = gbt_single_q
-            if (rank == 0) call g_logger%warning('gbt_kspace is deprecated; selecting magnetic_representation=gbt_single_q.', &
-                                                 __FILE__, __LINE__)
-         end if
-         ! Compatibility is resolved once at input. Solver code must not use it
-         ! as a Hamiltonian-physics selector.
+         if (rank == 0) call g_logger%warning('gbt_kspace is deprecated and ignored; '// &
+                                              'use magnetic_representation=gbt_single_q explicitly.', __FILE__, __LINE__)
+         ! Keep accepting the old namelist key so existing inputs still parse,
+         ! but give it no direct or indirect Hamiltonian-physics role.
          this%gbt_kspace = .false.
       end if
       this%js_alpha = js_alpha
@@ -573,6 +570,7 @@ contains
       this%theta_ss = 0.0_rp
       this%gbt_kspace = .false.
       this%magnetic_representation = periodic_nc
+      this%operator_generation = 0
       if (allocated(this%texture_moments)) deallocate(this%texture_moments)
       if (allocated(this%theta_ss_sublattice)) deallocate (this%theta_ss_sublattice)
       if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
@@ -1208,6 +1206,16 @@ contains
       ! Local variables
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
+
+      ! This is the single production rebuild boundary shared by recursion and
+      ! reciprocal space. Advancing the generation invalidates every derived
+      ! cache even when the changed dependency is not q itself (cone,
+      ! sublattice reference axes, or any potential parameter).
+      if (this%operator_generation == huge(this%operator_generation)) then
+         this%operator_generation = 1
+      else
+         this%operator_generation = this%operator_generation + 1
+      end if
 
       if (trim(this%magnetic_representation) == explicit_texture) then
          call this%prepare_explicit_texture_moments()

@@ -41,6 +41,11 @@ contains
 
       call root_info('calculate_density_of_states: Starting DOS calculation', __FILE__, __LINE__)
 
+      ! DOS arrays and their eigensystem are operator-dependent. This catches
+      ! q, cone/reference-frame, and potential rebuilds even when the reciprocal
+      ! object and k mesh are deliberately reused across probes/SCF iterations.
+      call this%invalidate_if_operator_changed('reciprocal%calculate_density_of_states')
+
       ! Set parameters from optional arguments
       if (present(n_energy_points)) this%n_energy_points = n_energy_points
       if (present(energy_range)) this%dos_energy_range = energy_range

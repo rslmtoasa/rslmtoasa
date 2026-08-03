@@ -828,11 +828,26 @@ end subroutine calculate_band_moments
       
       ! Local variables
       integer :: isite
+      logical :: operator_changed
       
       ! Orbital indexing: 
       ! iorb = 1 (s, 1 orbital), iorb = 2 (p, 3 orbitals), iorb = 3 (d, 5 orbitals)
       
       call root_info('calculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS', __FILE__, __LINE__)
+
+      call this%invalidate_if_operator_changed('reciprocal%calculate_ldm_from_projected_dos', operator_changed)
+      if (operator_changed .or. .not. allocated(this%eigenvalues)) then
+         if (.not. allocated(this%k_points)) then
+            if (this%use_symmetry_reduction) then
+               call this%generate_reduced_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
+            else
+               call this%generate_mp_mesh()
+            end if
+         end if
+         call this%build_kspace_hamiltonian()
+         call this%diagonalize_hamiltonian()
+         this%fermi_level = this%find_fermi_level_from_eigenvalues(this%total_electrons)
+      end if
       
       ! Initialize all LDM to zero
       do isite = 1, lattice_obj%nrec

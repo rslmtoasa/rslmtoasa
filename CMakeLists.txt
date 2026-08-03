@@ -432,7 +432,7 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
   add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
   set_tests_properties(UnitGbtStructure PROPERTIES LABELS "unit;gbt;wp4")
-  set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2")
+  set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
     add_test(NAME UnitKspaceOccupations_mpi
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
@@ -443,6 +443,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtOracles
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
   set_tests_properties(UnitGbtOracles PROPERTIES LABELS "unit;gbt")
+  add_test(NAME UnitGbtWp5SourceContract
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp5_source_contract.py)
+  set_tests_properties(UnitGbtWp5SourceContract PROPERTIES LABELS "unit;gbt;wp5")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE

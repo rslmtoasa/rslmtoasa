@@ -4,6 +4,7 @@
 program test_kspace_occupations
    use precision_mod, only: rp
    use reciprocal_mod, only: reciprocal
+   use hamiltonian_mod, only: hamiltonian
    use logger_mod, only: g_logger
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
 #ifdef USE_MPI
@@ -22,6 +23,7 @@ program test_kspace_occupations
    real(rp), parameter :: weights_full(nk_global) = [1.0_rp, 2.0_rp, 3.0_rp, 4.0_rp]
 
    type(reciprocal) :: obj
+   type(hamiltonian), target :: ham_state
    integer :: k_start, k_end, nk_local, ik, ie, ne
    integer, allocatable :: l2g(:), g2l(:)
    real(rp) :: ef, ef_ref, nelect, eband, eband_ref, raw_weight_sum
@@ -132,6 +134,12 @@ program test_kspace_occupations
    if (obj%canonical_energy_valid) failed = .true.
    if (.not. allocated(obj%k_weights)) failed = .true.
 
+   ! The Hamiltonian rebuild generation is the dependency key for q, cone,
+   ! sublattice reference axes, and potential parameters. Each change must
+   ! invalidate H(k), mesh/path eigensystems, DOS, and density projections
+   ! while retaining the reusable k mesh and weights.
+   call test_operator_generation_invalidation(obj, ham_state, failed)
+
 #ifdef USE_MPI
    call reduce_failure(failed)
 #endif
@@ -148,6 +156,63 @@ program test_kspace_occupations
    if (failed) error stop 1
 
 contains
+
+   subroutine test_operator_generation_invalidation(recip, ham, test_failed)
+      type(reciprocal), intent(inout) :: recip
+      type(hamiltonian), target, intent(inout) :: ham
+      logical, intent(inout) :: test_failed
+      integer :: idep
+      logical :: changed
+      character(len=20), parameter :: dependency(4) = [character(len=20) :: &
+         'q', 'cone', 'reference-axis', 'potential']
+
+      recip%hamiltonian => ham
+      ham%operator_generation = 40
+      recip%cached_operator_generation = ham%operator_generation
+
+      do idep = 1, size(dependency)
+         allocate(recip%hk_bulk(1, 1, 1), recip%hk_total(1, 1, 1))
+         allocate(recip%eigenvalues(1, 1), recip%eigenvectors(1, 1, 1))
+         allocate(recip%eigenvalues_path(1, 1), recip%eigenvectors_path(1, 1, 1))
+         allocate(recip%total_dos(2), recip%total_nos(2))
+         allocate(recip%projected_dos(1, 1, 2, 2), recip%band_moments(1, 1, 2, 3))
+         allocate(recip%projected_dos_moments(1, 1, 2, 3, 2))
+         recip%canonical_energy_valid = .true.
+
+         select case (idep)
+         case (1)
+            ham%q_ss = [0.05_rp, 0.0_rp, 0.0_rp]
+         case (2)
+            ham%theta_ss = 0.2_rp
+         case (3)
+            if (allocated(ham%theta_ss_sublattice)) deallocate(ham%theta_ss_sublattice)
+            allocate(ham%theta_ss_sublattice(1))
+            ham%theta_ss_sublattice = 0.3_rp
+         case (4)
+            ! Potential arrays are owned below lattice/symbolic_atom; their
+            ! rebuild dependency is represented by this same generation bump.
+            continue
+         end select
+         ham%operator_generation = ham%operator_generation + 1
+         call recip%invalidate_if_operator_changed('unit '//trim(dependency(idep)), changed)
+
+         if (.not. changed) test_failed = .true.
+         if (allocated(recip%hk_bulk) .or. allocated(recip%hk_total)) test_failed = .true.
+         if (allocated(recip%eigenvalues) .or. allocated(recip%eigenvectors)) test_failed = .true.
+         if (allocated(recip%eigenvalues_path) .or. allocated(recip%eigenvectors_path)) test_failed = .true.
+         if (allocated(recip%total_dos) .or. allocated(recip%total_nos)) test_failed = .true.
+         if (allocated(recip%projected_dos) .or. allocated(recip%band_moments)) test_failed = .true.
+         if (allocated(recip%projected_dos_moments)) test_failed = .true.
+         if (recip%canonical_energy_valid) test_failed = .true.
+         if (.not. allocated(recip%k_weights)) test_failed = .true.
+
+         recip%cached_operator_generation = ham%operator_generation
+         if (rank == 0) write (*, '(a,a)') 'Operator-cache invalidation PASS: ', trim(dependency(idep))
+      end do
+
+      if (allocated(ham%theta_ss_sublattice)) deallocate(ham%theta_ss_sublattice)
+      nullify(recip%hamiltonian)
+   end subroutine test_operator_generation_invalidation
 
    pure real(rp) function independent_occupation(e, mu, temp) result(value)
       real(rp), intent(in) :: e, mu, temp

@@ -103,6 +103,9 @@ module reciprocal_mod
       complex(rp), dimension(:, :, :), allocatable :: hk_total
       !> Overlap matrix in k-space
       complex(rp), dimension(:, :, :), allocatable :: sk_overlap
+      !> Hamiltonian operator_generation used to build the current H(k) and
+      !> every spectrum/DOS/density object derived from it.
+      integer :: cached_operator_generation
       !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
       !> or 'generalized_overlap_kanpur'.
       character(len=32) :: reciprocal_mode
@@ -255,8 +258,6 @@ module reciprocal_mod
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
-      procedure :: fourier_transform_gbt
-      procedure :: fourier_transform_gbt_array
       procedure :: fourier_transform_hamiltonian_second_order
       procedure :: fourier_transform_array
       procedure :: fourier_transform_overlap
@@ -302,6 +303,7 @@ module reciprocal_mod
       procedure :: write_dos_to_file
       procedure :: restore_to_default
       procedure :: invalidate_spectral_cache
+      procedure :: invalidate_if_operator_changed
       procedure :: build_from_file
       procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
@@ -475,28 +477,6 @@ module reciprocal_mod
       !       here; they are only included in the second-order path
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
    end subroutine fourier_transform_hamiltonian
-
-   !> @brief Generalized-Bloch-theorem spin-spiral k-space Hamiltonian.
-   !> @param[in] this Reciprocal object with the collinear reference Hamiltonian.
-   !> @param[in] k_vec k-point vector (fractional coordinates).
-   !> @param[out] hk_result Packed GBT k-space Hamiltonian matrix.
-   module subroutine fourier_transform_gbt(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
-      real(rp), dimension(3), intent(in) :: k_vec
-      complex(rp), dimension(:, :), intent(out) :: hk_result
-   end subroutine fourier_transform_gbt
-
-   !> @brief GBT Fourier transform for one spinor neighbor/type block array.
-   !> @param[in] this Reciprocal object with neighbor-vector tables.
-   !> @param[in] array4d Spinor block array indexed by orbital, neighbor, and type.
-   !> @param[in] k_vec k-point vector (fractional coordinates).
-   !> @param[out] mk_result Packed GBT k-space matrix.
-   module subroutine fourier_transform_gbt_array(this, array4d, k_vec, mk_result)
-      class(reciprocal), intent(in) :: this
-      complex(rp), dimension(:, :, :, :), intent(in) :: array4d
-      real(rp), dimension(3), intent(in) :: k_vec
-      complex(rp), dimension(:, :), intent(out) :: mk_result
-   end subroutine fourier_transform_gbt_array
 
    !> @brief Fourier transform an arbitrary neighbor/type block array.
    !> @details Applies the reciprocal neighbor map to a (orbital, orbital,
@@ -842,6 +822,16 @@ end subroutine print_hamiltonian_structure
    module subroutine invalidate_spectral_cache(this)
       class(reciprocal), intent(inout) :: this
    end subroutine invalidate_spectral_cache
+
+   !> @brief Drop reciprocal caches when the shared real-space operator changed.
+   !> @param[inout] this Reciprocal object owning operator-derived caches.
+   !> @param[in] context_tag Caller label used in the invalidation diagnostic.
+   !> @param[out] changed Optional flag reporting a generation mismatch.
+   module subroutine invalidate_if_operator_changed(this, context_tag, changed)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context_tag
+      logical, intent(out), optional :: changed
+   end subroutine invalidate_if_operator_changed
 
    !> @brief Validate full-to-irreducible k-point symmetry maps.
    !> @param[inout] this Reciprocal object containing symmetry maps and weights.

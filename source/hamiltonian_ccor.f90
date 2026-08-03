@@ -211,20 +211,18 @@ contains
          call hcpx(kcomp(:, :, idir), 'cart2sph')
       end do
 
-      ! Real-space spin spiral bond rotation. In k-space GBT mode this block
-      ! must remain the collinear reference; reciprocal_fourier applies the twist.
-      if (.not. this%gbt_kspace) then
-         if (this%lattice%pbc) then
-            call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
-         else
-            vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-         end if
-         alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
-         kx_ss = kcomp(:, :, 1)
-         ky_ss = kcomp(:, :, 2)
-         kcomp(:, :, 1) = kx_ss*cos(alpha_ss) - ky_ss*sin(alpha_ss)
-         kcomp(:, :, 2) = kx_ss*sin(alpha_ss) + ky_ss*cos(alpha_ss)
+      ! Legacy non-GBT CCOR bond rotation. GBT+CCOR is rejected before this
+      ! routine until WP6 proves covariance at the primitive S/Sdot boundary.
+      if (this%lattice%pbc) then
+         call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
+      else
+         vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
       end if
+      alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
+      kx_ss = kcomp(:, :, 1)
+      ky_ss = kcomp(:, :, 2)
+      kcomp(:, :, 1) = kx_ss*cos(alpha_ss) - ky_ss*sin(alpha_ss)
+      kcomp(:, :, 2) = kx_ss*sin(alpha_ss) + ky_ss*cos(alpha_ss)
 
          lambda = ccor_vmt_scalar(this) - this%ccor_elin
       hcc(1:norb, 1:norb) = lambda*(kcomp(:, :, 4) + kcomp(:, :, 3))
@@ -308,20 +306,17 @@ contains
             call hcpx(hcomp(:, :, idir), 'cart2sph')
          end do
 
-         ! Real-space spin spiral bond rotation. In k-space GBT mode this block
-         ! remains untwisted and is transformed in reciprocal_fourier.
-         if (.not. this%gbt_kspace) then
-            if (this%lattice%pbc) then
-               call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
-            else
-               vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-            end if
-            alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
-            hx_ss = hcomp(:, :, 1)
-            hy_ss = hcomp(:, :, 2)
-            hcomp(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)
-            hcomp(:, :, 2) = hx_ss*sin(alpha_ss) + hy_ss*cos(alpha_ss)
+         ! Legacy non-GBT CCOR bond rotation. GBT+CCOR remains guarded.
+         if (this%lattice%pbc) then
+            call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
+         else
+            vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
          end if
+         alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
+         hx_ss = hcomp(:, :, 1)
+         hy_ss = hcomp(:, :, 2)
+         hcomp(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)
+         hcomp(:, :, 2) = hx_ss*sin(alpha_ss) + hy_ss*cos(alpha_ss)
 
          hcc(1:norb, 1:norb) = hcomp(:, :, 4) + hcomp(:, :, 3)
          hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 4) - hcomp(:, :, 3)
@@ -626,8 +621,7 @@ contains
                mom(3) = cos(this%theta_ss_sublattice(this%charge%lattice%iz(ia)))
             end if
          end if
-      else if ((.not. this%gbt_kspace) .and. &
-               (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp)) then
+      else if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
          mom(1) = sin(this%theta_ss)
          mom(2) = 0.0_rp
          mom(3) = cos(this%theta_ss)

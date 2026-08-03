@@ -72,12 +72,15 @@ module hamiltonian_mod
       logical :: hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
-      !> Deprecated compatibility input. It is translated once into
-      !> magnetic_representation='gbt_single_q' and then cleared; solver code must
-      !> not use it to select Hamiltonian physics.
+      !> Deprecated compatibility input. It is accepted, warned about, and
+      !> cleared without changing the magnetic representation or solver physics.
       logical :: gbt_kspace
       !> Magnetic representation, independent of the real/reciprocal solver.
       character(len=magnetic_representation_len) :: magnetic_representation
+      !> Monotonic identity of the completed real-space operator. Every
+      !> build_bulkham entry advances it, covering q, cone/reference frames,
+      !> and all potential parameters consumed by that rebuild.
+      integer :: operator_generation
       !> Site-indexed moments used only by explicit_texture.
       real(rp), dimension(:, :), allocatable :: texture_moments
       !> Add orbital polarization to Hamiltonian

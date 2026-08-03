@@ -1832,10 +1832,8 @@ contains
       ! for every q (magnetic force theorem).
       self_obj = self(bands_obj, mix_obj)
       use_kspace = self_obj%use_kspace
-      ! GBT is a magnetic representation shared by both solvers. The deprecated
-      ! gbt_kspace flag has no physics role on this path.
+      ! GBT is a magnetic representation shared by both solvers.
       hamiltonian_obj%magnetic_representation = gbt_single_q
-      hamiltonian_obj%gbt_kspace = .false.
       hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
       call self_obj%run()
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
@@ -1977,7 +1975,6 @@ contains
       hamiltonian_obj%q_ss(:) = 0.0_rp
       self_obj = self(bands_obj, mix_obj)
       hamiltonian_obj%magnetic_representation = gbt_single_q
-      hamiltonian_obj%gbt_kspace = .false.
       call self_obj%run()
       use_kspace = self_obj%use_kspace
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)

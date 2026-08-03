@@ -63,24 +63,16 @@ contains
       !       here; they are only included in the second-order path
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
 
-      ! Generalized-Bloch-theorem spin spiral: apply the reciprocal twist to
-      ! each spin-dependent contribution through the same neighbor map as the
-      ! plain Bloch sum.
-      if (this%hamiltonian%gbt_kspace) then
-         call this%fourier_transform_gbt_array(this%hamiltonian%ee, k_vec, hk_result)
-      else
-         call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk_result)
-      end if
+      ! GBT, when selected, is already present in the linked primitive
+      ! real-space blocks. Every magnetic representation therefore uses the
+      ! same ordinary Bloch sum here.
+      call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk_result)
 
       if (this%hamiltonian%ccor_2c) then
          block
             complex(rp), allocatable :: hcck(:, :)
             allocate(hcck(size(hk_result, 1), size(hk_result, 2)))
-            if (this%hamiltonian%gbt_kspace) then
-               call this%fourier_transform_gbt_array(this%hamiltonian%eecc, k_vec, hcck)
-            else
-               call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
-            end if
+            call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
             hk_result(:, :) = hk_result(:, :) + hcck(:, :)
             deallocate(hcck)
          end block
@@ -145,105 +137,6 @@ contains
       deallocate(structure_factors)
    end subroutine fourier_transform_array
 
-   !> @brief Generalized-Bloch-theorem spin-spiral first-order Hamiltonian.
-   !> @details Convenience wrapper for the Hamiltonian `ee` blocks. Optional
-   !>          add-ons such as CCOR are handled by the caller so second-order HOH
-   !>          can reuse the bare GBT-transformed h(k).
-   !> @param[in] this Reciprocal object with the collinear reference Hamiltonian.
-   !> @param[in] k_vec k-point vector (fractional coordinates).
-   !> @param[out] hk_result Packed GBT k-space Hamiltonian matrix.
-   module subroutine fourier_transform_gbt(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
-      complex(rp), dimension(:, :), intent(out) :: hk_result
-      real(rp), dimension(3), intent(in) :: k_vec
-
-      call this%fourier_transform_gbt_array(this%hamiltonian%ee, k_vec, hk_result)
-   end subroutine fourier_transform_gbt
-
-   !> @brief Generalized-Bloch-theorem transform for spinor block arrays.
-   !> @details Applies the spiral phase only to the magnetic exchange part of a
-   !>          collinear reference block. Scalar and longitudinal exchange remain
-   !>          at k; transverse spin-flip exchange carries exp(+-i q.R). This is
-   !>          used for ee, eeo (HOH), and eecc so all first-order-like blocks use
-   !>          the same GBT convention.
-   !> @param[in] this Reciprocal object with the collinear reference Hamiltonian.
-   !> @param[in] array4d Spinor block array indexed by orbital, neighbor, and type.
-   !> @param[in] k_vec k-point vector (fractional coordinates).
-   !> @param[out] mk_result Packed GBT k-space matrix.
-   module subroutine fourier_transform_gbt_array(this, array4d, k_vec, mk_result)
-      class(reciprocal), intent(in) :: this
-      complex(rp), dimension(:, :, :, :), intent(in) :: array4d
-      real(rp), dimension(3), intent(in) :: k_vec
-      complex(rp), dimension(:, :), intent(out) :: mk_result
-      ! Local variables
-      integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr, n_sites
-      integer :: iu, id, ju, jd
-      real(rp) :: ct, st, spiral_phase
-      real(rp), dimension(3) :: q_direct, r_direct
-      complex(rp) :: sf0, sfp, sfm
-      complex(rp), dimension(:, :), allocatable :: structure_factors
-      complex(rp), dimension(norb, norb) :: h0, bz
-
-      n_sites = this%lattice%nrec
-      q_direct = this%hamiltonian%q_ss
-      ct = cos(this%hamiltonian%theta_ss)
-      st = sin(this%hamiltonian%theta_ss)
-
-      allocate(structure_factors(this%lattice%nn_max, this%lattice%ntype))
-      call this%calculate_structure_factors(k_vec, structure_factors)
-
-      mk_result = cmplx(0.0_rp, 0.0_rp, rp)
-
-      do isite = 1, n_sites
-         ntype_i = this%lattice%ib(isite)
-         ia = this%lattice%atlist(ntype_i)
-         nr = this%lattice%nn(ia, 1)
-         iu = (isite - 1) * nb + 1
-         id = iu + norb
-
-         do ineigh = 1, nr
-            if (ineigh == 1) then
-               jsite = isite
-            else
-               ja = this%lattice%nn(ia, ineigh)
-               if (ja < 1 .or. ja > this%lattice%kk) cycle
-               jsite = this%lattice%iz(ja)
-               if (jsite < 1 .or. jsite > n_sites) cycle
-            end if
-            ju = (jsite - 1) * nb + 1
-            jd = ju + norb
-
-            ! Scalar and longitudinal exchange are Bloch-summed at k. Use the
-            ! same direct-coordinate neighbor vector convention as
-            ! calculate_structure_factors for the transverse spiral phase.
-            sf0 = structure_factors(ineigh, ntype_i)
-            if (ineigh == 1) then
-               r_direct = 0.0_rp
-            else
-               r_direct = this%ham_vec_type_direct(:, ineigh, ntype_i)
-            end if
-            spiral_phase = 2.0_rp*pi*dot_product(q_direct, r_direct)
-            sfp = sf0 * cmplx(cos(spiral_phase),  sin(spiral_phase), rp)
-            sfm = sf0 * cmplx(cos(spiral_phase), -sin(spiral_phase), rp)
-            h0 = 0.5_rp*(array4d(1:norb, 1:norb, ineigh, ntype_i) + &
-                          array4d(norb+1:nb, norb+1:nb, ineigh, ntype_i))
-            bz = 0.5_rp*(array4d(1:norb, 1:norb, ineigh, ntype_i) - &
-                          array4d(norb+1:nb, norb+1:nb, ineigh, ntype_i))
-
-            mk_result(iu:iu+norb-1, ju:ju+norb-1) = mk_result(iu:iu+norb-1, ju:ju+norb-1) + &
-               (h0 + ct*bz) * sf0
-            mk_result(id:id+norb-1, jd:jd+norb-1) = mk_result(id:id+norb-1, jd:jd+norb-1) + &
-               (h0 - ct*bz) * sf0
-            mk_result(iu:iu+norb-1, jd:jd+norb-1) = mk_result(iu:iu+norb-1, jd:jd+norb-1) + &
-               st*bz * sfm
-            mk_result(id:id+norb-1, ju:ju+norb-1) = mk_result(id:id+norb-1, ju:ju+norb-1) + &
-               st*bz * sfp
-         end do
-      end do
-
-      deallocate(structure_factors)
-   end subroutine fourier_transform_gbt_array
-
    !> @brief Fourier transform the second-order ASA k-space Hamiltonian.
    !> @details Assembles onsite e_nu, first-order hopping, HOH, optional CCOR,
    !>          and spin-orbit contributions according to kspace_ham_order.
@@ -265,15 +158,10 @@ contains
 
       allocate(hk(ndim, ndim), eeok(ndim, ndim), hohk(ndim, ndim), hcck(ndim, ndim))
 
-      ! h(k) and eeo(k). In GBT mode both first-order-like blocks must carry
-      ! the same spin-spiral twist before forming HOH.
-      if (this%hamiltonian%gbt_kspace) then
-         call this%fourier_transform_gbt_array(this%hamiltonian%ee, k_vec, hk)
-         call this%fourier_transform_gbt_array(this%hamiltonian%eeo, k_vec, eeok)
-      else
-         call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk)
-         call this%fourier_transform_array(this%hamiltonian%eeo, k_vec, eeok)
-      end if
+      ! h(k) and eeo(k) are ordinary Bloch sums. Representation-specific bond
+      ! links belong upstream of these completed arrays.
+      call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk)
+      call this%fourier_transform_array(this%hamiltonian%eeo, k_vec, eeok)
 
       ! [hoh](k) = eeo(k) · h(k)
       ! GPU: this zgemm (and the two Bloch sums above) are the natural offload
@@ -284,11 +172,7 @@ contains
       ! H(k) = h(k) - [hoh](k)
       hk_result = hk - hohk
       if (this%hamiltonian%ccor_2c) then
-         if (this%hamiltonian%gbt_kspace) then
-            call this%fourier_transform_gbt_array(this%hamiltonian%eecc, k_vec, hcck)
-         else
-            call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
-         end if
+         call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
          hk_result = hk_result + hcck
       end if
 
@@ -481,6 +365,12 @@ contains
 #ifdef _OPENMP
       !$omp end parallel do
 #endif
+
+      ! H(k) now represents exactly this shared real-space operator generation.
+      ! All later eigensystem/DOS/density entry points verify this identity.
+      if (associated(this%hamiltonian)) then
+         this%cached_operator_generation = this%hamiltonian%operator_generation
+      end if
 
       if (this%hamiltonian%ccor_2c .and. this%hamiltonian%ccor_debug .and. this%nk_local > 0) then
          block

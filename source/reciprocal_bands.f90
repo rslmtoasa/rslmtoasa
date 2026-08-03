@@ -20,8 +20,15 @@ contains
       real(rp), dimension(:), allocatable :: rwork
       character(len=100) :: info_msg
       logical :: use_generalized
+      logical :: operator_changed
       real(rp) :: max_herm, max_herm_all, matrix_scale
       character(len=256) :: herm_msg
+
+      ! A q/cone/reference-axis/potential change advances the shared real-space
+      ! operator generation. Never diagonalize a stale H(k): invalidate and
+      ! rebuild it from the ordinary Fourier transform first.
+      call this%invalidate_if_operator_changed('reciprocal%diagonalize_hamiltonian', operator_changed)
+      if (operator_changed) call this%build_kspace_hamiltonian()
 
       ! Check prerequisites
       if (.not. allocated(this%hk_bulk)) then

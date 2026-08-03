@@ -139,6 +139,7 @@ contains
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orbs = nb
+      this%cached_operator_generation = -1
 
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
@@ -201,7 +202,9 @@ contains
       if (allocated(this%hk_total)) call g_safe_alloc%deallocate('reciprocal.hk_total', this%hk_total)
       if (allocated(this%sk_overlap)) call g_safe_alloc%deallocate('reciprocal.sk_overlap', this%sk_overlap)
       if (allocated(this%eigenvalues)) call g_safe_alloc%deallocate('reciprocal.eigenvalues', this%eigenvalues)
+      if (allocated(this%eigenvalues_path)) call g_safe_alloc%deallocate('reciprocal.eigenvalues_path', this%eigenvalues_path)
       if (allocated(this%eigenvectors)) call g_safe_alloc%deallocate('reciprocal.eigenvectors', this%eigenvectors)
+      if (allocated(this%eigenvectors_path)) call g_safe_alloc%deallocate('reciprocal.eigenvectors_path', this%eigenvectors_path)
       if (allocated(this%total_dos)) call g_safe_alloc%deallocate('reciprocal.total_dos', this%total_dos)
       if (allocated(this%total_nos)) call g_safe_alloc%deallocate('reciprocal.total_nos', this%total_nos)
       if (allocated(this%projected_dos)) call g_safe_alloc%deallocate('reciprocal.projected_dos', this%projected_dos)
@@ -218,7 +221,9 @@ contains
       if (allocated(this%hk_total)) deallocate(this%hk_total)
       if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
       if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+      if (allocated(this%eigenvalues_path)) deallocate(this%eigenvalues_path)
       if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      if (allocated(this%eigenvectors_path)) deallocate(this%eigenvectors_path)
       if (allocated(this%total_dos)) deallocate(this%total_dos)
       if (allocated(this%total_nos)) deallocate(this%total_nos)
       if (allocated(this%projected_dos)) deallocate(this%projected_dos)
@@ -236,6 +241,30 @@ contains
       this%canonical_weight_sum = 0.0_rp
       this%canonical_energy_valid = .false.
    end subroutine invalidate_spectral_cache
+
+   !> @brief Invalidate H(k), eigensystem, DOS, and density projections after
+   !>        any shared real-space operator rebuild.
+   !> @details build_bulkham advances hamiltonian%operator_generation before
+   !>          consuming q, cone/reference frames, and potential parameters.
+   !>          A generation mismatch therefore invalidates every downstream
+   !>          reciprocal object without relying on floating-point fingerprints.
+   module subroutine invalidate_if_operator_changed(this, context_tag, changed)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context_tag
+      logical, intent(out), optional :: changed
+      logical :: mismatch
+
+      mismatch = .false.
+      if (associated(this%hamiltonian)) then
+         mismatch = this%cached_operator_generation /= this%hamiltonian%operator_generation
+      end if
+      if (present(changed)) changed = mismatch
+      if (.not. mismatch) return
+
+      call this%invalidate_spectral_cache()
+      call root_info(trim(context_tag)//': invalidated operator-dependent H(k), eigensystem, DOS, and density caches', &
+                     __FILE__, __LINE__)
+   end subroutine invalidate_if_operator_changed
 
    !> @brief Read the &reciprocal namelist and install reciprocal-space options.
    !> @details Parses k-mesh, Fourier mode, band/DOS controls, symmetry options,

@@ -301,13 +301,13 @@ Invalidate all q/cone/reference-axis/potential-dependent caches before rebuildin
 Add pre-eigensolver Hermiticity assertions and compare RS/k-space outputs from identical bond dumps while converging recursion and k mesh.
 
 Completion checklist:
-- [ ] All reciprocal GBT transforms/interfaces/calls are removed.
-- [ ] Reciprocal assembly uses the ordinary Fourier transform only.
-- [ ] gbt_kspace has no physics role.
-- [ ] q-dependent cache invalidation is documented and tested.
-- [ ] Pre-solver Hermiticity checks pass.
-- [ ] RS/k-space convergence comparison is reported.
-- [ ] Deletion inventory and G5 PASS/FAIL are stated.
+- [x] All reciprocal GBT transforms/interfaces/calls are removed.
+- [x] Reciprocal assembly uses the ordinary Fourier transform only.
+- [x] gbt_kspace has no physics role.
+- [x] q-dependent cache invalidation is documented and tested.
+- [x] Pre-solver Hermiticity checks pass.
+- [x] RS/k-space convergence comparison is reported.
+- [x] Deletion inventory and G5 PASS/FAIL are stated.
 ```
 
 ## WP6a — HOH and overlap covariance

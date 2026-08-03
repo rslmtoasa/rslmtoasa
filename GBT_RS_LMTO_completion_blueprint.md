@@ -457,6 +457,15 @@ pass. Rerun G2O here; final G2 requires both G2E and G2O.
 
 **Gate G5:** the same bond dump is consumed by both routes; k-space matrices are Hermitian before diagonalization; solver differences converge monotonically with recursion depth, broadening, and k mesh.
 
+**WP5 implementation status (3 August 2026):** reciprocal cleanup, shared
+ordinary-Fourier routing, deprecated-input isolation, cache invalidation, and
+pre-solver Hermiticity requirements are complete. The identical-bond and
+Hermiticity parts of G5 pass. The tested high-depth RS sequence is not monotonic,
+but depths above ``lld=28`` are outside the useful range of the approximately
+1000-atom PBC cluster. By project-owner decision, **G5 is accepted/open with
+``lld <= 28`` as the operational recursion bound**. Evidence, limitations, and
+the deletion inventory are in `docs/dev/GBT_WP5_G5_REPORT.md`; WP6 is authorized.
+
 ### WP6 — Audit every Hamiltonian and overlap term
 
 Create a checked feature matrix. No blank or “probably okay” entries are allowed.
