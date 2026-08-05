@@ -460,23 +460,16 @@ contains
       if (trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) return
 
       ! These operators have no audited finite-q bond-gauge transformation.
-      ! Fail before the legacy post-Fourier GBT reconstruction can silently
-      ! produce a plausible-looking, but invalid, spectrum.
-      if (this%hamiltonian%ccor_2c) then
-         call g_logger%fatal(trim(context)//': GBT with CCOR is unsupported until the primitive-factor audit.', &
-                             __FILE__, __LINE__)
-      end if
+      ! Fail before reciprocal operator construction can produce a
+      ! plausible-looking, but invalid, spectrum.
       if (this%hamiltonian%hubbard_v_check) then
          call g_logger%fatal(trim(context)//': GBT with intersite Hubbard-V is unsupported.', &
                              __FILE__, __LINE__)
       end if
-      if (this%hamiltonian%hoh) then
-         call g_logger%fatal(trim(context)//': GBT with HOH/overlap products is unsupported until WP6.', &
-                             __FILE__, __LINE__)
-      end if
       if (trim(this%reciprocal_mode) /= 'ham_only') then
          call g_logger%fatal(trim(context)//': GBT with reciprocal_mode='// &
-                             trim(this%reciprocal_mode)//' is unsupported; only ham_only is classified.', &
+                             trim(this%reciprocal_mode)//' is unsupported: the available generalized-overlap '// &
+                             'representation is not a complete formal GBT metric; use ham_only.', &
                              __FILE__, __LINE__)
       end if
       if (allocated(this%hamiltonian%lsham)) then

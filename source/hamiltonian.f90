@@ -57,6 +57,8 @@ module hamiltonian_mod
       !> Torque operator T=[o, Hso]
       complex(rp), dimension(:, :, :, :), allocatable :: tmat
       !> Bulk Hamiltonian
+      ! ee is a directed bond; eeo=ee_ij*obarm_j and eeoee are composites.
+      ! eeoee is a same-bond diagnostic, not the global h-o-h contraction.
       complex(rp), dimension(:, :, :, :), allocatable :: ee, eeo, eeoee, eecc
       !> Local Hamiltonian
       complex(rp), dimension(:, :, :, :), allocatable :: hall, hallo, hallcc
@@ -65,8 +67,10 @@ module hamiltonian_mod
       !> Hamiltonian built in ham0m_nc (description to be improved
       complex(rp), dimension(:, :, :), allocatable :: hhmag
       !> Overlap Hamiltonian
+      ! Onsite rotating-frame factor; never carries a translational GBT phase.
       complex(rp), dimension(:, :, :), allocatable :: obarm
       !> Gravity center Hamiltonian
+      ! Onsite rotating-frame center; never carries a translational GBT phase.
       complex(rp), dimension(:, :, :), allocatable :: enim
       !> Logical variable to include hoh term
       logical :: hoh
@@ -450,6 +454,18 @@ module hamiltonian_mod
 
    end subroutine build_ccor_pair_block_scalar
 
+   !> Build a GBT CCOR block by linking primitive directed S and Sdot first.
+   module subroutine build_ccor_pair_block_gbt(this, ia, ja, it, jt, m, link, &
+                                                sign_i, sign_j, s_block, sdot_block, hcc)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt, m
+      complex(rp), dimension(2, 2), intent(in) :: link
+      real(rp), intent(in) :: sign_i, sign_j
+      complex(rp), dimension(norb, norb), intent(in) :: s_block, sdot_block
+      complex(rp), dimension(nb, nb), intent(out) :: hcc
+
+   end subroutine build_ccor_pair_block_gbt
+
    !> @brief Build one noncollinear CCOR pair block.
    !> @details Computes spin-dependent two-centre combined-correction terms using
    !>          local moments, D components, and VMT coefficients for the atom pair.
@@ -654,19 +670,13 @@ module hamiltonian_mod
 
    end subroutine ccor_spin_product
 
-      !> @brief Apply the spin-spiral rotation to a local moment for CCOR.
-      !> @details Rotates the supplied magnetic moment according to the atom
-      !>          position and spin-spiral q/theta parameters before pair-block use.
-      !> @param[in] this Hamiltonian object containing lattice and spin-spiral state.
-      !> @param[in] ia Site index whose position sets the spin-spiral phase.
-      !> @param[inout] mom Moment vector to rotate in place.
-      module subroutine ccor_apply_spin_spiral(this, ia, mom)
+      !> Select q-agnostic endpoint moments for ordinary NC/texture CCOR.
+      module subroutine ccor_select_endpoint_moments(this, ia, ja, it, jt, mom_i, mom_j)
       class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia
-      real(rp), dimension(3), intent(inout) :: mom
-      real(rp), dimension(3) :: r_ia
+      integer, intent(in) :: ia, ja, it, jt
+      real(rp), dimension(3), intent(out) :: mom_i, mom_j
 
-   end subroutine ccor_apply_spin_spiral
+   end subroutine ccor_select_endpoint_moments
 
    !> @brief Return angular momentum l from a packed orbital index.
    !> @details Maps the LMTO orbital index ilm to its shell quantum number for

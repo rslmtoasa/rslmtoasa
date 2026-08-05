@@ -1315,19 +1315,21 @@ contains
       close (128)
    end subroutine build_bulkham
 
-   !> Build the first-order GBT operator from raw directed strux-lib S blocks.
+   !> Build the first- and second-order GBT operators from raw directed strux-lib S blocks.
    !> The persistent orbital-sized lattice%sbar is read only. Each bond is lifted
    !> into a temporary spinor block, linked, and contracted with fixed collinear
-   !> rotating-frame potential factors before ee is stored.
+   !> rotating-frame potential factors before ee is stored. When HOH is active,
+   !> onsite obarm/enim remain unphased and eeo is derived from the linked ee.
    module subroutine build_gbt_bulkham(this)
       class(hamiltonian), intent(inout) :: this
-      integer :: ntype, ia, ino, nr, m, jj, it, jt, i, j, nn_max_loc, dump_unit
+      integer :: ntype, ia, ino, nr, m, jj, it, jt, i, j, ja, ji, nn_max_loc, dump_unit
       real(rp) :: sign_i, sign_j, theta_i, theta_j, phi_i, phi_j
       real(rp) :: vet(3)
       real(rp), allocatable :: cralat(:, :), ham_vec(:, :)
       complex(rp) :: link(2, 2)
       complex(rp) :: eye2(2, 2)
-      complex(rp) :: raw_orb(norb, norb), linked_spin(nb, nb), pair_spin(nb, nb)
+      complex(rp) :: raw_orb(norb, norb), raw_sdot(norb, norb)
+      complex(rp) :: linked_spin(nb, nb), pair_spin(nb, nb), ccor_spin(nb, nb)
       real(rp) :: max_q0_common_link_error
       real(rp), parameter :: term_tolerance = 1.0e-14_rp
 
@@ -1335,13 +1337,12 @@ contains
          call g_logger%fatal("gbt_single_q requires strux_backend='strux_lib'; the legacy backend is unsupported.", &
                              __FILE__, __LINE__)
       end if
-      if (this%hoh) then
-         call g_logger%fatal('gbt_single_q with HOH/eeo is guarded until primitive-factor covariance is proved.', &
-                             __FILE__, __LINE__)
-      end if
       if (this%ccor_2c) then
-         call g_logger%fatal('gbt_single_q with CCOR is guarded until the S/Sdot composite audit is complete.', &
-                             __FILE__, __LINE__)
+         if (.not. allocated(this%lattice%sdot) .or. .not. this%lattice%strux_want_sdot) then
+            call g_logger%fatal('gbt_single_q with CCOR requires generated Sdot and strux_want_sdot=.true.', &
+                                __FILE__, __LINE__)
+         end if
+         call validate_ccor_inputs(this)
       end if
       if (this%hubbard_v_check) then
          call g_logger%fatal('gbt_single_q with intersite Hubbard-V is unsupported.', __FILE__, __LINE__)
@@ -1359,6 +1360,11 @@ contains
       if (this%hubbard_u_general_check) call this%calculate_hubbard_u_potential_general()
       this%ee = cmplx(0.0_rp, 0.0_rp, rp)
       this%hxc = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%ccor_2c) this%eecc = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%hoh) then
+         this%eeo = cmplx(0.0_rp, 0.0_rp, rp)
+         this%eeoee = cmplx(0.0_rp, 0.0_rp, rp)
+      end if
       eye2 = cmplx(0.0_rp, 0.0_rp, rp)
       eye2(1, 1) = cmplx(1.0_rp, 0.0_rp, rp)
       eye2(2, 2) = eye2(1, 1)
@@ -1449,6 +1455,17 @@ contains
             call hcpx(pair_spin(norb + 1:nb, 1:norb), 'cart2sph')
             call hcpx(pair_spin(norb + 1:nb, norb + 1:nb), 'cart2sph')
             this%ee(:, :, m, ntype) = pair_spin
+
+            if (this%ccor_2c) then
+               do i = 1, norb
+                  do j = 1, norb
+                     raw_sdot(i, j) = normalize_ccor_sdot(this, this%lattice%sdot(j, i, m, ino))
+                  end do
+               end do
+               call build_ccor_pair_block_gbt(this, ia, jj, it, jt, m, link, sign_i, sign_j, &
+                                               raw_orb, raw_sdot, ccor_spin)
+               this%eecc(:, :, m, ntype) = ccor_spin
+            end if
          end do
          deallocate(ham_vec)
 
@@ -1463,10 +1480,51 @@ contains
       end do
       deallocate(cralat)
       if (rank == 0) close(dump_unit)
+
+      if (this%hoh) then
+         ! obarm and enim are onsite rotating-frame objects. The GBT link has
+         ! already entered at primitive S above. Therefore
+         !
+         !   eeo_ij = ee_ij obarm_j,
+         !   (eeo h)_ik = sum_j ee_ij obarm_j ee_jk = (h o h)_ik.
+         !
+         ! eeoee is only the historical same-bond diagnostic composite; it is
+         ! not the global HOH operator consumed by either solver.
+         call this%build_obarm()
+         call this%build_enim()
+         do ntype = 1, this%lattice%ntype
+            ia = this%lattice%atlist(ntype)
+            nr = this%lattice%nn(ia, 1)
+            do m = 1, nr
+               if (m == 1) then
+                  ji = this%lattice%iz(ia)
+               else
+                  ja = this%lattice%nn(ia, m)
+                  if (ja <= 0 .or. ja > this%lattice%kk) cycle
+                  ji = this%lattice%iz(ja)
+               end if
+               if (ji <= 0 .or. ji > this%lattice%ntype) cycle
+               call zgemm('n', 'n', nb, nb, nb, cone, this%ee(:, :, m, ntype), nb, &
+                          this%obarm(:, :, ji), nb, czero, this%eeo(:, :, m, ntype), nb)
+               call zgemm('n', 'c', nb, nb, nb, cone, this%eeo(:, :, m, ntype), nb, &
+                          this%ee(:, :, m, ntype), nb, czero, this%eeoee(:, :, m, ntype), nb)
+            end do
+         end do
+      end if
+
       if (rank == 0 .and. maxval(abs(this%q_ss)) <= 1.0e-14_rp) then
          call g_logger%info('GBT q=0 common-frame max|G-I|='// &
                             trim(real2str(max_q0_common_link_error, '(ES12.4)')), __FILE__, __LINE__)
       end if
+
+      if (this%ccor_2c .and. maxval(abs(this%eecc)) <= tiny(1.0_rp)) then
+         if (this%ccor_strict) then
+            call g_logger%fatal('GBT CCOR built zero eecc; check Sdot, VMTZ/vrmax, and ccor_elin.', __FILE__, __LINE__)
+         else if (rank == 0) then
+            call g_logger%warning('GBT CCOR built zero eecc; results will be unchanged.', __FILE__, __LINE__)
+         end if
+      end if
+      if (this%ccor_2c .and. this%ccor_debug) call log_ccor_debug(this, this%eecc, 'GBT bulk')
 
       if (trim(this%control%recur) == 'chebyshev') call this%compute_hamiltonian_bounds(verbose=.false.)
    end subroutine build_gbt_bulkham

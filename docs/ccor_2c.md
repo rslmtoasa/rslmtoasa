@@ -124,6 +124,18 @@ For reciprocal workflows, `Hcc(k)` is Bloch-summed from `eecc` in both first-
 and second-order paths. The deprecated `kspace_ham_order='proper'` input is
 treated as `second`.
 
+For `magnetic_representation='gbt_single_q'`, both primitive directed factors
+are linked before any endpoint contraction:
+
+```text
+S_ij    -> S_ij G_ij
+Sdot_ij -> Sdot_ij G_ij
+```
+
+The completed `D`, `Ddot`, and `Hcc` objects are not rotated. Onsite CCOR is
+evaluated in the shared collinear rotating frame with zero bond phase. See
+`docs/dev/GBT_WP6B_CCOR_REPORT.md` for the derivation and oracle evidence.
+
 ## Backend Status
 
 The legacy CPU recursion paths apply `Hcc_2c` exactly as a separate additive

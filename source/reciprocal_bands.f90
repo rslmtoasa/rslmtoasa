@@ -81,6 +81,7 @@ contains
                   ': max|O-O^H|=', max_herm, ', scale=', matrix_scale
                call g_logger%fatal('diagonalize_hamiltonian: '//trim(herm_msg), __FILE__, __LINE__)
             end if
+            if (use_generalized) call this%check_overlap_properties(ik, this%sk_overlap(:, :, ik))
          end do
       end if
 
@@ -125,7 +126,6 @@ contains
 
          if (use_generalized) then
             s_k_copy = this%sk_overlap(:, :, ik)
-            call this%check_overlap_properties(ik, s_k_copy)
             call zhegv(1, 'V', 'U', nmat, h_k_copy, nmat, s_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
          else
             ! Diagonalize H(k) using LAPACK ZHEEV
@@ -176,7 +176,7 @@ contains
       call root_info('Kanpur mapping: non-orthogonality treatment is approximation-level diagnostic.', __FILE__, __LINE__)
    end subroutine print_kanpur_mapping
 
-   !> @brief Check Hermiticity and basic diagnostics for an overlap matrix.
+   !> @brief Require a Hermitian positive-definite overlap matrix.
    !> @param[in] this Reciprocal object providing diagnostic context.
    !> @param[in] ik k-point index associated with s_k.
    !> @param[in] s_k Overlap matrix to inspect.
@@ -184,8 +184,9 @@ contains
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik
       complex(rp), dimension(:, :), intent(in) :: s_k
-      integer :: i, j, n
+      integer :: i, j, n, info
       real(rp) :: max_herm
+      complex(rp), allocatable :: chol(:, :)
       max_herm = 0.0_rp
       n = size(s_k, 1)
       do i = 1, n
@@ -196,6 +197,23 @@ contains
       if (ik == 1 .or. max_herm > 1.0e-6_rp) then
          call g_logger%info('S(k) hermiticity check ik=' // trim(int2str(ik)) // ' max_diff=' // &
             trim(real2str(max_herm, '(ES12.4)')), __FILE__, __LINE__)
+      end if
+      if (max_herm > 1.0e-10_rp*max(1.0_rp, maxval(abs(s_k)))) then
+         call g_logger%fatal('check_overlap_properties: overlap is not Hermitian at k='// &
+                             trim(int2str(ik)), __FILE__, __LINE__)
+      end if
+
+      ! ZPOTRF applies the same positive-definiteness criterion required by
+      ! ZHEGV. Check before the eigensolver so an incomplete or indefinite
+      ! metric cannot degrade into per-k solver warnings.
+      allocate(chol(n, n))
+      chol = s_k
+      call zpotrf('U', n, chol, n, info)
+      deallocate(chol)
+      if (info /= 0) then
+         call g_logger%fatal('check_overlap_properties: overlap is not positive definite at k='// &
+                             trim(int2str(ik))//'; leading minor='//trim(int2str(info)), &
+                             __FILE__, __LINE__)
       end if
    end subroutine check_overlap_properties
 

@@ -322,13 +322,13 @@ Trace eeo, eeoee, obarm, enim, the RS two-sweep HOH operator, reciprocal h-o-h c
 Do not phase an already contracted object without a derivation. If the formal overlap representation is incomplete, reject it in GBT mode explicitly.
 
 Completion checklist:
-- [ ] eeo/eeoee/obarm/enim are classified.
-- [ ] HOH covariance is derived at primitive-bond level.
-- [ ] RS two-sweep and reciprocal operators agree.
-- [ ] H/O Hermiticity checks pass.
-- [ ] Supported overlap is positive definite.
-- [ ] Unsupported modes fail early.
-- [ ] Term map and partial G6 PASS/FAIL are reported.
+- [x] eeo/eeoee/obarm/enim are classified.
+- [x] HOH covariance is derived at primitive-bond level.
+- [x] RS two-sweep and reciprocal operators agree.
+- [x] H/O Hermiticity checks pass.
+- [x] Supported overlap is positive definite.
+- [x] Unsupported modes fail early.
+- [x] Term map and partial G6 PASS/FAIL are reported.
 ```
 
 ## WP6b — CCOR covariance
@@ -343,13 +343,13 @@ Remove both old full-angle transverse GBT rotations. Trace each CCOR contributio
 Preserve ordinary noncollinear CCOR and explicit_texture behavior. Until every CCOR term has a dense oracle and directed-bond/k-space Hermiticity test, keep GBT+CCOR fatal.
 
 Completion checklist:
-- [ ] Both full-angle GBT rotations are removed.
-- [ ] Every CCOR term is classified onsite/bond/composite.
-- [ ] Directed CCOR factors use the common gauge.
-- [ ] Ordinary NC and explicit-texture CCOR regressions pass.
-- [ ] Dense and Hermiticity oracles pass for enabled CCOR.
-- [ ] Unsupported CCOR combinations fail early.
-- [ ] Derivation, deletion list, and partial G6 PASS/FAIL are reported.
+- [x] Both full-angle GBT rotations are removed.
+- [x] Every CCOR term is classified onsite/bond/composite.
+- [x] Directed CCOR factors use the common gauge.
+- [x] Ordinary NC and explicit-texture CCOR regressions pass.
+- [x] Dense and Hermiticity oracles pass for enabled CCOR.
+- [x] Unsupported CCOR combinations fail early.
+- [x] Derivation, deletion list, and partial G6 PASS/FAIL are reported.
 ```
 
 ## WP6c — Hubbard, constraints, velocity, and torque

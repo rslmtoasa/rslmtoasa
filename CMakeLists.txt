@@ -446,6 +446,12 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp5SourceContract
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp5_source_contract.py)
   set_tests_properties(UnitGbtWp5SourceContract PROPERTIES LABELS "unit;gbt;wp5")
+  add_test(NAME UnitGbtWp6Hoh
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
+  set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")
+  add_test(NAME UnitGbtWp6Ccor
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_ccor.py)
+  set_tests_properties(UnitGbtWp6Ccor PROPERTIES LABELS "unit;gbt;wp6;ccor")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE

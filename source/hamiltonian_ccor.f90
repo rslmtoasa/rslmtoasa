@@ -1,4 +1,6 @@
 submodule(hamiltonian_mod) hamiltonian_ccor
+   use magnetic_representation_mod, only: explicit_texture, gbt_single_q, select_endpoint_moments
+   use gbt_structure_mod, only: gbt_lift_orbital_block, gbt_contract_collinear
 
 contains
 
@@ -93,6 +95,12 @@ contains
    module subroutine validate_ccor_inputs(this)
       class(hamiltonian), intent(in) :: this
 
+      if (trim(this%magnetic_representation) == gbt_single_q .and. &
+          (.not. allocated(this%charge%lattice%sdot) .or. &
+           .not. this%charge%lattice%strux_want_sdot)) then
+         call g_logger%fatal('gbt_single_q with CCOR requires generated Sdot and strux_want_sdot=.true.', &
+                             __FILE__, __LINE__)
+      end if
       if (.not. allocated(this%charge%lattice%sdot)) then
          if (this%ccor_strict) then
             call g_logger%fatal('ccor_2c requires lattice%sdot; set strux_want_sdot=.true. with strux_lib.', __FILE__, __LINE__)
@@ -117,6 +125,32 @@ contains
       end if
    end subroutine validate_ccor_inputs
 
+   !> Select endpoint moments for ordinary noncollinear/texture CCOR.
+   !> GBT is intentionally excluded because S and Sdot must be linked before
+   !> either primitive factor is contracted with endpoint potential factors.
+   module subroutine ccor_select_endpoint_moments(this, ia, ja, it, jt, mom_i, mom_j)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt
+      real(rp), dimension(3), intent(out) :: mom_i, mom_j
+      logical :: valid
+
+      if (trim(this%magnetic_representation) == gbt_single_q) then
+         call g_logger%fatal('gbt_single_q must not enter the contracted CCOR pair builder.', __FILE__, __LINE__)
+      end if
+      if (trim(this%magnetic_representation) == explicit_texture) then
+         call select_endpoint_moments(this%magnetic_representation, ia, ja, &
+            this%charge%lattice%symbolic_atoms(it)%potential%mom(:), &
+            this%charge%lattice%symbolic_atoms(jt)%potential%mom(:), &
+            this%texture_moments, mom_i, mom_j, valid)
+         if (.not. valid) then
+            call g_logger%fatal('explicit_texture CCOR endpoint moment lookup failed.', __FILE__, __LINE__)
+         end if
+      else
+         mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
+         mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
+      end if
+   end subroutine ccor_select_endpoint_moments
+
    !> @brief Build one scalar-relativistic CCOR pair block.
    !> @details Computes the two-centre combined-correction hopping contribution
    !>          between atom sites ia/ja and types it/jt for neighbor index m.
@@ -135,6 +169,101 @@ contains
 
       call build_ccor_pair_block_noncollinear(this, ia, ja, it, jt, ino, m, hcc)
    end subroutine build_ccor_pair_block_scalar
+
+   !> Build one GBT CCOR block from primitive directed S and Sdot factors.
+   !> Both factors receive the already-computed common endpoint link before
+   !> contraction.  The completed D/Ddot/Hcc objects are never rephased.
+   module subroutine build_ccor_pair_block_gbt(this, ia, ja, it, jt, m, link, &
+                                                sign_i, sign_j, s_block, sdot_block, hcc)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt, m
+      complex(rp), dimension(2, 2), intent(in) :: link
+      real(rp), intent(in) :: sign_i, sign_j
+      complex(rp), dimension(norb, norb), intent(in) :: s_block, sdot_block
+      complex(rp), dimension(nb, nb), intent(out) :: hcc
+
+      complex(rp), dimension(nb, nb) :: linked_s, linked_sdot, dmat, ddotmat
+      real(rp), dimension(norb, 0:2) :: ccd_i, ccd_j
+      real(rp), dimension(2) :: lambda_pair, lambda_i, lambda_j
+      real(rp) :: lambda0, lambda1
+      complex(rp) :: wi
+      integer :: ilm, jlm, ispin, jspin, irow, jcol
+
+      call build_ccor_coefficients(this, ia, it, ccd_i)
+      call build_ccor_coefficients(this, ja, jt, ccd_j)
+
+      ! Primitive directed factors: S_ij G_ij and Sdot_ij G_ij.
+      call gbt_lift_orbital_block(s_block, link, linked_s)
+      call gbt_lift_orbital_block(sdot_block, link, linked_sdot)
+      call gbt_contract_collinear(linked_s, &
+         this%lattice%symbolic_atoms(it)%potential%wx0(1:norb), &
+         this%lattice%symbolic_atoms(it)%potential%wx1(1:norb), &
+         this%lattice%symbolic_atoms(jt)%potential%wx0(1:norb), &
+         this%lattice%symbolic_atoms(jt)%potential%wx1(1:norb), sign_i, sign_j, dmat)
+      call gbt_contract_collinear(linked_sdot, &
+         this%lattice%symbolic_atoms(it)%potential%wx0(1:norb), &
+         this%lattice%symbolic_atoms(it)%potential%wx1(1:norb), &
+         this%lattice%symbolic_atoms(jt)%potential%wx0(1:norb), &
+         this%lattice%symbolic_atoms(jt)%potential%wx1(1:norb), sign_i, sign_j, ddotmat)
+
+      hcc = czero
+      if (trim(this%ccor_vmt_mode) == 'pair_surface') then
+         lambda_pair = ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin
+         lambda0 = 0.5_rp*(lambda_pair(1) + lambda_pair(2))
+         lambda1 = 0.5_rp*(lambda_pair(1) - lambda_pair(2))
+         lambda_i = [lambda0 + sign_i*lambda1, lambda0 - sign_i*lambda1]
+         lambda_j = [lambda0 + sign_j*lambda1, lambda0 - sign_j*lambda1]
+         do ispin = 1, 2
+            do jspin = 1, 2
+               do ilm = 1, norb
+                  irow = ilm + (ispin - 1)*spin_off
+                  do jlm = 1, norb
+                     jcol = jlm + (jspin - 1)*spin_off
+                     hcc(irow, jcol) = 0.5_rp*(lambda_i(ispin) + lambda_j(jspin))*ddotmat(irow, jcol) + &
+                        (ccd_i(ilm, 1)*lambda_i(ispin) + ccd_j(jlm, 1)*lambda_j(jspin))*dmat(irow, jcol)
+                  end do
+               end do
+            end do
+         end do
+      else
+         lambda0 = ccor_vmt_scalar(this) - this%ccor_elin
+         do ispin = 1, 2
+            do jspin = 1, 2
+               do ilm = 1, norb
+                  irow = ilm + (ispin - 1)*spin_off
+                  do jlm = 1, norb
+                     jcol = jlm + (jspin - 1)*spin_off
+                     hcc(irow, jcol) = lambda0*(ddotmat(irow, jcol) + &
+                        (ccd_i(ilm, 1) + ccd_j(jlm, 1))*dmat(irow, jcol))
+                  end do
+               end do
+            end do
+         end do
+      end if
+
+      ! Onsite CCOR is evaluated in the shared collinear rotating frame.
+      ! d=0 gives alpha=0 and a common endpoint frame gives G_ii=I.
+      if (m == 1) then
+         do ispin = 1, 2
+            do ilm = 1, norb
+               irow = ilm + (ispin - 1)*spin_off
+               wi = this%lattice%symbolic_atoms(it)%potential%wx0(ilm) + &
+                    merge(sign_i, -sign_i, ispin == 1)* &
+                    this%lattice%symbolic_atoms(it)%potential%wx1(ilm)
+               if (trim(this%ccor_vmt_mode) == 'pair_surface') then
+                  hcc(irow, irow) = hcc(irow, irow) + lambda_i(ispin)*ccd_i(ilm, 0)*wi*wi
+               else
+                  hcc(irow, irow) = hcc(irow, irow) + lambda0*ccd_i(ilm, 0)*wi*wi
+               end if
+            end do
+         end do
+      end if
+
+      call hcpx(hcc(1:norb, 1:norb), 'cart2sph')
+      call hcpx(hcc(1:norb, norb + 1:nb), 'cart2sph')
+      call hcpx(hcc(norb + 1:nb, 1:norb), 'cart2sph')
+      call hcpx(hcc(norb + 1:nb, norb + 1:nb), 'cart2sph')
+   end subroutine build_ccor_pair_block_gbt
 
    !> @brief Build one noncollinear CCOR pair block.
    !> @details Computes spin-dependent two-centre combined-correction terms using
@@ -155,11 +284,8 @@ contains
       complex(rp), dimension(norb, norb) :: s_block, sdot_block
       complex(rp), dimension(norb, norb, 4) :: dcomp, ddotcomp, kcomp
       real(rp), dimension(norb, 0:2) :: ccd_i, ccd_j
-      real(rp), dimension(3) :: mom_i
+      real(rp), dimension(3) :: mom_i, mom_j
       real(rp) :: lambda
-      real(rp) :: alpha_ss
-      real(rp), dimension(3) :: vet_ss
-      complex(rp), dimension(norb, norb) :: kx_ss, ky_ss
       integer :: ilm, jlm, idir
 
       hcc(:, :) = czero
@@ -193,8 +319,7 @@ contains
       end do
 
       if (m == 1) then
-         mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-         call ccor_apply_spin_spiral(this, ia, mom_i)
+         call ccor_select_endpoint_moments(this, ia, ja, it, jt, mom_i, mom_j)
          do ilm = 1, norb
             kcomp(ilm, ilm, 4) = kcomp(ilm, ilm, 4) + ccd_i(ilm, 0)* &
                (this%charge%lattice%symbolic_atoms(it)%potential%wx0(ilm)**2 + &
@@ -210,19 +335,6 @@ contains
       do idir = 1, 4
          call hcpx(kcomp(:, :, idir), 'cart2sph')
       end do
-
-      ! Legacy non-GBT CCOR bond rotation. GBT+CCOR is rejected before this
-      ! routine until WP6 proves covariance at the primitive S/Sdot boundary.
-      if (this%lattice%pbc) then
-         call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
-      else
-         vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-      end if
-      alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
-      kx_ss = kcomp(:, :, 1)
-      ky_ss = kcomp(:, :, 2)
-      kcomp(:, :, 1) = kx_ss*cos(alpha_ss) - ky_ss*sin(alpha_ss)
-      kcomp(:, :, 2) = kx_ss*sin(alpha_ss) + ky_ss*cos(alpha_ss)
 
          lambda = ccor_vmt_scalar(this) - this%ccor_elin
       hcc(1:norb, 1:norb) = lambda*(kcomp(:, :, 4) + kcomp(:, :, 3))
@@ -257,19 +369,13 @@ contains
          complex(rp), dimension(4) :: lambda_i, lambda_j, dloc, ddotloc, term_l, term_r, onsite
          real(rp), dimension(2) :: lambda_pair
          real(rp), dimension(3) :: mom_i, mom_j
-         real(rp) :: alpha_ss
-         real(rp), dimension(3) :: vet_ss
-         complex(rp), dimension(norb, norb) :: hx_ss, hy_ss
          integer :: ilm, jlm, idir
 
          hcc(:, :) = czero
          hcomp(:, :, :) = czero
          lambda_pair(:) = (ccor_vmt_pair_surface(this, it, jt) - this%ccor_elin)
 
-         mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-         mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-         call ccor_apply_spin_spiral(this, ia, mom_i)
-         call ccor_apply_spin_spiral(this, ja, mom_j)
+         call ccor_select_endpoint_moments(this, ia, ja, it, jt, mom_i, mom_j)
          call ccor_lambda_components(lambda_pair, mom_i, lambda_i)
          call ccor_lambda_components(lambda_pair, mom_j, lambda_j)
 
@@ -306,18 +412,6 @@ contains
             call hcpx(hcomp(:, :, idir), 'cart2sph')
          end do
 
-         ! Legacy non-GBT CCOR bond rotation. GBT+CCOR remains guarded.
-         if (this%lattice%pbc) then
-            call this%lattice%f_wrap_coord_diff(this%lattice%kk, this%lattice%cr*this%lattice%alat, ia, ja, vet_ss)
-         else
-            vet_ss(:) = (this%charge%lattice%cr(:, ja) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
-         end if
-         alpha_ss = 2.0_rp*pi*dot_product(vet_ss, this%q_ss)/this%charge%lattice%alat
-         hx_ss = hcomp(:, :, 1)
-         hy_ss = hcomp(:, :, 2)
-         hcomp(:, :, 1) = hx_ss*cos(alpha_ss) - hy_ss*sin(alpha_ss)
-         hcomp(:, :, 2) = hx_ss*sin(alpha_ss) + hy_ss*cos(alpha_ss)
-
          hcc(1:norb, 1:norb) = hcomp(:, :, 4) + hcomp(:, :, 3)
          hcc(spin_off + 1:spin_off + norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 4) - hcomp(:, :, 3)
          hcc(1:norb, spin_off + 1:spin_off + norb) = hcomp(:, :, 1) - i_unit*hcomp(:, :, 2)
@@ -345,10 +439,7 @@ contains
       complex(rp) :: dotp
       integer :: ilm, jlm, idir
 
-      mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom(:)
-      mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom(:)
-      call ccor_apply_spin_spiral(this, ia, mom_i)
-      call ccor_apply_spin_spiral(this, ja, mom_j)
+      call ccor_select_endpoint_moments(this, ia, ja, it, jt, mom_i, mom_j)
       dotp = cmplx(dot_product(mom_i, mom_j), 0.0_rp, rp)
       cross = cmplx(cross_product(mom_i, mom_j), 0.0_rp, rp)
 
@@ -596,37 +687,6 @@ contains
          c(2) = a(4)*b(2) + b(4)*a(2) + i_unit*(a(3)*b(1) - a(1)*b(3))
          c(3) = a(4)*b(3) + b(4)*a(3) + i_unit*(a(1)*b(2) - a(2)*b(1))
       end subroutine ccor_spin_product
-
-      !> @brief Apply the spin-spiral cone tilt to a local moment for CCOR.
-      !> @details Generalized Bloch theorem: the cone angle is a purely local
-      !>          (on-site) quantity, common to every site -- no azimuthal
-      !>          q-dependence here. The q-dependent bond rotation is applied
-      !>          separately, in the pair-block builders (build_ccor_pair_block_noncollinear,
-      !>          build_ccor_pair_surface_block), using the actual bond vector.
-      !> @param[in] this Hamiltonian object containing spin-spiral state.
-      !> @param[in] ia Unused; retained for call-site compatibility.
-      !> @param[inout] mom Moment vector to rotate in place.
-      module subroutine ccor_apply_spin_spiral(this, ia, mom)
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia
-      real(rp), dimension(3), intent(inout) :: mom
-
-      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
-         if (ia >= 1 .and. ia <= size(this%charge%lattice%iz)) then
-            if (this%charge%lattice%iz(ia) <= size(this%theta_ss_sublattice)) then
-               mom(1) = sin(this%theta_ss_sublattice(this%charge%lattice%iz(ia))) * &
-                        cos(this%phi_ss_sublattice(this%charge%lattice%iz(ia)))
-               mom(2) = sin(this%theta_ss_sublattice(this%charge%lattice%iz(ia))) * &
-                        sin(this%phi_ss_sublattice(this%charge%lattice%iz(ia)))
-               mom(3) = cos(this%theta_ss_sublattice(this%charge%lattice%iz(ia)))
-            end if
-         end if
-      else if (norm2(this%q_ss) > 1.0e-5_rp .or. abs(sin(this%theta_ss)) > 1.0e-8_rp) then
-         mom(1) = sin(this%theta_ss)
-         mom(2) = 0.0_rp
-         mom(3) = cos(this%theta_ss)
-      end if
-   end subroutine ccor_apply_spin_spiral
 
    !> @brief Return angular momentum l from a packed orbital index.
    !> @details Maps the LMTO orbital index ilm to its shell quantum number for

@@ -1,0 +1,21 @@
+{
+  "_description": "WP6b cases that must terminate before operator construction.",
+  "cases": [
+    {
+      "name": "wp6b_ccor_missing_sdot_reject",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false, "screening": "sigma" },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "reciprocal": { "nk1": 2, "nk2": 2, "nk3": 2,
+          "use_symmetry_reduction": false, "use_time_reversal": false,
+          "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "theta_ss": 20.0, "ccor_2c": true,
+          "ccor_elin": 0.25, "ccor_vmt_mode": "vmad_scalar", "ccor_strict": false },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    }
+  ]
+}
