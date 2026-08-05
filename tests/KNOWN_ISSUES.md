@@ -352,3 +352,80 @@ future reference regeneration will capture genuinely different `vmad` values.
 - **Found:** B7.6 (vacuum-lead wiring), while probing whether the new
   electrostatics path had multi-layer coverage. Not investigated further —
   out of scope for the wiring task.
+
+## Magnetic constraining field (`&control constraints_enable`) is a no-op
+
+- **Symptom:** none visible to the user — the mechanism silently does
+  nothing. `constraints_enable = .true.` (with `constraints_i_cons`,
+  `constraints_mom_ref`, `constraints_bfield`, etc.) runs without error and
+  produces ordinary unconstrained SCF output.
+- **Root cause, verified by reading the code:** both call sites of
+  `cfd::constrain` (`source/self.f90:1082-1102`, inside `run_dos`'s real-space
+  SCF branch, and `source/exchange.f90:1475-1497`, inside
+  `calculate_exchange`) allocate local `mom_in`/`mom_ref`/`bfield`, call
+  `constrain(mom_in, mom_ref, bfield, nrec)` (`source/include_codes/abspinlib/constrain.f90:60-234`),
+  then immediately `deallocate` all three without ever writing `bfield` back
+  into `potential%mom`, any Hamiltonian array (`ee`/`hall`), or
+  `this%control%constraints_bfield`. The constraint energy `etcon` computed
+  inside `constrain` (e.g. `constrain.f90:89,96,149`) is a plain local
+  `real(dblprec)`, never returned, never logged, and never added to the total
+  energy. A user-supplied `constraints_bfield` seed is also discarded: both
+  call sites zero-initialize `bfield(:, ia_loc) = 0.0_dblprec` immediately
+  before calling `constrain`, so any namelist value never reaches it.
+- **Scope:** this is independent of the Generalized Bloch Theorem work —
+  the mechanism is equally inert under `periodic_nc`, `explicit_texture`, and
+  `gbt_single_q`. There is currently no Hamiltonian/energy term for any
+  representation mode to gauge or gate.
+- **Also noted while reading `constrain.f90`, unrelated to the above:** for
+  `constraints_i_cons` 2 and 3, the local accumulator `etcon` is read
+  (`etcon = etcon + ...`) inside the `do na` loop (`constrain.f90:89,96`)
+  with no `etcon = 0.0_dblprec` initialization beforehand — a latent
+  uninitialized-read, though moot for now since `etcon` is discarded anyway.
+- **Found:** WP6c (GBT audit of Hubbard/constraints/velocity/torque/SOC
+  terms), while checking what frame the constraining field uses. Not fixed
+  here — wiring it up is a real feature-completion task (decide the target
+  frame, thread `bfield` into the potential/Hamiltonian, add the energy term,
+  fix the `constraints_bfield` seed discard, fix the `etcon` initialization),
+  estimated at least one dedicated task, not a WP6c-sized fix.
+
+## Five `tests/scf/cases.json` GBT fixtures fatal on `strux_backend='legacy'` (pre-existing, not a WP6c regression)
+
+- **Symptom:** `Example_bulk_bccFe_nsp4_block_spiral_qplus`,
+  `Example_bulk_bccFe_nsp4_block_spiral_qminus`, `Example_frozen_magnon_bccFe`,
+  `Example_frozen_magnon_bccFe_auto`, and `Example_frozen_magnon_bccFe_auto_scf`
+  all abort with `gbt_single_q requires strux_backend='strux_lib'; the legacy
+  backend is unsupported.` (`hamiltonian_build.f90::build_gbt_bulkham`)
+  instead of producing output to compare against their reference.
+- **Root cause, verified:** `calculation.f90:1836` and `:1977`
+  unconditionally set `hamiltonian_obj%magnetic_representation = gbt_single_q`
+  for the bulk-spiral (`q_ss`/`theta_ss` active) and `frozen_magnon`
+  post-processing workflows. `lattice%strux_backend` defaults to `'legacy'`
+  (`lattice_lifecycle.f90:404,654,920`) unless a case's namelist explicitly
+  sets `strux_backend='strux_lib'`. These five `tests/scf/cases.json` entries
+  do not set it, so every run through these workflows now hits the WP4
+  legacy-backend guard (`hamiltonian_build.f90`) before producing any
+  Hamiltonian.
+- **Confirmed pre-existing, not introduced by WP6c:** reproduces identically,
+  same fatal, same line, on the pre-WP6c commit `0188a6a` with no source
+  changes (checked via `git stash` + rebuild before diagnosing this). WP6a
+  and WP6b's own gate evidence only reports `ctest -L unit` pass counts
+  (18/18, 19/19) — the SCF example suite (`ctest -L scf`) does not appear to
+  have been run as part of closing those gates, so this breakage was not
+  caught then either. It predates WP6c and is unrelated to the
+  Hubbard-U/V/constraints/velocity/torque/SOC terms WP6c actually audited.
+- **Two more `tests/scf/cases.json` failures are separate and older still:**
+  `Example_bulk_bccFe_nsp2_block`/`_hoh` fail a single `totaldos.out` row by
+  ~4-6e-5 (rel ~2e-6) — this matches the pre-existing gfortran-13 DOS
+  tolerance delta already recorded in `docs/dev/GBT_WP0_G0_REPORT.md`, not a
+  new issue.
+- **Proposed fix (not applied — regression-reference-touching, needs a
+  green light):** add `"lattice": {"strux_backend": "strux_lib"}` (and
+  whatever `screening`/`strux_want_sdot` the GBT path additionally requires)
+  to the five affected `tests/scf/cases.json` entries, then regenerate their
+  reference values on the corrected `strux_lib` GBT path — the numbers will
+  differ from the old `legacy`-backend GBT output, so this is a reference
+  regeneration, not a one-line config patch. Estimated size: small
+  (config + one `tests/generate_references.py` run + review), but touches
+  golden values and so needs explicit sign-off before doing it.
+- **Found:** WP6c, while running the full `ctest -L scf` suite as required by
+  the project's rule 1 regression gate before/after every task.

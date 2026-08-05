@@ -752,6 +752,19 @@ contains
       complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
       complex(rp), dimension(nb, nb) :: locham
 
+      ! this%hxc is only populated by build_bulkham's ordinary periodic_nc/
+      ! explicit_texture branch (hamiltonian_build.f90, build_bulkham); GBT's
+      ! own builder never fills it and returns before that code is reached.
+      ! Under gbt_single_q the commutator below would therefore be built from
+      ! an identically-zero array and silently report a zero spin-torque
+      ! current rather than a covariant, gauged one. Fail before the caller
+      ! spends any recursion/conductivity work on it.
+      if (trim(this%magnetic_representation) == gbt_single_q) then
+         call g_logger%fatal('gbt_single_q with cond_type=spin_torque is unsupported: '// &
+                              'the exchange-splitting bond array hxc is not built under GBT.', &
+                              __FILE__, __LINE__)
+      end if
+
       ! Derive dimension from your velocity array:
       hblocksize = size(this%v_a, 1)  ! e.g. first dimension of v_a
 
@@ -1345,6 +1358,14 @@ contains
          call validate_ccor_inputs(this)
       end if
       if (this%hubbard_v_check) then
+         ! calculate_hubbard_v_potential is a real diagonal-occupation proxy
+         ! (hamiltonian_hubbard.f90) with no primitive directed-bond factor at
+         ! all -- it is not built from S/Sdot, so it has nothing for the
+         ! endpoint link G_ab to act on, and the proxy itself is already
+         ! documented as an incomplete stand-in for the true inter-site
+         ! density-matrix term. There is no covariant gauge to apply here;
+         ! reject rather than add an unlinked bond correction that would
+         ! break the K(-d)=K(d)^H reverse-bond identity.
          call g_logger%fatal('gbt_single_q with intersite Hubbard-V is unsupported.', __FILE__, __LINE__)
       end if
       if (this%local_axis) then
@@ -1470,6 +1491,12 @@ contains
          deallocate(ham_vec)
 
          if (this%hubbard_u_general_check) then
+            ! Hubbard-U is onsite (spin-diagonal in the collinear rotating
+            ! frame, from potential%ldm) and is added at bond slot m=1, where
+            ! d=0 and the endpoint link G_ii=I by construction. It therefore
+            ! carries no translational phase and needs no separate gauge
+            ! step: adding it here, after the primitive-link contraction,
+            ! is equivalent to adding it before contraction.
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + &

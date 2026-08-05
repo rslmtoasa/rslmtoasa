@@ -369,14 +369,31 @@ differences. Keep nonzero-q GBT+SOC fatal.
 Preserve periodic_nc and explicit_texture behavior. Unsupported terms must fail before SCF.
 
 Completion checklist:
-- [ ] Hubbard-U/V frame and gauge handling are explicit.
-- [ ] Constraint frame and energy bookkeeping are explicit.
-- [ ] Velocity/torque finite-difference tests pass.
-- [ ] Other derivative/downfolded terms are classified.
-- [ ] Nonzero-q GBT+SOC fails early.
-- [ ] Ordinary NC/texture regressions pass.
-- [ ] Feature matrix and partial G6 PASS/FAIL are reported.
+- [x] Hubbard-U/V frame and gauge handling are explicit.
+- [x] Constraint frame and energy bookkeeping are explicit.
+- [x] Velocity/torque finite-difference tests pass.
+- [x] Other derivative/downfolded terms are classified.
+- [x] Nonzero-q GBT+SOC fails early.
+- [x] Ordinary NC/texture regressions pass.
+- [x] Feature matrix and partial G6 PASS/FAIL are reported.
 ```
+
+**WP6c outcome (2026-08-05):** Hubbard-U (onsite) and SOC were already
+correctly gated; this task adds explicit frame commentary and confirms both
+guards by citation. Hubbard-V stays fatal (its diagonal-occupation proxy
+carries no directed factor to gauge). Charge/spin/orbital velocity are
+proven, by an independent k-derivative oracle (closed-form and finite-
+difference), to inherit their gauge from the already-audited `ee` with no
+code change needed. One real gap was found and fixed: `cond_type=spin_torque`
+conductivity silently returned zero under GBT (`this%hxc` is never populated
+on the GBT path) and is now fatal. Constraining fields have no functional
+Hamiltonian/energy term in *any* representation mode in this codebase
+(verified by reading both call sites) — recorded in `tests/KNOWN_ISSUES.md`,
+not fixed here. Full evidence, term map, and regression results (including
+5 pre-existing, WP6c-unrelated `strux_backend` fixture failures found while
+running the full `scf` suite) are in `docs/dev/GBT_WP6C_REPORT.md`.
+WP6c: **PASS**. Partial G6 through WP6a+WP6b+WP6c: **PASS for the audited
+slices**. Final G6 remains open pending the WP6 integration task below.
 
 ## WP6 integration — Close the feature gate
 
