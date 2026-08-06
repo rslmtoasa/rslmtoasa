@@ -91,6 +91,28 @@ module spglib_interface_mod
          integer(c_int) :: spg_get_ir_reciprocal_mesh
       end function spg_get_ir_reciprocal_mesh
 
+      ! Reduce a k-point mesh by the subgroup of the given rotations that
+      ! stabilizes (leaves invariant) every one of the given q-points -- the
+      ! little group common to the whole q-point set. With num_q=1 this is the
+      ! little group of a single q; with num_q>1 it is the subgroup common to
+      ! every q, which is what a multi-q sweep needs to build one mesh valid
+      ! for all its points instead of reusing one point's mesh for the rest.
+      function spg_get_stabilized_reciprocal_mesh(grid_address, ir_mapping_table, mesh, is_shift, &
+                                                  is_time_reversal, num_rot, rotations, num_q, qpoints) &
+         bind(C, name="spg_get_stabilized_reciprocal_mesh")
+         import :: c_int, c_double
+         integer(c_int), intent(out) :: grid_address(3,*)
+         integer(c_int), intent(out) :: ir_mapping_table(*)
+         integer(c_int), intent(in) :: mesh(3)
+         integer(c_int), intent(in) :: is_shift(3)
+         integer(c_int), value :: is_time_reversal
+         integer(c_int), value :: num_rot
+         integer(c_int), intent(in) :: rotations(3,3,*)
+         integer(c_int), value :: num_q
+         real(c_double), intent(in) :: qpoints(3,*)
+         integer(c_int) :: spg_get_stabilized_reciprocal_mesh
+      end function spg_get_stabilized_reciprocal_mesh
+
       ! Dataset API for getting detailed information about crystal structure
       function spg_get_dataset(lattice, position, types, num_atom, symprec) &
          bind(C, name="spg_get_dataset")
@@ -133,6 +155,8 @@ module spglib_interface_mod
       procedure :: get_symmetry_operations
       procedure :: get_reduced_kpoint_mesh
       procedure :: get_reduced_kpoint_mesh_with_points
+      procedure :: get_rotation_matrices
+      procedure :: get_little_group_kpoint_mesh_with_points
       procedure :: get_full_kpoint_mesh_with_points
       procedure :: get_crystal_system
       procedure :: get_band_path_points
@@ -507,6 +531,186 @@ contains
       call root_print('spglib_interface: Using full k-mesh (spglib not compiled)')
 #endif
    end function get_reduced_kpoint_mesh_with_points
+
+   !---------------------------------------------------------------------------
+   !> @brief Get the full set of point-group rotation matrices for the crystal.
+   !> @details Real-space fractional-coordinate convention, i.e. the same
+   !>          rotation matrices returned by spg_get_symmetry and consumed
+   !>          directly by spg_get_stabilized_reciprocal_mesh. Translations are
+   !>          discarded: only the rotational part is needed to determine
+   !>          whether an operation leaves a given q-point invariant.
+   !> @param[out] rotations Rotation matrices [3, 3, num_ops]
+   !> @return Number of operations, or 0 on failure
+   !---------------------------------------------------------------------------
+   function get_rotation_matrices(this, rotations) result(num_ops)
+      class(spglib_interface), intent(in) :: this
+      integer, allocatable, intent(out) :: rotations(:,:,:)
+      integer :: num_ops
+
+#ifdef USE_SPGLIB
+      integer, parameter :: max_operations = 192
+      integer :: rotation(3,3,max_operations)
+      real(c_double) :: translation(3,max_operations)
+
+      if (.not. this%initialized) then
+         call root_print('ERROR: spglib_interface: Not initialized')
+         num_ops = 0
+         return
+      end if
+
+      num_ops = spg_get_symmetry(rotation, translation, max_operations, &
+                                this%lattice_vectors, this%atomic_positions, &
+                                this%atomic_types, this%num_atoms, this%symprec)
+
+      if (num_ops > 0) then
+         if (allocated(rotations)) deallocate(rotations)
+         allocate(rotations(3, 3, num_ops))
+         rotations = rotation(:, :, 1:num_ops)
+      end if
+#else
+      num_ops = 0
+      call root_print('spglib_interface: Symmetry operations unavailable (spglib not compiled)')
+#endif
+   end function get_rotation_matrices
+
+   !---------------------------------------------------------------------------
+   !> @brief Get an irreducible k-point mesh reduced by the little group common
+   !>        to a set of q-points: the subgroup of the crystal point group that
+   !>        leaves every q-point in q_frac invariant. With one q-point this is
+   !>        the ordinary little group of that q; with several, it is the
+   !>        subgroup common to all of them, which is the correct reduction for
+   !>        a multi-q sweep sharing a single mesh (see
+   !>        docs/dev/plans/B1_gbt_frozen_magnons_v2.md section 3.1 and the WP8
+   !>        multi-q cache-key requirement).
+   !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
+   !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]
+   !> @param[in] q_frac q-point(s) in reduced (fractional reciprocal-lattice)
+   !>            coordinates [3, num_q]
+   !> @param[out] kpoints K-point coordinates in reciprocal lattice units [3, num_ir]
+   !> @param[out] weights K-point weights (normalized to sum to 1) [num_ir]
+   !> @return Number of irreducible k-points, or 0 if the little group could not
+   !>         be determined -- the caller must then fall back to the full mesh.
+   !---------------------------------------------------------------------------
+   function get_little_group_kpoint_mesh_with_points(this, mesh_dims, is_shift, q_frac, kpoints, weights, &
+                                                      use_time_reversal, full_to_irred, irred_to_full) &
+      result(num_ir_kpoints)
+      class(spglib_interface), intent(in) :: this
+      integer, intent(in) :: mesh_dims(3)
+      integer, intent(in), optional :: is_shift(3)
+      real(rp), intent(in) :: q_frac(:,:)
+      real(rp), allocatable, intent(out) :: kpoints(:,:)
+      real(rp), allocatable, intent(out) :: weights(:)
+      logical, intent(in), optional :: use_time_reversal
+      integer, allocatable, intent(out), optional :: full_to_irred(:)
+      integer, allocatable, intent(out), optional :: irred_to_full(:)
+      integer :: num_ir_kpoints
+
+#ifdef USE_SPGLIB
+      integer :: total_kpoints, shift(3), ir_idx, i
+      integer :: trs_flag
+      integer, allocatable :: grid_address(:,:)
+      integer, allocatable :: ir_mapping(:)
+      integer, allocatable :: rotations(:,:,:)
+      integer :: num_rot, num_q, multiplicity
+      integer, allocatable :: ir_kpoint_indices(:)
+      real(c_double), allocatable :: qpoints_c(:,:)
+
+      num_ir_kpoints = 0
+
+      if (.not. this%initialized) then
+         call root_print('ERROR: spglib_interface: Not initialized')
+         return
+      end if
+
+      num_rot = this%get_rotation_matrices(rotations)
+      if (num_rot <= 0) then
+         call root_print('spglib_interface: No symmetry operations available for little-group reduction')
+         return
+      end if
+
+      total_kpoints = mesh_dims(1) * mesh_dims(2) * mesh_dims(3)
+
+      if (present(is_shift)) then
+         shift = is_shift
+      else
+         shift = [0, 0, 0]
+      end if
+      trs_flag = 1
+      if (present(use_time_reversal)) then
+         if (.not. use_time_reversal) trs_flag = 0
+      end if
+
+      num_q = size(q_frac, 2)
+      allocate(qpoints_c(3, num_q))
+      qpoints_c = real(q_frac, c_double)
+
+      allocate(grid_address(3, total_kpoints))
+      allocate(ir_mapping(total_kpoints))
+
+      num_ir_kpoints = spg_get_stabilized_reciprocal_mesh(grid_address, ir_mapping, mesh_dims, shift, &
+                                                           trs_flag, num_rot, rotations, num_q, qpoints_c)
+
+      if (num_ir_kpoints <= 0) then
+         num_ir_kpoints = 0
+         deallocate(grid_address, ir_mapping, rotations, qpoints_c)
+         return
+      end if
+
+      allocate(kpoints(3, num_ir_kpoints))
+      allocate(weights(num_ir_kpoints))
+      allocate(ir_kpoint_indices(num_ir_kpoints))
+
+      ir_idx = 0
+      do i = 1, total_kpoints
+         if (ir_mapping(i) == i - 1) then
+            ir_idx = ir_idx + 1
+            ir_kpoint_indices(ir_idx) = i
+         end if
+      end do
+
+      weights = 0.0_rp
+      do ir_idx = 1, num_ir_kpoints
+         i = ir_kpoint_indices(ir_idx)
+         kpoints(1, ir_idx) = real(grid_address(1, i), rp) / real(mesh_dims(1), rp)
+         kpoints(2, ir_idx) = real(grid_address(2, i), rp) / real(mesh_dims(2), rp)
+         kpoints(3, ir_idx) = real(grid_address(3, i), rp) / real(mesh_dims(3), rp)
+         if (shift(1) /= 0) kpoints(1, ir_idx) = kpoints(1, ir_idx) + 0.5_rp / real(mesh_dims(1), rp)
+         if (shift(2) /= 0) kpoints(2, ir_idx) = kpoints(2, ir_idx) + 0.5_rp / real(mesh_dims(2), rp)
+         if (shift(3) /= 0) kpoints(3, ir_idx) = kpoints(3, ir_idx) + 0.5_rp / real(mesh_dims(3), rp)
+         multiplicity = count(ir_mapping == i - 1)
+         weights(ir_idx) = real(multiplicity, rp) / real(total_kpoints, rp)
+      end do
+
+      if (present(full_to_irred)) then
+         if (allocated(full_to_irred)) deallocate(full_to_irred)
+         allocate(full_to_irred(total_kpoints))
+         full_to_irred = 0
+         do i = 1, total_kpoints
+            do ir_idx = 1, num_ir_kpoints
+               if (ir_mapping(i) == ir_kpoint_indices(ir_idx) - 1) then
+                  full_to_irred(i) = ir_idx
+                  exit
+               end if
+            end do
+         end do
+      end if
+      if (present(irred_to_full)) then
+         if (allocated(irred_to_full)) deallocate(irred_to_full)
+         allocate(irred_to_full(num_ir_kpoints))
+         irred_to_full = ir_kpoint_indices
+      end if
+
+      if (rank == 0) then
+         write(*,*) 'spglib_interface: Little group common to', num_q, 'q-point(s) reduced', total_kpoints, &
+                    'k-points to', num_ir_kpoints, 'irreducible points using', num_rot, 'candidate operations'
+      end if
+
+      deallocate(grid_address, ir_mapping, ir_kpoint_indices, rotations, qpoints_c)
+#else
+      num_ir_kpoints = 0
+      call root_print('spglib_interface: Little-group reduction unavailable (spglib not compiled)')
+#endif
+   end function get_little_group_kpoint_mesh_with_points
 
    !---------------------------------------------------------------------------
    !> @brief Get full (non-reduced) k-point mesh points in spglib grid convention

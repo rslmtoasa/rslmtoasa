@@ -242,6 +242,30 @@ module reciprocal_mod
       !> Irreducible-k representative indices in full mesh
       integer, dimension(:), allocatable :: irred_to_full_k
 
+      !> WP8: BZ-reduction policy for finite-q GBT (has_nonzero_q_gbt()).
+      !>   'full_bz'              -> always the full chemical-cell BZ; the WP0
+      !>                             default and the oracle every other policy
+      !>                             is checked against.
+      !>   'little_group'         -> reduce by the little group of the current
+      !>                             hamiltonian%q_ss (rebuilt whenever q_ss
+      !>                             changes; see ensure_kpoint_mesh).
+      !>   'little_group_common'  -> reduce by the subgroup common to every
+      !>                             q-point a caller declares in one
+      !>                             ensure_kpoint_mesh(q_list_cart=...) call
+      !>                             -- one mesh valid for an entire multi-q
+      !>                             sweep instead of a per-q rebuild.
+      character(len=32) :: q_symmetry_policy
+      !> Cache key describing the (lattice, mesh, offset, q-set, policy) tuple
+      !> the current k_points/k_weights were built for. ensure_kpoint_mesh
+      !> compares against this before reusing the mesh, so a sweep can never
+      !> silently reuse one q's (or one policy's) mesh for another.
+      logical :: mesh_cache_valid
+      integer :: mesh_cache_dims(3)
+      real(rp) :: mesh_cache_offset(3)
+      real(rp) :: mesh_cache_lattice(3, 3)
+      character(len=32) :: mesh_cache_policy
+      real(rp), dimension(:, :), allocatable :: mesh_cache_q
+
       ! Real-space neighbor vectors per atom type (for multi-site H_k)
       !> Neighbor vectors for each atom type [3, nn_max, ntype]
       !> These are the R vectors for Fourier transform H(k) = Σ_R H(R) e^(ik·R)
@@ -314,6 +338,8 @@ module reciprocal_mod
       procedure :: build_from_file
       procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
+      procedure :: generate_little_group_kpoint_mesh
+      procedure :: ensure_kpoint_mesh
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
@@ -776,6 +802,66 @@ end subroutine print_hamiltonian_structure
       integer, allocatable :: full_to_irred(:), irred_to_full(:)
 
    end subroutine generate_reduced_kpoint_mesh
+
+   !> @brief Generate a k-mesh reduced by the little group common to one or
+   !>        more q-points.
+   !> @details A spin spiral lowers the crystal symmetry to the subgroup of
+   !>          point-group operations that leave q_ss invariant; reducing by
+   !>          the full point group is an invalid BZ integral for q_ss != 0
+   !>          (docs/dev/plans/B1_gbt_frozen_magnons_v2.md section 3.1). With
+   !>          q_list_cart absent, uses the single current hamiltonian%q_ss.
+   !>          With q_list_cart present (Cartesian, 2*pi/alat units, one
+   !>          column per q), reduces by the subgroup common to every column
+   !>          -- the "common subgroup" option a multi-q sweep can use to
+   !>          build one mesh valid for the whole sweep. Falls back to the
+   !>          full mesh, with a single logged info message, if spglib is
+   !>          unavailable or the little group cannot be determined.
+   !> @param[inout] this Reciprocal object receiving reduced-mesh data.
+   !> @param[in] mesh_dims Full mesh dimensions.
+   !> @param[in] use_shift Optional flag selecting shifted-grid generation.
+   !> @param[in] q_list_cart Optional explicit q-point set (Cartesian, one column per q).
+   module subroutine generate_little_group_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: mesh_dims(3)
+      logical, intent(in), optional :: use_shift
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+      integer :: shift(3)
+      integer :: num_ir_kpoints
+      logical :: do_shift, effective_time_reversal
+      real(rp), allocatable :: kpoints_frac(:,:), weights(:), q_frac(:,:)
+      integer, allocatable :: full_to_irred(:), irred_to_full(:)
+
+   end subroutine generate_little_group_kpoint_mesh
+
+   !> @brief Ensure k_points/k_weights match the (lattice, mesh, offset, q-set,
+   !>        policy) tuple currently in effect, rebuilding only if not.
+   !> @details The single entry point call sites (in particular multi-q
+   !>          sweeps) should use instead of the historical
+   !>          `if (.not. allocated(this%k_points))` guard, which reuses
+   !>          whichever mesh happened to be built first -- silently wrong the
+   !>          moment q_ss, the mesh, the offset, or the policy changes
+   !>          in between calls (WP8). Dispatches to generate_mp_mesh,
+   !>          generate_reduced_kpoint_mesh, or generate_little_group_kpoint_mesh
+   !>          according to has_nonzero_q_gbt() and q_symmetry_policy, and
+   !>          invalidates every q-dependent eigensystem/DOS/density cache
+   !>          whenever it actually rebuilds the mesh.
+   !> @param[inout] this Reciprocal object receiving k_points/k_weights state.
+   !> @param[in] mesh_dims Full mesh dimensions.
+   !> @param[in] use_shift Optional flag selecting shifted-grid generation.
+   !> @param[in] q_list_cart Optional explicit q-point set for the
+   !>            'little_group_common' policy (Cartesian, one column per q).
+   !>            Ignored by every other policy, which reads hamiltonian%q_ss.
+   module subroutine ensure_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: mesh_dims(3)
+      logical, intent(in), optional :: use_shift
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+      logical :: do_shift
+      real(rp) :: offset(3)
+      real(rp), allocatable :: q_now(:, :)
+      logical :: key_matches
+
+   end subroutine ensure_kpoint_mesh
 
    !> @brief Write a complex matrix and its k-point label to a text file.
    !> @param[in] matrix Matrix to dump.

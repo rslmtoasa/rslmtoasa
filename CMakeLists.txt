@@ -349,6 +349,17 @@ set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 set_tests_properties(Chebyshev PROPERTIES LABELS "regression;baseline")
 
+# WP8: q little-group BZ reduction and q-lifecycle (axial/generic/shifted-mesh
+# reduction vs the full-BZ oracle, q/-q and multi-q common-subgroup, q-list
+# reordering invariance).
+add_test(NAME WP8LittleGroup
+  COMMAND ${Python3_EXECUTABLE} ${TestDIR}/regression/run_wp8_littlegroup.py
+    --binary "${TestBinary}"
+    --deck-root "${TestDIR}/regression/wp8_littlegroup"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp8_littlegroup"
+)
+set_tests_properties(WP8LittleGroup PROPERTIES LABELS "regression;gbt;wp8" TIMEOUT 1800)
+
 set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
 file(READ "${REGRESSION_CASES_JSON}" _regression_json)
 string(JSON _regression_n LENGTH "${_regression_json}" "cases")

@@ -84,6 +84,7 @@ contains
       if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
       if (allocated(this%ham_vec_type)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type', this%ham_vec_type)
       if (allocated(this%ham_vec_type_direct)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct)
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 #else
       if (allocated(this%k_points)) deallocate (this%k_points)
       if (allocated(this%k_weights)) deallocate (this%k_weights)
@@ -115,6 +116,7 @@ contains
       if (allocated(this%ham_vec_type_direct)) deallocate (this%ham_vec_type_direct)
       if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
       if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 #endif
    end subroutine destructor
 
@@ -140,6 +142,16 @@ contains
       this%include_so = .false.
       this%max_orbs = nb
       this%cached_operator_generation = -1
+
+      ! WP8: full BZ stays the default/oracle for finite-q GBT (WP0). Opt-in
+      ! to 'little_group' or 'little_group_common' via &reciprocal.
+      this%q_symmetry_policy = 'full_bz'
+      this%mesh_cache_valid = .false.
+      this%mesh_cache_dims = [0, 0, 0]
+      this%mesh_cache_offset = [0.0_rp, 0.0_rp, 0.0_rp]
+      this%mesh_cache_lattice = 0.0_rp
+      this%mesh_cache_policy = ''
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
@@ -293,6 +305,7 @@ contains
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
       tetra_symmetry_mode = this%tetra_symmetry_mode
+      q_symmetry_policy = this%q_symmetry_policy
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -349,6 +362,14 @@ contains
           this%tetra_symmetry_mode /= 'irreducible_native') then
          call g_logger%warning("reciprocal%build_from_file: tetra_symmetry_mode must be 'full_expand_ref' or 'irreducible_native'. Falling back to irreducible_native.", __FILE__, __LINE__)
          this%tetra_symmetry_mode = 'irreducible_native'
+      end if
+      this%q_symmetry_policy = lower(trim(q_symmetry_policy))
+      if (this%q_symmetry_policy /= 'full_bz' .and. this%q_symmetry_policy /= 'little_group' .and. &
+          this%q_symmetry_policy /= 'little_group_common') then
+         call g_logger%warning("reciprocal%build_from_file: q_symmetry_policy must be 'full_bz', "// &
+                               "'little_group', or 'little_group_common'. Falling back to full_bz.", &
+                               __FILE__, __LINE__)
+         this%q_symmetry_policy = 'full_bz'
       end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
@@ -433,6 +454,7 @@ contains
          call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
       call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: q_symmetry_policy = ' // trim(this%q_symmetry_policy), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
@@ -486,6 +508,21 @@ contains
       end if
    end subroutine validate_nonzero_q_gbt
 
+   !> @brief Enforce the nonzero-q GBT BZ policy before every H(k) build.
+   !> @details Called from build_kspace_hamiltonian on every probe, so this is
+   !>          the actual per-Hamiltonian-build enforcement point -- the
+   !>          calculation.f90 sweep-level mesh calls only prepare a mesh this
+   !>          routine must not silently discard. 'full_bz' (default)
+   !>          reproduces the original WP0 behaviour exactly: force the full
+   !>          chemical BZ every call. 'little_group' delegates to
+   !>          ensure_kpoint_mesh, which is a no-op once the current q_ss's
+   !>          mesh is already cached (set by the calculation.f90 per-q
+   !>          rebuild) and only rebuilds on an actual q change.
+   !>          'little_group_common' must never rebuild a mesh a sweep already
+   !>          proved valid for its whole q-list (WP8): if one is cached under
+   !>          that policy for the current mesh dims, it is left untouched;
+   !>          only a genuinely missing mesh (e.g. this routine invoked outside
+   !>          a sweep) falls back to the single current q_ss's little group.
    module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context
@@ -498,6 +535,21 @@ contains
       ! A band path is not a BZ integration mesh.  Do not replace it here;
       ! the finite-q mesh callers below are forced through generate_mp_mesh.
       if (allocated(this%k_path)) return
+
+      select case (trim(this%q_symmetry_policy))
+      case ('little_group')
+         call this%ensure_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
+         return
+      case ('little_group_common')
+         if (this%mesh_cache_valid .and. trim(this%mesh_cache_policy) == 'little_group_common' .and. &
+             allocated(this%k_points) .and. all(this%mesh_cache_dims == this%nk_mesh)) then
+            return   ! sweep already built (and owns) the common-subgroup mesh
+         end if
+         call root_info(trim(context)//': little_group_common has no pre-built sweep mesh; '// &
+                        'falling back to the current q_ss little group.', __FILE__, __LINE__)
+         call this%generate_little_group_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
+         return
+      end select
 
       call root_info(trim(context)//': nonzero-q GBT rebuilding the full chemical BZ mesh.', __FILE__, __LINE__)
       call this%generate_mp_mesh()

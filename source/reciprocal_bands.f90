@@ -554,6 +554,16 @@ contains
       if (present(use_shift)) do_shift = use_shift
 
       if (this%has_nonzero_q_gbt()) then
+         ! WP0's full-BZ guard stays the default and the oracle every other
+         ! policy is checked against (WP8: "keep full BZ as the oracle").
+         ! q_symmetry_policy is an explicit opt-in to reduce by the little
+         ! group of q_ss instead; anything else (including the 'full_bz'
+         ! default) reproduces the WP0 behaviour bit-for-bit.
+         if (trim(this%q_symmetry_policy) == 'little_group' .or. &
+             trim(this%q_symmetry_policy) == 'little_group_common') then
+            call this%generate_little_group_kpoint_mesh(mesh_dims, use_shift)
+            return
+         end if
          this%use_symmetry_reduction = .false.
          this%use_time_reversal = .false.
          call root_info('generate_reduced_kpoint_mesh: nonzero-q GBT forces the full chemical BZ.', __FILE__, __LINE__)
@@ -661,6 +671,234 @@ contains
       call this%validate_symmetry_kmap('generate_reduced_kpoint_mesh')
       if (this%dump_symmetry_kmap) call this%write_symmetry_kmap_dump('symmetry_kmap.dat')
    end subroutine generate_reduced_kpoint_mesh
+
+   !> @brief Generate a k-mesh reduced by the little group common to one or
+   !>        more q-points. See the interface docstring in reciprocal.f90.
+   module subroutine generate_little_group_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: mesh_dims(3)
+      logical, intent(in), optional :: use_shift
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+      integer :: shift(3)
+      integer :: num_ir_kpoints
+      logical :: do_shift, effective_time_reversal
+      real(rp), allocatable :: kpoints_frac(:,:), weights(:), q_frac(:,:)
+      integer, allocatable :: full_to_irred(:), irred_to_full(:)
+      integer :: iq, num_q
+
+      do_shift = .false.
+      if (present(use_shift)) do_shift = use_shift
+
+      if (do_shift) then
+         shift = [1, 1, 1]
+      else
+         shift = [0, 0, 0]
+      end if
+
+      this%nk_mesh = mesh_dims
+      effective_time_reversal = this%use_time_reversal
+      if (associated(this%control)) then
+         if (this%control%nsp >= 3 .and. effective_time_reversal) then
+            effective_time_reversal = .false.
+            call g_logger%info('generate_little_group_kpoint_mesh: Disabled time-reversal reduction for '// &
+                               'non-collinear calculation; the little-group spatial reduction remains enabled.', &
+                               __FILE__, __LINE__)
+         end if
+      end if
+
+      ! q_ss is Cartesian in units of 2*pi/alat (source/hamiltonian_build.f90);
+      ! convert to fractional reciprocal-lattice coordinates for spglib using
+      ! the same, already-locked convention as the frozen_magnon
+      ! q_coordinates='direct' round trip (tests/unit/test_qss_theta_conventions.f90,
+      ! source/calculation.f90): cart_to_direct = transpose(lattice%a).
+      if (present(q_list_cart)) then
+         num_q = size(q_list_cart, 2)
+         allocate(q_frac(3, num_q))
+         do iq = 1, num_q
+            q_frac(:, iq) = matmul(transpose(this%lattice%a), q_list_cart(:, iq))
+         end do
+      else
+         num_q = 1
+         allocate(q_frac(3, 1))
+         q_frac(:, 1) = matmul(transpose(this%lattice%a), this%hamiltonian%q_ss)
+      end if
+
+#ifdef USE_SPGLIB
+      if (.not. this%symmetry_analysis%spglib%is_available()) then
+         call g_logger%info('generate_little_group_kpoint_mesh: spglib not available; falling back to the '// &
+                            'full k-mesh for q_ss != 0 (little group could not be determined).', &
+                            __FILE__, __LINE__)
+         deallocate(q_frac)
+         call this%generate_mp_mesh()
+         return
+      end if
+
+      num_ir_kpoints = this%symmetry_analysis%spglib%get_little_group_kpoint_mesh_with_points( &
+                           mesh_dims, shift, q_frac, kpoints_frac, weights, effective_time_reversal, &
+                           full_to_irred, irred_to_full)
+#else
+      call g_logger%info('generate_little_group_kpoint_mesh: spglib support was not compiled in; '// &
+                         'falling back to the full k-mesh for q_ss != 0 (little group could not '// &
+                         'be determined).', __FILE__, __LINE__)
+      deallocate(q_frac)
+      call this%generate_mp_mesh()
+      return
+#endif
+      deallocate(q_frac)
+
+      if (num_ir_kpoints <= 0) then
+         call g_logger%info('generate_little_group_kpoint_mesh: little group could not be '// &
+                            'determined; falling back to the full k-mesh.', __FILE__, __LINE__)
+         call this%generate_mp_mesh()
+         return
+      end if
+
+      this%nk_total = num_ir_kpoints
+      if (allocated(this%k_points)) deallocate(this%k_points)
+      if (allocated(this%k_weights)) deallocate(this%k_weights)
+      allocate(this%k_points(3, this%nk_total))
+      allocate(this%k_weights(this%nk_total))
+      this%k_points = kpoints_frac
+      this%k_weights = weights
+      if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
+      if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+      allocate(this%full_to_irred_k(size(full_to_irred)))
+      allocate(this%irred_to_full_k(size(irred_to_full)))
+      this%full_to_irred_k = full_to_irred
+      this%irred_to_full_k = irred_to_full
+      deallocate(kpoints_frac, weights, full_to_irred, irred_to_full)
+
+      call root_info('generate_little_group_kpoint_mesh: q_ss != 0; reduced by the little group common to '// &
+                     trim(int2str(num_q))//' q-point(s) to '//trim(int2str(this%nk_total))// &
+                     ' irreducible k-points from '//trim(int2str(product(mesh_dims)))//' total points ('// &
+                     trim(real2str(real(product(mesh_dims), rp)/real(this%nk_total, rp), '(F6.2)'))// &
+                     'x reduction).', __FILE__, __LINE__)
+
+      if (abs(sum(this%k_weights) - 1.0_rp) > 1.0e-6_rp) then
+         if (this%strict_symmetry_checks) then
+            call g_logger%fatal('generate_little_group_kpoint_mesh: K-point weights sum to ' // &
+                               trim(real2str(sum(this%k_weights), '(F12.8)')) // ' (expected 1.0)', &
+                               __FILE__, __LINE__)
+         else
+            call g_logger%warning('generate_little_group_kpoint_mesh: K-point weights sum to ' // &
+                                 trim(real2str(sum(this%k_weights), '(F12.8)')) // ' (should be 1.0)', &
+                                 __FILE__, __LINE__)
+         end if
+      end if
+      if (allocated(this%full_to_irred_k)) then
+         if (any(this%full_to_irred_k < 1) .or. any(this%full_to_irred_k > this%nk_total)) then
+            if (this%strict_symmetry_checks) then
+               call g_logger%fatal('generate_little_group_kpoint_mesh: Invalid full_to_irred mapping detected', &
+                                   __FILE__, __LINE__)
+            else
+               call g_logger%warning('generate_little_group_kpoint_mesh: Invalid full_to_irred mapping detected', &
+                                     __FILE__, __LINE__)
+            end if
+         end if
+      end if
+      call this%validate_symmetry_kmap('generate_little_group_kpoint_mesh')
+      if (this%dump_symmetry_kmap) call this%write_symmetry_kmap_dump('symmetry_kmap.dat')
+   end subroutine generate_little_group_kpoint_mesh
+
+   !> @brief Is this a GBT run with a nonzero q, either the current single
+   !>        hamiltonian%q_ss (has_nonzero_q_gbt) or, if given, any column of
+   !>        an explicitly declared q_list_cart (the 'little_group_common'
+   !>        pre-loop case, called while q_ss is still the reference point).
+   logical function is_declared_nonzero_q_gbt(this, q_list_cart) result(nonzero)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+
+      nonzero = this%has_nonzero_q_gbt()
+      if (nonzero .or. .not. present(q_list_cart)) return
+      if (.not. associated(this%hamiltonian)) return
+      if (trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) return
+      nonzero = any(abs(q_list_cart) > 1.0e-12_rp)
+   end function is_declared_nonzero_q_gbt
+
+   !> @brief Ensure k_points/k_weights match the current cache key, rebuilding
+   !>        only if not. See the interface docstring in reciprocal.f90.
+   module subroutine ensure_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: mesh_dims(3)
+      logical, intent(in), optional :: use_shift
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+      logical :: do_shift
+      real(rp) :: offset(3)
+      real(rp), allocatable :: q_now(:, :)
+      logical :: key_matches
+
+      do_shift = .false.
+      if (present(use_shift)) do_shift = use_shift
+      offset = 0.0_rp
+      if (do_shift) offset = 0.5_rp
+
+      ! The q-part of the key: the declared sweep list under
+      ! 'little_group_common', otherwise the single current q_ss (zero for
+      ! q=0/non-GBT runs, so ordinary callers get a key that only tracks
+      ! mesh/offset/lattice/policy, matching their actual dependence).
+      if (present(q_list_cart)) then
+         allocate(q_now(3, size(q_list_cart, 2)))
+         q_now = q_list_cart
+      else
+         allocate(q_now(3, 1))
+         q_now(:, 1) = 0.0_rp
+         if (associated(this%hamiltonian)) q_now(:, 1) = this%hamiltonian%q_ss
+      end if
+
+      key_matches = .false.
+      if (this%mesh_cache_valid .and. allocated(this%k_points)) then
+         key_matches = all(this%mesh_cache_dims == mesh_dims) .and. &
+                       all(abs(this%mesh_cache_offset - offset) < 1.0e-12_rp) .and. &
+                       trim(this%mesh_cache_policy) == trim(this%q_symmetry_policy) .and. &
+                       allocated(this%mesh_cache_q)
+         if (key_matches .and. associated(this%lattice)) then
+            key_matches = all(abs(this%mesh_cache_lattice - this%lattice%a) < 1.0e-12_rp)
+         end if
+         if (key_matches) then
+            key_matches = size(this%mesh_cache_q, 2) == size(q_now, 2)
+            if (key_matches) key_matches = all(abs(this%mesh_cache_q - q_now) < 1.0e-12_rp)
+         end if
+      end if
+
+      if (key_matches) then
+         deallocate(q_now)
+         return
+      end if
+
+      ! Cache key changed (or no mesh yet): rebuild through the ordinary
+      ! dispatch, which itself honours q_symmetry_policy and has_nonzero_q_gbt.
+      ! has_nonzero_q_gbt() alone only sees the single CURRENT hamiltonian%q_ss
+      ! -- for a pre-loop 'little_group_common' call the caller's q_list_cart
+      ! is nonzero while the reference q_ss is still (0,0,0), so a caller-
+      ! supplied nonzero q-set must also count as "nonzero q GBT" here or the
+      ! sweep would silently fall through to the ordinary q=0 point-group mesh
+      ! (exactly the "wrong subgroup" failure mode WP8 exists to remove).
+      if (is_declared_nonzero_q_gbt(this, q_list_cart) .and. &
+          (trim(this%q_symmetry_policy) == 'little_group' .or. &
+           trim(this%q_symmetry_policy) == 'little_group_common')) then
+         call this%generate_little_group_kpoint_mesh(mesh_dims, use_shift, q_list_cart)
+      else if (this%use_symmetry_reduction .and. .not. this%has_nonzero_q_gbt()) then
+         call this%generate_reduced_kpoint_mesh(mesh_dims, do_shift)
+      else
+         call this%generate_mp_mesh()
+      end if
+
+      ! The mesh (and therefore every eigensystem/DOS/density object derived
+      ! from it) just changed identity, independent of whether the shared
+      ! Hamiltonian operator_generation moved -- invalidate explicitly rather
+      ! than relying on the next build_bulkham/diagonalize call to notice.
+      call this%invalidate_spectral_cache()
+
+      this%mesh_cache_dims = mesh_dims
+      this%mesh_cache_offset = offset
+      this%mesh_cache_policy = this%q_symmetry_policy
+      if (associated(this%lattice)) this%mesh_cache_lattice = this%lattice%a
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
+      allocate(this%mesh_cache_q(3, size(q_now, 2)))
+      this%mesh_cache_q = q_now
+      this%mesh_cache_valid = .true.
+      deallocate(q_now)
+   end subroutine ensure_kpoint_mesh
 
    !> @brief Write a complex matrix and its k-point label to a text file.
    !> @param[in] matrix Matrix to dump.

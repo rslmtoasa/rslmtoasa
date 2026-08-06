@@ -1849,24 +1849,44 @@ contains
          ! to return to its value at symmetry-equivalent q (e.g. the two Gamma points).
          if (use_kspace) then
             recip_obj = reciprocal(hamiltonian_obj)
-            if (.not. allocated(recip_obj%k_points)) then
-               ! Every probe in one force-theorem difference must use the same
-               ! integration contract.  If the sweep contains finite q, make
-               ! the q=0 reference use the full chemical BZ as well.
-               if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
-                  recip_obj%use_symmetry_reduction = .false.
-                  recip_obj%use_time_reversal = .false.
-                  call recip_obj%generate_mp_mesh()
-               else if (recip_obj%use_symmetry_reduction) then
-                  call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-               else
-                  call recip_obj%generate_mp_mesh()
+            ! WP8: the mesh must never be built once from row 1's q_ss and
+            ! reused blindly for every other q in the sweep -- each policy
+            ! below either shares one mesh proven valid for the whole sweep,
+            ! or rebuilds per q inside the loop.
+            select case (trim(recip_obj%q_symmetry_policy))
+            case ('little_group_common')
+               ! One mesh, reduced by the little group common to every q in
+               ! the sweep (not just row 1's), valid for every probe below.
+               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
+                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
+                                                 q_list_cart=q_ss_cart)
+            case ('little_group')
+               ! Built per q inside the loop below.
+            case default   ! 'full_bz': WP0 oracle, unchanged from pre-WP8 behaviour.
+               if (.not. allocated(recip_obj%k_points)) then
+                  ! Every probe in one force-theorem difference must use the same
+                  ! integration contract.  If the sweep contains finite q, make
+                  ! the q=0 reference use the full chemical BZ as well.
+                  if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+                     recip_obj%use_symmetry_reduction = .false.
+                     recip_obj%use_time_reversal = .false.
+                     call recip_obj%generate_mp_mesh()
+                  else if (recip_obj%use_symmetry_reduction) then
+                     call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+                  else
+                     call recip_obj%generate_mp_mesh()
+                  end if
                end if
-            end if
+            end select
          end if
          do iq = 1, fm_obj%n_q
             hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+            if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
+               ! Rebuild (or, via the cache key, reuse if unchanged) for this
+               ! specific q -- never reuse another q's little-group mesh.
+               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+            end if
             eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
             etot_q(iq) = etot_ref   ! potential frozen; total energy not re-evaluated
          end do
@@ -2000,20 +2020,38 @@ contains
       end do
 
       ! --- Force-theorem evaluator: build a k-space mesh once if in k-space mode. ---
+      ! WP8: the mesh must never be built once (from whatever q_ss happens to be
+      ! set here) and reused blindly for every other q in the sweep below --
+      ! each policy either shares one mesh proven valid for the whole sweep, or
+      ! rebuilds per q inside the loop.
       if (use_kspace) then
          recip_obj = reciprocal(hamiltonian_obj)
-         if (.not. allocated(recip_obj%k_points)) then
-            if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
-               recip_obj%use_symmetry_reduction = .false.
-               recip_obj%use_time_reversal = .false.
-               call recip_obj%generate_mp_mesh()
-            else if (recip_obj%use_symmetry_reduction) then
-               call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                           sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-            else
-               call recip_obj%generate_mp_mesh()
+         select case (trim(recip_obj%q_symmetry_policy))
+         case ('little_group_common')
+            ! One mesh, reduced by the little group common to every q in the
+            ! sweep (not just row 1's), valid for every probe below.
+            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
+                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
+                                              q_list_cart=q_ss_cart)
+         case ('little_group')
+            ! q_ss is 0 here (reset below); build the ordinary q=0 mesh now so
+            ! the reference-energy probe has one. Per-nonzero-q rebuilds
+            ! happen inside the sweep loop below via the same cache key.
+            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+         case default   ! 'full_bz': WP0 oracle, unchanged from pre-WP8 behaviour.
+            if (.not. allocated(recip_obj%k_points)) then
+               if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+                  recip_obj%use_symmetry_reduction = .false.
+                  recip_obj%use_time_reversal = .false.
+                  call recip_obj%generate_mp_mesh()
+               else if (recip_obj%use_symmetry_reduction) then
+                  call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+               else
+                  call recip_obj%generate_mp_mesh()
+               end if
             end if
-         end if
+         end select
       end if
 
       ! Reference band energy (collinear) via the force theorem at the fixed potential;
@@ -2032,6 +2070,11 @@ contains
       allocate (omega_mat(nactive, nactive), eigvec(nactive, nactive), eval(nactive), single_energy(nactive))
       do iq = 1, fm_obj%n_q
          hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+         if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
+            ! Rebuild (or, via the cache key, reuse if unchanged) for this
+            ! specific q -- never reuse another q's little-group mesh (WP8).
+            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+         end if
          omega_mat(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
 
          ! Diagonal: single-sublattice tilt. d^2E/dtheta_i^2 / M_i, in omega = dE/dm_z units.
