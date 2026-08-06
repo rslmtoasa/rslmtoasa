@@ -407,14 +407,33 @@ Resolve shared-interface conflicts, run the full regression suite, and create on
 Do not weaken tests or enable partially audited paths.
 
 Completion checklist:
-- [ ] WP6a/b/c interfaces are reconciled.
-- [ ] One authoritative feature matrix exists.
-- [ ] Every enabled combination has oracle evidence.
-- [ ] Every unsupported combination fails early.
-- [ ] Full regression suite passes.
-- [ ] Conflicts/limitations are documented.
-- [ ] Final G6 PASS/FAIL is stated.
+- [x] WP6a/b/c interfaces are reconciled.
+- [x] One authoritative feature matrix exists.
+- [x] Every enabled combination has oracle evidence.
+- [x] Every unsupported combination fails early.
+- [x] Full regression suite passes.
+- [x] Conflicts/limitations are documented.
+- [x] Final G6 PASS/FAIL is stated.
 ```
+
+**WP6 integration outcome (2026-08-05):** the authoritative matrix is
+`tests/gbt_wp6_matrix/feature_matrix.json`, machine-checked in both directions
+by `tests/unit/test_gbt_wp6_matrix.py` (a GBT rejection present in `source/`
+but absent from the matrix is a test failure). Seven interface findings are
+recorded in `docs/dev/GBT_WP6_INTEGRATION_REPORT.md` §1; two needed a change
+(a scope comment on `validate_nonzero_q_gbt`, whose name no longer matches its
+all-q behaviour, and a dangling doc reference in `tests/gbt_wp6c/README.md`).
+The one real evidence gap the slices left — Hubbard-U enabled on an argument
+with no oracle and no probe — is closed with an onsite-fold oracle, a
+finite-q production pair, and a non-no-op comparison (`eband` moves by
+`0.129 Ry`). `orb_pol`, unlisted by all three slices, is classified and shown
+to be covered by the SOC guard. Combined GBT+CCOR+HOH now has its own
+composition oracle rather than only a smoke test. Executed: 7/7 negative
+probes stop before eigensolution, 2/2 positive probes pass, `ctest -L unit`
+21/21, `ctest -L regression` 16/16; the 8 example-suite failures are
+pre-existing (5 stale `strux_backend` decks, 2 gfortran-13 DOS tolerance, 1
+timeout) and are documented, not fixed — the deck fix touches goldens and
+needs sign-off. Final **G6: PASS**. Next allowed task: WP7.
 
 ## WP7 — Common rotating-frame density and SCF
 

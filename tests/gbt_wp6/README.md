@@ -6,3 +6,5 @@ Kanpur cases are negative probes: both must stop with the explicit incomplete
 formal-overlap diagnostic before an eigensolve.
 
 The independent dense operator proof is `tests/unit/test_gbt_wp6_hoh.py`.
+
+Superseded as a status source by `tests/gbt_wp6_matrix/feature_matrix.json`.

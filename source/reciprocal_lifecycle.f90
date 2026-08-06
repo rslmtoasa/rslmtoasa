@@ -451,6 +451,12 @@ contains
                           maxval(abs(this%hamiltonian%q_ss)) > q_tolerance
    end function has_nonzero_q_gbt
 
+   !> Despite the name (kept from WP0, where the reciprocal guards were scoped
+   !> to finite q), every check below fires for *any* gbt_single_q run,
+   !> including q=0: WP6a widened the overlap rejection and none of these
+   !> terms has an audited GBT form at q=0 either. has_nonzero_q_gbt is the
+   !> genuinely q-scoped predicate; use that one when q matters. Renaming this
+   !> routine belongs to WP10's documentation pass.
    module subroutine validate_nonzero_q_gbt(this, context)
       class(reciprocal), intent(in) :: this
       character(len=*), intent(in) :: context
