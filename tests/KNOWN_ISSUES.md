@@ -430,24 +430,33 @@ future reference regeneration will capture genuinely different `vmad` values.
 - **Found:** WP6c, while running the full `ctest -L scf` suite as required by
   the project's rule 1 regression gate before/after every task.
 
-## `Example_bulk_bccFe_nsp4_block_spiral_qplus` converges to an out-of-plane axis
+## `nsp4_block_spiral_qplus`/`_qminus` never enable GBT (diagnosed)
 
-- **Symptom:** the case fails on `Fe_out.nml:mom[3]`, `run = 1.000000e+00`
-  against `ref = 6.856242e-09`. The converged moment direction is `+z`, where
-  the committed reference has it in-plane — a flat (theta = 90 degrees) spiral.
-  This is a direction failure, not a tolerance failure: the other two checked
-  values pass.
-- **Confirmed pre-existing, not introduced by WP7:** reproduces identically
-  (same value, same field) on a stashed pristine tree at `b0e8e01` with no
-  source changes, verified by `git stash push source/` + rebuild + rerun before
-  and after the WP7 change.
-- **Untriaged.** Not diagnosed. Candidate directions, in no particular order
-  and none of them checked: the case's own start deck may no longer set the
-  cone angle it expects; `self%mix_magnetic_moments` may be collapsing a
-  direction that carries no energy gradient; or the finite-q moment update
-  really is wrong. The committed reference itself is also a suspect — nothing
-  here establishes that `6.9e-09` is the right answer.
-- **Why it matters:** it touches the finite-q moment direction, i.e. squarely
-  GBT territory, and WP9's validation ladder will lean on spiral moments.
-- **Proposal (not done):** triage before WP9. Estimated size: half a day.
-- **Found:** WP7, running the SCF example suite for the gate G7 evidence.
+- **Symptom:** both cases fail on `Fe_out.nml:mom[3]`, `run = 1.000000e+00`
+  against `ref = 6.856242e-09`. The converged moment is `+z` where the
+  reference has it in-plane, as a `theta_ss = 90` cone should be.
+- **Cause (diagnosed 2026-08-06, WP7):** the two `tests/scf/cases.json`
+  entries set `hamiltonian.q_ss = (0,0,±0.05)` and `theta_ss = 90.0` but
+  **never set `magnetic_representation`**. Since WP3/WP5 made the
+  representation explicit, it defaults to `periodic_nc`, under which `q_ss` is
+  stored and never read — so both cases have been converging an ordinary
+  collinear ferromagnet along `+z`. `mom[3] = 1.0` is exactly that. There is
+  no spiral in these runs and there has not been one since the representation
+  split landed. They also set `nsp = 4`, i.e. SOC on, which GBT rejects
+  outright.
+- **How it surfaced:** the WP7 input guard
+  (`validate_spiral_keys_are_consumed`, `hamiltonian_build.f90`) now makes this
+  fatal, so the failure mode changed from a silent wrong value to an explicit
+  rejection naming the missing key. The committed reference `mom[3] ≈ 6.9e-9`
+  presumably dates from when the spiral was enabled implicitly (via
+  `gbt_kspace` or the absolute-position branch), both since deleted.
+- **Proposed fix (not applied — touches golden references, needs a green
+  light):** add `"magnetic_representation": "gbt_single_q"` to both cases'
+  `hamiltonian` namelist, change `nsp` from `4` to `3` (SOC is fatal under
+  GBT), add `"lattice": {"strux_backend": "strux_lib"}` (the WP4 requirement),
+  then regenerate both references. The values *will* move — these cases have
+  not computed a spiral in a long time — so this is a reference regeneration
+  with a physics justification, not a config patch. It would also restore the
+  `E(q) = E(-q)` pin the pair was written to provide, which is currently
+  vacuous (both sides compute the same ferromagnet).
+- **Found:** WP7, answering "does GBT functionally work?".

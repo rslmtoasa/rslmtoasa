@@ -135,6 +135,21 @@ Spin-spiral / non-collinear
 - ``magnetic_representation`` (character, default ``'periodic_nc'``) — selects
   ``'periodic_nc'``, ``'gbt_single_q'``, or ``'explicit_texture'`` independently
   of whether recursion or reciprocal space solves the resulting operator.
+
+  .. warning::
+
+     ``q_ss`` is only read by ``'gbt_single_q'`` (as the bond gauge phase) and
+     ``'explicit_texture'`` (as the site-dependent moment direction). Under the
+     **default** ``'periodic_nc'`` it is stored and never used, so a spiral
+     sweep would return the same collinear answer at every ``q``. Setting a
+     nonzero ``q_ss`` without selecting one of the two spiral representations
+     is therefore **fatal** at ``build_bulkham``; the two live interpretations
+     are different physics (the gauge trick versus the real-space texture it is
+     validated against), so the code names all three exits rather than guessing.
+     ``theta_ss`` alone does not trigger it: a cone angle at ``q = 0`` is a
+     global spin rotation and is energy-invariant without SOC.
+     ``post_processing='frozen_magnon'`` selects ``'gbt_single_q'`` itself and
+     is unaffected.
 - ``v_alpha`` / ``v_beta`` (real(3)) — quantization-axis vectors.
 - ``js_alpha`` / ``jl_alpha`` (character, default ``'z'``) — spin / orbital
   projection axes.

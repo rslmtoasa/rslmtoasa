@@ -1,0 +1,517 @@
+{
+ "_description": "Authoritative GBT (magnetic_representation='gbt_single_q') feature matrix produced by the WP6 integration task. This file is the single source of truth reconciling WP6a (HOH/overlap), WP6b (CCOR) and WP6c (Hubbard/constraints/velocity/torque/SOC). tests/unit/test_gbt_wp6_matrix.py fails if any row drifts from the source: every 'fatal' row's guard message must be present in the cited file, and every 'supported' row's oracle files must exist.",
+ "representation": "gbt_single_q",
+ "schema": {
+  "status": [
+   "supported: enabled under GBT; requires oracle + bond-reversal + k-space Hermiticity evidence",
+   "fatal: rejected before Hamiltonian construction or before eigensolution",
+   "inactive: term exists in the codebase but contributes nothing in any representation mode",
+   "not_implemented: term does not exist in this codebase at all"
+  ],
+  "class": [
+   "onsite",
+   "directed_bond",
+   "directed_composite",
+   "composite",
+   "operator",
+   "infrastructure"
+  ]
+ },
+ "rows": [
+  {
+   "id": "ee_first_order",
+   "term": "First-order intersite Hamiltonian ee (h_ij)",
+   "class": "directed_bond",
+   "status": "supported",
+   "wp": "WP4/WP6a",
+   "frame": "collinear rotating frame; the endpoint link G_ab = (U_a0)^H Rz(q.d) U_b0 is applied to the primitive orbital S block before the LMTO contraction, exactly once",
+   "oracles": [
+    "tests/unit/test_gbt_oracles.py",
+    "tests/unit/test_gbt_structure.f90",
+    "tests/unit/test_gbt_wp6_hoh.py",
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "reverse directed bond h_ji(-d) = h_ij^H (test_gbt_oracles.py, test_gbt_structure.f90, test_gbt_wp6_matrix.py)",
+   "kspace_hermiticity": "pre-eigensolver max|H-H^H| assertion in reciprocal_fourier.f90; measured <= 2.3e-16 in wp6_hoh_k4",
+   "production_probes": [
+    "tests/gbt_wp5/cases.json:wp5_k4",
+    "tests/gbt_wp5/cases.json:wp5_rs12",
+    "tests/gbt_wp6/cases.json:wp6_hoh_k4",
+    "tests/gbt_wp6/cases.json:wp6_hoh_rs12"
+   ]
+  },
+  {
+   "id": "onsite_potential_terms",
+   "term": "Onsite potential factors (enim, obarm, wx0/wx1 endpoint W_i)",
+   "class": "onsite",
+   "status": "supported",
+   "wp": "WP6a",
+   "frame": "collinear rotating frame; no translational phase. At the d=0 bond slot the endpoint link is the identity by construction (G_ii = U^H Rz(0) U = I).",
+   "oracles": [
+    "tests/unit/test_gbt_wp6_hoh.py",
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "d=0 slot is Hermitian by construction; identity-link check onsite_fold_oracle",
+   "kspace_hermiticity": "k-independent additive block; covered by the full-H k-space check",
+   "runtime_assertion": "max_q0_common_link_error diagnostic in build_gbt_bulkham re-asserts G_ii = I every run",
+   "production_probes": [
+    "tests/gbt_wp6/cases.json:wp6_hoh_k4"
+   ]
+  },
+  {
+   "id": "hoh_second_order",
+   "term": "HOH second-order operator (eeo = ee*obarm, h-o-h contraction)",
+   "class": "directed_composite",
+   "status": "supported",
+   "wp": "WP6a",
+   "frame": "derived from the already-linked ee and unphased onsite obarm; never phased independently",
+   "oracles": [
+    "tests/unit/test_gbt_wp6_hoh.py",
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "eeo is intentionally non-Hermitian ((ho)^H = oh); the contracted h-o-h and the full H2 are Hermitian (test_gbt_wp6_hoh.py: 1.968e-16)",
+   "kspace_hermiticity": "reciprocal second-order H Hermiticity 9.610e-17 (test_gbt_wp6_hoh.py); production max|H-H^H| <= 2.2888e-16 (wp6_hoh_k4)",
+   "production_probes": [
+    "tests/gbt_wp6/cases.json:wp6_hoh_k4",
+    "tests/gbt_wp6/cases.json:wp6_hoh_rs12"
+   ]
+  },
+  {
+   "id": "overlap_ham_only",
+   "term": "Orthogonal representation, O(k) = I (reciprocal_mode='ham_only')",
+   "class": "onsite",
+   "status": "supported",
+   "wp": "WP6a",
+   "frame": "identity metric; no phase",
+   "oracles": [
+    "tests/unit/test_gbt_wp6_hoh.py"
+   ],
+   "positive_definiteness": "minimum eigenvalue exactly 1.0; zpotrf runs on every supported metric before zhegv",
+   "bond_hermiticity": "the metric is the identity at the d=0 slot and zero on every bond, so the reverse-bond identity holds trivially",
+   "kspace_hermiticity": "O(k)=I is Hermitian and positive definite at every k; the O(k) Hermiticity assertion in reciprocal_bands.f90 runs on it unconditionally",
+   "production_probes": [
+    "tests/gbt_wp6/cases.json:wp6_hoh_k4"
+   ]
+  },
+  {
+   "id": "ccor_scalar",
+   "term": "Two-centre CCOR, scalar modes (ccor_vmt_mode='surface_scalar' or 'vmad_scalar')",
+   "class": "directed_composite",
+   "status": "supported",
+   "wp": "WP6b",
+   "frame": "the same endpoint link G_ij is applied independently to primitive S and Sdot; D/Ddot and the completed CCOR block are composites and are never phased afterward",
+   "requires": [
+    "strux_want_sdot=.true.",
+    "lattice screening 'sigma' or 'fitted'"
+   ],
+   "oracles": [
+    "tests/unit/test_gbt_wp6_ccor.py",
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "reverse directed bond 3.023e-16 (test_gbt_wp6_ccor.py)",
+   "kspace_hermiticity": "scalar k-space Hermiticity 1.231e-16 (test_gbt_wp6_ccor.py); production max|H-H^H| <= 2.2276e-16 (wp6b_ccor_scalar_k4)",
+   "production_probes": [
+    "tests/gbt_wp6b/cases.json:wp6b_ccor_scalar_k4",
+    "tests/gbt_wp6b/cases.json:wp6b_ccor_scalar_rs12"
+   ]
+  },
+  {
+   "id": "ccor_pair_surface",
+   "term": "Two-centre CCOR, pair-surface mode (ccor_vmt_mode='pair_surface')",
+   "class": "directed_composite",
+   "status": "supported",
+   "wp": "WP6b",
+   "frame": "same link as ccor_scalar; endpoint Lambda_i/Lambda_j are onsite diagonal matrices in the same rotating frame",
+   "oracles": [
+    "tests/unit/test_gbt_wp6_ccor.py",
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "reverse directed bond 3.023e-16 (test_gbt_wp6_ccor.py)",
+   "kspace_hermiticity": "pair-surface k-space Hermiticity 9.743e-17; production max|H-H^H| <= 4.4431e-16 (wp6b_ccor_pair_surface_k4)",
+   "production_probes": [
+    "tests/gbt_wp6b/cases.json:wp6b_ccor_pair_surface_k4"
+   ]
+  },
+  {
+   "id": "ccor_plus_hoh",
+   "term": "Combined GBT + CCOR + HOH operator (ee+eecc fed into the h-o-h chain)",
+   "class": "composite",
+   "status": "supported",
+   "wp": "WP6 integration",
+   "frame": "additive and multiplicative closure of the common endpoint link: any sum or chain of blocks carrying the same G_ab is itself covariant",
+   "oracles": [
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "combined-operator reverse-bond check in composition_oracle",
+   "kspace_hermiticity": "combined-operator k-space Hermiticity in composition_oracle; production max|H-H^H| <= 4.4431e-16 (wp6b_ccor_pair_surface_k4 runs with hoh=.true.)",
+   "production_probes": [
+    "tests/gbt_wp6b/cases.json:wp6b_ccor_pair_surface_k4"
+   ],
+   "notes": "WP6a and WP6b each audited their own slice; this row is the integration-owned cell that certifies their composition."
+  },
+  {
+   "id": "hubbard_u_onsite",
+   "term": "Hubbard-U onsite correction (calculate_hubbard_u_potential_general)",
+   "class": "onsite",
+   "status": "supported",
+   "wp": "WP6c + WP6 integration",
+   "frame": "collinear rotating frame, spin-diagonal blocks from potential%ldm; folded into ee(:,:,1,ntype) at the d=0 slot after the primitive-link contraction, where the link is the identity",
+   "oracles": [
+    "tests/unit/test_gbt_wp6_matrix.py"
+   ],
+   "bond_hermiticity": "onsite_fold_oracle: gauging the onsite correction before or after contraction differ by 0 because G_ii=I; reverse-bond identity of the full shell is preserved",
+   "kspace_hermiticity": "onsite_fold_oracle: H(k) with the fold stays Hermitian and the fold is k- and q-independent",
+   "production_probes": [
+    "tests/gbt_wp6_matrix/positive_cases.json:wp6i_hubbard_u_k4",
+    "tests/gbt_wp6_matrix/positive_cases.json:wp6i_hubbard_u_off_k4"
+   ],
+   "notes": "WP6c asserted this by the G_ii=I argument but produced no oracle and no production probe; the integration task supplies both."
+  },
+  {
+   "id": "velocity_charge",
+   "term": "Charge velocity operators v_a, v_b",
+   "class": "directed_composite",
+   "status": "supported",
+   "wp": "WP6c",
+   "frame": "inherits ee's gauge exactly; v_a(R) = (1/i)(dir_a . rij) ee(R), rij = -R",
+   "oracles": [
+    "tests/unit/test_gbt_wp6c_velocity.py"
+   ],
+   "bond_hermiticity": "v(-R) = v(R)^H, error 0.000e+00",
+   "kspace_hermiticity": "v(k) Hermiticity 1.662e-16; v(k) == analytic dH/dk_a exactly (0.000e+00) and by central differences (2.653e-09 at dk=1e-4, quadratic convergence ratio 100)",
+   "source_contract": "test_gbt_wp6c_velocity.py asserts the velocity builder contains no q_ss/gbt phase of its own"
+  },
+  {
+   "id": "velocity_hoh_companion",
+   "term": "HOH companion velocity operators vo_a, vo_b",
+   "class": "composite",
+   "status": "supported",
+   "wp": "WP6c",
+   "frame": "v_a * obarm_j, the same onsite obarm factor as eeo",
+   "oracles": [
+    "tests/unit/test_gbt_wp6c_velocity.py",
+    "tests/unit/test_gbt_wp6_hoh.py"
+   ],
+   "bond_hermiticity": "inherits the eeo argument of WP6a (directed composite, not Hermitian alone)",
+   "kspace_hermiticity": "inherits the contracted-operator Hermiticity of WP6a"
+  },
+  {
+   "id": "velocity_spin_orbital",
+   "term": "Spin/orbital current operators js_a, jl_a, jso_a, jlo_a",
+   "class": "composite",
+   "status": "supported",
+   "wp": "WP6c",
+   "frame": "fixed-operator anticommutators 0.5*{S_op or L_op, v_a}; k-independent operators commute with the Bloch sum",
+   "oracles": [
+    "tests/unit/test_gbt_wp6c_velocity.py"
+   ],
+   "bond_hermiticity": "corollary of velocity_charge by linearity, error 3.087e-16",
+   "kspace_hermiticity": "corollary of velocity_charge by linearity"
+  },
+  {
+   "id": "orbital_torque",
+   "term": "Orbital torque operators (build_realspace_orbital_torque_operators)",
+   "class": "composite",
+   "status": "supported",
+   "wp": "WP6c",
+   "frame": "(1/i)[L_op, ee + lsham] onsite, (1/i)[L_op, ee] on bonds; lsham is forced to zero under GBT by the SOC guard, so this reduces to the ordinary zero-SOC operator",
+   "oracles": [
+    "tests/unit/test_gbt_wp6c_velocity.py"
+   ],
+   "bond_hermiticity": "inherits ee",
+   "kspace_hermiticity": "inherits ee",
+   "notes": "Supported only in the sense that it is the same operator a zero-SOC periodic_nc run would build. It is gated indirectly by soc_lsham."
+  },
+  {
+   "id": "overlap_generalized_proxy",
+   "term": "reciprocal_mode='generalized_overlap_proxy'",
+   "class": "composite",
+   "status": "fatal",
+   "wp": "WP6a",
+   "reason": "the current I + eeo(k) proxy is not the formal LMTO metric; there is no derivation for a GBT metric built this way",
+   "guards": [
+    {
+     "file": "source/reciprocal_lifecycle.f90",
+     "routine": "validate_nonzero_q_gbt",
+     "message": "is unsupported: the available generalized-overlap"
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6/cases.json:wp6_overlap_proxy_reject",
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_overlap_proxy_reject"
+   ]
+  },
+  {
+   "id": "overlap_generalized_kanpur",
+   "term": "reciprocal_mode='generalized_overlap_kanpur'",
+   "class": "composite",
+   "status": "fatal",
+   "wp": "WP6a",
+   "reason": "the formal Kanpur metric is not implemented at all",
+   "guards": [
+    {
+     "file": "source/reciprocal_lifecycle.f90",
+     "routine": "validate_nonzero_q_gbt",
+     "message": "is unsupported: the available generalized-overlap"
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6/cases.json:wp6_overlap_kanpur_reject",
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_overlap_kanpur_reject"
+   ]
+  },
+  {
+   "id": "hubbard_v_intersite",
+   "term": "Hubbard-V intersite correction (calculate_hubbard_v_potential)",
+   "class": "directed_bond",
+   "status": "fatal",
+   "wp": "WP6c",
+   "reason": "the implementation is a real diagonal-occupation proxy with no directed structure-like factor for the endpoint link G_ab to act on; an unlinked bond addition is q-blind and therefore not covariant",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_gbt_bulkham",
+     "message": "gbt_single_q with intersite Hubbard-V is unsupported."
+    },
+    {
+     "file": "source/reciprocal_lifecycle.f90",
+     "routine": "validate_nonzero_q_gbt",
+     "message": "GBT with intersite Hubbard-V is unsupported."
+    }
+   ],
+   "negative_control_oracle": "tests/unit/test_gbt_wp6_matrix.py::unlinked_bond_defect_oracle quantifies the gauge defect of an unlinked bond addition: exactly zero at q=0, O(1) relative at finite q",
+   "negative_probes": [
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_hubbard_v_reject"
+   ]
+  },
+  {
+   "id": "soc_lsham",
+   "term": "Spin-orbit coupling (build_lsham, lsham)",
+   "class": "onsite",
+   "status": "fatal",
+   "wp": "WP6c",
+   "reason": "lsham couples the spin channels in the laboratory frame and has no bond index; a rotating-frame single-q ansatz has no audited SOC term",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_gbt_bulkham",
+     "message": "gbt_single_q with SOC is unsupported."
+    },
+    {
+     "file": "source/reciprocal_lifecycle.f90",
+     "routine": "validate_nonzero_q_gbt",
+     "message": "GBT with SOC is unsupported."
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_soc_reject"
+   ],
+   "notes": "The real-space guard is stronger than the blueprint's 'nonzero-q GBT+SOC must be fatal': it fires whenever maxval(abs(lsham)) exceeds 1e-14, including at q=0. Kept conservative; a q=0 GBT+SOC audit was not performed."
+  },
+  {
+   "id": "orbital_polarization",
+   "term": "Orbital polarization (orb_pol)",
+   "class": "onsite",
+   "status": "fatal",
+   "wp": "WP6 integration",
+   "reason": "orb_pol contributes only through lsham, and its rac/lz_loc prefactors are proportional to sqrt(xi_d), so it is identically zero whenever SOC is; it is therefore covered by the soc_lsham guard with no separate check needed",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_gbt_bulkham",
+     "message": "gbt_single_q with SOC is unsupported."
+    }
+   ],
+   "source_contract": "tests/unit/test_gbt_wp6_matrix.py asserts orb_pol is used only inside build_lsham",
+   "notes": "Not called out by WP6a/b/c; classified here so the matrix has no unlisted Hamiltonian term."
+  },
+  {
+   "id": "spin_torque_conductivity",
+   "term": "cond_type='spin_torque' operators js_a/jso_a from hxc",
+   "class": "composite",
+   "status": "fatal",
+   "wp": "WP6c",
+   "reason": "this%hxc (the pure exchange-splitting bond array) is only populated by build_bulkham's ordinary periodic_nc/explicit_texture branch; build_gbt_bulkham zeroes it and never fills it, so the commutator would silently return an identically-zero spin-torque current",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_realspace_spin_torque_operators",
+     "message": "gbt_single_q with cond_type=spin_torque is unsupported"
+    }
+   ],
+   "source_contract": "tests/unit/test_gbt_wp6c_velocity.py::source_contract, tests/unit/test_gbt_wp6_matrix.py",
+   "negative_probes": [],
+   "limitation": "No live production negative probe: the existing conductivity fixtures (tests/postproc/cases/conductivity/fccPt) are not GBT-compatible lattice/screening setups and a new GBT+conductivity fixture was judged out of scope. Evidence is the source contract plus the fact that hxc has exactly one consumer."
+  },
+  {
+   "id": "local_axis",
+   "term": "local_axis=.true. under GBT",
+   "class": "infrastructure",
+   "status": "fatal",
+   "wp": "WP3/WP4",
+   "reason": "the GBT rotating-frame operator must remain explicit; a second implicit local-frame rotation is unaudited",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_gbt_bulkham",
+     "message": "gbt_single_q with local_axis is not yet audited"
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_local_axis_reject"
+   ]
+  },
+  {
+   "id": "legacy_strux_backend",
+   "term": "strux_backend other than 'strux_lib' under GBT",
+   "class": "infrastructure",
+   "status": "fatal",
+   "wp": "WP4",
+   "reason": "the primitive-link assembler reads raw complex orbital S/Sdot blocks that only the strux_lib backend produces",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_gbt_bulkham",
+     "message": "gbt_single_q requires strux_backend='strux_lib'"
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_legacy_backend_reject"
+   ]
+  },
+  {
+   "id": "ccor_missing_sdot",
+   "term": "GBT + CCOR without generated Sdot",
+   "class": "infrastructure",
+   "status": "fatal",
+   "wp": "WP6b",
+   "reason": "the CCOR link must be applied to the primitive Sdot factor; without it the CCOR block would be silently zero",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_gbt_bulkham",
+     "message": "gbt_single_q with CCOR requires generated Sdot and strux_want_sdot=.true."
+    },
+    {
+     "file": "source/hamiltonian_ccor.f90",
+     "routine": "validate_ccor_inputs",
+     "message": "gbt_single_q with CCOR requires generated Sdot and strux_want_sdot=.true."
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6b/negative_cases.json:wp6b_ccor_missing_sdot_reject",
+    "tests/gbt_wp6_matrix/negative_cases.json:wp6i_ccor_missing_sdot_reject"
+   ],
+   "notes": "The GBT-specific CCOR/Sdot guard is unconditional and ignores ccor_strict, unlike the ordinary-mode Sdot warning."
+  },
+  {
+   "id": "local_cluster_route",
+   "term": "GBT through build_locham (impurity / local-cluster route)",
+   "class": "infrastructure",
+   "status": "fatal",
+   "wp": "WP3",
+   "reason": "the primitive S-level assembler exists only for the bulk route; the local-cluster GBT assembler is not implemented",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_locham",
+     "message": "gbt_single_q representation boundary is active, but the primitive S-level assembler is not installed."
+    }
+   ],
+   "negative_probes": [],
+   "limitation": "Source-contract evidence only; no impurity GBT fixture exists."
+  },
+  {
+   "id": "contracted_pair_boundaries",
+   "term": "Internal representation boundaries (ham0m_nc, ccor_select_endpoint_moments)",
+   "class": "infrastructure",
+   "status": "fatal",
+   "wp": "WP3/WP6b",
+   "reason": "these are the ordinary q-agnostic contracted-Pauli builders; GBT must never reach them because its gauge belongs on the primitive factor",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "ham0m_nc",
+     "message": "gbt_single_q must not enter ham0m_nc."
+    },
+    {
+     "file": "source/hamiltonian_ccor.f90",
+     "routine": "ccor_select_endpoint_moments",
+     "message": "gbt_single_q must not enter the contracted CCOR pair builder."
+    }
+   ],
+   "notes": "Defensive internal assertions, not user-facing combinations. They are expected never to fire."
+  },
+  {
+   "id": "constraining_field",
+   "term": "Magnetic constraining field (cfd::constrain)",
+   "class": "onsite",
+   "status": "inactive",
+   "wp": "WP6c",
+   "reason": "the computed bfield and etcon are deallocated at both call sites (source/self.f90, source/exchange.f90) without ever reaching the potential, Hamiltonian or total energy, in every representation mode",
+   "guards": [],
+   "notes": "Pre-existing gap recorded in tests/KNOWN_ISSUES.md ('Magnetic constraining field is a no-op'). Not GBT-specific; there is no functional term for GBT to frame or gate. Wiring one up is a feature task, not a WP6 audit item."
+  },
+  {
+   "id": "ccor_three_centre",
+   "term": "Three-centre CCOR and an active ccd2 Hamiltonian contribution",
+   "class": "directed_composite",
+   "status": "not_implemented",
+   "wp": "WP6b",
+   "reason": "outside the implemented two-centre CCOR model in any representation mode; ccd2 is computed and logged only",
+   "guards": []
+  },
+  {
+   "id": "downfolding",
+   "term": "Downfolded / other structure-derivative terms",
+   "class": "directed_composite",
+   "status": "not_implemented",
+   "wp": "WP6c",
+   "reason": "no downfolding term exists in this codebase; every Sdot use outside HOH is tied to CCOR",
+   "guards": []
+  },
+  {
+   "id": "gbt_kspace_flag",
+   "term": "gbt_kspace namelist flag",
+   "class": "infrastructure",
+   "status": "inactive",
+   "wp": "WP5",
+   "reason": "the reciprocal GBT transform was deleted in WP5; the flag is accepted, warned about, and forced to .false.",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "build_from_file",
+     "message": "gbt_kspace is deprecated and ignored"
+    }
+   ],
+   "notes": "Removal of the input field itself belongs to WP10."
+  },
+  {
+   "id": "paoflow_export",
+   "term": "PAOFLOW / TB export (hamiltonian_paoflow_io.f90)",
+   "class": "infrastructure",
+   "status": "supported",
+   "wp": "WP6c",
+   "reason": "a passive dump of already-built, already-audited ee/lsham arrays; computes no new physics and needs no gate of its own",
+   "guards": []
+  },
+  {
+   "id": "spiral_keys_without_representation",
+   "term": "q_ss set while magnetic_representation='periodic_nc'",
+   "class": "infrastructure",
+   "status": "fatal",
+   "wp": "WP7",
+   "guards": [
+    {
+     "file": "source/hamiltonian_build.f90",
+     "routine": "validate_spiral_keys_are_consumed",
+     "message": "q_ss is set but magnetic_representation="
+    }
+   ],
+   "negative_probes": [
+    "tests/gbt_wp6_matrix/negative_cases.json:wp7_periodic_nc_qss_reject"
+   ],
+   "notes": "Input boundary, not a GBT feature: q_ss is live under gbt_single_q (bond gauge) and explicit_texture (site moments) but dead under the default periodic_nc, where it used to be silently ignored and return a flat dispersion. Two legitimate interpretations exist, so the guard names all three exits rather than guessing one. Keyed on q_ss alone: a cone angle at q=0 is a global spin rotation and is energy-invariant without SOC, and frozen_magnon decks carry theta_ss through their initial periodic_nc build. Placed at build_bulkham, the production rebuild boundary, so it sees the representation AFTER calculation.f90 selects gbt_single_q for a frozen-magnon sweep."
+  }
+ ]
+}

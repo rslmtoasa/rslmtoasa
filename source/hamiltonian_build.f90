@@ -1230,6 +1230,8 @@ contains
          this%operator_generation = this%operator_generation + 1
       end if
 
+      call validate_spiral_keys_are_consumed(this, 'hamiltonian%build_bulkham')
+
       if (trim(this%magnetic_representation) == explicit_texture) then
          call this%prepare_explicit_texture_moments()
          call validate_explicit_texture_bulk_reuse(this)
@@ -1566,6 +1568,47 @@ contains
                              __FILE__, __LINE__)
       end if
    end subroutine validate_explicit_texture_bulk_reuse
+
+   !---------------------------------------------------------------------------
+   !> @brief Refuse a spiral wavevector that the chosen representation ignores.
+   !>
+   !> `q_ss` is only ever read by two of the three magnetic representations:
+   !> `gbt_single_q` (as the bond gauge phase, `gbt_endpoint_link`) and
+   !> `explicit_texture` (as the site-dependent moment direction,
+   !> `prepare_explicit_texture_moments`). Under `periodic_nc` -- which is the
+   !> DEFAULT when `magnetic_representation` is omitted -- it is stored and
+   !> never used, so a spiral sweep silently returns the same collinear answer
+   !> at every q. That is the most expensive failure mode this code has: it
+   !> produces a plausible, flat, entirely wrong dispersion instead of an error.
+   !>
+   !> The two live interpretations are both legitimate and genuinely different
+   !> physics (the gauge trick versus the real-space texture it is validated
+   !> against), so this does NOT guess one -- it names all three exits and
+   !> stops. Fatal rather than a warning on purpose: in a multi-hundred-point q
+   !> sweep a warning scrolls past and the flat curve still gets written.
+   !>
+   !> Deliberately keyed on `q_ss` alone, not `theta_ss`. A cone angle at q=0 is
+   !> a global spin rotation, which without SOC leaves every energy invariant,
+   !> so ignoring it is harmless -- and `post_processing='frozen_magnon'` decks
+   !> legitimately carry `theta_ss` through the initial `periodic_nc` build
+   !> before `calculation.f90` selects `gbt_single_q` for the sweep itself.
+   !---------------------------------------------------------------------------
+   subroutine validate_spiral_keys_are_consumed(this, context)
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: context
+      real(rp), parameter :: q_tolerance = 1.0e-12_rp
+
+      if (trim(this%magnetic_representation) /= periodic_nc) return
+      if (norm2(this%q_ss) <= q_tolerance) return
+
+      call g_logger%fatal(trim(context)//': q_ss is set but magnetic_representation='// &
+         'periodic_nc, which has no spiral wavevector -- q_ss would be silently '// &
+         'ignored and every q would return the same collinear answer. Select '// &
+         'magnetic_representation=gbt_single_q (single-q spiral/cone through the '// &
+         'bond gauge; needs nsp=3 and no SOC), or magnetic_representation='// &
+         'explicit_texture (real-space spiral carried by the cluster), or remove '// &
+         'q_ss for an ordinary non-spiral calculation.', __FILE__, __LINE__)
+   end subroutine validate_spiral_keys_are_consumed
 
    subroutine gbt_endpoint_angles(this, itype, theta, phi, axis_sign)
       class(hamiltonian), intent(in) :: this
