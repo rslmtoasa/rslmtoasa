@@ -453,14 +453,44 @@ Never use stale potential%mom as an implicit projection axis. Reconstruct lab-fr
 Compare RS/k-space SCF and a q=0 cone.
 
 Completion checklist:
-- [ ] One full rotating-frame density contract exists.
-- [ ] RS and k-space producers populate the same object.
-- [ ] Radial projection uses an explicit current axis.
-- [ ] Constrained and relaxed policies are distinct.
-- [ ] Density physicality assertions pass.
-- [ ] q=0 cone invariance passes.
-- [ ] RS/k-space SCF comparison and G7 PASS/FAIL are reported.
+- [x] One full rotating-frame density contract exists.
+- [x] RS and k-space producers populate the same object.
+- [x] Radial projection uses an explicit current axis.
+- [x] Constrained and relaxed policies are distinct.
+- [x] Density physicality assertions pass.
+- [x] q=0 cone invariance passes.
+- [x] RS/k-space SCF comparison and G7 PASS/FAIL are reported.
 ```
+
+**WP7 outcome (2026-08-06):** the contract is `source/spin_density.f90` --
+the complete per-site/per-l rotating-frame 2x2 spin matrix for all three
+energy-moment orders, with no default projection axis (`get_axis` is fatal
+when unset and the module never reads `potential%mom`). Both solvers fill it:
+`bands%accumulate_spin_density_rs` from the on-site Green function and
+`reciprocal%accumulate_spin_density_kspace` from eigenvectors/k weights/
+occupations, and both project onto radial up/down only afterwards, through
+`radial_band_moments`. The k-space route no longer derives its SCF density
+from a `potential%mom`-projected DOS grid; `projected_dos` remains DOS output.
+New `&control density_policy` selects `constrained_spiral` (default, pre-WP7
+behaviour) or `relaxed_reference`. Executed: `ctest -L unit` 22/22 (new
+`UnitSpinDensity`, 7 oracle groups, none of which call a production solver),
+`ctest -L regression` 16/16, plus a bcc-Fe RS/k-space SCF comparison over
+`lld = 15/21/27` and `nk = 8^3..20^3`. Cross-route agreement is 1.33e-4 Ry in
+etot, 3.13e-3 mu_B in moment, 2.81e-4 Ry in E_F and exact in charge -- smaller
+than each route's own convergence spread in every quantity. q=0 cone
+invariance: 1e-13 in the oracle, 1.20e-5 Ry in production. Limitation recorded,
+not hidden: the two policies coincide on the single-sublattice collinear
+ferromagnet used for the comparison (as they must), so their distinctness is
+shown at the contract level only. The `scf`/`postproc` suites were not baselined
+at the start of the task, so every failure was attributed individually rather
+than assumed: 8 are the pre-existing set the WP6 integration report records,
+and 3 apparent timeouts turned out to be machine contention (all three pass in
+19-33 s when re-run alone against the 300 s limit). Two pre-existing,
+WP7-unrelated failures were re-confirmed against a stashed pristine tree at
+`b0e8e01`; `Example_bulk_bccFe_nsp4_block_spiral_qplus` converges to an
+out-of-plane axis and is newly written up in `tests/KNOWN_ISSUES.md` rather
+than fixed. Full evidence in `docs/dev/GBT_WP7_G7_REPORT.md`. **G7: PASS.** Next
+allowed task: WP8.
 
 ## WP8 — Little-group symmetry and q lifecycle
 

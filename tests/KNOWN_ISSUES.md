@@ -429,3 +429,25 @@ future reference regeneration will capture genuinely different `vmad` values.
   golden values and so needs explicit sign-off before doing it.
 - **Found:** WP6c, while running the full `ctest -L scf` suite as required by
   the project's rule 1 regression gate before/after every task.
+
+## `Example_bulk_bccFe_nsp4_block_spiral_qplus` converges to an out-of-plane axis
+
+- **Symptom:** the case fails on `Fe_out.nml:mom[3]`, `run = 1.000000e+00`
+  against `ref = 6.856242e-09`. The converged moment direction is `+z`, where
+  the committed reference has it in-plane — a flat (theta = 90 degrees) spiral.
+  This is a direction failure, not a tolerance failure: the other two checked
+  values pass.
+- **Confirmed pre-existing, not introduced by WP7:** reproduces identically
+  (same value, same field) on a stashed pristine tree at `b0e8e01` with no
+  source changes, verified by `git stash push source/` + rebuild + rerun before
+  and after the WP7 change.
+- **Untriaged.** Not diagnosed. Candidate directions, in no particular order
+  and none of them checked: the case's own start deck may no longer set the
+  cone angle it expects; `self%mix_magnetic_moments` may be collapsing a
+  direction that carries no energy gradient; or the finite-q moment update
+  really is wrong. The committed reference itself is also a suspect — nothing
+  here establishes that `6.9e-09` is the right answer.
+- **Why it matters:** it touches the finite-q moment direction, i.e. squarely
+  GBT territory, and WP9's validation ladder will lean on spiral moments.
+- **Proposal (not done):** triage before WP9. Estimated size: half a day.
+- **Found:** WP7, running the SCF example suite for the gate G7 evidence.

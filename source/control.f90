@@ -26,6 +26,7 @@ module control_mod
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init, norb
    use math_mod, only: init_math_operators
+   use spin_density_mod, only: sd_constrained_spiral, sd_relaxed_reference
    implicit none
 
    private
@@ -203,6 +204,20 @@ module control_mod
       !> Allowed values: 'random_vec', 'per_type'
       character(len=13) :: cond_calctype
 
+      !> SCF density policy for the shared rotating-frame density contract
+      !> (GBT blueprint WP7). Governs which variables the SCF may mix and what
+      !> the radial projection axis means:
+      !>
+      !>   'constrained_spiral' -- reference directions fixed; charge and the
+      !>     longitudinal moment magnitude are mixed; the transverse density is
+      !>     reported as a constraint residual/torque.
+      !>   'relaxed_reference'  -- the full rotating-frame Cartesian moment is
+      !>     mixed and the per-sublattice reference axis follows it, keeping the
+      !>     single-q ansatz.
+      !>
+      !> Default: 'constrained_spiral'.
+      character(len=30) :: density_policy
+
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
       ! 0=over orbitals, 1=over atoms
@@ -327,6 +342,7 @@ contains
       linear_in = this%linear_in
       linear_out = this%linear_out
       cond_calctype = this%cond_calctype
+      density_policy = this%density_policy
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
@@ -390,6 +406,7 @@ contains
       this%linear_in = linear_in
       this%linear_out = linear_out
       this%cond_calctype = cond_calctype
+      this%density_policy = trim(adjustl(density_policy))
 
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
@@ -487,6 +504,7 @@ contains
       this%linear_in = 'charge'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
+      this%density_policy = 'constrained_spiral'
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
@@ -654,6 +672,11 @@ contains
           .and. this%cheb_backend /= 'mkl_sparse' &
           .and. this%cheb_backend /= 'legacy') then
          call g_logger%fatal('control%cheb_backend must be one of: ''fast'', ''fast_dp'', ''batched'', ''mkl_batch'', ''mkl_sparse'' or ''legacy''.', __FILE__, __LINE__)
+      end if
+      if (this%density_policy /= sd_constrained_spiral &
+          .and. this%density_policy /= sd_relaxed_reference) then
+         call g_logger%fatal('control%density_policy must be one of: '''//trim(sd_constrained_spiral)// &
+                             ''' or '''//trim(sd_relaxed_reference)//'''.', __FILE__, __LINE__)
       end if
    end subroutine check_all
 

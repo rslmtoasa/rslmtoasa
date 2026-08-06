@@ -677,14 +677,10 @@ end subroutine project_dos_orbitals_gaussian
 module subroutine calculate_band_moments(this)
    class(reciprocal), intent(inout) :: this
 
-   integer :: isite, iorb, ispin, ie, n_energy
-   real(rp) :: energy, dos_value, fermi_weight
-   real(rp) :: m0, m1, m2
-   real(rp), dimension(:), allocatable :: integrand, fermi_dist
-   real(rp) :: kT, fermi_arg
-   real(rp) :: total_occupation, expected_electrons, total_occupation_alt
-      real(rp), allocatable :: energy_grid_ry(:)
-      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
+   integer :: isite, iorb, ispin
+   integer :: atom_idx
+   real(rp) :: m0
+   real(rp), allocatable :: reference(:, :), axis_used(:, :)
 
    call root_info('calculate_band_moments: Starting calculation', __FILE__, __LINE__)
    call root_info('calculate_band_moments: DEBUG - this%auto_find_fermi = ' // &
@@ -718,85 +714,35 @@ module subroutine calculate_band_moments(this)
       call this%project_dos_orbitals_tetrahedron()
    end if
 
-   if (allocated(this%band_moments)) deallocate(this%band_moments)
-   allocate(this%band_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3))
-   this%band_moments = 0.0_rp
-
-   n_energy = this%n_energy_points
-   allocate(integrand(n_energy))
-   allocate(fermi_dist(n_energy))
-   allocate(energy_grid_ry(n_energy))
-   energy_grid_ry = this%dos_energy_grid  ! Already in Ry
-
-   ! Boltzmann constant: kB = 6.3336814e-6 Ry/K
-   kT = max(this%temperature * 6.3336814e-6_rp, 1.0e-10_rp)  ! Ry/K; canonical FD floor
-   
-   call g_logger%info('calculate_band_moments: kT = ' // trim(real2str(kT, '(ES12.5)')) // &
-                     ' Ry at T = ' // trim(real2str(this%temperature, '(F8.2)')) // ' K', &
-                     __FILE__, __LINE__)
-
-   ! Pre-calculate Fermi-Dirac distribution
-   do ie = 1, n_energy
-      energy = energy_grid_ry(ie)
-      fermi_arg = (energy - this%fermi_level) / kT
-      
-      if (fermi_arg > 50.0_rp) then
-         fermi_dist(ie) = 0.0_rp
-      else if (fermi_arg < -50.0_rp) then
-         fermi_dist(ie) = 1.0_rp
-      else
-         fermi_dist(ie) = 1.0_rp / (exp(fermi_arg) + 1.0_rp)
+   ! --- WP7: the SCF density is the shared rotating-frame contract. ----------
+   ! Accumulate the full 2x2 spin density from eigenvectors / k weights /
+   ! occupations with no axis in it, resolve the explicit per-site axis through
+   ! the SCF policy, and only then project onto the radial up/down band moments.
+   ! `projected_dos` above stays a DOS diagnostic; it no longer defines the
+   ! density, and its `potential%mom` projection is no longer an SCF input.
+   allocate(reference(3, this%n_sites))
+   allocate(axis_used(3, this%n_sites))
+   do isite = 1, this%n_sites
+      reference(:, isite) = [0.0_rp, 0.0_rp, 1.0_rp]
+      atom_idx = this%lattice%nbulk + isite
+      if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
+         if (allocated(this%lattice%symbolic_atoms(atom_idx)%potential%mom)) then
+            reference(:, isite) = this%lattice%symbolic_atoms(atom_idx)%potential%mom(1:3)
+         end if
       end if
    end do
 
-   ! Calculate total occupation to verify normalization
-   integrand = this%total_dos * fermi_dist
-   total_occupation = trapezoidal_integral(energy_grid_ry, integrand)
-   
-   ! Also calculate using the same method as find_fermi_level_from_dos for comparison
-   total_occupation_alt = this%integrate_dos_up_to_energy(this%fermi_level, kT)
-   
-   call g_logger%info('calculate_band_moments: Total occupation (method 1) = ' // &
-                     trim(real2str(total_occupation, '(F10.5)')) // &
-                     ', (method 2) = ' // trim(real2str(total_occupation_alt, '(F10.5)')) // &
-                     ', expected = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
-                     __FILE__, __LINE__)
+   call this%accumulate_spin_density_kspace()
+   call this%fill_band_moments_from_spin_density( &
+      trim(this%lattice%control%density_policy), reference, axis_used)
 
-   ! Calculate moments for each projection
    do isite = 1, this%n_sites
-      do iorb = 1, this%n_orb_types
-         do ispin = 1, this%n_spin_components
-
-            ! m0: occupation = ∫ DOS(E) * f(E) dE
-            integrand = this%projected_dos(isite, iorb, ispin, :) * fermi_dist
-            m0 = trapezoidal_integral(energy_grid_ry, integrand)
-
-            ! m1: band center = ∫ E * DOS(E) * f(E) dE / m0
-            if (abs(m0) > 1.0e-12_rp) then
-               integrand = energy_grid_ry * this%projected_dos(isite, iorb, ispin, :) * fermi_dist
-               m1 = trapezoidal_integral(energy_grid_ry, integrand) / m0
-            else
-               m1 = 0.0_rp
-            end if
-
-            ! m2: band width = sqrt(∫ (E - m1)² * DOS(E) * f(E) dE / m0)
-            if (abs(m0) > 1.0e-12_rp) then
-               ! Use energy grid in Ry for the variance integral (units must match projected_dos which
-               ! was integrated/normalized in Ry). Previously we accidentally passed the eV grid here.
-               integrand = (energy_grid_ry - m1)**2 * &
-                          this%projected_dos(isite, iorb, ispin, :) * fermi_dist
-               m2 = trapezoidal_integral(energy_grid_ry, integrand) / m0
-               m2 = sqrt(max(m2, 0.0_rp))
-            else
-               m2 = 0.0_rp
-            end if
-
-            this%band_moments(isite, iorb, ispin, 1) = m0
-            this%band_moments(isite, iorb, ispin, 2) = m1
-            this%band_moments(isite, iorb, ispin, 3) = m2
-         end do
-      end do
+      call g_logger%info('calculate_band_moments: site '//trim(int2str(isite))// &
+                         ' projection axis = ('//trim(real2str(axis_used(1, isite), '(F9.5)'))//', '// &
+                         trim(real2str(axis_used(2, isite), '(F9.5)'))//', '// &
+                         trim(real2str(axis_used(3, isite), '(F9.5)'))//')', __FILE__, __LINE__)
    end do
+   deallocate(reference, axis_used)
 
    ! Calculate sum of all m0 moments (should equal total occupation)
    m0 = 0.0_rp
@@ -807,13 +753,11 @@ module subroutine calculate_band_moments(this)
          end do
       end do
    end do
-   
+
    call g_logger%info('calculate_band_moments: Sum of all m0 moments = ' // &
                      trim(real2str(m0, '(F10.5)')) // &
-                     ', total occupation = ' // trim(real2str(total_occupation, '(F10.5)')), &
+                     ', expected electrons = ' // trim(real2str(this%total_electrons, '(F10.5)')), &
                      __FILE__, __LINE__)
-
-   deallocate(integrand, fermi_dist)
 
    call g_logger%info('calculate_band_moments: Completed', __FILE__, __LINE__)
 end subroutine calculate_band_moments

@@ -47,6 +47,7 @@ module reciprocal_mod
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
    use basis_mod, only: nb, norb
+   use spin_density_mod, only: spin_density
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
 #ifdef USE_MPI
    use mpi
@@ -172,6 +173,10 @@ module reciprocal_mod
       real(rp), dimension(:, :, :, :), allocatable :: projected_dos
       !> Band moments [m0, m1, m2] for each projection
       real(rp), dimension(:, :, :, :), allocatable :: band_moments
+      !> WP7 shared rotating-frame density contract, filled by the k-space
+      !> producer `accumulate_spin_density_kspace`. `band_moments` is projected
+      !> out of THIS object, after accumulation, against its own explicit axis.
+      type(spin_density) :: rf_density
       !> Directional DOS x-component [n_energy_points]
       real(rp), dimension(:), allocatable :: dos_mx_tot
       !> Directional DOS y-component [n_energy_points]
@@ -289,6 +294,8 @@ module reciprocal_mod
       procedure :: project_dos_orbitals_gaussian
       procedure :: project_dos_orbitals_tetrahedron
       procedure :: calculate_band_moments
+      procedure :: accumulate_spin_density_kspace
+      procedure :: fill_band_moments_from_spin_density
       procedure :: print_total_and_spin_dos
       procedure :: evaluate_eigenvalue_occupations
       procedure :: find_fermi_level_from_eigenvalues
@@ -1268,17 +1275,25 @@ end subroutine project_dos_orbitals_gaussian
 !> @param[inout] this Reciprocal object receiving band_moments.
 module subroutine calculate_band_moments(this)
    class(reciprocal), intent(inout) :: this
-
-   integer :: isite, iorb, ispin, ie, n_energy
-   real(rp) :: energy, dos_value, fermi_weight
-   real(rp) :: m0, m1, m2
-   real(rp), dimension(:), allocatable :: integrand, fermi_dist
-   real(rp) :: kT, fermi_arg
-   real(rp) :: total_occupation, expected_electrons, total_occupation_alt
-      real(rp), allocatable :: energy_grid_ry(:)
-      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
-
 end subroutine calculate_band_moments
+
+!> @brief WP7 k-space producer for the shared rotating-frame density contract.
+!> @param[inout] this Reciprocal object whose `rf_density` is filled.
+module subroutine accumulate_spin_density_kspace(this)
+   class(reciprocal), intent(inout) :: this
+end subroutine accumulate_spin_density_kspace
+
+!> @brief Project the accumulated density onto radial band moments.
+!> @param[inout] this      Reciprocal object receiving band_moments.
+!> @param[in]    policy    SCF density policy governing the axis choice.
+!> @param[in]    reference Per-site reference directions (3, n_sites).
+!> @param[out]   axis_out  Per-site axis actually used (3, n_sites).
+module subroutine fill_band_moments_from_spin_density(this, policy, reference, axis_out)
+   class(reciprocal), intent(inout) :: this
+   character(len=*), intent(in) :: policy
+   real(rp), dimension(:, :), intent(in) :: reference
+   real(rp), dimension(:, :), intent(out) :: axis_out
+end subroutine fill_band_moments_from_spin_density
 
    !> @brief Print total and spin-resolved DOS occupation diagnostics.
    !> @param[in] this Reciprocal object containing DOS and projected DOS arrays.

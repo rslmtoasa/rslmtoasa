@@ -161,6 +161,7 @@ Alphabetical Listing (All Parameters)
 
 - ``dipole_electrostatics`` - Enable l=1 dipole surface/interface electrostatics (B6)
 - ``dipole_mix`` - SCF mixing fraction for the dipole moment Q10 (B6)
+- ``density_policy`` - Rotating-frame SCF density policy (WP7)
 - ``do_asd`` - Enable atomistic spin dynamics
 - ``do_cochg`` - Enable co-charge correction
 - ``do_comom`` - Enable co-moment correction
