@@ -1,0 +1,63 @@
+&calculation
+pre_processing = 'none'
+post_processing = 'frozen_magnon'
+verbose = T
+/
+&lattice
+rc = 080 ! radius cut. We could think about setting a default
+alat = 2.86120 ! lattice parameter
+crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
+strux_backend = 'strux_lib'
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 3
+use_kspace = .true.
+/
+&energy
+fermi = -0.042265
+energy_min = -2.0
+energy_max = 0.8
+channels_ldos = 2500
+/
+&reciprocal
+nk1 = 12
+nk2 = 12
+nk3 = 12
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .true.
+use_time_reversal = .true.
+use_shift = .false.
+q_symmetry_policy = 'full_bz'
+dos_method = 'tetrahedron'
+temperature = 300.0
+auto_find_fermi = .false.
+/
+&control
+calctype = 'B'
+nsp = 3
+lld = 20
+recur = 'block'
+/
+&mix
+beta = 0.01
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+theta_ss = 90.0
+/
+&frozen_magnon
+mode = 'mft'
+q_file = 'q_points.dat'
+q_coordinates = 'cartesian'
+/

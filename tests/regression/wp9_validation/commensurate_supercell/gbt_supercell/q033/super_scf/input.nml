@@ -1,0 +1,54 @@
+&calculation
+pre_processing = 'bravais'
+/
+&lattice
+! ndim/rc are chosen so the spherical cut (radius sqrt(rc) = 8 alat) sits well
+! inside the pre-cut translation box on BOTH sides of the pair -- see the
+! header of tests/regression/run_gbt_supercell.py.
+ndim = 60000
+rc = 64.0
+alat = 2.86120
+crystal_sym = 'file'
+wav = 1.40880
+ntype = 6
+ct(1:6) = 6*3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = './'
+label(1) = 'Fe1'
+label(2) = 'Fe2'
+label(3) = 'Fe3'
+label(4) = 'Fe4'
+label(5) = 'Fe5'
+label(6) = 'Fe6'
+/
+&self
+ws_all = .true.
+! WP9 SCF leg: full self-consistency, not the frozen-potential force theorem.
+! nstep/conv_thr chosen generously; the run stops early if converged.
+nstep = 25
+conv_thr = 1.0d-7
+/
+&energy
+fermi = -0.069933
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 3
+lld = 16
+recur = 'block'
+/
+&hamiltonian
+q_ss(:) = 0.0d0, 0.0d0, 0.0d0
+theta_ss = 0.0d0
+/
+&mix
+! WP9 SCF leg: proper broyden mixing, moment direction allowed to relax
+! (magbeta defaults to 1.0 -- full mixing -- when omitted).
+beta = 0.15
+mixtype = 'broyden'
+/

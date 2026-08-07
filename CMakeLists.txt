@@ -360,6 +360,60 @@ add_test(NAME WP8LittleGroup
 )
 set_tests_properties(WP8LittleGroup PROPERTIES LABELS "regression;gbt;wp8" TIMEOUT 1800)
 
+# WP9 physical validation.
+#
+# Battery A -- commensurate-supercell known-answer test (MFT/SCF/constrained-SCF
+# legs). NOT in the "regression" label: every case currently fails its derived
+# tolerance (see docs/dev/GBT_WP9_G9_REPORT.md and tests/KNOWN_ISSUES.md, "a
+# frozen potential carried over from a different kernel evaluates to near-zero
+# moment") -- a real, understood-scope, currently-open finding, not a false
+# positive to silence. Registered under "gbt;wp9" so it stays independently
+# runnable and visible without turning the default `-L regression` run red for
+# a known, already-documented gap.
+set(WP9_SUPERCELL_CASES_JSON "${TestDIR}/regression/wp9_validation/commensurate_supercell/cases.json")
+file(READ "${WP9_SUPERCELL_CASES_JSON}" _wp9_supercell_json)
+string(JSON _wp9_supercell_n LENGTH "${_wp9_supercell_json}" "cases")
+math(EXPR _wp9_supercell_last "${_wp9_supercell_n} - 1")
+foreach(_i RANGE ${_wp9_supercell_last})
+  string(JSON _wp9_supercell_name GET "${_wp9_supercell_json}" "cases" ${_i} "name")
+  string(JSON _wp9_supercell_timeout GET "${_wp9_supercell_json}" "cases" ${_i} "timeout")
+  add_test(NAME "WP9CommensurateSupercell_${_wp9_supercell_name}"
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/wp9_validation/commensurate_supercell/run_wp9_commensurate_supercell.py"
+      "--binary" "${TestBinary}"
+      "--cases-json" "${WP9_SUPERCELL_CASES_JSON}"
+      "--case-name" "${_wp9_supercell_name}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/wp9_commensurate_supercell"
+  )
+  set_tests_properties("WP9CommensurateSupercell_${_wp9_supercell_name}" PROPERTIES LABELS "gbt;wp9" TIMEOUT ${_wp9_supercell_timeout})
+endforeach()
+
+# Battery B -- bcc-Fe Gamma-H frozen-magnon sweep: RS-vs-k-space EBAND
+# agreement (against each route's own measured convergence spread), q<->-q
+# symmetry, and cone-angle scaling (informational; see
+# docs/dev/GBT_WP9_G9_REPORT.md -- the raw omega(theta) spread is large and is
+# reported there, not gated by this script). All of this script's own gated
+# checks pass, so it stays in the default regression label.
+add_test(NAME WP9GammaHSweep
+  COMMAND ${Python3_EXECUTABLE} ${TestDIR}/regression/wp9_validation/gammaH_sweep/run_wp9_gammaH_sweep.py
+    --binary "${TestBinary}"
+    --deck-root "${TestDIR}/regression/wp9_validation/gammaH_sweep"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp9_gammaH_sweep"
+)
+set_tests_properties(WP9GammaHSweep PROPERTIES LABELS "regression;gbt;wp9" TIMEOUT 3600)
+
+# Battery C -- multi-sublattice Goldstone measurement (bcc FeCo, branch_mode=
+# 'auto'). This is a MEASUREMENT, not a Goldstone-satisfaction gate (see the
+# script docstring and tests/KNOWN_ISSUES.md) -- it only asserts a loose
+# sanity bound, so it stays in the default regression label without implying
+# the historical Goldstone-violation finding is closed.
+add_test(NAME WP9MultisublatticeGoldstone
+  COMMAND ${Python3_EXECUTABLE} ${TestDIR}/regression/wp9_validation/multisublattice_goldstone/run_wp9_goldstone.py
+    --binary "${TestBinary}"
+    --deck-root "${TestDIR}/regression/wp9_validation/multisublattice_goldstone"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp9_goldstone"
+)
+set_tests_properties(WP9MultisublatticeGoldstone PROPERTIES LABELS "regression;gbt;wp9" TIMEOUT 1800)
+
 set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
 file(READ "${REGRESSION_CASES_JSON}" _regression_json)
 string(JSON _regression_n LENGTH "${_regression_json}" "cases")
