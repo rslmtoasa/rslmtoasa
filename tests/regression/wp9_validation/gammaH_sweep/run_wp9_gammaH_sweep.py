@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WP9 Battery B -- Gamma-H frozen-magnon sweep, RS vs k-space validation.
+"""WP9 Battery B -- Gamma-H frozen-magnon sweep, k-space route only.
 
 WHAT IS BEING TESTED
 =====================
@@ -9,26 +9,35 @@ single bcc-Fe deck, sweeping the spiral wavevector q_ss = (0, 0, q) (Cartesian,
 2*pi/alat) along Gamma-H (q in [0, 1.0]) and slightly past H (up to q=1.2).
 `post_processing_frozen_magnon_acoustic` (source/calculation.f90) forces
 `magnetic_representation = gbt_single_q` unconditionally, so no namelist
-setting is needed for that; both decks set `lattice%strux_backend =
+setting is needed for that; the deck sets `lattice%strux_backend =
 'strux_lib'` (required by WP4) and `nsp = 3` (spin-polarised, no SOC -- SOC
 is fatal under nonzero-q GBT per WP6c).
+
+k-space only, by explicit instruction (Anders): long-wavelength spirals can
+have real numerical problems on the real-space recursion route, either from
+the finite cluster truncation radius (`rc`) or from periodic-boundary-
+condition artifacts, so this validation should not depend on a cross-route
+comparison against a route that may itself be unreliable for this physics.
+An earlier version of this battery ran both routes and compared them
+(`base_realspace/`, since removed); that comparison has been dropped, not
+just de-gated.
 
 Three checks, each reported with raw numbers and a *measured* tolerance
 (no asserted magic constants):
 
-  1. RS-vs-k-space EBAND agreement. Both routes run the identical q-sweep
-     from the identical converged reference potential (mode='mft', force
-     theorem). Cross-route EBAND differences are compared at q=0.5 and q=1.0
-     against each route's own convergence spread, measured by varying the
-     k-space mesh density (nk=8/12/16) and the RS recursion depth
-     (lld=15/21/27) on those same two q-points -- the WP7 G7 methodology
-     (docs/dev/GBT_WP7_G7_REPORT.md section 4).
+  1. k-space EBAND convergence at q3=0.5 and q3=1.0 (H). The mesh is swept
+     nk=8/12/16 (identical nk1=nk2=nk3) and the spread (max-min) over those
+     three points is reported as the noise floor for this quantity -- the
+     same role WP7's own convergence-spread methodology played
+     (docs/dev/GBT_WP7_G7_REPORT.md section 4), now the sole tolerance
+     source instead of a second, cross-route one. The gate itself checks
+     that refinement is well-behaved: the last step (nk=12->16) must not be
+     larger than the first step (nk=8->12), i.e. the production resolution
+     (nk=12) must not be diverging away from the finer mesh.
   2. q <-> -q symmetry. No SOC is present, so E(q) = E(-q) must hold exactly
      up to numerical noise; any measured asymmetry is a phase-convention bug,
      not physics (task instructions, section on q-mirror). The noise floor
-     used for this check is the same convergence spread measured in (1),
-     since it is a measurement of numerical noise in the same EBAND quantity
-     under nominally-identical physics.
+     used for this check is the same convergence spread measured in (1).
   3. Cone-angle (theta_ss) scaling. At a fixed small q_ss=(0,0,0.05) (well
      inside the harmonic regime), sweep theta_ss in {5,10,15,20} degrees on
      the k-space route and report the spread of omega(q) = 4[E(q)-E(0)] /
@@ -126,7 +135,6 @@ def main() -> int:
     scratch.mkdir(parents=True, exist_ok=True)
 
     kspace_base = deck_root / "base_kspace"
-    rs_base = deck_root / "base_realspace"
     cone_base = deck_root / "base_cone"
     q_gammaH = deck_root / "q_points_gammaH.dat"
     q_conv = deck_root / "q_points_convergence.dat"
@@ -141,74 +149,58 @@ def main() -> int:
             failures.append(f"{label}: {detail}")
 
     # ------------------------------------------------------------------
-    # 0. Production Gamma-H sweep, both routes, at each route's default
-    #    resolution (k-space nk=12, RS lld=21).
+    # 0. Production Gamma-H sweep, k-space route, default resolution (nk=12).
     # ------------------------------------------------------------------
-    print("=== production Gamma-H sweep (k-space nk=12, RS lld=21) ===")
+    print("=== production Gamma-H sweep (k-space nk=12) ===")
     ks_prod = run_variant(args.binary, kspace_base, scratch / "prod_kspace", q_gammaH, args.timeout)
-    rs_prod = run_variant(args.binary, rs_base, scratch / "prod_realspace", q_gammaH, args.timeout)
 
     # ------------------------------------------------------------------
-    # 1 & partial 2. Convergence spread at q=0.5 and q=1.0 (H), each route.
+    # 1. Convergence spread at q=0.5 and q=1.0 (H), k-space mesh only.
     # ------------------------------------------------------------------
-    print("=== convergence spread: k-space nk in {8,12,16}, RS lld in {15,21,27} ===")
+    print("=== convergence spread: k-space nk in {8,12,16} ===")
     ks_spread_runs = {}
     for nk in (8, 12, 16):
         ks_spread_runs[nk] = run_variant(args.binary, kspace_base, scratch / f"conv_kspace_nk{nk}",
                                          q_conv, args.timeout, nk=nk)
-    rs_spread_runs = {}
-    for lld in (15, 21, 27):
-        rs_spread_runs[lld] = run_variant(args.binary, rs_base, scratch / f"conv_realspace_lld{lld}",
-                                          q_conv, args.timeout, lld=lld)
 
-    spread_tol = {}  # q3 -> tolerance (Ry), max of the two routes' own spreads
+    spread_tol = {}  # q3 -> tolerance (Ry), k-space own-route spread
     for q3 in (0.5, 1.0):
         ks_vals = [ks_spread_runs[nk]["by_q"][q3]["eband"] for nk in (8, 12, 16)]
-        rs_vals = [rs_spread_runs[lld]["by_q"][q3]["eband"] for lld in (15, 21, 27)]
         ks_spread = max(ks_vals) - min(ks_vals)
-        rs_spread = max(rs_vals) - min(rs_vals)
-        tol = max(ks_spread, rs_spread)
-        spread_tol[q3] = tol
+        spread_tol[q3] = ks_spread
         print(f"  q3={q3}: k-space eband(8,12,16)={[fmt(v) for v in ks_vals]} spread={ks_spread:.3e} Ry")
-        print(f"  q3={q3}: RS      eband(15,21,27)={[fmt(v) for v in rs_vals]} spread={rs_spread:.3e} Ry")
-        print(f"  q3={q3}: tolerance (max own-route spread) = {tol:.3e} Ry")
+        print(f"  q3={q3}: tolerance (own-route spread) = {ks_spread:.3e} Ry")
 
-    print("=== check 1: RS vs k-space EBAND agreement at production resolution ===")
+    print("=== check 1: k-space EBAND convergence at production resolution (nk=12) ===")
     for q3 in (0.5, 1.0):
-        e_ks = ks_prod["by_q"][q3]["eband"]
-        e_rs = rs_prod["by_q"][q3]["eband"]
-        d = abs(e_ks - e_rs)
-        tol = spread_tol[q3]
-        check(f"RS-vs-kspace eband q3={q3}", d < tol,
-              f"k-space {fmt(e_ks)}, RS {fmt(e_rs)}, diff {d:.3e} Ry, tol(own-route spread) {tol:.3e} Ry")
-    # Full-sweep informational diffs (not gated -- no convergence-spread measured at every q).
-    print("  informational: RS-vs-kspace eband diff across the full sweep (production resolution)")
-    max_diff_q, max_diff = None, -1.0
-    for q3 in sorted(ks_prod["by_q"]):
-        if q3 in rs_prod["by_q"]:
-            d = abs(ks_prod["by_q"][q3]["eband"] - rs_prod["by_q"][q3]["eband"])
-            if d > max_diff:
-                max_diff, max_diff_q = d, q3
-    print(f"    max diff over sweep: {max_diff:.3e} Ry at q3={max_diff_q}")
+        e8 = ks_spread_runs[8]["by_q"][q3]["eband"]
+        e12 = ks_spread_runs[12]["by_q"][q3]["eband"]
+        e16 = ks_spread_runs[16]["by_q"][q3]["eband"]
+        step_first = abs(e12 - e8)
+        step_last = abs(e16 - e12)
+        # Well-behaved refinement: the last step must not exceed the first
+        # step (production is not diverging away from the finer mesh).
+        check(f"k-space eband refinement q3={q3}", step_last <= step_first,
+              f"nk=8 {fmt(e8)}, nk=12 {fmt(e12)}, nk=16 {fmt(e16)}, "
+              f"step(8->12) {step_first:.3e} Ry, step(12->16) {step_last:.3e} Ry")
 
     # ------------------------------------------------------------------
-    # 2. q <-> -q symmetry, both routes, production sweep.
+    # 2. q <-> -q symmetry, k-space route, production sweep.
     # ------------------------------------------------------------------
-    print("=== check 2: q <-> -q symmetry (production sweep, both routes) ===")
-    for route_name, prod in (("k-space", ks_prod), ("RS", rs_prod)):
-        max_asym_q, max_asym = None, -1.0
-        for q3 in prod["by_q"]:
-            if q3 <= 0.0:
-                continue
-            if -q3 not in prod["by_q"]:
-                continue
-            d = abs(prod["by_q"][q3]["eband"] - prod["by_q"][-q3]["eband"])
-            if d > max_asym:
-                max_asym, max_asym_q = d, q3
-        tol = spread_tol.get(max_asym_q, max(spread_tol.values()))
-        check(f"{route_name}: max|E(q)-E(-q)| over sweep", max_asym < tol,
-              f"{max_asym:.3e} Ry at q3=+/-{max_asym_q}, noise-floor tol {tol:.3e} Ry "
-              f"(convergence spread measured at nearest of q3 in {{0.5,1.0}})")
+    print("=== check 2: q <-> -q symmetry (production sweep, k-space) ===")
+    max_asym_q, max_asym = None, -1.0
+    for q3 in ks_prod["by_q"]:
+        if q3 <= 0.0:
+            continue
+        if -q3 not in ks_prod["by_q"]:
+            continue
+        d = abs(ks_prod["by_q"][q3]["eband"] - ks_prod["by_q"][-q3]["eband"])
+        if d > max_asym:
+            max_asym, max_asym_q = d, q3
+    tol = spread_tol.get(max_asym_q, max(spread_tol.values()))
+    check("k-space: max|E(q)-E(-q)| over sweep", max_asym < tol,
+          f"{max_asym:.3e} Ry at q3=+/-{max_asym_q}, noise-floor tol {tol:.3e} Ry "
+          f"(convergence spread measured at nearest of q3 in {{0.5,1.0}})")
 
     # ------------------------------------------------------------------
     # 3. Cone-angle (theta_ss) scaling at fixed small q_ss=(0,0,0.05).
@@ -237,28 +229,21 @@ def main() -> int:
     # Informational: smoothness through H (q=1.0) from the production sweep's
     # own dense sampling near the zone boundary (step 0.05 for |q3| in [0.80,1.20]).
     # ------------------------------------------------------------------
-    print("=== informational: smoothness of eband(q) near/through H (q3=1.0) ===")
-    for route_name, prod in (("k-space", ks_prod), ("RS", rs_prod)):
-        near_h = sorted(q3 for q3 in prod["by_q"] if 0.75 <= q3 <= 1.25)
-        print(f"  {route_name}:")
-        prev = None
-        second_diffs = []
-        for q3 in near_h:
-            e = prod["by_q"][q3]["eband"]
-            print(f"    q3={q3:6.2f}  eband={fmt(e)}")
-            if prev is not None:
-                pass
-            prev = e
-        # Second difference (curvature proxy) on the uniform-step subset step=0.05
-        step_pts = [q3 for q3 in near_h]
-        for i in range(1, len(step_pts) - 1):
-            q_m, q_0, q_p = step_pts[i - 1], step_pts[i], step_pts[i + 1]
-            if abs((q_p - q_0) - (q_0 - q_m)) < 1e-9:  # uniform step only
-                d2 = prod["by_q"][q_p]["eband"] - 2 * prod["by_q"][q_0]["eband"] + prod["by_q"][q_m]["eband"]
-                second_diffs.append((q_0, d2))
-        if second_diffs:
-            print(f"    second differences (curvature, Ry): "
-                  f"{[(q, f'{d:.2e}') for q, d in second_diffs]}")
+    print("=== informational: smoothness of eband(q) near/through H (q3=1.0), k-space ===")
+    near_h = sorted(q3 for q3 in ks_prod["by_q"] if 0.75 <= q3 <= 1.25)
+    for q3 in near_h:
+        e = ks_prod["by_q"][q3]["eband"]
+        print(f"    q3={q3:6.2f}  eband={fmt(e)}")
+    # Second difference (curvature proxy) on the uniform-step subset step=0.05
+    second_diffs = []
+    for i in range(1, len(near_h) - 1):
+        q_m, q_0, q_p = near_h[i - 1], near_h[i], near_h[i + 1]
+        if abs((q_p - q_0) - (q_0 - q_m)) < 1e-9:  # uniform step only
+            d2 = ks_prod["by_q"][q_p]["eband"] - 2 * ks_prod["by_q"][q_0]["eband"] + ks_prod["by_q"][q_m]["eband"]
+            second_diffs.append((q_0, d2))
+    if second_diffs:
+        print(f"    second differences (curvature, Ry): "
+              f"{[(q, f'{d:.2e}') for q, d in second_diffs]}")
 
     print()
     if failures:

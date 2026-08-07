@@ -494,47 +494,79 @@ future reference regeneration will capture genuinely different `vmad` values.
   vacuous (both sides compute the same ferromagnet).
 - **Found:** WP7, answering "does GBT functionally work?".
 
-## `magnetic_representation = 'gbt_single_q'`: a frozen potential carried over from a different kernel evaluates to near-zero moment; SCF from the same starting point recovers most, not all, of it
+## [RESOLVED 2026-08-07, test-fixture bug] `magnetic_representation = 'gbt_single_q'` decks must set `mom` to the collinear-rotating-frame convention `(0,0,±1)`, never to the physical cone direction — WP9's commensurate-supercell decks got this backwards
 
-- **WP9 integrator follow-up (2026-08-07):** independently re-checked the
-  `q_ss=0, theta_ss=0` claim below with a **clean** deck (same `&control`/
-  `&mix`/`&lattice` recipe as the `q050` SCF-leg deck this entry describes,
-  but built fresh — not carrying over the foreign `3fd21c0` potential,
-  `nstep=25`, `beta=0.15`, `magbeta` default) comparing `gbt_single_q` vs
-  `periodic_nc` at literal `q_ss=0`. Both sides converge cleanly (no charge
-  warnings, no divergence) to matching moments: `gbt_single_q` 2.1310 μB vs
-  `periodic_nc` 2.1277 μB (diff 3.3e-3 μB, ~0.15%), charge conserved to
-  7e-15 e on both. **This does not reproduce the divergence reported below**
-  for the same nominal `q_ss=0, theta_ss=0` full-SCF case. The scope of the
-  issue below is therefore narrower than "gbt_single_q violates the q=0
-  bit-identity contract in general": it is specific to the *frozen-potential
-  MFT leg* (`nstep=1`) and/or to reusing the foreign `3fd21c0` starting
-  potential — not a defect that reproduces from a normal starting point. The
-  q=0 full-SCF divergence reported below remains unexplained (still not
-  cross-checked against `periodic_nc` **starting from the same foreign
-  potential** — my control used a fresh start, which is a different
-  question) and is not contradicted by this note; it just means "starting
-  point" is now the leading suspect over "representation bug," not a closed
-  question.
-- **WP9 integrator follow-up #2 (2026-08-07):** running the registered
-  `WP9CommensurateSupercell_gbt_supercell_q050_mft` ctest with
-  `--output-on-failure` surfaces a diagnostic the original finding below
-  didn't have: `source/bands.f90`'s `DENSITY_POLICY` log line for the gbt
-  side reads `m_long=0.000000 |m_transverse|=2.395328
-  torque=(0.000000,-2.395328,0.000000)`. The moment is **not** actually
-  near-zero — it is ≈2.395 μB, matching the supercell side almost exactly —
-  it is sitting entirely in the **transverse** channel instead of the
-  longitudinal (cone-axis) one. Since the `ql(1,:,1)`/`ql(1,:,2)` up/down
-  read used to detect "near-zero moment" only sees the longitudinal
-  projection, a fully-transverse moment reads as zero through that
-  extraction even though the density itself is not small. This sharpens the
-  finding considerably: whatever is wrong is a **frame/axis mismatch**
-  between the carried-over potential's implicit quantization axis and the
-  `nstep=1` gbt evaluation's expected cone axis, not a magnitude-destroying
-  bug. Not traced further (would mean reading `source/spin_density.f90`'s
-  `get_axis`/radial-projection contract against how `nstep=1` force-theorem
-  evaluations set it up, which is beyond this task's scope) — recorded as
-  the concrete next clue for whoever picks this up.
+- **Root cause, fully traced (2026-08-07):** in `gbt_single_q` (for a
+  `hoh=.false.` deck — the WP9 decks below never call `build_obarm`/
+  `build_enim` at all, confirmed empirically, see below), the bond Hamiltonian
+  (`gbt_contract_collinear`, driven by `gbt_endpoint_angles`) and the on-site
+  correction are built **entirely** from `theta_ss`/`phi_ss_sublattice` plus
+  the *sign* of `potential%mom(3)` (a binary up/down-sublattice selector,
+  `source/hamiltonian_build.f90:1619`) — `potential%mom(1)`/`mom(2)` and the
+  magnitude of `mom(3)` never enter the Hamiltonian construction at all.
+  *But* `ql`'s up/down decomposition — what every moment readout (including
+  the mixing/SCF-convergence machinery) is built on — separately **projects
+  the density onto `potential%mom` as its quantization axis**. So for
+  `gbt_single_q`, `mom` must always be set in the code's internal
+  collinear-rotating-frame convention (nominally `(0,0,1)`, i.e. "+z always
+  means the rotating-frame reference," exactly what the already-validated
+  `tests/regression/wp8_littlegroup/base/Fe.nml` does even at
+  `theta_ss=90`) — **not** pre-rotated to the physical lab-frame cone
+  direction `m₀=(sinθ,0,cosθ)`. The WP9 decks below (ported from the older,
+  pre-representation-split `3fd21c0` fixture, where that convention may have
+  been different) set `mom=(1,0,0)` for `theta_ss=90`, i.e. physically
+  pre-rotated — wrong for the current architecture.
+- **Direct proof:** with the wrong `mom=(1,0,0)`, the physical density is
+  unaffected (`source/bands.f90`'s `DENSITY_POLICY` diagnostic, which is
+  independent of `mom`, reads `m_long=0.000000 |m_transverse|=2.395328` —
+  the moment is present, magnitude ≈2.395 μB, matching the supercell almost
+  exactly) but `ql`'s `mom`-projected up/down split reads that as ≈0 (a
+  z-pointing vector projected onto x). Editing only `mom` from `(1,0,0)` to
+  `(0,0,1)` on an otherwise byte-identical deck reproduces the **exact same**
+  `DENSITY_POLICY` physics (confirming the Hamiltonian truly doesn't depend
+  on `mom`'s value) but now `ql` correctly reads ≈2.395 μB, matching
+  `DENSITY_POLICY`'s `m_long`.
+- **Fix applied:** `mom(:) = 0.0d0, 0.0d0, 1.0d0` in all six `gbt_single_q`
+  decks (`gbt_supercell/{q050,q033}/gbt{,_scf,_constrained}/Fe.nml`). Effect,
+  re-running the registered `WP9CommensurateSupercell_*` ctests:
+
+  | case | moment gap before | moment gap after | eband gap (unaffected — frame-invariant) |
+  | --- | --- | --- | --- |
+  | q050 MFT | 2.396 μB | **5.78e-4 μB** (~4100x better) | 7.19e-4 Ry (unchanged) |
+  | q033 MFT | ~2.33 μB | **6.38e-3 μB** (~360x better) | 5.98e-3 Ry (unchanged) |
+  | q050 SCF | already ~1.3e-3 μB | unchanged (already correctly axis-aligned once mixing converges) | 2.73e-4 Ry (unchanged, **now the sole remaining failure**) |
+
+  All four `WP9CommensurateSupercell_*` cases still **FAIL** their derived
+  tolerances — but now on the band-energy residual alone, not the moment
+  direction. That residual is real, smaller, and separate; see below.
+- **What remains open (the actual physics question, not a fixture bug):**
+  a band-energy gap of 7.2e-4–6.0e-3 Ry/atom (MFT leg, larger for the
+  6-atom q033 case than the 4-atom q050 case) and 2.7-2.8e-4 Ry/atom (SCF
+  leg, q050 only) between the `gbt_single_q` single-atom result and the
+  explicit lab-frame supercell, exceeding tolerances derived with 6x+
+  headroom over the measured noise floor. Leading hypothesis, not confirmed:
+  the MFT leg's frozen starting potential is carried over from the older
+  `3fd21c0` kernel and may not be self-consistent under the current one
+  (the SCF leg, which lets the same starting potential relax, shows a
+  smaller gap, consistent with this). Not traced to a specific source line.
+- **Time-reversal checked and ruled out as a contributor to this specific
+  finding** (WP9 integrator, 2026-08-07, prompted by a question about
+  local/global axis handling): `force_full_bz_for_nonzero_q_gbt`
+  (`source/reciprocal_lifecycle.f90:526`) unconditionally forces both
+  `use_symmetry_reduction` and `use_time_reversal` to `.false.` for any
+  nonzero-q `gbt_single_q` k-space build, regardless of the namelist;
+  confirmed by log inspection (`"nonzero-q GBT rebuilding the full chemical
+  BZ mesh"`, full unreduced mesh point count). Not relevant to this
+  real-space-route battery in the first place, but checked because the same
+  question applies to Battery B (see the Gamma-H sweep entry below).
+- **What I verified vs. guessed:** the `mom`/`ql`/`DENSITY_POLICY` mechanism
+  above is directly verified by reading `gbt_endpoint_angles`,
+  `gbt_contract_collinear`'s call site in `build_gbt_bulkham`, and the `hoh`
+  default (`source/hamiltonian_build.f90:559`, confirms `build_obarm`/
+  `build_enim` are dead code for these `hoh`-unset decks), plus the
+  before/after `mom` experiment run directly. The remaining band-energy
+  residual's cause (stale starting potential) is still a guess, not traced
+  further.
 - **Original symptom, verified directly (build_13 binary, current `fable_v2_gbt_v2`
   HEAD, bcc Fe, `alat=2.8612`, `nsp=3`, `recur='block'`, `lld=16`,
   `strux_backend='strux_lib'`, single-atom cell, `magnetic_representation=
@@ -587,28 +619,71 @@ future reference regeneration will capture genuinely different `vmad` values.
   `q=0` SCF divergence at all — it surfaced from an extra side-experiment
   beyond the assigned task and is reported here only because it is a real,
   reproducible symptom, not because I understand it.
-- **Impact:** the WP9 commensurate-supercell battery (Battery A)'s
-  frozen-potential (MFT) leg does not reproduce the supercell identity when
-  seeded from the carried-over `3fd21c0` potential — a large, real,
-  measured gap, not a tolerance miss. The battery's SCF leg, seeded from the
-  same potential but allowed to relax, gets much closer but still leaves an
-  unresolved ~0.15 μB / ~1e-2 Ry gap against the supercell side. See the WP9
-  battery report (`tests/regression/wp9_validation/commensurate_supercell/`)
-  for the full set of numbers across both legs and both `q050`/`q033` cases.
-- **Proposed fix / follow-up (not applied):** (a) regenerate the MFT leg's
-  frozen starting potentials by first running each side to SCF convergence
-  under the *current* kernel, then freezing that converged state for the
-  `nstep=1` force-theorem comparison, instead of reusing the `3fd21c0`
-  potential as-is — this is a fixture change, not a source change, and would
-  directly test whether the near-zero-moment `nstep=1` reading was a
-  stale-potential artifact. (b) separately diagnose the `q=0` full-SCF
-  divergence, including whether it reproduces under `periodic_nc`. Neither
-  was done here (out of scope for a fixture-porting task; (a) in particular
-  changes the leg's methodology beyond a straight port and needs a
-  green light). Estimated size: (a) small, mostly rerunning; (b) unknown
-  until scoped.
-- **Found:** WP9 Battery A (commensurate-supercell known-answer test),
-  while porting the `3fd21c0` supercell decks to the current architecture.
+- **Impact (superseded by the fix above, kept for the historical trail):**
+  before the `mom` fix, the MFT leg looked like it was destroying the
+  moment entirely; it was not — the fixture was reading the density's
+  projection onto the wrong axis. The `q=0, theta_ss=0` full-SCF divergence
+  noted above was **not reproduced** by a later, independent q=0 control
+  (see the follow-up note two paragraphs up in git history / superseded
+  text) using a fresh (non-carried-over) starting potential, which converged
+  cleanly and matched `periodic_nc` — pointing at the foreign starting
+  potential, not `gbt_single_q` itself, consistent with the current
+  understanding above.
+- **Remaining follow-up (not applied, unrelated to the fix above):**
+  diagnose the band-energy residual described in the "what remains open"
+  paragraph above — likely start by regenerating the MFT leg's frozen
+  starting potential from an SCF convergence under the *current* kernel
+  rather than reusing the `3fd21c0` state, to test the leading hypothesis
+  directly. Estimated size: small, mostly rerunning with a modified fixture.
+- **Found:** WP9 Battery A (commensurate-supercell known-answer test), while
+  porting the `3fd21c0` supercell decks to the current architecture; root
+  cause traced by the WP9 integrator the same day after a targeted question
+  about local-vs-global axis handling.
+
+## `frozen_magnon` k-space cone-angle (theta_ss) scaling is not theta-independent, by a large margin
+
+- **Symptom, verified directly** (bcc Fe, WP9 Battery B,
+  `tests/regression/wp9_validation/gammaH_sweep/base_cone/`, k-space route,
+  `nk=12`, fixed small `q_ss=(0,0,0.05)`, `theta_ss` swept 5/10/15/20
+  degrees, `omega(q) = 4[E(q)-E(0)]/(M sin^2 theta)`): `omega` measures
+  `-6.417e-3, -1.293e-3, -3.426e-4, -8.270e-6` Ry respectively — a **~776x**
+  spread across the window, decreasing monotonically as theta grows, rather
+  than the flat line the harmonic-regime self-diagnostic
+  (`docs/dev/plans/B1_gbt_frozen_magnons_v2.md` §2.10) predicts.
+- **Time-reversal/BZ-reduction checked and ruled out:** confirmed by direct
+  log inspection that `force_full_bz_for_nonzero_q_gbt` correctly forces the
+  full, unreduced k-mesh (no time-reversal, no spatial symmetry reduction)
+  for every one of these nonzero-q builds, regardless of the deck's
+  `use_symmetry_reduction`/`use_time_reversal` namelist settings — so an
+  under-reduced or over-reduced BZ integral is not the explanation.
+- **Not diagnosed further:** a naive noise-amplification argument (fixed
+  absolute noise in the band-energy difference, divided by `sin^2(theta)`)
+  predicts only a ~15x range across 5-20 degrees, an order of magnitude
+  short of the measured 776x — so simple additive Fermi-search/DOS noise
+  does not by itself explain the spread. Whether the noise itself grows at
+  small theta (a smaller induced-moment signal proportionally noisier
+  against the same DOS/mesh discretization) or something else is at play is
+  unknown.
+- **Impact:** the code cannot currently be trusted to report a stable
+  small-cone spin-stiffness estimate — the answer depends heavily, and
+  unphysically, on which small test angle is chosen.
+- **Found:** WP9 Battery B (bcc-Fe Gamma-H frozen-magnon sweep).
+
+## `frozen_magnon` k-space EBAND mesh refinement is mildly non-monotonic at some q
+
+- **Symptom, verified directly** (same deck as above, `q_ss=(0,0,0.5)`,
+  `nk=8/12/16`): `eband` = `-1.98668388, -1.98714329, -1.98785909` Ry — the
+  refinement step **grows** from `nk=8->12` (4.59e-4 Ry) to `nk=12->16`
+  (7.16e-4 Ry) instead of shrinking. At `q_ss=(0,0,1.0)` (H) the same sweep
+  is well-behaved (step shrinks `5.72e-4 -> 5.25e-4` Ry). Both steps are the
+  same order of magnitude and well inside the overall spread
+  (1.175e-3 Ry) — not a divergence, just non-monotonic.
+- **Not diagnosed:** plausibly ordinary tetrahedron-integration
+  discretization noise at that particular q-point rather than anything
+  systematic, but not investigated.
+- **Found:** WP9 Battery B, while reworking the battery to a k-space-only
+  design (RS route dropped per Anders: long-wavelength spirals can have real
+  numerical problems from real-space cluster truncation/PBC artifacts).
 
 ## `strux_backend='strux_lib'` badly breaks a `crystal_sym='file'` custom-lattice supercell that `legacy` handles cleanly
 

@@ -35,6 +35,11 @@ k_offset_x = 0.0
 k_offset_y = 0.0
 k_offset_z = 0.0
 use_symmetry_reduction = .true.
+! Both inert for this run: force_full_bz_for_nonzero_q_gbt overrides both to
+! .false. for any nonzero-q gbt_single_q build (source/reciprocal_lifecycle.f90),
+! and noncollinear (nsp=3) builds separately disable time-reversal reduction
+! regardless of GBT. Left explicit at .true. only for readability of the
+! namelist's own default; verified inert by log inspection, WP9 (2026-08-07).
 use_time_reversal = .true.
 use_shift = .false.
 q_symmetry_policy = 'full_bz'
