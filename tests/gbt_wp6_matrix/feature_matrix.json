@@ -471,22 +471,6 @@
    "guards": []
   },
   {
-   "id": "gbt_kspace_flag",
-   "term": "gbt_kspace namelist flag",
-   "class": "infrastructure",
-   "status": "inactive",
-   "wp": "WP5",
-   "reason": "the reciprocal GBT transform was deleted in WP5; the flag is accepted, warned about, and forced to .false.",
-   "guards": [
-    {
-     "file": "source/hamiltonian_build.f90",
-     "routine": "build_from_file",
-     "message": "gbt_kspace is deprecated and ignored"
-    }
-   ],
-   "notes": "Removal of the input field itself belongs to WP10."
-  },
-  {
    "id": "paoflow_export",
    "term": "PAOFLOW / TB export (hamiltonian_paoflow_io.f90)",
    "class": "infrastructure",

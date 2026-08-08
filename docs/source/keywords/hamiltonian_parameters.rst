@@ -153,11 +153,12 @@ Spin-spiral / non-collinear
 - ``v_alpha`` / ``v_beta`` (real(3)) — quantization-axis vectors.
 - ``js_alpha`` / ``jl_alpha`` (character, default ``'z'``) — spin / orbital
   projection axes.
-- ``gbt_kspace`` (logical, default ``.false.``) — deprecated compatibility
-  input. ``.true.`` emits a warning and is ignored; select
-  ``magnetic_representation='gbt_single_q'`` explicitly. Both solvers consume the same
-  linked real-space operator; reciprocal space always uses the ordinary
-  Fourier transform.
+
+Both solvers consume the same linked real-space operator; reciprocal space
+always uses the ordinary Fourier transform. The old ``gbt_kspace`` input
+(a deprecated, no-op compatibility flag from before ``magnetic_representation``
+existed) was removed in WP10 — select ``magnetic_representation='gbt_single_q'``
+explicitly instead.
 
 Hamiltonian export
 ==================

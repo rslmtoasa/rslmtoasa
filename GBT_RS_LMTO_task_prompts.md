@@ -556,16 +556,44 @@ Keep and document periodic_nc and the site-indexed explicit_texture/skyrmion pat
 Run the complete test matrix and repository searches.
 
 Completion checklist:
-- [ ] Absolute-position bulk GBT is removed.
-- [ ] Reciprocal GBT code is removed.
-- [ ] CCOR full-angle GBT code is removed.
-- [ ] gbt_kspace deprecation/removal is complete.
-- [ ] Explicit-texture/skyrmion support remains tested and documented.
-- [ ] Only gbt_bond_phase calculates q·bond.
-- [ ] Obsolete comments/goldens are removed or relabelled.
-- [ ] Complete test matrix passes.
-- [ ] Removal/migration notes and G10 PASS/FAIL are reported.
+- [x] Absolute-position bulk GBT is removed.
+- [x] Reciprocal GBT code is removed.
+- [x] CCOR full-angle GBT code is removed.
+- [x] gbt_kspace deprecation/removal is complete.
+- [x] Explicit-texture/skyrmion support remains tested and documented.
+- [x] Only gbt_bond_phase calculates q·bond.
+- [x] Obsolete comments/goldens are removed or relabelled.
+- [x] Complete test matrix passes.
+- [x] Removal/migration notes and G10 PASS/FAIL are reported.
 ```
+
+**WP10 outcome (2026-08-08):** run with G9 **not** passing, on Anders'
+explicit instruction to proceed anyway (three open WP9 physics-validation
+items remain unresolved, see `docs/dev/GBT_WP9_FAIL_WALKTHROUGH.md`) — this
+is a deliberate departure from this document's own gate discipline
+("Failed gates return to the responsible task"), recorded here rather than
+hidden. A repo-wide audit found five of WP10's six named deletion targets
+already gone (finished by WP4/WP5/WP6b): absolute-position bulk GBT,
+`fourier_transform_gbt*`, CCOR's full-angle rotation, and the
+cone/sublattice routing were already correct in `source/`; only stale claims
+in an untracked doc draft needed correcting. The two real deletions were
+`gbt_kspace` (removed outright: type field, namelist entry, getter/setter,
+deprecation-warning block, default-init — all four sites in
+`hamiltonian_build.f90` plus `hamiltonian.f90` and the namelist include)
+and the orphaned `tests/gbt_wp0/` diagnostic fixture (predates the
+`periodic_nc`/`gbt_single_q`/`explicit_texture` split, one entry
+self-labeled `"diagnostic_known_wrong_gbt_not_golden"`, not wired into
+CMake). Added `tests/unit/test_gbt_wp10_source_contract.py`, a repo-wide
+static guard that only `gbt_bond_phase` (via `gbt_endpoint_link`) may
+compute q·bond, with a named, positively-checked exemption for
+`explicit_texture`'s own site-position phase. `ctest -L unit` 23/23, `ctest -L regression` 18/18, `ctest -L example` 37/45
+— the 8 failures are the exact pre-existing, documented set (5
+`strux_backend='legacy'` GBT fixtures, 2 gfortran-13 DOS-tolerance deltas,
+1 genuine 300s timeout that reproduces on a pristine pre-WP7 tree), zero new
+regressions. Full evidence and file list in
+`docs/dev/GBT_WP10_G10_REPORT.md`. **G10: PASS** for everything WP10 itself
+checks. **G9 remains FAIL** regardless — this task does not affect it; the
+three WP9 physics items are still open work.
 
 ---
 

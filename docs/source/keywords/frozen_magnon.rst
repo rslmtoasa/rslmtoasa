@@ -14,8 +14,7 @@ and reporting a magnon dispersion :math:`\omega(q)`. It relies on the B1
 generalized-Bloch-theorem (GBT) fix in the spiral Hamiltonian block — see
 :ref:`keywords/hamiltonian_parameters` (``q_ss``, ``theta_ss``,
 ``magnetic_representation='gbt_single_q'``) and
-``GBT_RS_LMTO_completion_blueprint.md``. The old ``gbt_kspace`` input is
-deprecated and ignored; it does not choose a magnetic representation or solver.
+``GBT_RS_LMTO_completion_blueprint.md``.
 
 The namelist is **optional**. It only has an effect when
 ``post_processing = 'frozen_magnon'`` (see :ref:`keywords/output_options`).

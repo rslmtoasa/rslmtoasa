@@ -76,9 +76,6 @@ module hamiltonian_mod
       logical :: hoh
       !> Rotate Hamiltonian to local spin axis
       logical :: local_axis
-      !> Deprecated compatibility input. It is accepted, warned about, and
-      !> cleared without changing the magnetic representation or solver physics.
-      logical :: gbt_kspace
       !> Magnetic representation, independent of the real/reciprocal solver.
       character(len=magnetic_representation_len) :: magnetic_representation
       !> Monotonic identity of the completed real-space operator. Every

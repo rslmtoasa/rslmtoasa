@@ -521,6 +521,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp5SourceContract
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp5_source_contract.py)
   set_tests_properties(UnitGbtWp5SourceContract PROPERTIES LABELS "unit;gbt;wp5")
+  add_test(NAME UnitGbtWp10SourceContract
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_source_contract.py)
+  set_tests_properties(UnitGbtWp10SourceContract PROPERTIES LABELS "unit;gbt;wp10")
   add_test(NAME UnitGbtWp6Hoh
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
   set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")

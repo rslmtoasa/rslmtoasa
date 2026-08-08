@@ -131,7 +131,6 @@ contains
       v_beta(:) = this%v_beta(:)
       q_ss(:) = this%q_ss(:)
       theta_ss = this%theta_ss
-      gbt_kspace = this%gbt_kspace
       magnetic_representation = this%magnetic_representation
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
@@ -200,7 +199,6 @@ contains
       ! phase = 2*pi*q_ss.(bond/alat), with theta_ss stored internally in radians.
       this%q_ss(:) = q_ss(:)
       this%theta_ss = theta_ss * pi / 180.0_rp
-      this%gbt_kspace = gbt_kspace
       this%magnetic_representation = normalize_magnetic_representation(magnetic_representation)
       if (len_trim(this%magnetic_representation) == 0) this%magnetic_representation = periodic_nc
       select case (trim(this%magnetic_representation))
@@ -210,13 +208,6 @@ contains
          call g_logger%fatal("Invalid magnetic_representation. Use 'periodic_nc', 'gbt_single_q', or 'explicit_texture'.", &
                              __FILE__, __LINE__)
       end select
-      if (this%gbt_kspace) then
-         if (rank == 0) call g_logger%warning('gbt_kspace is deprecated and ignored; '// &
-                                              'use magnetic_representation=gbt_single_q explicitly.', __FILE__, __LINE__)
-         ! Keep accepting the old namelist key so existing inputs still parse,
-         ! but give it no direct or indirect Hamiltonian-physics role.
-         this%gbt_kspace = .false.
-      end if
       this%js_alpha = js_alpha
       this%jl_alpha = jl_alpha
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
@@ -568,7 +559,6 @@ contains
       this%v_beta(:) = [1, 0, 0]
       this%q_ss(:) = [0.0_rp, 0.0_rp, 0.0_rp]
       this%theta_ss = 0.0_rp
-      this%gbt_kspace = .false.
       this%magnetic_representation = periodic_nc
       this%operator_generation = 0
       if (allocated(this%texture_moments)) deallocate(this%texture_moments)
