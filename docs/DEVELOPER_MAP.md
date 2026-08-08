@@ -304,14 +304,29 @@ only make sense via that same C API.
    construction + a thin dispatch layer, which is exactly the kind of
    structural change Phase 1/2 ground rule 10 and the "no further
    structural refactoring this phase" rule put out of scope for now.
-4. **No remaining bare module-level mutable state found beyond the
-   Phase-1-introduced caches** (`cheb_cache_t`, the CUDA plugin's context
-   singleton) — those are already the right shape (fingerprinted, explicit
-   invalidation) for a future binding to reason about, so no new blocker
-   there.
+4. **`mpi_mod`'s MPI-range partition is bare module-level mutable state,
+   read directly (not through `this`) by most of the physics core.**
+   `start_atom`, `end_atom`, `atoms_per_process`, and `g2l_map` are set once
+   by `get_mpi_range` and then read as free module variables in
+   `bands.f90`, `electrostatics_multipole.f90`, `exchange.f90`, `green.f90`,
+   `reciprocal.f90`, `reciprocal_green.f90`, `reciprocal_lifecycle.f90`,
+   `recursion_haydock.f90`, `recursion_chebyshev.f90`,
+   `recursion_transport.f90`, and `self.f90` — found while writing the
+   `green.f90` P7 docstrings (2026-08-09), where nearly every routine's
+   atom loop is bounded by `start_atom`/`end_atom` and indexed through
+   `g2l_map`. A single-process Python session could call `get_mpi_range`
+   with a 1-rank partition to make this safe, but multiple independent
+   `calculation` objects in the same interpreter would still corrupt each
+   other's partition — this is a real blocker, not just a caches-shaped one
+   like `cheb_cache_t`/the CUDA context singleton (those are already
+   fingerprinted and per-instance-safe). Not fixed here: moving the
+   partition onto `this` touches every one of those 11 files' call sites,
+   which is the structural change Phase 2 defers.
 
-**Results as data:** the physically meaningful outputs per workflow are the
-arrays this map's P7 docstring pass will document on each object — e.g.
-`self`/`bands`'s moment arrays, `exchange`'s J_ij/D_ij, `conductivity`'s
-tensor, `reciprocal_dos`'s DOS arrays. That documentation doubles as the
-binding surface specification once P7 is done.
+**Results as data:** the physically meaningful outputs per workflow are
+documented on each object by the now-complete P7 docstring pass — e.g.
+`self`/`bands`'s moment arrays, `green`'s `g0`/`gij`/`gji` (+ the
+`Gi{x,y,z}`/`Gj{x,y,z}` spin-decomposed and `G00ij`/`G01ij`/... two-index
+families), `exchange`'s J_ij/D_ij, `conductivity`'s tensor,
+`reciprocal_dos`'s DOS arrays. That documentation is the binding surface
+specification for a future Python module.

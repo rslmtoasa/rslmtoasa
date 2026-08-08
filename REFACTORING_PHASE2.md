@@ -60,9 +60,17 @@ after every task.
       an automated negative test — that would need a new "expect-fatal"
       case type plus an inverse `requires_cmake_option`-style gate (skip
       when the option *is* on), more than the "if trivial" bar the doc set.
-- [ ] P11 — Python-binding awareness lens (standing, applied throughout;
-      final blocker list recorded in the developer map — do one more pass
-      once P7 is done, in case docstring-writing surfaces new blockers).
+- [x] P11 — Python-binding awareness lens (standing, applied throughout).
+      Final pass done 2026-08-09, after P7: the `green.f90` docstring work
+      surfaced a real new blocker — `mpi_mod`'s `start_atom`/`end_atom`/
+      `atoms_per_process`/`g2l_map` are bare module-level state read
+      directly (not through `this`) by 11 files across the physics core,
+      not just `green.f90`. Recorded as blocker #4 in
+      `docs/DEVELOPER_MAP.md` §7, replacing the earlier (incorrect) "no
+      remaining bare module-level state" note. The §7 "results as data"
+      note was also updated to point at the now-complete P7 docstrings
+      instead of a future-tense "will document". Not fixed — moving the
+      partition onto `this` is a structural change Phase 2 defers.
 
 ---
 
