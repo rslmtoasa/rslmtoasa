@@ -393,9 +393,17 @@ contains
    end subroutine block_green_ij
 
    !---------------------------------------------------------------------------
-   !> GPU drop-in for block_green_ij: the 4 intersite-pair combos are
-   !> reconstructed on the device over all nv energies in one batched call
-   !> (rsrec_block_dos, natoms=4). Terminator stays on the CPU.
+   !> @brief GPU drop-in for block_green_ij (intersite block/Haydock GF).
+   !> @details Reconstructs the 4 intersite pair-combo Green's functions (ii,
+   !>          jj, and the two off-diagonal combos consumed by
+   !>          calculate_intersite_gf_core) over all nv = channels_ldos+10
+   !>          energies in one batched device call (rsrec_block_dos,
+   !>          natoms=4). The Haydock terminator (get_terminf) still runs on
+   !>          the CPU; only its diagonal a/b values go down to the device.
+   !>          Called from calculate_intersite_gf_core when
+   !>          control%recur=='block' and control%gpu_plugin is set.
+   !> @param[in] istart Index of the first of the 4 contiguous pair-combo
+   !>            "atoms" in recursion%a_b/b2_b for the current pair.
    !---------------------------------------------------------------------------
    subroutine block_green_ij_gpu(this, istart)
       implicit none
@@ -433,6 +441,19 @@ contains
                                  this%control%sym_term, this%g0(:, :, 1:nv, 1:na))
    end subroutine block_green_ij_gpu
 
+   !---------------------------------------------------------------------------
+   !> @brief Repack the intersite GF into the two-index (00/01) form the
+   !>        anisotropic-exchange tensor code consumes.
+   !> @details For every local pair, remaps Ginmag/Gjnmag and Gi{x,y,z}/
+   !>          Gj{x,y,z} (orbital-diagonal blocks, indexed (k,j)) into the
+   !>          symmetric/antisymmetric combinations G00/G01 and Gx0/Gx1 (and
+   !>          y, z) using the l1/l2 angular-momentum decomposition of the
+   !>          orbital indices k, j (k0/j0 mark the start of each l-shell) and
+   !>          the (-1)**(k+j) parity factor between the (k,j) and mirrored
+   !>          (2*j0-j, 2*k0-k) matrix elements. Called from
+   !>          post_processing_exchange after calculate_intersite_gf(_core);
+   !>          the results feed exchange%calculate_exchange_twoindex (dGdG).
+   !---------------------------------------------------------------------------
    subroutine calculate_intersite_gf_twoindex(this)
       use mpi_mod
    use basis_mod, only: nb, norb, spin_off
@@ -473,6 +494,10 @@ contains
       end do
    end subroutine calculate_intersite_gf_twoindex
 
+   !> @brief Deprecated wrapper; use calculate_intersite_gf_core(this, .false.).
+   !> @details Fixed-mesh (no Gauss-Legendre eta contour) intersite GF fill,
+   !>          on-shell at the real energy mesh. Kept only so existing
+   !>          type-bound call sites keep compiling.
    subroutine calculate_intersite_gf(this)
       class(green), intent(inout) :: this
 
@@ -480,6 +505,10 @@ contains
       call calculate_intersite_gf_core(this, .false.)
    end subroutine calculate_intersite_gf
 
+   !> @brief Deprecated wrapper; use calculate_intersite_gf_core(this, .true.).
+   !> @details Gauss-Legendre eta-contour intersite GF fill, evaluated at the
+   !>          Fermi energy. Kept only so existing type-bound call sites keep
+   !>          compiling.
    subroutine calculate_intersite_gf_eta(this)
       class(green), intent(inout) :: this
 
@@ -487,6 +516,29 @@ contains
       call calculate_intersite_gf_core(this, .true.)
    end subroutine calculate_intersite_gf_eta
 
+   !> @brief Fill the intersite (pair) Green's functions gij/gji and their
+   !>        spin-decomposed projections (Ginmag/Gjnmag, Gi{x,y,z}/Gj{x,y,z}).
+   !> @details Two modes, selected by eta_mode:
+   !>          - eta_mode=.false.: fills gij/gji on the real energy mesh
+   !>            (this%en%ene), one call to block_green_ij/chebyshev_green_ij
+   !>            (or their _gpu variants) per local pair, dispatched on
+   !>            control%recur. This is the path used by
+   !>            calculate_exchange_twoindex / post_processing_exchange
+   !>            (gf_route='recursion').
+   !>          - eta_mode=.true.: fills gij_eta/gji_eta at the Fermi energy
+   !>            only, integrated over a 64-point Gauss-Legendre contour in
+   !>            eta = i*(1-x)/x (block_green_ij_eta/chebyshev_green_ij_eta per
+   !>            contour point). This is the path used by
+   !>            calculate_exchange_gauss_legendre. If control%gpu_plugin is
+   !>            set (block/chebyshev recur), delegates the whole contour loop
+   !>            to calculate_intersite_gf_eta_gpu instead.
+   !>          In both modes the 4 combos returned per pair (g0(:,:,:,1:4) or
+   !>          y(:,:,:,1:4)) are combined into gij = g1-g2+(g3-g4)/i and
+   !>          gji = g1-g2-(g3-g4)/i, then Pauli-decomposed into the
+   !>          Ginmag/Giz/Giy/Gix (and Gj*) families using spin_off to index
+   !>          the down-spin block.
+   !> @param[in] eta_mode Selects the eta-contour path (.true.) or the
+   !>            on-mesh path (.false.); see @details.
    subroutine calculate_intersite_gf_core(this, eta_mode)
       use mpi_mod
       implicit none
@@ -604,10 +656,19 @@ contains
    end subroutine calculate_intersite_gf_core
 
    !---------------------------------------------------------------------------
-   !> GPU port of calculate_intersite_gf_eta: the per-pair x per-eta bgreen loop
-   !> (nij x 64 x 4 continued fractions at the Fermi energy) is reconstructed on
-   !> the device in ONE batched call (rsrec_block_gf_eta), over all local pairs.
-   !> The terminator (get_terminf) stays on the CPU; only diagonals go down.
+   !> @brief GPU port of the eta-contour branch of calculate_intersite_gf_core.
+   !> @details The per-pair x per-eta continued-fraction loop (n_pairs x 64
+   !>          contour points x 4 pair combos, each normally one bgreen call at
+   !>          the Fermi energy) is reconstructed on the device in ONE batched
+   !>          call: rsrec_block_gf_eta for control%recur=='block' (terminator
+   !>          from get_terminf stays on the CPU, only its diagonals go down)
+   !>          or rsrec_cuda_backend%chebyshev_gf_eta for 'chebyshev' (built
+   !>          directly from the Chebyshev moments, no terminator needed). The
+   !>          eta contour (eta = i*(1-x)/x, Gauss-Legendre in x) and the
+   !>          post-hoc gij/gji + Pauli-decomposition algebra are identical to
+   !>          the CPU eta_mode=.true. path in calculate_intersite_gf_core, so
+   !>          the two are numerically interchangeable. Invoked from there
+   !>          when control%gpu_plugin is set.
    !---------------------------------------------------------------------------
    subroutine calculate_intersite_gf_eta_gpu(this)
       use mpi_mod
@@ -740,11 +801,15 @@ contains
    end subroutine block_green
 
    !---------------------------------------------------------------------------
-   !> GPU port of block_green: the block (Haydock) continued-fraction Green's
-   !> function is reconstructed on the device (rsrec_block_dos), replacing the
-   !> per-atom/per-energy bgreen loop. The terminator (get_terminf) stays on the
-   !> CPU; only its diagonals are passed down. Falls back transparently to the
-   !> legacy path if the GPU plugin is unavailable (handled inside the backend).
+   !> @brief Deprecated wrapper; use block_green_core(this).
+   !> @details GPU port of block_green: the block (Haydock) continued-fraction
+   !>          Green's function is reconstructed on the device
+   !>          (rsrec_block_dos), replacing the per-atom/per-energy bgreen
+   !>          loop. The terminator (get_terminf) stays on the CPU; only its
+   !>          diagonals are passed down. block_green_core dispatches to the
+   !>          GPU path automatically when control%gpu_plugin is set, so this
+   !>          name is kept only so existing type-bound call sites keep
+   !>          compiling.
    !---------------------------------------------------------------------------
    subroutine block_green_gpu(this)
       class(green), intent(inout) :: this
@@ -753,6 +818,29 @@ contains
       call block_green_core(this)
    end subroutine block_green_gpu
 
+   !> @brief On-site block (Haydock) Green's function, on-mesh or at a single
+   !>        eta-shifted energy.
+   !> @details Two modes, both looping over this rank's local atoms
+   !>          (start_atom..end_atom, mapped through g2l_map):
+   !>          - eta absent: fills this%g0 over the full energy mesh
+   !>            (nv = channels_ldos+10) via bgreen (or, if control%gpu_plugin
+   !>            is set, a batched rsrec_block_dos call gathering all local
+   !>            atoms into contiguous buffers first). This is the
+   !>            block_green/block_green_gpu path used by the on-site DOS/SCF
+   !>            loop.
+   !>          - eta present: fills g_ef with the single-energy value at
+   !>            fermi_point + eta, via bgreen only (no GPU path). This is the
+   !>            block_green_eta path used by the Gauss-Legendre eta contour
+   !>            (e.g. Lehmann-representation moment counting).
+   !>          In every mode the Haydock terminator (get_terminf) is computed
+   !>          once up front from recursion%a_b/b2_b for atoms_per_process
+   !>          "atoms" (this%lattice%nrec recursion levels).
+   !> @param[in] eta Optional imaginary energy shift; presence selects the
+   !>            single-energy mode.
+   !> @param[in] fermi_point Optional energy-mesh index to evaluate at when
+   !>            eta is present.
+   !> @param[out] g_ef Optional single-energy GF output when eta is present,
+   !>             one block per local atom.
    subroutine block_green_core(this, eta, fermi_point, g_ef)
       use mpi_mod
       implicit none
@@ -912,7 +1000,18 @@ contains
       end do
    end subroutine sgreen
 
-   ! Routines that clones the g_eta to g. For use in exchange calculations
+   !> @brief Reshape the 64-point eta-contour intersite GF into the same
+   !>        (norb,norb,echan,atom) layout as the on-mesh arrays.
+   !> @details Copies Ginmag_eta/Gjnmag_eta/Gi{x,y,z}_eta/Gj{x,y,z}_eta
+   !>          (shape (echan,norb,norb,atoms_per_process), filled by
+   !>          calculate_intersite_gf_core's eta_mode) into freshly
+   !>          (re)allocated Ginmag/Gjnmag/Gi{x,y,z}/Gj{x,y,z} arrays of shape
+   !>          (norb,norb,64,atoms_per_process), transposing the orbital and
+   !>          energy-channel index order. This lets
+   !>          exchange%calculate_exchange_gauss_legendre reuse the same
+   !>          orbital-indexed exchange kernels (dGdG and friends) that the
+   !>          on-mesh gf_route='recursion' path uses, without a separate
+   !>          eta-indexed code path.
    subroutine gij_eta_to_gij(this)
       use mpi_mod
       !
@@ -1161,9 +1260,17 @@ contains
    end subroutine chebyshev_green_ij
 
    !---------------------------------------------------------------------------
-   !> GPU drop-in for chebyshev_green_ij: the 4 intersite-pair combos are
-   !> reconstructed on the device over all nv energies in one batched moment
-   !> contraction (rsrec_chebyshev_dos), reusing the on-site Chebyshev engine.
+   !> @brief GPU drop-in for chebyshev_green_ij (intersite Chebyshev GF).
+   !> @details Reconstructs the 4 intersite pair-combo Green's functions over
+   !>          all nv = channels_ldos+10 energies in one batched moment
+   !>          contraction (rsrec_chebyshev_dos), using the rescaled window
+   !>          (a, b) from recursion%resolve_chebyshev_window and the raw
+   !>          Chebyshev moments recursion%mu_n (no Jackson-kernel damping is
+   !>          applied here; the kernel and reconstruction live inside the GPU
+   !>          backend). Called from calculate_intersite_gf_core when
+   !>          control%recur=='chebyshev' and control%gpu_plugin is set.
+   !> @param[in] istart Index of the first of the 4 contiguous pair-combo
+   !>            "atoms" in recursion%mu_n for the current pair.
    !---------------------------------------------------------------------------
    subroutine chebyshev_green_ij_gpu(this, istart)
       class(green), intent(inout) :: this
@@ -1276,9 +1383,13 @@ contains
    end subroutine chebyshev_green
 
    !---------------------------------------------------------------------------
-   !> Chebyshev Green function with GPU CUDA acceleration (cuBLAS)
-   !> 20-100x faster than scalar loop for large nv
-   !> Falls back to CPU BLAS if GPU unavailable
+   !> @brief Deprecated wrapper; use chebyshev_green_core(this, use_gpu=.true.).
+   !> @details On-site Chebyshev Green's function with GPU CUDA acceleration
+   !>          (cuBLAS moment contraction via rsrec_cuda_backend%chebyshev_dos),
+   !>          20-100x faster than the scalar CPU loop for large nv. Kept only
+   !>          so existing type-bound call sites keep compiling; new code
+   !>          should call chebyshev_dos_dispatch, which picks this path
+   !>          automatically.
    !---------------------------------------------------------------------------
    subroutine chebyshev_green_gpu(this)
       class(green), intent(inout) :: this
@@ -1288,10 +1399,19 @@ contains
    end subroutine chebyshev_green_gpu
 
    !---------------------------------------------------------------------------
-   !> Dispatcher for Chebyshev DOS reconstruction
-   !> Selects implementation based on control flags (gpu_plugin)
-   !> - gpu_plugin=.true.  → chebyshev_green_gpu (GPU with CPU fallback)
-   !> - otherwise          → chebyshev_green (legacy Fortran)
+   !> @brief Dispatcher for the on-site Chebyshev Green's-function/DOS
+   !>        reconstruction, called once per SCF/DOS pass.
+   !> @details Selects the implementation based on control%gpu_plugin:
+   !>          - .true. and control%nsp <= 4: chebyshev_green_core with
+   !>            use_gpu=.true. (batched device moment contraction).
+   !>          - .true. and control%nsp > 4: falls back to the CPU path
+   !>            (use_gpu=.false.) with a logged warning -- the GPU batched
+   !>            kernel does not yet support nsp > 4.
+   !>          - .false.: chebyshev_green_core with use_gpu=.false. (legacy
+   !>            per-atom Fortran loop, via cheb_green_fast).
+   !>          Called from calculation.f90's post-processing drivers and from
+   !>          self.f90's SCF loop wherever the Chebyshev recursion route
+   !>          needs the on-site GF/DOS reconstructed from recursion%mu_n.
    !---------------------------------------------------------------------------
    subroutine chebyshev_dos_dispatch(this)
       class(green), intent(inout) :: this
@@ -1328,6 +1448,37 @@ contains
       call chebyshev_green_core(this, eta, fermi_point, g_ef)
    end subroutine chebyshev_green_eta
 
+   !> @brief On-site Chebyshev Green's function, on-mesh or at a single
+   !>        eta-shifted energy, CPU or GPU.
+   !> @details Rescales the energy window to Chebyshev's [-1,1] domain
+   !>          (a, b from recursion%resolve_chebyshev_window), then reconstructs
+   !>          G(E) = sum_n mu_n(E) * exp_factor(n,E) / sqrt(a^2-(E-b)^2) from
+   !>          the Chebyshev moments recursion%mu_n, Jackson-kernel-damped into
+   !>          recursion%mu_ng. Three sub-paths, chosen by the presence of eta
+   !>          and by do_gpu (defaults to control%gpu_plugin, overridable via
+   !>          use_gpu):
+   !>          - eta absent, do_gpu: batches all local atoms into one device
+   !>            call (rsrec_cuda_backend%chebyshev_dos) -- the
+   !>            chebyshev_green_gpu path.
+   !>          - eta absent, not do_gpu: per-local-atom call to the OpenMP
+   !>            CPU kernel cheb_green_fast -- the chebyshev_green path.
+   !>          - eta present: per-local-atom scalar loop evaluated only at
+   !>            fermi_point with energy shifted by eta -- the
+   !>            chebyshev_green_eta path (Gauss-Legendre eta contour), no GPU
+   !>            variant.
+   !>          On-mesh output goes to this%g0; eta output goes to g_ef, one
+   !>          block per local atom (start_atom..end_atom via g2l_map).
+   !>          Called (via chebyshev_dos_dispatch or directly through the
+   !>          deprecated wrappers) from the Chebyshev-recursion branch of the
+   !>          SCF loop and from the intersite/DOS post-processing drivers.
+   !> @param[in] eta Optional imaginary energy shift; presence selects the
+   !>            single-energy (fermi_point) mode over the full-mesh mode.
+   !> @param[in] fermi_point Optional energy-mesh index to evaluate at when
+   !>            eta is present.
+   !> @param[out] g_ef Optional single-energy GF output when eta is present,
+   !>             one block per local atom.
+   !> @param[in] use_gpu Optional override for control%gpu_plugin (only
+   !>            consulted when eta is absent).
    subroutine chebyshev_green_core(this, eta, fermi_point, g_ef, use_gpu)
       use mpi_mod
       class(green), intent(inout) :: this

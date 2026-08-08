@@ -37,13 +37,13 @@ after every task.
       "quick" label + nightly-full/PR-quick split, best-effort Windows
       test job (`continue-on-error`, unverified — no Windows runner
       available here; see tests/README.md for the documented fallback).
-- [ ] P7 — Docstring blocks for `recursion.f90`, `hamiltonian_*`,
+- [x] P7 — Docstring blocks for `recursion.f90`, `hamiltonian_*`,
       `lattice_*`, `green.f90`/`calculation.f90` gaps, `reciprocal_*`.
-      Nearly done as of 2026-08-08: `recursion.f90`, all four
-      `hamiltonian_*` files, all `lattice_*` files, all `reciprocal_*`
-      files, `calculation.f90` gaps, and the `cheb_cache_t` module contract
-      are complete (see the P7 sub-checklist below for detail and dates).
-      Only `green.f90` gaps (13 routines) remain open.
+      Complete as of 2026-08-09: `recursion.f90`, all four `hamiltonian_*`
+      files, all `lattice_*` files, all `reciprocal_*` files,
+      `calculation.f90` gaps, `green.f90` gaps, and the `cheb_cache_t`
+      module contract are all done (see the P7 sub-checklist below for
+      detail and dates).
 - [x] P8 — `docs/DEVELOPER_MAP.md` (all 7 sections, every pointer verified
       against the code) + repo-root `CLAUDE.md`.
 - [x] P6 — Reference-update workflow documentation in `tests/README.md`.
@@ -102,15 +102,17 @@ interface doc blocks, not a per-routine pass.
 - [x] `lattice_lifecycle.f90` — done in `c9bfdc1`.
 - [x] `lattice_print.f90` — done in `c9bfdc1`.
 - [x] `lattice_strux.f90` — done in `c9bfdc1`.
-- [ ] `green.f90` gaps — `c9bfdc1` did not touch this file (it grew after
-      the "Docstring pass step 1" pass). Live-grepped gap, 2026-08-08: 13
-      undocumented of ~27 routines total — `block_green_ij_gpu`,
-      `calculate_intersite_gf_twoindex`, `calculate_intersite_gf`,
-      `calculate_intersite_gf_eta`, `calculate_intersite_gf_core`,
-      `calculate_intersite_gf_eta_gpu`, `block_green_gpu`,
-      `block_green_core`, `gij_eta_to_gij`, `chebyshev_green_ij_gpu`,
-      `chebyshev_green_gpu`, `chebyshev_dos_dispatch`,
-      `chebyshev_green_core`. Next up.
+- [x] `green.f90` gaps — filled 2026-08-09. `c9bfdc1` did not touch this
+      file (it grew after the "Docstring pass step 1" pass). Live-grepped
+      gap before this session, 2026-08-08: 13 undocumented of ~27 routines
+      total — `block_green_ij_gpu`, `calculate_intersite_gf_twoindex`,
+      `calculate_intersite_gf`, `calculate_intersite_gf_eta`,
+      `calculate_intersite_gf_core`, `calculate_intersite_gf_eta_gpu`,
+      `block_green_gpu`, `block_green_core`, `gij_eta_to_gij`,
+      `chebyshev_green_ij_gpu`, `chebyshev_green_gpu`,
+      `chebyshev_dos_dispatch`, `chebyshev_green_core`. All 13 now carry
+      `@brief`/`@details`/`@param` blocks; pure-comment diff (verified via
+      `git diff`, every changed line starts with `!`).
 - [x] `calculation.f90` gaps — filled 2026-08-08 (this session). `c9bfdc1`
       did not touch this file; it grew substantially after that pass, from
       the GBT frozen-magnon work (B1 milestone). Live-grepped gap before
