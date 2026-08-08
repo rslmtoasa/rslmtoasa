@@ -39,6 +39,11 @@ after every task.
       available here; see tests/README.md for the documented fallback).
 - [ ] P7 — Docstring blocks for `recursion.f90`, `hamiltonian_*`,
       `lattice_*`, `green.f90`/`calculation.f90` gaps, `reciprocal_*`.
+      Nearly done as of 2026-08-08: `recursion.f90`, all four
+      `hamiltonian_*` files, all `lattice_*` files, all `reciprocal_*`
+      files, `calculation.f90` gaps, and the `cheb_cache_t` module contract
+      are complete (see the P7 sub-checklist below for detail and dates).
+      Only `green.f90` gaps (13 routines) remain open.
 - [x] P8 — `docs/DEVELOPER_MAP.md` (all 7 sections, every pointer verified
       against the code) + repo-root `CLAUDE.md`.
 - [x] P6 — Reference-update workflow documentation in `tests/README.md`.
@@ -82,47 +87,65 @@ contracts (`ham_apply_t`, `cheb_cache_t`, both in `chebyshev_fast.f90`) can
 be done as their own small commit whenever convenient — they're two type/
 interface doc blocks, not a per-routine pass.
 
-- [ ] `recursion.f90` — ~0/36 routines documented.
-- [ ] `hamiltonian_build.f90` — ~0/23 routines documented.
-- [ ] `hamiltonian_ccor.f90` — ~0/18 routines documented.
-- [ ] `hamiltonian_hubbard.f90` — ~0/2 routines documented (small — good
-      first "warm-up" file for a fresh session, or bundle with
-      `hamiltonian_paoflow_io.f90`).
-- [ ] `hamiltonian_paoflow_io.f90` — ~0/9 routines documented.
-- [ ] `lattice.f90` — ~0/49 routines documented. Large — consider whether
-      to split into two commits (e.g. constructor/lifecycle procedures vs.
-      geometry/query procedures) if it doesn't fit one session comfortably.
-- [ ] `lattice_cluster.f90` — ~0/16 routines documented.
-- [ ] `lattice_lifecycle.f90` — ~0/12 routines documented.
-- [ ] `lattice_print.f90` — ~0/3 routines documented (small).
-- [ ] `lattice_strux.f90` — ~0/20 routines documented.
-- [ ] `green.f90` gaps — 18/27 documented per the original count; find and
-      fill the ~9 undocumented ones, don't touch the 18 that already have
-      blocks.
-- [ ] `calculation.f90` gaps — 13/23 documented per the original count;
-      same approach — fill gaps only. Note: many procedures here are the
-      `pre_processing_*`/`post_processing_*` pipeline entry points
-      described in `docs/DEVELOPER_MAP.md` section 1-2; use that map to get
-      the "why"/"which workflow calls it" right without re-deriving it from
-      scratch.
-- [ ] `reciprocal.f90` — ~0/70 routines documented. Largest file in this
-      list — very likely needs 2-3 commits of its own. Split however makes
-      sense once you can see the file's internal grouping (e.g. by
-      lifecycle vs. Fourier/k-mesh vs. band/DOS helpers if it's not already
-      split that way at the submodule level).
-- [ ] `reciprocal_bands.f90` — ~0/9 routines documented.
-- [ ] `reciprocal_dos.f90` — ~0/30 routines documented.
-- [ ] `reciprocal_fourier.f90` — ~0/11 routines documented. This is the
-      ccor_2c/hoh k-space entry point (`docs/DEVELOPER_MAP.md` section 2) —
-      worth getting the physics notes right here in particular.
-- [ ] `reciprocal_lifecycle.f90` — ~0/11 routines documented.
-- [ ] `reciprocal_projection.f90` — ~0/11 routines documented.
-- [ ] `ham_apply_t` + `cheb_cache_t` module-level contracts
-      (`chebyshev_fast.f90`) — semantics of `alpha`/`beta` (y = α·H·x1 +
-      β·x0), and the cache's fingerprint-invalidation/single-rank-assumption
-      semantics (see `docs/DEVELOPER_MAP.md` section 3 for what's already
-      known about these — turn that into proper `!>` blocks on the actual
-      type/interface declarations).
+- [x] `recursion.f90` (+ `recursion_core.f90`/`recursion_haydock.f90`/
+      `recursion_chebyshev.f90`/`recursion_transport.f90`) — done in
+      `c9bfdc1` ("Docstring pass step 1", 2026-07-05); box was never
+      checked at the time. Verified via live grep: every `module
+      subroutine`/`module function` declaration and every submodule
+      `module procedure` implementation carries a `!> @brief` block.
+- [x] `hamiltonian_build.f90` — done in `c9bfdc1`.
+- [x] `hamiltonian_ccor.f90` — done in `c9bfdc1`.
+- [x] `hamiltonian_hubbard.f90` — done in `c9bfdc1`.
+- [x] `hamiltonian_paoflow_io.f90` — done in `c9bfdc1`.
+- [x] `lattice.f90` — done in `c9bfdc1`.
+- [x] `lattice_cluster.f90` — done in `c9bfdc1`.
+- [x] `lattice_lifecycle.f90` — done in `c9bfdc1`.
+- [x] `lattice_print.f90` — done in `c9bfdc1`.
+- [x] `lattice_strux.f90` — done in `c9bfdc1`.
+- [ ] `green.f90` gaps — `c9bfdc1` did not touch this file (it grew after
+      the "Docstring pass step 1" pass). Live-grepped gap, 2026-08-08: 13
+      undocumented of ~27 routines total — `block_green_ij_gpu`,
+      `calculate_intersite_gf_twoindex`, `calculate_intersite_gf`,
+      `calculate_intersite_gf_eta`, `calculate_intersite_gf_core`,
+      `calculate_intersite_gf_eta_gpu`, `block_green_gpu`,
+      `block_green_core`, `gij_eta_to_gij`, `chebyshev_green_ij_gpu`,
+      `chebyshev_green_gpu`, `chebyshev_dos_dispatch`,
+      `chebyshev_green_core`. Next up.
+- [x] `calculation.f90` gaps — filled 2026-08-08 (this session). `c9bfdc1`
+      did not touch this file; it grew substantially after that pass, from
+      the GBT frozen-magnon work (B1 milestone). Live-grepped gap before
+      this session: 14 undocumented of 38 routines total (most of them the
+      frozen-magnon and gf_route-dispatch procedures added post-`c9bfdc1`):
+      `prepare_post_processing_stack`, `run_intersite_moments`,
+      `finish_conductivity_moments`, `post_processing_exchange_p2rs`,
+      `post_processing_exchange`, `post_processing_conductivity`,
+      `post_processing_conductivity_p2rs`, `post_processing_orbital_modern`,
+      `post_processing_band_structure`, `post_processing_density_of_states`,
+      `post_processing_frozen_magnon_acoustic`,
+      `set_reference_sublattice_angles`, `diagonalize_frozen_magnon_matrix`,
+      `write_frozen_magnon_auto_headers`.
+- [x] `reciprocal.f90` — done in `c9bfdc1`.
+- [x] `reciprocal_bands.f90` — done in `c9bfdc1`.
+- [x] `reciprocal_dos.f90` — done in `c9bfdc1`.
+- [x] `reciprocal_fourier.f90` — done in `c9bfdc1`.
+- [x] `reciprocal_lifecycle.f90` — done in `c9bfdc1`.
+- [x] `reciprocal_projection.f90` — done in `c9bfdc1`.
+- [x] `cheb_cache_t` module-level contract (`chebyshev_fast.f90`) —
+      documented 2026-08-08 (this session): fingerprint-invalidation and
+      single-rank-assumption semantics, on both `cheb_cache_fingerprint_t`
+      and `cheb_cache_t`. **`ham_apply_t` no longer exists** — confirmed via
+      `git log -S"ham_apply_t"`: it was a dummy-procedure callback interface
+      (`subroutine ham_apply_t(x1, x0, y, alpha, beta, ld, nb)`) introduced
+      in `848ad2f` (T4) and deliberately removed in `4a34593` ("fix: avoid
+      executable stack in chebyshev kernels", the R2 gfortran-trampoline
+      fix — internal-procedure callbacks like this one were the trampoline
+      source). The direct `hsweep_sp`/`happly_sp`/`spmv_block_sp` dispatch
+      that replaced it has no equivalent module-level contract to document;
+      each routine's own `!>` block (already present) covers it.
+      `docs/DEVELOPER_MAP.md` §3 and this file's own P7 prose above still
+      describe `ham_apply_t` as if it exists — stale, worth a follow-up doc
+      fix, not done here (out of scope for a docstring-only commit on
+      `calculation.f90`/`chebyshev_fast.f90`).
 
 ---
 
