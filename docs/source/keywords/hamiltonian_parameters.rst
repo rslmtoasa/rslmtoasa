@@ -132,18 +132,33 @@ Spin-spiral / non-collinear
   axis is the zone boundary at :math:`\pi/\text{alat}`).
 - ``theta_ss`` (real, default ``0``) — spin-spiral cone angle, degrees in
   the namelist (converted to radians internally).
+- ``magnetic_representation`` (character, default ``'periodic_nc'``) — selects
+  ``'periodic_nc'``, ``'gbt_single_q'``, or ``'explicit_texture'`` independently
+  of whether recursion or reciprocal space solves the resulting operator.
+
+  .. warning::
+
+     ``q_ss`` is only read by ``'gbt_single_q'`` (as the bond gauge phase) and
+     ``'explicit_texture'`` (as the site-dependent moment direction). Under the
+     **default** ``'periodic_nc'`` it is stored and never used, so a spiral
+     sweep would return the same collinear answer at every ``q``. Setting a
+     nonzero ``q_ss`` without selecting one of the two spiral representations
+     is therefore **fatal** at ``build_bulkham``; the two live interpretations
+     are different physics (the gauge trick versus the real-space texture it is
+     validated against), so the code names all three exits rather than guessing.
+     ``theta_ss`` alone does not trigger it: a cone angle at ``q = 0`` is a
+     global spin rotation and is energy-invariant without SOC.
+     ``post_processing='frozen_magnon'`` selects ``'gbt_single_q'`` itself and
+     is unaffected.
 - ``v_alpha`` / ``v_beta`` (real(3)) — quantization-axis vectors.
 - ``js_alpha`` / ``jl_alpha`` (character, default ``'z'``) — spin / orbital
   projection axes.
-- ``gbt_kspace`` (logical, default ``.false.``) — B1: Bloch-sum the
-  generalized-Bloch-theorem spiral bond block :math:`K(\Delta R)` through
-  the ``reciprocal_fourier.f90`` machinery for spiral band structures,
-  instead of (or in addition to) the real-space frozen-magnon route. The
-  bond-vector-phase/half-angle-rotation fix itself (the actual B1 bug fix)
-  is always active for ``q_ss /= 0``; this flag only controls whether the
-  reciprocal-space Bloch sum of :math:`K(\Delta R)` is also computed. See
-  ``docs/dev/plans/B1_gbt_frozen_magnons.md`` §1.3/§1.6 and
-  :ref:`keywords/frozen_magnon`.
+
+Both solvers consume the same linked real-space operator; reciprocal space
+always uses the ordinary Fourier transform. The old ``gbt_kspace`` input
+(a deprecated, no-op compatibility flag from before ``magnetic_representation``
+existed) was removed in WP10 — select ``magnetic_representation='gbt_single_q'``
+explicitly instead.
 
 Hamiltonian export
 ==================

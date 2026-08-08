@@ -1,0 +1,61 @@
+{
+  "_description": "WP9 Battery A: generalized-Bloch-theorem commensurate-supercell known-answer tests, ported from the B1r.5 reference (commit 3fd21c0, sibling branch fable_v2_gbt) onto the current WP2-WP8 architecture. Each 'mft'-leg case runs bcc Fe twice on the SAME frozen potential -- once as a flat spiral (theta_ss = 90 deg) imposed through &hamiltonian q_ss + magnetic_representation='gbt_single_q' in the 1-atom chemical cell, once as an explicit magnetic supercell whose per-site lab-frame moment directions are hand-set in the Fe<k>.nml mom(:) with q_ss = 0 -- and requires per-site charge, per-site moment and band energy to agree. 'scf'-leg cases do the same comparison after full self-consistency instead of a frozen-potential force theorem. 'constrained'-leg cases re-run the gbt SCF side with density_policy='constrained_spiral' explicit and compare against the same super_scf reference, additionally reporting (not asserting) the transverse-residual/torque diagnostic. See the module docstring of run_wp9_commensurate_supercell.py for the supercell sizing (plan section 3.3), the WP9-specific deck adaptations, and tests/KNOWN_ISSUES.md for a large measured discrepancy found while building this battery (the mft leg's carried-over frozen potential evaluates to near-zero moment under the current kernel).",
+  "cases": [
+    {
+      "name": "gbt_supercell_q050_mft",
+      "leg": "mft",
+      "base": "gbt_supercell/q050",
+      "gbt_dir": "gbt",
+      "super_dir": "super",
+      "q_ss": 0.5,
+      "timeout": 900,
+      "charge_tol": 1.0e-5,
+      "moment_tol": 1.0e-5,
+      "eband_tol": 3.0e-6,
+      "angle_tol": 1.0e-2,
+      "_note": "alpha = 90 deg per bcc (001) layer -> 4-atom supercell, a_3 = (0,0,2) alat, winding N_w = 1 (odd). Tolerances are the same sanity-ceiling values the 3fd21c0 reference measured; see the WP9 battery report for what this run actually measured on the current kernel (a large discrepancy, not noise) -- these tolerances are NOT claimed to be met."
+    },
+    {
+      "name": "gbt_supercell_q033_mft",
+      "leg": "mft",
+      "base": "gbt_supercell/q033",
+      "gbt_dir": "gbt",
+      "super_dir": "super",
+      "q_ss": 0.3333333333333333,
+      "timeout": 900,
+      "charge_tol": 1.0e-5,
+      "moment_tol": 1.0e-5,
+      "eband_tol": 3.0e-6,
+      "angle_tol": 1.0e-2,
+      "_note": "alpha = 60 deg per bcc (001) layer -> 6-atom supercell, a_3 = (0,0,3) alat, winding N_w = 1 (odd). Same caveat as q050_mft."
+    },
+    {
+      "name": "gbt_supercell_q050_scf",
+      "leg": "scf",
+      "base": "gbt_supercell/q050",
+      "gbt_dir": "gbt_scf",
+      "super_dir": "super_scf",
+      "q_ss": 0.5,
+      "timeout": 1800,
+      "charge_tol": 1.0e-2,
+      "moment_tol": 5.0e-3,
+      "eband_tol": 5.0e-5,
+      "angle_tol": 1.0e-1,
+      "_note": "Full SCF (nstep=25, broyden, beta=0.15) from the same carried-over 3fd21c0 starting potential as the mft leg. Recovers most but not all of the supercell's moment -- see the WP9 battery report for the measured gap. Tolerances derived from the two measured noise floors (base+perturbed starts both run): intra-run symmetry spread dq=4.05e-3 e / dm=1.35e-3 mu_B (SCF did not fully converge in 25 steps -- this floor is loose), and spread of the gbt-super difference across starts dq=1.98e-3 e / dm=8.55e-4 mu_B / dE=8.23e-6 Ry. eband_tol is set with ~6x headroom over the eband noise floor and the measured diff (2.7-2.8e-4 Ry) still exceeds it -- a real, reproducible gap, not noise."
+    },
+    {
+      "name": "gbt_supercell_q050_constrained",
+      "leg": "constrained",
+      "base": "gbt_supercell/q050",
+      "gbt_dir": "gbt_constrained",
+      "super_dir": "super_scf",
+      "q_ss": 0.5,
+      "timeout": 1800,
+      "charge_tol": 1.0e-2,
+      "moment_tol": 5.0e-3,
+      "eband_tol": 5.0e-5,
+      "angle_tol": 1.0e-1,
+      "_note": "gbt side re-run with &control density_policy='constrained_spiral' explicit (already the code default, so this run is numerically identical to gbt_supercell_q050_scf's base start -- confirmed: same eband/charge/moment to all reported digits). Compared against the same super_scf reference. Tolerances copied from gbt_supercell_q050_scf (base start only was run here -- see the WP9 battery report for why the perturbed-restart leg was scoped down for this case). Transverse residual / torque are reported as diagnostics, not asserted: at the converged state m_transverse=0.000000, torque~0 -- the single-sublattice cell gives the constraint nothing to do, matching the WP7 G7 report's own documented limitation (policy distinctness needs a genuinely multi-sublattice constrained state)."
+    }
+  ]
+}

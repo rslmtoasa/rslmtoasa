@@ -1,0 +1,54 @@
+&calculation
+pre_processing = 'bravais'
+post_processing = 'frozen_magnon'
+verbose = T
+/
+&lattice
+rc = 010 ! radius cut. We could think about setting a default
+alat = 2.859 ! lattice parapeter
+crystal_sym = 'file' ! options are bcc, fcc and hcp so far.
+wav = 1.406216
+pbc = .false.
+ntype = 2
+ct(:) = 4.0d0
+r2 = 16.0d0
+strux_backend = 'strux_lib' ! WP4 requirement for gbt_single_q (magnetic_representation forced by frozen_magnon post-processing)
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+label(2) = 'Co'
+/
+&self
+ws_all = .true. ! ''
+nstep = 20
+conv_thr = 0.5e-9
+/
+&energy
+fermi = -0.030223
+energy_min = -2.5
+energy_max = 1.5
+channels_ldos = 5400
+/
+&control
+calctype = 'B'
+nsp = 3 ! WP9 Battery C: spin-polarized, no SOC (nsp=4/SOC is fatal for GBT)
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.2
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+theta_ss = 90.0
+/
+&frozen_magnon
+mode = 'mft'
+branch_mode = 'auto'
+theta_probe = 20.0
+active_moment_threshold = 1.0d-6
+q_file = 'q_points.dat'
+q_coordinates = 'cartesian'
+/

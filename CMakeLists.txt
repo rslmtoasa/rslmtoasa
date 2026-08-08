@@ -349,6 +349,79 @@ set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
 set_tests_properties(Chebyshev PROPERTIES LABELS "regression;baseline")
 
+# WP8: q little-group BZ reduction and q-lifecycle (axial/generic/shifted-mesh
+# reduction vs the full-BZ oracle, q/-q and multi-q common-subgroup, q-list
+# reordering invariance).
+add_test(NAME WP8LittleGroup
+  COMMAND ${Python3_EXECUTABLE} ${TestDIR}/regression/run_wp8_littlegroup.py
+    --binary "${TestBinary}"
+    --deck-root "${TestDIR}/regression/wp8_littlegroup"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp8_littlegroup"
+)
+set_tests_properties(WP8LittleGroup PROPERTIES LABELS "regression;gbt;wp8" TIMEOUT 1800)
+
+# WP9 physical validation.
+#
+# Battery A -- commensurate-supercell known-answer test (MFT/SCF/constrained-SCF
+# legs). NOT in the "regression" label: every case still fails its derived
+# tolerance on the remaining band-energy residual (see
+# docs/dev/GBT_WP9_G9_REPORT.md and tests/KNOWN_ISSUES.md) -- a real,
+# understood-scope, currently-open finding, not a false positive to silence.
+# (An earlier, much larger apparent failure -- the moment reading near zero --
+# was diagnosed and fixed as a test-fixture bug: the deck's `mom` input must
+# stay in the code's collinear-rotating-frame convention, nominally (0,0,1)
+# regardless of theta_ss, not pre-rotated to the physical cone direction; see
+# the KNOWN_ISSUES.md entry for the full trace.) Registered under "gbt;wp9" so
+# it stays independently runnable and visible without turning the default
+# `-L regression` run red for a known, already-documented gap.
+set(WP9_SUPERCELL_CASES_JSON "${TestDIR}/regression/wp9_validation/commensurate_supercell/cases.json")
+file(READ "${WP9_SUPERCELL_CASES_JSON}" _wp9_supercell_json)
+string(JSON _wp9_supercell_n LENGTH "${_wp9_supercell_json}" "cases")
+math(EXPR _wp9_supercell_last "${_wp9_supercell_n} - 1")
+foreach(_i RANGE ${_wp9_supercell_last})
+  string(JSON _wp9_supercell_name GET "${_wp9_supercell_json}" "cases" ${_i} "name")
+  string(JSON _wp9_supercell_timeout GET "${_wp9_supercell_json}" "cases" ${_i} "timeout")
+  add_test(NAME "WP9CommensurateSupercell_${_wp9_supercell_name}"
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/wp9_validation/commensurate_supercell/run_wp9_commensurate_supercell.py"
+      "--binary" "${TestBinary}"
+      "--cases-json" "${WP9_SUPERCELL_CASES_JSON}"
+      "--case-name" "${_wp9_supercell_name}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/wp9_commensurate_supercell"
+  )
+  set_tests_properties("WP9CommensurateSupercell_${_wp9_supercell_name}" PROPERTIES LABELS "gbt;wp9" TIMEOUT ${_wp9_supercell_timeout})
+endforeach()
+
+# Battery B -- bcc-Fe Gamma-H frozen-magnon sweep, k-space route only (RS
+# dropped per Anders: long-wavelength spirals can have real numerical
+# problems on the real-space route from cluster truncation/PBC artifacts).
+# k-space EBAND mesh-refinement monotonicity, q<->-q symmetry, and cone-angle
+# scaling. NOT in the "regression" label: the mesh-refinement check currently
+# fails at q3=0.5 (a real, mild, uninvestigated non-monotonicity -- see
+# docs/dev/GBT_WP9_G9_REPORT.md and tests/KNOWN_ISSUES.md), and cone-angle
+# scaling is far outside any defensible budget. Registered under "gbt;wp9" so
+# it stays independently runnable and visible without turning the default
+# `-L regression` run red for known, already-documented gaps.
+add_test(NAME WP9GammaHSweep
+  COMMAND ${Python3_EXECUTABLE} ${TestDIR}/regression/wp9_validation/gammaH_sweep/run_wp9_gammaH_sweep.py
+    --binary "${TestBinary}"
+    --deck-root "${TestDIR}/regression/wp9_validation/gammaH_sweep"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp9_gammaH_sweep"
+)
+set_tests_properties(WP9GammaHSweep PROPERTIES LABELS "gbt;wp9" TIMEOUT 3600)
+
+# Battery C -- multi-sublattice Goldstone measurement (bcc FeCo, branch_mode=
+# 'auto'). This is a MEASUREMENT, not a Goldstone-satisfaction gate (see the
+# script docstring and tests/KNOWN_ISSUES.md) -- it only asserts a loose
+# sanity bound, so it stays in the default regression label without implying
+# the historical Goldstone-violation finding is closed.
+add_test(NAME WP9MultisublatticeGoldstone
+  COMMAND ${Python3_EXECUTABLE} ${TestDIR}/regression/wp9_validation/multisublattice_goldstone/run_wp9_goldstone.py
+    --binary "${TestBinary}"
+    --deck-root "${TestDIR}/regression/wp9_validation/multisublattice_goldstone"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp9_goldstone"
+)
+set_tests_properties(WP9MultisublatticeGoldstone PROPERTIES LABELS "regression;gbt;wp9" TIMEOUT 1800)
+
 set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
 file(READ "${REGRESSION_CASES_JSON}" _regression_json)
 string(JSON _regression_n LENGTH "${_regression_json}" "cases")
@@ -395,6 +468,8 @@ endif (RUN_REG_TESTS)
 # Standalone Fortran unit tests (known-answer, no external fixtures)
 ##############################################################################################
 if (RUN_UNIT_TESTS)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
   # Each test is a small program linked against the project library. Link the
   # same conditional MPI/OpenMP libraries as the main binary.
   function(add_fortran_unit_test _name _source)
@@ -425,6 +500,45 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitVacuumLead ${TestDIR}/unit/test_vacuum_lead.f90)
   add_fortran_unit_test(UnitVacuumRegionWiring ${TestDIR}/unit/test_vacuum_region_wiring.f90)
   add_fortran_unit_test(UnitAlignmentSolver ${TestDIR}/unit/test_alignment_solver.f90)
+  add_fortran_unit_test(UnitKspaceOccupations ${TestDIR}/unit/test_kspace_occupations.f90)
+  add_fortran_unit_test(UnitMagneticRepresentation ${TestDIR}/unit/test_magnetic_representation.f90)
+  set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
+  add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
+  set_tests_properties(UnitGbtStructure PROPERTIES LABELS "unit;gbt;wp4")
+  add_fortran_unit_test(UnitSpinDensity ${TestDIR}/unit/test_spin_density.f90)
+  set_tests_properties(UnitSpinDensity PROPERTIES LABELS "unit;gbt;wp7;density")
+  set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
+  if(ENABLE_MPI AND MPI_Fortran_FOUND)
+    add_test(NAME UnitKspaceOccupations_mpi
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+              $<TARGET_FILE:UnitKspaceOccupations> ${MPIEXEC_POSTFLAGS})
+    set_tests_properties(UnitKspaceOccupations_mpi PROPERTIES
+      LABELS "unit;gbt;wp2;mpi" PROCESSORS 2)
+  endif()
+  add_test(NAME UnitGbtOracles
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
+  set_tests_properties(UnitGbtOracles PROPERTIES LABELS "unit;gbt")
+  add_test(NAME UnitGbtWp5SourceContract
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp5_source_contract.py)
+  set_tests_properties(UnitGbtWp5SourceContract PROPERTIES LABELS "unit;gbt;wp5")
+  add_test(NAME UnitGbtWp10SourceContract
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_source_contract.py)
+  set_tests_properties(UnitGbtWp10SourceContract PROPERTIES LABELS "unit;gbt;wp10")
+  add_test(NAME UnitGbtWp6Hoh
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
+  set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")
+  add_test(NAME UnitGbtWp6Ccor
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_ccor.py)
+  set_tests_properties(UnitGbtWp6Ccor PROPERTIES LABELS "unit;gbt;wp6;ccor")
+  add_test(NAME UnitGbtWp6cVelocity
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6c_velocity.py)
+  set_tests_properties(UnitGbtWp6cVelocity PROPERTIES LABELS "unit;gbt;wp6;velocity;torque")
+  # WP6 integration: keeps tests/gbt_wp6_matrix/feature_matrix.json in step with
+  # the guards actually present in source/, and owns the oracles that span the
+  # WP6a/WP6b/WP6c slice boundaries (onsite fold, CCOR+HOH composition).
+  add_test(NAME UnitGbtWp6Matrix
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_matrix.py)
+  set_tests_properties(UnitGbtWp6Matrix PROPERTIES LABELS "unit;gbt;wp6;matrix")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE

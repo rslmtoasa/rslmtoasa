@@ -1,0 +1,43 @@
+&lattice
+! Explicit bcc supercell for the commensurate spiral q_ss = (0,0,0.5) 2*pi/alat.
+! a(:,3) = (0,0,2) is the SHORTEST z translation with an INTEGER winding
+! number N_w = q_ss . a(:,3) = 1. The naive "L = 1/q_ss" cell has a
+! half-integer winding and is antiperiodic, not periodic -- plan section 3.3.
+nbulk_bulk = 4
+ntot = 4
+nbas = 4
+nrec = 4
+a(:, 1) = 1.00000000, 0.00000000, 0.00000000
+a(:, 2) = 0.00000000, 1.00000000, 0.00000000
+a(:, 3) = 0.00000000, 0.00000000, 2.00000000
+!
+crd(:, 1) = 0.00, 0.00, 0.00
+crd(:, 2) = 0.50, 0.50, 0.50
+crd(:, 3) = 0.00, 0.00, 1.00
+crd(:, 4) = 0.50, 0.50, 1.50
+!
+izp(1) = 1
+izp(2) = 2
+izp(3) = 3
+izp(4) = 4
+!
+no(1) = 1
+no(2) = 2
+no(3) = 3
+no(4) = 4
+!
+iu(1) = 1
+iu(2) = 2
+iu(3) = 3
+iu(4) = 4
+!
+ib(1) = 1
+ib(2) = 2
+ib(3) = 3
+ib(4) = 4
+!
+irec(1) = 1
+irec(2) = 2
+irec(3) = 3
+irec(4) = 4
+/

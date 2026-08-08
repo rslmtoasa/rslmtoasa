@@ -1,0 +1,62 @@
+&calculation
+pre_processing = 'bravais'
+/
+&lattice
+! ndim/rc are chosen so the spherical cut (radius sqrt(rc) = 8 alat) sits well
+! inside the pre-cut translation box on BOTH sides of the pair -- see the
+! header of tests/regression/run_gbt_supercell.py.
+ndim = 60000
+rc = 64.0
+alat = 2.86120
+crystal_sym = 'bcc'
+wav = 1.40880
+ntype = 1
+ct(1:1) = 1*3.0d0
+r2 = 9.00d0
+! WP4: gbt_single_q is rejected fatally on the legacy backend
+! (hamiltonian_build.f90::build_gbt_bulkham) -- required, not optional.
+strux_backend = 'strux_lib'
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+ws_all = .true.
+! WP9 SCF leg: full self-consistency, not the frozen-potential force theorem.
+! nstep/conv_thr chosen generously; the run stops early if converged.
+nstep = 25
+conv_thr = 1.0d-7
+/
+&energy
+fermi = -0.069933
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 3
+lld = 16
+recur = 'block'
+! WP9 constrained-SCF leg: explicit (this is already the code default, see
+! source/control.f90 restore_to_default -- set explicitly here so the deck
+! documents intent and is future-proof against the default changing).
+density_policy = 'constrained_spiral'
+/
+&hamiltonian
+q_ss(:) = 0.0d0, 0.0d0, 0.5d0
+theta_ss = 90.0d0
+! WP3/WP5: the representation is explicit and defaults to periodic_nc, under
+! which q_ss is stored but never read (tests/KNOWN_ISSUES.md,
+! "nsp4_block_spiral_qplus/_qminus never enable GBT"). Plain bulk SCF
+! (pre_processing='bravais') does not auto-force this the way
+! post_processing_frozen_magnon{,_auto} does -- it must be set here.
+magnetic_representation = 'gbt_single_q'
+/
+&mix
+! WP9 SCF leg: proper broyden mixing, moment direction allowed to relax
+! (magbeta defaults to 1.0 -- full mixing -- when omitted).
+beta = 0.15
+mixtype = 'broyden'
+/

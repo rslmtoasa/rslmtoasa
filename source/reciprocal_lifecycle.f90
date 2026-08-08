@@ -1,4 +1,5 @@
 submodule (reciprocal_mod) reciprocal_lifecycle
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
 contains
@@ -83,6 +84,7 @@ contains
       if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
       if (allocated(this%ham_vec_type)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type', this%ham_vec_type)
       if (allocated(this%ham_vec_type_direct)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct)
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 #else
       if (allocated(this%k_points)) deallocate (this%k_points)
       if (allocated(this%k_weights)) deallocate (this%k_weights)
@@ -96,8 +98,8 @@ contains
       if (allocated(this%k_path)) deallocate (this%k_path)
       if (allocated(this%k_labels)) deallocate (this%k_labels)
       if (allocated(this%k_distances)) deallocate (this%k_distances)
-   if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
-   if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+      if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
       ! DOS arrays
       if (allocated(this%dos_energy_grid)) deallocate (this%dos_energy_grid)
       if (allocated(this%total_dos)) deallocate (this%total_dos)
@@ -114,6 +116,7 @@ contains
       if (allocated(this%ham_vec_type_direct)) deallocate (this%ham_vec_type_direct)
       if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
       if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 #endif
    end subroutine destructor
 
@@ -138,6 +141,17 @@ contains
       this%k_offset = [0.0_rp, 0.0_rp, 0.0_rp]  ! No shift by default
       this%include_so = .false.
       this%max_orbs = nb
+      this%cached_operator_generation = -1
+
+      ! WP8: full BZ stays the default/oracle for finite-q GBT (WP0). Opt-in
+      ! to 'little_group' or 'little_group_common' via &reciprocal.
+      this%q_symmetry_policy = 'full_bz'
+      this%mesh_cache_valid = .false.
+      this%mesh_cache_dims = [0, 0, 0]
+      this%mesh_cache_offset = [0.0_rp, 0.0_rp, 0.0_rp]
+      this%mesh_cache_lattice = 0.0_rp
+      this%mesh_cache_policy = ''
+      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
@@ -155,7 +169,11 @@ contains
       this%temperature = 300.0_rp  ! Default temperature in Kelvin
       this%fermi_level = 0.0_rp  ! Default Fermi level
       this%total_electrons = 0.0_rp  ! 0 = auto-calculate from valence in constructor
-      this%auto_find_fermi = .true.  ! Auto-find Fermi level from DOS (recommended default)
+      this%canonical_electron_count = 0.0_rp
+      this%canonical_band_energy = 0.0_rp
+      this%canonical_weight_sum = 0.0_rp
+      this%canonical_energy_valid = .false.
+      this%auto_find_fermi = .true.  ! Auto-find Fermi level from eigenvalue occupations
       this%reciprocal_mode = 'ham_only'
       this%kspace_ham_order = 'auto'
       this%kanpur_diagnostics = .true.
@@ -182,6 +200,83 @@ contains
       this%green_eta = 0.02_rp        ! Ry; gate G-B2-2 working point (was 0.01, G-B2-1)
       this%green_backend = 'lehmann'  ! backend E (Sigma = 0) by default
    end subroutine restore_to_default
+
+   !> @brief Invalidate every spectrum-derived cache while retaining the k mesh.
+   !> @details Frozen-magnon and SCF probes change the Hamiltonian repeatedly.
+   !>          Keeping k_points/k_weights is safe, but eigenpairs, DOS arrays,
+   !>          projections, tetrahedra, and their canonical energy are not.
+   module subroutine invalidate_spectral_cache(this)
+      class(reciprocal), intent(inout) :: this
+
+#ifdef USE_SAFE_ALLOC
+      if (allocated(this%hk_bulk)) call g_safe_alloc%deallocate('reciprocal.hk_bulk', this%hk_bulk)
+      if (allocated(this%hk_so)) call g_safe_alloc%deallocate('reciprocal.hk_so', this%hk_so)
+      if (allocated(this%hk_total)) call g_safe_alloc%deallocate('reciprocal.hk_total', this%hk_total)
+      if (allocated(this%sk_overlap)) call g_safe_alloc%deallocate('reciprocal.sk_overlap', this%sk_overlap)
+      if (allocated(this%eigenvalues)) call g_safe_alloc%deallocate('reciprocal.eigenvalues', this%eigenvalues)
+      if (allocated(this%eigenvalues_path)) call g_safe_alloc%deallocate('reciprocal.eigenvalues_path', this%eigenvalues_path)
+      if (allocated(this%eigenvectors)) call g_safe_alloc%deallocate('reciprocal.eigenvectors', this%eigenvectors)
+      if (allocated(this%eigenvectors_path)) call g_safe_alloc%deallocate('reciprocal.eigenvectors_path', this%eigenvectors_path)
+      if (allocated(this%total_dos)) call g_safe_alloc%deallocate('reciprocal.total_dos', this%total_dos)
+      if (allocated(this%total_nos)) call g_safe_alloc%deallocate('reciprocal.total_nos', this%total_nos)
+      if (allocated(this%projected_dos)) call g_safe_alloc%deallocate('reciprocal.projected_dos', this%projected_dos)
+      if (allocated(this%band_moments)) call g_safe_alloc%deallocate('reciprocal.band_moments', this%band_moments)
+      if (allocated(this%dos_mx_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mx_tot', this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) call g_safe_alloc%deallocate('reciprocal.dos_my_tot', this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) call g_safe_alloc%deallocate('reciprocal.dos_mz_tot', this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) call g_safe_alloc%deallocate('reciprocal.projected_dos_moments', this%projected_dos_moments)
+      if (allocated(this%tetrahedra)) call g_safe_alloc%deallocate('reciprocal.tetrahedra', this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
+#else
+      if (allocated(this%hk_bulk)) deallocate(this%hk_bulk)
+      if (allocated(this%hk_so)) deallocate(this%hk_so)
+      if (allocated(this%hk_total)) deallocate(this%hk_total)
+      if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
+      if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+      if (allocated(this%eigenvalues_path)) deallocate(this%eigenvalues_path)
+      if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      if (allocated(this%eigenvectors_path)) deallocate(this%eigenvectors_path)
+      if (allocated(this%total_dos)) deallocate(this%total_dos)
+      if (allocated(this%total_nos)) deallocate(this%total_nos)
+      if (allocated(this%projected_dos)) deallocate(this%projected_dos)
+      if (allocated(this%band_moments)) deallocate(this%band_moments)
+      if (allocated(this%dos_mx_tot)) deallocate(this%dos_mx_tot)
+      if (allocated(this%dos_my_tot)) deallocate(this%dos_my_tot)
+      if (allocated(this%dos_mz_tot)) deallocate(this%dos_mz_tot)
+      if (allocated(this%projected_dos_moments)) deallocate(this%projected_dos_moments)
+      if (allocated(this%tetrahedra)) deallocate(this%tetrahedra)
+      if (allocated(this%tetrahedron_volumes)) deallocate(this%tetrahedron_volumes)
+#endif
+
+      this%canonical_electron_count = 0.0_rp
+      this%canonical_band_energy = 0.0_rp
+      this%canonical_weight_sum = 0.0_rp
+      this%canonical_energy_valid = .false.
+   end subroutine invalidate_spectral_cache
+
+   !> @brief Invalidate H(k), eigensystem, DOS, and density projections after
+   !>        any shared real-space operator rebuild.
+   !> @details build_bulkham advances hamiltonian%operator_generation before
+   !>          consuming q, cone/reference frames, and potential parameters.
+   !>          A generation mismatch therefore invalidates every downstream
+   !>          reciprocal object without relying on floating-point fingerprints.
+   module subroutine invalidate_if_operator_changed(this, context_tag, changed)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context_tag
+      logical, intent(out), optional :: changed
+      logical :: mismatch
+
+      mismatch = .false.
+      if (associated(this%hamiltonian)) then
+         mismatch = this%cached_operator_generation /= this%hamiltonian%operator_generation
+      end if
+      if (present(changed)) changed = mismatch
+      if (.not. mismatch) return
+
+      call this%invalidate_spectral_cache()
+      call root_info(trim(context_tag)//': invalidated operator-dependent H(k), eigensystem, DOS, and density caches', &
+                     __FILE__, __LINE__)
+   end subroutine invalidate_if_operator_changed
 
    !> @brief Read the &reciprocal namelist and install reciprocal-space options.
    !> @details Parses k-mesh, Fourier mode, band/DOS controls, symmetry options,
@@ -210,6 +305,7 @@ contains
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
       tetra_symmetry_mode = this%tetra_symmetry_mode
+      q_symmetry_policy = this%q_symmetry_policy
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -267,6 +363,14 @@ contains
          call g_logger%warning("reciprocal%build_from_file: tetra_symmetry_mode must be 'full_expand_ref' or 'irreducible_native'. Falling back to irreducible_native.", __FILE__, __LINE__)
          this%tetra_symmetry_mode = 'irreducible_native'
       end if
+      this%q_symmetry_policy = lower(trim(q_symmetry_policy))
+      if (this%q_symmetry_policy /= 'full_bz' .and. this%q_symmetry_policy /= 'little_group' .and. &
+          this%q_symmetry_policy /= 'little_group_common') then
+         call g_logger%warning("reciprocal%build_from_file: q_symmetry_policy must be 'full_bz', "// &
+                               "'little_group', or 'little_group_common'. Falling back to full_bz.", &
+                               __FILE__, __LINE__)
+         this%q_symmetry_policy = 'full_bz'
+      end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
       this%gaussian_sigma = gaussian_sigma
@@ -306,6 +410,17 @@ contains
 	         this%kspace_ham_order = 'auto'
 	      end if
 
+      ! WP0: a finite-q spin spiral breaks the crystal symmetries used for an
+      ! irreducible wedge (and, in general, time reversal).  Keep the chemical
+      ! cell, but always integrate its *full* BZ.  The same enforcement is made
+      ! immediately before an H(k) build because frozen-magnon sweeps mutate q.
+      if (this%has_nonzero_q_gbt()) then
+         this%use_symmetry_reduction = .false.
+         this%use_time_reversal = .false.
+         call root_info('reciprocal%build_from_file: nonzero-q GBT forces the full chemical BZ; '// &
+                        'symmetry and time-reversal reduction disabled.', __FILE__, __LINE__)
+      end if
+
       ! K-path settings
       this%auto_kpath = auto_kpath
       this%nk_per_segment = nk_per_segment
@@ -339,6 +454,7 @@ contains
          call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
       call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: q_symmetry_policy = ' // trim(this%q_symmetry_policy), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
@@ -346,6 +462,98 @@ contains
       call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
       call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
    end subroutine build_from_file
+
+   module logical function has_nonzero_q_gbt(this)
+      class(reciprocal), intent(in) :: this
+      real(rp), parameter :: q_tolerance = 1.0e-12_rp
+
+      has_nonzero_q_gbt = .false.
+      if (.not. associated(this%hamiltonian)) return
+      has_nonzero_q_gbt = trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
+                          maxval(abs(this%hamiltonian%q_ss)) > q_tolerance
+   end function has_nonzero_q_gbt
+
+   !> Despite the name (kept from WP0, where the reciprocal guards were scoped
+   !> to finite q), every check below fires for *any* gbt_single_q run,
+   !> including q=0: WP6a widened the overlap rejection and none of these
+   !> terms has an audited GBT form at q=0 either. has_nonzero_q_gbt is the
+   !> genuinely q-scoped predicate; use that one when q matters. Renaming this
+   !> routine belongs to WP10's documentation pass.
+   module subroutine validate_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: context
+      real(rp), parameter :: term_tolerance = 1.0e-12_rp
+
+      if (.not. associated(this%hamiltonian)) return
+      if (trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) return
+
+      ! These operators have no audited finite-q bond-gauge transformation.
+      ! Fail before reciprocal operator construction can produce a
+      ! plausible-looking, but invalid, spectrum.
+      if (this%hamiltonian%hubbard_v_check) then
+         call g_logger%fatal(trim(context)//': GBT with intersite Hubbard-V is unsupported.', &
+                             __FILE__, __LINE__)
+      end if
+      if (trim(this%reciprocal_mode) /= 'ham_only') then
+         call g_logger%fatal(trim(context)//': GBT with reciprocal_mode='// &
+                             trim(this%reciprocal_mode)//' is unsupported: the available generalized-overlap '// &
+                             'representation is not a complete formal GBT metric; use ham_only.', &
+                             __FILE__, __LINE__)
+      end if
+      if (allocated(this%hamiltonian%lsham)) then
+         if (maxval(abs(this%hamiltonian%lsham)) > term_tolerance) then
+            call g_logger%fatal(trim(context)//': GBT with SOC is unsupported.', &
+                                __FILE__, __LINE__)
+         end if
+      end if
+   end subroutine validate_nonzero_q_gbt
+
+   !> @brief Enforce the nonzero-q GBT BZ policy before every H(k) build.
+   !> @details Called from build_kspace_hamiltonian on every probe, so this is
+   !>          the actual per-Hamiltonian-build enforcement point -- the
+   !>          calculation.f90 sweep-level mesh calls only prepare a mesh this
+   !>          routine must not silently discard. 'full_bz' (default)
+   !>          reproduces the original WP0 behaviour exactly: force the full
+   !>          chemical BZ every call. 'little_group' delegates to
+   !>          ensure_kpoint_mesh, which is a no-op once the current q_ss's
+   !>          mesh is already cached (set by the calculation.f90 per-q
+   !>          rebuild) and only rebuilds on an actual q change.
+   !>          'little_group_common' must never rebuild a mesh a sweep already
+   !>          proved valid for its whole q-list (WP8): if one is cached under
+   !>          that policy for the current mesh dims, it is left untouched;
+   !>          only a genuinely missing mesh (e.g. this routine invoked outside
+   !>          a sweep) falls back to the single current q_ss's little group.
+   module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context
+
+      if (.not. this%has_nonzero_q_gbt()) return
+
+      this%use_symmetry_reduction = .false.
+      this%use_time_reversal = .false.
+
+      ! A band path is not a BZ integration mesh.  Do not replace it here;
+      ! the finite-q mesh callers below are forced through generate_mp_mesh.
+      if (allocated(this%k_path)) return
+
+      select case (trim(this%q_symmetry_policy))
+      case ('little_group')
+         call this%ensure_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
+         return
+      case ('little_group_common')
+         if (this%mesh_cache_valid .and. trim(this%mesh_cache_policy) == 'little_group_common' .and. &
+             allocated(this%k_points) .and. all(this%mesh_cache_dims == this%nk_mesh)) then
+            return   ! sweep already built (and owns) the common-subgroup mesh
+         end if
+         call root_info(trim(context)//': little_group_common has no pre-built sweep mesh; '// &
+                        'falling back to the current q_ss little group.', __FILE__, __LINE__)
+         call this%generate_little_group_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
+         return
+      end select
+
+      call root_info(trim(context)//': nonzero-q GBT rebuilding the full chemical BZ mesh.', __FILE__, __LINE__)
+      call this%generate_mp_mesh()
+   end subroutine force_full_bz_for_nonzero_q_gbt
 
    !> @brief Set Monkhorst-Pack mesh dimensions.
    !> @param[inout] this Reciprocal object whose nk_mesh is updated.

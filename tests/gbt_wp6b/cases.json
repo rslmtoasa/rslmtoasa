@@ -1,0 +1,69 @@
+{
+  "_description": "WP6b finite-q GBT CCOR production probes.",
+  "cases": [
+    {
+      "name": "wp6b_ccor_scalar_k4",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": true, "screening": "sigma" },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": false, "use_time_reversal": false,
+          "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0, "ccor_2c": true,
+          "ccor_elin": 0.25, "ccor_vmt_mode": "vmad_scalar", "ccor_debug": true, "ccor_strict": true },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp6b_ccor_pair_surface_k4",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": true, "screening": "sigma" },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": false, "use_time_reversal": false,
+          "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": true, "theta_ss": 20.0, "ccor_2c": true,
+          "ccor_elin": 0.25, "ccor_vmt_mode": "pair_surface", "ccor_debug": true, "ccor_strict": false },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp6b_ccor_scalar_rs12",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": true, "screening": "sigma" },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0, "ccor_2c": true,
+          "ccor_elin": 0.25, "ccor_vmt_mode": "vmad_scalar", "ccor_strict": true },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp6b_ccor_explicit_texture_q0",
+      "case": "../../scf/cases/bulk/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": true, "screening": "sigma" },
+        "control": { "nsp": 4, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "magnetic_representation": "explicit_texture", "hoh": false,
+          "ccor_2c": true, "ccor_elin": 0.25, "ccor_vmt_mode": "vmad_scalar",
+          "ccor_debug": true, "ccor_strict": true }
+      }
+    }
+  ]
+}

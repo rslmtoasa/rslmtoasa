@@ -15,13 +15,13 @@ Start here, then read:
 - **[`tests/KNOWN_ISSUES.md`](tests/KNOWN_ISSUES.md)** — bugs found via
   coverage work, deliberately left unfixed pending a dedicated task.
 
-## The six rules that matter most
+## The seven rules that matter most
 
 1. **Bit-level behavior is the contract.** `tests/regression` and the
    `tests/{scf,postproc}` example suites must pass at the same tolerances
    before and after every change. Run them before starting and after every
    task.
-2. **One task, one commit.** Don't batch unrelated changes into one commit.
+2. **One task, one commit.** Don't batch unrelated changes into one commit. If too complicated, ask.
 3. **KISS.** No argument-validation ladders, wrapper layers, or "just in
    case" guards on internal routines — checks belong at true boundaries
    (namelist parsing, file I/O, plugin availability).
@@ -30,17 +30,18 @@ Start here, then read:
    pattern.
 5. **`self.f90` and `symbolic_atom.f90` are off-limits.** Physics-dense
    legacy code scheduled for a separate audit — edit around the edges only.
-6. **Stay inside the task Anders defined.** See below — this one is about
-   token budget, and it is not optional.
+6. **Stay inside the defined task.** See below — this one is about
+   token budget, and it is not optional. Do not expand the task.
+7. **Work in sprint to medium distance, no marathons.** Avoid getting stuck in repeating loops chasing incremental gains, unless asked to. If stuck report back.
 
 ## Scope discipline — do only the task that was asked for
 
-Anders defines the task. Work on that, finish it, report, and **stop**. Do not
+The user defines the task. Work on that, finish it, report, and **stop**. Do not
 extend the scope because an adjacent problem looks tractable or interesting.
 This is a budget constraint, not a limit on capability: exploratory work burns
 tokens that were not authorized for it.
 
-**Green-light rule.** Anything beyond the stated task needs Anders' explicit
+**Green-light rule.** Anything beyond the stated task needs the users explicit
 approval *before* you start it. That includes: fixing a bug you found on the
 side, adding test cases or examples that were not requested, refactoring code
 you happened to read, widening a validation study, and "while I'm here"

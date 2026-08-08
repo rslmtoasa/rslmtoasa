@@ -1,0 +1,298 @@
+{
+  "_description": "WP6 integration negative probes: every unsupported GBT combination in feature_matrix.json that can be expressed in an input deck must terminate before the Hamiltonian reaches an eigensolver. Run with run_probes.py.",
+  "cases": [
+    {
+      "name": "wp6i_hubbard_v_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "gbt_single_q with intersite Hubbard-V is unsupported",
+      "timeout": 300,
+      "namelists": {
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "theta_ss": 20.0
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      },
+      "raw": {
+        "hamiltonian": [
+          "hubbard_v(1,1,3,3) = 1.0"
+        ]
+      }
+    },
+    {
+      "name": "wp6i_local_axis_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "gbt_single_q with local_axis is not yet audited",
+      "timeout": 300,
+      "namelists": {
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "theta_ss": 20.0,
+          "local_axis": true
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      }
+    },
+    {
+      "name": "wp6i_legacy_backend_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "gbt_single_q requires strux_backend='strux_lib'",
+      "timeout": 300,
+      "namelists": {
+        "lattice": {
+          "strux_backend": "legacy",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "theta_ss": 20.0
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      }
+    },
+    {
+      "name": "wp6i_soc_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "with SOC is unsupported",
+      "timeout": 300,
+      "comment": "nsp=4 makes calculation.f90/self.f90 call build_lsham before build_bulkham; Fe.nml carries nonzero xi_p/xi_d, so lsham is above the 1e-14 guard tolerance.",
+      "namelists": {
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 4,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "theta_ss": 20.0
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      }
+    },
+    {
+      "name": "wp6i_overlap_proxy_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "is unsupported: the available generalized-overlap",
+      "timeout": 300,
+      "comment": "WP6a probe, rerun here on the integrated build.",
+      "namelists": {
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "generalized_overlap_proxy"
+        },
+        "hamiltonian": {
+          "hoh": true,
+          "theta_ss": 20.0
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      }
+    },
+    {
+      "name": "wp6i_overlap_kanpur_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "is unsupported: the available generalized-overlap",
+      "timeout": 300,
+      "comment": "WP6a probe, rerun here on the integrated build.",
+      "namelists": {
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "generalized_overlap_kanpur"
+        },
+        "hamiltonian": {
+          "hoh": true,
+          "theta_ss": 20.0
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      }
+    },
+    {
+      "name": "wp6i_ccor_missing_sdot_reject",
+      "case": "../scf/cases/frozen_magnon/bccFe",
+      "expect_fatal": "gbt_single_q with CCOR requires generated Sdot and strux_want_sdot=.true.",
+      "timeout": 300,
+      "comment": "WP6b probe, rerun here on the integrated build. ccor_strict is deliberately false: the GBT-specific guard must fire regardless.",
+      "namelists": {
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false,
+          "screening": "sigma"
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "theta_ss": 20.0,
+          "ccor_2c": true,
+          "ccor_elin": 0.25,
+          "ccor_vmt_mode": "vmad_scalar",
+          "ccor_strict": false
+        },
+        "frozen_magnon": {
+          "q_file": "q_pm.dat"
+        }
+      }
+    },
+    {
+      "name": "wp7_periodic_nc_qss_reject",
+      "case": "../scf/cases/k_space_scf/bccFe",
+      "expect_fatal": "q_ss is set but magnetic_representation=periodic_nc",
+      "timeout": 300,
+      "comment": "WP7 input-boundary guard. A spiral wavevector under the DEFAULT periodic_nc representation is never read, so the sweep would return the same collinear answer at every q. Deliberately uses an ordinary SCF deck, not frozen_magnon: post_processing='frozen_magnon' forces magnetic_representation=gbt_single_q itself, so the guard cannot and must not fire there.",
+      "namelists": {
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 12
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "theta_ss": 20.0
+        }
+      },
+      "raw": {
+        "hamiltonian": [
+          "q_ss(:) = 0.0d0, 0.0d0, 0.25d0"
+        ]
+      }
+    }
+  ]
+}

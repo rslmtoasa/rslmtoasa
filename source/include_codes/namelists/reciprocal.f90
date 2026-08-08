@@ -18,6 +18,8 @@ logical :: strict_symmetry_checks          ! Enforce strict symmetry-map checks
 logical :: use_shift                       ! Additional Monkhorst-Pack shift (default: .false.)
 logical :: dump_symmetry_kmap              ! Dump full->irreducible map diagnostics
 character(len=32) :: tetra_symmetry_mode   ! 'full_expand_ref' or 'irreducible_native'
+character(len=32) :: q_symmetry_policy     ! Finite-q GBT BZ reduction: 'full_bz' (default/oracle),
+                                            ! 'little_group', or 'little_group_common'
 
 ! Density of states settings (for post_processing = 'density_of_states')
 ! **CRITICAL**: All energy values are in RYDBERGS (Ry), NOT eV!
@@ -53,7 +55,7 @@ character(len=16) :: green_backend         ! fill_green backend: 'lehmann' (E, S
 
 namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
    use_symmetry_reduction, use_time_reversal, strict_symmetry_checks, use_shift, &
-   dump_symmetry_kmap, tetra_symmetry_mode, &
+   dump_symmetry_kmap, tetra_symmetry_mode, q_symmetry_policy, &
    n_energy_points, dos_energy_min, dos_energy_max, &
    gaussian_sigma, temperature, total_electrons, dos_method, &
    auto_find_fermi, suppress_internal_logs, reciprocal_mode, &

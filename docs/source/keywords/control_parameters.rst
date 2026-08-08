@@ -760,6 +760,48 @@ iterations, analogous to charge mixing (``mixing``/``alpha``): ``q10_new
 
 **Related code:** ``source/electrostatics_multipole.f90``
 
+density_policy (WP7)
+--------------------
+
+**Type:** String
+
+**Default:** ``'constrained_spiral'``
+
+**Allowed values:** ``'constrained_spiral'``, ``'relaxed_reference'``
+
+**Purpose:** Selects how the shared rotating-frame spin density
+(``source/spin_density.f90``) is reduced to the variables the SCF mixes, and
+what the radial up/down projection axis means. Both solvers -- the real-space
+Green-function route and the k-space eigenvector route -- accumulate the full
+per-site, per-l 2x2 spin matrix first and project onto radial channels only
+afterwards, against the axis this policy resolves.
+
+- ``'constrained_spiral'`` -- the per-site reference direction is imposed and
+  held fixed. Only the charge and the *longitudinal* moment magnitude
+  ``m . ref`` are mixed; the transverse density ``m - (m . ref) ref`` and the
+  torque ``ref x m`` are reported per site as the constraint residual
+  (``DENSITY_POLICY`` log lines) rather than absorbed.
+- ``'relaxed_reference'`` -- the full rotating-frame Cartesian moment is mixed
+  and the per-sublattice reference axis follows it, while the single-q ansatz
+  is retained. The transverse residual and torque vanish identically.
+
+**Example:**
+
+.. code-block:: fortran
+
+   density_policy = 'relaxed_reference'
+
+**Notes:**
+
+- On a single-sublattice collinear ferromagnet the two policies coincide, as
+  they must: the accumulated moment is already parallel to the reference.
+- The projection axis is always stated explicitly; a stale ``potential%mom``
+  is never used as an implicit projection definition.
+
+**Related code:** ``source/spin_density.f90``, ``source/bands.f90``
+(``accumulate_spin_density_rs``, ``resolve_density_axes``),
+``source/reciprocal_spin_density.f90``
+
 hyperfine
 ---------
 

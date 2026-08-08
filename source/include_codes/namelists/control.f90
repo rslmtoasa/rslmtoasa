@@ -7,6 +7,7 @@ logical :: gpu_plugin
 logical :: dipole_electrostatics
 character(len=sl) :: calctype, recur, cond_type, cond_calctype, gpu_backend, cheb_backend
 character(len=sl) :: linear_in, linear_out
+character(len=sl) :: density_policy
 ! Constraints are provided in a separate namelist file `constraints.f90`
 
 namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
@@ -14,4 +15,4 @@ namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    svac, calctype, txc, blockrec, partype, do_cochg, asd_jij, terminator, conca, &
    concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, cheb_backend, &
    random_vec_num, cond_ll, cond_type, cond_calctype, linear_in, linear_out, lmax, &
-   dipole_electrostatics, dipole_mix
+   dipole_electrostatics, dipole_mix, density_policy

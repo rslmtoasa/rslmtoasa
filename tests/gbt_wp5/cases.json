@@ -1,0 +1,166 @@
+{
+  "_description": "WP5 shared-bond RS/k-space convergence probes at q=0,+/-0.05.",
+  "cases": [
+    {
+      "name": "wp5_k4",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 4, "nk2": 4, "nk3": 4, "use_symmetry_reduction": false,
+          "use_time_reversal": false, "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_k6",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 6, "nk2": 6, "nk3": 6, "use_symmetry_reduction": false,
+          "use_time_reversal": false, "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_k8",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 8, "nk2": 8, "nk3": 8, "use_symmetry_reduction": false,
+          "use_time_reversal": false, "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_k12",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 12, "nk2": 12, "nk3": 12, "use_symmetry_reduction": false,
+          "use_time_reversal": false, "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_k16",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": { "nk1": 16, "nk2": 16, "nk3": 16, "use_symmetry_reduction": false,
+          "use_time_reversal": false, "dos_method": "gaussian", "gaussian_sigma": 0.01,
+          "temperature": 300.0, "reciprocal_mode": "ham_only" },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_rs12",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_rs20",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 20 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_rs28",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 28 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_rs36",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 36 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_rs44",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 44 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp5_green_l20_k8_eta002",
+      "case": "green_bccFe",
+      "timeout": 300,
+      "namelists": {
+        "calculation": { "post_processing": "kspace_green" },
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 20 },
+        "self": { "nstep": 0 },
+        "energy": { "energy_min": -1.0, "energy_max": 0.5, "channels_ldos": 300 },
+        "reciprocal": { "nk1": 8, "nk2": 8, "nk3": 8, "use_symmetry_reduction": false,
+          "use_time_reversal": false, "green_eta": 0.02 },
+        "hamiltonian": { "hoh": false, "magnetic_representation": "gbt_single_q",
+          "q_ss": [0.0, 0.0, 0.05], "theta_ss": 20.0 }
+      }
+    }
+  ]
+}

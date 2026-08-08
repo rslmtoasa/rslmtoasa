@@ -161,6 +161,7 @@ Alphabetical Listing (All Parameters)
 
 - ``dipole_electrostatics`` - Enable l=1 dipole surface/interface electrostatics (B6)
 - ``dipole_mix`` - SCF mixing fraction for the dipole moment Q10 (B6)
+- ``density_policy`` - Rotating-frame SCF density policy (WP7)
 - ``do_asd`` - Enable atomistic spin dynamics
 - ``do_cochg`` - Enable co-charge correction
 - ``do_comom`` - Enable co-moment correction
@@ -185,7 +186,6 @@ Alphabetical Listing (All Parameters)
 
 **G**
 
-- ``gbt_kspace`` - Bloch-sum the GBT spiral block for spiral bands (B1)
 - ``gf_route`` - Route selector for Green's-function producer: recursion/lehmann/dyson (B2/B5)
 - ``green_backend`` - k-space Green's-function backend: lehmann/dyson (B2)
 - ``green_eta`` - Retarded broadening for the k-space Green's function (B2)

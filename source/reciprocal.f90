@@ -47,6 +47,7 @@ module reciprocal_mod
    use timer_mod, only: g_timer
    use symmetry_mod, only: symmetry
    use basis_mod, only: nb, norb
+   use spin_density_mod, only: spin_density
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
 #ifdef USE_MPI
    use mpi
@@ -103,6 +104,9 @@ module reciprocal_mod
       complex(rp), dimension(:, :, :), allocatable :: hk_total
       !> Overlap matrix in k-space
       complex(rp), dimension(:, :, :), allocatable :: sk_overlap
+      !> Hamiltonian operator_generation used to build the current H(k) and
+      !> every spectrum/DOS/density object derived from it.
+      integer :: cached_operator_generation
       !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
       !> or 'generalized_overlap_kanpur'.
       character(len=32) :: reciprocal_mode
@@ -169,6 +173,10 @@ module reciprocal_mod
       real(rp), dimension(:, :, :, :), allocatable :: projected_dos
       !> Band moments [m0, m1, m2] for each projection
       real(rp), dimension(:, :, :, :), allocatable :: band_moments
+      !> WP7 shared rotating-frame density contract, filled by the k-space
+      !> producer `accumulate_spin_density_kspace`. `band_moments` is projected
+      !> out of THIS object, after accumulation, against its own explicit axis.
+      type(spin_density) :: rf_density
       !> Directional DOS x-component [n_energy_points]
       real(rp), dimension(:), allocatable :: dos_mx_tot
       !> Directional DOS y-component [n_energy_points]
@@ -187,7 +195,15 @@ module reciprocal_mod
       real(rp) :: fermi_level
       !> Total number of valence electrons for Fermi level finding
       real(rp) :: total_electrons
-      !> Flag to automatically find Fermi level from DOS
+      !> Projection-free electron count from the current eigenvalue occupations.
+      real(rp) :: canonical_electron_count
+      !> Projection-free occupied-eigenvalue band energy for the current spectrum.
+      real(rp) :: canonical_band_energy
+      !> Global raw k-weight sum used by the canonical normalization contract.
+      real(rp) :: canonical_weight_sum
+      !> True only after the current eigensystem has been evaluated canonically.
+      logical :: canonical_energy_valid
+      !> Flag to automatically find Fermi level from the current eigensystem
       logical :: auto_find_fermi
       !> Number of sites for projections
       integer :: n_sites
@@ -226,6 +242,30 @@ module reciprocal_mod
       !> Irreducible-k representative indices in full mesh
       integer, dimension(:), allocatable :: irred_to_full_k
 
+      !> WP8: BZ-reduction policy for finite-q GBT (has_nonzero_q_gbt()).
+      !>   'full_bz'              -> always the full chemical-cell BZ; the WP0
+      !>                             default and the oracle every other policy
+      !>                             is checked against.
+      !>   'little_group'         -> reduce by the little group of the current
+      !>                             hamiltonian%q_ss (rebuilt whenever q_ss
+      !>                             changes; see ensure_kpoint_mesh).
+      !>   'little_group_common'  -> reduce by the subgroup common to every
+      !>                             q-point a caller declares in one
+      !>                             ensure_kpoint_mesh(q_list_cart=...) call
+      !>                             -- one mesh valid for an entire multi-q
+      !>                             sweep instead of a per-q rebuild.
+      character(len=32) :: q_symmetry_policy
+      !> Cache key describing the (lattice, mesh, offset, q-set, policy) tuple
+      !> the current k_points/k_weights were built for. ensure_kpoint_mesh
+      !> compares against this before reusing the mesh, so a sweep can never
+      !> silently reuse one q's (or one policy's) mesh for another.
+      logical :: mesh_cache_valid
+      integer :: mesh_cache_dims(3)
+      real(rp) :: mesh_cache_offset(3)
+      real(rp) :: mesh_cache_lattice(3, 3)
+      character(len=32) :: mesh_cache_policy
+      real(rp), dimension(:, :), allocatable :: mesh_cache_q
+
       ! Real-space neighbor vectors per atom type (for multi-site H_k)
       !> Neighbor vectors for each atom type [3, nn_max, ntype]
       !> These are the R vectors for Fourier transform H(k) = Σ_R H(R) e^(ik·R)
@@ -247,8 +287,6 @@ module reciprocal_mod
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
-      procedure :: fourier_transform_gbt
-      procedure :: fourier_transform_gbt_array
       procedure :: fourier_transform_hamiltonian_second_order
       procedure :: fourier_transform_array
       procedure :: fourier_transform_overlap
@@ -257,6 +295,9 @@ module reciprocal_mod
       procedure :: check_multisite_hamiltonian_diagonal
       procedure :: build_kspace_overlap
       procedure :: diagonalize_hamiltonian
+      procedure :: has_nonzero_q_gbt
+      procedure :: validate_nonzero_q_gbt
+      procedure :: force_full_bz_for_nonzero_q_gbt
       procedure :: print_kanpur_mapping
       procedure :: check_overlap_properties
       procedure :: run_gamma_bounds_diagnostics
@@ -277,7 +318,13 @@ module reciprocal_mod
       procedure :: project_dos_orbitals_gaussian
       procedure :: project_dos_orbitals_tetrahedron
       procedure :: calculate_band_moments
-   procedure :: print_total_and_spin_dos
+      procedure :: accumulate_spin_density_kspace
+      procedure :: fill_band_moments_from_spin_density
+      procedure :: print_total_and_spin_dos
+      procedure :: evaluate_eigenvalue_occupations
+      procedure :: find_fermi_level_from_eigenvalues
+      procedure :: calculate_canonical_band_energy
+      procedure :: calculate_band_energy_from_total_dos
       procedure :: calculate_band_energy_from_moments
       procedure :: calculate_adaptive_sigma
       procedure :: find_fermi_level_from_dos
@@ -286,9 +333,13 @@ module reciprocal_mod
       procedure :: calculate_gaussian_weight_single
       procedure :: write_dos_to_file
       procedure :: restore_to_default
+      procedure :: invalidate_spectral_cache
+      procedure :: invalidate_if_operator_changed
       procedure :: build_from_file
       procedure :: set_kpoint_mesh
       procedure :: generate_reduced_kpoint_mesh
+      procedure :: generate_little_group_kpoint_mesh
+      procedure :: ensure_kpoint_mesh
       procedure :: validate_symmetry_kmap
       procedure :: write_symmetry_kmap_dump
       procedure :: ensure_tetra_symmetry_backend
@@ -459,28 +510,6 @@ module reciprocal_mod
       !       here; they are only included in the second-order path
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
    end subroutine fourier_transform_hamiltonian
-
-   !> @brief Generalized-Bloch-theorem spin-spiral k-space Hamiltonian.
-   !> @param[in] this Reciprocal object with the collinear reference Hamiltonian.
-   !> @param[in] k_vec k-point vector (fractional coordinates).
-   !> @param[out] hk_result Packed GBT k-space Hamiltonian matrix.
-   module subroutine fourier_transform_gbt(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
-      real(rp), dimension(3), intent(in) :: k_vec
-      complex(rp), dimension(:, :), intent(out) :: hk_result
-   end subroutine fourier_transform_gbt
-
-   !> @brief GBT Fourier transform for one spinor neighbor/type block array.
-   !> @param[in] this Reciprocal object with neighbor-vector tables.
-   !> @param[in] array4d Spinor block array indexed by orbital, neighbor, and type.
-   !> @param[in] k_vec k-point vector (fractional coordinates).
-   !> @param[out] mk_result Packed GBT k-space matrix.
-   module subroutine fourier_transform_gbt_array(this, array4d, k_vec, mk_result)
-      class(reciprocal), intent(in) :: this
-      complex(rp), dimension(:, :, :, :), intent(in) :: array4d
-      real(rp), dimension(3), intent(in) :: k_vec
-      complex(rp), dimension(:, :), intent(out) :: mk_result
-   end subroutine fourier_transform_gbt_array
 
    !> @brief Fourier transform an arbitrary neighbor/type block array.
    !> @details Applies the reciprocal neighbor map to a (orbital, orbital,
@@ -654,6 +683,26 @@ end subroutine print_hamiltonian_structure
       ! Check prerequisites
    end subroutine diagonalize_hamiltonian
 
+   !> @brief Return whether the legacy reciprocal GBT path has a finite q vector.
+   !> @details WP0 treats this state specially: only the bare first-order
+   !>          operator is permitted while the bond-gauge implementation is pending.
+   module logical function has_nonzero_q_gbt(this)
+      class(reciprocal), intent(in) :: this
+   end function has_nonzero_q_gbt
+
+   !> @brief Reject nonzero-q GBT combinations whose operator transformation is unverified.
+   !> @param[in] context Caller name included in fatal diagnostics.
+   module subroutine validate_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: context
+   end subroutine validate_nonzero_q_gbt
+
+   !> @brief Disable symmetry/time-reversal reduction and rebuild a full chemical BZ mesh for finite-q GBT.
+   module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context
+   end subroutine force_full_bz_for_nonzero_q_gbt
+
    !> @brief Print mapping diagnostics for the Kanpur generalized-overlap path.
    !> @param[in] this Reciprocal object containing basis and overlap metadata.
    module subroutine print_kanpur_mapping(this)
@@ -754,6 +803,66 @@ end subroutine print_hamiltonian_structure
 
    end subroutine generate_reduced_kpoint_mesh
 
+   !> @brief Generate a k-mesh reduced by the little group common to one or
+   !>        more q-points.
+   !> @details A spin spiral lowers the crystal symmetry to the subgroup of
+   !>          point-group operations that leave q_ss invariant; reducing by
+   !>          the full point group is an invalid BZ integral for q_ss != 0
+   !>          (docs/dev/plans/B1_gbt_frozen_magnons_v2.md section 3.1). With
+   !>          q_list_cart absent, uses the single current hamiltonian%q_ss.
+   !>          With q_list_cart present (Cartesian, 2*pi/alat units, one
+   !>          column per q), reduces by the subgroup common to every column
+   !>          -- the "common subgroup" option a multi-q sweep can use to
+   !>          build one mesh valid for the whole sweep. Falls back to the
+   !>          full mesh, with a single logged info message, if spglib is
+   !>          unavailable or the little group cannot be determined.
+   !> @param[inout] this Reciprocal object receiving reduced-mesh data.
+   !> @param[in] mesh_dims Full mesh dimensions.
+   !> @param[in] use_shift Optional flag selecting shifted-grid generation.
+   !> @param[in] q_list_cart Optional explicit q-point set (Cartesian, one column per q).
+   module subroutine generate_little_group_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: mesh_dims(3)
+      logical, intent(in), optional :: use_shift
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+      integer :: shift(3)
+      integer :: num_ir_kpoints
+      logical :: do_shift, effective_time_reversal
+      real(rp), allocatable :: kpoints_frac(:,:), weights(:), q_frac(:,:)
+      integer, allocatable :: full_to_irred(:), irred_to_full(:)
+
+   end subroutine generate_little_group_kpoint_mesh
+
+   !> @brief Ensure k_points/k_weights match the (lattice, mesh, offset, q-set,
+   !>        policy) tuple currently in effect, rebuilding only if not.
+   !> @details The single entry point call sites (in particular multi-q
+   !>          sweeps) should use instead of the historical
+   !>          `if (.not. allocated(this%k_points))` guard, which reuses
+   !>          whichever mesh happened to be built first -- silently wrong the
+   !>          moment q_ss, the mesh, the offset, or the policy changes
+   !>          in between calls (WP8). Dispatches to generate_mp_mesh,
+   !>          generate_reduced_kpoint_mesh, or generate_little_group_kpoint_mesh
+   !>          according to has_nonzero_q_gbt() and q_symmetry_policy, and
+   !>          invalidates every q-dependent eigensystem/DOS/density cache
+   !>          whenever it actually rebuilds the mesh.
+   !> @param[inout] this Reciprocal object receiving k_points/k_weights state.
+   !> @param[in] mesh_dims Full mesh dimensions.
+   !> @param[in] use_shift Optional flag selecting shifted-grid generation.
+   !> @param[in] q_list_cart Optional explicit q-point set for the
+   !>            'little_group_common' policy (Cartesian, one column per q).
+   !>            Ignored by every other policy, which reads hamiltonian%q_ss.
+   module subroutine ensure_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: mesh_dims(3)
+      logical, intent(in), optional :: use_shift
+      real(rp), intent(in), optional :: q_list_cart(:, :)
+      logical :: do_shift
+      real(rp) :: offset(3)
+      real(rp), allocatable :: q_now(:, :)
+      logical :: key_matches
+
+   end subroutine ensure_kpoint_mesh
+
    !> @brief Write a complex matrix and its k-point label to a text file.
    !> @param[in] matrix Matrix to dump.
    !> @param[in] filename Output file name.
@@ -799,6 +908,23 @@ end subroutine print_hamiltonian_structure
       character(len=100) :: filename
 
    end subroutine calculate_density_of_states
+
+   !> @brief Invalidate eigensystem, DOS, projection, and canonical-energy state.
+   !> @details K-point geometry and weights are retained so a frozen-potential
+   !>          probe can rebuild on the same mesh without reusing stale spectra.
+   module subroutine invalidate_spectral_cache(this)
+      class(reciprocal), intent(inout) :: this
+   end subroutine invalidate_spectral_cache
+
+   !> @brief Drop reciprocal caches when the shared real-space operator changed.
+   !> @param[inout] this Reciprocal object owning operator-derived caches.
+   !> @param[in] context_tag Caller label used in the invalidation diagnostic.
+   !> @param[out] changed Optional flag reporting a generation mismatch.
+   module subroutine invalidate_if_operator_changed(this, context_tag, changed)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in) :: context_tag
+      logical, intent(out), optional :: changed
+   end subroutine invalidate_if_operator_changed
 
    !> @brief Validate full-to-irreducible k-point symmetry maps.
    !> @param[inout] this Reciprocal object containing symmetry maps and weights.
@@ -1235,17 +1361,25 @@ end subroutine project_dos_orbitals_gaussian
 !> @param[inout] this Reciprocal object receiving band_moments.
 module subroutine calculate_band_moments(this)
    class(reciprocal), intent(inout) :: this
-
-   integer :: isite, iorb, ispin, ie, n_energy
-   real(rp) :: energy, dos_value, fermi_weight
-   real(rp) :: m0, m1, m2
-   real(rp), dimension(:), allocatable :: integrand, fermi_dist
-   real(rp) :: kT, fermi_arg
-   real(rp) :: total_occupation, expected_electrons, total_occupation_alt
-      real(rp), allocatable :: energy_grid_ry(:)
-      real(rp), parameter :: eV_to_Ry = 0.073498618_rp
-
 end subroutine calculate_band_moments
+
+!> @brief WP7 k-space producer for the shared rotating-frame density contract.
+!> @param[inout] this Reciprocal object whose `rf_density` is filled.
+module subroutine accumulate_spin_density_kspace(this)
+   class(reciprocal), intent(inout) :: this
+end subroutine accumulate_spin_density_kspace
+
+!> @brief Project the accumulated density onto radial band moments.
+!> @param[inout] this      Reciprocal object receiving band_moments.
+!> @param[in]    policy    SCF density policy governing the axis choice.
+!> @param[in]    reference Per-site reference directions (3, n_sites).
+!> @param[out]   axis_out  Per-site axis actually used (3, n_sites).
+module subroutine fill_band_moments_from_spin_density(this, policy, reference, axis_out)
+   class(reciprocal), intent(inout) :: this
+   character(len=*), intent(in) :: policy
+   real(rp), dimension(:, :), intent(in) :: reference
+   real(rp), dimension(:, :), intent(out) :: axis_out
+end subroutine fill_band_moments_from_spin_density
 
    !> @brief Print total and spin-resolved DOS occupation diagnostics.
    !> @param[in] this Reciprocal object containing DOS and projected DOS arrays.
@@ -1261,6 +1395,33 @@ end subroutine calculate_band_moments
       real(rp), parameter :: kB_Ry_per_K = 6.3336814e-6_rp
 
    end subroutine print_total_and_spin_dos
+
+!> @brief Evaluate normalized Fermi-Dirac electron count and eigenvalue EBAND.
+!> @details Each rank accumulates only its owned eigenvalues.  The three raw
+!>          sums (weight, occupation, energy) are reduced together exactly once
+!>          when the mesh is distributed, then occupation and energy are divided
+!>          by the explicit global weight sum.
+   module subroutine evaluate_eigenvalue_occupations(this, fermi_level, electron_count, band_energy, weight_sum)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: fermi_level
+      real(rp), intent(out) :: electron_count, band_energy
+      real(rp), intent(out), optional :: weight_sum
+   end subroutine evaluate_eigenvalue_occupations
+
+!> @brief Find EF directly from eigenvalues, k weights, and Fermi occupations.
+   module function find_fermi_level_from_eigenvalues(this, total_electrons) result(fermi_level)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: total_electrons
+      real(rp) :: fermi_level
+   end function find_fermi_level_from_eigenvalues
+
+!> @brief Set/validate EF and return the canonical occupied-eigenvalue EBAND.
+   module function calculate_canonical_band_energy(this, find_fermi, electron_count) result(eband)
+      class(reciprocal), intent(inout) :: this
+      logical, intent(in), optional :: find_fermi
+      real(rp), intent(out), optional :: electron_count
+      real(rp) :: eband
+   end function calculate_canonical_band_energy
 
 !> @brief Find the Fermi level matching a target electron count.
 !> @param[in] this Reciprocal object containing DOS/NOS information.
@@ -1319,6 +1480,12 @@ end function integrate_dos_up_to_energy
       integer :: isite, iorb, ispin
       
    end function calculate_band_energy_from_moments
+
+   !> @brief Diagnostic integral of E*D_total(E)*f(E) on the configured DOS grid.
+   module function calculate_band_energy_from_total_dos(this) result(eband)
+      class(reciprocal), intent(in) :: this
+      real(rp) :: eband
+   end function calculate_band_energy_from_total_dos
 
    !> @brief Evaluate one normalized Gaussian smearing weight.
    !> @param[in] this Reciprocal object containing gaussian_sigma/adaptive settings.

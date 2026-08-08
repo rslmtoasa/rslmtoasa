@@ -40,9 +40,18 @@ module bands_mod
    use mpi
 #endif
    use basis_mod, only: nb, norb, spin_off, lmax_basis
+   use spin_density_mod, only: spin_density, sd_orders, sd_producer_rs, &
+                               sd_matrix_from_cartesian, &
+                               sd_constrained_spiral, sd_relaxed_reference
    implicit none
 
    private
+
+   !> Absolute tolerance of the WP7 density physicality assertions. Loose enough
+   !> to absorb the recursion terminator's DOS noise on the integrated density,
+   !> tight enough that a genuinely wrong producer (wrong spin convention, wrong
+   !> conjugation, missing 1/pi) cannot pass.
+   real(rp), parameter :: density_physicality_tol = 1.0e-6_rp
 
    !> Module´s main structure
    type, public :: bands
@@ -75,8 +84,6 @@ module bands_mod
       real(rp), dimension(:, :, :, :, :), allocatable :: d_orb
       !> Projected Green Function
       complex(rp), dimension(:, :, :, :), allocatable :: g0_x, g0_y, g0_z
-      !> Energy bands (?)
-      real(rp), dimension(:, :, :), allocatable :: dspd
       real(rp) :: eband
       !> Magnetic force
       real(rp), dimension(:, :), allocatable :: mag_for
@@ -84,7 +91,13 @@ module bands_mod
       real(rp), dimension(:, :), allocatable :: hubbard_u_eff_old
       !> Convergence flag for self-consistent Hubbard U updates
       logical :: hubbard_u_converged
+      !> WP7 shared rotating-frame density contract, filled by the real-space
+      !> producer `accumulate_spin_density_rs`. The radial up/down channels the
+      !> SCF consumes are projected out of THIS object, after accumulation,
+      !> against its own explicit axis -- never from `potential%mom` inline.
+      type(spin_density) :: rf_density
    contains
+      procedure :: accumulate_spin_density_rs
       procedure :: calculate_projected_green
       procedure :: calculate_projected_dos
       procedure :: calculate_orbital_dos
@@ -156,7 +169,6 @@ contains
       if (allocated(this%g0_x)) call g_safe_alloc%deallocate('bands.g0_x', this%g0_x)
       if (allocated(this%g0_y)) call g_safe_alloc%deallocate('bands.g0_y', this%g0_y)
       if (allocated(this%g0_z)) call g_safe_alloc%deallocate('bands.g0_z', this%g0_z)
-      if (allocated(this%dspd)) call g_safe_alloc%deallocate('bands.dspd', this%dspd)
       if (allocated(this%d_orb)) call g_safe_alloc%deallocate('bands.ddw', this%d_orb)
       if (allocated(this%mag_for)) call g_safe_alloc%deallocate('bands.mag_for', this%mag_for)
       if (allocated(this%hubbard_u_eff_old)) call g_safe_alloc%deallocate('bands.hubbard_u_eff_old', this%hubbard_u_eff_old)
@@ -172,7 +184,6 @@ contains
       if (allocated(this%g0_x)) deallocate (this%g0_x)
       if (allocated(this%g0_y)) deallocate (this%g0_y)
       if (allocated(this%g0_z)) deallocate (this%g0_z)
-      if (allocated(this%dspd)) deallocate (this%dspd)
       if (allocated(this%d_orb)) deallocate (this%d_orb)
       if (allocated(this%mag_for)) deallocate (this%mag_for)
       if (allocated(this%hubbard_u_eff_old)) deallocate (this%hubbard_u_eff_old)
@@ -197,7 +208,6 @@ contains
       call g_safe_alloc%allocate('bands.g0_x', this%g0_x, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.g0_y', this%g0_y, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.g0_z', this%g0_z, (/norb, norb, this%en%channels_ldos + 10, atoms_per_process/))
-      call g_safe_alloc%allocate('bands.dspd', this%dspd, (/2*(lmax_basis + 1), this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.d_orb', this%d_orb, (/norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process/))
       call g_safe_alloc%allocate('bands.mag_for', this%mag_for, (/3, atoms_per_process/))
       call g_safe_alloc%allocate('bands.hubbard_u_eff_old', this%hubbard_u_eff_old, (/max(1, this%lattice%ntype), 4/))
@@ -210,7 +220,6 @@ contains
       allocate (this%g0_x(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%g0_y(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%g0_z(norb, norb, this%en%channels_ldos + 10, atoms_per_process))
-      allocate (this%dspd(2*(lmax_basis + 1), this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%d_orb(norb, norb, 3, this%en%channels_ldos + 10, atoms_per_process))
       allocate (this%mag_for(3, atoms_per_process))
       allocate (this%hubbard_u_eff_old(max(1, this%lattice%ntype), 4))
@@ -224,7 +233,6 @@ contains
       this%g0_x(:, :, :, :) = 0.0d0
       this%g0_y(:, :, :, :) = 0.0d0
       this%g0_z(:, :, :, :) = 0.0d0
-      this%dspd(:, :, :) = 0.0d0
       this%d_orb(:, :, :, :, :) = 0.0d0
       this%mag_for(:, :) = 0.0d0
       this%hubbard_u_eff_old(:, :) = 0.0d0
@@ -654,6 +662,179 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
+   !> WP7 real-space producer for the shared rotating-frame density contract.
+   !>
+   !> Accumulates, per site and per angular channel, the COMPLETE rotating-frame
+   !> 2x2 spin density matrix of the three energy moments the radial SCF needs,
+   !>
+   !>   order 1: int rho(E) dE,  order 2: int E rho(E) dE,  order 3: int E^2 rho(E) dE,
+   !>
+   !> from the on-site Green function. The Hermitian density built from a
+   !> retarded G is rho = (i/2pi)(G - G^dagger), i.e. in Cartesian components
+   !>
+   !>   n   = -Im(G_uu + G_dd)/pi        m_z = -Im(G_uu - G_dd)/pi
+   !>   m_x = -Im(G_ud + G_du)/pi        m_y = -Im(i G_ud - i G_du)/pi
+   !>
+   !> which is exactly the four-channel combination the pre-WP7 `dspd`
+   !> accumulation used -- the difference is that no projection axis appears
+   !> here at all. Projection onto radial up/down happens afterwards, in
+   !> `calculate_moments`, against the object's own explicit axis.
+   !>
+   !> @param[inout] sd Density contract, sized (nrec, lmax_basis+1). Zeroed on
+   !>                  entry and MPI-reduced on exit, so every rank holds the
+   !>                  same global object.
+   !---------------------------------------------------------------------------
+   subroutine accumulate_spin_density_rs(this, sd)
+      use mpi_mod
+      class(bands) :: this
+      type(spin_density), intent(inout) :: sd
+
+      integer :: na, na_glob, l, m, o, ie, iorder
+      real(rp), dimension(this%en%channels_ldos + 10) :: dn, dmx, dmy, dmz
+      real(rp) :: cart(4)
+      complex(rp) :: blk(2, 2)
+      complex(rp) :: guu, gdd, gud, gdu
+#ifdef USE_MPI
+      real(rp), allocatable :: rho_comm(:, :)
+      integer :: nflat
+#endif
+
+      call sd%zero_density()
+      sd%producer = sd_producer_rs
+
+      do na_glob = start_atom, end_atom
+         na = g2l_map(na_glob)
+         do l = 1, lmax_basis + 1
+            dn = 0.0_rp; dmx = 0.0_rp; dmy = 0.0_rp; dmz = 0.0_rp
+            do m = 1, 2*l - 1
+               o = (l - 1)**2 + m
+               do ie = 1, this%en%channels_ldos
+                  guu = this%green%g0(o, o, ie, na)
+                  gdd = this%green%g0(o + spin_off, o + spin_off, ie, na)
+                  gud = this%green%g0(o, o + spin_off, ie, na)
+                  gdu = this%green%g0(o + spin_off, o, ie, na)
+                  dn(ie) = dn(ie) - aimag(guu + gdd)
+                  dmz(ie) = dmz(ie) - aimag(guu - gdd)
+                  dmy(ie) = dmy(ie) - aimag(i_unit*gud - i_unit*gdu)
+                  dmx(ie) = dmx(ie) - aimag(gud + gdu)
+               end do
+            end do
+            dn(:) = dn(:)/pi
+            dmx(:) = dmx(:)/pi
+            dmy(:) = dmy(:)/pi
+            dmz(:) = dmz(:)/pi
+
+            do iorder = 1, sd_orders
+               call simpson_m(cart(1), this%en%edel, this%en%fermi, this%nv1, dn, this%e1, iorder - 1, this%en%ene)
+               call simpson_m(cart(2), this%en%edel, this%en%fermi, this%nv1, dmx, this%e1, iorder - 1, this%en%ene)
+               call simpson_m(cart(3), this%en%edel, this%en%fermi, this%nv1, dmy, this%e1, iorder - 1, this%en%ene)
+               call simpson_m(cart(4), this%en%edel, this%en%fermi, this%nv1, dmz, this%e1, iorder - 1, this%en%ene)
+               call sd_matrix_from_cartesian(cart(1), cart(2:4), blk)
+               call sd%accumulate_block(na_glob, l, iorder, blk)
+            end do
+         end do
+      end do
+
+#ifdef USE_MPI
+      ! One global object on every rank: each rank owns a disjoint atom range,
+      ! so a plain sum reduction is the assembly.
+      nflat = 2*size(sd%rho)
+      allocate (rho_comm(nflat, 1))
+      rho_comm(1:nflat:2, 1) = real(reshape(sd%rho, [size(sd%rho)]), rp)
+      rho_comm(2:nflat:2, 1) = aimag(reshape(sd%rho, [size(sd%rho)]))
+      call MPI_ALLREDUCE(MPI_IN_PLACE, rho_comm, nflat, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      sd%rho = reshape(cmplx(rho_comm(1:nflat:2, 1), rho_comm(2:nflat:2, 1), rp), shape(sd%rho))
+      deallocate (rho_comm)
+#endif
+   end subroutine accumulate_spin_density_rs
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Resolve and state the explicit radial projection axis of every site
+   !> through the active WP7 SCF policy.
+   !>
+   !> `potential%mom` enters here as the site's *reference direction* only --
+   !> the imposed spiral/cone reference under `constrained_spiral`, the starting
+   !> point under `relaxed_reference`. It is never read again as a projection
+   !> definition: the axis handed to `set_axis` is what every later projection
+   !> uses, and under `relaxed_reference` it is written back so the reference
+   !> genuinely follows the accumulated density.
+   !>
+   !> Under `constrained_spiral` the transverse density that the fixed reference
+   !> cannot absorb is reported per site as the constraint residual and torque.
+   !---------------------------------------------------------------------------
+   subroutine resolve_density_axes(sd, symbolic_atoms, nbulk, nrec)
+      type(spin_density), intent(inout) :: sd
+      class(symbolic_atom), dimension(:), intent(inout) :: symbolic_atoms
+      integer, intent(in) :: nbulk, nrec
+
+      integer :: ia, plusbulk
+      real(rp) :: axis(3), reference(3), m_transverse(3), torque(3)
+      real(rp) :: site_charge, m_long, trans_norm
+
+      do ia = 1, nrec
+         plusbulk = nbulk + ia
+         reference(:) = symbolic_atoms(plusbulk)%potential%mom(:)
+         if (sqrt(sum(reference(:)**2)) <= 1.0e-12_rp) reference(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+
+         call sd%resolve_site_axis(ia, reference, axis, site_charge, m_long, m_transverse, torque)
+         call sd%set_axis(ia, axis)
+
+         select case (trim(sd%policy))
+         case (sd_constrained_spiral)
+            trans_norm = sqrt(sum(m_transverse(:)**2))
+            if (rank == 0) then
+               call g_logger%info('DENSITY_POLICY constrained_spiral atom'//fmt('i4', ia)// &
+                                  ' m_long='//fmt('f10.6', m_long)// &
+                                  ' |m_transverse|='//fmt('f10.6', trans_norm)// &
+                                  ' torque=('//fmt('f10.6', torque(1))//','// &
+                                  fmt('f10.6', torque(2))//','//fmt('f10.6', torque(3))//')', &
+                                  __FILE__, __LINE__)
+            end if
+         case (sd_relaxed_reference)
+            ! The reference axis follows the full rotating-frame Cartesian
+            ! moment; the single-q ansatz is untouched.
+            symbolic_atoms(plusbulk)%potential%mom(:) = axis(:)
+            if (rank == 0) then
+               call g_logger%info('DENSITY_POLICY relaxed_reference atom'//fmt('i4', ia)// &
+                                  ' |m|='//fmt('f10.6', m_long)// &
+                                  ' axis=('//fmt('f10.6', axis(1))//','// &
+                                  fmt('f10.6', axis(2))//','//fmt('f10.6', axis(3))//')', &
+                                  __FILE__, __LINE__)
+            end if
+         end select
+      end do
+   end subroutine resolve_density_axes
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Run the WP7 density physicality assertions (Hermiticity, non-negative
+   !> eigenvalues, trace, |m| <= n) and abort loudly on a violation.
+   !>
+   !> This is a true correctness boundary, not a defensive guard on an internal
+   !> routine: an unphysical accumulated density means the producer or the
+   !> Green function feeding it is wrong, and continuing would silently push
+   !> that into the radial SCF.
+   !---------------------------------------------------------------------------
+   subroutine assert_density_physical(sd, caller)
+      type(spin_density), intent(in) :: sd
+      character(len=*), intent(in) :: caller
+
+      logical :: ok
+      character(len=256) :: message
+
+      call sd%check_physicality(density_physicality_tol, ok, message)
+      if (.not. ok) then
+         call g_logger%fatal(caller//': rotating-frame density failed a physicality ' // &
+                             'assertion -- '//trim(message)//'.', __FILE__, __LINE__)
+      end if
+   end subroutine assert_density_physical
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
    !> Calculates the moments m^(q), q = 0, 1 and 2
    !---------------------------------------------------------------------------
    subroutine calculate_moments(this)
@@ -702,28 +883,21 @@ contains
       nchan_spin = lmax_basis + 1
       nchan = 2*nchan_spin
 
-      !print *,'AB debug: Finished Hubbard U check, starting moment calculation'
-      this%dspd(:, :, :) = 0.0d0
-      !do na=1, this%lattice%nrec
+      !=====================================================================
+      ! WP7: accumulate the full rotating-frame spin density FIRST, with no
+      ! axis anywhere in it, then resolve the explicit projection axis through
+      ! the SCF policy, then -- and only then -- project onto radial up/down.
+      ! Before WP7 the projection happened per energy point against whatever
+      ! `potential%mom` held, which made the axis implicit and left the two
+      ! solvers unable to be compared.
+      !=====================================================================
+      this%rf_density = spin_density(this%lattice%nrec, lmax_basis + 1)
+      this%rf_density%policy = trim(this%control%density_policy)
+      call this%accumulate_spin_density_rs(this%rf_density)
+
       do na_glob = start_atom, end_atom
-         !print *,'AB debug: Calculating moments for atom_glob='//fmt('i4', na_glob)
          na = g2l_map(na_glob)
          plusbulk = this%lattice%nbulk + na_glob
-         do isp = 1, 2
-            isgn = (-1.0d0)**(isp - 1)
-            soff = nchan_spin*(isp - 1)
-            do l = 1, lmax_basis + 1
-               do m = 1, 2*l - 1
-                  o = (l - 1)**2 + m
-                  do ie = 1, this%en%channels_ldos
-                     this%dspd(l + soff, ie, na) = this%dspd(l + soff, ie, na) - aimag(this%green%g0(o, o, ie, na) + this%green%g0(o +spin_off, o +spin_off, ie, na)) - &
-                                                   isgn*this%symbolic_atom(plusbulk)%potential%mom(3)*aimag(this%green%g0(o, o, ie, na) - this%green%g0(o +spin_off, o +spin_off, ie, na)) &
-                                                   - isgn*this%symbolic_atom(plusbulk)%potential%mom(2)*aimag(i_unit*this%green%g0(o, o +spin_off, ie, na) - i_unit*this%green%g0(o +spin_off, o, ie, na)) &
-                                                   - isgn*this%symbolic_atom(plusbulk)%potential%mom(1)*aimag(this%green%g0(o, o +spin_off, ie, na) + this%green%g0(o +spin_off, o, ie, na))
-                  end do
-               end do
-            end do
-         end do
          ! Rotate moments back to global frame if rotated earlier
          if (this%recursion%hamiltonian%local_axis) then
             call updatrotmom_single(this%symbolic_atom(plusbulk)%potential%mom, mom_prev(:, na))
@@ -737,33 +911,29 @@ contains
          end if
       end do
 
-      this%dspd(:, :, :) = this%dspd(:, :, :)*0.5d0/pi
+      call resolve_density_axes(this%rf_density, this%symbolic_atom, this%lattice%nbulk, this%lattice%nrec)
+      call assert_density_physical(this%rf_density, 'bands%calculate_moments')
 
       occ = 0.0d0; sums = 0.0d0; sump = 0.0d0; sumd = 0.0d0
       !do na=1, this%lattice%nrec
       do na_glob = start_atom, end_atom
          na = g2l_map(na_glob)
          do i = 1, nchan
-            y(:) = 0.0d0
             if (i > nchan_spin) then
                nsp = 2
             else
                nsp = 1
             end if
             soff = nchan_spin*(nsp - 1)
-            y(:) = this%dspd(i, :, na)
-            sgef = 0.0d0; pmef = 0.0d0; smef = 0.0d0
-            call simpson_m(sgef, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
-            call simpson_m(pmef, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 1, this%en%ene)
-            call simpson_m(smef, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 2, this%en%ene)
+            call this%rf_density%radial_band_moments(na_glob, i - soff, nsp, sgef, pmef, smef)
 
             occ(na_glob, i) = sgef
 
             if (abs(sgef) > epsilon) then
-               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%gravity_center(i - soff, nsp) = (pmef/sgef) - this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%vmad
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%gravity_center(i - soff, nsp) = pmef - this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%vmad
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, i - soff - 1, nsp) = sgef
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(2, i - soff - 1, nsp) = 0.0d0
-               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = smef - 2.0d0*(pmef/sgef)*pmef + ((pmef/sgef)**2)*sgef
+               this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = smef
             else
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%gravity_center(i - soff, nsp) = 0.0_rp
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, i - soff - 1, nsp) = 0.0_rp

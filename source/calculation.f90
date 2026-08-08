@@ -47,6 +47,7 @@ module calculation_mod
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
    private
@@ -1831,9 +1832,8 @@ contains
       ! for every q (magnetic force theorem).
       self_obj = self(bands_obj, mix_obj)
       use_kspace = self_obj%use_kspace
-      ! k-space runs use the GBT twist (reciprocal module), so ham0m_nc must NOT
-      ! rotate the moments by q_ss; real-space runs do the rotation (explicit spiral).
-      hamiltonian_obj%gbt_kspace = use_kspace
+      ! GBT is a magnetic representation shared by both solvers.
+      hamiltonian_obj%magnetic_representation = gbt_single_q
       hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
       call self_obj%run()
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
@@ -1849,17 +1849,44 @@ contains
          ! to return to its value at symmetry-equivalent q (e.g. the two Gamma points).
          if (use_kspace) then
             recip_obj = reciprocal(hamiltonian_obj)
-            if (.not. allocated(recip_obj%k_points)) then
-               if (recip_obj%use_symmetry_reduction) then
-                  call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-               else
-                  call recip_obj%generate_mp_mesh()
+            ! WP8: the mesh must never be built once from row 1's q_ss and
+            ! reused blindly for every other q in the sweep -- each policy
+            ! below either shares one mesh proven valid for the whole sweep,
+            ! or rebuilds per q inside the loop.
+            select case (trim(recip_obj%q_symmetry_policy))
+            case ('little_group_common')
+               ! One mesh, reduced by the little group common to every q in
+               ! the sweep (not just row 1's), valid for every probe below.
+               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
+                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
+                                                 q_list_cart=q_ss_cart)
+            case ('little_group')
+               ! Built per q inside the loop below.
+            case default   ! 'full_bz': WP0 oracle, unchanged from pre-WP8 behaviour.
+               if (.not. allocated(recip_obj%k_points)) then
+                  ! Every probe in one force-theorem difference must use the same
+                  ! integration contract.  If the sweep contains finite q, make
+                  ! the q=0 reference use the full chemical BZ as well.
+                  if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+                     recip_obj%use_symmetry_reduction = .false.
+                     recip_obj%use_time_reversal = .false.
+                     call recip_obj%generate_mp_mesh()
+                  else if (recip_obj%use_symmetry_reduction) then
+                     call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+                  else
+                     call recip_obj%generate_mp_mesh()
+                  end if
                end if
-            end if
+            end select
          end if
          do iq = 1, fm_obj%n_q
             hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+            if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
+               ! Rebuild (or, via the cache key, reuse if unchanged) for this
+               ! specific q -- never reuse another q's little-group mesh.
+               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+            end if
             eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
             etot_q(iq) = etot_ref   ! potential frozen; total energy not re-evaluated
          end do
@@ -1967,7 +1994,7 @@ contains
       hamiltonian_obj%theta_ss = 0.0_rp
       hamiltonian_obj%q_ss(:) = 0.0_rp
       self_obj = self(bands_obj, mix_obj)
-      hamiltonian_obj%gbt_kspace = self_obj%use_kspace
+      hamiltonian_obj%magnetic_representation = gbt_single_q
       call self_obj%run()
       use_kspace = self_obj%use_kspace
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
@@ -1993,16 +2020,38 @@ contains
       end do
 
       ! --- Force-theorem evaluator: build a k-space mesh once if in k-space mode. ---
+      ! WP8: the mesh must never be built once (from whatever q_ss happens to be
+      ! set here) and reused blindly for every other q in the sweep below --
+      ! each policy either shares one mesh proven valid for the whole sweep, or
+      ! rebuilds per q inside the loop.
       if (use_kspace) then
          recip_obj = reciprocal(hamiltonian_obj)
-         if (.not. allocated(recip_obj%k_points)) then
-            if (recip_obj%use_symmetry_reduction) then
-               call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                           sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-            else
-               call recip_obj%generate_mp_mesh()
+         select case (trim(recip_obj%q_symmetry_policy))
+         case ('little_group_common')
+            ! One mesh, reduced by the little group common to every q in the
+            ! sweep (not just row 1's), valid for every probe below.
+            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
+                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
+                                              q_list_cart=q_ss_cart)
+         case ('little_group')
+            ! q_ss is 0 here (reset below); build the ordinary q=0 mesh now so
+            ! the reference-energy probe has one. Per-nonzero-q rebuilds
+            ! happen inside the sweep loop below via the same cache key.
+            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+         case default   ! 'full_bz': WP0 oracle, unchanged from pre-WP8 behaviour.
+            if (.not. allocated(recip_obj%k_points)) then
+               if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+                  recip_obj%use_symmetry_reduction = .false.
+                  recip_obj%use_time_reversal = .false.
+                  call recip_obj%generate_mp_mesh()
+               else if (recip_obj%use_symmetry_reduction) then
+                  call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+               else
+                  call recip_obj%generate_mp_mesh()
+               end if
             end if
-         end if
+         end select
       end if
 
       ! Reference band energy (collinear) via the force theorem at the fixed potential;
@@ -2021,6 +2070,11 @@ contains
       allocate (omega_mat(nactive, nactive), eigvec(nactive, nactive), eval(nactive), single_energy(nactive))
       do iq = 1, fm_obj%n_q
          hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+         if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
+            ! Rebuild (or, via the cache key, reuse if unchanged) for this
+            ! specific q -- never reuse another q's little-group mesh (WP8).
+            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+         end if
          omega_mat(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
 
          ! Diagonal: single-sublattice tilt. d^2E/dtheta_i^2 / M_i, in omega = dE/dm_z units.
@@ -2115,7 +2169,7 @@ contains
    !>        current spiral/tilt config (set on the hamiltonian via q_ss + theta/phi_ss_sublattice).
    !> @details Rebuilds only the Hamiltonian (rotated moment directions, fixed potential
    !>        parameters) and evaluates the single-particle band energy through the k-space
-   !>        (build/diagonalize/DOS -> band energy from moments) or real-space recursion
+   !>        (build/diagonalize -> normalized eigenvalue occupations and EBAND) or real-space recursion
    !>        (recursion -> Green -> fermi -> band energy) path. No charge/potential update
    !>        is done, so the reference potential is held fixed across every probe -- this is
    !>        the Liechtenstein/MFT energy surface whose second derivatives give the magnon
@@ -2134,10 +2188,10 @@ contains
          if (use_kspace) then
             call recip_obj%build_kspace_hamiltonian()
             call recip_obj%diagonalize_hamiltonian()
-            call recip_obj%calculate_density_of_states(ham, n_energy_points=energy_obj%channels_ldos + 10, &
-                 energy_range=[energy_obj%energy_min, energy_obj%energy_max], fermi_level=energy_obj%fermi, &
-                 auto_find_fermi=.true.)
-            e_band = recip_obj%calculate_band_energy_from_moments()
+            ! MFT must not depend on DOS window/grid/projections.  This solves
+            ! EF from the target electron count and uses exactly those Fermi
+            ! occupations in sum_k,n w_k f_nk epsilon_nk.
+            e_band = recip_obj%calculate_canonical_band_energy(find_fermi=.true.)
          else
             select case (ctl%recur)
             case ('block')

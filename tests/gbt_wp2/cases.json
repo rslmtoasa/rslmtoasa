@@ -1,0 +1,106 @@
+{
+  "_description": "WP2 production-path probes for canonical reciprocal EBAND. Compare q=0 rows across DOS controls and use the fixed-potential auto probe for global rotation; no projected-DOS value is a golden source of truth.",
+  "cases": [
+    {
+      "name": "wp2_q0_theta20_narrow_dos",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -0.5, "energy_max": 0.2, "channels_ldos": 80 },
+        "reciprocal": {
+          "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "dos_method": "gaussian",
+          "gaussian_sigma": 0.01,
+          "temperature": 300.0,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q0_only.dat" }
+      }
+    },
+    {
+      "name": "wp2_q0_theta20_wide_dos",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 2500 },
+        "reciprocal": {
+          "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "dos_method": "gaussian",
+          "gaussian_sigma": 0.01,
+          "temperature": 300.0,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q0_only.dat" }
+      }
+    },
+    {
+      "name": "wp2_q0_fixed_potential_rotation",
+      "case": "../../scf/cases/frozen_magnon/bccFe_auto",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": {
+          "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "dos_method": "gaussian",
+          "gaussian_sigma": 0.01,
+          "temperature": 300.0,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": { "hoh": false },
+        "frozen_magnon": { "q_file": "q0_only.dat", "theta_probe": 20.0 }
+      }
+    },
+    {
+      "name": "wp4_finite_q_non_noop",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": true },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "reciprocal": {
+          "nk1": 4, "nk2": 4, "nk3": 4,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": false,
+          "dos_method": "gaussian",
+          "gaussian_sigma": 0.01,
+          "temperature": 300.0,
+          "reciprocal_mode": "ham_only"
+        },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    },
+    {
+      "name": "wp4_finite_q_realspace_consumer",
+      "case": "../../scf/cases/frozen_magnon/bccFe",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block", "lld": 12 },
+        "self": { "nstep": 1, "use_kspace": false },
+        "energy": { "energy_min": -2.0, "energy_max": 0.8, "channels_ldos": 500 },
+        "hamiltonian": { "hoh": false, "theta_ss": 20.0 },
+        "frozen_magnon": { "q_file": "q_pm.dat" }
+      }
+    }
+  ]
+}

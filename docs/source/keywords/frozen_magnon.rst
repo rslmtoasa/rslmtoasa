@@ -13,7 +13,8 @@ The ``&frozen_magnon`` namelist configures ``post_processing =
 and reporting a magnon dispersion :math:`\omega(q)`. It relies on the B1
 generalized-Bloch-theorem (GBT) fix in the spiral Hamiltonian block — see
 :ref:`keywords/hamiltonian_parameters` (``q_ss``, ``theta_ss``,
-``gbt_kspace``) and ``docs/dev/plans/B1_gbt_frozen_magnons.md``.
+``magnetic_representation='gbt_single_q'``) and
+``GBT_RS_LMTO_completion_blueprint.md``.
 
 The namelist is **optional**. It only has an effect when
 ``post_processing = 'frozen_magnon'`` (see :ref:`keywords/output_options`).
@@ -228,7 +229,7 @@ See Also
 ========
 
 - :ref:`keywords/hamiltonian_parameters` — ``q_ss``, ``theta_ss``,
-  ``gbt_kspace`` (the underlying GBT spiral machinery)
+  ``magnetic_representation='gbt_single_q'`` (the GBT representation)
 - :ref:`keywords/output_options` — ``post_processing = 'frozen_magnon'``
 - ``docs/dev/plans/B1_gbt_frozen_magnons.md`` — the GBT bug-fix spec and
   frozen-magnon workflow design

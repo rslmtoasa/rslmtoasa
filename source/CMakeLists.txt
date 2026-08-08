@@ -22,6 +22,9 @@ add_library(${PROJECT_NAME} STATIC
     frozen_magnon.f90
     globals.f90
     green.f90
+    magnetic_representation.f90
+    gbt_structure.f90
+    spin_density.f90
     #hamiltonian_base_mod.f90
     #hamiltonian_cpu_mod.f90
     hamiltonian.f90
@@ -49,11 +52,13 @@ add_library(${PROJECT_NAME} STATIC
     reciprocal_lifecycle.f90
     reciprocal_fourier.f90
     reciprocal_bands.f90
+    reciprocal_occupations.f90
     reciprocal_dos.f90
     reciprocal_projection.f90
     reciprocal_green.f90
     reciprocal_bsf.f90
     reciprocal_moments.f90
+    reciprocal_spin_density.f90
     region_registry.f90
     recursion.f90
     recursion_core.f90
