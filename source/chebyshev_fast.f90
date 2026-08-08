@@ -33,6 +33,13 @@ module chebyshev_fast_mod
    integer, parameter :: rp = selected_real_kind(15, 307)
    real(rp), parameter :: pi = 3.14159265358979323846_rp
 
+   !> @brief Cache-validity fingerprint for one cheb_cache_t buffer group.
+   !> @details A fingerprint records the problem size and scaling parameters an
+   !>          fp32 buffer group was built for. Each ensure_* routine compares
+   !>          the current call's parameters against its stored fingerprint. A
+   !>          mismatch marks the group invalid and forces a rebuild. valid
+   !>          starts false, so the first call always rebuilds.
+   !> @note Not MPI-aware. The cache assumes a single rank owns and reuses it.
    type :: cheb_cache_fingerprint_t
       logical :: valid = .false.
       integer :: nb = 0
@@ -47,6 +54,24 @@ module chebyshev_fast_mod
       logical :: hoh = .false.
    end type cheb_cache_fingerprint_t
 
+   !> @brief Per-process cache of fp32 Chebyshev operator, work, and pointer
+   !>        buffers.
+   !> @details The cache holds fp32 mirrors of the Hamiltonian, ortho, BSR, and
+   !>          velocity operator blocks (see the individual ensure_* routines
+   !>          for what each group contains), plus shared work buffers and MKL
+   !>          batch pointer arrays. Each group has its own
+   !>          cheb_cache_fingerprint_t, so a change to only one group (for
+   !>          example a new scaling window) does not invalidate the others.
+   !>          cheb_moments_fast and its batched, MKL, hoh, stochastic, and
+   !>          orbital variants read and populate this cache through the
+   !>          ensure_* type-bound procedures; callers never touch the
+   !>          pointers directly.
+   !> @note One module-level instance (cheb_cache, below) is shared by every
+   !>       recursion object in the process. It assumes a single MPI rank per
+   !>       process. It is not safe to share across ranks, and it is not safe
+   !>       to use from two recursion objects with different problem sizes at
+   !>       the same time: each ensure_* call rebuilds the cache for the
+   !>       CURRENT caller's shape.
    type :: cheb_cache_t
       complex(sp), pointer :: hee_cache(:, :, :, :) => null(), hha_cache(:, :, :, :) => null()
       complex(sp), pointer :: oee_cache(:, :, :, :) => null(), oha_cache(:, :, :, :) => null()
