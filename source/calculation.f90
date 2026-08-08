@@ -961,6 +961,38 @@ contains
 
    end subroutine post_processing_paoflow2rs
 
+   !> @brief Build the shared object stack for a post-processing driver.
+   !> @details The routine builds the pre-processing stage for calctype B, S, I,
+   !>          or L. If use_paoflow is true, it builds a PAOFLOW-imported
+   !>          Hamiltonian instead. It also builds the potential and the
+   !>          Hamiltonian. It does not run the recursion step or the
+   !>          Green's-function step; the caller runs those after this routine
+   !>          returns. Most post_processing_* drivers call this routine first
+   !>          (post_processing_orbital_modern, post_processing_band_structure,
+   !>          post_processing_bsf, and post_processing_density_of_states build
+   !>          their own stack instead).
+   !> @param[in] this Calculation object. Only fname is read.
+   !> @param[in] use_paoflow True builds a PAOFLOW Hamiltonian. False builds the
+   !>            normal RS-LMTO-ASA Hamiltonian for the current calctype.
+   !> @param[in] use_exchange_pairs True sizes MPI ranks over lattice%njij (atom
+   !>            pairs). False sizes them over lattice%ntype (atom types).
+   !> @param[in] energy_mesh_before_hamiltonian True builds the energy mesh
+   !>            before the Hamiltonian. False builds it after.
+   !> @param[in] stochastic_moments True runs compute_moments_stochastic once
+   !>            the recursion object exists.
+   !> @param[out] control_obj Control object, built from this%fname.
+   !> @param[out] lattice_obj Lattice object, built for the current calctype.
+   !> @param[out] charge_obj Charge object, with the calctype-specific Madelung
+   !>             matrices built.
+   !> @param[out] mix_obj Mixing object for the caller's self-consistency step.
+   !> @param[out] energy_obj Energy object; the energy mesh may already be built.
+   !> @param[out] hamiltonian_obj Hamiltonian object, with the potential and the
+   !>             bulk (and, for calctype I, local) blocks built.
+   !> @param[out] recursion_obj Recursion object, ready for a recur/recur_b/
+   !>             chebyshev_recur call.
+   !> @param[out] dos_obj Density-of-states object built on recursion_obj.
+   !> @param[out] green_obj Green object built on dos_obj.
+   !> @param[out] bands_obj Bands object built on green_obj.
    subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
                                              stochastic_moments, control_obj, lattice_obj, charge_obj, mix_obj, &
                                              energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
@@ -1105,6 +1137,15 @@ contains
       if (.not. energy_mesh_before_hamiltonian) call energy_obj%e_mesh()
    end subroutine prepare_post_processing_stack
 
+   !> @brief Run the intersite recursion pass that produces the moments for G_ij.
+   !> @details The routine reads control_obj%recur. For 'block' it calls
+   !>          recur_b_ij. For 'chebyshev' it calls chebyshev_recur_ij. The
+   !>          lanczos route has no intersite form, so the routine does nothing
+   !>          for it. Every exchange and kspace_green driver calls this routine
+   !>          before it fills green%gij through the real-space recursion route.
+   !> @param[in] control_obj Control object. Only recur is read.
+   !> @param[inout] recursion_obj Recursion object. The routine fills its
+   !>               pair-local moment arrays (a_b/b2_b or mu_n).
    subroutine run_intersite_moments(control_obj, recursion_obj)
       type(control), intent(in) :: control_obj
       type(recursion), intent(inout) :: recursion_obj
@@ -1117,6 +1158,15 @@ contains
       end select
    end subroutine run_intersite_moments
 
+   !> @brief Finish the Chebyshev DOS step and resolve the Fermi level.
+   !> @details The routine calls green%chebyshev_dos_dispatch to turn the
+   !>          Chebyshev transport moments into a Green's function. It then
+   !>          calls bands%calculate_fermi. Both conductivity drivers
+   !>          (post_processing_conductivity and post_processing_conductivity_p2rs)
+   !>          call this routine right before they build the conductivity tensor.
+   !> @param[inout] green_obj Green object. The Chebyshev DOS dispatch fills its
+   !>               Green's-function arrays.
+   !> @param[inout] bands_obj Bands object. calculate_fermi sets its Fermi level.
    subroutine finish_conductivity_moments(green_obj, bands_obj)
       type(green), intent(inout) :: green_obj
       type(bands), intent(inout) :: bands_obj
@@ -1125,6 +1175,13 @@ contains
       call bands_obj%calculate_fermi()
    end subroutine finish_conductivity_moments
 
+   !> @brief Exchange (J_ij) post-processing for a PAOFLOW-imported Hamiltonian.
+   !> @details The routine builds the post-processing stack with a PAOFLOW
+   !>          Hamiltonian, runs the intersite recursion pass, fills the
+   !>          eta-broadened intersite Green's function, and evaluates J_ij
+   !>          with the Gauss-Legendre exchange integrator. It always uses the
+   !>          real-space recursion route; it has no gf_route dispatch.
+   !> @param[in] this Calculation object. fname selects the namelist input.
    subroutine post_processing_exchange_p2rs(this)
       class(calculation), intent(in) :: this
 
@@ -1152,6 +1209,21 @@ contains
       call exchange_obj%calculate_exchange_gauss_legendre()
    end subroutine post_processing_exchange_p2rs
 
+   !> @brief Exchange (J_ij) post-processing, with an optional Gilbert-damping
+   !>        evaluation (B2.5/B5.3 dispatch).
+   !> @details The routine builds the post-processing stack, then fills
+   !>          green%gij (and the torque families) through the route named in
+   !>          this%gf_route. Route 'recursion' runs the real-space intersite
+   !>          recursion pass. Routes 'lehmann' and 'dyson' fill the same
+   !>          arrays from the k-space engine (reciprocal%fill_green). Every
+   !>          route fills the same canonical arrays, so
+   !>          calculate_intersite_gf_twoindex and the exchange evaluation run
+   !>          unchanged after this point. When this%do_damping is true, the
+   !>          routine also evaluates the on-site Kambersky torque-correlation
+   !>          Gilbert damping from the same green%gij.
+   !> @param[in] this Calculation object. Reads fname, gf_route, and do_damping.
+   !> @note The damping term needs SOC in the potential (xi_p/xi_d). The
+   !>       k-space routes also need kspace_ham_order='second'.
    subroutine post_processing_exchange(this)
       use sigma_provider_mod, only: sigma_zero
       class(calculation), intent(in) :: this
@@ -1235,6 +1307,17 @@ contains
    end subroutine post_processing_exchange
 
 
+   !> @brief Conductivity-tensor post-processing (B5.1 dispatch).
+   !> @details The routine picks the source of the Chebyshev transport moments
+   !>          (mu_nm_stochastic) from this%gf_route. Route 'recursion' runs
+   !>          the stochastic moment generator inside prepare_post_processing_stack.
+   !>          Routes 'lehmann' and 'dyson' fill the same array exactly from the
+   !>          k-space eigenpairs (reciprocal%fill_moments), on the same
+   !>          Chebyshev scaling window the recursion route uses
+   !>          (resolve_chebyshev_window). Either way, calculate_gamma_nm and
+   !>          calculate_conductivity_tensor then run unchanged on
+   !>          mu_nm_stochastic.
+   !> @param[in] this Calculation object. Reads fname and gf_route.
    subroutine post_processing_conductivity(this)
       class(calculation), intent(in) :: this
 
@@ -1291,6 +1374,13 @@ contains
    end subroutine post_processing_conductivity
 
 
+   !> @brief Conductivity-tensor post-processing for a PAOFLOW-imported
+   !>        Hamiltonian.
+   !> @details The routine builds the post-processing stack with a PAOFLOW
+   !>          Hamiltonian and always runs the real-space stochastic moment
+   !>          generator. There is no gf_route dispatch here: a PAOFLOW
+   !>          Hamiltonian has no k-space reciprocal build.
+   !> @param[in] this Calculation object. fname selects the namelist input.
    subroutine post_processing_conductivity_p2rs(this)
       class(calculation), intent(in) :: this
 
@@ -1318,6 +1408,15 @@ contains
    end subroutine post_processing_conductivity_p2rs
 
 
+   !> @brief Orbital-moment post-processing entry point.
+   !> @details The routine builds its own control/lattice/charge/hamiltonian/
+   !>          recursion/green/bands/mix stack for the current calctype (B, S,
+   !>          I, or L). It predates prepare_post_processing_stack and is not
+   !>          routed through it. It then calls
+   !>          recursion%chebyshev_orbital_mod, which is always the Chebyshev
+   !>          route and loops over every cluster atom rather than only the
+   !>          recursion atoms.
+   !> @param[in] this Calculation object. fname selects the namelist input.
    subroutine post_processing_orbital_modern(this)
       class(calculation), intent(in) :: this
 
@@ -1451,6 +1550,14 @@ contains
       self_obj = self(bands_obj, mix_obj)
    end subroutine post_processing_orbital_modern
 
+   !> @brief k-space band-structure post-processing entry point.
+   !> @details The routine builds a bulk-only pre-processing stack directly
+   !>          (bravais, structb, atomlist, bulkmat, potential build,
+   !>          Hamiltonian build). It does not support surface, impurity, or
+   !>          interface calctypes. It then calls
+   !>          reciprocal%calculate_band_structure along an automatic
+   !>          high-symmetry path and writes band_structure.dat.
+   !> @param[in] this Calculation object. fname selects the namelist input.
    subroutine post_processing_band_structure(this)
       class(calculation), intent(in) :: this
       type(control), target :: control_obj
@@ -1513,6 +1620,13 @@ contains
       call reciprocal_obj%calculate_bsf('bsf.dat')
    end subroutine post_processing_bsf
 
+   !> @brief k-space density-of-states post-processing entry point.
+   !> @details The routine builds the same bulk-only stack as
+   !>          post_processing_band_structure. It then calls
+   !>          reciprocal%calculate_density_of_states with the method, energy
+   !>          range, temperature, and Fermi-search settings from the
+   !>          &reciprocal namelist, and writes dos_kspace.dat.
+   !> @param[in] this Calculation object. fname selects the namelist input.
    subroutine post_processing_density_of_states(this)
       class(calculation), intent(in) :: this
       type(control), target :: control_obj
@@ -1809,6 +1923,31 @@ contains
       end if
    end subroutine post_processing_frozen_magnon
 
+   !> @brief Single acoustic-branch frozen-magnon sweep (fm_obj%branch_mode
+   !>        /= 'auto' path of post_processing_frozen_magnon).
+   !> @details For mode='mft' the routine converges the reference potential
+   !>          once, at q_ss_list(:,1). It then reuses that fixed potential for
+   !>          one force-theorem band-energy probe (frozen_magnon_probe_energy)
+   !>          at every other q. A k-space run picks its q-mesh policy
+   !>          (little_group, little_group_common, or full_bz) from
+   !>          reciprocal%q_symmetry_policy. For mode='scf' the routine fully
+   !>          re-converges the potential at every q instead. Either way it
+   !>          builds the Halilov-style dispersion
+   !>          omega(q) = 4*(E(q)-E(q_ref)) / (M_tot*sin^2(theta_ss)), with
+   !>          M_tot summed over sublattices at the reference point, and writes
+   !>          fm_obj%output_file.
+   !> @param[in] fm_obj Frozen-magnon namelist settings (q list, mode, output
+   !>            file).
+   !> @param[in] q_ss_cart Cartesian spin-spiral q vectors for the sweep, one
+   !>            column per q, in 2*pi/alat units. Row 1 is the reference point.
+   !> @param[inout] lattice_obj Lattice object from prepare_post_processing_stack.
+   !> @param[inout] hamiltonian_obj Hamiltonian object; q_ss is set to each
+   !>               sweep point in turn.
+   !> @param[inout] bands_obj Bands object used by the force-theorem probe.
+   !> @param[inout] mix_obj Mixing object for the self-consistency runs.
+   !> @param[inout] self_obj Self object; (re)constructed here and run once per
+   !>               q in mode='scf'.
+   !> @param[inout] energy_obj Energy object used by the force-theorem probe.
    subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, energy_obj)
       type(frozen_magnon), intent(in) :: fm_obj
       real(rp), intent(in) :: q_ss_cart(:, :)
@@ -2120,6 +2259,15 @@ contains
       if (allocated(hamiltonian_obj%phi_ss_sublattice)) deallocate (hamiltonian_obj%phi_ss_sublattice)
    end subroutine post_processing_frozen_magnon_auto
 
+   !> @brief Read the collinear reference axis for every sublattice type.
+   !> @details The routine sets ref_theta to 0 (moment up) or pi (moment down)
+   !>          from the sign of the converged z-moment. It sets ref_phi to 0
+   !>          for every type. post_processing_frozen_magnon_auto uses these
+   !>          reference angles as the zero point for its small cone-angle tilt
+   !>          probes.
+   !> @param[in] lattice_obj Lattice object. Reads symbolic_atoms(:)%potential%mom(3).
+   !> @param[out] ref_theta Reference polar angle per sublattice type, radians.
+   !> @param[out] ref_phi Reference azimuthal angle per sublattice type, radians.
    subroutine set_reference_sublattice_angles(lattice_obj, ref_theta, ref_phi)
       type(lattice), intent(in) :: lattice_obj
       real(rp), intent(out) :: ref_theta(:), ref_phi(:)
@@ -2212,6 +2360,15 @@ contains
       end associate
    end function frozen_magnon_probe_energy
 
+   !> @brief Diagonalize the real symmetric magnon dynamical matrix.
+   !> @details The routine calls LAPACK zheev on mat. It returns the magnon
+   !>          branch energies in eval, ascending order, and the mode
+   !>          eigenvectors in mat, in place. It raises a fatal error if mat is
+   !>          not square, if eval does not match its dimension, or if zheev
+   !>          reports a nonzero info.
+   !> @param[inout] mat Magnon dynamical matrix on input; eigenvectors (mode
+   !>               amplitudes and phases) on output.
+   !> @param[out] eval Magnon branch energies, ascending order.
    subroutine diagonalize_frozen_magnon_matrix(mat, eval)
       complex(rp), intent(inout) :: mat(:, :)
       real(rp), intent(out) :: eval(:)
@@ -2235,6 +2392,25 @@ contains
       deallocate (work, rwork)
    end subroutine diagonalize_frozen_magnon_matrix
 
+   !> @brief Write the metadata header lines for the auto branch-mode output files.
+   !> @details The routine writes the sweep configuration (q-file coordinates,
+   !>          theta_probe, active-moment threshold, reference energies) and
+   !>          the active-sublattice list to frozen_magnon_branches.dat and
+   !>          frozen_magnon_modes.dat. post_processing_frozen_magnon_auto
+   !>          writes the per-q data rows after these headers.
+   !> @param[in] branch_unit Open file unit for frozen_magnon_branches.dat.
+   !> @param[in] modes_unit Open file unit for frozen_magnon_modes.dat.
+   !> @param[in] fm_obj Frozen-magnon namelist settings.
+   !> @param[in] q_ss_cart Cartesian spin-spiral q vectors for the sweep (only
+   !>            its coordinate convention is recorded here).
+   !> @param[in] theta_probe Cone-angle used for the finite-difference probes,
+   !>            radians.
+   !> @param[in] active_rec Sublattice index of each active sublattice.
+   !> @param[in] active_type Atom-type index of each active sublattice.
+   !> @param[in] active_moment Reference moment magnitude of each active
+   !>            sublattice.
+   !> @param[in] etot_ref Reference total energy at the collinear ground state.
+   !> @param[in] eband_ref Reference band energy at the collinear ground state.
    subroutine write_frozen_magnon_auto_headers(branch_unit, modes_unit, fm_obj, q_ss_cart, theta_probe, active_rec, &
                                                active_type, active_moment, etot_ref, eband_ref)
       integer, intent(in) :: branch_unit, modes_unit
