@@ -290,6 +290,9 @@ module reciprocal_mod
       procedure :: fourier_transform_hamiltonian_second_order
       procedure :: fourier_transform_array
       procedure :: fourier_transform_overlap
+      procedure :: fold_kpoint
+      procedure :: build_hamiltonian_at_kpoint
+      procedure :: calculate_eigenpairs_at_kpoints
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
       procedure :: check_multisite_hamiltonian_diagonal
@@ -565,6 +568,46 @@ module reciprocal_mod
       complex(rp), dimension(:, :), allocatable :: overlap_block
 
    end subroutine fourier_transform_overlap
+
+   !> @brief Fold a fractional reciprocal-space point into [-1/2,1/2).
+   !> @details Folding is component-wise in reciprocal lattice units, so k and
+   !>          k+G are represented by exactly the same Bloch Hamiltonian.
+   !> @param[in] this Reciprocal object (kept for a uniform type-bound API).
+   !> @param[in] k_point Arbitrary fractional reciprocal-space point.
+   !> @param[out] k_folded Equivalent point in the reciprocal primitive cell.
+   module subroutine fold_kpoint(this, k_point, k_folded)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: k_point(3)
+      real(rp), intent(out) :: k_folded(3)
+   end subroutine fold_kpoint
+
+   !> @brief Construct the normal-state reciprocal Hamiltonian at one arbitrary k point.
+   !> @details This does not touch k_points, hk_bulk, or any bands/DOS cache.
+   !>          It uses the same first/second-order selection and Fourier terms as
+   !>          build_kspace_hamiltonian.
+   module subroutine build_hamiltonian_at_kpoint(this, k_point, hk_result)
+      class(reciprocal), intent(inout) :: this
+      real(rp), intent(in) :: k_point(3)
+      complex(rp), intent(out) :: hk_result(:, :)
+   end subroutine build_hamiltonian_at_kpoint
+
+   !> @brief Return caller-owned eigenpairs at arbitrary reciprocal-space points.
+   !> @details Points are folded into the reciprocal primitive cell, repeated
+   !>          folded points are solved once, and no standard mesh/bands/DOS
+   !>          state is overwritten.  The routine is intentionally local to the
+   !>          caller, making it suitable for an outer MPI-over-q decomposition.
+   !> @param[in] this Reciprocal object with a completed normal-state Hamiltonian.
+   !> @param[in] k_points Arbitrary fractional reciprocal points, shape (3,nk).
+   !> @param[out] eigenvalues Caller-owned array, shape (nband,nk).
+   !> @param[out] eigenvectors Caller-owned array, shape (nbasis,nband,nk).
+   !> @param[out] folded_k_points Optional caller-owned folded points, shape (3,nk).
+   module subroutine calculate_eigenpairs_at_kpoints(this, k_points, eigenvalues, eigenvectors, folded_k_points)
+      class(reciprocal), intent(inout) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      real(rp), allocatable, intent(out) :: eigenvalues(:, :)
+      complex(rp), allocatable, intent(out) :: eigenvectors(:, :, :)
+      real(rp), allocatable, intent(out), optional :: folded_k_points(:, :)
+   end subroutine calculate_eigenpairs_at_kpoints
 
    !> @brief Configure MPI ownership for a k-point set.
    !> @param[inout] this Reciprocal object receiving local/global k maps.

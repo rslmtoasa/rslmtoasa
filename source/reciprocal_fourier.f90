@@ -244,6 +244,207 @@ contains
       deallocate(overlap_block, structure_factors)
    end subroutine fourier_transform_overlap
 
+   !> Fold an arbitrary fractional reciprocal point into the first reciprocal
+   !> cell.  The half-open convention [-1/2,1/2) gives one canonical
+   !> representative while retaining the exact exp(i 2*pi*k.R) phase for every
+   !> lattice translation R.
+   module subroutine fold_kpoint(this, k_point, k_folded)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: k_point(3)
+      real(rp), intent(out) :: k_folded(3)
+
+      k_folded = k_point - floor(k_point + 0.5_rp)
+   end subroutine fold_kpoint
+
+   !> Build the normal-state H(k) at one arbitrary k point without consulting
+   !> or changing the active reciprocal mesh.  This is the single assembly
+   !> route shared by mesh bands/DOS and response-style arbitrary-k callers.
+   module subroutine build_hamiltonian_at_kpoint(this, k_point, hk_result)
+      class(reciprocal), intent(inout) :: this
+      real(rp), intent(in) :: k_point(3)
+      complex(rp), intent(out) :: hk_result(:, :)
+
+      ! The neighbor table is a geometry cache, not a k-mesh cache.  It is the
+      ! only object-local setup this service needs and never alters k_points,
+      ! hk_bulk, eigenvalues, or DOS arrays.
+      call this%build_neighbor_vectors()
+      call assemble_hamiltonian_at_kpoint(this, k_point, hk_result)
+   end subroutine build_hamiltonian_at_kpoint
+
+   !> Return caller-owned eigenpairs at arbitrary fractional reciprocal points.
+   !> Points supplied as k+q are folded only by reciprocal lattice vectors; no
+   !> nearest-mesh mapping is ever performed.  Exact duplicate folded points
+   !> within this call share one eigensolve, which is useful for repeated q
+   !> work while keeping the service MPI-local and side-effect free for the
+   !> standard bands/DOS mesh.
+   module subroutine calculate_eigenpairs_at_kpoints(this, k_points, eigenvalues, eigenvectors, folded_k_points)
+      class(reciprocal), intent(inout) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      real(rp), allocatable, intent(out) :: eigenvalues(:, :)
+      complex(rp), allocatable, intent(out) :: eigenvectors(:, :, :)
+      real(rp), allocatable, intent(out), optional :: folded_k_points(:, :)
+
+      integer :: nk, nmat, ik, iu, nunique
+      integer, allocatable :: representative(:), unique_of_k(:)
+      real(rp), allocatable :: folded(:, :)
+      complex(rp), allocatable :: hk(:, :)
+      logical :: use_generalized
+
+      if (size(k_points, 1) /= 3) then
+         call g_logger%error('calculate_eigenpairs_at_kpoints: k_points must have shape (3,nk).', __FILE__, __LINE__)
+         return
+      end if
+      if (.not. associated(this%lattice) .or. .not. associated(this%hamiltonian)) then
+         call g_logger%error('calculate_eigenpairs_at_kpoints: reciprocal object is not initialized.', __FILE__, __LINE__)
+         return
+      end if
+      call this%validate_nonzero_q_gbt('reciprocal%calculate_eigenpairs_at_kpoints')
+
+      nk = size(k_points, 2)
+      nmat = nb*this%lattice%nrec
+      if (nmat <= 0) then
+         call g_logger%error('calculate_eigenpairs_at_kpoints: invalid reciprocal basis size.', __FILE__, __LINE__)
+         return
+      end if
+
+      allocate(eigenvalues(nmat, nk), eigenvectors(nmat, nmat, nk))
+      allocate(folded(3, nk), representative(nk), unique_of_k(nk))
+      do ik = 1, nk
+         call this%fold_kpoint(k_points(:, ik), folded(:, ik))
+      end do
+      if (present(folded_k_points)) then
+         allocate(folded_k_points(3, nk))
+         folded_k_points = folded
+      end if
+
+      ! Only bit-identical canonical points are cached.  A tolerance-based
+      ! merge would turn two distinct off-mesh Hamiltonians into an
+      ! approximation, which is not acceptable for the response definition.
+      nunique = 0
+      do ik = 1, nk
+         unique_of_k(ik) = 0
+         do iu = 1, nunique
+            if (all(folded(:, ik) == folded(:, representative(iu)))) then
+               unique_of_k(ik) = iu
+               exit
+            end if
+         end do
+         if (unique_of_k(ik) == 0) then
+            nunique = nunique + 1
+            representative(nunique) = ik
+            unique_of_k(ik) = nunique
+         end if
+      end do
+
+      use_generalized = trim(this%reciprocal_mode) == 'generalized_overlap_proxy'
+      call this%build_neighbor_vectors()
+      allocate(hk(nmat, nmat))
+      do iu = 1, nunique
+         ik = representative(iu)
+         call assemble_hamiltonian_at_kpoint(this, folded(:, ik), hk)
+         call diagonalize_single_kpoint(this, folded(:, ik), hk, use_generalized, &
+                                        eigenvalues(:, ik), eigenvectors(:, :, ik))
+      end do
+      do ik = 1, nk
+         iu = unique_of_k(ik)
+         if (representative(iu) /= ik) then
+            eigenvalues(:, ik) = eigenvalues(:, representative(iu))
+            eigenvectors(:, :, ik) = eigenvectors(:, :, representative(iu))
+         end if
+      end do
+
+      deallocate(hk, folded, representative, unique_of_k)
+   end subroutine calculate_eigenpairs_at_kpoints
+
+   !> Shared single-point Hamiltonian assembly.  Keeping this underneath both
+   !> build_kspace_hamiltonian and the arbitrary-k API ensures that SOC,
+   !> non-collinearity, Hubbard/CCOR blocks, and second-order terms follow the
+   !> normal reciprocal calculation automatically.
+   subroutine assemble_hamiltonian_at_kpoint(this, k_point, hk_result)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: k_point(3)
+      complex(rp), intent(out) :: hk_result(:, :)
+      real(rp) :: k_folded(3)
+      logical :: use_second_order
+
+      call this%fold_kpoint(k_point, k_folded)
+      select case (trim(this%kspace_ham_order))
+      case ('second')
+         use_second_order = .true.
+      case ('first')
+         use_second_order = .false.
+      case default
+         use_second_order = this%hamiltonian%hoh
+      end select
+      if (use_second_order .and. (.not. this%hamiltonian%hoh .or. .not. allocated(this%hamiltonian%eeo))) then
+         use_second_order = .false.
+      end if
+
+      if (use_second_order) then
+         call this%fourier_transform_hamiltonian_second_order(k_folded, hk_result)
+      else
+         call this%fourier_transform_hamiltonian(k_folded, hk_result)
+      end if
+   end subroutine assemble_hamiltonian_at_kpoint
+
+   !> Solve one normal-state reciprocal eigenproblem using the same LAPACK
+   !> convention as diagonalize_hamiltonian.  The optional proxy overlap is
+   !> formed locally so the standard sk_overlap mesh cache remains untouched.
+   subroutine diagonalize_single_kpoint(this, k_point, hk, use_generalized, eigenvals, eigenvecs)
+      class(reciprocal), intent(in) :: this
+      real(rp), intent(in) :: k_point(3)
+      complex(rp), intent(in) :: hk(:, :)
+      logical, intent(in) :: use_generalized
+      real(rp), intent(out) :: eigenvals(:)
+      complex(rp), intent(out) :: eigenvecs(:, :)
+
+      integer :: nmat, lwork, info
+      complex(rp), allocatable :: h_copy(:, :), s_copy(:, :), work(:)
+      real(rp), allocatable :: rwork(:)
+      complex(rp) :: work_query(1)
+      real(rp) :: max_herm, matrix_scale
+
+      nmat = size(hk, 1)
+      if (size(hk, 2) /= nmat .or. size(eigenvals) /= nmat .or. &
+          size(eigenvecs, 1) /= nmat .or. size(eigenvecs, 2) /= nmat) then
+         call g_logger%fatal('diagonalize_single_kpoint: inconsistent eigensystem dimensions.', __FILE__, __LINE__)
+      end if
+      max_herm = maxval(abs(hk - transpose(conjg(hk))))
+      matrix_scale = max(1.0_rp, maxval(abs(hk)))
+      if (max_herm > 1.0e-10_rp*matrix_scale) then
+         call g_logger%fatal('diagonalize_single_kpoint: H(k) is non-Hermitian before eigensolution.', __FILE__, __LINE__)
+      end if
+
+      allocate(h_copy(nmat, nmat), rwork(max(1, 3*nmat - 2)))
+      h_copy = hk
+      if (use_generalized) then
+         allocate(s_copy(nmat, nmat))
+         call this%fourier_transform_overlap(k_point, s_copy)
+         call this%check_overlap_properties(1, s_copy)
+      end if
+
+      if (use_generalized) then
+         call zhegv(1, 'V', 'U', nmat, h_copy, nmat, s_copy, nmat, eigenvals, work_query, -1, rwork, info)
+      else
+         call zheev('V', 'U', nmat, h_copy, nmat, eigenvals, work_query, -1, rwork, info)
+      end if
+      lwork = max(1, int(real(work_query(1), rp)))
+      allocate(work(lwork))
+      h_copy = hk
+      if (use_generalized) then
+         call this%fourier_transform_overlap(k_point, s_copy)
+         call zhegv(1, 'V', 'U', nmat, h_copy, nmat, s_copy, nmat, eigenvals, work, lwork, rwork, info)
+      else
+         call zheev('V', 'U', nmat, h_copy, nmat, eigenvals, work, lwork, rwork, info)
+      end if
+      if (info /= 0) then
+         call g_logger%fatal('diagonalize_single_kpoint: LAPACK eigensolver failed.', __FILE__, __LINE__)
+      end if
+      eigenvecs = h_copy
+      if (allocated(s_copy)) deallocate(s_copy)
+      deallocate(h_copy, rwork, work)
+   end subroutine diagonalize_single_kpoint
+
    !> @brief Build H(k) for every active mesh or path k-point.
    !> @details Allocates hk_bulk/hk_total as needed, dispatches first- or
    !>          second-order Fourier transforms, and applies local k ownership.
@@ -254,7 +455,6 @@ contains
       integer :: ik, ik_global, nk, ntype
       character(len=200) :: debug_msg
       logical :: using_kpath, distribute_mesh
-      logical :: use_second_order
       integer :: i, j
 
       call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
@@ -311,55 +511,18 @@ contains
    allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
-      ! Decide first- vs second-order k-space Hamiltonian.
-      ! Resolution of kspace_ham_order:
-      !   'auto'   -> 'second' if hoh is enabled, else 'first' (default)
-      !   'second' -> force second order
-      !   'first'  -> force first order
-      ! Second order requires the orthogonalization arrays (eeo/enim/lsham),
-      ! which are only built when the real-space Hamiltonian was assembled with
-      ! hoh enabled. Fall back to first order with a warning otherwise.
-      select case (trim(this%kspace_ham_order))
-      case ('second')
-         use_second_order = .true.
-      case ('first')
-         use_second_order = .false.
-      case default  ! 'auto'
-         use_second_order = this%hamiltonian%hoh
-         if (use_second_order) then
-            call root_info('build_kspace_hamiltonian: kspace_ham_order=auto and hoh enabled ' // &
-               '-> using second order', __FILE__, __LINE__)
-         end if
-      end select
-      if (use_second_order) then
-         if (.not. this%hamiltonian%hoh .or. .not. allocated(this%hamiltonian%eeo)) then
-            call g_logger%warning('build_kspace_hamiltonian: second-order H(k) requires ' // &
-               'hoh-enabled Hamiltonian (eeo not available). Falling back to first order.', __FILE__, __LINE__)
-            use_second_order = .false.
-         else
-            call root_info('build_kspace_hamiltonian: using SECOND-order H(k) = E_nu + h - hoh + L.S', __FILE__, __LINE__)
-         end if
-      end if
-
       ! Parallelize over k-points (coarse-grained) when OpenMP is available.
 #ifdef _OPENMP
-      !$omp parallel do private(ik, ik_global) shared(this, using_kpath, use_second_order) default(none)
+      !$omp parallel do private(ik, ik_global) shared(this, using_kpath) default(none)
 #endif
       do ik = 1, this%nk_local
          ik_global = local_k_index_to_global(this, ik)
-         ! Fourier transform: builds full multi-site H(k)
-         if (use_second_order) then
-            if (using_kpath) then
-               call this%fourier_transform_hamiltonian_second_order(this%k_path(:, ik), this%hk_bulk(:, :, ik))
-            else
-               call this%fourier_transform_hamiltonian_second_order(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
-            end if
+         ! Fourier transform: builds full multi-site H(k) through the same
+         ! single-point assembly used by arbitrary-k response callers.
+         if (using_kpath) then
+            call assemble_hamiltonian_at_kpoint(this, this%k_path(:, ik), this%hk_bulk(:, :, ik))
          else
-            if (using_kpath) then
-               call this%fourier_transform_hamiltonian(this%k_path(:, ik), this%hk_bulk(:, :, ik))
-            else
-               call this%fourier_transform_hamiltonian(this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
-            end if
+            call assemble_hamiltonian_at_kpoint(this, this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
          end if
       end do
 #ifdef _OPENMP
