@@ -1,0 +1,35 @@
+{
+  "material": "deterministic one-mode transverse fixture (not a material benchmark)",
+  "goldstone_file": "goldstone.dat",
+  "modes_file": "modes.dat",
+  "chi0_file": "chi0.dat",
+  "dyson_file": "dyson.dat",
+  "q_points": [
+    {"q_direct": [0.0, 0.0, 0.0]},
+    {"q_direct": [0.05, 0.0, 0.0]},
+    {"q_direct": [0.10, 0.0, 0.0]}
+  ],
+  "eta_sweep": [
+    {"eta_Ry": 0.001, "observed_fwhm_Ry": 0.008},
+    {"eta_Ry": 0.002, "observed_fwhm_Ry": 0.011},
+    {"eta_Ry": 0.003, "observed_fwhm_Ry": 0.014}
+  ],
+  "convergence": [
+    {"axis": "k_mesh", "values": [4, 8], "stable": true},
+    {"axis": "band_window", "values": [2, 4], "stable": true},
+    {"axis": "response_projection", "values": ["site", "site+l"], "stable": true},
+    {"axis": "electronic_smearing", "values": [100, 300], "stable": true},
+    {"axis": "eta", "values": [0.001, 0.002, 0.003], "stable": true},
+    {"axis": "frequency_grid", "values": [81, 161], "stable": true}
+  ],
+  "independent_routes": {
+    "GBT": {"D_Ry_per_q2": 4.05, "provenance": "external corrected GBT/frozen-magnon output"},
+    "Jij": {"D_Ry_per_q2": 3.95, "provenance": "external Jij-derived stiffness"}
+  },
+  "acceptance": {
+    "max_raw_goldstone_residual": 0.01,
+    "min_magnetization_overlap": 0.99,
+    "max_stiffness_relative_residual": 0.001,
+    "max_eta_fit_relative_residual": 0.001
+  }
+}

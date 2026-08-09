@@ -12,6 +12,9 @@ the case-file format and how to add cases:
   recursion modes).
 - [`postproc/README.md`](postproc/README.md) — example post-processing suite (exchange,
   conductivity, bands, DOS, orbital moments, PAOFLOW import).
+- [`regression/tddft_validation/README.md`](regression/tddft_validation/README.md) —
+  deterministic transverse LR-TDDFT evidence fixture and the material-campaign
+  manifest checker.
 
 ## Regenerating references
 

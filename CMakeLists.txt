@@ -462,6 +462,12 @@ foreach(_i RANGE ${_triad_last})
   set_tests_properties("Triad_${_triad_name}" PROPERTIES
     LABELS "regression;triad" TIMEOUT "${_triad_timeout}")
 endforeach()
+
+# Small no-binary fixture: keep TDDFT output parsing and scientific reporting
+# policy live in the same CI runs as the other regression infrastructure.
+add_test(NAME TddftValidationCampaign
+  COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/tddft_validation/test_validation.py")
+set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "regression;tddft;backend;quick" TIMEOUT 30)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

@@ -1,0 +1,5 @@
+# quantity = bare chi_KS; no TDDFT enhancement; eta is numerical broadening
+# record omega_Ry kind left_channel right_channel Re_chi_Ry^-1 Im_chi_Ry^-1 spectral_Ry^-1
+0.0000000000000000e+00 trace 0 0 0.0 0.0 1.0000000000000000e-02
+1.0000000000000000e-02 trace 0 0 0.0 0.0 1.2000000000000000e-02
+4.0000000000000001e-02 trace 0 0 0.0 0.0 1.5000000000000000e-02

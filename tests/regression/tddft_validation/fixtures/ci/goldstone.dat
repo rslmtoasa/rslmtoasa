@@ -1,0 +1,7 @@
+# Xi = chi_KS K_perp; K_perp provenance = xc_response_kernel
+# raw Goldstone diagnostics are retained when sum_rule is active
+# sum_rule_requested = T
+# sum_rule_applied = T
+raw_magnetization_overlap 9.9900000000000000e-01
+raw_residual 5.0000000000000001e-03
+sum_rule_corrected_residual 0.0000000000000000e+00
