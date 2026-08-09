@@ -53,6 +53,7 @@ module tddft_modes_mod
       integer, allocatable :: classification(:)
       character(len=48), allocatable :: classification_label(:)
       type(tddft_peak_fit), allocatable :: fit(:)
+      real(rp) :: analysis_cpu_seconds = 0.0_rp
    end type tddft_mode_result
 
    public :: analyze_tddft_modes
@@ -70,7 +71,7 @@ contains
       type(tddft_mode_options), intent(in) :: options
       type(tddft_mode_result), intent(out) :: result
       integer :: n, nw, nq, iq, iw, imode, best_iw, best_mode
-      real(rp) :: best_distance, distance, previous_overlap, candidate_overlap
+      real(rp) :: best_distance, distance, previous_overlap, candidate_overlap, t_start, t_stop
       complex(rp), allocatable :: previous_vector(:)
 
       n = size(xi, 1)
@@ -86,6 +87,7 @@ contains
       end if
       if (any(omega(2:) <= omega(:size(omega)-1))) error stop 'analyze_tddft_modes: omega must increase strictly'
 
+      call cpu_time(t_start)
       allocate(result%xi_eigenvalues(n, nw, nq), result%xi_eigenvectors(n, n, nw, nq), &
          result%candidate_frequency_index(nq), result%candidate_mode_index(nq), result%candidate_unity_distance(nq), &
          result%branch_overlap(nq), result%classification(nq), result%classification_label(nq), result%fit(nq))
@@ -139,6 +141,8 @@ contains
          call classify_mode(best_distance, options%unity_distance_threshold, result%fit(iq), result%classification(iq), &
             result%classification_label(iq))
       end do
+      call cpu_time(t_stop)
+      result%analysis_cpu_seconds = t_stop-t_start
    end subroutine analyze_tddft_modes
 
    !> Fit a local loss maximum after estimating a linear-free constant
@@ -270,6 +274,7 @@ contains
       write(unit, '(a)') '# Xi candidates use right-eigenvector overlap between adjacent q values'
       write(unit, '(a)') '# FWHM = 2*HWHM. Individual fits are observed widths; eta remains numerical broadening.'
       write(unit, '(a,es24.16)') '# eta_Ry = ', eta
+      write(unit, '(a,es24.16)') '# profile_mode_analysis_cpu_s = ', result%analysis_cpu_seconds
       do iq = 1, size(result%candidate_frequency_index)
          write(unit, '(a,1x,i0,1x,es24.16,1x,i0,1x,es24.16,1x,es24.16,1x,a)') 'candidate', iq, &
             omega(result%candidate_frequency_index(iq)), result%candidate_mode_index(iq), result%candidate_unity_distance(iq), &

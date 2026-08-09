@@ -194,7 +194,7 @@ contains
       complex(rp), allocatable :: left_ops(:, :, :), right_ops(:, :, :)
       complex(rp), allocatable :: gr_k(:, :), ga_k(:, :), gr_q(:, :), ga_q(:, :), gr_shift(:, :), ga_shift(:, :)
       real(rp) :: energy_min, energy_max, denergy, energy, weight_sum, green_eta, thermal_tail, omega_tail
-      real(rp) :: quadrature_weight, prefactor
+      real(rp) :: quadrature_weight, prefactor, t_start, t_stop
       integer :: nmat, nk, nleft, nright, nw, ne, ik, ie, iw, ileft, iright
 
       if (.not. allocated(this%one_particle)) error stop 'green_chi0_provider%build: one-particle provider is absent'
@@ -235,6 +235,7 @@ contains
       allocate(gr_k(nmat, nmat), ga_k(nmat, nmat), gr_q(nmat, nmat), ga_q(nmat, nmat), &
          gr_shift(nmat, nmat), ga_shift(nmat, nmat))
 
+      call cpu_time(t_start)
       do ik = 1, nk
          prefactor = k_weights(ik)/weight_sum
          do ie = 1, ne
@@ -260,6 +261,7 @@ contains
             end do
          end do
       end do
+      call cpu_time(t_stop)
       result%re_chi = real(result%chi, rp)
       result%im_chi = aimag(result%chi)
       call build_spectral_products(left_channels, right_channels, result)
@@ -279,6 +281,7 @@ contains
       result%metadata%available_band_count = nmat
       result%metadata%band_first = 1
       result%metadata%band_last = nmat
+      result%metadata%green_energy_integration_cpu_seconds = t_stop-t_start
    end subroutine build_green_chi0
 
    subroutine build_four_component_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, omega, options, result)

@@ -43,7 +43,7 @@ Some preparatory work can overlap, but scientific signoff should respect the gat
 - [ ] TDDFT-08 — longitudinal susceptibility + relaxation
 - [ ] TDDFT-09 — full four-component/SOC/non-collinear
 - [ ] TDDFT-10 — Green-function KS-response backend
-- [ ] TDDFT-11 — optimized/GPU implementation
+- [x] TDDFT-11 — optimized CPU implementation (GPU deferred: no CUDA/HIP hardware)
 
 ## Cross-project gates
 

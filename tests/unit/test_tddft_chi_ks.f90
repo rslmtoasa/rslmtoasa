@@ -4,7 +4,7 @@
 program test_tddft_chi_ks
    use precision_mod, only: rp
    use math_mod, only: pi
-   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
+   use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ, RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
    implicit none
@@ -14,6 +14,7 @@ program test_tddft_chi_ks
 
    failed = .false.
    call test_independent_pair_sum()
+   call test_batched_accumulator_equivalence()
    call test_positive_frequency_sign_and_products()
    call test_convergence_controls()
 
@@ -63,6 +64,42 @@ contains
          end do
       end do
    end subroutine test_independent_pair_sum
+
+   ! TDDFT-11: the BLAS transition tiles must remain numerically equivalent to
+   ! the scalar, fixed-order reference path for a genuinely complex,
+   ! multi-channel response.  This exercises non-Hermitian left/right channel
+   ! pairs, multiple k points, and batch boundaries that do not divide n^2.
+   subroutine test_batched_accumulator_equivalence()
+      integer, parameter :: nk = 3, nbands = 4
+      real(rp) :: weights(nk), eval(nbands, nk), evalq(nbands, nk), omega(5)
+      complex(rp) :: evec(4, nbands, nk), evecq(4, nbands, nk)
+      type(tddft_chi0_options) :: reference_options, batched_options
+      type(tddft_chi0_result) :: reference, batched
+      type(response_channel) :: left(2), right(2)
+
+      weights = [1.0_rp, 3.0_rp, 2.0_rp]
+      omega = [0.013_rp, 0.041_rp, 0.079_rp, 0.121_rp, 0.169_rp]
+      call build_complex_four_spinor_fixture(eval, evalq, evec, evecq)
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      left(2) = response_channel(1, RESPONSE_MZ)
+      right(1) = response_channel(1, RESPONSE_MINUS)
+      right(2) = response_channel(1, RESPONSE_CHARGE)
+      reference_options%eta = 0.004_rp
+      reference_options%fermi_level = 0.01_rp
+      reference_options%electronic_temperature = 700.0_rp
+      reference_options%use_batched_accumulation = .false.
+      batched_options = reference_options
+      batched_options%use_batched_accumulation = .true.
+      batched_options%transition_batch_size = 3
+      call build_chi_ks_from_eigenpairs(weights, eval, evec, evalq, evecq, [2], left, right, omega, &
+         reference_options, reference)
+      call build_chi_ks_from_eigenpairs(weights, eval, evec, evalq, evecq, [2], left, right, omega, &
+         batched_options, batched)
+      call check_complex_vector('scalar/Batched GEMM chi_KS equivalence', reshape(batched%chi, [size(batched%chi)]), &
+         reshape(reference%chi, [size(reference%chi)]))
+      call check_true('batched metadata is explicit', batched%metadata%batched_accumulation .and. &
+         batched%metadata%transition_batch_size == 3)
+   end subroutine test_batched_accumulator_equivalence
 
    subroutine test_positive_frequency_sign_and_products()
       integer, parameter :: nk = 4
@@ -165,6 +202,26 @@ contains
          evecq(2, 2, ik) = cmplx(1.0_rp, 0.0_rp, rp)
       end do
    end subroutine build_spin_split_fixture
+
+   subroutine build_complex_four_spinor_fixture(eval, evalq, evec, evecq)
+      real(rp), intent(out) :: eval(:, :), evalq(:, :)
+      complex(rp), intent(out) :: evec(:, :, :), evecq(:, :, :)
+      integer :: ik, ib, ic
+      real(rp) :: norm
+
+      do ik = 1, size(eval, 2)
+         do ib = 1, size(eval, 1)
+            eval(ib, ik) = -0.12_rp + 0.075_rp*real(ib-1, rp) + 0.006_rp*real(ik-1, rp)
+            evalq(ib, ik) = -0.10_rp + 0.079_rp*real(ib-1, rp) - 0.004_rp*real(ik-1, rp)
+            do ic = 1, size(evec, 1)
+               evec(ic, ib, ik) = cmplx(real(2*ic+ib+ik, rp), real(ic-2*ib+ik, rp), rp)
+               evecq(ic, ib, ik) = cmplx(real(ic+2*ib-ik, rp), real(2*ic-ib+ik, rp), rp)
+            end do
+            norm = sqrt(sum(abs(evec(:, ib, ik))**2)); evec(:, ib, ik) = evec(:, ib, ik)/norm
+            norm = sqrt(sum(abs(evecq(:, ib, ik))**2)); evecq(:, ib, ik) = evecq(:, ib, ik)/norm
+         end do
+      end do
+   end subroutine build_complex_four_spinor_fixture
 
    subroutine brute_force_pair_sum(weights, eval, evalq, omega, fermi_level, temperature, eta, chi)
       real(rp), intent(in) :: weights(:), eval(:, :), evalq(:, :), omega(:), fermi_level, temperature, eta

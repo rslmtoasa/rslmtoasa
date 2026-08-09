@@ -30,6 +30,8 @@ module tddft_dyson_mod
       character(len=112) :: loss_convention = 'loss = -(chi-chi^H)/(2 i pi); positive diagonal loss denotes positive-frequency absorption'
       character(len=112) :: eta_convention = 'eta is numerical broadening in Ry, distinct from any fitted or extrapolated intrinsic linewidth'
       real(rp) :: eta = 0.0_rp
+      real(rp) :: solve_cpu_seconds = 0.0_rp
+      real(rp) :: diagonalization_cpu_seconds = 0.0_rp
    end type tddft_dyson_metadata
 
    !> Arrays are (response left, response right, frequency), except that the
@@ -70,6 +72,7 @@ contains
       type(tddft_dyson_options), intent(in) :: options
       type(tddft_dyson_result), intent(out) :: result
       integer :: n, nw, iw, i, info
+      real(rp) :: t_start, t_stop
 
       n = size(chi_ks, 1)
       nw = size(chi_ks, 3)
@@ -87,7 +90,10 @@ contains
          result%chi_ks_loss(:, :, iw) = tddft_loss_matrix(chi_ks(:, :, iw))
          result%chi_ks_site_spectral_weight(:, iw) = real([(result%chi_ks_loss(i, i, iw), i=1, n)], rp)
          result%chi_ks_trace_spectral_weight(iw) = sum(result%chi_ks_site_spectral_weight(:, iw))
+         call cpu_time(t_start)
          call solve_tddft_dyson_frequency(chi_ks(:, :, iw), kernel, result%chi(:, :, iw), result%xi(:, :, iw), info)
+         call cpu_time(t_stop)
+         result%metadata%solve_cpu_seconds = result%metadata%solve_cpu_seconds + t_stop-t_start
          result%solve_info(iw) = info
          if (info /= 0) error stop 'enhance_tddft_susceptibility: LAPACK zgesv failed; I-chi_KS K is singular'
          result%loss(:, :, iw) = tddft_loss_matrix(result%chi(:, :, iw))
@@ -98,17 +104,23 @@ contains
 
       if (options%diagonalize_loss) then
          allocate(result%loss_eigenvalues(n, nw), result%loss_eigenvectors(n, n, nw))
+         call cpu_time(t_start)
          do iw = 1, nw
             call diagonalize_hermitian_loss(result%loss(:, :, iw), result%loss_eigenvalues(:, iw), &
                result%loss_eigenvectors(:, :, iw))
          end do
+         call cpu_time(t_stop)
+         result%metadata%diagonalization_cpu_seconds = result%metadata%diagonalization_cpu_seconds + t_stop-t_start
       end if
       if (options%diagonalize_xi) then
          allocate(result%xi_eigenvalues(n, nw), result%xi_eigenvectors(n, n, nw))
+         call cpu_time(t_start)
          do iw = 1, nw
             call diagonalize_nonhermitian_response(result%xi(:, :, iw), result%xi_eigenvalues(:, iw), &
                result%xi_eigenvectors(:, :, iw))
          end do
+         call cpu_time(t_stop)
+         result%metadata%diagonalization_cpu_seconds = result%metadata%diagonalization_cpu_seconds + t_stop-t_start
       end if
    end subroutine enhance_tddft_susceptibility
 
@@ -218,6 +230,8 @@ contains
       write(unit, '(a,a)') '# loss_convention = ', trim(result%metadata%loss_convention)
       write(unit, '(a,a)') '# eta_convention = ', trim(result%metadata%eta_convention)
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
+      write(unit, '(a,es24.16)') '# profile_dyson_solves_cpu_s = ', result%metadata%solve_cpu_seconds
+      write(unit, '(a,es24.16)') '# profile_dyson_diagonalizations_cpu_s = ', result%metadata%diagonalization_cpu_seconds
       write(unit, '(a)') '# record omega_Ry i j Re Im'
       do iw = 1, size(omega)
          do j = 1, size(result%chi, 2)

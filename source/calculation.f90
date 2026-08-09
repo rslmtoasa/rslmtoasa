@@ -1991,7 +1991,7 @@ contains
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), coulomb_site(:, :), magnetization(:, :)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
-      real(rp) :: response_eta
+      real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
@@ -2186,7 +2186,10 @@ contains
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
          allocate(kq_points(3, reciprocal_obj%nk_total))
          kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
+         call cpu_time(t_profile_start)
          call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_points, eigenvalues_kq, eigenvectors_kq)
+         call cpu_time(t_profile_stop)
+         kq_eigensolve_cpu_seconds = t_profile_stop-t_profile_start
          if (config%chi0_backend == 'green') then
             call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
             if (is_full_response) then
@@ -2203,6 +2206,7 @@ contains
             call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
                eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
          end if
+         chi0_result%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
          response_eta = chi0_result%metadata%eta
          if (config%output_chi0 .or. config%output_stoner) then
             write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq

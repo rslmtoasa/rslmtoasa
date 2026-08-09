@@ -520,6 +520,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitResponseVertices PROPERTIES LABELS "unit;tddft;vertices")
   add_fortran_unit_test(UnitTddftChiKS ${TestDIR}/unit/test_tddft_chi_ks.f90)
   set_tests_properties(UnitTddftChiKS PROPERTIES LABELS "unit;tddft;chi_ks;stoner")
+  add_fortran_unit_test(UnitTddftCpuProfile ${TestDIR}/unit/test_tddft_cpu_profile.f90)
+  set_tests_properties(UnitTddftCpuProfile PROPERTIES LABELS "unit;tddft;profile")
   add_fortran_unit_test(UnitTddftGreenChiKS ${TestDIR}/unit/test_tddft_green_chi0.f90)
   set_tests_properties(UnitTddftGreenChiKS PROPERTIES LABELS "unit;tddft;chi_ks;green")
   add_fortran_unit_test(UnitTddftGoldstone ${TestDIR}/unit/test_tddft_goldstone.f90)
@@ -530,6 +532,11 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftFourComponent PROPERTIES LABELS "unit;tddft;four-component;soc;noncollinear")
   add_fortran_unit_test(UnitTddftConfig ${TestDIR}/unit/test_tddft_config.f90)
   set_tests_properties(UnitTddftConfig PROPERTIES LABELS "unit;tddft;input;dispatch")
+  add_test(NAME TddftCrossMilestoneEquivalence
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_cross_milestone_equivalence.py
+      --binary-dir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  set_tests_properties(TddftCrossMilestoneEquivalence PROPERTIES
+    LABELS "unit;tddft;equivalence;TDDFT-03-10" TIMEOUT 120)
   add_test(NAME UnitTddftDispatch
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_dispatch.py)
   set_tests_properties(UnitTddftDispatch PROPERTIES LABELS "unit;tddft;dispatch")
