@@ -1,0 +1,240 @@
+!------------------------------------------------------------------------------
+! TDDFT-03 -- independent bare transverse chi_KS oracle
+!------------------------------------------------------------------------------
+program test_tddft_chi_ks
+   use precision_mod, only: rp
+   use math_mod, only: pi
+   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
+   use response_vertices_mod, only: response_channel
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
+   implicit none
+
+   real(rp), parameter :: machine_tol = 256.0_rp*epsilon(1.0_rp)
+   logical :: failed
+
+   failed = .false.
+   call test_independent_pair_sum()
+   call test_positive_frequency_sign_and_products()
+   call test_convergence_controls()
+
+   if (failed) then
+      write (*, '(a)') 'RESULT: FAIL'
+      error stop 1
+   end if
+   write (*, '(a)') 'RESULT: PASS'
+
+contains
+
+   ! A one-orbital, spin-split tight-binding fixture.  The oracle below uses
+   ! its own explicit spin-selection factors and Fermi routine; it deliberately
+   ! does not call response vertices or the production occupation routine.
+   subroutine test_independent_pair_sum()
+      integer, parameter :: nk = 4
+      integer :: iq, itemp, ieta
+      integer :: q_shifts(3) = [0, 1, 2]
+      real(rp) :: temperatures(2) = [250.0_rp, 900.0_rp]
+      real(rp) :: etas(2) = [0.0015_rp, 0.008_rp]
+      real(rp) :: omega(4) = [0.025_rp, 0.075_rp, 0.110_rp, 0.170_rp]
+      real(rp) :: weights(nk), eval(2, nk), evalq(2, nk)
+      complex(rp) :: evec(2, 2, nk), evecq(2, 2, nk), oracle(size(omega))
+      type(tddft_chi0_options) :: options
+      type(tddft_chi0_result) :: result
+      type(response_channel) :: left(1), right(1)
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      right(1) = response_channel(1, RESPONSE_MINUS)
+      weights = [1.0_rp, 2.0_rp, 1.0_rp, 3.0_rp]
+      do iq = 1, size(q_shifts)
+         call build_spin_split_fixture(q_shifts(iq), 0.030_rp, eval, evalq, evec, evecq)
+         do itemp = 1, size(temperatures)
+            do ieta = 1, size(etas)
+               options%eta = etas(ieta)
+               options%fermi_level = 0.0_rp
+               options%electronic_temperature = temperatures(itemp)
+               options%k_mesh_shape = [nk, 1, 1]
+               call build_chi_ks_from_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, right, omega, &
+                  options, result)
+               call brute_force_pair_sum(weights, eval, evalq, omega, options%fermi_level, &
+                  options%electronic_temperature, options%eta, oracle)
+               call check_complex_vector('independent one-orbital pair sum', result%chi(1, 1, :), oracle)
+               call check_real('metadata eta', result%metadata%eta, options%eta)
+               call check_real('metadata Fermi level', result%metadata%fermi_level, options%fermi_level)
+            end do
+         end do
+      end do
+   end subroutine test_independent_pair_sum
+
+   subroutine test_positive_frequency_sign_and_products()
+      integer, parameter :: nk = 4
+      real(rp) :: omega(1) = [0.100_rp]
+      real(rp) :: weights(nk), eval(2, nk), evalq(2, nk)
+      complex(rp) :: evec(2, 2, nk), evecq(2, 2, nk)
+      type(tddft_chi0_options) :: options
+      type(tddft_chi0_result) :: result
+      type(response_channel) :: left(1), right(1)
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      right(1) = response_channel(1, RESPONSE_MINUS)
+      weights = 1.0_rp
+      call build_spin_split_fixture(0, 0.0_rp, eval, evalq, evec, evecq)
+      options%eta = 0.002_rp
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 100.0_rp
+      options%k_mesh_shape = [nk, 1, 1]
+      call build_chi_ks_from_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, right, omega, options, result)
+
+      ! For an occupied up state and empty down state, chi has negative Im at
+      ! its positive excitation energy.  The documented Stoner quantity is
+      ! therefore -Im(chi)/pi and must be positive.
+      call check_true('positive-frequency Im chi is negative', result%im_chi(1, 1, 1) < 0.0_rp)
+      call check_true('positive-frequency Stoner spectrum is positive', result%trace_spectrum(1) > 0.0_rp)
+      call check_real('site diagonal spectrum', result%site_diagonal_spectrum(1, 1), result%trace_spectrum(1))
+      call check_real('KS/Stoner map', result%stoner_spectral_map(1, 1), result%trace_spectrum(1))
+      call check_real('real chi product', result%re_chi(1, 1, 1), real(result%chi(1, 1, 1), rp))
+      call check_real('imag chi product', result%im_chi(1, 1, 1), aimag(result%chi(1, 1, 1)))
+   end subroutine test_positive_frequency_sign_and_products
+
+   subroutine test_convergence_controls()
+      real(rp) :: omega(2) = [0.075_rp, 0.105_rp]
+      real(rp) :: weights4(4), eval4(2, 4), evalq4(2, 4)
+      real(rp) :: weights8(8), eval8(2, 8), evalq8(2, 8)
+      complex(rp) :: evec4(2, 2, 4), evecq4(2, 2, 4), evec8(2, 2, 8), evecq8(2, 2, 8)
+      type(tddft_chi0_options) :: options, changed
+      type(tddft_chi0_result) :: reference, comparison, fine_mesh
+      type(response_channel) :: left(1), right(1)
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      right(1) = response_channel(1, RESPONSE_MINUS)
+      weights4 = 1.0_rp
+      weights8 = 1.0_rp
+      ! A flat spin-split band has an exactly mesh-independent BZ average,
+      ! making this a deterministic k-mesh convergence oracle.
+      call build_spin_split_fixture(0, 0.0_rp, eval4, evalq4, evec4, evecq4)
+      call build_spin_split_fixture(0, 0.0_rp, eval8, evalq8, evec8, evecq8)
+      options%eta = 0.003_rp
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 300.0_rp
+      options%k_mesh_shape = [4, 1, 1]
+      call build_chi_ks_from_eigenpairs(weights4, eval4, evec4, evalq4, evecq4, [1], left, right, omega, options, reference)
+      options%k_mesh_shape = [8, 1, 1]
+      call build_chi_ks_from_eigenpairs(weights8, eval8, evec8, evalq8, evecq8, [1], left, right, omega, options, fine_mesh)
+      call check_complex_vector('flat-band k mesh convergence', fine_mesh%chi(1, 1, :), reference%chi(1, 1, :))
+      call check_true('k mesh metadata retained', all(fine_mesh%metadata%k_mesh_shape == [8, 1, 1]))
+
+      ! Explicit full-band selection is the exact reference path.  The knobs
+      ! below are additionally checked to ensure eta and electronic smearing
+      ! are not silently ignored by future optimized paths.
+      changed = options
+      changed%k_mesh_shape = [4, 1, 1]
+      changed%band_first = 1
+      changed%band_last = 2
+      call build_chi_ks_from_eigenpairs(weights4, eval4, evec4, evalq4, evecq4, [1], left, right, omega, changed, comparison)
+      call check_complex_vector('explicit all-band window', comparison%chi(1, 1, :), reference%chi(1, 1, :))
+      changed%eta = 0.012_rp
+      call build_chi_ks_from_eigenpairs(weights4, eval4, evec4, evalq4, evecq4, [1], left, right, omega, changed, comparison)
+      call check_true('eta convergence control changes response', abs(comparison%chi(1, 1, 1) - reference%chi(1, 1, 1)) > 0.0_rp)
+      changed%eta = options%eta
+      changed%electronic_temperature = 18000.0_rp
+      call build_chi_ks_from_eigenpairs(weights4, eval4, evec4, evalq4, evecq4, [1], left, right, omega, changed, comparison)
+      call check_true('smearing convergence control changes response', &
+         abs(comparison%chi(1, 1, 1) - reference%chi(1, 1, 1)) > 0.0_rp)
+   end subroutine test_convergence_controls
+
+   subroutine build_spin_split_fixture(q_shift, hopping, eval, evalq, evec, evecq)
+      integer, intent(in) :: q_shift
+      real(rp), intent(in) :: hopping
+      real(rp), intent(out) :: eval(:, :), evalq(:, :)
+      complex(rp), intent(out) :: evec(:, :, :), evecq(:, :, :)
+      integer :: nk, ik, ikq
+      real(rp) :: k, kq
+
+      nk = size(eval, 2)
+      do ik = 1, nk
+         ikq = 1 + modulo(ik - 1 + q_shift, nk)
+         k = real(ik - 1, rp)/real(nk, rp)
+         kq = real(ikq - 1, rp)/real(nk, rp)
+         eval(1, ik) = -0.050_rp - 2.0_rp*hopping*cos(2.0_rp*pi*k)
+         eval(2, ik) =  0.050_rp - 2.0_rp*hopping*cos(2.0_rp*pi*k)
+         evalq(1, ik) = -0.050_rp - 2.0_rp*hopping*cos(2.0_rp*pi*kq)
+         evalq(2, ik) =  0.050_rp - 2.0_rp*hopping*cos(2.0_rp*pi*kq)
+         evec(:, :, ik) = cmplx(0.0_rp, 0.0_rp, rp)
+         evecq(:, :, ik) = cmplx(0.0_rp, 0.0_rp, rp)
+         evec(1, 1, ik) = cmplx(1.0_rp, 0.0_rp, rp)
+         evec(2, 2, ik) = cmplx(1.0_rp, 0.0_rp, rp)
+         evecq(1, 1, ik) = cmplx(1.0_rp, 0.0_rp, rp)
+         evecq(2, 2, ik) = cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+   end subroutine build_spin_split_fixture
+
+   subroutine brute_force_pair_sum(weights, eval, evalq, omega, fermi_level, temperature, eta, chi)
+      real(rp), intent(in) :: weights(:), eval(:, :), evalq(:, :), omega(:), fermi_level, temperature, eta
+      complex(rp), intent(out) :: chi(:)
+      integer :: ik, n, m, iw
+      real(rp) :: fn, fm, spin_factor
+
+      chi = cmplx(0.0_rp, 0.0_rp, rp)
+      do iw = 1, size(omega)
+         do ik = 1, size(weights)
+            do n = 1, size(eval, 1)
+               do m = 1, size(evalq, 1)
+                  spin_factor = 0.0_rp
+                  ! <up|m+|down><down|m-|up> = 2*2.  This is intentionally
+                  ! written directly, independent of response_vertices_mod.
+                  if (n == 1 .and. m == 2) spin_factor = 4.0_rp
+                  fn = independent_fermi(eval(n, ik), fermi_level, temperature)
+                  fm = independent_fermi(evalq(m, ik), fermi_level, temperature)
+                  chi(iw) = chi(iw) + weights(ik)/sum(weights)*(fn - fm)*spin_factor/ &
+                     cmplx(omega(iw) + eval(n, ik) - evalq(m, ik), eta, rp)
+               end do
+            end do
+         end do
+      end do
+   end subroutine brute_force_pair_sum
+
+   pure real(rp) function independent_fermi(e, ef, temperature) result(f)
+      real(rp), intent(in) :: e, ef, temperature
+      real(rp) :: x, kt
+
+      kt = max(temperature*6.3336814e-6_rp, 1.0e-10_rp)
+      x = (e - ef)/kt
+      if (x >= 50.0_rp) then
+         f = 0.0_rp
+      else if (x <= -50.0_rp) then
+         f = 1.0_rp
+      else
+         f = 1.0_rp/(exp(x) + 1.0_rp)
+      end if
+   end function independent_fermi
+
+   subroutine check_complex_vector(label, actual, expected)
+      character(len=*), intent(in) :: label
+      complex(rp), intent(in) :: actual(:), expected(:)
+      real(rp) :: error, scale
+
+      error = maxval(abs(actual - expected))
+      scale = max(1.0_rp, maxval(abs(expected)))
+      if (error > machine_tol*scale) then
+         write (*, '(a,1x,a,1x,es12.4)') 'FAIL', label, error
+         failed = .true.
+      end if
+   end subroutine check_complex_vector
+
+   subroutine check_real(label, actual, expected)
+      character(len=*), intent(in) :: label
+      real(rp), intent(in) :: actual, expected
+      if (abs(actual - expected) > machine_tol*max(1.0_rp, abs(expected))) then
+         write (*, '(a,1x,a,1x,es12.4)') 'FAIL', label, abs(actual - expected)
+         failed = .true.
+      end if
+   end subroutine check_real
+
+   subroutine check_true(label, condition)
+      character(len=*), intent(in) :: label
+      logical, intent(in) :: condition
+      if (.not. condition) then
+         write (*, '(a,1x,a)') 'FAIL', label
+         failed = .true.
+      end if
+   end subroutine check_true
+
+end program test_tddft_chi_ks
