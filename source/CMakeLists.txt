@@ -69,6 +69,7 @@ add_library(${PROJECT_NAME} STATIC
     report.f90
     response_components.f90
     response_basis.f90
+    response_vertices.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
     sigma_provider.f90
