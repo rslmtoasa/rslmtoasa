@@ -524,6 +524,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftGoldstone PROPERTIES LABELS "unit;tddft;goldstone;alsda")
   add_fortran_unit_test(UnitTddftLongitudinal ${TestDIR}/unit/test_tddft_longitudinal.f90)
   set_tests_properties(UnitTddftLongitudinal PROPERTIES LABELS "unit;tddft;longitudinal;relaxation")
+  add_fortran_unit_test(UnitTddftFourComponent ${TestDIR}/unit/test_tddft_four_component.f90)
+  set_tests_properties(UnitTddftFourComponent PROPERTIES LABELS "unit;tddft;four-component;soc;noncollinear")
   add_fortran_unit_test(UnitTddftConfig ${TestDIR}/unit/test_tddft_config.f90)
   set_tests_properties(UnitTddftConfig PROPERTIES LABELS "unit;tddft;input;dispatch")
   add_test(NAME UnitTddftDispatch

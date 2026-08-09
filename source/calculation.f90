@@ -52,6 +52,8 @@ module calculation_mod
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
    use response_vertices_mod, only: response_channel
+   use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
+      evaluate_four_component_zero_modes, tddft_four_component_zero_mode_diagnostics
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
       write_tddft_dyson_text
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
@@ -1979,14 +1981,15 @@ contains
       type(tddft_longitudinal_options) :: longitudinal_options
       type(tddft_longitudinal_static_result) :: longitudinal_static
       type(tddft_longitudinal_result) :: longitudinal_result
+      type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
-      real(rp), allocatable :: all_trace_loss(:, :)
+      real(rp), allocatable :: all_trace_loss(:, :), coulomb_site(:, :), magnetization(:, :)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
-      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite
-      logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_gamma, has_gamma
+      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
+      logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
       character(len=sl) :: filename
 
       config = tddft_config(this%fname)
@@ -2016,6 +2019,7 @@ contains
       reciprocal_obj%use_time_reversal = .false.
       call reciprocal_obj%generate_mp_mesh()
       is_longitudinal = config%channel == 'longitudinal'
+      is_full_response = config%channel == 'full'
 
       nq = size(config%q_points, 2)
       call get_mpi_range(rank, nq, iq_start, iq_end, nq_per_rank, region_tag='tddft-q')
@@ -2042,6 +2046,11 @@ contains
             right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
          end if
       end do
+      if (is_full_response) then
+         nresponse = 4*lattice_obj%nrec
+      else
+         nresponse = lattice_obj%nrec
+      end if
       chi0_options%eta = config%eta
       chi0_options%fermi_level = config%fermi_level
       chi0_options%electronic_temperature = config%electronic_temperature
@@ -2069,9 +2078,14 @@ contains
       ! kernel from independently converged symmetric +/- Bz calculations.
       allocate(omega_static(1))
       omega_static = 0.0_rp
-      call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
-         eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
-      allocate(kernel(lattice_obj%nrec, lattice_obj%nrec))
+      if (is_full_response) then
+         call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
+            eigenvectors_k, site_orbital_counts, omega_static, chi0_options, chi0_static)
+      else
+         call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
+            eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
+      end if
+      allocate(kernel(nresponse, nresponse))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
       if (is_longitudinal) then
          longitudinal_options%pair_tolerance = config%longitudinal_pair_tolerance
@@ -2088,6 +2102,29 @@ contains
             m0(isite) = self_obj%xc_response_provider%site(isite)%spin_population
          end do
          call build_longitudinal_kernel(chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), kernel)
+      else if (is_full_response) then
+         ! The common XC provider is the sole source of ALSDA derivatives;
+         ! the charge response additionally uses the projected Madelung
+         ! charge kernel.  Refuse a dimension mismatch instead of treating a
+         ! real-space matrix as a different response projection.
+         if (.not. allocated(charge_obj%amad) .or. size(charge_obj%amad, 1) /= lattice_obj%nrec .or. &
+            size(charge_obj%amad, 2) /= lattice_obj%nrec) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: full TDDFT requires an nrec-by-nrec projected Coulomb kernel.', &
+               __FILE__, __LINE__)
+         end if
+         allocate(coulomb_site(lattice_obj%nrec, lattice_obj%nrec), magnetization(3, lattice_obj%nrec))
+         coulomb_site = charge_obj%amad
+         do isite = 1, lattice_obj%nrec
+            magnetization(:, isite) = self_obj%xc_response_provider%site(isite)%spin_population* &
+               self_obj%xc_response_provider%site(isite)%magnetization_direction
+         end do
+         call build_four_component_kernel(self_obj%xc_response_provider, coulomb_site, kernel)
+         call evaluate_four_component_zero_modes(chi0_static%chi(:, :, 1), kernel, magnetization, has_soc, &
+            has_external_field, full_zero_mode_diagnostics)
+         if (rank == 0 .and. full_zero_mode_diagnostics%applicable) then
+            call g_logger%info('TDDFT full response rigid-rotation zero-mode residual = '// &
+               real2str(maxval(full_zero_mode_diagnostics%residual)), __FILE__, __LINE__)
+         end if
       else
          goldstone_options%goldstone_mode = config%goldstone_mode
          goldstone_options%has_soc = has_soc
@@ -2119,7 +2156,7 @@ contains
       dyson_options%diagonalize_xi = config%output_modes
       dyson_options%diagonalize_loss = config%output_modes
       if (config%output_modes) then
-         allocate(all_xi(lattice_obj%nrec, lattice_obj%nrec, nw, nq), all_trace_loss(nw, nq))
+         allocate(all_xi(nresponse, nresponse, nw, nq), all_trace_loss(nw, nq))
          all_xi = cmplx(0.0_rp, 0.0_rp, rp)
          all_trace_loss = 0.0_rp
       end if
@@ -2128,8 +2165,13 @@ contains
          allocate(kq_points(3, reciprocal_obj%nk_total))
          kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
          call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_points, eigenvalues_kq, eigenvectors_kq)
-         call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
-            eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
+         if (is_full_response) then
+            call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+               eigenvectors_kq, site_orbital_counts, omega, chi0_options, chi0_result)
+         else
+            call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+               eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
+         end if
          if (config%output_chi0 .or. config%output_stoner) then
             write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
             call write_chi_ks_text(trim(filename), omega, chi0_result)

@@ -210,8 +210,8 @@ contains
    subroutine validate_scalar_settings(this)
       class(tddft_config), intent(in) :: this
 
-      if (this%channel /= 'transverse' .and. this%channel /= 'longitudinal') then
-         call g_logger%fatal("[tddft_config]: channel must be 'transverse' or 'longitudinal'", __FILE__, __LINE__)
+      if (this%channel /= 'transverse' .and. this%channel /= 'longitudinal' .and. this%channel /= 'full') then
+         call g_logger%fatal("[tddft_config]: channel must be 'transverse', 'longitudinal', or 'full'", __FILE__, __LINE__)
       end if
       if (this%chi0_backend /= 'eigenpairs') then
          call g_logger%fatal("[tddft_config]: only chi0_backend='eigenpairs' is currently implemented", __FILE__, __LINE__)

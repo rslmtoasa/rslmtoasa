@@ -15,6 +15,9 @@ def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     assert "calculate_eigenpairs_at_kpoints(kq_points" in source
     assert "self_obj%refresh_xc_response_kernel()" in source
     assert "evaluate_goldstone(chi0_static%chi" in source
+    assert "is_full_response = config%channel == 'full'" in source
+    assert "build_four_component_chi_ks" in source
+    assert "build_four_component_kernel" in source
     assert "enhance_tddft_susceptibility" in source
     assert "MPI_ALLREDUCE(MPI_IN_PLACE, all_xi" in source
 

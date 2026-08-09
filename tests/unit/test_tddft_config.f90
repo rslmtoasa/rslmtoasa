@@ -12,6 +12,7 @@ program test_tddft_config
    call test_path_input()
    call test_mesh_input()
    call test_longitudinal_input()
+   call test_full_input()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -78,6 +79,21 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_longitudinal_input
+
+   subroutine test_full_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " channel = 'full', q_mode = 'list', n_q_points = 1"
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('full charge-spin channel is accepted', trim(config%channel) == 'full')
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_full_input
 
    subroutine assert_true(label, condition)
       character(len=*), intent(in) :: label

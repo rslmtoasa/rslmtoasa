@@ -162,11 +162,16 @@ contains
       if (spectrum(ip) <= spectrum(ip-1) .or. spectrum(ip) <= spectrum(ip+1)) return
       fit%peak_index = ip
       ileft = ip - 1
-      do while (ileft > 1 .and. spectrum(ileft-1) <= spectrum(ileft))
+      ! Fortran does not guarantee short-circuit evaluation of `.and.`.
+      ! Keep the bound check separate so a peak adjacent to the first point
+      ! never evaluates spectrum(0) under bounds checking.
+      do while (ileft > 1)
+         if (spectrum(ileft-1) > spectrum(ileft)) exit
          ileft = ileft - 1
       end do
       iright = ip + 1
-      do while (iright < n .and. spectrum(iright+1) <= spectrum(iright))
+      do while (iright < n)
+         if (spectrum(iright+1) > spectrum(iright)) exit
          iright = iright + 1
       end do
       background = min(spectrum(ileft), spectrum(iright))

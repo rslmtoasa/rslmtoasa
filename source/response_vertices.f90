@@ -34,6 +34,7 @@ module response_vertices_mod
    public :: site_projected_operator
    public :: response_transition_vertex
    public :: response_transition_vectors
+   public :: build_site_charge_spin_channels
 
 contains
 
@@ -131,6 +132,23 @@ contains
          end do
       end do
    end subroutine response_transition_vectors
+
+   !> Canonical active basis for a full charge-spin response: site-major with
+   !> components (charge, mx, my, mz) at every site.  Circular labels remain
+   !> views for the legacy transverse output and are intentionally excluded.
+   subroutine build_site_charge_spin_channels(nsite, channels)
+      integer, intent(in) :: nsite
+      type(response_channel), allocatable, intent(out) :: channels(:)
+      integer :: isite, component
+
+      if (nsite < 1) error stop 'build_site_charge_spin_channels: nsite must be positive'
+      allocate(channels(4*nsite))
+      do isite = 1, nsite
+         do component = RESPONSE_CHARGE, RESPONSE_MZ
+            channels(4*(isite-1) + component + 1) = response_channel(isite, component)
+         end do
+      end do
+   end subroutine build_site_charge_spin_channels
 
    subroutine add_component_element(op, iup, idown, component)
       complex(rp), intent(inout) :: op(:, :)

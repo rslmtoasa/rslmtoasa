@@ -44,11 +44,15 @@ module xc_response_kernel_mod
       real(rp) :: dbxc_dn = 0.0_rp
       real(rp) :: dbxc_dm = 0.0_rp
       real(rp) :: k_perp = 0.0_rp
+      ! Unit vector giving the local ALSDA longitudinal axis in the global
+      ! response frame.  It is explicitly retained instead of assuming z.
+      real(rp) :: magnetization_direction(3) = [0.0_rp, 0.0_rp, 1.0_rp]
       logical :: has_dvxc_dn = .false.
       logical :: has_dvxc_dm = .false.
       logical :: has_dbxc_dn = .false.
       logical :: has_dbxc_dm = .false.
       logical :: has_k_perp = .false.
+      logical :: has_magnetization_direction = .false.
    end type xc_response_site
 
    !> Accumulator for one radial VXC0SP evaluation.  `radial_weight` below is
@@ -73,6 +77,7 @@ module xc_response_kernel_mod
       procedure :: record_ground_state_site => xc_kernel_record_ground_state_site
       procedure :: record_radial_projection => xc_kernel_record_radial_projection
       procedure :: set_site_spin_population => xc_kernel_set_site_spin_population
+      procedure :: set_site_magnetization_direction => xc_kernel_set_site_magnetization_direction
       procedure :: set_site_derivatives => xc_kernel_set_site_derivatives
    end type xc_response_kernel_provider
 
@@ -197,6 +202,24 @@ contains
       this%site(isite)%spin_population = spin_population
       call finalize_site_k_perp(this%site(isite))
    end subroutine xc_kernel_set_site_spin_population
+
+   !> Record the direction of the ground-state magnetization for the site's
+   !> local ALSDA frame.  Its magnitude is deliberately not used here: the
+   !> response projector population is stored separately as spin_population.
+   subroutine xc_kernel_set_site_magnetization_direction(this, isite, direction)
+      class(xc_response_kernel_provider), intent(inout) :: this
+      integer, intent(in) :: isite
+      real(rp), intent(in) :: direction(3)
+      real(rp) :: norm_direction
+
+      call require_site(this, isite, 'set_site_magnetization_direction')
+      norm_direction = sqrt(sum(direction**2))
+      if (norm_direction <= tiny(1.0_rp)) then
+         error stop 'xc_response_kernel_provider: local magnetization direction is zero'
+      end if
+      this%site(isite)%magnetization_direction = direction/norm_direction
+      this%site(isite)%has_magnetization_direction = .true.
+   end subroutine xc_kernel_set_site_magnetization_direction
 
    subroutine finalize_site_k_perp(site)
       type(xc_response_site), intent(inout) :: site
