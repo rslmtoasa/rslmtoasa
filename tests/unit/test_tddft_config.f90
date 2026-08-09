@@ -11,6 +11,7 @@ program test_tddft_config
    failed = .false.
    call test_path_input()
    call test_mesh_input()
+   call test_longitudinal_input()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -56,6 +57,27 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_mesh_input
+
+   subroutine test_longitudinal_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " channel = 'longitudinal', longitudinal_static_file = 'static_fields.dat'"
+      write(unit, '(a)') ' longitudinal_pair_tolerance = 1.0e-9, longitudinal_linearity_tolerance = 0.02'
+      write(unit, '(a)') ' longitudinal_static_agreement_tolerance = 0.03'
+      write(unit, '(a)') ' longitudinal_fit_omega_min = 0.001, longitudinal_fit_omega_max = 0.04'
+      write(unit, '(a)') '/'
+      close(unit)
+
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('longitudinal channel is accepted', trim(config%channel) == 'longitudinal')
+      call assert_true('longitudinal static driver path is retained', trim(config%longitudinal_static_file) == 'static_fields.dat')
+      call assert_real('longitudinal fit upper bound is read', config%longitudinal_fit_omega_max, 0.04_rp)
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_longitudinal_input
 
    subroutine assert_true(label, condition)
       character(len=*), intent(in) :: label

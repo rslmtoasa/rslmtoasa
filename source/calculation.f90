@@ -50,13 +50,16 @@ module calculation_mod
    use magnetic_representation_mod, only: gbt_single_q
    use tddft_config_mod, only: tddft_config
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
-   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
+   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
    use response_vertices_mod, only: response_channel
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
       write_tddft_dyson_text
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
       write_goldstone_diagnostics_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
+   use tddft_longitudinal_mod, only: tddft_longitudinal_options, tddft_longitudinal_static_result, &
+      tddft_longitudinal_result, read_longitudinal_static_fields, build_longitudinal_static_response, &
+      build_longitudinal_kernel, calibrate_longitudinal_response, write_longitudinal_report
 #ifdef USE_MPI
    use mpi
 #endif
@@ -1973,13 +1976,17 @@ contains
       type(tddft_goldstone_result) :: goldstone_result
       type(tddft_mode_options) :: mode_options
       type(tddft_mode_result) :: mode_result
+      type(tddft_longitudinal_options) :: longitudinal_options
+      type(tddft_longitudinal_static_result) :: longitudinal_static
+      type(tddft_longitudinal_result) :: longitudinal_result
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :)
-      integer, allocatable :: site_orbital_counts(:)
+      real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
+      integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite
-      logical :: has_soc, has_external_field, need_dyson
+      logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_gamma, has_gamma
       character(len=sl) :: filename
 
       config = tddft_config(this%fname)
@@ -2008,6 +2015,7 @@ contains
       reciprocal_obj%use_symmetry_reduction = .false.
       reciprocal_obj%use_time_reversal = .false.
       call reciprocal_obj%generate_mp_mesh()
+      is_longitudinal = config%channel == 'longitudinal'
 
       nq = size(config%q_points, 2)
       call get_mpi_range(rank, nq, iq_start, iq_end, nq_per_rank, region_tag='tddft-q')
@@ -2024,8 +2032,15 @@ contains
       allocate(site_orbital_counts(lattice_obj%nrec), left_channels(lattice_obj%nrec), right_channels(lattice_obj%nrec))
       site_orbital_counts = norb
       do iq = 1, lattice_obj%nrec
-         left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
-         right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+         if (is_longitudinal) then
+            ! sigma_z is diagonal in the collinear spin basis: the generic
+            ! vertex engine therefore retains same-spin electron-hole pairs.
+            left_channels(iq) = response_channel(iq, RESPONSE_MZ)
+            right_channels(iq) = response_channel(iq, RESPONSE_MZ)
+         else
+            left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
+            right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+         end if
       end do
       chi0_options%eta = config%eta
       chi0_options%fermi_level = config%fermi_level
@@ -2040,41 +2055,67 @@ contains
             any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_d) > tiny(1.0_rp))
       end do
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
+      if (is_longitudinal .and. has_soc) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &
+            __FILE__, __LINE__)
+      end if
 
       ! k eigenpairs are independent of q and are therefore reused on each q
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
       call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points, eigenvalues_k, eigenvectors_k)
 
-      ! The Goldstone preflight is intentionally always Gamma/static, even if
-      ! the requested q set omits Gamma.  It establishes one documented local
-      ! kernel for the whole q path; sum-rule mode retains the raw diagnostic.
+      ! The Gamma/static KS batch is shared by both channels.  Transverse uses
+      ! it for Goldstone diagnostics; longitudinal instead calibrates its own
+      ! kernel from independently converged symmetric +/- Bz calculations.
       allocate(omega_static(1))
       omega_static = 0.0_rp
       call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
          eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
-      goldstone_options%goldstone_mode = config%goldstone_mode
-      goldstone_options%has_soc = has_soc
-      goldstone_options%has_external_field = has_external_field
-      call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
       allocate(kernel(lattice_obj%nrec, lattice_obj%nrec))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
-      if (goldstone_result%sum_rule_applied) then
+      if (is_longitudinal) then
+         longitudinal_options%pair_tolerance = config%longitudinal_pair_tolerance
+         longitudinal_options%linearity_tolerance = config%longitudinal_linearity_tolerance
+         longitudinal_options%static_agreement_tolerance = config%longitudinal_static_agreement_tolerance
+         longitudinal_options%fit_omega_min = config%longitudinal_fit_omega_min
+         longitudinal_options%fit_omega_max = config%longitudinal_fit_omega_max
+         call read_longitudinal_static_fields(trim(config%longitudinal_static_file), lattice_obj%nrec, static_sources, &
+            static_fields, static_moments)
+         call build_longitudinal_static_response(static_sources, static_fields, static_moments, longitudinal_options, &
+            longitudinal_static)
+         allocate(m0(lattice_obj%nrec))
          do isite = 1, lattice_obj%nrec
-            kernel(isite, isite) = goldstone_result%k_perp_sum_rule(isite)
+            m0(isite) = self_obj%xc_response_provider%site(isite)%spin_population
          end do
+         call build_longitudinal_kernel(chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), kernel)
       else
-         do isite = 1, lattice_obj%nrec
-            kernel(isite, isite) = goldstone_result%k_perp(isite)
-         end do
-      end if
-      if (rank == 0) then
-         write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
-         call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
-         call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-            rank, has_soc, has_external_field)
+         goldstone_options%goldstone_mode = config%goldstone_mode
+         goldstone_options%has_soc = has_soc
+         goldstone_options%has_external_field = has_external_field
+         call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
+         if (goldstone_result%sum_rule_applied) then
+            do isite = 1, lattice_obj%nrec
+               kernel(isite, isite) = goldstone_result%k_perp_sum_rule(isite)
+            end do
+         else
+            do isite = 1, lattice_obj%nrec
+               kernel(isite, isite) = goldstone_result%k_perp(isite)
+            end do
+         end if
+         if (rank == 0) then
+            write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
+            call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
+            call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+               rank, has_soc, has_external_field)
+         end if
       end if
 
-      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes
+      has_gamma = any(maxval(abs(config%q_points), dim=1) <= 1.0e-12_rp)
+      if (is_longitudinal .and. .not. has_gamma) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: longitudinal response requires q=Gamma for static acceptance.', &
+            __FILE__, __LINE__)
+      end if
+      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes .or. is_longitudinal
       dyson_options%diagonalize_xi = config%output_modes
       dyson_options%diagonalize_loss = config%output_modes
       if (config%output_modes) then
@@ -2083,6 +2124,7 @@ contains
          all_trace_loss = 0.0_rp
       end if
       do iq = iq_start, iq_end
+         is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
          allocate(kq_points(3, reciprocal_obj%nk_total))
          kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
          call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_points, eigenvalues_kq, eigenvectors_kq)
@@ -2101,6 +2143,14 @@ contains
                call write_tddft_dyson_text(trim(filename), omega, dyson_result)
                call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
                   rank, has_soc, has_external_field)
+            end if
+            if (is_longitudinal .and. is_gamma) then
+               call calibrate_longitudinal_response(m0, chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), &
+                  omega, dyson_result%chi, longitudinal_options, longitudinal_result)
+               write(filename, '(a,"_q",i6.6,"_longitudinal.dat")') trim(config%output_prefix), iq
+               call write_longitudinal_report(trim(filename), omega, config%eta, longitudinal_static, longitudinal_result)
+               call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
+                  has_soc, has_external_field)
             end if
             if (config%output_modes) then
                all_xi(:, :, :, iq) = dyson_result%xi
@@ -2132,7 +2182,11 @@ contains
          if (ios /= 0) then
             call g_logger%fatal('[calculation.post_processing_susceptibility]: cannot write manifest', __FILE__, __LINE__)
          end if
-         write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
+         if (is_longitudinal) then
+            write(unit, '(a)') '# TDDFT longitudinal chi_KS manifest; static calibration is reported at Gamma'
+         else
+            write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
+         end if
          write(unit, '(a)') '# q_index q1 q2 q3 chi0_file'
          do iq = 1, nq
             write(unit, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq

@@ -31,6 +31,9 @@ module tddft_config_mod
       real(rp) :: electronic_temperature, fermi_level
       integer :: band_first, band_last
       real(rp) :: occupation_tolerance
+      character(len=sl) :: longitudinal_static_file
+      real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance
+      real(rp) :: longitudinal_static_agreement_tolerance, longitudinal_fit_omega_min, longitudinal_fit_omega_max
       logical :: output_chi0, output_xi, output_chi, output_modes, output_stoner
       real(rp), allocatable :: q_points(:, :)
    contains
@@ -72,6 +75,12 @@ contains
       this%band_first = 1
       this%band_last = 0
       this%occupation_tolerance = 0.0_rp
+      this%longitudinal_static_file = ''
+      this%longitudinal_pair_tolerance = 1.0e-10_rp
+      this%longitudinal_linearity_tolerance = 5.0e-2_rp
+      this%longitudinal_static_agreement_tolerance = 5.0e-2_rp
+      this%longitudinal_fit_omega_min = 0.0_rp
+      this%longitudinal_fit_omega_max = huge(1.0_rp)
       this%output_chi0 = .true.
       this%output_xi = .false.
       this%output_chi = .false.
@@ -106,6 +115,12 @@ contains
       electronic_temperature = this%electronic_temperature; fermi_level = this%fermi_level
       band_first = this%band_first; band_last = this%band_last
       occupation_tolerance = this%occupation_tolerance
+      longitudinal_static_file = this%longitudinal_static_file
+      longitudinal_pair_tolerance = this%longitudinal_pair_tolerance
+      longitudinal_linearity_tolerance = this%longitudinal_linearity_tolerance
+      longitudinal_static_agreement_tolerance = this%longitudinal_static_agreement_tolerance
+      longitudinal_fit_omega_min = this%longitudinal_fit_omega_min
+      longitudinal_fit_omega_max = this%longitudinal_fit_omega_max
       output_chi0 = this%output_chi0; output_xi = this%output_xi; output_chi = this%output_chi
       output_modes = this%output_modes; output_stoner = this%output_stoner
 
@@ -134,6 +149,12 @@ contains
       this%electronic_temperature = electronic_temperature; this%fermi_level = fermi_level
       this%band_first = band_first; this%band_last = band_last
       this%occupation_tolerance = occupation_tolerance
+      this%longitudinal_static_file = trim(longitudinal_static_file)
+      this%longitudinal_pair_tolerance = longitudinal_pair_tolerance
+      this%longitudinal_linearity_tolerance = longitudinal_linearity_tolerance
+      this%longitudinal_static_agreement_tolerance = longitudinal_static_agreement_tolerance
+      this%longitudinal_fit_omega_min = longitudinal_fit_omega_min
+      this%longitudinal_fit_omega_max = longitudinal_fit_omega_max
       this%output_chi0 = output_chi0; this%output_xi = output_xi; this%output_chi = output_chi
       this%output_modes = output_modes; this%output_stoner = output_stoner
 
@@ -189,8 +210,8 @@ contains
    subroutine validate_scalar_settings(this)
       class(tddft_config), intent(in) :: this
 
-      if (this%channel /= 'transverse') then
-         call g_logger%fatal("[tddft_config]: only channel='transverse' is currently implemented", __FILE__, __LINE__)
+      if (this%channel /= 'transverse' .and. this%channel /= 'longitudinal') then
+         call g_logger%fatal("[tddft_config]: channel must be 'transverse' or 'longitudinal'", __FILE__, __LINE__)
       end if
       if (this%chi0_backend /= 'eigenpairs') then
          call g_logger%fatal("[tddft_config]: only chi0_backend='eigenpairs' is currently implemented", __FILE__, __LINE__)
@@ -209,6 +230,14 @@ contains
           this%electronic_temperature < 0.0_rp .or. this%band_first < 1 .or. this%band_last < 0 .or. &
           this%occupation_tolerance < 0.0_rp .or. len_trim(this%output_prefix) == 0) then
          call g_logger%fatal('[tddft_config]: invalid frequency, band, temperature, or output settings', __FILE__, __LINE__)
+      end if
+      if (this%channel == 'longitudinal') then
+         if (len_trim(this%longitudinal_static_file) == 0 .or. this%longitudinal_pair_tolerance <= 0.0_rp .or. &
+             this%longitudinal_linearity_tolerance < 0.0_rp .or. this%longitudinal_static_agreement_tolerance < 0.0_rp .or. &
+             this%longitudinal_fit_omega_max < this%longitudinal_fit_omega_min) then
+            call g_logger%fatal('[tddft_config]: longitudinal response requires a static +/- field file and valid fit tolerances', &
+               __FILE__, __LINE__)
+         end if
       end if
       if (this%output_modes .and. (this%nomega < 2 .or. this%omega_max <= this%omega_min)) then
          call g_logger%fatal('[tddft_config]: output_modes requires at least two strictly increasing frequencies', &

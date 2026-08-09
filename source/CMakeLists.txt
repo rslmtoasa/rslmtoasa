@@ -73,6 +73,7 @@ add_library(${PROJECT_NAME} STATIC
     tddft_config.f90
     tddft_chi0.f90
     tddft_dyson.f90
+    tddft_longitudinal.f90
     tddft_goldstone.f90
     tddft_modes.f90
     rsrec_cuda_plugin.f90

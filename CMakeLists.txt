@@ -522,6 +522,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftChiKS PROPERTIES LABELS "unit;tddft;chi_ks;stoner")
   add_fortran_unit_test(UnitTddftGoldstone ${TestDIR}/unit/test_tddft_goldstone.f90)
   set_tests_properties(UnitTddftGoldstone PROPERTIES LABELS "unit;tddft;goldstone;alsda")
+  add_fortran_unit_test(UnitTddftLongitudinal ${TestDIR}/unit/test_tddft_longitudinal.f90)
+  set_tests_properties(UnitTddftLongitudinal PROPERTIES LABELS "unit;tddft;longitudinal;relaxation")
   add_fortran_unit_test(UnitTddftConfig ${TestDIR}/unit/test_tddft_config.f90)
   set_tests_properties(UnitTddftConfig PROPERTIES LABELS "unit;tddft;input;dispatch")
   add_test(NAME UnitTddftDispatch
