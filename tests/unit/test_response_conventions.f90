@@ -9,7 +9,7 @@ program test_response_conventions
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MX, RESPONSE_MY, RESPONSE_MZ, &
       RESPONSE_PLUS, RESPONSE_MINUS
    use response_basis_mod, only: response_operator, ladder_operator
-   use xc_response_kernel_mod, only: xc_response_sample, xc_response_kernel_provider
+   use xc_response_kernel_mod, only: xc_response_sample, xc_response_kernel_provider, xc_response_radial_projection
    implicit none
 
    real(rp), parameter :: tol = 1.0e-13_rp
@@ -19,6 +19,7 @@ program test_response_conventions
    call test_pauli_and_circular_algebra()
    call test_two_level_spin_split_fixture()
    call test_xc_provider_contract()
+   call test_radial_alsda_projection()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -97,6 +98,31 @@ contains
          failed = .true.
       end if
    end subroutine test_xc_provider_contract
+
+   subroutine test_radial_alsda_projection()
+      type(xc_response_kernel_provider) :: provider
+      type(xc_response_radial_projection) :: projection
+
+      ! m(r) = [2,1], B_xc(r) = [1,2]; all values are energy/population
+      ! quantities in the SCF convention.  The response projector population
+      ! is M_site=2.2, so K = (2 + 2)/2.2^2 and B_site = 4/2.2.
+      call projection%clear()
+      call projection%accumulate(1.0_rp, rho_down=1.0_rp, rho_up=3.0_rp, &
+         vxc_down=1.0_rp, vxc_up=3.0_rp)
+      call projection%accumulate(1.0_rp, rho_down=2.0_rp, rho_up=3.0_rp, &
+         vxc_down=0.0_rp, vxc_up=4.0_rp)
+      call provider%initialize(1, 'test-xc')
+      call provider%record_radial_projection(1, projection)
+      call provider%set_site_spin_population(1, 2.2_rp)
+      if (.not. provider%site(1)%has_k_perp .or. &
+          abs(provider%site(1)%radial_spin_population - 3.0_rp) > tol .or. &
+          abs(provider%site(1)%bxc_energy - 4.0_rp/2.2_rp) > tol .or. &
+          abs(provider%site(1)%k_perp - 4.0_rp/(2.2_rp*2.2_rp)) > tol .or. &
+          abs(provider%site(1)%spin_population - 2.2_rp) > tol) then
+         write (*, '(a)') 'FAIL radial ALSDA XC projection'
+         failed = .true.
+      end if
+   end subroutine test_radial_alsda_projection
 
    subroutine assert_matrix(label, actual, expected)
       character(len=*), intent(in) :: label

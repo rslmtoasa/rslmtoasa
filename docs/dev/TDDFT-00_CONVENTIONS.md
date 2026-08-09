@@ -89,9 +89,25 @@ Bxc_energy = (Vxc_up - Vxc_down)/2.
 field in Tesla.  `xc_response_kernel_provider` retains this provenance plus a
 site spin population and future slots for `dVxc/dn`, `dVxc/dm`, `dBxc/dn`,
 `dBxc/dm`, and `K_perp`.  It does not calculate `K_perp` from a Hamiltonian
-block or from a moment ratio.  A future site projection must define its radial
-weights and the mapping from radial spin density to site spin population before
-it fills those derivatives.
+block or an untraced site-moment ratio.  `self%VXC0SP` now accumulates its
+existing radial SCF quadrature, using the returned XC potentials *before*
+the constraining field is added.  The site projection is
+
+```
+K_perp(site) = integral Bxc_energy(r) m(r) dr / M_site^2,
+```
+
+which follows by restricting a transverse `P_site sigma` fluctuation to the
+converged radial spin shape; `M_site` is exactly that response-projector
+population.  This is the energy curvature for that same site variable; it adds
+neither a factor of two nor `mu_B`.  The provider retains the radial spin
+population separately from `potential%mtot`, the latter supplying `M_site`.
+SCF MPI
+ownership is reduced so every rank receives the same complete provider.
+
+`self%refresh_xc_response_kernel()` lets a caller that retains an SCF `self`
+object refresh this provider through the existing atomic SCF/VXC path.  It has
+no Hamiltonian-derived fallback.
 
 ## Retarded convention
 
@@ -110,8 +126,6 @@ This contract does not infer a time convention from static SCF code.
 
 ## Explicitly unresolved
 
-- The radial-to-site projection required for a production ALSDA `K_perp` is not
-  yet defined, so no numerical `K_perp` is supplied.
 - Derivatives of the legacy LDA/GGA and optional libXC functional paths are not
   yet evaluated.  The provider exposes their typed slots but marks each absent
   until a future evaluator populates it.

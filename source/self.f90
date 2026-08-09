@@ -41,6 +41,7 @@ module self_mod
    use mix_mod
    use reciprocal_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, xc_response_radial_projection
    use math_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
@@ -236,6 +237,9 @@ module self_mod
       logical :: use_kspace
       !> Cached reciprocal helper for k-space SCF branch (reused across iterations).
       type(reciprocal), allocatable :: reciprocal_scf_cache
+      !> Ground-state XC data populated at the VXC0SP SCF call site.  This is
+      !> the only permissible source of a transverse TDDFT kernel.
+      type(xc_response_kernel_provider) :: xc_response_provider
 
    contains
       procedure :: build_from_file
@@ -246,6 +250,7 @@ module self_mod
       procedure :: run
       procedure :: report
       procedure :: lmtst
+      procedure :: refresh_xc_response_kernel
       procedure :: is_converged
       procedure, private :: atomsc
       procedure, private :: ftype
@@ -1260,12 +1265,13 @@ contains
       integer :: ia, na_glob, pot_size
    
       call g_timer%start('atomic-scf')
+      call this%xc_response_provider%initialize(this%lattice%nrec, 'SCF-XCPOT')
    
       !=========================================================================
       !                       MAKE SFC ATOMIC SPHERE
       !=========================================================================
       do ia = start_atom, end_atom
-         qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia)) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
+         qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia), ia) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
       end do
       if (rank == 0) call g_logger%info('Atomic SFC done for all atoms', __FILE__, __LINE__)
 
@@ -1288,6 +1294,8 @@ contains
       deallocate (T_comm)
 #endif
 
+      call synchronize_xc_response_provider(this)
+
       !=========================================================================
       !      TRANSFORM POTENTIAL BASIS FROM ORTHOGONAL TO TIGHT-BINDING
       !=========================================================================
@@ -1298,6 +1306,55 @@ contains
    
       call g_timer%stop('atomic-scf')
    end subroutine run_scf
+
+   !> Re-evaluate the atomic SCF XC path for the current ground-state
+   !> potential and refresh the provider.  This is intended for a response
+   !> post-processing consumer which is constructed after the normal SCF
+   !> object has gone out of scope; it does not infer a kernel from Hxc.
+   subroutine refresh_xc_response_kernel(this)
+      class(self), intent(inout) :: this
+      call run_scf(this)
+   end subroutine refresh_xc_response_kernel
+
+   subroutine synchronize_xc_response_provider(this)
+      class(self), intent(inout) :: this
+      real(rp), allocatable :: packed(:, :)
+      integer :: ia
+
+#ifdef USE_MPI
+      allocate(packed(4, this%lattice%nrec))
+      packed = 0.0_rp
+      do ia = 1, this%lattice%nrec
+         if (this%xc_response_provider%site(ia)%has_k_perp) then
+            packed(1, ia) = this%xc_response_provider%site(ia)%radial_spin_population
+            packed(2, ia) = this%xc_response_provider%site(ia)%vxc_scalar
+            packed(3, ia) = this%xc_response_provider%site(ia)%bxc_spin_moment
+            packed(4, ia) = 1.0_rp
+         end if
+      end do
+      call MPI_ALLREDUCE(MPI_IN_PLACE, packed, product(shape(packed)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      do ia = 1, this%lattice%nrec
+         if (packed(4, ia) > 1.5_rp) then
+            call g_logger%fatal('SCF XC response provider received duplicate site records across MPI ranks.', __FILE__, __LINE__)
+         end if
+         if (packed(4, ia) > 0.5_rp) then
+            this%xc_response_provider%site(ia)%radial_spin_population = packed(1, ia)
+            this%xc_response_provider%site(ia)%vxc_scalar = packed(2, ia)
+            this%xc_response_provider%site(ia)%bxc_spin_moment = packed(3, ia)
+            this%xc_response_provider%site(ia)%has_k_perp = .false.
+         end if
+      end do
+      deallocate(packed)
+#endif
+
+      ! This is the same site population used by P_site sigma response
+      ! vertices.  Its setter now normalizes the radial ALSDA numerator to
+      ! that projector, rather than replacing it by a radial atomic quantity.
+      do ia = 1, this%lattice%nrec
+         call this%xc_response_provider%set_site_spin_population(ia, &
+            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mtot)
+      end do
+   end subroutine synchronize_xc_response_provider
 
 
    !---------------------------------------------------------------------------
@@ -1539,14 +1596,16 @@ contains
    !> LMTO sefconsitency in the atomic part
    !> by Michael Methfessel
    !---------------------------------------------------------------------------
-   function lmtst(this, atom) result(QSL)
+   function lmtst(this, atom, isite) result(QSL)
       implicit none
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
+      integer, intent(in), optional :: isite
       real(rp), dimension(6) :: QSL
 
       real(rp), dimension(:, :), allocatable :: v
       real(rp), dimension(:), allocatable :: rofi
+      type(xc_response_radial_projection) :: xc_projection
 
       ! Iterative variables
       integer :: LMAX, NSP
@@ -1554,7 +1613,8 @@ contains
 
       if (rank == 0) call g_logger%info(atom%element%symbol, __FILE__, __LINE__)
 
-      call this%atomsc(atom, v, rofi, "RHO")
+      call this%atomsc(atom, v, rofi, "RHO", xc_projection)
+      if (present(isite)) call this%xc_response_provider%record_radial_projection(isite, xc_projection)
 
       this%VZT(1, 1) = this%VZT(2, 1)
       this%VZT(1, 2) = this%VZT(2, 2)
@@ -1591,13 +1651,14 @@ contains
       end if
    end function lmtst
 
-   subroutine atomsc(this, atom, v, rofi, job)
+   subroutine atomsc(this, atom, v, rofi, job, xc_projection)
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
       type(xc) :: xc_obj
       real(rp), dimension(:, :), allocatable, intent(out) :: v
       real(rp), dimension(:), allocatable, intent(out) :: rofi
       character(LEN=3), intent(in) :: JOB
+      type(xc_response_radial_projection), intent(out) :: xc_projection
 
       integer, parameter :: NCMX = 50
       integer, parameter :: NVMX = 20
@@ -1613,6 +1674,8 @@ contains
       real(rp), dimension(2) :: VRMAX
       real(rp), dimension(:, :), allocatable :: rho_in, rho
       real(rp), dimension(2) :: qval
+
+      call xc_projection%clear()
 
       ipr = 0
       nsp = 2
@@ -1802,7 +1865,7 @@ contains
          call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, NSP)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
-         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP, B_fsm)
+         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP, B_fsm, xc_projection)
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, NSP, IPR1)
          DRHO = 0.d0
          SUM = 0.d0
@@ -3085,7 +3148,7 @@ contains
       end if
    end subroutine POISS0
 
-   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm)
+   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm, xc_projection)
       !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
       !
       ! use xcdata
@@ -3106,6 +3169,7 @@ contains
       real(rp), dimension(NR, NSP), intent(in) :: RHO
       real(rp), dimension(NR, NSP), intent(inout) :: V
       real(rp), intent(in)  :: B_fsm
+      type(xc_response_radial_projection), intent(out) :: xc_projection
       !
       !.. Local Scalars ..
       integer :: IR, ISP, IXC
@@ -3130,6 +3194,7 @@ contains
       ! Constraining field related hacks below
       Bxc_up = 0.0d0
       Bxc_dw = 0.0d0
+      call xc_projection%clear()
       !
       ! Extrapolate density to core point
       do ISP = 1, NSP
@@ -3249,6 +3314,7 @@ contains
                WGT = 1.d0/3.d0
             end if
             DRDI = A*(rofi(IR) + B)
+            call xc_projection%accumulate(WGT*DRDI, RHO(IR, 1), RHO(IR, 2), VXC2, VXC1)
             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
             !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1

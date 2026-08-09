@@ -30,6 +30,13 @@ module xc_response_kernel_mod
       ! Site-projected spin population n_up - n_down; it is not a Tesla field
       ! or a magnetic moment in SI units.
       real(rp) :: spin_population = 0.0_rp
+      ! Radial ASA spin population used to define the projected ALSDA
+      ! stiffness.  It is retained separately from spin_population, whose
+      ! value is the response-projector population (P_site sigma).
+      real(rp) :: radial_spin_population = 0.0_rp
+      ! Numerator of the radial ALSDA projection, retained until the
+      ! P_site-sigma population has been supplied.
+      real(rp) :: bxc_spin_moment = 0.0_rp
       real(rp) :: vxc_scalar = 0.0_rp
       real(rp) :: bxc_energy = 0.0_rp
       real(rp) :: dvxc_dn = 0.0_rp
@@ -44,6 +51,19 @@ module xc_response_kernel_mod
       logical :: has_k_perp = .false.
    end type xc_response_site
 
+   !> Accumulator for one radial VXC0SP evaluation.  `radial_weight` below is
+   !> the SCF quadrature factor WGT*DRDI; its density arguments are the radial
+   !> densities RHO used by the existing SCF integration.
+   type, public :: xc_response_radial_projection
+      real(rp) :: charge_population = 0.0_rp
+      real(rp) :: spin_population = 0.0_rp
+      real(rp) :: vxc_charge_moment = 0.0_rp
+      real(rp) :: bxc_spin_moment = 0.0_rp
+   contains
+      procedure :: clear => xc_radial_projection_clear
+      procedure :: accumulate => xc_radial_projection_accumulate
+   end type xc_response_radial_projection
+
    type, public :: xc_response_kernel_provider
       character(len=32) :: functional_label = 'unrecorded'
       type(xc_response_site), allocatable :: site(:)
@@ -51,6 +71,8 @@ module xc_response_kernel_mod
       procedure :: initialize => xc_kernel_initialize
       procedure :: clear => xc_kernel_clear
       procedure :: record_ground_state_site => xc_kernel_record_ground_state_site
+      procedure :: record_radial_projection => xc_kernel_record_radial_projection
+      procedure :: set_site_spin_population => xc_kernel_set_site_spin_population
       procedure :: set_site_derivatives => xc_kernel_set_site_derivatives
    end type xc_response_kernel_provider
 
@@ -78,6 +100,31 @@ contains
       sample%vxc_scalar = 0.5_rp*(v_up + v_down)
       sample%bxc_energy = 0.5_rp*(v_up - v_down)
    end function evaluate_ground_state_xc_sample
+
+   subroutine xc_radial_projection_clear(this)
+      class(xc_response_radial_projection), intent(inout) :: this
+      this%charge_population = 0.0_rp
+      this%spin_population = 0.0_rp
+      this%vxc_charge_moment = 0.0_rp
+      this%bxc_spin_moment = 0.0_rp
+   end subroutine xc_radial_projection_clear
+
+   !> Accumulate an XC sample already evaluated by VXC0SP.  No second XC
+   !> evaluation and no FSM/constraining field enter this record.
+   subroutine xc_radial_projection_accumulate(this, radial_weight, rho_down, rho_up, vxc_down, vxc_up)
+      class(xc_response_radial_projection), intent(inout) :: this
+      real(rp), intent(in) :: radial_weight, rho_down, rho_up, vxc_down, vxc_up
+      real(rp) :: charge_density, spin_density, vxc_scalar, bxc_energy
+
+      charge_density = rho_up + rho_down
+      spin_density = rho_up - rho_down
+      vxc_scalar = 0.5_rp*(vxc_up + vxc_down)
+      bxc_energy = 0.5_rp*(vxc_up - vxc_down)
+      this%charge_population = this%charge_population + radial_weight*charge_density
+      this%spin_population = this%spin_population + radial_weight*spin_density
+      this%vxc_charge_moment = this%vxc_charge_moment + radial_weight*charge_density*vxc_scalar
+      this%bxc_spin_moment = this%bxc_spin_moment + radial_weight*spin_density*bxc_energy
+   end subroutine xc_radial_projection_accumulate
 
    subroutine xc_kernel_initialize(this, nsite, functional_label)
       class(xc_response_kernel_provider), intent(inout) :: this
@@ -107,6 +154,68 @@ contains
       this%site(isite)%vxc_scalar = sample%vxc_scalar
       this%site(isite)%bxc_energy = sample%bxc_energy
    end subroutine xc_kernel_record_ground_state_site
+
+   !> Store a radial ALSDA projection for one response site.
+   !>
+   !> The site response variable is the total P_site sigma population.  Taking
+   !> its transverse fluctuation to preserve the SCF radial spin shape gives
+   !>
+   !>   K_perp(site) = integral B_xc(r)m(r) dr / M_site^2,
+   !>
+   !> where M_site is the P_site sigma population supplied separately by
+   !> set_site_spin_population.  Here B_xc is the *energy* coefficient
+   !> (V_up-V_down)/2.  This is the
+   !> direct rotational ALSDA derivative in the code's m=n_up-n_down and
+   !> H=H0+Hvec.sigma convention; no factor of two or mu_B is inserted.
+   subroutine xc_kernel_record_radial_projection(this, isite, projection)
+      class(xc_response_kernel_provider), intent(inout) :: this
+      integer, intent(in) :: isite
+      type(xc_response_radial_projection), intent(in) :: projection
+      real(rp) :: mrad
+
+      call require_site(this, isite, 'record_radial_projection')
+      mrad = projection%spin_population
+      this%site(isite)%radial_spin_population = mrad
+      if (abs(projection%charge_population) > tiny(1.0_rp)) then
+         this%site(isite)%vxc_scalar = projection%vxc_charge_moment/projection%charge_population
+      else
+         this%site(isite)%vxc_scalar = 0.0_rp
+      end if
+      this%site(isite)%bxc_spin_moment = projection%bxc_spin_moment
+      call finalize_site_k_perp(this%site(isite))
+   end subroutine xc_kernel_record_radial_projection
+
+   !> Set the ground-state population in the same site projector used by the
+   !> response vertices.  It is intentionally not substituted by a radial
+   !> population, since those are distinct projections in the current code.
+   subroutine xc_kernel_set_site_spin_population(this, isite, spin_population)
+      class(xc_response_kernel_provider), intent(inout) :: this
+      integer, intent(in) :: isite
+      real(rp), intent(in) :: spin_population
+
+      call require_site(this, isite, 'set_site_spin_population')
+      this%site(isite)%spin_population = spin_population
+      call finalize_site_k_perp(this%site(isite))
+   end subroutine xc_kernel_set_site_spin_population
+
+   subroutine finalize_site_k_perp(site)
+      type(xc_response_site), intent(inout) :: site
+
+      ! A radial m=0 record cannot define a rotation profile.  Likewise the
+      ! stiffness cannot be normalized before the response projector's M_site
+      ! is known.  This deliberately leaves the provider invalid in either
+      ! case rather than replacing M_site with an unrelated quantity.
+      if (abs(site%radial_spin_population) <= tiny(1.0_rp) .or. &
+         abs(site%spin_population) <= tiny(1.0_rp)) then
+         site%bxc_energy = 0.0_rp
+         site%k_perp = 0.0_rp
+         site%has_k_perp = .false.
+         return
+      end if
+      site%bxc_energy = site%bxc_spin_moment/site%spin_population
+      site%k_perp = site%bxc_energy/site%spin_population
+      site%has_k_perp = .true.
+   end subroutine finalize_site_k_perp
 
    subroutine xc_kernel_set_site_derivatives(this, isite, dvxc_dn, dvxc_dm, dbxc_dn, dbxc_dm, k_perp)
       class(xc_response_kernel_provider), intent(inout) :: this
