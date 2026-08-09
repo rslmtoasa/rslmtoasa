@@ -706,3 +706,5 @@ if(WIN32)
    endif()
 
 include(CPack)
+  add_fortran_unit_test(UnitTddftDysonModes ${TestDIR}/unit/test_tddft_dyson_modes.f90)
+  set_tests_properties(UnitTddftDysonModes PROPERTIES LABELS "unit;tddft;dyson;modes;damping")

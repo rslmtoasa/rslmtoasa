@@ -37,7 +37,7 @@ Some preparatory work can overlap, but scientific signoff should respect the gat
 - [ ] TDDFT-02 — response basis + transition vertices
 - [x] TDDFT-03 — bare transverse KS susceptibility
 - [ ] TDDFT-04 — ALSDA kernel + Goldstone diagnostics
-- [ ] TDDFT-05 — Dyson + Xi + modes + damping
+- [x] TDDFT-05 — Dyson + Xi + modes + damping
 - [ ] TDDFT-06 — production wiring + I/O + MPI over q
 - [ ] TDDFT-07 — transverse validation campaign
 - [ ] TDDFT-08 — longitudinal susceptibility + relaxation

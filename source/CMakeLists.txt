@@ -71,7 +71,9 @@ add_library(${PROJECT_NAME} STATIC
     response_basis.f90
     response_vertices.f90
     tddft_chi0.f90
+    tddft_dyson.f90
     tddft_goldstone.f90
+    tddft_modes.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
     sigma_provider.f90
