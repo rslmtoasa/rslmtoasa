@@ -67,6 +67,8 @@ add_library(${PROJECT_NAME} STATIC
     recursion_transport.f90
     sparse.f90
     report.f90
+    response_components.f90
+    response_basis.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
     sigma_provider.f90
@@ -80,6 +82,7 @@ add_library(${PROJECT_NAME} STATIC
     timer.f90
     vacuum_lead.f90
     xc.f90
+    xc_response_kernel.f90
 )
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")

@@ -1,0 +1,121 @@
+# TDDFT-00: Response conventions and XC-kernel interface
+
+This is the executable convention contract for LR-TDDFT.  It covers response
+operators and XC provenance only; it intentionally does not implement
+`chi_KS`, a TDDFT Dyson solve, Goldstone correction, SOC response, GBT changes,
+or longitudinal response.
+
+## Hamiltonian and spin basis
+
+The normal electronic basis is spin-major:
+
+```
+(orbital_1 up, ..., orbital_N up, orbital_1 down, ..., orbital_N down).
+```
+
+`basis_mod` sets `spin_off = norb`; `hamiltonian_build.f90` writes
+
+```
+H(up,up)     = H0 + Hz
+H(down,down) = H0 - Hz
+H(up,down)   = Hx - i Hy
+H(down,up)   = Hx + i Hy.
+```
+
+Thus the *assembled electronic block* has the algebraic form
+`H = H0 sigma_0 + Hx sigma_x + Hy sigma_y + Hz sigma_z`.  Its magnetic part
+`hamiltonian%hxc` is filled by copying the full `Hvec.sigma` block.  It has
+LMTO representation-dependent matrix and hopping structure; it is not an
+identified local XC field and is never used as the TDDFT kernel input.
+
+`response_basis_mod` builds those matrices in precisely this ordering.  Its
+`response_operator(PLUS)` is `sigma_x + i sigma_y`, because the response
+variable is defined as `m_plus = m_x + i*m_y`.  The conventional ladder
+operator `sigma_plus = (sigma_x + i*sigma_y)/2` is separately available through
+`ladder_operator(PLUS)`.  The same statements hold with `-` signs for MINUS.
+This distinction is pinned by `UnitResponseConventions`.
+
+## Density, moment, and units
+
+`math_mod%rho2nm` defines the electronic density components directly from the
+2x2 density matrix:
+
+```
+n  = rho_upup + rho_downdown
+mx = rho_updown + rho_downup
+my = Im(rho_downup - rho_updown)
+mz = rho_upup - rho_downdown.
+```
+
+They are spin-population/electron-number components.  `bands%calculate_magnetic_moments`
+integrates the same spin-resolved DOS difference and stores `potential%mx,my,mz,mtot`;
+no `mu_B` factor is applied in that electronic response path.  Existing user
+documentation calls the displayed number a spin magnetic moment in Bohr
+magnetons, which is the usual numerical identification for an electron spin
+population with `g=2`, but that conversion is not an internal response-kernel
+normalization.
+
+The internal energy unit is Rydberg: `math_mod%ry2ev` and `ry2joule` are used by
+the code, and the libXC wrapper explicitly converts Hartree outputs by two.
+`ry2tesla` exists only as a conversion constant.  The SCF XC potential and the
+Hamiltonian coefficients above are energy-valued Rydbergs, not Tesla.  There is
+no `mu_B` in `VXC0SP` or the Hamiltonian assembly.  Therefore no `mu_B` may be
+introduced into a TDDFT kernel unless its input/output response variables have
+first been converted from this spin-population convention to a physical
+magnetization convention.
+
+## Ground-state XC provenance
+
+The production radial SCF path is
+
+```
+self%VXC0SP -> xc_obj%XCPOT(rho_down, rho_up, rho_total, ...) -> VXC1/VXC2.
+```
+
+`VXC0SP` passes `RHO1 = rho_down` and `RHO2 = rho_up`, and calls XCPOT with
+output arguments in the order `VXC2, VXC1`.  Consequently `VXC1` is the up
+potential and `VXC2` is the down potential.  It adds `+B_fsm/-B_fsm` only after
+the XC call; this constraining field is not XC.
+
+For a radial sample, `xc_response_kernel_mod%evaluate_ground_state_xc_sample`
+calls that exact `XCPOT` route and stores
+
+```
+Vxc_scalar = (Vxc_up + Vxc_down)/2
+Bxc_energy = (Vxc_up - Vxc_down)/2.
+```
+
+`Bxc_energy` is deliberately named as an energy coefficient, not a magnetic
+field in Tesla.  `xc_response_kernel_provider` retains this provenance plus a
+site spin population and future slots for `dVxc/dn`, `dVxc/dm`, `dBxc/dn`,
+`dBxc/dm`, and `K_perp`.  It does not calculate `K_perp` from a Hamiltonian
+block or from a moment ratio.  A future site projection must define its radial
+weights and the mapping from radial spin density to site spin population before
+it fills those derivatives.
+
+## Retarded convention
+
+No existing source module defines a dynamical TDDFT Fourier transform.  The
+frozen TDDFT convention is therefore
+
+```
+delta W(t) = Re[delta W(omega) exp(-i omega t)]
+chi^R(t)  = -i theta(t) <[A(t), B(0)]>.
+```
+
+Future `chi_KS` code must use energy-valued `omega` in Rydberg and the retarded
+denominator `omega + epsilon_n - epsilon_m + i*eta`, with `eta > 0`.  Physical
+angular frequency requires `omega_energy = hbar*omega_SI` converted to Rydberg.
+This contract does not infer a time convention from static SCF code.
+
+## Explicitly unresolved
+
+- The radial-to-site projection required for a production ALSDA `K_perp` is not
+  yet defined, so no numerical `K_perp` is supplied.
+- Derivatives of the legacy LDA/GGA and optional libXC functional paths are not
+  yet evaluated.  The provider exposes their typed slots but marks each absent
+  until a future evaluator populates it.
+- The legacy SCF radial path currently calls `XCPOT` directly.  `XCPOT_hybrid`
+  (the libXC wrapper) is not called by `VXC0SP`; a future libXC-response change
+  must first reconcile that ground-state path rather than assume the wrapper
+  was active.

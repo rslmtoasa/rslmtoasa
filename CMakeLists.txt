@@ -507,6 +507,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitGbtStructure PROPERTIES LABELS "unit;gbt;wp4")
   add_fortran_unit_test(UnitSpinDensity ${TestDIR}/unit/test_spin_density.f90)
   set_tests_properties(UnitSpinDensity PROPERTIES LABELS "unit;gbt;wp7;density")
+  add_fortran_unit_test(UnitResponseConventions ${TestDIR}/unit/test_response_conventions.f90)
+  set_tests_properties(UnitResponseConventions PROPERTIES LABELS "unit;tddft;conventions")
   set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
     add_test(NAME UnitKspaceOccupations_mpi
