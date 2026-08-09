@@ -46,8 +46,12 @@ module calculation_mod
    use string_mod, only: sl, fmt, real2str, int2str
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
-   use basis_mod, only: basis_init
+   use basis_mod, only: basis_init, norb
    use magnetic_representation_mod, only: gbt_single_q
+   use tddft_config_mod, only: tddft_config
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
+   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
+   use response_vertices_mod, only: response_channel
    implicit none
 
    private
@@ -142,6 +146,7 @@ module calculation_mod
       procedure, private :: post_processing_density_of_states
       procedure, private :: post_processing_kspace_green
       procedure, private :: post_processing_frozen_magnon
+      procedure, private :: post_processing_susceptibility
       procedure :: process
       final :: destructor
    end type calculation
@@ -281,6 +286,8 @@ contains
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
          call this%post_processing_frozen_magnon()
+      case ('susceptibility')
+         call this%post_processing_susceptibility()
       end select
    end subroutine
 
@@ -1923,6 +1930,168 @@ contains
       end if
    end subroutine post_processing_frozen_magnon
 
+   !---------------------------------------------------------------------------
+   !> @brief Finite-q transverse KS susceptibility production route.
+   !> @details This is intentionally MPI-over-q: each rank owns complete,
+   !> caller-local k/k+q eigenpair batches for its assigned q points.  That
+   !> keeps the existing reciprocal k mesh unmodified and makes every emitted
+   !> q file independent, deterministic, and restart-friendly.  Frequency
+   !> batching remains inside build_chi_ks_from_eigenpairs.
+   !>
+   !> Enhanced TDDFT products are deliberately rejected at this boundary until
+   !> the SCF path records a site-projected XC K_perp in
+   !> xc_response_kernel_provider.  In particular this routine must not infer
+   !> K_perp from hamiltonian%hxc/cx1 or any other assembled Hamiltonian block.
+   !---------------------------------------------------------------------------
+   subroutine post_processing_susceptibility(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(energy), target :: energy_obj
+      type(charge), target :: charge_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(recursion), target :: recursion_obj
+      type(green), target :: green_obj
+      type(dos), target :: dos_obj
+      type(bands), target :: bands_obj
+      type(mix), target :: mix_obj
+      type(reciprocal) :: reciprocal_obj
+      type(tddft_config) :: config
+      type(tddft_chi0_options) :: chi0_options
+      type(tddft_chi0_result) :: chi0_result
+      type(response_channel), allocatable :: left_channels(:), right_channels(:)
+      real(rp), allocatable :: omega(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
+      complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, allocatable :: site_orbital_counts(:)
+      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite
+      logical :: has_soc, has_external_field
+      character(len=sl) :: filename
+
+      config = tddft_config(this%fname)
+      if (.not. config%enabled) then
+         if (rank == 0) call g_logger%info('TDDFT susceptibility route disabled by &tddft enabled=.false.', __FILE__, __LINE__)
+         return
+      end if
+      if (config%output_xi .or. config%output_chi .or. config%output_modes) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: enhanced Xi/chi/mode output requires '// &
+            'a site-projected XC K_perp provider populated by SCF; no Hamiltonian-derived kernel fallback is permitted.', &
+            __FILE__, __LINE__)
+      end if
+
+      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
+         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      ! Response uses a complete reciprocal mesh.  A reduced mesh cannot in
+      ! general be paired with k+q without response-specific symmetry weights.
+      reciprocal_obj%use_symmetry_reduction = .false.
+      reciprocal_obj%use_time_reversal = .false.
+      call reciprocal_obj%generate_mp_mesh()
+
+      nq = size(config%q_points, 2)
+      call get_mpi_range(rank, nq, iq_start, iq_end, nq_per_rank, region_tag='tddft-q')
+      nw = config%nomega
+      allocate(omega(nw))
+      if (nw == 1) then
+         omega(1) = config%omega_min
+      else
+         do iq = 1, nw
+            omega(iq) = config%omega_min + real(iq-1, rp)*(config%omega_max-config%omega_min)/real(nw-1, rp)
+         end do
+      end if
+
+      allocate(site_orbital_counts(lattice_obj%nrec), left_channels(lattice_obj%nrec), right_channels(lattice_obj%nrec))
+      site_orbital_counts = norb
+      do iq = 1, lattice_obj%nrec
+         left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
+         right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+      end do
+      chi0_options%eta = config%eta
+      chi0_options%fermi_level = config%fermi_level
+      chi0_options%electronic_temperature = config%electronic_temperature
+      chi0_options%band_first = config%band_first
+      chi0_options%band_last = config%band_last
+      chi0_options%occupation_prune_tolerance = config%occupation_tolerance
+      chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
+      has_soc = .false.
+      do isite = 1, lattice_obj%ntype
+         has_soc = has_soc .or. any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_p) > tiny(1.0_rp)) .or. &
+            any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_d) > tiny(1.0_rp))
+      end do
+      has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
+
+      ! k eigenpairs are independent of q and are therefore reused on each q
+      ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
+      call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points, eigenvalues_k, eigenvectors_k)
+      do iq = iq_start, iq_end
+         allocate(kq_points(3, reciprocal_obj%nk_total))
+         kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
+         call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_points, eigenvalues_kq, eigenvectors_kq)
+         call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+            eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
+         if (config%output_chi0 .or. config%output_stoner) then
+            write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
+            call write_chi_ks_text(trim(filename), omega, chi0_result)
+            call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
+               has_soc, has_external_field)
+         end if
+         deallocate(kq_points, eigenvalues_kq, eigenvectors_kq)
+      end do
+
+      ! A deterministic manifest is written once; individual q files are
+      ! never concurrently opened by more than one rank.
+      if (rank == 0) then
+         write(filename, '(a,"_manifest.dat")') trim(config%output_prefix)
+         open(newunit=unit, file=trim(filename), status='replace', action='write', iostat=ios)
+         if (ios /= 0) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: cannot write manifest', __FILE__, __LINE__)
+         end if
+         write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
+         write(unit, '(a)') '# q_index q1 q2 q3 chi0_file'
+         do iq = 1, nq
+            write(unit, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
+            write(unit, '(i0,3(1x,es24.16),1x,a)') iq, config%q_points(:, iq), trim(filename)
+         end do
+         close(unit)
+      end if
+   end subroutine post_processing_susceptibility
+
+   subroutine append_tddft_metadata(filename, config, iq, k_mesh, q_point, mpi_rank, has_soc, has_external_field)
+      character(len=*), intent(in) :: filename
+      type(tddft_config), intent(in) :: config
+      integer, intent(in) :: iq, k_mesh(3), mpi_rank
+      real(rp), intent(in) :: q_point(3)
+      logical, intent(in) :: has_soc, has_external_field
+      integer :: unit, ios
+
+      open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+      if (ios /= 0) call g_logger%fatal('[calculation.append_tddft_metadata]: cannot append response metadata', __FILE__, __LINE__)
+      write(unit, '(a)') '# production_metadata_begin'
+      write(unit, '(a,a)') '# channel = ', trim(config%channel)
+      write(unit, '(a,a)') '# chi0_backend = ', trim(config%chi0_backend)
+      write(unit, '(a,a)') '# response_projection = ', trim(config%response_projection)
+      write(unit, '(a,a)') '# q_mode = ', trim(config%q_mode)
+      write(unit, '(a,a)') '# q_coordinates = ', trim(config%q_coordinates)
+      write(unit, '(a,i0)') '# q_index = ', iq
+      write(unit, '(a,3(1x,es24.16))') '# q_direct =', q_point
+      write(unit, '(a,3(1x,i0))') '# k_mesh =', k_mesh
+      write(unit, '(a,es24.16)') '# omega_min_Ry = ', config%omega_min
+      write(unit, '(a,es24.16)') '# omega_max_Ry = ', config%omega_max
+      write(unit, '(a,i0)') '# nomega = ', config%nomega
+      write(unit, '(a,es24.16)') '# eta_Ry = ', config%eta
+      write(unit, '(a,es24.16)') '# electronic_temperature_K = ', config%electronic_temperature
+      write(unit, '(a,es24.16)') '# fermi_level_Ry = ', config%fermi_level
+      write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', config%band_first, config%band_last
+      write(unit, '(a,es24.16)') '# occupation_prune_tolerance = ', config%occupation_tolerance
+      write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
+      write(unit, '(a,l1)') '# spin_orbit_present = ', has_soc
+      write(unit, '(a,l1)') '# external_symmetry_breaking_field_present = ', has_external_field
+      write(unit, '(a,5(1x,l1))') '# output_chi0 output_xi output_chi output_modes output_stoner =', &
+         config%output_chi0, config%output_xi, config%output_chi, config%output_modes, config%output_stoner
+      write(unit, '(a,i0)') '# mpi_q_owner_rank = ', mpi_rank
+      write(unit, '(a)') '# production_metadata_end'
+      close(unit)
+   end subroutine append_tddft_metadata
+
    !> @brief Single acoustic-branch frozen-magnon sweep (fm_obj%branch_mode
    !>        /= 'auto' path of post_processing_frozen_magnon).
    !> @details For mode='mft' the routine converges the reference potential
@@ -2481,11 +2650,12 @@ contains
           .and. post_processing /= 'bsf' &
           .and. post_processing /= 'density_of_states' &
           .and. post_processing /= 'kspace_green' &
-          .and. post_processing /= 'frozen_magnon') then
+          .and. post_processing /= 'frozen_magnon' &
+          .and. post_processing /= 'susceptibility') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
+                             " 'kspace_green', 'frozen_magnon', 'susceptibility'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

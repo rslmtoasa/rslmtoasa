@@ -516,6 +516,11 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftChiKS PROPERTIES LABELS "unit;tddft;chi_ks;stoner")
   add_fortran_unit_test(UnitTddftGoldstone ${TestDIR}/unit/test_tddft_goldstone.f90)
   set_tests_properties(UnitTddftGoldstone PROPERTIES LABELS "unit;tddft;goldstone;alsda")
+  add_fortran_unit_test(UnitTddftConfig ${TestDIR}/unit/test_tddft_config.f90)
+  set_tests_properties(UnitTddftConfig PROPERTIES LABELS "unit;tddft;input;dispatch")
+  add_test(NAME UnitTddftDispatch
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_dispatch.py)
+  set_tests_properties(UnitTddftDispatch PROPERTIES LABELS "unit;tddft;dispatch")
   set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
     add_test(NAME UnitKspaceOccupations_mpi
