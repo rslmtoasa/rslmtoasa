@@ -18,6 +18,8 @@ def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     assert "is_full_response = config%channel == 'full'" in source
     assert "build_four_component_chi_ks" in source
     assert "build_four_component_kernel" in source
+    assert "config%chi0_backend == 'green'" in source
+    assert "build_chi_ks_from_green_functions" in source
     assert "enhance_tddft_susceptibility" in source
     assert "MPI_ALLREDUCE(MPI_IN_PLACE, all_xi" in source
 

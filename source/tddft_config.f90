@@ -31,6 +31,10 @@ module tddft_config_mod
       real(rp) :: electronic_temperature, fermi_level
       integer :: band_first, band_last
       real(rp) :: occupation_tolerance
+      !> Real-axis GF bubble controls.  A zero green_eta means eta/2, and a
+      !> reversed energy window requests a source-spectrum-derived window.
+      real(rp) :: green_eta, green_energy_min, green_energy_max
+      integer :: green_energy_points
       character(len=sl) :: longitudinal_static_file
       real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance
       real(rp) :: longitudinal_static_agreement_tolerance, longitudinal_fit_omega_min, longitudinal_fit_omega_max
@@ -75,6 +79,10 @@ contains
       this%band_first = 1
       this%band_last = 0
       this%occupation_tolerance = 0.0_rp
+      this%green_eta = 0.0_rp
+      this%green_energy_min = huge(1.0_rp)
+      this%green_energy_max = -huge(1.0_rp)
+      this%green_energy_points = 2001
       this%longitudinal_static_file = ''
       this%longitudinal_pair_tolerance = 1.0e-10_rp
       this%longitudinal_linearity_tolerance = 5.0e-2_rp
@@ -115,6 +123,9 @@ contains
       electronic_temperature = this%electronic_temperature; fermi_level = this%fermi_level
       band_first = this%band_first; band_last = this%band_last
       occupation_tolerance = this%occupation_tolerance
+      green_eta = this%green_eta
+      green_energy_min = this%green_energy_min; green_energy_max = this%green_energy_max
+      green_energy_points = this%green_energy_points
       longitudinal_static_file = this%longitudinal_static_file
       longitudinal_pair_tolerance = this%longitudinal_pair_tolerance
       longitudinal_linearity_tolerance = this%longitudinal_linearity_tolerance
@@ -149,6 +160,9 @@ contains
       this%electronic_temperature = electronic_temperature; this%fermi_level = fermi_level
       this%band_first = band_first; this%band_last = band_last
       this%occupation_tolerance = occupation_tolerance
+      this%green_eta = green_eta
+      this%green_energy_min = green_energy_min; this%green_energy_max = green_energy_max
+      this%green_energy_points = green_energy_points
       this%longitudinal_static_file = trim(longitudinal_static_file)
       this%longitudinal_pair_tolerance = longitudinal_pair_tolerance
       this%longitudinal_linearity_tolerance = longitudinal_linearity_tolerance
@@ -213,8 +227,8 @@ contains
       if (this%channel /= 'transverse' .and. this%channel /= 'longitudinal' .and. this%channel /= 'full') then
          call g_logger%fatal("[tddft_config]: channel must be 'transverse', 'longitudinal', or 'full'", __FILE__, __LINE__)
       end if
-      if (this%chi0_backend /= 'eigenpairs') then
-         call g_logger%fatal("[tddft_config]: only chi0_backend='eigenpairs' is currently implemented", __FILE__, __LINE__)
+      if (this%chi0_backend /= 'eigenpairs' .and. this%chi0_backend /= 'green') then
+         call g_logger%fatal("[tddft_config]: chi0_backend must be 'eigenpairs' or 'green'", __FILE__, __LINE__)
       end if
       if (this%response_projection /= 'site') then
          call g_logger%fatal("[tddft_config]: only response_projection='site' is currently implemented", __FILE__, __LINE__)
@@ -230,6 +244,11 @@ contains
           this%electronic_temperature < 0.0_rp .or. this%band_first < 1 .or. this%band_last < 0 .or. &
           this%occupation_tolerance < 0.0_rp .or. len_trim(this%output_prefix) == 0) then
          call g_logger%fatal('[tddft_config]: invalid frequency, band, temperature, or output settings', __FILE__, __LINE__)
+      end if
+      if (this%green_eta < 0.0_rp .or. this%green_energy_points < 3 .or. &
+          (this%green_energy_min < huge(1.0_rp)/2.0_rp .and. &
+           this%green_energy_max > -huge(1.0_rp)/2.0_rp .and. this%green_energy_max <= this%green_energy_min)) then
+         call g_logger%fatal('[tddft_config]: invalid Green-function energy integration settings', __FILE__, __LINE__)
       end if
       if (this%channel == 'longitudinal') then
          if (len_trim(this%longitudinal_static_file) == 0 .or. this%longitudinal_pair_tolerance <= 0.0_rp .or. &

@@ -50,6 +50,8 @@ module calculation_mod
    use magnetic_representation_mod, only: gbt_single_q
    use tddft_config_mod, only: tddft_config
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
+   use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
+      build_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
@@ -1971,6 +1973,8 @@ contains
       type(reciprocal) :: reciprocal_obj
       type(tddft_config) :: config
       type(tddft_chi0_options) :: chi0_options
+      type(green_chi0_options) :: green_options
+      type(eigenpair_green_function_provider), target :: green_source
       type(tddft_chi0_result) :: chi0_result, chi0_static
       type(tddft_dyson_options) :: dyson_options
       type(tddft_dyson_result) :: dyson_result
@@ -1987,6 +1991,7 @@ contains
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), coulomb_site(:, :), magnetization(:, :)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
+      real(rp) :: response_eta
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
@@ -2058,6 +2063,14 @@ contains
       chi0_options%band_last = config%band_last
       chi0_options%occupation_prune_tolerance = config%occupation_tolerance
       chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
+      green_options%eta = config%eta
+      green_options%green_eta = config%green_eta
+      green_options%fermi_level = config%fermi_level
+      green_options%electronic_temperature = config%electronic_temperature
+      green_options%energy_min = config%green_energy_min
+      green_options%energy_max = config%green_energy_max
+      green_options%energy_points = config%green_energy_points
+      green_options%k_mesh_shape = reciprocal_obj%nk_mesh
       has_soc = .false.
       do isite = 1, lattice_obj%ntype
          has_soc = has_soc .or. any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_p) > tiny(1.0_rp)) .or. &
@@ -2078,7 +2091,16 @@ contains
       ! kernel from independently converged symmetric +/- Bz calculations.
       allocate(omega_static(1))
       omega_static = 0.0_rp
-      if (is_full_response) then
+      if (config%chi0_backend == 'green') then
+         call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
+         if (is_full_response) then
+            call build_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
+               site_orbital_counts, omega_static, green_options, chi0_static)
+         else
+            call build_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
+               left_channels, right_channels, omega_static, green_options, chi0_static)
+         end if
+      else if (is_full_response) then
          call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
             eigenvectors_k, site_orbital_counts, omega_static, chi0_options, chi0_static)
       else
@@ -2165,13 +2187,23 @@ contains
          allocate(kq_points(3, reciprocal_obj%nk_total))
          kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
          call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_points, eigenvalues_kq, eigenvectors_kq)
-         if (is_full_response) then
+         if (config%chi0_backend == 'green') then
+            call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
+            if (is_full_response) then
+               call build_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
+                  site_orbital_counts, omega, green_options, chi0_result)
+            else
+               call build_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
+                  left_channels, right_channels, omega, green_options, chi0_result)
+            end if
+         else if (is_full_response) then
             call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
                eigenvectors_kq, site_orbital_counts, omega, chi0_options, chi0_result)
          else
             call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
                eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
          end if
+         response_eta = chi0_result%metadata%eta
          if (config%output_chi0 .or. config%output_stoner) then
             write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
             call write_chi_ks_text(trim(filename), omega, chi0_result)
@@ -2179,7 +2211,7 @@ contains
                has_soc, has_external_field)
          end if
          if (need_dyson) then
-            call enhance_tddft_susceptibility(chi0_result%chi, kernel, config%eta, dyson_options, dyson_result)
+            call enhance_tddft_susceptibility(chi0_result%chi, kernel, response_eta, dyson_options, dyson_result)
             if (config%output_xi .or. config%output_chi) then
                write(filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
                call write_tddft_dyson_text(trim(filename), omega, dyson_result)
@@ -2190,7 +2222,7 @@ contains
                call calibrate_longitudinal_response(m0, chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), &
                   omega, dyson_result%chi, longitudinal_options, longitudinal_result)
                write(filename, '(a,"_q",i6.6,"_longitudinal.dat")') trim(config%output_prefix), iq
-               call write_longitudinal_report(trim(filename), omega, config%eta, longitudinal_static, longitudinal_result)
+               call write_longitudinal_report(trim(filename), omega, response_eta, longitudinal_static, longitudinal_result)
                call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
                   has_soc, has_external_field)
             end if
@@ -2208,9 +2240,9 @@ contains
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss, size(all_trace_loss), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
          if (rank == 0) then
-            call analyze_tddft_modes(omega, all_xi, all_trace_loss, config%eta, mode_options, mode_result)
+            call analyze_tddft_modes(omega, all_xi, all_trace_loss, response_eta, mode_options, mode_result)
             write(filename, '(a,"_modes.dat")') trim(config%output_prefix)
-            call write_tddft_modes_text(trim(filename), omega, config%eta, mode_result)
+            call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
             call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
                rank, has_soc, has_external_field)
          end if
@@ -2265,6 +2297,9 @@ contains
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', config%fermi_level
       write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', config%band_first, config%band_last
       write(unit, '(a,es24.16)') '# occupation_prune_tolerance = ', config%occupation_tolerance
+      write(unit, '(a,es24.16)') '# green_eta_Ry = ', config%green_eta
+      write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
+      write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
       write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
       write(unit, '(a,l1)') '# spin_orbit_present = ', has_soc
       write(unit, '(a,l1)') '# external_symmetry_breaking_field_present = ', has_external_field

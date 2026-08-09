@@ -39,6 +39,8 @@ module tddft_chi0_mod
 
    !> Reproducibility metadata written with every chi_KS output.
    type, public :: tddft_chi0_metadata
+      character(len=32) :: backend = 'eigenpairs'
+      character(len=32) :: energy_integration = 'not applicable'
       character(len=16) :: energy_unit = 'Rydberg'
       character(len=32) :: susceptibility_unit = '1/Rydberg'
       character(len=96) :: frequency_convention = 'retarded: omega is energy; denominator omega+en-em+i*eta'
@@ -54,6 +56,10 @@ module tddft_chi0_mod
       integer :: band_first = 0
       integer :: band_last = 0
       real(rp) :: occupation_prune_tolerance = 0.0_rp
+      real(rp) :: green_eta = 0.0_rp
+      real(rp) :: integration_energy_min = 0.0_rp
+      real(rp) :: integration_energy_max = 0.0_rp
+      integer :: integration_energy_points = 0
    end type tddft_chi0_metadata
 
    !> Response and directly consumable KS/Stoner spectral products.  The
@@ -209,6 +215,8 @@ contains
       write(unit, '(a,a)') '# susceptibility_unit = ', trim(result%metadata%susceptibility_unit)
       write(unit, '(a,a)') '# frequency_convention = ', trim(result%metadata%frequency_convention)
       write(unit, '(a,a)') '# spectral_convention = ', trim(result%metadata%spectral_convention)
+      write(unit, '(a,a)') '# chi0_backend = ', trim(result%metadata%backend)
+      write(unit, '(a,a)') '# energy_integration = ', trim(result%metadata%energy_integration)
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', result%metadata%fermi_level
       write(unit, '(a,es24.16)') '# electronic_temperature_K = ', result%metadata%electronic_temperature
@@ -219,6 +227,12 @@ contains
       write(unit, '(a,i0)') '# available_band_count = ', result%metadata%available_band_count
       write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', result%metadata%band_first, result%metadata%band_last
       write(unit, '(a,es24.16)') '# occupation_prune_tolerance = ', result%metadata%occupation_prune_tolerance
+      if (result%metadata%integration_energy_points > 0) then
+         write(unit, '(a,es24.16)') '# green_eta_Ry = ', result%metadata%green_eta
+         write(unit, '(a,2(1x,es24.16))') '# integration_energy_window_Ry = ', &
+            result%metadata%integration_energy_min, result%metadata%integration_energy_max
+         write(unit, '(a,i0)') '# integration_energy_points = ', result%metadata%integration_energy_points
+      end if
       write(unit, '(a)') '# record omega_Ry kind left_channel right_channel Re_chi_Ry^-1 Im_chi_Ry^-1 spectral_Ry^-1'
       do iw = 1, size(omega)
          do ileft = 1, size(result%chi, 1)

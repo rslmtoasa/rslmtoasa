@@ -13,6 +13,7 @@ program test_tddft_config
    call test_mesh_input()
    call test_longitudinal_input()
    call test_full_input()
+   call test_green_input()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -94,6 +95,24 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_full_input
+
+   subroutine test_green_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " chi0_backend = 'green', green_eta = 0.003, green_energy_min = -1.2"
+      write(unit, '(a)') ' green_energy_max = 0.8, green_energy_points = 4001'
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('Green chi0 backend is accepted', trim(config%chi0_backend) == 'green')
+      call assert_real('Green eta is read', config%green_eta, 0.003_rp)
+      call assert_true('Green energy mesh is read', config%green_energy_points == 4001)
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_green_input
 
    subroutine assert_true(label, condition)
       character(len=*), intent(in) :: label
