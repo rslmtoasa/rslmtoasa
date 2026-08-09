@@ -13,7 +13,10 @@ def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
     assert "region_tag='tddft-q'" in source
     assert "calculate_eigenpairs_at_kpoints(kq_points" in source
-    assert "Hamiltonian-derived kernel fallback is permitted" in source
+    assert "self_obj%refresh_xc_response_kernel()" in source
+    assert "evaluate_goldstone(chi0_static%chi" in source
+    assert "enhance_tddft_susceptibility" in source
+    assert "MPI_ALLREDUCE(MPI_IN_PLACE, all_xi" in source
 
 
 if __name__ == "__main__":

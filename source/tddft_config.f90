@@ -210,6 +210,10 @@ contains
           this%occupation_tolerance < 0.0_rp .or. len_trim(this%output_prefix) == 0) then
          call g_logger%fatal('[tddft_config]: invalid frequency, band, temperature, or output settings', __FILE__, __LINE__)
       end if
+      if (this%output_modes .and. (this%nomega < 2 .or. this%omega_max <= this%omega_min)) then
+         call g_logger%fatal('[tddft_config]: output_modes requires at least two strictly increasing frequencies', &
+            __FILE__, __LINE__)
+      end if
    end subroutine validate_scalar_settings
 
    subroutine read_q_file(this, filename)

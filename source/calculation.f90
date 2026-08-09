@@ -52,6 +52,14 @@ module calculation_mod
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
+   use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
+      write_tddft_dyson_text
+   use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
+      write_goldstone_diagnostics_text
+   use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
+#ifdef USE_MPI
+   use mpi
+#endif
    implicit none
 
    private
@@ -1938,10 +1946,9 @@ contains
    !> q file independent, deterministic, and restart-friendly.  Frequency
    !> batching remains inside build_chi_ks_from_eigenpairs.
    !>
-   !> Enhanced TDDFT products are deliberately rejected at this boundary until
-   !> the SCF path records a site-projected XC K_perp in
-   !> xc_response_kernel_provider.  In particular this routine must not infer
-   !> K_perp from hamiltonian%hxc/cx1 or any other assembled Hamiltonian block.
+   !> The transverse kernel is refreshed through self%VXC0SP and passed from
+   !> self%xc_response_provider into the Goldstone/Dyson core.  No kernel is
+   !> inferred from hamiltonian%hxc/cx1 or another assembled Hamiltonian block.
    !---------------------------------------------------------------------------
    subroutine post_processing_susceptibility(this)
       class(calculation), intent(in) :: this
@@ -1955,16 +1962,24 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
+      type(self) :: self_obj
       type(reciprocal) :: reciprocal_obj
       type(tddft_config) :: config
       type(tddft_chi0_options) :: chi0_options
-      type(tddft_chi0_result) :: chi0_result
+      type(tddft_chi0_result) :: chi0_result, chi0_static
+      type(tddft_dyson_options) :: dyson_options
+      type(tddft_dyson_result) :: dyson_result
+      type(tddft_goldstone_options) :: goldstone_options
+      type(tddft_goldstone_result) :: goldstone_result
+      type(tddft_mode_options) :: mode_options
+      type(tddft_mode_result) :: mode_result
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
-      real(rp), allocatable :: omega(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
-      complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
+      complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
+      real(rp), allocatable :: all_trace_loss(:, :)
       integer, allocatable :: site_orbital_counts(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite
-      logical :: has_soc, has_external_field
+      logical :: has_soc, has_external_field, need_dyson
       character(len=sl) :: filename
 
       config = tddft_config(this%fname)
@@ -1972,14 +1987,21 @@ contains
          if (rank == 0) call g_logger%info('TDDFT susceptibility route disabled by &tddft enabled=.false.', __FILE__, __LINE__)
          return
       end if
-      if (config%output_xi .or. config%output_chi .or. config%output_modes) then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: enhanced Xi/chi/mode output requires '// &
-            'a site-projected XC K_perp provider populated by SCF; no Hamiltonian-derived kernel fallback is permitted.', &
+      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
+         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
+      if (control_obj%calctype /= 'B') then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT currently requires calctype=''B''.', &
             __FILE__, __LINE__)
       end if
 
-      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
-         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
+      ! The response driver may be invoked after a normal SCF object has gone
+      ! out of scope.  Refresh the provider from the same VXC0SP route, then
+      ! rebuild the normal-state Hamiltonian from that ground-state potential.
+      call get_mpi_variables(rank, lattice_obj%nrec)
+      self_obj = self(bands_obj, mix_obj)
+      call self_obj%refresh_xc_response_kernel()
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
       reciprocal_obj = reciprocal(hamiltonian_obj)
       ! Response uses a complete reciprocal mesh.  A reduced mesh cannot in
       ! general be paired with k+q without response-specific symmetry weights.
@@ -2022,6 +2044,44 @@ contains
       ! k eigenpairs are independent of q and are therefore reused on each q
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
       call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points, eigenvalues_k, eigenvectors_k)
+
+      ! The Goldstone preflight is intentionally always Gamma/static, even if
+      ! the requested q set omits Gamma.  It establishes one documented local
+      ! kernel for the whole q path; sum-rule mode retains the raw diagnostic.
+      allocate(omega_static(1))
+      omega_static = 0.0_rp
+      call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
+         eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
+      goldstone_options%goldstone_mode = config%goldstone_mode
+      goldstone_options%has_soc = has_soc
+      goldstone_options%has_external_field = has_external_field
+      call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
+      allocate(kernel(lattice_obj%nrec, lattice_obj%nrec))
+      kernel = cmplx(0.0_rp, 0.0_rp, rp)
+      if (goldstone_result%sum_rule_applied) then
+         do isite = 1, lattice_obj%nrec
+            kernel(isite, isite) = goldstone_result%k_perp_sum_rule(isite)
+         end do
+      else
+         do isite = 1, lattice_obj%nrec
+            kernel(isite, isite) = goldstone_result%k_perp(isite)
+         end do
+      end if
+      if (rank == 0) then
+         write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
+         call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
+         call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+            rank, has_soc, has_external_field)
+      end if
+
+      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes
+      dyson_options%diagonalize_xi = config%output_modes
+      dyson_options%diagonalize_loss = config%output_modes
+      if (config%output_modes) then
+         allocate(all_xi(lattice_obj%nrec, lattice_obj%nrec, nw, nq), all_trace_loss(nw, nq))
+         all_xi = cmplx(0.0_rp, 0.0_rp, rp)
+         all_trace_loss = 0.0_rp
+      end if
       do iq = iq_start, iq_end
          allocate(kq_points(3, reciprocal_obj%nk_total))
          kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
@@ -2034,8 +2094,35 @@ contains
             call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
                has_soc, has_external_field)
          end if
+         if (need_dyson) then
+            call enhance_tddft_susceptibility(chi0_result%chi, kernel, config%eta, dyson_options, dyson_result)
+            if (config%output_xi .or. config%output_chi) then
+               write(filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
+               call write_tddft_dyson_text(trim(filename), omega, dyson_result)
+               call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                  rank, has_soc, has_external_field)
+            end if
+            if (config%output_modes) then
+               all_xi(:, :, :, iq) = dyson_result%xi
+               all_trace_loss(:, iq) = dyson_result%trace_spectral_weight
+            end if
+         end if
          deallocate(kq_points, eigenvalues_kq, eigenvectors_kq)
       end do
+
+      if (config%output_modes) then
+#ifdef USE_MPI
+         call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi, size(all_xi), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss, size(all_trace_loss), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+         if (rank == 0) then
+            call analyze_tddft_modes(omega, all_xi, all_trace_loss, config%eta, mode_options, mode_result)
+            write(filename, '(a,"_modes.dat")') trim(config%output_prefix)
+            call write_tddft_modes_text(trim(filename), omega, config%eta, mode_result)
+            call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+               rank, has_soc, has_external_field)
+         end if
+      end if
 
       ! A deterministic manifest is written once; individual q files are
       ! never concurrently opened by more than one rank.
