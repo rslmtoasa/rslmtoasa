@@ -148,3 +148,43 @@ LMTO construction of `Q`; WR-02 supplies that representation.
 oracle, the unequal-orbital divergence from the old scalar route, scalar versus
 batched equality for complex `q != 0` spinors, and the right-vertex-order
 negative control. It does not alter `calculation.f90` dispatch.
+
+## WR-02 LMTO representation audit — blocked
+
+The required active-basis pair potential cannot be derived faithfully from the
+stored ground-state state on commit `d3f5b1f`. This is a hard blocker, not a
+license to use `K_site P_site sigma_minus`.
+
+The eventual `Q_a` is a full real-space LMTO block operator, not an onsite
+orbital identity. `ham0m_nc` forms each directed bond from separate
+source-endpoint, target-endpoint, and cross-product magnetic terms; the normal
+`build_bulkham` route then sums those terms into `hmag`, packs the spin blocks
+into `hxc`, and Fourier transforms `ee`. Thus tails/hopping and any
+representation-generated matrix elements must remain in `Q_a`.
+
+Three facts prevent an analytic local derivative today:
+
+1. `hmag` is a scratch array reset by every `chbar_nc` call. The persistent
+   `hxc`/`ee` blocks contain only the **sum** of the two endpoint contributions
+   to a bond. A derivative with respect to rotation of site `a` needs the
+   source and target terms separately; they cannot be reconstructed from their
+   sum.
+2. `xc_response_kernel_provider` keeps only integrated radial quantities
+   (`radial_spin_population`, `bxc_spin_moment`, and scalar averages), rather
+   than radial samples or active-basis matrix elements of `Bxc(r)`. It cannot
+   independently supply the missing orbital matrix.
+3. The current provider/TDDFT driver stores a magnitude-only site population
+   (`mtot` and, in the response driver, `sqrt(mx^2+my^2+mz^2)`). It therefore
+   cannot provide the signed `M_a` normalization required for reversed or
+   antiferromagnetic sublattices. The constraining-field contribution is also
+   merged into the radial potential without an immutable response provenance.
+
+The smallest prerequisite is a dedicated Hamiltonian derivative API. It must
+persist or return the analytic source-endpoint and target-endpoint derivatives
+of `ham0m_nc` before they are summed, assemble their full real-space and
+Fourier-transformed matrices in the active `ham_only` basis, retain signed
+site moments and XC-versus-constraining-field provenance, and expose a
+side-effect-free `+theta/-theta` rebuild for the independent oracle. Only then
+can WR-02 compare analytic `Q_a^+=(Q_a^-)^dagger` against central rotations,
+including a rigid all-site rotation. Generalized-overlap modes remain rejected
+until a metric-correct operator and any `delta S` contribution are derived.

@@ -26,6 +26,15 @@
   `UnitResponseVertices`, `UnitTddftChiKS`, `UnitTddftGoldstone`,
   `UnitTddftDysonModes`, `UnitTddftConfig`, and `UnitKspaceOccupations`.
 
+## WR-02 blocker
+
+- [ ] Analytic LMTO pair-potential operator and finite-rotation oracle are
+  unavailable. Persistent `hxc` has collapsed the per-endpoint magnetic bond
+  terms, the XC provider has no radial/operator matrix data, and the current
+  response population is magnitude-only. The required derivative API is
+  specified in `TDDFT_WARD_REPAIR_BLUEPRINT.md`; no scalar-kernel fallback is
+  permitted.
+
 ## Global gates
 
 - [ ] Raw no-SOC `Xi(0,0) M = M` converges before correction
