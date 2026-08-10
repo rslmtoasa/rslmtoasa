@@ -77,6 +77,19 @@ def test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi() -> None:
     assert "goldstone_correction_applied = " in source
 
 
+def test_prototype_routes_and_full_alsda_are_explicitly_capability_gated() -> None:
+    root = Path(__file__).resolve().parents[2]
+    calculation = (root / "source" / "calculation.f90").read_text()
+    four_component = (root / "source" / "tddft_four_component.f90").read_text()
+    xc_kernel = (root / "source" / "xc_response_kernel.f90").read_text()
+    assert "cartesian_transverse_kernel" in four_component
+    assert "2.0_rp*circular_transverse_kernel" in xc_kernel
+    assert "full_response_capability" in calculation
+    assert "channel=''full'' is unavailable" in calculation
+    assert "longitudinal TDDFT remains a prototype" in calculation
+    assert "eigenpair-resolvent reference, not a native RS Green-function provider" in calculation
+
+
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
@@ -84,4 +97,5 @@ if __name__ == "__main__":
     test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults()
     test_controlled_goldstone_correction_rescales_only_pair_potential_columns()
     test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
+    test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
     print("RESULT: PASS")

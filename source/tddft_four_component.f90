@@ -13,7 +13,7 @@ module tddft_four_component_mod
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MX, RESPONSE_MY, RESPONSE_MZ
    use response_vertices_mod, only: response_channel, build_site_charge_spin_channels
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
-   use xc_response_kernel_mod, only: xc_response_kernel_provider
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, cartesian_transverse_kernel
    implicit none
 
    private
@@ -68,12 +68,18 @@ contains
       real(rp), intent(in) :: coulomb_site(:, :)
       complex(rp), intent(out) :: kernel(:, :)
       integer :: nsite, isite, jsite, i0, j0
+      logical :: full_response_supported
+      character(len=256) :: capability_reason
       real(rp) :: local_kernel(4, 4), rotation(3, 3), transform(4, 4), global_kernel(4, 4)
 
       if (.not. allocated(provider%site)) error stop 'build_four_component_kernel: XC provider is not initialized'
       nsite = size(provider%site)
       if (nsite < 1 .or. any(shape(coulomb_site) /= [nsite, nsite]) .or. any(shape(kernel) /= [4*nsite, 4*nsite])) then
          error stop 'build_four_component_kernel: incompatible site or response dimensions'
+      end if
+      call provider%full_response_capability(full_response_supported, capability_reason)
+      if (.not. full_response_supported) then
+         error stop 'build_four_component_kernel: full response unavailable: '//trim(capability_reason)
       end if
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
 
@@ -147,18 +153,15 @@ contains
       integer, intent(in) :: isite
       real(rp), intent(out) :: local_kernel(4, 4)
 
-      if (.not. provider%site(isite)%has_magnetization_direction .or. .not. provider%site(isite)%has_k_perp .or. &
-         .not. provider%site(isite)%has_dvxc_dn .or. .not. provider%site(isite)%has_dvxc_dm .or. &
-         .not. provider%site(isite)%has_dbxc_dn .or. .not. provider%site(isite)%has_dbxc_dm) then
-         error stop 'build_four_component_kernel: full local ALSDA derivatives/frame are absent from XC provider'
-      end if
       local_kernel = 0.0_rp
       local_kernel(1, 1) = provider%site(isite)%dvxc_dn
       local_kernel(1, 4) = provider%site(isite)%dvxc_dm
       local_kernel(4, 1) = provider%site(isite)%dbxc_dn
       local_kernel(4, 4) = provider%site(isite)%dbxc_dm
-      local_kernel(2, 2) = provider%site(isite)%k_perp
-      local_kernel(3, 3) = provider%site(isite)%k_perp
+      ! k_perp_circular is Bxc/(2M) for unhalved sigma+/- vertices.  The
+      ! Cartesian x/y block couples directly to sigma_x/y, so it is Bxc/M.
+      local_kernel(2, 2) = cartesian_transverse_kernel(provider, isite)
+      local_kernel(3, 3) = cartesian_transverse_kernel(provider, isite)
    end subroutine build_local_alsda_kernel
 
    subroutine local_frame(direction, rotation)

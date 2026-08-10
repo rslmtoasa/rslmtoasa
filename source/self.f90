@@ -1328,7 +1328,7 @@ contains
       allocate(packed(4, this%lattice%nrec))
       packed = 0.0_rp
       do ia = 1, this%lattice%nrec
-         if (this%xc_response_provider%site(ia)%has_k_perp) then
+         if (this%xc_response_provider%site(ia)%has_k_perp_circular) then
             packed(1, ia) = this%xc_response_provider%site(ia)%radial_spin_population
             packed(2, ia) = this%xc_response_provider%site(ia)%vxc_scalar
             packed(3, ia) = this%xc_response_provider%site(ia)%bxc_spin_moment
@@ -1344,7 +1344,7 @@ contains
             this%xc_response_provider%site(ia)%radial_spin_population = packed(1, ia)
             this%xc_response_provider%site(ia)%vxc_scalar = packed(2, ia)
             this%xc_response_provider%site(ia)%bxc_spin_moment = packed(3, ia)
-            this%xc_response_provider%site(ia)%has_k_perp = .false.
+            this%xc_response_provider%site(ia)%has_k_perp_circular = .false.
          end if
       end do
       deallocate(packed)

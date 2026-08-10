@@ -8,7 +8,7 @@
 - [x] WR-03 — Integrate direct Xi in production shadow mode
 - [x] WR-04 — Implement the real static limit and ground-state provenance
 - [x] WR-05 — Repair Goldstone option semantics and controlled correction
-- [ ] WR-06 — Repair Cartesian/circular factors and unsupported-route gates
+- [x] WR-06 — Repair Cartesian/circular factors and unsupported-route gates
 - [ ] WR-07 — Replace heuristic mode classification
 - [ ] WR-08 — Pass Fe/Ni material gates and switch the validated default
 
@@ -165,6 +165,30 @@
   change, rank-deficient/ill-conditioned, small-moment, complex-static, and
   negative-spectrum controls; `UnitTddftConfig` covers explicit and migrated
   option semantics.
+
+## WR-06 evidence
+
+- `k_perp_circular` and `circular_transverse_kernel` are reserved for the
+  unhalved circular vertices.  `cartesian_transverse_kernel` is the separately
+  named `2*k_perp_circular` derivative used by the full Cartesian x/y block;
+  the old direct reuse of the circular scalar is removed.
+- `UnitTddftWardConventions` proves bare and dressed Cartesian/circular
+  equivalence in the collinear no-SOC two-level oracle and includes the
+  wrong-Cartesian-half negative control.  `UnitTddftFourComponent` verifies
+  the Cartesian factor and the complete selected-XC derivative capability
+  gate.  Unvalidated or incomplete derivative slots are rejected before a
+  production `channel='full'` response starts.
+- Production metadata labels `chi0_backend='green'` as the
+  eigenpair-resolvent reference and states that a native RS Green provider is
+  unavailable.  The longitudinal production route now fails explicitly until
+  its static calibration uses the WR-04 real static limit; no LLB readiness is
+  claimed.  GPU work remains deferred.
+- gfortran-13 evidence (2026-08-10):
+  `cmake --build build-gfortran13 --target UnitTddftWardConventions
+  UnitTddftFourComponent UnitResponseConventions UnitTddftGoldstone
+  UnitTddftConfig -j4`; `ctest --test-dir build-gfortran13
+  --output-on-failure -L tddft` (16/16 passed); `python3 tests/unit/test_tddft_dispatch.py` and
+  `python3 tests/regression/tddft_validation/test_validation.py` (both pass).
 
 ## Global gates
 

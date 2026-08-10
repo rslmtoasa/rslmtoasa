@@ -108,6 +108,12 @@ population separately from `potential%mtot`, the latter supplying `M_site`.
 SCF MPI
 ownership is reduced so every rank receives the same complete provider.
 
+The stored name is `k_perp_circular`: it is only for unhalved circular
+`sigma_x +/- i sigma_y` vertices.  `circular_transverse_kernel` returns that
+quantity, while `cartesian_transverse_kernel` returns exactly twice it for the
+Cartesian `sigma_x`/`sigma_y` block.  A caller must select one of these typed
+accessors; it may not reuse the circular scalar in Cartesian response.
+
 `self%refresh_xc_response_kernel()` lets a caller that retains an SCF `self`
 object refresh this provider through the existing atomic SCF/VXC path.  It has
 no Hamiltonian-derived fallback.
@@ -155,6 +161,15 @@ count, and recomputed response count; it terminates when their mismatch exceeds
 - Derivatives of the legacy LDA/GGA and optional libXC functional paths are not
   yet evaluated.  The provider exposes their typed slots but marks each absent
   until a future evaluator populates it.
+- `channel='full'` is capability-gated in production.  It is rejected unless
+  the selected XC route supplies `dVxc/dn`, `dVxc/dm`, `dBxc/dn`,
+  `dBxc/dm`, the local frame, and circular transverse value, and explicitly
+  marks its derivative evaluator validated.  The present SCF XC routes do not
+  make that claim.
+- `chi0_backend='green'` currently means an eigenpair-resolvent reference, not
+  an adapter to a native RS Green-function provider.  Longitudinal response is
+  unavailable pending a WR-04 real-static-limit calibration; it is not LLB
+  ready.
 - The legacy SCF radial path currently calls `XCPOT` directly.  `XCPOT_hybrid`
   (the libXC wrapper) is not called by `VXC0SP`; a future libXC-response change
   must first reconcile that ground-state path rather than assume the wrapper

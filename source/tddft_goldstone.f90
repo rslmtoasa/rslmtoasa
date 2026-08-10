@@ -12,7 +12,7 @@
 !> static Xi; it never injects a finite-eta inverse chi_KS as a kernel.
 module tddft_goldstone_mod
    use precision_mod, only: rp
-   use xc_response_kernel_mod, only: xc_response_kernel_provider
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, circular_transverse_kernel
    implicit none
 
    private
@@ -95,7 +95,7 @@ module tddft_goldstone_mod
 contains
 
    !> Return the site-projected transverse ALSDA kernel recorded by the XC
-   !> response provider.  `has_k_perp` makes missing functional provenance a
+   !> response provider.  `has_k_perp_circular` makes missing functional provenance a
    !> hard error rather than silently substituting a Hamiltonian-derived value.
    subroutine build_site_projected_k_perp(provider, k_perp)
       type(xc_response_kernel_provider), intent(in) :: provider
@@ -107,10 +107,10 @@ contains
       end if
       allocate(k_perp(size(provider%site)))
       do isite = 1, size(provider%site)
-         if (.not. provider%site(isite)%has_k_perp) then
-            error stop 'build_site_projected_k_perp: site has no xc_response_kernel K_perp'
+         if (.not. provider%site(isite)%has_k_perp_circular) then
+            error stop 'build_site_projected_k_perp: site has no circular xc_response_kernel K_perp'
          end if
-         k_perp(isite) = cmplx(provider%site(isite)%k_perp, 0.0_rp, rp)
+         k_perp(isite) = cmplx(circular_transverse_kernel(provider, isite), 0.0_rp, rp)
       end do
    end subroutine build_site_projected_k_perp
 

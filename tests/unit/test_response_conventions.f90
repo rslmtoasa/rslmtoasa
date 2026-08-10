@@ -93,10 +93,10 @@ contains
       call provider%initialize(1, 'test-xc')
       call provider%record_ground_state_site(1, 2.2_rp, sample)
       call provider%set_site_derivatives(1, dvxc_dn=1.0_rp, dvxc_dm=2.0_rp, &
-         dbxc_dn=3.0_rp, dbxc_dm=4.0_rp, k_perp=5.0_rp)
+         dbxc_dn=3.0_rp, dbxc_dm=4.0_rp, k_perp_circular=5.0_rp)
       if (abs(provider%site(1)%bxc_energy + 0.10_rp) > tol .or. &
           abs(provider%site(1)%spin_population - 2.2_rp) > tol .or. &
-          .not. provider%site(1)%has_k_perp .or. abs(provider%site(1)%k_perp - 5.0_rp) > tol) then
+          .not. provider%site(1)%has_k_perp_circular .or. abs(provider%site(1)%k_perp_circular - 5.0_rp) > tol) then
          write (*, '(a)') 'FAIL XC response-provider ground-state contract'
          failed = .true.
       end if
@@ -117,10 +117,10 @@ contains
       call provider%initialize(1, 'test-xc')
       call provider%record_radial_projection(1, projection)
       call provider%set_site_spin_population(1, 2.2_rp)
-      if (.not. provider%site(1)%has_k_perp .or. &
+      if (.not. provider%site(1)%has_k_perp_circular .or. &
           abs(provider%site(1)%radial_spin_population - 3.0_rp) > tol .or. &
           abs(provider%site(1)%bxc_energy - 4.0_rp/2.2_rp) > tol .or. &
-          abs(provider%site(1)%k_perp - 4.0_rp/(2.0_rp*2.2_rp*2.2_rp)) > tol .or. &
+          abs(provider%site(1)%k_perp_circular - 4.0_rp/(2.0_rp*2.2_rp*2.2_rp)) > tol .or. &
           abs(provider%site(1)%spin_population - 2.2_rp) > tol) then
          write (*, '(a)') 'FAIL radial ALSDA XC projection'
          failed = .true.
@@ -148,7 +148,7 @@ contains
       call provider%record_radial_projection(1, projection)
       call provider%set_site_spin_population(1, 1.0_rp)
       call assert_scalar('transverse kernel includes signed circular half', &
-         cmplx(provider%site(1)%k_perp, 0.0_rp, rp), cmplx(-0.025_rp, 0.0_rp, rp))
+         cmplx(provider%site(1)%k_perp_circular, 0.0_rp, rp), cmplx(-0.025_rp, 0.0_rp, rp))
 
       left(1) = response_channel(1, RESPONSE_PLUS)
       right(1) = response_channel(1, RESPONSE_MINUS)
@@ -163,7 +163,7 @@ contains
       options%electronic_temperature = 0.0_rp
       call build_chi_ks_from_eigenpairs(weights, eigenvalues, eigenvectors, eigenvalues, eigenvectors, [1], &
          left, right, omega, options, response)
-      xi = response%chi(1, 1, 1)*provider%site(1)%k_perp
+      xi = response%chi(1, 1, 1)*provider%site(1)%k_perp_circular
       call assert_scalar('two-level transverse Goldstone identity', xi, cmplx(1.0_rp, 0.0_rp, rp))
    end subroutine test_transverse_goldstone_kernel_normalization
 

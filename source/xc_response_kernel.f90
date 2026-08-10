@@ -46,7 +46,10 @@ module xc_response_kernel_mod
       real(rp) :: dvxc_dm = 0.0_rp
       real(rp) :: dbxc_dn = 0.0_rp
       real(rp) :: dbxc_dm = 0.0_rp
-      real(rp) :: k_perp = 0.0_rp
+      ! Circular (m+/- = mx +/- i my, sigma+/- = sigma_x +/- i sigma_y)
+      ! transverse ALSDA scalar.  The unhalved circular operators require the
+      ! explicit 1/2 in Bxc/(2 M).  It must not be used in Cartesian x/y.
+      real(rp) :: k_perp_circular = 0.0_rp
       ! Unit vector giving the local ALSDA longitudinal axis in the global
       ! response frame.  It is explicitly retained instead of assuming z.
       real(rp) :: magnetization_direction(3) = [0.0_rp, 0.0_rp, 1.0_rp]
@@ -54,7 +57,7 @@ module xc_response_kernel_mod
       logical :: has_dvxc_dm = .false.
       logical :: has_dbxc_dn = .false.
       logical :: has_dbxc_dm = .false.
-      logical :: has_k_perp = .false.
+      logical :: has_k_perp_circular = .false.
       logical :: has_magnetization_direction = .false.
    end type xc_response_site
 
@@ -73,6 +76,10 @@ module xc_response_kernel_mod
 
    type, public :: xc_response_kernel_provider
       character(len=32) :: functional_label = 'unrecorded'
+      ! Set only by a selected XC route after its full ALSDA derivative
+      ! evaluator has passed its own derivative verification.  Merely filling
+      ! synthetic slots is not production capability.
+      logical :: full_alsda_derivatives_validated = .false.
       type(xc_response_site), allocatable :: site(:)
    contains
       procedure :: initialize => xc_kernel_initialize
@@ -83,9 +90,12 @@ module xc_response_kernel_mod
       procedure :: set_site_signed_spin_population => xc_kernel_set_site_signed_spin_population
       procedure :: set_site_magnetization_direction => xc_kernel_set_site_magnetization_direction
       procedure :: set_site_derivatives => xc_kernel_set_site_derivatives
+      procedure :: full_response_capability => xc_kernel_full_response_capability
    end type xc_response_kernel_provider
 
    public :: evaluate_ground_state_xc_sample
+   public :: circular_transverse_kernel
+   public :: cartesian_transverse_kernel
 
 contains
 
@@ -150,6 +160,7 @@ contains
       class(xc_response_kernel_provider), intent(inout) :: this
       if (allocated(this%site)) deallocate(this%site)
       this%functional_label = 'unrecorded'
+      this%full_alsda_derivatives_validated = .false.
    end subroutine xc_kernel_clear
 
    subroutine xc_kernel_record_ground_state_site(this, isite, spin_population, sample)
@@ -245,19 +256,21 @@ contains
       if (abs(site%radial_spin_population) <= tiny(1.0_rp) .or. &
          abs(site%spin_population) <= tiny(1.0_rp)) then
          site%bxc_energy = 0.0_rp
-         site%k_perp = 0.0_rp
-         site%has_k_perp = .false.
+         site%k_perp_circular = 0.0_rp
+         site%has_k_perp_circular = .false.
          return
       end if
       site%bxc_energy = site%bxc_spin_moment/site%spin_population
-      site%k_perp = 0.5_rp*site%bxc_energy/site%spin_population
-      site%has_k_perp = .true.
+      site%k_perp_circular = 0.5_rp*site%bxc_energy/site%spin_population
+      site%has_k_perp_circular = .true.
    end subroutine finalize_site_k_perp
 
-   subroutine xc_kernel_set_site_derivatives(this, isite, dvxc_dn, dvxc_dm, dbxc_dn, dbxc_dm, k_perp)
+   subroutine xc_kernel_set_site_derivatives(this, isite, dvxc_dn, dvxc_dm, dbxc_dn, dbxc_dm, k_perp_circular, &
+      derivatives_validated)
       class(xc_response_kernel_provider), intent(inout) :: this
       integer, intent(in) :: isite
-      real(rp), intent(in), optional :: dvxc_dn, dvxc_dm, dbxc_dn, dbxc_dm, k_perp
+      real(rp), intent(in), optional :: dvxc_dn, dvxc_dm, dbxc_dn, dbxc_dm, k_perp_circular
+      logical, intent(in), optional :: derivatives_validated
 
       call require_site(this, isite, 'set_site_derivatives')
       if (present(dvxc_dn)) then
@@ -276,11 +289,64 @@ contains
          this%site(isite)%dbxc_dm = dbxc_dm
          this%site(isite)%has_dbxc_dm = .true.
       end if
-      if (present(k_perp)) then
-         this%site(isite)%k_perp = k_perp
-         this%site(isite)%has_k_perp = .true.
+      if (present(k_perp_circular)) then
+         this%site(isite)%k_perp_circular = k_perp_circular
+         this%site(isite)%has_k_perp_circular = .true.
       end if
+      if (present(derivatives_validated)) this%full_alsda_derivatives_validated = derivatives_validated
    end subroutine xc_kernel_set_site_derivatives
+
+   !> Return the circular ALSDA scalar for unhalved sigma+/- vertices.
+   function circular_transverse_kernel(provider, isite) result(kernel)
+      type(xc_response_kernel_provider), intent(in) :: provider
+      integer, intent(in) :: isite
+      real(rp) :: kernel
+
+      call require_site(provider, isite, 'circular_transverse_kernel')
+      if (.not. provider%site(isite)%has_k_perp_circular) then
+         error stop 'circular_transverse_kernel: circular transverse kernel is absent'
+      end if
+      kernel = provider%site(isite)%k_perp_circular
+   end function circular_transverse_kernel
+
+   !> Return the Cartesian x/y derivative.  With the frozen unhalved circular
+   !> convention it is exactly twice the circular scalar.
+   function cartesian_transverse_kernel(provider, isite) result(kernel)
+      type(xc_response_kernel_provider), intent(in) :: provider
+      integer, intent(in) :: isite
+      real(rp) :: kernel
+
+      kernel = 2.0_rp*circular_transverse_kernel(provider, isite)
+   end function cartesian_transverse_kernel
+
+   subroutine xc_kernel_full_response_capability(this, supported, reason)
+      class(xc_response_kernel_provider), intent(in) :: this
+      logical, intent(out) :: supported
+      character(len=*), intent(out) :: reason
+      integer :: isite
+
+      supported = .false.
+      reason = 'full ALSDA derivatives have not been validated for the selected XC route'
+      if (.not. allocated(this%site)) then
+         reason = 'XC response provider is not initialized'
+         return
+      end if
+      if (.not. this%full_alsda_derivatives_validated) return
+      do isite = 1, size(this%site)
+         if (.not. this%site(isite)%has_magnetization_direction) then
+            write(reason, '(a,i0)') 'site lacks a ground-state magnetization direction: ', isite
+            return
+         end if
+         if (.not. this%site(isite)%has_k_perp_circular .or. .not. this%site(isite)%has_dvxc_dn .or. &
+             .not. this%site(isite)%has_dvxc_dm .or. .not. this%site(isite)%has_dbxc_dn .or. &
+             .not. this%site(isite)%has_dbxc_dm) then
+            write(reason, '(a,i0)') 'site lacks one or more full ALSDA derivatives: ', isite
+            return
+         end if
+      end do
+      supported = .true.
+      reason = 'validated full ALSDA derivatives supplied by selected XC route'
+   end subroutine xc_kernel_full_response_capability
 
    subroutine require_site(this, isite, caller)
       class(xc_response_kernel_provider), intent(in) :: this

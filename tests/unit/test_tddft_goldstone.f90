@@ -200,7 +200,7 @@ contains
 
       call provider%initialize(size(moment), 'unit-test-XC')
       do i = 1, size(moment)
-         call provider%set_site_derivatives(i, k_perp=kernel(i))
+         call provider%set_site_derivatives(i, k_perp_circular=kernel(i))
          provider%site(i)%spin_population = moment(i)
       end do
    end subroutine make_provider

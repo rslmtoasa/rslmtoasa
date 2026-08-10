@@ -2008,8 +2008,9 @@ contains
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
-      logical :: pair_backend, legacy_backend, corrected_spectral_weight_ok
+      logical :: pair_backend, legacy_backend, corrected_spectral_weight_ok, full_response_supported
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
+      character(len=256) :: full_response_capability_reason
 
       config = tddft_config(this%fname)
       if (.not. config%enabled) then
@@ -2130,6 +2131,15 @@ contains
          call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &
             __FILE__, __LINE__)
       end if
+      if (is_longitudinal) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: longitudinal TDDFT remains a prototype and is '// &
+            'unavailable until its static calibration is rebuilt on the WR-04 real static-limit machinery; no LLB claim is supported.', &
+            __FILE__, __LINE__)
+      end if
+      if (config%chi0_backend == 'green' .and. rank == 0) then
+         call g_logger%warning('[calculation.post_processing_susceptibility]: chi0_backend=''green'' currently selects the '// &
+            'eigenpair-resolvent reference, not a native RS Green-function provider.', __FILE__, __LINE__)
+      end if
 
       ! k eigenpairs are independent of q and are therefore reused on each q
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
@@ -2163,6 +2173,13 @@ contains
          end if
       end do
       deallocate(site_moments)
+      if (is_full_response) then
+         call self_obj%xc_response_provider%full_response_capability(full_response_supported, full_response_capability_reason)
+         if (.not. full_response_supported) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: channel=''full'' is unavailable for XC route '''// &
+               trim(self_obj%xc_response_provider%functional_label)//''': '//trim(full_response_capability_reason), __FILE__, __LINE__)
+         end if
+      end if
 
       ! The Gamma/static KS batch is shared by both channels.  Transverse uses
       ! it for Goldstone diagnostics; longitudinal instead calibrates its own
@@ -2643,6 +2660,21 @@ contains
       write(unit, '(a)') '# production_metadata_begin'
       write(unit, '(a,a)') '# channel = ', trim(config%channel)
       write(unit, '(a,a)') '# chi0_backend = ', trim(config%chi0_backend)
+      if (trim(config%chi0_backend) == 'green') then
+         write(unit, '(a)') '# chi0_backend_capability = eigenpair_resolvent reference; native RS Green-function provider unavailable'
+      else
+         write(unit, '(a)') '# chi0_backend_capability = eigenpair Lehmann response'
+      end if
+      if (trim(config%channel) == 'full') then
+         write(unit, '(a)') '# full_response_capability = validated selected-XC ALSDA derivatives'
+      else
+         write(unit, '(a)') '# full_response_capability = not selected; production full response is capability-gated'
+      end if
+      if (trim(config%channel) == 'longitudinal') then
+         write(unit, '(a)') '# longitudinal_capability = unavailable pending WR-04 static-limit calibration'
+      else
+         write(unit, '(a)') '# longitudinal_capability = not selected; LLB readiness is not claimed'
+      end if
       write(unit, '(a,a)') '# xi_backend_requested = ', trim(config%xi_backend)
       write(unit, '(a,a)') '# xi_backend_output = ', trim(xi_backend_label)
       if (index(xi_backend_label, 'pair_potential') > 0) then

@@ -16,6 +16,7 @@ program test_tddft_four_component
 
    failed = .false.
    call test_collinear_reduction_and_soc_mixing_fixture()
+   call test_full_response_capability_gate()
    call test_local_alsda_hartree_rotation_covariance()
    call test_rigid_rotation_diagnostics()
    if (failed) error stop 1
@@ -62,6 +63,23 @@ contains
       call check_true('spin-mixed fixture retains charge-spin coupling', abs(full%chi(ic, ix, 1)) > tol)
    end subroutine test_collinear_reduction_and_soc_mixing_fixture
 
+   subroutine test_full_response_capability_gate()
+      type(xc_response_kernel_provider) :: provider
+      logical :: supported
+      character(len=256) :: reason
+
+      call provider%initialize(1, 'unit-unvalidated-XC')
+      call provider%set_site_magnetization_direction(1, [0.0_rp, 0.0_rp, 1.0_rp])
+      call provider%set_site_derivatives(1, dvxc_dn=1.0_rp, dvxc_dm=0.2_rp, dbxc_dn=0.2_rp, dbxc_dm=1.4_rp, &
+         k_perp_circular=0.7_rp)
+      call provider%full_response_capability(supported, reason)
+      call check_true('unvalidated full ALSDA derivatives are rejected', .not. supported .and. &
+         index(reason, 'not been validated') > 0)
+      call provider%set_site_derivatives(1, derivatives_validated=.true.)
+      call provider%full_response_capability(supported, reason)
+      call check_true('validated complete full ALSDA derivatives are accepted', supported)
+   end subroutine test_full_response_capability_gate
+
    subroutine test_local_alsda_hartree_rotation_covariance()
       type(xc_response_kernel_provider) :: local_z, rotated
       complex(rp) :: kernel_z(4, 4), kernel_rotated(4, 4), expected(4, 4)
@@ -71,8 +89,8 @@ contains
       call make_provider(local_z, [0.0_rp, 0.0_rp, 1.0_rp])
       call build_four_component_kernel(local_z, coulomb, kernel_z)
       call check_real('Hartree enters charge-charge only', real(kernel_z(1, 1), rp), 1.6_rp)
-      call check_real('transverse ALSDA x', real(kernel_z(2, 2), rp), 0.7_rp)
-      call check_real('transverse ALSDA y', real(kernel_z(3, 3), rp), 0.7_rp)
+      call check_real('Cartesian transverse ALSDA x is twice circular scalar', real(kernel_z(2, 2), rp), 1.4_rp)
+      call check_real('Cartesian transverse ALSDA y is twice circular scalar', real(kernel_z(3, 3), rp), 1.4_rp)
       call check_real('longitudinal ALSDA', real(kernel_z(4, 4), rp), 1.4_rp)
 
       theta = 0.31_rp
@@ -105,7 +123,8 @@ contains
 
       call provider%initialize(1, 'unit-full-ALSDA')
       call provider%set_site_magnetization_direction(1, direction)
-      call provider%set_site_derivatives(1, dvxc_dn=1.0_rp, dvxc_dm=0.2_rp, dbxc_dn=0.2_rp, dbxc_dm=1.4_rp, k_perp=0.7_rp)
+      call provider%set_site_derivatives(1, dvxc_dn=1.0_rp, dvxc_dm=0.2_rp, dbxc_dn=0.2_rp, dbxc_dm=1.4_rp, &
+         k_perp_circular=0.7_rp, derivatives_validated=.true.)
    end subroutine make_provider
 
    pure function identity4() result(matrix)
