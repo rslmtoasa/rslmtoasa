@@ -100,6 +100,15 @@ def test_goldstone_correction_input_error_is_rejected_before_response_setup() ->
     assert "goldstone_mode=correct requires" in calculation  # retain driver defence for programmatic config construction
 
 
+def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
+    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    assert source.index("calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points") < source.index(
+        "calculate_canonical_band_energy(find_fermi=.true."
+    )
+    assert "response electron count does not match target: target=" in source
+    assert "Remove a stale &tddft fermi_level override" in source
+
+
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
@@ -109,4 +118,5 @@ if __name__ == "__main__":
     test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
     test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
     test_goldstone_correction_input_error_is_rejected_before_response_setup()
+    test_response_mesh_resolves_inherited_fermi_after_eigenpairs()
     print("RESULT: PASS")

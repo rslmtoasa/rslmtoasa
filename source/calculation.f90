@@ -2011,6 +2011,7 @@ contains
       logical :: pair_backend, legacy_backend, corrected_spectral_weight_ok, full_response_supported
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
       character(len=256) :: full_response_capability_reason
+      character(len=384) :: electron_count_message
 
       config = tddft_config(this%fname)
       if (.not. config%enabled) then
@@ -2051,7 +2052,6 @@ contains
       if (config%electronic_temperature < 0.0_rp) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: response temperature is unresolved.', __FILE__, __LINE__)
       end if
-      reciprocal_obj%fermi_level = config%fermi_level
       reciprocal_obj%temperature = config%electronic_temperature
       is_longitudinal = config%channel == 'longitudinal'
       is_full_response = config%channel == 'full'
@@ -2153,12 +2153,32 @@ contains
       ! non-serialized legacy cache.
       reciprocal_obj%eigenvalues = eigenvalues_k
       reciprocal_obj%eigenvectors = eigenvectors_k
-      call reciprocal_obj%evaluate_eigenvalue_occupations(config%fermi_level, response_electron_count, response_band_energy)
+      ! With no TDDFT EF override, resolve the chemical potential on the
+      ! actual complete response mesh after its eigenpairs exist.  Reading
+      ! reciprocal%fermi_level before this point only recovers the input
+      ! seed, even when auto_find_fermi=.true.; it does not prove N=N_target
+      ! on a refined response mesh.
+      if (.not. config%fermi_level_overridden .and. reciprocal_obj%auto_find_fermi) then
+         response_band_energy = reciprocal_obj%calculate_canonical_band_energy(find_fermi=.true., &
+            electron_count=response_electron_count)
+         config%ground_state_fermi_level = reciprocal_obj%fermi_level
+         config%fermi_level = reciprocal_obj%fermi_level
+      else
+         reciprocal_obj%fermi_level = config%fermi_level
+         call reciprocal_obj%evaluate_eigenvalue_occupations(config%fermi_level, response_electron_count, response_band_energy)
+      end if
       config%response_electron_count = response_electron_count
+      chi0_options%fermi_level = config%fermi_level
+      green_options%fermi_level = config%fermi_level
       electron_count_tolerance = 1.0e-8_rp*max(1.0_rp, config%ground_state_electron_count)
       if (abs(response_electron_count-config%ground_state_electron_count) > electron_count_tolerance) then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: response electron count does not match the '// &
-            'converged reciprocal ground state within 1e-8 relative tolerance.', __FILE__, __LINE__)
+         write(electron_count_message, '(a,es16.8,a,es16.8,a,es12.4,a,es16.8,a,es16.8,a,l1)') &
+            '[calculation.post_processing_susceptibility]: response electron count does not match target: target=', &
+            config%ground_state_electron_count, ', recomputed=', response_electron_count, ', dN=', &
+            response_electron_count-config%ground_state_electron_count, ', ground_EF=', config%ground_state_fermi_level, &
+            ', response_EF=', config%fermi_level, ', response_EF_overridden=', config%fermi_level_overridden
+         call g_logger%fatal(trim(electron_count_message)// &
+            '. Remove a stale &tddft fermi_level override or use an EF that reproduces the target electron count.', __FILE__, __LINE__)
       end if
       allocate(site_moments(3, lattice_obj%nrec), signed_moments(lattice_obj%nrec))
       call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)

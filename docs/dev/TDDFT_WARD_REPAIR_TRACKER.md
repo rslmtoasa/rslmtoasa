@@ -116,10 +116,13 @@
   omega=0 Lehmann divided difference.  Exact and near degeneracies use the
   analytic derivative of the same Fermi function; the static implementation
   has no dynamic-eta input.
-- The production driver inherits reciprocal ground-state Fermi level,
-  temperature, and electron count unless an `&tddft` value is explicit.  It
-  records both provenance values and override flags, recomputes the response
-  count from the response eigenpairs, and fails when `|dN| > 1e-8 max(1,N)`.
+- The production driver inherits reciprocal ground-state temperature and
+  electron count.  With no explicit `&tddft` Fermi level and
+  `auto_find_fermi=.true.`, it resolves the chemical potential from the
+  complete response-mesh eigenpairs against that target count.  It records
+  provenance values and override flags, recomputes the response count, and
+  fails when `|dN| > 1e-8 max(1,N)`; an explicit inconsistent Fermi override
+  is never silently replaced.
   Its transverse response moment is the signed occupied `P_site sigma_z`
   population.
 - At Gamma, `*_goldstone.dat` additionally records observed raw loss-grid
