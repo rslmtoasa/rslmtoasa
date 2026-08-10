@@ -2,6 +2,7 @@
 
 - [x] WR-00 — Freeze pair-potential conventions and executable identities
 - [x] WR-01 — Add generic weighted-vertex and direct-Xi machinery
+- [x] WR-01b — Preserve endpoint-resolved LMTO magnetic tangents
 - [ ] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
 - [ ] WR-03 — Integrate direct Xi in production shadow mode
 - [ ] WR-04 — Implement the real static limit and ground-state provenance
@@ -26,14 +27,21 @@
   `UnitResponseVertices`, `UnitTddftChiKS`, `UnitTddftGoldstone`,
   `UnitTddftDysonModes`, `UnitTddftConfig`, and `UnitKspaceOccupations`.
 
-## WR-02 blocker
+## WR-01b evidence
 
-- [ ] Analytic LMTO pair-potential operator and finite-rotation oracle are
-  unavailable. Persistent `hxc` has collapsed the per-endpoint magnetic bond
-  terms, the XC provider has no radial/operator matrix data, and the current
-  response population is magnitude-only. The required derivative API is
-  specified in `TDDFT_WARD_REPAIR_BLUEPRINT.md`; no scalar-kernel fallback is
-  permitted.
+- `UnitLmtoMagneticTangents`: old/reference value preservation, complex spinor
+  map, three-step central finite differences for either endpoint and a common
+  rotation, dot/cross negative controls, reverse-bond covariance, same-type
+  distinct-site identity, and capability rejection.
+- Focused regression: `UnitGbtStructure`, `UnitResponseConventions`,
+  `UnitTddftWardConventions`, and `UnitTddftDirectXi`.
+
+## WR-02 handoff
+
+- [ ] Consume endpoint Cartesian tangents with endpoint-position Bloch phases,
+  establish signed `M_a` provenance, form `Q_a^-`, and validate against a
+  commensurate-supercell finite-rotation oracle. No assembled-`hxc` or scalar
+  site-kernel reconstruction is allowed.
 
 ## Global gates
 

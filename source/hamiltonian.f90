@@ -39,6 +39,7 @@ module hamiltonian_mod
 #endif
    use basis_mod, only: nb, norb, spin_off, lmax_basis
    use magnetic_representation_mod, only: magnetic_representation_len
+   use lmto_magnetic_tangent_mod, only: lmto_endpoint_tangent_record
    implicit none
 
    private
@@ -153,6 +154,8 @@ module hamiltonian_mod
       procedure :: export_rs_tb_all
       procedure :: chbar_nc
       procedure :: ham0m_nc
+      procedure :: ham0m_nc_tangent
+      procedure :: ham0m_nc_endpoint_tangents
       procedure :: hmfind
       procedure :: set_texture_moments
       procedure :: clear_texture_moments
@@ -783,6 +786,33 @@ module hamiltonian_mod
       real(rp) :: vv
 
    end subroutine ham0m_nc
+
+   !> Return the complete fixed-potential directional derivative of one ordinary
+   !> LMTO bond. `supported=.false.` is a capability rejection, never a partial
+   !> operator; callers must inspect it before consuming delta_hhmag.
+   module subroutine ham0m_nc_tangent(this, ia, ja, it, jt, vet, hhh, delta_mom_i, delta_mom_j, &
+                                      delta_hhmag, supported, reason)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt
+      real(rp), intent(in) :: vet(3), hhh(norb, norb), delta_mom_i(3), delta_mom_j(3)
+      complex(rp), intent(out) :: delta_hhmag(norb, norb, 4)
+      logical, intent(out) :: supported
+      character(len=*), intent(out), optional :: reason
+   end subroutine ham0m_nc_tangent
+
+   !> On-demand endpoint provider for a directed real-space bond. `directed_bond`
+   !> is the neighbor-list/Fourier bond slot; `ia` and `ja` retain response-site
+   !> identity even when their chemical types coincide.
+   module subroutine ham0m_nc_endpoint_tangents(this, ia, ja, it, jt, directed_bond, vet, hhh, &
+                                                left_tangent, right_tangent, record, supported, reason)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: ia, ja, it, jt, directed_bond
+      real(rp), intent(in) :: vet(3), hhh(norb, norb)
+      complex(rp), intent(out) :: left_tangent(norb, norb, 4, 3), right_tangent(norb, norb, 4, 3)
+      type(lmto_endpoint_tangent_record), intent(out) :: record
+      logical, intent(out) :: supported
+      character(len=*), intent(out), optional :: reason
+   end subroutine ham0m_nc_endpoint_tangents
 
    !> @brief Build noncollinear local hopping data for one cluster atom.
    !> @details Walks the neighbor list around atom ia, obtains orbital hopping

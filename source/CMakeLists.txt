@@ -24,6 +24,7 @@ add_library(${PROJECT_NAME} STATIC
     green.f90
     magnetic_representation.f90
     gbt_structure.f90
+    lmto_magnetic_tangent.f90
     spin_density.f90
     #hamiltonian_base_mod.f90
     #hamiltonian_cpu_mod.f90

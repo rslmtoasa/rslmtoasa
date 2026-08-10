@@ -149,42 +149,88 @@ oracle, the unequal-orbital divergence from the old scalar route, scalar versus
 batched equality for complex `q != 0` spinors, and the right-vertex-order
 negative control. It does not alter `calculation.f90` dispatch.
 
-## WR-02 LMTO representation audit — blocked
+## WR-01b endpoint-resolved LMTO magnetic tangents
 
-The required active-basis pair potential cannot be derived faithfully from the
-stored ground-state state on commit `d3f5b1f`. This is a hard blocker, not a
-license to use `K_site P_site sigma_minus`.
+`ham0m_nc` now delegates ordinary bond assembly to the side-effect-free
+`lmto_magnetic_tangent_mod`. The same coefficient construction supplies the
+fixed-potential derivative before `chbar_nc` collapses it into `hmag`, `hxc`,
+and `ee`. This is provenance for a later vertex provider, not a TDDFT dispatch
+change.
 
-The eventual `Q_a` is a full real-space LMTO block operator, not an onsite
-orbital identity. `ham0m_nc` forms each directed bond from separate
-source-endpoint, target-endpoint, and cross-product magnetic terms; the normal
-`build_bulkham` route then sums those terms into `hmag`, packs the spin blocks
-into `hxc`, and Fourier transforms `ee`. Thus tails/hopping and any
-representation-generated matrix elements must remain in `Q_a`.
+For a directed bond `i -> j`, with `S = hhh`, the actual implemented orbital
+matrices are
 
-Three facts prevent an analytic local derivative today:
+\[
+A_{00}=w_{0i}S w_{0j},\quad A_{11}=w_{1i}S w_{1j},\quad
+A_{10}=w_{1i}S w_{0j},\quad A_{01}=w_{0i}S w_{1j}.
+\]
 
-1. `hmag` is a scratch array reset by every `chbar_nc` call. The persistent
-   `hxc`/`ee` blocks contain only the **sum** of the two endpoint contributions
-   to a bond. A derivative with respect to rotation of site `a` needs the
-   source and target terms separately; they cannot be reconstructed from their
-   sum.
-2. `xc_response_kernel_provider` keeps only integrated radial quantities
-   (`radial_spin_population`, `bxc_spin_moment`, and scalar averages), rather
-   than radial samples or active-basis matrix elements of `Bxc(r)`. It cannot
-   independently supply the missing orbital matrix.
-3. The current provider/TDDFT driver stores a magnitude-only site population
-   (`mtot` and, in the response driver, `sqrt(mx^2+my^2+mz^2)`). It therefore
-   cannot provide the signed `M_a` normalization required for reversed or
-   antiferromagnetic sublattices. The constraining-field contribution is also
-   merged into the radial potential without an immutable response provenance.
+With `e_i=potential%mom_i`, `e_j=potential%mom_j`, and onsite `D_i=cx1_i`
+(`cex1_i` in the HOH value path), the core returns
 
-The smallest prerequisite is a dedicated Hamiltonian derivative API. It must
-persist or return the analytic source-endpoint and target-endpoint derivatives
-of `ham0m_nc` before they are summed, assemble their full real-space and
-Fourier-transformed matrices in the active `ham_only` basis, retain signed
-site moments and XC-versus-constraining-field provenance, and expose a
-side-effect-free `+theta/-theta` rebuild for the independent oracle. Only then
-can WR-02 compare analytic `Q_a^+=(Q_a^-)^dagger` against central rotations,
-including a rigid all-site rotation. Generalized-overlap modes remain rejected
-until a metric-correct operator and any `delta S` contribution are derived.
+\[
+H_0=A_{00}+A_{11}(e_i\!\cdot e_j)+C_{0i},
+\]
+\[
+H_\alpha=A_{10}e_{i\alpha}+A_{01}e_{j\alpha}
++iA_{11}(e_i\!\times e_j)_\alpha+D_i e_{i\alpha}.
+\]
+
+For explicit endpoint tangents `d_i=delta_mom_i` and `d_j=delta_mom_j`, the
+new narrow API `ham0m_nc_tangent` returns
+
+\[
+\delta H_0=A_{11}(d_i\!\cdot e_j+e_i\!\cdot d_j),
+\]
+\[
+\delta H_\alpha=A_{10}d_{i\alpha}+A_{01}d_{j\alpha}
++iA_{11}(d_i\!\times e_j+e_i\!\times d_j)_\alpha+D_i d_{i\alpha}.
+\]
+
+`potential%mom` is a **unit direction**, not a moment magnitude: it is
+normalised in `potential.f90` at construction and input boundaries, and the
+Hamiltonian uses it only as the orientation multiplying fixed spin-dependent
+LMTO potential parameters. The response population `M_a` therefore remains a
+separate, signed-normalisation problem for WR-02; WR-01b does not assume that
+`potential%mom` supplies it.
+
+The cartesian-to-spinor helper uses the existing convention
+
+\[
+H=H_0 I+H_x\sigma_x+H_y\sigma_y+H_z\sigma_z,
+\]
+
+so its blocks are `(H0+Hz, Hx-iHy; Hx+iHy, H0-Hz)`. WR-02 will form
+`Q_a^-=(D_{a,x}-iD_{a,y})/(2M_a)` only after it assigns endpoint phases in the
+reciprocal convention and establishes signed `M_a` provenance.
+
+`ham0m_nc_endpoint_tangents` is an on-demand provider. Its record carries
+source/neighbor **site** identities, their types, the directed neighbor/Fourier
+bond slot, displacement, onsite ownership, and operator generation. Thus two
+sites of type `1` do not alias. It returns left and right tangents with an
+explicit final Cartesian-component index, so a future response layer obtains
+all three components without trying to split an assembled block.
+
+| Feature | WR-01b status |
+| --- | --- |
+| Ordinary CPU `periodic_nc` first-order LMTO, fixed potential | supported |
+| `explicit_texture` endpoint lookup | supported only when its normal bulk-reuse guard holds |
+| SOC, constraining/FSM-field provenance | rejected pending a separated derivation |
+| HOH/generalized overlap | rejected: `delta S`/HOH tangent absent |
+| GBT bond gauge | rejected |
+| two-centre CCOR | rejected |
+| Hubbard U/V and local-axis transformed route | rejected |
+
+The capability result is false with a specific reason for every rejected
+active route; it returns zero storage rather than a partial tangent. The core
+unit oracle checks value preservation, complex spinor mapping, left/right and
+common-rotation central differences, dot/cross negative controls, reverse-bond
+covariance, same-type distinct-site records, and each capability rejection.
+
+### WR-02 handoff
+
+Consume `ham0m_nc_endpoint_tangents` before `hxc`/`ee` assembly, attach the
+phase of the *perturbed endpoint* in the reciprocal Fourier convention, then
+form `D_x`, `D_y`, and `Q^-`. Validate the q-dependent operator against a
+commensurate-supercell finite rotation. No radial reconstruction or scalar
+`K_site P_site sigma_minus` fallback is permitted.
