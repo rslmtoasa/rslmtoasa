@@ -133,3 +133,18 @@ Dyson equivalence, the uniform-kernel reduction `Xi=chi_KS*K`, and the
 unequal-exchange negative control. For the latter, the exact weighted
 two-orbital vertex satisfies the Ward identity to numerical precision while
 the old site-averaged scalar kernel has a nonzero residual.
+
+## WR-01 generic direct-Xi layer
+
+`tddft_xi_mod` accepts a set of dense weighted operators in the same
+coefficient representation as the eigenvectors. It evaluates
+`<m,k+q|Q_b|n,k>` without assuming Hermiticity or applying a conjugation, then
+forms direct `Xi` with the same finite-temperature occupations, retarded
+denominators, band window, k weights, and scalar/batched controls as
+`chi_KS`. This layer deliberately knows nothing about radial XC data or the
+LMTO construction of `Q`; WR-02 supplies that representation.
+
+`UnitTddftDirectXi` establishes the uniform scalar reduction only as an
+oracle, the unequal-orbital divergence from the old scalar route, scalar versus
+batched equality for complex `q != 0` spinors, and the right-vertex-order
+negative control. It does not alter `calculation.f90` dispatch.

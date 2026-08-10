@@ -1,7 +1,7 @@
 # TDDFT Ward-repair tracker
 
 - [x] WR-00 — Freeze pair-potential conventions and executable identities
-- [ ] WR-01 — Add generic weighted-vertex and direct-Xi machinery
+- [x] WR-01 — Add generic weighted-vertex and direct-Xi machinery
 - [ ] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
 - [ ] WR-03 — Integrate direct Xi in production shadow mode
 - [ ] WR-04 — Implement the real static limit and ground-state provenance
@@ -16,6 +16,15 @@
   pair-potential oracles, including the scalar-kernel negative control.
 - Existing `UnitResponseConventions`, `UnitResponseVertices`, `UnitTddftChiKS`,
   and `UnitTddftGoldstone` remain required regression evidence.
+
+## WR-01 evidence
+
+- `UnitTddftDirectXi`: uniform scalar reduction, unequal-orbital weighted
+  oracle, complex nonzero-`q` scalar/batched equivalence, metadata propagation,
+  and wrong-right-vertex-order negative control.
+- Regression set: `UnitResponseConventions`, `UnitTddftWardConventions`,
+  `UnitResponseVertices`, `UnitTddftChiKS`, `UnitTddftGoldstone`,
+  `UnitTddftDysonModes`, `UnitTddftConfig`, and `UnitKspaceOccupations`.
 
 ## Global gates
 

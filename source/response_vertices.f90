@@ -34,6 +34,8 @@ module response_vertices_mod
    public :: site_projected_operator
    public :: response_transition_vertex
    public :: response_transition_vectors
+   public :: weighted_transition_vertex
+   public :: weighted_transition_vectors
    public :: build_site_charge_spin_channels
 
 contains
@@ -132,6 +134,51 @@ contains
          end do
       end do
    end subroutine response_transition_vectors
+
+   !> Transition vertex for an explicitly supplied electronic-space operator.
+   !> This is deliberately representation-neutral: callers provide the matrix
+   !> in exactly the coefficient representation of `bra_spinor` and
+   !> `ket_spinor`.  In WR-02 that matrix will be the LMTO pair potential Q;
+   !> this layer neither constructs it nor assumes it is Hermitian.
+   function weighted_transition_vertex(operator, bra_spinor, ket_spinor) result(vertex)
+      complex(rp), intent(in) :: operator(:, :)
+      complex(rp), intent(in) :: bra_spinor(:), ket_spinor(:)
+      complex(rp) :: vertex
+      integer :: nmat
+
+      nmat = size(bra_spinor)
+      if (nmat < 1 .or. size(ket_spinor) /= nmat .or. any(shape(operator) /= [nmat, nmat])) then
+         error stop 'weighted_transition_vertex: operator and spinor dimensions are incompatible'
+      end if
+      vertex = sum(conjg(bra_spinor)*matmul(operator, ket_spinor))
+   end function weighted_transition_vertex
+
+   !> Batched form of weighted_transition_vertex.  Each operator is one
+   !> response-space input coordinate, and no conjugation or adjoint is added:
+   !> the caller selects the physically ordered matrix element explicitly.
+   subroutine weighted_transition_vectors(operators, bra_spinors, ket_spinors, vertices)
+      complex(rp), intent(in) :: operators(:, :, :)
+      complex(rp), intent(in) :: bra_spinors(:, :), ket_spinors(:, :)
+      complex(rp), intent(out) :: vertices(:, :)
+      integer :: nmat, noperators, npairs, ioperator, ipair
+
+      nmat = size(bra_spinors, 1)
+      npairs = size(bra_spinors, 2)
+      noperators = size(operators, 3)
+      if (nmat < 1 .or. size(ket_spinors, 1) /= nmat .or. size(ket_spinors, 2) /= npairs .or. &
+          size(operators, 1) /= nmat .or. size(operators, 2) /= nmat) then
+         error stop 'weighted_transition_vectors: incompatible operator or spinor batch shape'
+      end if
+      if (any(shape(vertices) /= [noperators, npairs])) then
+         error stop 'weighted_transition_vectors: vertices must have shape (noperators,npairs)'
+      end if
+      do ipair = 1, npairs
+         do ioperator = 1, noperators
+            vertices(ioperator, ipair) = weighted_transition_vertex(operators(:, :, ioperator), &
+               bra_spinors(:, ipair), ket_spinors(:, ipair))
+         end do
+      end do
+   end subroutine weighted_transition_vectors
 
    !> Canonical active basis for a full charge-spin response: site-major with
    !> components (charge, mx, my, mz) at every site.  Circular labels remain
