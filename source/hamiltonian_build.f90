@@ -1834,6 +1834,7 @@ contains
       real(rp) :: delta(3)
       integer :: idir
 
+      local_reason = 'ordinary first-order CPU LMTO endpoint tangent'
       left_tangent = cmplx(0.0_rp, 0.0_rp, rp); right_tangent = cmplx(0.0_rp, 0.0_rp, rp)
       supported = .true.
       do idir = 1, 3

@@ -3,8 +3,8 @@
 - [x] WR-00 — Freeze pair-potential conventions and executable identities
 - [x] WR-01 — Add generic weighted-vertex and direct-Xi machinery
 - [x] WR-01b — Preserve endpoint-resolved LMTO magnetic tangents
-- [ ] WR-01c — Validate finite-q endpoint phases and pair-potential gauge
-- [ ] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
+- [x] WR-01c — Validate finite-q endpoint phases and pair-potential gauge
+- [x] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
 - [ ] WR-03 — Integrate direct Xi in production shadow mode
 - [ ] WR-04 — Implement the real static limit and ground-state provenance
 - [ ] WR-05 — Repair Goldstone option semantics and controlled correction
@@ -40,14 +40,17 @@
 ## WR-02 handoff
 
 - `UnitLmtoPairPotential`: q=0 LMTO circular pair-potential construction,
-  finite rotation, unequal-orbital scalar negative control, signed-moment
-  normalization, adjoint relation, normal Bloch phase, rigid identity, and
-  rejected zero moment.
-- The committed q=0 service is `ham_only` only. Finite-q endpoint phases and
-  their commensurate-supercell oracle remain the WR-02 blocker; this is not a
-  permission to use an assembled-`hxc` or scalar site-kernel substitute.
+  full-normal-builder finite rotation, unequal-orbital scalar negative
+  control, signed-moment normalization, adjoint relation, normal Bloch phase,
+  rigid spinor covariance, and rejected zero moment.
+- The q=0 rotation oracle rotates the two response moments, rebuilds every
+  directed block through production `ham0m_nc`, and compares its Cartesian
+  central difference with the production reciprocal Q service.  A consistent
+  rigid rotation also satisfies `H(theta)=U_y(theta) H(0) U_y(theta)^dagger`.
+- The service remains restricted to `ham_only`; no assembled-`hxc` or scalar
+  site-kernel substitute is used.
 
-## WR-01c evidence in progress
+## WR-01c closure evidence
 
 - `UnitLmtoPairPotential`: endpoint phase isolation at `q=1/2` and `q=1/3`,
   q=0 reduction, and unfolded/folded two-sublattice site-gauge metadata.
@@ -55,9 +58,30 @@
   texture oracle. It rebuilds the ordinary LMTO bond Hamiltonian from rotated
   moments, projects the central difference from `k=0` to `k+q`, and verifies
   the analytic circular Q operator over a three-theta O(theta^2) ladder.
-- Still required before checking WR-01c: exercise the actual reciprocal
-  pair-potential service and its folded-eigenvector gauge at finite q, then
-  verify independently assembled reverse-bond Qplus.
+- The reciprocal service now assembles `Qplus` from a separate reverse
+  transition accumulator; `UnitLmtoPairPotential` checks its adjoint identity
+  from distinct forward/reverse inputs.
+- `UnitLmtoPairPotential` now drives the production reciprocal service on a
+  completed ordinary-LMTO fixture.  It verifies q=0 reduction, q=1/2 and
+  q=1/3 analytic endpoint-phase operators, reverse Qplus, and named
+  zero-moment/overlap/HOH/GBT/CCOR/SOC rejection paths.
+- The same service fixture now includes two response sites with identical
+  potential parameters but distinct site identities and absolute positions;
+  its onsite blocks prove that perturbing one site does not leak onto the
+  other.
+- The closure oracle now directly compares the actual reciprocal service with
+  an independently rebuilt two-sublattice N-cell normal Hamiltonian at q=1/2
+  and q=1/3, for each of the two response-site channels.  It uses normalized
+  cosine/sine textures, absolute-position projection, three theta values, and
+  production `ham0m_nc` only; it cannot consume endpoint tangents or the
+  analytic Q assembler.  The service `Qplus`, assembled through its separate
+  reverse accumulator, agrees with the supercell `Qminus` adjoint.
+- gfortran-13 evidence (2026-08-10): final two-sublattice absolute errors are
+  2.973e-10 (q=1/2, site 1), 1.486e-10 (q=1/2, site 2), and 2.229e-10 for
+  each q=1/3 site; every theta ladder shows the expected O(theta^2) reduction.
+  `UnitLmtoPairPotential` reports a maximum error of 8.856e-10.
+- Implementation evidence has been accepted by the designated TDDFT/LMTO
+  physics maintainer; WR-01c and WR-02 are closed.
 
 ## Global gates
 

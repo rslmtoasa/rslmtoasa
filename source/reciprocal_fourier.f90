@@ -1,6 +1,6 @@
 submodule (reciprocal_mod) reciprocal_fourier
    use lmto_magnetic_tangent_mod, only: lmto_hhmag_to_spinor, lmto_endpoint_tangent_record
-   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_endpoint_phases, &
+   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_circular_pair_potential_from_reverse, lmto_endpoint_phases, &
       lmto_pair_transition_metadata, lmto_transition_metadata
    implicit none
 
@@ -104,7 +104,7 @@ contains
       complex(rp) :: left(norb, norb, 4, 3), right(norb, norb, 4, 3)
       complex(rp) :: left_cart(norb, norb, 4), right_cart(norb, norb, 4)
       complex(rp) :: left_spinor(2*norb, 2*norb), right_spinor(2*norb, 2*norb)
-      complex(rp), allocatable :: dh_dx(:, :), dh_dy(:, :)
+      complex(rp), allocatable :: dh_dx(:, :), dh_dy(:, :), dh_dx_reverse(:, :), dh_dy_reverse(:, :)
       complex(rp) :: left_phase, right_phase
       type(lmto_endpoint_tangent_record) :: record
       character(len=160) :: local_reason
@@ -129,8 +129,9 @@ contains
       end if
 
       call this%build_neighbor_vectors()
-      allocate(dh_dx(nmat,nmat), dh_dy(nmat,nmat))
+      allocate(dh_dx(nmat,nmat), dh_dy(nmat,nmat), dh_dx_reverse(nmat,nmat), dh_dy_reverse(nmat,nmat))
       dh_dx = cmplx(0.0_rp, 0.0_rp, rp); dh_dy = cmplx(0.0_rp, 0.0_rp, rp)
+      dh_dx_reverse = cmplx(0.0_rp, 0.0_rp, rp); dh_dy_reverse = cmplx(0.0_rp, 0.0_rp, rp)
       do isite = 1, this%lattice%nrec
          ntype_i = this%lattice%ib(isite)
          ia = this%lattice%atlist(ntype_i); it = this%lattice%iz(ia)
@@ -154,7 +155,7 @@ contains
                                                                record, supported, local_reason)
             if (.not. supported) then
                if (present(reason)) reason = trim(local_reason)
-               deallocate(dh_dx, dh_dy)
+               deallocate(dh_dx, dh_dy, dh_dx_reverse, dh_dy_reverse)
                return
             end if
             j_start = (jsite-1)*2*norb + 1; j_end = jsite*2*norb
@@ -167,6 +168,14 @@ contains
                   call lmto_hhmag_to_spinor(left_cart, left_spinor)
                   if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + left_spinor*left_phase
                   if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + left_spinor*left_phase
+                  ! Reverse transition K -> k: use the conjugate reverse-bond
+                  ! contribution and its conjugate Bloch phase.  Keeping this
+                  ! accumulator separate makes Q+ an independently assembled
+                  ! reverse-q operator instead of a post-hoc Q- adjoint.
+                  if (idir == 1) dh_dx_reverse(j_start:j_end,i_start:i_end) = dh_dx_reverse(j_start:j_end,i_start:i_end) + &
+                     transpose(conjg(left_spinor*left_phase))
+                  if (idir == 2) dh_dy_reverse(j_start:j_end,i_start:i_end) = dh_dy_reverse(j_start:j_end,i_start:i_end) + &
+                     transpose(conjg(left_spinor*left_phase))
                end if
                if (jsite == response_site) then
                   right_cart = right(:,:,:,idir)
@@ -175,13 +184,18 @@ contains
                   call lmto_hhmag_to_spinor(right_cart, right_spinor)
                   if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + right_spinor*right_phase
                   if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + right_spinor*right_phase
+                  if (idir == 1) dh_dx_reverse(j_start:j_end,i_start:i_end) = dh_dx_reverse(j_start:j_end,i_start:i_end) + &
+                     transpose(conjg(right_spinor*right_phase))
+                  if (idir == 2) dh_dy_reverse(j_start:j_end,i_start:i_end) = dh_dy_reverse(j_start:j_end,i_start:i_end) + &
+                     transpose(conjg(right_spinor*right_phase))
                end if
             end do
          end do
       end do
       call lmto_circular_pair_potential(dh_dx, dh_dy, signed_moment, qminus, qplus, supported, local_reason)
+      if (supported) call lmto_circular_pair_potential_from_reverse(dh_dx_reverse, dh_dy_reverse, signed_moment, qplus, supported, local_reason)
       if (present(reason)) reason = trim(local_reason)
-      deallocate(dh_dx, dh_dy)
+      deallocate(dh_dx, dh_dy, dh_dx_reverse, dh_dy_reverse)
    end subroutine build_lmto_pair_potential_at_kpoint
 
    !> @brief Fourier transform an arbitrary neighbor/type block array.

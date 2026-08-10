@@ -268,10 +268,12 @@ Zero signed moments, `generalized_overlap_proxy`, and
 also rejects SOC, constraining/FSM fields, HOH, GBT, CCOR, Hubbard, and local
 axis transforms. There is no TDDFT production-dispatch change.
 
-The q=0 limitation is intentional: a finite-q pair potential requires the
-phase of the *perturbed endpoint position*, not merely the directed bond. That
-endpoint-cell phase belongs in the later `k+q,k` vertex assembly and remains
-unchecked until its commensurate-supercell oracle exists.
+The q=0 service remains deliberately restricted to `ham_only`, but its
+rotation evidence now uses the production normal block builder rather than a
+hand-built bond algebra: finite x/y rotations are rebuilt through `ham0m_nc`
+and compared with the reciprocal Q service.  A uniform finite rotation also
+satisfies the corresponding spinor unitary covariance of the full normal
+matrix.
 
 `UnitLmtoPairPotential` validates: a two-level/on-site central rotation,
 unequal-orbital failure of a scalar site substitute, reversed signed moment,
@@ -315,7 +317,16 @@ ladder. The `k=0` endpoint is intentional: both primitive Bloch states are
 then commensurate with the Gamma supercell, so no boundary-condition phase is
 silently approximated.
 
-WR-01c remains open until that oracle is connected to the actual reciprocal
-pair-potential service, including its folded-eigenvector gauge, and Qplus is
-independently reconstructed from reverse-bond data. The current circular
-adjoint remains the q=0 service convention and is not yet finite-q evidence.
+The reciprocal service now accumulates a separate reverse transition while it
+assembles the forward endpoint tangents.  It forms `Qplus` from the reverse
+Cartesian circular combination, rather than assigning `adjoint(Qminus)`;
+`UnitLmtoPairPotential` verifies the resulting adjoint identity from distinct
+forward and reverse inputs.  The same test drives the production service on an
+ordinary-LMTO fixture at q=0, 1/2, and 1/3.  Its same-chemical-parameter,
+two-sublattice closure fixture preserves distinct internal site identities and
+compares the actual service against an independent explicit N-cell supercell
+normal-Hamiltonian rebuild for q=1/2 and q=1/3, both response sites, and a
+three-theta central-difference ladder.  The oracle calls only `ham0m_nc` and
+an absolute-position projection; it cannot consume endpoint tangents, the
+analytic phase helper, or the Q assembler.  Its folded-eigenvector contraction
+is covered separately by the explicit gauge-covariant transition-vertex test.

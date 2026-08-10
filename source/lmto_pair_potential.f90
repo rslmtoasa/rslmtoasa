@@ -9,6 +9,7 @@ module lmto_pair_potential_mod
    implicit none
    private
    public :: lmto_circular_pair_potential
+   public :: lmto_circular_pair_potential_from_reverse
    public :: lmto_bloch_phase
    public :: lmto_endpoint_phases
    public :: lmto_pair_transition_metadata
@@ -48,6 +49,34 @@ contains
       supported = .true.
       if (present(reason)) reason = 'ordinary ham_only LMTO pair potential'
    end subroutine lmto_circular_pair_potential
+
+   !> Form the emission-side circular vertex from a separately assembled
+   !> reverse transition.  `dh_*_reverse` has rows in the k coefficient space
+   !> and columns in the K=k+q coefficient space.  It is deliberately a
+   !> different input from the absorption-side tangent so Q+ is not created by
+   !> assigning the adjoint of Q-.
+   subroutine lmto_circular_pair_potential_from_reverse(dh_dx_reverse, dh_dy_reverse, signed_moment, qplus, supported, reason)
+      complex(rp), intent(in) :: dh_dx_reverse(:, :), dh_dy_reverse(:, :)
+      real(rp), intent(in) :: signed_moment
+      complex(rp), intent(out) :: qplus(:, :)
+      logical, intent(out) :: supported
+      character(len=*), intent(out), optional :: reason
+
+      qplus = cmplx(0.0_rp, 0.0_rp, rp)
+      supported = .false.
+      if (size(dh_dx_reverse, 1) /= size(dh_dx_reverse, 2) .or. &
+          any(shape(dh_dy_reverse) /= shape(dh_dx_reverse)) .or. any(shape(qplus) /= shape(dh_dx_reverse))) then
+         if (present(reason)) reason = 'incompatible reverse Cartesian tangent matrix shapes'
+         return
+      end if
+      if (abs(signed_moment) <= tiny(1.0_rp)) then
+         if (present(reason)) reason = 'signed response moment is zero or unavailable'
+         return
+      end if
+      qplus = (dh_dx_reverse + i_unit*dh_dy_reverse)/(2.0_rp*signed_moment)
+      supported = .true.
+      if (present(reason)) reason = 'ordinary ham_only LMTO reverse pair potential'
+   end subroutine lmto_circular_pair_potential_from_reverse
 
    pure function lmto_bloch_phase(k_direct, displacement_direct) result(phase)
       real(rp), intent(in) :: k_direct(3), displacement_direct(3)
