@@ -277,6 +277,17 @@ contains
       if (this%goldstone_mode /= 'off' .and. this%goldstone_mode /= 'diagnose' .and. this%goldstone_mode /= 'correct') then
          call g_logger%fatal("[tddft_config]: goldstone_mode must be 'off', 'diagnose', or 'correct' (deprecated 'sum_rule')", __FILE__, __LINE__)
       end if
+      if (this%goldstone_mode == 'correct') then
+         if (this%xi_backend /= 'pair_potential' .and. this%xi_backend /= 'compare') then
+            call g_logger%fatal("[tddft_config]: goldstone_mode='correct' cannot be used with xi_backend='legacy_site_scalar'. "// &
+               "Use goldstone_mode='diagnose' for the legacy raw spectrum, or select xi_backend='pair_potential' or 'compare' for a controlled correction.", &
+               __FILE__, __LINE__)
+         end if
+         if (.not. (this%output_xi .or. this%output_chi)) then
+            call g_logger%fatal("[tddft_config]: goldstone_mode='correct' requires output_xi=.true. or output_chi=.true. "// &
+               'so the raw pair-potential Xi remains auditable.', __FILE__, __LINE__)
+         end if
+      end if
       if (this%nomega < 1 .or. this%omega_max < this%omega_min .or. this%eta <= 0.0_rp .or. &
           (this%electronic_temperature_overridden .and. this%electronic_temperature < 0.0_rp) .or. &
           this%band_first < 1 .or. this%band_last < 0 .or. &

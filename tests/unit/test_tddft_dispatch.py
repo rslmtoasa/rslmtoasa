@@ -90,6 +90,16 @@ def test_prototype_routes_and_full_alsda_are_explicitly_capability_gated() -> No
     assert "eigenpair-resolvent reference, not a native RS Green-function provider" in calculation
 
 
+def test_goldstone_correction_input_error_is_rejected_before_response_setup() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = (root / "source" / "tddft_config.f90").read_text()
+    calculation = (root / "source" / "calculation.f90").read_text()
+    assert "goldstone_mode='correct' cannot be used with xi_backend='legacy_site_scalar'" in config
+    assert "goldstone_mode='correct' requires output_xi=.true. or output_chi=.true." in config
+    assert config.index("goldstone_mode='correct' cannot be used") < config.index("invalid frequency, band, temperature")
+    assert "goldstone_mode=correct requires" in calculation  # retain driver defence for programmatic config construction
+
+
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
@@ -98,4 +108,5 @@ if __name__ == "__main__":
     test_controlled_goldstone_correction_rescales_only_pair_potential_columns()
     test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
     test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
+    test_goldstone_correction_input_error_is_rejected_before_response_setup()
     print("RESULT: PASS")

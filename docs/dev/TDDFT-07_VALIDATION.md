@@ -38,6 +38,25 @@ residual is the quality metric and correction is not evidence of raw
 convergence. The old `goldstone_mode = 'sum_rule'` spelling migrates to
 `correct` with a warning.
 
+## Goldstone input combinations
+
+`correct` is intentionally unavailable with the legacy site-scalar route: a
+legacy correction would conceal the raw Ward failure that the repair is meant
+to measure.  Input validation rejects that pair before the response setup.
+
+| Purpose | `xi_backend` | `goldstone_mode` |
+| --- | --- | --- |
+| Legacy comparison / raw baseline | `legacy_site_scalar` | `diagnose` (or `off`) |
+| Raw pair-potential quality measurement | `pair_potential` | `diagnose` |
+| Raw legacy and pair comparison | `compare` | `diagnose` |
+| Controlled corrected comparison | `pair_potential` or `compare` | `correct` |
+
+For `correct`, also set `output_xi=.true.` or `output_chi=.true.` so the raw
+pair-potential operator and spectrum remain auditable.  Do not silently switch
+the default legacy backend to pair potential merely by requesting correction:
+the pair route has additional `ham_only` and eigenpair prerequisites that must
+be explicit in the input and output metadata.
+
 Make one `campaign.json` for every fixed physical setup. The checker at
 [`tests/regression/tddft_validation/tddft_validation.py`](../../tests/regression/tddft_validation/tddft_validation.py)
 reads the production text outputs and writes a compact, reproducible evidence
