@@ -24,7 +24,26 @@ def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     assert "MPI_ALLREDUCE(MPI_IN_PLACE, all_xi" in source
 
 
+def test_response_reconstructs_restart_site_moments_before_alsda_kernel() -> None:
+    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    assert "reciprocal_obj%eigenvalues = eigenvalues_k" in source
+    assert "reciprocal_obj%eigenvectors = eigenvectors_k" in source
+    assert "compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)" in source
+    assert "set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))" in source
+
+
+def test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed() -> None:
+    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    assert "kernel(isite, isite) = goldstone_result%k_perp(isite)" in source
+    assert "kernel(isite, isite) = goldstone_result%k_perp_sum_rule(isite)" not in source
+    assert "sum_rule_dynamic_kernel_applied" in source
+    assert "write(chi0_filename" in source
+    assert "trim(chi0_filename)" in source
+
+
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
+    test_response_reconstructs_restart_site_moments_before_alsda_kernel()
+    test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed()
     print("RESULT: PASS")

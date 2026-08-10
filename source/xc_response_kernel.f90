@@ -165,13 +165,15 @@ contains
    !> The site response variable is the total P_site sigma population.  Taking
    !> its transverse fluctuation to preserve the SCF radial spin shape gives
    !>
-   !>   K_perp(site) = integral B_xc(r)m(r) dr / M_site^2,
+   !>   K_perp(site) = integral B_xc(r)m(r) dr / (2 M_site^2),
    !>
    !> where M_site is the P_site sigma population supplied separately by
    !> set_site_spin_population.  Here B_xc is the *energy* coefficient
    !> (V_up-V_down)/2.  This is the
    !> direct rotational ALSDA derivative in the code's m=n_up-n_down and
-   !> H=H0+Hvec.sigma convention; no factor of two or mu_B is inserted.
+   !> H=H0+Hvec.sigma convention.  Since the response vertices measure
+   !> m^+/-=sigma_x +/- i sigma_y while delta H=(delta B^+m^- +
+   !> delta B^-m^+)/2, the circular kernel includes the explicit half.
    subroutine xc_kernel_record_radial_projection(this, isite, projection)
       class(xc_response_kernel_provider), intent(inout) :: this
       integer, intent(in) :: isite
@@ -236,7 +238,7 @@ contains
          return
       end if
       site%bxc_energy = site%bxc_spin_moment/site%spin_population
-      site%k_perp = site%bxc_energy/site%spin_population
+      site%k_perp = 0.5_rp*site%bxc_energy/site%spin_population
       site%has_k_perp = .true.
    end subroutine finalize_site_k_perp
 

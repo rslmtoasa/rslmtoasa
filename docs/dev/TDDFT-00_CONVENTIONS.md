@@ -94,13 +94,14 @@ existing radial SCF quadrature, using the returned XC potentials *before*
 the constraining field is added.  The site projection is
 
 ```
-K_perp(site) = integral Bxc_energy(r) m(r) dr / M_site^2,
+K_perp(site) = integral Bxc_energy(r) m(r) dr / (2 M_site^2),
 ```
 
 which follows by restricting a transverse `P_site sigma` fluctuation to the
 converged radial spin shape; `M_site` is exactly that response-projector
-population.  This is the energy curvature for that same site variable; it adds
-neither a factor of two nor `mu_B`.  The provider retains the radial spin
+population.  The response variables are `m+/- = mx +/- i my`, while the
+Hamiltonian couples as `(delta B+ m- + delta B- m+)/2`; this supplies the
+explicit factor one half.  No `mu_B` factor is introduced.  The provider retains the radial spin
 population separately from `potential%mtot`, the latter supplying `M_site`.
 SCF MPI
 ownership is reduced so every rank receives the same complete provider.

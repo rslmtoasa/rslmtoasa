@@ -283,7 +283,10 @@ module self_mod
       !> @endnote
       procedure :: potpar
       procedure, private :: write_kspace_scf_dos_outputs
-      procedure, private :: compute_kspace_spin_moments_spinor
+      !> Occupied-state site moments in the response projector.  Besides the
+      !> optional k-space SCF branch, LR-TDDFT uses this after reading a
+      !> restart: legacy *_out.nml files do not serialize `mtot`.
+      procedure :: compute_kspace_spin_moments_spinor
       final :: destructor
    end type self
 
@@ -3316,7 +3319,10 @@ contains
                WGT = 1.d0/3.d0
             end if
             DRDI = A*(rofi(IR) + B)
-            call xc_projection%accumulate(WGT*DRDI, RHO(IR, 1), RHO(IR, 2), VXC2, VXC1)
+            ! RHO(:,1)/VXC1 is spin-up in the same +z convention as the
+            ! response spinor's first block; channel 2 is spin down.
+            ! Preserve that ordering in the radial B_xc*m projection.
+            call xc_projection%accumulate(WGT*DRDI, RHO(IR, 2), RHO(IR, 1), VXC2, VXC1)
             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
             !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1

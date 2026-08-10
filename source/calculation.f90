@@ -1989,13 +1989,13 @@ contains
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
-      real(rp), allocatable :: all_trace_loss(:, :), coulomb_site(:, :), magnetization(:, :)
+      real(rp), allocatable :: all_trace_loss(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
-      character(len=sl) :: filename
+      character(len=sl) :: filename, chi0_filename
 
       config = tddft_config(this%fname)
       if (.not. config%enabled) then
@@ -2086,6 +2086,25 @@ contains
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
       call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points, eigenvalues_k, eigenvectors_k)
 
+      ! `*_out.nml` restart files retain the potential and its direction but
+      ! not the scalar site moment `mtot`.  The XC radial projection recorded
+      ! by refresh_xc_response_kernel must be normalized by the same occupied
+      ! P_site sigma population used by the response vertices.  Reconstruct it
+      ! from the complete, unreduced response mesh rather than relying on that
+      ! non-serialized legacy cache.
+      reciprocal_obj%fermi_level = config%fermi_level
+      reciprocal_obj%eigenvalues = eigenvalues_k
+      reciprocal_obj%eigenvectors = eigenvectors_k
+      allocate(site_moments(3, lattice_obj%nrec))
+      call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)
+      do isite = 1, lattice_obj%nrec
+         call self_obj%xc_response_provider%set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))
+         if (sqrt(sum(site_moments(:, isite)**2)) > tiny(1.0_rp)) then
+            call self_obj%xc_response_provider%set_site_magnetization_direction(isite, site_moments(:, isite))
+         end if
+      end do
+      deallocate(site_moments)
+
       ! The Gamma/static KS batch is shared by both channels.  Transverse uses
       ! it for Goldstone diagnostics; longitudinal instead calibrates its own
       ! kernel from independently converged symmetric +/- Bz calculations.
@@ -2152,15 +2171,14 @@ contains
          goldstone_options%has_soc = has_soc
          goldstone_options%has_external_field = has_external_field
          call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
-         if (goldstone_result%sum_rule_applied) then
-            do isite = 1, lattice_obj%nrec
-               kernel(isite, isite) = goldstone_result%k_perp_sum_rule(isite)
-            end do
-         else
-            do isite = 1, lattice_obj%nrec
-               kernel(isite, isite) = goldstone_result%k_perp(isite)
-            end do
-         end if
+         ! The finite-eta static sum-rule inverse remains a diagnostic only.
+         ! It is generally complex; using it as a frequency-independent
+         ! adiabatic kernel forces an artificial Gamma singularity and can
+         ! produce negative spectral weight.  Production Dyson spectra use
+         ! the real, XC-derived kernel below.
+         do isite = 1, lattice_obj%nrec
+            kernel(isite, isite) = goldstone_result%k_perp(isite)
+         end do
          if (rank == 0) then
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
             call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
@@ -2267,8 +2285,8 @@ contains
          end if
          write(unit, '(a)') '# q_index q1 q2 q3 chi0_file'
          do iq = 1, nq
-            write(unit, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
-            write(unit, '(i0,3(1x,es24.16),1x,a)') iq, config%q_points(:, iq), trim(filename)
+            write(chi0_filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
+            write(unit, '(i0,3(1x,es24.16),1x,a)') iq, config%q_points(:, iq), trim(chi0_filename)
          end do
          close(unit)
       end if
@@ -2305,6 +2323,7 @@ contains
       write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
       write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
       write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
+      write(unit, '(a,l1)') '# sum_rule_dynamic_kernel_applied = ', .false.
       write(unit, '(a,l1)') '# spin_orbit_present = ', has_soc
       write(unit, '(a,l1)') '# external_symmetry_breaking_field_present = ', has_external_field
       write(unit, '(a,5(1x,l1))') '# output_chi0 output_xi output_chi output_modes output_stoner =', &
