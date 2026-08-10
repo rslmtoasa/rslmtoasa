@@ -117,12 +117,10 @@
   analytic derivative of the same Fermi function; the static implementation
   has no dynamic-eta input.
 - The production driver inherits reciprocal ground-state temperature and
-  electron count.  With no explicit `&tddft` Fermi level and
-  `auto_find_fermi=.true.`, it resolves the chemical potential from the
-  complete response-mesh eigenpairs against that target count.  It records
-  provenance values and override flags, recomputes the response count, and
-  fails when `|dN| > 1e-8 max(1,N)`; an explicit inconsistent Fermi override
-  is never silently replaced.
+  electron count.  `fermi_level` is intentionally absent from `&tddft`.
+  After complete response-mesh eigenpairs exist, it always resolves the
+  chemical potential against that target count, records the separate SCF and
+  response-mesh values, and fails when `|dN| > 1e-8 max(1,N)`.
   Its transverse response moment is the signed occupied `P_site sigma_z`
   population.
 - At Gamma, `*_goldstone.dat` additionally records observed raw loss-grid

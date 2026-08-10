@@ -101,12 +101,15 @@ def test_goldstone_correction_input_error_is_rejected_before_response_setup() ->
 
 
 def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
-    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "source" / "calculation.f90").read_text()
+    namelist = (root / "source" / "include_codes" / "namelists" / "tddft.f90").read_text()
     assert source.index("calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points") < source.index(
         "calculate_canonical_band_energy(find_fermi=.true."
     )
     assert "response electron count does not match target: target=" in source
-    assert "Remove a stale &tddft fermi_level override" in source
+    assert "There is deliberately no &tddft EF input" in source
+    assert "fermi_level" not in namelist
 
 
 if __name__ == "__main__":

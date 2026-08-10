@@ -57,11 +57,11 @@ the default legacy backend to pair potential merely by requesting correction:
 the pair route has additional `ham_only` and eigenpair prerequisites that must
 be explicit in the input and output metadata.
 
-Do not copy a Fermi level from an SCF mesh into `&tddft` when the response uses
-a different k mesh.  Omit `fermi_level` and let `auto_find_fermi=.true.` solve
-the chemical potential on the complete response mesh for the same target
-electron count.  An explicit response Fermi level is an audited override and
-is rejected if its Fermi occupations do not reproduce that count.
+Do not place a Fermi level in `&tddft`: `fermi_level` is not a TDDFT input.
+The driver always solves the chemical potential on the complete response mesh
+for the reciprocal ground-state target electron count, independent of the SCF
+mesh.  Response output records both the SCF and response-mesh Fermi levels and
+fails if the latter does not reproduce that target count.
 
 Make one `campaign.json` for every fixed physical setup. The checker at
 [`tests/regression/tddft_validation/tddft_validation.py`](../../tests/regression/tddft_validation/tddft_validation.py)

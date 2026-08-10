@@ -150,15 +150,15 @@ numerical noise.  The dynamic `eta` remains a spectrum-resolution control and
 cannot enter `Xi_static`.
 
 Unless explicitly supplied in `&tddft`, response temperature is inherited from
-the reciprocal ground-state object.  Once the complete response-mesh
-eigenpairs exist, `auto_find_fermi=.true.` resolves the inherited chemical
-potential on that same mesh against the ground-state target electron count.
-This prevents a stale SCF-mesh Fermi seed from changing the response particle
-number on a refined mesh.  An explicit `&tddft fermi_level` is never silently
-replaced: the driver records both values and terminates when its recomputed
-count differs by more than `1e-8 * max(1, N)`.  The transverse response vector
-is the signed occupied `P_site sigma_z` population, not a site-moment
-magnitude.
+the reciprocal ground-state object.  `&tddft` has no `fermi_level` key.  Once
+the complete response-mesh eigenpairs exist, the driver always resolves the
+chemical potential on that mesh against the ground-state target electron
+count.  This prevents a stale SCF-mesh seed from changing the response particle
+number on a refined mesh.  Output metadata records both the original
+ground-state Fermi level and the resolved response-mesh Fermi level; it
+terminates when the recomputed count differs by more than `1e-8 * max(1, N)`.
+The transverse response vector is the signed occupied `P_site sigma_z`
+population, not a site-moment magnitude.
 
 ## Explicitly unresolved
 

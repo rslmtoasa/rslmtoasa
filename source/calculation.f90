@@ -2039,13 +2039,12 @@ contains
       reciprocal_obj%use_symmetry_reduction = .false.
       reciprocal_obj%use_time_reversal = .false.
       call reciprocal_obj%generate_mp_mesh()
-      ! TDDFT inherits the canonical reciprocal occupation contract unless a
-      ! value was explicitly placed in &tddft.  This closes the old hidden
-      ! default (EF=0, T=300 K) which could silently differ from the SCF state.
+      ! TDDFT inherits the canonical reciprocal occupation contract.  Its
+      ! Fermi level is resolved only after complete response-mesh eigenpairs
+      ! exist, so a coarser SCF-mesh value cannot change the response count.
       config%ground_state_fermi_level = reciprocal_obj%fermi_level
       config%ground_state_electronic_temperature = reciprocal_obj%temperature
       config%ground_state_electron_count = reciprocal_obj%total_electrons
-      if (.not. config%fermi_level_overridden) config%fermi_level = config%ground_state_fermi_level
       if (.not. config%electronic_temperature_overridden) then
          config%electronic_temperature = config%ground_state_electronic_temperature
       end if
@@ -2107,7 +2106,6 @@ contains
          nresponse = lattice_obj%nrec
       end if
       chi0_options%eta = config%eta
-      chi0_options%fermi_level = config%fermi_level
       chi0_options%electronic_temperature = config%electronic_temperature
       chi0_options%band_first = config%band_first
       chi0_options%band_last = config%band_last
@@ -2115,7 +2113,6 @@ contains
       chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
       green_options%eta = config%eta
       green_options%green_eta = config%green_eta
-      green_options%fermi_level = config%fermi_level
       green_options%electronic_temperature = config%electronic_temperature
       green_options%energy_min = config%green_energy_min
       green_options%energy_max = config%green_energy_max
@@ -2153,32 +2150,24 @@ contains
       ! non-serialized legacy cache.
       reciprocal_obj%eigenvalues = eigenvalues_k
       reciprocal_obj%eigenvectors = eigenvectors_k
-      ! With no TDDFT EF override, resolve the chemical potential on the
-      ! actual complete response mesh after its eigenpairs exist.  Reading
-      ! reciprocal%fermi_level before this point only recovers the input
-      ! seed, even when auto_find_fermi=.true.; it does not prove N=N_target
-      ! on a refined response mesh.
-      if (.not. config%fermi_level_overridden .and. reciprocal_obj%auto_find_fermi) then
-         response_band_energy = reciprocal_obj%calculate_canonical_band_energy(find_fermi=.true., &
-            electron_count=response_electron_count)
-         config%ground_state_fermi_level = reciprocal_obj%fermi_level
-         config%fermi_level = reciprocal_obj%fermi_level
-      else
-         reciprocal_obj%fermi_level = config%fermi_level
-         call reciprocal_obj%evaluate_eigenvalue_occupations(config%fermi_level, response_electron_count, response_band_energy)
-      end if
+      ! Resolve the chemical potential on the actual complete response mesh
+      ! after its eigenpairs exist.  There is deliberately no &tddft EF input:
+      ! the response remains at the reciprocal ground-state electron count.
+      response_band_energy = reciprocal_obj%calculate_canonical_band_energy(find_fermi=.true., &
+         electron_count=response_electron_count)
+      config%fermi_level = reciprocal_obj%fermi_level
       config%response_electron_count = response_electron_count
       chi0_options%fermi_level = config%fermi_level
       green_options%fermi_level = config%fermi_level
       electron_count_tolerance = 1.0e-8_rp*max(1.0_rp, config%ground_state_electron_count)
       if (abs(response_electron_count-config%ground_state_electron_count) > electron_count_tolerance) then
-         write(electron_count_message, '(a,es16.8,a,es16.8,a,es12.4,a,es16.8,a,es16.8,a,l1)') &
+         write(electron_count_message, '(a,es16.8,a,es16.8,a,es12.4,a,es16.8,a,es16.8,a)') &
             '[calculation.post_processing_susceptibility]: response electron count does not match target: target=', &
             config%ground_state_electron_count, ', recomputed=', response_electron_count, ', dN=', &
             response_electron_count-config%ground_state_electron_count, ', ground_EF=', config%ground_state_fermi_level, &
-            ', response_EF=', config%fermi_level, ', response_EF_overridden=', config%fermi_level_overridden
+            ', response_EF=', config%fermi_level, ', response EF is derived from the response mesh'
          call g_logger%fatal(trim(electron_count_message)// &
-            '. Remove a stale &tddft fermi_level override or use an EF that reproduces the target electron count.', __FILE__, __LINE__)
+            '. Check reciprocal total_electrons and whether the response band window can represent the target count.', __FILE__, __LINE__)
       end if
       allocate(site_moments(3, lattice_obj%nrec), signed_moments(lattice_obj%nrec))
       call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)
@@ -2720,8 +2709,7 @@ contains
       write(unit, '(a,es24.16)') '# ground_state_fermi_level_Ry = ', config%ground_state_fermi_level
       write(unit, '(a,es24.16)') '# electronic_temperature_K = ', config%electronic_temperature
       write(unit, '(a,es24.16)') '# ground_state_electronic_temperature_K = ', config%ground_state_electronic_temperature
-      write(unit, '(a,es24.16)') '# fermi_level_Ry = ', config%fermi_level
-      write(unit, '(a,l1)') '# response_fermi_level_overridden = ', config%fermi_level_overridden
+      write(unit, '(a,es24.16)') '# response_fermi_level_Ry = ', config%fermi_level
       write(unit, '(a,l1)') '# response_electronic_temperature_overridden = ', config%electronic_temperature_overridden
       write(unit, '(a,2(1x,es24.16))') '# ground_state_response_electron_count = ', &
          config%ground_state_electron_count, config%response_electron_count
