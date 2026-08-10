@@ -2005,13 +2005,16 @@ contains
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
       real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, pair_corrected_gamma_peak
+      real(rp) :: raw_pair_minimum_spectral_weight, corrected_pair_minimum_spectral_weight
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
+      integer :: corrected_minimum_location(2)
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
-      logical :: pair_backend, legacy_backend, corrected_spectral_weight_ok, full_response_supported
+      logical :: pair_backend, legacy_backend, raw_pair_spectral_weight_ok, corrected_spectral_weight_ok, full_response_supported
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
       character(len=256) :: full_response_capability_reason
       character(len=384) :: electron_count_message
+      character(len=640) :: spectral_weight_message
 
       config = tddft_config(this%fname)
       if (.not. config%enabled) then
@@ -2388,12 +2391,17 @@ contains
                   pair_xi_result)
                call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_result%xi, response_eta, dyson_options, &
                   dyson_pair_result)
+               raw_pair_minimum_spectral_weight = minval(dyson_pair_result%site_spectral_weight)
+               raw_pair_spectral_weight_ok = spectral_weights_are_nonnegative(reshape( &
+                  dyson_pair_result%site_spectral_weight, [size(dyson_pair_result%site_spectral_weight)]))
                if (is_gamma) pair_gamma_peak = observed_loss_peak(omega, dyson_pair_result%trace_spectral_weight)
                if (config%output_xi .or. config%output_chi) then
                   write(filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
                   call write_tddft_dyson_text(trim(filename), omega, dyson_pair_result)
                   call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
                      rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+                  call append_pair_spectral_weight_diagnostic(trim(filename), 'raw_pair', raw_pair_spectral_weight_ok, &
+                     raw_pair_minimum_spectral_weight)
                end if
                if (config%goldstone_mode == 'correct') then
                   allocate(pair_operators_corrected, source=pair_operators)
@@ -2406,21 +2414,34 @@ contains
                   if (is_gamma) then
                      pair_corrected_gamma_peak = observed_loss_peak(omega, dyson_pair_corrected_result%trace_spectral_weight)
                   end if
+                  corrected_pair_minimum_spectral_weight = minval(dyson_pair_corrected_result%site_spectral_weight)
                   corrected_spectral_weight_ok = spectral_weights_are_nonnegative(reshape( &
                      dyson_pair_corrected_result%site_spectral_weight, [size(dyson_pair_corrected_result%site_spectral_weight)]))
                   if (config%output_xi .or. config%output_chi) then
                      write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
                      call write_tddft_dyson_text(trim(filename), omega, dyson_pair_corrected_result)
                      call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_corrected')
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_corrected')
                      call append_goldstone_column_correction_text(trim(filename), pair_correction)
-                     call append_corrected_spectral_weight_diagnostic(trim(filename), corrected_spectral_weight_ok, &
-                        minval(dyson_pair_corrected_result%site_spectral_weight))
+                     call append_pair_spectral_weight_diagnostic(trim(filename), 'corrected_pair', corrected_spectral_weight_ok, &
+                        corrected_pair_minimum_spectral_weight)
                   end if
                   deallocate(pair_operators_corrected)
                   if (.not. corrected_spectral_weight_ok) then
-                     call g_logger%fatal('[calculation.post_processing_susceptibility]: corrected pair-potential spectrum has '// &
-                        'negative spectral weight beyond tolerance.', __FILE__, __LINE__)
+                     corrected_minimum_location = minloc(dyson_pair_corrected_result%site_spectral_weight)
+                     write(spectral_weight_message, '(a,3(1x,es12.4),a,es12.4,a,i0,a,es12.4,a,es12.4,a,es12.4)') &
+                        '[calculation.post_processing_susceptibility]: pair-potential negative spectral weight at q=', &
+                        config%q_points(:, iq), ', omega=', omega(corrected_minimum_location(2)), ', site=', &
+                        corrected_minimum_location(1), ', raw_min=', raw_pair_minimum_spectral_weight, ', corrected_min=', &
+                        corrected_pair_minimum_spectral_weight, ', correction_max_delta=', pair_correction%maximum_change
+                     if (.not. raw_pair_spectral_weight_ok) then
+                        call g_logger%fatal(trim(spectral_weight_message)//'. The raw pair spectrum is already negative; '// &
+                           'the static column correction did not cause this material causality/representation failure. '// &
+                           'Use goldstone_mode=diagnose only to complete a raw diagnostic sweep.', __FILE__, __LINE__)
+                     else
+                        call g_logger%fatal(trim(spectral_weight_message)//'. The static column correction introduced negative '// &
+                           'spectral weight and is rejected.', __FILE__, __LINE__)
+                     end if
                   end if
                end if
                deallocate(pair_operators)
@@ -2576,19 +2597,20 @@ contains
       close(unit)
    end subroutine append_dynamic_gamma_peaks
 
-   subroutine append_corrected_spectral_weight_diagnostic(filename, acceptable, minimum_weight)
+   subroutine append_pair_spectral_weight_diagnostic(filename, label, acceptable, minimum_weight)
       character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: label
       logical, intent(in) :: acceptable
       real(rp), intent(in) :: minimum_weight
       integer :: unit, ios
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
-      if (ios /= 0) call g_logger%fatal('[calculation.append_corrected_spectral_weight_diagnostic]: cannot append diagnostic', &
+      if (ios /= 0) call g_logger%fatal('[calculation.append_pair_spectral_weight_diagnostic]: cannot append diagnostic', &
          __FILE__, __LINE__)
-      write(unit, '(a,l1)') '# corrected_pair_spectral_weight_nonnegative = ', acceptable
-      write(unit, '(a,es24.16)') '# corrected_pair_minimum_site_spectral_weight = ', minimum_weight
+      write(unit, '(a,l1)') '# '//trim(label)//'_spectral_weight_nonnegative = ', acceptable
+      write(unit, '(a,es24.16)') '# '//trim(label)//'_minimum_site_spectral_weight = ', minimum_weight
       close(unit)
-   end subroutine append_corrected_spectral_weight_diagnostic
+   end subroutine append_pair_spectral_weight_diagnostic
 
    !> Build the Q^- operators in the same ham_only coefficient representation
    !> as the two endpoint eigensystems.  Q is intentionally retained per k:

@@ -112,6 +112,13 @@ def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
     assert "fermi_level" not in namelist
 
 
+def test_pair_correction_reports_whether_negative_weight_predates_correction() -> None:
+    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    assert "raw_pair_spectral_weight_ok" in source
+    assert "The raw pair spectrum is already negative" in source
+    assert "goldstone_mode=diagnose only to complete a raw diagnostic sweep" in source
+
+
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
@@ -122,4 +129,5 @@ if __name__ == "__main__":
     test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
     test_goldstone_correction_input_error_is_rejected_before_response_setup()
     test_response_mesh_resolves_inherited_fermi_after_eigenpairs()
+    test_pair_correction_reports_whether_negative_weight_predates_correction()
     print("RESULT: PASS")

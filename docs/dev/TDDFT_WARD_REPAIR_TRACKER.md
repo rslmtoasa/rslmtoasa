@@ -152,11 +152,13 @@
   unit minimum-change weights. It rejects material static imaginary content,
   rank deficiency, small moments, nonfinite scales, and any scale change over
   25 percent. No finite-dynamic-eta inverse is used.
-- Raw `*_pair_dyson.dat`, corrected `*_pair_corrected_dyson.dat`, static raw
-  and corrected residuals, SVD rank/condition, every scale, decision, Gamma
-  loss maxima, and the corrected spectral-weight nonnegativity check are
-  emitted independently. A rejected correction writes raw diagnostics then
-  terminates clearly; it never falls through to diagnose.
+- Raw `*_pair_dyson.dat` and corrected `*_pair_corrected_dyson.dat` record
+  their own minimum site spectral weights, alongside static raw/corrected
+  residuals, SVD rank/condition, every scale, decision, and Gamma loss maxima.
+  A negative corrected weight terminates after both products are written. When
+  the raw minimum is already negative, the output identifies it as a material
+  causality/representation failure rather than blaming the column correction;
+  `diagnose` can then be used only to complete the raw sweep.
 - gfortran-13 evidence (2026-08-10):
   `cmake --build build-gfortran13 --target UnitTddftGoldstone UnitTddftConfig -j4`;
   `ctest --test-dir build-gfortran13 --output-on-failure -L tddft` (16/16

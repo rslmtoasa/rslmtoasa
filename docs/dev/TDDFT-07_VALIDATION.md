@@ -38,6 +38,13 @@ residual is the quality metric and correction is not evidence of raw
 convergence. The old `goldstone_mode = 'sum_rule'` spelling migrates to
 `correct` with a warning.
 
+Every raw and corrected pair-Dyson file records its minimum site spectral
+weight. A negative value beyond tolerance is a material causality/response-
+representation failure, not a value to clip or normalize away. In `correct`
+mode the code writes both products and then stops. If the raw and corrected
+minima are both negative, the correction did not cause the failure; rerun with
+`goldstone_mode = 'diagnose'` only to complete a raw diagnostic sweep.
+
 ## Goldstone input combinations
 
 `correct` is intentionally unavailable with the legacy site-scalar route: a
