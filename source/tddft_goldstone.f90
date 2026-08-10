@@ -39,12 +39,19 @@ module tddft_goldstone_mod
       real(rp) :: bare_spectral_gap = -1.0_rp
       real(rp) :: residual = -1.0_rp
       real(rp) :: closest_eigenvalue_distance = -1.0_rp
+      ! `magnetization_overlap` is retained as the right overlap for
+      ! compatibility with existing campaign readers.
       real(rp) :: magnetization_overlap = -1.0_rp
+      real(rp) :: left_magnetization_overlap = -1.0_rp
+      real(rp) :: biorthogonal_magnetization_overlap = -1.0_rp
+      real(rp) :: imaginary_norm = -1.0_rp
       integer :: closest_eigenvalue_index = 0
       complex(rp) :: closest_eigenvalue = cmplx(0.0_rp, 0.0_rp, rp)
       complex(rp), allocatable :: eigenvalues(:)
       complex(rp), allocatable :: eigenvectors(:, :)
+      complex(rp), allocatable :: left_eigenvectors(:, :)
       complex(rp), allocatable :: closest_eigenvector(:)
+      complex(rp), allocatable :: closest_left_eigenvector(:)
    end type tddft_goldstone_diagnostics
 
    type, public :: tddft_goldstone_result
@@ -205,10 +212,10 @@ contains
       type(tddft_goldstone_diagnostics), intent(out) :: diagnostics
       real(rp), intent(in), optional :: bare_spectral_gap
       complex(rp), allocatable :: residual_vector(:)
-      real(rp) :: norm_m
+      real(rp) :: norm_m, norm_right, norm_left, matrix_norm
       integer :: i
 
-      call diagonalize_nonhermitian(xi, diagnostics%eigenvalues, diagnostics%eigenvectors)
+      call diagonalize_nonhermitian(xi, diagnostics%eigenvalues, diagnostics%eigenvectors, diagnostics%left_eigenvectors)
       diagnostics%closest_eigenvalue_index = 1
       do i = 2, size(diagnostics%eigenvalues)
          if (abs(diagnostics%eigenvalues(i) - cmplx(1.0_rp, 0.0_rp, rp)) < &
@@ -220,12 +227,22 @@ contains
       diagnostics%closest_eigenvalue_distance = abs(diagnostics%closest_eigenvalue - cmplx(1.0_rp, 0.0_rp, rp))
       allocate(diagnostics%closest_eigenvector(size(magnetization)))
       diagnostics%closest_eigenvector = diagnostics%eigenvectors(:, diagnostics%closest_eigenvalue_index)
+      allocate(diagnostics%closest_left_eigenvector(size(magnetization)))
+      diagnostics%closest_left_eigenvector = diagnostics%left_eigenvectors(:, diagnostics%closest_eigenvalue_index)
       norm_m = sqrt(sum(abs(magnetization)**2))
+      norm_right = sqrt(sum(abs(diagnostics%closest_eigenvector)**2))
+      norm_left = sqrt(sum(abs(diagnostics%closest_left_eigenvector)**2))
       diagnostics%magnetization_overlap = abs(dot_product(magnetization, diagnostics%closest_eigenvector))/ &
-         (norm_m*sqrt(sum(abs(diagnostics%closest_eigenvector)**2)))
+         (norm_m*norm_right)
+      diagnostics%left_magnetization_overlap = abs(dot_product(diagnostics%closest_left_eigenvector, magnetization))/ &
+         (norm_left*norm_m)
+      diagnostics%biorthogonal_magnetization_overlap = abs(dot_product(diagnostics%closest_left_eigenvector, magnetization)* &
+         dot_product(magnetization, diagnostics%closest_eigenvector))/(norm_left*norm_right*norm_m**2)
       allocate(residual_vector(size(magnetization)))
       residual_vector = matmul(xi, magnetization) - magnetization
       diagnostics%residual = sqrt(sum(abs(residual_vector)**2))/norm_m
+      matrix_norm = sqrt(sum(abs(xi)**2))
+      diagnostics%imaginary_norm = sqrt(sum(aimag(xi)**2))/max(1.0_rp, matrix_norm)
       diagnostics%available = .true.
       if (present(bare_spectral_gap)) then
          diagnostics%has_bare_spectral_gap = .true.
@@ -233,24 +250,24 @@ contains
       end if
    end subroutine calculate_diagnostics
 
-   subroutine diagonalize_nonhermitian(matrix, eigenvalues, eigenvectors)
+   subroutine diagonalize_nonhermitian(matrix, eigenvalues, eigenvectors, left_eigenvectors)
       complex(rp), intent(in) :: matrix(:, :)
-      complex(rp), allocatable, intent(out) :: eigenvalues(:), eigenvectors(:, :)
-      complex(rp), allocatable :: work_matrix(:, :), work(:), vl(:, :)
+      complex(rp), allocatable, intent(out) :: eigenvalues(:), eigenvectors(:, :), left_eigenvectors(:, :)
+      complex(rp), allocatable :: work_matrix(:, :), work(:)
       real(rp), allocatable :: rwork(:)
       complex(rp) :: work_query(1)
       integer :: n, info, lwork
 
       n = size(matrix, 1)
       if (size(matrix, 2) /= n) error stop 'diagonalize_nonhermitian: matrix must be square'
-      allocate(work_matrix(n, n), eigenvalues(n), eigenvectors(n, n), vl(1, 1), rwork(max(1, 2*n)))
+      allocate(work_matrix(n, n), eigenvalues(n), eigenvectors(n, n), left_eigenvectors(n, n), rwork(max(1, 2*n)))
       work_matrix = matrix
-      call zgeev('N', 'V', n, work_matrix, n, eigenvalues, vl, 1, eigenvectors, n, work_query, -1, rwork, info)
+      call zgeev('V', 'V', n, work_matrix, n, eigenvalues, left_eigenvectors, n, eigenvectors, n, work_query, -1, rwork, info)
       if (info /= 0) error stop 'diagonalize_nonhermitian: LAPACK workspace query failed'
       lwork = max(1, int(real(work_query(1), rp)))
       allocate(work(lwork))
       work_matrix = matrix
-      call zgeev('N', 'V', n, work_matrix, n, eigenvalues, vl, 1, eigenvectors, n, work, lwork, rwork, info)
+      call zgeev('V', 'V', n, work_matrix, n, eigenvalues, left_eigenvectors, n, eigenvectors, n, work, lwork, rwork, info)
       if (info /= 0) error stop 'diagonalize_nonhermitian: LAPACK zgeev failed'
    end subroutine diagonalize_nonhermitian
 
@@ -307,6 +324,9 @@ contains
          real(diagnostics%closest_eigenvalue, rp), aimag(diagnostics%closest_eigenvalue)
       write(unit, '(a,a,a,es24.16)') trim(prefix), '_closest_eigenvalue_distance', '', diagnostics%closest_eigenvalue_distance
       write(unit, '(a,a,a,es24.16)') trim(prefix), '_magnetization_overlap', '', diagnostics%magnetization_overlap
+      write(unit, '(a,a,a,es24.16)') trim(prefix), '_left_magnetization_overlap', '', diagnostics%left_magnetization_overlap
+      write(unit, '(a,a,a,es24.16)') trim(prefix), '_biorthogonal_magnetization_overlap', '', diagnostics%biorthogonal_magnetization_overlap
+      write(unit, '(a,a,a,es24.16)') trim(prefix), '_imaginary_norm', '', diagnostics%imaginary_norm
       write(unit, '(a,a,a,es24.16)') trim(prefix), '_residual', '', diagnostics%residual
       if (diagnostics%has_bare_spectral_gap) then
          write(unit, '(a,a,a,es24.16)') trim(prefix), '_bare_spectral_gap', '', diagnostics%bare_spectral_gap
@@ -318,6 +338,10 @@ contains
       do i = 1, size(diagnostics%closest_eigenvector)
          write(unit, '(a,a,1x,i0,2(1x,es24.16))') trim(prefix), '_closest_eigenvector', i, &
             real(diagnostics%closest_eigenvector(i), rp), aimag(diagnostics%closest_eigenvector(i))
+      end do
+      do i = 1, size(diagnostics%closest_left_eigenvector)
+         write(unit, '(a,a,1x,i0,2(1x,es24.16))') trim(prefix), '_closest_left_eigenvector', i, &
+            real(diagnostics%closest_left_eigenvector(i), rp), aimag(diagnostics%closest_left_eigenvector(i))
       end do
    end subroutine write_one_diagnostics
 

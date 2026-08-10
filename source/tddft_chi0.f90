@@ -90,7 +90,9 @@ module tddft_chi0_mod
    end type tddft_chi0_result
 
    public :: build_chi_ks_from_eigenpairs
+   public :: build_static_chi_ks_from_eigenpairs
    public :: tddft_fermi_occupation
+   public :: tddft_static_divided_difference
    public :: write_chi_ks_text
 
 contains
@@ -265,6 +267,89 @@ contains
       result%metadata%batched_accumulation = options%use_batched_accumulation
       if (options%use_batched_accumulation) result%metadata%transition_batch_size = batch_size
    end subroutine build_chi_ks_from_eigenpairs
+
+   !> Real q=0, omega=0 Lehmann response used only for static Ward
+   !> diagnostics.  It deliberately has no eta argument: the n=m and nearly
+   !> degenerate limit is the derivative of the same finite-temperature Fermi
+   !> function used by the dynamic response, (f_n-f_m)/(e_n-e_m) -> f'(e).
+   subroutine build_static_chi_ks_from_eigenpairs(k_weights, eigenvalues, eigenvectors, site_orbital_counts, &
+      left_channels, right_channels, options, result)
+      real(rp), intent(in) :: k_weights(:), eigenvalues(:, :)
+      complex(rp), intent(in) :: eigenvectors(:, :, :)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+
+      integer :: nk, nbands, nspinor, nleft, nright, ik, n, m, ileft, iright, band_first, band_last
+      real(rp) :: weight_sum, prefactor, factor
+      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+
+      nk = size(k_weights); nbands = size(eigenvalues, 1); nspinor = 2*sum(site_orbital_counts)
+      nleft = size(left_channels); nright = size(right_channels)
+      call validate_chi_ks_inputs(nk, nbands, nspinor, nleft, nright, 1, k_weights, eigenvalues, eigenvectors, &
+         eigenvalues, eigenvectors, options)
+      band_first = options%band_first; band_last = options%band_last
+      if (band_last == 0) band_last = nbands
+      if (band_first < 1 .or. band_last < band_first .or. band_last > nbands) then
+         error stop 'build_static_chi_ks_from_eigenpairs: invalid selected band window'
+      end if
+      weight_sum = sum(k_weights)
+      allocate(result%chi(nleft, nright, 1), result%re_chi(nleft, nright, 1), result%im_chi(nleft, nright, 1))
+      result%chi = cmplx(0.0_rp, 0.0_rp, rp)
+      allocate(left_vertex(nleft), right_vertex(nright))
+      do ik = 1, nk
+         prefactor = k_weights(ik)/weight_sum
+         do n = band_first, band_last
+            do m = band_first, band_last
+               factor = tddft_static_divided_difference(eigenvalues(n, ik), eigenvalues(m, ik), options%fermi_level, &
+                  options%electronic_temperature)
+               if (options%occupation_prune_tolerance > 0.0_rp .and. abs(factor) <= options%occupation_prune_tolerance) cycle
+               do ileft = 1, size(left_channels)
+                  left_vertex(ileft) = response_transition_vertex(left_channels(ileft), site_orbital_counts, &
+                     eigenvectors(:, n, ik), eigenvectors(:, m, ik))
+               end do
+               do iright = 1, size(right_channels)
+                  right_vertex(iright) = response_transition_vertex(right_channels(iright), site_orbital_counts, &
+                     eigenvectors(:, m, ik), eigenvectors(:, n, ik))
+               end do
+               result%chi(:, :, 1) = result%chi(:, :, 1) + prefactor*factor*outer_product(left_vertex, right_vertex)
+            end do
+         end do
+      end do
+      deallocate(left_vertex, right_vertex)
+      result%re_chi = real(result%chi, rp); result%im_chi = 0.0_rp
+      call build_spectral_products(left_channels, right_channels, result)
+      result%metadata%backend = 'static_eigenpairs'
+      result%metadata%frequency_convention = 'static q=0 omega=0 divided difference; no dynamical eta'
+      result%metadata%eta = 0.0_rp; result%metadata%fermi_level = options%fermi_level
+      result%metadata%electronic_temperature = options%electronic_temperature
+      result%metadata%electronic_kT = max(options%electronic_temperature*tddft_kB_Ry_per_K, tddft_occupation_kT_floor)
+      result%metadata%k_weight_sum = weight_sum; result%metadata%k_mesh_shape = options%k_mesh_shape; result%metadata%nk = nk
+      result%metadata%available_band_count = nbands; result%metadata%band_first = band_first; result%metadata%band_last = band_last
+      result%metadata%occupation_prune_tolerance = options%occupation_prune_tolerance
+   end subroutine build_static_chi_ks_from_eigenpairs
+
+   pure real(rp) function tddft_static_divided_difference(energy_n, energy_m, fermi_level, temperature) result(value)
+      real(rp), intent(in) :: energy_n, energy_m, fermi_level, temperature
+      real(rp) :: delta, midpoint, scale, occupation, kT
+
+      delta = energy_n-energy_m
+      kT = max(temperature*tddft_kB_Ry_per_K, tddft_occupation_kT_floor)
+      scale = max(1.0_rp, abs(energy_n), abs(energy_m), kT)
+      if (abs(delta) > 32.0_rp*sqrt(epsilon(1.0_rp))*scale) then
+         value = (tddft_fermi_occupation(energy_n, fermi_level, temperature) - &
+                  tddft_fermi_occupation(energy_m, fermi_level, temperature))/delta
+      else
+         midpoint = 0.5_rp*(energy_n + energy_m)
+         occupation = tddft_fermi_occupation(midpoint, fermi_level, temperature)
+         if (abs((midpoint-fermi_level)/kT) >= 50.0_rp) then
+            value = 0.0_rp
+         else
+            value = -occupation*(1.0_rp-occupation)/kT
+         end if
+      end if
+   end function tddft_static_divided_difference
 
    !> Write a self-describing plain-text chi_KS result.  The `matrix` records
    !> contain Re and Im chi; `site_diagonal` and `trace` are the explicitly

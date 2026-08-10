@@ -24,12 +24,29 @@ def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     assert "MPI_ALLREDUCE(MPI_IN_PLACE, all_xi" in source
 
 
-def test_response_reconstructs_restart_site_moments_before_alsda_kernel() -> None:
+def test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel() -> None:
     source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
     assert "reciprocal_obj%eigenvalues = eigenvalues_k" in source
     assert "reciprocal_obj%eigenvectors = eigenvectors_k" in source
     assert "compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)" in source
-    assert "set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))" in source
+    assert "set_site_spin_population(isite, site_moments(3, isite))" in source
+    assert "set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))" not in source
+
+
+def test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults() -> None:
+    root = Path(__file__).resolve().parents[2]
+    calculation = (root / "source" / "calculation.f90").read_text()
+    chi0 = (root / "source" / "tddft_chi0.f90").read_text()
+    xi = (root / "source" / "tddft_xi.f90").read_text()
+    assert "build_static_chi_ks_from_eigenpairs" in calculation
+    assert "build_static_direct_xi_from_k_dependent_eigenpairs" in calculation
+    assert "response electron count does not match" in calculation
+    assert "ground_state_response_electron_count" in calculation
+    assert "real q=0 omega=0 Fermi divided difference; dynamic eta excluded" in calculation
+    assert "dynamic_pair_raw_gamma_loss_peak_Ry" in calculation
+    assert "tddft_static_divided_difference" in chi0
+    assert "no dynamical eta" in chi0
+    assert "no dynamical eta" in xi
 
 
 def test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed() -> None:
@@ -56,7 +73,8 @@ def test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi() -> None:
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
-    test_response_reconstructs_restart_site_moments_before_alsda_kernel()
+    test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel()
+    test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults()
     test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed()
     test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
     print("RESULT: PASS")

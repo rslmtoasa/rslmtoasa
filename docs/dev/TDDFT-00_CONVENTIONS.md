@@ -127,6 +127,29 @@ denominator `omega + epsilon_n - epsilon_m + i*eta`, with `eta > 0`.  Physical
 angular frequency requires `omega_energy = hbar*omega_SI` converted to Rydberg.
 This contract does not infer a time convention from static SCF code.
 
+## Static Ward limit and response provenance
+
+The Gamma Ward diagnostic does **not** call the dynamical response at
+`omega=0` with its finite broadening.  Its dedicated eigenpair solver evaluates
+
+```
+(f(e_n) - f(e_m)) / (e_n - e_m)
+```
+
+as a real divided difference.  For equal or numerically near-degenerate
+energies it uses the analytic derivative of the identical finite-temperature
+Fermi function, `f'(e) = -f(e)*(1-f(e))/kT`.  Thus the static sign is negative,
+there is no `i*eta`, and the static Xi imaginary norm is expected to be
+numerical noise.  The dynamic `eta` remains a spectrum-resolution control and
+cannot enter `Xi_static`.
+
+Unless explicitly supplied in `&tddft`, response Fermi level and electronic
+temperature are inherited from the reciprocal ground-state object.  The driver
+records both ground-state and response values, override flags, target electron
+count, and recomputed response count; it terminates when their mismatch exceeds
+`1e-8 * max(1, N)`.  The transverse response vector is the signed occupied
+`P_site sigma_z` population, not a site-moment magnitude.
+
 ## Explicitly unresolved
 
 - Derivatives of the legacy LDA/GGA and optional libXC functional paths are not

@@ -11,7 +11,7 @@ module tddft_xi_mod
    use precision_mod, only: rp
    use response_vertices_mod, only: response_channel, response_transition_vertex, weighted_transition_vertex
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_metadata, tddft_fermi_occupation, &
-      tddft_kB_Ry_per_K, tddft_occupation_kT_floor
+      tddft_kB_Ry_per_K, tddft_occupation_kT_floor, tddft_static_divided_difference
    implicit none
 
    private
@@ -23,8 +23,59 @@ module tddft_xi_mod
 
    public :: build_direct_xi_from_eigenpairs
    public :: build_direct_xi_from_k_dependent_eigenpairs
+   public :: build_static_direct_xi_from_k_dependent_eigenpairs
 
 contains
+
+   !> Dedicated real static q=0 operator.  This is intentionally separate
+   !> from the dynamic builder so a response eta can never enter Xi_static.
+   subroutine build_static_direct_xi_from_k_dependent_eigenpairs(k_weights, eigenvalues, eigenvectors, &
+      site_orbital_counts, left_channels, weighted_right_operators, options, result)
+      real(rp), intent(in) :: k_weights(:), eigenvalues(:, :)
+      complex(rp), intent(in) :: eigenvectors(:, :, :), weighted_right_operators(:, :, :, :)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_direct_xi_result), intent(out) :: result
+
+      integer :: nk, nbands, nspinor, nleft, nright, ik, n, m, band_first, band_last
+      real(rp) :: weight_sum, prefactor, factor
+      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+
+      nk = size(k_weights); nbands = size(eigenvalues, 1); nspinor = 2*sum(site_orbital_counts)
+      nleft = size(left_channels); nright = size(weighted_right_operators, 3)
+      call validate_direct_xi_inputs(nk, nbands, nspinor, nleft, nright, 1, k_weights, eigenvalues, eigenvectors, &
+         eigenvalues, eigenvectors, weighted_right_operators(:, :, :, 1), options)
+      if (size(weighted_right_operators, 4) /= nk) then
+         error stop 'build_static_direct_xi_from_k_dependent_eigenpairs: operator k dimension is incompatible'
+      end if
+      band_first = options%band_first; band_last = options%band_last
+      if (band_last == 0) band_last = nbands
+      if (band_first < 1 .or. band_last < band_first .or. band_last > nbands) then
+         error stop 'build_static_direct_xi_from_k_dependent_eigenpairs: invalid selected band window'
+      end if
+      weight_sum = sum(k_weights)
+      allocate(result%xi(nleft, nright, 1)); result%xi = cmplx(0.0_rp, 0.0_rp, rp)
+      call set_direct_xi_metadata(result%metadata, options, nk, nbands, band_first, band_last, weight_sum)
+      result%metadata%backend = 'static_xi_k_resolved_eigenpairs'
+      result%metadata%frequency_convention = 'static q=0 omega=0 divided difference; no dynamical eta'
+      result%metadata%eta = 0.0_rp
+      allocate(left_vertex(nleft), right_vertex(nright))
+      do ik = 1, nk
+         prefactor = k_weights(ik)/weight_sum
+         do n = band_first, band_last
+            do m = band_first, band_last
+               factor = tddft_static_divided_difference(eigenvalues(n, ik), eigenvalues(m, ik), options%fermi_level, &
+                  options%electronic_temperature)
+               if (options%occupation_prune_tolerance > 0.0_rp .and. abs(factor) <= options%occupation_prune_tolerance) cycle
+               call build_transition_vertices(left_channels, weighted_right_operators(:, :, :, ik), site_orbital_counts, &
+                  eigenvectors(:, n, ik), eigenvectors(:, m, ik), left_vertex, right_vertex)
+               result%xi(:, :, 1) = result%xi(:, :, 1) + prefactor*factor*outer_product(left_vertex, right_vertex)
+            end do
+         end do
+      end do
+      deallocate(left_vertex, right_vertex)
+   end subroutine build_static_direct_xi_from_k_dependent_eigenpairs
 
    !> Assemble Xi_ab=sum (f_n-f_m)V_a W_b/(omega+en-em+i eta), where the
    !> weighted right vertex has the required order W_b=<m,k+q|Q_b|n,k>.

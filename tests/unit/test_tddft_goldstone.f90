@@ -5,7 +5,8 @@ program test_tddft_goldstone
    use precision_mod, only: rp
    use xc_response_kernel_mod, only: xc_response_kernel_provider
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, &
-      build_site_projected_k_perp, construct_transverse_xi, evaluate_goldstone, write_goldstone_diagnostics_text
+      tddft_goldstone_diagnostics, build_site_projected_k_perp, construct_transverse_xi, evaluate_goldstone, &
+      evaluate_raw_xi_diagnostics, write_goldstone_diagnostics_text
    implicit none
 
    real(rp), parameter :: tol = 2.0e-12_rp
@@ -17,6 +18,7 @@ program test_tddft_goldstone
    call test_sum_rule_repair_preserves_raw_diagnostics()
    call test_symmetry_breaking_disables_sum_rule()
    call test_raw_residual_convergence_controls()
+   call test_signed_magnetization_diagnostics()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -148,6 +150,24 @@ contains
       call evaluate_goldstone(chi1, one_site, options, bands4)
       call assert_real('raw residual band-window convergence', bands4%raw%residual, bands2%raw%residual)
    end subroutine test_raw_residual_convergence_controls
+
+   subroutine test_signed_magnetization_diagnostics()
+      complex(rp) :: xi_one(1, 1), xi_two(2, 2)
+      type(tddft_goldstone_diagnostics) :: reversed, ferro, antiferro
+
+      xi_one(1, 1) = cmplx(1.0_rp, 0.0_rp, rp)
+      call evaluate_raw_xi_diagnostics(xi_one, [cmplx(-2.0_rp, 0.0_rp, rp)], reversed)
+      call assert_real('reversed one-site signed moment is a zero mode', reversed%residual, 0.0_rp)
+      call assert_real('reversed one-site right overlap is retained', reversed%magnetization_overlap, 1.0_rp)
+      call assert_real('real static Xi has zero imaginary norm', reversed%imaginary_norm, 0.0_rp)
+
+      xi_two = cmplx(0.0_rp, 0.0_rp, rp)
+      xi_two(1, 1) = 1.0_rp; xi_two(2, 2) = 1.0_rp
+      call evaluate_raw_xi_diagnostics(xi_two, [cmplx(1.0_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)], ferro)
+      call evaluate_raw_xi_diagnostics(xi_two, [cmplx(1.0_rp, 0.0_rp, rp), cmplx(-1.0_rp, 0.0_rp, rp)], antiferro)
+      call assert_real('two-site ferro signed moment is a zero mode', ferro%residual, 0.0_rp)
+      call assert_real('two-site antiferro signed moment is a zero mode', antiferro%residual, 0.0_rp)
+   end subroutine test_signed_magnetization_diagnostics
 
    subroutine make_provider(provider, moment, kernel)
       type(xc_response_kernel_provider), intent(out) :: provider

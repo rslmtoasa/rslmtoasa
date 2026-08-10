@@ -8,7 +8,7 @@ program test_tddft_direct_xi
       weighted_transition_vectors
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
    use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_eigenpairs, &
-      build_direct_xi_from_k_dependent_eigenpairs
+      build_direct_xi_from_k_dependent_eigenpairs, build_static_direct_xi_from_k_dependent_eigenpairs
    implicit none
 
    real(rp), parameter :: tol = 1024.0_rp*epsilon(1.0_rp)
@@ -20,6 +20,7 @@ program test_tddft_direct_xi
    call test_unequal_orbital_oracle()
    call test_batched_complex_q_and_metadata()
    call test_k_resolved_pair_operator_retention()
+   call test_static_two_orbital_ward_identity()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -94,6 +95,30 @@ contains
       call check_true('direct Xi differs from old site scalar kernel', &
          abs(xi%xi(1, 1, 1) - scalar_kernel*chi%chi(1, 1, 1)) > 0.25_rp)
    end subroutine test_unequal_orbital_oracle
+
+   subroutine test_static_two_orbital_ward_identity()
+      type(response_channel) :: left(1)
+      type(tddft_chi0_options) :: options, eta_ladder
+      type(tddft_direct_xi_result) :: static_xi, static_xi_eta
+      real(rp), parameter :: b(2) = [0.20_rp, 0.80_rp], moment = 2.0_rp
+      real(rp) :: weights(1), eval(4, 1)
+      complex(rp) :: evec(4, 4, 1), operators(4, 4, 1, 1)
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      weights = 1.0_rp; eval(:, 1) = [-b(1), -b(2), b(1), b(2)]
+      evec = cmplx(0.0_rp, 0.0_rp, rp)
+      evec(1, 1, 1) = 1.0_rp; evec(2, 2, 1) = 1.0_rp
+      evec(3, 3, 1) = 1.0_rp; evec(4, 4, 1) = 1.0_rp
+      operators = cmplx(0.0_rp, 0.0_rp, rp)
+      operators(3, 1, 1, 1) = -b(1)/moment; operators(4, 2, 1, 1) = -b(2)/moment
+      options%eta = 1.0e-5_rp; options%fermi_level = 0.0_rp; options%electronic_temperature = 0.0_rp
+      call build_static_direct_xi_from_k_dependent_eigenpairs(weights, eval, evec, [2], left, operators, options, static_xi)
+      eta_ladder = options; eta_ladder%eta = 0.1_rp
+      call build_static_direct_xi_from_k_dependent_eigenpairs(weights, eval, evec, [2], left, operators, eta_ladder, static_xi_eta)
+      call check_complex('static pair-potential two-orbital Ward identity', static_xi%xi(1, 1, 1), cmplx(1.0_rp, 0.0_rp, rp))
+      call check_complex('static pair-potential ignores dynamic eta', static_xi_eta%xi(1, 1, 1), static_xi%xi(1, 1, 1))
+      call check_real('static Xi metadata reports eta zero', static_xi%metadata%eta, 0.0_rp)
+   end subroutine test_static_two_orbital_ward_identity
 
    subroutine test_batched_complex_q_and_metadata()
       type(response_channel) :: left(1), right(1)

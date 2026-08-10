@@ -6,7 +6,7 @@
 - [x] WR-01c — Validate finite-q endpoint phases and pair-potential gauge
 - [x] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
 - [x] WR-03 — Integrate direct Xi in production shadow mode
-- [ ] WR-04 — Implement the real static limit and ground-state provenance
+- [x] WR-04 — Implement the real static limit and ground-state provenance
 - [ ] WR-05 — Repair Goldstone option semantics and controlled correction
 - [ ] WR-06 — Repair Cartesian/circular factors and unsupported-route gates
 - [ ] WR-07 — Replace heuristic mode classification
@@ -108,6 +108,36 @@
   retention checks; `UnitTddftDysonModes` checks direct-Xi versus kernel Dyson
   equivalence in the uniform oracle.  No MPI-enabled build was available in
   this workspace, so serial-versus-multirank equivalence remains unchecked.
+
+## WR-04 evidence
+
+- `build_static_chi_ks_from_eigenpairs` and the k-resolved
+  `build_static_direct_xi_from_k_dependent_eigenpairs` use the real q=0,
+  omega=0 Lehmann divided difference.  Exact and near degeneracies use the
+  analytic derivative of the same Fermi function; the static implementation
+  has no dynamic-eta input.
+- The production driver inherits reciprocal ground-state Fermi level,
+  temperature, and electron count unless an `&tddft` value is explicit.  It
+  records both provenance values and override flags, recomputes the response
+  count from the response eigenpairs, and fails when `|dN| > 1e-8 max(1,N)`.
+  Its transverse response moment is the signed occupied `P_site sigma_z`
+  population.
+- At Gamma, `*_goldstone.dat` additionally records observed raw loss-grid
+  maxima for bare and available legacy/pair enhanced spectra.  These dynamic
+  measurements are explicitly separate from the real static Ward operator
+  and are not fitted shifts or corrections.
+- gfortran-13 evidence (2026-08-10):
+  `cmake --build build-gfortran13 --target UnitTddftChiKS UnitTddftDirectXi UnitTddftGoldstone UnitTddftConfig -j4`;
+  `ctest --test-dir build-gfortran13 --output-on-failure -R 'UnitTddft(ChiKS|DirectXi|Goldstone|Config)'`
+  (4/4 passed).  The focused tests cover exact/near-degenerate divided
+  differences, zero-temperature and finite-temperature limits, static
+  eta-independence, the two-orbital pair-potential Ward identity, reversed
+  one-site and signed ferro/antiferromagnetic two-site moments, and explicit
+  provenance overrides. `python3 tests/unit/test_tddft_dispatch.py` confirms
+  the material electron-count mismatch is a fatal production path.
+- No material Gamma pole, raw material Ward convergence, MPI comparison, or
+  eta-ladder material evidence is claimed here; those global gates remain
+  open for WR-08.
 
 ## Global gates
 

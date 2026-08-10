@@ -6,7 +6,8 @@ program test_tddft_chi_ks
    use math_mod, only: pi
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ, RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
-   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
+      build_static_chi_ks_from_eigenpairs, tddft_static_divided_difference
    implicit none
 
    real(rp), parameter :: machine_tol = 256.0_rp*epsilon(1.0_rp)
@@ -17,6 +18,7 @@ program test_tddft_chi_ks
    call test_batched_accumulator_equivalence()
    call test_positive_frequency_sign_and_products()
    call test_convergence_controls()
+   call test_static_divided_difference_and_eta_independence()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -176,6 +178,37 @@ contains
       call check_true('smearing convergence control changes response', &
          abs(comparison%chi(1, 1, 1) - reference%chi(1, 1, 1)) > 0.0_rp)
    end subroutine test_convergence_controls
+
+   subroutine test_static_divided_difference_and_eta_independence()
+      real(rp) :: finite_difference, derivative, near_value, zero_temperature_value
+      real(rp) :: weights(2), eval(2, 2), evalq(2, 2)
+      complex(rp) :: evec(2, 2, 2), evecq(2, 2, 2)
+      type(response_channel) :: left(1), right(1)
+      type(tddft_chi0_options) :: low_eta, high_eta
+      type(tddft_chi0_result) :: static_low_eta, static_high_eta
+
+      ! (f_n-f_m)/(e_n-e_m) has the sign f'(e)<0.  The exact and nearby
+      ! degeneracy paths must agree with the analytic Fermi derivative.
+      derivative = -0.25_rp/(300.0_rp*6.3336814e-6_rp)
+      finite_difference = tddft_static_divided_difference(0.0_rp, 0.0_rp, 0.0_rp, 300.0_rp)
+      near_value = tddft_static_divided_difference(1.0e-13_rp, -1.0e-13_rp, 0.0_rp, 300.0_rp)
+      call check_real('static exact degeneracy uses negative Fermi derivative', finite_difference, derivative)
+      call check_real('static near degeneracy is stable', near_value, derivative)
+      zero_temperature_value = tddft_static_divided_difference(-0.2_rp, -0.1_rp, 0.0_rp, 0.0_rp)
+      call check_real('zero-temperature occupied degeneracy has zero derivative', zero_temperature_value, 0.0_rp)
+
+      left(1) = response_channel(1, RESPONSE_PLUS); right(1) = response_channel(1, RESPONSE_MINUS)
+      weights = 1.0_rp
+      call build_spin_split_fixture(0, 0.0_rp, eval, evalq, evec, evecq)
+      low_eta%eta = 1.0e-5_rp; low_eta%fermi_level = 0.0_rp; low_eta%electronic_temperature = 300.0_rp
+      high_eta = low_eta; high_eta%eta = 0.08_rp
+      call build_static_chi_ks_from_eigenpairs(weights, eval, evec, [1], left, right, low_eta, static_low_eta)
+      call build_static_chi_ks_from_eigenpairs(weights, eval, evec, [1], left, right, high_eta, static_high_eta)
+      call check_complex_vector('static chi is independent of dynamic eta', static_low_eta%chi(1, 1, :), &
+         static_high_eta%chi(1, 1, :))
+      call check_real('static chi has no imaginary broadening', aimag(static_low_eta%chi(1, 1, 1)), 0.0_rp)
+      call check_real('static metadata reports eta zero', static_low_eta%metadata%eta, 0.0_rp)
+   end subroutine test_static_divided_difference_and_eta_independence
 
    subroutine build_spin_split_fixture(q_shift, hopping, eval, evalq, evec, evecq)
       integer, intent(in) :: q_shift

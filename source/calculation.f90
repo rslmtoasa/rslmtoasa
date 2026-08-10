@@ -49,8 +49,10 @@ module calculation_mod
    use basis_mod, only: basis_init, norb
    use magnetic_representation_mod, only: gbt_single_q
    use tddft_config_mod, only: tddft_config
-   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
-   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_k_dependent_eigenpairs
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
+      build_static_chi_ks_from_eigenpairs, write_chi_ks_text
+   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_k_dependent_eigenpairs, &
+      build_static_direct_xi_from_k_dependent_eigenpairs
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
@@ -1997,6 +1999,8 @@ contains
       real(rp), allocatable :: signed_moments(:)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
+      real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
+      real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
@@ -2029,6 +2033,21 @@ contains
       reciprocal_obj%use_symmetry_reduction = .false.
       reciprocal_obj%use_time_reversal = .false.
       call reciprocal_obj%generate_mp_mesh()
+      ! TDDFT inherits the canonical reciprocal occupation contract unless a
+      ! value was explicitly placed in &tddft.  This closes the old hidden
+      ! default (EF=0, T=300 K) which could silently differ from the SCF state.
+      config%ground_state_fermi_level = reciprocal_obj%fermi_level
+      config%ground_state_electronic_temperature = reciprocal_obj%temperature
+      config%ground_state_electron_count = reciprocal_obj%total_electrons
+      if (.not. config%fermi_level_overridden) config%fermi_level = config%ground_state_fermi_level
+      if (.not. config%electronic_temperature_overridden) then
+         config%electronic_temperature = config%ground_state_electronic_temperature
+      end if
+      if (config%electronic_temperature < 0.0_rp) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: response temperature is unresolved.', __FILE__, __LINE__)
+      end if
+      reciprocal_obj%fermi_level = config%fermi_level
+      reciprocal_obj%temperature = config%electronic_temperature
       is_longitudinal = config%channel == 'longitudinal'
       is_full_response = config%channel == 'full'
       pair_backend = config%xi_backend == 'pair_potential' .or. config%xi_backend == 'compare'
@@ -2114,15 +2133,21 @@ contains
       ! P_site sigma population used by the response vertices.  Reconstruct it
       ! from the complete, unreduced response mesh rather than relying on that
       ! non-serialized legacy cache.
-      reciprocal_obj%fermi_level = config%fermi_level
       reciprocal_obj%eigenvalues = eigenvalues_k
       reciprocal_obj%eigenvectors = eigenvectors_k
+      call reciprocal_obj%evaluate_eigenvalue_occupations(config%fermi_level, response_electron_count, response_band_energy)
+      config%response_electron_count = response_electron_count
+      electron_count_tolerance = 1.0e-8_rp*max(1.0_rp, config%ground_state_electron_count)
+      if (abs(response_electron_count-config%ground_state_electron_count) > electron_count_tolerance) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: response electron count does not match the '// &
+            'converged reciprocal ground state within 1e-8 relative tolerance.', __FILE__, __LINE__)
+      end if
       allocate(site_moments(3, lattice_obj%nrec), signed_moments(lattice_obj%nrec))
       call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)
       do isite = 1, lattice_obj%nrec
-         call self_obj%xc_response_provider%set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))
-         ! Preserve the collinear signed response coordinate independently of
-         ! the legacy magnitude used by the scalar ALSDA comparison path.
+         ! A transverse Goldstone vector is signed.  Replacing this by its
+         ! magnitude breaks reversed and multi-sublattice reference states.
+         call self_obj%xc_response_provider%set_site_spin_population(isite, site_moments(3, isite))
          call self_obj%xc_response_provider%set_site_signed_spin_population(isite, site_moments(3, isite))
          signed_moments(isite) = site_moments(3, isite)
          if (sqrt(sum(site_moments(:, isite)**2)) > tiny(1.0_rp)) then
@@ -2136,7 +2161,14 @@ contains
       ! kernel from independently converged symmetric +/- Bz calculations.
       allocate(omega_static(1))
       omega_static = 0.0_rp
-      if (config%chi0_backend == 'green') then
+      if (.not. is_longitudinal .and. .not. is_full_response) then
+         if (config%chi0_backend /= 'eigenpairs') then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: real static Ward diagnostics require '// &
+               'chi0_backend=eigenpairs; the eigenpair-resolvent backend has no static-limit solver.', __FILE__, __LINE__)
+         end if
+         call build_static_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+            site_orbital_counts, left_channels, right_channels, chi0_options, chi0_static)
+      else if (config%chi0_backend == 'green') then
          call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
          if (is_full_response) then
             call build_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
@@ -2155,9 +2187,8 @@ contains
       if (pair_backend) then
          call build_pair_potential_operators(reciprocal_obj, reciprocal_obj%k_points, signed_moments, &
             [0.0_rp, 0.0_rp, 0.0_rp], pair_operators_static)
-         call build_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
-            eigenvalues_k, eigenvectors_k, site_orbital_counts, left_channels, pair_operators_static, omega_static, &
-            chi0_options, pair_xi_static)
+         call build_static_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+            site_orbital_counts, left_channels, pair_operators_static, chi0_options, pair_xi_static)
          call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone)
          deallocate(pair_operators_static)
       end if
@@ -2246,8 +2277,14 @@ contains
             all_trace_loss_pair = 0.0_rp
          end if
       end if
+#ifdef USE_MPI
+      ! Root writes the static Goldstone record above; q owners may append the
+      ! independently observed dynamic Gamma peaks below.
+      call MPI_BARRIER(MPI_COMM_WORLD, ierr)
+#endif
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
+         bare_gamma_peak = -1.0_rp; legacy_gamma_peak = -1.0_rp; pair_gamma_peak = -1.0_rp
          allocate(kq_points(3, reciprocal_obj%nk_total))
          kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
          call cpu_time(t_profile_start)
@@ -2272,6 +2309,7 @@ contains
          end if
          chi0_result%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
          response_eta = chi0_result%metadata%eta
+         if (is_gamma) bare_gamma_peak = observed_loss_peak(omega, chi0_result%trace_spectrum)
          if (config%output_chi0 .or. config%output_stoner) then
             write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
             call write_chi_ks_text(trim(filename), omega, chi0_result)
@@ -2281,6 +2319,7 @@ contains
          if (need_dyson) then
             if (legacy_backend) then
                call enhance_tddft_susceptibility(chi0_result%chi, kernel, response_eta, dyson_options, dyson_result)
+               if (is_gamma) legacy_gamma_peak = observed_loss_peak(omega, dyson_result%trace_spectral_weight)
                if (config%output_xi .or. config%output_chi) then
                   if (pair_backend) then
                      write(filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
@@ -2300,6 +2339,7 @@ contains
                   pair_xi_result)
                call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_result%xi, response_eta, dyson_options, &
                   dyson_pair_result)
+               if (is_gamma) pair_gamma_peak = observed_loss_peak(omega, dyson_pair_result%trace_spectral_weight)
                deallocate(pair_operators)
                if (config%output_xi .or. config%output_chi) then
                   write(filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
@@ -2329,6 +2369,10 @@ contains
                   all_trace_loss_pair(:, iq) = dyson_pair_result%trace_spectral_weight
                end if
             end if
+         end if
+         if (is_gamma .and. .not. is_longitudinal .and. .not. is_full_response) then
+            write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
+            call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak)
          end if
          deallocate(kq_points, eigenvalues_kq, eigenvectors_kq)
       end do
@@ -2408,6 +2452,34 @@ contains
       end if
    end subroutine post_processing_susceptibility
 
+   !> Report observed dynamic Gamma maxima separately from the real static
+   !> Ward operator.  These are grid-resolved loss maxima, not a correction or
+   !> a fitted frequency shift, and retain both legacy and pair raw routes.
+   real(rp) function observed_loss_peak(omega, loss) result(peak)
+      real(rp), intent(in) :: omega(:), loss(:)
+      integer :: index(1)
+
+      if (size(omega) /= size(loss) .or. size(omega) < 1) then
+         error stop 'observed_loss_peak: incompatible omega/loss arrays'
+      end if
+      index = maxloc(loss)
+      peak = omega(index(1))
+   end function observed_loss_peak
+
+   subroutine append_dynamic_gamma_peaks(filename, bare_peak, legacy_peak, pair_peak)
+      character(len=*), intent(in) :: filename
+      real(rp), intent(in) :: bare_peak, legacy_peak, pair_peak
+      integer :: unit, ios
+
+      open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+      if (ios /= 0) call g_logger%fatal('[calculation.append_dynamic_gamma_peaks]: cannot append Gamma peaks', __FILE__, __LINE__)
+      write(unit, '(a,es24.16)') '# dynamic_bare_gamma_loss_peak_Ry = ', bare_peak
+      if (legacy_peak >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_legacy_raw_gamma_loss_peak_Ry = ', legacy_peak
+      if (pair_peak >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_pair_raw_gamma_loss_peak_Ry = ', pair_peak
+      write(unit, '(a)') '# dynamic Gamma peaks are observed raw loss-grid maxima; no correction or fitted shift was applied'
+      close(unit)
+   end subroutine append_dynamic_gamma_peaks
+
    !> Build the Q^- operators in the same ham_only coefficient representation
    !> as the two endpoint eigensystems.  Q is intentionally retained per k:
    !> replacing it by a site scalar or an average here would reintroduce the
@@ -2459,6 +2531,11 @@ contains
       write(unit, '(a,2(1x,es24.16))') '# pair_potential_raw_closest_eigenvalue = ', real(diagnostics%closest_eigenvalue, rp), &
          aimag(diagnostics%closest_eigenvalue)
       write(unit, '(a,es24.16)') '# pair_potential_raw_magnetization_overlap = ', diagnostics%magnetization_overlap
+      write(unit, '(a,es24.16)') '# pair_potential_raw_left_magnetization_overlap = ', diagnostics%left_magnetization_overlap
+      write(unit, '(a,es24.16)') '# pair_potential_raw_biorthogonal_magnetization_overlap = ', &
+         diagnostics%biorthogonal_magnetization_overlap
+      write(unit, '(a,es24.16)') '# pair_potential_raw_imaginary_norm = ', diagnostics%imaginary_norm
+      write(unit, '(a)') '# pair_potential_static_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded'
       write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
       write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
       write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
@@ -2491,7 +2568,7 @@ contains
          write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
       else
          write(unit, '(a)') '# pair_potential_provenance = not used by this output'
-         write(unit, '(a)') '# signed_moment_source = legacy scalar comparison uses magnitude; signed population retained for pair route'
+         write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
          write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
       end if
       write(unit, '(a,a)') '# response_projection = ', trim(config%response_projection)
@@ -2504,8 +2581,15 @@ contains
       write(unit, '(a,es24.16)') '# omega_max_Ry = ', config%omega_max
       write(unit, '(a,i0)') '# nomega = ', config%nomega
       write(unit, '(a,es24.16)') '# eta_Ry = ', config%eta
+      write(unit, '(a,es24.16)') '# ground_state_fermi_level_Ry = ', config%ground_state_fermi_level
       write(unit, '(a,es24.16)') '# electronic_temperature_K = ', config%electronic_temperature
+      write(unit, '(a,es24.16)') '# ground_state_electronic_temperature_K = ', config%ground_state_electronic_temperature
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', config%fermi_level
+      write(unit, '(a,l1)') '# response_fermi_level_overridden = ', config%fermi_level_overridden
+      write(unit, '(a,l1)') '# response_electronic_temperature_overridden = ', config%electronic_temperature_overridden
+      write(unit, '(a,2(1x,es24.16))') '# ground_state_response_electron_count = ', &
+         config%ground_state_electron_count, config%response_electron_count
+      write(unit, '(a)') '# static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded'
       write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', config%band_first, config%band_last
       write(unit, '(a,es24.16)') '# occupation_prune_tolerance = ', config%occupation_tolerance
       write(unit, '(a,es24.16)') '# green_eta_Ry = ', config%green_eta

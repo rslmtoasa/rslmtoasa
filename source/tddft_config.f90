@@ -33,7 +33,13 @@ module tddft_config_mod
       character(len=sl) :: output_prefix
       integer :: nomega
       real(rp) :: omega_min, omega_max, eta
+      ! Negative/huge values mean inherit the canonical reciprocal ground
+      ! state.  The resolved values and override flags are emitted with every
+      ! response product by the production driver.
       real(rp) :: electronic_temperature, fermi_level
+      real(rp) :: ground_state_electronic_temperature, ground_state_fermi_level, ground_state_electron_count
+      real(rp) :: response_electron_count
+      logical :: electronic_temperature_overridden, fermi_level_overridden
       integer :: band_first, band_last
       real(rp) :: occupation_tolerance
       !> Real-axis GF bubble controls.  A zero green_eta means eta/2, and a
@@ -80,8 +86,14 @@ contains
       this%omega_min = 0.0_rp
       this%omega_max = 0.5_rp
       this%eta = 0.01_rp
-      this%electronic_temperature = 300.0_rp
-      this%fermi_level = 0.0_rp
+      this%electronic_temperature = -1.0_rp
+      this%fermi_level = huge(1.0_rp)
+      this%ground_state_electronic_temperature = -1.0_rp
+      this%ground_state_fermi_level = huge(1.0_rp)
+      this%ground_state_electron_count = -1.0_rp
+      this%response_electron_count = -1.0_rp
+      this%electronic_temperature_overridden = .false.
+      this%fermi_level_overridden = .false.
       this%band_first = 1
       this%band_last = 0
       this%occupation_tolerance = 0.0_rp
@@ -127,7 +139,9 @@ contains
       q_start = 0.0_rp; q_end = 0.0_rp; q_list = 0.0_rp
       nomega = this%nomega
       omega_min = this%omega_min; omega_max = this%omega_max; eta = this%eta
-      electronic_temperature = this%electronic_temperature; fermi_level = this%fermi_level
+      ! Sentinels make an omitted TDDFT control distinct from an explicit
+      ! request to override the reciprocal ground-state provenance.
+      electronic_temperature = -1.0_rp; fermi_level = huge(1.0_rp)
       band_first = this%band_first; band_last = this%band_last
       occupation_tolerance = this%occupation_tolerance
       green_eta = this%green_eta
@@ -166,6 +180,8 @@ contains
       this%nomega = nomega
       this%omega_min = omega_min; this%omega_max = omega_max; this%eta = eta
       this%electronic_temperature = electronic_temperature; this%fermi_level = fermi_level
+      this%electronic_temperature_overridden = electronic_temperature >= 0.0_rp
+      this%fermi_level_overridden = abs(fermi_level) < huge(1.0_rp)/2.0_rp
       this%band_first = band_first; this%band_last = band_last
       this%occupation_tolerance = occupation_tolerance
       this%green_eta = green_eta
@@ -254,7 +270,8 @@ contains
          call g_logger%fatal("[tddft_config]: goldstone_mode must be 'off', 'diagnose', or 'sum_rule'", __FILE__, __LINE__)
       end if
       if (this%nomega < 1 .or. this%omega_max < this%omega_min .or. this%eta <= 0.0_rp .or. &
-          this%electronic_temperature < 0.0_rp .or. this%band_first < 1 .or. this%band_last < 0 .or. &
+          (this%electronic_temperature_overridden .and. this%electronic_temperature < 0.0_rp) .or. &
+          this%band_first < 1 .or. this%band_last < 0 .or. &
           this%occupation_tolerance < 0.0_rp .or. len_trim(this%output_prefix) == 0) then
          call g_logger%fatal('[tddft_config]: invalid frequency, band, temperature, or output settings', __FILE__, __LINE__)
       end if

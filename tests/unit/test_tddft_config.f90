@@ -15,6 +15,7 @@ program test_tddft_config
    call test_full_input()
    call test_green_input()
    call test_xi_backend_input()
+   call test_ground_state_provenance_defaults()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -129,6 +130,32 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_xi_backend_input
+
+   subroutine test_ground_state_provenance_defaults()
+      type(tddft_config) :: inherited, overridden
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " output_prefix = 'unit_response'"
+      write(unit, '(a)') '/'
+      close(unit)
+      inherited = tddft_config('unit_tddft_config.nml')
+      call assert_true('omitted response EF inherits reciprocal provenance', .not. inherited%fermi_level_overridden)
+      call assert_true('omitted response temperature inherits reciprocal provenance', .not. inherited%electronic_temperature_overridden)
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') ' fermi_level = -0.071, electronic_temperature = 420.0'
+      write(unit, '(a)') '/'
+      close(unit)
+      overridden = tddft_config('unit_tddft_config.nml')
+      call assert_true('explicit response EF is auditable', overridden%fermi_level_overridden)
+      call assert_true('explicit response temperature is auditable', overridden%electronic_temperature_overridden)
+      call assert_real('explicit response EF is retained', overridden%fermi_level, -0.071_rp)
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_ground_state_provenance_defaults
 
    subroutine assert_true(label, condition)
       character(len=*), intent(in) :: label
