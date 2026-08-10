@@ -279,3 +279,34 @@ unequal-orbital failure of a scalar site substitute, reversed signed moment,
 moment-weighted rigid two-endpoint identity. Together with the WR-01b
 three-step finite-difference test, this pins the analytic Hamiltonian tangent
 at the q=0 operator boundary.
+
+## WR-01c finite-q endpoint-phase assembly — in progress
+
+The reciprocal convention is established by `calculate_structure_factors`:
+each stored directed block is row-site `i`, column-site `j`, and uses its full
+fractional displacement `d=R+tau_j-tau_i` from `ham_vec_type_direct` in
+`H(k)=sum_d H(d) exp(+i 2 pi k dot d)`. The WR-01b record already carries
+the distinct endpoint site identities and displacement; no atom-type lookup is
+used for endpoint ownership.
+
+The optional `q_point` argument of
+`build_lmto_pair_potential_at_kpoint` now applies the derived transition
+phases before the circular combination:
+
+\[
+D_{a,mu}(k+q,k)=\sum_{ij,d}\left[
+delta_{a,i}D^{L}_{ij,mu}(d)e^{i2pi k\cdot d}
++delta_{a,j}D^{R}_{ij,mu}(d)e^{i2pi(k+q)\cdot d}\right].
+\]
+
+At q=0 both reduce exactly to the existing Bloch phase. `lmto_pair_potential`
+centralises this calculation, exposes `K=k+q`, folded `Kbar`, reciprocal shift
+`G=K-Kbar`, and the required site gauge. With
+`U_G(a)=exp(i2pi G dot tau_a)`, unfolded eigenvectors are
+`u_K=U_G^dagger u_Kbar`; raw multisublattice matrices are not assumed periodic.
+
+The phase/gauge unit tests pass, including independent left/right phase
+negative controls and `q=1/2,1/3` probes. WR-01c remains open pending the
+independent commensurate-supercell cosine/sine oracle; the current circular
+adjoint remains the q=0 service convention and is not yet finite-q oracle
+evidence.

@@ -1,6 +1,7 @@
 submodule (reciprocal_mod) reciprocal_fourier
    use lmto_magnetic_tangent_mod, only: lmto_hhmag_to_spinor, lmto_endpoint_tangent_record
-   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_bloch_phase
+   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_endpoint_phases, &
+      lmto_pair_transition_metadata, lmto_transition_metadata
    implicit none
 
 contains
@@ -81,18 +82,20 @@ contains
       end if
    end subroutine fourier_transform_hamiltonian
 
-   !> Build the q=0 LMTO pair potential in exactly the `ham_only` coefficient
+   !> Build the finite-q LMTO pair potential in exactly the `ham_only` coefficient
    !> basis used by the reciprocal eigensolver.  The endpoint tangent is asked
    !> for before hxc/ee collapse; its directed-bond phase is the normal
-   !> H(k)=sum_R H(R) exp(+i k.R) phase.  Finite q endpoint phases are a WR-03
-   !> integration responsibility and intentionally cannot be guessed here.
-   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason)
+   !> H(k)=sum_R H(R) exp(+i k.R) phase: left endpoints carry k and right
+   !> endpoints carry k+q. The optional q=0 default preserves WR-02 callers.
+   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason, q_point, metadata)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: response_site
       real(rp), intent(in) :: k_point(3), signed_moment
       complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
       logical, intent(out) :: supported
       character(len=*), intent(out), optional :: reason
+      real(rp), intent(in), optional :: q_point(3)
+      type(lmto_pair_transition_metadata), intent(out), optional :: metadata
       integer :: nmat, isite, jsite, ntype_i, ia, ja, it, jt, ineigh, nr, ni, idir
       integer :: i_start, i_end, j_start, j_end
       real(rp) :: vet(3)
@@ -102,11 +105,14 @@ contains
       complex(rp) :: left_cart(norb, norb, 4), right_cart(norb, norb, 4)
       complex(rp) :: left_spinor(2*norb, 2*norb), right_spinor(2*norb, 2*norb)
       complex(rp), allocatable :: dh_dx(:, :), dh_dy(:, :)
-      complex(rp) :: phase
+      complex(rp) :: left_phase, right_phase
       type(lmto_endpoint_tangent_record) :: record
       character(len=160) :: local_reason
+      real(rp) :: q_direct(3)
 
       nmat = 2*norb*this%lattice%nrec
+      q_direct = 0.0_rp; if (present(q_point)) q_direct = q_point
+      if (present(metadata)) metadata = lmto_transition_metadata(k_point, q_direct)
       qminus = cmplx(0.0_rp, 0.0_rp, rp); qplus = cmplx(0.0_rp, 0.0_rp, rp)
       supported = .false.
       if (size(qminus,1) /= nmat .or. size(qminus,2) /= nmat .or. any(shape(qplus) /= shape(qminus))) then
@@ -152,23 +158,23 @@ contains
                return
             end if
             j_start = (jsite-1)*2*norb + 1; j_end = jsite*2*norb
-            phase = lmto_bloch_phase(k_point, this%ham_vec_type_direct(:,ineigh,ntype_i))
+            call lmto_endpoint_phases(k_point, q_direct, this%ham_vec_type_direct(:,ineigh,ntype_i), left_phase, right_phase)
             do idir = 1, 2
                if (isite == response_site) then
                   left_cart = left(:,:,:,idir)
                   call hcpx(left_cart(:,:,1), 'cart2sph'); call hcpx(left_cart(:,:,2), 'cart2sph')
                   call hcpx(left_cart(:,:,3), 'cart2sph'); call hcpx(left_cart(:,:,4), 'cart2sph')
                   call lmto_hhmag_to_spinor(left_cart, left_spinor)
-                  if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + left_spinor*phase
-                  if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + left_spinor*phase
+                  if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + left_spinor*left_phase
+                  if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + left_spinor*left_phase
                end if
                if (jsite == response_site) then
                   right_cart = right(:,:,:,idir)
                   call hcpx(right_cart(:,:,1), 'cart2sph'); call hcpx(right_cart(:,:,2), 'cart2sph')
                   call hcpx(right_cart(:,:,3), 'cart2sph'); call hcpx(right_cart(:,:,4), 'cart2sph')
                   call lmto_hhmag_to_spinor(right_cart, right_spinor)
-                  if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + right_spinor*phase
-                  if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + right_spinor*phase
+                  if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + right_spinor*right_phase
+                  if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + right_spinor*right_phase
                end if
             end do
          end do

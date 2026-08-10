@@ -3,6 +3,7 @@
 - [x] WR-00 — Freeze pair-potential conventions and executable identities
 - [x] WR-01 — Add generic weighted-vertex and direct-Xi machinery
 - [x] WR-01b — Preserve endpoint-resolved LMTO magnetic tangents
+- [ ] WR-01c — Validate finite-q endpoint phases and pair-potential gauge
 - [ ] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
 - [ ] WR-03 — Integrate direct Xi in production shadow mode
 - [ ] WR-04 — Implement the real static limit and ground-state provenance
@@ -45,6 +46,13 @@
 - The committed q=0 service is `ham_only` only. Finite-q endpoint phases and
   their commensurate-supercell oracle remain the WR-02 blocker; this is not a
   permission to use an assembled-`hxc` or scalar site-kernel substitute.
+
+## WR-01c evidence in progress
+
+- `UnitLmtoPairPotential`: endpoint phase isolation at `q=1/2` and `q=1/3`,
+  q=0 reduction, and unfolded/folded two-sublattice site-gauge metadata.
+- Still required before checking WR-01c: independent commensurate-supercell
+  cosine/sine rotation projection and its theta-convergence ladder.
 
 ## Global gates
 

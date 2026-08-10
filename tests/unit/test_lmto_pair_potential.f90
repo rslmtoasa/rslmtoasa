@@ -2,7 +2,8 @@ program test_lmto_pair_potential
    use precision_mod, only: rp
    use math_mod, only: i_unit
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_tangent, lmto_hhmag_to_spinor
-   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_bloch_phase
+   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_bloch_phase, lmto_endpoint_phases, &
+      lmto_pair_transition_metadata, lmto_transition_metadata, lmto_unfold_site_spinors
    implicit none
    real(rp), parameter :: tol = 2.0e-9_rp
    real(rp) :: maximum_error
@@ -12,6 +13,7 @@ program test_lmto_pair_potential
    call test_rotation_oracle_and_adjoint()
    call test_unequal_orbital_negative_control()
    call test_signed_moment_and_bloch_phase()
+   call test_finite_q_endpoint_phases_and_gauge()
    write(*,'(a,es12.4)') 'LMTO pair-potential maximum error: ', maximum_error
    if (failed .or. maximum_error > tol) error stop 1
    write(*,'(a)') 'RESULT: PASS'
@@ -86,6 +88,27 @@ contains
       call lmto_circular_pair_potential(dx,dy,0.0_rp,qm,qp,supported,reason)
       if(supported) then; failed=.true.; write(*,'(a)') 'FAIL zero signed moment was accepted'; end if
    end subroutine test_signed_moment_and_bloch_phase
+
+   subroutine test_finite_q_endpoint_phases_and_gauge()
+      real(rp)::k(3),q(3),d(3),tau(3,2)
+      complex(rp)::left,right,common,folded(4,1),unfolded(4,1),expected(4,1)
+      type(lmto_pair_transition_metadata)::meta
+      k=[0.17_rp,0.0_rp,0.0_rp]; q=[0.5_rp,0.0_rp,0.0_rp]; d=[1.0_rp,0.0_rp,0.0_rp]
+      call lmto_endpoint_phases(k,q,d,left,right)
+      call check(abs(left-lmto_bloch_phase(k,d)), 'left endpoint carries k phase')
+      call check(abs(right-lmto_bloch_phase(k+q,d)), 'right endpoint carries k+q phase')
+      common=left
+      if(abs(right-common)<1.0e-3_rp) then; failed=.true.; write(*,'(a)') 'FAIL common left/right phase negative control'; end if
+      q=[1.0_rp/3.0_rp,0.0_rp,0.0_rp]
+      call lmto_endpoint_phases(k,q,d,left,right)
+      if(abs(right-left)<1.0e-3_rp) then; failed=.true.; write(*,'(a)') 'FAIL q=1/3 endpoint phase is a no-op'; end if
+      meta=lmto_transition_metadata([0.45_rp,0.0_rp,0.0_rp],[0.2_rp,0.0_rp,0.0_rp])
+      if(.not.meta%unfolded_gauge_required .or. meta%reciprocal_shift(1)/=1) then; failed=.true.; write(*,'(a)') 'FAIL folded/unfolded metadata'; end if
+      tau(:,1)=[0.0_rp,0.0_rp,0.0_rp]; tau(:,2)=[0.25_rp,0.0_rp,0.0_rp]
+      folded=cmplx(1.0_rp,0.0_rp,rp); call lmto_unfold_site_spinors(meta,tau,folded,unfolded)
+      expected=folded; expected(3:4,:)=exp(cmplx(0.0_rp,-0.5_rp*acos(-1.0_rp),rp))*expected(3:4,:)
+      call check(maxval(abs(unfolded-expected)), 'multisublattice unfolded site gauge')
+   end subroutine test_finite_q_endpoint_phases_and_gauge
 
    subroutine sample(h,w0,w1,c0,c1)
       complex(rp),intent(out)::h(2,2),w0(2),w1(2),c0(2),c1(2)

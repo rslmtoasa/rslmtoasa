@@ -48,6 +48,7 @@ module reciprocal_mod
    use symmetry_mod, only: symmetry
    use basis_mod, only: nb, norb
    use spin_density_mod, only: spin_density
+   use lmto_pair_potential_mod, only: lmto_pair_transition_metadata
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
 #ifdef USE_MPI
    use mpi
@@ -592,15 +593,18 @@ module reciprocal_mod
       complex(rp), intent(out) :: hk_result(:, :)
    end subroutine build_hamiltonian_at_kpoint
 
-   !> Construct Q_a^-/Q_a^+ in the ordinary ham_only coefficient basis at q=0.
+   !> Construct Q_a^-/Q_a^+ in the ordinary ham_only coefficient basis.  With
+   !> q_point present it is the finite-q (k+q,k) endpoint-phase operator.
    !> The response-site index is a primitive site identity, not an atom type.
-   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason)
+   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason, q_point, metadata)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: response_site
       real(rp), intent(in) :: k_point(3), signed_moment
       complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
       logical, intent(out) :: supported
       character(len=*), intent(out), optional :: reason
+      real(rp), intent(in), optional :: q_point(3)
+      type(lmto_pair_transition_metadata), intent(out), optional :: metadata
    end subroutine build_lmto_pair_potential_at_kpoint
 
    !> @brief Return caller-owned eigenpairs at arbitrary reciprocal-space points.
