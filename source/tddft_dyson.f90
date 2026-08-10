@@ -57,6 +57,7 @@ module tddft_dyson_mod
    end type tddft_dyson_result
 
    public :: enhance_tddft_susceptibility
+   public :: enhance_tddft_susceptibility_from_xi
    public :: solve_tddft_dyson_frequency
    public :: tddft_loss_matrix
    public :: diagonalize_nonhermitian_response
@@ -124,6 +125,63 @@ contains
       end if
    end subroutine enhance_tddft_susceptibility
 
+   !> Pair-potential/self-enhancement route.  Xi is already the ordered
+   !> kernel-weighted Lehmann sum, so this intentionally has no response-space
+   !> K and cannot reconstruct one by inversion.
+   subroutine enhance_tddft_susceptibility_from_xi(chi_ks, xi, eta, options, result)
+      complex(rp), intent(in) :: chi_ks(:, :, :), xi(:, :, :)
+      real(rp), intent(in) :: eta
+      type(tddft_dyson_options), intent(in) :: options
+      type(tddft_dyson_result), intent(out) :: result
+      integer :: n, nw, iw, i, info
+      real(rp) :: t_start, t_stop
+
+      n = size(chi_ks, 1); nw = size(chi_ks, 3)
+      if (n <= 0 .or. size(chi_ks, 2) /= n .or. nw <= 0 .or. any(shape(xi) /= shape(chi_ks))) then
+         error stop 'enhance_tddft_susceptibility_from_xi: incompatible chi_KS/Xi frequency batches'
+      end if
+      if (eta <= 0.0_rp) error stop 'enhance_tddft_susceptibility_from_xi: eta must be positive and numerical'
+      allocate(result%chi_ks(n, n, nw), result%chi_ks_loss(n, n, nw), result%xi(n, n, nw), result%chi(n, n, nw), &
+         result%loss(n, n, nw), result%site_spectral_weight(n, nw), result%trace_spectral_weight(nw), &
+         result%chi_ks_site_spectral_weight(n, nw), result%chi_ks_trace_spectral_weight(nw), result%solve_info(nw))
+      result%chi_ks = chi_ks; result%xi = xi
+      do iw = 1, nw
+         result%chi_ks_loss(:, :, iw) = tddft_loss_matrix(chi_ks(:, :, iw))
+         result%chi_ks_site_spectral_weight(:, iw) = real([(result%chi_ks_loss(i, i, iw), i=1, n)], rp)
+         result%chi_ks_trace_spectral_weight(iw) = sum(result%chi_ks_site_spectral_weight(:, iw))
+         call cpu_time(t_start)
+         call solve_tddft_dyson_direct_xi_frequency(chi_ks(:, :, iw), xi(:, :, iw), result%chi(:, :, iw), info)
+         call cpu_time(t_stop)
+         result%metadata%solve_cpu_seconds = result%metadata%solve_cpu_seconds + t_stop-t_start
+         result%solve_info(iw) = info
+         if (info /= 0) error stop 'enhance_tddft_susceptibility_from_xi: LAPACK zgesv failed; I-Xi is singular'
+         result%loss(:, :, iw) = tddft_loss_matrix(result%chi(:, :, iw))
+         result%site_spectral_weight(:, iw) = real([(result%loss(i, i, iw), i=1, n)], rp)
+         result%trace_spectral_weight(iw) = sum(result%site_spectral_weight(:, iw))
+      end do
+      result%metadata%eta = eta
+      if (options%diagonalize_loss) then
+         allocate(result%loss_eigenvalues(n, nw), result%loss_eigenvectors(n, n, nw))
+         call cpu_time(t_start)
+         do iw = 1, nw
+            call diagonalize_hermitian_loss(result%loss(:, :, iw), result%loss_eigenvalues(:, iw), &
+               result%loss_eigenvectors(:, :, iw))
+         end do
+         call cpu_time(t_stop)
+         result%metadata%diagonalization_cpu_seconds = result%metadata%diagonalization_cpu_seconds + t_stop-t_start
+      end if
+      if (options%diagonalize_xi) then
+         allocate(result%xi_eigenvalues(n, nw), result%xi_eigenvectors(n, n, nw))
+         call cpu_time(t_start)
+         do iw = 1, nw
+            call diagonalize_nonhermitian_response(result%xi(:, :, iw), result%xi_eigenvalues(:, iw), &
+               result%xi_eigenvectors(:, :, iw))
+         end do
+         call cpu_time(t_stop)
+         result%metadata%diagonalization_cpu_seconds = result%metadata%diagonalization_cpu_seconds + t_stop-t_start
+      end if
+   end subroutine enhance_tddft_susceptibility_from_xi
+
    !> Streaming primitive for one (q,omega): factor A=I-chi_KS K and solve
    !> A X=chi_KS.  `info` is returned so an outer production scheduler can
    !> report/skip a failed point rather than relying on a matrix inverse.
@@ -147,6 +205,27 @@ contains
       chi = chi_ks
       call zgesv(n, n, system, n, ipiv, chi, n, info)
    end subroutine solve_tddft_dyson_frequency
+
+   !> Solve (I-Xi) chi=chi_KS without ever referring to a truncated K.
+   subroutine solve_tddft_dyson_direct_xi_frequency(chi_ks, xi, chi, info)
+      complex(rp), intent(in) :: chi_ks(:, :), xi(:, :)
+      complex(rp), intent(out) :: chi(:, :)
+      integer, intent(out) :: info
+      complex(rp), allocatable :: system(:, :)
+      integer, allocatable :: ipiv(:)
+      integer :: n, i
+
+      n = size(chi_ks, 1)
+      if (n <= 0 .or. size(chi_ks, 2) /= n .or. any(shape(xi) /= [n, n]) .or. any(shape(chi) /= [n, n])) then
+         error stop 'solve_tddft_dyson_direct_xi_frequency: incompatible response dimensions'
+      end if
+      allocate(system(n, n), ipiv(n)); system = -xi
+      do i = 1, n
+         system(i, i) = system(i, i) + cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+      chi = chi_ks
+      call zgesv(n, n, system, n, ipiv, chi, n, info)
+   end subroutine solve_tddft_dyson_direct_xi_frequency
 
    !> Hermitian loss matrix.  Use this rather than elementwise -Im chi when
    !> response channels are coupled: off-diagonal entries must be Hermitian.

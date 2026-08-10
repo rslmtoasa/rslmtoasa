@@ -7,7 +7,8 @@ program test_tddft_direct_xi
    use response_vertices_mod, only: response_channel, site_projected_operator, weighted_transition_vertex, &
       weighted_transition_vectors
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
-   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_eigenpairs
+   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_eigenpairs, &
+      build_direct_xi_from_k_dependent_eigenpairs
    implicit none
 
    real(rp), parameter :: tol = 1024.0_rp*epsilon(1.0_rp)
@@ -18,6 +19,7 @@ program test_tddft_direct_xi
    call test_uniform_scalar_kernel_reduction()
    call test_unequal_orbital_oracle()
    call test_batched_complex_q_and_metadata()
+   call test_k_resolved_pair_operator_retention()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -137,6 +139,35 @@ contains
       call build_direct_xi_from_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, operators, omega, changed_options, changed)
       call check_true('band window is propagated into direct Xi', maxval(abs(changed%xi-scalar%xi)) > 1.0e-6_rp)
    end subroutine test_batched_complex_q_and_metadata
+
+   subroutine test_k_resolved_pair_operator_retention()
+      type(response_channel) :: left(1)
+      type(tddft_chi0_options) :: options
+      type(tddft_direct_xi_result) :: static_xi, k_resolved_xi, changed_xi
+      real(rp) :: weights(2), eval(2, 2), evalq(2, 2), omega(2)
+      complex(rp) :: evec(2, 2, 2), evecq(2, 2, 2), operators(2, 2, 1), operators_k(2, 2, 1, 2)
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      weights = [1.0_rp, 3.0_rp]; omega = [0.03_rp, 0.09_rp]
+      call build_complex_q_fixture(eval, evalq, evec, evecq)
+      operators(:, :, 1) = reshape([cmplx(0.13_rp, -0.04_rp, rp), cmplx(-0.31_rp, 0.17_rp, rp), &
+         cmplx(0.22_rp, 0.35_rp, rp), cmplx(-0.07_rp, 0.11_rp, rp)], [2, 2])
+      operators_k(:, :, 1, 1) = operators(:, :, 1); operators_k(:, :, 1, 2) = operators(:, :, 1)
+      options%eta = 0.007_rp; options%fermi_level = 0.015_rp; options%electronic_temperature = 850.0_rp
+      options%band_first = 1; options%band_last = 2; options%use_batched_accumulation = .true.; options%transition_batch_size = 3
+      call build_direct_xi_from_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, operators, omega, options, static_xi)
+      call build_direct_xi_from_k_dependent_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, operators_k, omega, options, &
+         k_resolved_xi)
+      call check_complex_vector('k-resolved direct Xi reduces to static direct-Xi oracle when Q is k independent', &
+         k_resolved_xi%xi(1, 1, :), static_xi%xi(1, 1, :))
+      operators_k(:, :, 1, 2) = 1.7_rp*operators_k(:, :, 1, 2)
+      call build_direct_xi_from_k_dependent_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, operators_k, omega, options, &
+         changed_xi)
+      call check_true('k-resolved direct Xi retains distinct pair potential at each k', &
+         maxval(abs(changed_xi%xi-k_resolved_xi%xi)) > 1.0e-6_rp)
+      call check_true('k-resolved direct Xi records its eigenpair provenance', &
+         trim(k_resolved_xi%metadata%backend) == 'direct_xi_k_resolved_eigenpairs')
+   end subroutine test_k_resolved_pair_operator_retention
 
    subroutine build_complex_q_fixture(eval, evalq, evec, evecq)
       real(rp), intent(out) :: eval(:, :), evalq(:, :)

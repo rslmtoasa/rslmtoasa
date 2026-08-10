@@ -5,6 +5,7 @@
 integer, parameter :: tddft_max_q = 2000
 logical :: enabled
 character(len=16) :: channel, chi0_backend, response_projection, q_mode, q_coordinates
+character(len=24) :: xi_backend
 character(len=16) :: goldstone_mode
 character(len=256) :: q_file, output_prefix, longitudinal_static_file
 integer :: n_q_points, q_mesh1, q_mesh2, q_mesh3
@@ -16,7 +17,7 @@ real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance, longi
 real(rp) :: longitudinal_fit_omega_min, longitudinal_fit_omega_max
 logical :: output_chi0, output_xi, output_chi, output_modes, output_stoner
 
-namelist /tddft/ enabled, channel, chi0_backend, response_projection, q_mode, q_coordinates, goldstone_mode, &
+namelist /tddft/ enabled, channel, chi0_backend, xi_backend, response_projection, q_mode, q_coordinates, goldstone_mode, &
    q_file, output_prefix, n_q_points, q_mesh1, q_mesh2, q_mesh3, q_start, q_end, q_list, &
    omega_min, omega_max, nomega, eta, electronic_temperature, fermi_level, band_first, band_last, &
    occupation_tolerance, green_eta, green_energy_min, green_energy_max, green_energy_points, &

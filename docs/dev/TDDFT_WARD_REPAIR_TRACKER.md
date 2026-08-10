@@ -5,7 +5,7 @@
 - [x] WR-01b — Preserve endpoint-resolved LMTO magnetic tangents
 - [x] WR-01c — Validate finite-q endpoint phases and pair-potential gauge
 - [x] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
-- [ ] WR-03 — Integrate direct Xi in production shadow mode
+- [x] WR-03 — Integrate direct Xi in production shadow mode
 - [ ] WR-04 — Implement the real static limit and ground-state provenance
 - [ ] WR-05 — Repair Goldstone option semantics and controlled correction
 - [ ] WR-06 — Repair Cartesian/circular factors and unsupported-route gates
@@ -82,6 +82,32 @@
   `UnitLmtoPairPotential` reports a maximum error of 8.856e-10.
 - Implementation evidence has been accepted by the designated TDDFT/LMTO
   physics maintainer; WR-01c and WR-02 are closed.
+
+## WR-03 evidence
+
+- `xi_backend='legacy_site_scalar'` remains the default comparison route and
+  retains its existing `*_dyson.dat` filename.  `pair_potential` writes
+  `*_pair_dyson.dat`; `compare` writes separate `*_legacy_dyson.dat` and
+  `*_pair_dyson.dat`, plus correspondingly named mode files.
+- The pair route builds `Q_a^-(k,q)` for every response site and k point from
+  the validated ordinary-LMTO `ham_only` rotation service, accumulates direct
+  Xi from the same eigenpairs/occupations/k weights/band window as chiKS, and
+  solves `(I-Xi) chi=chiKS` without constructing a response-space kernel.
+  Generalized-overlap, Green, longitudinal, and full-component pair routes
+  are explicitly rejected pending their own metric/derivative work.
+- `*_goldstone.dat` retains the legacy raw diagnostic and, for pair/compare,
+  adds separately named legacy and pair raw residuals with pair-potential
+  representation, provenance, and signed-moment source.  No correction is
+  applied by WR-03.
+- gfortran-13 build and focused evidence (2026-08-10):
+  `cmake --build build-gfortran13 --target rslmto UnitTddftDirectXi UnitTddftDysonModes UnitTddftConfig -j2`;
+  `ctest --test-dir build-gfortran13 --output-on-failure -L tddft` (16/16
+  passed); `python3 tests/unit/test_tddft_dispatch.py` and
+  `python3 tests/regression/tddft_validation/test_validation.py` (both pass).
+  `UnitTddftDirectXi` includes the k-resolved-Q reduction and nonuniform-k
+  retention checks; `UnitTddftDysonModes` checks direct-Xi versus kernel Dyson
+  equivalence in the uniform oracle.  No MPI-enabled build was available in
+  this workspace, so serial-versus-multirank equivalence remains unchecked.
 
 ## Global gates
 

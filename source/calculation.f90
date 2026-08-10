@@ -50,6 +50,7 @@ module calculation_mod
    use magnetic_representation_mod, only: gbt_single_q
    use tddft_config_mod, only: tddft_config
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, write_chi_ks_text
+   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_k_dependent_eigenpairs
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
@@ -57,9 +58,9 @@ module calculation_mod
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
       evaluate_four_component_zero_modes, tddft_four_component_zero_mode_diagnostics
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
-      write_tddft_dyson_text
+      enhance_tddft_susceptibility_from_xi, write_tddft_dyson_text
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
-      write_goldstone_diagnostics_text
+      tddft_goldstone_diagnostics, evaluate_raw_xi_diagnostics, write_goldstone_diagnostics_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
    use tddft_longitudinal_mod, only: tddft_longitudinal_options, tddft_longitudinal_static_result, &
       tddft_longitudinal_result, read_longitudinal_static_fields, build_longitudinal_static_response, &
@@ -1977,9 +1978,11 @@ contains
       type(eigenpair_green_function_provider), target :: green_source
       type(tddft_chi0_result) :: chi0_result, chi0_static
       type(tddft_dyson_options) :: dyson_options
-      type(tddft_dyson_result) :: dyson_result
+      type(tddft_dyson_result) :: dyson_result, dyson_pair_result
+      type(tddft_direct_xi_result) :: pair_xi_result, pair_xi_static
       type(tddft_goldstone_options) :: goldstone_options
       type(tddft_goldstone_result) :: goldstone_result
+      type(tddft_goldstone_diagnostics) :: pair_goldstone
       type(tddft_mode_options) :: mode_options
       type(tddft_mode_result) :: mode_result
       type(tddft_longitudinal_options) :: longitudinal_options
@@ -1989,13 +1992,16 @@ contains
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
-      real(rp), allocatable :: all_trace_loss(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
+      complex(rp), allocatable :: pair_operators(:, :, :, :), pair_operators_static(:, :, :, :), all_xi_pair(:, :, :, :)
+      real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
+      real(rp), allocatable :: signed_moments(:)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
-      character(len=sl) :: filename, chi0_filename
+      logical :: pair_backend, legacy_backend
+      character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
 
       config = tddft_config(this%fname)
       if (.not. config%enabled) then
@@ -2025,6 +2031,22 @@ contains
       call reciprocal_obj%generate_mp_mesh()
       is_longitudinal = config%channel == 'longitudinal'
       is_full_response = config%channel == 'full'
+      pair_backend = config%xi_backend == 'pair_potential' .or. config%xi_backend == 'compare'
+      legacy_backend = config%xi_backend == 'legacy_site_scalar' .or. config%xi_backend == 'compare'
+      if (pair_backend) then
+         if (is_longitudinal .or. is_full_response .or. config%chi0_backend /= 'eigenpairs') then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: xi_backend=pair_potential/compare is currently '// &
+               'restricted to transverse chi0_backend=eigenpairs.', __FILE__, __LINE__)
+         end if
+         if (trim(reciprocal_obj%reciprocal_mode) /= 'ham_only') then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: pair-potential Xi requires reciprocal_mode=ham_only; '// &
+               'generalized-overlap response is explicitly unsupported.', __FILE__, __LINE__)
+         end if
+         if (.not. (config%output_xi .or. config%output_chi)) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: pair-potential shadow workflows require '// &
+               'output_xi=.true. or output_chi=.true. so raw Xi is auditable.', __FILE__, __LINE__)
+         end if
+      end if
 
       nq = size(config%q_points, 2)
       call get_mpi_range(rank, nq, iq_start, iq_end, nq_per_rank, region_tag='tddft-q')
@@ -2095,13 +2117,14 @@ contains
       reciprocal_obj%fermi_level = config%fermi_level
       reciprocal_obj%eigenvalues = eigenvalues_k
       reciprocal_obj%eigenvectors = eigenvectors_k
-      allocate(site_moments(3, lattice_obj%nrec))
+      allocate(site_moments(3, lattice_obj%nrec), signed_moments(lattice_obj%nrec))
       call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)
       do isite = 1, lattice_obj%nrec
          call self_obj%xc_response_provider%set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))
          ! Preserve the collinear signed response coordinate independently of
          ! the legacy magnitude used by the scalar ALSDA comparison path.
          call self_obj%xc_response_provider%set_site_signed_spin_population(isite, site_moments(3, isite))
+         signed_moments(isite) = site_moments(3, isite)
          if (sqrt(sum(site_moments(:, isite)**2)) > tiny(1.0_rp)) then
             call self_obj%xc_response_provider%set_site_magnetization_direction(isite, site_moments(:, isite))
          end if
@@ -2128,6 +2151,15 @@ contains
       else
          call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
             eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
+      end if
+      if (pair_backend) then
+         call build_pair_potential_operators(reciprocal_obj, reciprocal_obj%k_points, signed_moments, &
+            [0.0_rp, 0.0_rp, 0.0_rp], pair_operators_static)
+         call build_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+            eigenvalues_k, eigenvectors_k, site_orbital_counts, left_channels, pair_operators_static, omega_static, &
+            chi0_options, pair_xi_static)
+         call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone)
+         deallocate(pair_operators_static)
       end if
       allocate(kernel(nresponse, nresponse))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
@@ -2179,14 +2211,17 @@ contains
          ! adiabatic kernel forces an artificial Gamma singularity and can
          ! produce negative spectral weight.  Production Dyson spectra use
          ! the real, XC-derived kernel below.
-         do isite = 1, lattice_obj%nrec
-            kernel(isite, isite) = goldstone_result%k_perp(isite)
-         end do
+         if (legacy_backend) then
+            do isite = 1, lattice_obj%nrec
+               kernel(isite, isite) = goldstone_result%k_perp(isite)
+            end do
+         end if
          if (rank == 0) then
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
             call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
+            if (pair_backend) call append_pair_goldstone_diagnostics(trim(filename), goldstone_result%raw, pair_goldstone)
             call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-               rank, has_soc, has_external_field)
+               rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_compare')
          end if
       end if
 
@@ -2195,13 +2230,21 @@ contains
          call g_logger%fatal('[calculation.post_processing_susceptibility]: longitudinal response requires q=Gamma for static acceptance.', &
             __FILE__, __LINE__)
       end if
-      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes .or. is_longitudinal
+      ! Selecting a pair-potential backend is itself a request to construct
+      ! the raw Xi shadow data at every requested (q,omega), even if the user
+      ! has disabled the optional text products.
+      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes .or. is_longitudinal .or. pair_backend
       dyson_options%diagonalize_xi = config%output_modes
       dyson_options%diagonalize_loss = config%output_modes
       if (config%output_modes) then
          allocate(all_xi(nresponse, nresponse, nw, nq), all_trace_loss(nw, nq))
          all_xi = cmplx(0.0_rp, 0.0_rp, rp)
          all_trace_loss = 0.0_rp
+         if (pair_backend .and. legacy_backend) then
+            allocate(all_xi_pair(nresponse, nresponse, nw, nq), all_trace_loss_pair(nw, nq))
+            all_xi_pair = cmplx(0.0_rp, 0.0_rp, rp)
+            all_trace_loss_pair = 0.0_rp
+         end if
       end if
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
@@ -2233,15 +2276,37 @@ contains
             write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
             call write_chi_ks_text(trim(filename), omega, chi0_result)
             call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
-               has_soc, has_external_field)
+               has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_chi_ks')
          end if
          if (need_dyson) then
-            call enhance_tddft_susceptibility(chi0_result%chi, kernel, response_eta, dyson_options, dyson_result)
-            if (config%output_xi .or. config%output_chi) then
-               write(filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
-               call write_tddft_dyson_text(trim(filename), omega, dyson_result)
-               call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                  rank, has_soc, has_external_field)
+            if (legacy_backend) then
+               call enhance_tddft_susceptibility(chi0_result%chi, kernel, response_eta, dyson_options, dyson_result)
+               if (config%output_xi .or. config%output_chi) then
+                  if (pair_backend) then
+                     write(filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
+                  else
+                     write(filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
+                  end if
+                  call write_tddft_dyson_text(trim(filename), omega, dyson_result)
+                  call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw')
+               end if
+            end if
+            if (pair_backend) then
+               call build_pair_potential_operators(reciprocal_obj, reciprocal_obj%k_points, signed_moments, &
+                  config%q_points(:, iq), pair_operators)
+               call build_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                  eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operators, omega, chi0_options, &
+                  pair_xi_result)
+               call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_result%xi, response_eta, dyson_options, &
+                  dyson_pair_result)
+               deallocate(pair_operators)
+               if (config%output_xi .or. config%output_chi) then
+                  write(filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+                  call write_tddft_dyson_text(trim(filename), omega, dyson_pair_result)
+                  call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+               end if
             end if
             if (is_longitudinal .and. is_gamma) then
                call calibrate_longitudinal_response(m0, chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), &
@@ -2249,11 +2314,20 @@ contains
                write(filename, '(a,"_q",i6.6,"_longitudinal.dat")') trim(config%output_prefix), iq
                call write_longitudinal_report(trim(filename), omega, response_eta, longitudinal_static, longitudinal_result)
                call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
-                  has_soc, has_external_field)
+                  has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'longitudinal_static')
             end if
             if (config%output_modes) then
-               all_xi(:, :, :, iq) = dyson_result%xi
-               all_trace_loss(:, iq) = dyson_result%trace_spectral_weight
+               if (legacy_backend) then
+                  all_xi(:, :, :, iq) = dyson_result%xi
+                  all_trace_loss(:, iq) = dyson_result%trace_spectral_weight
+               else
+                  all_xi(:, :, :, iq) = dyson_pair_result%xi
+                  all_trace_loss(:, iq) = dyson_pair_result%trace_spectral_weight
+               end if
+               if (pair_backend .and. legacy_backend) then
+                  all_xi_pair(:, :, :, iq) = dyson_pair_result%xi
+                  all_trace_loss_pair(:, iq) = dyson_pair_result%trace_spectral_weight
+               end if
             end if
          end if
          deallocate(kq_points, eigenvalues_kq, eigenvectors_kq)
@@ -2263,13 +2337,35 @@ contains
 #ifdef USE_MPI
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi, size(all_xi), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss, size(all_trace_loss), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         if (pair_backend .and. legacy_backend) then
+            call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi_pair, size(all_xi_pair), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+            call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss_pair, size(all_trace_loss_pair), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         end if
 #endif
          if (rank == 0) then
             call analyze_tddft_modes(omega, all_xi, all_trace_loss, response_eta, mode_options, mode_result)
-            write(filename, '(a,"_modes.dat")') trim(config%output_prefix)
+            if (pair_backend .and. legacy_backend) then
+               write(filename, '(a,"_legacy_modes.dat")') trim(config%output_prefix)
+            else if (pair_backend) then
+               write(filename, '(a,"_pair_modes.dat")') trim(config%output_prefix)
+            else
+               write(filename, '(a,"_modes.dat")') trim(config%output_prefix)
+            end if
             call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
-            call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-               rank, has_soc, has_external_field)
+            if (legacy_backend) then
+               call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw')
+            else
+               call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+            end if
+            if (pair_backend .and. legacy_backend) then
+               call analyze_tddft_modes(omega, all_xi_pair, all_trace_loss_pair, response_eta, mode_options, mode_result)
+               write(filename, '(a,"_pair_modes.dat")') trim(config%output_prefix)
+               call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
+               call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+            end if
          end if
       end if
 
@@ -2286,21 +2382,99 @@ contains
          else
             write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
          end if
-         write(unit, '(a)') '# q_index q1 q2 q3 chi0_file'
+         if (pair_backend .and. legacy_backend) then
+            write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file pair_raw_dyson_file'
+         else if (pair_backend) then
+            write(unit, '(a)') '# q_index q1 q2 q3 chi0_file pair_raw_dyson_file'
+         else
+            write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file'
+         end if
          do iq = 1, nq
             write(chi0_filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
-            write(unit, '(i0,3(1x,es24.16),1x,a)') iq, config%q_points(:, iq), trim(chi0_filename)
+            if (pair_backend .and. legacy_backend) then
+               write(legacy_filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
+               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+               write(unit, '(i0,3(1x,es24.16),3(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
+                  trim(legacy_filename), trim(pair_filename)
+            else if (pair_backend) then
+               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+               write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(pair_filename)
+            else
+               write(legacy_filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
+               write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(legacy_filename)
+            end if
          end do
          close(unit)
       end if
    end subroutine post_processing_susceptibility
 
-   subroutine append_tddft_metadata(filename, config, iq, k_mesh, q_point, mpi_rank, has_soc, has_external_field)
+   !> Build the Q^- operators in the same ham_only coefficient representation
+   !> as the two endpoint eigensystems.  Q is intentionally retained per k:
+   !> replacing it by a site scalar or an average here would reintroduce the
+   !> projection/multiplication ordering defect repaired by WR-03.
+   subroutine build_pair_potential_operators(reciprocal_obj, k_points, signed_moments, q_point, operators)
+      type(reciprocal), intent(inout) :: reciprocal_obj
+      real(rp), intent(in) :: k_points(:, :), signed_moments(:), q_point(3)
+      complex(rp), allocatable, intent(out) :: operators(:, :, :, :)
+      complex(rp), allocatable :: qminus(:, :), qplus(:, :)
+      integer :: nmat, ik, isite
+      logical :: supported
+      character(len=160) :: reason
+
+      if (size(k_points, 1) /= 3 .or. size(signed_moments) /= reciprocal_obj%lattice%nrec) then
+         call g_logger%fatal('[calculation.build_pair_potential_operators]: incompatible k-point or signed-moment shape.', &
+            __FILE__, __LINE__)
+      end if
+      nmat = 2*norb*reciprocal_obj%lattice%nrec
+      allocate(operators(nmat, nmat, reciprocal_obj%lattice%nrec, size(k_points, 2)), qminus(nmat, nmat), qplus(nmat, nmat))
+      operators = cmplx(0.0_rp, 0.0_rp, rp)
+      do ik = 1, size(k_points, 2)
+         do isite = 1, reciprocal_obj%lattice%nrec
+            call reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, k_points(:, ik), signed_moments(isite), &
+               qminus, qplus, supported, reason, q_point)
+            if (.not. supported) then
+               call g_logger%fatal('[calculation.build_pair_potential_operators]: pair-potential construction rejected: '// &
+                  trim(reason), __FILE__, __LINE__)
+            end if
+            operators(:, :, isite, ik) = qminus
+         end do
+      end do
+      deallocate(qminus, qplus)
+   end subroutine build_pair_potential_operators
+
+   subroutine append_pair_goldstone_diagnostics(filename, legacy_diagnostics, diagnostics)
+      character(len=*), intent(in) :: filename
+      type(tddft_goldstone_diagnostics), intent(in) :: legacy_diagnostics
+      type(tddft_goldstone_diagnostics), intent(in) :: diagnostics
+      integer :: unit, ios
+
+      open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+      if (ios /= 0) call g_logger%fatal('[calculation.append_pair_goldstone_diagnostics]: cannot append pair diagnostics', &
+         __FILE__, __LINE__)
+      write(unit, '(a)') '# pair_potential_raw_goldstone_begin'
+      write(unit, '(a,es24.16)') '# legacy_site_scalar_raw_residual = ', legacy_diagnostics%residual
+      write(unit, '(a,es24.16)') '# legacy_site_scalar_raw_magnetization_overlap = ', legacy_diagnostics%magnetization_overlap
+      write(unit, '(a,l1)') '# pair_potential_raw_available = ', diagnostics%available
+      write(unit, '(a,es24.16)') '# pair_potential_raw_residual = ', diagnostics%residual
+      write(unit, '(a,2(1x,es24.16))') '# pair_potential_raw_closest_eigenvalue = ', real(diagnostics%closest_eigenvalue, rp), &
+         aimag(diagnostics%closest_eigenvalue)
+      write(unit, '(a,es24.16)') '# pair_potential_raw_magnetization_overlap = ', diagnostics%magnetization_overlap
+      write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
+      write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
+      write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
+      write(unit, '(a)') '# pair_potential_raw_goldstone_end'
+      close(unit)
+   end subroutine append_pair_goldstone_diagnostics
+
+   subroutine append_tddft_metadata(filename, config, iq, k_mesh, q_point, mpi_rank, has_soc, has_external_field, &
+      reciprocal_mode, xi_backend_label)
       character(len=*), intent(in) :: filename
       type(tddft_config), intent(in) :: config
       integer, intent(in) :: iq, k_mesh(3), mpi_rank
       real(rp), intent(in) :: q_point(3)
       logical, intent(in) :: has_soc, has_external_field
+      character(len=*), intent(in) :: reciprocal_mode
+      character(len=*), intent(in) :: xi_backend_label
       integer :: unit, ios
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
@@ -2308,6 +2482,18 @@ contains
       write(unit, '(a)') '# production_metadata_begin'
       write(unit, '(a,a)') '# channel = ', trim(config%channel)
       write(unit, '(a,a)') '# chi0_backend = ', trim(config%chi0_backend)
+      write(unit, '(a,a)') '# xi_backend_requested = ', trim(config%xi_backend)
+      write(unit, '(a,a)') '# xi_backend_output = ', trim(xi_backend_label)
+      if (index(xi_backend_label, 'pair_potential') > 0) then
+         write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
+         write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
+         write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
+         write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
+      else
+         write(unit, '(a)') '# pair_potential_provenance = not used by this output'
+         write(unit, '(a)') '# signed_moment_source = legacy scalar comparison uses magnitude; signed population retained for pair route'
+         write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
+      end if
       write(unit, '(a,a)') '# response_projection = ', trim(config%response_projection)
       write(unit, '(a,a)') '# q_mode = ', trim(config%q_mode)
       write(unit, '(a,a)') '# q_coordinates = ', trim(config%q_coordinates)
@@ -2327,6 +2513,7 @@ contains
       write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
       write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
       write(unit, '(a,l1)') '# sum_rule_dynamic_kernel_applied = ', .false.
+      write(unit, '(a,l1)') '# goldstone_correction_applied = ', .false.
       write(unit, '(a,l1)') '# spin_orbit_present = ', has_soc
       write(unit, '(a,l1)') '# external_symmetry_breaking_field_present = ', has_external_field
       write(unit, '(a,5(1x,l1))') '# output_chi0 output_xi output_chi output_modes output_stoner =', &

@@ -14,6 +14,7 @@ program test_tddft_config
    call test_longitudinal_input()
    call test_full_input()
    call test_green_input()
+   call test_xi_backend_input()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
@@ -113,6 +114,21 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_green_input
+
+   subroutine test_xi_backend_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " xi_backend = 'compare', output_xi = .true., output_chi = .true."
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('pair-potential shadow comparison backend is accepted', trim(config%xi_backend) == 'compare')
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_xi_backend_input
 
    subroutine assert_true(label, condition)
       character(len=*), intent(in) :: label

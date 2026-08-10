@@ -41,9 +41,22 @@ def test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_w
     assert "trim(chi0_filename)" in source
 
 
+def test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi() -> None:
+    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    assert "config%xi_backend == 'compare'" in source
+    assert "build_pair_potential_operators" in source
+    assert "build_direct_xi_from_k_dependent_eigenpairs" in source
+    assert "enhance_tddft_susceptibility_from_xi" in source
+    assert '_legacy_dyson.dat' in source
+    assert '_pair_dyson.dat' in source
+    assert "pair_potential_raw_residual" in source
+    assert "goldstone_correction_applied = " in source
+
+
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
     test_response_reconstructs_restart_site_moments_before_alsda_kernel()
     test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed()
+    test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
     print("RESULT: PASS")

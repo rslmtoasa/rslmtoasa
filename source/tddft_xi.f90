@@ -4,8 +4,9 @@
 !> @brief Direct kernel-weighted self-enhancement operator from eigenpairs.
 !>
 !> This module deliberately accepts weighted electronic-space operators Q_b
-!> rather than a response-space kernel.  It is not wired into production
-!> dispatch until the LMTO representation of Q has passed its rotation oracle.
+!> rather than a response-space kernel.  The k-resolved entry point is used by
+!> the production pair-potential workflow: Q_b(k,q) is kept in the active
+!> LMTO representation until after its transition matrix elements are formed.
 module tddft_xi_mod
    use precision_mod, only: rp
    use response_vertices_mod, only: response_channel, response_transition_vertex, weighted_transition_vertex
@@ -21,6 +22,7 @@ module tddft_xi_mod
    end type tddft_direct_xi_result
 
    public :: build_direct_xi_from_eigenpairs
+   public :: build_direct_xi_from_k_dependent_eigenpairs
 
 contains
 
@@ -131,6 +133,109 @@ contains
       end if
       deallocate(left_vertex, right_vertex)
    end subroutine build_direct_xi_from_eigenpairs
+
+   !> K-resolved variant of the direct construction.  The last dimension of
+   !> `weighted_right_operators` is the same k index as the eigenpairs, so a
+   !> finite-q pair-potential matrix is never replaced by a site scalar or a
+   !> k-averaged operator before the Lehmann sum.
+   subroutine build_direct_xi_from_k_dependent_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+      eigenvectors_kq, site_orbital_counts, left_channels, weighted_right_operators, omega, options, result)
+      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
+      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:)
+      complex(rp), intent(in) :: weighted_right_operators(:, :, :, :)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_direct_xi_result), intent(out) :: result
+
+      integer :: nk, nbands, nspinor, nleft, nright, nw, ik, n, m, iw, npairs, batch_size
+      integer :: band_first, band_last
+      real(rp) :: weight_sum, occupation_difference, transition_energy, prefactor, t_start, t_stop
+      complex(rp) :: denominator
+      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+      complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
+      real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+
+      nk = size(k_weights); nbands = size(eigenvalues_k, 1); nspinor = 2*sum(site_orbital_counts)
+      nleft = size(left_channels); nright = size(weighted_right_operators, 3); nw = size(omega)
+      call validate_direct_xi_inputs(nk, nbands, nspinor, nleft, nright, nw, k_weights, eigenvalues_k, eigenvectors_k, &
+         eigenvalues_kq, eigenvectors_kq, weighted_right_operators(:, :, :, 1), options)
+      if (size(weighted_right_operators, 4) /= nk) then
+         error stop 'build_direct_xi_from_k_dependent_eigenpairs: operator k dimension is incompatible'
+      end if
+      band_first = options%band_first; band_last = options%band_last
+      if (band_last == 0) band_last = nbands
+      if (band_first < 1 .or. band_last < band_first .or. band_last > nbands) then
+         error stop 'build_direct_xi_from_k_dependent_eigenpairs: invalid selected band window'
+      end if
+      weight_sum = sum(k_weights)
+      allocate(result%xi(nleft, nright, nw)); result%xi = cmplx(0.0_rp, 0.0_rp, rp)
+      call set_direct_xi_metadata(result%metadata, options, nk, nbands, band_first, band_last, weight_sum)
+      result%metadata%backend = 'direct_xi_k_resolved_eigenpairs'
+      allocate(left_vertex(nleft), right_vertex(nright))
+
+      if (options%use_batched_accumulation) then
+         batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+         result%metadata%transition_batch_size = batch_size
+         allocate(left_batch(nleft, batch_size), right_batch(nright, batch_size), weighted_left(nleft, batch_size), &
+            denominator_batch(batch_size), occupation_batch(batch_size), transition_energy_batch(batch_size))
+         do ik = 1, nk
+            prefactor = k_weights(ik)/weight_sum; npairs = 0
+            do n = band_first, band_last
+               do m = band_first, band_last
+                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
+                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
+                     options%fermi_level, options%electronic_temperature)
+                  if (options%occupation_prune_tolerance > 0.0_rp) then
+                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
+                  end if
+                  npairs = npairs + 1
+                  call cpu_time(t_start)
+                  call build_transition_vertices(left_channels, weighted_right_operators(:, :, :, ik), site_orbital_counts, &
+                     eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik), left_batch(:, npairs), right_batch(:, npairs))
+                  call cpu_time(t_stop)
+                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
+                  occupation_batch(npairs) = occupation_difference
+                  transition_energy_batch(npairs) = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
+                  if (npairs == batch_size) then
+                     call accumulate_direct_xi_batch(result%xi, omega, options%eta, prefactor, left_batch, right_batch, &
+                        occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
+                     npairs = 0
+                  end if
+               end do
+            end do
+            if (npairs > 0) call accumulate_direct_xi_batch(result%xi, omega, options%eta, prefactor, left_batch, right_batch, &
+               occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
+         end do
+         deallocate(left_batch, right_batch, weighted_left, denominator_batch, occupation_batch, transition_energy_batch)
+      else
+         do ik = 1, nk
+            prefactor = k_weights(ik)/weight_sum
+            do n = band_first, band_last
+               do m = band_first, band_last
+                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
+                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
+                     options%fermi_level, options%electronic_temperature)
+                  if (options%occupation_prune_tolerance > 0.0_rp) then
+                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
+                  end if
+                  call cpu_time(t_start)
+                  call build_transition_vertices(left_channels, weighted_right_operators(:, :, :, ik), site_orbital_counts, &
+                     eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik), left_vertex, right_vertex)
+                  call cpu_time(t_stop)
+                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
+                  transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
+                  do iw = 1, nw
+                     denominator = cmplx(omega(iw) + transition_energy, options%eta, rp)
+                     result%xi(:, :, iw) = result%xi(:, :, iw) + prefactor*occupation_difference* &
+                        outer_product(left_vertex, right_vertex)/denominator
+                  end do
+               end do
+            end do
+         end do
+      end if
+      deallocate(left_vertex, right_vertex)
+   end subroutine build_direct_xi_from_k_dependent_eigenpairs
 
    subroutine build_transition_vertices(left_channels, operators, site_orbital_counts, n_spinor, m_spinor, left, right)
       type(response_channel), intent(in) :: left_channels(:)

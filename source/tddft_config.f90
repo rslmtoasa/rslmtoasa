@@ -21,6 +21,11 @@ module tddft_config_mod
       logical :: enabled
       character(len=16) :: channel
       character(len=16) :: chi0_backend
+      !> Self-enhancement construction.  The site-scalar route is retained as
+      !> the backwards-compatible diagnostic baseline; pair_potential is the
+      !> validated ham_only LMTO tangent route and compare writes both raw
+      !> results from the same response inputs.
+      character(len=24) :: xi_backend
       character(len=16) :: response_projection
       character(len=16) :: q_mode
       character(len=16) :: q_coordinates
@@ -65,6 +70,7 @@ contains
       this%enabled = .true.
       this%channel = 'transverse'
       this%chi0_backend = 'eigenpairs'
+      this%xi_backend = 'legacy_site_scalar'
       this%response_projection = 'site'
       this%q_mode = 'list'
       this%q_coordinates = 'direct'
@@ -109,6 +115,7 @@ contains
       enabled = this%enabled
       channel = this%channel
       chi0_backend = this%chi0_backend
+      xi_backend = this%xi_backend
       response_projection = this%response_projection
       q_mode = this%q_mode
       q_coordinates = this%q_coordinates
@@ -150,6 +157,7 @@ contains
       this%enabled = enabled
       this%channel = lower(trim(channel))
       this%chi0_backend = lower(trim(chi0_backend))
+      this%xi_backend = lower(trim(xi_backend))
       this%response_projection = lower(trim(response_projection))
       this%q_mode = lower(trim(q_mode))
       this%q_coordinates = lower(trim(q_coordinates))
@@ -229,6 +237,11 @@ contains
       end if
       if (this%chi0_backend /= 'eigenpairs' .and. this%chi0_backend /= 'green') then
          call g_logger%fatal("[tddft_config]: chi0_backend must be 'eigenpairs' or 'green'", __FILE__, __LINE__)
+      end if
+      if (this%xi_backend /= 'legacy_site_scalar' .and. this%xi_backend /= 'pair_potential' .and. &
+          this%xi_backend /= 'compare') then
+         call g_logger%fatal("[tddft_config]: xi_backend must be 'legacy_site_scalar', 'pair_potential', or 'compare'", &
+            __FILE__, __LINE__)
       end if
       if (this%response_projection /= 'site') then
          call g_logger%fatal("[tddft_config]: only response_projection='site' is currently implemented", __FILE__, __LINE__)

@@ -62,6 +62,7 @@ module tddft_goldstone_mod
    public :: build_site_projected_k_perp
    public :: construct_transverse_xi
    public :: evaluate_goldstone
+   public :: evaluate_raw_xi_diagnostics
    public :: write_goldstone_diagnostics_text
 
 contains
@@ -146,6 +147,27 @@ contains
       call calculate_diagnostics(result%xi_corrected, magnetization, result%corrected, bare_spectral_gap)
       result%sum_rule_applied = .true.
    end subroutine evaluate_goldstone
+
+   !> Diagnose an already assembled self-enhancement operator.  This keeps the
+   !> pair-potential route out of the legacy site-scalar K interface while
+   !> retaining exactly the same raw residual/eigenmode definitions.
+   subroutine evaluate_raw_xi_diagnostics(xi, magnetization, diagnostics, bare_spectral_gap)
+      complex(rp), intent(in) :: xi(:, :), magnetization(:)
+      type(tddft_goldstone_diagnostics), intent(out) :: diagnostics
+      real(rp), intent(in), optional :: bare_spectral_gap
+
+      if (size(xi, 1) /= size(xi, 2) .or. size(magnetization) /= size(xi, 1)) then
+         error stop 'evaluate_raw_xi_diagnostics: Xi and magnetization dimensions are incompatible'
+      end if
+      if (sqrt(sum(abs(magnetization)**2)) <= tiny(1.0_rp)) then
+         error stop 'evaluate_raw_xi_diagnostics: magnetization is zero'
+      end if
+      if (present(bare_spectral_gap)) then
+         call calculate_diagnostics(xi, magnetization, diagnostics, bare_spectral_gap)
+      else
+         call calculate_diagnostics(xi, magnetization, diagnostics)
+      end if
+   end subroutine evaluate_raw_xi_diagnostics
 
    !> Write raw diagnostics first.  Corrected diagnostics are an additional
    !> record, never a replacement, so output remains useful for convergence

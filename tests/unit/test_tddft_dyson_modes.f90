@@ -4,7 +4,7 @@
 program test_tddft_dyson_modes
    use precision_mod, only: rp
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
-      solve_tddft_dyson_frequency, write_tddft_dyson_text
+      enhance_tddft_susceptibility_from_xi, solve_tddft_dyson_frequency, write_tddft_dyson_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, &
       extrapolate_linewidth_zero_eta, TDDFT_MODE_COHERENT
    implicit none
@@ -14,6 +14,7 @@ program test_tddft_dyson_modes
 
    failed = .false.
    call test_dyson_collective_pole_and_loss()
+   call test_direct_xi_dyson_equivalence()
    call test_overlap_branch_tracking_and_fit_policy()
    call test_multi_eta_extrapolation()
 
@@ -58,6 +59,26 @@ contains
       call check_output_contains('unit_tddft_dyson.out', 'loss')
       call delete_output('unit_tddft_dyson.out')
    end subroutine test_dyson_collective_pole_and_loss
+
+   subroutine test_direct_xi_dyson_equivalence()
+      integer, parameter :: nw = 5
+      complex(rp) :: chi_ks(2, 2, nw), kernel(2, 2), xi(2, 2, nw), u(2)
+      real(rp) :: omega(nw)
+      type(tddft_dyson_options) :: options
+      type(tddft_dyson_result) :: from_kernel, from_xi
+      integer :: iw
+
+      call make_collective_fixture(omega, chi_ks, kernel, u)
+      do iw = 1, nw
+         xi(:, :, iw) = matmul(chi_ks(:, :, iw), kernel)
+      end do
+      call enhance_tddft_susceptibility(chi_ks, kernel, 0.001_rp, options, from_kernel)
+      call enhance_tddft_susceptibility_from_xi(chi_ks, xi, 0.001_rp, options, from_xi)
+      call check_complex_matrix('direct-Xi Dyson solve equals kernel route for uniform oracle', &
+         reshape(from_xi%chi, [2, 2*nw]), reshape(from_kernel%chi, [2, 2*nw]))
+      call check_complex_matrix('direct-Xi Dyson retains supplied Xi without reconstructing K', &
+         reshape(from_xi%xi, [2, 2*nw]), reshape(xi, [2, 2*nw]))
+   end subroutine test_direct_xi_dyson_equivalence
 
    subroutine test_overlap_branch_tracking_and_fit_policy()
       integer, parameter :: nw = 81, nq = 2
