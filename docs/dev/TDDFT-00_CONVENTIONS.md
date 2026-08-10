@@ -97,9 +97,11 @@ the constraining field is added.  The site projection is
 K_perp(site) = integral Bxc_energy(r) m(r) dr / (2 M_site^2),
 ```
 
-which follows by restricting a transverse `P_site sigma` fluctuation to the
-converged radial spin shape; `M_site` is exactly that response-projector
-population.  The response variables are `m+/- = mx +/- i my`, while the
+which is the **legacy site-scalar projection**. It is retained only as an
+auditable comparison path: projection and multiplication by spatially/orbitally
+varying `Bxc` do not commute, so it is not a Ward-consistent material kernel.
+The frozen pair-potential replacement is documented in
+`TDDFT_WARD_REPAIR_BLUEPRINT.md`. The response variables are `m+/- = mx +/- i my`, while the
 Hamiltonian couples as `(delta B+ m- + delta B- m+)/2`; this supplies the
 explicit factor one half.  No `mu_B` factor is introduced.  The provider retains the radial spin
 population separately from `potential%mtot`, the latter supplying `M_site`.

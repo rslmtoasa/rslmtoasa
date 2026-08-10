@@ -1,0 +1,135 @@
+# TDDFT Ward-repair blueprint
+
+## Status and scope
+
+This document freezes the convention contract for the Ward-identity repair.
+It applies only to the CPU, collinear, no-SOC transverse response with
+`reciprocal_mode='ham_only'`. It does not change the current production
+spectra: the existing site-scalar kernel remains a legacy comparison route
+until the pair-potential construction and its LMTO representation oracle are
+implemented and validated.
+
+The current `P_site sigma` coefficient-space vertices are not physical
+operators for a generalized eigenproblem `H c = epsilon S c` without a
+derived metric representation (and, where relevant, a `delta S` term).
+Accordingly, `generalized_overlap_proxy` and `generalized_overlap_kanpur` are
+outside this repair slice and must be rejected by the future pair-potential
+route rather than treated as supported.
+
+## Frozen transverse convention
+
+The response coordinates and vertices are unhalved:
+
+\[
+m^\pm=m_x\pm i m_y,\qquad
+\sigma^\pm=\sigma_x\pm i\sigma_y.
+\]
+
+Thus `RESPONSE_PLUS` and `RESPONSE_MINUS` have spin-flip matrix element two.
+The magnetic Hamiltonian is
+
+\[
+H_{\rm mag}=B_x\sigma_x+B_y\sigma_y+B_z\sigma_z
+=\tfrac12(B^-\sigma^+ + B^+\sigma^-)+B_z\sigma_z.
+\]
+
+For a collinear ground state along `z`, LSDA/ALSDA rotational invariance gives
+
+\[
+\delta B^+(\mathbf r)=\frac{B_{\rm xc}(\mathbf r)}{m_z(\mathbf r)}
+\delta m^+(\mathbf r).
+\]
+
+The corresponding circular transverse kernel is therefore
+
+\[
+\kappa^{-+}(\mathbf r)=\frac{B_{\rm xc}(\mathbf r)}{2m_z(\mathbf r)}.
+\]
+
+The factor one half belongs to the unhalved circular convention. It must not
+be copied to Cartesian coordinates: the Cartesian transverse derivative is
+`Bxc/mz`, twice the circular scalar.
+
+## Magnetization-shape coordinate and pair potential
+
+For site `a`, use the converged signed collinear magnetization shape
+
+\[
+g_a(\mathbf r)=\begin{cases}m_z(\mathbf r)/M_a,&\mathbf r\in\Omega_a,\\
+0,&\text{otherwise},\end{cases}\qquad
+M_a=\int_{\Omega_a}m_z(\mathbf r)\,d\mathbf r.
+\]
+
+An input coordinate has
+
+\[
+\delta m^+(\mathbf r)=\sum_a g_a(\mathbf r)\delta M_a^+.
+\]
+
+Its kernel-weighted, or pair-potential, operator is
+
+\[
+\hat Q_a^-=g_a(\mathbf r)\kappa^{-+}(\mathbf r)\sigma^-
+=\frac{B_{\rm xc}(\mathbf r)}{2M_a}\sigma^-\,\mathbf1_{\Omega_a}.
+\]
+
+`Bxc(r)` must remain an orbital/radial operator until matrix elements in the
+active LMTO representation are evaluated. Replacing it with
+`K_site * P_site sigma_minus` is only equivalent in a deliberately uniform
+two-level oracle, not in a general material.
+
+## Direct self-enhancement operator
+
+Let
+
+\[
+V^+_{a,nm}=\langle n\mathbf k|P_a\sigma^+|m\mathbf k+\mathbf q\rangle,
+\qquad
+W^-_{b,mn}=\langle m\mathbf k+\mathbf q|Q_b^-|n\mathbf k\rangle.
+\]
+
+The direct self-enhancement operator is
+
+\[
+\Xi_{ab}(\mathbf q,\omega)=\sum_{\mathbf k,n,m}w_{\mathbf k}
+\frac{f_{n\mathbf k}-f_{m\mathbf k+\mathbf q}}
+{\omega+\epsilon_{n\mathbf k}-\epsilon_{m\mathbf k+\mathbf q}+i\eta}
+V^+_{a,nm}W^-_{b,mn}.
+\]
+
+The observable bare response retains its ordinary right vertex `V^-`; the
+dressed response is evaluated in the correct ordering as
+
+\[
+\chi=(I-\Xi)^{-1}\chi_{\rm KS}.
+\]
+
+No separately truncated `K` is inferred by inverting `chi_KS`.
+
+## Raw Ward identity
+
+For a rigid infinitesimal rotation, `delta M_a^+=M_a theta`, and therefore
+
+\[
+\sum_a M_a Q_a^-=\tfrac12B_{\rm xc}(\mathbf r)\sigma^-.
+\]
+
+When the same self-consistent spin-dependent operator is represented in the
+eigensolver and response, the uncorrected static result obeys
+
+\[
+\Xi(\mathbf0,0)\mathbf M=\mathbf M,\qquad
+r_G=\frac{\|\Xi\mathbf M-\mathbf M\|_2}{\|\mathbf M\|_2}=0.
+\]
+
+This raw identity is a release gate. A later controlled correction may be
+reported beside it, but can never substitute for it.
+
+## WR-00 executable evidence
+
+`UnitTddftWardConventions` uses analytic two-level and two-orbital oracles.
+It pins the unhalved circular matrices, the half in `Q^-`, Cartesian/circular
+Dyson equivalence, the uniform-kernel reduction `Xi=chi_KS*K`, and the
+unequal-exchange negative control. For the latter, the exact weighted
+two-orbital vertex satisfies the Ward identity to numerical precision while
+the old site-averaged scalar kernel has a nonzero residual.
