@@ -13,6 +13,10 @@ is produced and reviewed.
   KS/Stoner and enhanced spectra, quadratic fitting, η extrapolation, all
   convergence-axis names, and read-only GBT/`Jij` comparison inputs.
 - [x] CI registration: `UnitTddftValidationCampaign` (`unit;tddft;validation;quick`).
+- [x] WR-07 Xi-mode evidence: `UnitTddftDysonModes` requires an interpolated
+  `Re(lambda_Xi)=1` crossing, records `Im(lambda_Xi)`, biorthogonal branch
+  continuity/conditioning, and mode-projected loss; total-trace peaks without
+  a crossing remain Stoner features.
 - [ ] Raw no-SOC material `q=0, omega=0` residual and unity-mode/magnetization
   overlap are stable under response-basis, k-mesh, and band-window sweeps.
 - [ ] Stable three-route small-q stiffness for a real material.
@@ -44,6 +48,15 @@ representation failure, not a value to clip or normalize away. In `correct`
 mode the code writes both products and then stops. If the raw and corrected
 minima are both negative, the correction did not cause the failure; rerun with
 `goldstone_mode = 'diagnose'` only to complete a raw diagnostic sweep.
+
+Mode files retain the legacy `candidate` and optional Lorentzian `fit` rows
+for compatibility, but physical classification is in their `crossing` rows.
+Those rows report whether an interpolated `Re(lambda_Xi)=1` crossing exists,
+the crossing frequency, `Im(lambda_Xi)`, biorthogonal q-continuity overlap,
+eigenvalue step, mode-projected enhanced loss, eigenpair condition number,
+and an exceptional-point warning. A total trace-loss peak alone is never a
+collective-mode claim; a large `Im(lambda_Xi)` crossing remains a recorded
+strongly damped/incoherent mode.
 
 ## Goldstone input combinations
 

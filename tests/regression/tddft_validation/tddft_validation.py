@@ -85,6 +85,7 @@ def read_goldstone(path: Path) -> dict[str, float | bool]:
 def read_mode_fits(path: Path) -> dict[int, dict[str, float | bool | str]]:
     fits: dict[int, dict[str, float | bool | str]] = {}
     candidates: set[int] = set()
+    crossings: dict[int, dict[str, float | bool]] = {}
     for columns in _records(path):
         if columns[0] == "candidate" and len(columns) >= 7:
             candidates.add(int(columns[1]))
@@ -97,8 +98,21 @@ def read_mode_fits(path: Path) -> dict[int, dict[str, float | bool | str]]:
                 "relative_residual": float(columns[6]),
                 "reason": " ".join(columns[7:]),
             }
-    if not fits or candidates != set(fits):
-        raise ValidationError(f"{path}: candidate/mode-fit records are incomplete")
+        elif columns[0] == "crossing" and len(columns) >= 10:
+            crossings[int(columns[1])] = {
+                "present": columns[2].upper().startswith("T"),
+                "omega": float(columns[3]),
+                "imaginary_part": float(columns[4]),
+                "branch_overlap": float(columns[5]),
+                "eigenvalue_step": float(columns[6]),
+                "projected_weight": float(columns[7]),
+                "condition_number": float(columns[8]),
+                "exceptional_warning": columns[9].upper().startswith("T"),
+            }
+    if not fits or candidates != set(fits) or candidates != set(crossings):
+        raise ValidationError(f"{path}: candidate/crossing/mode-fit records are incomplete")
+    for index, fit in fits.items():
+        fit["crossing"] = crossings[index]
     return fits
 
 
@@ -166,6 +180,12 @@ def analyse_campaign(manifest_path: Path) -> dict[str, Any]:
         fit = modes.get(index)
         if fit is None or not fit["accepted"]:
             raise ValidationError(f"q index {index}: no accepted coherent-mode fit; do not use it for stiffness")
+        crossing = fit["crossing"]
+        assert isinstance(crossing, dict)
+        if not crossing["present"] or crossing["exceptional_warning"]:
+            raise ValidationError(f"q index {index}: fit lacks a well-conditioned Xi unity crossing")
+        if float(crossing["projected_weight"]) <= 0.0:
+            raise ValidationError(f"q index {index}: Xi crossing has no positive mode-projected enhanced weight")
         q_norms.append(_q_norm(point["q_direct"]))
         centers.append(float(fit["center"]))
     stiffness = fit_stiffness(q_norms, centers)

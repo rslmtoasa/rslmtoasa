@@ -9,7 +9,7 @@
 - [x] WR-04 — Implement the real static limit and ground-state provenance
 - [x] WR-05 — Repair Goldstone option semantics and controlled correction
 - [x] WR-06 — Repair Cartesian/circular factors and unsupported-route gates
-- [ ] WR-07 — Replace heuristic mode classification
+- [x] WR-07 — Replace heuristic mode classification
 - [ ] WR-08 — Pass Fe/Ni material gates and switch the validated default
 
 ## WR-00 evidence
@@ -192,6 +192,32 @@
   UnitTddftConfig -j4`; `ctest --test-dir build-gfortran13
   --output-on-failure -L tddft` (16/16 passed); `python3 tests/unit/test_tddft_dispatch.py` and
   `python3 tests/regression/tddft_validation/test_validation.py` (both pass).
+
+## WR-07 evidence
+
+- `tddft_modes_mod` now obtains left and right Xi eigenvectors with LAPACK
+  `zgeev`, biorthogonally normalizes accepted pairs, and records their
+  condition number.  It orders branches locally across the frequency grid
+  using biorthogonal overlap plus eigenvalue continuity, then selects a
+  q-continuous branch only from interpolated `Re(lambda_Xi)=1` crossings.
+  Ill-conditioned pairs are warned about and never forced through an apparent
+  exceptional point.
+- `*_modes.dat` now keeps legacy candidate/fit records and adds a `crossing`
+  record with crossing frequency, `Im(lambda_Xi)`, q overlap, eigenvalue step,
+  mode-projected enhanced loss, eigenpair condition number, and exceptional
+  warning.  A total-loss peak without a crossing is explicitly Stoner; a
+  crossing with large imaginary part is explicitly damped/incoherent.
+- `UnitTddftDysonModes` covers an avoided two-mode crossing, a non-normal Xi
+  requiring left/right vectors and a nonzero projected loss, q-continuous
+  branch selection, a Stoner peak without a unity crossing, a strongly damped
+  unity crossing, and frequency-grid/eta-ladder crossing consistency.  The
+  existing controlled Lorentzian and zero-eta linewidth tests remain
+  secondary diagnostics.
+- gfortran-13 evidence (2026-08-10): `cmake --build build-gfortran13 --target
+  UnitTddftDysonModes UnitTddftCpuProfile UnitTddftConfig -j2`; `ctest
+  --test-dir build-gfortran13 --output-on-failure -L tddft` (16/16 passed).
+  No material Fe/Ni calculation or eta ladder is claimed here; those remain
+  WR-08 gates.
 
 ## Global gates
 

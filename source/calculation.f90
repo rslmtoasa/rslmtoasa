@@ -1996,9 +1996,9 @@ contains
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
-      complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
+      complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :), all_loss(:, :, :, :)
       complex(rp), allocatable :: pair_operators(:, :, :, :), pair_operators_static(:, :, :, :), &
-         pair_operators_corrected(:, :, :, :), all_xi_pair(:, :, :, :)
+         pair_operators_corrected(:, :, :, :), all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
       real(rp), allocatable :: signed_moments(:)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
@@ -2320,12 +2320,14 @@ contains
       dyson_options%diagonalize_xi = config%output_modes
       dyson_options%diagonalize_loss = config%output_modes
       if (config%output_modes) then
-         allocate(all_xi(nresponse, nresponse, nw, nq), all_trace_loss(nw, nq))
+         allocate(all_xi(nresponse, nresponse, nw, nq), all_loss(nresponse, nresponse, nw, nq), all_trace_loss(nw, nq))
          all_xi = cmplx(0.0_rp, 0.0_rp, rp)
+         all_loss = cmplx(0.0_rp, 0.0_rp, rp)
          all_trace_loss = 0.0_rp
          if (pair_backend .and. legacy_backend) then
-            allocate(all_xi_pair(nresponse, nresponse, nw, nq), all_trace_loss_pair(nw, nq))
+            allocate(all_xi_pair(nresponse, nresponse, nw, nq), all_loss_pair(nresponse, nresponse, nw, nq), all_trace_loss_pair(nw, nq))
             all_xi_pair = cmplx(0.0_rp, 0.0_rp, rp)
+            all_loss_pair = cmplx(0.0_rp, 0.0_rp, rp)
             all_trace_loss_pair = 0.0_rp
          end if
       end if
@@ -2457,13 +2459,16 @@ contains
             if (config%output_modes) then
                if (legacy_backend) then
                   all_xi(:, :, :, iq) = dyson_result%xi
+                  all_loss(:, :, :, iq) = dyson_result%loss
                   all_trace_loss(:, iq) = dyson_result%trace_spectral_weight
                else
                   all_xi(:, :, :, iq) = dyson_pair_result%xi
+                  all_loss(:, :, :, iq) = dyson_pair_result%loss
                   all_trace_loss(:, iq) = dyson_pair_result%trace_spectral_weight
                end if
                if (pair_backend .and. legacy_backend) then
                   all_xi_pair(:, :, :, iq) = dyson_pair_result%xi
+                  all_loss_pair(:, :, :, iq) = dyson_pair_result%loss
                   all_trace_loss_pair(:, iq) = dyson_pair_result%trace_spectral_weight
                end if
             end if
@@ -2479,14 +2484,16 @@ contains
       if (config%output_modes) then
 #ifdef USE_MPI
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi, size(all_xi), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, all_loss, size(all_loss), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss, size(all_trace_loss), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
          if (pair_backend .and. legacy_backend) then
             call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi_pair, size(all_xi_pair), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+            call MPI_ALLREDUCE(MPI_IN_PLACE, all_loss_pair, size(all_loss_pair), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
             call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss_pair, size(all_trace_loss_pair), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
          end if
 #endif
          if (rank == 0) then
-            call analyze_tddft_modes(omega, all_xi, all_trace_loss, response_eta, mode_options, mode_result)
+            call analyze_tddft_modes(omega, all_xi, all_trace_loss, response_eta, mode_options, mode_result, all_loss)
             if (pair_backend .and. legacy_backend) then
                write(filename, '(a,"_legacy_modes.dat")') trim(config%output_prefix)
             else if (pair_backend) then
@@ -2503,7 +2510,7 @@ contains
                   rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
             end if
             if (pair_backend .and. legacy_backend) then
-               call analyze_tddft_modes(omega, all_xi_pair, all_trace_loss_pair, response_eta, mode_options, mode_result)
+               call analyze_tddft_modes(omega, all_xi_pair, all_trace_loss_pair, response_eta, mode_options, mode_result, all_loss_pair)
                write(filename, '(a,"_pair_modes.dat")') trim(config%output_prefix)
                call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
