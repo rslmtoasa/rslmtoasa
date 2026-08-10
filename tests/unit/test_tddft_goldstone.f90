@@ -6,7 +6,8 @@ program test_tddft_goldstone
    use xc_response_kernel_mod, only: xc_response_kernel_provider
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, &
       tddft_goldstone_diagnostics, build_site_projected_k_perp, construct_transverse_xi, evaluate_goldstone, &
-      evaluate_raw_xi_diagnostics, write_goldstone_diagnostics_text
+      tddft_goldstone_column_correction, evaluate_raw_xi_diagnostics, build_goldstone_column_correction, &
+      rescale_xi_columns, spectral_weights_are_nonnegative, write_goldstone_diagnostics_text
    implicit none
 
    real(rp), parameter :: tol = 2.0e-12_rp
@@ -15,7 +16,8 @@ program test_tddft_goldstone
    failed = .false.
    call test_xc_provider_kernel_and_raw_diagnostics()
    call test_off_mode_only_constructs_xi()
-   call test_sum_rule_repair_preserves_raw_diagnostics()
+   call test_controlled_pair_column_correction()
+   call test_correction_rejections_and_spectral_control()
    call test_symmetry_breaking_disables_sum_rule()
    call test_raw_residual_convergence_controls()
    call test_signed_magnetization_diagnostics()
@@ -72,30 +74,52 @@ contains
       call assert_true('off mode does not apply a sum rule', .not. result%sum_rule_applied)
    end subroutine test_off_mode_only_constructs_xi
 
-   subroutine test_sum_rule_repair_preserves_raw_diagnostics()
-      type(xc_response_kernel_provider) :: provider
-      type(tddft_goldstone_options) :: options
-      type(tddft_goldstone_result) :: result
-      complex(rp) :: chi(2, 2)
+   subroutine test_controlled_pair_column_correction()
+      type(tddft_goldstone_column_correction) :: correction
+      complex(rp) :: xi(2, 2), corrected(2, 2)
+      complex(rp) :: moment(2)
 
-      call make_provider(provider, [2.0_rp, 1.0_rp], [3.0_rp, 4.0_rp])
-      chi = cmplx(0.0_rp, 0.0_rp, rp)
-      chi(1, 1) = cmplx(0.3_rp, 0.0_rp, rp)
-      chi(2, 2) = cmplx(0.2_rp, 0.0_rp, rp)
-      options%goldstone_mode = 'sum_rule'
-      call evaluate_goldstone(chi, provider, options, result)
+      xi = cmplx(0.0_rp, 0.0_rp, rp)
+      xi(1, 1) = 0.9_rp; xi(2, 2) = 0.95_rp
+      moment = [cmplx(2.0_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)]
+      call build_goldstone_column_correction(xi, moment, correction)
+      call assert_true('real static pair correction is accepted', correction%applied .and. .not. correction%rejected)
+      call assert_real_vector('one-site and multisite scales use the real static Xi', correction%scales, &
+         [1.0_rp/0.9_rp, 1.0_rp/0.95_rp])
+      call assert_real('corrected pair Xi restores Ward residual', correction%corrected%residual, 0.0_rp)
+      call rescale_xi_columns(xi, correction%scales, corrected)
+      call assert_true('correct mode changes dynamic Xi columns', maxval(abs(corrected-xi)) > 1.0e-6_rp)
+      call assert_real('raw pair Xi is retained', correction%raw%residual, sqrt((0.2_rp**2+0.05_rp**2)/5.0_rp))
+   end subroutine test_controlled_pair_column_correction
 
-      call assert_true('perturbed kernel has an exposed raw violation', result%raw%residual > 0.1_rp)
-      call assert_true('sum-rule correction is marked as applied', result%sum_rule_applied)
-      call assert_true('raw diagnostics survive correction', result%raw%available .and. size(result%raw%eigenvalues) == 2)
-      call assert_real('raw residual was not overwritten', result%raw%residual, sqrt(0.08_rp/5.0_rp))
-      call assert_real('sum-rule correction restores Goldstone condition', result%corrected%residual, 0.0_rp)
-      call assert_real('corrected unity eigenvalue distance', result%corrected%closest_eigenvalue_distance, 0.0_rp)
-      call assert_real_vector('documented static K_perp sum-rule correction', real(result%k_perp_sum_rule, rp), &
-         [1.0_rp/0.3_rp, 5.0_rp])
-      call write_goldstone_diagnostics_text('unit_goldstone_diagnostics.out', result)
-      call assert_output_has_raw_and_corrected_records('unit_goldstone_diagnostics.out')
-   end subroutine test_sum_rule_repair_preserves_raw_diagnostics
+   subroutine test_correction_rejections_and_spectral_control()
+      type(tddft_goldstone_column_correction) :: correction
+      complex(rp) :: xi(2, 2)
+      complex(rp) :: moment(2)
+
+      moment = [cmplx(1.0_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)]
+      xi = cmplx(0.0_rp, 0.0_rp, rp)
+      xi(:, 1) = [cmplx(0.5_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)]
+      xi(:, 2) = [cmplx(0.5_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)]
+      call build_goldstone_column_correction(xi, moment, correction)
+      call assert_true('rank-deficient static correction is rejected', correction%rejected .and. .not. correction%applied)
+
+      xi = cmplx(0.0_rp, 0.0_rp, rp); xi(1, 1) = 1.0_rp; xi(2, 2) = 1.0e-9_rp
+      call build_goldstone_column_correction(xi, moment, correction)
+      call assert_true('ill-conditioned static correction is rejected', correction%rejected)
+
+      xi = cmplx(0.0_rp, 0.0_rp, rp); xi(1, 1) = 1.0_rp; xi(2, 2) = 1.0_rp
+      moment(2) = cmplx(1.0e-14_rp, 0.0_rp, rp)
+      call build_goldstone_column_correction(xi, moment, correction)
+      call assert_true('small response moment correction is rejected', correction%rejected)
+
+      moment = [cmplx(1.0_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)]
+      xi = cmplx(0.0_rp, 0.0_rp, rp); xi(1, 1) = cmplx(0.95_rp, 1.0e-4_rp, rp); xi(2, 2) = 0.95_rp
+      call build_goldstone_column_correction(xi, moment, correction)
+      call assert_true('complex static correction is rejected', correction%rejected)
+      call assert_true('negative spectral-weight control is detected', .not. spectral_weights_are_nonnegative([-1.0e-4_rp]))
+      call assert_true('nonnegative spectral-weight control passes', spectral_weights_are_nonnegative([0.0_rp, 1.0e-8_rp]))
+   end subroutine test_correction_rejections_and_spectral_control
 
    subroutine test_symmetry_breaking_disables_sum_rule()
       type(xc_response_kernel_provider) :: provider
@@ -105,11 +129,11 @@ contains
 
       call make_provider(provider, [1.0_rp], [0.5_rp])
       chi(1, 1) = cmplx(0.5_rp, 0.0_rp, rp)
-      options%goldstone_mode = 'sum_rule'
+      options%goldstone_mode = 'correct'
       options%has_soc = .true.
       call evaluate_goldstone(chi, provider, options, result)
       call assert_true('SOC disables zero-gap enforcement', result%sum_rule_disabled_by_symmetry_breaking)
-      call assert_true('SOC does not apply sum rule', .not. result%sum_rule_applied)
+      call assert_true('SOC does not apply a legacy correction', .not. result%sum_rule_applied)
       call assert_true('SOC still reports raw diagnostics', result%raw%available)
 
       options%has_soc = .false.
@@ -213,32 +237,5 @@ contains
          failed = .true.
       end if
    end subroutine assert_true
-
-   subroutine assert_output_has_raw_and_corrected_records(filename)
-      character(len=*), intent(in) :: filename
-      character(len=256) :: line
-      logical :: saw_raw_value, saw_raw_vector, saw_corrected_value
-      integer :: unit, ios
-
-      saw_raw_value = .false.
-      saw_raw_vector = .false.
-      saw_corrected_value = .false.
-      open(newunit=unit, file=filename, status='old', action='read', iostat=ios)
-      if (ios /= 0) then
-         call assert_true('Goldstone diagnostic output was written', .false.)
-         return
-      end if
-      do
-         read(unit, '(a)', iostat=ios) line
-         if (ios /= 0) exit
-         if (index(line, 'raw_eigenvalue') > 0) saw_raw_value = .true.
-         if (index(line, 'raw_closest_eigenvector') > 0) saw_raw_vector = .true.
-         if (index(line, 'sum_rule_corrected_eigenvalue') > 0) saw_corrected_value = .true.
-      end do
-      close(unit, status='delete')
-      call assert_true('output preserves raw eigenvalues', saw_raw_value)
-      call assert_true('output preserves raw unity eigenvector', saw_raw_vector)
-      call assert_true('output includes corrected diagnostics separately', saw_corrected_value)
-   end subroutine assert_output_has_raw_and_corrected_records
 
 end program test_tddft_goldstone

@@ -7,14 +7,9 @@
 !> particular, this module never inspects hamiltonian%hxc, cx1, or another
 !> assembled Hamiltonian quantity: those are not a documented TDDFT kernel.
 !>
-!> The optional sum-rule repair is a *static, site-diagonal* correction.  For
-!> m_i /= 0 it chooses K_i^SR such that
-!>
-!>   chi_KS(0,0) diag(K^SR) m = m,
-!>
-!> i.e. K_i^SR = [chi_KS(0,0)^(-1) m]_i / m_i.  It is only permitted for a
-!> collinear calculation without SOC or an external symmetry-breaking field.
-!> Raw Xi and its diagnostics are always retained in the result.
+!> Goldstone correction is deliberately restricted to the Ward-consistent
+!> pair-potential route.  It rescales its right-hand columns from the real
+!> static Xi; it never injects a finite-eta inverse chi_KS as a kernel.
 module tddft_goldstone_mod
    use precision_mod, only: rp
    use xc_response_kernel_mod, only: xc_response_kernel_provider
@@ -24,7 +19,14 @@ module tddft_goldstone_mod
 
    integer, parameter, public :: GOLDSTONE_OFF = 0
    integer, parameter, public :: GOLDSTONE_DIAGNOSE = 1
-   integer, parameter, public :: GOLDSTONE_SUM_RULE = 2
+   integer, parameter, public :: GOLDSTONE_CORRECT = 2
+   ! Compatibility name for callers compiled against the pre-WR-05 module.
+   integer, parameter, public :: GOLDSTONE_SUM_RULE = GOLDSTONE_CORRECT
+   real(rp), parameter :: static_imaginary_tolerance = 1.0e-10_rp
+   real(rp), parameter :: minimum_moment_relative = 1.0e-10_rp
+   real(rp), parameter :: svd_rank_relative_tolerance = 1.0e-10_rp
+   real(rp), parameter :: maximum_condition_number = 1.0e8_rp
+   real(rp), parameter :: maximum_scale_change = 0.25_rp
 
    type, public :: tddft_goldstone_options
       ! Development default: report the raw Goldstone quality, never repair it.
@@ -66,10 +68,28 @@ module tddft_goldstone_mod
       logical :: sum_rule_disabled_by_symmetry_breaking = .false.
    end type tddft_goldstone_result
 
+   type, public :: tddft_goldstone_column_correction
+      logical :: requested = .false.
+      logical :: applied = .false.
+      logical :: rejected = .false.
+      character(len=160) :: decision = 'not requested'
+      real(rp), allocatable :: scales(:)
+      integer :: effective_rank = 0
+      real(rp) :: condition_number = -1.0_rp
+      real(rp) :: maximum_change = -1.0_rp
+      type(tddft_goldstone_diagnostics) :: raw
+      type(tddft_goldstone_diagnostics) :: corrected
+   end type tddft_goldstone_column_correction
+
    public :: build_site_projected_k_perp
    public :: construct_transverse_xi
    public :: evaluate_goldstone
    public :: evaluate_raw_xi_diagnostics
+   public :: build_goldstone_column_correction
+   public :: rescale_xi_columns
+   public :: rescale_pair_potential_columns
+   public :: spectral_weights_are_nonnegative
+   public :: append_goldstone_column_correction_text
    public :: write_goldstone_diagnostics_text
 
 contains
@@ -116,7 +136,7 @@ contains
       type(tddft_goldstone_options), intent(in) :: options
       type(tddft_goldstone_result), intent(out) :: result
       real(rp), intent(in), optional :: bare_spectral_gap
-      complex(rp), allocatable :: magnetization(:), rhs(:)
+      complex(rp), allocatable :: magnetization(:)
       integer :: mode
 
       call build_site_projected_k_perp(provider, result%k_perp)
@@ -134,7 +154,11 @@ contains
          call calculate_diagnostics(result%xi_raw, magnetization, result%raw, bare_spectral_gap)
       end if
 
-      if (mode /= GOLDSTONE_SUM_RULE) return
+      ! The legacy site-scalar route is now diagnose-only.  The production
+      ! `correct` path invokes build_goldstone_column_correction on direct
+      ! pair-potential Xi below; retaining this old inverse here would revive
+      ! exactly the misleading correction WR-05 replaces.
+      if (mode /= GOLDSTONE_CORRECT) return
       if (options%has_soc .or. options%has_external_field) then
          ! A zero-frequency transverse mode is not required if symmetry is
          ! broken physically.  Preserve raw diagnostics and disable repair.
@@ -142,17 +166,10 @@ contains
          return
       end if
       if (any(abs(magnetization) <= tiny(1.0_rp))) then
-         error stop 'evaluate_goldstone: sum-rule correction requires nonzero magnetization on every response site'
+         error stop 'evaluate_goldstone: legacy diagnostic requires nonzero magnetization on every response site'
       end if
 
-      allocate(rhs(size(magnetization)))
-      rhs = magnetization
-      call solve_linear_system(chi_ks_static, rhs)
-      allocate(result%k_perp_sum_rule(size(rhs)))
-      result%k_perp_sum_rule = rhs/magnetization
-      result%xi_corrected = construct_transverse_xi(chi_ks_static, result%k_perp_sum_rule)
-      call calculate_diagnostics(result%xi_corrected, magnetization, result%corrected, bare_spectral_gap)
-      result%sum_rule_applied = .true.
+      result%sum_rule_disabled_by_symmetry_breaking = .true.
    end subroutine evaluate_goldstone
 
    !> Diagnose an already assembled self-enhancement operator.  This keeps the
@@ -176,6 +193,151 @@ contains
       end if
    end subroutine evaluate_raw_xi_diagnostics
 
+   !> Compute real column scales for direct pair-potential Xi.  With W=I the
+   !> constrained minimum-change problem is
+   !> min ||s-1|| subject to Re[Xi diag(M)] s=M.  A rank-revealing SVD is used
+   !> even though the accepted square full-rank case has a unique solution.
+   subroutine build_goldstone_column_correction(xi_static, magnetization, correction)
+      complex(rp), intent(in) :: xi_static(:, :), magnetization(:)
+      type(tddft_goldstone_column_correction), intent(out) :: correction
+      real(rp), allocatable :: system(:, :), singular(:), u(:, :), vt(:, :), work(:), projected_rhs(:), scales(:)
+      complex(rp), allocatable :: corrected_xi(:, :)
+      real(rp) :: work_query(1), max_moment, max_singular, rank_cutoff
+      integer :: n, i, info, lwork
+
+      correction%requested = .true.
+      n = size(magnetization)
+      if (n < 1 .or. size(xi_static, 1) /= n .or. size(xi_static, 2) /= n) then
+         call reject_correction(correction, 'static Xi and magnetization dimensions are incompatible')
+         return
+      end if
+      call evaluate_raw_xi_diagnostics(xi_static, magnetization, correction%raw)
+      if (correction%raw%imaginary_norm > static_imaginary_tolerance) then
+         call reject_correction(correction, 'static Xi has material imaginary content')
+         return
+      end if
+      if (maxval(abs(aimag(magnetization))) > minimum_moment_relative*max(1.0_rp, maxval(abs(magnetization)))) then
+         call reject_correction(correction, 'Goldstone correction requires a real collinear magnetization')
+         return
+      end if
+      max_moment = maxval(abs(real(magnetization, rp)))
+      if (max_moment <= tiny(1.0_rp) .or. any(abs(real(magnetization, rp)) <= minimum_moment_relative*max_moment)) then
+         call reject_correction(correction, 'one or more response moments are too small for column rescaling')
+         return
+      end if
+      allocate(system(n, n), singular(n), u(n, n), vt(n, n))
+      do i = 1, n
+         system(:, i) = real(xi_static(:, i), rp)*real(magnetization(i), rp)
+      end do
+      call dgesvd('S', 'S', n, n, system, n, singular, u, n, vt, n, work_query, -1, info)
+      if (info /= 0) then
+         call reject_correction(correction, 'static correction SVD workspace query failed')
+         return
+      end if
+      lwork = max(1, int(work_query(1)))
+      allocate(work(lwork))
+      do i = 1, n
+         system(:, i) = real(xi_static(:, i), rp)*real(magnetization(i), rp)
+      end do
+      call dgesvd('S', 'S', n, n, system, n, singular, u, n, vt, n, work, lwork, info)
+      if (info /= 0) then
+         call reject_correction(correction, 'static correction SVD failed')
+         return
+      end if
+      max_singular = maxval(singular)
+      if (max_singular <= tiny(1.0_rp)) then
+         call reject_correction(correction, 'static correction constraint is rank deficient')
+         return
+      end if
+      rank_cutoff = svd_rank_relative_tolerance*max_singular
+      correction%effective_rank = count(singular > rank_cutoff)
+      if (correction%effective_rank /= n) then
+         call reject_correction(correction, 'static correction constraint is rank deficient')
+         return
+      end if
+      correction%condition_number = max_singular/minval(singular)
+      if (correction%condition_number > maximum_condition_number) then
+         call reject_correction(correction, 'static correction constraint is too ill-conditioned')
+         return
+      end if
+      allocate(projected_rhs(n), scales(n))
+      projected_rhs = matmul(transpose(u), real(magnetization, rp))/singular
+      scales = matmul(transpose(vt), projected_rhs)
+      if (any(.not. finite_real(scales))) then
+         call reject_correction(correction, 'static correction produced a nonfinite scale')
+         return
+      end if
+      correction%maximum_change = maxval(abs(scales-1.0_rp))
+      if (correction%maximum_change > maximum_scale_change) then
+         call reject_correction(correction, 'requested column rescaling exceeds the 25 percent safety limit')
+         return
+      end if
+      allocate(correction%scales(n), corrected_xi(n, n))
+      correction%scales = scales
+      call rescale_xi_columns(xi_static, correction%scales, corrected_xi)
+      call evaluate_raw_xi_diagnostics(corrected_xi, magnetization, correction%corrected)
+      correction%applied = .true.
+      correction%decision = 'accepted: real static SVD column rescaling with W=I'
+   end subroutine build_goldstone_column_correction
+
+   subroutine rescale_xi_columns(xi, scales, corrected_xi)
+      complex(rp), intent(in) :: xi(:, :)
+      real(rp), intent(in) :: scales(:)
+      complex(rp), intent(out) :: corrected_xi(:, :)
+      integer :: j
+      if (size(xi, 1) /= size(xi, 2) .or. size(scales) /= size(xi, 2) .or. any(shape(corrected_xi) /= shape(xi))) then
+         error stop 'rescale_xi_columns: incompatible Xi/scale dimensions'
+      end if
+      do j = 1, size(scales)
+         corrected_xi(:, j) = xi(:, j)*scales(j)
+      end do
+   end subroutine rescale_xi_columns
+
+   subroutine rescale_pair_potential_columns(operators, scales)
+      complex(rp), intent(inout) :: operators(:, :, :, :)
+      real(rp), intent(in) :: scales(:)
+      integer :: isite
+      if (size(operators, 3) /= size(scales)) error stop 'rescale_pair_potential_columns: response-site mismatch'
+      do isite = 1, size(scales)
+         operators(:, :, isite, :) = scales(isite)*operators(:, :, isite, :)
+      end do
+   end subroutine rescale_pair_potential_columns
+
+   logical function spectral_weights_are_nonnegative(weights, tolerance) result(acceptable)
+      real(rp), intent(in) :: weights(:)
+      real(rp), intent(in), optional :: tolerance
+      real(rp) :: allowed_negative
+      allowed_negative = 1.0e-10_rp
+      if (present(tolerance)) allowed_negative = tolerance
+      acceptable = all(weights >= -allowed_negative)
+   end function spectral_weights_are_nonnegative
+
+   subroutine append_goldstone_column_correction_text(filename, correction)
+      character(len=*), intent(in) :: filename
+      type(tddft_goldstone_column_correction), intent(in) :: correction
+      integer :: unit, ios, i
+
+      open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+      if (ios /= 0) error stop 'append_goldstone_column_correction_text: cannot append diagnostic output'
+      write(unit, '(a)') '# pair_potential_goldstone_correction_begin'
+      write(unit, '(a,l1)') '# goldstone_correction_requested = ', correction%requested
+      write(unit, '(a,l1)') '# goldstone_correction_applied = ', correction%applied
+      write(unit, '(a,l1)') '# goldstone_correction_rejected = ', correction%rejected
+      write(unit, '(a,a)') '# goldstone_correction_decision = ', trim(correction%decision)
+      write(unit, '(a,i0)') '# goldstone_correction_effective_rank = ', correction%effective_rank
+      write(unit, '(a,es24.16)') '# goldstone_correction_condition_number = ', correction%condition_number
+      write(unit, '(a,es24.16)') '# goldstone_correction_maximum_scale_change = ', correction%maximum_change
+      if (correction%raw%available) call write_one_diagnostics(unit, 'pair_correction_raw', correction%raw)
+      if (correction%corrected%available) call write_one_diagnostics(unit, 'pair_correction_corrected', correction%corrected)
+      if (allocated(correction%scales)) then
+         do i = 1, size(correction%scales)
+            write(unit, '(a,1x,i0,1x,es24.16)') 'pair_potential_column_scale', i, correction%scales(i)
+         end do
+      end if
+      write(unit, '(a)') '# pair_potential_goldstone_correction_end'
+      close(unit)
+   end subroutine append_goldstone_column_correction_text
+
    !> Write raw diagnostics first.  Corrected diagnostics are an additional
    !> record, never a replacement, so output remains useful for convergence
    !> studies even when sum-rule mode was requested.
@@ -186,13 +348,13 @@ contains
 
       open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
       if (ios /= 0) error stop 'write_goldstone_diagnostics_text: cannot open output file'
-      write(unit, '(a)') '# Xi = chi_KS K_perp; K_perp provenance = xc_response_kernel'
-      write(unit, '(a)') '# raw Goldstone diagnostics are retained when sum_rule is active'
-      write(unit, '(a,l1)') '# sum_rule_requested = ', result%sum_rule_requested
-      write(unit, '(a,l1)') '# sum_rule_applied = ', result%sum_rule_applied
-      write(unit, '(a,l1)') '# sum_rule_disabled_by_SOC_or_external_field = ', result%sum_rule_disabled_by_symmetry_breaking
+      write(unit, '(a)') '# legacy Xi = chi_KS K_perp; K_perp provenance = xc_response_kernel'
+      write(unit, '(a)') '# raw Goldstone diagnostics are retained for every non-off mode'
+      write(unit, '(a,l1)') '# legacy_site_scalar_correction_requested = ', result%sum_rule_requested
+      write(unit, '(a,l1)') '# legacy_site_scalar_correction_applied = ', result%sum_rule_applied
+      write(unit, '(a,l1)') '# legacy_site_scalar_correction_disabled = ', result%sum_rule_disabled_by_symmetry_breaking
       call write_one_diagnostics(unit, 'raw', result%raw)
-      if (result%sum_rule_applied) call write_one_diagnostics(unit, 'sum_rule_corrected', result%corrected)
+      if (result%sum_rule_applied) call write_one_diagnostics(unit, 'legacy_site_scalar_corrected', result%corrected)
       if (allocated(result%k_perp)) then
          do i = 1, size(result%k_perp)
             write(unit, '(a,1x,i0,2(1x,es24.16))') 'kernel_raw', i, real(result%k_perp(i), rp), aimag(result%k_perp(i))
@@ -200,7 +362,7 @@ contains
       end if
       if (allocated(result%k_perp_sum_rule)) then
          do i = 1, size(result%k_perp_sum_rule)
-            write(unit, '(a,1x,i0,2(1x,es24.16))') 'kernel_sum_rule', i, real(result%k_perp_sum_rule(i), rp), &
+            write(unit, '(a,1x,i0,2(1x,es24.16))') 'legacy_site_scalar_kernel_correction', i, real(result%k_perp_sum_rule(i), rp), &
                aimag(result%k_perp_sum_rule(i))
          end do
       end if
@@ -271,23 +433,6 @@ contains
       if (info /= 0) error stop 'diagonalize_nonhermitian: LAPACK zgeev failed'
    end subroutine diagonalize_nonhermitian
 
-   subroutine solve_linear_system(matrix, rhs)
-      complex(rp), intent(in) :: matrix(:, :)
-      complex(rp), intent(inout) :: rhs(:)
-      complex(rp), allocatable :: work_matrix(:, :)
-      integer, allocatable :: ipiv(:)
-      integer :: n, info
-
-      n = size(rhs)
-      if (size(matrix, 1) /= n .or. size(matrix, 2) /= n) then
-         error stop 'solve_linear_system: matrix/vector dimensions are incompatible'
-      end if
-      allocate(work_matrix(n, n), ipiv(n))
-      work_matrix = matrix
-      call zgesv(n, 1, work_matrix, n, ipiv, rhs, n, info)
-      if (info /= 0) error stop 'evaluate_goldstone: sum-rule chi_KS(0,0) is singular'
-   end subroutine solve_linear_system
-
    integer function goldstone_mode_code(mode) result(code)
       character(len=*), intent(in) :: mode
 
@@ -296,12 +441,25 @@ contains
          code = GOLDSTONE_OFF
       case ('diagnose')
          code = GOLDSTONE_DIAGNOSE
-      case ('sum_rule')
-         code = GOLDSTONE_SUM_RULE
+      case ('correct', 'sum_rule')
+         code = GOLDSTONE_CORRECT
       case default
-         error stop 'evaluate_goldstone: goldstone_mode must be off, diagnose, or sum_rule'
+         error stop 'evaluate_goldstone: goldstone_mode must be off, diagnose, or correct'
       end select
    end function goldstone_mode_code
+
+   subroutine reject_correction(correction, decision)
+      type(tddft_goldstone_column_correction), intent(inout) :: correction
+      character(len=*), intent(in) :: decision
+      correction%rejected = .true.
+      correction%applied = .false.
+      correction%decision = trim(decision)
+   end subroutine reject_correction
+
+   elemental logical function finite_real(value)
+      real(rp), intent(in) :: value
+      finite_real = abs(value) < huge(value)
+   end function finite_real
 
    subroutine require_square_response(chi_ks, k_perp, caller)
       complex(rp), intent(in) :: chi_ks(:, :), k_perp(:)

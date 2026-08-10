@@ -7,7 +7,7 @@
 - [x] WR-02 — Implement the LMTO pair-potential operator with rotation oracle
 - [x] WR-03 — Integrate direct Xi in production shadow mode
 - [x] WR-04 — Implement the real static limit and ground-state provenance
-- [ ] WR-05 — Repair Goldstone option semantics and controlled correction
+- [x] WR-05 — Repair Goldstone option semantics and controlled correction
 - [ ] WR-06 — Repair Cartesian/circular factors and unsupported-route gates
 - [ ] WR-07 — Replace heuristic mode classification
 - [ ] WR-08 — Pass Fe/Ni material gates and switch the validated default
@@ -138,6 +138,33 @@
 - No material Gamma pole, raw material Ward convergence, MPI comparison, or
   eta-ladder material evidence is claimed here; those global gates remain
   open for WR-08.
+
+## WR-05 evidence
+
+- `goldstone_mode='off'` constructs no Goldstone diagnostic or correction;
+  `diagnose` writes raw diagnostics and uses raw direct pair-potential Xi;
+  `correct` requires `xi_backend='pair_potential'` or `compare`.  Deprecated
+  `sum_rule` inputs migrate to `correct` with an explicit warning and output
+  provenance flag.
+- `build_goldstone_column_correction` solves the real-static constrained
+  column problem `Re[Xi_static diag(M)] s=M` with a rank-revealing SVD and
+  unit minimum-change weights. It rejects material static imaginary content,
+  rank deficiency, small moments, nonfinite scales, and any scale change over
+  25 percent. No finite-dynamic-eta inverse is used.
+- Raw `*_pair_dyson.dat`, corrected `*_pair_corrected_dyson.dat`, static raw
+  and corrected residuals, SVD rank/condition, every scale, decision, Gamma
+  loss maxima, and the corrected spectral-weight nonnegativity check are
+  emitted independently. A rejected correction writes raw diagnostics then
+  terminates clearly; it never falls through to diagnose.
+- gfortran-13 evidence (2026-08-10):
+  `cmake --build build-gfortran13 --target UnitTddftGoldstone UnitTddftConfig -j4`;
+  `ctest --test-dir build-gfortran13 --output-on-failure -L tddft` (16/16
+  passed); `python3 tests/unit/test_tddft_dispatch.py` and
+  `python3 tests/regression/tddft_validation/test_validation.py` (both pass).
+  `UnitTddftGoldstone` covers accepted one-/multi-site scales, dynamic-Xi
+  change, rank-deficient/ill-conditioned, small-moment, complex-static, and
+  negative-spectrum controls; `UnitTddftConfig` covers explicit and migrated
+  option semantics.
 
 ## Global gates
 

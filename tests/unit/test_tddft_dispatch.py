@@ -49,11 +49,18 @@ def test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults() -> N
     assert "no dynamical eta" in xi
 
 
-def test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed() -> None:
-    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
-    assert "kernel(isite, isite) = goldstone_result%k_perp(isite)" in source
-    assert "kernel(isite, isite) = goldstone_result%k_perp_sum_rule(isite)" not in source
-    assert "sum_rule_dynamic_kernel_applied" in source
+def test_controlled_goldstone_correction_rescales_only_pair_potential_columns() -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "source" / "calculation.f90").read_text()
+    goldstone = (root / "source" / "tddft_goldstone.f90").read_text()
+    assert "goldstone_mode=correct requires" in source
+    assert "build_goldstone_column_correction(pair_xi_static%xi" in source
+    assert "rescale_pair_potential_columns(pair_operators_corrected" in source
+    assert "_pair_corrected_dyson.dat" in source
+    assert "k_perp_sum_rule" not in source[source.index("post_processing_susceptibility"):source.index("append_dynamic_gamma_peaks")]
+    assert "dgesvd('S', 'S'" in goldstone
+    assert "static Xi has material imaginary content" in goldstone
+    assert "finite-eta inverse" in goldstone
     assert "write(chi0_filename" in source
     assert "trim(chi0_filename)" in source
 
@@ -75,6 +82,6 @@ if __name__ == "__main__":
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
     test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel()
     test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults()
-    test_sum_rule_is_not_injected_as_a_finite_eta_dyson_kernel_and_manifest_is_well_formed()
+    test_controlled_goldstone_correction_rescales_only_pair_potential_columns()
     test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
     print("RESULT: PASS")

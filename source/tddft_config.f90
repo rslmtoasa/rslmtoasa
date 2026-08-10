@@ -30,6 +30,7 @@ module tddft_config_mod
       character(len=16) :: q_mode
       character(len=16) :: q_coordinates
       character(len=16) :: goldstone_mode
+      logical :: goldstone_mode_migrated_from_sum_rule
       character(len=sl) :: output_prefix
       integer :: nomega
       real(rp) :: omega_min, omega_max, eta
@@ -81,6 +82,7 @@ contains
       this%q_mode = 'list'
       this%q_coordinates = 'direct'
       this%goldstone_mode = 'diagnose'
+      this%goldstone_mode_migrated_from_sum_rule = .false.
       this%output_prefix = 'tddft'
       this%nomega = 201
       this%omega_min = 0.0_rp
@@ -176,6 +178,12 @@ contains
       this%q_mode = lower(trim(q_mode))
       this%q_coordinates = lower(trim(q_coordinates))
       this%goldstone_mode = lower(trim(goldstone_mode))
+      this%goldstone_mode_migrated_from_sum_rule = this%goldstone_mode == 'sum_rule'
+      if (this%goldstone_mode_migrated_from_sum_rule) then
+         this%goldstone_mode = 'correct'
+         call g_logger%warning("[tddft_config]: goldstone_mode='sum_rule' is deprecated; using explicit pair-potential 'correct'.", &
+            __FILE__, __LINE__)
+      end if
       this%output_prefix = trim(output_prefix)
       this%nomega = nomega
       this%omega_min = omega_min; this%omega_max = omega_max; this%eta = eta
@@ -266,8 +274,8 @@ contains
          call g_logger%fatal("[tddft_config]: q_coordinates must be 'direct' (fractional reciprocal coordinates)", &
             __FILE__, __LINE__)
       end if
-      if (this%goldstone_mode /= 'off' .and. this%goldstone_mode /= 'diagnose' .and. this%goldstone_mode /= 'sum_rule') then
-         call g_logger%fatal("[tddft_config]: goldstone_mode must be 'off', 'diagnose', or 'sum_rule'", __FILE__, __LINE__)
+      if (this%goldstone_mode /= 'off' .and. this%goldstone_mode /= 'diagnose' .and. this%goldstone_mode /= 'correct') then
+         call g_logger%fatal("[tddft_config]: goldstone_mode must be 'off', 'diagnose', or 'correct' (deprecated 'sum_rule')", __FILE__, __LINE__)
       end if
       if (this%nomega < 1 .or. this%omega_max < this%omega_min .or. this%eta <= 0.0_rp .or. &
           (this%electronic_temperature_overridden .and. this%electronic_temperature < 0.0_rp) .or. &

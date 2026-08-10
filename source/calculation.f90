@@ -62,7 +62,9 @@ module calculation_mod
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
       enhance_tddft_susceptibility_from_xi, write_tddft_dyson_text
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
-      tddft_goldstone_diagnostics, evaluate_raw_xi_diagnostics, write_goldstone_diagnostics_text
+      tddft_goldstone_diagnostics, tddft_goldstone_column_correction, evaluate_raw_xi_diagnostics, &
+      build_goldstone_column_correction, rescale_pair_potential_columns, spectral_weights_are_nonnegative, &
+      write_goldstone_diagnostics_text, append_goldstone_column_correction_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
    use tddft_longitudinal_mod, only: tddft_longitudinal_options, tddft_longitudinal_static_result, &
       tddft_longitudinal_result, read_longitudinal_static_fields, build_longitudinal_static_response, &
@@ -1980,11 +1982,12 @@ contains
       type(eigenpair_green_function_provider), target :: green_source
       type(tddft_chi0_result) :: chi0_result, chi0_static
       type(tddft_dyson_options) :: dyson_options
-      type(tddft_dyson_result) :: dyson_result, dyson_pair_result
-      type(tddft_direct_xi_result) :: pair_xi_result, pair_xi_static
+      type(tddft_dyson_result) :: dyson_result, dyson_pair_result, dyson_pair_corrected_result
+      type(tddft_direct_xi_result) :: pair_xi_result, pair_xi_static, pair_xi_corrected_result
       type(tddft_goldstone_options) :: goldstone_options
       type(tddft_goldstone_result) :: goldstone_result
       type(tddft_goldstone_diagnostics) :: pair_goldstone
+      type(tddft_goldstone_column_correction) :: pair_correction
       type(tddft_mode_options) :: mode_options
       type(tddft_mode_result) :: mode_result
       type(tddft_longitudinal_options) :: longitudinal_options
@@ -1994,17 +1997,18 @@ contains
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :)
-      complex(rp), allocatable :: pair_operators(:, :, :, :), pair_operators_static(:, :, :, :), all_xi_pair(:, :, :, :)
+      complex(rp), allocatable :: pair_operators(:, :, :, :), pair_operators_static(:, :, :, :), &
+         pair_operators_corrected(:, :, :, :), all_xi_pair(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
       real(rp), allocatable :: signed_moments(:)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
-      real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak
+      real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, pair_corrected_gamma_peak
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
-      logical :: pair_backend, legacy_backend
+      logical :: pair_backend, legacy_backend, corrected_spectral_weight_ok
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
 
       config = tddft_config(this%fname)
@@ -2065,6 +2069,10 @@ contains
             call g_logger%fatal('[calculation.post_processing_susceptibility]: pair-potential shadow workflows require '// &
                'output_xi=.true. or output_chi=.true. so raw Xi is auditable.', __FILE__, __LINE__)
          end if
+      end if
+      if (config%goldstone_mode == 'correct' .and. .not. pair_backend) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: goldstone_mode=correct requires '// &
+            'xi_backend=pair_potential or compare; legacy site-scalar correction was removed.', __FILE__, __LINE__)
       end if
 
       nq = size(config%q_points, 2)
@@ -2190,6 +2198,16 @@ contains
          call build_static_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
             site_orbital_counts, left_channels, pair_operators_static, chi0_options, pair_xi_static)
          call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone)
+         if (config%goldstone_mode == 'correct') then
+            if (has_soc .or. has_external_field) then
+               pair_correction%requested = .true.
+               pair_correction%rejected = .true.
+               pair_correction%decision = 'Goldstone correction is unavailable with SOC or an external symmetry-breaking field'
+            else
+               call build_goldstone_column_correction(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), &
+                  pair_correction)
+            end if
+         end if
          deallocate(pair_operators_static)
       end if
       allocate(kernel(nresponse, nresponse))
@@ -2251,8 +2269,13 @@ contains
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
             call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
             if (pair_backend) call append_pair_goldstone_diagnostics(trim(filename), goldstone_result%raw, pair_goldstone)
+            if (config%goldstone_mode == 'correct') call append_goldstone_column_correction_text(trim(filename), pair_correction)
             call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
                rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_compare')
+         end if
+         if (config%goldstone_mode == 'correct' .and. .not. pair_correction%applied) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: requested Goldstone correction rejected: '// &
+               trim(pair_correction%decision), __FILE__, __LINE__)
          end if
       end if
 
@@ -2340,13 +2363,41 @@ contains
                call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_result%xi, response_eta, dyson_options, &
                   dyson_pair_result)
                if (is_gamma) pair_gamma_peak = observed_loss_peak(omega, dyson_pair_result%trace_spectral_weight)
-               deallocate(pair_operators)
                if (config%output_xi .or. config%output_chi) then
                   write(filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
                   call write_tddft_dyson_text(trim(filename), omega, dyson_pair_result)
                   call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
                      rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
                end if
+               if (config%goldstone_mode == 'correct') then
+                  allocate(pair_operators_corrected, source=pair_operators)
+                  call rescale_pair_potential_columns(pair_operators_corrected, pair_correction%scales)
+                  call build_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                     eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operators_corrected, omega, &
+                     chi0_options, pair_xi_corrected_result)
+                  call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_corrected_result%xi, response_eta, &
+                     dyson_options, dyson_pair_corrected_result)
+                  if (is_gamma) then
+                     pair_corrected_gamma_peak = observed_loss_peak(omega, dyson_pair_corrected_result%trace_spectral_weight)
+                  end if
+                  corrected_spectral_weight_ok = spectral_weights_are_nonnegative(reshape( &
+                     dyson_pair_corrected_result%site_spectral_weight, [size(dyson_pair_corrected_result%site_spectral_weight)]))
+                  if (config%output_xi .or. config%output_chi) then
+                     write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+                     call write_tddft_dyson_text(trim(filename), omega, dyson_pair_corrected_result)
+                     call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_corrected')
+                     call append_goldstone_column_correction_text(trim(filename), pair_correction)
+                     call append_corrected_spectral_weight_diagnostic(trim(filename), corrected_spectral_weight_ok, &
+                        minval(dyson_pair_corrected_result%site_spectral_weight))
+                  end if
+                  deallocate(pair_operators_corrected)
+                  if (.not. corrected_spectral_weight_ok) then
+                     call g_logger%fatal('[calculation.post_processing_susceptibility]: corrected pair-potential spectrum has '// &
+                        'negative spectral weight beyond tolerance.', __FILE__, __LINE__)
+                  end if
+               end if
+               deallocate(pair_operators)
             end if
             if (is_longitudinal .and. is_gamma) then
                call calibrate_longitudinal_response(m0, chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), &
@@ -2372,7 +2423,8 @@ contains
          end if
          if (is_gamma .and. .not. is_longitudinal .and. .not. is_full_response) then
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
-            call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak)
+            call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, &
+               pair_corrected_gamma_peak)
          end if
          deallocate(kq_points, eigenvalues_kq, eigenvectors_kq)
       end do
@@ -2426,8 +2478,12 @@ contains
          else
             write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
          end if
-         if (pair_backend .and. legacy_backend) then
+         if (pair_backend .and. legacy_backend .and. config%goldstone_mode == 'correct') then
+            write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file pair_raw_dyson_file pair_corrected_dyson_file'
+         else if (pair_backend .and. legacy_backend) then
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file pair_raw_dyson_file'
+         else if (pair_backend .and. config%goldstone_mode == 'correct') then
+            write(unit, '(a)') '# q_index q1 q2 q3 chi0_file pair_raw_dyson_file pair_corrected_dyson_file'
          else if (pair_backend) then
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file pair_raw_dyson_file'
          else
@@ -2435,11 +2491,22 @@ contains
          end if
          do iq = 1, nq
             write(chi0_filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
-            if (pair_backend .and. legacy_backend) then
+            if (pair_backend .and. legacy_backend .and. config%goldstone_mode == 'correct') then
+               write(legacy_filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
+               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+               write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+               write(unit, '(i0,3(1x,es24.16),4(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
+                  trim(legacy_filename), trim(pair_filename), trim(filename)
+            else if (pair_backend .and. legacy_backend) then
                write(legacy_filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
                write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
                write(unit, '(i0,3(1x,es24.16),3(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
                   trim(legacy_filename), trim(pair_filename)
+            else if (pair_backend .and. config%goldstone_mode == 'correct') then
+               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+               write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+               write(unit, '(i0,3(1x,es24.16),3(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
+                  trim(pair_filename), trim(filename)
             else if (pair_backend) then
                write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
                write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(pair_filename)
@@ -2466,9 +2533,9 @@ contains
       peak = omega(index(1))
    end function observed_loss_peak
 
-   subroutine append_dynamic_gamma_peaks(filename, bare_peak, legacy_peak, pair_peak)
+   subroutine append_dynamic_gamma_peaks(filename, bare_peak, legacy_peak, pair_peak, pair_corrected_peak)
       character(len=*), intent(in) :: filename
-      real(rp), intent(in) :: bare_peak, legacy_peak, pair_peak
+      real(rp), intent(in) :: bare_peak, legacy_peak, pair_peak, pair_corrected_peak
       integer :: unit, ios
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
@@ -2476,9 +2543,26 @@ contains
       write(unit, '(a,es24.16)') '# dynamic_bare_gamma_loss_peak_Ry = ', bare_peak
       if (legacy_peak >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_legacy_raw_gamma_loss_peak_Ry = ', legacy_peak
       if (pair_peak >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_pair_raw_gamma_loss_peak_Ry = ', pair_peak
-      write(unit, '(a)') '# dynamic Gamma peaks are observed raw loss-grid maxima; no correction or fitted shift was applied'
+      if (pair_corrected_peak >= 0.0_rp) then
+         write(unit, '(a,es24.16)') '# dynamic_pair_corrected_gamma_loss_peak_Ry = ', pair_corrected_peak
+      end if
+      write(unit, '(a)') '# dynamic Gamma peaks are observed loss-grid maxima; raw and corrected records remain distinct'
       close(unit)
    end subroutine append_dynamic_gamma_peaks
+
+   subroutine append_corrected_spectral_weight_diagnostic(filename, acceptable, minimum_weight)
+      character(len=*), intent(in) :: filename
+      logical, intent(in) :: acceptable
+      real(rp), intent(in) :: minimum_weight
+      integer :: unit, ios
+
+      open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+      if (ios /= 0) call g_logger%fatal('[calculation.append_corrected_spectral_weight_diagnostic]: cannot append diagnostic', &
+         __FILE__, __LINE__)
+      write(unit, '(a,l1)') '# corrected_pair_spectral_weight_nonnegative = ', acceptable
+      write(unit, '(a,es24.16)') '# corrected_pair_minimum_site_spectral_weight = ', minimum_weight
+      close(unit)
+   end subroutine append_corrected_spectral_weight_diagnostic
 
    !> Build the Q^- operators in the same ham_only coefficient representation
    !> as the two endpoint eigensystems.  Q is intentionally retained per k:
@@ -2596,8 +2680,9 @@ contains
       write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
       write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
       write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
-      write(unit, '(a,l1)') '# sum_rule_dynamic_kernel_applied = ', .false.
-      write(unit, '(a,l1)') '# goldstone_correction_applied = ', .false.
+      write(unit, '(a,l1)') '# goldstone_mode_migrated_from_sum_rule = ', config%goldstone_mode_migrated_from_sum_rule
+      write(unit, '(a,l1)') '# goldstone_correction_requested = ', config%goldstone_mode == 'correct'
+      write(unit, '(a,l1)') '# goldstone_correction_applied = ', index(xi_backend_label, 'corrected') > 0
       write(unit, '(a,l1)') '# spin_orbit_present = ', has_soc
       write(unit, '(a,l1)') '# external_symmetry_breaking_field_present = ', has_external_field
       write(unit, '(a,5(1x,l1))') '# output_chi0 output_xi output_chi output_modes output_stoner =', &

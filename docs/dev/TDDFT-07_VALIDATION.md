@@ -28,10 +28,15 @@ material gate remains unchecked.
 Start from a converged collinear no-SOC ground state and retain the original
 response output files. Run `post_processing = 'susceptibility'` with
 `goldstone_mode = 'diagnose'` for quality measurements. A separate
-`goldstone_mode = 'sum_rule'` run may make the dispersion usable, but its
-`*_goldstone.dat` must be retained next to the diagnose output: the raw
-residual is the quality metric and the correction is not evidence of raw
-convergence.
+`goldstone_mode = 'correct'` run with `xi_backend = 'pair_potential'` (or
+`'compare'`) may emit a controlled comparison spectrum. It derives real
+static column scales from direct pair-potential `Xi`, rejects ill-conditioned,
+complex-static, small-moment, and over-25%-change cases, and writes
+`*_pair_dyson.dat` and `*_pair_corrected_dyson.dat` separately. The raw
+`*_goldstone.dat` must be retained next to the corrected output: the raw
+residual is the quality metric and correction is not evidence of raw
+convergence. The old `goldstone_mode = 'sum_rule'` spelling migrates to
+`correct` with a warning.
 
 Make one `campaign.json` for every fixed physical setup. The checker at
 [`tests/regression/tddft_validation/tddft_validation.py`](../../tests/regression/tddft_validation/tddft_validation.py)
@@ -70,9 +75,9 @@ small fixture directory.
 
 For every convergence point preserve: k mesh, selected band interval,
 response projection, electronic temperature/smearing, η, frequency range and
-count, q list, XC functional, lattice parameter, and whether the sum rule was
-applied. Do not compare a corrected TDDFT curve with an uncorrected Goldstone
-quality metric.
+count, q list, XC functional, lattice parameter, and whether controlled
+pair-potential correction was applied. Do not compare a corrected TDDFT curve
+with an uncorrected Goldstone quality metric.
 
 ## Literature frame and expected discrepancies
 

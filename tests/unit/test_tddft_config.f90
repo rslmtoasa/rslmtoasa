@@ -15,6 +15,7 @@ program test_tddft_config
    call test_full_input()
    call test_green_input()
    call test_xi_backend_input()
+   call test_goldstone_correction_modes()
    call test_ground_state_provenance_defaults()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
@@ -130,6 +131,31 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_xi_backend_input
+
+   subroutine test_goldstone_correction_modes()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " goldstone_mode = 'correct', xi_backend = 'pair_potential', output_xi = .true."
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('explicit controlled correction mode is accepted', trim(config%goldstone_mode) == 'correct')
+      call assert_true('explicit correct mode is not marked as migrated', .not. config%goldstone_mode_migrated_from_sum_rule)
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " goldstone_mode = 'sum_rule', xi_backend = 'pair_potential', output_xi = .true."
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('deprecated sum_rule migrates to correct', trim(config%goldstone_mode) == 'correct')
+      call assert_true('sum_rule migration is explicit in metadata', config%goldstone_mode_migrated_from_sum_rule)
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_goldstone_correction_modes
 
    subroutine test_ground_state_provenance_defaults()
       type(tddft_config) :: inherited, overridden
