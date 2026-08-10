@@ -1,5 +1,9 @@
 # TDDFT-11 CPU performance hardening
 
+The measurements in this document are kernel-cost evidence only. They do not
+lift the open WR-07/WR-08 mode-classification and material-physics gates in
+`TDDFT_WARD_REPAIR_TRACKER.md`; GPU work remains deferred.
+
 ## Completed checklist
 
 - [x] CPU timing is emitted with every `chi0`, Dyson, and mode output.

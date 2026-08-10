@@ -128,10 +128,11 @@ delta W(t) = Re[delta W(omega) exp(-i omega t)]
 chi^R(t)  = -i theta(t) <[A(t), B(0)]>.
 ```
 
-Future `chi_KS` code must use energy-valued `omega` in Rydberg and the retarded
-denominator `omega + epsilon_n - epsilon_m + i*eta`, with `eta > 0`.  Physical
-angular frequency requires `omega_energy = hbar*omega_SI` converted to Rydberg.
-This contract does not infer a time convention from static SCF code.
+The production `chi_KS` implementation uses energy-valued `omega` in Rydberg
+and the retarded denominator `omega + epsilon_n - epsilon_m + i*eta`, with
+`eta > 0`. Physical angular frequency requires
+`omega_energy = hbar*omega_SI` converted to Rydberg. This contract does not
+infer a time convention from static SCF code.
 
 ## Static Ward limit and response provenance
 

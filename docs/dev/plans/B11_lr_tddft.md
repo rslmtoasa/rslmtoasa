@@ -1,5 +1,10 @@
 # B11 — Linear-response TDDFT: transverse magnons
 
+> Historical planning document. It predates the Ward-repair work and is not a
+> statement of currently supported physics or inputs. For current capability
+> gates, Goldstone semantics, and release status, use
+> `docs/dev/TDDFT_WARD_REPAIR_TRACKER.md` and `docs/dev/TDDFT-07_VALIDATION.md`.
+
 **Effort:** L–XL / medium-high risk (kernel + Goldstone hygiene).
 **Lead:** OPUS throughout. **Depends on:** B1 (validation target +
 conventions — hard), B2 backend E (χ₀ ingredients), B4 (χ₀ cost, GPU

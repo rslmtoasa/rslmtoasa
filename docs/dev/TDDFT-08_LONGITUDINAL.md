@@ -1,20 +1,20 @@
-# TDDFT-08: on-site longitudinal susceptibility and relaxation
+# TDDFT-08: longitudinal susceptibility and relaxation (prototype disabled)
 
-- [x] Reuse the generalized TDDFT vertex, chi_KS, and Dyson infrastructure.
-- [x] Select the `MZ` (`sigma_z`) vertex, which is same-spin in a collinear basis.
-- [x] Retain full site-site response matrices and report on-site diagonals.
-- [x] Provide a symmetric finite-field static-response driver.
-- [x] Require matched `+Delta B` and `-Delta B` data and test linearity as `Delta B -> 0`.
-- [x] Calibrate `U_parallel = chi_KS(0)^-1 - chi_parallel(0)^-1`.
-- [x] Enhance dynamic response using the existing Dyson solver.
-- [x] Fit and report `T_parallel` and `Gamma_parallel=1/T_parallel`.
-- [x] Check dynamic Gamma/static finite-field agreement at the configured tolerance.
-- [ ] Direct coupled charge-longitudinal XC-derivative kernel (future work).
+## Current production status
 
-## Input and finite-field data
+`channel = 'longitudinal'` is deliberately **unavailable** in the production
+susceptibility driver. It terminates before reading or using a longitudinal
+static file. The earlier prototype must be rebuilt on the WR-04 real
+static-limit machinery and validated before it can be exposed as a runnable
+calculation. In particular, no output from the present code supports an LLB
+parameter or `alpha_parallel` claim.
 
-Use `post_processing = 'susceptibility'` and the following additions to
-`&tddft`:
+The interface and file format below are retained as a design record for that
+future reactivation; they are not a supported input recipe.
+
+## Reserved input and finite-field data
+
+When this route is revalidated, its proposed `&tddft` controls are:
 
 ```fortran
 channel = 'longitudinal'
@@ -26,34 +26,25 @@ longitudinal_fit_omega_min = 0.0
 longitudinal_fit_omega_max = 0.05
 ```
 
-The static file is a clean handoff from independently converged field-SCF
-jobs. Its first non-comment line is `nsite nrecords`. Each subsequent record
-is `perturbed_site signed_DeltaB_Ry mz_site_1 ... mz_site_nsite`. Supply at
-least one matched `+DeltaB/-DeltaB` pair for every source site; multiple
-field magnitudes are required to make a real linearity check meaningful.
-The central differences reconstruct every column of the site-site static
-susceptibility.
+The reserved static file format is a clean handoff from independently
+converged field-SCF jobs. Its first non-comment line is `nsite nrecords`.
+Each subsequent record is `perturbed_site signed_DeltaB_Ry mz_site_1 ...
+mz_site_nsite`. A future implementation must require at least one matched
+`+DeltaB/-DeltaB` pair for every source site and multiple field magnitudes to
+make a real linearity check meaningful.
 
-The longitudinal route is currently restricted to collinear no-SOC input and
-requires a Gamma q-point. It writes the ordinary
-site-site `chi_KS` and enhanced Dyson outputs plus
-`<prefix>_qXXXXXX_longitudinal.dat`, containing response-projector `m0`, static on-site
-susceptibility, diagonal and full `U_parallel`, `T_parallel`,
-`Gamma_parallel`, fit range/residual, the static-agreement error, linearity
-error, and the numerical `eta` used.
+## Reactivation requirements
 
-The code uses the retarded `omega + DeltaE + i eta` convention. Consequently
-the fitted absorptive form is `chi(0)/(1 + i omega T_parallel)`, the
-convention-translated version of the requested relaxation model. A failed
-static-agreement or linearity condition terminates the run rather than
-emitting an apparently valid parameter.
+Before this route is enabled, it must be restricted to a defined collinear,
+no-SOC scope and demonstrate all of the following:
 
-## Eta and LLB caveats
+- a real-static, `eta`-independent calibration compatible with WR-04;
+- matched finite-field linearity and a documented Gamma q-point convention;
+- agreement between static and dynamic limits before writing `U_parallel`,
+  `T_parallel`, or `Gamma_parallel`; and
+- an explicit mapping and normalization before making any LLB claim.
 
-`eta` is written in every longitudinal result. Repeat the same finite-field
-calibration for a decreasing eta series and compare the reported
-`T_parallel`, fit residual, and static-agreement error; eta remains a
-numerical broadening and is not an intrinsic rate. `Gamma_parallel` is a
-microscopic inverse relaxation time. It is explicitly **not** an LLB
-`alpha_parallel`; an LLB mapping requires a separately specified dynamical
+Eta is a numerical broadening, not an intrinsic rate. Even after
+reactivation, a microscopic inverse relaxation time is not automatically an
+LLB `alpha_parallel`; that mapping needs a separately specified dynamical
 equation and normalization.

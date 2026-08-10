@@ -2,12 +2,13 @@
 
 ## Status and scope
 
-This document freezes the convention contract for the Ward-identity repair.
-It applies only to the CPU, collinear, no-SOC transverse response with
-`reciprocal_mode='ham_only'`. It does not change the current production
-spectra: the existing site-scalar kernel remains a legacy comparison route
-until the pair-potential construction and its LMTO representation oracle are
-implemented and validated.
+This document freezes the convention contract and implementation record for
+the Ward-identity repair. The current production scope is CPU, collinear,
+no-SOC transverse response with `reciprocal_mode='ham_only'` and
+`chi0_backend='eigenpairs'` for the pair-potential route. The legacy
+site-scalar kernel remains an explicit comparison route; pair-potential Xi is
+implemented in shadow/controlled-correction workflows. Current route gates
+and evidence are authoritative in `TDDFT_WARD_REPAIR_TRACKER.md`.
 
 The current `P_site sigma` coefficient-space vertices are not physical
 operators for a generalized eigenproblem `H c = epsilon S c` without a
@@ -282,7 +283,7 @@ moment-weighted rigid two-endpoint identity. Together with the WR-01b
 three-step finite-difference test, this pins the analytic Hamiltonian tangent
 at the q=0 operator boundary.
 
-## WR-01c finite-q endpoint-phase assembly — in progress
+## WR-01c finite-q endpoint-phase assembly — completed
 
 The reciprocal convention is established by `calculate_structure_factors`:
 each stored directed block is row-site `i`, column-site `j`, and uses its full

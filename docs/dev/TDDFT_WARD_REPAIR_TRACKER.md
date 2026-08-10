@@ -133,9 +133,9 @@
   (4/4 passed).  The focused tests cover exact/near-degenerate divided
   differences, zero-temperature and finite-temperature limits, static
   eta-independence, the two-orbital pair-potential Ward identity, reversed
-  one-site and signed ferro/antiferromagnetic two-site moments, and explicit
-  provenance overrides. `python3 tests/unit/test_tddft_dispatch.py` confirms
-  the material electron-count mismatch is a fatal production path.
+  one-site and signed ferro/antiferromagnetic two-site moments, and response
+  temperature provenance. `python3 tests/unit/test_tddft_dispatch.py`
+  confirms the material electron-count mismatch is a fatal production path.
 - No material Gamma pole, raw material Ward convergence, MPI comparison, or
   eta-ladder material evidence is claimed here; those global gates remain
   open for WR-08.
