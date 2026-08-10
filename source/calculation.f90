@@ -2099,6 +2099,9 @@ contains
       call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)
       do isite = 1, lattice_obj%nrec
          call self_obj%xc_response_provider%set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))
+         ! Preserve the collinear signed response coordinate independently of
+         ! the legacy magnitude used by the scalar ALSDA comparison path.
+         call self_obj%xc_response_provider%set_site_signed_spin_population(isite, site_moments(3, isite))
          if (sqrt(sum(site_moments(:, isite)**2)) > tiny(1.0_rp)) then
             call self_obj%xc_response_provider%set_site_magnetization_direction(isite, site_moments(:, isite))
          end if

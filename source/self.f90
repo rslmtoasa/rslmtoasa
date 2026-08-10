@@ -1356,6 +1356,9 @@ contains
       do ia = 1, this%lattice%nrec
          call this%xc_response_provider%set_site_spin_population(ia, &
             this%symbolic_atom(this%lattice%nbulk + ia)%potential%mtot)
+         call this%xc_response_provider%set_site_signed_spin_population(ia, &
+            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mtot * &
+            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(3))
          call this%xc_response_provider%set_site_magnetization_direction(ia, &
             this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(1:3))
       end do

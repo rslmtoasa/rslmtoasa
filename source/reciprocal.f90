@@ -292,6 +292,7 @@ module reciprocal_mod
       procedure :: fourier_transform_overlap
       procedure :: fold_kpoint
       procedure :: build_hamiltonian_at_kpoint
+      procedure :: build_lmto_pair_potential_at_kpoint
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
@@ -590,6 +591,17 @@ module reciprocal_mod
       real(rp), intent(in) :: k_point(3)
       complex(rp), intent(out) :: hk_result(:, :)
    end subroutine build_hamiltonian_at_kpoint
+
+   !> Construct Q_a^-/Q_a^+ in the ordinary ham_only coefficient basis at q=0.
+   !> The response-site index is a primitive site identity, not an atom type.
+   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: response_site
+      real(rp), intent(in) :: k_point(3), signed_moment
+      complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
+      logical, intent(out) :: supported
+      character(len=*), intent(out), optional :: reason
+   end subroutine build_lmto_pair_potential_at_kpoint
 
    !> @brief Return caller-owned eigenpairs at arbitrary reciprocal-space points.
    !> @details Points are folded into the reciprocal primitive cell, repeated

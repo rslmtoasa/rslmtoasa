@@ -38,10 +38,13 @@
 
 ## WR-02 handoff
 
-- [ ] Consume endpoint Cartesian tangents with endpoint-position Bloch phases,
-  establish signed `M_a` provenance, form `Q_a^-`, and validate against a
-  commensurate-supercell finite-rotation oracle. No assembled-`hxc` or scalar
-  site-kernel reconstruction is allowed.
+- `UnitLmtoPairPotential`: q=0 LMTO circular pair-potential construction,
+  finite rotation, unequal-orbital scalar negative control, signed-moment
+  normalization, adjoint relation, normal Bloch phase, rigid identity, and
+  rejected zero moment.
+- The committed q=0 service is `ham_only` only. Finite-q endpoint phases and
+  their commensurate-supercell oracle remain the WR-02 blocker; this is not a
+  permission to use an assembled-`hxc` or scalar site-kernel substitute.
 
 ## Global gates
 

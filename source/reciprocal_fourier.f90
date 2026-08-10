@@ -1,4 +1,6 @@
 submodule (reciprocal_mod) reciprocal_fourier
+   use lmto_magnetic_tangent_mod, only: lmto_hhmag_to_spinor, lmto_endpoint_tangent_record
+   use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_bloch_phase
    implicit none
 
 contains
@@ -78,6 +80,103 @@ contains
          end block
       end if
    end subroutine fourier_transform_hamiltonian
+
+   !> Build the q=0 LMTO pair potential in exactly the `ham_only` coefficient
+   !> basis used by the reciprocal eigensolver.  The endpoint tangent is asked
+   !> for before hxc/ee collapse; its directed-bond phase is the normal
+   !> H(k)=sum_R H(R) exp(+i k.R) phase.  Finite q endpoint phases are a WR-03
+   !> integration responsibility and intentionally cannot be guessed here.
+   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in) :: response_site
+      real(rp), intent(in) :: k_point(3), signed_moment
+      complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
+      logical, intent(out) :: supported
+      character(len=*), intent(out), optional :: reason
+      integer :: nmat, isite, jsite, ntype_i, ia, ja, it, jt, ineigh, nr, ni, idir
+      integer :: i_start, i_end, j_start, j_end
+      real(rp) :: vet(3)
+      real(rp) :: ham_vec(3, this%lattice%nn_max)
+      real(rp) :: hhh(norb, norb)
+      complex(rp) :: left(norb, norb, 4, 3), right(norb, norb, 4, 3)
+      complex(rp) :: left_cart(norb, norb, 4), right_cart(norb, norb, 4)
+      complex(rp) :: left_spinor(2*norb, 2*norb), right_spinor(2*norb, 2*norb)
+      complex(rp), allocatable :: dh_dx(:, :), dh_dy(:, :)
+      complex(rp) :: phase
+      type(lmto_endpoint_tangent_record) :: record
+      character(len=160) :: local_reason
+
+      nmat = 2*norb*this%lattice%nrec
+      qminus = cmplx(0.0_rp, 0.0_rp, rp); qplus = cmplx(0.0_rp, 0.0_rp, rp)
+      supported = .false.
+      if (size(qminus,1) /= nmat .or. size(qminus,2) /= nmat .or. any(shape(qplus) /= shape(qminus))) then
+         if (present(reason)) reason = 'pair-potential matrix shape does not match site-major ham_only basis'
+         return
+      end if
+      if (response_site < 1 .or. response_site > this%lattice%nrec) then
+         if (present(reason)) reason = 'invalid response-site identity'
+         return
+      end if
+      if (trim(this%reciprocal_mode) /= 'ham_only') then
+         if (present(reason)) reason = 'LMTO pair potential requires reciprocal_mode=ham_only'
+         return
+      end if
+
+      call this%build_neighbor_vectors()
+      allocate(dh_dx(nmat,nmat), dh_dy(nmat,nmat))
+      dh_dx = cmplx(0.0_rp, 0.0_rp, rp); dh_dy = cmplx(0.0_rp, 0.0_rp, rp)
+      do isite = 1, this%lattice%nrec
+         ntype_i = this%lattice%ib(isite)
+         ia = this%lattice%atlist(ntype_i); it = this%lattice%iz(ia)
+         nr = this%lattice%nn(ia, 1)
+         ham_vec = 0.0_rp
+         ham_vec(:,1:nr) = this%ham_vec_type(:,1:nr,ntype_i)
+         i_start = (isite-1)*2*norb + 1; i_end = isite*2*norb
+         do ineigh = 1, nr
+            if (ineigh == 1) then
+               ja = ia; jsite = isite
+            else
+               ja = this%lattice%nn(ia, ineigh)
+               if (ja < 1 .or. ja > this%lattice%kk) cycle
+               jsite = this%lattice%iz(ja)
+               if (jsite < 1 .or. jsite > this%lattice%nrec) cycle
+            end if
+            jt = this%lattice%iz(ja); vet = this%ham_vec_type(:,ineigh,ntype_i)
+            call this%hamiltonian%hmfind(vet, nr, hhh, ineigh, ia, ineigh, ni, ham_vec(:,1:nr))
+            if (ni == 0) cycle
+            call this%hamiltonian%ham0m_nc_endpoint_tangents(ia, ja, it, jt, ineigh, vet, hhh, left, right, &
+                                                               record, supported, local_reason)
+            if (.not. supported) then
+               if (present(reason)) reason = trim(local_reason)
+               deallocate(dh_dx, dh_dy)
+               return
+            end if
+            j_start = (jsite-1)*2*norb + 1; j_end = jsite*2*norb
+            phase = lmto_bloch_phase(k_point, this%ham_vec_type_direct(:,ineigh,ntype_i))
+            do idir = 1, 2
+               if (isite == response_site) then
+                  left_cart = left(:,:,:,idir)
+                  call hcpx(left_cart(:,:,1), 'cart2sph'); call hcpx(left_cart(:,:,2), 'cart2sph')
+                  call hcpx(left_cart(:,:,3), 'cart2sph'); call hcpx(left_cart(:,:,4), 'cart2sph')
+                  call lmto_hhmag_to_spinor(left_cart, left_spinor)
+                  if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + left_spinor*phase
+                  if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + left_spinor*phase
+               end if
+               if (jsite == response_site) then
+                  right_cart = right(:,:,:,idir)
+                  call hcpx(right_cart(:,:,1), 'cart2sph'); call hcpx(right_cart(:,:,2), 'cart2sph')
+                  call hcpx(right_cart(:,:,3), 'cart2sph'); call hcpx(right_cart(:,:,4), 'cart2sph')
+                  call lmto_hhmag_to_spinor(right_cart, right_spinor)
+                  if (idir == 1) dh_dx(i_start:i_end,j_start:j_end) = dh_dx(i_start:i_end,j_start:j_end) + right_spinor*phase
+                  if (idir == 2) dh_dy(i_start:i_end,j_start:j_end) = dh_dy(i_start:i_end,j_start:j_end) + right_spinor*phase
+               end if
+            end do
+         end do
+      end do
+      call lmto_circular_pair_potential(dh_dx, dh_dy, signed_moment, qminus, qplus, supported, local_reason)
+      if (present(reason)) reason = trim(local_reason)
+      deallocate(dh_dx, dh_dy)
+   end subroutine build_lmto_pair_potential_at_kpoint
 
    !> @brief Fourier transform an arbitrary neighbor/type block array.
    !> @details Applies the reciprocal neighbor map to a (orbital, orbital,

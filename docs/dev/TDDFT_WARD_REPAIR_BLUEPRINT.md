@@ -234,3 +234,48 @@ phase of the *perturbed endpoint* in the reciprocal Fourier convention, then
 form `D_x`, `D_y`, and `Q^-`. Validate the q-dependent operator against a
 commensurate-supercell finite rotation. No radial reconstruction or scalar
 `K_site P_site sigma_minus` fallback is permitted.
+
+## WR-02 q=0 LMTO pair-potential operator and rotation oracle
+
+The first validated operator service is deliberately restricted to the
+orthonormal `reciprocal_mode='ham_only'` representation and q=0. For response
+site `a`, `reciprocal%build_lmto_pair_potential_at_kpoint` re-walks the normal
+directed neighbor table, obtains the WR-01b left/right endpoint Cartesian
+tangents before `hxc` or `ee` is assembled, applies the same `hcpx('cart2sph')`
+orbital transformation as `chbar_nc`, maps with `H=H0+Hvec.sigma`, and applies
+the normal reciprocal phase
+
+\[
+e^{+i2\pi k\cdot R}
+\]
+
+from `ham_vec_type_direct`. It thus includes the LMTO tails/hopping terms from
+`w_1 S w_0`, `w_0 S w_1`, `w_1 S w_1`, the dot/cross pieces, and the onsite
+`cx1` term. It is not an onsite orbital identity and does not inspect final
+`hxc`.
+
+The signed collinear response population is retained as
+`xc_response_site%signed_spin_population`; the response refresh records the
+occupied site `sigma_z` value while leaving the legacy magnitude field intact.
+The operator service receives this signed value explicitly and constructs
+
+\[
+Q_a^- = \frac{D_{a,x}-iD_{a,y}}{2M_a},\qquad Q_a^+=(Q_a^-)^\dagger.
+\]
+
+Zero signed moments, `generalized_overlap_proxy`, and
+`generalized_overlap_kanpur` are rejected. The existing WR-01b feature guard
+also rejects SOC, constraining/FSM fields, HOH, GBT, CCOR, Hubbard, and local
+axis transforms. There is no TDDFT production-dispatch change.
+
+The q=0 limitation is intentional: a finite-q pair potential requires the
+phase of the *perturbed endpoint position*, not merely the directed bond. That
+endpoint-cell phase belongs in the later `k+q,k` vertex assembly and remains
+unchecked until its commensurate-supercell oracle exists.
+
+`UnitLmtoPairPotential` validates: a two-level/on-site central rotation,
+unequal-orbital failure of a scalar site substitute, reversed signed moment,
+`Q^+=(Q^-)^dagger`, normal q=0/Bloch phases, zero-moment rejection, and the
+moment-weighted rigid two-endpoint identity. Together with the WR-01b
+three-step finite-difference test, this pins the analytic Hamiltonian tangent
+at the q=0 operator boundary.
