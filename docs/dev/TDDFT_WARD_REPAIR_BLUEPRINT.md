@@ -306,7 +306,16 @@ centralises this calculation, exposes `K=k+q`, folded `Kbar`, reciprocal shift
 `u_K=U_G^dagger u_Kbar`; raw multisublattice matrices are not assumed periodic.
 
 The phase/gauge unit tests pass, including independent left/right phase
-negative controls and `q=1/2,1/3` probes. WR-01c remains open pending the
-independent commensurate-supercell cosine/sine oracle; the current circular
-adjoint remains the q=0 service convention and is not yet finite-q oracle
-evidence.
+negative controls and `q=1/2,1/3` probes. `UnitLmtoPairPotential` also has an
+independent 2- and 3-cell oracle: it creates explicit normalized cosine/sine
+textures, rebuilds the ordinary LMTO bond Hamiltonian without consuming an
+endpoint tangent, projects the central difference from `k=0` to `k+q`, and
+matches the analytic circular Q operator through a three-theta O(theta^2)
+ladder. The `k=0` endpoint is intentional: both primitive Bloch states are
+then commensurate with the Gamma supercell, so no boundary-condition phase is
+silently approximated.
+
+WR-01c remains open until that oracle is connected to the actual reciprocal
+pair-potential service, including its folded-eigenvector gauge, and Qplus is
+independently reconstructed from reverse-bond data. The current circular
+adjoint remains the q=0 service convention and is not yet finite-q evidence.

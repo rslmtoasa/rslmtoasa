@@ -51,8 +51,13 @@
 
 - `UnitLmtoPairPotential`: endpoint phase isolation at `q=1/2` and `q=1/3`,
   q=0 reduction, and unfolded/folded two-sublattice site-gauge metadata.
-- Still required before checking WR-01c: independent commensurate-supercell
-  cosine/sine rotation projection and its theta-convergence ladder.
+- `UnitLmtoPairPotential`: independent explicit 2- and 3-cell cosine/sine
+  texture oracle. It rebuilds the ordinary LMTO bond Hamiltonian from rotated
+  moments, projects the central difference from `k=0` to `k+q`, and verifies
+  the analytic circular Q operator over a three-theta O(theta^2) ladder.
+- Still required before checking WR-01c: exercise the actual reciprocal
+  pair-potential service and its folded-eigenvector gauge at finite q, then
+  verify independently assembled reverse-bond Qplus.
 
 ## Global gates
 
