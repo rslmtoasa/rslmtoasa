@@ -27,6 +27,7 @@ All examples are located in the ``example/`` directory of the RS-LMTO-ASA distri
 - :doc:`examples/conductivity_fcccu` - Electrical conductivity of copper
 - :doc:`examples/conductivity_fccpt` - Spin Hall effect in platinum
 - :doc:`examples/conductivity_bccfe` - Anomalous Hall effect in iron
+- :doc:`examples/fccni_tddft_magnons` - Lightweight transverse TDDFT magnons in fcc Ni
 
 Running the Examples
 ====================
@@ -73,6 +74,7 @@ The following sections explain each example in detail.
    examples/conductivity_fcccu
    examples/conductivity_fccpt
    examples/conductivity_bccfe
+   examples/fccni_tddft_magnons
 
 Best Practices
 ==============
