@@ -1,0 +1,104 @@
+! High-resolution transverse LR-TDDFT magnon baseline for converged bcc Fe.
+!
+! The local database reuses Fe_out.nml.  Preserve that potential and retain
+! every TDDFT output under the distinct bccFe_tddft_hq prefix for convergence
+! and cross-method comparisons.
+&calculation
+pre_processing = 'bravais'
+post_processing = 'susceptibility'
+verbose = T
+/
+&lattice
+rc = 040 ! radius cut. We could think about setting a default
+alat = 2.86120 ! lattice parapeter
+crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+! Re-converge the restart on the response mesh before constructing Xi.  The
+! TDDFT calculation is sensitive to the spin moment and Fermi surface, so the
+! inexpensive 25-step refresh used by the demonstration deck is inadequate.
+nstep = 80
+conv_thr = 1.0e-9
+use_kspace = .true.
+soc_scale = 0.0d0
+fix_soc = .true.
+/
+&energy
+fermi = -0.069612
+energy_min = -2.0
+energy_max = 1.5
+channels_ldos = 401
+/
+&reciprocal
+! Full, unreduced 32^3 mesh: required for the finite-q transverse bubble.
+! This is a high-resolution baseline, not a substitute for a k-mesh sweep.
+nk1 = 32
+nk2 = 32
+nk3 = 32
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+dos_method = 'tetrahedron'
+! Keep the SCF and response Fermi-Dirac occupations consistent.  100 K gives
+! k_B T = 0.63 mRy, below the explicit response broadening.
+temperature = 100.0
+auto_find_fermi = .true.
+/
+&control
+calctype = 'B'
+nsp = 2
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.15
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+/
+&tddft
+enabled = .true.
+channel = 'transverse'
+chi0_backend = 'eigenpairs'
+response_projection = 'site'
+! Gamma-H-N-Gamma-P-H-P-N in direct reciprocal coordinates.  The 113-point path
+! resolves the displayed dispersion; the 32^3 mesh resolves the metallic
+! particle-hole continuum much more faithfully than the old 6^3 smoke test.
+q_mode = 'list'
+q_coordinates = 'direct'
+q_file = 'bccFe_qpath.dat'
+omega_min = 0.0
+! 0.05 mRy (0.68 meV) frequency spacing resolves eta = 1 mRy (13.6 meV)
+! without grid-limited peak locations.  0.06 Ry covers bcc-Fe magnons and
+! their low-energy Stoner continuum.
+omega_max = 0.06
+nomega = 1201
+eta = 0.001
+electronic_temperature = 100.0
+! Use the complete 18-band LMTO spinor space.  A truncated band window is a
+! separate convergence study, not a performance default for this reference.
+band_first = 1
+band_last = 0
+! The response chemical potential is derived from this 32^3 mesh and the
+! restart target count; fermi_level is intentionally not a &tddft key.
+occupation_tolerance = 1.0e-14
+output_prefix = 'bccFe_tddft_hq'
+output_chi0 = .true.
+output_xi = .true.
+output_chi = .true.
+output_modes = .true.
+output_stoner = .true.
+xi_backend = 'pair_potential'  ! or 'compare'
+goldstone_mode = 'correct'
+/

@@ -89,6 +89,7 @@ module tddft_goldstone_mod
    public :: rescale_xi_columns
    public :: rescale_pair_potential_columns
    public :: spectral_weights_are_nonnegative
+   public :: spectral_weight_correction_is_acceptable
    public :: append_goldstone_column_correction_text
    public :: write_goldstone_diagnostics_text
 
@@ -311,6 +312,30 @@ contains
       if (present(tolerance)) allowed_negative = tolerance
       acceptable = all(weights >= -allowed_negative)
    end function spectral_weights_are_nonnegative
+
+   !> A finite-eta circular retarded response may contain a negative
+   !> low-frequency tail from the opposite-frequency Lehmann poles.  The
+   !> Goldstone-column correction must therefore be judged against the raw
+   !> pair response, not against an unconditional pointwise positivity test.
+   !> It is rejected only when it creates negative weight or makes pre-existing
+   !> negative weight more negative by more than a combined absolute/relative
+   !> numerical tolerance.  The relative term is essential near a narrow
+   !> finite-eta pole: a column-scale change at roundoff can otherwise produce
+   !> an absolute loss difference above 1e-10 while remaining numerically
+   !> identical to the raw spectrum.
+   logical function spectral_weight_correction_is_acceptable(raw_weights, corrected_weights, tolerance) result(acceptable)
+      real(rp), intent(in) :: raw_weights(:), corrected_weights(:)
+      real(rp), intent(in), optional :: tolerance
+      real(rp) :: allowed_change
+
+      if (size(raw_weights) /= size(corrected_weights)) then
+         error stop 'spectral_weight_correction_is_acceptable: raw/corrected shape mismatch'
+      end if
+      allowed_change = 1.0e-10_rp
+      if (present(tolerance)) allowed_change = tolerance
+      acceptable = all(.not. ((corrected_weights < -allowed_change) .and. &
+         (corrected_weights < raw_weights - allowed_change*max(1.0_rp, abs(raw_weights), abs(corrected_weights)))))
+   end function spectral_weight_correction_is_acceptable
 
    subroutine append_goldstone_column_correction_text(filename, correction)
       character(len=*), intent(in) :: filename

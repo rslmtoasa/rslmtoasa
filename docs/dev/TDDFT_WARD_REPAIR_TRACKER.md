@@ -155,10 +155,10 @@
 - Raw `*_pair_dyson.dat` and corrected `*_pair_corrected_dyson.dat` record
   their own minimum site spectral weights, alongside static raw/corrected
   residuals, SVD rank/condition, every scale, decision, and Gamma loss maxima.
-  A negative corrected weight terminates after both products are written. When
-  the raw minimum is already negative, the output identifies it as a material
-  causality/representation failure rather than blaming the column correction;
-  `diagnose` can then be used only to complete the raw sweep.
+  Finite-eta circular spectra can retain a low-frequency opposite-branch tail,
+  so a correction is rejected only when it creates negative weight or worsens
+  an existing negative value relative to its raw counterpart. Raw and
+  corrected nonnegativity remain explicit diagnostics.
 - gfortran-13 evidence (2026-08-10):
   `cmake --build build-gfortran13 --target UnitTddftGoldstone UnitTddftConfig -j4`;
   `ctest --test-dir build-gfortran13 --output-on-failure -L tddft` (16/16

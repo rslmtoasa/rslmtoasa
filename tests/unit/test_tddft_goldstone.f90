@@ -7,7 +7,8 @@ program test_tddft_goldstone
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, &
       tddft_goldstone_diagnostics, build_site_projected_k_perp, construct_transverse_xi, evaluate_goldstone, &
       tddft_goldstone_column_correction, evaluate_raw_xi_diagnostics, build_goldstone_column_correction, &
-      rescale_xi_columns, spectral_weights_are_nonnegative, write_goldstone_diagnostics_text
+      rescale_xi_columns, spectral_weights_are_nonnegative, spectral_weight_correction_is_acceptable, &
+      write_goldstone_diagnostics_text
    implicit none
 
    real(rp), parameter :: tol = 2.0e-12_rp
@@ -119,6 +120,16 @@ contains
       call assert_true('complex static correction is rejected', correction%rejected)
       call assert_true('negative spectral-weight control is detected', .not. spectral_weights_are_nonnegative([-1.0e-4_rp]))
       call assert_true('nonnegative spectral-weight control passes', spectral_weights_are_nonnegative([0.0_rp, 1.0e-8_rp]))
+      call assert_true('unchanged finite-eta circular tail is accepted', &
+         spectral_weight_correction_is_acceptable([-0.20_rp, 0.10_rp], [-0.20_rp, 0.10_rp]))
+      call assert_true('correction-created negative weight is rejected', &
+         .not. spectral_weight_correction_is_acceptable([0.10_rp, 0.10_rp], [0.10_rp, -0.01_rp]))
+      call assert_true('correction-worsened negative weight is rejected', &
+         .not. spectral_weight_correction_is_acceptable([-0.20_rp, 0.10_rp], [-0.21_rp, 0.10_rp]))
+      call assert_true('roundoff-sized change near a large finite-eta pole is accepted', &
+         spectral_weight_correction_is_acceptable([-100.0_rp], [-100.0_rp-5.0e-9_rp]))
+      call assert_true('resolved worsening near a large finite-eta pole is rejected', &
+         .not. spectral_weight_correction_is_acceptable([-100.0_rp], [-100.0_rp-2.0e-8_rp]))
    end subroutine test_correction_rejections_and_spectral_control
 
    subroutine test_symmetry_breaking_disables_sum_rule()

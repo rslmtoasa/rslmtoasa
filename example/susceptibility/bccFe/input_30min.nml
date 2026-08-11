@@ -1,0 +1,93 @@
+! Lean transverse LR-TDDFT screening deck for bcc Fe (~30 min on the machine
+! that takes ~16 h for input.nml).  It retains the full 113-point path and
+! full band window, but is not a replacement for the 32^3 high-resolution run.
+! To use it after the current run, copy it to input.nml and keep input.nml
+! under its bccFe_tddft_hq prefix as the high-resolution reference.
+&calculation
+pre_processing = 'bravais'
+post_processing = 'susceptibility'
+verbose = T
+/
+&lattice
+rc = 040
+alat = 2.86120
+crystal_sym = 'bcc'
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+! The saved potential is already converged; this is a radial-kernel refresh
+! and a practical SCF check, not a new high-accuracy ground-state campaign.
+nstep = 40
+conv_thr = 1.0e-8
+use_kspace = .true.
+soc_scale = 0.0d0
+fix_soc = .true.
+/
+&energy
+fermi = -0.069612
+energy_min = -2.0
+energy_max = 1.5
+channels_ldos = 401
+/
+&reciprocal
+! 16^3 is a screening mesh.  Use input.nml's 32^3 mesh for the final
+! convergence point, and compare both before interpreting the dispersion.
+nk1 = 16
+nk2 = 16
+nk3 = 16
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+dos_method = 'tetrahedron'
+temperature = 100.0
+auto_find_fermi = .true.
+/
+&control
+calctype = 'B'
+nsp = 2
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.15
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+/
+&tddft
+enabled = .true.
+channel = 'transverse'
+chi0_backend = 'eigenpairs'
+response_projection = 'site'
+q_mode = 'list'
+q_coordinates = 'direct'
+q_file = 'bccFe_qpath.dat'
+omega_min = 0.0
+! 2.55 meV frequency spacing gives more than ten samples across the 27 meV
+! numerical broadening, while keeping the spectrum suitable for screening.
+omega_max = 0.06
+nomega = 321
+eta = 0.002
+electronic_temperature = 100.0
+band_first = 1
+band_last = 0
+occupation_tolerance = 1.0e-12
+output_prefix = 'bccFe_tddft_30m'
+output_chi0 = .true.
+output_xi = .true.
+output_chi = .true.
+output_modes = .true.
+output_stoner = .true.
+xi_backend = 'pair_potential'
+goldstone_mode = 'correct'
+/

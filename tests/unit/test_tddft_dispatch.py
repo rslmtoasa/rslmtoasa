@@ -112,11 +112,15 @@ def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
     assert "fermi_level" not in namelist
 
 
-def test_pair_correction_reports_whether_negative_weight_predates_correction() -> None:
-    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
-    assert "raw_pair_spectral_weight_ok" in source
-    assert "The raw pair spectrum is already negative" in source
-    assert "goldstone_mode=diagnose only to complete a raw diagnostic sweep" in source
+def test_pair_correction_compares_corrected_loss_to_raw_pair_loss() -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "source" / "calculation.f90").read_text()
+    goldstone = (root / "source" / "tddft_goldstone.f90").read_text()
+    assert "spectral_weight_correction_is_acceptable" in source
+    assert "pair_correction_preserves_raw_spectral_weight" in source
+    assert "created or worsened" in source
+    assert "negative spectral weight relative to the raw pair response" in source
+    assert "corrected_weights < raw_weights - allowed_change*max(1.0_rp" in goldstone
 
 
 if __name__ == "__main__":
@@ -129,5 +133,5 @@ if __name__ == "__main__":
     test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
     test_goldstone_correction_input_error_is_rejected_before_response_setup()
     test_response_mesh_resolves_inherited_fermi_after_eigenpairs()
-    test_pair_correction_reports_whether_negative_weight_predates_correction()
+    test_pair_correction_compares_corrected_loss_to_raw_pair_loss()
     print("RESULT: PASS")
