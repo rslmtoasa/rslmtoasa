@@ -729,18 +729,17 @@ backend.**
 | `f89ed22` GC-05 | Codex, 2026-08-12 | One-k operator source, legacy adapters, fetch-count and finite-q Xi oracle | Approved stage scope; final gate blocked elsewhere. |
 | `464cbe7` qualification fixes | Codex, 2026-08-12 | Strict-Debug guard/lifecycle fixes and DOS text-resolution comparator; four complete matrices | Approved; all former qualification blockers closed. |
 
-## Review record template
-
-Use this template for each GC commit in the handoff and in the commit review:
+## GC-06 final completion review
 
 | Field | Record |
 | --- | --- |
-| Commit SHA | |
-| Reviewer and date | |
-| Scope checked | |
-| Numerical contracts rechecked | |
-| Debug result | |
-| MPI result | |
-| Allocation/residency evidence | |
-| Open findings / follow-up issue | |
-| Approved for next GC stage | Yes / No |
+| Qualified source commit | `464cbe7f7193ea433f154542c80fb0c2e7f86bc7` |
+| Evidence record commit | `44e958b4627a2685b701e21a16d40b12ce05d9d7` |
+| Reviewer and date | Codex, 2026-08-12 |
+| Scope checked | GC-01 through GC-05 contracts, strict-Debug corrective guards, DOS text-resolution comparison, four complete CPU-only qualification matrices, MPI rank coverage, TD-DFT profile, CI configuration, and final decision. |
+| Numerical contracts rechecked | FP64, retarded TD-DFT denominators, occupation/window semantics, explicit k-weight normalization, left/right vertex order, scalar TD-DFT oracle, generalized residual/metric orthogonality, and unchanged physical defaults/references. |
+| Debug result | Release serial/OpenMP 105/105 enabled passed; strict Debug with runtime checks and invalid/zero/overflow traps 105/105 enabled passed. |
+| MPI result | Release MPI+OpenMP and MPI-only each passed 116/116 enabled tests; bcc-Fe k-space SCF passed serial and MPI ranks 1, 2, and 4. |
+| Allocation/residency evidence | GC-02 through GC-05 direct workspace/fetch-count tests pass; `UnitTddftCpuProfile` passes with the recorded bcc-Fe and fcc-Ni payloads/phases. |
+| Open findings / follow-up issue | Seven repository-disabled WP8/WP9 tests remain excluded from all counts; they are explicitly documented above and are not GPU-reciprocal gate failures. |
+| Approved for next GC stage | Yes — GC-06 is complete and the reciprocal GPU optimization task is closed. |
