@@ -24,10 +24,14 @@ module tddft_transition_engine_mod
    type, public :: tddft_transition_workspace
       integer :: capacity = 0
       integer :: active_pairs = 0
+      integer :: coefficient_dimension = 0
+      integer :: storage_allocations = 0
+      integer :: capacity_reuses = 0
       integer, allocatable :: band_n(:), band_m(:)
       real(rp), allocatable :: occupations(:), transition_energies(:)
       complex(rp), allocatable :: left_vertices(:, :), right_vertices(:, :)
       complex(rp), allocatable :: denominators(:), weighted_left(:, :)
+      complex(rp), allocatable :: bra(:, :), ket(:, :)
    contains
       procedure :: ensure_capacity => transition_workspace_ensure_capacity
       procedure :: clear => transition_workspace_clear
@@ -40,6 +44,7 @@ module tddft_transition_engine_mod
    !> left=<n|A|m>, right=<m|B|n>; right is not inferred by conjugation.
    type, abstract, public :: tddft_vertex_provider
    contains
+      procedure(coefficient_dimension_interface), deferred :: coefficient_dimension
       procedure(fill_vertex_tile_interface), deferred :: fill_vertex_tile
    end type tddft_vertex_provider
 
@@ -49,6 +54,7 @@ module tddft_transition_engine_mod
       type(response_channel), pointer :: left_channels(:) => null(), right_channels(:) => null()
       complex(rp), pointer :: eigenvectors_k(:, :, :) => null(), eigenvectors_kq(:, :, :) => null()
    contains
+      procedure :: coefficient_dimension => site_channel_coefficient_dimension
       procedure :: fill_vertex_tile => fill_site_channel_vertex_tile
       procedure :: restore_to_default => restore_site_channel_provider
       final :: site_channel_provider_destructor
@@ -65,6 +71,7 @@ module tddft_transition_engine_mod
       complex(rp), pointer :: constant_operators(:, :, :) => null()
       logical :: k_dependent = .false.
    contains
+      procedure :: coefficient_dimension => pair_operator_coefficient_dimension
       procedure :: fill_vertex_tile => fill_pair_operator_vertex_tile
       procedure :: restore_to_default => restore_pair_operator_provider
       final :: pair_operator_provider_destructor
@@ -85,11 +92,16 @@ module tddft_transition_engine_mod
    public :: tddft_fermi_occupation, tddft_static_divided_difference
 
    abstract interface
-      subroutine fill_vertex_tile_interface(this, ik, band_n, band_m, npairs, left_vertices, right_vertices)
+      integer function coefficient_dimension_interface(this)
+         import :: tddft_vertex_provider
+         class(tddft_vertex_provider), intent(in) :: this
+      end function coefficient_dimension_interface
+
+      subroutine fill_vertex_tile_interface(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
          import :: tddft_vertex_provider, rp
          class(tddft_vertex_provider), intent(in) :: this
          integer, intent(in) :: ik, band_n(:), band_m(:), npairs
-         complex(rp), intent(out) :: left_vertices(:, :), right_vertices(:, :)
+         complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
       end subroutine fill_vertex_tile_interface
    end interface
 
@@ -166,46 +178,76 @@ contains
       provider%constant_operators => operators; provider%k_dependent = .false.
    end subroutine make_pair_operator_vertex_provider_constant
 
-   subroutine fill_site_channel_vertex_tile(this, ik, band_n, band_m, npairs, left_vertices, right_vertices)
+   integer function site_channel_coefficient_dimension(this) result(ncoefficient)
+      class(site_channel_vertex_provider), intent(in) :: this
+      if (.not. associated(this%eigenvectors_k) .or. .not. associated(this%eigenvectors_kq)) then
+         error stop 'site vertex provider is not configured'
+      end if
+      if (size(this%eigenvectors_k, 1) /= size(this%eigenvectors_kq, 1)) then
+         error stop 'site vertex provider has incompatible coefficient dimensions'
+      end if
+      ncoefficient = size(this%eigenvectors_k, 1)
+   end function site_channel_coefficient_dimension
+
+   integer function pair_operator_coefficient_dimension(this) result(ncoefficient)
+      class(pair_operator_vertex_provider), intent(in) :: this
+      if (.not. associated(this%eigenvectors_k) .or. .not. associated(this%eigenvectors_kq)) then
+         error stop 'pair vertex provider is not configured'
+      end if
+      if (size(this%eigenvectors_k, 1) /= size(this%eigenvectors_kq, 1)) then
+         error stop 'pair vertex provider has incompatible coefficient dimensions'
+      end if
+      ncoefficient = size(this%eigenvectors_k, 1)
+   end function pair_operator_coefficient_dimension
+
+   subroutine fill_site_channel_vertex_tile(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
       class(site_channel_vertex_provider), intent(in) :: this
       integer, intent(in) :: ik, band_n(:), band_m(:), npairs
-      complex(rp), intent(out) :: left_vertices(:, :), right_vertices(:, :)
-      complex(rp), allocatable :: bra(:, :), ket(:, :)
+      complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
       integer :: ipair, nmat
       if (.not. associated(this%eigenvectors_k) .or. .not. associated(this%eigenvectors_kq)) error stop 'site vertex provider is not configured'
-      nmat = size(this%eigenvectors_k,1); allocate(bra(nmat,npairs),ket(nmat,npairs))
+      nmat = size(this%eigenvectors_k,1)
+      if (size(bra,1) /= nmat .or. size(ket,1) /= nmat .or. size(bra,2) < npairs .or. size(ket,2) < npairs) then
+         error stop 'site vertex provider scratch shape is incompatible'
+      end if
       do ipair=1,npairs
          bra(:,ipair)=this%eigenvectors_k(:,band_n(ipair),ik); ket(:,ipair)=this%eigenvectors_kq(:,band_m(ipair),ik)
       end do
-      call response_transition_vectors(this%left_channels,this%site_orbital_counts,bra,ket,left_vertices(:,1:npairs))
+      call response_transition_vectors(this%left_channels,this%site_orbital_counts,bra(:,1:npairs),ket(:,1:npairs), &
+         left_vertices(:,1:npairs))
       do ipair=1,npairs
          bra(:,ipair)=this%eigenvectors_kq(:,band_m(ipair),ik); ket(:,ipair)=this%eigenvectors_k(:,band_n(ipair),ik)
       end do
-      call response_transition_vectors(this%right_channels,this%site_orbital_counts,bra,ket,right_vertices(:,1:npairs))
+      call response_transition_vectors(this%right_channels,this%site_orbital_counts,bra(:,1:npairs),ket(:,1:npairs), &
+         right_vertices(:,1:npairs))
    end subroutine fill_site_channel_vertex_tile
 
-   subroutine fill_pair_operator_vertex_tile(this, ik, band_n, band_m, npairs, left_vertices, right_vertices)
+   subroutine fill_pair_operator_vertex_tile(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
       class(pair_operator_vertex_provider), intent(in) :: this
       integer, intent(in) :: ik, band_n(:), band_m(:), npairs
-      complex(rp), intent(out) :: left_vertices(:, :), right_vertices(:, :)
-      complex(rp), allocatable :: bra(:, :), ket(:, :)
+      complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
       integer :: ipair, nmat, operator_k
       if (.not. associated(this%operators_k) .and. .not. associated(this%constant_operators)) then
          error stop 'pair vertex provider is not configured'
       end if
       operator_k=1; if (this%k_dependent) operator_k=ik
-      nmat=size(this%eigenvectors_k,1); allocate(bra(nmat,npairs),ket(nmat,npairs))
+      nmat=size(this%eigenvectors_k,1)
+      if (size(bra,1) /= nmat .or. size(ket,1) /= nmat .or. size(bra,2) < npairs .or. size(ket,2) < npairs) then
+         error stop 'pair vertex provider scratch shape is incompatible'
+      end if
       do ipair=1,npairs
          bra(:,ipair)=this%eigenvectors_k(:,band_n(ipair),ik); ket(:,ipair)=this%eigenvectors_kq(:,band_m(ipair),ik)
       end do
-      call response_transition_vectors(this%left_channels,this%site_orbital_counts,bra,ket,left_vertices(:,1:npairs))
+      call response_transition_vectors(this%left_channels,this%site_orbital_counts,bra(:,1:npairs),ket(:,1:npairs), &
+         left_vertices(:,1:npairs))
       do ipair=1,npairs
          bra(:,ipair)=this%eigenvectors_kq(:,band_m(ipair),ik); ket(:,ipair)=this%eigenvectors_k(:,band_n(ipair),ik)
       end do
       if (associated(this%constant_operators)) then
-         call weighted_transition_vectors(this%constant_operators,bra,ket,right_vertices(:,1:npairs))
+         call weighted_transition_vectors(this%constant_operators,bra(:,1:npairs),ket(:,1:npairs),right_vertices(:,1:npairs))
       else
-         call weighted_transition_vectors(this%operators_k(:,:,:,operator_k),bra,ket,right_vertices(:,1:npairs))
+         call weighted_transition_vectors(this%operators_k(:,:,:,operator_k),bra(:,1:npairs),ket(:,1:npairs), &
+            right_vertices(:,1:npairs))
       end if
    end subroutine fill_pair_operator_vertex_tile
 
@@ -219,11 +261,12 @@ contains
       class(tddft_vertex_provider), intent(in) :: provider
       complex(rp), intent(inout) :: response(:, :, :)
       real(rp), intent(inout) :: vertex_seconds, preparation_seconds, denominator_seconds, accumulation_seconds
-      integer :: ik,n,m,npairs,capacity,ipair,iw
+      integer :: ik,n,m,npairs,capacity,ipair,iw,ncoefficient
       real(rp) :: weight_sum,prefactor,t0,t1
       if (eta <= 0.0_rp .or. batch_size < 1) error stop 'transition engine: invalid dynamic controls'
       weight_sum=sum(k_weights); capacity=merge(batch_size,1,use_batched)
-      call this%workspace%ensure_capacity(size(response,1),size(response,2),capacity)
+      ncoefficient = provider%coefficient_dimension()
+      call this%workspace%ensure_capacity(size(response,1),size(response,2),ncoefficient,capacity)
       do ik=1,size(k_weights)
          prefactor=k_weights(ik)/weight_sum; npairs=0
          do n=band_first,band_last
@@ -258,8 +301,9 @@ contains
       class(tddft_vertex_provider), intent(in) :: provider
       complex(rp), intent(inout) :: response(:, :, :)
       real(rp), intent(inout) :: vertex_seconds, preparation_seconds, accumulation_seconds
-      integer :: ik,n,m,npairs; real(rp)::weight_sum,prefactor,t0,t1,factor
-      weight_sum=sum(k_weights); call this%workspace%ensure_capacity(size(response,1),size(response,2),batch_size)
+      integer :: ik,n,m,npairs,ncoefficient; real(rp)::weight_sum,prefactor,t0,t1,factor
+      weight_sum=sum(k_weights); ncoefficient=provider%coefficient_dimension()
+      call this%workspace%ensure_capacity(size(response,1),size(response,2),ncoefficient,batch_size)
       do ik=1,size(k_weights)
          prefactor=k_weights(ik)/weight_sum; npairs=0
          do n=band_first,band_last; do m=band_first,band_last
@@ -285,7 +329,8 @@ contains
       real(rp),intent(inout)::vertex_seconds,denominator_seconds,accumulation_seconds
       integer::iw,ipair,ileft,iright; real(rp)::t0,t1
       call cpu_time(t0); call provider%fill_vertex_tile(ik,this%workspace%band_n,this%workspace%band_m,npairs, &
-         this%workspace%left_vertices,this%workspace%right_vertices); call cpu_time(t1); vertex_seconds=vertex_seconds+t1-t0
+         this%workspace%bra,this%workspace%ket,this%workspace%left_vertices,this%workspace%right_vertices)
+      call cpu_time(t1); vertex_seconds=vertex_seconds+t1-t0
       do iw=1,size(omega)
          call cpu_time(t0); this%workspace%denominators(1:npairs)=cmplx(omega(iw)+this%workspace%transition_energies(1:npairs),eta,rp)
          do ipair=1,npairs
@@ -313,7 +358,8 @@ contains
       class(tddft_vertex_provider),intent(in)::provider; complex(rp),intent(inout)::response(:,:,:)
       real(rp),intent(inout)::vertex_seconds,accumulation_seconds; integer::ipair; real(rp)::t0,t1
       call cpu_time(t0); call provider%fill_vertex_tile(ik,this%workspace%band_n,this%workspace%band_m,npairs, &
-         this%workspace%left_vertices,this%workspace%right_vertices); call cpu_time(t1); vertex_seconds=vertex_seconds+t1-t0
+         this%workspace%bra,this%workspace%ket,this%workspace%left_vertices,this%workspace%right_vertices)
+      call cpu_time(t1); vertex_seconds=vertex_seconds+t1-t0
       do ipair=1,npairs
          this%workspace%weighted_left(:,ipair)=prefactor*this%workspace%occupations(ipair)*this%workspace%left_vertices(:,ipair)
       end do
@@ -323,36 +369,44 @@ contains
       accumulation_seconds=accumulation_seconds+t1-t0
    end subroutine flush_static
 
-   subroutine transition_workspace_ensure_capacity(this,nleft,nright,capacity)
-      class(tddft_transition_workspace),intent(inout)::this; integer,intent(in)::nleft,nright,capacity
-      if (capacity<1 .or. nleft<1 .or. nright<1) error stop 'transition workspace: invalid shape'
+   subroutine transition_workspace_ensure_capacity(this,nleft,nright,ncoefficient,capacity)
+      class(tddft_transition_workspace),intent(inout)::this; integer,intent(in)::nleft,nright,ncoefficient,capacity
+      if (capacity<1 .or. nleft<1 .or. nright<1 .or. ncoefficient<1) error stop 'transition workspace: invalid shape'
       ! Fortran does not guarantee short-circuit evaluation of .and.; keep
       ! every allocation inquiry separate from the corresponding size inquiry.
       ! A partially initialized workspace is never reusable.
       if (this%capacity >= capacity) then
          if (allocated(this%band_n) .and. allocated(this%band_m) .and. allocated(this%occupations) .and. &
              allocated(this%transition_energies) .and. allocated(this%left_vertices) .and. &
-             allocated(this%right_vertices) .and. allocated(this%denominators) .and. allocated(this%weighted_left)) then
+             allocated(this%right_vertices) .and. allocated(this%denominators) .and. allocated(this%weighted_left) .and. &
+             allocated(this%bra) .and. allocated(this%ket)) then
             if (size(this%band_n) >= capacity .and. size(this%band_m) >= capacity .and. &
                 size(this%occupations) >= capacity .and. size(this%transition_energies) >= capacity .and. &
                 size(this%denominators) >= capacity .and. size(this%left_vertices, 1) == nleft .and. &
                 size(this%left_vertices, 2) >= capacity .and. size(this%right_vertices, 1) == nright .and. &
                 size(this%right_vertices, 2) >= capacity .and. size(this%weighted_left, 1) == nleft .and. &
-                size(this%weighted_left, 2) >= capacity) return
+                size(this%weighted_left, 2) >= capacity .and. size(this%bra,1) == ncoefficient .and. &
+                size(this%bra,2) >= capacity .and. size(this%ket,1) == ncoefficient .and. size(this%ket,2) >= capacity) then
+               this%capacity_reuses=this%capacity_reuses+1
+               return
+            end if
          end if
       end if
-      call this%clear(); this%capacity=capacity
+      call this%clear(); this%capacity=capacity; this%coefficient_dimension=ncoefficient
+      this%storage_allocations=this%storage_allocations+1
       allocate(this%band_n(capacity),this%band_m(capacity),this%occupations(capacity),this%transition_energies(capacity), &
-         this%left_vertices(nleft,capacity),this%right_vertices(nright,capacity),this%denominators(capacity),this%weighted_left(nleft,capacity))
+         this%left_vertices(nleft,capacity),this%right_vertices(nright,capacity),this%denominators(capacity),this%weighted_left(nleft,capacity), &
+         this%bra(ncoefficient,capacity),this%ket(ncoefficient,capacity))
    end subroutine transition_workspace_ensure_capacity
    subroutine transition_workspace_clear(this)
       class(tddft_transition_workspace),intent(inout)::this
       if(allocated(this%band_n))deallocate(this%band_n);if(allocated(this%band_m))deallocate(this%band_m);if(allocated(this%occupations))deallocate(this%occupations)
       if(allocated(this%transition_energies))deallocate(this%transition_energies);if(allocated(this%left_vertices))deallocate(this%left_vertices)
       if(allocated(this%right_vertices))deallocate(this%right_vertices);if(allocated(this%denominators))deallocate(this%denominators);if(allocated(this%weighted_left))deallocate(this%weighted_left)
-      this%capacity=0;this%active_pairs=0
+      if(allocated(this%bra))deallocate(this%bra);if(allocated(this%ket))deallocate(this%ket)
+      this%capacity=0;this%active_pairs=0;this%coefficient_dimension=0
    end subroutine transition_workspace_clear
-   subroutine transition_workspace_restore_to_default(this);class(tddft_transition_workspace),intent(inout)::this;call this%clear();end subroutine
+   subroutine transition_workspace_restore_to_default(this);class(tddft_transition_workspace),intent(inout)::this;call this%clear();this%storage_allocations=0;this%capacity_reuses=0;end subroutine
    subroutine transition_workspace_destructor(this);type(tddft_transition_workspace)::this;call this%clear();end subroutine
    subroutine transition_engine_restore_to_default(this);class(tddft_transition_engine),intent(inout)::this;call this%workspace%restore_to_default();end subroutine
    subroutine transition_engine_destructor(this);type(tddft_transition_engine)::this;call this%workspace%clear();end subroutine

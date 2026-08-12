@@ -281,10 +281,46 @@ continue to dispatch per completed tile, never per scalar transition.
 
 ### Acceptance checklist
 
-- [ ] Site and pair providers allocate no `bra`/`ket` scratch in a tile flush.
-- [ ] Repeated dynamic/static chi_KS and Xi calls reuse prepared storage.
-- [ ] Scalar and GEMM/tiled paths agree over the RF-01 response surface.
-- [ ] Debug TD-DFT suite passes with checks enabled.
+#### Evidence — 2026-08-12, `128e66a75efb1555767410a858de50dc52f621f7` + GC-03 worktree
+
+`tddft_transition_workspace` now owns coefficient-space `bra` and `ket`
+tiles with the response tile arrays.  Each provider exposes its coefficient
+dimension once per `accumulate_dynamic`/`accumulate_static` call; the engine
+then prepares all storage together.  The tile interface receives caller-owned
+`bra`/`ket` buffers and both site-channel and pair-operator providers only fill
+their active slices.  They perform no allocation/deallocation in a tile flush;
+provider dispatch remains once per completed transition tile.
+
+`UnitTddftTransitionWorkspace` now uses real site-channel chi_KS and constant
+pair-operator Xi providers over two k points with batch size 3 (including the
+partial final tile).  It verifies prepared `(ncoefficient,capacity)` scratch,
+unchanged allocation counters and stable numerical results for repeated dynamic
+and static calls.  Existing scalar-vs-GEMM coverage remains in the chi_KS and
+direct-Xi tests.  GNU Fortran 13.3.0 validation passed:
+
+```text
+cmake --build build-rf-serial --parallel
+ctest --test-dir build-rf-serial -R 'Unit(TddftChiKS|TddftDirectXi|TddftFourComponent|TddftCpuProfile)|TddftCrossMilestoneEquivalence' --output-on-failure
+# 5/5 passed
+
+cmake --build build-rf-debug --parallel
+ctest --test-dir build-rf-debug -L unit --output-on-failure -j 1
+# 43/43 passed
+
+bash -lc 'source env/openmpi.sh; cmake --build build-rf-mpi --parallel'
+bash -lc 'source env/openmpi.sh; ctest --test-dir build-rf-mpi -L unit --output-on-failure -j 1'
+# 47/47 passed outside the sandbox
+```
+
+The MPI run used the approved unsandboxed OpenMPI runtime because the sandbox
+blocks PMIx listener socket creation (recorded in GC-02).  CUDA remained
+disabled; no TD-DFT response formulas, scalar reduction, batching semantics,
+or reference results changed.
+
+- [x] Site and pair providers allocate no `bra`/`ket` scratch in a tile flush.
+- [x] Repeated dynamic/static chi_KS and Xi calls reuse prepared storage.
+- [x] Scalar and GEMM/tiled paths agree over the RF-01 response surface.
+- [x] Debug TD-DFT suite passes with checks enabled.
 - [ ] GC-03 evidence is recorded and the commit is independently reviewed.
 
 ---
