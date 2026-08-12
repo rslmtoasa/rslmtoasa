@@ -5,7 +5,7 @@
 | Stage | Scope | Status |
 | --- | --- | --- |
 | RF-01 | Characterization, numerical oracles, and CPU baseline | Complete |
-| RF-02 | MPI runtime state, build integration, and output ownership | Pending RF-01 |
+| RF-02 | MPI runtime state, build integration, and output ownership | Complete (debug suite caveat recorded below) |
 | RF-03 | Explicit k-point worksets and ownership | Pending RF-02 |
 | RF-04 | Batched reciprocal assembly and reusable workspaces | Pending RF-03 |
 | RF-05 | Reciprocal execution backend with CPU/LAPACK implementation | Pending RF-04 |
@@ -123,7 +123,66 @@ RF-01 validation; they remain independently documented executable tests.
 
 ### RF-02
 
-- [ ] Start only after RF-01 is green and committed.
+- [x] RF-01 commit `28960f1` present and baseline green.
+- [x] `parallel_context` has deterministic serial defaults, generic construction,
+  type-bound range/root/barrier helpers, local rank/size, and a finalizer that
+  frees only its duplicated shared-memory communicator; it never finalizes MPI.
+- [x] Legacy MPI globals are initialized at declaration and synchronized only by
+  context initialization.
+- [x] `ENABLE_MPI=ON, ENABLE_OPENMP=OFF` builds, passes all 45 unit tests, and
+  reports one OpenMP thread per MPI process.
+- [x] MPI target definitions/linkage use `MPI::MPI_Fortran`; CMake no longer
+  changes the Fortran compiler after enabling the language.
+- [x] Device assignment is hardware-independent: default
+  `mod(local_rank, device_count)`, with a validated programmatic override.
+- [x] `report.out`, `minfo.out`, `linfo.out`, `totaldos.out`, and
+  `magneticdos.out` are root-owned through open/write/close after collectives.
+- [x] Gaussian bcc-Fe k-space SCF is paired against one serial reference at
+  serial and MPI ranks 1, 2, and 4; each leaves exactly one complete shared
+  output file set.
+- [x] Zero-work and oversubscribed ranges are deterministic and collective-safe.
+- [x] Serial Release units pass 41/41; MPI/OpenMP and MPI/no-OpenMP units each
+  pass 45/45; focused Debug RF-02 units pass 2/2.
+- [ ] The full Debug unit label has one unrelated pre-existing failure:
+  `TddftCrossMilestoneEquivalence` runs `UnitTddftConfig` under bounds checking
+  and indexes `config%q_points(:,4)` after a one-column allocation. No RF-02
+  file participates in that failure, so it remains outside this stage.
+- [x] `git diff --check` passed; RF-02 progress is updated in this commit.
+
+#### RF-02 validation record
+
+Configured with GNU Fortran 13.3.0, OpenMPI 4, and CUDA disabled. The MPI
+wrapper was selected before configuration; the host has an Intel oneAPI MPI
+runtime on `LD_LIBRARY_PATH`, so the OpenMPI library directory was put first in
+`LIBRARY_PATH` while linking validation binaries to avoid mixing MPI ABIs.
+
+```bash
+# Serial/OpenMP Release: 41/41 unit tests
+cmake --build build-rf-serial --parallel 4
+ctest --test-dir build-rf-serial -L unit -j 4 --output-on-failure
+
+# MPI/OpenMP Release: 45/45 unit tests
+cmake -S . -B build-rf-mpi -DCMAKE_Fortran_COMPILER=/bin/mpifort \
+  -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA_PLUGIN=OFF \
+  -DENABLE_MPI=ON -DENABLE_OPENMP=ON -DMPIEXEC_EXECUTABLE=/usr/bin/mpirun
+LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/openmpi/lib cmake --build build-rf-mpi --parallel 8
+ctest --test-dir build-rf-mpi -L unit -j 4 --output-on-failure
+
+# MPI without OpenMP: 45/45 unit tests
+ctest --test-dir build-rf-mpi-noomp -L unit -j 4 --output-on-failure
+
+# Debug build; 2/2 RF-02 units pass (full-label caveat above)
+cmake --build build-rf-debug --parallel 1
+ctest --test-dir build-rf-debug -R 'Unit(ParallelContext|KspaceOccupations)$' --output-on-failure
+```
+
+The bcc-Fe Gaussian SCF registration runs serial plus MPI ranks 1, 2, and 4
+against `tests/scf/references/Example_k_space_scf_bccFe`. All four passed with
+the CTest tolerances (`abs=1e-4`, `rel=1e-5`) over 18 checked values. Its
+canonical values are unchanged by rank count: `EF=-0.0463582057 Ry`,
+`N=8`, and `EBAND=-1.8920685 Ry`; Gaussian DOS integrates to 18. The MPI run
+also verifies exactly one each of the root-owned report/minfo/linfo and DOS
+output files.
 
 ### RF-03
 
@@ -152,7 +211,7 @@ RF-01 validation; they remain independently documented executable tests.
 | Stage | Commit |
 | --- | --- |
 | RF-01 | Created (exact SHA reported in the handoff) |
-| RF-02 | Not started |
+| RF-02 | Created in this commit (exact SHA reported in the handoff) |
 | RF-03 | Not started |
 | RF-04 | Not started |
 | RF-05 | Not started |

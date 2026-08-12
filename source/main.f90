@@ -17,21 +17,24 @@ program main
    type(calculation) :: calculation_obj
    type(argument_parser) :: args
 
+   integer :: nomp = 1
+
 #ifdef OpenMP_Fortran_FOUND
    ! External functions
    integer, external :: omp_get_num_threads
    integer, external :: omp_get_thread_num
-   integer :: nomp
 #endif
 
 #ifdef USE_MPI
    ! Initialize MPI
    call MPI_INIT(ierr)
-   call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
-   call MPI_COMM_SIZE(MPI_COMM_WORLD, numprocs, ierr)
-   if (rank == 0) then
-      print *, 'Running with', numprocs, 'MPI processes.'
-   end if
+#endif
+
+   ! The context initializes deterministic serial state when MPI is absent and
+   ! is the one synchronization point for legacy mpi_mod compatibility globals.
+   g_parallel_context = parallel_context()
+#ifdef USE_MPI
+   if (g_parallel_context%is_root()) print *, 'Running with', g_parallel_context%size, 'MPI processes.'
 #endif
 
 #ifdef OpenMP_Fortran_FOUND
@@ -46,7 +49,7 @@ program main
 #endif
 
 #ifdef USE_MPI
-   if (rank == 0) then
+   if (g_parallel_context%is_root()) then
       print *, 'Each MPI process is using', nomp, 'OpenMP threads.'
       print *, ' OpenMP in play with ', nomp, ' cores.'
    end if
@@ -83,6 +86,7 @@ program main
 #endif
 
 #ifdef USE_MPI
+   call g_parallel_context%restore_to_default()
    ! Finalize MPI
    call MPI_FINALIZE(ierr)
 #endif

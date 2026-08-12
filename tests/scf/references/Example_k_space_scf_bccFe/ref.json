@@ -16,15 +16,15 @@
     "totaldos.out": {
       "800": {
         "1": -0.67983,
-        "2": 0.06056
+        "2": 1.20402
       },
       "1255": {
         "1": 0.04556,
-        "2": 13.50067
+        "2": 6.52898
       },
       "1700": {
         "1": 0.75501,
-        "2": 7.3639
+        "2": 0.07753
       }
     }
   },
@@ -33,8 +33,7 @@
       "fermi_level": -0.0463582057,
       "canonical_electron_count": 8.0,
       "canonical_band_energy": -1.8920685,
-      "dos_integral": 13.507092,
-      "dos_state_count": 18.0,
+      "dos_integral": 18.0,
       "site_spin_moment": 2.002235,
       "site_valence": 8.0,
       "site_charge_transfer_z": -0.0

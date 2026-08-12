@@ -33,6 +33,9 @@ Reference data is driven by a "checks" dict in cases.json:
         "file": "testrun.log",
         "patterns": { "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)" }
       }
+    ],
+    "outputs": [
+      { "file": "totaldos.out", "min_lines": 50 }
     ]
   }
 
@@ -140,6 +143,20 @@ def check_log(workdir: str, case_name: str) -> None:
         sys.exit(1)
 
 
+def check_output_files(workdir: str, case_name: str, output_checks: list[dict]) -> None:
+    """Require one complete shared output for each root-owned file contract."""
+    for output_check in output_checks:
+        filename = output_check["file"]
+        matches = glob.glob(os.path.join(workdir, filename))
+        if len(matches) != 1:
+            print(f"ERROR [{case_name}]: expected exactly one '{filename}', found {len(matches)}")
+            sys.exit(1)
+        with open(matches[0]) as fh:
+            line_count = sum(1 for _ in fh)
+        min_lines = output_check.get("min_lines", 1)
+        if line_count < min_lines:
+            print(f"ERROR [{case_name}]: '{filename}' incomplete ({line_count} < {min_lines} lines)")
+            sys.exit(1)
 # ---------------------------------------------------------------------------
 # Value extraction
 # ---------------------------------------------------------------------------
@@ -367,6 +384,8 @@ def main() -> None:
                              "set to the base case name so a serial/mpi pair shares one reference")
     parser.add_argument("--force-serial", action="store_true",
                         help="Force mpi_procs=1 regardless of case mpi_procs or --mpi-enabled")
+    parser.add_argument("--mpi-procs", type=int, default=None,
+                        help="Override the case MPI rank count (requires --mpi-enabled)")
 
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--compare-ref", metavar="REF_DIR", help="Compare output against stored reference")
@@ -389,9 +408,17 @@ def main() -> None:
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
     patch_input_nml(workdir, case)
     serial_omp = case.get("omp_threads", None)
-    mpi_procs = 1 if args.force_serial else (case.get("mpi_procs", 1) if args.mpi_enabled else 1)
+    if args.mpi_procs is not None and args.mpi_procs < 1:
+        parser.error("--mpi-procs must be a positive integer")
+    if args.mpi_procs is not None and not args.mpi_enabled:
+        parser.error("--mpi-procs requires --mpi-enabled")
+    mpi_procs = 1 if args.force_serial else (
+        args.mpi_procs if args.mpi_enabled and args.mpi_procs is not None else
+        (case.get("mpi_procs", 1) if args.mpi_enabled else 1)
+    )
     run_binary(binary, workdir, mpi_procs, serial_omp)
     check_log(workdir, args.case_name)
+    check_output_files(workdir, args.case_name, case.get("outputs", []))
 
     if args.compare_ref:
         abs_tol = case.get("abs_tol", args.abs_tol)

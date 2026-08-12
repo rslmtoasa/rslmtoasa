@@ -537,13 +537,18 @@
       "quick": true,
       "case": "k_space_scf/bccFe",
       "timeout": 300,
+      "launch_modes": ["serial", "mpi"],
+      "mpi_procs": 2,
+      "mpi_rank_counts": [1, 2, 4],
       "namelists": {
         "self": { "nstep": 1, "use_kspace": true },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
           "nk3": 2,
-          "n_energy_points": 40
+          "n_energy_points": 40,
+          "dos_method": "gaussian",
+          "gaussian_sigma": 0.01
         },
         "energy": { "energy_min": -2.0, "energy_max": 2.0 },
         "control": { "nsp": 1, "recur": "block", "lld": 12 }
@@ -563,15 +568,21 @@
               "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
               "canonical_electron_count": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
               "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
-              "dos_integral": "DOS integral =\\s*([-+0-9.EeDd]+)",
-              "dos_state_count": "N\\(Emax\\)-N\\(Emin\\)\\s*=\\s*([-+0-9.EeDd]+)",
+              "dos_integral": "DOS integrates to\\s*([-+0-9.EeDd]+)",
               "site_spin_moment": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
               "site_valence": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
               "site_charge_transfer_z": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
             }
           }
         ]
-      }
+      },
+      "outputs": [
+        { "file": "totaldos.out", "min_lines": 50 },
+        { "file": "magneticdos.out", "min_lines": 51 },
+        { "file": "report.out", "min_lines": 10 },
+        { "file": "minfo.out", "min_lines": 1 },
+        { "file": "linfo.out", "min_lines": 1 }
+      ]
     },
     {
       "name": "Example_bulk_fccCu_chebyshev",

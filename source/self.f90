@@ -1380,11 +1380,6 @@ contains
       real(rp) :: denom
       real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
-      ! Open report.out file
-      open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
-      open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
-      open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
-
       ! Calculate outputs that are not calculated during the SFC run
       call this%bands%calculate_magnetic_torques()
 
@@ -1406,6 +1401,11 @@ contains
 #endif
 
       if (rank == 0) then
+         ! These are shared files. Root owns their complete open/write/close
+         ! lifetime; reductions above deliberately remain collective.
+         open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
+         open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
+         open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
          call g_logger%info('Calculation finished. Report printed in report.out', __FILE__, __LINE__)
          !===========================================================================
          !                      Total Energy
@@ -1485,6 +1485,9 @@ contains
          do ia = 1, this%lattice%nrec
             write (newunit, '(a,i4,a,f10.6)') 'RMS Diff of atom', ia, ':', sqrt(sum((this%mix%qia_old(ia, 1:nb_slice) - this%mix%qia_new(ia, 1:nb_slice))**2))/denom
          end do
+         close(newunit)
+         close(10)
+         close(20)
       end if
 
       ! Print angle betweens magnetic and orbital moments
@@ -1497,10 +1500,6 @@ contains
          end do
       end if
       
-      close(newunit)
-      close(10)
-      close(20)
-    
    end subroutine report
 
    function is_converged(this, delta_en) result(l)

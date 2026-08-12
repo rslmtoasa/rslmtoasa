@@ -6,7 +6,7 @@ program test_kspace_occupations
    use reciprocal_mod, only: reciprocal
    use hamiltonian_mod, only: hamiltonian
    use logger_mod, only: g_logger
-   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
+   use mpi_mod, only: parallel_context, assignment(=), rank, numprocs, ierr, get_mpi_range
 #ifdef USE_MPI
    use mpi
 #endif
@@ -24,6 +24,7 @@ program test_kspace_occupations
 
    type(reciprocal) :: obj
    type(hamiltonian), target :: ham_state
+   type(parallel_context) :: context
    integer :: k_start, k_end, nk_local, ik, ie, ne
    integer, allocatable :: l2g(:), g2l(:)
    real(rp) :: ef, ef_ref, nelect, eband, eband_ref, raw_weight_sum
@@ -34,13 +35,8 @@ program test_kspace_occupations
 
 #ifdef USE_MPI
    call MPI_INIT(ierr)
-   call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
-   call MPI_COMM_SIZE(MPI_COMM_WORLD, numprocs, ierr)
-#else
-   rank = 0
-   numprocs = 1
-   ierr = 0
 #endif
+   context = parallel_context()
    call g_logger%init()
    failed = .false.
 
@@ -151,6 +147,7 @@ program test_kspace_occupations
       end if
    end if
 #ifdef USE_MPI
+   call context%restore_to_default()
    call MPI_FINALIZE(ierr)
 #endif
    if (failed) error stop 1
