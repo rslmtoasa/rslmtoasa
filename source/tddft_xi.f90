@@ -12,6 +12,8 @@ module tddft_xi_mod
    use response_vertices_mod, only: response_channel, response_transition_vertex, weighted_transition_vertex
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_metadata, tddft_fermi_occupation, &
       tddft_kB_Ry_per_K, tddft_occupation_kT_floor, tddft_static_divided_difference
+   use tddft_transition_engine_mod, only: tddft_transition_engine, pair_operator_vertex_provider, &
+      make_pair_operator_vertex_provider
    implicit none
 
    private
@@ -31,16 +33,19 @@ contains
    !> from the dynamic builder so a response eta can never enter Xi_static.
    subroutine build_static_direct_xi_from_k_dependent_eigenpairs(k_weights, eigenvalues, eigenvectors, &
       site_orbital_counts, left_channels, weighted_right_operators, options, result)
-      real(rp), intent(in) :: k_weights(:), eigenvalues(:, :)
-      complex(rp), intent(in) :: eigenvectors(:, :, :), weighted_right_operators(:, :, :, :)
-      integer, intent(in) :: site_orbital_counts(:)
-      type(response_channel), intent(in) :: left_channels(:)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues(:, :)
+      complex(rp), target, intent(in) :: eigenvectors(:, :, :), weighted_right_operators(:, :, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_direct_xi_result), intent(out) :: result
 
       integer :: nk, nbands, nspinor, nleft, nright, ik, n, m, band_first, band_last
       real(rp) :: weight_sum, prefactor, factor
       complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+      type(tddft_transition_engine) :: engine
+      type(pair_operator_vertex_provider) :: provider
+      integer :: batch_size
 
       nk = size(k_weights); nbands = size(eigenvalues, 1); nspinor = 2*sum(site_orbital_counts)
       nleft = size(left_channels); nright = size(weighted_right_operators, 3)
@@ -60,6 +65,14 @@ contains
       result%metadata%backend = 'static_xi_k_resolved_eigenpairs'
       result%metadata%frequency_convention = 'static q=0 omega=0 divided difference; no dynamical eta'
       result%metadata%eta = 0.0_rp
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors, eigenvectors, &
+         weighted_right_operators, .true.)
+      call engine%accumulate_static(k_weights, eigenvalues, options%fermi_level, options%electronic_temperature, &
+         band_first, band_last, options%occupation_prune_tolerance, batch_size, provider, result%xi, &
+         result%metadata%vertex_cpu_seconds, result%metadata%transition_preparation_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+      if (.false.) then
       allocate(left_vertex(nleft), right_vertex(nright))
       do ik = 1, nk
          prefactor = k_weights(ik)/weight_sum
@@ -75,6 +88,7 @@ contains
          end do
       end do
       deallocate(left_vertex, right_vertex)
+      end if
    end subroutine build_static_direct_xi_from_k_dependent_eigenpairs
 
    !> Assemble Xi_ab=sum (f_n-f_m)V_a W_b/(omega+en-em+i eta), where the
@@ -83,11 +97,11 @@ contains
    !> coefficient representation as the supplied eigenvectors.
    subroutine build_direct_xi_from_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
       eigenvectors_kq, site_orbital_counts, left_channels, weighted_right_operators, omega, options, result)
-      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
-      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
-      integer, intent(in) :: site_orbital_counts(:)
-      type(response_channel), intent(in) :: left_channels(:)
-      complex(rp), intent(in) :: weighted_right_operators(:, :, :)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
+      complex(rp), target, intent(in) :: weighted_right_operators(:, :, :)
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_direct_xi_result), intent(out) :: result
 
@@ -98,6 +112,8 @@ contains
       complex(rp), allocatable :: left_vertex(:), right_vertex(:)
       complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
       real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+      type(tddft_transition_engine) :: engine
+      type(pair_operator_vertex_provider) :: provider
 
       nk = size(k_weights); nbands = size(eigenvalues_k, 1); nspinor = 2*sum(site_orbital_counts)
       nleft = size(left_channels); nright = size(weighted_right_operators, 3); nw = size(omega)
@@ -112,6 +128,15 @@ contains
       allocate(result%xi(nleft, nright, nw))
       result%xi = cmplx(0.0_rp, 0.0_rp, rp)
       call set_direct_xi_metadata(result%metadata, options, nk, nbands, band_first, band_last, weight_sum)
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq, &
+         weighted_right_operators)
+      call engine%accumulate_dynamic(k_weights, eigenvalues_k, eigenvalues_kq, omega, options%eta, options%fermi_level, &
+         options%electronic_temperature, band_first, band_last, options%occupation_prune_tolerance, batch_size, &
+         options%use_batched_accumulation, provider, result%xi, result%metadata%vertex_cpu_seconds, &
+         result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+      if (.false.) then
       allocate(left_vertex(nleft), right_vertex(nright))
 
       if (options%use_batched_accumulation) then
@@ -183,6 +208,7 @@ contains
          end do
       end if
       deallocate(left_vertex, right_vertex)
+      end if
    end subroutine build_direct_xi_from_eigenpairs
 
    !> K-resolved variant of the direct construction.  The last dimension of
@@ -191,11 +217,11 @@ contains
    !> k-averaged operator before the Lehmann sum.
    subroutine build_direct_xi_from_k_dependent_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
       eigenvectors_kq, site_orbital_counts, left_channels, weighted_right_operators, omega, options, result)
-      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
-      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
-      integer, intent(in) :: site_orbital_counts(:)
-      type(response_channel), intent(in) :: left_channels(:)
-      complex(rp), intent(in) :: weighted_right_operators(:, :, :, :)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
+      complex(rp), target, intent(in) :: weighted_right_operators(:, :, :, :)
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_direct_xi_result), intent(out) :: result
 
@@ -206,6 +232,8 @@ contains
       complex(rp), allocatable :: left_vertex(:), right_vertex(:)
       complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
       real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+      type(tddft_transition_engine) :: engine
+      type(pair_operator_vertex_provider) :: provider
 
       nk = size(k_weights); nbands = size(eigenvalues_k, 1); nspinor = 2*sum(site_orbital_counts)
       nleft = size(left_channels); nright = size(weighted_right_operators, 3); nw = size(omega)
@@ -223,6 +251,15 @@ contains
       allocate(result%xi(nleft, nright, nw)); result%xi = cmplx(0.0_rp, 0.0_rp, rp)
       call set_direct_xi_metadata(result%metadata, options, nk, nbands, band_first, band_last, weight_sum)
       result%metadata%backend = 'direct_xi_k_resolved_eigenpairs'
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq, &
+         weighted_right_operators, .true.)
+      call engine%accumulate_dynamic(k_weights, eigenvalues_k, eigenvalues_kq, omega, options%eta, options%fermi_level, &
+         options%electronic_temperature, band_first, band_last, options%occupation_prune_tolerance, batch_size, &
+         options%use_batched_accumulation, provider, result%xi, result%metadata%vertex_cpu_seconds, &
+         result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+      if (.false.) then
       allocate(left_vertex(nleft), right_vertex(nright))
 
       if (options%use_batched_accumulation) then
@@ -286,6 +323,7 @@ contains
          end do
       end if
       deallocate(left_vertex, right_vertex)
+      end if
    end subroutine build_direct_xi_from_k_dependent_eigenpairs
 
    subroutine build_transition_vertices(left_channels, operators, site_orbital_counts, n_spinor, m_spinor, left, right)

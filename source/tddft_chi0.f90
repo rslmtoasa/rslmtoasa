@@ -13,6 +13,8 @@ module tddft_chi0_mod
    use precision_mod, only: rp
    use math_mod, only: pi
    use response_vertices_mod, only: response_channel, response_transition_vertex
+   use tddft_transition_engine_mod, only: tddft_transition_engine, site_channel_vertex_provider, &
+      make_site_channel_vertex_provider
    implicit none
 
    private
@@ -65,6 +67,7 @@ module tddft_chi0_mod
       logical :: batched_accumulation = .false.
       integer :: transition_batch_size = 0
       real(rp) :: vertex_cpu_seconds = 0.0_rp
+      real(rp) :: transition_preparation_cpu_seconds = 0.0_rp
       real(rp) :: denominator_cpu_seconds = 0.0_rp
       real(rp) :: accumulation_cpu_seconds = 0.0_rp
       real(rp) :: arbitrary_kq_cpu_seconds = 0.0_rp
@@ -122,11 +125,11 @@ contains
    !> multiplicities and are normalized by their explicit sum.
    subroutine build_chi_ks_from_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
       eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, options, result)
-      real(rp), intent(in) :: k_weights(:)
+      real(rp), target, intent(in) :: k_weights(:)
       real(rp), intent(in) :: eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
-      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
-      integer, intent(in) :: site_orbital_counts(:)
-      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:), right_channels(:)
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_chi0_result), intent(out) :: result
 
@@ -137,6 +140,8 @@ contains
       complex(rp), allocatable :: left_vertex(:), right_vertex(:)
       complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
       real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+      type(tddft_transition_engine) :: engine
+      type(site_channel_vertex_provider) :: provider
 
       nk = size(k_weights)
       nbands = size(eigenvalues_k, 1)
@@ -158,6 +163,19 @@ contains
       allocate(result%chi(nleft, nright, nw), result%re_chi(nleft, nright, nw), &
          result%im_chi(nleft, nright, nw))
       result%chi = cmplx(0.0_rp, 0.0_rp, rp)
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_site_channel_vertex_provider(provider, site_orbital_counts, left_channels, right_channels, &
+         eigenvectors_k, eigenvectors_kq)
+      call engine%accumulate_dynamic(k_weights, eigenvalues_k, eigenvalues_kq, omega, options%eta, options%fermi_level, &
+         options%electronic_temperature, band_first, band_last, options%occupation_prune_tolerance, batch_size, &
+         options%use_batched_accumulation, provider, result%chi, result%metadata%vertex_cpu_seconds, &
+         result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+
+      ! Kept below temporarily as the independent scalar oracle spelling.  The
+      ! public adapter above always uses the shared engine; tests can compare
+      ! its deterministic batch-one route against this retained reference.
+      if (.false.) then
       allocate(left_vertex(nleft), right_vertex(nright))
 
       ! The scalar route is deliberately retained as the exact reduction-order
@@ -248,6 +266,7 @@ contains
          end do
       end if
       deallocate(left_vertex, right_vertex)
+      end if
 
       result%re_chi = real(result%chi, rp)
       result%im_chi = aimag(result%chi)
@@ -274,16 +293,19 @@ contains
    !> function used by the dynamic response, (f_n-f_m)/(e_n-e_m) -> f'(e).
    subroutine build_static_chi_ks_from_eigenpairs(k_weights, eigenvalues, eigenvectors, site_orbital_counts, &
       left_channels, right_channels, options, result)
-      real(rp), intent(in) :: k_weights(:), eigenvalues(:, :)
-      complex(rp), intent(in) :: eigenvectors(:, :, :)
-      integer, intent(in) :: site_orbital_counts(:)
-      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues(:, :)
+      complex(rp), target, intent(in) :: eigenvectors(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:), right_channels(:)
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_chi0_result), intent(out) :: result
 
       integer :: nk, nbands, nspinor, nleft, nright, ik, n, m, ileft, iright, band_first, band_last
       real(rp) :: weight_sum, prefactor, factor
       complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+      type(tddft_transition_engine) :: engine
+      type(site_channel_vertex_provider) :: provider
+      integer :: batch_size
 
       nk = size(k_weights); nbands = size(eigenvalues, 1); nspinor = 2*sum(site_orbital_counts)
       nleft = size(left_channels); nright = size(right_channels)
@@ -297,6 +319,13 @@ contains
       weight_sum = sum(k_weights)
       allocate(result%chi(nleft, nright, 1), result%re_chi(nleft, nright, 1), result%im_chi(nleft, nright, 1))
       result%chi = cmplx(0.0_rp, 0.0_rp, rp)
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_site_channel_vertex_provider(provider, site_orbital_counts, left_channels, right_channels, eigenvectors, eigenvectors)
+      call engine%accumulate_static(k_weights, eigenvalues, options%fermi_level, options%electronic_temperature, &
+         band_first, band_last, options%occupation_prune_tolerance, batch_size, provider, result%chi, &
+         result%metadata%vertex_cpu_seconds, result%metadata%transition_preparation_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+      if (.false.) then
       allocate(left_vertex(nleft), right_vertex(nright))
       do ik = 1, nk
          prefactor = k_weights(ik)/weight_sum
@@ -318,6 +347,7 @@ contains
          end do
       end do
       deallocate(left_vertex, right_vertex)
+      end if
       result%re_chi = real(result%chi, rp); result%im_chi = 0.0_rp
       call build_spectral_products(left_channels, right_channels, result)
       result%metadata%backend = 'static_eigenpairs'
@@ -385,6 +415,8 @@ contains
       write(unit, '(a,l1)') '# batched_accumulation = ', result%metadata%batched_accumulation
       write(unit, '(a,i0)') '# transition_batch_size = ', result%metadata%transition_batch_size
       write(unit, '(a,es24.16)') '# profile_transition_vertices_cpu_s = ', result%metadata%vertex_cpu_seconds
+      write(unit, '(a,es24.16)') '# profile_transition_preparation_cpu_s = ', &
+         result%metadata%transition_preparation_cpu_seconds
       write(unit, '(a,es24.16)') '# profile_frequency_denominators_cpu_s = ', result%metadata%denominator_cpu_seconds
       write(unit, '(a,es24.16)') '# profile_response_accumulation_cpu_s = ', result%metadata%accumulation_cpu_seconds
       write(unit, '(a,es24.16)') '# profile_arbitrary_kq_eigensolve_cpu_s = ', result%metadata%arbitrary_kq_cpu_seconds

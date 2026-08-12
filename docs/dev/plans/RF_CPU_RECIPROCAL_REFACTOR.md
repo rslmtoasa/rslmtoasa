@@ -230,7 +230,51 @@ parallelizing; do not combine such parallelism with a threaded BLAS setting.
 
 ### RF-06
 
-- [ ] Start only after RF-05 is green and committed.
+- [x] RF-05 commit `c57ae2f` is present; CUDA remains disabled.
+- [x] Added `tddft_transition_engine`, its reusable bounded
+  `tddft_transition_workspace`, and final/restore lifecycle methods.  The
+  workspace stores only transition-index, occupation/energy, vertex,
+  denominator and weighted-left tiles; it never stores a full transition
+  tensor.
+- [x] Added a tile-level abstract `tddft_vertex_provider`, with concrete
+  site/channel and pair-operator providers.  Provider dispatch is once per
+  completed transition tile, never per `(k,n,m,omega)` element.  Pair
+  providers retain non-owning views of constant or k-resolved operator input;
+  a future LMTO producer may pass one k/operator tile without making a second
+  full operator cache.
+- [x] Public chi0 and direct-Xi builders configure a provider and shared
+  engine.  The engine normalizes the selected band interval and k weights,
+  retains n-major/m-minor deterministic transition order, performs Fermi
+  occupation/pruning and energies, then applies either the retarded
+  `omega+e_n-e_m+i*eta` denominator/GEMM (`N,T`, never conjugating right
+  vertices) or the mathematically distinct static divided-difference limit.
+  Batch-one plus scalar accumulation remains a selectable independent
+  reduction oracle for tests.
+- [x] The Green-function reference backend, LMTO pair-potential construction,
+  and Goldstone physics remain separate.  Metadata now also records
+  transition-preparation time; existing vertex, denominator and accumulation
+  fields keep their previous meaning.
+- [x] Serial focused TD-DFT validation passed: chi0, direct Xi, four-component,
+  Green reference, Ward, Goldstone, Dyson and modes (7/7).  The existing chi0
+  and Xi unit fixtures cover scalar/batched, partial tiles, finite/zero-T,
+  eta, restricted-window and k-dependent-operator comparisons.
+- [x] One current Release profile sample (`UnitTddftCpuProfile`) reports
+  TD-DFT vertex/denominator/accumulation CPU seconds of
+  `4.222e-3/1.1854e-2/3.0097e-2` for bccFe and
+  `3.6722e-2/1.7058e-1/4.4278e-1` for fccNi.  The analytical principal
+  payload remains `0.33746/3.2249 MiB`; the new response workspace is bounded
+  by `O((nleft+nright)*batch_size)` rather than a transition tensor.  These
+  process-CPU samples are informational and not directly compared with the
+  earlier noisy host baseline.
+- [ ] Full serial/OpenMP/MPI/debug and validation-campaign reruns remain to be
+  recorded after the RF-06 commit.  No GPU implementation is included.
+
+**Projected device call flow.** RF-05 produces an eigenpair tile and an LMTO
+producer supplies the matching pair-operator k slice.  A device-resident
+provider fills response-space left/right vertex tiles, then this engine's
+selection/denominator/accumulation contract produces partial response matrices
+with unchanged public chi0/Xi result semantics.  A reduction layer may combine
+those partial matrices without revisiting vertex physics.
 
 ## Decisions affecting later MPI/GPU work
 

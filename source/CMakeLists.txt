@@ -75,6 +75,7 @@ add_library(${PROJECT_NAME} STATIC
     response_basis.f90
     response_vertices.f90
     tddft_config.f90
+    tddft_transition_engine.f90
     tddft_chi0.f90
     tddft_xi.f90
     tddft_chi0_green.f90
