@@ -61,6 +61,53 @@ module reciprocal_mod
 
    private
 
+   !> Reusable CPU storage for reciprocal-space tiles.  H, S, and all matrix
+   !> temporaries use (nmat,nmat,nbatch): the first two dimensions are one
+   !> Fortran column-major matrix and the third dimension is a contiguous,
+   !> strided batch.  A workspace is deliberately owned by one reciprocal
+   !> object/worker; callers must not share it across OpenMP workers.
+   type, public :: reciprocal_workspace
+      integer :: nmat = 0
+      integer :: tile_capacity = 0
+      integer :: active_tile_length = 0
+      integer :: lwork = 0
+      integer :: cached_operator_generation = -1
+      !> Diagnostic counters: preparation events only.  A stable prepared
+      !> tile must leave both counts unchanged inside its k-point loop.
+      integer :: storage_allocations = 0
+      integer :: lapack_workspace_queries = 0
+      integer :: capacity_reuses = 0
+      logical :: generalized = .false.
+      complex(rp), allocatable :: h(:, :, :), s(:, :, :)
+      complex(rp), allocatable :: eeo(:, :, :), hoh(:, :, :), hcc(:, :, :)
+      complex(rp), allocatable :: phase(:, :, :)
+      real(rp), allocatable :: points(:, :)
+      real(rp), allocatable :: eigenvalue(:, :)
+      complex(rp), allocatable :: eigenvector(:, :, :), lapack_work(:)
+      real(rp), allocatable :: lapack_rwork(:)
+      integer, allocatable :: info(:)
+   contains
+      procedure :: ensure_capacity => reciprocal_workspace_ensure_capacity
+      procedure :: clear => reciprocal_workspace_clear
+      procedure :: restore_to_default => reciprocal_workspace_restore_to_default
+      final :: reciprocal_workspace_destructor
+   end type reciprocal_workspace
+
+   !> Non-owning view of the long-lived operator and geometry state required
+   !> by Fourier assembly.  It owns no Hamiltonian matrices; phase and HOH
+   !> scratch belong exclusively to reciprocal_workspace.
+   type, public :: reciprocal_assembler
+      class(hamiltonian), pointer :: hamiltonian => null()
+      class(lattice), pointer :: lattice => null()
+      class(control), pointer :: control => null()
+      real(rp), allocatable :: ham_vec_type_direct(:, :, :)
+      logical :: use_second_order = .false.
+   contains
+      procedure :: assemble_batch => reciprocal_assembler_assemble_batch
+      procedure :: assemble_overlap_batch => reciprocal_assembler_assemble_overlap_batch
+      procedure :: assemble_one => reciprocal_assembler_assemble_one
+   end type reciprocal_assembler
+
    !> Module's main procedure
    type, public :: reciprocal
       !> Hamiltonian
@@ -129,6 +176,10 @@ module reciprocal_mod
       logical :: gamma_bounds_diagnostics
       !> Experimental finite real-space HALL diagonalization
       logical :: hall_diag_experimental
+      ! Conservative internal CPU tile size.  It is intentionally not a
+      ! namelist option; tests may set it programmatically.
+      integer :: reciprocal_tile_size
+      type(reciprocal_workspace) :: workspace
 
       ! Band structure variables
       !> Maximum number of orbital channels per atom type
@@ -299,6 +350,7 @@ module reciprocal_mod
       procedure :: fourier_transform_overlap
       procedure :: fold_kpoint
       procedure :: build_hamiltonian_at_kpoint
+      procedure :: make_reciprocal_assembler
       procedure :: build_lmto_pair_potential_at_kpoint
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: require_replicated_k_workset
@@ -371,6 +423,48 @@ module reciprocal_mod
 
 
    interface
+   module subroutine reciprocal_workspace_ensure_capacity(this, nmat, tile_length, generalized, operator_generation, nnmax, ntype)
+      class(reciprocal_workspace), intent(inout) :: this
+      integer, intent(in) :: nmat, tile_length, operator_generation, nnmax, ntype
+      logical, intent(in) :: generalized
+   end subroutine reciprocal_workspace_ensure_capacity
+
+   module subroutine reciprocal_workspace_clear(this)
+      class(reciprocal_workspace), intent(inout) :: this
+   end subroutine reciprocal_workspace_clear
+
+   module subroutine reciprocal_workspace_restore_to_default(this)
+      class(reciprocal_workspace), intent(inout) :: this
+   end subroutine reciprocal_workspace_restore_to_default
+
+   module subroutine reciprocal_workspace_destructor(this)
+      type(reciprocal_workspace) :: this
+   end subroutine reciprocal_workspace_destructor
+
+   module subroutine reciprocal_assembler_assemble_batch(this, k_points, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+   end subroutine reciprocal_assembler_assemble_batch
+
+   module subroutine reciprocal_assembler_assemble_overlap_batch(this, k_points, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+   end subroutine reciprocal_assembler_assemble_overlap_batch
+
+   module subroutine reciprocal_assembler_assemble_one(this, k_point, hk_result, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_point(3)
+      complex(rp), intent(out) :: hk_result(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+   end subroutine reciprocal_assembler_assemble_one
+
+   module subroutine make_reciprocal_assembler(this, assembler)
+      class(reciprocal), intent(inout) :: this
+      type(reciprocal_assembler), intent(out) :: assembler
+   end subroutine make_reciprocal_assembler
+
    !> @brief Print a root-rank informational message with source location.
    !> @param[in] message Message text.
    !> @param[in] file_name Source file name for diagnostics.
@@ -512,7 +606,7 @@ module reciprocal_mod
    !> @param[in] k_vec k-point vector.
    !> @param[out] hk_result Packed k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
 
@@ -550,7 +644,7 @@ module reciprocal_mod
    !> @param[in] k_vec k-point vector.
    !> @param[out] hk_result Packed second-order k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian_second_order(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
       ! Local variables
@@ -567,7 +661,7 @@ module reciprocal_mod
    !> @param[in] k_vec k-point vector.
    !> @param[out] sk_result Packed k-space overlap matrix.
    module subroutine fourier_transform_overlap(this, k_vec, sk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: sk_result
       integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr, iorb

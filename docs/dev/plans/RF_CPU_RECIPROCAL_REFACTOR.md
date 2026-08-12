@@ -7,7 +7,7 @@
 | RF-01 | Characterization, numerical oracles, and CPU baseline | Complete |
 | RF-02 | MPI runtime state, build integration, and output ownership | Complete |
 | RF-03 | Explicit k-point worksets and ownership | Complete (MPI runtime validation pending environment repair) |
-| RF-04 | Batched reciprocal assembly and reusable workspaces | Pending RF-03 |
+| RF-04 | Batched reciprocal assembly and reusable workspaces | Complete (broad non-reciprocal example sweep remains optional) |
 | RF-05 | Reciprocal execution backend with CPU/LAPACK implementation | Pending RF-04 |
 | RF-06 | Shared TD-DFT transition engine for chi0 and Xi | Pending RF-05 |
 
@@ -206,7 +206,23 @@ safe tolerance-key replacement under the existing coordinate convention.
 
 ### RF-04
 
-- [ ] Start only after RF-03 is green and committed.
+- [x] Added `reciprocal_workspace`: reusable `(nmat,nmat,nbatch)` H/S/phase/HOH/eigenpair/LAPACK storage with capacity, mode, and operator-generation keys plus finalization.
+- [x] Added `reciprocal_assembler`: non-owning Hamiltonian/lattice/control view with an owned geometry cache and first-order, HOH/SOC/CCOR, and overlap tile assembly.
+- [x] Normal mesh assembly and arbitrary-k eigensolves use conservative internal tiles (default 16); public single-k H, HOH, and overlap calls are batch-of-one wrappers.
+- [x] Arbitrary-k folds and deduplicates once, diagonalizes unique points from prepared workspace slices, then scatters to caller order. LAPACK queries occur only in `ensure_capacity`, keyed by matrix dimension and generalized mode.
+- [x] `UnitArbitraryKEigenpairs` covers 1/partial/multiple tile equivalence, duplicate scatter order, first-order, HOH/SOC, operator-generation refresh, and a two-site positive-definite generalized-overlap (`zhegv`) model. It also proves a repeated prepared tile leaves `storage_allocations` and `lapack_workspace_queries` unchanged.
+- [x] Release/OpenMP checks pass with `OMP_NUM_THREADS=1` and `4`: `Unit(ArbitraryKEigenpairs|TddftCpuProfile)` is 2/2 in both runs. Serial k-space SCF and DOS/CCOR/DOS-HOH post-processing examples pass 4/4; the enabled GBT oracle matrix passes 11/11.
+- [x] Updated the WP6 HOH source-contract fixture to accept the equivalent batched `workspace%eeo(:,:,ik) * workspace%h(:,:,ik)` contraction, while retaining the legacy scalar spelling as a supported oracle.
+- [x] Restored shared k-path ownership: `setup_k_mesh_distribution` now constructs a replicated workset from `k_path` when no transitional mesh exists. The real bcc-Fe band-structure post-processing fixture passes after this change.
+- [x] GNU Debug unit suite passes 42/42. Serial Release passes Lanczos, Block, Chebyshev, bcc-Fe k-space SCF, band structure, DOS, DOS+CCOR, and reciprocal-HOH DOS. The enabled GBT matrix passes 11/11.
+- [x] Clean OpenMPI Release rebuild links `libmpi.so.40` only and passes 8 reciprocal/workset unit registrations plus bcc-Fe k-space SCF at serial and MPI 1/2/4 ranks (12/12). No output fixture changed.
+- [x] Three single-thread GNU 13.3/oneMKL Release profile samples report medians (ms) of bccFe Fourier/k-solve/k+q/pair = `1.318/2.547/0.350/6.958`; fccNi = `0.998/7.756/8.034/45.695`. Principal payloads remain `0.33746/3.2249` MiB. These timings are informational only; compared with RF-01 they are affected by host noise and the new conservative tile traversal.
+- [x] `git diff --check` passes.
+
+**CPU ownership.** A `reciprocal` object owns one workspace and uses serial
+tile assembly, so no mutable Fourier or LAPACK array is shared between OpenMP
+workers.  Outer OpenMP callers should provision one workspace per worker before
+parallelizing; do not combine such parallelism with a threaded BLAS setting.
 
 ### RF-05
 

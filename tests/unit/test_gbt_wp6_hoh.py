@@ -131,7 +131,9 @@ def source_contract() -> list[str]:
         failures.append("GBT link must be computed only for the primitive S path")
     if "not a complete formal GBT metric" not in lifecycle:
         failures.append("incomplete generalized-overlap modes are not rejected explicitly")
-    if "call this%fourier_transform_array(this%hamiltonian%eeo" not in fourier or "eeok, ndim, hk" not in fourier:
+    legacy_hoh = "call this%fourier_transform_array(this%hamiltonian%eeo" in fourier and "eeok, ndim, hk" in fourier
+    batched_hoh = "workspace%eeo(:,:,ik),nmat,workspace%h(:,:,ik)" in fourier
+    if not (legacy_hoh or batched_hoh):
         failures.append("reciprocal HOH is not eeo(k)*h(k)")
     if "call zpotrf" not in bands:
         failures.append("supported generalized overlaps lack a positive-definiteness check")

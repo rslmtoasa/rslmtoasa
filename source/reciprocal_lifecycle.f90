@@ -180,6 +180,8 @@ contains
       this%kanpur_diagnostics = .true.
       this%gamma_bounds_diagnostics = .false.
       this%hall_diag_experimental = .false.
+      this%reciprocal_tile_size = 16
+      call this%workspace%restore_to_default()
       this%n_sites = 0
       this%n_orb_types = 4  ! s, p, d, f
       this%n_spin_components = 2  ! RS-LMTO basis is always spin-polarized
@@ -818,21 +820,27 @@ contains
       integer :: ik
       real(rp), allocatable :: unit_weights(:)
 
-      if (.not. allocated(this%k_points) .or. size(this%k_points, 2) /= nk_global) then
-         call g_logger%fatal('setup_k_mesh_distribution: complete transitional k-point list is unavailable.', __FILE__, __LINE__)
-      end if
-      if (allocated(this%k_weights)) then
+      if (allocated(this%k_points) .and. size(this%k_points, 2) == nk_global .and. allocated(this%k_weights)) then
          if (size(this%k_weights) /= nk_global) then
             call g_logger%fatal('setup_k_mesh_distribution: k-point weight shape is invalid.', __FILE__, __LINE__)
          end if
          this%k_workset = make_kpoint_workset(this%k_points, this%k_weights, g_parallel_context, enable_distribution)
-      else
-         ! Hamiltonian-only callers historically did not need integration
+      else if (allocated(this%k_points) .and. size(this%k_points, 2) == nk_global) then
+         ! Hamiltonian-only mesh callers historically did not need integration
          ! weights.  Give their ownership object neutral unit weights without
          ! materializing a second compatibility array.
          allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
          this%k_workset = make_kpoint_workset(this%k_points, unit_weights, g_parallel_context, enable_distribution)
          deallocate(unit_weights)
+      else if (allocated(this%k_path) .and. size(this%k_path, 2) == nk_global) then
+         ! A symmetry-generated band path is not a mesh and therefore has no
+         ! k_points compatibility view.  It still needs an authoritative
+         ! replicated workset for the shared reciprocal assembly path.
+         allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
+         this%k_workset = make_kpoint_workset(this%k_path, unit_weights, g_parallel_context, .false.)
+         deallocate(unit_weights)
+      else
+         call g_logger%fatal('setup_k_mesh_distribution: no complete k-point mesh or path is available.', __FILE__, __LINE__)
       end if
 
       if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
@@ -857,7 +865,7 @@ contains
       ! Transitional mappings mirror the authoritative workset in one direction
       ! while legacy matrix/DOS storage is migrated.  The workset is validated
       ! at this public boundary and is never reconstructed from these maps.
-      if (this%nk_total /= this%k_workset%nk_global .or. this%nk_local /= this%k_workset%nk_local .or. &
+      if (nk_global /= this%k_workset%nk_global .or. this%nk_local /= this%k_workset%nk_local .or. &
           this%k_start /= this%k_workset%global_start .or. this%k_end /= this%k_workset%global_end .or. &
           this%k_mesh_distributed_active .neqv. this%k_workset%distributed .or. &
           any(this%k_l2g_map /= this%k_workset%local_to_global) .or. any(this%k_g2l_map /= this%k_workset%global_to_local)) then

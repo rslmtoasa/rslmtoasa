@@ -6,6 +6,216 @@ submodule (reciprocal_mod) reciprocal_fourier
 
 contains
 
+   module subroutine reciprocal_workspace_ensure_capacity(this, nmat, tile_length, generalized, operator_generation, nnmax, ntype)
+      class(reciprocal_workspace), intent(inout) :: this
+      integer, intent(in) :: nmat, tile_length, operator_generation, nnmax, ntype
+      logical, intent(in) :: generalized
+      complex(rp) :: query(1)
+      integer :: info, requested
+      logical :: reusable
+
+      if (nmat <= 0 .or. tile_length <= 0 .or. nnmax <= 0 .or. ntype <= 0) then
+         call g_logger%fatal('reciprocal_workspace%ensure_capacity: invalid workspace dimensions.', __FILE__, __LINE__)
+      end if
+      requested = max(tile_length, 1)
+      reusable = .false.
+      if (allocated(this%phase)) reusable = this%nmat == nmat .and. this%tile_capacity >= requested .and. &
+         (this%generalized .eqv. generalized) .and. size(this%phase, 1) == nnmax .and. size(this%phase, 2) == ntype
+      if (reusable) then
+         this%active_tile_length = tile_length
+         this%generalized = generalized
+         this%cached_operator_generation = operator_generation
+         this%capacity_reuses = this%capacity_reuses + 1
+         return
+      end if
+
+      call this%clear()
+      this%nmat = nmat
+      this%tile_capacity = requested
+      this%active_tile_length = tile_length
+      this%generalized = generalized
+      this%cached_operator_generation = operator_generation
+      this%storage_allocations = this%storage_allocations + 1
+      allocate(this%h(nmat,nmat,requested), this%s(nmat,nmat,requested), this%eeo(nmat,nmat,requested), &
+               this%hoh(nmat,nmat,requested), this%hcc(nmat,nmat,requested), this%phase(nnmax,ntype,requested), this%points(3,requested), &
+               this%eigenvalue(nmat,requested), this%eigenvector(nmat,nmat,requested), this%info(requested), &
+               this%lapack_rwork(max(1,3*nmat-2)))
+      this%h = cmplx(0.0_rp,0.0_rp,rp); this%s = cmplx(0.0_rp,0.0_rp,rp)
+      this%eeo = cmplx(0.0_rp,0.0_rp,rp); this%hoh = cmplx(0.0_rp,0.0_rp,rp)
+      this%hcc = cmplx(0.0_rp,0.0_rp,rp); this%phase = cmplx(0.0_rp,0.0_rp,rp)
+      if (generalized) then
+         call zhegv(1, 'V', 'U', nmat, this%h(:,:,1), nmat, this%s(:,:,1), nmat, this%eigenvalue(:,1), &
+                    query, -1, this%lapack_rwork, info)
+      else
+         call zheev('V', 'U', nmat, this%h(:,:,1), nmat, this%eigenvalue(:,1), query, -1, this%lapack_rwork, info)
+      end if
+      if (info /= 0) call g_logger%fatal('reciprocal_workspace%ensure_capacity: LAPACK workspace query failed.', __FILE__, __LINE__)
+      this%lapack_workspace_queries = this%lapack_workspace_queries + 1
+      this%lwork = max(1, int(real(query(1), rp)))
+      allocate(this%lapack_work(this%lwork))
+   end subroutine reciprocal_workspace_ensure_capacity
+
+   module subroutine reciprocal_workspace_clear(this)
+      class(reciprocal_workspace), intent(inout) :: this
+      if (allocated(this%h)) deallocate(this%h)
+      if (allocated(this%s)) deallocate(this%s)
+      if (allocated(this%eeo)) deallocate(this%eeo)
+      if (allocated(this%hoh)) deallocate(this%hoh)
+      if (allocated(this%hcc)) deallocate(this%hcc)
+      if (allocated(this%phase)) deallocate(this%phase)
+      if (allocated(this%points)) deallocate(this%points)
+      if (allocated(this%eigenvalue)) deallocate(this%eigenvalue)
+      if (allocated(this%eigenvector)) deallocate(this%eigenvector)
+      if (allocated(this%lapack_work)) deallocate(this%lapack_work)
+      if (allocated(this%lapack_rwork)) deallocate(this%lapack_rwork)
+      if (allocated(this%info)) deallocate(this%info)
+      this%nmat = 0; this%tile_capacity = 0; this%active_tile_length = 0
+      this%lwork = 0; this%cached_operator_generation = -1; this%generalized = .false.
+   end subroutine reciprocal_workspace_clear
+
+   module subroutine reciprocal_workspace_restore_to_default(this)
+      class(reciprocal_workspace), intent(inout) :: this
+      call this%clear()
+      this%storage_allocations = 0
+      this%lapack_workspace_queries = 0
+      this%capacity_reuses = 0
+   end subroutine reciprocal_workspace_restore_to_default
+
+   module subroutine reciprocal_workspace_destructor(this)
+      type(reciprocal_workspace) :: this
+      call this%clear()
+   end subroutine reciprocal_workspace_destructor
+
+   module subroutine make_reciprocal_assembler(this, assembler)
+      class(reciprocal), intent(inout) :: this
+      type(reciprocal_assembler), intent(out) :: assembler
+      call this%build_neighbor_vectors()
+      assembler%hamiltonian => this%hamiltonian
+      assembler%lattice => this%lattice
+      assembler%control => this%control
+      allocate(assembler%ham_vec_type_direct, source=this%ham_vec_type_direct)
+      select case (trim(this%kspace_ham_order))
+      case ('second'); assembler%use_second_order = .true.
+      case ('first');  assembler%use_second_order = .false.
+      case default;    assembler%use_second_order = this%hamiltonian%hoh
+      end select
+   end subroutine make_reciprocal_assembler
+
+   ! Assemble a whole tile.  The loop is serial by design: a workspace is
+   ! exclusive to its caller, avoiding nested OpenMP/BLAS oversubscription.
+   ! Parallel callers should use one workspace per worker.
+   module subroutine reciprocal_assembler_assemble_batch(this, k_points, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+      integer :: ik, isite, jsite, ntype_i, ineigh, ia, ja, nr, i_start, i_end, j_start, j_end, nmat
+      real(rp) :: kfold(3), angle
+      logical :: second_order, add_ccor
+
+      if (size(k_points,1) /= 3 .or. .not. associated(this%hamiltonian) .or. .not. associated(this%lattice) .or. &
+          .not. allocated(this%ham_vec_type_direct)) then
+         call g_logger%fatal('reciprocal_assembler%assemble_batch: incomplete assembly state.', __FILE__, __LINE__)
+      end if
+      nmat = nb*this%lattice%nrec
+      if (workspace%nmat /= nmat .or. workspace%tile_capacity < size(k_points,2)) then
+         call workspace%ensure_capacity(nmat, size(k_points,2), workspace%generalized, this%hamiltonian%operator_generation, &
+                                        this%lattice%nn_max, this%lattice%ntype)
+      else
+         workspace%active_tile_length = size(k_points,2)
+         workspace%cached_operator_generation = this%hamiltonian%operator_generation
+      end if
+      second_order = this%use_second_order .and. this%hamiltonian%hoh .and. allocated(this%hamiltonian%eeo)
+      add_ccor = this%hamiltonian%ccor_2c
+      do ik = 1, size(k_points,2)
+         kfold = k_points(:,ik) - floor(k_points(:,ik) + 0.5_rp)
+         workspace%phase(:,:,ik) = cmplx(0.0_rp,0.0_rp,rp)
+         do ntype_i = 1, this%lattice%ntype
+            ia = this%lattice%atlist(ntype_i); nr = this%lattice%nn(ia,1)
+            do ineigh = 1, nr
+               if (ineigh == 1) then
+                  workspace%phase(ineigh,ntype_i,ik) = cmplx(1.0_rp,0.0_rp,rp)
+               else
+                  angle = 2.0_rp*pi*dot_product(kfold, this%ham_vec_type_direct(:,ineigh,ntype_i))
+                  workspace%phase(ineigh,ntype_i,ik) = cmplx(cos(angle),sin(angle),rp)
+               end if
+            end do
+         end do
+         workspace%h(:,:,ik) = cmplx(0.0_rp,0.0_rp,rp)
+         workspace%eeo(:,:,ik) = cmplx(0.0_rp,0.0_rp,rp)
+         workspace%hcc(:,:,ik) = cmplx(0.0_rp,0.0_rp,rp)
+         do isite = 1, this%lattice%nrec
+            ntype_i = this%lattice%ib(isite); ia = this%lattice%atlist(ntype_i); nr = this%lattice%nn(ia,1)
+            i_start = (isite-1)*nb+1; i_end = isite*nb
+            do ineigh = 1, nr
+               if (ineigh == 1) then
+                  jsite = isite
+               else
+                  ja = this%lattice%nn(ia,ineigh)
+                  if (ja < 1 .or. ja > this%lattice%kk) cycle
+                  jsite = this%lattice%iz(ja)
+                  if (jsite < 1 .or. jsite > this%lattice%nrec) cycle
+               end if
+               j_start = (jsite-1)*nb+1; j_end = jsite*nb
+               workspace%h(i_start:i_end,j_start:j_end,ik) = workspace%h(i_start:i_end,j_start:j_end,ik) + &
+                  this%hamiltonian%ee(:,:,ineigh,ntype_i)*workspace%phase(ineigh,ntype_i,ik)
+               if (second_order) workspace%eeo(i_start:i_end,j_start:j_end,ik) = workspace%eeo(i_start:i_end,j_start:j_end,ik) + &
+                  this%hamiltonian%eeo(:,:,ineigh,ntype_i)*workspace%phase(ineigh,ntype_i,ik)
+               if (add_ccor) workspace%hcc(i_start:i_end,j_start:j_end,ik) = workspace%hcc(i_start:i_end,j_start:j_end,ik) + &
+                  this%hamiltonian%eecc(:,:,ineigh,ntype_i)*workspace%phase(ineigh,ntype_i,ik)
+            end do
+         end do
+         if (second_order) then
+            call zgemm('N','N',nmat,nmat,nmat,cone,workspace%eeo(:,:,ik),nmat,workspace%h(:,:,ik),nmat,czero,workspace%hoh(:,:,ik),nmat)
+            workspace%h(:,:,ik) = workspace%h(:,:,ik) - workspace%hoh(:,:,ik)
+            do isite = 1, this%lattice%nrec
+               ntype_i = this%lattice%ib(isite); i_start=(isite-1)*nb+1; i_end=isite*nb
+               workspace%h(i_start:i_end,i_start:i_end,ik) = workspace%h(i_start:i_end,i_start:i_end,ik) + &
+                  this%hamiltonian%enim(:,:,ntype_i) + this%hamiltonian%lsham(:,:,ntype_i)
+            end do
+         end if
+         if (add_ccor) workspace%h(:,:,ik) = workspace%h(:,:,ik) + workspace%hcc(:,:,ik)
+      end do
+   end subroutine reciprocal_assembler_assemble_batch
+
+   module subroutine reciprocal_assembler_assemble_overlap_batch(this, k_points, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+      integer :: ik, isite, jsite, ntype_i, ineigh, ia, ja, nr, i_start, i_end, j_start, j_end, iorb
+      if (workspace%active_tile_length /= size(k_points,2)) call this%assemble_batch(k_points, workspace)
+      do ik = 1, size(k_points,2)
+         workspace%s(:,:,ik) = cmplx(0.0_rp,0.0_rp,rp)
+         do isite = 1, this%lattice%nrec
+            ntype_i=this%lattice%ib(isite); ia=this%lattice%atlist(ntype_i); nr=this%lattice%nn(ia,1)
+            i_start=(isite-1)*nb+1; i_end=isite*nb
+            do ineigh=1,nr
+               if (ineigh == 1) then; jsite=isite
+               else
+                  ja=this%lattice%nn(ia,ineigh); if (ja < 1 .or. ja > this%lattice%kk) cycle
+                  jsite=this%lattice%iz(ja); if (jsite < 1 .or. jsite > this%lattice%nrec) cycle
+               end if
+               j_start=(jsite-1)*nb+1; j_end=jsite*nb
+               workspace%s(i_start:i_end,j_start:j_end,ik) = workspace%s(i_start:i_end,j_start:j_end,ik) + &
+                  this%hamiltonian%eeo(:,:,ineigh,ntype_i)*workspace%phase(ineigh,ntype_i,ik)
+               if (ineigh == 1 .and. jsite == isite) then
+                  do iorb=1,nb; workspace%s(i_start+iorb-1,i_start+iorb-1,ik) = workspace%s(i_start+iorb-1,i_start+iorb-1,ik) + 1.0_rp; end do
+               end if
+            end do
+         end do
+      end do
+   end subroutine reciprocal_assembler_assemble_overlap_batch
+
+   module subroutine reciprocal_assembler_assemble_one(this, k_point, hk_result, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_point(3)
+      complex(rp), intent(out) :: hk_result(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+      real(rp) :: point(3,1)
+      point(:,1) = k_point
+      call this%assemble_batch(point, workspace)
+      hk_result = workspace%h(:,:,1)
+   end subroutine reciprocal_assembler_assemble_one
+
    !> @brief Calculate exp(i k.R) factors for each neighbor/type.
    !> @param[in] this Reciprocal object containing neighbor-vector tables.
    !> @param[in] k_vec k-point vector in reciprocal coordinates.
@@ -56,9 +266,10 @@ contains
    !> @param[in] k_vec k-point vector.
    !> @param[out] hk_result Packed k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
+      type(reciprocal_assembler) :: assembler
 
       ! First-order k-space Hamiltonian: H(k) = h(k) = Sum_R ee(R) exp(i*k·R).
       ! NOTE: This deliberately reproduces the historical first-order behaviour.
@@ -66,20 +277,11 @@ contains
       !       here; they are only included in the second-order path
       !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
 
-      ! GBT, when selected, is already present in the linked primitive
-      ! real-space blocks. Every magnetic representation therefore uses the
-      ! same ordinary Bloch sum here.
-      call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk_result)
-
-      if (this%hamiltonian%ccor_2c) then
-         block
-            complex(rp), allocatable :: hcck(:, :)
-            allocate(hcck(size(hk_result, 1), size(hk_result, 2)))
-            call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
-            hk_result(:, :) = hk_result(:, :) + hcck(:, :)
-            deallocate(hcck)
-         end block
-      end if
+      call this%make_reciprocal_assembler(assembler)
+      assembler%use_second_order = .false.
+      call this%workspace%ensure_capacity(size(hk_result,1), 1, .false., this%hamiltonian%operator_generation, &
+                                          this%lattice%nn_max, this%lattice%ntype)
+      call assembler%assemble_one(k_vec, hk_result, this%workspace)
    end subroutine fourier_transform_hamiltonian
 
    !> Build the finite-q LMTO pair potential in exactly the `ham_only` coefficient
@@ -263,51 +465,15 @@ contains
    !> @param[in] k_vec k-point vector.
    !> @param[out] hk_result Packed second-order k-space Hamiltonian matrix.
    module subroutine fourier_transform_hamiltonian_second_order(this, k_vec, hk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: hk_result  ! (n_orb*n_sites, n_orb*n_sites)
-      ! Local variables
-      integer :: isite, ntype_i, i_start, i_end
-      integer :: n_orb, n_sites, ndim
-      complex(rp), dimension(:, :), allocatable :: hk, eeok, hohk, hcck
-
-      n_orb = nb
-      n_sites = this%lattice%nrec
-      ndim = n_orb * n_sites
-
-      allocate(hk(ndim, ndim), eeok(ndim, ndim), hohk(ndim, ndim), hcck(ndim, ndim))
-
-      ! h(k) and eeo(k) are ordinary Bloch sums. Representation-specific bond
-      ! links belong upstream of these completed arrays.
-      call this%fourier_transform_array(this%hamiltonian%ee, k_vec, hk)
-      call this%fourier_transform_array(this%hamiltonian%eeo, k_vec, eeok)
-
-      ! [hoh](k) = eeo(k) · h(k)
-      ! GPU: this zgemm (and the two Bloch sums above) are the natural offload
-      ! point; batch over k with a strided-batched cuBLAS zgemm, mirroring the
-      ! existing rsrec_cuda plugin pattern.
-      call zgemm('n', 'n', ndim, ndim, ndim, cone, eeok, ndim, hk, ndim, czero, hohk, ndim)
-
-      ! H(k) = h(k) - [hoh](k)
-      hk_result = hk - hohk
-      if (this%hamiltonian%ccor_2c) then
-         call this%fourier_transform_array(this%hamiltonian%eecc, k_vec, hcck)
-         hk_result = hk_result + hcck
-      end if
-
-      ! Add on-site (R=0) terms: E_nu (enim) and L.S (lsham), per site/type,
-      ! onto the block diagonal (no phase factor for R=0).
-      do isite = 1, n_sites
-         ntype_i = this%lattice%ib(isite)
-         i_start = (isite - 1) * n_orb + 1
-         i_end = isite * n_orb
-         hk_result(i_start:i_end, i_start:i_end) = &
-            hk_result(i_start:i_end, i_start:i_end) + &
-            this%hamiltonian%enim(:, :, ntype_i) + &
-            this%hamiltonian%lsham(:, :, ntype_i)
-      end do
-
-      deallocate(hk, eeok, hohk, hcck)
+      type(reciprocal_assembler) :: assembler
+      call this%make_reciprocal_assembler(assembler)
+      assembler%use_second_order = .true.
+      call this%workspace%ensure_capacity(size(hk_result,1), 1, .false., this%hamiltonian%operator_generation, &
+                                          this%lattice%nn_max, this%lattice%ntype)
+      call assembler%assemble_one(k_vec, hk_result, this%workspace)
    end subroutine fourier_transform_hamiltonian_second_order
 
    !> @brief Fourier transform overlap blocks into S(k).
@@ -317,50 +483,16 @@ contains
    !> @param[in] k_vec k-point vector.
    !> @param[out] sk_result Packed k-space overlap matrix.
    module subroutine fourier_transform_overlap(this, k_vec, sk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), dimension(3), intent(in) :: k_vec
       complex(rp), dimension(:, :), intent(out) :: sk_result
-      integer :: isite, jsite, ntype_i, ineigh, ia, ja, nr, iorb
-      integer :: i_start, i_end, j_start, j_end
-      integer :: n_orb, n_sites
-      complex(rp), dimension(:, :), allocatable :: structure_factors
-      complex(rp), dimension(:, :), allocatable :: overlap_block
-
-      n_orb = nb
-      n_sites = this%lattice%nrec
-      allocate(structure_factors(this%lattice%nn_max, this%lattice%ntype))
-      allocate(overlap_block(n_orb, n_orb))
-      call this%calculate_structure_factors(k_vec, structure_factors)
-
-      sk_result = cmplx(0.0_rp, 0.0_rp, rp)
-      do isite = 1, n_sites
-         ntype_i = this%lattice%ib(isite)
-         ia = this%lattice%atlist(ntype_i)
-         nr = this%lattice%nn(ia, 1)
-         i_start = (isite - 1) * n_orb + 1
-         i_end = isite * n_orb
-         do ineigh = 1, nr
-            if (ineigh == 1) then
-               jsite = isite
-            else
-               ja = this%lattice%nn(ia, ineigh)
-               if (ja < 1 .or. ja > this%lattice%kk) cycle
-               jsite = this%lattice%iz(ja)
-               if (jsite < 1 .or. jsite > n_sites) cycle
-            end if
-            j_start = (jsite - 1) * n_orb + 1
-            j_end = jsite * n_orb
-            overlap_block(:, :) = this%hamiltonian%eeo(:, :, ineigh, ntype_i)
-            if (ineigh == 1 .and. jsite == isite) then
-               do iorb = 1, n_orb
-                  overlap_block(iorb, iorb) = overlap_block(iorb, iorb) + cmplx(1.0_rp, 0.0_rp, rp)
-               end do
-            end if
-            sk_result(i_start:i_end, j_start:j_end) = sk_result(i_start:i_end, j_start:j_end) + &
-               overlap_block * structure_factors(ineigh, ntype_i)
-         end do
-      end do
-      deallocate(overlap_block, structure_factors)
+      type(reciprocal_assembler) :: assembler
+      call this%make_reciprocal_assembler(assembler)
+      call this%workspace%ensure_capacity(size(sk_result,1), 1, .true., this%hamiltonian%operator_generation, &
+                                          this%lattice%nn_max, this%lattice%ntype)
+      this%workspace%points(:,1) = k_vec
+      call assembler%assemble_overlap_batch(this%workspace%points(:,1:1), this%workspace)
+      sk_result = this%workspace%s(:,:,1)
    end subroutine fourier_transform_overlap
 
    !> Fold an arbitrary fractional reciprocal point into the first reciprocal
@@ -403,11 +535,11 @@ contains
       complex(rp), allocatable, intent(out) :: eigenvectors(:, :, :)
       real(rp), allocatable, intent(out), optional :: folded_k_points(:, :)
 
-      integer :: nk, nmat, ik, iu, nunique
+      integer :: nk, nmat, ik, iu, nunique, tile_first, tile_last, tile_length, slot
       integer, allocatable :: representative(:), unique_of_k(:)
       real(rp), allocatable :: folded(:, :)
-      complex(rp), allocatable :: hk(:, :)
       logical :: use_generalized
+      type(reciprocal_assembler) :: assembler
 
       if (size(k_points, 1) /= 3) then
          call g_logger%error('calculate_eigenpairs_at_kpoints: k_points must have shape (3,nk).', __FILE__, __LINE__)
@@ -456,13 +588,26 @@ contains
       end do
 
       use_generalized = trim(this%reciprocal_mode) == 'generalized_overlap_proxy'
-      call this%build_neighbor_vectors()
-      allocate(hk(nmat, nmat))
-      do iu = 1, nunique
-         ik = representative(iu)
-         call assemble_hamiltonian_at_kpoint(this, folded(:, ik), hk)
-         call diagonalize_single_kpoint(this, folded(:, ik), hk, use_generalized, &
-                                        eigenvalues(:, ik), eigenvectors(:, :, ik))
+      call this%make_reciprocal_assembler(assembler)
+      ! Fold/deduplicate once, then process unique points in persistent CPU
+      ! tiles.  No allocation, deallocation, or LAPACK query occurs below.
+      do tile_first = 1, nunique, max(1, this%reciprocal_tile_size)
+         tile_last = min(nunique, tile_first + max(1, this%reciprocal_tile_size) - 1)
+         tile_length = tile_last - tile_first + 1
+         call this%workspace%ensure_capacity(nmat, tile_length, use_generalized, this%hamiltonian%operator_generation, &
+                                             this%lattice%nn_max, this%lattice%ntype)
+         do slot = 1, tile_length
+            ik = representative(tile_first + slot - 1)
+            this%workspace%points(:,slot) = folded(:,ik)
+         end do
+         call assembler%assemble_batch(this%workspace%points(:,1:tile_length), this%workspace)
+         if (use_generalized) call assembler%assemble_overlap_batch(this%workspace%points(:,1:tile_length), this%workspace)
+         do slot = 1, tile_length
+            ik = representative(tile_first + slot - 1)
+            call diagonalize_workspace_slot(this, this%workspace, slot, use_generalized)
+            eigenvalues(:,ik) = this%workspace%eigenvalue(:,slot)
+            eigenvectors(:,:,ik) = this%workspace%eigenvector(:,:,slot)
+         end do
       end do
       do ik = 1, nk
          iu = unique_of_k(ik)
@@ -472,7 +617,7 @@ contains
          end if
       end do
 
-      deallocate(hk, folded, representative, unique_of_k)
+      deallocate(folded, representative, unique_of_k)
    end subroutine calculate_eigenpairs_at_kpoints
 
    !> Shared single-point Hamiltonian assembly.  Keeping this underneath both
@@ -480,7 +625,7 @@ contains
    !> non-collinearity, Hubbard/CCOR blocks, and second-order terms follow the
    !> normal reciprocal calculation automatically.
    subroutine assemble_hamiltonian_at_kpoint(this, k_point, hk_result)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: k_point(3)
       complex(rp), intent(out) :: hk_result(:, :)
       real(rp) :: k_folded(3)
@@ -506,11 +651,38 @@ contains
       end if
    end subroutine assemble_hamiltonian_at_kpoint
 
+   !> Diagonalize one exclusive workspace slice.  The caller prepared the
+   !> workspace, including the mode-specific LAPACK work size, before entering
+   !> its k-point tile loop.
+   subroutine diagonalize_workspace_slot(this, workspace, slot, use_generalized)
+      class(reciprocal), intent(in) :: this
+      class(reciprocal_workspace), intent(inout) :: workspace
+      integer, intent(in) :: slot
+      logical, intent(in) :: use_generalized
+      real(rp) :: max_herm, matrix_scale
+
+      max_herm = maxval(abs(workspace%h(:,:,slot) - transpose(conjg(workspace%h(:,:,slot)))))
+      matrix_scale = max(1.0_rp, maxval(abs(workspace%h(:,:,slot))))
+      if (max_herm > 1.0e-10_rp*matrix_scale) then
+         call g_logger%fatal('reciprocal workspace H(k) is non-Hermitian before eigensolution.', __FILE__, __LINE__)
+      end if
+      workspace%eigenvector(:,:,slot) = workspace%h(:,:,slot)
+      if (use_generalized) then
+         call this%check_overlap_properties(slot, workspace%s(:,:,slot))
+         call zhegv(1, 'V', 'U', workspace%nmat, workspace%eigenvector(:,:,slot), workspace%nmat, workspace%s(:,:,slot), &
+                    workspace%nmat, workspace%eigenvalue(:,slot), workspace%lapack_work, workspace%lwork, workspace%lapack_rwork, workspace%info(slot))
+      else
+         call zheev('V', 'U', workspace%nmat, workspace%eigenvector(:,:,slot), workspace%nmat, workspace%eigenvalue(:,slot), &
+                    workspace%lapack_work, workspace%lwork, workspace%lapack_rwork, workspace%info(slot))
+      end if
+      if (workspace%info(slot) /= 0) call g_logger%fatal('reciprocal workspace LAPACK eigensolver failed.', __FILE__, __LINE__)
+   end subroutine diagonalize_workspace_slot
+
    !> Solve one normal-state reciprocal eigenproblem using the same LAPACK
    !> convention as diagonalize_hamiltonian.  The optional proxy overlap is
    !> formed locally so the standard sk_overlap mesh cache remains untouched.
    subroutine diagonalize_single_kpoint(this, k_point, hk, use_generalized, eigenvals, eigenvecs)
-      class(reciprocal), intent(in) :: this
+      class(reciprocal), intent(inout) :: this
       real(rp), intent(in) :: k_point(3)
       complex(rp), intent(in) :: hk(:, :)
       logical, intent(in) :: use_generalized
@@ -571,10 +743,11 @@ contains
    module subroutine build_kspace_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
       ! Local variables
-      integer :: ik, ik_global, nk, ntype
+      integer :: ik, ik_global, nk, ntype, tile_first, tile_last, tile_length
       character(len=200) :: debug_msg
       logical :: using_kpath, distribute_mesh
       integer :: i, j
+      type(reciprocal_assembler) :: assembler
 
       call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
       call this%force_full_bz_for_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
@@ -630,23 +803,23 @@ contains
    allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
-      ! Parallelize over k-points (coarse-grained) when OpenMP is available.
-#ifdef _OPENMP
-      !$omp parallel do private(ik, ik_global) shared(this, using_kpath) default(none)
-#endif
-      do ik = 1, this%nk_local
-         ik_global = local_k_index_to_global(this, ik)
-         ! Fourier transform: builds full multi-site H(k) through the same
-         ! single-point assembly used by arbitrary-k response callers.
+      call this%make_reciprocal_assembler(assembler)
+      ! Tile-level assembly owns this workspace exclusively.  This deliberately
+      ! avoids sharing mutable LAPACK/Fourier arrays with OpenMP workers; users
+      ! should avoid simultaneous outer OpenMP and threaded-BLAS parallelism.
+      do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
+         tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
+         tile_length = tile_last - tile_first + 1
+         call this%workspace%ensure_capacity(size(this%hk_bulk,1), tile_length, .false., this%hamiltonian%operator_generation, &
+                                             this%lattice%nn_max, this%lattice%ntype)
          if (using_kpath) then
-            call assemble_hamiltonian_at_kpoint(this, this%k_path(:, ik), this%hk_bulk(:, :, ik))
+            this%workspace%points(:,1:tile_length) = this%k_path(:,tile_first:tile_last)
          else
-            call assemble_hamiltonian_at_kpoint(this, this%k_workset%points(:, ik), this%hk_bulk(:, :, ik))
+            this%workspace%points(:,1:tile_length) = this%k_workset%points(:,tile_first:tile_last)
          end if
+         call assembler%assemble_batch(this%workspace%points(:,1:tile_length), this%workspace)
+         this%hk_bulk(:,:,tile_first:tile_last) = this%workspace%h(:,:,1:tile_length)
       end do
-#ifdef _OPENMP
-      !$omp end parallel do
-#endif
 
       ! H(k) now represents exactly this shared real-space operator generation.
       ! All later eigensystem/DOS/density entry points verify this identity.
@@ -697,8 +870,9 @@ contains
    !> @param[inout] this Reciprocal object receiving sk_overlap arrays.
    module subroutine build_kspace_overlap(this)
       class(reciprocal), intent(inout) :: this
-      integer :: ik, ik_global, nk
+      integer :: ik, ik_global, nk, tile_first, tile_last, tile_length
       logical :: using_kpath
+      type(reciprocal_assembler) :: assembler
 
       using_kpath = .false.
       if (allocated(this%k_path)) then
@@ -720,20 +894,20 @@ contains
       allocate(this%sk_overlap(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
-#ifdef _OPENMP
-      !$omp parallel do private(ik, ik_global) shared(this, using_kpath) default(none)
-#endif
-      do ik = 1, this%nk_local
-         ik_global = local_k_index_to_global(this, ik)
+      call this%make_reciprocal_assembler(assembler)
+      do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
+         tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
+         tile_length = tile_last - tile_first + 1
+         call this%workspace%ensure_capacity(size(this%sk_overlap,1), tile_length, .true., this%hamiltonian%operator_generation, &
+                                             this%lattice%nn_max, this%lattice%ntype)
          if (using_kpath) then
-            call this%fourier_transform_overlap(this%k_path(:, ik), this%sk_overlap(:, :, ik))
+            this%workspace%points(:,1:tile_length) = this%k_path(:,tile_first:tile_last)
          else
-            call this%fourier_transform_overlap(this%k_workset%points(:, ik), this%sk_overlap(:, :, ik))
+            this%workspace%points(:,1:tile_length) = this%k_workset%points(:,tile_first:tile_last)
          end if
+         call assembler%assemble_overlap_batch(this%workspace%points(:,1:tile_length), this%workspace)
+         this%sk_overlap(:,:,tile_first:tile_last) = this%workspace%s(:,:,1:tile_length)
       end do
-#ifdef _OPENMP
-      !$omp end parallel do
-#endif
       call root_info('reciprocal%build_kspace_overlap: Built S(k) overlap proxy.', __FILE__, __LINE__)
    end subroutine build_kspace_overlap
 

@@ -11,13 +11,20 @@ program test_arbitrary_k_eigenpairs
    implicit none
 
    type(reciprocal) :: recip
+   type(reciprocal) :: recip_two_site
    type(hamiltonian), target :: ham
+   type(hamiltonian), target :: ham_two_site
    type(lattice), target :: lat
+   type(lattice), target :: lat_two_site
    real(rp) :: k0(3), k_off(3)
    real(rp), allocatable :: evals(:, :), evals_qg(:, :), folded(:, :), evals_second(:, :), direct_evals(:)
+   real(rp), allocatable :: evals_tile1(:, :), evals_tile2(:, :)
    complex(rp), allocatable :: evecs(:, :, :), evecs_qg(:, :, :), evecs_second(:, :, :)
+   complex(rp), allocatable :: evecs_tile1(:, :, :), evecs_tile2(:, :, :)
    complex(rp), allocatable :: h_direct(:, :), direct_vecs(:, :)
    logical :: failed
+   integer :: workspace_capacity
+   integer :: allocation_count, query_count
 
    call g_logger%init()
    failed = .false.
@@ -67,6 +74,57 @@ program test_arbitrary_k_eigenpairs
    call hermitian_eig(h_direct, direct_evals, direct_vecs)
    call check_close('off-mesh direct Hamiltonian spectrum', maxval(abs(evals(:, 1) - direct_evals)), 1.0e-12_rp, failed)
    call check_gauge('off-mesh direct Hamiltonian eigenvectors', evecs(:, :, 1), direct_vecs, failed)
+
+   ! RF-04: one-point, partial, and multi-tile batches must agree while exact
+   ! duplicates still scatter back into the caller's original order.
+   recip%reciprocal_tile_size = 1
+   call recip%calculate_eigenpairs_at_kpoints(reshape([k0, k_off, k0 + [1.0_rp, 0.0_rp, 0.0_rp], &
+                                                         [0.0_rp, 0.125_rp, 0.0_rp]], [3, 4]), &
+                                              evals_tile1, evecs_tile1)
+   workspace_capacity = recip%workspace%tile_capacity
+   recip%reciprocal_tile_size = 3
+   call recip%calculate_eigenpairs_at_kpoints(reshape([k0, k_off, k0 + [1.0_rp, 0.0_rp, 0.0_rp], &
+                                                         [0.0_rp, 0.125_rp, 0.0_rp]], [3, 4]), &
+                                              evals_tile2, evecs_tile2)
+   call check_close('RF-04 tiled eigenvalue equivalence', maxval(abs(evals_tile1-evals_tile2)), 1.0e-12_rp, failed)
+   call check_gauge('RF-04 tiled eigenvector equivalence', evecs_tile1(:,:,2), evecs_tile2(:,:,2), failed)
+   if (recip%workspace%tile_capacity < workspace_capacity) then
+      write (*, '(a)') 'FAIL RF-04 workspace capacity shrank unexpectedly'
+      failed = .true.
+   end if
+   ham%operator_generation = ham%operator_generation + 1
+   call recip%calculate_eigenpairs_at_kpoints(reshape(k0, [3, 1]), evals_qg, evecs_qg)
+   if (recip%workspace%cached_operator_generation /= ham%operator_generation) then
+      write (*, '(a)') 'FAIL RF-04 workspace did not refresh operator-generation fingerprint'
+      failed = .true.
+   end if
+   deallocate(evals_tile1, evecs_tile1, evals_tile2, evecs_tile2, evals_qg, evecs_qg)
+
+   ! RF-04 generalized/multi-site coverage.  A two-site model with a positive
+   ! overlap proxy verifies tile equivalence in the zhegv path and proves that
+   ! a prepared repeat performs neither another workspace allocation nor a
+   ! LAPACK workspace query.
+   call setup_two_site_generalized_model(recip_two_site, ham_two_site, lat_two_site)
+   recip_two_site%reciprocal_tile_size = 3
+   call recip_two_site%calculate_eigenpairs_at_kpoints(reshape([k0, k_off, [0.0_rp, 0.125_rp, 0.0_rp], &
+                                                                   [0.25_rp, -0.125_rp, 0.0_rp]], [3, 4]), &
+                                                       evals_tile1, evecs_tile1)
+   allocation_count = recip_two_site%workspace%storage_allocations
+   query_count = recip_two_site%workspace%lapack_workspace_queries
+   recip_two_site%reciprocal_tile_size = 2
+   call recip_two_site%calculate_eigenpairs_at_kpoints(reshape([k0, k_off, [0.0_rp, 0.125_rp, 0.0_rp], &
+                                                                   [0.25_rp, -0.125_rp, 0.0_rp]], [3, 4]), &
+                                                       evals_tile2, evecs_tile2)
+   call check_close('RF-04 multi-site generalized tiled eigenvalue equivalence', &
+                    maxval(abs(evals_tile1-evals_tile2)), 1.0e-12_rp, failed)
+   call check_gauge_normalized('RF-04 multi-site generalized tiled eigenvector equivalence', &
+                               evecs_tile1(:,:,3), evecs_tile2(:,:,3), failed)
+   if (recip_two_site%workspace%storage_allocations /= allocation_count .or. &
+       recip_two_site%workspace%lapack_workspace_queries /= query_count) then
+      write (*, '(a)') 'FAIL RF-04 prepared generalized tile repeated an allocation or LAPACK query'
+      failed = .true.
+   end if
+   deallocate(evals_tile1, evecs_tile1, evals_tile2, evecs_tile2)
 
    ! Switch the same completed normal Hamiltonian model to the second-order
    ! route with an onsite spin-orbit term.  The arbitrary-k route must inherit
@@ -156,6 +214,39 @@ contains
       end do
    end subroutine enable_second_order_terms
 
+   subroutine setup_two_site_generalized_model(obj, ham_obj, lat_obj)
+      type(reciprocal), intent(out) :: obj
+      type(hamiltonian), target, intent(out) :: ham_obj
+      type(lattice), target, intent(out) :: lat_obj
+      integer :: i
+
+      lat_obj%nrec = 2; lat_obj%ntype = 2; lat_obj%nn_max = 2; lat_obj%kk = 2
+      allocate(lat_obj%ib(2), lat_obj%atlist(2), lat_obj%iz(2), lat_obj%nn(2,2))
+      lat_obj%ib = [1,2]; lat_obj%atlist = [1,2]; lat_obj%iz = [1,2]
+      lat_obj%nn(1,:) = [2,2]; lat_obj%nn(2,:) = [2,1]
+      ham_obj%lattice => lat_obj; ham_obj%hoh = .false.; ham_obj%ccor_2c = .false.
+      ham_obj%operator_generation = 0; ham_obj%magnetic_representation = 'periodic_nc'
+      allocate(ham_obj%ee(nb,nb,2,2), ham_obj%eeo(nb,nb,2,2))
+      ham_obj%ee = cmplx(0.0_rp,0.0_rp,rp); ham_obj%eeo = cmplx(0.0_rp,0.0_rp,rp)
+      do i=1,nb
+         ham_obj%ee(i,i,1,1) = cmplx(0.04_rp*real(i,rp),0.0_rp,rp)
+         ham_obj%ee(i,i,1,2) = cmplx(0.06_rp*real(i,rp),0.0_rp,rp)
+         ham_obj%ee(i,i,2,1) = cmplx(0.003_rp,0.0_rp,rp)
+         ham_obj%ee(i,i,2,2) = cmplx(0.003_rp,0.0_rp,rp)
+         ham_obj%eeo(i,i,1,1) = cmplx(0.02_rp,0.0_rp,rp)
+         ham_obj%eeo(i,i,1,2) = cmplx(0.02_rp,0.0_rp,rp)
+         ham_obj%eeo(i,i,2,1) = cmplx(0.001_rp,0.0_rp,rp)
+         ham_obj%eeo(i,i,2,2) = cmplx(0.001_rp,0.0_rp,rp)
+      end do
+      obj%hamiltonian => ham_obj; obj%lattice => lat_obj
+      obj%reciprocal_mode = 'generalized_overlap_proxy'; obj%kspace_ham_order = 'first'
+      obj%max_orbs = nb; obj%reciprocal_tile_size = 3; obj%cached_operator_generation = 0
+      allocate(obj%ham_vec_type(3,2,2), obj%ham_vec_type_direct(3,2,2))
+      obj%ham_vec_type = 0.0_rp; obj%ham_vec_type_direct = 0.0_rp
+      obj%ham_vec_type_direct(1,2,1) = 0.25_rp
+      obj%ham_vec_type_direct(1,2,2) = -0.25_rp
+   end subroutine setup_two_site_generalized_model
+
    subroutine hermitian_eig(h, w, vecs)
       complex(rp), intent(in) :: h(:, :)
       real(rp), intent(out) :: w(:)
@@ -197,6 +288,21 @@ contains
       end do
       call check_close(label, max_error, 1.0e-12_rp, test_failed)
    end subroutine check_gauge
+
+   subroutine check_gauge_normalized(label, left, right, test_failed)
+      character(len=*), intent(in) :: label
+      complex(rp), intent(in) :: left(:, :), right(:, :)
+      logical, intent(inout) :: test_failed
+      integer :: iband
+      real(rp) :: max_error, denominator
+
+      max_error = 0.0_rp
+      do iband = 1, size(left, 2)
+         denominator = sqrt(sum(abs(left(:,iband))**2)*sum(abs(right(:,iband))**2))
+         max_error = max(max_error, abs(abs(sum(conjg(left(:,iband))*right(:,iband)))/denominator - 1.0_rp))
+      end do
+      call check_close(label, max_error, 1.0e-12_rp, test_failed)
+   end subroutine check_gauge_normalized
 
    subroutine check_hermiticity(label, h, test_failed)
       character(len=*), intent(in) :: label
