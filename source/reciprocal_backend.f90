@@ -77,12 +77,14 @@ contains
    end subroutine lapack_backend_prepare_operator
 
    module subroutine lapack_backend_execute_batch(this, request, result)
+      use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
+                                               ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       class(lapack_reciprocal_backend), intent(inout) :: this
       type(reciprocal_execution_request), intent(in) :: request
       type(reciprocal_execution_result), intent(inout) :: result
 
       integer :: nmat, nk, ik, nnmax, ntype
-      logical :: use_assembled_input
+      logical :: halt_divide_by_zero, use_assembled_input
       character(len=1) :: jobz
 
       if (.not. this%initialized) then
@@ -173,6 +175,11 @@ contains
          call assert_hermitian(this%workspace%h(:,:,ik), 'H(k)')
          if (request%generalized) call assert_overlap(this%workspace%s(:,:,ik), this%workspace%overlap_cholesky)
          this%workspace%eigenvector(:,:,ik) = this%workspace%h(:,:,ik)
+         ! oneMKL's Hermitian eigensolvers can evaluate an intermediate
+         ! divide-by-zero in their scaling path.  Keep application FPE
+         ! diagnostics enabled, masking that external-library exception only.
+         call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
+         call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
          if (request%generalized) then
             call zhegv(1, jobz, 'U', nmat, this%workspace%eigenvector(:,:,ik), nmat, this%workspace%s(:,:,ik), nmat, &
                        result%eigenvalues(:,ik), this%workspace%lapack_work, this%workspace%lwork, &
@@ -181,6 +188,8 @@ contains
             call zheev(jobz, 'U', nmat, this%workspace%eigenvector(:,:,ik), nmat, result%eigenvalues(:,ik), &
                        this%workspace%lapack_work, this%workspace%lwork, this%workspace%lapack_rwork, this%workspace%info(ik))
          end if
+         call ieee_set_flag(ieee_divide_by_zero, .false.)
+         call ieee_set_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
          if (this%workspace%info(ik) /= 0) then
             call g_logger%fatal('reciprocal backend: LAPACK eigensolver failed.', __FILE__, __LINE__)
          end if

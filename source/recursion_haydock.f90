@@ -521,6 +521,8 @@ contains
    !> @note Uses MPI partition sizes and LAPACK zheev; no collective communication occurs here.
    module subroutine zsqr(this)
       use mpi_mod
+      use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
+                                               ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       implicit none
       class(recursion), intent(inout) :: this
       !
@@ -529,6 +531,7 @@ contains
       real(rp), dimension(3*nb - 2) ::rwork
       complex(rp), dimension(nb*nb) ::zwork
       complex(rp), dimension(nb, nb) :: B2t, U, DUM, lam
+      logical :: halt_divide_by_zero
 
       !
       if (this%lattice%njij == 0) then
@@ -550,7 +553,13 @@ contains
             end do
             ! replace sqrt with eigen solver to get lamda^2 and U
             ! get lamda^2 and U in lamda=U*BB´*U*
+            ! oneMKL's zheev can evaluate an intermediate divide-by-zero in
+            ! its scaling path; mask that external-library exception only.
+            call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
+            call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
             call zheev('V', 'U', LDIM, U, LDIM, ev, zwork, LDIM*LDIM, rwork, info)
+            call ieee_set_flag(ieee_divide_by_zero, .false.)
+            call ieee_set_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
             !
             if (info /= 0) print *, 'diag', info
             ! lam=sqrt(lamda^2) ; lam_i=1/sqrt(lamda^2)
@@ -941,7 +950,7 @@ contains
 
          ! summ = real(zdotc(nat*hblocksize, this%pmn, 1, this%pmn, 1))
 
-         s = 1.0d0/sqrt(summ)
+         s = 1.0d0/sqrt(MAX(summ, TINY(1.0_rp)))
 
          thpsi(:, :) = this%pmn(:, :)*s
          this%pmn(:, :) = this%psi(:, :)
@@ -1118,6 +1127,13 @@ contains
             EMIN0 = X2
          end if
       end do
+      ! An identically zero scalar recursion channel has a zero-width spectrum.
+      ! Its band edges are already known; avoid the relative 0/0 test below.
+      if (EMAX0 == 0.0_rp .and. EMIN0 == 0.0_rp) then
+         EMAX = 0.0_rp
+         EMIN = 0.0_rp
+         return
+      end if
       RELFEH = 2.d0**(-39)
       EPS = 1.0d-6
       !C....CALCULATION OF EMAX

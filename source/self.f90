@@ -1469,8 +1469,8 @@ contains
          write (newunit, '(a,f10.6)') 'Fermi energy: ', this%en%fermi
          
          do ia = 1, this%lattice%nrec
-            write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', (magmom(ia, :))/norm2(magmom(ia, :))
-            write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', (lmom(ia, :))/norm2(lmom(ia, :))
+            write (10, '(a,i4,a,3f10.6)') 'Spin moment direction of atom', ia, ':', (magmom(ia, :))/MAX(norm2(magmom(ia, :)), TINY(1.0_rp))
+            write (20, '(a,i4,a,3f10.6)') 'Orbital moment direction of atom', ia, ':', (lmom(ia, :))/MAX(norm2(lmom(ia, :)), TINY(1.0_rp))
          end do
          !===========================================================================
          !                           Log info     

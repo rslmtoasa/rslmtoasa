@@ -1615,7 +1615,7 @@ contains
             ! Write the aij.out file
             write (40, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
       & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
-            write (99, *) 'null', (this%lattice%cr(:, j) + this%lattice%cr(:, i))/2, this%dmi/norm2(this%dmi)
+            write (99, *) 'null', (this%lattice%cr(:, j) + this%lattice%cr(:, i))/2, this%dmi/MAX(norm2(this%dmi), TINY(1.0_rp))
             ! Compute and write the jtens.out file
             ! J on the diagonal
             jtens = 0.0d0
@@ -1944,7 +1944,7 @@ contains
           & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), (this%dmi), norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
             write (40, '(2i8,2x,3f12.6,2x,9f12.6,1x,f12.6)') &
           & this%lattice%iz(i), this%lattice%iz(j), this%lattice%cr(:, j) - this%lattice%cr(:, i), this%aij, norm2(this%lattice%cr(:, i) - this%lattice%cr(:, j))
-            write (99, *) 'null', (this%lattice%cr(:, j) + this%lattice%cr(:, i))/2, this%dmi/norm2(this%dmi)
+            write (99, *) 'null', (this%lattice%cr(:, j) + this%lattice%cr(:, i))/2, this%dmi/MAX(norm2(this%dmi), TINY(1.0_rp))
          end do
       end if
       close (20)

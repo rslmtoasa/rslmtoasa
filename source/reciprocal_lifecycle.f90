@@ -822,21 +822,32 @@ contains
       logical, intent(in) :: enable_distribution
       integer :: local_count
       integer :: ik
+      logical :: have_k_points, have_k_path
       real(rp), allocatable :: unit_weights(:)
 
-      if (allocated(this%k_points) .and. size(this%k_points, 2) == nk_global .and. allocated(this%k_weights)) then
-         if (size(this%k_weights) /= nk_global) then
-            call g_logger%fatal('setup_k_mesh_distribution: k-point weight shape is invalid.', __FILE__, __LINE__)
-         end if
-         this%k_workset = make_kpoint_workset(this%k_points, this%k_weights, g_parallel_context, enable_distribution)
-      else if (allocated(this%k_points) .and. size(this%k_points, 2) == nk_global) then
+      ! Fortran does not require logical expressions to short-circuit.  Check
+      ! allocation before querying a compatibility array's shape: a band path
+      ! intentionally has no k_points array.
+      have_k_points = .false.
+      if (allocated(this%k_points)) have_k_points = size(this%k_points, 2) == nk_global
+      have_k_path = .false.
+      if (allocated(this%k_path)) have_k_path = size(this%k_path, 2) == nk_global
+
+      if (have_k_points) then
+         if (allocated(this%k_weights)) then
+            if (size(this%k_weights) /= nk_global) then
+               call g_logger%fatal('setup_k_mesh_distribution: k-point weight shape is invalid.', __FILE__, __LINE__)
+            end if
+            this%k_workset = make_kpoint_workset(this%k_points, this%k_weights, g_parallel_context, enable_distribution)
+         else
          ! Hamiltonian-only mesh callers historically did not need integration
          ! weights.  Give their ownership object neutral unit weights without
          ! materializing a second compatibility array.
-         allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
-         this%k_workset = make_kpoint_workset(this%k_points, unit_weights, g_parallel_context, enable_distribution)
-         deallocate(unit_weights)
-      else if (allocated(this%k_path) .and. size(this%k_path, 2) == nk_global) then
+            allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
+            this%k_workset = make_kpoint_workset(this%k_points, unit_weights, g_parallel_context, enable_distribution)
+            deallocate(unit_weights)
+         end if
+      else if (have_k_path) then
          ! A symmetry-generated band path is not a mesh and therefore has no
          ! k_points compatibility view.  It still needs an authoritative
          ! replicated workset for the shared reciprocal assembly path.

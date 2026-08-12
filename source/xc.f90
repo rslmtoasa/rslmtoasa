@@ -297,7 +297,7 @@ contains
          return
       end if
       RS1 = ((4*pi)*RHO/3.)**this%OTH
-      RS = 1./RS1
+      RS = 1.d0/MAX(RS1, TOLDD)
       IXC = this%TXC
       select case (IXC)
       case (2)
@@ -314,7 +314,7 @@ contains
          X = SQRT(RS)
          XPX = X*X + BP*X + CP
          XFX = X*X + BF*X + CF
-         S = (RHO2 - RHO1)/RHO
+         S = (RHO2 - RHO1)/MAX(RHO, TOLDD)
          SP = 1.d0 + S
          SM = 1.d0 - S
          S4 = S**4 - 1.d0
@@ -452,14 +452,14 @@ contains
          EPSCF = -this%XCCF*FCF
          EPSXP = -.91633059d0/RS
          CNY = 5.1297628d0*(EPSCF - EPSCP)
-         X = RHO1/RHO
-         FX = (X**this%FTH + (1.d0 - X)**this%FTH - this%AA)/this%BB
+         X = MIN(1.d0, MAX(0.d0, RHO1/MAX(RHO, TOLDD)))
+         FX = (X**this%FTH + (1.d0 - X)**this%FTH - this%AA)/MAX(this%BB, TOLDD)
          EXC = EPSXP + EPSCP + FX*(CNY + this%FTH*EPSXP)/5.1297628d0
          ARS = -1.22177412d0/RS + CNY
          BRS = -this%XCCP*LOG(1.d0 + this%XCRP/RS) - CNY
          TRX1 = (2.d0*X)**this%OTH
          V1 = ARS*TRX1 + BRS
-         TRX2 = (2.d0*RHO2/RHO)**this%OTH
+         TRX2 = (2.d0*RHO2/MAX(RHO, TOLDD))**this%OTH
          V2 = ARS*TRX2 + BRS
       end select
       return

@@ -56,6 +56,14 @@ import sys
 import f90nml
 
 
+# DOS text files are written by the Fortran code with five digits after the
+# decimal point (for example, ``(2f16.5)``). Their references therefore carry
+# a one-last-printed-digit quantization uncertainty. Keep this floor local to
+# text DOS output; namelist and log comparisons retain their requested
+# tolerances.
+DOS_TEXT_ABS_TOL = 1.1e-5
+
+
 # ---------------------------------------------------------------------------
 # Case loading
 # ---------------------------------------------------------------------------
@@ -266,6 +274,13 @@ def _check_value(
         )
 
 
+def _text_abs_tol(filename: str, abs_tol: float) -> float:
+    """Apply the DOS text-output resolution floor without weakening other checks."""
+    if "dos" in filename.lower():
+        return max(abs_tol, DOS_TEXT_ABS_TOL)
+    return abs_tol
+
+
 def compare_ref(
     workdir: str,
     case_name: str,
@@ -307,6 +322,7 @@ def compare_ref(
     # Text comparisons
     for filename, ref_rows in ref_data.get("text", {}).items():
         run_rows = run_data.get("text", {}).get(filename, {})
+        text_abs_tol = _text_abs_tol(filename, abs_tol)
         for row_str, ref_cols in ref_rows.items():
             run_cols = run_rows.get(row_str, {})
             for col_str, ref_v in ref_cols.items():
@@ -315,7 +331,7 @@ def compare_ref(
                     f"{filename}:row{row_str}:col{col_str}",
                     run_cols.get(col_str),
                     ref_v,
-                    abs_tol,
+                    text_abs_tol,
                     rel_tol,
                 )
                 n_checked += 1

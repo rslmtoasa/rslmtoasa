@@ -315,6 +315,7 @@ contains
       nbas = this%nbas
       if (nbas <= 0) nbas = max(1, maxval(this%no(1:min(this%kk, size(this%no)))))
       sbar_dim = size(this%sbar, 1)
+      call cpu_time(t_total_start)
       pair_cutoff = sqrt(this%r2)
       solve_cutoff = sqrt(max(this%strux_solve_scale, 1.0_rp)*this%r2)
       pair_cutoff_bohr = pair_cutoff*ang2au
@@ -460,6 +461,7 @@ contains
       flush(17)
 
       nttab = result%nttab
+         call cpu_time(t_total_end)
       write (17, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
 
       do ii = 1, this%ntot

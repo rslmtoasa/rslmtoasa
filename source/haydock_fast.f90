@@ -51,6 +51,8 @@ contains
 
    !> Hermitian square root of B^2 (nb x nb), always fp64.
    subroutine bsqrt_dp(b2, bmat, binv, nb)
+      use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
+                                               ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       integer, intent(in) :: nb
       complex(rp), intent(in) :: b2(nb, nb)
       complex(rp), intent(out) :: bmat(nb, nb), binv(nb, nb)
@@ -59,9 +61,17 @@ contains
       real(rp) :: ev(nb), rwork(3*nb - 2)
       complex(rp) :: zwork(2*nb - 1)
       integer :: i, info
+      logical :: halt_divide_by_zero
       external :: zheev, zgemm
       u = b2
+      ! oneMKL's zheev implementation deliberately evaluates an intermediate
+      ! divide-by-zero in its scaling path.  Keep FPE diagnostics active for
+      ! all application code, masking this external-library exception only.
+      call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
+      call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
       call zheev('v', 'u', nb, u, nb, ev, zwork, 2*nb - 1, rwork, info)
+      call ieee_set_flag(ieee_divide_by_zero, .false.)
+      call ieee_set_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
       if (info /= 0) then
          bmat = czero; binv = czero; return
       end if

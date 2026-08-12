@@ -385,7 +385,7 @@ contains
       real(rp), intent(in) :: ei(2)
       real(rp) :: DISC, BI2, AIT, RT, T1, T2
       complex(rp) :: etop, ebot, ea, eb, emid
-      complex(rp) :: det, zoff, Qt
+      complex(rp) :: den, det, zoff, Qt
       integer :: l
 
       ebot = ei(1) !a(ll)-2*b2(ll)
@@ -403,7 +403,9 @@ contains
          Qt = (e - emid + zoff)*0.5d0
       end if
       do l = ll - 1, 1, -1
-         Qt = B2(l)/(e - A(l) - Qt)
+         den = e - A(l) - Qt
+         if (ABS(den) < TINY(1.0_rp)) den = CMPLX(TINY(1.0_rp), 0.0_rp, kind=rp)
+         Qt = B2(l)/den
       end do
       bpRLDOS = -AIMAG(Qt)/PI
       RETURN

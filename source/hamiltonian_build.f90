@@ -1609,10 +1609,17 @@ contains
 
       axis_sign = 1.0_rp
       if (this%lattice%symbolic_atoms(itype)%potential%mom(3) < 0.0_rp) axis_sign = -1.0_rp
-      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice) .and. &
-          itype <= size(this%theta_ss_sublattice) .and. itype <= size(this%phi_ss_sublattice)) then
-         theta = this%theta_ss_sublattice(itype)
-         phi = this%phi_ss_sublattice(itype)
+      if (allocated(this%theta_ss_sublattice) .and. allocated(this%phi_ss_sublattice)) then
+         if (itype >= 1 .and. itype <= size(this%theta_ss_sublattice) .and. itype <= size(this%phi_ss_sublattice)) then
+            theta = this%theta_ss_sublattice(itype)
+            phi = this%phi_ss_sublattice(itype)
+         else if (axis_sign > 0.0_rp) then
+            theta = this%theta_ss
+            phi = 0.0_rp
+         else
+            theta = acos(-1.0_rp) - this%theta_ss
+            phi = acos(-1.0_rp)
+         end if
       else if (axis_sign > 0.0_rp) then
          theta = this%theta_ss
          phi = 0.0_rp

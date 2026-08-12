@@ -755,8 +755,16 @@ contains
    function angle(v1, v2) result(d)
       real(rp), dimension(3), intent(in) :: v1, v2
       real(rp) :: d
+      real(rp) :: c, nprod
 
-      d = acos(dot_product(v1, v2)/(norm2(v1)*norm2(v2)))
+      nprod = norm2(v1)*norm2(v2)
+      if (nprod <= TINY(1.0_rp)) then
+         d = 0.0_rp
+      else
+         c = dot_product(v1, v2)/nprod
+         c = MAX(-1.0_rp, MIN(1.0_rp, c))
+         d = acos(c)
+      end if
 
    end function angle
 

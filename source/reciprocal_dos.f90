@@ -1467,8 +1467,9 @@ module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
    real(rp) :: integral
 
    integer :: ie
-   real(rp) :: e, fermi_weight, fermi_weight_next, delta_e
+   real(rp) :: e, fermi_weight, fermi_weight_next, delta_e, x, x_next
    real(rp), parameter :: eV_to_Ry = 0.073498618_rp
+   real(rp), parameter :: exp_limit = 700.0_rp
 
    integral = 0.0_rp
 
@@ -1479,8 +1480,22 @@ module function integrate_dos_up_to_energy(this, energy, kT) result(integral)
 
       ! Fermi-Dirac weight at current energy
       if (kT > 1.0e-10_rp) then
-         fermi_weight = 1.0_rp / (exp((e - energy) / kT) + 1.0_rp)
-         fermi_weight_next = 1.0_rp / (exp((this%dos_energy_grid(ie+1) - energy) / kT) + 1.0_rp)
+         x = (e - energy) / kT
+         x_next = (this%dos_energy_grid(ie+1) - energy) / kT
+         if (x >= exp_limit) then
+            fermi_weight = 0.0_rp
+         else if (x <= -exp_limit) then
+            fermi_weight = 1.0_rp
+         else
+            fermi_weight = 1.0_rp / (exp(x) + 1.0_rp)
+         end if
+         if (x_next >= exp_limit) then
+            fermi_weight_next = 0.0_rp
+         else if (x_next <= -exp_limit) then
+            fermi_weight_next = 1.0_rp
+         else
+            fermi_weight_next = 1.0_rp / (exp(x_next) + 1.0_rp)
+         end if
       else
          ! T=0 limit
          if (e <= energy) then
