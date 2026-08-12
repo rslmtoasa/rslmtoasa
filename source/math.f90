@@ -906,8 +906,16 @@ contains
       implicit none
       real(rp), intent(in) :: e, ef, kbt
       real(rp) :: fermifun
+      real(rp) :: argument
 
-      fermifun = 1.0d0/(exp((e - ef)/kbt) + 1.0d0)
+      argument = (e - ef)/kbt
+      if (argument >= 50.0_rp) then
+         fermifun = 0.0_rp
+      else if (argument <= -50.0_rp) then
+         fermifun = 1.0_rp
+      else
+         fermifun = 1.0_rp/(exp(argument) + 1.0_rp)
+      end if
    end function fermifun
 
    function dfermifun(e, ef, kbt)
