@@ -326,7 +326,21 @@ contains
    subroutine transition_workspace_ensure_capacity(this,nleft,nright,capacity)
       class(tddft_transition_workspace),intent(inout)::this; integer,intent(in)::nleft,nright,capacity
       if (capacity<1 .or. nleft<1 .or. nright<1) error stop 'transition workspace: invalid shape'
-      if (this%capacity>=capacity .and. allocated(this%left_vertices) .and. size(this%left_vertices,1)==nleft .and. size(this%right_vertices,1)==nright) return
+      ! Fortran does not guarantee short-circuit evaluation of .and.; keep
+      ! every allocation inquiry separate from the corresponding size inquiry.
+      ! A partially initialized workspace is never reusable.
+      if (this%capacity >= capacity) then
+         if (allocated(this%band_n) .and. allocated(this%band_m) .and. allocated(this%occupations) .and. &
+             allocated(this%transition_energies) .and. allocated(this%left_vertices) .and. &
+             allocated(this%right_vertices) .and. allocated(this%denominators) .and. allocated(this%weighted_left)) then
+            if (size(this%band_n) >= capacity .and. size(this%band_m) >= capacity .and. &
+                size(this%occupations) >= capacity .and. size(this%transition_energies) >= capacity .and. &
+                size(this%denominators) >= capacity .and. size(this%left_vertices, 1) == nleft .and. &
+                size(this%left_vertices, 2) >= capacity .and. size(this%right_vertices, 1) == nright .and. &
+                size(this%right_vertices, 2) >= capacity .and. size(this%weighted_left, 1) == nleft .and. &
+                size(this%weighted_left, 2) >= capacity) return
+         end if
+      end if
       call this%clear(); this%capacity=capacity
       allocate(this%band_n(capacity),this%band_m(capacity),this%occupations(capacity),this%transition_energies(capacity), &
          this%left_vertices(nleft,capacity),this%right_vertices(nright,capacity),this%denominators(capacity),this%weighted_left(nleft,capacity))
