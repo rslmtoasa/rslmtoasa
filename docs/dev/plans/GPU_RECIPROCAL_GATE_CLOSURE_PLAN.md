@@ -186,10 +186,43 @@ positive definite before `zhegv`.
 
 ### Acceptance checklist
 
-- [ ] Generalized per-k solve path has no allocate/deallocate or workspace query.
-- [ ] `S(k)` validation remains a copied Cholesky test and preserves `S(k)`.
-- [ ] Generalized residual and metric-orthogonality tests pass.
-- [ ] Repeated prepared arbitrary-k tiles show no new workspace allocation.
+#### Evidence — 2026-08-12, `8b3f8082232a751c69851e9b0f6d68ada76e7a88` + GC-02 worktree
+
+`reciprocal_workspace` now owns `overlap_cholesky(nmat,nmat)`, allocated only
+while preparing a generalized tile and released by `clear`.  The backend passes
+that scratch explicitly to `assert_overlap`; it first copies `S(k)` into the
+scratch, verifies Hermiticity, and applies `ZPOTRF` there.  Thus the source
+overlap matrix remains intact for the following `ZHEGV`, and the per-k solve
+loop has neither allocation/deallocation nor a workspace query.
+
+The generalized two-site arbitrary-k fixture now checks the prepared scratch
+shape, generalized residual and metric orthogonality, and stable
+`storage_allocations`/`lapack_workspace_queries` across a repeated prepared
+tile sequence.  GNU Fortran 13.3.0 validation passed:
+
+```text
+cmake --build build-rf-serial --parallel
+ctest --test-dir build-rf-serial -R 'UnitArbitraryKEigenpairs' --output-on-failure
+# 1/1 passed
+
+cmake --build build-rf-debug --parallel
+ctest --test-dir build-rf-debug -R 'UnitArbitraryKEigenpairs' --output-on-failure
+# 1/1 passed
+
+bash -lc 'source env/openmpi.sh; cmake --build build-rf-mpi --target UnitArbitraryKEigenpairs --parallel'
+bash -lc 'source env/openmpi.sh; ctest --test-dir build-rf-mpi -R "UnitArbitraryKEigenpairs|UnitKspaceOccupations_mpi" --output-on-failure'
+# 2/2 passed outside the sandbox
+```
+
+The same MPI ctest inside the sandbox failed only when OpenMPI could not create
+its PMIx listener (`opal_ifinit: socket() failed with errno=1`); after the
+approved unsandboxed rerun, both rebuilt tests passed.  CUDA remained disabled;
+no overlap tolerance, LAPACK routine, reference, or TD-DFT code changed.
+
+- [x] Generalized per-k solve path has no allocate/deallocate or workspace query.
+- [x] `S(k)` validation remains a copied Cholesky test and preserves `S(k)`.
+- [x] Generalized residual and metric-orthogonality tests pass.
+- [x] Repeated prepared arbitrary-k tiles show no new workspace allocation.
 - [ ] GC-02 evidence is recorded and the commit is independently reviewed.
 
 ---

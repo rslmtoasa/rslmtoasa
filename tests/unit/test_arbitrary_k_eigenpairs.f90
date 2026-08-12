@@ -5,7 +5,7 @@ program test_arbitrary_k_eigenpairs
    use precision_mod, only: rp
    use basis_mod, only: nb
    use reciprocal_mod, only: reciprocal, reciprocal_execution_capabilities, reciprocal_execution_request, &
-                             reciprocal_execution_result, reciprocal_residency_host
+                             reciprocal_execution_result, reciprocal_residency_host, lapack_reciprocal_backend
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
@@ -143,6 +143,20 @@ program test_arbitrary_k_eigenpairs
    call recip_two_site%calculate_eigenpairs_at_kpoints(reshape([k0, k_off, [0.0_rp, 0.125_rp, 0.0_rp], &
                                                                    [0.25_rp, -0.125_rp, 0.0_rp]], [3, 4]), &
                                                        evals_tile1, evecs_tile1)
+   if (allocated(backend_request%k_points)) deallocate(backend_request%k_points)
+   backend_request%assemble_hamiltonian = .true.
+   backend_request%assemble_overlap = .true.
+   backend_request%solve_eigensystem = .true.
+   backend_request%generalized = .true.
+   backend_request%request_eigenvectors = .true.
+   backend_request%request_assembled_hamiltonian = .true.
+   backend_request%request_assembled_overlap = .true.
+   backend_request%operator_generation = ham_two_site%operator_generation
+   allocate(backend_request%k_points(3,1)); backend_request%k_points(:,1) = k0
+   call recip_two_site%execution_backend%execute_batch(backend_request, backend_result)
+   call check_generalized_eigenpairs('GC-02 generalized residual and metric orthogonality', &
+                                     backend_result%hamiltonian(:,:,1), backend_result%overlap(:,:,1), &
+                                     backend_result%eigenvalues(:,1), backend_result%eigenvectors(:,:,1), failed)
    allocation_count = recip_two_site%workspace%storage_allocations
    query_count = recip_two_site%workspace%lapack_workspace_queries
    recip_two_site%reciprocal_tile_size = 2
@@ -158,6 +172,17 @@ program test_arbitrary_k_eigenpairs
       write (*, '(a)') 'FAIL RF-04 prepared generalized tile repeated an allocation or LAPACK query'
       failed = .true.
    end if
+   select type (backend => recip_two_site%execution_backend)
+   type is (lapack_reciprocal_backend)
+      if (.not. allocated(backend%workspace%overlap_cholesky) .or. &
+          any(shape(backend%workspace%overlap_cholesky) /= [2*nb, 2*nb])) then
+         write (*, '(a)') 'FAIL GC-02 generalized overlap validation scratch is not prepared'
+         failed = .true.
+      end if
+   class default
+      write (*, '(a)') 'FAIL GC-02 generalized test did not retain the LAPACK backend'
+      failed = .true.
+   end select
    deallocate(evals_tile1, evecs_tile1, evals_tile2, evecs_tile2)
 
    ! Switch the same completed normal Hamiltonian model to the second-order
@@ -363,6 +388,24 @@ contains
       call check_close(trim(label)//' orthonormality', maxval(abs(overlap)), 1.0e-12_rp, test_failed)
       deallocate(identity, residual, overlap)
    end subroutine check_eigenpairs
+
+   subroutine check_generalized_eigenpairs(label, h, s, eigenvalues, eigenvectors, test_failed)
+      character(len=*), intent(in) :: label
+      complex(rp), intent(in) :: h(:, :), s(:, :), eigenvectors(:, :)
+      real(rp), intent(in) :: eigenvalues(:)
+      logical, intent(inout) :: test_failed
+      complex(rp), allocatable :: identity(:, :), residual(:, :), metric_overlap(:, :)
+      integer :: n
+
+      n = size(eigenvalues)
+      allocate(identity(n,n), residual(n,n), metric_overlap(n,n))
+      identity = diag_identity(n)
+      residual = matmul(h, eigenvectors) - matmul(s, eigenvectors)*spread(eigenvalues, 1, n)
+      metric_overlap = matmul(conjg(transpose(eigenvectors)), matmul(s, eigenvectors)) - identity
+      call check_close(trim(label)//' residual', maxval(abs(residual)), 1.0e-12_rp, test_failed)
+      call check_close(trim(label)//' metric orthogonality', maxval(abs(metric_overlap)), 1.0e-12_rp, test_failed)
+      deallocate(identity, residual, metric_overlap)
+   end subroutine check_generalized_eigenpairs
 
    function diag_identity(n) result(identity)
       integer, intent(in) :: n

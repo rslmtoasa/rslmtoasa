@@ -158,7 +158,7 @@ contains
       jobz = merge('V', 'N', request%request_eigenvectors)
       do ik = 1, nk
          call assert_hermitian(this%workspace%h(:,:,ik), 'H(k)')
-         if (request%generalized) call assert_overlap(this%workspace%s(:,:,ik))
+         if (request%generalized) call assert_overlap(this%workspace%s(:,:,ik), this%workspace%overlap_cholesky)
          this%workspace%eigenvector(:,:,ik) = this%workspace%h(:,:,ik)
          if (request%generalized) then
             call zhegv(1, jobz, 'U', nmat, this%workspace%eigenvector(:,:,ik), nmat, this%workspace%s(:,:,ik), nmat, &
@@ -221,15 +221,19 @@ contains
       end if
    end subroutine assert_hermitian
 
-   subroutine assert_overlap(overlap)
+   subroutine assert_overlap(overlap, chol)
       complex(rp), intent(in) :: overlap(:, :)
-      complex(rp), allocatable :: chol(:, :)
+      complex(rp), intent(inout) :: chol(:, :)
       integer :: info, n
       call assert_hermitian(overlap, 'S(k)')
       n = size(overlap,1)
-      allocate(chol(n,n), source=overlap)
+      if (size(overlap, 2) /= n .or. any(shape(chol) /= [n, n])) then
+         call g_logger%fatal('reciprocal backend: overlap validation scratch shape is invalid.', __FILE__, __LINE__)
+      end if
+      ! Validate a copy: ZPOTRF is destructive and the original S(k) is the
+      ! input metric that the following ZHEGV call must receive unchanged.
+      chol = overlap
       call zpotrf('U', n, chol, n, info)
-      deallocate(chol)
       if (info /= 0) then
          call g_logger%fatal('reciprocal backend: S(k) is not positive definite for generalized eigensolution.', __FILE__, __LINE__)
       end if

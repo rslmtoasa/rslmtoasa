@@ -81,6 +81,9 @@ module reciprocal_mod
       complex(rp), allocatable :: h(:, :, :), s(:, :, :)
       complex(rp), allocatable :: eeo(:, :, :), hoh(:, :, :), hcc(:, :, :)
       complex(rp), allocatable :: phase(:, :, :)
+      !> Private validation copy used by ZPOTRF before a generalized solve.
+      !> It preserves S(k), which ZHEGV later consumes in place.
+      complex(rp), allocatable :: overlap_cholesky(:, :)
       real(rp), allocatable :: points(:, :)
       real(rp), allocatable :: eigenvalue(:, :)
       complex(rp), allocatable :: eigenvector(:, :, :), lapack_work(:)

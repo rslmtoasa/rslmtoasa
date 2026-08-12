@@ -21,6 +21,13 @@ contains
       reusable = .false.
       if (allocated(this%phase)) reusable = this%nmat == nmat .and. this%tile_capacity >= requested .and. &
          (this%generalized .eqv. generalized) .and. size(this%phase, 1) == nnmax .and. size(this%phase, 2) == ntype
+      if (reusable .and. generalized) then
+         if (.not. allocated(this%overlap_cholesky)) then
+            reusable = .false.
+         else
+            reusable = all(shape(this%overlap_cholesky) == [nmat, nmat])
+         end if
+      end if
       if (reusable) then
          this%active_tile_length = tile_length
          this%generalized = generalized
@@ -40,6 +47,7 @@ contains
                this%hoh(nmat,nmat,requested), this%hcc(nmat,nmat,requested), this%phase(nnmax,ntype,requested), this%points(3,requested), &
                this%eigenvalue(nmat,requested), this%eigenvector(nmat,nmat,requested), this%info(requested), &
                this%lapack_rwork(max(1,3*nmat-2)))
+      if (generalized) allocate(this%overlap_cholesky(nmat,nmat))
       this%h = cmplx(0.0_rp,0.0_rp,rp); this%s = cmplx(0.0_rp,0.0_rp,rp)
       this%eeo = cmplx(0.0_rp,0.0_rp,rp); this%hoh = cmplx(0.0_rp,0.0_rp,rp)
       this%hcc = cmplx(0.0_rp,0.0_rp,rp); this%phase = cmplx(0.0_rp,0.0_rp,rp)
@@ -63,6 +71,7 @@ contains
       if (allocated(this%hoh)) deallocate(this%hoh)
       if (allocated(this%hcc)) deallocate(this%hcc)
       if (allocated(this%phase)) deallocate(this%phase)
+      if (allocated(this%overlap_cholesky)) deallocate(this%overlap_cholesky)
       if (allocated(this%points)) deallocate(this%points)
       if (allocated(this%eigenvalue)) deallocate(this%eigenvalue)
       if (allocated(this%eigenvector)) deallocate(this%eigenvector)
