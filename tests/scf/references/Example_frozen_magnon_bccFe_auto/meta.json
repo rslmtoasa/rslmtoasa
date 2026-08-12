@@ -1,0 +1,16 @@
+{
+  "name": "Example_frozen_magnon_bccFe_auto",
+  "case": "frozen_magnon/bccFe_auto",
+  "timeout": 300,
+  "_note": "Auto-branch frozen_magnon MFT smoke test on single-sublattice bccFe. Checks branch and eigenvector output files.",
+  "namelists": {
+    "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+    "control": { "nsp": 3, "recur": "block" }
+  },
+  "checks": {
+    "text": [
+      { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
+      { "file": "frozen_magnon_modes.dat", "rows": [9, 10, 11], "cols": [3, 4, 7, 8] }
+    ]
+  }
+}

@@ -12,7 +12,6 @@ module lmto_pair_potential_mod
    public :: lmto_circular_pair_potential_from_reverse
    public :: lmto_bloch_phase
    public :: lmto_endpoint_phases
-   public :: lmto_pair_transition_metadata
    public :: lmto_transition_metadata
    public :: lmto_unfold_site_spinors
 

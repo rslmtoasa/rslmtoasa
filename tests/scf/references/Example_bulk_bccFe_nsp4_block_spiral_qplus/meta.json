@@ -4,8 +4,12 @@
   "timeout": 300,
   "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,+0.05) [units: 2*pi/alat, degrees]. Paired with _qminus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "strux_want_sdot": false
+    },
     "control": {
-      "nsp": 4,
+      "nsp": 3,
       "recur": "block",
       "lld": 20
     },
@@ -14,6 +18,7 @@
     },
     "hamiltonian": {
       "hoh": false,
+      "magnetic_representation": "gbt_single_q",
       "q_ss": [
         0.0,
         0.0,

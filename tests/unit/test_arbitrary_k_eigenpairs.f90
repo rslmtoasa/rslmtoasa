@@ -62,6 +62,8 @@ program test_arbitrary_k_eigenpairs
    deallocate(evals, evecs, folded)
    call recip%calculate_eigenpairs_at_kpoints(reshape(k_off, [3, 1]), evals, evecs, folded)
    call recip%fourier_transform_hamiltonian(folded(:, 1), h_direct)
+   call check_hermiticity('first-order off-mesh Hamiltonian', h_direct, failed)
+   call check_eigenpairs('first-order off-mesh service eigenpairs', h_direct, evals(:, 1), evecs(:, :, 1), failed)
    call hermitian_eig(h_direct, direct_evals, direct_vecs)
    call check_close('off-mesh direct Hamiltonian spectrum', maxval(abs(evals(:, 1) - direct_evals)), 1.0e-12_rp, failed)
    call check_gauge('off-mesh direct Hamiltonian eigenvectors', evecs(:, :, 1), direct_vecs, failed)
@@ -73,6 +75,9 @@ program test_arbitrary_k_eigenpairs
    deallocate(evals, evecs, folded)
    call recip%calculate_eigenpairs_at_kpoints(reshape(k_off, [3, 1]), evals_second, evecs_second, folded)
    call recip%fourier_transform_hamiltonian_second_order(folded(:, 1), h_direct)
+   call check_hermiticity('second-order/SOC off-mesh Hamiltonian', h_direct, failed)
+   call check_eigenpairs('second-order/SOC off-mesh service eigenpairs', h_direct, evals_second(:, 1), &
+                         evecs_second(:, :, 1), failed)
    call hermitian_eig(h_direct, direct_evals, direct_vecs)
    call check_close('second-order/SOC direct spectrum', maxval(abs(evals_second(:, 1) - direct_evals)), 1.0e-12_rp, failed)
    call check_gauge('second-order/SOC eigenvectors', evecs_second(:, :, 1), direct_vecs, failed)
@@ -192,5 +197,42 @@ contains
       end do
       call check_close(label, max_error, 1.0e-12_rp, test_failed)
    end subroutine check_gauge
+
+   subroutine check_hermiticity(label, h, test_failed)
+      character(len=*), intent(in) :: label
+      complex(rp), intent(in) :: h(:, :)
+      logical, intent(inout) :: test_failed
+
+      call check_close(label, maxval(abs(h - transpose(conjg(h)))), 1.0e-12_rp, test_failed)
+   end subroutine check_hermiticity
+
+   subroutine check_eigenpairs(label, h, eigenvalues, eigenvectors, test_failed)
+      character(len=*), intent(in) :: label
+      complex(rp), intent(in) :: h(:, :), eigenvectors(:, :)
+      real(rp), intent(in) :: eigenvalues(:)
+      logical, intent(inout) :: test_failed
+      complex(rp), allocatable :: identity(:, :), residual(:, :), overlap(:, :)
+      integer :: n
+
+      n = size(eigenvalues)
+      allocate(identity(n, n), residual(n, n), overlap(n, n))
+      identity = diag_identity(n)
+      residual = matmul(h, eigenvectors) - eigenvectors*spread(eigenvalues, 1, n)
+      overlap = matmul(conjg(transpose(eigenvectors)), eigenvectors) - identity
+      call check_close(trim(label)//' residual', maxval(abs(residual)), 1.0e-12_rp, test_failed)
+      call check_close(trim(label)//' orthonormality', maxval(abs(overlap)), 1.0e-12_rp, test_failed)
+      deallocate(identity, residual, overlap)
+   end subroutine check_eigenpairs
+
+   function diag_identity(n) result(identity)
+      integer, intent(in) :: n
+      complex(rp) :: identity(n, n)
+      integer :: i
+
+      identity = cmplx(0.0_rp, 0.0_rp, rp)
+      do i = 1, n
+         identity(i, i) = cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+   end function diag_identity
 
 end program test_arbitrary_k_eigenpairs

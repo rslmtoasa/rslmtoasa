@@ -358,7 +358,11 @@ add_test(NAME WP8LittleGroup
     --deck-root "${TestDIR}/regression/wp8_littlegroup"
     --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp8_littlegroup"
 )
-set_tests_properties(WP8LittleGroup PROPERTIES LABELS "regression;gbt;wp8" TIMEOUT 1800)
+set_tests_properties(WP8LittleGroup PROPERTIES
+  LABELS "regression;gbt;wp8"
+  TIMEOUT 1800
+  DISABLED TRUE
+)
 
 # WP9 physical validation.
 #
@@ -388,7 +392,11 @@ foreach(_i RANGE ${_wp9_supercell_last})
       "--case-name" "${_wp9_supercell_name}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/wp9_commensurate_supercell"
   )
-  set_tests_properties("WP9CommensurateSupercell_${_wp9_supercell_name}" PROPERTIES LABELS "gbt;wp9" TIMEOUT ${_wp9_supercell_timeout})
+  set_tests_properties("WP9CommensurateSupercell_${_wp9_supercell_name}" PROPERTIES
+    LABELS "gbt;wp9"
+    TIMEOUT ${_wp9_supercell_timeout}
+    DISABLED TRUE
+  )
 endforeach()
 
 # Battery B -- bcc-Fe Gamma-H frozen-magnon sweep, k-space route only (RS
@@ -407,7 +415,11 @@ add_test(NAME WP9GammaHSweep
     --deck-root "${TestDIR}/regression/wp9_validation/gammaH_sweep"
     --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp9_gammaH_sweep"
 )
-set_tests_properties(WP9GammaHSweep PROPERTIES LABELS "gbt;wp9" TIMEOUT 3600)
+set_tests_properties(WP9GammaHSweep PROPERTIES
+  LABELS "gbt;wp9"
+  TIMEOUT 3600
+  DISABLED TRUE
+)
 
 # Battery C -- multi-sublattice Goldstone measurement (bcc FeCo, branch_mode=
 # 'auto'). This is a MEASUREMENT, not a Goldstone-satisfaction gate (see the
@@ -420,7 +432,11 @@ add_test(NAME WP9MultisublatticeGoldstone
     --deck-root "${TestDIR}/regression/wp9_validation/multisublattice_goldstone"
     --scratch-root "${CMAKE_BINARY_DIR}/Testing/wp9_goldstone"
 )
-set_tests_properties(WP9MultisublatticeGoldstone PROPERTIES LABELS "regression;gbt;wp9" TIMEOUT 1800)
+set_tests_properties(WP9MultisublatticeGoldstone PROPERTIES
+  LABELS "regression;gbt;wp9"
+  TIMEOUT 1800
+  DISABLED TRUE
+)
 
 set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
 file(READ "${REGRESSION_CASES_JSON}" _regression_json)

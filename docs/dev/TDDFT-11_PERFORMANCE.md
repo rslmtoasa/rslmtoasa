@@ -19,26 +19,21 @@ lift the open WR-07/WR-08 mode-classification and material-physics gates in
 
 ## CPU profile snapshot
 
-`UnitTddftCpuProfile` was run in the local Debug build (GNU Fortran 16.1,
-Apple Accelerate BLAS) on 2026-08-09.  It uses deterministic one-atom,
-18-spinor `(s,p,d)` response fixtures matching the basis shape of the bcc Fe
-and fcc Ni examples.  They are kernel-cost fixtures, not replacement material
+`UnitTddftCpuProfile` uses deterministic completed reciprocal fixtures, not
+an SCF material calculation: a one-site 18-spinor `(s,p,d)` model with
+`(nk,nω)=(16,96)` and a two-site 36-spinor model with `(32,192)`.  They are
+representative one- and multi-site workload shapes, not replacement material
 validation calculations.
 
-Times are process CPU seconds.  The columns are `vertices`, `denominators`,
-`GEMM accumulation`, `k+q eigensolve`, `Dyson solve`, `Dyson diagonalization`,
-`mode analysis`, and `GF integration`.
-
-| Fixture | nk | nω | CPU profile (s) |
-| --- | ---: | ---: | --- |
-| bccFe | 16 | 96 | 0.005823, 0.011847, 0.011021, 0, 0.000175, 0, 0.000297, 0.081919 |
-| fccNi | 32 | 192 | 0.011800, 0.047096, 0.042887, 0, 0.000233, 0, 0.000436, 0.081910 |
-
-The fixture feeds precomputed eigenpairs, hence its `k+q eigensolve` column is
-zero.  Production q runs populate it through
-`profile_arbitrary_kq_eigensolve_cpu_s` in every χ₀ file.  The same output
-headers expose all other fields, so an Fe/Ni production run needs no special
-profiler build or changed physics input.
+Times are informational process CPU seconds. `PROFILE_RECIPROCAL` labels
+Fourier assembly, normal-k eigensolution, arbitrary-`k+q`
+assembly/eigensolution, and finite-q LMTO pair-potential construction.
+`PROFILE_TDDFT` labels vertex construction, denominator generation, response
+accumulation, Green-function energy integration, Dyson, and mode analysis.
+`PROFILE_MEMORY_MIB` reports analytical principal-array payloads: H(k), both
+eigenpair sets, the pair-operator cache plus Q+ workspace, response tensors,
+and their sum. It assumes FP64 reals (8 bytes) and complex FP64 values (16
+bytes); it is deliberately not an OS-level RSS measurement.
 
 The result identifies Green-function integration, followed by denominator and
 response accumulation, as the hotspots in these small-basis fixtures.  The

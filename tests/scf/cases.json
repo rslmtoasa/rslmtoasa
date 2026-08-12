@@ -307,9 +307,11 @@
       "timeout": 300,
       "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,+0.05) [units: 2*pi/alat, degrees]. Paired with _qminus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
       "namelists": {
-        "control":     { "nsp": 4, "recur": "block", "lld": 20 },
+        "lattice":     { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "q_ss": [0.0, 0.0, 0.05], "theta_ss": 90.0 }
+        "hamiltonian": { "hoh": false, "magnetic_representation": "gbt_single_q",
+                           "q_ss": [0.0, 0.0, 0.05], "theta_ss": 90.0 }
       },
       "checks": {
         "nml": [
@@ -323,9 +325,11 @@
       "timeout": 300,
       "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,-0.05) [units: 2*pi/alat, degrees]. Paired with _qplus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
       "namelists": {
-        "control":     { "nsp": 4, "recur": "block", "lld": 20 },
+        "lattice":     { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "q_ss": [0.0, 0.0, -0.05], "theta_ss": 90.0 }
+        "hamiltonian": { "hoh": false, "magnetic_representation": "gbt_single_q",
+                           "q_ss": [0.0, 0.0, -0.05], "theta_ss": 90.0 }
       },
       "checks": {
         "nml": [
@@ -338,7 +342,10 @@
       "case": "frozen_magnon/bccFe",
       "timeout": 300,
       "_note": "T5: frozen_magnon post-processing sweep (mode='mft', 3 q-points from q_points.dat, theta_ss=90deg, units 2*pi/alat). Checks frozen_magnon.dat q/etot/eband/moment/omega columns. See docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md T5.",
-      "namelists": { "control": { "recur": "block" } },
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block" }
+      },
       "checks": {
         "text": [
           { "file": "frozen_magnon.dat", "rows": [7, 8, 9], "cols": [3, 4, 5, 6, 7] }
@@ -350,7 +357,10 @@
       "case": "frozen_magnon/bccFe_auto",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon MFT smoke test on single-sublattice bccFe. Checks branch and eigenvector output files.",
-      "namelists": { "control": { "recur": "block" } },
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block" }
+      },
       "checks": {
         "text": [
           { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
@@ -363,7 +373,10 @@
       "case": "frozen_magnon/bccFe_auto_scf",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon SCF smoke test on single-sublattice bccFe. Checks total-energy branch and eigenvector output files.",
-      "namelists": { "control": { "recur": "block" } },
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
+        "control": { "nsp": 3, "recur": "block" }
+      },
       "checks": {
         "text": [
           { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
@@ -525,18 +538,38 @@
       "case": "k_space_scf/bccFe",
       "timeout": 300,
       "namelists": {
-        "self": { "nstep": 1 },
+        "self": { "nstep": 1, "use_kspace": true },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
           "nk3": 2,
           "n_energy_points": 40
         },
+        "energy": { "energy_min": -2.0, "energy_max": 2.0 },
         "control": { "nsp": 1, "recur": "block", "lld": 12 }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
+          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"],
+            "arrays": { "mom": [3], "lmom": [3] } }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [800, 1255, 1700], "cols": [1, 2] }
+        ],
+        "log": [
+          {
+            "file": "testrun.log",
+            "patterns": {
+              "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
+              "canonical_electron_count": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
+              "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+              "dos_integral": "DOS integral =\\s*([-+0-9.EeDd]+)",
+              "dos_state_count": "N\\(Emax\\)-N\\(Emin\\)\\s*=\\s*([-+0-9.EeDd]+)",
+              "site_spin_moment": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+              "site_valence": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+              "site_charge_transfer_z": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+            }
+          }
         ]
       }
     },

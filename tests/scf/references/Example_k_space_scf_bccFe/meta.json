@@ -1,16 +1,22 @@
 {
   "name": "Example_k_space_scf_bccFe",
+  "quick": true,
   "case": "k_space_scf/bccFe",
-  "timeout": 240,
+  "timeout": 300,
   "namelists": {
     "self": {
-      "nstep": 1
+      "nstep": 1,
+      "use_kspace": true
     },
     "reciprocal": {
       "nk1": 2,
       "nk2": 2,
       "nk3": 2,
       "n_energy_points": 40
+    },
+    "energy": {
+      "energy_min": -2.0,
+      "energy_max": 2.0
     },
     "control": {
       "nsp": 1,
@@ -26,7 +32,44 @@
           "etot",
           "ws_r",
           "vmad"
+        ],
+        "arrays": {
+          "mom": [
+            3
+          ],
+          "lmom": [
+            3
+          ]
+        }
+      }
+    ],
+    "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          800,
+          1255,
+          1700
+        ],
+        "cols": [
+          1,
+          2
         ]
+      }
+    ],
+    "log": [
+      {
+        "file": "testrun.log",
+        "patterns": {
+          "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
+          "canonical_electron_count": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
+          "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+          "dos_integral": "DOS integral =\\s*([-+0-9.EeDd]+)",
+          "dos_state_count": "N\\(Emax\\)-N\\(Emin\\)\\s*=\\s*([-+0-9.EeDd]+)",
+          "site_spin_moment": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+          "site_valence": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+          "site_charge_transfer_z": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+        }
       }
     ]
   }

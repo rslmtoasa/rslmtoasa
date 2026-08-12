@@ -27,6 +27,12 @@ Reference data is driven by a "checks" dict in cases.json:
     ],
     "text": [
       { "file": "Fe_dos.out", "rows": [50, 100], "cols": [1, 2] }
+    ],
+    "log": [
+      {
+        "file": "testrun.log",
+        "patterns": { "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)" }
+      }
     ]
   }
 
@@ -39,6 +45,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -180,6 +187,21 @@ def extract_text_values(workdir: str, text_check: dict) -> dict:
     return result
 
 
+def extract_log_values(workdir: str, log_check: dict) -> dict:
+    """Extract named scalar values from the first match of each log regex."""
+    filepath = os.path.join(workdir, log_check["file"])
+    with open(filepath) as fh:
+        content = fh.read()
+
+    result: dict = {}
+    for key, pattern in log_check.get("patterns", {}).items():
+        match = re.search(pattern, content)
+        if match is None:
+            raise ValueError(f"Log pattern '{key}' did not match {filepath}: {pattern}")
+        result[key] = float(match.group(1).replace("D", "E").replace("d", "e"))
+    return result
+
+
 def build_ref_data(workdir: str, checks: dict) -> dict:
     """Build a complete reference data dict from the workdir outputs."""
     ref: dict = {}
@@ -193,6 +215,11 @@ def build_ref_data(workdir: str, checks: dict) -> dict:
         ref["text"] = {}
         for text_check in checks["text"]:
             ref["text"][text_check["file"]] = extract_text_values(workdir, text_check)
+
+    if "log" in checks:
+        ref["log"] = {}
+        for log_check in checks["log"]:
+            ref["log"][log_check["file"]] = extract_log_values(workdir, log_check)
 
     return ref
 
@@ -276,6 +303,13 @@ def compare_ref(
                 )
                 n_checked += 1
 
+    # Log comparisons
+    for filename, ref_vals in ref_data.get("log", {}).items():
+        run_vals = run_data.get("log", {}).get(filename, {})
+        for key, ref_v in ref_vals.items():
+            _check_value(failures, f"{filename}:{key}", run_vals.get(key), ref_v, abs_tol, rel_tol)
+            n_checked += 1
+
     if failures:
         print(f"FAIL [{case_name}]: {len(failures)} of {n_checked} value(s) out of tolerance")
         for msg in failures:
@@ -308,6 +342,9 @@ def save_ref(workdir: str, case_name: str, ref_dir: str, case: dict) -> None:
         len(cols)
         for rows in ref_data.get("text", {}).values()
         for cols in rows.values()
+    ) + sum(
+        len(values)
+        for values in ref_data.get("log", {}).values()
     )
     print(f"REF  [{case_name}]: {n} values saved to {dest_dir}")
 

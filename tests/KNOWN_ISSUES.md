@@ -4,6 +4,72 @@ Bugs surfaced while closing test-matrix coverage gaps (Phase 2, P1). Recorded
 here rather than fixed in place, per the "no further structural refactoring"
 rule for this phase — each entry is a candidate for a future bug-fix task.
 
+## RF-01 GNU debug baseline and ifx diagnostic test issues
+
+- **GNU Fortran 13.3.0 and 14.2.0, verified on 2026-08-11:** the original
+  Debug setting `-fcheck=all` compiles the static library but fails while
+  linking `rslmto.x` and several unit executables. The linker reports
+  compiler-generated symbols such as `is_recursive.67.5`, `is_recursive.58.5`,
+  and `is_recursive.903.25` from `control.f90`, `element.f90`, and
+  `potential.f90`.
+- **Resolution:** the GNU Debug configuration now uses
+  `-fcheck=all,no-recursion`. This preserves bounds, DO-loop, memory, and
+  pointer checks while excluding the faulty recursion instrumentation. A clean
+  GNU 14.2.0 Debug build links the main executable and every unit executable.
+- **Resolved Intel ifx compilation errors:** `lmto_pair_potential.f90` redundantly declared
+  `lmto_pair_transition_metadata` in both a module PUBLIC statement and a
+  `type, public` declaration. The same redundancy for
+  `lmto_endpoint_tangent_record` in `lmto_magnetic_tangent.f90` was also
+  removed. A clean ifx 2025.3.3 Debug build now compiles and links the main
+  executable and every unit-test executable.
+- **Resolved diagnostic-unit blockers, verified on 2026-08-11:**
+  `UnitDysonEquivalence` now masks only the divide-by-zero exception generated
+  internally by oneMKL `zheev`, clearing that library status flag before
+  restoring the caller's FPE mode. The two missing WP6 Python tests have been
+  restored as independent algebra/source-contract oracles. With GNU 14.2.0 and
+  `-fcheck=all,no-recursion -ffpe-trap=invalid,zero,overflow -finit-real=snan`,
+  `ctest -L unit` passes 40/40.
+- **Reproduction:** configure with the RF-01 debug command in
+  `docs/dev/plans/RF_CPU_RECIPROCAL_REFACTOR.md`, then run both
+  `cmake --build build-rf-debug --parallel` and
+  `ctest --test-dir build-rf-debug -L unit --output-on-failure`. The GNU
+  configuration adds `-fcheck=all,no-recursion`; the ifx configuration uses
+  `-check all -traceback -fpe0 -init=snan`. Both build cleanly. Those
+  diagnostic repairs modified no reference files.
+- **Impact:** the GNU Release/OpenMP build with the same source and CUDA
+  disabled builds successfully; focused reciprocal and TD-DFT unit tests
+  and the complete Debug unit suite pass in the GNU 14 configuration.
+- **Found:** RF-01 baseline characterization, before production changes.
+
+## [RESOLVED 2026-08-12, fixture repair] `Example_k_space_scf_bccFe` exercised recursion, not k-space SCF
+
+- **Symptom:** despite its name and reciprocal namelist values, the case never
+  set `self%use_kspace=.true.`. Its log therefore reported
+  `Perform recursion` and the reciprocal SCF branch in `self%run_dos` was not
+  reached.
+- **Fix applied:** the manifest and reference metadata now explicitly set
+  `self.use_kspace=true`. The regenerated contract pins the canonical Fermi
+  level, electron count, band energy, site valence/charge/spin moment, DOS
+  state count, three DOS samples, and stable output-namelist moments. The
+  reference runner now supports named scalar extraction from `testrun.log`.
+- **Validation:** GNU 14.2.0 / oneMKL Release passes the case with 19 checked
+  values and logs `run_dos: use_kspace=.true.`.
+
+## K-space tetrahedron DOS value integral differs from its cumulative state count
+
+- **Symptom, verified 2026-08-12 on the repaired bcc-Fe k-space fixture:**
+  over the widened `[-2,2] Ry` DOS window, the tetrahedron diagnostic reports
+  `N(Emax)-N(Emin)=18.000000`, matching the 18 bands, but the independently
+  trapezoid-integrated `total_dos` reports `13.507092`. Its DOS-occupied-count
+  diagnostic is also `5.83712648` instead of the canonical 8 electrons.
+- **Scope:** the canonical occupation route is internally conserved
+  (`N=8.00000000`, residual `-2.89e-11`) and is the SCF source of truth.
+  This discrepancy is confined to the sampled tetrahedron-DOS diagnostic.
+- **Test impact:** RF-01 now pins both the cumulative state count and the raw
+  DOS integral, so later reciprocal batching/backends cannot silently alter
+  either. Resolving their disagreement is a separate DOS-method correctness
+  task, not a baseline characterization change.
+
 ## `recur = 'lanczos'` + `nsp = 2` produces NaN DOS and `lmom`
 
 - **Symptom:** with `control%recur = 'lanczos'` and `control%nsp = 2`, every
@@ -421,9 +487,9 @@ future reference regeneration will capture genuinely different `vmad` values.
   fix the `constraints_bfield` seed discard, fix the `etcon` initialization),
   estimated at least one dedicated task, not a WP6c-sized fix.
 
-## Five `tests/scf/cases.json` GBT fixtures fatal on `strux_backend='legacy'` (pre-existing, not a WP6c regression)
+## [RESOLVED 2026-08-11, fixture repair] Five `tests/scf/cases.json` GBT fixtures fatal on `strux_backend='legacy'` (pre-existing, not a WP6c regression)
 
-- **Symptom:** `Example_bulk_bccFe_nsp4_block_spiral_qplus`,
+- **Former symptom:** `Example_bulk_bccFe_nsp4_block_spiral_qplus`,
   `Example_bulk_bccFe_nsp4_block_spiral_qminus`, `Example_frozen_magnon_bccFe`,
   `Example_frozen_magnon_bccFe_auto`, and `Example_frozen_magnon_bccFe_auto_scf`
   all abort with `gbt_single_q requires strux_backend='strux_lib'; the legacy
@@ -451,19 +517,17 @@ future reference regeneration will capture genuinely different `vmad` values.
   ~4-6e-5 (rel ~2e-6) — this matches the pre-existing gfortran-13 DOS
   tolerance delta already recorded in `docs/dev/GBT_WP0_G0_REPORT.md`, not a
   new issue.
-- **Proposed fix (not applied — regression-reference-touching, needs a
-  green light):** add `"lattice": {"strux_backend": "strux_lib"}` (and
-  whatever `screening`/`strux_want_sdot` the GBT path additionally requires)
-  to the five affected `tests/scf/cases.json` entries, then regenerate their
-  reference values on the corrected `strux_lib` GBT path — the numbers will
-  differ from the old `legacy`-backend GBT output, so this is a reference
-  regeneration, not a one-line config patch. Estimated size: small
-  (config + one `tests/generate_references.py` run + review), but touches
-  golden values and so needs explicit sign-off before doing it.
+- **Fix applied:** every fixture now sets
+  `lattice.strux_backend='strux_lib'` and `strux_want_sdot=.false.`. The two
+  direct spiral cases also set `magnetic_representation='gbt_single_q'` and
+  `nsp=3`; all frozen-magnon cases set `nsp=3`, because GBT with SOC (`nsp=4`)
+  is unsupported. Golden outputs were regenerated from a clean GNU 14.2.0 /
+  oneMKL Release build and reviewed. The five corrected CTest cases pass,
+  including 15 checked MFT values and 21 checked values in each auto branch.
 - **Found:** WP6c, while running the full `ctest -L scf` suite as required by
   the project's rule 1 regression gate before/after every task.
 
-## `nsp4_block_spiral_qplus`/`_qminus` never enable GBT (diagnosed)
+## [RESOLVED 2026-08-11, fixture repair] `nsp4_block_spiral_qplus`/`_qminus` never enable GBT (diagnosed)
 
 - **Symptom:** both cases fail on `Fe_out.nml:mom[3]`, `run = 1.000000e+00`
   against `ref = 6.856242e-09`. The converged moment is `+z` where the
@@ -483,15 +547,9 @@ future reference regeneration will capture genuinely different `vmad` values.
   rejection naming the missing key. The committed reference `mom[3] ≈ 6.9e-9`
   presumably dates from when the spiral was enabled implicitly (via
   `gbt_kspace` or the absolute-position branch), both since deleted.
-- **Proposed fix (not applied — touches golden references, needs a green
-  light):** add `"magnetic_representation": "gbt_single_q"` to both cases'
-  `hamiltonian` namelist, change `nsp` from `4` to `3` (SOC is fatal under
-  GBT), add `"lattice": {"strux_backend": "strux_lib"}` (the WP4 requirement),
-  then regenerate both references. The values *will* move — these cases have
-  not computed a spiral in a long time — so this is a reference regeneration
-  with a physics justification, not a config patch. It would also restore the
-  `E(q) = E(-q)` pin the pair was written to provide, which is currently
-  vacuous (both sides compute the same ferromagnet).
+- **Fix applied:** both cases now select `gbt_single_q`, use `nsp=3`, and
+  select `strux_lib`. The regenerated plus/minus total energies differ by
+  only `6.86e-9 Ry`, restoring the intended even-in-q regression signal.
 - **Found:** WP7, answering "does GBT functionally work?".
 
 ## [RESOLVED 2026-08-07, test-fixture bug] `magnetic_representation = 'gbt_single_q'` decks must set `mom` to the collinear-rotating-frame convention `(0,0,±1)`, never to the physical cone direction — WP9's commensurate-supercell decks got this backwards

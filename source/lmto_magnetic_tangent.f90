@@ -12,7 +12,6 @@ module lmto_magnetic_tangent_mod
    public :: lmto_bond_value
    public :: lmto_bond_tangent
    public :: lmto_hhmag_to_spinor
-   public :: lmto_endpoint_tangent_record
    public :: lmto_make_endpoint_record
    public :: lmto_ordinary_tangent_supported
 

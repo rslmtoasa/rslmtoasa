@@ -159,7 +159,7 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 # Check array bounds
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                  Fortran "-check all"   # Intel
-                         "-fcheck=all"  # GNU (bounds + do + mem + pointer + recursion)
+                         "-fcheck=all,no-recursion"  # GNU (recursion instrumentation can emit unresolved symbols)
                          "-Mbounds"     # Portland Group
                           "/check:all"   # Intel Windows
                 )

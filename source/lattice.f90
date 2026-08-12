@@ -45,6 +45,8 @@ module lattice_mod
 
    private
 
+   real(rp), parameter :: default_screening_alpha_values(4) = [0.3485_rp, 0.0530_rp, 0.0107_rp, 0.00674_rp]
+
    !> Module´s main structure
    type, public :: lattice
       !> Charge
@@ -716,7 +718,6 @@ module lattice_mod
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl
       real(rp) :: alpha_default(nl)
-      real(rp), parameter :: default_values(4) = [0.3485_rp, 0.0530_rp, 0.0107_rp, 0.00674_rp]
       integer :: i
 
    end function default_screening_alpha

@@ -148,12 +148,11 @@ contains
       class(lattice), intent(in) :: this
       integer, intent(in) :: nl
       real(rp) :: alpha_default(nl)
-      real(rp), parameter :: default_values(4) = [0.3485_rp, 0.0530_rp, 0.0107_rp, 0.00674_rp]
       integer :: i
 
       alpha_default = 0.0_rp
       do i = 1, nl
-         alpha_default(i) = default_values(min(i, size(default_values)))
+         alpha_default(i) = default_screening_alpha_values(min(i, size(default_screening_alpha_values)))
       end do
    end function default_screening_alpha
 

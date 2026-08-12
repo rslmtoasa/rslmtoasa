@@ -30,6 +30,7 @@ program test_dyson_equivalence
    use math_mod, only: pi, two_pi, i_unit
    use lehmann_kernel_mod, only: lehmann_pair_block
    use dyson_kernel_mod, only: dyson_kspace_inverse
+   use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
    implicit none
 
    integer, parameter :: nk = 256
@@ -265,12 +266,22 @@ contains
       complex(rp), allocatable :: work(:)
       real(rp) :: rwork(max(1, 3*n - 2))
       integer :: info, lwork
+      logical :: halt_divide_by_zero
 
       vecs = a_in
       call zheev('V', 'U', n, vecs, n, w, work_q, -1, rwork, info)
       lwork = max(1, nint(real(work_q(1), rp)))
       allocate (work(lwork))
+
+      ! oneMKL's zheev implementation deliberately evaluates an intermediate
+      ! divide-by-zero in its scaling path.  Keep the test's FPE diagnostics
+      ! enabled everywhere else, but mask that external-library exception only
+      ! for the LAPACK call and clear its status flag before restoring the mode.
+      call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
+      call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
       call zheev('V', 'U', n, vecs, n, w, work, lwork, rwork, info)
+      call ieee_set_flag(ieee_divide_by_zero, .false.)
+      call ieee_set_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
       deallocate (work)
       if (info /= 0) then
          write (*, '(a,i0)') 'hermitian_eig: zheev info = ', info
