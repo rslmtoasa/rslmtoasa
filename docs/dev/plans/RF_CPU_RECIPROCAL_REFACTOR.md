@@ -5,7 +5,7 @@
 | Stage | Scope | Status |
 | --- | --- | --- |
 | RF-01 | Characterization, numerical oracles, and CPU baseline | Complete |
-| RF-02 | MPI runtime state, build integration, and output ownership | Complete (debug suite caveat recorded below) |
+| RF-02 | MPI runtime state, build integration, and output ownership | Complete |
 | RF-03 | Explicit k-point worksets and ownership | Pending RF-02 |
 | RF-04 | Batched reciprocal assembly and reusable workspaces | Pending RF-03 |
 | RF-05 | Reciprocal execution backend with CPU/LAPACK implementation | Pending RF-04 |
@@ -141,12 +141,8 @@ RF-01 validation; they remain independently documented executable tests.
   serial and MPI ranks 1, 2, and 4; each leaves exactly one complete shared
   output file set.
 - [x] Zero-work and oversubscribed ranges are deterministic and collective-safe.
-- [x] Serial Release units pass 41/41; MPI/OpenMP and MPI/no-OpenMP units each
-  pass 45/45; focused Debug RF-02 units pass 2/2.
-- [ ] The full Debug unit label has one unrelated pre-existing failure:
-  `TddftCrossMilestoneEquivalence` runs `UnitTddftConfig` under bounds checking
-  and indexes `config%q_points(:,4)` after a one-column allocation. No RF-02
-  file participates in that failure, so it remains outside this stage.
+- [x] Serial Release and Debug units each pass 41/41; MPI/OpenMP and
+  MPI/no-OpenMP units each pass 45/45.
 - [x] `git diff --check` passed; RF-02 progress is updated in this commit.
 
 #### RF-02 validation record
@@ -171,9 +167,9 @@ ctest --test-dir build-rf-mpi -L unit -j 4 --output-on-failure
 # MPI without OpenMP: 45/45 unit tests
 ctest --test-dir build-rf-mpi-noomp -L unit -j 4 --output-on-failure
 
-# Debug build; 2/2 RF-02 units pass (full-label caveat above)
+# Debug build: 41/41 unit tests
 cmake --build build-rf-debug --parallel 1
-ctest --test-dir build-rf-debug -R 'Unit(ParallelContext|KspaceOccupations)$' --output-on-failure
+ctest --test-dir build-rf-debug -L unit -j 1 --output-on-failure
 ```
 
 The bcc-Fe Gaussian SCF registration runs serial plus MPI ranks 1, 2, and 4
