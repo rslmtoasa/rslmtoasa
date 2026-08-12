@@ -53,6 +53,10 @@ contains
    !> @param[inout] this Reciprocal object being finalized.
    module subroutine destructor(this)
       type(reciprocal) :: this
+      if (allocated(this%execution_backend)) then
+         call this%execution_backend%release()
+         deallocate(this%execution_backend)
+      end if
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%k_points)) call g_safe_alloc%deallocate('reciprocal.k_points', this%k_points)
       if (allocated(this%k_weights)) call g_safe_alloc%deallocate('reciprocal.k_weights', this%k_weights)

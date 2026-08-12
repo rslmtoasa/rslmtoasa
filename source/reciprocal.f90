@@ -108,6 +108,88 @@ module reciprocal_mod
       procedure :: assemble_one => reciprocal_assembler_assemble_one
    end type reciprocal_assembler
 
+   !> Residency values reported by reciprocal_execution_capabilities.  The
+   !> first implementation is deliberately host-only; callers must not infer
+   !> a device transfer from an implementation name.
+   integer, parameter, public :: reciprocal_residency_host = 1
+   integer, parameter, public :: reciprocal_residency_device = 2
+
+   !> Backend feature and tile limits.  This is a typed contract rather than
+   !> a collection of backend-name string tests in physics callers.
+   type, public :: reciprocal_execution_capabilities
+      logical :: standard_hermitian = .false.
+      logical :: generalized_hermitian = .false.
+      logical :: eigenvalues_only = .false.
+      logical :: eigenvectors = .false.
+      logical :: first_order_assembly = .false.
+      logical :: second_order_assembly = .false.
+      logical :: overlap = .false.
+      integer :: preferred_tile_size = 1
+      integer :: maximum_tile_size = 1
+      integer :: residency = reciprocal_residency_host
+   end type reciprocal_execution_capabilities
+
+   !> One execution request owns its point list and any compatibility input
+   !> matrices.  A resident backend is therefore free to retain a request until
+   !> synchronize; the CPU adapter copies legacy mesh caches at this boundary.
+   type, public :: reciprocal_execution_request
+      logical :: assemble_hamiltonian = .true.
+      logical :: assemble_overlap = .false.
+      logical :: solve_eigensystem = .true.
+      logical :: generalized = .false.
+      logical :: request_eigenvectors = .true.
+      logical :: request_assembled_hamiltonian = .false.
+      logical :: request_assembled_overlap = .false.
+      integer :: operator_generation = -1
+      real(rp), allocatable :: k_points(:, :)
+      complex(rp), allocatable :: input_hamiltonian(:, :, :)
+      complex(rp), allocatable :: input_overlap(:, :, :)
+   end type reciprocal_execution_request
+
+   !> Results are caller-owned allocations.  Matrix allocation signals an
+   !> explicit diagnostic request; eigenvectors are absent for values-only
+   !> requests.  All slots describe exactly local_point_count points.
+   type, public :: reciprocal_execution_result
+      integer :: local_point_count = 0
+      integer :: operator_generation = -1
+      logical :: assembled_hamiltonian_valid = .false.
+      logical :: assembled_overlap_valid = .false.
+      logical :: eigenvalues_valid = .false.
+      logical :: eigenvectors_valid = .false.
+      complex(rp), allocatable :: hamiltonian(:, :, :)
+      complex(rp), allocatable :: overlap(:, :, :)
+      real(rp), allocatable :: eigenvalues(:, :)
+      complex(rp), allocatable :: eigenvectors(:, :, :)
+   end type reciprocal_execution_result
+
+   type, abstract, public :: reciprocal_execution_backend
+   contains
+      procedure(backend_initialize_if), deferred :: initialize
+      procedure(backend_capabilities_if), deferred :: capabilities
+      procedure(backend_prepare_if), deferred :: prepare_operator
+      procedure(backend_execute_if), deferred :: execute_batch
+      procedure(backend_synchronize_if), deferred :: synchronize
+      procedure(backend_release_if), deferred :: release
+   end type reciprocal_execution_backend
+
+   !> CPU implementation.  It composes the RF-04 assembler and exclusive
+   !> workspace so an eventual device implementation can keep both assembly
+   !> and eigensolution resident behind the same request/result boundary.
+   type, extends(reciprocal_execution_backend), public :: lapack_reciprocal_backend
+      type(reciprocal_assembler) :: assembler
+      type(reciprocal_workspace) :: workspace
+      integer :: prepared_operator_generation = -1
+      logical :: initialized = .false.
+   contains
+      procedure :: initialize => lapack_backend_initialize
+      procedure :: capabilities => lapack_backend_capabilities
+      procedure :: prepare_operator => lapack_backend_prepare_operator
+      procedure :: execute_batch => lapack_backend_execute_batch
+      procedure :: synchronize => lapack_backend_synchronize
+      procedure :: release => lapack_backend_release
+      final :: lapack_backend_destructor
+   end type lapack_reciprocal_backend
+
    !> Module's main procedure
    type, public :: reciprocal
       !> Hamiltonian
@@ -180,6 +262,9 @@ module reciprocal_mod
       ! namelist option; tests may set it programmatically.
       integer :: reciprocal_tile_size
       type(reciprocal_workspace) :: workspace
+      !> Persistent default execution context.  Legacy workspace remains a
+      !> compatibility diagnostic view while this backend owns active tiles.
+      class(reciprocal_execution_backend), allocatable :: execution_backend
 
       ! Band structure variables
       !> Maximum number of orbital channels per atom type
@@ -351,6 +436,7 @@ module reciprocal_mod
       procedure :: fold_kpoint
       procedure :: build_hamiltonian_at_kpoint
       procedure :: make_reciprocal_assembler
+      procedure :: make_execution_backend
       procedure :: build_lmto_pair_potential_at_kpoint
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: require_replicated_k_workset
@@ -423,6 +509,79 @@ module reciprocal_mod
 
 
    interface
+   subroutine backend_initialize_if(this, assembler)
+      import reciprocal_execution_backend, reciprocal_assembler
+      class(reciprocal_execution_backend), intent(inout) :: this
+      type(reciprocal_assembler), intent(in) :: assembler
+   end subroutine backend_initialize_if
+
+   subroutine backend_capabilities_if(this, capabilities)
+      import reciprocal_execution_backend, reciprocal_execution_capabilities
+      class(reciprocal_execution_backend), intent(in) :: this
+      type(reciprocal_execution_capabilities), intent(out) :: capabilities
+   end subroutine backend_capabilities_if
+
+   subroutine backend_prepare_if(this, operator_generation)
+      import reciprocal_execution_backend
+      class(reciprocal_execution_backend), intent(inout) :: this
+      integer, intent(in) :: operator_generation
+   end subroutine backend_prepare_if
+
+   subroutine backend_execute_if(this, request, result)
+      import reciprocal_execution_backend, reciprocal_execution_request, reciprocal_execution_result
+      class(reciprocal_execution_backend), intent(inout) :: this
+      type(reciprocal_execution_request), intent(in) :: request
+      type(reciprocal_execution_result), intent(inout) :: result
+   end subroutine backend_execute_if
+
+   subroutine backend_synchronize_if(this)
+      import reciprocal_execution_backend
+      class(reciprocal_execution_backend), intent(inout) :: this
+   end subroutine backend_synchronize_if
+
+   subroutine backend_release_if(this)
+      import reciprocal_execution_backend
+      class(reciprocal_execution_backend), intent(inout) :: this
+   end subroutine backend_release_if
+
+   module subroutine lapack_backend_initialize(this, assembler)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_assembler), intent(in) :: assembler
+   end subroutine lapack_backend_initialize
+
+   module subroutine lapack_backend_capabilities(this, capabilities)
+      class(lapack_reciprocal_backend), intent(in) :: this
+      type(reciprocal_execution_capabilities), intent(out) :: capabilities
+   end subroutine lapack_backend_capabilities
+
+   module subroutine lapack_backend_prepare_operator(this, operator_generation)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+      integer, intent(in) :: operator_generation
+   end subroutine lapack_backend_prepare_operator
+
+   module subroutine lapack_backend_execute_batch(this, request, result)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_execution_request), intent(in) :: request
+      type(reciprocal_execution_result), intent(inout) :: result
+   end subroutine lapack_backend_execute_batch
+
+   module subroutine lapack_backend_synchronize(this)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+   end subroutine lapack_backend_synchronize
+
+   module subroutine lapack_backend_release(this)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+   end subroutine lapack_backend_release
+
+   module subroutine lapack_backend_destructor(this)
+      type(lapack_reciprocal_backend), intent(inout) :: this
+   end subroutine lapack_backend_destructor
+
+   module subroutine make_execution_backend(this, backend_name)
+      class(reciprocal), intent(inout) :: this
+      character(len=*), intent(in), optional :: backend_name
+   end subroutine make_execution_backend
+
    module subroutine reciprocal_workspace_ensure_capacity(this, nmat, tile_length, generalized, operator_generation, nnmax, ntype)
       class(reciprocal_workspace), intent(inout) :: this
       integer, intent(in) :: nmat, tile_length, operator_generation, nnmax, ntype

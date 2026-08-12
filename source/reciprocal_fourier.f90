@@ -539,7 +539,8 @@ contains
       integer, allocatable :: representative(:), unique_of_k(:)
       real(rp), allocatable :: folded(:, :)
       logical :: use_generalized
-      type(reciprocal_assembler) :: assembler
+      type(reciprocal_execution_request) :: request
+      type(reciprocal_execution_result) :: result
 
       if (size(k_points, 1) /= 3) then
          call g_logger%error('calculate_eigenpairs_at_kpoints: k_points must have shape (3,nk).', __FILE__, __LINE__)
@@ -588,27 +589,43 @@ contains
       end do
 
       use_generalized = trim(this%reciprocal_mode) == 'generalized_overlap_proxy'
-      call this%make_reciprocal_assembler(assembler)
       ! Fold/deduplicate once, then process unique points in persistent CPU
-      ! tiles.  No allocation, deallocation, or LAPACK query occurs below.
+      ! tiles.  The deferred call is once per tile, never per k-point or band.
+      call this%make_execution_backend()
       do tile_first = 1, nunique, max(1, this%reciprocal_tile_size)
          tile_last = min(nunique, tile_first + max(1, this%reciprocal_tile_size) - 1)
          tile_length = tile_last - tile_first + 1
-         call this%workspace%ensure_capacity(nmat, tile_length, use_generalized, this%hamiltonian%operator_generation, &
-                                             this%lattice%nn_max, this%lattice%ntype)
+         request%assemble_hamiltonian = .true.
+         request%assemble_overlap = use_generalized
+         request%solve_eigensystem = .true.
+         request%generalized = use_generalized
+         request%request_eigenvectors = .true.
+         request%request_assembled_hamiltonian = .false.
+         request%request_assembled_overlap = .false.
+         request%operator_generation = this%hamiltonian%operator_generation
+         if (allocated(request%k_points)) deallocate(request%k_points)
+         allocate(request%k_points(3,tile_length))
          do slot = 1, tile_length
             ik = representative(tile_first + slot - 1)
-            this%workspace%points(:,slot) = folded(:,ik)
+            request%k_points(:,slot) = folded(:,ik)
          end do
-         call assembler%assemble_batch(this%workspace%points(:,1:tile_length), this%workspace)
-         if (use_generalized) call assembler%assemble_overlap_batch(this%workspace%points(:,1:tile_length), this%workspace)
+         call this%execution_backend%execute_batch(request, result)
          do slot = 1, tile_length
             ik = representative(tile_first + slot - 1)
-            call diagonalize_workspace_slot(this, this%workspace, slot, use_generalized)
-            eigenvalues(:,ik) = this%workspace%eigenvalue(:,slot)
-            eigenvectors(:,:,ik) = this%workspace%eigenvector(:,:,slot)
+            eigenvalues(:,ik) = result%eigenvalues(:,slot)
+            eigenvectors(:,:,ik) = result%eigenvectors(:,:,slot)
          end do
       end do
+      ! RF-04 exposed this workspace for allocation/cache diagnostics.  Keep
+      ! that view coherent while the backend owns the active execution tile.
+      select type (backend => this%execution_backend)
+      type is (lapack_reciprocal_backend)
+         this%workspace%tile_capacity = backend%workspace%tile_capacity
+         this%workspace%cached_operator_generation = backend%workspace%cached_operator_generation
+         this%workspace%storage_allocations = backend%workspace%storage_allocations
+         this%workspace%lapack_workspace_queries = backend%workspace%lapack_workspace_queries
+         this%workspace%capacity_reuses = backend%workspace%capacity_reuses
+      end select
       do ik = 1, nk
          iu = unique_of_k(ik)
          if (representative(iu) /= ik) then
@@ -747,7 +764,8 @@ contains
       character(len=200) :: debug_msg
       logical :: using_kpath, distribute_mesh
       integer :: i, j
-      type(reciprocal_assembler) :: assembler
+      type(reciprocal_execution_request) :: request
+      type(reciprocal_execution_result) :: result
 
       call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
       call this%force_full_bz_for_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
@@ -803,22 +821,30 @@ contains
    allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
-      call this%make_reciprocal_assembler(assembler)
-      ! Tile-level assembly owns this workspace exclusively.  This deliberately
-      ! avoids sharing mutable LAPACK/Fourier arrays with OpenMP workers; users
-      ! should avoid simultaneous outer OpenMP and threaded-BLAS parallelism.
+      ! Tile-level assembly crosses the execution backend boundary.  The CPU
+      ! implementation owns the RF-04 scratch tile; a future device backend
+      ! can keep this matrix resident for a following eigensolve.
+      call this%make_execution_backend()
       do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
          tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
          tile_length = tile_last - tile_first + 1
-         call this%workspace%ensure_capacity(size(this%hk_bulk,1), tile_length, .false., this%hamiltonian%operator_generation, &
-                                             this%lattice%nn_max, this%lattice%ntype)
+         request%assemble_hamiltonian = .true.
+         request%assemble_overlap = .false.
+         request%solve_eigensystem = .false.
+         request%generalized = .false.
+         request%request_eigenvectors = .false.
+         request%request_assembled_hamiltonian = .true.
+         request%request_assembled_overlap = .false.
+         request%operator_generation = this%hamiltonian%operator_generation
+         if (allocated(request%k_points)) deallocate(request%k_points)
+         allocate(request%k_points(3,tile_length))
          if (using_kpath) then
-            this%workspace%points(:,1:tile_length) = this%k_path(:,tile_first:tile_last)
+            request%k_points = this%k_path(:,tile_first:tile_last)
          else
-            this%workspace%points(:,1:tile_length) = this%k_workset%points(:,tile_first:tile_last)
+            request%k_points = this%k_workset%points(:,tile_first:tile_last)
          end if
-         call assembler%assemble_batch(this%workspace%points(:,1:tile_length), this%workspace)
-         this%hk_bulk(:,:,tile_first:tile_last) = this%workspace%h(:,:,1:tile_length)
+         call this%execution_backend%execute_batch(request, result)
+         this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
       end do
 
       ! H(k) now represents exactly this shared real-space operator generation.

@@ -52,6 +52,7 @@ add_library(${PROJECT_NAME} STATIC
     precision.f90
     kpoint_workset.f90
     reciprocal.f90
+    reciprocal_backend.f90
     reciprocal_lifecycle.f90
     reciprocal_fourier.f90
     reciprocal_bands.f90

@@ -4,7 +4,8 @@
 program test_arbitrary_k_eigenpairs
    use precision_mod, only: rp
    use basis_mod, only: nb
-   use reciprocal_mod, only: reciprocal
+   use reciprocal_mod, only: reciprocal, reciprocal_execution_capabilities, reciprocal_execution_request, &
+                             reciprocal_execution_result, reciprocal_residency_host
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
@@ -25,6 +26,9 @@ program test_arbitrary_k_eigenpairs
    logical :: failed
    integer :: workspace_capacity
    integer :: allocation_count, query_count
+   type(reciprocal_execution_capabilities) :: backend_caps
+   type(reciprocal_execution_request) :: backend_request
+   type(reciprocal_execution_result) :: backend_result
 
    call g_logger%init()
    failed = .false.
@@ -33,6 +37,36 @@ program test_arbitrary_k_eigenpairs
 
    k0 = [0.125_rp, 0.0_rp, 0.0_rp]
    k_off = [0.371_rp, -0.217_rp, 0.083_rp]
+
+   ! RF-05 contract: the default factory is CPU/LAPACK, advertises the full
+   ! current solve surface, and can return an assembled diagnostic matrix
+   ! while keeping an eigenvalues-only tile free of eigenvector ownership.
+   call recip%make_execution_backend('lapack')
+   call recip%execution_backend%capabilities(backend_caps)
+   if (.not. backend_caps%standard_hermitian .or. .not. backend_caps%generalized_hermitian .or. &
+       .not. backend_caps%eigenvalues_only .or. .not. backend_caps%eigenvectors .or. &
+       .not. backend_caps%first_order_assembly .or. .not. backend_caps%second_order_assembly .or. &
+       .not. backend_caps%overlap .or. backend_caps%residency /= reciprocal_residency_host) then
+      write (*, '(a)') 'FAIL RF-05 LAPACK backend capability contract'
+      failed = .true.
+   end if
+   allocate(backend_request%k_points(3,1))
+   backend_request%k_points(:,1) = k0
+   backend_request%solve_eigensystem = .true.
+   backend_request%request_eigenvectors = .false.
+   backend_request%request_assembled_hamiltonian = .true.
+   backend_request%operator_generation = ham%operator_generation
+   call recip%execution_backend%execute_batch(backend_request, backend_result)
+   if (.not. backend_result%eigenvalues_valid .or. backend_result%eigenvectors_valid .or. &
+       .not. backend_result%assembled_hamiltonian_valid .or. allocated(backend_result%eigenvectors) .or. &
+       backend_result%local_point_count /= 1 .or. backend_result%operator_generation /= ham%operator_generation) then
+      write (*, '(a)') 'FAIL RF-05 eigenvalues-only result ownership contract'
+      failed = .true.
+   end if
+   call check_hermiticity('RF-05 assembled backend H(k)', backend_result%hamiltonian(:,:,1), failed)
+   call recip%execution_backend%release()
+   deallocate(recip%execution_backend)
+   call recip%make_execution_backend('cpu')
 
    ! q=0 must be the identity, including a meaningful gauge comparison for
    ! this non-degenerate diagonal model.

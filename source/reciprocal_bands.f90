@@ -23,6 +23,8 @@ contains
       logical :: operator_changed
       real(rp) :: max_herm, max_herm_all, matrix_scale
       character(len=256) :: herm_msg
+      type(reciprocal_execution_request) :: request
+      type(reciprocal_execution_result) :: result
 
       ! A q/cone/reference-axis/potential change advances the shared real-space
       ! operator generation. Never diagonalize a stale H(k): invalidate and
@@ -92,69 +94,21 @@ contains
       if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
       allocate(this%eigenvalues(nmat, nk))
       allocate(this%eigenvectors(nmat, nmat, nk))
-      mode_fail_count = 0
-
-      ! Parallel diagonalization over k-points
-      ! Each thread needs its own LAPACK workspace
-!$OMP PARALLEL DEFAULT(SHARED) &
-!$OMP& PRIVATE(ik, h_k_copy, s_k_copy, eigenvals, work_complex, rwork, lwork, info, info_msg) &
-!$OMP& IF(nk > 10)
-      
-      ! Allocate thread-private work arrays
-      allocate(h_k_copy(nmat, nmat))
-      allocate(s_k_copy(nmat, nmat))
-      allocate(eigenvals(nmat))
-      allocate(rwork(3*nmat - 2))
-      
-      ! Query optimal LAPACK workspace size
-      lwork = -1
-      allocate(work_complex(1))
-      if (use_generalized) then
-         call zhegv(1, 'V', 'U', nmat, h_k_copy, nmat, s_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
-      else
-         call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
-      end if
-      lwork = int(real(work_complex(1)))
-      deallocate(work_complex)
-      allocate(work_complex(lwork))
-
-      ! Loop over all k-points - use pre-computed hk_bulk
-!$OMP DO SCHEDULE(DYNAMIC, 10)
-      do ik = 1, nk
-         ! Copy H(k) from pre-computed array
-         h_k_copy = this%hk_bulk(:, :, ik)
-
-         if (use_generalized) then
-            s_k_copy = this%sk_overlap(:, :, ik)
-            call zhegv(1, 'V', 'U', nmat, h_k_copy, nmat, s_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
-         else
-            ! Diagonalize H(k) using LAPACK ZHEEV
-            call zheev('V', 'U', nmat, h_k_copy, nmat, eigenvals, work_complex, lwork, rwork, info)
-         end if
-         
-         if (info /= 0) then
-            write(info_msg, '(A,I0,A,I0)') 'Diagonalization failed at k-point ', ik, ', info = ', info
-            call g_logger%error('diagonalize_hamiltonian: ' // trim(info_msg), __FILE__, __LINE__)
-!$OMP CRITICAL
-            mode_fail_count = mode_fail_count + 1
-!$OMP END CRITICAL
-            cycle
-         end if
-
-         ! Store eigenvalues and eigenvectors
-         this%eigenvalues(:, ik) = eigenvals
-         this%eigenvectors(:, :, ik) = h_k_copy
-      end do
-!$OMP END DO
-      
-      ! Cleanup thread-private arrays
-      deallocate(h_k_copy, s_k_copy, eigenvals, work_complex, rwork)
-      
-!$OMP END PARALLEL
-
-      if (mode_fail_count > 0 .and. use_generalized) then
-         call g_logger%warning('diagonalize_hamiltonian: generalized_overlap had failures; consider ham_only for robustness.', __FILE__, __LINE__)
-      end if
+      ! Compatibility adapter: the public mesh cache remains caller-owned,
+      ! while the real solve crosses the same typed execution boundary used by
+      ! arbitrary k/k+q services.  This is one deferred call for the mesh.
+      call this%make_execution_backend()
+      request%assemble_hamiltonian = .false.
+      request%assemble_overlap = .false.
+      request%solve_eigensystem = .true.
+      request%generalized = use_generalized
+      request%request_eigenvectors = .true.
+      request%operator_generation = this%hamiltonian%operator_generation
+      allocate(request%input_hamiltonian(nmat,nmat,nk), source=this%hk_bulk)
+      if (use_generalized) allocate(request%input_overlap(nmat,nmat,nk), source=this%sk_overlap)
+      call this%execution_backend%execute_batch(request, result)
+      this%eigenvalues = result%eigenvalues
+      this%eigenvectors = result%eigenvectors
       if (this%gamma_bounds_diagnostics) call this%run_gamma_bounds_diagnostics()
       if (this%hall_diag_experimental) call this%diagonalize_hall_experimental()
       call root_info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)
