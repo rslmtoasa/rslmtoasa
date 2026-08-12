@@ -12,7 +12,8 @@ def test_susceptibility_dispatch_is_registered() -> None:
 def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
     assert "region_tag='tddft-q'" in source
-    assert "calculate_eigenpairs_at_kpoints(kq_points" in source
+    assert "kq_workset = reciprocal_obj%k_workset%shifted" in source
+    assert "calculate_eigenpairs_at_kpoints(kq_workset%points" in source
     assert "self_obj%refresh_xc_response_kernel()" in source
     assert "evaluate_goldstone(chi0_static%chi" in source
     assert "is_full_response = config%channel == 'full'" in source
@@ -104,7 +105,7 @@ def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
     root = Path(__file__).resolve().parents[2]
     source = (root / "source" / "calculation.f90").read_text()
     namelist = (root / "source" / "include_codes" / "namelists" / "tddft.f90").read_text()
-    assert source.index("calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points") < source.index(
+    assert source.index("calculate_eigenpairs_at_kpoints(reciprocal_obj%k_workset%points") < source.index(
         "calculate_canonical_band_energy(find_fermi=.true."
     )
     assert "response electron count does not match target: target=" in source

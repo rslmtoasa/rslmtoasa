@@ -639,6 +639,7 @@ contains
 
       ! Clean up temporary arrays
       deallocate(kpoints_frac, weights, full_to_irred, irred_to_full)
+      call setup_k_mesh_distribution(this, this%nk_total, .false.)
 
       call root_info('generate_reduced_kpoint_mesh: Generated ' // trim(int2str(this%nk_total)) // &
                      ' irreducible k-points from ' // trim(int2str(product(mesh_dims))) // ' total points', &
@@ -767,6 +768,7 @@ contains
       this%full_to_irred_k = full_to_irred
       this%irred_to_full_k = irred_to_full
       deallocate(kpoints_frac, weights, full_to_irred, irred_to_full)
+      call setup_k_mesh_distribution(this, this%nk_total, .false.)
 
       call root_info('generate_little_group_kpoint_mesh: q_ss != 0; reduced by the little group common to '// &
                      trim(int2str(num_q))//' q-point(s) to '//trim(int2str(this%nk_total))// &

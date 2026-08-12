@@ -49,7 +49,8 @@ module reciprocal_mod
    use basis_mod, only: nb, norb
    use spin_density_mod, only: spin_density
    use lmto_pair_potential_mod, only: lmto_pair_transition_metadata
-   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range
+   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context
+   use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset
 #ifdef USE_MPI
    use mpi
 #endif
@@ -72,9 +73,14 @@ module reciprocal_mod
       ! K-point mesh variables
       !> Number of k-points in each direction (nx, ny, nz)
       integer, dimension(3) :: nk_mesh
-      !> Total number of k-points
+      !> Authoritative k-point ownership.  points/weights in this object are
+      !> local to the current rank; replicated worksets own the entire mesh.
+      type(kpoint_workset) :: k_workset
+      !> Total number of k-points.  Transitional compatibility view of
+      !> k_workset%nk_global; do not write outside mesh construction.
       integer :: nk_total
-      !> K-point coordinates in reciprocal lattice units
+      !> Transitional read-only full-list compatibility view.  New consumers
+      !> must use k_workset%points and k_workset%weights.
       real(rp), dimension(:, :), allocatable :: k_points
       !> K-point weights for Brillouin zone integration
       real(rp), dimension(:), allocatable :: k_weights
@@ -295,6 +301,7 @@ module reciprocal_mod
       procedure :: build_hamiltonian_at_kpoint
       procedure :: build_lmto_pair_potential_at_kpoint
       procedure :: calculate_eigenpairs_at_kpoints
+      procedure :: require_replicated_k_workset
       procedure :: set_basis_sizes
       procedure :: get_basis_type_from_size
       procedure :: check_multisite_hamiltonian_diagonal
@@ -624,6 +631,13 @@ module reciprocal_mod
       complex(rp), allocatable, intent(out) :: eigenvectors(:, :, :)
       real(rp), allocatable, intent(out), optional :: folded_k_points(:, :)
    end subroutine calculate_eigenpairs_at_kpoints
+
+   !> Reject a distributed mesh at consumers whose mathematics still requires
+   !> every rank to own every k point (tetrahedron, reciprocal Green, moments).
+   module subroutine require_replicated_k_workset(this, consumer)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: consumer
+   end subroutine require_replicated_k_workset
 
    !> @brief Configure MPI ownership for a k-point set.
    !> @param[inout] this Reciprocal object receiving local/global k maps.

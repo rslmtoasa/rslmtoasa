@@ -641,7 +641,7 @@ contains
          if (using_kpath) then
             call assemble_hamiltonian_at_kpoint(this, this%k_path(:, ik), this%hk_bulk(:, :, ik))
          else
-            call assemble_hamiltonian_at_kpoint(this, this%k_points(:, ik_global), this%hk_bulk(:, :, ik))
+            call assemble_hamiltonian_at_kpoint(this, this%k_workset%points(:, ik), this%hk_bulk(:, :, ik))
          end if
       end do
 #ifdef _OPENMP
@@ -666,7 +666,7 @@ contains
             if (using_kpath) then
                call this%fourier_transform_array(this%hamiltonian%eecc, this%k_path(:, 1), hcck_diag)
             else
-               call this%fourier_transform_array(this%hamiltonian%eecc, this%k_points(:, diag_k_global), hcck_diag)
+               call this%fourier_transform_array(this%hamiltonian%eecc, this%k_workset%points(:, 1), hcck_diag)
             end if
             max_eecc = maxval(abs(this%hamiltonian%eecc))
             max_hcck = maxval(abs(hcck_diag))
@@ -728,7 +728,7 @@ contains
          if (using_kpath) then
             call this%fourier_transform_overlap(this%k_path(:, ik), this%sk_overlap(:, :, ik))
          else
-            call this%fourier_transform_overlap(this%k_points(:, ik_global), this%sk_overlap(:, :, ik))
+            call this%fourier_transform_overlap(this%k_workset%points(:, ik), this%sk_overlap(:, :, ik))
          end if
       end do
 #ifdef _OPENMP

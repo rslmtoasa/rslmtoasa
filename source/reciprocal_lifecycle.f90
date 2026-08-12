@@ -134,6 +134,7 @@ contains
       this%k_start = 1
       this%k_end = 0
       this%k_mesh_distributed_active = .false.
+      call this%k_workset%restore_to_default()
       this%use_time_reversal = .true.
       this%strict_symmetry_checks = .false.
       this%dump_symmetry_kmap = .false.
@@ -667,6 +668,7 @@ contains
                this%irred_to_full_k(ik) = ik
             end do
             deallocate(kpoints_full)
+            call setup_k_mesh_distribution(this, this%nk_total, .false.)
             call g_logger%info('reciprocal%generate_mp_mesh: Generated full mesh via spglib grid convention (' // &
                                trim(int2str(this%nk_total)) // ' k-points)', __FILE__, __LINE__)
             return
@@ -694,6 +696,7 @@ contains
          end do
       end do
 
+      call setup_k_mesh_distribution(this, this%nk_total, .false.)
       call root_info('reciprocal%generate_mp_mesh: Generated Monkhorst-Pack mesh with ' // trim(int2str(this%nk_total)) // ' k-points', __FILE__, __LINE__)
    end subroutine generate_mp_mesh
 
@@ -813,6 +816,24 @@ contains
       logical, intent(in) :: enable_distribution
       integer :: local_count
       integer :: ik
+      real(rp), allocatable :: unit_weights(:)
+
+      if (.not. allocated(this%k_points) .or. size(this%k_points, 2) /= nk_global) then
+         call g_logger%fatal('setup_k_mesh_distribution: complete transitional k-point list is unavailable.', __FILE__, __LINE__)
+      end if
+      if (allocated(this%k_weights)) then
+         if (size(this%k_weights) /= nk_global) then
+            call g_logger%fatal('setup_k_mesh_distribution: k-point weight shape is invalid.', __FILE__, __LINE__)
+         end if
+         this%k_workset = make_kpoint_workset(this%k_points, this%k_weights, g_parallel_context, enable_distribution)
+      else
+         ! Hamiltonian-only callers historically did not need integration
+         ! weights.  Give their ownership object neutral unit weights without
+         ! materializing a second compatibility array.
+         allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
+         this%k_workset = make_kpoint_workset(this%k_points, unit_weights, g_parallel_context, enable_distribution)
+         deallocate(unit_weights)
+      end if
 
       if (allocated(this%k_l2g_map)) deallocate(this%k_l2g_map)
       if (allocated(this%k_g2l_map)) deallocate(this%k_g2l_map)
@@ -833,6 +854,15 @@ contains
             this%k_g2l_map(ik) = ik
          end do
       end if
+      ! Transitional mappings mirror the authoritative workset in one direction
+      ! while legacy matrix/DOS storage is migrated.  The workset is validated
+      ! at this public boundary and is never reconstructed from these maps.
+      if (this%nk_total /= this%k_workset%nk_global .or. this%nk_local /= this%k_workset%nk_local .or. &
+          this%k_start /= this%k_workset%global_start .or. this%k_end /= this%k_workset%global_end .or. &
+          this%k_mesh_distributed_active .neqv. this%k_workset%distributed .or. &
+          any(this%k_l2g_map /= this%k_workset%local_to_global) .or. any(this%k_g2l_map /= this%k_workset%global_to_local)) then
+         call g_logger%fatal('setup_k_mesh_distribution: transitional k ownership view disagrees with workset.', __FILE__, __LINE__)
+      end if
    end subroutine setup_k_mesh_distribution
 
    !> @brief Convert a local k-point index to a global k-point index.
@@ -843,11 +873,16 @@ contains
       class(reciprocal), intent(in) :: this
       integer, intent(in) :: ik_local
 
-      if (allocated(this%k_l2g_map) .and. ik_local >= 1 .and. ik_local <= size(this%k_l2g_map)) then
-         ik_global = this%k_l2g_map(ik_local)
-      else
-         ik_global = ik_local
-      end if
+      ik_global = this%k_workset%global_index(ik_local)
    end function local_k_index_to_global
+
+   module subroutine require_replicated_k_workset(this, consumer)
+      class(reciprocal), intent(in) :: this
+      character(len=*), intent(in) :: consumer
+      if (this%k_workset%distributed) then
+         call g_logger%fatal(trim(consumer)//': requires a replicated kpoint_workset; distributed ownership is not supported here.', &
+                             __FILE__, __LINE__)
+      end if
+   end subroutine require_replicated_k_workset
 
 end submodule reciprocal_lifecycle

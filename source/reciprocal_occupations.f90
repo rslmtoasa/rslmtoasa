@@ -44,7 +44,7 @@ contains
       if (.not. allocated(this%eigenvalues)) then
          call g_logger%fatal('evaluate_eigenvalue_occupations: eigenvalues are not available', __FILE__, __LINE__)
       end if
-      if (.not. allocated(this%k_weights)) then
+      if (.not. allocated(this%k_workset%weights)) then
          call g_logger%fatal('evaluate_eigenvalue_occupations: k-point weights are not available', __FILE__, __LINE__)
       end if
 
@@ -53,10 +53,10 @@ contains
 
       do ik = 1, size(this%eigenvalues, 2)
          ik_global = local_k_index_to_global(this, ik)
-         if (ik_global < 1 .or. ik_global > size(this%k_weights)) then
+         if (ik_global < 1 .or. ik_global > this%k_workset%nk_global) then
             call g_logger%fatal('evaluate_eigenvalue_occupations: local/global k-point map is invalid', __FILE__, __LINE__)
          end if
-         wk = this%k_weights(ik_global)
+         wk = this%k_workset%weights(ik)
          if (wk < 0.0_rp) then
             call g_logger%fatal('evaluate_eigenvalue_occupations: negative k-point weight', __FILE__, __LINE__)
          end if

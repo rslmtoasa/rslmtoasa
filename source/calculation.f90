@@ -38,6 +38,7 @@ module calculation_mod
    use spin_dynamics_mod
    use conductivity_mod
    use reciprocal_mod
+   use kpoint_workset_mod, only: kpoint_workset
    use mix_mod
    use frozen_magnon_mod
    use vacuum_lead_mod, only: vacuum_lead, refresh_vacuum_region
@@ -1996,7 +1997,8 @@ contains
       type(tddft_longitudinal_result) :: longitudinal_result
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
-      real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), kq_points(:, :)
+      real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
+      type(kpoint_workset) :: kq_workset
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :), all_loss(:, :, :, :)
       complex(rp), allocatable :: pair_operators(:, :, :, :), pair_operators_static(:, :, :, :), &
          pair_operators_corrected(:, :, :, :), all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
@@ -2145,7 +2147,7 @@ contains
 
       ! k eigenpairs are independent of q and are therefore reused on each q
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
-      call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_points, eigenvalues_k, eigenvectors_k)
+      call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_workset%points, eigenvalues_k, eigenvectors_k)
 
       ! `*_out.nml` restart files retain the potential and its direction but
       ! not the scalar site moment `mtot`.  The XC radial projection recorded
@@ -2341,10 +2343,9 @@ contains
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
          bare_gamma_peak = -1.0_rp; legacy_gamma_peak = -1.0_rp; pair_gamma_peak = -1.0_rp
-         allocate(kq_points(3, reciprocal_obj%nk_total))
-         kq_points = reciprocal_obj%k_points + spread(config%q_points(:, iq), dim=2, ncopies=reciprocal_obj%nk_total)
+         kq_workset = reciprocal_obj%k_workset%shifted(config%q_points(:, iq))
          call cpu_time(t_profile_start)
-         call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_points, eigenvalues_kq, eigenvectors_kq)
+         call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_workset%points, eigenvalues_kq, eigenvectors_kq)
          call cpu_time(t_profile_stop)
          kq_eigensolve_cpu_seconds = t_profile_stop-t_profile_start
          if (config%chi0_backend == 'green') then
@@ -2478,7 +2479,7 @@ contains
             call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, &
                pair_corrected_gamma_peak)
          end if
-         deallocate(kq_points, eigenvalues_kq, eigenvectors_kq)
+         deallocate(eigenvalues_kq, eigenvectors_kq)
       end do
 
       if (config%output_modes) then

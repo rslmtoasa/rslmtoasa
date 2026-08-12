@@ -85,6 +85,7 @@ contains
          call g_logger%fatal('reciprocal%fill_moments: eigenvectors unavailable after ' // &
             'diagonalization.', __FILE__, __LINE__)
       end if
+      call this%require_replicated_k_workset('reciprocal%fill_moments')
 
       nk = size(this%eigenvalues, 2)
       if (nk /= this%nk_total) then

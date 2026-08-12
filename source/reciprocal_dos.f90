@@ -476,6 +476,7 @@ contains
       integer :: nk_full_expected, tet_start, tet_end, tet_count
 
       call g_logger%info('calculate_dos_tetrahedron: Calculating DOS using tetrahedron method', __FILE__, __LINE__)
+      call this%require_replicated_k_workset('calculate_dos_tetrahedron')
 
       ! Setup tetrahedra if not already done
       if (.not. allocated(this%tetrahedra)) then

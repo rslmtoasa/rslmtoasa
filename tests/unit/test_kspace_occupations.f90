@@ -7,6 +7,7 @@ program test_kspace_occupations
    use hamiltonian_mod, only: hamiltonian
    use logger_mod, only: g_logger
    use mpi_mod, only: parallel_context, assignment(=), rank, numprocs, ierr, get_mpi_range
+   use kpoint_workset_mod, only: make_kpoint_workset, make_replicated_kpoint_workset
 #ifdef USE_MPI
    use mpi
 #endif
@@ -21,6 +22,7 @@ program test_kspace_occupations
       -1.00_rp, 0.15_rp,  -0.60_rp, 0.45_rp, &
       -0.25_rp, 0.80_rp,   0.05_rp, 1.10_rp], [nbands, nk_global])
    real(rp), parameter :: weights_full(nk_global) = [1.0_rp, 2.0_rp, 3.0_rp, 4.0_rp]
+   real(rp), parameter :: points_full(3, nk_global) = 0.0_rp
 
    type(reciprocal) :: obj
    type(hamiltonian), target :: ham_state
@@ -56,6 +58,7 @@ program test_kspace_occupations
    obj%k_start = k_start
    obj%k_end = k_end
    obj%k_mesh_distributed_active = numprocs > 1
+   obj%k_workset = make_kpoint_workset(points_full, weights_full, context, numprocs > 1)
    obj%temperature = temperature
    obj%total_electrons = target_electrons
    obj%auto_find_fermi = .true.
@@ -75,11 +78,13 @@ program test_kspace_occupations
 
    ! Explicit normalization contract: raw multiplicities may be rescaled.
    obj%k_weights = 7.0_rp*weights_full
+   obj%k_workset%weights = 7.0_rp*obj%k_workset%weights
    call obj%evaluate_eigenvalue_occupations(ef, nelect_scaled, eband_scaled, raw_weight_sum)
    call check_close('weight-scale invariant N', nelect_scaled, nelect, tol)
    call check_close('weight-scale invariant EBAND', eband_scaled, eband, tol)
    call check_close('scaled raw k-weight sum', raw_weight_sum, 7.0_rp*sum(weights_full), 1.0e-9_rp)
    obj%k_weights = weights_full
+   obj%k_workset%weights = obj%k_workset%weights/7.0_rp
 
    ! DOS output controls must be spectators for the canonical evaluator.
    obj%n_energy_points = 17
@@ -300,6 +305,7 @@ contains
       recip%k_weights = 9.0_rp
       recip%k_l2g_map = 1
       recip%k_mesh_distributed_active = .false.
+      recip%k_workset = make_replicated_kpoint_workset(reshape([0.0_rp, 0.0_rp, 0.0_rp], [3, 1]), [9.0_rp], context)
       recip%eigenvalues(:, 1) = eval0
       call recip%evaluate_eigenvalue_occupations(0.0_rp, n0, e0)
       recip%eigenvalues(:, 1) = evalrot

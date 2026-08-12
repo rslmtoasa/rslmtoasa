@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | RF-01 | Characterization, numerical oracles, and CPU baseline | Complete |
 | RF-02 | MPI runtime state, build integration, and output ownership | Complete |
-| RF-03 | Explicit k-point worksets and ownership | Pending RF-02 |
+| RF-03 | Explicit k-point worksets and ownership | Complete (MPI runtime validation pending environment repair) |
 | RF-04 | Batched reciprocal assembly and reusable workspaces | Pending RF-03 |
 | RF-05 | Reciprocal execution backend with CPU/LAPACK implementation | Pending RF-04 |
 | RF-06 | Shared TD-DFT transition engine for chi0 and Xi | Pending RF-05 |
@@ -182,7 +182,27 @@ output files.
 
 ### RF-03
 
-- [ ] Start only after RF-02 is green and committed.
+- [x] RF-02 is present and green (`41fc840` plus documentation correction `23b853c`).
+- [x] Added concrete `kpoint_workset`: local point/weight storage, contiguous ownership maps, finalizer, validation, folding, and non-mutating q shift.
+- [x] Defined the empty-rank invariant as allocated zero-length arrays with global range `[1,0]`.
+- [x] Reciprocal construction creates a replicated workset; Gaussian k assembly selects distributed local ownership. Fourier assembly and canonical occupations consume local workset arrays.
+- [x] TD-DFT obtains k+q from `k_workset%shifted`, retaining the base mesh unchanged.
+- [x] Tetrahedron DOS, reciprocal Green, and reciprocal moments reject distributed worksets at their public boundaries.
+- [x] Added `UnitKpointWorkset`, covering simulated 1/2/4 rank ownership, empty ranks, map round-trips, weight preservation, folding boundaries/negative/k+G, duplicate order, and q shifts.
+- [x] Serial Release build and the complete unit-labelled CTest suite pass (42/42), including `UnitKpointWorkset`, occupations, arbitrary-k, and TD-DFT coverage.
+- [x] `git diff --check` passes.
+- [x] Open MPI runtime validation passes: the executable resolves only `libmpi.so.40`/`libmpi_mpifh.so.40`, and `Unit(KpointWorkset|KspaceOccupations|ParallelContext)` passes 7/7, including 1/2/4-rank parallel-context and MPI-occupation tests. Validation used `env/openmpi.sh` with `RSLMTO_FC=/usr/bin/mpifort` on the host shell.
+- [ ] Full SCF/GBT/DOS/TD-DFT regression matrix and a new performance baseline remain to be rerun; no reciprocal mathematical or storage-layout batching was introduced, so no material performance change is expected.
+
+**Ownership table.** `kpoint_workset` owns the authoritative local points,
+weights, and mappings. Reciprocal mesh construction creates it; Fourier and
+occupation consumers read it; TD-DFT creates a caller-local shifted workset.
+Tetrahedron/Green/moment consumers explicitly require a replicated workset.
+Legacy `reciprocal%k_points`, `k_weights`, and mapping fields are transitional
+read-only full-list compatibility views during the remaining migration; their
+map metadata is asserted against the workset at setup. The arbitrary-k exact
+duplicate scan deliberately remains quadratic: its bit-exact comparison has no
+safe tolerance-key replacement under the existing coordinate convention.
 
 ### RF-04
 
@@ -208,7 +228,7 @@ output files.
 | --- | --- |
 | RF-01 | Created (exact SHA reported in the handoff) |
 | RF-02 | Created in this commit (exact SHA reported in the handoff) |
-| RF-03 | Not started |
+| RF-03 | Created in this commit (exact SHA reported in the handoff) |
 | RF-04 | Not started |
 | RF-05 | Not started |
 | RF-06 | Not started |

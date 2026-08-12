@@ -192,6 +192,7 @@ contains
             'diagonalization.', __FILE__, __LINE__)
          return
       end if
+      call this%require_replicated_k_workset('fill_green_lehmann')
 
       nk = size(this%eigenvalues, 2)
       if (nk /= this%nk_total) then
@@ -437,6 +438,7 @@ contains
          call g_logger%error('fill_green_dyson: H(k) unavailable after build.', __FILE__, __LINE__)
          return
       end if
+      call this%require_replicated_k_workset('fill_green_dyson')
 
       nk = size(this%hk_bulk, 3)
       if (nk /= this%nk_total) then
