@@ -171,6 +171,7 @@ module reciprocal_mod
       procedure(backend_capabilities_if), deferred :: capabilities
       procedure(backend_prepare_if), deferred :: prepare_operator
       procedure(backend_execute_if), deferred :: execute_batch
+      procedure(backend_execution_metrics_if), deferred :: execution_metrics
       procedure(backend_synchronize_if), deferred :: synchronize
       procedure(backend_release_if), deferred :: release
    end type reciprocal_execution_backend
@@ -182,12 +183,19 @@ module reciprocal_mod
       type(reciprocal_assembler) :: assembler
       type(reciprocal_workspace) :: workspace
       integer :: prepared_operator_generation = -1
+      !> Request-shape counters are backend-contract observability for the
+      !> reciprocal tile tests.  They count execute_batch calls, not k points.
+      integer :: execute_batch_requests = 0
+      integer :: combined_assembly_solve_requests = 0
+      integer :: assemble_only_requests = 0
+      integer :: input_hamiltonian_solve_requests = 0
       logical :: initialized = .false.
    contains
       procedure :: initialize => lapack_backend_initialize
       procedure :: capabilities => lapack_backend_capabilities
       procedure :: prepare_operator => lapack_backend_prepare_operator
       procedure :: execute_batch => lapack_backend_execute_batch
+      procedure :: execution_metrics => lapack_backend_execution_metrics
       procedure :: synchronize => lapack_backend_synchronize
       procedure :: release => lapack_backend_release
       final :: lapack_backend_destructor
@@ -430,6 +438,7 @@ module reciprocal_mod
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
       procedure :: build_kspace_hamiltonian
+      procedure :: execute_normal_mesh_tiles
       procedure :: build_neighbor_vectors
       procedure :: calculate_structure_factors
       procedure :: fourier_transform_hamiltonian
@@ -537,6 +546,12 @@ module reciprocal_mod
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine backend_execute_if
 
+   subroutine backend_execution_metrics_if(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
+      import reciprocal_execution_backend
+      class(reciprocal_execution_backend), intent(in) :: this
+      integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
+   end subroutine backend_execution_metrics_if
+
    subroutine backend_synchronize_if(this)
       import reciprocal_execution_backend
       class(reciprocal_execution_backend), intent(inout) :: this
@@ -567,6 +582,11 @@ module reciprocal_mod
       type(reciprocal_execution_request), intent(in) :: request
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine lapack_backend_execute_batch
+
+   module subroutine lapack_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
+      class(lapack_reciprocal_backend), intent(in) :: this
+      integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
+   end subroutine lapack_backend_execution_metrics
 
    module subroutine lapack_backend_synchronize(this)
       class(lapack_reciprocal_backend), intent(inout) :: this
@@ -933,6 +953,16 @@ module reciprocal_mod
 
       ! Determine which k-point set to use
    end subroutine build_kspace_hamiltonian
+
+   !> @brief Assemble and solve the active reciprocal mesh one tile at a time.
+   !> @details The host compatibility caches are copied only from a completed
+   !> execution result.  The typed request deliberately combines Fourier
+   !> assembly and eigensolution so a resident backend never needs a host H(k)
+   !> round trip between those operations.
+   module subroutine execute_normal_mesh_tiles(this, using_kpath, generalized)
+      class(reciprocal), intent(inout) :: this
+      logical, intent(in) :: using_kpath, generalized
+   end subroutine execute_normal_mesh_tiles
 
    !> @brief Build S(k) for every active mesh or path k-point.
    !> @param[inout] this Reciprocal object receiving sk_overlap arrays.

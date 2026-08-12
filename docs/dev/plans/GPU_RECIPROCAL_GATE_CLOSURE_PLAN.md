@@ -387,10 +387,64 @@ solution.
 
 ### Acceptance checklist
 
-- [ ] Normal mesh requests assembly and eigensolution together once per tile.
-- [ ] No host H tile is required between those two backend operations.
-- [ ] Compatibility H/eigenpair caches and invalidation behavior are unchanged.
-- [ ] Serial/MPI bcc-Fe SCF and reciprocal contracts match the RF-01 oracle.
+#### Evidence — 2026-08-12, `e616705d9ff8d9a7c52cb58246743e739c2133c9` + GC-04 worktree
+
+`execute_normal_mesh_tiles` is now the single internal service behind the
+legacy normal-mesh build/diagonalize sequence.  Each local tile submits one
+typed request with `assemble_hamiltonian` and `solve_eigensystem` enabled;
+the generalized proxy also requests overlap assembly in that same operation.
+After the backend synchronizes, the service copies the completed H/S,
+eigenvalue, and eigenvector results into the existing compatibility caches.
+It never sends `hk_bulk` back as `input_hamiltonian`.  Thus the CPU backend
+keeps its implementation-local storage as before, while a future resident
+backend has no required host H(k) transfer between Fourier assembly and solve.
+
+`diagonalize_hamiltonian` is now a compatibility/cache-validity adapter.  A
+missing or stale cache calls the combined service; an already-current cache
+does not submit a second request.  The generation invariant is explicit:
+H/S/eigenpair caches materialized by the service have
+`cached_operator_generation == hamiltonian%operator_generation`; a mismatch
+invalidates the full spectral cache and rebuilds combined tiles.  Empty local
+worksets allocate zero-extent compatibility caches and submit no backend
+request.  The typed backend boundary now exposes request-shape counters,
+which the unit test uses to prove one combined request per normal tile, zero
+assemble-only requests, and zero input-H solve requests for normal mesh,
+k-path, generation-refresh, and generalized cases.
+
+`UnitArbitraryKEigenpairs` compares the fused normal H(k) to the direct
+Fourier oracle and verifies standard/generalized residuals, orthogonality,
+q=0 spectra/gauges, cache-generation refresh, k-path tiles, and empty local
+ownership at `1.0e-12`.  GNU Fortran 13.3.0 validation passed:
+
+```text
+cmake --build build-rf-serial --parallel
+ctest --test-dir build-rf-serial -R 'Unit(ArbitraryKEigenpairs|KspaceOccupations)|Example_k_space_scf_bccFe' --output-on-failure
+# 3/3 passed
+
+cmake --build build-rf-debug --parallel
+ctest --test-dir build-rf-debug -R 'Unit(ArbitraryKEigenpairs|KspaceOccupations)' --output-on-failure
+# 2/2 passed
+
+bash -lc 'source env/openmpi.sh; cmake --build build-rf-mpi --parallel'
+bash -lc 'source env/openmpi.sh; ctest --test-dir build-rf-mpi -R "Unit(KspaceOccupations_mpi|ParallelContext_mpi_[124])|Example_k_space_scf_bccFe(_mpi(_[14])?)?" --output-on-failure -j 1'
+# 8/8 passed outside the sandbox, including bcc-Fe serial and MPI ranks 1, 2, and 4
+
+ctest --test-dir build-rf-serial -L unit --output-on-failure -j 1
+ctest --test-dir build-rf-debug -L unit --output-on-failure -j 1
+# 43/43 passed in each configuration
+```
+
+The same MPI ctest inside the sandbox failed before test startup because
+OpenMPI could not create its PMIx listener (`opal_ifinit: socket() failed
+with errno=1`; `The PMIx server's listener thread failed to start`).  The
+approved unsandboxed rerun above passed all eight rebuilt tests.  CUDA
+remained disabled; no physics formulas, public input, reference output, or
+default reciprocal mode changed.
+
+- [x] Normal mesh requests assembly and eigensolution together once per tile.
+- [x] No host H tile is required between those two backend operations.
+- [x] Compatibility H/eigenpair caches and invalidation behavior are unchanged.
+- [x] Serial/MPI bcc-Fe SCF and reciprocal contracts match the RF-01 oracle.
 - [ ] GC-04 evidence is recorded and the commit is independently reviewed.
 
 ---

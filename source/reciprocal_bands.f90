@@ -10,105 +10,28 @@ contains
    !> @param[inout] this Reciprocal object receiving eigenvalue/eigenvector arrays.
    module subroutine diagonalize_hamiltonian(this)
       class(reciprocal), intent(inout) :: this
-      
-      ! Local variables
-      integer :: nk, ik, nmat, lwork, info, mode_fail_count
-      complex(rp), dimension(:, :), allocatable :: h_k_copy
-      complex(rp), dimension(:, :), allocatable :: s_k_copy
-      real(rp), dimension(:), allocatable :: eigenvals
-      complex(rp), dimension(:), allocatable :: work_complex
-      real(rp), dimension(:), allocatable :: rwork
-      character(len=100) :: info_msg
-      logical :: use_generalized
       logical :: operator_changed
-      real(rp) :: max_herm, max_herm_all, matrix_scale
-      character(len=256) :: herm_msg
-      type(reciprocal_execution_request) :: request
-      type(reciprocal_execution_result) :: result
 
-      ! A q/cone/reference-axis/potential change advances the shared real-space
-      ! operator generation. Never diagonalize a stale H(k): invalidate and
-      ! rebuild it from the ordinary Fourier transform first.
+      ! GC-04 compatibility adapter.  A mesh build already submits combined
+      ! assembly/eigensolution tiles, so this entry point must never copy
+      ! hk_bulk back as input to a second backend solve.
       call this%invalidate_if_operator_changed('reciprocal%diagonalize_hamiltonian', operator_changed)
-      if (operator_changed) call this%build_kspace_hamiltonian()
+      if (operator_changed .or. .not. allocated(this%hk_bulk) .or. .not. allocated(this%eigenvalues) .or. &
+          .not. allocated(this%eigenvectors)) call this%build_kspace_hamiltonian()
 
-      ! Check prerequisites
-      if (.not. allocated(this%hk_bulk)) then
-         call g_logger%error('diagonalize_hamiltonian: hk_bulk not built - call build_kspace_hamiltonian first', &
-                            __FILE__, __LINE__)
+      if (.not. allocated(this%hk_bulk) .or. .not. allocated(this%eigenvalues) .or. .not. allocated(this%eigenvectors)) then
+         call g_logger%error('diagonalize_hamiltonian: normal-mesh combined execution did not materialize eigenpairs.', &
+                             __FILE__, __LINE__)
          return
       end if
-
-      ! Get dimensions from hk_bulk
-      nmat = size(this%hk_bulk, 1)
-      nk = size(this%hk_bulk, 3)
-      
-      call root_info('diagonalize_hamiltonian: Diagonalizing ' // trim(int2str(nk)) // ' k-points', __FILE__, __LINE__)
-      call root_info('diagonalize_hamiltonian: Matrix size = ' // &
-                        trim(int2str(nmat)) // ' x ' // trim(int2str(nmat)), __FILE__, __LINE__)
-
-      use_generalized = trim(this%reciprocal_mode) == 'generalized_overlap_proxy'
-      if (use_generalized) then
-         if (.not. allocated(this%sk_overlap)) call this%build_kspace_overlap()
-         if (.not. allocated(this%sk_overlap)) then
-            call g_logger%warning('diagonalize_hamiltonian: S(k) unavailable, falling back to ham_only.', __FILE__, __LINE__)
-            use_generalized = .false.
+      if (associated(this%hamiltonian)) then
+         if (this%cached_operator_generation /= this%hamiltonian%operator_generation) then
+            call g_logger%error('diagonalize_hamiltonian: cache generation is stale after normal-mesh execution.', __FILE__, __LINE__)
+            return
          end if
-      end if
-
-      ! zheev/zhegv read only one triangle.  Check the completed matrices
-      ! first, otherwise a broken lower triangle (notably the old finite-q GBT
-      ! reconstruction) would be silently discarded by LAPACK.
-      max_herm_all = 0.0_rp
-      do ik = 1, nk
-         max_herm = maxval(abs(this%hk_bulk(:, :, ik) - transpose(conjg(this%hk_bulk(:, :, ik)))) )
-         max_herm_all = max(max_herm_all, max_herm)
-         matrix_scale = max(1.0_rp, maxval(abs(this%hk_bulk(:, :, ik))))
-         if (max_herm > 1.0e-10_rp*matrix_scale) then
-            write(herm_msg, '(A,I0,A,ES12.4,A,ES12.4)') 'H(k) is non-Hermitian before eigensolution at k=', ik, &
-               ': max|H-H^H|=', max_herm, ', scale=', matrix_scale
-            call g_logger%fatal('diagonalize_hamiltonian: '//trim(herm_msg), __FILE__, __LINE__)
-         end if
-      end do
-      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
-         write(herm_msg, '(A,ES12.4)') 'GBT pre-eigensolver max|H-H^H|=', max_herm_all
-         call root_info(trim(herm_msg), __FILE__, __LINE__)
-      end if
-      if (allocated(this%sk_overlap)) then
-         do ik = 1, size(this%sk_overlap, 3)
-            max_herm = maxval(abs(this%sk_overlap(:, :, ik) - transpose(conjg(this%sk_overlap(:, :, ik)))) )
-            matrix_scale = max(1.0_rp, maxval(abs(this%sk_overlap(:, :, ik))))
-            if (max_herm > 1.0e-10_rp*matrix_scale) then
-               write(herm_msg, '(A,I0,A,ES12.4,A,ES12.4)') 'O(k) is non-Hermitian before eigensolution at k=', ik, &
-                  ': max|O-O^H|=', max_herm, ', scale=', matrix_scale
-               call g_logger%fatal('diagonalize_hamiltonian: '//trim(herm_msg), __FILE__, __LINE__)
-            end if
-            if (use_generalized) call this%check_overlap_properties(ik, this%sk_overlap(:, :, ik))
-         end do
       end if
 
       if (this%kanpur_diagnostics) call this%print_kanpur_mapping()
-
-      ! Allocate eigenvalue and eigenvector storage
-      if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
-      if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
-      allocate(this%eigenvalues(nmat, nk))
-      allocate(this%eigenvectors(nmat, nmat, nk))
-      ! Compatibility adapter: the public mesh cache remains caller-owned,
-      ! while the real solve crosses the same typed execution boundary used by
-      ! arbitrary k/k+q services.  This is one deferred call for the mesh.
-      call this%make_execution_backend()
-      request%assemble_hamiltonian = .false.
-      request%assemble_overlap = .false.
-      request%solve_eigensystem = .true.
-      request%generalized = use_generalized
-      request%request_eigenvectors = .true.
-      request%operator_generation = this%hamiltonian%operator_generation
-      allocate(request%input_hamiltonian(nmat,nmat,nk), source=this%hk_bulk)
-      if (use_generalized) allocate(request%input_overlap(nmat,nmat,nk), source=this%sk_overlap)
-      call this%execution_backend%execute_batch(request, result)
-      this%eigenvalues = result%eigenvalues
-      this%eigenvectors = result%eigenvectors
       if (this%gamma_bounds_diagnostics) call this%run_gamma_bounds_diagnostics()
       if (this%hall_diag_experimental) call this%diagonalize_hall_experimental()
       call root_info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)

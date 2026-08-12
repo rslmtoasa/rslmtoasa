@@ -43,6 +43,10 @@ contains
 
       call this%release()
       this%assembler = assembler
+      this%execute_batch_requests = 0
+      this%combined_assembly_solve_requests = 0
+      this%assemble_only_requests = 0
+      this%input_hamiltonian_solve_requests = 0
       this%initialized = .true.
    end subroutine lapack_backend_initialize
 
@@ -121,6 +125,15 @@ contains
          end if
       end if
 
+      this%execute_batch_requests = this%execute_batch_requests + 1
+      if (request%assemble_hamiltonian .and. request%solve_eigensystem) then
+         this%combined_assembly_solve_requests = this%combined_assembly_solve_requests + 1
+      else if (request%assemble_hamiltonian) then
+         this%assemble_only_requests = this%assemble_only_requests + 1
+      else if (request%solve_eigensystem) then
+         this%input_hamiltonian_solve_requests = this%input_hamiltonian_solve_requests + 1
+      end if
+
       call this%prepare_operator(request%operator_generation)
       call this%workspace%ensure_capacity(nmat, nk, request%generalized, request%operator_generation, nnmax, ntype)
       if (request%assemble_hamiltonian) then
@@ -176,6 +189,16 @@ contains
       result%eigenvalues_valid = .true.
       result%eigenvectors_valid = request%request_eigenvectors
    end subroutine lapack_backend_execute_batch
+
+   module subroutine lapack_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
+      class(lapack_reciprocal_backend), intent(in) :: this
+      integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
+
+      execute_requests = this%execute_batch_requests
+      combined_requests = this%combined_assembly_solve_requests
+      assemble_only = this%assemble_only_requests
+      input_hamiltonian_solves = this%input_hamiltonian_solve_requests
+   end subroutine lapack_backend_execution_metrics
 
    module subroutine lapack_backend_synchronize(this)
       class(lapack_reciprocal_backend), intent(inout) :: this

@@ -13,10 +13,13 @@ program test_arbitrary_k_eigenpairs
 
    type(reciprocal) :: recip
    type(reciprocal) :: recip_two_site
+   type(reciprocal) :: recip_empty
    type(hamiltonian), target :: ham
    type(hamiltonian), target :: ham_two_site
+   type(hamiltonian), target :: ham_empty
    type(lattice), target :: lat
    type(lattice), target :: lat_two_site
+   type(lattice), target :: lat_empty
    real(rp) :: k0(3), k_off(3)
    real(rp), allocatable :: evals(:, :), evals_qg(:, :), folded(:, :), evals_second(:, :), direct_evals(:)
    real(rp), allocatable :: evals_tile1(:, :), evals_tile2(:, :)
@@ -26,6 +29,8 @@ program test_arbitrary_k_eigenpairs
    logical :: failed
    integer :: workspace_capacity
    integer :: allocation_count, query_count
+   integer :: execute_before, combined_before, assemble_before, input_solve_before
+   integer :: execute_after, combined_after, assemble_after, input_solve_after
    type(reciprocal_execution_capabilities) :: backend_caps
    type(reciprocal_execution_request) :: backend_request
    type(reciprocal_execution_result) :: backend_result
@@ -85,10 +90,61 @@ program test_arbitrary_k_eigenpairs
 
    ! A q=0 response call is also the normal mesh eigensystem at the same k.
    recip%k_points(:, 1) = k0
+   recip%reciprocal_tile_size = 1
+   call recip%execution_backend%execution_metrics(execute_before, combined_before, assemble_before, input_solve_before)
    call recip%build_kspace_hamiltonian()
+   call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+   if (execute_after /= execute_before + 1 .or. combined_after /= combined_before + 1 .or. &
+       assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
+      write (*, '(a)') 'FAIL GC-04 normal mesh did not use one combined backend request'
+      failed = .true.
+   end if
    call recip%diagonalize_hamiltonian()
+   call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+   if (execute_after /= execute_before + 1 .or. combined_after /= combined_before + 1 .or. &
+       assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
+      write (*, '(a)') 'FAIL GC-04 diagonalize adapter submitted a second backend request'
+      failed = .true.
+   end if
+   call recip%fourier_transform_hamiltonian(k0, h_direct)
+   call check_close('GC-04 normal-mesh H(k) compatibility cache', maxval(abs(recip%hk_bulk(:,:,1) - h_direct)), 1.0e-12_rp, failed)
+   call check_eigenpairs('GC-04 normal-mesh combined eigenpairs', recip%hk_bulk(:,:,1), recip%eigenvalues(:,1), &
+                         recip%eigenvectors(:,:,1), failed)
    call check_close('q=0 normal-mesh spectrum', maxval(abs(evals(:, 1) - recip%eigenvalues(:, 1))), 1.0e-12_rp, failed)
    call check_gauge('q=0 normal-mesh eigenvectors', evecs(:, :, 1), recip%eigenvectors(:, :, 1), failed)
+
+   ! A generation change must invalidate both compatibility caches and rebuild
+   ! them through one new combined tile, not an input-H solve.
+   ham%operator_generation = ham%operator_generation + 1
+   call recip%diagonalize_hamiltonian()
+   call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+   if (execute_after /= execute_before + 2 .or. combined_after /= combined_before + 2 .or. &
+       assemble_after /= assemble_before .or. input_solve_after /= input_solve_before .or. &
+       recip%cached_operator_generation /= ham%operator_generation) then
+      write (*, '(a)') 'FAIL GC-04 stale normal-mesh generation did not rebuild as a combined tile'
+      failed = .true.
+   end if
+   call check_close('GC-04 generation-refresh spectrum', maxval(abs(evals(:,1) - recip%eigenvalues(:,1))), 1.0e-12_rp, failed)
+
+   ! A k-path follows the same resident tile contract while retaining the
+   ! ordinary public build/diagonalize entry points.
+   allocate(recip%k_path(3,2))
+   recip%k_path(:,1) = k0
+   recip%k_path(:,2) = k_off
+   recip%nk_path = 2
+   call recip%execution_backend%execution_metrics(execute_before, combined_before, assemble_before, input_solve_before)
+   call recip%build_kspace_hamiltonian()
+   call recip%diagonalize_hamiltonian()
+   call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+   if (execute_after /= execute_before + 2 .or. combined_after /= combined_before + 2 .or. &
+       assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
+      write (*, '(a)') 'FAIL GC-04 k-path did not use one combined request per tile'
+      failed = .true.
+   end if
+   call check_eigenpairs('GC-04 k-path combined eigenpairs', recip%hk_bulk(:,:,2), recip%eigenvalues(:,2), &
+                         recip%eigenvectors(:,:,2), failed)
+   deallocate(recip%k_path)
+   recip%nk_path = 0
 
    ! k+q and k+q+G are the same physical point.  The second column also
    ! exercises exact duplicate folded-point caching in one service call.
@@ -183,7 +239,43 @@ program test_arbitrary_k_eigenpairs
       write (*, '(a)') 'FAIL GC-02 generalized test did not retain the LAPACK backend'
       failed = .true.
    end select
+
+   ! GC-04 generalized normal-mesh tiles must assemble H/S and solve together.
+   recip_two_site%nk_total = 2
+   allocate(recip_two_site%k_points(3,2))
+   recip_two_site%k_points(:,1) = k0
+   recip_two_site%k_points(:,2) = k_off
+   recip_two_site%reciprocal_tile_size = 1
+   call recip_two_site%execution_backend%execution_metrics(execute_before, combined_before, assemble_before, input_solve_before)
+   call recip_two_site%build_kspace_hamiltonian()
+   call recip_two_site%diagonalize_hamiltonian()
+   call recip_two_site%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+   if (execute_after /= execute_before + 2 .or. combined_after /= combined_before + 2 .or. &
+       assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
+      write (*, '(a)') 'FAIL GC-04 generalized normal mesh did not use one combined request per tile'
+      failed = .true.
+   end if
+   call check_generalized_eigenpairs('GC-04 generalized normal-mesh eigenpairs', recip_two_site%hk_bulk(:,:,1), &
+                                     recip_two_site%sk_overlap(:,:,1), recip_two_site%eigenvalues(:,1), &
+                                     recip_two_site%eigenvectors(:,:,1), failed)
+   call check_close('GC-04 generalized normal-mesh spectrum', &
+                    maxval(abs(recip_two_site%eigenvalues(:,1) - evals_tile1(:,1))), 1.0e-12_rp, failed)
    deallocate(evals_tile1, evecs_tile1, evals_tile2, evecs_tile2)
+
+   ! Empty local ownership is a defined no-op: caches have zero local extent
+   ! and no backend request is created merely to represent an empty tile.
+   call setup_one_site_model(recip_empty, ham_empty, lat_empty)
+   deallocate(recip_empty%k_points, recip_empty%hk_bulk)
+   allocate(recip_empty%k_points(3,0))
+   recip_empty%nk_total = 0
+   recip_empty%kanpur_diagnostics = .false.
+   call recip_empty%build_kspace_hamiltonian()
+   call recip_empty%diagonalize_hamiltonian()
+   if (size(recip_empty%hk_bulk,3) /= 0 .or. size(recip_empty%eigenvalues,2) /= 0 .or. &
+       size(recip_empty%eigenvectors,3) /= 0 .or. allocated(recip_empty%execution_backend)) then
+      write (*, '(a)') 'FAIL GC-04 empty local mesh did not remain a no-op cache state'
+      failed = .true.
+   end if
 
    ! Switch the same completed normal Hamiltonian model to the second-order
    ! route with an onsite spin-orbit term.  The arbitrary-k route must inherit

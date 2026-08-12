@@ -830,31 +830,23 @@ contains
    allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
-      ! Tile-level assembly crosses the execution backend boundary.  The CPU
-      ! implementation owns the RF-04 scratch tile; a future device backend
-      ! can keep this matrix resident for a following eigensolve.
-      call this%make_execution_backend()
-      do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
-         tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
-         tile_length = tile_last - tile_first + 1
-         request%assemble_hamiltonian = .true.
-         request%assemble_overlap = .false.
-         request%solve_eigensystem = .false.
-         request%generalized = .false.
-         request%request_eigenvectors = .false.
-         request%request_assembled_hamiltonian = .true.
-         request%request_assembled_overlap = .false.
-         request%operator_generation = this%hamiltonian%operator_generation
-         if (allocated(request%k_points)) deallocate(request%k_points)
-         allocate(request%k_points(3,tile_length))
-         if (using_kpath) then
-            request%k_points = this%k_path(:,tile_first:tile_last)
-         else
-            request%k_points = this%k_workset%points(:,tile_first:tile_last)
-         end if
-         call this%execution_backend%execute_batch(request, result)
-         this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
-      end do
+      ! GC-04: normal mesh assembly and eigensolution are one tile request.
+      ! The host H(k) cache is a compatibility result, not input to a later
+      ! eigensolver request.  This lets a resident backend retain H/S and its
+      ! eigensolver work until the explicit result boundary below.
+      if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+      if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+      allocate(this%eigenvalues(size(this%hk_bulk,1), this%nk_local))
+      allocate(this%eigenvectors(size(this%hk_bulk,1), size(this%hk_bulk,2), this%nk_local))
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
+#ifdef USE_SAFE_ALLOC
+         call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, shape(this%hk_bulk))
+#else
+         if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
+         allocate(this%sk_overlap(size(this%hk_bulk,1), size(this%hk_bulk,2), size(this%hk_bulk,3)))
+#endif
+      end if
+      call this%execute_normal_mesh_tiles(using_kpath, trim(this%reciprocal_mode) == 'generalized_overlap_proxy')
 
       ! H(k) now represents exactly this shared real-space operator generation.
       ! All later eigensystem/DOS/density entry points verify this identity.
@@ -889,9 +881,7 @@ contains
       end if
 
       call root_info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
-      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
-         call this%build_kspace_overlap()
-      else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
          call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
       end if
       
@@ -900,6 +890,54 @@ contains
          call this%check_multisite_hamiltonian_diagonal()
       end if
    end subroutine build_kspace_hamiltonian
+
+   !> Execute the active k mesh as combined assembly/eigensolution tiles.
+   !> This is the one normal-mesh backend crossing used by both legacy public
+   !> adapters.  A result always contains the compatibility H(k) cache; its
+   !> host copy occurs only after the backend has completed the tile solve.
+   module subroutine execute_normal_mesh_tiles(this, using_kpath, generalized)
+      class(reciprocal), intent(inout) :: this
+      logical, intent(in) :: using_kpath, generalized
+      integer :: tile_first, tile_last, tile_length
+      type(reciprocal_execution_request) :: request
+      type(reciprocal_execution_result) :: result
+
+      if (this%nk_local == 0) return
+      call this%make_execution_backend()
+      do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
+         tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
+         tile_length = tile_last - tile_first + 1
+         request%assemble_hamiltonian = .true.
+         request%assemble_overlap = generalized
+         request%solve_eigensystem = .true.
+         request%generalized = generalized
+         request%request_eigenvectors = .true.
+         request%request_assembled_hamiltonian = .true.
+         request%request_assembled_overlap = generalized
+         request%operator_generation = this%hamiltonian%operator_generation
+         allocate(request%k_points(3,tile_length))
+         if (using_kpath) then
+            request%k_points = this%k_path(:,tile_first:tile_last)
+         else
+            request%k_points = this%k_workset%points(:,tile_first:tile_last)
+         end if
+         call this%execution_backend%execute_batch(request, result)
+         call this%execution_backend%synchronize()
+         if (result%local_point_count /= tile_length .or. result%operator_generation /= request%operator_generation .or. &
+             .not. result%assembled_hamiltonian_valid .or. .not. result%eigenvalues_valid .or. &
+             .not. result%eigenvectors_valid) then
+            call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: incomplete combined tile result.', __FILE__, __LINE__)
+         end if
+         if (generalized .and. .not. result%assembled_overlap_valid) then
+            call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: generalized tile omitted S(k).', __FILE__, __LINE__)
+         end if
+         this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
+         this%eigenvalues(:,tile_first:tile_last) = result%eigenvalues
+         this%eigenvectors(:,:,tile_first:tile_last) = result%eigenvectors
+         if (generalized) this%sk_overlap(:,:,tile_first:tile_last) = result%overlap
+         deallocate(request%k_points)
+      end do
+   end subroutine execute_normal_mesh_tiles
 
    !> @brief Build S(k) for every active mesh or path k-point.
    !> @param[inout] this Reciprocal object receiving sk_overlap arrays.
