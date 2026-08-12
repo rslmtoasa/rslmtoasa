@@ -506,10 +506,62 @@ full-tensor APIs remain thin compatibility adapters.
 
 ### Acceptance checklist
 
-- [ ] Pair provider consumes one caller-owned operator tile per k point.
-- [ ] No complete k-resolved operator tensor is required by the new path.
-- [ ] Constant and legacy tensor inputs remain compatible adapters.
-- [ ] Dynamic/static Xi and scalar/tiled tests cover streamed tiles.
+#### Evidence — 2026-08-12, `5339fffedd83fd7d61795204448e80f6d497ef00` + GC-05 worktree
+
+`pair_operator_tile_source` is the narrow one-local-k boundary: its source
+fills a caller-owned `(nmat,nmat,nright)` tile and reports `nright`.  The
+source remains owned by the calling Xi builder for the streamed entry points
+(the legacy adapters are provider-owned); the pair vertex provider otherwise
+owns only its reusable active tile.  Each transition-engine accumulation
+invalidates the prepared index, then calls `prepare_kpoint(ik)` once before
+transition batching.  Consequently, every batch at that k consumes the same
+resident tile, while source/provider dispatch stays outside both scalar
+transition and frequency loops.
+
+The legacy constant rank-three and cached rank-four APIs now construct thin
+source adapters inside `make_pair_operator_vertex_provider`; their public
+entry points and metadata remain unchanged.  The new source entry points use
+explicit `*_operator_source` provenance.  Production pair susceptibility now
+uses `lmto_pair_operator_tile_source`, which owns its small signed-moment and
+optional scale vectors, retains reusable Q-minus and Q-plus construction
+matrices, and fills the active tile directly from the existing LMTO reciprocal
+construction.  Goldstone correction scales are applied to each outgoing
+right-channel column during that fill.  No production call materializes or
+copies a `(nmat,nmat,nright,nk)` operator tensor; the active bound is one
+`(nmat,nmat,nright)` provider tile, two `(nmat,nmat)` LMTO scratch matrices,
+and O(`nright`) source vectors.
+
+`UnitTddftDirectXi` supplies a deterministic two-k mock source with distinct
+complex finite-q operators.  With two bands and batch size three it exercises
+a one-transition final partial tile at each k.  The mock fetch count is exactly
+two for dynamic tiled, dynamic scalar, and static Xi (once per k, never once
+per batch).  Each streamed result equals the legacy k-resolved tensor oracle
+at the unit tolerance (`1024*epsilon`); scalar and GEMM dynamic reductions
+agree, and the constant source equals the legacy constant-operator oracle.
+`UnitTddftDispatch` additionally enforces the production source boundary and
+the corrected-column path without a rank-four corrected copy.
+
+GNU Fortran 13.3.0 validation results:
+
+```text
+cmake --build build-rf-serial --parallel                                      PASS
+ctest --test-dir build-rf-serial -R 'Unit(TddftDirectXi|TddftChiKS|LmtoPairPotential|TddftCpuProfile)|TddftCrossMilestoneEquivalence' --output-on-failure
+                                                                             PASS (5/5)
+cmake --build build-rf-debug --parallel                                       PASS
+ctest --test-dir build-rf-debug -L unit --output-on-failure -j 1             PASS (43/43)
+bash -lc 'source env/openmpi.sh; cmake --build build-rf-mpi --parallel'      PASS
+bash -lc 'source env/openmpi.sh; ctest --test-dir build-rf-mpi -L unit --output-on-failure -j 1'
+                                                                             PASS (47/47)
+```
+
+The initial sandboxed MPI test attempt failed only because Open MPI/PMIx could
+not create its local listener socket (`opal_ifinit: socket() failed with
+errno=1`); the approved local-socket rerun above passed all 47 tests.
+
+- [x] Pair provider consumes one caller-owned operator tile per k point.
+- [x] No complete k-resolved operator tensor is required by the new path.
+- [x] Constant and legacy tensor inputs remain compatible adapters.
+- [x] Dynamic/static Xi and scalar/tiled tests cover streamed tiles.
 - [ ] GC-05 evidence is recorded and the commit is independently reviewed.
 
 ---

@@ -52,8 +52,9 @@ module calculation_mod
    use tddft_config_mod, only: tddft_config
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
       build_static_chi_ks_from_eigenpairs, write_chi_ks_text
-   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_k_dependent_eigenpairs, &
-      build_static_direct_xi_from_k_dependent_eigenpairs
+   use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_operator_source, &
+      build_static_direct_xi_from_operator_source
+   use tddft_transition_engine_mod, only: pair_operator_tile_source
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
@@ -64,7 +65,7 @@ module calculation_mod
       enhance_tddft_susceptibility_from_xi, write_tddft_dyson_text
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
       tddft_goldstone_diagnostics, tddft_goldstone_column_correction, evaluate_raw_xi_diagnostics, &
-      build_goldstone_column_correction, rescale_pair_potential_columns, spectral_weights_are_nonnegative, &
+      build_goldstone_column_correction, spectral_weights_are_nonnegative, &
       spectral_weight_correction_is_acceptable, &
       write_goldstone_diagnostics_text, append_goldstone_column_correction_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
@@ -98,6 +99,23 @@ module calculation_mod
    integer, save :: vacuum_nbulk_a = 0
    integer, save :: vacuum_nbulk = 0
    type(energy), pointer :: vacuum_energy => null()
+
+   !> Streamed LMTO Q^- producer for TD-DFT pair-potential Xi.  It owns its
+   !> small site-data vectors and two reusable construction matrices; the
+   !> transition provider owns the one-k `(nmat,nmat,nright)` tile it fills.
+   type, extends(pair_operator_tile_source) :: lmto_pair_operator_tile_source
+      type(reciprocal), pointer :: reciprocal_obj => null()
+      real(rp), allocatable :: signed_moments(:), column_scales(:)
+      real(rp) :: q_point(3) = 0.0_rp
+      complex(rp), allocatable :: qminus(:, :), qplus(:, :)
+      integer :: fetch_count = 0
+   contains
+      procedure :: initialize => initialize_lmto_pair_operator_source
+      procedure :: channel_dimension => lmto_pair_operator_channel_dimension
+      procedure :: fill_operator_tile => fill_lmto_pair_operator_tile
+      procedure :: clear => clear_lmto_pair_operator_source
+      final :: lmto_pair_operator_source_destructor
+   end type lmto_pair_operator_tile_source
 
    type, public :: calculation
       !> Pre-processing. Options are:
@@ -1977,7 +1995,7 @@ contains
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
       type(self) :: self_obj
-      type(reciprocal) :: reciprocal_obj
+      type(reciprocal), target :: reciprocal_obj
       type(tddft_config) :: config
       type(tddft_chi0_options) :: chi0_options
       type(green_chi0_options) :: green_options
@@ -1996,12 +2014,12 @@ contains
       type(tddft_longitudinal_static_result) :: longitudinal_static
       type(tddft_longitudinal_result) :: longitudinal_result
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
+      type(lmto_pair_operator_tile_source), target :: pair_operator_source
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
       type(kpoint_workset) :: kq_workset
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :), all_loss(:, :, :, :)
-      complex(rp), allocatable :: pair_operators(:, :, :, :), pair_operators_static(:, :, :, :), &
-         pair_operators_corrected(:, :, :, :), all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
+      complex(rp), allocatable :: all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
       real(rp), allocatable :: signed_moments(:)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
@@ -2226,10 +2244,9 @@ contains
             eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
       end if
       if (pair_backend) then
-         call build_pair_potential_operators(reciprocal_obj, reciprocal_obj%k_points, signed_moments, &
-            [0.0_rp, 0.0_rp, 0.0_rp], pair_operators_static)
-         call build_static_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
-            site_orbital_counts, left_channels, pair_operators_static, chi0_options, pair_xi_static)
+         call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp])
+         call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+            site_orbital_counts, left_channels, pair_operator_source, chi0_options, pair_xi_static)
          call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone)
          if (config%goldstone_mode == 'correct') then
             if (has_soc .or. has_external_field) then
@@ -2241,7 +2258,7 @@ contains
                   pair_correction)
             end if
          end if
-         deallocate(pair_operators_static)
+         call pair_operator_source%clear()
       end if
       allocate(kernel(nresponse, nresponse))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
@@ -2389,11 +2406,10 @@ contains
                end if
             end if
             if (pair_backend) then
-               call build_pair_potential_operators(reciprocal_obj, reciprocal_obj%k_points, signed_moments, &
-                  config%q_points(:, iq), pair_operators)
-               call build_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
-                  eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operators, omega, chi0_options, &
-                  pair_xi_result)
+               call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq))
+               call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                  eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
+                  chi0_options, pair_xi_result)
                call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_result%xi, response_eta, dyson_options, &
                   dyson_pair_result)
                raw_pair_minimum_spectral_weight = minval(dyson_pair_result%site_spectral_weight)
@@ -2409,10 +2425,10 @@ contains
                      raw_pair_minimum_spectral_weight)
                end if
                if (config%goldstone_mode == 'correct') then
-                  allocate(pair_operators_corrected, source=pair_operators)
-                  call rescale_pair_potential_columns(pair_operators_corrected, pair_correction%scales)
-                  call build_direct_xi_from_k_dependent_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
-                     eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operators_corrected, omega, &
+                  call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                     pair_correction%scales)
+                  call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                     eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
                      chi0_options, pair_xi_corrected_result)
                   call enhance_tddft_susceptibility_from_xi(chi0_result%chi, pair_xi_corrected_result%xi, response_eta, &
                      dyson_options, dyson_pair_corrected_result)
@@ -2435,7 +2451,6 @@ contains
                         corrected_pair_minimum_spectral_weight)
                      call append_pair_correction_spectral_weight_diagnostic(trim(filename), correction_spectral_weight_ok)
                   end if
-                  deallocate(pair_operators_corrected)
                   if (.not. correction_spectral_weight_ok) then
                      corrected_minimum_location = minloc(dyson_pair_corrected_result%site_spectral_weight)
                      write(spectral_weight_message, '(a,3(1x,es12.4),a,es12.4,a,i0,a,es12.4,a,es12.4,a,es12.4)') &
@@ -2447,7 +2462,7 @@ contains
                         'negative spectral weight relative to the raw pair response and is rejected.', __FILE__, __LINE__)
                   end if
                end if
-               deallocate(pair_operators)
+               call pair_operator_source%clear()
             end if
             if (is_longitudinal .and. is_gamma) then
                call calibrate_longitudinal_response(m0, chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), &
@@ -2631,6 +2646,89 @@ contains
       write(unit, '(a,l1)') '# pair_correction_preserves_raw_spectral_weight = ', acceptable
       close(unit)
    end subroutine append_pair_correction_spectral_weight_diagnostic
+
+   subroutine initialize_lmto_pair_operator_source(this, reciprocal_obj, signed_moments, q_point, column_scales)
+      class(lmto_pair_operator_tile_source), intent(inout) :: this
+      type(reciprocal), target, intent(inout) :: reciprocal_obj
+      real(rp), intent(in) :: signed_moments(:)
+      real(rp), intent(in) :: q_point(3)
+      real(rp), intent(in), optional :: column_scales(:)
+      integer :: nmat, nright
+
+      call this%clear()
+      if (.not. associated(reciprocal_obj%lattice) .or. .not. allocated(reciprocal_obj%k_points)) then
+         call g_logger%fatal('[calculation.lmto_pair_operator_source]: reciprocal mesh is unavailable.', __FILE__, __LINE__)
+      end if
+      nright = reciprocal_obj%lattice%nrec
+      if (size(signed_moments) /= nright) then
+         call g_logger%fatal('[calculation.lmto_pair_operator_source]: signed-moment shape is incompatible.', __FILE__, __LINE__)
+      end if
+      if (present(column_scales)) then
+         if (size(column_scales) /= nright) then
+            call g_logger%fatal('[calculation.lmto_pair_operator_source]: correction-scale shape is incompatible.', __FILE__, __LINE__)
+         end if
+         allocate(this%column_scales(nright))
+         this%column_scales = column_scales
+      end if
+      nmat = 2*norb*nright
+      this%reciprocal_obj => reciprocal_obj
+      allocate(this%signed_moments(nright))
+      this%signed_moments = signed_moments
+      this%q_point = q_point
+      allocate(this%qminus(nmat, nmat), this%qplus(nmat, nmat))
+   end subroutine initialize_lmto_pair_operator_source
+
+   integer function lmto_pair_operator_channel_dimension(this) result(nright)
+      class(lmto_pair_operator_tile_source), intent(in) :: this
+      if (.not. associated(this%reciprocal_obj)) error stop 'LMTO pair operator source is not configured'
+      nright = this%reciprocal_obj%lattice%nrec
+   end function lmto_pair_operator_channel_dimension
+
+   subroutine fill_lmto_pair_operator_tile(this, ik, operator_tile)
+      class(lmto_pair_operator_tile_source), intent(inout) :: this
+      integer, intent(in) :: ik
+      complex(rp), intent(out) :: operator_tile(:, :, :)
+      integer :: isite, nmat, nright
+      logical :: supported
+      character(len=160) :: reason
+
+      if (.not. associated(this%reciprocal_obj) .or. .not. allocated(this%signed_moments)) then
+         error stop 'LMTO pair operator source is not configured'
+      end if
+      nright = this%reciprocal_obj%lattice%nrec
+      nmat = 2*norb*nright
+      if (ik < 1 .or. ik > size(this%reciprocal_obj%k_points, 2) .or. &
+          any(shape(operator_tile) /= [nmat, nmat, nright])) then
+         error stop 'LMTO pair operator source tile shape is incompatible'
+      end if
+      do isite = 1, nright
+         call this%reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, this%reciprocal_obj%k_points(:, ik), &
+            this%signed_moments(isite), this%qminus, this%qplus, supported, reason, this%q_point)
+         if (.not. supported) then
+            call g_logger%fatal('[calculation.lmto_pair_operator_source]: pair-potential construction rejected: '// &
+               trim(reason), __FILE__, __LINE__)
+         end if
+         operator_tile(:, :, isite) = this%qminus
+         if (allocated(this%column_scales)) operator_tile(:, :, isite) = this%column_scales(isite)*operator_tile(:, :, isite)
+      end do
+      this%fetch_count = this%fetch_count + 1
+   end subroutine fill_lmto_pair_operator_tile
+
+   subroutine clear_lmto_pair_operator_source(this)
+      class(lmto_pair_operator_tile_source), intent(inout) :: this
+      if (allocated(this%qminus)) deallocate(this%qminus)
+      if (allocated(this%qplus)) deallocate(this%qplus)
+      if (allocated(this%signed_moments)) deallocate(this%signed_moments)
+      if (allocated(this%column_scales)) deallocate(this%column_scales)
+      nullify(this%reciprocal_obj)
+      this%q_point = 0.0_rp
+      this%fetch_count = 0
+   end subroutine clear_lmto_pair_operator_source
+
+   subroutine lmto_pair_operator_source_destructor(this)
+      type(lmto_pair_operator_tile_source), intent(inout) :: this
+      call this%clear()
+   end subroutine lmto_pair_operator_source_destructor
 
    !> Build the Q^- operators in the same ham_only coefficient representation
    !> as the two endpoint eigensystems.  Q is intentionally retained per k:

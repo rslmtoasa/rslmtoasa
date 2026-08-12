@@ -40,7 +40,7 @@ def test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults() -> N
     chi0 = (root / "source" / "tddft_chi0.f90").read_text()
     xi = (root / "source" / "tddft_xi.f90").read_text()
     assert "build_static_chi_ks_from_eigenpairs" in calculation
-    assert "build_static_direct_xi_from_k_dependent_eigenpairs" in calculation
+    assert "build_static_direct_xi_from_operator_source" in calculation
     assert "response electron count does not match" in calculation
     assert "ground_state_response_electron_count" in calculation
     assert "real q=0 omega=0 Fermi divided difference; dynamic eta excluded" in calculation
@@ -56,7 +56,9 @@ def test_controlled_goldstone_correction_rescales_only_pair_potential_columns() 
     goldstone = (root / "source" / "tddft_goldstone.f90").read_text()
     assert "goldstone_mode=correct requires" in source
     assert "build_goldstone_column_correction(pair_xi_static%xi" in source
-    assert "rescale_pair_potential_columns(pair_operators_corrected" in source
+    assert "pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &" in source
+    assert "pair_correction%scales)" in source
+    assert "pair_operators_corrected" not in source
     assert "_pair_corrected_dyson.dat" in source
     assert "k_perp_sum_rule" not in source[source.index("post_processing_susceptibility"):source.index("append_dynamic_gamma_peaks")]
     assert "dgesvd('S', 'S'" in goldstone
@@ -69,8 +71,9 @@ def test_controlled_goldstone_correction_rescales_only_pair_potential_columns() 
 def test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi() -> None:
     source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
     assert "config%xi_backend == 'compare'" in source
-    assert "build_pair_potential_operators" in source
-    assert "build_direct_xi_from_k_dependent_eigenpairs" in source
+    assert "lmto_pair_operator_tile_source" in source
+    assert "build_direct_xi_from_operator_source" in source
+    assert "call build_pair_potential_operators(" not in source
     assert "enhance_tddft_susceptibility_from_xi" in source
     assert '_legacy_dyson.dat' in source
     assert '_pair_dyson.dat' in source

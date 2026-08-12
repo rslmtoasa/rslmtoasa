@@ -45,8 +45,40 @@ module tddft_transition_engine_mod
    type, abstract, public :: tddft_vertex_provider
    contains
       procedure(coefficient_dimension_interface), deferred :: coefficient_dimension
+      procedure(begin_accumulation_interface), deferred :: begin_accumulation
+      procedure(prepare_kpoint_interface), deferred :: prepare_kpoint
       procedure(fill_vertex_tile_interface), deferred :: fill_vertex_tile
    end type tddft_vertex_provider
+
+   !> One local-k producer for pair-potential operators.  The producer fills
+   !> caller-owned `(nmat,nmat,nright)` storage and never needs a complete
+   !> k-resolved tensor.  It is deliberately separate from transition tiling:
+   !> one source fetch serves every transition batch at that k point.
+   type, abstract, public :: pair_operator_tile_source
+   contains
+      procedure(pair_operator_channel_dimension_interface), deferred :: channel_dimension
+      procedure(fill_pair_operator_tile_interface), deferred :: fill_operator_tile
+   end type pair_operator_tile_source
+
+   !> Thin compatibility source for the pre-GC-05 constant operator API.
+   type, extends(pair_operator_tile_source), public :: constant_pair_operator_tile_source
+      complex(rp), pointer :: operators(:, :, :) => null()
+   contains
+      procedure :: channel_dimension => constant_pair_operator_channel_dimension
+      procedure :: fill_operator_tile => fill_constant_pair_operator_tile
+      procedure :: restore_to_default => restore_constant_pair_operator_source
+      final :: constant_pair_operator_source_destructor
+   end type constant_pair_operator_tile_source
+
+   !> Thin compatibility source for the pre-GC-05 rank-four cached API.
+   type, extends(pair_operator_tile_source), public :: cached_pair_operator_tile_source
+      complex(rp), pointer :: operators(:, :, :, :) => null()
+   contains
+      procedure :: channel_dimension => cached_pair_operator_channel_dimension
+      procedure :: fill_operator_tile => fill_cached_pair_operator_tile
+      procedure :: restore_to_default => restore_cached_pair_operator_source
+      final :: cached_pair_operator_source_destructor
+   end type cached_pair_operator_tile_source
 
    !> Site/channel provider used by ordinary chi_KS and four-component paths.
    type, extends(tddft_vertex_provider), public :: site_channel_vertex_provider
@@ -55,23 +87,30 @@ module tddft_transition_engine_mod
       complex(rp), pointer :: eigenvectors_k(:, :, :) => null(), eigenvectors_kq(:, :, :) => null()
    contains
       procedure :: coefficient_dimension => site_channel_coefficient_dimension
+      procedure :: begin_accumulation => begin_site_channel_accumulation
+      procedure :: prepare_kpoint => prepare_site_channel_kpoint
       procedure :: fill_vertex_tile => fill_site_channel_vertex_tile
       procedure :: restore_to_default => restore_site_channel_provider
       final :: site_channel_provider_destructor
    end type site_channel_vertex_provider
 
-   !> Pair-potential provider. `operators_k` is a non-owning view of either a
-   !> constant operator slice (extent one) or a streamed k slice.  Therefore
-   !> the engine never creates a second full pair-operator tensor.
+   !> Pair-potential provider.  It owns one reusable operator tile and borrows
+   !> a source that fills it once per k point.  No rank-four k-resolved tensor
+   !> is required by this path; legacy tensor inputs are source adapters.
    type, extends(tddft_vertex_provider), public :: pair_operator_vertex_provider
       integer, pointer :: site_orbital_counts(:) => null()
       type(response_channel), pointer :: left_channels(:) => null()
       complex(rp), pointer :: eigenvectors_k(:, :, :) => null(), eigenvectors_kq(:, :, :) => null()
-      complex(rp), pointer :: operators_k(:, :, :, :) => null()
-      complex(rp), pointer :: constant_operators(:, :, :) => null()
-      logical :: k_dependent = .false.
+      class(pair_operator_tile_source), pointer :: operator_source => null()
+      type(constant_pair_operator_tile_source), pointer :: owned_constant_source => null()
+      type(cached_pair_operator_tile_source), pointer :: owned_cached_source => null()
+      complex(rp), allocatable :: operator_tile(:, :, :)
+      integer :: prepared_kpoint = 0
+      integer :: operator_tile_fetches = 0
    contains
       procedure :: coefficient_dimension => pair_operator_coefficient_dimension
+      procedure :: begin_accumulation => begin_pair_operator_accumulation
+      procedure :: prepare_kpoint => prepare_pair_operator_kpoint
       procedure :: fill_vertex_tile => fill_pair_operator_vertex_tile
       procedure :: restore_to_default => restore_pair_operator_provider
       final :: pair_operator_provider_destructor
@@ -89,6 +128,7 @@ module tddft_transition_engine_mod
    end type tddft_transition_engine
 
    public :: make_site_channel_vertex_provider, make_pair_operator_vertex_provider
+   public :: make_constant_pair_operator_tile_source, make_cached_pair_operator_tile_source
    public :: tddft_fermi_occupation, tddft_static_divided_difference
 
    abstract interface
@@ -97,17 +137,41 @@ module tddft_transition_engine_mod
          class(tddft_vertex_provider), intent(in) :: this
       end function coefficient_dimension_interface
 
+      subroutine begin_accumulation_interface(this)
+         import :: tddft_vertex_provider
+         class(tddft_vertex_provider), intent(inout) :: this
+      end subroutine begin_accumulation_interface
+
+      subroutine prepare_kpoint_interface(this, ik)
+         import :: tddft_vertex_provider
+         class(tddft_vertex_provider), intent(inout) :: this
+         integer, intent(in) :: ik
+      end subroutine prepare_kpoint_interface
+
       subroutine fill_vertex_tile_interface(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
          import :: tddft_vertex_provider, rp
-         class(tddft_vertex_provider), intent(in) :: this
+         class(tddft_vertex_provider), intent(inout) :: this
          integer, intent(in) :: ik, band_n(:), band_m(:), npairs
          complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
       end subroutine fill_vertex_tile_interface
+
+      integer function pair_operator_channel_dimension_interface(this)
+         import :: pair_operator_tile_source
+         class(pair_operator_tile_source), intent(in) :: this
+      end function pair_operator_channel_dimension_interface
+
+      subroutine fill_pair_operator_tile_interface(this, ik, operator_tile)
+         import :: pair_operator_tile_source, rp
+         class(pair_operator_tile_source), intent(inout) :: this
+         integer, intent(in) :: ik
+         complex(rp), intent(out) :: operator_tile(:, :, :)
+      end subroutine fill_pair_operator_tile_interface
    end interface
 
    interface make_pair_operator_vertex_provider
       module procedure make_pair_operator_vertex_provider_k_resolved
       module procedure make_pair_operator_vertex_provider_constant
+      module procedure make_pair_operator_vertex_provider_streamed
    end interface make_pair_operator_vertex_provider
 
 contains
@@ -162,9 +226,14 @@ contains
       type(response_channel), target, intent(in) :: left_channels(:)
       complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), operators_k(:, :, :, :)
       logical, intent(in) :: k_dependent
-      provider%site_orbital_counts => site_orbital_counts; provider%left_channels => left_channels
-      provider%eigenvectors_k => eigenvectors_k; provider%eigenvectors_kq => eigenvectors_kq; provider%operators_k => operators_k
-      provider%k_dependent = k_dependent
+
+      if (.not. k_dependent .or. size(operators_k, 4) /= size(eigenvectors_k, 3)) then
+         error stop 'k-resolved pair provider requires one operator tile per k point'
+      end if
+      allocate(provider%owned_cached_source)
+      call make_cached_pair_operator_tile_source(provider%owned_cached_source, operators_k)
+      provider%operator_source => provider%owned_cached_source
+      call configure_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq)
    end subroutine make_pair_operator_vertex_provider_k_resolved
 
    subroutine make_pair_operator_vertex_provider_constant(provider, site_orbital_counts, left_channels, eigenvectors_k, &
@@ -173,10 +242,61 @@ contains
       integer, target, intent(in) :: site_orbital_counts(:)
       type(response_channel), target, intent(in) :: left_channels(:)
       complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), operators(:, :, :)
-      provider%site_orbital_counts => site_orbital_counts; provider%left_channels => left_channels
-      provider%eigenvectors_k => eigenvectors_k; provider%eigenvectors_kq => eigenvectors_kq
-      provider%constant_operators => operators; provider%k_dependent = .false.
+      allocate(provider%owned_constant_source)
+      call make_constant_pair_operator_tile_source(provider%owned_constant_source, operators)
+      provider%operator_source => provider%owned_constant_source
+      call configure_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq)
    end subroutine make_pair_operator_vertex_provider_constant
+
+   !> Construct a pair provider from an arbitrary one-k source.  The caller
+   !> retains the source and its producer state for the duration of the
+   !> accumulation; the provider owns only the reusable active operator tile.
+   subroutine make_pair_operator_vertex_provider_streamed(provider, site_orbital_counts, left_channels, eigenvectors_k, &
+      eigenvectors_kq, operator_source)
+      type(pair_operator_vertex_provider), intent(out) :: provider
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      class(pair_operator_tile_source), target, intent(inout) :: operator_source
+
+      provider%operator_source => operator_source
+      call configure_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq)
+   end subroutine make_pair_operator_vertex_provider_streamed
+
+   subroutine configure_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq)
+      type(pair_operator_vertex_provider), intent(inout) :: provider
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer :: nmat, nright
+
+      if (.not. associated(provider%operator_source)) error stop 'pair operator source is not configured'
+      nmat = size(eigenvectors_k, 1)
+      nright = provider%operator_source%channel_dimension()
+      if (nmat < 1 .or. nright < 1 .or. size(eigenvectors_kq, 1) /= nmat .or. &
+          size(eigenvectors_kq, 3) /= size(eigenvectors_k, 3)) then
+         error stop 'pair operator provider has incompatible source or eigenpair dimensions'
+      end if
+      provider%site_orbital_counts => site_orbital_counts
+      provider%left_channels => left_channels
+      provider%eigenvectors_k => eigenvectors_k
+      provider%eigenvectors_kq => eigenvectors_kq
+      allocate(provider%operator_tile(nmat, nmat, nright))
+      provider%prepared_kpoint = 0
+      provider%operator_tile_fetches = 0
+   end subroutine configure_pair_operator_vertex_provider
+
+   subroutine make_constant_pair_operator_tile_source(source, operators)
+      type(constant_pair_operator_tile_source), intent(out) :: source
+      complex(rp), target, intent(in) :: operators(:, :, :)
+      source%operators => operators
+   end subroutine make_constant_pair_operator_tile_source
+
+   subroutine make_cached_pair_operator_tile_source(source, operators)
+      type(cached_pair_operator_tile_source), intent(out) :: source
+      complex(rp), target, intent(in) :: operators(:, :, :, :)
+      source%operators => operators
+   end subroutine make_cached_pair_operator_tile_source
 
    integer function site_channel_coefficient_dimension(this) result(ncoefficient)
       class(site_channel_vertex_provider), intent(in) :: this
@@ -189,6 +309,15 @@ contains
       ncoefficient = size(this%eigenvectors_k, 1)
    end function site_channel_coefficient_dimension
 
+   subroutine begin_site_channel_accumulation(this)
+      class(site_channel_vertex_provider), intent(inout) :: this
+   end subroutine begin_site_channel_accumulation
+
+   subroutine prepare_site_channel_kpoint(this, ik)
+      class(site_channel_vertex_provider), intent(inout) :: this
+      integer, intent(in) :: ik
+   end subroutine prepare_site_channel_kpoint
+
    integer function pair_operator_coefficient_dimension(this) result(ncoefficient)
       class(pair_operator_vertex_provider), intent(in) :: this
       if (.not. associated(this%eigenvectors_k) .or. .not. associated(this%eigenvectors_kq)) then
@@ -200,8 +329,41 @@ contains
       ncoefficient = size(this%eigenvectors_k, 1)
    end function pair_operator_coefficient_dimension
 
+   integer function constant_pair_operator_channel_dimension(this) result(nright)
+      class(constant_pair_operator_tile_source), intent(in) :: this
+      if (.not. associated(this%operators)) error stop 'constant pair operator source is not configured'
+      nright = size(this%operators, 3)
+   end function constant_pair_operator_channel_dimension
+
+   integer function cached_pair_operator_channel_dimension(this) result(nright)
+      class(cached_pair_operator_tile_source), intent(in) :: this
+      if (.not. associated(this%operators)) error stop 'cached pair operator source is not configured'
+      nright = size(this%operators, 3)
+   end function cached_pair_operator_channel_dimension
+
+   subroutine fill_constant_pair_operator_tile(this, ik, operator_tile)
+      class(constant_pair_operator_tile_source), intent(inout) :: this
+      integer, intent(in) :: ik
+      complex(rp), intent(out) :: operator_tile(:, :, :)
+      if (.not. associated(this%operators) .or. ik < 1 .or. any(shape(operator_tile) /= shape(this%operators))) then
+         error stop 'constant pair operator source tile shape is incompatible'
+      end if
+      operator_tile = this%operators
+   end subroutine fill_constant_pair_operator_tile
+
+   subroutine fill_cached_pair_operator_tile(this, ik, operator_tile)
+      class(cached_pair_operator_tile_source), intent(inout) :: this
+      integer, intent(in) :: ik
+      complex(rp), intent(out) :: operator_tile(:, :, :)
+      if (.not. associated(this%operators) .or. ik < 1 .or. ik > size(this%operators, 4) .or. &
+          any(shape(operator_tile) /= shape(this%operators(:,:,:,ik)))) then
+         error stop 'cached pair operator source tile shape is incompatible'
+      end if
+      operator_tile = this%operators(:,:,:,ik)
+   end subroutine fill_cached_pair_operator_tile
+
    subroutine fill_site_channel_vertex_tile(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
-      class(site_channel_vertex_provider), intent(in) :: this
+      class(site_channel_vertex_provider), intent(inout) :: this
       integer, intent(in) :: ik, band_n(:), band_m(:), npairs
       complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
       integer :: ipair, nmat
@@ -222,15 +384,40 @@ contains
          right_vertices(:,1:npairs))
    end subroutine fill_site_channel_vertex_tile
 
-   subroutine fill_pair_operator_vertex_tile(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
-      class(pair_operator_vertex_provider), intent(in) :: this
-      integer, intent(in) :: ik, band_n(:), band_m(:), npairs
-      complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
-      integer :: ipair, nmat, operator_k
-      if (.not. associated(this%operators_k) .and. .not. associated(this%constant_operators)) then
+   subroutine begin_pair_operator_accumulation(this)
+      class(pair_operator_vertex_provider), intent(inout) :: this
+      this%prepared_kpoint = 0
+   end subroutine begin_pair_operator_accumulation
+
+   subroutine prepare_pair_operator_kpoint(this, ik)
+      class(pair_operator_vertex_provider), intent(inout) :: this
+      integer, intent(in) :: ik
+      integer :: nmat, nright
+
+      if (.not. associated(this%operator_source) .or. .not. allocated(this%operator_tile)) then
          error stop 'pair vertex provider is not configured'
       end if
-      operator_k=1; if (this%k_dependent) operator_k=ik
+      if (ik < 1 .or. ik > size(this%eigenvectors_k, 3)) error stop 'pair vertex provider k index is incompatible'
+      if (this%prepared_kpoint == ik) return
+      nmat = size(this%eigenvectors_k, 1)
+      nright = this%operator_source%channel_dimension()
+      if (any(shape(this%operator_tile) /= [nmat, nmat, nright])) then
+         error stop 'pair vertex provider operator tile shape is incompatible'
+      end if
+      call this%operator_source%fill_operator_tile(ik, this%operator_tile)
+      this%prepared_kpoint = ik
+      this%operator_tile_fetches = this%operator_tile_fetches + 1
+   end subroutine prepare_pair_operator_kpoint
+
+   subroutine fill_pair_operator_vertex_tile(this, ik, band_n, band_m, npairs, bra, ket, left_vertices, right_vertices)
+      class(pair_operator_vertex_provider), intent(inout) :: this
+      integer, intent(in) :: ik, band_n(:), band_m(:), npairs
+      complex(rp), intent(out) :: bra(:, :), ket(:, :), left_vertices(:, :), right_vertices(:, :)
+      integer :: ipair, nmat
+      if (.not. associated(this%operator_source) .or. .not. allocated(this%operator_tile)) then
+         error stop 'pair vertex provider is not configured'
+      end if
+      if (this%prepared_kpoint /= ik) error stop 'pair vertex provider tile was not prepared for this k point'
       nmat=size(this%eigenvectors_k,1)
       if (size(bra,1) /= nmat .or. size(ket,1) /= nmat .or. size(bra,2) < npairs .or. size(ket,2) < npairs) then
          error stop 'pair vertex provider scratch shape is incompatible'
@@ -243,12 +430,7 @@ contains
       do ipair=1,npairs
          bra(:,ipair)=this%eigenvectors_kq(:,band_m(ipair),ik); ket(:,ipair)=this%eigenvectors_k(:,band_n(ipair),ik)
       end do
-      if (associated(this%constant_operators)) then
-         call weighted_transition_vectors(this%constant_operators,bra(:,1:npairs),ket(:,1:npairs),right_vertices(:,1:npairs))
-      else
-         call weighted_transition_vectors(this%operators_k(:,:,:,operator_k),bra(:,1:npairs),ket(:,1:npairs), &
-            right_vertices(:,1:npairs))
-      end if
+      call weighted_transition_vectors(this%operator_tile,bra(:,1:npairs),ket(:,1:npairs),right_vertices(:,1:npairs))
    end subroutine fill_pair_operator_vertex_tile
 
    subroutine transition_engine_accumulate_dynamic(this, k_weights, eigenvalues_k, eigenvalues_kq, omega, eta, fermi_level, &
@@ -258,7 +440,7 @@ contains
       real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:), eta, fermi_level, temperature, prune_tolerance
       integer, intent(in) :: band_first, band_last, batch_size
       logical, intent(in) :: use_batched
-      class(tddft_vertex_provider), intent(in) :: provider
+      class(tddft_vertex_provider), intent(inout) :: provider
       complex(rp), intent(inout) :: response(:, :, :)
       real(rp), intent(inout) :: vertex_seconds, preparation_seconds, denominator_seconds, accumulation_seconds
       integer :: ik,n,m,npairs,capacity,ipair,iw,ncoefficient
@@ -267,7 +449,9 @@ contains
       weight_sum=sum(k_weights); capacity=merge(batch_size,1,use_batched)
       ncoefficient = provider%coefficient_dimension()
       call this%workspace%ensure_capacity(size(response,1),size(response,2),ncoefficient,capacity)
+      call provider%begin_accumulation()
       do ik=1,size(k_weights)
+         call provider%prepare_kpoint(ik)
          prefactor=k_weights(ik)/weight_sum; npairs=0
          do n=band_first,band_last
             do m=band_first,band_last
@@ -298,13 +482,15 @@ contains
       class(tddft_transition_engine), intent(inout) :: this
       real(rp), intent(in) :: k_weights(:), eigenvalues(:, :), fermi_level, temperature, prune_tolerance
       integer, intent(in) :: band_first, band_last, batch_size
-      class(tddft_vertex_provider), intent(in) :: provider
+      class(tddft_vertex_provider), intent(inout) :: provider
       complex(rp), intent(inout) :: response(:, :, :)
       real(rp), intent(inout) :: vertex_seconds, preparation_seconds, accumulation_seconds
       integer :: ik,n,m,npairs,ncoefficient; real(rp)::weight_sum,prefactor,t0,t1,factor
       weight_sum=sum(k_weights); ncoefficient=provider%coefficient_dimension()
       call this%workspace%ensure_capacity(size(response,1),size(response,2),ncoefficient,batch_size)
+      call provider%begin_accumulation()
       do ik=1,size(k_weights)
+         call provider%prepare_kpoint(ik)
          prefactor=k_weights(ik)/weight_sum; npairs=0
          do n=band_first,band_last; do m=band_first,band_last
             call cpu_time(t0); factor=tddft_static_divided_difference(eigenvalues(n,ik),eigenvalues(m,ik),fermi_level,temperature)
@@ -325,7 +511,7 @@ contains
       class(tddft_transition_engine),intent(inout)::this
       integer,intent(in)::ik,npairs; real(rp),intent(in)::omega(:),eta,prefactor
       logical,intent(in)::use_batched
-      class(tddft_vertex_provider),intent(in)::provider; complex(rp),intent(inout)::response(:,:,:)
+      class(tddft_vertex_provider),intent(inout)::provider; complex(rp),intent(inout)::response(:,:,:)
       real(rp),intent(inout)::vertex_seconds,denominator_seconds,accumulation_seconds
       integer::iw,ipair,ileft,iright; real(rp)::t0,t1
       call cpu_time(t0); call provider%fill_vertex_tile(ik,this%workspace%band_n,this%workspace%band_m,npairs, &
@@ -355,7 +541,7 @@ contains
 
    subroutine flush_static(this,ik,npairs,prefactor,provider,response,vertex_seconds,accumulation_seconds)
       class(tddft_transition_engine),intent(inout)::this; integer,intent(in)::ik,npairs; real(rp),intent(in)::prefactor
-      class(tddft_vertex_provider),intent(in)::provider; complex(rp),intent(inout)::response(:,:,:)
+      class(tddft_vertex_provider),intent(inout)::provider; complex(rp),intent(inout)::response(:,:,:)
       real(rp),intent(inout)::vertex_seconds,accumulation_seconds; integer::ipair; real(rp)::t0,t1
       call cpu_time(t0); call provider%fill_vertex_tile(ik,this%workspace%band_n,this%workspace%band_m,npairs, &
          this%workspace%bra,this%workspace%ket,this%workspace%left_vertices,this%workspace%right_vertices)
@@ -412,6 +598,30 @@ contains
    subroutine transition_engine_destructor(this);type(tddft_transition_engine)::this;call this%workspace%clear();end subroutine
    subroutine restore_site_channel_provider(this);class(site_channel_vertex_provider),intent(inout)::this;nullify(this%site_orbital_counts,this%left_channels,this%right_channels,this%eigenvectors_k,this%eigenvectors_kq);end subroutine
    subroutine site_channel_provider_destructor(this);type(site_channel_vertex_provider)::this;call this%restore_to_default();end subroutine
-   subroutine restore_pair_operator_provider(this);class(pair_operator_vertex_provider),intent(inout)::this;nullify(this%site_orbital_counts,this%left_channels,this%eigenvectors_k,this%eigenvectors_kq,this%operators_k,this%constant_operators);this%k_dependent=.false.;end subroutine
+   subroutine restore_pair_operator_provider(this)
+      class(pair_operator_vertex_provider), intent(inout) :: this
+      if (associated(this%owned_constant_source)) deallocate(this%owned_constant_source)
+      if (associated(this%owned_cached_source)) deallocate(this%owned_cached_source)
+      if (allocated(this%operator_tile)) deallocate(this%operator_tile)
+      nullify(this%site_orbital_counts, this%left_channels, this%eigenvectors_k, this%eigenvectors_kq, this%operator_source)
+      this%prepared_kpoint = 0
+      this%operator_tile_fetches = 0
+   end subroutine restore_pair_operator_provider
    subroutine pair_operator_provider_destructor(this);type(pair_operator_vertex_provider)::this;call this%restore_to_default();end subroutine
+   subroutine restore_constant_pair_operator_source(this)
+      class(constant_pair_operator_tile_source), intent(inout) :: this
+      nullify(this%operators)
+   end subroutine restore_constant_pair_operator_source
+   subroutine constant_pair_operator_source_destructor(this)
+      type(constant_pair_operator_tile_source) :: this
+      call this%restore_to_default()
+   end subroutine constant_pair_operator_source_destructor
+   subroutine restore_cached_pair_operator_source(this)
+      class(cached_pair_operator_tile_source), intent(inout) :: this
+      nullify(this%operators)
+   end subroutine restore_cached_pair_operator_source
+   subroutine cached_pair_operator_source_destructor(this)
+      type(cached_pair_operator_tile_source) :: this
+      call this%restore_to_default()
+   end subroutine cached_pair_operator_source_destructor
 end module tddft_transition_engine_mod

@@ -80,7 +80,7 @@ contains
    subroutine check_provider_reuse(label, engine, provider, k_weights, eigenvalues)
       character(len=*), intent(in) :: label
       class(tddft_transition_engine), intent(inout) :: engine
-      class(tddft_vertex_provider), intent(in) :: provider
+      class(tddft_vertex_provider), intent(inout) :: provider
       real(rp), intent(in) :: k_weights(:), eigenvalues(:, :)
       complex(rp) :: dynamic(1,1,2), dynamic_repeat(1,1,2), static(1,1,1), static_repeat(1,1,1)
       real(rp) :: vertex_seconds, preparation_seconds, denominator_seconds, accumulation_seconds

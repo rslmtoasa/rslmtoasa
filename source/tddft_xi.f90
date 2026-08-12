@@ -13,7 +13,7 @@ module tddft_xi_mod
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_metadata, tddft_fermi_occupation, &
       tddft_kB_Ry_per_K, tddft_occupation_kT_floor, tddft_static_divided_difference
    use tddft_transition_engine_mod, only: tddft_transition_engine, pair_operator_vertex_provider, &
-      make_pair_operator_vertex_provider
+      pair_operator_tile_source, make_pair_operator_vertex_provider
    implicit none
 
    private
@@ -26,8 +26,92 @@ module tddft_xi_mod
    public :: build_direct_xi_from_eigenpairs
    public :: build_direct_xi_from_k_dependent_eigenpairs
    public :: build_static_direct_xi_from_k_dependent_eigenpairs
+   public :: build_direct_xi_from_operator_source
+   public :: build_static_direct_xi_from_operator_source
 
 contains
+
+   !> Dynamic Xi from a producer that supplies exactly one operator tile for
+   !> each local k point.  The source remains caller-owned; the transition
+   !> provider allocates only its active `(nmat,nmat,nright)` tile.
+   subroutine build_direct_xi_from_operator_source(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+      eigenvectors_kq, site_orbital_counts, left_channels, operator_source, omega, options, result)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
+      class(pair_operator_tile_source), target, intent(inout) :: operator_source
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_direct_xi_result), intent(out) :: result
+
+      integer :: nk, nbands, nspinor, nleft, nright, nw, band_first, band_last, batch_size
+      real(rp) :: weight_sum
+      type(tddft_transition_engine) :: engine
+      type(pair_operator_vertex_provider) :: provider
+
+      nk = size(k_weights); nbands = size(eigenvalues_k, 1); nspinor = 2*sum(site_orbital_counts)
+      nleft = size(left_channels); nright = operator_source%channel_dimension(); nw = size(omega)
+      call validate_direct_xi_source_inputs(nk, nbands, nspinor, nleft, nright, nw, k_weights, eigenvalues_k, eigenvectors_k, &
+         eigenvalues_kq, eigenvectors_kq, options)
+      band_first = options%band_first; band_last = options%band_last
+      if (band_last == 0) band_last = nbands
+      if (band_first < 1 .or. band_last < band_first .or. band_last > nbands) then
+         error stop 'build_direct_xi_from_operator_source: invalid selected band window'
+      end if
+      weight_sum = sum(k_weights)
+      allocate(result%xi(nleft, nright, nw)); result%xi = cmplx(0.0_rp, 0.0_rp, rp)
+      call set_direct_xi_metadata(result%metadata, options, nk, nbands, band_first, band_last, weight_sum)
+      result%metadata%backend = 'direct_xi_operator_source'
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors_k, eigenvectors_kq, &
+         operator_source)
+      call engine%accumulate_dynamic(k_weights, eigenvalues_k, eigenvalues_kq, omega, options%eta, options%fermi_level, &
+         options%electronic_temperature, band_first, band_last, options%occupation_prune_tolerance, batch_size, &
+         options%use_batched_accumulation, provider, result%xi, result%metadata%vertex_cpu_seconds, &
+         result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+   end subroutine build_direct_xi_from_operator_source
+
+   !> Static q=0 Xi from the same streamed tile source contract.  As in the
+   !> legacy static entry point, no dynamic eta enters its divided difference.
+   subroutine build_static_direct_xi_from_operator_source(k_weights, eigenvalues, eigenvectors, site_orbital_counts, &
+      left_channels, operator_source, options, result)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues(:, :)
+      complex(rp), target, intent(in) :: eigenvectors(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:)
+      class(pair_operator_tile_source), target, intent(inout) :: operator_source
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_direct_xi_result), intent(out) :: result
+
+      integer :: nk, nbands, nspinor, nleft, nright, band_first, band_last, batch_size
+      real(rp) :: weight_sum
+      type(tddft_transition_engine) :: engine
+      type(pair_operator_vertex_provider) :: provider
+
+      nk = size(k_weights); nbands = size(eigenvalues, 1); nspinor = 2*sum(site_orbital_counts)
+      nleft = size(left_channels); nright = operator_source%channel_dimension()
+      call validate_direct_xi_source_inputs(nk, nbands, nspinor, nleft, nright, 1, k_weights, eigenvalues, eigenvectors, &
+         eigenvalues, eigenvectors, options)
+      band_first = options%band_first; band_last = options%band_last
+      if (band_last == 0) band_last = nbands
+      if (band_first < 1 .or. band_last < band_first .or. band_last > nbands) then
+         error stop 'build_static_direct_xi_from_operator_source: invalid selected band window'
+      end if
+      weight_sum = sum(k_weights)
+      allocate(result%xi(nleft, nright, 1)); result%xi = cmplx(0.0_rp, 0.0_rp, rp)
+      call set_direct_xi_metadata(result%metadata, options, nk, nbands, band_first, band_last, weight_sum)
+      result%metadata%backend = 'static_xi_operator_source'
+      result%metadata%frequency_convention = 'static q=0 omega=0 divided difference; no dynamical eta'
+      result%metadata%eta = 0.0_rp
+      batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
+      call make_pair_operator_vertex_provider(provider, site_orbital_counts, left_channels, eigenvectors, eigenvectors, &
+         operator_source)
+      call engine%accumulate_static(k_weights, eigenvalues, options%fermi_level, options%electronic_temperature, &
+         band_first, band_last, options%occupation_prune_tolerance, batch_size, provider, result%xi, &
+         result%metadata%vertex_cpu_seconds, result%metadata%transition_preparation_cpu_seconds, &
+         result%metadata%accumulation_cpu_seconds)
+   end subroutine build_static_direct_xi_from_operator_source
 
    !> Dedicated real static q=0 operator.  This is intentionally separate
    !> from the dynamic builder so a response eta can never enter Xi_static.
@@ -420,5 +504,29 @@ contains
          error stop 'build_direct_xi_from_eigenpairs: invalid response options'
       end if
    end subroutine validate_direct_xi_inputs
+
+   subroutine validate_direct_xi_source_inputs(nk, nbands, nspinor, nleft, nright, nw, k_weights, eigenvalues_k, &
+      eigenvectors_k, eigenvalues_kq, eigenvectors_kq, options)
+      integer, intent(in) :: nk, nbands, nspinor, nleft, nright, nw
+      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
+      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      type(tddft_chi0_options), intent(in) :: options
+
+      if (nk <= 0 .or. nbands <= 0 .or. nspinor <= 0 .or. nleft <= 0 .or. nright <= 0 .or. nw <= 0) then
+         error stop 'build_direct_xi_from_operator_source: empty input is not valid'
+      end if
+      if (size(eigenvalues_k, 2) /= nk .or. any(shape(eigenvalues_kq) /= shape(eigenvalues_k)) .or. &
+          size(eigenvectors_k, 1) /= nspinor .or. size(eigenvectors_k, 2) /= nbands .or. &
+          size(eigenvectors_k, 3) /= nk .or. any(shape(eigenvectors_kq) /= shape(eigenvectors_k))) then
+         error stop 'build_direct_xi_from_operator_source: eigenpair shapes are incompatible'
+      end if
+      if (any(k_weights < 0.0_rp) .or. sum(k_weights) <= tiny(1.0_rp)) then
+         error stop 'build_direct_xi_from_operator_source: k weights must have a positive sum'
+      end if
+      if (options%eta <= 0.0_rp .or. options%electronic_temperature < 0.0_rp .or. &
+          options%occupation_prune_tolerance < 0.0_rp .or. options%transition_batch_size < 1) then
+         error stop 'build_direct_xi_from_operator_source: invalid response options'
+      end if
+   end subroutine validate_direct_xi_source_inputs
 
 end module tddft_xi_mod

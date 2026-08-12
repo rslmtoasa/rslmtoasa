@@ -1,4 +1,41 @@
 !------------------------------------------------------------------------------
+! GC-05 -- deterministic streamed pair-operator source used only by the Xi test.
+!------------------------------------------------------------------------------
+module tddft_direct_xi_test_support_mod
+   use precision_mod, only: rp
+   use tddft_transition_engine_mod, only: pair_operator_tile_source
+   implicit none
+
+   type, extends(pair_operator_tile_source), public :: mock_pair_operator_tile_source
+      complex(rp), pointer :: tiles(:, :, :, :) => null()
+      integer :: fetch_count = 0
+   contains
+      procedure :: channel_dimension => mock_pair_operator_channel_dimension
+      procedure :: fill_operator_tile => fill_mock_pair_operator_tile
+   end type mock_pair_operator_tile_source
+
+contains
+
+   integer function mock_pair_operator_channel_dimension(this) result(nright)
+      class(mock_pair_operator_tile_source), intent(in) :: this
+      if (.not. associated(this%tiles)) error stop 'mock pair operator source is not configured'
+      nright = size(this%tiles, 3)
+   end function mock_pair_operator_channel_dimension
+
+   subroutine fill_mock_pair_operator_tile(this, ik, operator_tile)
+      class(mock_pair_operator_tile_source), intent(inout) :: this
+      integer, intent(in) :: ik
+      complex(rp), intent(out) :: operator_tile(:, :, :)
+      if (.not. associated(this%tiles) .or. ik < 1 .or. ik > size(this%tiles, 4) .or. &
+          any(shape(operator_tile) /= shape(this%tiles(:,:,:,ik)))) then
+         error stop 'mock pair operator source tile shape is incompatible'
+      end if
+      operator_tile = this%tiles(:, :, :, ik)
+      this%fetch_count = this%fetch_count + 1
+   end subroutine fill_mock_pair_operator_tile
+end module tddft_direct_xi_test_support_mod
+
+!------------------------------------------------------------------------------
 ! WR-01 -- generic weighted vertices and direct Xi assembly
 !------------------------------------------------------------------------------
 program test_tddft_direct_xi
@@ -8,7 +45,10 @@ program test_tddft_direct_xi
       weighted_transition_vectors
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
    use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_eigenpairs, &
-      build_direct_xi_from_k_dependent_eigenpairs, build_static_direct_xi_from_k_dependent_eigenpairs
+      build_direct_xi_from_k_dependent_eigenpairs, build_static_direct_xi_from_k_dependent_eigenpairs, &
+      build_direct_xi_from_operator_source, build_static_direct_xi_from_operator_source
+   use tddft_transition_engine_mod, only: constant_pair_operator_tile_source, make_constant_pair_operator_tile_source
+   use tddft_direct_xi_test_support_mod, only: mock_pair_operator_tile_source
    implicit none
 
    real(rp), parameter :: tol = 1024.0_rp*epsilon(1.0_rp)
@@ -20,6 +60,7 @@ program test_tddft_direct_xi
    call test_unequal_orbital_oracle()
    call test_batched_complex_q_and_metadata()
    call test_k_resolved_pair_operator_retention()
+   call test_streamed_pair_operator_source()
    call test_static_two_orbital_ward_identity()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
@@ -193,6 +234,62 @@ contains
       call check_true('k-resolved direct Xi records its eigenpair provenance', &
          trim(k_resolved_xi%metadata%backend) == 'direct_xi_k_resolved_eigenpairs')
    end subroutine test_k_resolved_pair_operator_retention
+
+   subroutine test_streamed_pair_operator_source()
+      type(response_channel) :: left(1)
+      type(tddft_chi0_options) :: scalar_options, batched_options
+      type(tddft_direct_xi_result) :: legacy, streamed, scalar_streamed, static_legacy, static_streamed, &
+         constant_legacy, constant_streamed
+      type(mock_pair_operator_tile_source), target :: source
+      type(constant_pair_operator_tile_source), target :: constant_source
+      real(rp) :: weights(2), eval(2, 2), evalq(2, 2), omega(2)
+      complex(rp), target :: evec(2, 2, 2), evecq(2, 2, 2), operators_k(2, 2, 1, 2), operators(2, 2, 1)
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      weights = [1.0_rp, 3.0_rp]; omega = [0.03_rp, 0.09_rp]
+      call build_complex_q_fixture(eval, evalq, evec, evecq)
+      operators_k(:, :, 1, 1) = reshape([cmplx(0.13_rp, -0.04_rp, rp), cmplx(-0.31_rp, 0.17_rp, rp), &
+         cmplx(0.22_rp, 0.35_rp, rp), cmplx(-0.07_rp, 0.11_rp, rp)], [2, 2])
+      operators_k(:, :, 1, 2) = reshape([cmplx(-0.18_rp, 0.09_rp, rp), cmplx(0.27_rp, 0.06_rp, rp), &
+         cmplx(0.04_rp, -0.29_rp, rp), cmplx(0.16_rp, 0.21_rp, rp)], [2, 2])
+      batched_options%eta = 0.007_rp; batched_options%fermi_level = 0.015_rp
+      batched_options%electronic_temperature = 850.0_rp; batched_options%band_first = 1; batched_options%band_last = 2
+      batched_options%use_batched_accumulation = .true.; batched_options%transition_batch_size = 3
+      scalar_options = batched_options; scalar_options%use_batched_accumulation = .false.
+
+      call build_direct_xi_from_k_dependent_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, operators_k, omega, &
+         batched_options, legacy)
+      source%tiles => operators_k; source%fetch_count = 0
+      call build_direct_xi_from_operator_source(weights, eval, evec, evalq, evecq, [1], left, source, omega, &
+         batched_options, streamed)
+      call check_true('streaming source fetches exactly once per dynamic k point despite partial transition tiles', &
+         source%fetch_count == size(weights))
+      call check_complex_vector('streamed dynamic Xi equals k-resolved tensor oracle', streamed%xi(1,1,:), legacy%xi(1,1,:))
+      call check_true('streamed dynamic Xi records source provenance', trim(streamed%metadata%backend) == 'direct_xi_operator_source')
+
+      source%fetch_count = 0
+      call build_direct_xi_from_operator_source(weights, eval, evec, evalq, evecq, [1], left, source, omega, &
+         scalar_options, scalar_streamed)
+      call check_true('streaming source fetches once per k in scalar Xi accumulation', source%fetch_count == size(weights))
+      call check_complex_vector('streamed scalar and GEMM Xi agree', scalar_streamed%xi(1,1,:), streamed%xi(1,1,:))
+
+      source%fetch_count = 0
+      call build_static_direct_xi_from_k_dependent_eigenpairs(weights, eval, evec, [1], left, operators_k, batched_options, &
+         static_legacy)
+      call build_static_direct_xi_from_operator_source(weights, eval, evec, [1], left, source, batched_options, static_streamed)
+      call check_true('streaming source fetches exactly once per static k point despite partial transition tiles', &
+         source%fetch_count == size(weights))
+      call check_complex('streamed static Xi equals k-resolved tensor oracle', static_streamed%xi(1,1,1), static_legacy%xi(1,1,1))
+
+      operators = operators_k(:, :, :, 1)
+      call build_direct_xi_from_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, operators, omega, batched_options, &
+         constant_legacy)
+      call make_constant_pair_operator_tile_source(constant_source, operators)
+      call build_direct_xi_from_operator_source(weights, eval, evec, evalq, evecq, [1], left, constant_source, omega, &
+         batched_options, constant_streamed)
+      call check_complex_vector('constant tile source equals constant direct-Xi oracle', constant_streamed%xi(1,1,:), &
+         constant_legacy%xi(1,1,:))
+   end subroutine test_streamed_pair_operator_source
 
    subroutine build_complex_q_fixture(eval, evalq, evec, evecq)
       real(rp), intent(out) :: eval(:, :), evalq(:, :)
