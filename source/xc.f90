@@ -1586,6 +1586,8 @@ contains
       exc_libxc = 0.0d0
       vrho_libxc = 0.0d0
       vsigma_libxc = 0.0d0
+      ! LDA combinations must not enter the GGA potential branch.
+      any_gga = .false.
       
    ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
    ! Track whether any functional is a GGA so we can correctly apply gradient contributions

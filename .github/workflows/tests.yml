@@ -556,3 +556,42 @@ jobs:
             --output-on-failure \
             --parallel 1 \
             -V
+
+  # ---------------------------------------------------------------------------
+  # libXC: opt-in functional equivalence contract.  This stays separate from
+  # the normal CPU matrix so libXC is not required for developer builds.
+  # ---------------------------------------------------------------------------
+  libxc_unit:
+    name: libXC XC equivalence (Ubuntu)
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || ((github.event_name != 'pull_request' && github.event_name != 'schedule') && github.event.workflow_run.head_sha || '') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build cmake gfortran libopenblas-dev liblapack-dev libxc-dev
+
+      - name: Configure libXC unit build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_MPI=OFF \
+            -DENABLE_LIBXC=ON \
+            -DRUN_UNIT_TESTS=ON
+
+      - name: Build standalone unit tests
+        run: cmake --build build --target unit_tests --parallel
+
+      - name: Run libXC equivalence test
+        run: ctest --test-dir build -L libxc --output-on-failure -V
