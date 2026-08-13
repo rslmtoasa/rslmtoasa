@@ -1,5 +1,5 @@
 {
-  "_description": "Regression backend matrix. Optional manifest defaults are recursively merged into each case's 'namelists' before patching the base input.nml. References were generated from the trusted pre-refactor build.",
+  "_description": "Regression backend matrix. Optional manifest defaults are recursively merged into each case's 'namelists' before patching the base input.nml. Backend-only Chebyshev rows use the shared diamond-Si sp fixture; magnetic and composition-specific rows remain on Fe.",
   "defaults": {
     "namelists": {
       "lattice": { "strux_backend": "strux_lib" }
@@ -7,56 +7,66 @@
   },
   "cases": [
     {
-      "name": "bccFe_chebyshev_fast",
-      "base": "bccFe_chebyshev",
-      "labels": ["validation"],
+      "name": "diamondSi_sp_chebyshev_fast",
+      "base": "../scf/cases/bulk/diamondSi",
+      "output_file": "Si1_out.nml",
+      "labels": ["validation", "functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
       "timeout": 300,
       "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
+        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "fast", "lld": 200 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
     },
     {
-      "name": "bccFe_chebyshev_batched",
-      "base": "bccFe_chebyshev",
+      "name": "diamondSi_sp_chebyshev_batched",
+      "base": "../scf/cases/bulk/diamondSi",
+      "output_file": "Si1_out.nml",
+      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
       "timeout": 300,
       "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "batched", "lld": 30 },
+        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "batched", "lld": 200 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
     },
     {
-      "name": "bccFe_chebyshev_mkl_batch",
-      "base": "bccFe_chebyshev",
+      "name": "diamondSi_sp_chebyshev_mkl_batch",
+      "base": "../scf/cases/bulk/diamondSi",
+      "output_file": "Si1_out.nml",
+      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
       "timeout": 300,
       "requires_cmake_option": "ENABLE_MKL_KERNELS",
       "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 30 },
+        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 200 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
     },
     {
-      "name": "bccFe_chebyshev_mkl_sparse",
-      "base": "bccFe_chebyshev",
+      "name": "diamondSi_sp_chebyshev_mkl_sparse",
+      "base": "../scf/cases/bulk/diamondSi",
+      "output_file": "Si1_out.nml",
+      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
       "timeout": 300,
       "requires_cmake_option": "ENABLE_MKL_KERNELS",
       "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "mkl_sparse", "lld": 30 },
+        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "mkl_sparse", "lld": 200 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
     },
     {
-      "name": "bccFe_chebyshev_legacy",
-      "base": "bccFe_chebyshev",
+      "name": "diamondSi_sp_chebyshev_legacy",
+      "base": "../scf/cases/bulk/diamondSi",
+      "output_file": "Si1_out.nml",
+      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
       "timeout": 300,
       "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "legacy", "lld": 30 },
+        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "legacy", "lld": 200 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
     },
     {
       "name": "bccFe_chebyshev_fast_hoh",
       "base": "bccFe_chebyshev",
+      "labels": ["chebyshev", "basis_spd", "magnetic", "hoh"],
       "timeout": 300,
       "namelists": {
         "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
@@ -67,6 +77,7 @@
     {
       "name": "bccFe_chebyshev_legacy_hoh",
       "base": "bccFe_chebyshev",
+      "labels": ["chebyshev", "basis_spd", "magnetic", "hoh"],
       "timeout": 300,
       "namelists": {
         "control": { "recur": "chebyshev", "cheb_backend": "legacy", "lld": 50 },
@@ -77,6 +88,7 @@
     {
       "name": "bccFe_chebyshev_fast_ccor_2c",
       "base": "bccFe_chebyshev",
+      "labels": ["chebyshev", "basis_spd", "magnetic", "ccor"],
       "_note": "ccor_2c requires derivative structure constants; use the supported strux_lib fitted-screening/Sdot mode from example/bulk/bccFe/CCOR.",
       "timeout": 300,
       "namelists": {

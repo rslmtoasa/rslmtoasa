@@ -13,7 +13,7 @@
       "timeout": 300,
       "abs_tol": 1e-6,
       "rel_tol": 1e-6,
-      "_note": "TEST-06: deterministic nonmagnetic diamond-Si sp fixture. Explicit strux_lib, periodic 8x8x8 Bravais geometry, one SCF step, 200 Chebyshev moments. Measured at 5.25 s for the clean production run and 6.19 s through CTest in serial build-gc-debug on 2026-08-13; not a converged Si benchmark and intentionally not quick.",
+      "_note": "TEST-06/07: deterministic nonmagnetic diamond-Si sp fixture. Explicit strux_lib, periodic 12x12x12 Bravais geometry, one SCF step, 200 Chebyshev moments. The 12^3 replication is retained for a stable DOS shape and remains a lean backend fixture; runtime/reference provenance is recorded in the fixture README. This is not a converged Si benchmark and is intentionally not quick.",
       "namelists": {
         "lattice":    { "strux_backend": "strux_lib" },
         "control":    { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "fast", "lld": 200 },
@@ -120,24 +120,30 @@
       }
     },
     {
-      "name": "Example_bulk_bccFe_nsp2_chebyshev_mkl_batch",
-      "case": "bulk/bccFe",
+      "name": "Example_bulk_diamondSi_sp_chebyshev_mkl_batch",
+      "labels": ["functional", "scf", "rs", "chebyshev", "basis_sp", "nonmagnetic", "strux"],
+      "case": "bulk/diamondSi",
       "timeout": 600,
       "requires_cmake_option": "ENABLE_MKL_KERNELS",
-      "_note": "P3: exercises cheb_backend=mkl_batch in the example suite, not just the regression matrix",
+      "_note": "TEST-07: backend-only MKL batch coverage uses the canonical diamond-Si sp fixture; reference provenance is recorded in the fixture README.",
       "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 100 },
+        "control":     { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 200 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          { "file": "totaldos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] },
+          { "file": "Si1_dos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] }
         ]
-      }
+      },
+      "outputs": [
+        { "file": "totaldos.out", "min_lines": 100 },
+        { "file": "Si1_dos.out", "min_lines": 100 }
+      ]
     },
     {
       "name": "Example_bulk_bccFe_nsp2_lanczos_hoh",

@@ -95,10 +95,10 @@ def main() -> int:
     patch_input(workdir, case["namelists"])
     run_binary(binary, workdir)
 
-    output = workdir / "Fe_out.nml"
+    output = workdir / case.get("output_file", "Fe_out.nml")
     if not output.exists():
         print((workdir / "testrun.log").read_text()[-3000:])
-        raise SystemExit(f"ERROR [{case['name']}]: Fe_out.nml was not produced")
+        raise SystemExit(f"ERROR [{case['name']}]: {output.name} was not produced")
 
     ref_dir = Path(args.references).resolve()
     ref_path = ref_dir / f"{case['name']}.nml"

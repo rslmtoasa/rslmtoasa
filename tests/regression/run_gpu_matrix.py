@@ -75,7 +75,8 @@ def run_variant(binary: Path, tests_dir: Path, case: dict, workdir: Path, gpu: b
     if result.returncode != 0:
         raise RuntimeError(f"binary exited {result.returncode}; see {workdir / 'testrun.log'}")
 
-    out = f90nml.read(str(workdir / "Fe_out.nml"))["par"]
+    output_file = case.get("output_file", "Fe_out.nml")
+    out = f90nml.read(str(workdir / output_file))["par"]
     return {"etot": float(out["etot"]), "ws_r": float(out["ws_r"]), "vmad": float(out.get("vmad", 0.0))}
 
 

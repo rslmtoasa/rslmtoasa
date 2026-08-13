@@ -1,5 +1,5 @@
 {
-  "name": "Example_bulk_diamondSi_sp_chebyshev",
+  "name": "Example_bulk_diamondSi_sp_chebyshev_mkl_batch",
   "labels": [
     "functional",
     "scf",
@@ -10,10 +10,9 @@
     "strux"
   ],
   "case": "bulk/diamondSi",
-  "timeout": 300,
-  "abs_tol": 1e-06,
-  "rel_tol": 1e-06,
-  "_note": "TEST-06/07: deterministic nonmagnetic diamond-Si sp fixture. Explicit strux_lib, periodic 12x12x12 Bravais geometry, one SCF step, 200 Chebyshev moments. The 12^3 replication is retained for a stable DOS shape and remains a lean backend fixture; runtime/reference provenance is recorded in the fixture README. This is not a converged Si benchmark and is intentionally not quick.",
+  "timeout": 600,
+  "requires_cmake_option": "ENABLE_MKL_KERNELS",
+  "_note": "TEST-07: backend-only MKL batch coverage uses the canonical diamond-Si sp fixture; reference provenance is recorded in the fixture README.",
   "namelists": {
     "lattice": {
       "strux_backend": "strux_lib"
@@ -22,7 +21,7 @@
       "nsp": 1,
       "lmax": 1,
       "recur": "chebyshev",
-      "cheb_backend": "fast",
+      "cheb_backend": "mkl_batch",
       "lld": 200
     },
     "self": {
@@ -72,14 +71,6 @@
           1,
           2
         ]
-      }
-    ],
-    "log": [
-      {
-        "file": "testrun.log",
-        "patterns": {
-          "fermi_level": "Free Fermi energy:\\s*([-+0-9.EeDd]+)"
-        }
       }
     ]
   },
