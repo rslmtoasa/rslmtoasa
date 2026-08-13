@@ -55,20 +55,23 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
 - **Validation:** GNU 14.2.0 / oneMKL Release passes the case with 19 checked
   values and logs `run_dos: use_kspace=.true.`.
 
-## K-space tetrahedron DOS value integral differs from its cumulative state count
+## [RESOLVED 2026-08-14, STAB-03] K-space tetrahedron DOS value integral differed from its cumulative state count
 
-- **Symptom, verified 2026-08-12 on the repaired bcc-Fe k-space fixture:**
-  over the widened `[-2,2] Ry` DOS window, the tetrahedron diagnostic reports
-  `N(Emax)-N(Emin)=18.000000`, matching the 18 bands, but the independently
-  trapezoid-integrated `total_dos` reports `13.507092`. Its DOS-occupied-count
-  diagnostic is also `5.83712648` instead of the canonical 8 electrons.
-- **Scope:** the canonical occupation route is internally conserved
-  (`N=8.00000000`, residual `-2.89e-11`) and is the SCF source of truth.
-  This discrepancy is confined to the sampled tetrahedron-DOS diagnostic.
-- **Test impact:** RF-01 now pins both the cumulative state count and the raw
-  DOS integral, so later reciprocal batching/backends cannot silently alter
-  either. Resolving their disagreement is a separate DOS-method correctness
-  task, not a baseline characterization change.
+- **Symptom:** on the repaired bcc-Fe k-space fixture, the cumulative
+  tetrahedron count reported all 18 states over `[-2,2] Ry`, while the sampled
+  DOS integral omitted several states. The Si/sp reproducer likewise exposed
+  the mismatch when flat band--tetrahedron combinations were present.
+- **Root cause:** the cumulative tetrahedron path correctly represented a
+  constant band on a tetrahedron as a unit step, but the DOS path skipped every
+  contribution whose energy denominators were degenerate. Each such contribution
+  is a delta-function DOS, not zero DOS.
+- **Fix:** the producing tetrahedron DOS and projected-DOS paths now place a
+  grid delta with the exact trapezoidal mass of the tetrahedron weight for a
+  flat/within-grid-resolution band. No final-DOS scaling factor is applied.
+- **Validation:** the 4x4x4 Si/sp test has 16 represented states, raw k-weight
+  sum 1, canonical count 8, cumulative count 16, DOS integral 15.998235 on its
+  2001-point grid, and `N(E_F)=8.000000`. The residual difference from 16 is
+  ordinary finite-grid quadrature of the regular (non-singular) pieces.
 
 ## [RESOLVED 2026-08-13, STAB-02] `recur = 'lanczos'` + `nsp = 2` produced non-finite DOS and `lmom`
 

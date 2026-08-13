@@ -855,6 +855,19 @@ contains
 
       de = (emax - emin) / real(npts - 1, rp)
       if (de <= 0.0_rp) return
+      ! A band that is constant over a tetrahedron has a delta-function DOS,
+      ! while its cumulative contribution is a unit step.  Preserve that
+      ! state on the sampled DOS grid instead of dropping it when every
+      ! piecewise denominator is degenerate.
+      if (e4 - e1 <= max(1.0e-10_rp, 1.0e-6_rp*de)) then
+         i = max(1, min(npts, 2 + int((0.5_rp*(e1 + e4) - emin) / de - 1.0e-12_rp)))
+         if (i == 1 .or. i == npts) then
+            dos(i) = dos(i) + 2.0_rp*volwgt/de
+         else
+            dos(i) = dos(i) + volwgt/de
+         end if
+         return
+      end if
       ! See tetra_add_nos for the justification: a segment narrower than the grid
       ! resolution is treated as degenerate (its own boundary-value limit is zero),
       ! rather than letting grid-index rounding evaluate the polynomial out of range.

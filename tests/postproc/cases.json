@@ -125,7 +125,7 @@
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
-      "_note": "Minimal 2x2x2 reciprocal Gaussian DOS reproducer. The test pins the actual dos_kspace.dat rows and the finite-window DOS-integral/cumulative-state diagnostics, including their known discrepancy from the canonical 18-state/8-electron counts.",
+      "_note": "Minimal 2x2x2 reciprocal Gaussian DOS fixture. The test pins the actual dos_kspace.dat rows and finite-window DOS diagnostics; its Gaussian broadening/window convention is distinct from the tetrahedron state-count contract.",
       "namelists": {
         "self": { "nstep": 1 },
         "reciprocal": {

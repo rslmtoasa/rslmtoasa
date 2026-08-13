@@ -341,6 +341,7 @@ end subroutine project_dos_orbitals_gaussian
       integer, dimension(:), allocatable :: site_orb_offset
       real(rp) :: mx_char_avg, my_char_avg, mz_char_avg, local_char
       real(rp) :: axis(3)
+      logical :: degenerate_tetra
       real(rp), allocatable :: site_axes(:, :)
       real(rp), allocatable :: dos_line(:)
       real(rp), allocatable :: local_projected_dos(:, :, :, :)
@@ -423,7 +424,7 @@ end subroutine project_dos_orbitals_gaussian
       !$OMP         i_energy, energy, dos_contrib, x, C, tet_weight, isite, site_orb_start, axis, iorb, &
       !$OMP         orbital_char_avg, mx_char_avg, my_char_avg, mz_char_avg, orbital_char, orbital_chars, &
       !$OMP         mx_chars, my_chars, mz_chars, local_char, dos_line, local_projected_dos, &
-      !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz)
+      !$OMP         local_projected_dos_moments, local_dos_mx, local_dos_my, local_dos_mz, degenerate_tetra)
       allocate(dos_line(this%n_energy_points))
       allocate(local_projected_dos(this%n_sites, this%n_orb_types, this%n_spin_components, this%n_energy_points))
       allocate(local_projected_dos_moments(this%n_sites, this%n_orb_types, this%n_spin_components, 3, this%n_energy_points))
@@ -449,46 +450,57 @@ end subroutine project_dos_orbitals_gaussian
             e3 = sorted_e(3)
             e4 = sorted_e(4)
             if (e4 <= this%dos_energy_grid(1) .or. e1 >= this%dos_energy_grid(this%n_energy_points)) cycle
-            if (abs(e2 - e1) < TOL .or. abs(e3 - e1) < TOL .or. abs(e4 - e1) < TOL .or. &
-                abs(e3 - e2) < TOL .or. abs(e4 - e2) < TOL .or. abs(e4 - e3) < TOL) cycle
-
-            i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
-            i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
             tet_weight = this%tetrahedron_volumes(i_tet)
 
             dos_line = 0.0_rp
-            do i_energy = i_start, i_end
-               energy = this%dos_energy_grid(i_energy)
-               if (trim(this%dos_method) == 'blochl') then
-                  if (energy <= e1 .or. energy >= e4) cycle
-                  if (energy <= e2) then
-                     dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
-                  else if (energy <= e3) then
-                     C = 1.0_rp / ((e4 - e1) * (e3 - e1))
-                     dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
-                                    3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
-                                    ((e3 - e2) * (e4 - e2)))
-                  else
-                     dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
-                  end if
+            degenerate_tetra = e4 - e1 <= max(TOL, 1.0e-6_rp*de)
+            if (degenerate_tetra) then
+               i_start = max(1, min(this%n_energy_points, 2 + int((0.5_rp*(e1 + e4) - &
+                  this%dos_energy_grid(1)) / de - 1.0e-12_rp)))
+               i_end = i_start
+               if (i_start == 1 .or. i_start == this%n_energy_points) then
+                  dos_line(i_start) = 2.0_rp*tet_weight/de
                else
-                  if (energy < e1 .or. energy >= e4) cycle
-                  if (energy < e2) then
-                     x = energy - e1
-                     dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
-                  else if (energy < e3) then
-                     x = energy - e2
-                     dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
-                                 x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
-                                 x * (3.0_rp * (e1 + e2 - e3 - e4) / &
-                                 ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
-                  else
-                     x = energy - e4
-                     dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
-                  end if
+                  dos_line(i_start) = tet_weight/de
                end if
-               dos_line(i_energy) = dos_contrib * tet_weight
-            end do
+            else
+               if (abs(e2 - e1) < TOL .or. abs(e3 - e1) < TOL .or. abs(e4 - e1) < TOL .or. &
+                   abs(e3 - e2) < TOL .or. abs(e4 - e2) < TOL .or. abs(e4 - e3) < TOL) cycle
+               i_start = max(1, int(floor((e1 - this%dos_energy_grid(1)) / de)) + 1)
+               i_end = min(this%n_energy_points, int(ceiling((e4 - this%dos_energy_grid(1)) / de)) + 1)
+               do i_energy = i_start, i_end
+                  energy = this%dos_energy_grid(i_energy)
+                  if (trim(this%dos_method) == 'blochl') then
+                     if (energy <= e1 .or. energy >= e4) cycle
+                     if (energy <= e2) then
+                        dos_contrib = 3.0_rp * (energy - e1)**2 / ((e4 - e1) * (e3 - e1) * (e2 - e1))
+                     else if (energy <= e3) then
+                        C = 1.0_rp / ((e4 - e1) * (e3 - e1))
+                        dos_contrib = C * (3.0_rp * (e2 - e1) + 6.0_rp * (energy - e2) - &
+                                       3.0_rp * (e3 + e4 - e1 - e2) * (energy - e2)**2 / &
+                                       ((e3 - e2) * (e4 - e2)))
+                     else
+                        dos_contrib = 3.0_rp * (e4 - energy)**2 / ((e4 - e1) * (e4 - e2) * (e4 - e3))
+                     end if
+                  else
+                     if (energy < e1 .or. energy >= e4) cycle
+                     if (energy < e2) then
+                        x = energy - e1
+                        dos_contrib = 3.0_rp * x * x / ((e2 - e1) * (e3 - e1) * (e4 - e1))
+                     else if (energy < e3) then
+                        x = energy - e2
+                        dos_contrib = 3.0_rp * (e2 - e1) / ((e3 - e1) * (e4 - e1)) + &
+                                    x * (6.0_rp / ((e3 - e1) * (e4 - e1)) + &
+                                    x * (3.0_rp * (e1 + e2 - e3 - e4) / &
+                                    ((e3 - e1) * (e4 - e1) * (e3 - e2) * (e4 - e2))))
+                     else
+                        x = energy - e4
+                        dos_contrib = 3.0_rp * x * x / ((e4 - e3) * (e4 - e2) * (e4 - e1))
+                     end if
+                  end if
+                  dos_line(i_energy) = dos_contrib * tet_weight
+               end do
+            end if
 
             do isite = 1, this%n_sites
                site_orb_start = site_orb_offset(isite)

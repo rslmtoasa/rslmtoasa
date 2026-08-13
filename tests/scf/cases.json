@@ -711,6 +711,81 @@
       ]
     },
     {
+      "name": "Example_k_space_scf_diamondSi_sp_tetrahedron",
+      "quick": true,
+      "labels": ["functional", "scf", "kspace", "dos", "tetrahedron", "basis_sp", "nonmagnetic", "strux"],
+      "case": "bulk/diamondSi",
+      "timeout": 300,
+      "launch_modes": ["serial", "mpi"],
+      "mpi_procs": 2,
+      "mpi_rank_counts": [2],
+      "_note": "STAB-03: full 4x4x4 reciprocal Si/sp mesh with linear tetrahedron DOS. The explicit state-count and occupied-count assertions cover the singular flat-tetrahedron contributions as well as finite sampled DOS output.",
+      "namelists": {
+        "lattice": { "strux_backend": "strux_lib" },
+        "self": { "nstep": 1, "use_kspace": true },
+        "reciprocal": {
+          "nk1": 4,
+          "nk2": 4,
+          "nk3": 4,
+          "use_symmetry_reduction": false,
+          "use_time_reversal": true,
+          "use_shift": false,
+          "n_energy_points": 2001,
+          "dos_method": "tetrahedron",
+          "gaussian_sigma": 0.01
+        },
+        "energy": { "channels_ldos": 2001, "energy_min": -1.5, "energy_max": 1.0 },
+        "control": { "nsp": 1, "lmax": 1, "recur": "block", "lld": 12 },
+        "hamiltonian": { "hoh": false }
+      },
+      "checks": {
+        "nml": [
+          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] },
+          { "file": "Si2_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [100, 1000, 1900], "cols": [1, 2] }
+        ],
+        "finite": [
+          { "file": "totaldos.out", "cols": [1, 2] }
+        ],
+        "assertions": [
+          { "file": "testrun.log", "pattern": "Canonical k-space occupations:.*?N=\\s*([-+0-9.EeDd]+)", "value": 8.0, "abs_tol": 1.0e-10 },
+          { "file": "testrun.log", "pattern": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)", "value": 1.0, "abs_tol": 1.0e-10 },
+          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 0.05 },
+          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: DOS integral =.*?N\\(Emax\\)-N\\(Emin\\) =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 1.0e-10 },
+          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: DOS integral =.*?expected states =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 1.0e-10 },
+          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)", "value": 8.0, "abs_tol": 0.02 },
+          { "file": "testrun.log", "pattern": "k-space energy cross-checks:.*?DOS N=\\s*([-+0-9.EeDd]+)", "value": 8.0, "abs_tol": 0.02 },
+          { "file": "testrun.log", "pattern": "k-space energy cross-checks:.*?deltaN=\\s*([-+0-9.EeDd]+)", "value": 0.0, "abs_tol": 0.02 }
+        ],
+        "log": [
+          {
+            "file": "testrun.log",
+            "patterns": {
+              "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
+              "canonical_electron_count": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
+              "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+              "k_weight_sum": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
+              "dos_integral": "calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
+              "dos_state_count": "calculate_dos_tetrahedron: DOS integral =.*?N\\(Emax\\)-N\\(Emin\\) =\\s*([-+0-9.EeDd]+)",
+              "represented_band_count": "calculate_dos_tetrahedron: DOS integral =.*?expected states =\\s*([-+0-9.EeDd]+)",
+              "dos_occupied_count": "calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
+              "dos_electron_count": "k-space energy cross-checks:.*?DOS N=\\s*([-+0-9.EeDd]+)",
+              "dos_electron_residual": "k-space energy cross-checks:.*?deltaN=\\s*([-+0-9.EeDd]+)"
+            }
+          }
+        ]
+      },
+      "outputs": [
+        { "file": "totaldos.out", "min_lines": 2001 },
+        { "file": "magneticdos.out", "min_lines": 2002 },
+        { "file": "report.out", "min_lines": 10 },
+        { "file": "minfo.out", "min_lines": 1 },
+        { "file": "linfo.out", "min_lines": 1 }
+      ]
+    },
+    {
       "name": "Example_k_space_scf_bccFe_spd_magnetic",
       "quick": true,
       "labels": ["functional", "scf", "kspace", "basis_spd", "magnetic", "strux", "mpi"],

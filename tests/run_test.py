@@ -31,6 +31,12 @@ Reference data is driven by a "checks" dict in cases.json:
     "dimensions": [
       { "file": "band_structure.dat", "data_rows": 201, "data_columns": 19 }
     ],
+    "finite": [
+      { "file": "totaldos.out", "cols": [1, 2] }
+    ],
+    "assertions": [
+      { "file": "testrun.log", "pattern": "N\\(Emax\\)-N\\(Emin\\) =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 1e-6 }
+    ],
     "log": [
       {
         "file": "testrun.log",
@@ -201,6 +207,71 @@ def check_text_dimensions(workdir: str, case_name: str, dimension_checks: list[d
             print(
                 f"ERROR [{case_name}]: '{filename}' line {line_number} has "
                 f"{actual_columns} data columns (expected {expected_columns})"
+            )
+            sys.exit(1)
+
+
+def check_text_finite(workdir: str, case_name: str, finite_checks: list[dict]) -> None:
+    """Require selected numeric columns in text outputs to remain finite."""
+    for finite_check in finite_checks:
+        filename = finite_check["file"]
+        filepath = os.path.join(workdir, filename)
+        requested_cols = finite_check.get("cols")
+        with open(filepath) as fh:
+            for line_number, line in enumerate(fh, start=1):
+                fields = line.split("#", 1)[0].split()
+                if not fields:
+                    continue
+                columns = requested_cols or list(range(1, len(fields) + 1))
+                for column in columns:
+                    if column < 1 or column > len(fields):
+                        print(
+                            f"ERROR [{case_name}]: '{filename}' line {line_number} "
+                            f"has no requested column {column}"
+                        )
+                        sys.exit(1)
+                    try:
+                        value = float(fields[column - 1].replace("D", "E").replace("d", "e"))
+                    except ValueError:
+                        print(
+                            f"ERROR [{case_name}]: '{filename}' line {line_number} "
+                            f"column {column} is not numeric"
+                        )
+                        sys.exit(1)
+                    if not math.isfinite(value):
+                        print(
+                            f"ERROR [{case_name}]: '{filename}' line {line_number} "
+                            f"column {column} is non-finite ({fields[column - 1]!r})"
+                        )
+                        sys.exit(1)
+
+
+def check_log_assertions(workdir: str, case_name: str, assertions: list[dict]) -> None:
+    """Check explicit numerical invariants captured from a log file."""
+    contents: dict[str, str] = {}
+    for assertion in assertions:
+        filename = assertion["file"]
+        if filename not in contents:
+            with open(os.path.join(workdir, filename)) as fh:
+                contents[filename] = fh.read()
+        match = re.search(assertion["pattern"], contents[filename])
+        if match is None:
+            print(
+                f"ERROR [{case_name}]: log assertion pattern did not match "
+                f"{filename}: {assertion['pattern']}"
+            )
+            sys.exit(1)
+        try:
+            actual = float(match.group(1).replace("D", "E").replace("d", "e"))
+        except ValueError:
+            print(f"ERROR [{case_name}]: log assertion value is not numeric in {filename}")
+            sys.exit(1)
+        expected = float(assertion["value"])
+        tolerance = float(assertion.get("abs_tol", 0.0))
+        if not math.isfinite(actual) or abs(actual - expected) > tolerance:
+            print(
+                f"ERROR [{case_name}]: {filename} invariant failed: "
+                f"actual={actual!r}, expected={expected!r}, tolerance={tolerance!r}"
             )
             sys.exit(1)
 
@@ -482,6 +553,8 @@ def main() -> None:
     check_log(workdir, args.case_name)
     check_output_files(workdir, args.case_name, case.get("outputs", []))
     check_text_dimensions(workdir, args.case_name, case.get("checks", {}).get("dimensions", []))
+    check_text_finite(workdir, args.case_name, case.get("checks", {}).get("finite", []))
+    check_log_assertions(workdir, args.case_name, case.get("checks", {}).get("assertions", []))
 
     if args.compare_ref:
         abs_tol = case.get("abs_tol", args.abs_tol)
