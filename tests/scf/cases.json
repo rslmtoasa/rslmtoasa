@@ -7,6 +7,37 @@
   },
   "cases": [
     {
+      "name": "Example_bulk_diamondSi_sp_chebyshev",
+      "labels": ["functional", "scf", "rs", "chebyshev", "basis_sp", "nonmagnetic", "strux"],
+      "case": "bulk/diamondSi",
+      "timeout": 300,
+      "abs_tol": 1e-6,
+      "rel_tol": 1e-6,
+      "_note": "TEST-06: deterministic nonmagnetic diamond-Si sp fixture. Explicit strux_lib, periodic 8x8x8 Bravais geometry, one SCF step, 200 Chebyshev moments. Measured at 5.25 s for the clean production run and 6.19 s through CTest in serial build-gc-debug on 2026-08-13; not a converged Si benchmark and intentionally not quick.",
+      "namelists": {
+        "lattice":    { "strux_backend": "strux_lib" },
+        "control":    { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "fast", "lld": 200 },
+        "self":       { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      },
+      "checks": {
+        "nml": [
+          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] },
+          { "file": "Si1_dos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] }
+        ],
+        "log": [
+          { "file": "testrun.log", "patterns": { "fermi_level": "Free Fermi energy:\\s*([-+0-9.EeDd]+)" } }
+        ]
+      },
+      "outputs": [
+        { "file": "totaldos.out", "min_lines": 100 },
+        { "file": "Si1_dos.out", "min_lines": 100 }
+      ]
+    },
+    {
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
       "quick": true,
       "labels": ["functional", "rs", "magnetic", "basis_spd", "hoh"],

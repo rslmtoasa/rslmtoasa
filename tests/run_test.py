@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import math
 import os
 import re
 import shutil
@@ -265,6 +266,12 @@ def _check_value(
 ) -> None:
     if run_v is None:
         failures.append(f"  {label}: missing in run output")
+        return
+    if not math.isfinite(run_v):
+        failures.append(f"  {label}: non-finite run value ({run_v!r})")
+        return
+    if not math.isfinite(ref_v):
+        failures.append(f"  {label}: non-finite reference value ({ref_v!r})")
         return
     abs_diff = abs(run_v - ref_v)
     scale = max(abs(ref_v), 1.0)
