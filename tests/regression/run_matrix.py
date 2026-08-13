@@ -11,13 +11,16 @@ from pathlib import Path
 
 import f90nml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manifest_defaults import apply_manifest_defaults
+
 
 def load_case(cases_json: Path, case_name: str) -> dict:
     with cases_json.open() as fh:
         data = json.load(fh)
     for case in data["cases"]:
         if case["name"] == case_name:
-            return case
+            return apply_manifest_defaults(data, case)
     raise KeyError(f"case {case_name!r} not found in {cases_json}")
 
 

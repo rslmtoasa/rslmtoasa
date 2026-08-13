@@ -30,11 +30,15 @@ from pathlib import Path
 
 import f90nml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manifest_defaults import apply_manifest_defaults
+
 
 def load_chebyshev_cases(cases_json: Path) -> list[dict]:
     with cases_json.open() as fh:
         data = json.load(fh)
-    return [c for c in data["cases"] if c["namelists"]["control"].get("recur") == "chebyshev"]
+    cases = [apply_manifest_defaults(data, c) for c in data["cases"]]
+    return [c for c in cases if c["namelists"]["control"].get("recur") == "chebyshev"]
 
 
 def cmake_option_enabled(binary: Path, option: str) -> bool:

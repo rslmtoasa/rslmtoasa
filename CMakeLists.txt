@@ -645,6 +645,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp6Matrix
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_matrix.py)
   set_tests_properties(UnitGbtWp6Matrix PROPERTIES LABELS "unit;gbt;wp6;matrix")
+  add_test(NAME UnitManifestDefaults
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_manifest_defaults.py)
+  set_tests_properties(UnitManifestDefaults PROPERTIES LABELS "unit;manifest")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE

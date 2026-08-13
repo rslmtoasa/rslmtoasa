@@ -55,6 +55,8 @@ import sys
 
 import f90nml
 
+from manifest_defaults import apply_manifest_defaults
+
 
 # DOS text files are written by the Fortran code with five digits after the
 # decimal point (for example, ``(2f16.5)``). Their references therefore carry
@@ -73,7 +75,7 @@ def load_case(cases_json: str, case_name: str) -> dict:
         data = json.load(fh)
     for case in data["cases"]:
         if case["name"] == case_name:
-            return case
+            return apply_manifest_defaults(data, case)
     raise KeyError(f"Case '{case_name}' not found in {cases_json}")
 
 

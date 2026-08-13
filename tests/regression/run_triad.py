@@ -31,6 +31,9 @@ from pathlib import Path
 
 import f90nml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manifest_defaults import apply_manifest_defaults
+
 ROUTE_PATCH = {
     "recursion": {"calculation": {"gf_route": "recursion"}},
     "lehmann": {"calculation": {"gf_route": "lehmann"}, "reciprocal": {"green_backend": "lehmann"}},
@@ -44,7 +47,7 @@ def load_case(cases_json: Path, case_name: str) -> dict:
     data = json.loads(cases_json.read_text())
     for case in data["cases"]:
         if case["name"] == case_name:
-            return case
+            return apply_manifest_defaults(data, case)
     raise KeyError(f"case {case_name!r} not found in {cases_json}")
 
 
