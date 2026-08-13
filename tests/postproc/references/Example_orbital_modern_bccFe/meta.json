@@ -4,6 +4,10 @@
   "timeout": 300,
   "_note": "rc shrunk to 20 (from the usual 80) - chebyshev_orbital_mod loops over every cluster atom, so cluster size dominates runtime",
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "rc": 20
+    },
     "control": {
       "nsp": 2,
       "recur": "block",
@@ -11,9 +15,6 @@
     },
     "self": {
       "nstep": 1
-    },
-    "lattice": {
-      "rc": 20
     },
     "energy": {
       "channels_ldos": 200

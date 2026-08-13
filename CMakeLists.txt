@@ -358,6 +358,24 @@ function(read_manifest_case_labels MANIFEST_JSON CASE_INDEX OUT_VAR)
   set(${OUT_VAR} "${_labels}" PARENT_SCOPE)
 endfunction()
 
+# Resolve the effective structure-constant backend for one manifest case.  The
+# case-local value wins over the optional manifest default; absent values retain
+# the production default (legacy) and are labelled accordingly.
+function(read_manifest_case_strux_backend MANIFEST_JSON CASE_INDEX OUT_VAR)
+  set(_backend "legacy")
+  string(JSON _default_backend ERROR_VARIABLE _default_error GET
+    "${MANIFEST_JSON}" "defaults" "namelists" "lattice" "strux_backend")
+  if (NOT _default_error)
+    set(_backend "${_default_backend}")
+  endif()
+  string(JSON _case_backend ERROR_VARIABLE _case_error GET
+    "${MANIFEST_JSON}" "cases" ${CASE_INDEX} "namelists" "lattice" "strux_backend")
+  if (NOT _case_error)
+    set(_backend "${_case_backend}")
+  endif()
+  set(${OUT_VAR} "${_backend}" PARENT_SCOPE)
+endfunction()
+
 if (RUN_REG_TESTS)
 set(Python3_FIND_VIRTUALENV FIRST)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -470,8 +488,14 @@ foreach(_i RANGE ${_regression_last})
   string(JSON _regression_name GET "${_regression_json}" "cases" ${_i} "name")
   string(JSON _regression_timeout GET "${_regression_json}" "cases" ${_i} "timeout")
   read_manifest_case_labels("${_regression_json}" ${_i} _regression_case_labels)
+  read_manifest_case_strux_backend("${_regression_json}" ${_i} _regression_strux_backend)
   set(_regression_labels "regression;backend")
   list(APPEND _regression_labels ${_regression_case_labels})
+  if (_regression_strux_backend STREQUAL "strux_lib")
+    list(APPEND _regression_labels "strux")
+  elseif (_regression_strux_backend STREQUAL "legacy")
+    list(APPEND _regression_labels "legacy_strux")
+  endif()
   list(REMOVE_DUPLICATES _regression_labels)
   add_test(NAME "Regression_${_regression_name}"
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/run_matrix.py"
@@ -692,6 +716,12 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
       set(_quick_label ";quick")
     endif()
     read_manifest_case_labels("${_json}" ${_i} _case_labels)
+    read_manifest_case_strux_backend("${_json}" ${_i} _case_strux_backend)
+    if (_case_strux_backend STREQUAL "strux_lib")
+      list(APPEND _case_labels "strux")
+    elseif (_case_strux_backend STREQUAL "legacy")
+      list(APPEND _case_labels "legacy_strux")
+    endif()
 
     set(_cmd
       "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/run_test.py"

@@ -1,10 +1,13 @@
 {
   "name": "Example_exchange_bccFe_hoh",
   "case": "exchange/bccFe",
-  "timeout": 240,
+  "timeout": 300,
   "abs_tol": 0.0001,
   "rel_tol": 0.0001,
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib"
+    },
     "control": {
       "nsp": 2,
       "recur": "block",

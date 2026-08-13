@@ -1,5 +1,10 @@
 {
-  "_description": "Test case matrix for example SCF tests. Single source of truth — CMakeLists reads this file. The 'namelists' dict is applied verbatim as an f90nml patch on top of each case's input.nml.",
+  "_description": "Test case matrix for example SCF tests. Single source of truth — CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
+  "defaults": {
+    "namelists": {
+      "lattice": { "strux_backend": "strux_lib" }
+    }
+  },
   "cases": [
     {
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
@@ -420,11 +425,14 @@
     {
       "name": "Example_surface_fccCu001_block_hoh",
       "quick": true,
+      "labels": ["legacy_strux"],
       "case": "surface/fccCu001",
       "timeout": 300,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib's periodic solve expands this surface route to an impractical allocation.",
       "mpi_procs": 2,
       "launch_modes": ["serial", "mpi"],
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
@@ -439,11 +447,14 @@
     {
       "name": "Example_impurity_B2FeCo_block_hoh",
       "quick": true,
+      "labels": ["legacy_strux"],
       "case": "impurity/B2FeCo",
       "timeout": 300,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib's impurity solve requests an impractical allocation for this route.",
       "mpi_procs": 2,
       "launch_modes": ["serial", "mpi"],
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
@@ -457,11 +468,14 @@
     },
     {
       "name": "Example_bulk_Pt2MnGa_block_hoh",
+      "labels": ["legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
       "mpi_procs": 4,
       "launch_modes": ["serial", "mpi"],
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
@@ -477,10 +491,13 @@
     },
     {
       "name": "Example_bulk_Pt2MnGa_block",
+      "labels": ["legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
       "mpi_procs": 4,
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
@@ -496,11 +513,14 @@
     },
     {
       "name": "Example_bulk_Pt2MnGa_chebyshev_hoh",
+      "labels": ["legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 600,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
       "mpi_procs": 4,
       "launch_modes": ["serial", "mpi"],
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50  },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
@@ -516,10 +536,13 @@
     },
     {
       "name": "Example_bulk_Pt2MnGa_chebyshev",
+      "labels": ["legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 600,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
       "mpi_procs": 4,
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
@@ -609,12 +632,15 @@
     },
     {
       "name": "Example_impurity_fccCu_chebyshev",
+      "labels": ["legacy_strux"],
       "case": "impurity/fccCu",
       "timeout": 600,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib's impurity solve requests an impractical allocation for this route.",
       "omp_threads": 2,
       "abs_tol": 1e-6,
       "rel_tol": 1e-6,
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control": { "recur": "chebyshev" },
         "self":    { "nstep": 1 }
       },
@@ -630,12 +656,15 @@
     },
     {
       "name": "Example_interface_fccCu001_chebyshev",
+      "labels": ["legacy_strux"],
       "case": "interface/fccCu001",
       "timeout": 900,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib's custom interface solve requests an impractical allocation for this route.",
       "omp_threads": 2,
       "abs_tol": 1e-6,
       "rel_tol": 1e-6,
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control": { "recur": "chebyshev" },
         "self":    { "nstep": 1 }
       },
@@ -651,12 +680,15 @@
     },
     {
       "name": "Example_interface_fccCu111_chebyshev",
+      "labels": ["legacy_strux"],
       "case": "interface/fccCu111",
       "timeout": 900,
+      "_note": "Explicit legacy structure-constant sentinel: strux_lib's custom interface solve requests an impractical allocation for this route.",
       "omp_threads": 2,
       "abs_tol": 1e-6,
       "rel_tol": 1e-6,
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control": { "recur": "chebyshev" },
         "self":    { "nstep": 1 }
       },

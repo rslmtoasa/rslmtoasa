@@ -3,8 +3,13 @@
   "case": "density_of_states/bccFe",
   "timeout": 300,
   "preserve_outputs": true,
-  "_note": "k-space DOS with ccor_2c=.true.; checks dos_kspace.dat since etot/ws_r/vmad come from the preserved restart potential and don't probe this flag",
+  "_note": "ccor_2c requires derivative structure constants; use the supported strux_lib fitted-screening/Sdot mode from example/bulk/bccFe/CCOR.",
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "screening": "fitted",
+      "strux_want_sdot": true
+    },
     "self": {
       "nstep": 1
     },

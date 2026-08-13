@@ -5,6 +5,9 @@
   "preserve_outputs": true,
   "_note": "k-space DOS with hoh=.true. (reciprocal-mode hoh); checks dos_kspace.dat, see ccor_2c sibling case note",
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib"
+    },
     "self": {
       "nstep": 1
     },

@@ -1,5 +1,10 @@
 {
-  "_description": "Regression backend matrix. Each case patches the base test input.nml, runs rslmto.x, and compares Fe_out.nml to references generated from the trusted pre-refactor build.",
+  "_description": "Regression backend matrix. Optional manifest defaults are recursively merged into each case's 'namelists' before patching the base input.nml. References were generated from the trusted pre-refactor build.",
+  "defaults": {
+    "namelists": {
+      "lattice": { "strux_backend": "strux_lib" }
+    }
+  },
   "cases": [
     {
       "name": "bccFe_chebyshev_fast",
@@ -72,8 +77,10 @@
     {
       "name": "bccFe_chebyshev_fast_ccor_2c",
       "base": "bccFe_chebyshev",
+      "_note": "ccor_2c requires derivative structure constants; use the supported strux_lib fitted-screening/Sdot mode from example/bulk/bccFe/CCOR.",
       "timeout": 300,
       "namelists": {
+        "lattice": { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
         "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
         "hamiltonian": { "hoh": false, "ccor_2c": true }
       }
@@ -81,8 +88,11 @@
     {
       "name": "bccFe_block_fast_sp",
       "base": "bccFe_block",
+      "labels": ["legacy_strux"],
+      "_note": "Explicit legacy structure-constant sentinel; the normal regression default is strux_lib.",
       "timeout": 300,
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control": { "recur": "block", "cheb_backend": "fast", "lld": 16 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }

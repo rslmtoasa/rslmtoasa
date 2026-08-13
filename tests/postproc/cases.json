@@ -1,5 +1,10 @@
 {
-  "_description": "Test case matrix for example post-processing tests. Single source of truth — CMakeLists reads this file. The 'namelists' dict is applied verbatim as an f90nml patch on top of each case's input.nml.",
+  "_description": "Test case matrix for example post-processing tests. Single source of truth — CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
+  "defaults": {
+    "namelists": {
+      "lattice": { "strux_backend": "strux_lib" }
+    }
+  },
   "cases": [
     {
       "name": "Example_exchange_bccFe",
@@ -42,9 +47,12 @@
     },
     {
       "name": "Example_exchange_conductivity_fccPt",
+      "labels": ["legacy_strux"],
       "case": "conductivity/fccPt",
       "timeout": 600,
+      "_note": "Explicit legacy structure-constant sentinel: this PBC conductivity fixture makes the strux_lib periodic solve impractically large.",
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100, "cheb_backend": "legacy" },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
@@ -58,9 +66,12 @@
     },
     {
       "name": "Example_exchange_conductivity_fccPt_hoh",
+      "labels": ["legacy_strux"],
       "case": "conductivity/fccPt",
       "timeout": 600,
+      "_note": "Explicit legacy structure-constant sentinel: this PBC conductivity fixture makes the strux_lib periodic solve impractically large.",
       "namelists": {
+        "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cheb_backend": "legacy" },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": true }
@@ -122,10 +133,11 @@
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
-      "_note": "k-space DOS with ccor_2c=.true.; checks dos_kspace.dat since etot/ws_r/vmad come from the preserved restart potential and don't probe this flag",
+      "_note": "ccor_2c requires derivative structure constants; use the supported strux_lib fitted-screening/Sdot mode from example/bulk/bccFe/CCOR.",
       "namelists": {
         "self":        { "nstep": 1 },
         "reciprocal":  { "nk1": 2, "nk2": 2, "nk3": 2, "n_energy_points": 40 },
+        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
         "control":     { "nsp": 1, "recur": "block", "lld": 12 },
         "hamiltonian": { "ccor_2c": true }
       },
