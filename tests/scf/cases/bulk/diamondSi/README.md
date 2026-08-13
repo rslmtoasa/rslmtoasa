@@ -22,3 +22,28 @@ runs with the explicit `strux_lib` path. The stored checks are deterministic
 functional outputs (energy-related scalars, Wigner-Seitz radius, Madelung
 potential, total DOS, Si-projected DOS, and Fermi level), not a converged Si
 benchmark.
+
+## Chebyshev/k-space DOS equivalence
+
+`Example_si_chebyshev_kspace_dos_equivalence` runs this same fixture through
+the real-space Chebyshev route and the production k-space eigensystem/DOS
+route. Both routes use `strux_lib`, `lmax=1` (sp), `nsp=1`, the same
+`-1.5 ... 1.0` Ry energy range, and 1000 DOS channels. The k-space route uses
+an unreduced 8x8x8 mesh and Gaussian broadening with fixed sigma `0.02` Ry.
+The real-space route uses the fixed Chebyshev order `lld=200`.
+Here `nsp=1` retains the project's scalar-relativistic collinear spin
+treatment; it is not a spin-disabled calculation.
+
+These are deliberately lean functional settings, not converged material
+physics. The 0.02 Ry broadening was frozen after a one-time comparison study:
+with the rebuilt serial binary, the selected pair integrated to 16.000005 and
+16.000002 states, had central-window relative DOS RMS 0.141 and maximum
+absolute difference 11.60, and its principal DOS peaks differed by 0.005 Ry.
+The CI driver uses fixed tolerances (relative RMS 0.20, maximum absolute
+difference 12.5, and peak separation 0.08 Ry); it performs no runtime fitting
+or DOS calculation. It only runs the two production routes, parses
+`totaldos.out`, interpolates the shifted grids to a common absolute-energy
+window `-1.2 ... 0.8` Ry, integrates, and reports differences. Route runtimes
+are printed by the driver for each run; the final recorded serial run took
+12.27 s for real-space Chebyshev, 2.15 s for k-space Gaussian, and 14.46 s
+total (CTest wall time 14.52 s).

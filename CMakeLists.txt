@@ -808,6 +808,20 @@ register_example_tests(
   "${TestDIR}/postproc/references"
 )
 
+add_test(
+  NAME Example_si_chebyshev_kspace_dos_equivalence
+  COMMAND
+    "${EXAMPLE_PYTHON_EXECUTABLE}"
+    "${TestDIR}/scf/test_si_dos_equivalence.py"
+    --binary "${TestBinary}"
+    --case-root "${TestDIR}/scf/cases/bulk/diamondSi"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/scf/si_dos_equivalence"
+)
+set_tests_properties(Example_si_chebyshev_kspace_dos_equivalence PROPERTIES
+  LABELS "example;scf;functional;equivalence;rs;kspace;chebyshev;basis_sp;nonmagnetic;strux;quick"
+  TIMEOUT 300
+)
+
 endif (RUN_EXAMPLE_TESTS)
  
 ##############################################################################################
