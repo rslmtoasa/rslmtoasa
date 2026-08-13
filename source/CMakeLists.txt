@@ -27,8 +27,6 @@ add_library(${PROJECT_NAME} STATIC
     lmto_magnetic_tangent.f90
     lmto_pair_potential.f90
     spin_density.f90
-    #hamiltonian_base_mod.f90
-    #hamiltonian_cpu_mod.f90
     hamiltonian.f90
     hamiltonian_build.f90
     hamiltonian_ccor.f90

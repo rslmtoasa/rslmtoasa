@@ -482,6 +482,8 @@ if (RUN_UNIT_TESTS)
 
   add_fortran_unit_test(UnitBasisDimensions ${TestDIR}/unit/test_basis_dimensions.f90)
   set_tests_properties(UnitBasisDimensions PROPERTIES LABELS "unit;basis")
+  add_fortran_unit_test(UnitGreenLifecycle ${TestDIR}/unit/test_green_lifecycle.f90)
+  set_tests_properties(UnitGreenLifecycle PROPERTIES LABELS "unit;green;lifecycle")
   if(ENABLE_LIBXC)
     add_fortran_unit_test(UnitLibxcXcBaseline ${TestDIR}/unit/test_libxc_xc_baseline.f90)
     set_tests_properties(UnitLibxcXcBaseline PROPERTIES LABELS "unit;libxc;xc")

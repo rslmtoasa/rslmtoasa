@@ -3,6 +3,7 @@
 /build_*/
 /CMakeFiles/
 /CMakeCache.txt
+/source/CMakeCache.txt
 /cmake_install.cmake
 /CPackConfig.cmake
 /CPackSourceConfig.cmake

@@ -40,9 +40,6 @@ module exchange_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use string_mod
-#ifdef USE_MPI
-   use mpi
-#endif
    implicit none
 
    private

@@ -169,7 +169,7 @@ contains
       if (allocated(this%g0_x)) call g_safe_alloc%deallocate('bands.g0_x', this%g0_x)
       if (allocated(this%g0_y)) call g_safe_alloc%deallocate('bands.g0_y', this%g0_y)
       if (allocated(this%g0_z)) call g_safe_alloc%deallocate('bands.g0_z', this%g0_z)
-      if (allocated(this%d_orb)) call g_safe_alloc%deallocate('bands.ddw', this%d_orb)
+      if (allocated(this%d_orb)) call g_safe_alloc%deallocate('bands.d_orb', this%d_orb)
       if (allocated(this%mag_for)) call g_safe_alloc%deallocate('bands.mag_for', this%mag_for)
       if (allocated(this%hubbard_u_eff_old)) call g_safe_alloc%deallocate('bands.hubbard_u_eff_old', this%hubbard_u_eff_old)
 #else
