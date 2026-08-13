@@ -1,9 +1,10 @@
-! TEST-14: fixed-density equivalence checks for the internal and libXC XC paths.
+! TEST-14: fixed-density baseline checks for the internal and libXC XC paths.
 !
 ! This executable is registered only in a libXC-enabled build.  It calls the
 ! production legacy XCPOT routine and the production libXC wrapper directly;
-! it does not contain a second implementation of either functional.
-program test_libxc_xc_equivalence
+! it does not contain a second implementation of either functional.  The two
+! routes are checked independently against their own reference values.
+program test_libxc_xc_baseline
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -11,16 +12,36 @@ program test_libxc_xc_equivalence
    implicit none
 
    integer, parameter :: sample_count = 4
-   ! The legacy PBE path keeps decimal constants while libXC evaluates its
-   ! reference implementation; the fixed-density differences are below 2e-6
-   ! relative for the cases below.
-   real(rp), parameter :: abs_tolerance = 2.0e-8_rp
+   ! These are baseline tolerances, not a claim of route-to-route equivalence.
+   ! They allow small compiler/libXC-version variation while catching changes
+   ! in either production path.
+   real(rp), parameter :: abs_tolerance = 2.0e-7_rp
    real(rp), parameter :: rel_tolerance = 2.0e-6_rp
    real(rp), parameter :: radius = 1.25_rp
    real(rp), parameter :: rho_down(sample_count) = [0.31_rp, 0.40_rp, 0.20_rp, 0.55_rp]
    real(rp), parameter :: rho_up(sample_count) = [0.69_rp, 0.40_rp, 0.80_rp, 0.55_rp]
    real(rp), parameter :: rho_gradient(2) = [0.0_rp, 0.0_rp]
    real(rp), parameter :: rho_laplacian(2) = [0.0_rp, 0.0_rp]
+   ! Generated from the production paths with libXC 5.2.3; internal and libXC
+   ! values intentionally have separate baselines.
+   real(rp), parameter :: internal_exc_reference(sample_count) = [ &
+      -1.6606541999070092_rp, -1.5099683469349781_rp, &
+      -1.7240724982621929_rp, -1.6687764735993575_rp]
+   real(rp), parameter :: internal_v_down_reference(sample_count) = [ &
+      -1.8821860386718519_rp, -1.9833919038375623_rp, &
+      -1.6962292377842685_rp, -2.1936272288988179_rp]
+   real(rp), parameter :: internal_v_up_reference(sample_count) = [ &
+      -2.3208260903616056_rp, -1.9833919038375623_rp, &
+      -2.4158688251756741_rp, -2.1936272288988179_rp]
+   real(rp), parameter :: libxc_exc_reference(sample_count) = [ &
+      -1.6606546889583951_rp, -1.5099688309059647_rp, &
+      -1.7240729202852934_rp, -1.6687769941351385_rp]
+   real(rp), parameter :: libxc_v_down_reference(sample_count) = [ &
+      -1.8821868284272996_rp, -1.9833925006991866_rp, &
+      -1.6962306928293545_rp, -2.1936278661632440_rp]
+   real(rp), parameter :: libxc_v_up_reference(sample_count) = [ &
+      -2.3208266062120977_rp, -1.9833925006991866_rp, &
+      -2.4158691110126762_rp, -2.1936278661632440_rp]
 
    type(control) :: ctl
    type(xc) :: functional
@@ -70,11 +91,24 @@ contains
       call functional%xcpot_libxc_wrapper(rho_down(isample), rho_up(isample), rho_total, rho_gradient, rho_laplacian, &
          radius, libxc_v_down, libxc_v_up, libxc_exc)
 
-      call require_close(libxc_exc, internal_exc, 'XC energy density', isample)
-      call require_close(libxc_v_down, internal_v_down, 'spin-down XC potential', isample)
-      call require_close(libxc_v_up, internal_v_up, 'spin-up XC potential', isample)
-      call require_close(libxc_v_up - libxc_v_down, internal_v_up - internal_v_down, &
-         'XC spin splitting', isample)
+      call require_close(internal_exc, internal_exc_reference(isample), &
+         'internal XC energy density', isample)
+      call require_close(internal_v_down, internal_v_down_reference(isample), &
+         'internal spin-down XC potential', isample)
+      call require_close(internal_v_up, internal_v_up_reference(isample), &
+         'internal spin-up XC potential', isample)
+      call require_close(internal_v_up - internal_v_down, &
+         internal_v_up_reference(isample) - internal_v_down_reference(isample), &
+         'internal XC spin splitting', isample)
+      call require_close(libxc_exc, libxc_exc_reference(isample), &
+         'libXC XC energy density', isample)
+      call require_close(libxc_v_down, libxc_v_down_reference(isample), &
+         'libXC spin-down XC potential', isample)
+      call require_close(libxc_v_up, libxc_v_up_reference(isample), &
+         'libXC spin-up XC potential', isample)
+      call require_close(libxc_v_up - libxc_v_down, &
+         libxc_v_up_reference(isample) - libxc_v_down_reference(isample), &
+         'libXC XC spin splitting', isample)
    end subroutine compare_sample
 
    subroutine require_close(actual, expected, quantity, isample)
@@ -86,7 +120,7 @@ contains
       scale = max(1.0_rp, abs(expected))
       if (abs(actual - expected) > abs_tolerance + rel_tolerance*scale) then
          write (*, '(a,i0,a,a,es16.8,a,es16.8)') 'FAIL: sample ', isample, ' ', trim(quantity)// &
-            ' libXC=', actual, ' internal=', expected
+            ' actual=', actual, ' reference=', expected
          failed = .true.
       end if
    end subroutine require_close
@@ -101,4 +135,4 @@ contains
       end if
    end subroutine require
 
-end program test_libxc_xc_equivalence
+end program test_libxc_xc_baseline

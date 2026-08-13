@@ -558,11 +558,11 @@ jobs:
             -V
 
   # ---------------------------------------------------------------------------
-  # libXC: opt-in functional equivalence contract.  This stays separate from
+  # libXC: opt-in functional baseline contract.  This stays separate from
   # the normal CPU matrix so libXC is not required for developer builds.
   # ---------------------------------------------------------------------------
   libxc_unit:
-    name: libXC XC equivalence (Ubuntu)
+    name: libXC XC baseline (Ubuntu)
 
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -593,5 +593,5 @@ jobs:
       - name: Build standalone unit tests
         run: cmake --build build --target unit_tests --parallel
 
-      - name: Run libXC equivalence test
+      - name: Run libXC baseline test
         run: ctest --test-dir build -L libxc --output-on-failure -V
