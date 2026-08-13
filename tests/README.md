@@ -16,6 +16,38 @@ the case-file format and how to add cases:
   deterministic transverse LR-TDDFT evidence fixture and the material-campaign
   manifest checker.
 
+## CTest tiers and selectors
+
+CTest labels describe the evidence a test provides:
+
+- `unit` — focused known-answer/component tests of production routines.
+- `functional` — executable SCF or post-processing workflows.
+- `performance` — profiling and resource/performance executables; these are
+  intentionally outside the default `unit` correctness selector.
+- `tooling` — parsers, report-policy fixtures, and other test-harness checks;
+  these are not scientific regression evidence.
+- `validation` — longer validation/convergence evidence, kept separate from
+  ordinary pull-request correctness runs.
+
+Useful local selectors (from the build directory) are:
+
+```bash
+ctest -L unit
+ctest -L quick
+ctest -L kspace
+ctest -L rs
+ctest -L conductivity
+ctest -L structure_constants
+ctest -L performance
+ctest -L validation
+```
+
+`quick` is the intentionally small workflow subset used for pull requests.
+The historical WP8/WP9 decks and runners remain under
+`tests/regression/wp8_littlegroup/` and `tests/regression/wp9_validation/` for
+scientific reference, but are not registered in the active CTest harness.
+They require a separate validation decision before being run again.
+
 ## Regenerating references
 
 Each suite's `references/<TestName>/ref.json` (or `.nml` for the legacy

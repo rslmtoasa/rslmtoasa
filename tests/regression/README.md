@@ -56,6 +56,14 @@ path currently emits NaN spectral DOS/`lmom`, so those values are deliberately
 not referenced or described as validated. The root-cause repair is a separate
 production task; see `tests/KNOWN_ISSUES.md`.
 
+## Historical WP8/WP9 validation material
+
+The WP8 little-group and WP9 validation decks/runners are retained here as
+historical scientific evidence. They are intentionally outside the active
+CTest harness: CMake does not register them, so they do not appear in
+`ctest -N` or any ordinary label selector. Running one requires an explicit
+validation decision and invoking its retained runner directly.
+
 Pt2MnGa retains its multi-sublattice metallic Block path with serial/MPI
 coverage and its Chebyshev paths. The redundant Pt2MnGa Block+HOH Cartesian
 point was removed because Fe already covers Block+HOH and the retained Pt2

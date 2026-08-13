@@ -142,6 +142,7 @@ jobs:
             -DENABLE_MPI=ON \
             -DRUN_REG_TESTS=ON \
             -DRUN_EXAMPLE_TESTS=ON \
+            -DRUN_UNIT_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
 
       - name: Build from source (pull_request / schedule) ${{ matrix.icon }}
@@ -178,9 +179,38 @@ jobs:
           cp dist/rslmto.* build/bin/rslmto.x
           chmod +x build/bin/rslmto.x
 
+      # The downloaded artifact contains the production binary only. Build the
+      # standalone unit/profile executables without rebuilding/replacing it.
+      - name: Build standalone unit tests ${{ matrix.icon }}
+        run: cmake --build build --target unit_tests --parallel
+
       # -----------------------------------------------------------------------
       # Run tests
       # -----------------------------------------------------------------------
+      - name: Run unit correctness tests ${{ matrix.icon }}
+        id: ctest_unit
+        run: |
+          ctest --test-dir build \
+            -L unit \
+            --output-on-failure \
+            --output-junit "${{ github.workspace }}/unit_results.xml" \
+            --parallel 1 \
+            -V 2>&1 | tee ctest_unit_output.txt
+          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Run tooling tests ${{ matrix.icon }}
+        id: ctest_tooling
+        run: |
+          ctest --test-dir build \
+            -L tooling \
+            --output-on-failure \
+            --output-junit "${{ github.workspace }}/tooling_results.xml" \
+            --parallel 1 \
+            -V 2>&1 | tee ctest_tooling_output.txt
+          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
       - name: Run regression backend tests ${{ matrix.icon }}
         id: ctest_backend
         env:
@@ -223,7 +253,7 @@ jobs:
         continue-on-error: true
 
       - name: Dump per-case runner logs on failure
-        if: steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
+        if: steps.ctest_unit.outputs.ctest_exit != '0' || steps.ctest_tooling.outputs.ctest_exit != '0' || steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
         run: |
           echo "ctest failed; printing per-case testrun.log files"
           find build/Testing -type f -name testrun.log | sort | while read -r f; do
@@ -302,6 +332,8 @@ jobs:
               with open(summary_path, "a") as f:
                   f.write("\n".join(lines) + "\n")
 
+          write_section("Unit correctness tests", "unit_results.xml")
+          write_section("Tooling tests", "tooling_results.xml")
           write_section("Regression backend tests", "backend_results.xml")
           write_section("Example tests", "results.xml")
           PYEOF
@@ -315,6 +347,10 @@ jobs:
         with:
           name: test_logs.${{ runner.os }}.${{ matrix.arch }}
           path: |
+            ctest_unit_output.txt
+            unit_results.xml
+            ctest_tooling_output.txt
+            tooling_results.xml
             ctest_backend_output.txt
             backend_results.xml
             ctest_output.txt
@@ -325,7 +361,7 @@ jobs:
       # Propagate failure after summary and upload are done
       # -----------------------------------------------------------------------
       - name: Check test outcome
-        if: steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
+        if: steps.ctest_unit.outputs.ctest_exit != '0' || steps.ctest_tooling.outputs.ctest_exit != '0' || steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
         run: |
           echo "Tests failed — see summary above for details."
           exit 1
