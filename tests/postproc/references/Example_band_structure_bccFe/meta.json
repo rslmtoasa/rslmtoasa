@@ -1,9 +1,17 @@
 {
   "name": "Example_band_structure_bccFe",
+  "quick": true,
+  "labels": [
+    "kspace",
+    "bands"
+  ],
   "case": "band_structure/bccFe",
-  "timeout": 240,
+  "timeout": 300,
   "preserve_outputs": true,
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib"
+    },
     "self": {
       "nstep": 1
     },
@@ -30,6 +38,59 @@
           "vmad"
         ]
       }
+    ],
+    "dimensions": [
+      {
+        "file": "band_structure.dat",
+        "data_rows": 201,
+        "data_columns": 19
+      },
+      {
+        "file": "band_structure_kpath.dat",
+        "data_rows": 201,
+        "data_columns": 4
+      }
+    ],
+    "text": [
+      {
+        "file": "band_structure.dat",
+        "rows": [
+          7,
+          8,
+          47
+        ],
+        "cols": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19
+        ]
+      }
     ]
-  }
+  },
+  "outputs": [
+    {
+      "file": "band_structure.dat",
+      "min_lines": 207
+    },
+    {
+      "file": "band_structure_kpath.dat",
+      "min_lines": 204
+    }
+  ]
 }

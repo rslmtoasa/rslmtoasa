@@ -4,6 +4,18 @@ Fast example-based tests for post-processing workflows (exchange couplings,
 conductivity). Each case runs in an isolated scratch directory and checks
 for fatal errors. Numerical reference comparisons are optional.
 
+The reciprocal band/DOS cases are value tests, not completion-only smoke
+tests. `Example_band_structure_bccFe` checks the dimensions of the canonical
+`band_structure.dat`/`band_structure_kpath.dat` outputs and pins eigenvalues at
+Gamma, the first nontrivial k point, and H. The ordinary reciprocal DOS case
+checks selected rows of `dos_kspace.dat` plus the canonical occupation, band
+energy, finite-window DOS integral, and DOS-integrated electron count emitted
+by the production diagnostics. The 2x2x2 Gaussian fixture intentionally
+preserves the current discrepancy between those finite-window diagnostics and
+the canonical 18-state/8-electron counts; the values are pinned so the
+minimal reproducer remains visible rather than being normalized away. HOH and
+CCOR retain their existing DOS row oracles and now also check DOS dimensions.
+
 ## Structure
 
 - `cases.json` — test case matrix (single source of truth for CTest and reference generation)
@@ -46,6 +58,9 @@ optional `"checks"` dict defines what to compare against stored references.
   - `file` — filename in the workdir
   - `rows` — 1-based line numbers to check
   - `cols` — 1-based column indices; all columns are checked for every row
+- `dimensions` — exact dimensions for numeric records in a text output:
+  comments and inline `#` labels are ignored, and `data_rows`/`data_columns`
+  are required to match.
 
 Cases without a `"checks"` key run as smoke-only (log check, no value comparison).
 

@@ -1,5 +1,10 @@
 {
   "name": "Example_density_of_states_bccFe_reciprocal_hoh",
+  "labels": [
+    "kspace",
+    "dos",
+    "hoh"
+  ],
   "case": "density_of_states/bccFe",
   "timeout": 300,
   "preserve_outputs": true,
@@ -27,6 +32,13 @@
     }
   },
   "checks": {
+    "dimensions": [
+      {
+        "file": "dos_kspace.dat",
+        "data_rows": 40,
+        "data_columns": 2
+      }
+    ],
     "text": [
       {
         "file": "dos_kspace.dat",
@@ -41,5 +53,11 @@
         ]
       }
     ]
-  }
+  },
+  "outputs": [
+    {
+      "file": "dos_kspace.dat",
+      "min_lines": 48
+    }
+  ]
 }

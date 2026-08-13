@@ -28,6 +28,9 @@ Reference data is driven by a "checks" dict in cases.json:
     "text": [
       { "file": "Fe_dos.out", "rows": [50, 100], "cols": [1, 2] }
     ],
+    "dimensions": [
+      { "file": "band_structure.dat", "data_rows": 201, "data_columns": 19 }
+    ],
     "log": [
       {
         "file": "testrun.log",
@@ -168,6 +171,40 @@ def check_output_files(workdir: str, case_name: str, output_checks: list[dict]) 
         if line_count < min_lines:
             print(f"ERROR [{case_name}]: '{filename}' incomplete ({line_count} < {min_lines} lines)")
             sys.exit(1)
+
+
+def check_text_dimensions(workdir: str, case_name: str, dimension_checks: list[dict]) -> None:
+    """Check exact dimensions of the numeric records in a text output."""
+    for dimension_check in dimension_checks:
+        filename = dimension_check["file"]
+        filepath = os.path.join(workdir, filename)
+        data_rows = []
+        with open(filepath) as fh:
+            for line_number, line in enumerate(fh, start=1):
+                fields = line.split("#", 1)[0].split()
+                if not fields:
+                    continue
+                data_rows.append((line_number, fields))
+
+        expected_rows = dimension_check["data_rows"]
+        expected_columns = dimension_check["data_columns"]
+        if len(data_rows) != expected_rows:
+            print(
+                f"ERROR [{case_name}]: '{filename}' has {len(data_rows)} data rows "
+                f"(expected {expected_rows})"
+            )
+            sys.exit(1)
+        wrong_columns = [(line_number, len(fields)) for line_number, fields in data_rows
+                         if len(fields) != expected_columns]
+        if wrong_columns:
+            line_number, actual_columns = wrong_columns[0]
+            print(
+                f"ERROR [{case_name}]: '{filename}' line {line_number} has "
+                f"{actual_columns} data columns (expected {expected_columns})"
+            )
+            sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Value extraction
 # ---------------------------------------------------------------------------
@@ -444,6 +481,7 @@ def main() -> None:
     run_binary(binary, workdir, mpi_procs, serial_omp)
     check_log(workdir, args.case_name)
     check_output_files(workdir, args.case_name, case.get("outputs", []))
+    check_text_dimensions(workdir, args.case_name, case.get("checks", {}).get("dimensions", []))
 
     if args.compare_ref:
         abs_tol = case.get("abs_tol", args.abs_tol)

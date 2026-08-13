@@ -1,9 +1,20 @@
 {
   "name": "Example_density_of_states_bccFe",
+  "labels": [
+    "functional",
+    "kspace",
+    "dos",
+    "basis_spd",
+    "scalar_relativistic"
+  ],
   "case": "density_of_states/bccFe",
-  "timeout": 240,
+  "timeout": 300,
   "preserve_outputs": true,
+  "_note": "Minimal 2x2x2 reciprocal Gaussian DOS reproducer. The test pins the actual dos_kspace.dat rows and the finite-window DOS-integral/cumulative-state diagnostics, including their known discrepancy from the canonical 18-state/8-electron counts.",
   "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib"
+    },
     "self": {
       "nstep": 1
     },
@@ -29,6 +40,45 @@
           "vmad"
         ]
       }
+    ],
+    "dimensions": [
+      {
+        "file": "dos_kspace.dat",
+        "data_rows": 40,
+        "data_columns": 2
+      }
+    ],
+    "text": [
+      {
+        "file": "dos_kspace.dat",
+        "rows": [
+          15,
+          21,
+          30
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ],
+    "log": [
+      {
+        "file": "testrun.log",
+        "patterns": {
+          "canonical_electron_count": "Canonical k-space occupations:.*?N=\\s*([-+0-9.EeDd]+)",
+          "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+          "dos_integral": "calculate_dos_gaussian: DOS integrates to\\s*([-+0-9.EeDd]+)",
+          "dos_electron_count": "k-space energy cross-checks:.*?DOS N=\\s*([-+0-9.EeDd]+)",
+          "dos_electron_residual": "k-space energy cross-checks:.*?deltaN=\\s*([-+0-9.EeDd]+)"
+        }
+      }
     ]
-  }
+  },
+  "outputs": [
+    {
+      "file": "dos_kspace.dat",
+      "min_lines": 48
+    }
+  ]
 }

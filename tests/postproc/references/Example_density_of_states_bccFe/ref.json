@@ -5,5 +5,30 @@
       "ws_r": 2.6622,
       "vmad": 4.226945410563217e-15
     }
+  },
+  "text": {
+    "dos_kspace.dat": {
+      "15": {
+        "1": -1.115385,
+        "2": 0.0
+      },
+      "21": {
+        "1": -0.730769,
+        "2": 0.445846
+      },
+      "30": {
+        "1": -0.153846,
+        "2": 21.008703
+      }
+    }
+  },
+  "log": {
+    "testrun.log": {
+      "canonical_electron_count": 8.87495772,
+      "canonical_band_energy": -1.91165552,
+      "dos_integral": 20.6644,
+      "dos_electron_count": 10.195007,
+      "dos_electron_residual": 1.32
+    }
   }
 }

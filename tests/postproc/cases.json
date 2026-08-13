@@ -86,6 +86,7 @@
     {
       "name": "Example_band_structure_bccFe",
       "quick": true,
+      "labels": ["kspace", "bands"],
       "case": "band_structure/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
@@ -103,15 +104,28 @@
       "checks": {
         "nml": [
           { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
+        ],
+        "dimensions": [
+          { "file": "band_structure.dat", "data_rows": 201, "data_columns": 19 },
+          { "file": "band_structure_kpath.dat", "data_rows": 201, "data_columns": 4 }
+        ],
+        "text": [
+          { "file": "band_structure.dat", "rows": [7, 8, 47],
+            "cols": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] }
         ]
-      }
+      },
+      "outputs": [
+        { "file": "band_structure.dat", "min_lines": 207 },
+        { "file": "band_structure_kpath.dat", "min_lines": 204 }
+      ]
     },
     {
       "name": "Example_density_of_states_bccFe",
-      "labels": ["functional", "kspace", "nonmagnetic", "basis_spd"],
+      "labels": ["functional", "kspace", "dos", "basis_spd", "scalar_relativistic"],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
+      "_note": "Minimal 2x2x2 reciprocal Gaussian DOS reproducer. The test pins the actual dos_kspace.dat rows and the finite-window DOS-integral/cumulative-state diagnostics, including their known discrepancy from the canonical 18-state/8-electron counts.",
       "namelists": {
         "self": { "nstep": 1 },
         "reciprocal": {
@@ -125,11 +139,33 @@
       "checks": {
         "nml": [
           { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
+        ],
+        "dimensions": [
+          { "file": "dos_kspace.dat", "data_rows": 40, "data_columns": 2 }
+        ],
+        "text": [
+          { "file": "dos_kspace.dat", "rows": [15, 21, 30], "cols": [1, 2] }
+        ],
+        "log": [
+          {
+            "file": "testrun.log",
+            "patterns": {
+              "canonical_electron_count": "Canonical k-space occupations:.*?N=\\s*([-+0-9.EeDd]+)",
+              "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+              "dos_integral": "calculate_dos_gaussian: DOS integrates to\\s*([-+0-9.EeDd]+)",
+              "dos_electron_count": "k-space energy cross-checks:.*?DOS N=\\s*([-+0-9.EeDd]+)",
+              "dos_electron_residual": "k-space energy cross-checks:.*?deltaN=\\s*([-+0-9.EeDd]+)"
+            }
+          }
         ]
-      }
+      },
+      "outputs": [
+        { "file": "dos_kspace.dat", "min_lines": 48 }
+      ]
     },
     {
       "name": "Example_density_of_states_bccFe_ccor_2c",
+      "labels": ["kspace", "dos", "ccor"],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
@@ -142,13 +178,20 @@
         "hamiltonian": { "ccor_2c": true }
       },
       "checks": {
+        "dimensions": [
+          { "file": "dos_kspace.dat", "data_rows": 40, "data_columns": 2 }
+        ],
         "text": [
           { "file": "dos_kspace.dat", "rows": [15, 21, 30], "cols": [1, 2] }
         ]
-      }
+      },
+      "outputs": [
+        { "file": "dos_kspace.dat", "min_lines": 48 }
+      ]
     },
     {
       "name": "Example_density_of_states_bccFe_reciprocal_hoh",
+      "labels": ["kspace", "dos", "hoh"],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
@@ -160,10 +203,16 @@
         "hamiltonian": { "hoh": true }
       },
       "checks": {
+        "dimensions": [
+          { "file": "dos_kspace.dat", "data_rows": 40, "data_columns": 2 }
+        ],
         "text": [
           { "file": "dos_kspace.dat", "rows": [15, 21, 30], "cols": [1, 2] }
         ]
-      }
+      },
+      "outputs": [
+        { "file": "dos_kspace.dat", "min_lines": 48 }
+      ]
     },
     {
       "name": "Example_paoflow2rs_bccFe",
