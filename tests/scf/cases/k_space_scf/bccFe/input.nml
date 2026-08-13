@@ -7,6 +7,7 @@ verbose = T
 rc = 080 ! radius cut. We could think about setting a default
 alat = 2.86120 ! lattice parapeter
 crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
+strux_backend = 'strux_lib'
 wav = 1.40880
 ntype = 1
 ct(:) = 4.0d0

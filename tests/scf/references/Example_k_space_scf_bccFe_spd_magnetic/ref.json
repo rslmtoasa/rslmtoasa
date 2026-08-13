@@ -1,0 +1,47 @@
+{
+  "nml": {
+    "Fe_out.nml": {
+      "lmax": 2.0,
+      "etot": -2541.985107610656,
+      "ws_r": 2.6622,
+      "vmad": -6.107936118263849e-13,
+      "mom": {
+        "3": 0.9999999999999996
+      },
+      "lmom": {
+        "3": 0.04170166576999944
+      }
+    }
+  },
+  "text": {
+    "totaldos.out": {
+      "60": {
+        "1": -0.82444,
+        "2": 0.0
+      },
+      "105": {
+        "1": 0.03681,
+        "2": 19.79132
+      },
+      "150": {
+        "1": 0.89805,
+        "2": 0.0008
+      }
+    }
+  },
+  "log": {
+    "testrun.log": {
+      "fermi_level": -0.0463779468,
+      "canonical_electron_count": 8.0,
+      "canonical_band_energy": -1.8922963,
+      "dos_integral": 18.0132,
+      "site_spin_moment": 2.002214,
+      "site_valence": 8.0,
+      "site_charge_transfer_z": 0.0
+    },
+    "report.out": {
+      "site_occupation": 8.0,
+      "site_charge_transfer": 0.0
+    }
+  }
+}

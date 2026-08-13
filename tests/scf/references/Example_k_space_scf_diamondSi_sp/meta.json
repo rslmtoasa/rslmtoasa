@@ -1,0 +1,136 @@
+{
+  "name": "Example_k_space_scf_diamondSi_sp",
+  "quick": true,
+  "labels": [
+    "functional",
+    "scf",
+    "kspace",
+    "basis_sp",
+    "nonmagnetic",
+    "strux",
+    "mpi"
+  ],
+  "case": "bulk/diamondSi",
+  "timeout": 300,
+  "launch_modes": [
+    "serial",
+    "mpi"
+  ],
+  "mpi_procs": 2,
+  "mpi_rank_counts": [
+    2
+  ],
+  "_note": "TEST-09: canonical diamond-Si sp k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses the shared Si/sp physical fixture, a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
+  "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib"
+    },
+    "self": {
+      "nstep": 1,
+      "use_kspace": true
+    },
+    "reciprocal": {
+      "nk1": 2,
+      "nk2": 2,
+      "nk3": 2,
+      "use_symmetry_reduction": false,
+      "use_time_reversal": true,
+      "use_shift": false,
+      "n_energy_points": 200,
+      "dos_method": "gaussian",
+      "gaussian_sigma": 0.01
+    },
+    "energy": {
+      "channels_ldos": 200,
+      "energy_min": -1.5,
+      "energy_max": 1.0
+    },
+    "control": {
+      "nsp": 1,
+      "lmax": 1,
+      "recur": "block",
+      "lld": 12
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Si1_out.nml",
+        "scalars": [
+          "lmax",
+          "etot",
+          "ws_r",
+          "vmad"
+        ]
+      },
+      {
+        "file": "Si2_out.nml",
+        "scalars": [
+          "lmax",
+          "etot",
+          "ws_r",
+          "vmad"
+        ]
+      }
+    ],
+    "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          60,
+          105,
+          150
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ],
+    "log": [
+      {
+        "file": "testrun.log",
+        "patterns": {
+          "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
+          "canonical_electron_count": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
+          "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+          "dos_integral": "DOS integrates to\\s*([-+0-9.EeDd]+)",
+          "site_spin_moment": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+          "site_valence": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+          "site_charge_transfer_z": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+        }
+      },
+      {
+        "file": "report.out",
+        "patterns": {
+          "site1_occupation": "Occupation at atom\\s+1:\\s*([-+0-9.EeDd]+)",
+          "site1_charge_transfer": "Charge transfer at atom\\s+1:\\s*([-+0-9.EeDd]+)",
+          "site2_occupation": "Occupation at atom\\s+2:\\s*([-+0-9.EeDd]+)",
+          "site2_charge_transfer": "Charge transfer at atom\\s+2:\\s*([-+0-9.EeDd]+)"
+        }
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "file": "totaldos.out",
+      "min_lines": 200
+    },
+    {
+      "file": "magneticdos.out",
+      "min_lines": 201
+    },
+    {
+      "file": "report.out",
+      "min_lines": 10
+    },
+    {
+      "file": "minfo.out",
+      "min_lines": 1
+    },
+    {
+      "file": "linfo.out",
+      "min_lines": 1
+    }
+  ]
+}

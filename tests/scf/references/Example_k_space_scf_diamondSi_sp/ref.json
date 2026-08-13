@@ -1,0 +1,49 @@
+{
+  "nml": {
+    "Si1_out.nml": {
+      "lmax": 1.0,
+      "etot": -578.4150577713264,
+      "ws_r": 2.827551,
+      "vmad": 0.1529843075576826
+    },
+    "Si2_out.nml": {
+      "lmax": 1.0,
+      "etot": -578.4150577713248,
+      "ws_r": 2.827551,
+      "vmad": 0.15298430755767495
+    }
+  },
+  "text": {
+    "totaldos.out": {
+      "60": {
+        "1": -0.79571,
+        "2": 0.0
+      },
+      "105": {
+        "1": -0.25744,
+        "2": 0.00039
+      },
+      "150": {
+        "1": 0.28084,
+        "2": 0.16914
+      }
+    }
+  },
+  "log": {
+    "testrun.log": {
+      "fermi_level": 0.00145623965,
+      "canonical_electron_count": 8.0,
+      "canonical_band_energy": -3.99696729,
+      "dos_integral": 16.0,
+      "site_spin_moment": 0.0,
+      "site_valence": 4.0,
+      "site_charge_transfer_z": 0.45
+    },
+    "report.out": {
+      "site1_occupation": 3.55,
+      "site1_charge_transfer": -0.45,
+      "site2_occupation": 3.55,
+      "site2_charge_transfer": -0.45
+    }
+  }
+}
