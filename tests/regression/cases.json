@@ -4,6 +4,7 @@
     {
       "name": "bccFe_chebyshev_fast",
       "base": "bccFe_chebyshev",
+      "labels": ["validation"],
       "timeout": 300,
       "namelists": {
         "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },

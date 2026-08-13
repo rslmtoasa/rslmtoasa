@@ -4,6 +4,7 @@
     {
       "name": "Example_exchange_bccFe",
       "quick": true,
+      "labels": ["functional", "rs", "magnetic", "basis_spd", "exchange"],
       "case": "exchange/bccFe",
       "timeout": 300,
       "omp_threads": 2,
@@ -96,6 +97,7 @@
     },
     {
       "name": "Example_density_of_states_bccFe",
+      "labels": ["functional", "kspace", "nonmagnetic", "basis_spd"],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,

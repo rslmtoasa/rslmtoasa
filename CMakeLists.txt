@@ -337,6 +337,27 @@ include(CTest)
 set(TestBinary ${CMAKE_BINARY_DIR}/bin/${PROJECT_BINARY})
 set(TestDIR ${CMAKE_SOURCE_DIR}/tests)
 
+# Read optional semantic labels from one manifest case.  Missing or empty
+# labels are valid so older cases do not need to be changed.  Keep duplicate
+# removal at the registration site so explicit labels cannot duplicate a
+# derived label such as "scf" or "backend".
+function(read_manifest_case_labels MANIFEST_JSON CASE_INDEX OUT_VAR)
+  set(_labels "")
+  string(JSON _label_count ERROR_VARIABLE _label_error LENGTH
+    "${MANIFEST_JSON}" "cases" ${CASE_INDEX} "labels")
+  if (NOT _label_error)
+    if (_label_count GREATER 0)
+      math(EXPR _label_last "${_label_count} - 1")
+      foreach(_label_index RANGE ${_label_last})
+        string(JSON _label GET
+          "${MANIFEST_JSON}" "cases" ${CASE_INDEX} "labels" ${_label_index})
+        list(APPEND _labels "${_label}")
+      endforeach()
+    endif()
+  endif()
+  set(${OUT_VAR} "${_labels}" PARENT_SCOPE)
+endfunction()
+
 if (RUN_REG_TESTS)
 set(Python3_FIND_VIRTUALENV FIRST)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -444,9 +465,14 @@ set(REGRESSION_CASES_JSON "${TestDIR}/regression/cases.json")
 file(READ "${REGRESSION_CASES_JSON}" _regression_json)
 string(JSON _regression_n LENGTH "${_regression_json}" "cases")
 math(EXPR _regression_last "${_regression_n} - 1")
+
 foreach(_i RANGE ${_regression_last})
   string(JSON _regression_name GET "${_regression_json}" "cases" ${_i} "name")
   string(JSON _regression_timeout GET "${_regression_json}" "cases" ${_i} "timeout")
+  read_manifest_case_labels("${_regression_json}" ${_i} _regression_case_labels)
+  set(_regression_labels "regression;backend")
+  list(APPEND _regression_labels ${_regression_case_labels})
+  list(REMOVE_DUPLICATES _regression_labels)
   add_test(NAME "Regression_${_regression_name}"
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/run_matrix.py"
       "--binary" "${TestBinary}"
@@ -456,7 +482,7 @@ foreach(_i RANGE ${_regression_last})
       "--references" "${TestDIR}/regression/references"
   )
   set_tests_properties("Regression_${_regression_name}" PROPERTIES
-    LABELS "regression;backend" TIMEOUT "${_regression_timeout}")
+    LABELS "${_regression_labels}" TIMEOUT "${_regression_timeout}")
 endforeach()
 
 # B5.2 route-agnostic estimator triads (recursion vs lehmann vs dyson). Each case
@@ -655,6 +681,7 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
     if (NOT _quick_err AND ${_quick})
       set(_quick_label ";quick")
     endif()
+    read_manifest_case_labels("${_json}" ${_i} _case_labels)
 
     set(_cmd
       "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/run_test.py"
@@ -678,15 +705,21 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
         list(APPEND _default_cmd "--mpi-enabled")
       endif()
       add_test(NAME "${_name}" COMMAND ${_default_cmd})
+      set(_labels "example;${SUITE};${_recur}${_quick_label}")
+      list(APPEND _labels ${_case_labels})
+      list(REMOVE_DUPLICATES _labels)
       set_tests_properties("${_name}" PROPERTIES
-        LABELS "example;${SUITE};${_recur}${_quick_label}" TIMEOUT "${_timeout}")
+        LABELS "${_labels}" TIMEOUT "${_timeout}")
     else()
       string(JSON _mpi_procs GET "${_json}" "cases" ${_i} "mpi_procs")
 
       set(_serial_cmd ${_cmd} "--force-serial")
       add_test(NAME "${_name}" COMMAND ${_serial_cmd})
+      set(_labels "example;${SUITE};${_recur};launch_serial${_quick_label}")
+      list(APPEND _labels ${_case_labels})
+      list(REMOVE_DUPLICATES _labels)
       set_tests_properties("${_name}" PROPERTIES
-        LABELS "example;${SUITE};${_recur};launch_serial${_quick_label}" TIMEOUT "${_timeout}")
+        LABELS "${_labels}" TIMEOUT "${_timeout}")
 
       if (ENABLE_MPI)
         string(JSON _n_mpi_ranks ERROR_VARIABLE _mpi_ranks_err LENGTH "${_json}" "cases" ${_i} "mpi_rank_counts")
@@ -709,8 +742,11 @@ function(register_example_tests CASES_JSON SUITE SCRATCH_ROOT REFS_DIR)
           set(_mpi_test_name "${_name}${_mpi_suffix}")
           set(_mpi_cmd ${_cmd} "--mpi-enabled" "--mpi-procs" "${_mpi_rank}" "--scratch-name" "${_mpi_test_name}")
           add_test(NAME "${_mpi_test_name}" COMMAND ${_mpi_cmd})
+          set(_labels "example;${SUITE};${_recur};launch_mpi")
+          list(APPEND _labels ${_case_labels})
+          list(REMOVE_DUPLICATES _labels)
           set_tests_properties("${_mpi_test_name}" PROPERTIES
-            LABELS "example;${SUITE};${_recur};launch_mpi" TIMEOUT "${_timeout}"
+            LABELS "${_labels}" TIMEOUT "${_timeout}"
             PROCESSORS "${_mpi_rank}")
         endforeach()
       endif()

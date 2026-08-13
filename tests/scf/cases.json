@@ -4,6 +4,7 @@
     {
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
       "quick": true,
+      "labels": ["functional", "rs", "magnetic", "basis_spd", "hoh"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "omp_threads": 2,
@@ -535,6 +536,7 @@
     {
       "name": "Example_k_space_scf_bccFe",
       "quick": true,
+      "labels": ["functional", "kspace", "nonmagnetic", "basis_spd"],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
       "launch_modes": ["serial", "mpi"],
