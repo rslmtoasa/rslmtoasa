@@ -7,7 +7,10 @@
 # Move to the script directory
 cd "$(dirname "$0")"
 
-# Define the default list of tests
+# These legacy baselines intentionally remain separate from the manifest matrix:
+# each uses an Fe nsp=1 deck, while the manifest examples cover nsp=2/3/4.
+# They are metallic recursion smoke/reference contracts, not Si or sharp-DOS
+# benchmarks.
 default_tests=('bccFe_lanczos' 'bccFe_block' 'bccFe_chebyshev')
 
 # Scan for arguments
@@ -38,4 +41,3 @@ for test in "${tests[@]}"; do
     ./oneliner.sh
     cd ../..
 done
-

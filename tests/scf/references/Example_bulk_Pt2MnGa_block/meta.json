@@ -1,8 +1,20 @@
 {
   "name": "Example_bulk_Pt2MnGa_block",
+  "labels": [
+    "functional",
+    "rs",
+    "metallic",
+    "magnetic",
+    "multi_sublattice",
+    "basis_spd",
+    "block",
+    "legacy_strux"
+  ],
   "case": "bulk/Pt2MnGa",
-  "timeout": 240,
+  "timeout": 300,
   "mpi_procs": 4,
+  "launch_modes": ["serial", "mpi"],
+  "_note": "Explicit legacy structure-constant sentinel; retained as the multi-sublattice metallic Block contract with serial/MPI coverage.",
   "namelists": {
     "control": {
       "nsp": 2,

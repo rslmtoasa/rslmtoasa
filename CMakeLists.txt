@@ -382,13 +382,13 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(ThisTestDIR ${TestDIR}/regression/bccFe_lanczos)
 add_test(NAME Lanczos   COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
-set_tests_properties(Lanczos PROPERTIES LABELS "regression;baseline")
+set_tests_properties(Lanczos PROPERTIES LABELS "regression;baseline;metallic;rs;lanczos")
 set(ThisTestDIR ${TestDIR}/regression/bccFe_block)
 add_test(NAME Block     COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
-set_tests_properties(Block PROPERTIES LABELS "regression;baseline")
+set_tests_properties(Block PROPERTIES LABELS "regression;baseline;metallic;rs;block")
 set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
 add_test(NAME Chebyshev COMMAND  ${ThisTestDIR}/oneliner.sh ${TestBinary}  WORKING_DIRECTORY ${ThisTestDIR})
-set_tests_properties(Chebyshev PROPERTIES LABELS "regression;baseline")
+set_tests_properties(Chebyshev PROPERTIES LABELS "regression;baseline;metallic;rs;chebyshev")
 
 # WP8: q little-group BZ reduction and q-lifecycle (axial/generic/shifted-mesh
 # reduction vs the full-BZ oracle, q/-q and multi-q common-subgroup, q-list

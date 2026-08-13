@@ -3,9 +3,9 @@
 Top-level index for the test suites. Each suite has its own README with
 the case-file format and how to add cases:
 
-- `regression/cases.json` — backend regression matrix (10 cases: 5 CPU
-  Chebyshev backends × hoh × ccor_2c + block sp/dp), compared against
-  references from the trusted pre-refactor build. See
+- `regression/cases.json` — backend regression matrix (10 cases: 5 Si/sp
+  Chebyshev backend rows, retained Fe Chebyshev HOH/CCOR rows, and block
+  sp/dp rows), compared against committed references. See
   `tests/regression/run_matrix.py` and `run_gpu_matrix.py` (below) for the
   runners.
 - [`scf/README.md`](scf/README.md) — example SCF suite (bulk/surface/impurity, all

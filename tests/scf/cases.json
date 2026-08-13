@@ -40,7 +40,7 @@
     {
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
       "quick": true,
-      "labels": ["functional", "rs", "magnetic", "basis_spd", "hoh"],
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "omp_threads": 2,
@@ -62,6 +62,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp2_block",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "omp_threads": 2,
@@ -147,9 +148,10 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp2_lanczos_hoh",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos", "known_issue", "hoh"],
       "case": "bulk/bccFe",
       "timeout": 300,
-      "_note": "totaldos.out/lmom are NaN for recur=lanczos at nsp=2 (KNOWN_ISSUES.md); only scalar/mom checks until fixed",
+      "_note": "known_issue: recur=lanczos with nsp=2 produces NaN spectral DOS/lmom; this runnable reproducer checks only finite scalar/moment outputs and is not a validated spectral benchmark. Production root-cause repair is a separate task; see tests/KNOWN_ISSUES.md.",
       "namelists": {
         "control":     { "nsp": 2, "recur": "lanczos", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -163,10 +165,10 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp2_lanczos",
-      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos", "known_issue"],
       "case": "bulk/bccFe",
       "timeout": 300,
-      "_note": "totaldos.out/lmom are NaN for recur=lanczos at nsp=2 (KNOWN_ISSUES.md); only scalar/mom checks until fixed",
+      "_note": "known_issue: recur=lanczos with nsp=2 produces NaN spectral DOS/lmom; this runnable reproducer checks only finite scalar/moment outputs and is not a validated spectral benchmark. Production root-cause repair is a separate task; see tests/KNOWN_ISSUES.md.",
       "namelists": {
         "control":     { "nsp": 2, "recur": "lanczos", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -181,6 +183,7 @@
     {
       "name": "Example_bulk_bccFe_nsp2_hubbard",
       "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
       "_note": "hubbard_u_general(1,3)/hubbard_j_general(1,3) set directly in input.nml (smoke-and-compare, not physics)",
@@ -200,6 +203,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp3_block_hoh",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "namelists": {
@@ -218,6 +222,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp3_block",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "namelists": {
@@ -273,6 +278,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp4_block_hoh",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "namelists": {
@@ -291,6 +297,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp4_block",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "namelists": {
@@ -346,6 +353,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp4_block_spiral_qplus",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "gbt"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,+0.05) [units: 2*pi/alat, degrees]. Paired with _qminus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
@@ -364,6 +372,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp4_block_spiral_qminus",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "gbt"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,-0.05) [units: 2*pi/alat, degrees]. Paired with _qplus to pin E(q)=E(-q); see docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md.",
@@ -382,6 +391,7 @@
     },
     {
       "name": "Example_frozen_magnon_bccFe",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "frozen_magnon"],
       "case": "frozen_magnon/bccFe",
       "timeout": 300,
       "_note": "T5: frozen_magnon post-processing sweep (mode='mft', 3 q-points from q_points.dat, theta_ss=90deg, units 2*pi/alat). Checks frozen_magnon.dat q/etot/eband/moment/omega columns. See docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md T5.",
@@ -397,6 +407,7 @@
     },
     {
       "name": "Example_frozen_magnon_bccFe_auto",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "frozen_magnon"],
       "case": "frozen_magnon/bccFe_auto",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon MFT smoke test on single-sublattice bccFe. Checks branch and eigenvector output files.",
@@ -413,6 +424,7 @@
     },
     {
       "name": "Example_frozen_magnon_bccFe_auto_scf",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "frozen_magnon"],
       "case": "frozen_magnon/bccFe_auto_scf",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon SCF smoke test on single-sublattice bccFe. Checks total-energy branch and eigenvector output files.",
@@ -429,6 +441,7 @@
     },
     {
       "name": "Example_bulk_bccFe_export_rs2pao",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "export"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "_note": "smoke test for hamiltonian%export select-case (calculation.f90 pre_processing_bravais) - checks the exported file exists and parses",
@@ -445,6 +458,7 @@
     },
     {
       "name": "Example_bulk_bccFe_export_python",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "export"],
       "case": "bulk/bccFe",
       "timeout": 300,
       "_note": "smoke test for hamiltonian%export select-case (calculation.f90 pre_processing_bravais) - checks the exported file exists and parses",
@@ -462,7 +476,7 @@
     {
       "name": "Example_surface_fccCu001_block_hoh",
       "quick": true,
-      "labels": ["legacy_strux"],
+      "labels": ["functional", "rs", "metallic", "basis_spd", "block", "hoh", "legacy_strux"],
       "case": "surface/fccCu001",
       "timeout": 300,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib's periodic solve expands this surface route to an impractical allocation.",
@@ -484,7 +498,7 @@
     {
       "name": "Example_impurity_B2FeCo_block_hoh",
       "quick": true,
-      "labels": ["legacy_strux"],
+      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "hoh", "legacy_strux"],
       "case": "impurity/B2FeCo",
       "timeout": 300,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib's impurity solve requests an impractical allocation for this route.",
@@ -504,35 +518,13 @@
       }
     },
     {
-      "name": "Example_bulk_Pt2MnGa_block_hoh",
-      "labels": ["legacy_strux"],
+      "name": "Example_bulk_Pt2MnGa_block",
+      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
       "mpi_procs": 4,
       "launch_modes": ["serial", "mpi"],
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Pt1_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
-          { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_Pt2MnGa_block",
-      "labels": ["legacy_strux"],
-      "case": "bulk/Pt2MnGa",
-      "timeout": 300,
-      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
-      "mpi_procs": 4,
       "namelists": {
         "lattice": { "strux_backend": "legacy" },
         "control":     { "nsp": 2, "recur": "block", "lld": 20 },
@@ -550,7 +542,7 @@
     },
     {
       "name": "Example_bulk_Pt2MnGa_chebyshev_hoh",
-      "labels": ["legacy_strux"],
+      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "chebyshev", "hoh", "legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 600,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
@@ -573,7 +565,7 @@
     },
     {
       "name": "Example_bulk_Pt2MnGa_chebyshev",
-      "labels": ["legacy_strux"],
+      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "chebyshev", "legacy_strux"],
       "case": "bulk/Pt2MnGa",
       "timeout": 600,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",

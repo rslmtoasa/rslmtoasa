@@ -29,3 +29,34 @@ real time with two CTest workers in `build-gc-debug`; its plain backend rows
 alone took 17.18 s (fast), 23.64 s (batched), and 22.05 s (legacy). Those rows
 were replaced only after confirming that each Si manifest row selects the same
 dispatch branch in `recursion_chebyshev.f90`.
+
+## Metallic Block and Lanczos coverage
+
+Block and Lanczos remain metallic real-space recursion coverage. The canonical
+Fe examples use 20 recursion levels, which is within the lean 15–20-level
+target; their existing radius-cut cluster is retained because it is the
+established faster production contract and does not map naturally to the Si
+fixture's periodic replication controls. No Si Block or Lanczos case exists.
+The DOS samples in these tests are coarse finite-depth recursion diagnostics,
+not sharply resolved Kohn–Sham DOS benchmarks.
+
+The Fe nsp=2/3/4 Block cases retain both HOH and non-HOH coverage. The direct
+`Lanczos`, `Block`, and `Chebyshev` CTest baselines are intentionally retained:
+they use separate Fe nsp=1 decks and therefore are not duplicates of the
+manifest's nsp=2/3/4 cases. They check the legacy nsp=1 scalar contract
+(`etot`, `ws_r`, `vmad`) and took 45.44 s real time together with two CTest
+workers before TEST-08 (Block 7.68 s, Chebyshev 23.67 s, Lanczos 45.44 s).
+The comparable 12-case manifest slice took 73.21 s before TEST-08; after
+removing only the redundant Pt2MnGa Block+HOH point, the retained 11-case
+slice took 54.98 s.
+
+The nsp=2 Lanczos functional cases are labeled `known_issue` and are not
+`quick`. They remain runnable scalar/moment reproducers only: the production
+path currently emits NaN spectral DOS/`lmom`, so those values are deliberately
+not referenced or described as validated. The root-cause repair is a separate
+production task; see `tests/KNOWN_ISSUES.md`.
+
+Pt2MnGa retains its multi-sublattice metallic Block path with serial/MPI
+coverage and its Chebyshev paths. The redundant Pt2MnGa Block+HOH Cartesian
+point was removed because Fe already covers Block+HOH and the retained Pt2
+Block case covers the distinct multi-species path in both launch modes.
