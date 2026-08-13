@@ -6,10 +6,10 @@
 | --- | --- | --- |
 | RF-01 | Characterization, numerical oracles, and CPU baseline | Complete |
 | RF-02 | MPI runtime state, build integration, and output ownership | Complete |
-| RF-03 | Explicit k-point worksets and ownership | Complete (MPI runtime validation pending environment repair) |
-| RF-04 | Batched reciprocal assembly and reusable workspaces | Complete (broad non-reciprocal example sweep remains optional) |
-| RF-05 | Reciprocal execution backend with CPU/LAPACK implementation | Pending RF-04 |
-| RF-06 | Shared TD-DFT transition engine for chi0 and Xi | Pending RF-05 |
+| RF-03 | Explicit k-point worksets and ownership | Complete |
+| RF-04 | Batched reciprocal assembly and reusable workspaces | Complete |
+| RF-05 | Reciprocal execution backend with CPU/LAPACK implementation | Complete |
+| RF-06 | Shared TD-DFT transition engine for chi0 and Xi | Complete |
 
 ## Baseline record
 
@@ -192,7 +192,7 @@ output files.
 - [x] Serial Release build and the complete unit-labelled CTest suite pass (42/42), including `UnitKpointWorkset`, occupations, arbitrary-k, and TD-DFT coverage.
 - [x] `git diff --check` passes.
 - [x] Open MPI runtime validation passes: the executable resolves only `libmpi.so.40`/`libmpi_mpifh.so.40`, and `Unit(KpointWorkset|KspaceOccupations|ParallelContext)` passes 7/7, including 1/2/4-rank parallel-context and MPI-occupation tests. Validation used `env/openmpi.sh` with `RSLMTO_FC=/usr/bin/mpifort` on the host shell.
-- [ ] Full SCF/GBT/DOS/TD-DFT regression matrix and a new performance baseline remain to be rerun; no reciprocal mathematical or storage-layout batching was introduced, so no material performance change is expected.
+- [x] GC-06 reran the full serial, strict-Debug, MPI/OpenMP, and MPI-only matrices on the qualified source revision; `UnitTddftCpuProfile` refreshed the bcc-Fe/fcc-Ni phase and payload baseline.
 
 **Ownership table.** `kpoint_workset` owns the authoritative local points,
 weights, and mappings. Reciprocal mesh construction creates it; Fourier and
@@ -226,7 +226,8 @@ parallelizing; do not combine such parallelism with a threaded BLAS setting.
 
 ### RF-05
 
-- [ ] Start only after RF-04 is green and committed.
+- [x] RF-05 is implemented in `c57ae2f`: the concrete CPU/LAPACK execution backend is the reciprocal substitution boundary, with batched normal/arbitrary-k adapters, generalized-overlap support, and direct residual/orthogonality/allocation evidence.
+- [x] GC-06 independently reviewed RF-05 and reran the full serial, strict-Debug, MPI/OpenMP, and MPI-only matrices on the qualified source revision.
 
 ### RF-06
 
@@ -266,8 +267,9 @@ parallelizing; do not combine such parallelism with a threaded BLAS setting.
   by `O((nleft+nright)*batch_size)` rather than a transition tensor.  These
   process-CPU samples are informational and not directly compared with the
   earlier noisy host baseline.
-- [ ] Full serial/OpenMP/MPI/debug and validation-campaign reruns remain to be
-  recorded after the RF-06 commit.  No GPU implementation is included.
+- [x] GC-06 completed and recorded the full serial, strict-Debug, MPI/OpenMP,
+  and MPI-only reruns after RF-06; all 442 enabled matrix executions passed
+  (105 + 105 + 116 + 116). No GPU implementation is included.
 
 **Projected device call flow.** RF-05 produces an eigenpair tile and an LMTO
 producer supplies the matching pair-operator k slice.  A device-resident
@@ -279,16 +281,30 @@ those partial matrices without revisiting vertex physics.
 ## Decisions affecting later MPI/GPU work
 
 - The default numerical path remains FP64 CPU with Intel oneMKL LAPACK.
-- `ENABLE_CUDA_PLUGIN=OFF` remains mandatory through RF-06 validation.
-- No workset, backend, MPI ownership, or production-algorithm change has begun while RF-01 baseline status is blocked.
+- `ENABLE_CUDA_PLUGIN=OFF` was retained through RF-01–RF-06 and GC-06
+  validation. GPU implementation is permitted only after the completed GC-06
+  gate and begins with one FP64 `ham_only` reciprocal backend.
+- Workset, backend, MPI ownership, and TD-DFT engine refactors are complete;
+  subsequent GPU work must preserve their documented numerical contracts.
 
 ## Completed-stage commits
 
 | Stage | Commit |
 | --- | --- |
-| RF-01 | Created (exact SHA reported in the handoff) |
-| RF-02 | Created in this commit (exact SHA reported in the handoff) |
-| RF-03 | Created in this commit (exact SHA reported in the handoff) |
-| RF-04 | Not started |
-| RF-05 | Not started |
-| RF-06 | Not started |
+| RF-01 | `28960f1` |
+| RF-02 | `41fc840` (with record correction `23b853c`) |
+| RF-03 | `9a5221b` |
+| RF-04 | `f30b108` |
+| RF-05 | `c57ae2f` |
+| RF-06 | `5f1ff71` |
+
+## Final gate closure
+
+GC-01 through GC-05 closed the Debug-safety, allocation-residency, normal-tile,
+and pair-operator-tile findings from the adversarial RF review. GC-06 then
+qualified source commit `464cbe7` with complete serial Release, strict Debug,
+MPI/OpenMP, and MPI-only matrices and independently reviewed RF-01 through
+RF-05. The final record is `44e958b`/`79ce8a1` in
+`docs/dev/plans/GPU_RECIPROCAL_GATE_CLOSURE_PLAN.md`.
+
+**RF-01 through RF-06 are complete. The reciprocal GPU gate is cleared.**
