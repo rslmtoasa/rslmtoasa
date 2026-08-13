@@ -400,8 +400,9 @@ contains
    !> @brief
    !> Destructor
    !---------------------------------------------------------------------------
-   subroutine add_matrix_integer_variable(this, name, value)
+   subroutine add_matrix_integer_variable(this, name, value, lower_bounds)
       integer, dimension(:, :), intent(in) :: value
+      integer, dimension(2), intent(in), optional :: lower_bounds
       include 'include_codes/namelist_generator/add_matrix_X_variable.f90'
    end subroutine add_matrix_integer_variable
 
@@ -410,8 +411,9 @@ contains
    !> @brief
    !> Destructor
    !---------------------------------------------------------------------------
-   subroutine add_matrix_real4_variable(this, name, value)
+   subroutine add_matrix_real4_variable(this, name, value, lower_bounds)
       real(4), dimension(:, :), intent(in) :: value
+      integer, dimension(2), intent(in), optional :: lower_bounds
       include 'include_codes/namelist_generator/add_matrix_X_variable.f90'
    end subroutine add_matrix_real4_variable
 
@@ -420,8 +422,9 @@ contains
    !> @brief
    !> Destructor
    !---------------------------------------------------------------------------
-   subroutine add_matrix_real8_variable(this, name, value)
+   subroutine add_matrix_real8_variable(this, name, value, lower_bounds)
       real(8), dimension(:, :), intent(in) :: value
+      integer, dimension(2), intent(in), optional :: lower_bounds
       include 'include_codes/namelist_generator/add_matrix_X_variable.f90'
    end subroutine add_matrix_real8_variable
 
@@ -430,8 +433,9 @@ contains
    !> @brief
    !> Destructor
    !---------------------------------------------------------------------------
-   subroutine add_tensor3_integer_variable(this, name, value)
+   subroutine add_tensor3_integer_variable(this, name, value, lower_bounds)
       integer, dimension(:, :, :), intent(in) :: value
+      integer, dimension(3), intent(in), optional :: lower_bounds
       include 'include_codes/namelist_generator/add_tensor3_X_variable.f90'
    end subroutine add_tensor3_integer_variable
 
@@ -440,8 +444,9 @@ contains
    !> @brief
    !> Destructor
    !---------------------------------------------------------------------------
-   subroutine add_tensor3_real4_variable(this, name, value)
+   subroutine add_tensor3_real4_variable(this, name, value, lower_bounds)
       real(4), dimension(:, :, :), intent(in) :: value
+      integer, dimension(3), intent(in), optional :: lower_bounds
       include 'include_codes/namelist_generator/add_tensor3_X_variable.f90'
    end subroutine add_tensor3_real4_variable
 
@@ -450,8 +455,9 @@ contains
    !> @brief
    !> Destructor
    !---------------------------------------------------------------------------
-   subroutine add_tensor3_real8_variable(this, name, value)
+   subroutine add_tensor3_real8_variable(this, name, value, lower_bounds)
       real(8), dimension(:, :, :), intent(in) :: value
+      integer, dimension(3), intent(in), optional :: lower_bounds
       include 'include_codes/namelist_generator/add_tensor3_X_variable.f90'
    end subroutine add_tensor3_real8_variable
 
@@ -579,4 +585,3 @@ contains
    end function array_real_variable_to_string
 
 end module namelist_generator_mod
-

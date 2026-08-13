@@ -1533,11 +1533,11 @@ contains
       integer :: na      ! Atom index
       integer :: ie      ! Energy channel index
 
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-      complex(rp), dimension(18, 18) :: mLx_ext, mLy_ext, mLz_ext
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
+      complex(rp), dimension(nb, nb) :: mLx_ext, mLy_ext, mLz_ext
 
-      complex(rp), dimension(18, 18) :: mQxx_ext, mQyy_ext, mQzz_ext
-      complex(rp), dimension(18, 18) :: mQxy_ext, mQyz_ext, mQzx_ext
+      complex(rp), dimension(nb, nb) :: mQxx_ext, mQyy_ext, mQzz_ext
+      complex(rp), dimension(nb, nb) :: mQxy_ext, mQyz_ext, mQzx_ext
 
       integer :: na_loc, unitquad
       character(len=256) :: fnamequad
@@ -1559,11 +1559,12 @@ contains
       call hcpx(mLz, 'cart2sph')
 
       !-----------------------------------------------------------------------
-      ! Extending the 9x9 orbital operators to the 18x18 spin-orbital basis.
+      ! Extending the norb x norb orbital operators to the nb x nb
+      ! spin-orbital basis.
       ! This assumes the basis ordering:
       !
-      !   1:9   -> spin up orbitals
-      !   10:18 -> spin down orbitals
+      !   1:norb       -> spin up orbitals
+      !   norb+1:nb   -> spin down orbitals
       !
       ! with the same orbital operator acting in both spin blocks.
       !-----------------------------------------------------------------------
@@ -1571,14 +1572,14 @@ contains
       mLy_ext = (0.0_rp, 0.0_rp)
       mLz_ext = (0.0_rp, 0.0_rp)
 
-      mLx_ext(1:9, 1:9)     = mLx(:, :)
-      mLx_ext(10:18, 10:18) = mLx(:, :)
+      mLx_ext(1:norb, 1:norb)             = mLx(:, :)
+      mLx_ext(norb+1:nb, norb+1:nb)       = mLx(:, :)
 
-      mLy_ext(1:9, 1:9)     = mLy(:, :)
-      mLy_ext(10:18, 10:18) = mLy(:, :)
+      mLy_ext(1:norb, 1:norb)             = mLy(:, :)
+      mLy_ext(norb+1:nb, norb+1:nb)       = mLy(:, :)
 
-      mLz_ext(1:9, 1:9)     = mLz(:, :)
-      mLz_ext(10:18, 10:18) = mLz(:, :)
+      mLz_ext(1:norb, 1:norb)             = mLz(:, :)
+      mLz_ext(norb+1:nb, norb+1:nb)       = mLz(:, :)
 
       !-----------------------------------------------------------------------
       ! Constructing the raw quadrupolar / OAP operators:

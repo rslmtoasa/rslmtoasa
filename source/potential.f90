@@ -379,6 +379,30 @@ contains
       close (funit)
 
       file_lmax = lmax
+
+      ! Older formatted restart files were written by a generic assumed-shape
+      ! namelist helper which lost the zero lower bound of the orbital-channel
+      ! arrays.  Thus their pl(1,:), ql(:,1,:), c(1,:), ... entries contain the
+      ! in-memory l=0 values.  The extra slot retained by the legacy reader
+      ! lets us repair those files before the active-basis resize below.
+      if (file_lmax >= 0 .and. lbound(pl, 1) == 0 .and. any(pl(0, :) < 1.0_rp)) then
+         do is = 1, size(pl, 2)
+            do l = 0, min(file_lmax, ubound(pl, 1) - 1)
+               pl(l, is) = pl(l + 1, is)
+               c(l, is) = c(l + 1, is)
+               enu(l, is) = enu(l + 1, is)
+               ppar(l, is) = ppar(l + 1, is)
+               qpar(l, is) = qpar(l + 1, is)
+               srdel(l, is) = srdel(l + 1, is)
+               vl(l, is) = vl(l + 1, is)
+               ql(:, l, is) = ql(:, l + 1, is)
+            end do
+         end do
+         if (rank == 0) call g_logger%warning('Restart file '//trim(fname)// &
+                                              ' uses legacy one-based orbital indices; shifted channels to l=0-based storage.', &
+                                              __FILE__, __LINE__)
+      end if
+
       if (lmax < lmax_basis) then
          call g_logger%warning('Potential file '//trim(fname)//' has lmax='//int2str(file_lmax)// &
                                ' while active basis lmax='//int2str(lmax_basis)//'. Promoting potential arrays.', __FILE__, __LINE__)
@@ -963,15 +987,15 @@ contains
       call nml%add('utot', this%utot)
       call nml%add('ekin', this%ekin)
       call nml%add('rhoeps', this%rhoeps)
-      call nml%add('c', this%c)
-      call nml%add('enu', this%enu)
-      call nml%add('ppar', this%ppar)
-      call nml%add('qpar', this%qpar)
-      call nml%add('srdel', this%srdel)
-      call nml%add('vl', this%vl)
-      call nml%add('pl', this%pl)
+      call nml%add('c', this%c, lbound(this%c))
+      call nml%add('enu', this%enu, lbound(this%enu))
+      call nml%add('ppar', this%ppar, lbound(this%ppar))
+      call nml%add('qpar', this%qpar, lbound(this%qpar))
+      call nml%add('srdel', this%srdel, lbound(this%srdel))
+      call nml%add('vl', this%vl, lbound(this%vl))
+      call nml%add('pl', this%pl, lbound(this%pl))
       call nml%add('ws_r', this%ws_r)
-      call nml%add('ql', this%ql)
+      call nml%add('ql', this%ql, lbound(this%ql))
       call nml%add('lmax', this%lmax)
        call nml%add('vmad', this%vmad)
        call nml%add('q10', this%q10)
