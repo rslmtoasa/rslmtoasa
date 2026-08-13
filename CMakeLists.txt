@@ -482,6 +482,8 @@ if (RUN_UNIT_TESTS)
 
   add_fortran_unit_test(UnitBasisDimensions ${TestDIR}/unit/test_basis_dimensions.f90)
   set_tests_properties(UnitBasisDimensions PROPERTIES LABELS "unit;basis")
+  add_fortran_unit_test(UnitLdaUHamiltonian ${TestDIR}/unit/test_lda_u_hamiltonian.f90)
+  set_tests_properties(UnitLdaUHamiltonian PROPERTIES LABELS "unit;lda_u;hamiltonian")
   add_fortran_unit_test(UnitLehmannChain ${TestDIR}/unit/test_lehmann_chain.f90)
   add_fortran_unit_test(UnitDysonEquivalence ${TestDIR}/unit/test_dyson_equivalence.f90)
   add_fortran_unit_test(UnitGammaSupercell ${TestDIR}/unit/test_gamma_supercell.f90)
