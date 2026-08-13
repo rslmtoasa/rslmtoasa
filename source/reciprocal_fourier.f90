@@ -990,11 +990,20 @@ module subroutine check_multisite_hamiltonian_diagonal(this)
    class(reciprocal), intent(in) :: this
    integer :: isite, iorb, ispin
    complex(rp) :: h_avg_site1_up, h_avg_site1_dn, h_avg_site2_up, h_avg_site2_dn
-   integer :: n_sites, idx_up, idx_dn
+   integer :: n_sites, idx_up, idx_dn, nmat, n_per_site
    character(len=256) :: msg
    
+   if (.not. allocated(this%hk_bulk)) return
+   if (size(this%hk_bulk, 3) < 1) return
+
    n_sites = this%lattice%nrec
    if (n_sites < 2) return
+   nmat = size(this%hk_bulk, 1)
+   if (nmat <= 0) return
+   if (mod(nmat, n_sites) /= 0) return
+   n_per_site = nmat/n_sites
+   ! This diagnostic assumes an spd spinor block (18 states/site).
+   if (n_per_site < 18 .or. nmat < 36) return
    
    ! Check on-site diagonal elements for first two sites at Gamma (ik=1)
    ! For spd basis: s, p, d for spin-up (indices 1-9), then spin-down (10-18)
