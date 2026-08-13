@@ -70,26 +70,21 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   either. Resolving their disagreement is a separate DOS-method correctness
   task, not a baseline characterization change.
 
-## `recur = 'lanczos'` + `nsp = 2` produces NaN DOS and `lmom`
+## [RESOLVED 2026-08-13, STAB-02] `recur = 'lanczos'` + `nsp = 2` produced non-finite DOS and `lmom`
 
-- **Symptom:** with `control%recur = 'lanczos'` and `control%nsp = 2`, every
-  row of `totaldos.out` is NaN in the DOS column, and `lmom` in the output
-  namelist is NaN. `etot`, `ws_r`, and `mom` are unaffected (physically
-  sane, match the `nsp=1` lanczos and `nsp=2` block/chebyshev runs).
-- **Scope:** reproduces on both `hamiltonian%hoh = .true.` and `.false.`.
-  `nsp=1` lanczos is unaffected (`totaldos.out` and `lmom` both sane).
-  `nsp=2` with `recur = 'block'` or `'chebyshev'` is unaffected.
-- **Likely area:** `green%sgreen()` (the lanczos-path DOS/Green's-function
-  routine, dispatched from `calculation.f90`'s `recur` select-case) or the
-  orbital-moment calculation in `bands.f90` — both paths presumably assume
-  a code path shared with `nsp=1` that doesn't generalize to two spin
-  channels.
-- **Test impact:** `tests/scf/cases.json` entries `Example_bulk_bccFe_nsp2_lanczos`
-  and `Example_bulk_bccFe_nsp2_lanczos_hoh` check only `etot`/`ws_r`/`mom`;
-  the `totaldos.out` and `lmom` checks are intentionally omitted until this
-  is fixed, so the reference doesn't pin down an all-NaN result.
-- **Found:** Phase 2, P1 (adding lanczos coverage to the SCF example suite —
-  this combination had zero prior test coverage under any phase).
+- **Root cause:** the scalar Lanczos `hop` implementation had only a
+  `control%nsp = 1` branch. For nsp=2 it left the Hamiltonian action at zero;
+  apart from the seed norm, the scalar alpha and beta-squared coefficients
+  therefore remained zero. The DOS
+  path then reached the zero-width termination guard, producing an
+  identically zero spectrum on the current build (and the historical
+  layout-dependent NaN symptom before that guard).
+- **Fix:** the nsp=2 scalar route now applies the full spinor Hamiltonian,
+  including onsite `l.s` and CCOR terms, and mirrors the Block route's two
+  `h - H O H + e_nu + l.s` sweeps when HOH is enabled.
+- **Test impact:** both nsp=2 Lanczos fixtures now assert finite sampled DOS
+  values and all three `lmom` components. The nsp=1 Lanczos and nsp=2
+  Block/Chebyshev neighbouring paths remain covered.
 
 ## [RESOLVED 2026-07-23, commit 8b42928] Exchange `J_ij` NaN — `simpson_f` out-of-bounds read
 

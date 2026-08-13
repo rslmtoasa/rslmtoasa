@@ -786,6 +786,7 @@ contains
       integer :: ih ! Atom number in the clust
       integer, dimension(0:this%lattice%kk) :: idum
       complex(rp), dimension(nb) :: dum
+      complex(rp), dimension(nb, nb) :: locham
       real(rp) :: summ, start, finish
 
       summ = 0.0d0
@@ -897,6 +898,171 @@ contains
                this%pmn(l, i) = dum(l) + this%pmn(l, i)
             end do
          end do
+         this%atemp(ll) = summ
+
+      case (2) ! Collinear fully relativistic case
+
+         ! The scalar Lanczos driver still stores one coefficient chain per
+         ! orbital, but nsp=2 requires the full spinor Hamiltonian action.
+         ! Reuse the block-recursion work arrays for the two HOH sweeps.
+         this%hpsi(:, 1, :) = (0.0_rp, 0.0_rp)
+         this%hohpsi(:, 1, :) = (0.0_rp, 0.0_rp)
+         this%enupsi(:, 1, :) = (0.0_rp, 0.0_rp)
+         this%socpsi(:, 1, :) = (0.0_rp, 0.0_rp)
+
+         if (this%lattice%nmax /= 0) then
+            !$omp parallel do default(shared) private(i, nr, j, nnmap, ino, locham) schedule(dynamic, 100)
+            do i = 1, this%lattice%nmax
+               idum(i) = this%izero(i)
+               ino = this%lattice%iz(i)
+               nr = this%lattice%nn(i, 1)
+               if (this%izero(i) /= 0) then
+                  if (this%hamiltonian%hoh) then
+                     this%hpsi(:, 1, i) = matmul(this%hamiltonian%hall(:, :, 1, i), this%psi(:, i))
+                     this%enupsi(:, 1, i) = matmul(this%hamiltonian%enim(:, :, ino), this%psi(:, i))
+                     this%socpsi(:, 1, i) = matmul(this%hamiltonian%lsham(:, :, ino), this%psi(:, i))
+                     if (this%hamiltonian%ccor_2c) then
+                        this%enupsi(:, 1, i) = this%enupsi(:, 1, i) + &
+                           matmul(this%hamiltonian%hallcc(:, :, 1, i), this%psi(:, i))
+                     end if
+                  else
+                     locham = this%hamiltonian%hall(:, :, 1, i) + this%hamiltonian%lsham(:, :, ino)
+                     if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%hallcc(:, :, 1, i)
+                     this%hpsi(:, 1, i) = matmul(locham, this%psi(:, i))
+                  end if
+               end if
+               if (nr >= 2) then
+                  do j = 2, nr
+                     nnmap = this%lattice%nn(i, j)
+                     if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                        if (this%hamiltonian%hoh) then
+                           this%hpsi(:, 1, i) = this%hpsi(:, 1, i) + &
+                              matmul(this%hamiltonian%hall(:, :, j, i), this%psi(:, nnmap))
+                           if (this%hamiltonian%ccor_2c) this%enupsi(:, 1, i) = this%enupsi(:, 1, i) + &
+                              matmul(this%hamiltonian%hallcc(:, :, j, i), this%psi(:, nnmap))
+                        else
+                           locham = this%hamiltonian%hall(:, :, j, i)
+                           if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%hallcc(:, :, j, i)
+                           this%hpsi(:, 1, i) = this%hpsi(:, 1, i) + matmul(locham, this%psi(:, nnmap))
+                        end if
+                        idum(i) = 1
+                     end if
+                  end do
+               end if
+            end do
+            !$omp end parallel do
+         end if
+
+         !$omp parallel do default(shared) private(i, ih, nr, j, nnmap, locham) schedule(dynamic, 100)
+         do i = nlimplus1, this%lattice%kk
+            idum(i) = this%izero(i)
+            ih = this%lattice%iz(i)
+            nr = this%lattice%nn(i, 1)
+            if (this%izero(i) /= 0) then
+               if (this%hamiltonian%hoh) then
+                  this%hpsi(:, 1, i) = matmul(this%hamiltonian%ee(:, :, 1, ih), this%psi(:, i))
+                  this%enupsi(:, 1, i) = matmul(this%hamiltonian%enim(:, :, ih), this%psi(:, i))
+                  this%socpsi(:, 1, i) = matmul(this%hamiltonian%lsham(:, :, ih), this%psi(:, i))
+                  if (this%hamiltonian%ccor_2c) then
+                     this%enupsi(:, 1, i) = this%enupsi(:, 1, i) + &
+                        matmul(this%hamiltonian%eecc(:, :, 1, ih), this%psi(:, i))
+                  end if
+               else
+                  locham = this%hamiltonian%ee(:, :, 1, ih) + this%hamiltonian%lsham(:, :, ih)
+                  if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%eecc(:, :, 1, ih)
+                  this%hpsi(:, 1, i) = matmul(locham, this%psi(:, i))
+               end if
+            end if
+            if (nr >= 2) then
+               do j = 2, nr
+                  nnmap = this%lattice%nn(i, j)
+                  if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                     if (this%hamiltonian%hoh) then
+                        this%hpsi(:, 1, i) = this%hpsi(:, 1, i) + &
+                           matmul(this%hamiltonian%ee(:, :, j, ih), this%psi(:, nnmap))
+                        if (this%hamiltonian%ccor_2c) this%enupsi(:, 1, i) = this%enupsi(:, 1, i) + &
+                           matmul(this%hamiltonian%eecc(:, :, j, ih), this%psi(:, nnmap))
+                     else
+                        locham = this%hamiltonian%ee(:, :, j, ih)
+                        if (this%hamiltonian%ccor_2c) locham = locham + this%hamiltonian%eecc(:, :, j, ih)
+                        this%hpsi(:, 1, i) = this%hpsi(:, 1, i) + matmul(locham, this%psi(:, nnmap))
+                     end if
+                     idum(i) = 1
+                  end if
+               end do
+            end if
+         end do
+         !$omp end parallel do
+
+         if (this%hamiltonian%hoh) then
+            ! Apply the second sweep H O to the result of the first H sweep.
+            this%izero(:) = idum(:)
+            idum(:) = 0
+            if (this%lattice%nmax /= 0) then
+               !$omp parallel do default(shared) private(i, nr, j, nnmap) schedule(dynamic, 100)
+               do i = 1, this%lattice%nmax
+                  idum(i) = this%izero(i)
+                  nr = this%lattice%nn(i, 1)
+                  if (this%izero(i) /= 0) then
+                     this%hohpsi(:, 1, i) = matmul(this%hamiltonian%hallo(:, :, 1, i), this%hpsi(:, 1, i))
+                  end if
+                  if (nr >= 2) then
+                     do j = 2, nr
+                        nnmap = this%lattice%nn(i, j)
+                        if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                           this%hohpsi(:, 1, i) = this%hohpsi(:, 1, i) + &
+                              matmul(this%hamiltonian%hallo(:, :, j, i), this%hpsi(:, 1, nnmap))
+                           idum(i) = 1
+                        end if
+                     end do
+                  end if
+               end do
+               !$omp end parallel do
+            end if
+
+            !$omp parallel do default(shared) private(i, ih, nr, j, nnmap) schedule(dynamic, 100)
+            do i = nlimplus1, this%lattice%kk
+               idum(i) = this%izero(i)
+               ih = this%lattice%iz(i)
+               nr = this%lattice%nn(i, 1)
+               if (this%izero(i) /= 0) then
+                  this%hohpsi(:, 1, i) = matmul(this%hamiltonian%eeo(:, :, 1, ih), this%hpsi(:, 1, i))
+               end if
+               if (nr >= 2) then
+                  do j = 2, nr
+                     nnmap = this%lattice%nn(i, j)
+                     if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+                        this%hohpsi(:, 1, i) = this%hohpsi(:, 1, i) + &
+                           matmul(this%hamiltonian%eeo(:, :, j, ih), this%hpsi(:, 1, nnmap))
+                        idum(i) = 1
+                     end if
+                  end do
+               end if
+            end do
+            !$omp end parallel do
+
+            this%izero(:) = idum(:)
+            summ = 0.0_rp
+            do i = 1, this%lattice%kk
+               if (this%izero(i) /= 0) then
+                  this%hpsi(:, 1, i) = this%hpsi(:, 1, i) - this%hohpsi(:, 1, i) + &
+                     this%enupsi(:, 1, i) + this%socpsi(:, 1, i)
+                  do l = 1, nb
+                     summ = summ + real(this%hpsi(l, 1, i)*conjg(this%psi(l, i)))
+                     this%pmn(l, i) = this%hpsi(l, 1, i) + this%pmn(l, i)
+                  end do
+               end if
+            end do
+         else
+            this%izero(:) = idum(:)
+            summ = 0.0_rp
+            do i = 1, this%lattice%kk
+               do l = 1, nb
+                  summ = summ + real(this%hpsi(l, 1, i)*conjg(this%psi(l, i)))
+                  this%pmn(l, i) = this%hpsi(l, 1, i) + this%pmn(l, i)
+               end do
+            end do
+         end if
          this%atemp(ll) = summ
       end select
    end subroutine hop

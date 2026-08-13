@@ -148,10 +148,9 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp2_lanczos_hoh",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos", "known_issue", "hoh"],
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos", "hoh"],
       "case": "bulk/bccFe",
       "timeout": 300,
-      "_note": "known_issue: recur=lanczos with nsp=2 produces NaN spectral DOS/lmom; this runnable reproducer checks only finite scalar/moment outputs and is not a validated spectral benchmark. Production root-cause repair is a separate task; see tests/KNOWN_ISSUES.md.",
       "namelists": {
         "control":     { "nsp": 2, "recur": "lanczos", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -159,16 +158,18 @@
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3], "lmom": [1, 2, 3] } }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     },
     {
       "name": "Example_bulk_bccFe_nsp2_lanczos",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos", "known_issue"],
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos"],
       "case": "bulk/bccFe",
       "timeout": 300,
-      "_note": "known_issue: recur=lanczos with nsp=2 produces NaN spectral DOS/lmom; this runnable reproducer checks only finite scalar/moment outputs and is not a validated spectral benchmark. Production root-cause repair is a separate task; see tests/KNOWN_ISSUES.md.",
       "namelists": {
         "control":     { "nsp": 2, "recur": "lanczos", "lld": 20 },
         "self":        { "nstep": 1 },
@@ -176,7 +177,10 @@
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3], "lmom": [1, 2, 3] } }
+        ],
+        "text": [
+          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
         ]
       }
     },
