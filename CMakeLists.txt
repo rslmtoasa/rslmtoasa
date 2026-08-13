@@ -515,7 +515,7 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "regression;tddft
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
-# Standalone Fortran unit tests (known-answer, no external fixtures)
+# Standalone Fortran unit tests (known-answer and focused production-path tests)
 ##############################################################################################
 if (RUN_UNIT_TESTS)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -559,6 +559,13 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
   add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
   set_tests_properties(UnitGbtStructure PROPERTIES LABELS "unit;gbt;wp4")
+  add_fortran_unit_test(UnitStructureConstantsBackends ${TestDIR}/unit/test_structure_constants_backends.f90)
+  target_compile_definitions(UnitStructureConstantsBackends PRIVATE
+    TEST_STRUCTURE_CONSTANT_DATABASE="${CMAKE_SOURCE_DIR}/tests/scf/cases/bulk/bccFe")
+  file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
+  set_tests_properties(UnitStructureConstantsBackends PROPERTIES
+    LABELS "unit;structure_constants;strux;legacy_strux"
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
   add_fortran_unit_test(UnitLmtoMagneticTangents ${TestDIR}/unit/test_lmto_magnetic_tangents.f90)
   set_tests_properties(UnitLmtoMagneticTangents PROPERTIES LABELS "unit;tddft;ward;lmto;tangent")
   add_fortran_unit_test(UnitLmtoPairPotential ${TestDIR}/unit/test_lmto_pair_potential.f90)
