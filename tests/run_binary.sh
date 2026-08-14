@@ -19,6 +19,34 @@ if [ ! -x "$binary" ]; then
     exit 1
 fi
 
+# Keep dynamically linked spglib discoverable when a binary was built on a
+# separate CI job or when Homebrew's opt symlink is not present. The package
+# is still required; this only supplies the platform-specific loader path.
+prepend_loader_path() {
+    local variable="$1"
+    local directory="$2"
+    if [ -n "${!variable:-}" ]; then
+        printf -v "$variable" '%s:%s' "$directory" "${!variable}"
+    else
+        printf -v "$variable" '%s' "$directory"
+    fi
+    export "$variable"
+}
+
+if [ "$(uname -s)" = "Linux" ]; then
+    for spglib_dir in /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu; do
+        if [ -f "$spglib_dir/libsymspg.so.2" ]; then
+            prepend_loader_path LD_LIBRARY_PATH "$spglib_dir"
+        fi
+    done
+elif [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
+    spglib_prefix="$(brew --prefix spglib 2>/dev/null || true)"
+    spglib_dir="$spglib_prefix/lib"
+    if [ -d "$spglib_dir" ] && compgen -G "$spglib_dir/libsymspg*.dylib" >/dev/null; then
+        prepend_loader_path DYLD_LIBRARY_PATH "$spglib_dir"
+    fi
+fi
+
 if [ "$mpi_procs" -gt 1 ]; then
     # Respect an explicitly selected launcher from CI if provided.
     mpi_launcher="${RSLMTO_MPI_LAUNCHER:-}"
