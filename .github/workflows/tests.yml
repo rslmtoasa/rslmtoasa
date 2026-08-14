@@ -1,26 +1,14 @@
 name: Example tests
 
-# Triggered automatically after the build workflow completes successfully.
-# Also runs directly on pull_request (a quick labelled subset, building from
-# source itself since there is no upstream build-workflow artifact yet for an
-# unmerged PR), nightly on schedule (the full matrix, also self-built), and
-# can be triggered manually by providing a build workflow run ID.
+# Runs directly from the checked-out branch. The test workflow builds its own
+# binary, so it does not depend on another workflow's artifacts or definition.
 on:
-  workflow_run:
-    workflows: ["Build binaries on all platforms (beta)"]
-    types: [completed]
+  push:
   pull_request:
   schedule:
     # 03:00 UTC nightly - full matrix (all labels, all cases) on Linux + macOS.
     - cron: "0 3 * * *"
   workflow_dispatch:
-    inputs:
-      run_id:
-        description: "Run ID of the build workflow to pull binaries from"
-        required: true
-      ref:
-        description: "Git ref/SHA to test (defaults to triggering run head SHA when empty)"
-        required: false
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -29,14 +17,6 @@ concurrency:
 jobs:
   test:
     name: Test on ${{ matrix.os }} ${{ matrix.icon }}
-
-    # For workflow_run: only proceed if the build succeeded.
-    # For pull_request / schedule / workflow_dispatch: always run.
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule' ||
-      github.event.workflow_run.conclusion == 'success'
 
     strategy:
       fail-fast: false
@@ -51,11 +31,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          # workflow_run: pin to the exact commit that triggered the build workflow.
-          # workflow_dispatch: allow overriding via input.ref; if empty, use run head SHA.
-          # pull_request: default checkout ref (the PR merge commit) is correct as-is.
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || ((github.event_name != 'pull_request' && github.event_name != 'schedule') && github.event.workflow_run.head_sha || '') }}
 
       # -----------------------------------------------------------------------
       # System dependencies — mirrors the build workflow so cmake can configure
@@ -110,48 +85,7 @@ jobs:
         run: pip install f90nml
 
       # -----------------------------------------------------------------------
-      # Download pre-built binary from the build workflow
-      # (skipped for pull_request: there is no upstream build-workflow
-      # artifact for an unmerged PR, so we build from source instead - see
-      # "Build from source" below)
-      # -----------------------------------------------------------------------
-      - name: Resolve build workflow run ID
-        if: github.event_name != 'pull_request' && github.event_name != 'schedule'
-        id: run_id
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "id=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
-          else
-            echo "id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Show workflow provenance
-        if: github.event_name != 'pull_request' && github.event_name != 'schedule'
-        run: |
-          echo "event_name=${{ github.event_name }}"
-          echo "dispatch.run_id=${{ inputs.run_id || 'n/a' }}"
-          echo "dispatch.ref=${{ inputs.ref || 'n/a' }}"
-          echo "workflow_run.id=${{ github.event.workflow_run.id || 'n/a' }}"
-          echo "workflow_run.head_sha=${{ github.event.workflow_run.head_sha || 'n/a' }}"
-          echo "selected.run_id=${{ steps.run_id.outputs.id }}"
-          echo "checked_out_sha=$(git rev-parse HEAD)"
-          echo "checked_out_branch=$(git branch --show-current || true)"
-          echo "run_test_marker=$(grep -n "\[run_test\]" tests/run_test.py | head -n 1 || true)"
-
-      - name: Download binary artifact
-        if: github.event_name != 'pull_request' && github.event_name != 'schedule'
-        uses: actions/download-artifact@v8
-        with:
-          name: rslmto.${{ runner.os }}.${{ matrix.arch }}
-          path: dist/
-          run-id: ${{ steps.run_id.outputs.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # -----------------------------------------------------------------------
-      # Configure CMake (registers tests; for workflow_run/workflow_dispatch
-      # this only needs to register tests against the downloaded binary, no
-      # build step. For pull_request there is no upstream binary, so build
-      # from source below.)
+      # Configure and build the checked-out source.
       # -----------------------------------------------------------------------
       - name: Configure CMake
         run: |
@@ -168,8 +102,7 @@ jobs:
             -DRUN_UNIT_TESTS=ON \
             -DEXAMPLE_PYTHON_EXECUTABLE="$(which python3)"
 
-      - name: Build from source (pull_request / schedule) ${{ matrix.icon }}
-        if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+      - name: Build from source ${{ matrix.icon }}
         run: cmake --build build --parallel
 
       - name: Select MPI launcher
@@ -194,16 +127,6 @@ jobs:
             exit 1
           fi
 
-      # Place the pre-built binary where CMake expects it
-      - name: Stage pre-built binary
-        if: github.event_name != 'pull_request' && github.event_name != 'schedule'
-        run: |
-          mkdir -p build/bin
-          cp dist/rslmto.* build/bin/rslmto.x
-          chmod +x build/bin/rslmto.x
-
-      # The downloaded artifact contains the production binary only. Build the
-      # standalone unit/profile executables without rebuilding/replacing it.
       - name: Build standalone unit tests ${{ matrix.icon }}
         run: cmake --build build --target unit_tests --parallel
 
@@ -257,9 +180,8 @@ jobs:
           RSLMTO_OMP_THREADS_SERIAL: "2"
         run: |
           # pull_request runs a small representative "quick" subset to keep PR
-          # turnaround under ~15 min; every other trigger (push via
-          # workflow_run, nightly schedule, manual dispatch) runs the full
-          # example matrix.
+          # turnaround under ~15 min; every other trigger (push, nightly
+          # schedule, manual dispatch) runs the full example matrix.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             LABEL_REGEX="quick"
           else
@@ -397,18 +319,10 @@ jobs:
   mkl:
     name: MKL kernels (Ubuntu)
 
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule' ||
-      github.event.workflow_run.conclusion == 'success'
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || ((github.event_name != 'pull_request' && github.event_name != 'schedule') && github.event.workflow_run.head_sha || '') }}
 
       - name: Install system dependencies
         run: |
@@ -467,18 +381,10 @@ jobs:
   cuda_compile:
     name: CUDA plugin (compile-only, Ubuntu)
 
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule' ||
-      github.event.workflow_run.conclusion == 'success'
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || ((github.event_name != 'pull_request' && github.event_name != 'schedule') && github.event.workflow_run.head_sha || '') }}
 
       - name: Install system dependencies
         run: |
@@ -524,12 +430,6 @@ jobs:
   windows_quick:
     name: Windows quick subset (MSYS2, best effort)
 
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule' ||
-      github.event.workflow_run.conclusion == 'success'
-
     runs-on: windows-latest
     continue-on-error: true
     defaults:
@@ -538,8 +438,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || ((github.event_name != 'pull_request' && github.event_name != 'schedule') && github.event.workflow_run.head_sha || '') }}
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -587,18 +485,10 @@ jobs:
   libxc_unit:
     name: libXC XC baseline (Ubuntu)
 
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule' ||
-      github.event.workflow_run.conclusion == 'success'
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || ((github.event_name != 'pull_request' && github.event_name != 'schedule') && github.event.workflow_run.head_sha || '') }}
 
       - name: Install system dependencies
         run: |
