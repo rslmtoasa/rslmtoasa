@@ -79,7 +79,9 @@ contains
       type(parallel_context), intent(in) :: rhs
 #ifdef USE_MPI
       logical :: mpi_is_initialized, mpi_is_finalized
-      integer :: mpi_status
+      ! Open MPI 5 exposes TYPE(MPI_Status) from `use mpi`; do not reuse
+      ! that case-insensitive name for an integer error code.
+      integer :: mpi_ierr
 #endif
 
       lhs%rank = rhs%rank
@@ -91,13 +93,13 @@ contains
       lhs%local_comm = -1
       if (rhs%local_comm == -1) return
 
-      call MPI_Initialized(mpi_is_initialized, mpi_status)
-      if (.not. mpi_is_initialized .or. mpi_status /= MPI_SUCCESS) return
-      call MPI_Finalized(mpi_is_finalized, mpi_status)
-      if (mpi_is_finalized .or. mpi_status /= MPI_SUCCESS) return
+      call MPI_Initialized(mpi_is_initialized, mpi_ierr)
+      if (.not. mpi_is_initialized .or. mpi_ierr /= MPI_SUCCESS) return
+      call MPI_Finalized(mpi_is_finalized, mpi_ierr)
+      if (mpi_is_finalized .or. mpi_ierr /= MPI_SUCCESS) return
 
-      call MPI_Comm_dup(rhs%local_comm, lhs%local_comm, mpi_status)
-      if (mpi_status /= MPI_SUCCESS) then
+      call MPI_Comm_dup(rhs%local_comm, lhs%local_comm, mpi_ierr)
+      if (mpi_ierr /= MPI_SUCCESS) then
          lhs%local_comm = -1
          call g_logger%warning('MPI_Comm_dup failed while copying parallel context; local communicator disabled.', __FILE__, __LINE__)
       end if
@@ -109,21 +111,21 @@ contains
       class(parallel_context), intent(inout) :: this
 #ifdef USE_MPI
       logical :: mpi_is_initialized
-      integer :: mpi_status
+      integer :: mpi_ierr
 
-      call MPI_Initialized(mpi_is_initialized, mpi_status)
-      if (.not. mpi_is_initialized .or. mpi_status /= MPI_SUCCESS) return
+      call MPI_Initialized(mpi_is_initialized, mpi_ierr)
+      if (.not. mpi_is_initialized .or. mpi_ierr /= MPI_SUCCESS) return
 
-      call MPI_Comm_rank(MPI_COMM_WORLD, this%rank, mpi_status)
-      if (mpi_status /= MPI_SUCCESS) return
-      call MPI_Comm_size(MPI_COMM_WORLD, this%size, mpi_status)
-      if (mpi_status /= MPI_SUCCESS) return
+      call MPI_Comm_rank(MPI_COMM_WORLD, this%rank, mpi_ierr)
+      if (mpi_ierr /= MPI_SUCCESS) return
+      call MPI_Comm_size(MPI_COMM_WORLD, this%size, mpi_ierr)
+      if (mpi_ierr /= MPI_SUCCESS) return
 
       this%mpi_enabled = .true.
-      call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, this%rank, MPI_INFO_NULL, this%local_comm, mpi_status)
-      if (mpi_status == MPI_SUCCESS) then
-         call MPI_Comm_rank(this%local_comm, this%local_rank, mpi_status)
-         call MPI_Comm_size(this%local_comm, this%local_size, mpi_status)
+      call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, this%rank, MPI_INFO_NULL, this%local_comm, mpi_ierr)
+      if (mpi_ierr == MPI_SUCCESS) then
+         call MPI_Comm_rank(this%local_comm, this%local_rank, mpi_ierr)
+         call MPI_Comm_size(this%local_comm, this%local_size, mpi_ierr)
       else
          ! A usable world context is still preferable to aborting solely because
          ! node-local identity is unavailable on an older MPI implementation.
@@ -165,8 +167,8 @@ contains
    subroutine barrier(this)
       class(parallel_context), intent(in) :: this
 #ifdef USE_MPI
-      integer :: mpi_status
-      if (this%mpi_enabled) call MPI_Barrier(MPI_COMM_WORLD, mpi_status)
+      integer :: mpi_ierr
+      if (this%mpi_enabled) call MPI_Barrier(MPI_COMM_WORLD, mpi_ierr)
 #endif
    end subroutine barrier
 
@@ -175,14 +177,14 @@ contains
       class(parallel_context), intent(inout) :: this
 #ifdef USE_MPI
       logical :: mpi_is_initialized, mpi_is_finalized
-      integer :: mpi_status, communicator
+      integer :: mpi_ierr, communicator
 
       communicator = this%local_comm
-      call MPI_Initialized(mpi_is_initialized, mpi_status)
-      if (mpi_is_initialized .and. mpi_status == MPI_SUCCESS) then
-         call MPI_Finalized(mpi_is_finalized, mpi_status)
+      call MPI_Initialized(mpi_is_initialized, mpi_ierr)
+      if (mpi_is_initialized .and. mpi_ierr == MPI_SUCCESS) then
+         call MPI_Finalized(mpi_is_finalized, mpi_ierr)
          if (.not. mpi_is_finalized .and. communicator /= -1) then
-            call MPI_Comm_free(communicator, mpi_status)
+            call MPI_Comm_free(communicator, mpi_ierr)
          end if
       end if
       this%local_comm = -1
