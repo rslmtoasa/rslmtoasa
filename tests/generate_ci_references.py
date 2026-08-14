@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import subprocess
@@ -60,6 +61,29 @@ def openmpi_environment() -> dict[str, str]:
             key, value = item.split(b"=", 1)
             environment[key.decode()] = value.decode()
     return environment
+
+
+def runner_native_environment() -> dict[str, str]:
+    """Return the environment used by the platform CI runner itself.
+
+    This deliberately does not source env/openmpi.sh.  The runner workflow
+    installs its dependencies in a clean environment, and CMake should resolve
+    the compiler, MPI, and BLAS/LAPACK installation available there.
+    """
+    return os.environ.copy()
+
+
+def resolve_mpi_launcher(environment: dict[str, str]) -> str:
+    """Find an MPI launcher in the active runner environment."""
+    requested = environment.get("RSLMTO_MPI_LAUNCHER")
+    candidates = [requested] if requested else []
+    candidates.extend(["mpirun.openmpi", "mpirun", "mpiexec"])
+    for candidate in candidates:
+        if candidate:
+            resolved = shutil.which(candidate, path=environment.get("PATH"))
+            if resolved:
+                return resolved
+    raise RuntimeError("no MPI launcher found in the runner environment")
 
 
 def cache_values(cache_path: Path, keys: list[str]) -> dict[str, str]:
@@ -110,6 +134,13 @@ def main() -> None:
         help="Build the reference binary with MPI (default: enabled)",
     )
     parser.add_argument(
+        "--profile", choices=("linux-ci-equivalent", "runner-native"),
+        default="linux-ci-equivalent",
+        help=("Reference build profile. 'linux-ci-equivalent' preserves the "
+              "committed Linux/OpenBLAS profile; 'runner-native' mirrors the "
+              "current Linux or macOS CI runner."),
+    )
+    parser.add_argument(
         "--case", nargs="+", default=[], metavar="NAME",
         help="Generate only the named cases (default: all cases)",
     )
@@ -125,25 +156,30 @@ def main() -> None:
     if not references_dir.is_absolute():
         references_dir = ROOT / references_dir
 
-    # Reuse the repository-supported environment rather than reproducing its
-    # MPI library filtering here.  This matters on developer hosts that have
-    # Intel MPI preloaded alongside Open MPI.
-    ci_env = openmpi_environment()
-    for variable in ("CMAKE_PREFIX_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH"):
-        ci_env.pop(variable, None)
-    compiler_name = args.fortran_compiler or ("mpifort" if args.enable_mpi else "gfortran")
+    # The committed Linux profile uses the repository-supported environment to
+    # isolate local MPI installations.  The runner-native profile intentionally
+    # leaves the runner environment untouched and lets CMake resolve its tools.
+    ci_env = (openmpi_environment() if args.profile == "linux-ci-equivalent"
+              else runner_native_environment())
+    if args.profile == "linux-ci-equivalent":
+        for variable in ("CMAKE_PREFIX_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH"):
+            ci_env.pop(variable, None)
+    if args.fortran_compiler:
+        compiler_name = args.fortran_compiler
+    elif args.profile == "linux-ci-equivalent":
+        compiler_name = "mpifort" if args.enable_mpi else "gfortran"
+    else:
+        # This is only used for provenance and fallback lookup.  The
+        # runner-native configure below does not force this compiler.
+        compiler_name = "gfortran"
     compiler = shutil.which(compiler_name, path=ci_env.get("PATH")) or compiler_name
-    mpi_launcher = "/usr/bin/mpirun.openmpi"
-    if not Path(mpi_launcher).exists():
-        mpi_launcher = "/usr/bin/mpirun"
-    ci_env["RSLMTO_MPI_LAUNCHER"] = mpi_launcher
+    if args.enable_mpi:
+        ci_env["RSLMTO_MPI_LAUNCHER"] = resolve_mpi_launcher(ci_env)
     ci_env["RSLMTO_OMP_THREADS_SERIAL"] = str(CI_SERIAL_OMP_THREADS)
 
     configure = [
         "cmake", "-S", str(ROOT), "-B", str(build_dir), "-G", "Ninja",
         "-DCMAKE_BUILD_TYPE=Release",
-        f"-DCMAKE_Fortran_COMPILER={compiler}",
-        "-DBLA_VENDOR=OpenBLAS",
         f"-DENABLE_MPI={'ON' if args.enable_mpi else 'OFF'}",
         "-DENABLE_MARCH_NATIVE=OFF",
         "-DENABLE_MKL_KERNELS=OFF",
@@ -151,6 +187,10 @@ def main() -> None:
         "-DRUN_EXAMPLE_TESTS=OFF",
         "-DRUN_UNIT_TESTS=OFF",
     ]
+    if args.profile == "linux-ci-equivalent" or args.fortran_compiler:
+        configure.insert(8, f"-DCMAKE_Fortran_COMPILER={compiler}")
+    if args.profile == "linux-ci-equivalent":
+        configure.append("-DBLA_VENDOR=OpenBLAS")
     run(configure, env=ci_env)
     run(["cmake", "--build", str(build_dir), "--parallel"], env=ci_env)
 
@@ -166,6 +206,7 @@ def main() -> None:
             "BLAS_LIBRARIES", "LAPACK_LIBRARIES",
         ],
     )
+    effective_compiler = cache.get("CMAKE_Fortran_COMPILER", compiler)
     manifest = json.loads(cases_json.read_text())
     available_cases = {
         case["name"]: case for case in manifest.get("cases", [])
@@ -187,11 +228,12 @@ def main() -> None:
         selected_cases.append(name)
 
     provenance = {
-        "profile": "linux-ci-equivalent",
+        "profile": args.profile,
+        "platform": platform.platform(),
         "git_commit": command_text(["git", "-C", str(ROOT), "rev-parse", "HEAD"]),
-        "compiler": compiler,
-        "compiler_version": command_text([compiler, "--version"]),
-        "underlying_compiler": command_text([compiler, "--showme:command"]),
+        "compiler": effective_compiler,
+        "compiler_version": command_text([effective_compiler, "--version"]),
+        "underlying_compiler": command_text([effective_compiler, "--showme:command"]),
         "cmake_version": command_text(["cmake", "--version"]).splitlines()[0],
         "cmake_cache": cache,
         # Keep committed metadata relocatable; the build directory is printed
