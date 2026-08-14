@@ -1,12 +1,20 @@
 {
   "name": "Example_interface_fccCu111_chebyshev",
+  "labels": [
+    "legacy_strux"
+  ],
   "case": "interface/fccCu111",
   "timeout": 900,
+  "_note": "Explicit legacy structure-constant sentinel: strux_lib's custom interface solve requests an impractical allocation for this route.",
   "omp_threads": 2,
   "abs_tol": 1e-06,
   "rel_tol": 1e-06,
   "namelists": {
+    "lattice": {
+      "strux_backend": "legacy"
+    },
     "control": {
+      "cheb_backend": "legacy",
       "recur": "chebyshev"
     },
     "self": {
@@ -52,5 +60,25 @@
         ]
       }
     ]
+  },
+  "reference_provenance": {
+    "binary": "rslmto.x",
+    "cmake_cache": {
+      "BLA_VENDOR": "OpenBLAS",
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_Fortran_COMPILER": "/bin/mpifort",
+      "ENABLE_MARCH_NATIVE": "OFF",
+      "ENABLE_MKL_KERNELS": "OFF",
+      "ENABLE_MPI": "ON"
+    },
+    "cmake_version": "cmake version 3.28.3",
+    "compiler": "/bin/mpifort",
+    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "git_commit": "b63160b262573fbcd94e5d9a01038234b4780bfb",
+    "mpi_enabled": true,
+    "mpi_omp_threads": 1,
+    "profile": "linux-ci-equivalent",
+    "serial_omp_threads": 2,
+    "underlying_compiler": "gfortran"
   }
 }

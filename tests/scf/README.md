@@ -17,6 +17,11 @@ Each entry in the `"cases"` array defines one test. The `"namelists"` dict is
 applied as an `f90nml` patch on top of the case's `input.nml`, so it follows
 the same section/key structure as the namelist file itself.
 
+The manifest default sets `control.cheb_backend` to `legacy` for functional
+coverage. A case that explicitly names another backend keeps that selection;
+the dedicated backend regression matrix is where `fast` and the other
+Chebyshev implementations are exercised.
+
 ```json
 {
   "name":    "Example_bulk_bccFe_nsp2_block_hoh_true",
@@ -248,6 +253,12 @@ cmake ... \
   CLI/CMake defaults. For `omp_threads` the runner will propagate the value
   into the binary wrapper which sets `OMP_NUM_THREADS` for serial runs.
 
+- **Per-check overrides**: a `nml`, `text`, or `log` check may also set
+  `abs_tol`/`rel_tol`; `text` checks can put narrower overrides under
+  `"tolerances"` by column or `"row:column"`. Use this only for an observable
+  known to be backend-sensitive—for example, keep DOS energies strict while
+  allowing a documented FP32 DOS column envelope.
+
 - **Environment override (manual runs / CI)**: the wrapper `tests/run_binary.sh`
   reads the environment variable `RSLMTO_OMP_THREADS_SERIAL` (default `1`) and
   uses it for serial runs. You can export a value to override globally for a
@@ -276,6 +287,26 @@ cmake -DEXAMPLE_PYTHON_EXECUTABLE=/path/to/venv/bin/python3 build
 
 Run once with a known-good binary to populate `references/`. Results are
 committed so CI does not need to regenerate them.
+
+For the canonical Linux CI baseline, use the dedicated runner. It configures
+the same Release/gfortran/OpenBLAS/MPI/no-`-march=native` profile and two-thread
+serial launch setting used by the production Linux test workflow, and records
+the resolved toolchain in each reference `meta.json`:
+
+```bash
+source env/openmpi.sh
+python3 tests/generate_ci_references.py \
+    --cases-json tests/scf/cases.json \
+    --references-dir tests/scf/references
+```
+
+Use `--case NAME` while developing to regenerate only selected cases. The
+runner loads `env/openmpi.sh` itself as well, so the explicit `source` above is
+useful when inspecting the selected compiler and MPI launcher. The runner
+requires the CI-equivalent Linux dependencies (Ninja, CMake, gfortran,
+OpenBLAS/LAPACK, Open MPI, and Python `f90nml`). Use `--no-enable-mpi` only for
+a local serial fallback; those references are not the canonical Linux CI
+profile.
 
 ```bash
 # All cases

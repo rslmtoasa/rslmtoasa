@@ -7,7 +7,8 @@ the case's `output_file` so this shared fixture can be used without copying its
 inputs into the regression tree.
 
 The Si rows cover the production CPU dispatches `fast`, `batched`, `legacy`,
-`mkl_batch`, and `mkl_sparse`. The two MKL rows remain gated by
+`mkl_batch`, and `mkl_sparse`. The functional SCF fixture uses `legacy`; the
+`fast` and `batched` rows here are the dedicated backend tests. The two MKL rows remain gated by
 `ENABLE_MKL_KERNELS`. References were generated on 2026-08-13 from clean
 production runs: the first three with serial `build-gc-debug`, and the MKL rows
 with `build-gc-mkl-test` configured with `ENABLE_MKL_KERNELS=ON` and Intel

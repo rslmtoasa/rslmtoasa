@@ -26,7 +26,10 @@ Reference data is driven by a "checks" dict in cases.json:
       }
     ],
     "text": [
-      { "file": "Fe_dos.out", "rows": [50, 100], "cols": [1, 2] }
+      {
+        "file": "Fe_dos.out", "rows": [50, 100], "cols": [1, 2],
+        "tolerances": { "1": { "abs_tol": 1e-3 }, "2": { "abs_tol": 1e-4 } }
+      }
     ],
     "dimensions": [
       { "file": "band_structure.dat", "data_rows": 201, "data_columns": 19 }
@@ -40,7 +43,8 @@ Reference data is driven by a "checks" dict in cases.json:
     "log": [
       {
         "file": "testrun.log",
-        "patterns": { "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)" }
+        "patterns": { "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)" },
+        "tolerances": { "fermi_level": { "abs_tol": 1e-3 } }
       }
     ],
     "outputs": [
@@ -398,6 +402,44 @@ def _text_abs_tol(filename: str, abs_tol: float) -> float:
     return abs_tol
 
 
+def _check_tolerances(
+    check: dict | None,
+    key: str | None,
+    default_abs_tol: float,
+    default_rel_tol: float,
+) -> tuple[float, float]:
+    """Resolve a check-level or key-level tolerance override.
+
+    A check may specify ``abs_tol``/``rel_tol`` for all values, or a
+    ``tolerances`` mapping for selected values.  For text checks the key is
+    normally the column number; a ``row:column`` entry takes precedence when
+    present.  This keeps backend-sensitive columns (for example an EF-shifted
+    energy grid) from forcing a loose tolerance on unrelated observables.
+    """
+    if not check:
+        return default_abs_tol, default_rel_tol
+
+    spec = check
+    overrides = check.get("tolerances", {})
+    if key is not None and isinstance(overrides, dict):
+        spec = overrides.get(key, check)
+
+    if not isinstance(spec, dict):
+        spec = check
+    return (
+        float(spec.get("abs_tol", default_abs_tol)),
+        float(spec.get("rel_tol", default_rel_tol)),
+    )
+
+
+def _check_for_file(checks: dict, kind: str, filename: str) -> dict | None:
+    """Return the manifest check describing *filename*, if one exists."""
+    for check in checks.get(kind, []):
+        if check.get("file") == filename:
+            return check
+    return None
+
+
 def compare_ref(
     workdir: str,
     case_name: str,
@@ -425,39 +467,67 @@ def compare_ref(
     # NML comparisons
     for filename, ref_vals in ref_data.get("nml", {}).items():
         run_vals = run_data.get("nml", {}).get(filename, {})
+        nml_check = _check_for_file(checks, "nml", filename)
         for key, ref_val in ref_vals.items():
             if isinstance(ref_val, dict):
                 run_val = run_vals.get(key, {})
                 for idx, ref_v in ref_val.items():
                     run_v = run_val.get(idx) if isinstance(run_val, dict) else None
-                    _check_value(failures, f"{filename}:{key}[{idx}]", run_v, ref_v, abs_tol, rel_tol)
+                    check_abs_tol, check_rel_tol = _check_tolerances(
+                        nml_check, f"{key}[{idx}]", abs_tol, rel_tol
+                    )
+                    _check_value(
+                        failures, f"{filename}:{key}[{idx}]", run_v, ref_v,
+                        check_abs_tol, check_rel_tol,
+                    )
                     n_checked += 1
             else:
-                _check_value(failures, f"{filename}:{key}", run_vals.get(key), ref_val, abs_tol, rel_tol)
+                check_abs_tol, check_rel_tol = _check_tolerances(
+                    nml_check, key, abs_tol, rel_tol
+                )
+                _check_value(
+                    failures, f"{filename}:{key}", run_vals.get(key), ref_val,
+                    check_abs_tol, check_rel_tol,
+                )
                 n_checked += 1
 
     # Text comparisons
     for filename, ref_rows in ref_data.get("text", {}).items():
         run_rows = run_data.get("text", {}).get(filename, {})
-        text_abs_tol = _text_abs_tol(filename, abs_tol)
+        text_check = _check_for_file(checks, "text", filename)
         for row_str, ref_cols in ref_rows.items():
             run_cols = run_rows.get(row_str, {})
             for col_str, ref_v in ref_cols.items():
+                check_abs_tol, check_rel_tol = _check_tolerances(
+                    text_check, f"{row_str}:{col_str}", abs_tol, rel_tol
+                )
+                if text_check:
+                    check_abs_tol, check_rel_tol = _check_tolerances(
+                        text_check, col_str, check_abs_tol, check_rel_tol
+                    )
+                text_abs_tol = _text_abs_tol(filename, check_abs_tol)
                 _check_value(
                     failures,
                     f"{filename}:row{row_str}:col{col_str}",
                     run_cols.get(col_str),
                     ref_v,
                     text_abs_tol,
-                    rel_tol,
+                    check_rel_tol,
                 )
                 n_checked += 1
 
     # Log comparisons
     for filename, ref_vals in ref_data.get("log", {}).items():
         run_vals = run_data.get("log", {}).get(filename, {})
+        log_check = _check_for_file(checks, "log", filename)
         for key, ref_v in ref_vals.items():
-            _check_value(failures, f"{filename}:{key}", run_vals.get(key), ref_v, abs_tol, rel_tol)
+            check_abs_tol, check_rel_tol = _check_tolerances(
+                log_check, key, abs_tol, rel_tol
+            )
+            _check_value(
+                failures, f"{filename}:{key}", run_vals.get(key), ref_v,
+                check_abs_tol, check_rel_tol,
+            )
             n_checked += 1
 
     if failures:
@@ -481,8 +551,15 @@ def save_ref(workdir: str, case_name: str, ref_dir: str, case: dict) -> None:
     ref_data = build_ref_data(workdir, checks)
     with open(os.path.join(dest_dir, "ref.json"), "w") as fh:
         json.dump(ref_data, fh, indent=2)
+    meta = dict(case)
+    provenance = os.environ.get("RSLMTO_REFERENCE_PROVENANCE")
+    if provenance:
+        try:
+            meta["reference_provenance"] = json.loads(provenance)
+        except json.JSONDecodeError as exc:
+            raise ValueError("RSLMTO_REFERENCE_PROVENANCE must contain valid JSON") from exc
     with open(os.path.join(dest_dir, "meta.json"), "w") as fh:
-        json.dump(case, fh, indent=2)
+        json.dump(meta, fh, indent=2)
 
     n = sum(
         (len(v) if isinstance(v, dict) else 1)

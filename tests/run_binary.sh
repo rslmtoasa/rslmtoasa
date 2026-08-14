@@ -37,7 +37,11 @@ if [ "$mpi_procs" -gt 1 ]; then
     fi
 
     launcher_version="$("$mpi_launcher" --version 2>&1 || true)"
-    if printf '%s\n' "$launcher_version" | grep -qi 'Open MPI'; then
+    launcher_name="$(basename "$mpi_launcher")"
+    # Debian/Ubuntu's mpirun.openmpi identifies the runtime as OpenRTE,
+    # rather than printing the literal "Open MPI" in --version output.
+    if [[ "$launcher_name" == "mpirun.openmpi" || "$launcher_name" == "mpiexec.openmpi" ]] ||
+       printf '%s\n' "$launcher_version" | grep -Eqi 'Open MPI|OpenRTE'; then
         run_cmd=("$mpi_launcher" --oversubscribe -n "$mpi_procs" "$binary")
     else
         run_cmd=("$mpi_launcher" -n "$mpi_procs" "$binary")

@@ -27,6 +27,10 @@ CCOR retain their existing DOS row oracles and now also check DOS dimensions.
 Each entry defines one test. The `"namelists"` dict patches `input.nml`; the
 optional `"checks"` dict defines what to compare against stored references.
 
+Post-processing cases inherit `control.cheb_backend=legacy` from the manifest
+unless they explicitly select another backend, keeping workflow checks focused
+on stable functionality rather than FP32 backend noise.
+
 ```json
 {
   "name": "Example_exchange_bccFe",

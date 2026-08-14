@@ -1,16 +1,77 @@
 {
   "name": "Example_frozen_magnon_bccFe_auto_scf",
+  "labels": [
+    "functional",
+    "rs",
+    "metallic",
+    "magnetic",
+    "basis_spd",
+    "block",
+    "frozen_magnon"
+  ],
   "case": "frozen_magnon/bccFe_auto_scf",
   "timeout": 300,
   "_note": "Auto-branch frozen_magnon SCF smoke test on single-sublattice bccFe. Checks total-energy branch and eigenvector output files.",
   "namelists": {
-    "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
-    "control": { "nsp": 3, "recur": "block" }
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "strux_want_sdot": false
+    },
+    "control": {
+      "cheb_backend": "legacy",
+      "nsp": 3,
+      "recur": "block"
+    }
   },
   "checks": {
     "text": [
-      { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
-      { "file": "frozen_magnon_modes.dat", "rows": [9, 10, 11], "cols": [3, 4, 7, 8] }
+      {
+        "file": "frozen_magnon_branches.dat",
+        "rows": [
+          12,
+          13,
+          14
+        ],
+        "cols": [
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "file": "frozen_magnon_modes.dat",
+        "rows": [
+          9,
+          10,
+          11
+        ],
+        "cols": [
+          3,
+          4,
+          7,
+          8
+        ]
+      }
     ]
+  },
+  "reference_provenance": {
+    "binary": "rslmto.x",
+    "cmake_cache": {
+      "BLA_VENDOR": "OpenBLAS",
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_Fortran_COMPILER": "/bin/mpifort",
+      "ENABLE_MARCH_NATIVE": "OFF",
+      "ENABLE_MKL_KERNELS": "OFF",
+      "ENABLE_MPI": "ON"
+    },
+    "cmake_version": "cmake version 3.28.3",
+    "compiler": "/bin/mpifort",
+    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "git_commit": "b63160b262573fbcd94e5d9a01038234b4780bfb",
+    "mpi_enabled": true,
+    "mpi_omp_threads": 1,
+    "profile": "linux-ci-equivalent",
+    "serial_omp_threads": 2,
+    "underlying_compiler": "gfortran"
   }
 }

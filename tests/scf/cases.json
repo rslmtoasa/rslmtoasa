@@ -2,7 +2,8 @@
   "_description": "Test case matrix for example SCF tests. Single source of truth — CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
   "defaults": {
     "namelists": {
-      "lattice": { "strux_backend": "strux_lib" }
+      "lattice": { "strux_backend": "strux_lib" },
+      "control": { "cheb_backend": "legacy" }
     }
   },
   "cases": [
@@ -16,7 +17,7 @@
       "_note": "TEST-06/07: deterministic nonmagnetic diamond-Si sp fixture. Explicit strux_lib, periodic 12x12x12 Bravais geometry, one SCF step, 200 Chebyshev moments. The 12^3 replication is retained for a stable DOS shape and remains a lean backend fixture; runtime/reference provenance is recorded in the fixture README. This is not a converged Si benchmark and is intentionally not quick.",
       "namelists": {
         "lattice":    { "strux_backend": "strux_lib" },
-        "control":    { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "fast", "lld": 200 },
+        "control":    { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "legacy", "lld": 200 },
         "self":       { "nstep": 1 },
         "hamiltonian": { "hoh": false }
       },

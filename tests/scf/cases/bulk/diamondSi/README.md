@@ -6,8 +6,10 @@ diamond primitive cell and production Si potential data.
 
 The checked path is a periodic Bravais calculation with `n1=n2=n3=12`,
 `lmax=1` (sp), `nsp=1`, `recur='chebyshev'`, `lld=200`,
-`cheb_backend='fast'`, and `strux_backend='strux_lib'`. It uses one minimal
+`cheb_backend='legacy'`, and `strux_backend='strux_lib'`. It uses one minimal
 SCF step and checks finite total/site DOS and energy-related output values.
+The functional fixture deliberately uses the stable legacy Chebyshev route;
+the FP32 `fast` route is covered separately by the backend regression matrix.
 
 Measured provenance on 2026-08-13 using clean fixture directories: the
 12x12x12, 200-moment fast case took 13.16 s through CTest in serial
@@ -16,9 +18,10 @@ Measured provenance on 2026-08-13 using clean fixture directories: the
 gives the stable DOS shape needed by backend comparisons while remaining lean,
 and is intentionally not marked `quick`.
 
-The fast reference was generated with `build-gc-debug`. The MKL-batch reference
-was generated and checked with `build-gc-mkl-test`; both were clean production
-runs with the explicit `strux_lib` path. The stored checks are deterministic
+The canonical functional reference is generated with the CI-equivalent runner.
+The MKL-batch reference is generated and checked with an
+`ENABLE_MKL_KERNELS=ON` build; both are clean production runs with the explicit
+`strux_lib` path. The stored checks are deterministic
 functional outputs (energy-related scalars, Wigner-Seitz radius, Madelung
 potential, total DOS, Si-projected DOS, and Fermi level), not a converged Si
 benchmark.

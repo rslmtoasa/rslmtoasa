@@ -25,6 +25,13 @@
     "lattice": {
       "strux_backend": "strux_lib"
     },
+    "control": {
+      "cheb_backend": "legacy",
+      "nsp": 2,
+      "lmax": 2,
+      "recur": "block",
+      "lld": 12
+    },
     "self": {
       "nstep": 1,
       "use_kspace": true
@@ -44,12 +51,6 @@
       "channels_ldos": 200,
       "energy_min": -2.0,
       "energy_max": 2.0
-    },
-    "control": {
-      "nsp": 2,
-      "lmax": 2,
-      "recur": "block",
-      "lld": 12
     }
   },
   "checks": {
@@ -129,5 +130,25 @@
       "file": "linfo.out",
       "min_lines": 1
     }
-  ]
+  ],
+  "reference_provenance": {
+    "binary": "rslmto.x",
+    "cmake_cache": {
+      "BLA_VENDOR": "OpenBLAS",
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_Fortran_COMPILER": "/bin/mpifort",
+      "ENABLE_MARCH_NATIVE": "OFF",
+      "ENABLE_MKL_KERNELS": "OFF",
+      "ENABLE_MPI": "ON"
+    },
+    "cmake_version": "cmake version 3.28.3",
+    "compiler": "/bin/mpifort",
+    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "git_commit": "b63160b262573fbcd94e5d9a01038234b4780bfb",
+    "mpi_enabled": true,
+    "mpi_omp_threads": 1,
+    "profile": "linux-ci-equivalent",
+    "serial_omp_threads": 2,
+    "underlying_compiler": "gfortran"
+  }
 }

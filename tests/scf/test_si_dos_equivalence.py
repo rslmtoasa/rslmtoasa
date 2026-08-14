@@ -51,11 +51,12 @@ def patch_fixture(case_root: Path, workdir: Path, use_kspace: bool) -> None:
         "control": {
             "nsp": 1,
             "lmax": 1,
-            # The k-space branch skips the recursion solver stage, so this
-            # control does not turn the comparison into a Block/Lanczos test.
+            # The k-space branch skips the recursion solver stage.  Keep the
+            # real-space route on the stable functional backend; fast is
+            # covered separately by the backend regression matrix.
             "lld": CHEB_LLD,
             "recur": "chebyshev",
-            "cheb_backend": "fast",
+            "cheb_backend": "legacy",
         },
     }
     if use_kspace:
