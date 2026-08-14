@@ -195,18 +195,18 @@
     "binary": "rslmto.x",
     "cmake_cache": {
       "CMAKE_BUILD_TYPE": "Release",
-      "CMAKE_Fortran_COMPILER": "/usr/bin/gfortran",
+      "CMAKE_Fortran_COMPILER": "/opt/homebrew/bin/gfortran-13",
       "ENABLE_MARCH_NATIVE": "OFF",
       "ENABLE_MKL_KERNELS": "OFF",
-      "ENABLE_MPI": "ON"
+      "ENABLE_MPI": "OFF"
     },
-    "cmake_version": "cmake version 3.31.6",
-    "compiler": "/usr/bin/gfortran",
-    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "cmake_version": "cmake version 4.4.2",
+    "compiler": "/opt/homebrew/bin/gfortran-13",
+    "compiler_version": "GNU Fortran (Homebrew GCC 13.4.0) 13.4.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
     "git_commit": "4c58bef61727957fe3e72b79b0d11413ce6502c4",
-    "mpi_enabled": true,
+    "mpi_enabled": false,
     "mpi_omp_threads": 1,
-    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
     "profile": "runner-native",
     "serial_omp_threads": 2,
     "underlying_compiler": "unavailable"

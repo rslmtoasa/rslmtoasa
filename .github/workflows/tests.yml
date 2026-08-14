@@ -73,13 +73,19 @@ jobs:
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
         run: |
-          for pkg in ninja cmake open-mpi spglib; do
+          for pkg in ninja cmake open-mpi spglib gcc@13; do
             if ! brew list --versions "$pkg" >/dev/null 2>&1; then
               brew install "$pkg"
             fi
           done
-          gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
+          gcc13_prefix="$(brew --prefix gcc@13)"
+          gfc="$gcc13_prefix/bin/gfortran-13"
+          test -x "$gfc"
+          echo "$gcc13_prefix/bin" >> "$GITHUB_PATH"
           sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
+          echo "FC=$gfc" >> "$GITHUB_ENV"
+          echo "F77=$gfc" >> "$GITHUB_ENV"
+          echo "F90=$gfc" >> "$GITHUB_ENV"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
 
       # -----------------------------------------------------------------------

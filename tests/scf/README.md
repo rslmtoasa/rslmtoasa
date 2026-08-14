@@ -288,25 +288,82 @@ cmake -DEXAMPLE_PYTHON_EXECUTABLE=/path/to/venv/bin/python3 build
 Run once with a known-good binary to populate `references/`. Results are
 committed so CI does not need to regenerate them.
 
-For the canonical Linux CI baseline, use the dedicated runner. It configures
+For the canonical Linux CI baseline, first configure and build the binary with
 the same Release/gfortran/OpenBLAS/MPI/no-`-march=native` profile and two-thread
-serial launch setting used by the production Linux test workflow, and records
-the resolved toolchain in each reference `meta.json`:
+serial launch setting used by the production Linux test workflow:
 
 ```bash
 source env/openmpi.sh
+cmake -S . -B build-ci-reference -G "Unix Makefiles" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_Fortran_COMPILER=mpifort \
+    -DENABLE_MPI=ON \
+    -DENABLE_MARCH_NATIVE=OFF \
+    -DENABLE_MKL_KERNELS=OFF \
+    -DRUN_REG_TESTS=OFF \
+    -DRUN_EXAMPLE_TESTS=OFF \
+    -DRUN_UNIT_TESTS=OFF \
+    -DBLA_VENDOR=OpenBLAS
+cmake --build build-ci-reference --parallel
+```
+
+Then pass that existing build to the reference generator. It never runs
+CMake or Make itself:
+
+```bash
 python3 tests/generate_ci_references.py \
+    --cases-json tests/scf/cases.json \
+    --references-dir tests/scf/references \
+    --build-dir build-ci-reference
+```
+
+Use `--case NAME` while developing to regenerate only selected cases. The
+reference generator loads `env/openmpi.sh` for the Linux CI-equivalent profile
+so the MPI launcher is resolved consistently. The build itself must already
+exist and contain `bin/rslmto.x`; its CMake cache is recorded in each reference
+`meta.json`.
+
+For a runner-native macOS build, use the Homebrew GCC 13 toolchain rather than
+the newest installed GCC. The script selects `gfortran-13` automatically in
+this profile and resolves it from `gcc@13` when the formula is keg-only:
+
+```bash
+brew install gcc@13
+cmake -S . -B build-macos-reference-gcc13 -G "Unix Makefiles" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_Fortran_COMPILER="$(brew --prefix gcc@13)/bin/gfortran-13" \
+    -DENABLE_MPI=ON \
+    -DENABLE_MARCH_NATIVE=OFF \
+    -DENABLE_MKL_KERNELS=OFF \
+    -DRUN_REG_TESTS=OFF \
+    -DRUN_EXAMPLE_TESTS=OFF \
+    -DRUN_UNIT_TESTS=OFF
+cmake --build build-macos-reference-gcc13 --parallel
+python3 tests/generate_ci_references.py \
+    --profile runner-native \
+    --build-dir build-macos-reference-gcc13 \
     --cases-json tests/scf/cases.json \
     --references-dir tests/scf/references
 ```
 
-Use `--case NAME` while developing to regenerate only selected cases. The
-runner loads `env/openmpi.sh` itself as well, so the explicit `source` above is
-useful when inspecting the selected compiler and MPI launcher. The runner
-requires the CI-equivalent Linux dependencies (Ninja, CMake, gfortran,
-OpenBLAS/LAPACK, Open MPI, and Python `f90nml`). Use `--no-enable-mpi` only for
-a local serial fallback; those references are not the canonical Linux CI
-profile.
+The generated metadata records the exact compiler selected from the existing
+CMake build.
+
+To regenerate only the four macOS cases that previously failed, place `--case`
+last on the command line:
+
+```bash
+python3 tests/generate_ci_references.py \
+    --profile runner-native \
+    --build-dir build-macos-reference-gcc13 \
+    --cases-json tests/scf/cases.json \
+    --references-dir tests/scf/references \
+    --case \
+      Example_k_space_scf_bccFe \
+      Example_k_space_scf_diamondSi_sp \
+      Example_k_space_scf_diamondSi_sp_tetrahedron \
+      Example_k_space_scf_bccFe_spd_magnetic
+```
 
 ```bash
 # All cases

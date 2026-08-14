@@ -1,21 +1,14 @@
 #!/usr/bin/env python3
-"""Build the canonical Linux CI configuration and generate references.
+"""Generate references from an existing CI-equivalent build.
 
 This is intentionally a separate entry point from the generic reference
 generator.  It makes the reference provenance explicit and keeps the stored
-baselines tied to the production CI toolchain rather than to an arbitrary
-developer build directory.
-
-The default configuration mirrors the Linux binary workflow:
-
-* Release build
-* Open MPI's ``mpifort`` wrapper (GNU Fortran) with OpenBLAS/LAPACK
-* MPI enabled, but no architecture-specific ``-march=native`` flags
-* two OpenMP threads for serial test launches, matching ``tests.yml``
-* optional MKL Chebyshev kernels disabled
+baselines tied to the supplied build directory rather than to an arbitrary
+developer build.  Configure and build the binary separately; this script only
+validates the build and runs the reference cases.
 
 Usage:
-  tests/generate_ci_references.py [--case NAME ...]
+  tests/generate_ci_references.py --build-dir BUILD [--case NAME ...]
 """
 
 from __future__ import annotations
@@ -110,8 +103,9 @@ def cmake_option_enabled(cache_path: Path, option: str) -> bool:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--build-dir", default="build-ci-reference",
-        help="Build directory (default: build-ci-reference)",
+        "--build-dir", required=True,
+        help=("Existing CMake build directory containing bin/rslmto.x; "
+              "this script does not configure or build it"),
     )
     parser.add_argument(
         "--cases-json", default="tests/scf/cases.json",
@@ -126,19 +120,11 @@ def main() -> None:
         help="Scratch root passed to the reference generator",
     )
     parser.add_argument(
-        "--fortran-compiler", default=None,
-        help="Fortran compiler/wrapper (default: mpifort with MPI, gfortran without MPI)",
-    )
-    parser.add_argument(
-        "--enable-mpi", action=argparse.BooleanOptionalAction, default=True,
-        help="Build the reference binary with MPI (default: enabled)",
-    )
-    parser.add_argument(
         "--profile", choices=("linux-ci-equivalent", "runner-native"),
         default="linux-ci-equivalent",
-        help=("Reference build profile. 'linux-ci-equivalent' preserves the "
-              "committed Linux/OpenBLAS profile; 'runner-native' mirrors the "
-              "current Linux or macOS CI runner."),
+        help=("Execution environment for reference runs. 'linux-ci-equivalent' "
+              "uses the repository's local Open MPI environment; "
+              "'runner-native' leaves the current runner environment untouched."),
     )
     parser.add_argument(
         "--case", nargs="+", default=[], metavar="NAME",
@@ -156,57 +142,42 @@ def main() -> None:
     if not references_dir.is_absolute():
         references_dir = ROOT / references_dir
 
-    # The committed Linux profile uses the repository-supported environment to
-    # isolate local MPI installations.  The runner-native profile intentionally
-    # leaves the runner environment untouched and lets CMake resolve its tools.
-    ci_env = (openmpi_environment() if args.profile == "linux-ci-equivalent"
-              else runner_native_environment())
-    if args.profile == "linux-ci-equivalent":
-        for variable in ("CMAKE_PREFIX_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH"):
-            ci_env.pop(variable, None)
-    if args.fortran_compiler:
-        compiler_name = args.fortran_compiler
-    elif args.profile == "linux-ci-equivalent":
-        compiler_name = "mpifort" if args.enable_mpi else "gfortran"
-    else:
-        # This is only used for provenance and fallback lookup.  The
-        # runner-native configure below does not force this compiler.
-        compiler_name = "gfortran"
-    compiler = shutil.which(compiler_name, path=ci_env.get("PATH")) or compiler_name
-    if args.enable_mpi:
-        ci_env["RSLMTO_MPI_LAUNCHER"] = resolve_mpi_launcher(ci_env)
-    ci_env["RSLMTO_OMP_THREADS_SERIAL"] = str(CI_SERIAL_OMP_THREADS)
-
-    configure = [
-        "cmake", "-S", str(ROOT), "-B", str(build_dir), "-G", "Ninja",
-        "-DCMAKE_BUILD_TYPE=Release",
-        f"-DENABLE_MPI={'ON' if args.enable_mpi else 'OFF'}",
-        "-DENABLE_MARCH_NATIVE=OFF",
-        "-DENABLE_MKL_KERNELS=OFF",
-        "-DRUN_REG_TESTS=OFF",
-        "-DRUN_EXAMPLE_TESTS=OFF",
-        "-DRUN_UNIT_TESTS=OFF",
-    ]
-    if args.profile == "linux-ci-equivalent" or args.fortran_compiler:
-        configure.insert(8, f"-DCMAKE_Fortran_COMPILER={compiler}")
-    if args.profile == "linux-ci-equivalent":
-        configure.append("-DBLA_VENDOR=OpenBLAS")
-    run(configure, env=ci_env)
-    run(["cmake", "--build", str(build_dir), "--parallel"], env=ci_env)
-
+    cache_path = build_dir / "CMakeCache.txt"
     binary = build_dir / "bin" / "rslmto.x"
+    if not cache_path.is_file():
+        raise RuntimeError(
+            f"existing CMake build directory required: {cache_path} was not found; "
+            "configure the build before running this script"
+        )
     if not binary.is_file():
-        raise RuntimeError(f"canonical binary was not produced: {binary}")
+        raise RuntimeError(
+            f"existing reference binary required: {binary} was not found; "
+            "build the target before running this script"
+        )
 
     cache = cache_values(
-        build_dir / "CMakeCache.txt",
+        cache_path,
         [
             "CMAKE_BUILD_TYPE", "CMAKE_Fortran_COMPILER", "ENABLE_MPI",
             "ENABLE_MARCH_NATIVE", "ENABLE_MKL_KERNELS", "BLA_VENDOR",
             "BLAS_LIBRARIES", "LAPACK_LIBRARIES",
         ],
     )
-    effective_compiler = cache.get("CMAKE_Fortran_COMPILER", compiler)
+    mpi_enabled = cmake_option_enabled(cache_path, "ENABLE_MPI")
+
+    # The committed Linux profile uses the repository-supported environment to
+    # isolate local MPI installations.  The runner-native profile intentionally
+    # leaves the runner environment untouched and lets the existing build's
+    # runtime dependencies resolve in that environment.
+    ci_env = (openmpi_environment() if args.profile == "linux-ci-equivalent"
+              else runner_native_environment())
+    if args.profile == "linux-ci-equivalent":
+        for variable in ("CMAKE_PREFIX_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH"):
+            ci_env.pop(variable, None)
+    if mpi_enabled:
+        ci_env["RSLMTO_MPI_LAUNCHER"] = resolve_mpi_launcher(ci_env)
+    ci_env["RSLMTO_OMP_THREADS_SERIAL"] = str(CI_SERIAL_OMP_THREADS)
+    effective_compiler = cache.get("CMAKE_Fortran_COMPILER", "unknown")
     manifest = json.loads(cases_json.read_text())
     available_cases = {
         case["name"]: case for case in manifest.get("cases", [])
@@ -232,8 +203,14 @@ def main() -> None:
         "platform": platform.platform(),
         "git_commit": command_text(["git", "-C", str(ROOT), "rev-parse", "HEAD"]),
         "compiler": effective_compiler,
-        "compiler_version": command_text([effective_compiler, "--version"]),
-        "underlying_compiler": command_text([effective_compiler, "--showme:command"]),
+        "compiler_version": (
+            command_text([effective_compiler, "--version"])
+            if effective_compiler != "unknown" else "unavailable"
+        ),
+        "underlying_compiler": (
+            command_text([effective_compiler, "--showme:command"])
+            if effective_compiler != "unknown" else "unavailable"
+        ),
         "cmake_version": command_text(["cmake", "--version"]).splitlines()[0],
         "cmake_cache": cache,
         # Keep committed metadata relocatable; the build directory is printed
@@ -241,7 +218,7 @@ def main() -> None:
         "binary": binary.name,
         "serial_omp_threads": CI_SERIAL_OMP_THREADS,
         "mpi_omp_threads": 1,
-        "mpi_enabled": args.enable_mpi,
+        "mpi_enabled": mpi_enabled,
     }
 
     env = ci_env.copy()
@@ -261,7 +238,7 @@ def main() -> None:
         generator.extend(["--case", *selected_cases])
     run(generator, env=env)
 
-    print("Canonical CI-equivalent references generated.")
+    print("References generated from the existing build.")
     print(f"Binary: {binary}")
     print(f"References: {references_dir}")
 

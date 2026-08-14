@@ -28,11 +28,17 @@ jobs:
       - name: Provide ninja and MPI on macOS ${{ matrix.icon}}
         if: runner.os == 'macOS'
         run: |
-          # Install open-mpi first; it pulls in the exact gcc/gfortran version it was compiled with.
-          # We then symlink that gfortran so the project and mpi.mod are built with the same compiler.
-          brew install ninja open-mpi spglib
-          gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
+          # gfortran-16 currently segfaults in the reciprocal examples.  Keep
+          # the macOS build on the supported GCC 13 toolchain explicitly.
+          brew install ninja open-mpi spglib gcc@13
+          gcc13_prefix="$(brew --prefix gcc@13)"
+          gfc="$gcc13_prefix/bin/gfortran-13"
+          test -x "$gfc"
+          echo "$gcc13_prefix/bin" >> "$GITHUB_PATH"
           sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
+          echo "FC=$gfc" >> "$GITHUB_ENV"
+          echo "F77=$gfc" >> "$GITHUB_ENV"
+          echo "F90=$gfc" >> "$GITHUB_ENV"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
 
       - name: Provide ninja and MPI on Linux ${{ matrix.icon}}
