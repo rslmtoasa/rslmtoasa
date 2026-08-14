@@ -140,6 +140,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DENABLE_MPI=ON \
+            -DENABLE_MARCH_NATIVE=OFF \
             -DRUN_REG_TESTS=ON \
             -DRUN_EXAMPLE_TESTS=ON \
             -DRUN_UNIT_TESTS=ON \
