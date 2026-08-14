@@ -67,21 +67,21 @@ jobs:
             ninja-build cmake \
             gfortran \
             libopenblas-dev liblapack-dev \
-            libsymspg-dev \
+            libsymspg-dev libsymspg2 \
             openmpi-bin openmpi-common libopenmpi-dev
 
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
         run: |
-          for pkg in ninja cmake open-mpi spglib gcc@13; do
+          for pkg in cmake open-mpi spglib; do
             if ! brew list --versions "$pkg" >/dev/null 2>&1; then
               brew install "$pkg"
             fi
           done
-          gcc13_prefix="$(brew --prefix gcc@13)"
-          gfc="$gcc13_prefix/bin/gfortran-13"
+          # Use the current Homebrew GCC/Open MPI pair on CI. GCC 13 is only
+          # the local macOS workaround for the gfortran-16 issue.
+          gfc=$(ls "$(brew --prefix)/bin/gfortran-"* 2>/dev/null | sort -V | tail -1)
           test -x "$gfc"
-          echo "$gcc13_prefix/bin" >> "$GITHUB_PATH"
           sudo ln -sf "$gfc" "$(brew --prefix)/bin/gfortran"
           echo "FC=$gfc" >> "$GITHUB_ENV"
           echo "F77=$gfc" >> "$GITHUB_ENV"
@@ -145,7 +145,12 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Configure CMake
         run: |
-          cmake -S . -B build -G Ninja \
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            generator="Unix Makefiles"
+          else
+            generator="Ninja"
+          fi
+          cmake -S . -B build -G "$generator" \
             -DENABLE_MPI=ON \
             -DENABLE_MARCH_NATIVE=OFF \
             -DRUN_REG_TESTS=ON \

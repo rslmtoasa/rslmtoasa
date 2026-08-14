@@ -323,9 +323,9 @@ so the MPI launcher is resolved consistently. The build itself must already
 exist and contain `bin/rslmto.x`; its CMake cache is recorded in each reference
 `meta.json`.
 
-For a runner-native macOS build, use the Homebrew GCC 13 toolchain rather than
-the newest installed GCC. The script selects `gfortran-13` automatically in
-this profile and resolves it from `gcc@13` when the formula is keg-only:
+For a local macOS reference build where the newest gfortran is affected, use
+the Homebrew GCC 13 toolchain. The CI runner itself uses its current Homebrew
+GCC/Open MPI pair; this GCC 13 workaround is local-only:
 
 ```bash
 brew install gcc@13
