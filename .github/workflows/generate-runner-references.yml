@@ -1,9 +1,15 @@
 name: Generate runner-native reference artifacts (temporary)
 
-# Manual, deliberately non-mutating workflow.  It builds and runs the
-# reference generator on each supported CI runner and uploads the resulting
-# values for review.  It never commits or replaces the references in git.
+# Deliberately non-mutating workflow.  It builds and runs the reference
+# generator on each supported CI runner and uploads the resulting values for
+# review.  It never commits or replaces the references in git.
 on:
+  # Temporary branch-local trigger: workflow_dispatch is only runnable when
+  # the workflow file exists on the repository default branch.  Remove this
+  # push trigger after the platform-native references have been collected.
+  push:
+    branches:
+      - fable_v3
   workflow_dispatch:
     inputs:
       ref:
