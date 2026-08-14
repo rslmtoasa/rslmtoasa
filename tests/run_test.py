@@ -62,6 +62,7 @@ import glob
 import json
 import math
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -440,6 +441,37 @@ def _check_for_file(checks: dict, kind: str, filename: str) -> dict | None:
     return None
 
 
+def _reference_variant() -> str | None:
+    """Return the native reference variant for this runner.
+
+    A manual override is useful when reproducing a CI comparison locally.
+    Unknown platforms use the unqualified ``ref.json`` baseline.
+    """
+    override = os.environ.get("RSLMTO_REFERENCE_VARIANT", "").strip()
+    if override:
+        return None if override.lower() in {"default", "none"} else override
+
+    machine = platform.machine().lower()
+    if sys.platform == "darwin":
+        arch = "arm64" if machine in {"arm64", "aarch64"} else machine
+        return f"macos-{arch}"
+    if sys.platform.startswith("linux"):
+        arch = "x86_64" if machine in {"x86_64", "amd64"} else machine
+        return f"linux-{arch}"
+    return None
+
+
+def _reference_path(ref_dir: str, case_name: str) -> str:
+    """Select a native reference when one exists, otherwise the baseline."""
+    case_dir = os.path.join(ref_dir, case_name)
+    variant = _reference_variant()
+    if variant:
+        native_path = os.path.join(case_dir, f"ref.{variant}.json")
+        if os.path.exists(native_path):
+            return native_path
+    return os.path.join(case_dir, "ref.json")
+
+
 def compare_ref(
     workdir: str,
     case_name: str,
@@ -452,7 +484,7 @@ def compare_ref(
         print(f"PASS [{case_name}]: no checks defined (smoke only)")
         return
 
-    ref_path = os.path.join(ref_dir, case_name, "ref.json")
+    ref_path = _reference_path(ref_dir, case_name)
     if not os.path.exists(ref_path):
         print(f"PASS [{case_name}]: no reference found, smoke only (run --gen-ref to create)")
         return

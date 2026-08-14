@@ -1,0 +1,72 @@
+{
+  "name": "Example_bulk_bccFe_nsp4_chebyshev",
+  "case": "bulk/bccFe",
+  "timeout": 600,
+  "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib"
+    },
+    "control": {
+      "cheb_backend": "legacy",
+      "nsp": 4,
+      "recur": "chebyshev",
+      "lld": 100
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": false
+    }
+  },
+  "checks": {
+    "nml": [
+      {
+        "file": "Fe_out.nml",
+        "scalars": [
+          "etot",
+          "ws_r"
+        ],
+        "arrays": {
+          "mom": [
+            3
+          ]
+        }
+      }
+    ],
+    "text": [
+      {
+        "file": "totaldos.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          1,
+          2
+        ]
+      }
+    ]
+  },
+  "reference_provenance": {
+    "binary": "rslmto.x",
+    "cmake_cache": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_Fortran_COMPILER": "/opt/homebrew/bin/gfortran",
+      "ENABLE_MARCH_NATIVE": "OFF",
+      "ENABLE_MKL_KERNELS": "OFF",
+      "ENABLE_MPI": "ON"
+    },
+    "cmake_version": "cmake version 4.3.4",
+    "compiler": "/opt/homebrew/bin/gfortran",
+    "compiler_version": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "git_commit": "4c58bef61727957fe3e72b79b0d11413ce6502c4",
+    "mpi_enabled": true,
+    "mpi_omp_threads": 1,
+    "platform": "macOS-14.8.7-arm64-arm-64bit",
+    "profile": "runner-native",
+    "serial_omp_threads": 2,
+    "underlying_compiler": "unavailable"
+  }
+}

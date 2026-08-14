@@ -326,6 +326,13 @@ python3 tests/generate_references.py \
 Each reference is saved as `references/<TestName>/ref.nml` alongside a
 `meta.json` recording the full case definition used.
 
+Runner-native references may additionally be stored as
+`references/<TestName>/ref.<platform>-<arch>.json`, for example
+`ref.macos-arm64.json`, with matching optional metadata in
+`meta.macos-arm64.json`. The test runner selects an existing native variant
+before falling back to `ref.json`. Set `RSLMTO_REFERENCE_VARIANT=...` to
+override the automatic selection when reproducing a runner comparison.
+
 ---
 
 ## Running a single case manually

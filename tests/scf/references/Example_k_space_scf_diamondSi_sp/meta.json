@@ -137,21 +137,21 @@
   "reference_provenance": {
     "binary": "rslmto.x",
     "cmake_cache": {
-      "BLA_VENDOR": "OpenBLAS",
       "CMAKE_BUILD_TYPE": "Release",
-      "CMAKE_Fortran_COMPILER": "/bin/mpifort",
+      "CMAKE_Fortran_COMPILER": "/usr/bin/gfortran",
       "ENABLE_MARCH_NATIVE": "OFF",
       "ENABLE_MKL_KERNELS": "OFF",
       "ENABLE_MPI": "ON"
     },
-    "cmake_version": "cmake version 3.28.3",
-    "compiler": "/bin/mpifort",
+    "cmake_version": "cmake version 3.31.6",
+    "compiler": "/usr/bin/gfortran",
     "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
-    "git_commit": "b63160b262573fbcd94e5d9a01038234b4780bfb",
+    "git_commit": "4c58bef61727957fe3e72b79b0d11413ce6502c4",
     "mpi_enabled": true,
     "mpi_omp_threads": 1,
-    "profile": "linux-ci-equivalent",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "profile": "runner-native",
     "serial_omp_threads": 2,
-    "underlying_compiler": "gfortran"
+    "underlying_compiler": "unavailable"
   }
 }
