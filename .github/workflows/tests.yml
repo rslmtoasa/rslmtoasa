@@ -63,12 +63,18 @@ jobs:
       - name: Install system dependencies (Linux) ${{ matrix.icon }}
         if: runner.os == 'Linux'
         run: |
+          sudo apt-get update
           sudo apt-get -y install \
             ninja-build cmake \
             gfortran \
             libopenblas-dev liblapack-dev \
             libsymspg-dev libsymspg2 \
             openmpi-bin openmpi-common libopenmpi-dev
+          sudo ldconfig
+          symspg_lib="$(dpkg -L libsymspg2 | grep -m1 '/libsymspg\.so\.2$')"
+          test -n "$symspg_lib"
+          symspg_libdir="$(dirname "$symspg_lib")"
+          echo "LD_LIBRARY_PATH=$symspg_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
@@ -86,6 +92,10 @@ jobs:
           echo "FC=$gfc" >> "$GITHUB_ENV"
           echo "F77=$gfc" >> "$GITHUB_ENV"
           echo "F90=$gfc" >> "$GITHUB_ENV"
+          spglib_lib="$(find -L "$(brew --prefix spglib)" -type f -name 'libsymspg*.dylib' -print -quit)"
+          test -n "$spglib_lib"
+          spglib_libdir="$(dirname "$spglib_lib")"
+          echo "DYLD_LIBRARY_PATH=$spglib_libdir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
 
       # -----------------------------------------------------------------------
