@@ -830,6 +830,7 @@ contains
    allocate(this%hk_bulk(this%max_orbs*this%lattice%nrec, this%max_orbs*this%lattice%nrec, this%nk_local))
 #endif
 
+#ifndef RSLMTO_DISABLE_FUSED_RECIPROCAL
       ! GC-04: normal mesh assembly and eigensolution are one tile request.
       ! The host H(k) cache is a compatibility result, not input to a later
       ! eigensolver request.  This lets a resident backend retain H/S and its
@@ -847,6 +848,43 @@ contains
 #endif
       end if
       call this%execute_normal_mesh_tiles(using_kpath, trim(this%reciprocal_mode) == 'generalized_overlap_proxy')
+#else
+      ! The fused path is disabled by default on macOS: the runner's
+      ! compiler/OpenBLAS combination can fault while returning the combined
+      ! assembly/eigensolution tile.  Keep the public cache and solve
+      ! semantics identical by crossing the backend twice, as in the
+      ! pre-GC-04 compatibility route.
+      if (this%nk_local > 0) then
+         call this%make_execution_backend()
+         do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
+            tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
+            tile_length = tile_last - tile_first + 1
+            request%assemble_hamiltonian = .true.
+            request%assemble_overlap = .false.
+            request%solve_eigensystem = .false.
+            request%generalized = .false.
+            request%request_eigenvectors = .false.
+            request%request_assembled_hamiltonian = .true.
+            request%request_assembled_overlap = .false.
+            request%operator_generation = this%hamiltonian%operator_generation
+            if (allocated(request%k_points)) deallocate(request%k_points)
+            allocate(request%k_points(3,tile_length))
+            if (using_kpath) then
+               request%k_points = this%k_path(:,tile_first:tile_last)
+            else
+               request%k_points = this%k_workset%points(:,tile_first:tile_last)
+            end if
+            call this%execution_backend%execute_batch(request, result)
+            this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
+         end do
+      else
+         allocate(this%eigenvalues(size(this%hk_bulk,1), 0))
+         allocate(this%eigenvectors(size(this%hk_bulk,1), size(this%hk_bulk,2), 0))
+         if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
+            allocate(this%sk_overlap(size(this%hk_bulk,1), size(this%hk_bulk,2), 0))
+         end if
+      end if
+#endif
 
       ! H(k) now represents exactly this shared real-space operator generation.
       ! All later eigensystem/DOS/density entry points verify this identity.
@@ -881,9 +919,17 @@ contains
       end if
 
       call root_info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
+#ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
+         call this%build_kspace_overlap()
+      else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
+         call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
+      end if
+#else
       if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
          call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
       end if
+#endif
       
       ! Diagnostic: Check H(k) at Gamma point for multi-site systems
       if (this%lattice%nrec > 1 .and. this%nk_local > 0 .and. local_k_index_to_global(this, 1) == 1) then
@@ -978,6 +1024,11 @@ contains
          else
             this%workspace%points(:,1:tile_length) = this%k_workset%points(:,tile_first:tile_last)
          end if
+         ! The overlap assembler consumes the phase factors prepared by the
+         ! Hamiltonian assembler. Rebuild them explicitly here because the
+         ! compatibility path reaches this routine after an assembly-only
+         ! backend request, and ensure_capacity may have reset the workspace.
+         call assembler%assemble_batch(this%workspace%points(:,1:tile_length), this%workspace)
          call assembler%assemble_overlap_batch(this%workspace%points(:,1:tile_length), this%workspace)
          this%sk_overlap(:,:,tile_first:tile_last) = this%workspace%s(:,:,1:tile_length)
       end do

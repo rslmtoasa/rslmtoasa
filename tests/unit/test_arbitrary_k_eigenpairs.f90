@@ -94,18 +94,34 @@ program test_arbitrary_k_eigenpairs
    call recip%execution_backend%execution_metrics(execute_before, combined_before, assemble_before, input_solve_before)
    call recip%build_kspace_hamiltonian()
    call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+#ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
+   if (execute_after /= execute_before + 1 .or. combined_after /= combined_before .or. &
+       assemble_after /= assemble_before + 1 .or. input_solve_after /= input_solve_before) then
+      write (*, '(a)') 'FAIL compatibility normal mesh did not use one assembly request'
+      failed = .true.
+   end if
+#else
    if (execute_after /= execute_before + 1 .or. combined_after /= combined_before + 1 .or. &
        assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
       write (*, '(a)') 'FAIL GC-04 normal mesh did not use one combined backend request'
       failed = .true.
    end if
+#endif
    call recip%diagonalize_hamiltonian()
    call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+#ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
+   if (execute_after /= execute_before + 2 .or. combined_after /= combined_before .or. &
+       assemble_after /= assemble_before + 1 .or. input_solve_after /= input_solve_before + 1) then
+      write (*, '(a)') 'FAIL compatibility diagonalize adapter did not submit one input-H solve'
+      failed = .true.
+   end if
+#else
    if (execute_after /= execute_before + 1 .or. combined_after /= combined_before + 1 .or. &
        assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
       write (*, '(a)') 'FAIL GC-04 diagonalize adapter submitted a second backend request'
       failed = .true.
    end if
+#endif
    call recip%fourier_transform_hamiltonian(k0, h_direct)
    call check_close('GC-04 normal-mesh H(k) compatibility cache', maxval(abs(recip%hk_bulk(:,:,1) - h_direct)), 1.0e-12_rp, failed)
    call check_eigenpairs('GC-04 normal-mesh combined eigenpairs', recip%hk_bulk(:,:,1), recip%eigenvalues(:,1), &
@@ -118,12 +134,21 @@ program test_arbitrary_k_eigenpairs
    ham%operator_generation = ham%operator_generation + 1
    call recip%diagonalize_hamiltonian()
    call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+#ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
+   if (execute_after /= execute_before + 4 .or. combined_after /= combined_before .or. &
+       assemble_after /= assemble_before + 2 .or. input_solve_after /= input_solve_before + 2 .or. &
+       recip%cached_operator_generation /= ham%operator_generation) then
+      write (*, '(a)') 'FAIL compatibility stale normal mesh did not rebuild and re-solve'
+      failed = .true.
+   end if
+#else
    if (execute_after /= execute_before + 2 .or. combined_after /= combined_before + 2 .or. &
        assemble_after /= assemble_before .or. input_solve_after /= input_solve_before .or. &
        recip%cached_operator_generation /= ham%operator_generation) then
       write (*, '(a)') 'FAIL GC-04 stale normal-mesh generation did not rebuild as a combined tile'
       failed = .true.
    end if
+#endif
    call check_close('GC-04 generation-refresh spectrum', maxval(abs(evals(:,1) - recip%eigenvalues(:,1))), 1.0e-12_rp, failed)
 
    ! A k-path follows the same resident tile contract while retaining the
@@ -136,11 +161,19 @@ program test_arbitrary_k_eigenpairs
    call recip%build_kspace_hamiltonian()
    call recip%diagonalize_hamiltonian()
    call recip%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+#ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
+   if (execute_after /= execute_before + 3 .or. combined_after /= combined_before .or. &
+       assemble_after /= assemble_before + 2 .or. input_solve_after /= input_solve_before + 1) then
+      write (*, '(a)') 'FAIL compatibility k-path did not use assembly plus input-H solve'
+      failed = .true.
+   end if
+#else
    if (execute_after /= execute_before + 2 .or. combined_after /= combined_before + 2 .or. &
        assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
       write (*, '(a)') 'FAIL GC-04 k-path did not use one combined request per tile'
       failed = .true.
    end if
+#endif
    call check_eigenpairs('GC-04 k-path combined eigenpairs', recip%hk_bulk(:,:,2), recip%eigenvalues(:,2), &
                          recip%eigenvectors(:,:,2), failed)
    deallocate(recip%k_path)
@@ -250,11 +283,19 @@ program test_arbitrary_k_eigenpairs
    call recip_two_site%build_kspace_hamiltonian()
    call recip_two_site%diagonalize_hamiltonian()
    call recip_two_site%execution_backend%execution_metrics(execute_after, combined_after, assemble_after, input_solve_after)
+#ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
+   if (execute_after /= execute_before + 3 .or. combined_after /= combined_before .or. &
+       assemble_after /= assemble_before + 2 .or. input_solve_after /= input_solve_before + 1) then
+      write (*, '(a)') 'FAIL compatibility generalized normal mesh did not assemble H/S and solve'
+      failed = .true.
+   end if
+#else
    if (execute_after /= execute_before + 2 .or. combined_after /= combined_before + 2 .or. &
        assemble_after /= assemble_before .or. input_solve_after /= input_solve_before) then
       write (*, '(a)') 'FAIL GC-04 generalized normal mesh did not use one combined request per tile'
       failed = .true.
    end if
+#endif
    call check_generalized_eigenpairs('GC-04 generalized normal-mesh eigenpairs', recip_two_site%hk_bulk(:,:,1), &
                                      recip_two_site%sk_overlap(:,:,1), recip_two_site%eigenvalues(:,1), &
                                      recip_two_site%eigenvectors(:,:,1), failed)

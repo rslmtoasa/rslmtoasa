@@ -46,12 +46,13 @@ jobs:
           sudo apt-get -y install \
             ninja-build cmake gfortran \
             libopenblas-dev liblapack-dev \
+            libsymspg-dev \
             openmpi-bin openmpi-common libopenmpi-dev
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          for pkg in ninja cmake open-mpi; do
+          for pkg in ninja cmake open-mpi spglib; do
             if ! brew list --versions "$pkg" >/dev/null 2>&1; then
               brew install "$pkg"
             fi
@@ -70,8 +71,11 @@ jobs:
         run: python -m pip install f90nml
 
       - name: Generate runner-native references
+        id: generate_refs
+        continue-on-error: true
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          status=0
           artifact_root="runner-native-${{ matrix.artifact }}"
           rm -rf "$artifact_root"
           mkdir -p "$artifact_root/scf/references" \
@@ -83,16 +87,19 @@ jobs:
             --build-dir build \
             --cases-json tests/scf/cases.json \
             --references-dir "$artifact_root/scf/references" \
-            --scratch-root "$artifact_root/scf/scratch"
+            --scratch-root "$artifact_root/scf/scratch" || status=$?
 
           python tests/generate_ci_references.py \
             --profile runner-native \
             --build-dir build \
             --cases-json tests/postproc/cases.json \
             --references-dir "$artifact_root/postproc/references" \
-            --scratch-root "$artifact_root/postproc/scratch"
+            --scratch-root "$artifact_root/postproc/scratch" || status=$?
 
-          mapfile -t regression_cases < <(
+          regression_cases=()
+          while IFS= read -r case_name; do
+            regression_cases+=("$case_name")
+          done < <(
             python -c 'import json; print("\n".join(c["name"] for c in json.load(open("tests/regression/cases.json"))["cases"]))'
           )
           for case_name in "${regression_cases[@]}"; do
@@ -102,18 +109,28 @@ jobs:
               --case-name "$case_name" \
               --scratch-root "$artifact_root/regression/scratch" \
               --references "$artifact_root/regression/references" \
-              --gen-ref
+              --gen-ref || status=$?
           done
 
           mkdir -p "$artifact_root/build/bin"
-          cp build/bin/rslmto.x "$artifact_root/build/bin/rslmto.x"
-          cp build/CMakeCache.txt "$artifact_root/build/CMakeCache.txt"
+          if [ -f build/bin/rslmto.x ]; then
+            cp build/bin/rslmto.x "$artifact_root/build/bin/rslmto.x"
+          fi
+          if [ -f build/CMakeCache.txt ]; then
+            cp build/CMakeCache.txt "$artifact_root/build/CMakeCache.txt"
+          fi
           git rev-parse HEAD > "$artifact_root/GENERATED_FROM_COMMIT"
+          exit "$status"
 
       - name: Upload runner-native references
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: rslmto-runner-native-references-${{ matrix.artifact }}-${{ github.sha }}
           path: runner-native-${{ matrix.artifact }}/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Fail if reference generation failed
+        if: steps.generate_refs.outcome == 'failure'
+        run: exit 1

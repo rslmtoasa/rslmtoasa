@@ -576,18 +576,36 @@ contains
    subroutine generate_symmetry_kpath(this, nk_path_in)
       class(symmetry), intent(inout) :: this
       integer, intent(in), optional :: nk_path_in
+      integer :: npts
+      character(len=10) :: crystal_type
+
+      npts = 50
+      if (present(nk_path_in)) npts = nk_path_in
+      crystal_type = this%determine_crystal_structure()
+      ! The input namelist is authoritative when the lattice has an explicit
+      ! crystal selector.  After bravais/file construction the metric alone
+      ! can look cubic, even though it still carries the requested BCC/FCC
+      ! primitive-cell convention.
+      select case (trim(this%lattice%crystal_sym))
+      case ('bcc', 'b2')
+         crystal_type = 'bcc'
+      case ('fcc', 'fcc2', 'fcc3')
+         crystal_type = 'fcc'
+      case ('hcp')
+         crystal_type = 'hexagonal'
+      end select
 
 #ifdef USE_SPGLIB
       if (.not. this%spglib%is_available()) then
-         call g_logger%info('generate_symmetry_kpath: spglib NOT available — using default k-path', __FILE__, __LINE__)
-         call this%generate_kpath('cubic', 50)
+         call g_logger%info('generate_symmetry_kpath: spglib NOT available — using lattice-detected k-path', __FILE__, __LINE__)
+         call this%generate_kpath(crystal_type, npts)
          return
       end if
 
       ! Prefer spglib-detected crystal system but fall back when empty
       if (len_trim(this%crystal_system) == 0) then
-         call g_logger%warning('generate_symmetry_kpath: spglib available but crystal_system empty, using cubic', __FILE__, __LINE__)
-         call this%generate_kpath('cubic', 50)
+         call g_logger%warning('generate_symmetry_kpath: spglib available but crystal_system empty, using lattice-detected k-path', __FILE__, __LINE__)
+         call this%generate_kpath(crystal_type, npts)
          return
       end if
 
@@ -597,15 +615,14 @@ contains
       ! If get_high_symmetry_points returned a trivial set, fall back to default k-path construction
       if (.not. allocated(this%k_path) .or. size(this%k_path,2) == 0) then
          call g_logger%warning('generate_symmetry_kpath: Failed to get HS points, falling back to default k-path', __FILE__, __LINE__)
-         call this%generate_kpath('cubic', 50)
+         call this%generate_kpath(crystal_type, npts)
       else
-         ! Build full path by sampling each successive HS point segment
-         ! For now sample 50 points per segment (configurable later)
-         call this%generate_kpath(this%crystal_system, 50)
+         ! Build full path by sampling each successive HS point segment.
+         call this%generate_kpath(this%crystal_system, npts)
       end if
 #else
-      call g_logger%info('generate_symmetry_kpath: Built without spglib support, using default k-path', __FILE__, __LINE__)
-      call this%generate_kpath('cubic', 50)
+      call g_logger%info('generate_symmetry_kpath: Built without spglib support — using lattice-detected k-path', __FILE__, __LINE__)
+      call this%generate_kpath(crystal_type, npts)
 #endif
       
    end subroutine generate_symmetry_kpath
@@ -622,10 +639,20 @@ contains
       integer :: npts, spg_number
       character(len=20) :: international_symbol
       character(len=100) :: hall_symbol
+      character(len=10) :: crystal_type
       logical :: dataset_success
       
       npts = 50
       if (present(npts_per_segment)) npts = npts_per_segment
+      crystal_type = this%determine_crystal_structure()
+      select case (trim(this%lattice%crystal_sym))
+      case ('bcc', 'b2')
+         crystal_type = 'bcc'
+      case ('fcc', 'fcc2', 'fcc3')
+         crystal_type = 'fcc'
+      case ('hcp')
+         crystal_type = 'hexagonal'
+      end select
 
       call g_logger%info('generate_canonical_kpath: Starting canonical k-path generation with ' // &
                         trim(int2str(npts)) // ' points per segment', __FILE__, __LINE__)
@@ -633,7 +660,7 @@ contains
 #ifdef USE_SPGLIB
       if (.not. this%spglib%is_available()) then
          call g_logger%warning('generate_canonical_kpath: spglib not available, falling back to basic k-path', __FILE__, __LINE__)
-         call this%generate_kpath('cubic', npts)
+         call this%generate_kpath(crystal_type, npts)
          call g_logger%info('generate_canonical_kpath: FALLBACK used - basic k-path generated', __FILE__, __LINE__)
          return
       end if
@@ -663,8 +690,8 @@ contains
       call this%get_canonical_kpath_for_spacegroup(spg_number, international_symbol, npts)
       call g_logger%info('generate_canonical_kpath: CRYSTAL FAMILY-BASED k-path generation completed', __FILE__, __LINE__)
 #else
-      call g_logger%info('generate_canonical_kpath: Built without spglib support, using default k-path', __FILE__, __LINE__)
-      call this%generate_kpath('cubic', npts)
+      call g_logger%info('generate_canonical_kpath: Built without spglib support, using lattice-detected k-path', __FILE__, __LINE__)
+      call this%generate_kpath(crystal_type, npts)
       call g_logger%info('generate_canonical_kpath: NO-SPGLIB fallback used', __FILE__, __LINE__)
 #endif
 

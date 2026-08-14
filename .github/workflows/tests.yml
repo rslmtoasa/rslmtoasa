@@ -67,12 +67,13 @@ jobs:
             ninja-build cmake \
             gfortran \
             libopenblas-dev liblapack-dev \
+            libsymspg-dev \
             openmpi-bin openmpi-common libopenmpi-dev
 
       - name: Install system dependencies (macOS) ${{ matrix.icon }}
         if: runner.os == 'macOS'
         run: |
-          for pkg in ninja cmake open-mpi; do
+          for pkg in ninja cmake open-mpi spglib; do
             if ! brew list --versions "$pkg" >/dev/null 2>&1; then
               brew install "$pkg"
             fi
