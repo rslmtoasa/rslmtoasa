@@ -9,6 +9,7 @@ add_library(${PROJECT_NAME} STATIC
     calculation_preprocessing.f90
     calculation_reciprocal.f90
     charge.f90
+    charge_madelung_2d.f90
     chebyshev_fast.f90
     haydock_fast.f90
     bsf_kernel.f90
@@ -107,9 +108,9 @@ add_library(${PROJECT_NAME} STATIC
 )
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
-    # ifx 202x can ICE in charge.f90 around legacy FORMAT handling in release
-    # builds. Keep the workaround local to this translation unit.
-    set_source_files_properties(charge.f90 PROPERTIES COMPILE_OPTIONS "-O0")
+    # ifx 202x can ICE in the legacy FORMAT handling of the 2D Madelung
+    # implementation. Keep -O0 local to that isolated translation unit.
+    set_source_files_properties(charge_madelung_2d.f90 PROPERTIES COMPILE_OPTIONS "-O0")
 endif()
 
 if(ENABLE_MKL_KERNELS)

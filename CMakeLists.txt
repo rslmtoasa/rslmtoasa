@@ -623,7 +623,7 @@ if (RUN_UNIT_TESTS)
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE
-    MADL2D_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/source/charge.f90")
+    MADL2D_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/source/charge_madelung_2d.f90")
   add_custom_target(unit_tests DEPENDS ${_standalone_unit_targets})
 endif (RUN_UNIT_TESTS)
 
