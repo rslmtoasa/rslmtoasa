@@ -440,7 +440,7 @@ jobs:
   # to avoid MSYS2 MPI toolchain coupling issues - matched here).
   # ---------------------------------------------------------------------------
   windows_quick:
-    name: Windows quick subset (MSYS2, best effort)
+    name: Windows quick subset (MSYS2 UCRT64, best effort)
 
     runs-on: windows-latest
     continue-on-error: true
@@ -453,20 +453,21 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           path-type: inherit
           install: >-
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-gcc-fortran
-            mingw-w64-x86_64-blas
-            mingw-w64-x86_64-openblas
-            mingw-w64-x86_64-lapack
-            mingw-w64-x86_64-fftw
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-python
-            mingw-w64-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-gcc-fortran
+            mingw-w64-ucrt-x86_64-blas
+            mingw-w64-ucrt-x86_64-openblas
+            mingw-w64-ucrt-x86_64-lapack
+            mingw-w64-ucrt-x86_64-fftw
+            mingw-w64-ucrt-x86_64-spglib
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-pip
             git
 
       - name: Install Python dependencies

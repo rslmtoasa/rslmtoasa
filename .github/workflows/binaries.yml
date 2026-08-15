@@ -54,22 +54,23 @@ jobs:
           symspg_libdir="$(dirname "$symspg_lib")"
           echo "LD_LIBRARY_PATH=$symspg_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
-      - name: Provide gfortran on Windows ${{ matrix.icon}}
+      - name: Provide UCRT64 build dependencies on Windows ${{ matrix.icon}}
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           path-type: inherit
           install: >-
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-gcc-fortran
-            mingw-w64-x86_64-blas
-            mingw-w64-x86_64-openblas
-            mingw-w64-x86_64-lapack
-            mingw-w64-x86_64-fftw
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-gcc-fortran
+            mingw-w64-ucrt-x86_64-blas
+            mingw-w64-ucrt-x86_64-openblas
+            mingw-w64-ucrt-x86_64-lapack
+            mingw-w64-ucrt-x86_64-fftw
+            mingw-w64-ucrt-x86_64-spglib
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
             git 
 
       - uses: actions/checkout@v6

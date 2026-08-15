@@ -118,8 +118,8 @@ GitHub-hosted CI runners have no GPU, so GPU coverage splits into three tiers:
   rots — the nightly run still exercises every case every day.
 - **Windows:** `binaries.yml` builds a Windows binary but never tested it.
   The `windows_quick` job in `tests.yml` runs the same quick subset under
-  MSYS2 (mirroring `binaries.yml`'s Windows build steps, with
-  `mingw-w64-x86_64-python`/`-python-pip` added for `f90nml`), with
+  MSYS2 UCRT64 (mirroring `binaries.yml`'s Windows build steps, with
+  `mingw-w64-ucrt-x86_64-python`/`-python-pip` added for `f90nml`), with
   `ENABLE_MPI=OFF` to avoid MSYS2 MPI toolchain coupling issues (same as the
   Windows build job). This job carries `continue-on-error: true`: it was
   authored and validated on Linux only (no Windows runner was available to
