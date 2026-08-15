@@ -26,6 +26,8 @@ add_library(${PROJECT_NAME} STATIC
     green.f90
     green_lifecycle.f90
     green_chebyshev.f90
+    green_block.f90
+    green_lanczos.f90
     magnetic_representation.f90
     gbt_structure.f90
     lmto_magnetic_tangent.f90
