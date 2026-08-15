@@ -905,7 +905,13 @@ contains
       case ('python')
          call hamiltonian_obj%export_rs_tb_all()
       end select
-      call bands_obj%calculate_orbital_quadrupoles()
+      if (self_obj%use_kspace) then
+         if (rank == 0) call g_logger%warning( &
+            'Skipping orbital quadrupoles: the real-space Green-function diagnostic is unavailable in k-space mode.', &
+            __FILE__, __LINE__)
+      else
+         call bands_obj%calculate_orbital_quadrupoles()
+      end if
       !call bands_obj%calculate_moments_gauss_legendre()
    end subroutine pre_processing_bravais
 

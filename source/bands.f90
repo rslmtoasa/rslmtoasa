@@ -456,6 +456,8 @@ contains
 
       ik1 = this%en%ik1
       nv1 = this%en%nv1
+      this%nv1 = nv1
+      this%e1 = this%en%ene(nv1)
 
       ! Define the valence electrons from the bulk parameters
       this%qqv = real(sum(this%symbolic_atom(1:this%lattice%nbulk_bulk)%element%valence))

@@ -1418,7 +1418,7 @@ contains
          open (newunit=newunit, file='report.out', action='write', iostat=iostatus, status='replace')
          open (unit=10, file='minfo.out', action='write', iostat=iostatus, status='replace')
          open (unit=20, file='linfo.out', action='write', iostat=iostatus, status='replace')
-         call g_logger%info('Calculation finished. Report printed in report.out', __FILE__, __LINE__)
+         call g_logger%info('Writing calculation report to report.out', __FILE__, __LINE__)
          !===========================================================================
          !                      Total Energy
          !===========================================================================
@@ -1511,6 +1511,8 @@ contains
             call this%symbolic_atom(ia)%potential%print_hyperfine(ia)
          end do
       end if
+
+      if (rank == 0) call g_logger%info('Calculation finished. Report printed in report.out', __FILE__, __LINE__)
       
    end subroutine report
 

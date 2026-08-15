@@ -1104,12 +1104,16 @@ contains
       ! Input
       integer, intent(in) :: NPTS, nexp
       real(rp), intent(in) :: EA, EF, H
-      real(rp), dimension(NPTS + 2), intent(in) :: Y
-      real(rp), dimension(NPTS + 2), intent(in) :: Ene
+      real(rp), dimension(:), intent(in) :: Y
+      real(rp), dimension(:), intent(in) :: Ene
       ! Output
       real(rp), intent(out) :: AINT
       ! Local variables
       integer :: I
+
+      if (NPTS < 3 .or. size(Y) < NPTS + 2 .or. size(Ene) < NPTS + 2) then
+         error stop 'simpson_m: invalid NPTS or integration array extent'
+      end if
 
       AINT = 0.d0
       do I = 2, NPTS - 1, 2
