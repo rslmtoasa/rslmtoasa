@@ -408,6 +408,8 @@ contains
    !> @param[inout] this Recursion object with psi_b initialized for one atom or pair.
    !> @note Uses LAPACK zheev and mutates psi_b, pmn_b, atemp_b, and b2temp_b.
    module subroutine crecal_b(this)
+      use, intrinsic :: ieee_exceptions, only: ieee_divide_by_zero, &
+                             ieee_get_halting_mode, ieee_set_flag, ieee_set_halting_mode
       class(recursion), intent(inout) :: this
       ! Local variables
       integer :: i, j, k, l, m, info, lwork
@@ -423,6 +425,7 @@ contains
       complex(rp), dimension(nb) :: zev
       real(rp), dimension(3*nb - 2) ::rwork
       complex(rp), dimension(3*nb - 2) ::zwork
+      logical :: halt_divide_by_zero
 
       allocate (psi_t(nb, nb, this%lattice%kk))
 
@@ -475,7 +478,11 @@ contains
          u(:, :) = sum_b(:, :)
          ! Replace sqrt with eigen solver to get lamda^2 and U
          ! get lamda^2 and U in lamda=U*BB´*U*
+         call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
+         call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
          call zheev('v', 'u', nb, u, nb, ev, dum, nb*nb, rwork, info)
+         call ieee_set_flag(ieee_divide_by_zero, .false.)
+         call ieee_set_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
          if (info /= 0) call g_logger%fatal('Diagonalization error', __FILE__, __LINE__)
          !
          !
