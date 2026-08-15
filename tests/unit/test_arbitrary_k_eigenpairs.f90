@@ -346,6 +346,7 @@ contains
       type(lattice), target, intent(out) :: lat_obj
       integer :: i
 
+      call obj%restore_to_default()
       lat_obj%nrec = 1
       lat_obj%ntype = 1
       lat_obj%nn_max = 3
@@ -412,6 +413,7 @@ contains
       type(lattice), target, intent(out) :: lat_obj
       integer :: i
 
+      call obj%restore_to_default()
       lat_obj%nrec = 2; lat_obj%ntype = 2; lat_obj%nn_max = 2; lat_obj%kk = 2
       allocate(lat_obj%ib(2), lat_obj%atlist(2), lat_obj%iz(2), lat_obj%nn(2,2))
       lat_obj%ib = [1,2]; lat_obj%atlist = [1,2]; lat_obj%iz = [1,2]

@@ -82,7 +82,8 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        run: pip install f90nml
+        # The GBT oracle/unit checks import NumPy in addition to f90nml.
+        run: pip install f90nml numpy
 
       # -----------------------------------------------------------------------
       # Configure and build the checked-out source.
@@ -135,6 +136,11 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Run unit correctness tests ${{ matrix.icon }}
         id: ctest_unit
+        # ubuntu-latest exposes fewer Open MPI slots than the four-rank
+        # parallel-context test intentionally exercises.  This is a CI
+        # resource limit, not an oversubscription condition in the code.
+        env:
+          OMPI_MCA_rmaps_base_oversubscribe: ${{ runner.os == 'Linux' && '1' || '' }}
         run: |
           ctest --test-dir build \
             -L unit \

@@ -594,6 +594,7 @@ contains
    
       ! Allocate local matrices for partial products
       allocate(tmp1(hblocksize,hblocksize), tmp2(hblocksize,hblocksize), L_op(hblocksize,hblocksize))
+      L_op = (0.0_rp, 0.0_rp)
    
       ! Initialize the orbital–velocity array
       this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
@@ -850,6 +851,7 @@ contains
 
       ! Allocate temporary matrices for local block multiplication
       allocate(tmp1(hblocksize, hblocksize), tmp2(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
+      L_op = (0.0_rp, 0.0_rp)
 
       ! Initialize the spin–velocity array to zero
       this%jl_a(:, :, :, :) = (0.0_rp, 0.0_rp)
