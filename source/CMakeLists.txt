@@ -7,6 +7,7 @@ add_library(${PROJECT_NAME} STATIC
     bands.f90
     calculation.f90
     calculation_preprocessing.f90
+    calculation_reciprocal.f90
     charge.f90
     chebyshev_fast.f90
     haydock_fast.f90
