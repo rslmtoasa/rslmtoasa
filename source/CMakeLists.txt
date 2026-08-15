@@ -92,6 +92,8 @@ add_library(${PROJECT_NAME} STATIC
     safe_alloc.f90
     sigma_provider.f90
     self.f90
+    self_reciprocal.f90
+    self_xc_response.f90
     bounds.f90
     spglib_interface.f90
     spin_dynamics.f90
