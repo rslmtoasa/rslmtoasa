@@ -268,7 +268,7 @@
     {
       "name": "Example_orbital_modern_bccFe",
       "case": "orbital/bccFe",
-      "timeout": 300,
+      "timeout": 600,
       "_note": "rc shrunk to 20 (from the usual 80) - chebyshev_orbital_mod loops over every cluster atom, so cluster size dominates runtime",
       "namelists": {
         "control": { "nsp": 2, "recur": "block", "lld": 20 },

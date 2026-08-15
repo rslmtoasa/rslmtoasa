@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import shutil
 import subprocess
 import time
@@ -85,8 +86,14 @@ def run_route(
 ) -> float:
     patch_fixture(case_root, workdir, use_kspace)
     started = time.monotonic()
+    # MSYS Python launches child processes through the native Windows API,
+    # where a bare ``bash`` can resolve outside the configured MSYS2 runtime.
+    # Match run_test.py and pass the MSYS-provided interpreter explicitly.
+    bash = shutil.which("bash") if os.name == "nt" else "/bin/bash"
+    if bash is None:
+        raise RuntimeError("bash is required to run production routes on Windows/MSYS2")
     result = subprocess.run(
-        ["bash", str(runner), str(binary)],
+        [bash, str(runner), str(binary)],
         cwd=workdir,
         text=True,
         capture_output=True,
@@ -95,7 +102,14 @@ def run_route(
     elapsed = time.monotonic() - started
     if result.returncode != 0:
         log = workdir / "testrun.log"
-        detail = log.read_text(errors="replace")[-4000:] if log.exists() else result.stderr
+        detail_parts = []
+        if log.exists():
+            detail_parts.append("--- testrun.log ---\n" + log.read_text(errors="replace")[-4000:])
+        if result.stdout:
+            detail_parts.append("--- runner stdout ---\n" + result.stdout[-4000:])
+        if result.stderr:
+            detail_parts.append("--- runner stderr ---\n" + result.stderr[-4000:])
+        detail = "\n".join(detail_parts) or "(no output captured)"
         raise RuntimeError(f"production route failed in {workdir}\n{detail}")
     return elapsed
 
