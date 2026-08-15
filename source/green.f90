@@ -27,7 +27,7 @@ module green_mod
    use symbolic_atom_mod
    use recursion_mod
    use density_of_states_mod
-   use chebyshev_fast_mod, only: cheb_green_fast
+   use basis_mod, only: nb
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
@@ -130,6 +130,53 @@ module green_mod
    module subroutine restore_to_default(this)
       class(green) :: this
    end subroutine restore_to_default
+
+   module subroutine chebyshev_green_ij(this, istart)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+   end subroutine chebyshev_green_ij
+
+   module subroutine chebyshev_green_ij_gpu(this, istart)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+   end subroutine chebyshev_green_ij_gpu
+
+   module subroutine chebyshev_green_ij_eta(this, istart, eta, fermi_point, g_ef)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
+      complex(rp), intent(in) :: eta
+      integer, intent(in) :: fermi_point
+   end subroutine chebyshev_green_ij_eta
+
+   module subroutine chebyshev_green(this)
+      class(green), intent(inout) :: this
+   end subroutine chebyshev_green
+
+   module subroutine chebyshev_green_gpu(this)
+      class(green), intent(inout) :: this
+   end subroutine chebyshev_green_gpu
+
+   module subroutine chebyshev_dos_dispatch(this)
+      class(green), intent(inout) :: this
+   end subroutine chebyshev_dos_dispatch
+
+   module subroutine chebyshev_green_eta(this, eta, fermi_point, g_ef)
+      use mpi_mod, only: atoms_per_process
+      class(green), intent(inout) :: this
+      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout) :: g_ef
+      complex(rp), intent(in) :: eta
+      integer, intent(in) :: fermi_point
+   end subroutine chebyshev_green_eta
+
+   module subroutine chebyshev_green_core(this, eta, fermi_point, g_ef, use_gpu)
+      use mpi_mod, only: atoms_per_process
+      class(green), intent(inout) :: this
+      complex(rp), intent(in), optional :: eta
+      integer, intent(in), optional :: fermi_point
+      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout), optional :: g_ef
+      logical, intent(in), optional :: use_gpu
+   end subroutine chebyshev_green_core
 
    end interface
 
@@ -1003,419 +1050,6 @@ contains
       deallocate (pmat_resc3)
 
    end subroutine transform_auxiliary_gij
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Uses the moments form the Chebyshev recursions to calculate the onsite GF
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green_ij(this, istart)
-      class(green), intent(inout) :: this
-      integer, intent(in) :: istart
-      ! Local variables
-      real(rp), dimension(:), allocatable :: kernel
-      real(rp), dimension(:, :), allocatable :: polycheb
-      real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
-      complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n
-
-      this%g0 = 0.0d0
-
-      allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
-                wscale(this%en%channels_ldos + 10))
-      ! Defining rescaling coeficients
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-
-      wscale(:) = (this%en%ene(:) - b)/a
-
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
-
-      ! Calculating the Lorentz Kernel
-!    call lorentz_kernel(this%control%lld, kernel, 4.0d0)
-
-      do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n + istart - 1) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
-            end do
-         end do
-         this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1) = this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1)*2.0_rp
-
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
-
-         ! Calculate the density of states
-         !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-         do ie = 1, this%en%channels_ldos + 10
-            do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(wscale(ie)))
-               do l = 1, nb
-                  do m = 1, nb
-                     this%g0(l, m, ie, n) = this%g0(l, m, ie, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
-                  end do
-               end do
-            end do
-            do l = 1, nb
-               do m = 1, nb
-                  this%g0(l, m, ie, n) = this%g0(l, m, ie, n)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
-               end do
-            end do
-         end do
-         !$omp end parallel do
-      end do  ! End loop on n
-
-      deallocate (kernel, polycheb, w, wscale)
-   end subroutine chebyshev_green_ij
-
-   !---------------------------------------------------------------------------
-   !> @brief GPU drop-in for chebyshev_green_ij (intersite Chebyshev GF).
-   !> @details Reconstructs the 4 intersite pair-combo Green's functions over
-   !>          all nv = channels_ldos+10 energies in one batched moment
-   !>          contraction (rsrec_chebyshev_dos), using the rescaled window
-   !>          (a, b) from recursion%resolve_chebyshev_window and the raw
-   !>          Chebyshev moments recursion%mu_n (no Jackson-kernel damping is
-   !>          applied here; the kernel and reconstruction live inside the GPU
-   !>          backend). Called from calculate_intersite_gf_core when
-   !>          control%recur=='chebyshev' and control%gpu_plugin is set.
-   !> @param[in] istart Index of the first of the 4 contiguous pair-combo
-   !>            "atoms" in recursion%mu_n for the current pair.
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green_ij_gpu(this, istart)
-      class(green), intent(inout) :: this
-      integer, intent(in) :: istart
-      complex(rp), allocatable :: mu_local(:, :, :, :), g0_local(:, :, :, :)
-      real(rp) :: a, b, emin_win, emax_win
-      integer :: nv, n_mom
-      type(rsrec_cuda_backend), pointer :: gpu_backend
-
-      this%g0 = 0.0d0
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-      nv = this%en%channels_ldos + 10
-      n_mom = size(this%recursion%mu_n, 3)
-
-      allocate (mu_local(nb, nb, n_mom, 4), g0_local(nb, nb, nv, 4))
-      mu_local(:, :, :, 1:4) = this%recursion%mu_n(:, :, :, istart:istart + 3)
-
-      gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-
-      call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local)
-      this%g0(:, :, 1:nv, 1:4) = g0_local(:, :, :, 1:4)
-      deallocate (mu_local, g0_local)
-   end subroutine chebyshev_green_ij_gpu
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Uses the moments form the Chebyshev recursions to calculate the onsite GF
-   !> using a small complex eta into the energy channel
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green_ij_eta(this, istart, eta, fermi_point, g_ef)
-      class(green), intent(inout) :: this
-      integer, intent(in) :: istart
-      complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
-      complex(rp), intent(in) :: eta
-      integer, intent(in) :: fermi_point
-      ! Local variables
-      real(rp), dimension(:), allocatable :: kernel
-      real(rp), dimension(:, :), allocatable :: polycheb
-      real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
-      complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n
-
-      g_ef = 0.0d0
-
-      allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
-                wscale(this%en%channels_ldos + 10))
-      ! Defining rescaling coeficients
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-
-      wscale(:) = (this%en%ene(:) - b)/a
-
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
-
-      ! Calculating the Lorentz Kernel
-!    call lorentz_kernel(this%control%lld, kernel, 4.0d0)
-
-      do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n + istart - 1) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
-            end do
-         end do
-         this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1) = this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1)*2.0_rp
-
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
-
-         ! Calculate the density of states
-         !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-         do ie = fermi_point, fermi_point
-            do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
-               do l = 1, nb
-                  do m = 1, nb
-                     g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
-                  end do
-               end do
-            end do
-            do l = 1, nb
-               do m = 1, nb
-                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
-               end do
-            end do
-         end do
-         !$omp end parallel do
-      end do  ! End loop on n
-
-      deallocate (kernel, polycheb, w, wscale)
-   end subroutine chebyshev_green_ij_eta
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Uses the moments form the Chebyshev recursions to calculate the onsite GF
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green(this)
-      class(green), intent(inout) :: this
-
-      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
-      call chebyshev_green_core(this, use_gpu=this%control%gpu_plugin)
-   end subroutine chebyshev_green
-
-   !---------------------------------------------------------------------------
-   !> @brief Deprecated wrapper; use chebyshev_green_core(this, use_gpu=.true.).
-   !> @details On-site Chebyshev Green's function with GPU CUDA acceleration
-   !>          (cuBLAS moment contraction via rsrec_cuda_backend%chebyshev_dos),
-   !>          20-100x faster than the scalar CPU loop for large nv. Kept only
-   !>          so existing type-bound call sites keep compiling; new code
-   !>          should call chebyshev_dos_dispatch, which picks this path
-   !>          automatically.
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green_gpu(this)
-      class(green), intent(inout) :: this
-
-      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
-      call chebyshev_green_core(this, use_gpu=.true.)
-   end subroutine chebyshev_green_gpu
-
-   !---------------------------------------------------------------------------
-   !> @brief Dispatcher for the on-site Chebyshev Green's-function/DOS
-   !>        reconstruction, called once per SCF/DOS pass.
-   !> @details Selects the implementation based on control%gpu_plugin:
-   !>          - .true. and control%nsp <= 4: chebyshev_green_core with
-   !>            use_gpu=.true. (batched device moment contraction).
-   !>          - .true. and control%nsp > 4: falls back to the CPU path
-   !>            (use_gpu=.false.) with a logged warning -- the GPU batched
-   !>            kernel does not yet support nsp > 4.
-   !>          - .false.: chebyshev_green_core with use_gpu=.false. (legacy
-   !>            per-atom Fortran loop, via cheb_green_fast).
-   !>          Called from calculation.f90's post-processing drivers and from
-   !>          self.f90's SCF loop wherever the Chebyshev recursion route
-   !>          needs the on-site GF/DOS reconstructed from recursion%mu_n.
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_dos_dispatch(this)
-      class(green), intent(inout) :: this
-
-      if (this%control%gpu_plugin) then
-         if (this%control%nsp > 4) then
-            call g_logger%warning('gpu_plugin requested for Chebyshev DOS, '// &
-               'but nsp > 4. Using legacy path.', __FILE__, __LINE__)
-            call chebyshev_green_core(this, use_gpu=.false.)
-            return
-         end if
-         call chebyshev_green_core(this, use_gpu=.true.)
-         return
-      end if
-
-      call chebyshev_green_core(this, use_gpu=.false.)
-
-   end subroutine chebyshev_dos_dispatch
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   !> Uses the moments from the Chebyshev recursions to calculate the onsite GF
-   !> using a small complex eta into the energy channel
-   !---------------------------------------------------------------------------
-   subroutine chebyshev_green_eta(this, eta, fermi_point, g_ef)
-      use mpi_mod
-      class(green), intent(inout) :: this
-      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout) :: g_ef
-      complex(rp), intent(in) :: eta
-      integer, intent(in) :: fermi_point
-
-      ! Deprecated wrapper retained for type-bound callers; use chebyshev_green_core.
-      call chebyshev_green_core(this, eta, fermi_point, g_ef)
-   end subroutine chebyshev_green_eta
-
-   !> @brief On-site Chebyshev Green's function, on-mesh or at a single
-   !>        eta-shifted energy, CPU or GPU.
-   !> @details Rescales the energy window to Chebyshev's [-1,1] domain
-   !>          (a, b from recursion%resolve_chebyshev_window), then reconstructs
-   !>          G(E) = sum_n mu_n(E) * exp_factor(n,E) / sqrt(a^2-(E-b)^2) from
-   !>          the Chebyshev moments recursion%mu_n, Jackson-kernel-damped into
-   !>          recursion%mu_ng. Three sub-paths, chosen by the presence of eta
-   !>          and by do_gpu (defaults to control%gpu_plugin, overridable via
-   !>          use_gpu):
-   !>          - eta absent, do_gpu: batches all local atoms into one device
-   !>            call (rsrec_cuda_backend%chebyshev_dos) -- the
-   !>            chebyshev_green_gpu path.
-   !>          - eta absent, not do_gpu: per-local-atom call to the OpenMP
-   !>            CPU kernel cheb_green_fast -- the chebyshev_green path.
-   !>          - eta present: per-local-atom scalar loop evaluated only at
-   !>            fermi_point with energy shifted by eta -- the
-   !>            chebyshev_green_eta path (Gauss-Legendre eta contour), no GPU
-   !>            variant.
-   !>          On-mesh output goes to this%g0; eta output goes to g_ef, one
-   !>          block per local atom (start_atom..end_atom via g2l_map).
-   !>          Called (via chebyshev_dos_dispatch or directly through the
-   !>          deprecated wrappers) from the Chebyshev-recursion branch of the
-   !>          SCF loop and from the intersite/DOS post-processing drivers.
-   !> @param[in] eta Optional imaginary energy shift; presence selects the
-   !>            single-energy (fermi_point) mode over the full-mesh mode.
-   !> @param[in] fermi_point Optional energy-mesh index to evaluate at when
-   !>            eta is present.
-   !> @param[out] g_ef Optional single-energy GF output when eta is present,
-   !>             one block per local atom.
-   !> @param[in] use_gpu Optional override for control%gpu_plugin (only
-   !>            consulted when eta is absent).
-   subroutine chebyshev_green_core(this, eta, fermi_point, g_ef, use_gpu)
-      use mpi_mod
-      class(green), intent(inout) :: this
-      complex(rp), intent(in), optional :: eta
-      integer, intent(in), optional :: fermi_point
-      complex(rp), dimension(nb, nb, atoms_per_process), intent(inout), optional :: g_ef
-      logical, intent(in), optional :: use_gpu
-      ! Local variables
-      real(rp), dimension(this%control%lld*2 + 2) :: kernel
-      real(rp), dimension(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2) :: polycheb
-      real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
-      complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n, nv, n_glob, n_local
-      complex(rp), allocatable :: mu_local(:, :, :, :)
-      complex(rp), allocatable :: g0_local(:, :, :, :)
-      type(rsrec_cuda_backend), pointer :: gpu_backend
-      logical :: do_gpu
-
-      do_gpu = this%control%gpu_plugin
-      if (present(use_gpu)) do_gpu = use_gpu
-      if (present(eta)) then
-         g_ef = 0.0d0
-      else
-         this%g0 = 0.0d0
-      end if
-
-      ! Defining rescaling coeficients
-      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
-      b = (emax_win + emin_win)/2.0_rp
-
-      ! Number of DOS points
-      nv = this%en%channels_ldos + 10
-
-      if (.not. present(eta) .and. do_gpu) then
-         call jackson_kernel((this%control%lld)*2 + 2, kernel)
-         do n_glob = start_atom, end_atom
-            n = g2l_map(n_glob)
-            do l = 1, nb
-               do m = 1, nb
-                  this%recursion%mu_ng(l, m, :, n) = this%recursion%mu_n(l, m, :, n)*kernel(:)
-               end do
-            end do
-            this%recursion%mu_ng(:, :, 2:size(kernel), n) = &
-               this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
-         end do
-
-         gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
-
-         call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
-                                         this%en%ene(1:nv), a, b,                         &
-                                         this%g0(:, :, 1:nv, start_atom:end_atom))
-         return
-      end if
-
-      if (.not. present(eta)) then
-         n_local = end_atom - start_atom + 1
-         if (n_local <= 0) return
-
-         allocate (mu_local(nb, nb, size(this%recursion%mu_n, 3), n_local))
-         allocate (g0_local(nb, nb, nv, n_local))
-
-         do n_glob = start_atom, end_atom
-            n = g2l_map(n_glob)
-            mu_local(:, :, :, n) = this%recursion%mu_n(:, :, :, n)
-         end do
-
-         call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
-
-         do n_glob = start_atom, end_atom
-            n = g2l_map(n_glob)
-            this%g0(:, :, 1:nv, n) = g0_local(:, :, :, n)
-         end do
-
-         deallocate (g0_local, mu_local)
-         return
-      end if
-
-      wscale(:) = (this%en%ene(:) - b)/a
-
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
-
-      ! Calculating the Lorentz Kernel
-      ! call lorentz_kernel(this%control%lld, kernel, 4.0d0)
-
-      do n_glob = start_atom, end_atom ! Loop on self-consistent atoms
-         n = g2l_map(n_glob)
-         ! Multiply the moments with the kernel
-         do i = 1, nb
-            this%recursion%mu_ng(i, i, :, n) = this%recursion%mu_n(i, i, :, n)*kernel(:)
-         end do
-
-         this%recursion%mu_ng(:, :, 2:size(kernel), n) = this%recursion%mu_ng(:, :, 2:size(kernel), n)*2.0_rp
-
-         !do i=1, size(kernel)
-         !  write(400+n, *) i, sum(this%recursion%mu_n(n, i, 1:18, 1:18))
-         !end do
-
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
-
-         ! Calculate the density of states
-         !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-         do ie = fermi_point, fermi_point
-            do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
-               do l = 1, nb
-                  do m = 1, nb
-                     g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n)*exp_factor
-                  end do
-               end do
-            end do
-            do l = 1, nb
-               do m = 1, nb
-                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
-               end do
-            end do
-         end do
-         !$omp end parallel do
-      end do  ! End loop on self-consistent atoms
-   end subroutine chebyshev_green_core
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
