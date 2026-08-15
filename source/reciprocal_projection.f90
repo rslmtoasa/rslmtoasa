@@ -130,8 +130,8 @@ module subroutine project_dos_orbitals_gaussian(this)
             weight = gaussian_weight * this%k_weights(ik_global)
 
             do isite = 1, this%n_sites
-               ! Site-blocked layout: eigenvectors are [site1(18), site2(18), ...]
-               ! where each site block contains [orb1_up...orb9_up, orb1_dn...orb9_dn]
+               ! Site-blocked layout: each site contains the active spinor block,
+               ! with the up channels followed by the down channels.
                site_orb_start = site_orb_offset(isite)
 
                call get_site_spin_axis(this, isite, axis)
@@ -959,7 +959,7 @@ end subroutine calculate_band_moments
 #endif
 
       deallocate(DM)
-      call root_info('calculate_ldm_from_eigenvectors: Eigenvector-based 18x18 DM -> ldm complete', __FILE__, __LINE__)
+      call root_info('calculate_ldm_from_eigenvectors: Eigenvector-based site density matrix -> ldm complete', __FILE__, __LINE__)
       
    end subroutine calculate_ldm_from_eigenvectors
 

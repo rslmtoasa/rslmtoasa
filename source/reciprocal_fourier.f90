@@ -1039,66 +1039,89 @@ contains
 !> @param[in] this Reciprocal object containing hk_total or hk_bulk data.
 module subroutine check_multisite_hamiltonian_diagonal(this)
    class(reciprocal), intent(in) :: this
-   integer :: isite, iorb, ispin
+   integer :: iorb
    complex(rp) :: h_avg_site1_up, h_avg_site1_dn, h_avg_site2_up, h_avg_site2_dn
-   integer :: n_sites, idx_up, idx_dn, nmat, n_per_site
+   integer :: n_sites, idx_up, idx_dn, nmat, site_block, site_start
+   integer :: orbital_first, orbital_last, orbital_count, spin_offset
+   character(len=8) :: orbital_label
    character(len=256) :: msg
-   
+
    if (.not. allocated(this%hk_bulk)) return
+   if (size(this%hk_bulk, 2) /= size(this%hk_bulk, 1)) then
+      call g_logger%warning('reciprocal%check_multisite_hamiltonian_diagonal: non-square H(k) layout; diagnostic skipped.', __FILE__, __LINE__)
+      return
+   end if
    if (size(this%hk_bulk, 3) < 1) return
 
    n_sites = this%lattice%nrec
    if (n_sites < 2) return
    nmat = size(this%hk_bulk, 1)
-   if (nmat <= 0) return
-   if (mod(nmat, n_sites) /= 0) return
-   n_per_site = nmat/n_sites
-   ! This diagnostic assumes an spd spinor block (18 states/site).
-   if (n_per_site < 18 .or. nmat < 36) return
-   
+   site_block = this%max_orbs
+   spin_offset = spin_off
+   if (nmat <= 0 .or. site_block <= 0 .or. nmat /= site_block*n_sites) then
+      call g_logger%warning('reciprocal%check_multisite_hamiltonian_diagonal: H(k) dimensions do not match the active site layout; diagnostic skipped.', __FILE__, __LINE__)
+      return
+   end if
+   if (bdg_mode .or. site_block /= nb .or. site_block /= 2*norb .or. spin_offset /= norb) then
+      call g_logger%warning('reciprocal%check_multisite_hamiltonian_diagonal: unsupported non-normal spin/site layout; diagnostic skipped.', __FILE__, __LINE__)
+      return
+   end if
+
+   ! Preserve the historical d-shell diagnostic for spd/spdf while using the
+   ! highest non-s shell for sp, where no d shell exists.  The shell bounds
+   ! come from the active orbital basis, not from a fixed matrix dimension.
+   if (lmax_basis >= 2) then
+      orbital_first = 2**2 + 1
+      orbital_last = (2 + 1)**2
+      orbital_label = 'd'
+   else
+      orbital_first = 1**2 + 1
+      orbital_last = (1 + 1)**2
+      orbital_label = 'p'
+   end if
+   if (orbital_first > orbital_last .or. orbital_last > norb .or. orbital_last > spin_offset) then
+      call g_logger%warning('reciprocal%check_multisite_hamiltonian_diagonal: active orbital basis has no valid diagnostic shell; skipped.', __FILE__, __LINE__)
+      return
+   end if
+   orbital_count = orbital_last - orbital_first + 1
+
    ! Check on-site diagonal elements for first two sites at Gamma (ik=1)
-   ! For spd basis: s, p, d for spin-up (indices 1-9), then spin-down (10-18)
-   
-   ! Site 1, spin-up d-orbital average (indices 5-9 in spin block)
+   ! Each site is laid out as spin-up orbitals followed by spin-down orbitals.
    h_avg_site1_up = 0.0_rp
-   do iorb = 5, 9
-      idx_up = iorb  ! First 9 are spin-up
+   do iorb = orbital_first, orbital_last
+      idx_up = iorb
       h_avg_site1_up = h_avg_site1_up + this%hk_bulk(idx_up, idx_up, 1)
    end do
-   h_avg_site1_up = h_avg_site1_up / 5.0_rp
-   
-   ! Site 1, spin-down d-orbital average (indices 14-18 in site block)
+   h_avg_site1_up = h_avg_site1_up / real(orbital_count, rp)
+
    h_avg_site1_dn = 0.0_rp
-   do iorb = 5, 9
-      idx_dn = iorb + 9  ! Next 9 are spin-down
+   do iorb = orbital_first, orbital_last
+      idx_dn = spin_offset + iorb
       h_avg_site1_dn = h_avg_site1_dn + this%hk_bulk(idx_dn, idx_dn, 1)
    end do
-   h_avg_site1_dn = h_avg_site1_dn / 5.0_rp
-   
-   ! Site 2, spin-up d-orbital average (indices 18+5 to 18+9)
+
+   site_start = site_block
    h_avg_site2_up = 0.0_rp
-   do iorb = 5, 9
-      idx_up = 18 + iorb  ! Site 2 block starts at index 19
+   do iorb = orbital_first, orbital_last
+      idx_up = site_start + iorb
       h_avg_site2_up = h_avg_site2_up + this%hk_bulk(idx_up, idx_up, 1)
    end do
-   h_avg_site2_up = h_avg_site2_up / 5.0_rp
-   
-   ! Site 2, spin-down d-orbital average
+   h_avg_site2_up = h_avg_site2_up / real(orbital_count, rp)
+
    h_avg_site2_dn = 0.0_rp
-   do iorb = 5, 9
-      idx_dn = 18 + iorb + 9  ! Site 2, spin-down block
+   do iorb = orbital_first, orbital_last
+      idx_dn = site_start + spin_offset + iorb
       h_avg_site2_dn = h_avg_site2_dn + this%hk_bulk(idx_dn, idx_dn, 1)
    end do
-   h_avg_site2_dn = h_avg_site2_dn / 5.0_rp
-   
-   write(msg, '(A,2F12.6)') 'H(k=0) diagonal check - Site 1 d-orbital avg (up/dn): ', &
+
+   write(msg, '(A,A,A,2F12.6)') 'H(k=0) diagonal check - Site 1 ', trim(orbital_label), '-orbital avg (up/dn): ', &
                              real(h_avg_site1_up), real(h_avg_site1_dn)
    call root_info(trim(msg), __FILE__, __LINE__)
-   
-   write(msg, '(A,2F12.6)') 'H(k=0) diagonal check - Site 2 d-orbital avg (up/dn): ', &
+
+   write(msg, '(A,A,A,2F12.6)') 'H(k=0) diagonal check - Site 2 ', trim(orbital_label), '-orbital avg (up/dn): ', &
                              real(h_avg_site2_up), real(h_avg_site2_dn)
    call root_info(trim(msg), __FILE__, __LINE__)
-   
+
    write(msg, '(A,F12.6)') 'H(k=0) diagonal difference (site2-site1) up: ', &
                             real(h_avg_site2_up - h_avg_site1_up)
    call root_info(trim(msg), __FILE__, __LINE__)
@@ -1153,9 +1176,15 @@ module subroutine print_hamiltonian_structure(this, ik)
    character(len=500) :: msg
    
    if (.not. allocated(this%hk_total)) return
-   
+
    n_sites = this%lattice%nrec
-   block_size = 18
+   block_size = this%max_orbs
+   if (n_sites <= 0 .or. block_size <= 0 .or. size(this%hk_total, 2) /= size(this%hk_total, 1) .or. &
+       size(this%hk_total, 1) /= block_size*n_sites .or. ik < 1 .or. ik > size(this%hk_total, 3)) then
+      call g_logger%warning('reciprocal%print_hamiltonian_structure: unsupported H(k) block layout; diagnostic skipped.', __FILE__, __LINE__)
+      return
+   end if
+
    
    call g_logger%info('=== H(k) Block Structure at k-point ' // trim(int2str(ik)) // ' ===', &
                      __FILE__, __LINE__)

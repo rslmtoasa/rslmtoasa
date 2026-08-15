@@ -206,7 +206,7 @@ contains
    !> @param[inout] this Reciprocal object providing Hamiltonian and lattice state.
    module subroutine diagonalize_hall_experimental(this)
       class(reciprocal), intent(inout) :: this
-      integer :: nsites, n_orb, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
+      integer :: nsites, site_block, n, i, jsite, isite, ineigh, ia, ja, nr, info, lwork
       integer :: i_start, i_end, j_start, j_end
       complex(rp), allocatable :: hall_mat(:, :), work(:)
       real(rp), allocatable :: evals(:), rwork(:)
@@ -218,16 +218,25 @@ contains
       end if
 
       nsites = this%lattice%nmax
-      n_orb = 18
       if (nsites <= 0) return
-      n = nsites * n_orb
+      site_block = this%max_orbs
+      if (.not. allocated(this%hamiltonian%hall)) then
+         call g_logger%warning('HALL experimental diagonalization skipped: HALL blocks are unavailable.', __FILE__, __LINE__)
+         return
+      end if
+      if (site_block <= 0 .or. site_block /= nb .or. size(this%hamiltonian%hall, 1) /= site_block .or. &
+          size(this%hamiltonian%hall, 2) /= site_block) then
+         call g_logger%warning('HALL experimental diagonalization skipped: active site block is incompatible with HALL.', __FILE__, __LINE__)
+         return
+      end if
+      n = nsites * site_block
       allocate(hall_mat(n, n), evals(n), rwork(max(1, 3*n - 2)))
       hall_mat = cmplx(0.0_rp, 0.0_rp, rp)
       do isite = 1, nsites
          ia = isite
          nr = this%lattice%nn(ia, 1)
-         i_start = (isite - 1) * n_orb + 1
-         i_end = isite * n_orb
+         i_start = (isite - 1) * site_block + 1
+         i_end = isite * site_block
          do ineigh = 1, nr
             if (ineigh == 1) then
                jsite = isite
@@ -236,8 +245,8 @@ contains
                jsite = ja
                if (jsite < 1 .or. jsite > nsites) cycle
             end if
-            j_start = (jsite - 1) * n_orb + 1
-            j_end = jsite * n_orb
+            j_start = (jsite - 1) * site_block + 1
+            j_end = jsite * site_block
             hall_mat(i_start:i_end, j_start:j_end) = hall_mat(i_start:i_end, j_start:j_end) + this%hamiltonian%hall(:, :, ineigh, isite)
          end do
       end do

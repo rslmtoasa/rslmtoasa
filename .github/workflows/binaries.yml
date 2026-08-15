@@ -1,4 +1,7 @@
-name: Build binaries on all platforms (beta)
+# Keep this distinct from main's legacy build name.  Until the direct test
+# workflow is merged to main, its workflow_run trigger still watches the old
+# name and would otherwise launch an extra default-branch test run.
+name: Build binaries on all platforms (branch beta)
 
 #on: [release]
 on: [release, push, pull_request]

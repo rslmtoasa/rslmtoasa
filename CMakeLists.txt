@@ -572,14 +572,22 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftDispatch PROPERTIES LABELS "tooling;tddft;dispatch")
   set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
+    # Homebrew Open MPI on macOS runners may report only one available slot,
+    # while the parallel-context unit intentionally exercises four ranks.
+    # Pass the launcher override in front of the test executable so it is
+    # consumed by mpiexec rather than forwarded as an application argument.
+    set(_rslmto_mpi_unit_preflags ${MPIEXEC_PREFLAGS})
+    if(APPLE)
+      list(APPEND _rslmto_mpi_unit_preflags --map-by :OVERSUBSCRIBE)
+    endif()
     add_test(NAME UnitKspaceOccupations_mpi
-      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${_rslmto_mpi_unit_preflags}
               $<TARGET_FILE:UnitKspaceOccupations> ${MPIEXEC_POSTFLAGS})
     set_tests_properties(UnitKspaceOccupations_mpi PROPERTIES
       LABELS "unit;gbt;wp2;mpi" PROCESSORS 2)
     foreach(_parallel_context_ranks IN ITEMS 1 2 4)
       add_test(NAME "UnitParallelContext_mpi_${_parallel_context_ranks}"
-        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_parallel_context_ranks} ${MPIEXEC_PREFLAGS}
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_parallel_context_ranks} ${_rslmto_mpi_unit_preflags}
                 $<TARGET_FILE:UnitParallelContext> ${MPIEXEC_POSTFLAGS})
       set_tests_properties("UnitParallelContext_mpi_${_parallel_context_ranks}" PROPERTIES
         LABELS "unit;mpi;parallel_context" PROCESSORS ${_parallel_context_ranks})
