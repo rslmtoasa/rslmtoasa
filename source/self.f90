@@ -1378,14 +1378,18 @@ contains
       integer :: ia, ia_loc
       integer :: nb_slice, ncols
       real(rp) :: denom
+      logical :: reciprocal_scf_active
       real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
       ! The reciprocal SCF branch has no real-space Green function.  Its
       ! legacy projected-DOS refresh is therefore both unnecessary and, under
       ! MPI, can dereference rank-local recursion storage that was never
       ! populated.  The reciprocal branch already supplies the band energy and
-      ! site moments; retain the report's zero-field convention instead.
-      if (this%use_kspace) then
+      ! site moments; retain the report's zero-field convention instead.  The
+      ! cache is the authoritative post-run marker too: it remains allocated
+      ! through reporting even if a copied/stale self%use_kspace flag is not.
+      reciprocal_scf_active = this%use_kspace .or. allocated(this%reciprocal_scf_cache)
+      if (reciprocal_scf_active) then
          this%bands%mag_for(:, :) = 0.0_rp
       else
          call this%bands%calculate_magnetic_torques()
@@ -1430,7 +1434,7 @@ contains
          write (newunit, '(A)') '|                       Band Energy                                       |'
          write (newunit, '(A)') '==========================================================================='
          if (associated(this%bands)) then
-            if (.not. this%use_kspace) call this%bands%calculate_band_energy()
+            if (.not. reciprocal_scf_active) call this%bands%calculate_band_energy()
             write (newunit, '(a,f16.10)') 'Band energy of system: ', this%bands%eband
          else
             write (newunit, '(a)') 'Band energy of system: unavailable (bands object not associated)'
