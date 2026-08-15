@@ -352,76 +352,12 @@ contains
       type(mix), target :: mix_obj
       type(spin_dynamics), target :: sd_obj
 
-      ! Constructing control object
-      control_obj = control(this%fname)
-
-      ! Constructing lattice object
-      lattice_obj = lattice(control_obj)
-
-      ! Running the pre-calculation
-      call g_timer%start('pre-processing')
-      call lattice_obj%build_data()
-      call lattice_obj%bravais()
-      call lattice_obj%build_surf_full()
-      call lattice_obj%newclu()
-      call lattice_obj%structb(.true.)
-
-      ! Creating the symbolic_atom object
-      call lattice_obj%atomlist()
-
-      ! Initialize basis dimension parameters from lmax
-      call basis_init(lattice_obj%symbolic_atoms(1)%potential%lmax)
-
-      ! Initializing MPI lookup tables and info.
-      call get_mpi_variables(rank, lattice_obj%nrec)
-
-      ! Constructing the charge object
-      charge_obj = charge(lattice_obj)
-      call charge_obj%impmad()
-      call charge_obj%get_charge_transf
-      call g_timer%stop('pre-processing')
-
-      ! Constructing mixing object
-      mix_obj = mix(lattice_obj, charge_obj)
-
-      ! Creating the energy object
-      energy_obj = energy(lattice_obj)
-
-      ! Creating hamiltonian object
-      hamiltonian_obj = hamiltonian(charge_obj)
-
-      ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-
-      ! Creating density of states object
-      dos_obj = dos(recursion_obj, energy_obj)
-
-      ! Creating Green function object
-      green_obj = green(dos_obj)
-
-      ! Creating bands object
-      bands_obj = bands(green_obj)
-
-      ! Constructing mixing object
-      mix_obj = mix(lattice_obj, charge_obj)
-
-      ! Creating the energy object
-      energy_obj = energy(lattice_obj)
-
-      ! Creating hamiltonian object
-      hamiltonian_obj = hamiltonian(charge_obj)
-
-      ! Creating recursion object
-      recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
-
-      ! Creating density of states object
-      dos_obj = dos(recursion_obj, energy_obj)
-
-      ! Creating Green function object
-      green_obj = green(dos_obj)
-
-      ! Creating bands object
-      bands_obj = bands(green_obj)
+      ! The selected preprocessing route has already converged and written the
+      ! atom state.  Rebuild only the consumer stack from that route; do not
+      ! manufacture a surface/impurity geometry here.
+      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, charge_obj, mix_obj, &
+                                         energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
+                                         this%pre_processing)
 
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
@@ -1046,9 +982,13 @@ contains
    !> @param[out] dos_obj Density-of-states object built on recursion_obj.
    !> @param[out] green_obj Green object built on dos_obj.
    !> @param[out] bands_obj Bands object built on green_obj.
+   !> @param[in,optional] preprocessing_route Explicit normal-workflow route.
+   !>             Used by spin dynamics because calctype='I' alone does not
+   !>             distinguish a bulk-host impurity from a surface-host impurity.
    subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
                                              stochastic_moments, control_obj, lattice_obj, charge_obj, mix_obj, &
-                                             energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
+                                             energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
+                                             preprocessing_route)
       class(calculation), intent(in) :: this
       logical, intent(in) :: use_paoflow
       logical, intent(in) :: use_exchange_pairs
@@ -1064,10 +1004,27 @@ contains
       type(dos), target, intent(inout) :: dos_obj
       type(green), target, intent(inout) :: green_obj
       type(bands), target, intent(inout) :: bands_obj
+      character(len=*), intent(in), optional :: preprocessing_route
+      character(len=sl) :: route
       integer :: i
 
       control_obj = control(this%fname)
       lattice_obj = lattice(control_obj)
+      route = trim(control_obj%calctype)
+      if (present(preprocessing_route)) then
+         select case (trim(preprocessing_route))
+         case ('bravais')
+            route = 'B'
+         case ('buildsurf')
+            route = 'S'
+         case ('newclubulk')
+            route = 'I_bulk'
+         case ('newclusurf')
+            route = 'I_surface'
+         case ('buildinterface')
+            route = 'L'
+         end select
+      end if
 
       call g_timer%start('pre-processing')
       if (use_paoflow) then
@@ -1075,7 +1032,7 @@ contains
          call lattice_obj%bravais()
          call lattice_obj%structb(.false.)
       else
-         select case (control_obj%calctype)
+         select case (trim(route))
          case ('B')
             call lattice_obj%build_data()
             call lattice_obj%bravais()
@@ -1085,10 +1042,15 @@ contains
             call lattice_obj%bravais()
             call lattice_obj%build_surf_full()
             call lattice_obj%structb(.true.)
-         case ('I')
+         case ('I', 'I_surface')
             call lattice_obj%build_data()
             call lattice_obj%bravais()
             call lattice_obj%build_surf_full()
+            call lattice_obj%newclu()
+            call lattice_obj%structb(.true.)
+         case ('I_bulk')
+            call lattice_obj%build_data()
+            call lattice_obj%bravais()
             call lattice_obj%newclu()
             call lattice_obj%structb(.true.)
          case ('L')
@@ -1102,7 +1064,11 @@ contains
       end if
 
       call lattice_obj%atomlist()
-      if (use_exchange_pairs) then
+      if (present(preprocessing_route)) then
+         ! Spin dynamics consumes the active recursion atoms, matching the
+         ! normal preprocessing ownership and the original SD partition.
+         call get_mpi_variables(rank, lattice_obj%nrec)
+      else if (use_exchange_pairs) then
          call get_mpi_variables(rank, lattice_obj%njij)
       else
          call get_mpi_variables(rank, lattice_obj%ntype)
@@ -1120,6 +1086,7 @@ contains
             call charge_obj%surfmat
          case ('I')
             call charge_obj%impmad()
+            if (present(preprocessing_route)) call charge_obj%get_charge_transf
          case ('L')
             ! B7.5: same Madelung matrices as 'S' (no interfacemat exists, by
             ! design), plus the region reference charges and the genuinely

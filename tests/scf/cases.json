@@ -71,6 +71,24 @@
       }
     },
     {
+      "name": "Example_bulk_bccFe_sd_smoke",
+      "quick": true,
+      "labels": ["functional", "sd", "magnetic", "basis_spd", "block"],
+      "case": "bulk/bccFe",
+      "timeout": 300,
+      "omp_threads": 2,
+      "namelists": {
+        "calculation": { "processing": "sd" },
+        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false },
+        "sd":          { "asd_step": 1, "dt": 0.001 }
+      },
+      "outputs": [
+        { "file": "output.lammpstrj", "min_lines": 10 }
+      ]
+    },
+    {
       "name": "Example_bulk_bccFe_nsp2_block",
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
       "case": "bulk/bccFe",
