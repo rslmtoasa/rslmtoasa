@@ -68,6 +68,7 @@
       "base": "bccFe_chebyshev",
       "labels": ["chebyshev", "basis_spd", "magnetic", "hoh"],
       "timeout": 300,
+      "abs_tol": 5e-6,
       "namelists": {
         "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
         "energy": { "energy_min": -3.0, "energy_max": 1.8 },

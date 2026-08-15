@@ -156,13 +156,23 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
                  Fortran "-g"
                 )
 
-# Check array bounds
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
-                 Fortran "-check all"   # Intel
-                         "-fcheck=all,no-recursion"  # GNU (recursion instrumentation can emit unresolved symbols)
-                         "-Mbounds"     # Portland Group
-                          "/check:all"   # Intel Windows
-                )
+# Runtime checks.  GNU Fortran 16's -fcheck=all instrumentation corrupts
+# allocatable descriptors in the macOS STRUX workflow (seen in Si_sp), so
+# omit that compiler/runtime combination temporarily without weakening Linux
+# GNU or other compilers' debug checks.
+if(APPLE AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND
+   CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL "16.0")
+    message(WARNING
+        "Skipping -fcheck=all for GNU Fortran ${CMAKE_Fortran_COMPILER_VERSION} on macOS; "
+        "GCC 16 runtime instrumentation corrupts allocatable descriptors")
+else()
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                     Fortran "-check all"   # Intel
+                             "-fcheck=all,no-recursion"  # GNU (recursion instrumentation can emit unresolved symbols)
+                             "-Mbounds"     # Portland Group
+                              "/check:all"   # Intel Windows
+                    )
+endif()
 
 #####################
 ### TEST FLAGS ###

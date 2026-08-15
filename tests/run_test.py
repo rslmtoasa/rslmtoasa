@@ -127,7 +127,13 @@ def patch_input_nml(workdir: str, case: dict) -> None:
 
 def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads: int | None = None) -> None:
     run_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_binary.sh")
-    cmd = ["/bin/bash", run_script, binary]
+    # MSYS Python uses the native Windows process API, where the POSIX path
+    # /bin/bash is not executable.  Resolve bash through its MSYS-provided
+    # PATH there; Unix keeps the explicit system interpreter.
+    bash = shutil.which("bash") if os.name == "nt" else "/bin/bash"
+    if bash is None:
+        raise SystemExit("ERROR: bash is required to run test binaries on Windows/MSYS2")
+    cmd = [bash, run_script, binary]
     if mpi_procs > 1:
         cmd.append(str(mpi_procs))
     # propagate controlled serial OMP thread count to the wrapper via env

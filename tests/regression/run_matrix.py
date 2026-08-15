@@ -111,7 +111,10 @@ def main() -> int:
     if not ref_path.exists():
         raise SystemExit(f"ERROR [{case['name']}]: missing reference {ref_path}")
 
-    compare_nml(output, ref_path, args.abs_tol)
+    # A backend reference may carry a small, repeatable cross-platform BLAS
+    # difference.  Keep that allowance case-local so the rest of the matrix
+    # retains the command-line default guard.
+    compare_nml(output, ref_path, float(case.get("abs_tol", args.abs_tol)))
     print(f"PASS [{case['name']}]")
     return 0
 

@@ -1380,8 +1380,16 @@ contains
       real(rp) :: denom
       real(rp), dimension(this%lattice%nrec, 3) :: magmom, lmom
       real(rp), dimension(3, this%lattice%nrec) :: mag_for
-      ! Calculate outputs that are not calculated during the SFC run
-      call this%bands%calculate_magnetic_torques()
+      ! The reciprocal SCF branch has no real-space Green function.  Its
+      ! legacy projected-DOS refresh is therefore both unnecessary and, under
+      ! MPI, can dereference rank-local recursion storage that was never
+      ! populated.  The reciprocal branch already supplies the band energy and
+      ! site moments; retain the report's zero-field convention instead.
+      if (this%use_kspace) then
+         this%bands%mag_for(:, :) = 0.0_rp
+      else
+         call this%bands%calculate_magnetic_torques()
+      end if
 
       ! Transfer values across ranks
       magmom = 0.0d0

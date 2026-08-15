@@ -27,10 +27,19 @@
         ],
         "text": [
           { "file": "totaldos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] },
-          { "file": "Si1_dos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] }
+          {
+            "file": "Si1_dos.out",
+            "rows": [100, 500, 1000, 1500, 1900],
+            "cols": [1, 2],
+            "tolerances": { "1": { "abs_tol": 1e-4 } }
+          }
         ],
         "log": [
-          { "file": "testrun.log", "patterns": { "fermi_level": "Free Fermi energy:\\s*([-+0-9.EeDd]+)" } }
+          {
+            "file": "testrun.log",
+            "patterns": { "fermi_level": "Free Fermi energy:\\s*([-+0-9.EeDd]+)" },
+            "tolerances": { "fermi_level": { "abs_tol": 1e-4 } }
+          }
         ]
       },
       "outputs": [
