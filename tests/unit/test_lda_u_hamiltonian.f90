@@ -10,6 +10,7 @@ program test_lda_u_hamiltonian
    use control_mod, only: control
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
+   use reciprocal_mod, only: reciprocal
    use logger_mod, only: g_logger
    implicit none
 
@@ -28,6 +29,7 @@ program test_lda_u_hamiltonian
    call test_zero_u_j_limit()
    call test_simple_diagonal_occupation()
    call test_collinear_hermiticity()
+   call test_correlated_trace_and_common_state_fourier()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -133,6 +135,51 @@ contains
       call require(maxval(abs(ham%hubbard_u_pot(1:spin_off, spin_off + 1:nb, 1))) < tolerance, &
          'Hermitian collinear correction remains block diagonal in spin')
    end subroutine test_collinear_hermiticity
+
+   subroutine test_correlated_trace_and_common_state_fourier()
+      type(reciprocal) :: recip
+      complex(rp), allocatable :: rs_block(:, :), hk(:, :), blocks(:, :, :, :)
+      integer :: i, j
+      real(rp) :: trace_up, trace_down
+
+      ! Freeze one production occupation matrix, then compare the exact same
+      ! onsite block as inserted in the RS slot and Fourier-transformed at k.
+      ! This is a common-state representation check, not two SCF fixed points.
+      call reset_fixture(0.0_rp, 0.0_rp, 1.7_rp, 0.3_rp)
+      call set_symmetric_p_occupation(1, [0.20_rp, 0.40_rp, 0.10_rp], &
+         [0.07_rp, -0.03_rp, 0.05_rp])
+      call set_symmetric_p_occupation(2, [0.30_rp, 0.15_rp, 0.25_rp], &
+         [0.04_rp, -0.02_rp, 0.06_rp])
+      call ham%calculate_hubbard_u_potential_general()
+
+      trace_up = 0.0_rp
+      trace_down = 0.0_rp
+      do i = 1, 3
+         trace_up = trace_up + lat%symbolic_atoms(1)%potential%ldm(2, 1, i, i)
+         trace_down = trace_down + lat%symbolic_atoms(1)%potential%ldm(2, 2, i, i)
+      end do
+      call require(abs(trace_up - 0.70_rp) < tolerance, 'correlated p-shell spin-up trace')
+      call require(abs(trace_down - 0.70_rp) < tolerance, 'correlated p-shell spin-down trace')
+      call require(abs(trace_up + trace_down - 1.40_rp) < tolerance, 'correlated p-shell total trace')
+
+      lat%nrec = 1
+      lat%nn_max = 1
+      lat%kk = 1
+      allocate(lat%ib(1), lat%atlist(1), lat%iz(1), lat%nn(1, 1))
+      lat%ib = 1
+      lat%atlist = 1
+      lat%iz = 1
+      lat%nn = 1
+      recip%lattice => lat
+      allocate(recip%ham_vec_type_direct(3, 1, 1))
+      recip%ham_vec_type_direct = 0.0_rp
+      allocate(rs_block(nb, nb), hk(nb, nb), blocks(nb, nb, 1, 1))
+      rs_block = cmplx(ham%hubbard_u_pot(:, :, 1), 0.0_rp, rp)
+      blocks(:, :, 1, 1) = rs_block
+      call recip%fourier_transform_array(blocks, [0.173_rp, 0.071_rp, 0.019_rp], hk)
+      call require(maxval(abs(hk - rs_block)) < tolerance, &
+         'frozen onsite Hubbard block is identical in RS and reciprocal routes')
+   end subroutine test_correlated_trace_and_common_state_fourier
 
    subroutine set_symmetric_p_occupation(ispin, diagonal, off_diagonal)
       integer, intent(in) :: ispin

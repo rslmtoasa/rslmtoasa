@@ -86,15 +86,45 @@ Implementation status
 =====================
 
 - ``liechtenstein`` potential path:
-  fully wired and default.
+  the ordinary on-site U/J potential is wired and is the validated scope of
+  [VAL-04].  The physical validation is scoped to collinear bcc-Fe with a
+  fixed d-shell U/J input; it is not a blanket validation of every magnetic,
+  SOC, or self-consistent-U combination.
 - ``acbn0`` potential path:
   optional path is available, but should currently be treated as an
   implementation-in-progress path for validation studies.
 - ``+V``:
-  implemented as a nearest-neighbor orbital-channel correction using local
-  occupations and a practical diagonal-in-m approximation.
-  This is a **proxy** implementation: the full inter-site matrix form
-  :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active.
+  **Development**.  The current nearest-neighbor orbital-channel correction
+  uses local occupations and a practical diagonal-in-m approximation.  This
+  is a **proxy** implementation: the full inter-site matrix form
+  :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active and must not be
+  described as a validated inter-site DFT+U+V implementation.
+
+Validated ordinary on-site scope
+================================
+
+For the ordinary fixed-U/J route, ``calculate_hubbard_u_potential_general``
+builds the rotationally invariant Liechtenstein orbital potential from the
+real, spin-resolved local occupation matrices ``ldm(l,ispin,m,m')``.  The
+direct and exchange factors are generated from the supplied U and J.  For the
+default ``liechtenstein`` form, the diagonal terms additionally receive the
+implemented FLL-like shift
+
+.. math::
+
+   -U(n-\tfrac{1}{2}) + J(n_\sigma-\tfrac{1}{2}),
+
+where :math:`n=n_\uparrow+n_\downarrow`.  This is the double-counting
+convention actually used by the Hamiltonian route.  Namelist U/J values are
+in eV and are converted to Ry on input.
+
+The current route applies this potential to the on-site block of both the
+real-space Hamiltonian and the shared reciprocal Fourier assembly.  The
+Hamiltonian source currently does not accumulate a separate scalar
+:math:`E_U-E_{dc}` correction.  Therefore ``etot`` and ``sumev`` in a
+validation run are reported as finite response observables under the active
+Hamiltonian convention; they are not evidence of a fully variational,
+double-counting-corrected total-energy functional.
 
 Code mapping (developer view)
 =============================
@@ -102,11 +132,11 @@ Code mapping (developer view)
 Main entry points
 -----------------
 
-- ``source/hamiltonian.f90``: ``calculate_hubbard_u_potential_general`` builds
+- ``source/hamiltonian_hubbard.f90``: ``calculate_hubbard_u_potential_general`` builds
   the on-site Hubbard potential matrix.
-- ``source/hamiltonian.f90``: ``calculate_hubbard_v_potential`` builds the
+- ``source/hamiltonian_hubbard.f90``: ``calculate_hubbard_v_potential`` builds the
   current proxy nearest-neighbor +V potential contribution (diagonal/local-occupation based).
-- ``source/hamiltonian.f90``: ``build_bulkham`` and ``build_locham`` inject
+- ``source/hamiltonian_build.f90``: ``build_bulkham`` and ``build_locham`` inject
   ``hubbard_u_pot`` and ``hubbard_v_pot`` into Hamiltonian blocks.
 - ``source/bands.f90``: ``calculate_hubbard_u_sc`` performs the self-consistent
   ``U_eff`` update loop for channels selected by mask.
@@ -194,3 +224,7 @@ Notes and constraints
   full matrix expression. The implemented path uses nearest-neighbor, orbital-diagonal
   shifts derived from local occupations. Treat ``+V`` as a proxy/experimental correction
   until inter-site :math:`n^{JI,\sigma}_{m' m}` integration is wired from inter-site Green functions.
+
+See `VAL-04 developer record <../../dev/VAL-04_LDA_U.md>`_ for the material response envelope,
+occupation-matrix checks, convergence result, and the explicit RS/KS,
+noncollinear, and SOC support classification.

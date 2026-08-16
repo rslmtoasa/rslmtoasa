@@ -460,6 +460,13 @@ endforeach()
 add_test(NAME TddftValidationCampaign
   COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/tddft_validation/test_validation.py")
 set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" TIMEOUT 30)
+
+  add_test(NAME Val04LdaUPhysics
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val04_lda_u.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val04_lda_u")
+  set_tests_properties(Val04LdaUPhysics PROPERTIES
+    LABELS "validation;lda_u;magnetic;kspace" TIMEOUT 300)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

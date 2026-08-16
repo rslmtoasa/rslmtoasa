@@ -860,7 +860,7 @@ contains
       logical :: hubbard_active
       integer :: li, iorb, jorb, jdim, ispin
       integer :: ncap_orb, ncap_trace
-      real(rp) :: occ_raw, ch_sum, scale_ch, ldm_val
+      real(rp) :: occ_raw, ch_sum, scale_ch, ldm_val, max_herm
       real(rp), dimension(7) :: occ_ch
       real(rp) :: occ_orb
       real(rp), allocatable :: ldm_comm(:, :, :, :)
@@ -1006,6 +1006,16 @@ contains
                                      ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
             end if
             if (rank == 0) then
+               max_herm = 0.0_rp
+               do li = 0, min(3, lmax_basis)
+                  jdim = 2*li + 1
+                  do ispin = 1, 2
+                     max_herm = max(max_herm, maxval(abs(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, 1:jdim, 1:jdim) - &
+                        transpose(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, 1:jdim, 1:jdim)))))
+                  end do
+               end do
+               call g_logger%info('HUBBARD_LDM_CHECK atom='//fmt('i4', na_glob)// &
+                                  ' max_antiherm='//fmt('e12.4', max_herm), __FILE__, __LINE__)
                do li = 0, min(3, lmax_basis)
                   call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', na_glob)//' l='//fmt('i2', li)// &
                                      ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &

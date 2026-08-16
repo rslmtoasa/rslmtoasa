@@ -841,7 +841,7 @@ end subroutine calculate_band_moments
       complex(rp), allocatable :: DM(:,:)
       complex(rp) :: psi_a, psi_b
       integer :: nbands, nsites, i
-      real(rp) :: trace_tot, trace_up, trace_dn, max_imag
+      real(rp) :: trace_tot, trace_up, trace_dn, max_imag, max_herm
       integer :: idx_a, idx_b
 
       call root_info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
@@ -902,6 +902,7 @@ end subroutine calculate_band_moments
                trace_up = 0.0_rp
                trace_dn = 0.0_rp
                max_imag = 0.0_rp
+               max_herm = maxval(abs(DM - transpose(conjg(DM))))
                
                do i = 1, n_orb_site
                   trace_tot = trace_tot + real(DM(i, i), rp)
@@ -919,7 +920,8 @@ end subroutine calculate_band_moments
                                  ', trace_tot=' // trim(real2str(trace_tot, '(F10.6)')) // &
                                  ', trace_up=' // trim(real2str(trace_up, '(F10.6)')) // &
                                  ', trace_dn=' // trim(real2str(trace_dn, '(F10.6)')) // &
-                                 ', max_imag=' // trim(real2str(max_imag, '(E10.2)')), __FILE__, __LINE__)
+                                 ', max_imag=' // trim(real2str(max_imag, '(E10.2)')) // &
+                                 ', max_antiherm=' // trim(real2str(max_herm, '(E10.2)')), __FILE__, __LINE__)
                
                if (max_imag > 1.0e-6_rp) then
                   call g_logger%warning('calculate_ldm_from_eigenvectors: Large imaginary part in DM diagonal: ' // &
