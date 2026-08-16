@@ -1,0 +1,83 @@
+# Phase-II validation evidence ledger
+
+**Purpose.** This is the living, current-HEAD ledger for Phase II --
+scientific feature establishment.  A status applies only to the stated scope;
+it is not a claim about the whole feature family or a material benchmark unless
+the linked evidence says so.
+
+## Reading the ledger
+
+| Maturity | Meaning in this ledger |
+|---|---|
+| **Validated** | A direct mathematical/physical or cross-route contract and a relevant current-head test/fixture exist for the stated scope. |
+| **Experimental** | The path is implemented and has limited evidence, but its material/physical acceptance scope is still incomplete. |
+| **Blocked** | A current known defect prevents the capability from being used as claimed. |
+| **Unavailable** | A kernel may exist, but current HEAD has no end-to-end production route. |
+
+The test taxonomy and the difference between a fixture and a material
+benchmark are defined in [Phase-I stabilization](PHASE_I_STABILIZATION.md) and
+the [test index](../../tests/README.md).  Historical reports are evidence only
+where they describe artifacts still present at HEAD; current CTest registration
+in [CMakeLists.txt](../../CMakeLists.txt) is authoritative.
+
+## Core Green-function, SCF, exchange, and transport
+
+| Scoped capability | Maturity | Existing evidence and relevant tests/campaigns | Known defect(s) | Missing validation and promotion criterion |
+|---|---|---|---|---|
+| Real-space recursion SCF: Block, Lanczos, and Chebyshev representative bulk paths | **Validated** | [Phase-I feature record](PHASE_I_STABILIZATION.md) and real-space functional fixtures in [SCF cases](../../tests/scf/cases.json), including bcc-Fe recursion variants; [UnitGreenLifecycle](../../tests/unit/test_green_lifecycle.f90). | No unresolved defect is recorded for this scoped baseline. | Material/convergence claims remain out of scope. Promote a new recursion regime only with a direct invariant or independent route/material contract for that regime. |
+| Real-space GF residual/Haydock scope: residual construction and lifecycle, not a general material error bound | **Validated** | [recursion interface/residual documentation](../../source/recursion.f90), [UnitGreenLifecycle](../../tests/unit/test_green_lifecycle.f90), and representative RS fixtures above. | No documented global residual-to-observable error bound. | Establish a residual stopping/error contract against DOS or GF observables before claiming quantified recursion accuracy. |
+| Reciprocal SCF, bands, and DOS | **Validated** | [Phase-I reciprocal scope](PHASE_I_STABILIZATION.md); [Si RS/k-space DOS equivalence fixture](../../tests/scf/test_si_dos_equivalence.py); value-checked reciprocal cases described in the [post-processing README](../../tests/postproc/README.md). | None recorded for this scoped baseline. | A new integration/representation mode needs its own count/sum-rule and route-equivalence evidence. |
+| Strict Lehmann GF kernel (orthonormal basis, unreduced BZ) | **Validated** | [B2 handover](B2_RECIPROCAL_GREEN_HANDOVER.md) records chain, phase, and normalization identities; [UnitLehmannChain](../../tests/unit/test_lehmann_chain.f90) and [UnitGammaSupercell](../../tests/unit/test_gamma_supercell.f90). | Generalized-overlap use is explicitly outside this identity's scope. | Demonstrate the appropriate generalized-eigenproblem identity before extending this status to non-orthonormal overlap. |
+| Direct Dyson GF with \(\Sigma=0\): Lehmann equivalence | **Validated** | [B2 handover](B2_RECIPROCAL_GREEN_HANDOVER.md); [UnitDysonEquivalence](../../tests/unit/test_dyson_equivalence.f90); real-H(k) report driver described in the [developer map](../DEVELOPER_MAP.md). | No defect recorded for the stated \(S=I,\Sigma=0\) identity. | A nonzero self-energy provider must be validated against an independent analytic/reference problem before promotion beyond the zero-self-energy equivalence. |
+| General Lehmann/Dyson downstream consumers | **Experimental** | The [B5 route envelopes](route_agnostic_estimators.md) and [triad manifest](../../tests/regression/triad_cases.json) cover bcc-Fe \(J_{ij}\), conductivity, and damping; the CMake triads are registered only with `RUN_REG_TESTS`. | Finite-\(\eta\), finite-mesh metallic recursion-vs-k-space differences are observable-dependent, not a universal equality. | For each additional consumer, preserve \(\Sigma=0\) Lehmann/Dyson equality and provide its own \(\eta,N_k\) convergence/independent observable contract. |
+| Conventional real-space \(J_{ij}\) exchange | **Validated** | Value-checked [bcc-Fe exchange fixture](../../tests/postproc/cases/exchange/bccFe/input.nml) and [route-triad \(J_{ij}\) campaign](../../tests/regression/triad_cases.json); acceptance envelope in [route_agnostic_estimators](route_agnostic_estimators.md). | The resolved `simpson_f` out-of-bounds history is retained in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md); no current open defect is linked for this narrow path. | Promote other exchange tensors/materials only with their own symmetry, sum-rule, or trusted-reference evidence. |
+| Advanced exchange tensors/formulations beyond the conventional bcc-Fe \(J_{ij}\) scope | **Experimental** | The common exchange consumer is described in the [developer map](../DEVELOPER_MAP.md); GBT CCOR has focused algebra/probe evidence in [WP6b](GBT_WP6B_CCOR_REPORT.md). | No broad DMI/anisotropic-exchange validation record is present at HEAD. | Require a formulation-specific analytic symmetry limit and a converged material/reference comparison; do not inherit conventional-\(J\) status. |
+| Gilbert damping: on-site bcc-Fe SOC route triad | **Validated** | `do_damping` dispatch is in [calculation](../../source/calculation.f90); the [damping triad](../../tests/regression/triad_cases.json) checks recursion/Lehmann/Dyson envelopes; operator audit is [B5.3](B5.3_gilbert_damping_audit.md). | SOC is limited to the supported on-site orbital channels described by the audit. | Promote to general damping only after \(\eta\to0\)/\(N_k\) convergence and independent material comparison for each claimed regime. |
+| Moment of inertia | **Unavailable** | The kernel exists in [exchange dynamics](../../source/exchange_dynamics.f90). | No current production caller is present (repository search at HEAD); no dedicated test/campaign is linked. | Wire an explicit user route, then add a known-limit/unit contract and a converged physical campaign before any maturity promotion. |
+| KPM charge conductivity: exact reciprocal moments feeding existing estimator | **Validated** | [UnitMomentKernel](../../tests/unit/test_moment_kernel.f90) gives the direct Chebyshev identity; the [conductivity triad](../../tests/regression/triad_cases.json) covers bcc-Fe charge \(\sigma\). | The triad is a finite mesh/broadening acceptance envelope, not a general transport benchmark. | Require convergence and a trusted/reference material result before a broader charge-transport claim. |
+| KPM spin and orbital transport operators/moments | **Experimental** | [UnitKpmTransport](../../tests/unit/test_kpm_transport.f90) checks production charge/spin/orbital operators and moments. | No end-to-end spin/orbital transport fixture or material reference is recorded. | Add a value-checked production fixture and an independent symmetry/reference contract for each observable. |
+
+## Ground-state, magnetic, and boundary capabilities
+
+| Scoped capability | Maturity | Existing evidence and relevant tests/campaigns | Known defect(s) | Missing validation and promotion criterion |
+|---|---|---|---|---|
+| libXC XC baseline, when built with `ENABLE_LIBXC` | **Experimental** | [UnitLibxcXcBaseline](../../tests/unit/test_libxc_xc_baseline.f90) pins mapping and XC values; [CMake registration](../../CMakeLists.txt) is conditional on `ENABLE_LIBXC`. | The Phase-I recorded CPU gate had `ENABLE_LIBXC=OFF`; no libXC-enabled SCF fixture is linked. | Run the libXC-enabled unit gate and a value-checked SCF comparison for each supported XC family/collinearity mode claimed. |
+| Collinear Liechtenstein LDA+U Hamiltonian correction | **Validated** | [UnitLdaUHamiltonian](../../tests/unit/test_lda_u_hamiltonian.f90) checks zero-\(U,J\), a one-orbital formula, and Hermiticity; [bcc-Fe Hubbard fixture](../../tests/scf/cases.json) is explicitly described there as smoke-and-compare only. | No material-level double-counting/parameter benchmark is recorded. | Promote a specified LDA+U convention only after a converged material calculation and an independent/reference observable; do not promote all Hubbard modes together. |
+| Magnetic constraining fields | **Blocked** | The diagnostic is explicit in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | `constraints_enable` is a no-op: field and constraint energy are not fed back into Hamiltonian/energy, and the seed is discarded. | First implement/wire the physical field and energy with an analytic constrained-spin test; then add a production constrained-SCF fixture before reconsidering maturity. |
+| Ab-initio spin dynamics: one bulk production step | **Experimental** | [Developer-map workflow entry](../DEVELOPER_MAP.md); `Example_bulk_bccFe_sd_smoke` is documented in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | Impurity SD reaches an existing empty-output-filename failure; the bulk test is explicitly only a trajectory-emission smoke test. | Establish energy/moment integration behavior and compare a converged trajectory or mode against an independent result; add an impurity fixture only after the output-path issue is resolved. |
+| Surface SCF and bulk-host impurity SCF fixtures | **Validated** | Value-checked [surface and impurity cases](../../tests/scf/cases.json), including the [Cu cross-calctype oracle](../../tests/scf/README.md). | These routes retain explicit `legacy_strux` sentinels because the alternate backend has impractical allocations. | Validate alternate structure-constant backend support separately; do not generalize the fixture status to all surface/impurity geometries. |
+| Impurity-in-surface (`newclusurf`) | **Unavailable** | The route is listed in the [developer map](../DEVELOPER_MAP.md). | The map states that no example/test input uses it. | Add a controlled surface-host impurity fixture and a cross-route/known-limit oracle before calling this capability established. |
+| Layered interfaces (`calctype='L'`) | **Experimental** | [Cu cross-calctype oracle](../../tests/scf/README.md), [interface fixtures](../../tests/scf/cases.json), and [interface alignment unit test](../../tests/unit/test_interface_alignment_oracle.f90). | Current issues include the unexplained Cu(111) DOS residual and the charge-row alignment behavior; see [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | Resolve or bound those effects with orientation/buffer convergence plus an independently justified interface observable before promotion. |
+| `A | vacuum` lead generation and interface electrostatics, one active layer | **Experimental** | [UnitVacuumLead](../../tests/unit/test_vacuum_lead.f90), [UnitVacuumRegionWiring](../../tests/unit/test_vacuum_region_wiring.f90), and measured one-layer/buffer evidence in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | More-than-one active vacuum layer has an untriaged divergent result; the deck is itself a suspect. | Reproduce with a known-good multilayer deck, demonstrate stable electrostatic/buffer convergence, and compare an observable such as a work-function step to a trusted reference. |
+| Vacuum GF/self-energy coupling | **Unavailable** | The current vacuum evidence is limited to the lead generator/wiring units above; the [developer map](../DEVELOPER_MAP.md) contains no vacuum-GF post-processing route. | No end-to-end vacuum Green-function consumer or validation fixture is recorded at HEAD. | Define and wire the intended GF boundary contract, then validate a known vacuum/decay limit and a coupled surface calculation. |
+| `A | vacuum-gap | B` four-region interface/vacuum layout | **Unavailable** | Scope and missing four-region layout are documented in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | The current three-region arithmetic cannot express this geometry. | Implement a four-region contract, then add region-registry, electrostatic, and end-to-end fixture evidence. |
+
+## GBT and TDDFT
+
+| Scoped capability | Maturity | Existing evidence and relevant tests/campaigns | Known defect(s) | Missing validation and promotion criterion |
+|---|---|---|---|---|
+| GBT representation and single-\(q\) bcc-Fe spiral | **Validated** | [magnetic-representation](../../tests/unit/test_magnetic_representation.f90) and [GBT structure](../../tests/unit/test_gbt_structure.f90) units; plus/minus \(q\) value fixtures in [SCF cases](../../tests/scf/cases.json). | Requires `strux_lib`; nonzero-\(q\) GBT with SOC is rejected, as recorded in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | New representation/SOC combinations need their own covariance/symmetry and material evidence. |
+| GBT frozen magnons: single-sublattice bcc-Fe sweep | **Validated** | [frozen-magnon fixture](../../tests/scf/cases.json) pins output columns; workflow and scope are described in the [developer map](../DEVELOPER_MAP.md). | No defect recorded for this specific single-sublattice route. | Establish stiffness convergence and an independent comparison before making a material-accuracy claim. |
+| GBT multi-sublattice automatic branches | **Experimental** | The current-head remeasurement and remaining k-space gap are documented in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | Original k-space Goldstone violation has not been rechecked at current HEAD; one real-space FeCo measurement is insufficient to close it. | Demonstrate a gapless acoustic \(\Gamma\) branch and stable small-\(q\) behavior on both relevant routes, then compare to an independent method. |
+| GBT CCOR audited two-centre slice | **Experimental** | [WP6b CCOR report](GBT_WP6B_CCOR_REPORT.md) links dense/reverse-bond/Hermiticity oracles and production probes; current unit source is [test_gbt_wp6_ccor.py](../../tests/unit/test_gbt_wp6_ccor.py). | The report excludes SOC, incomplete overlap modes, local-cluster assembly, and other terms. | Expand only per combination after its algebraic covariance and end-to-end evidence exist; no broad GBT+CCOR promotion. |
+| TDDFT response kernels, \(\chi_\mathrm{KS}\), Dyson/modes, longitudinal, and four-component unit contracts | **Experimental** | Current unit registrations are in [CMakeLists.txt](../../CMakeLists.txt), with cross-milestone checks in [test_tddft_cross_milestone_equivalence.py](../../tests/unit/test_tddft_cross_milestone_equivalence.py). | No current material validation is claimed by the unit suite. | Retain the unit contracts and meet the real-material gate in the [TDDFT-07 campaign](TDDFT-07_VALIDATION.md). |
+| TDDFT transverse material response/magnons and damping interpretation | **Experimental** | Deterministic campaign checker and its limits are recorded in [TDDFT-07](TDDFT-07_VALIDATION.md); CMake's `TddftValidationCampaign` is tooling, not scientific regression. | The document explicitly records that no Fe/Ni corrected-GBT/\(J_{ij}\) material output is committed. | Complete raw Goldstone diagnostics, convergence axes, small-\(q\) stiffness versus independent routes, and a credible Fe/Ni collective-plus-Stoner analysis. |
+
+## Update discipline
+
+- Add evidence only after it exists at HEAD; link the exact unit, fixture,
+  route triad, validation document, or issue entry.
+- A known defect is not a missing-validation item.  Record both when both are
+  true, and do not promote around either one.
+- A passing smoke/reference-regression fixture establishes only its checked
+  scope.  Material claims require the promotion criterion in the relevant row.
+
+## Task checklist
+
+- [x] Current feature inventory audited
+- [x] Maturity assigned by scoped capability
+- [x] Existing evidence linked
+- [x] Known defects distinguished from missing validation
+- [x] Promotion criteria written
+- [x] No feature promoted without evidence
+- [x] No production source changed
