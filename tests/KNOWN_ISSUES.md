@@ -433,7 +433,11 @@ future reference regeneration will capture genuinely different `vmad` values.
   electrostatics path had multi-layer coverage. Not investigated further —
   out of scope for the wiring task.
 
-## Magnetic constraining field (`&control constraints_enable`) is a no-op
+## [RESOLVED 2026-08-16] Magnetic constraining field was a no-op
+
+The following records the pre-VAL-10 defect. It is closed for the scoped RS,
+reciprocal/KS, and onsite GBT paths by the implementation and tests described
+after the historical notes.
 
 - **Symptom:** none visible to the user — the mechanism silently does
   nothing. `constraints_enable = .true.` (with `constraints_i_cons`,
@@ -467,6 +471,16 @@ future reference regeneration will capture genuinely different `vmad` values.
   frame, thread `bfield` into the potential/Hamiltonian, add the energy term,
   fix the `constraints_bfield` seed discard, fix the `etcon` initialization),
   estimated at least one dedicated task, not a WP6c-sized fix.
+
+VAL-10 now establishes the frame/sign contract in
+`docs/source/theory/constraining_fields.rst`, preserves the seed, returns and
+reports initialized penalty energy, and inserts the updated Ry-valued field
+once into the onsite `m=1` Hamiltonian block shared by RS and reciprocal
+assembly. `UnitConstrainingField` covers aligned/canted limits, seed retention,
+finite-difference penalty consistency, and SOC-free global spin rotation;
+`UnitConstrainingFieldSource` guards the physical insertion and single-owner
+boundary. SOC constrained dynamics and a converged material constrained-SCF
+campaign remain outside the established scope.
 
 ## [RESOLVED 2026-08-11, fixture repair] Five `tests/scf/cases.json` GBT fixtures fatal on `strux_backend='legacy'` (pre-existing, not a WP6c regression)
 

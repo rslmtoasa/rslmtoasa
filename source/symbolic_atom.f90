@@ -154,6 +154,12 @@ contains
       this%mix = -1
       this%mixmag = -1
       this%rb = -1
+      this%mag_cfield = 0.0_rp
+      this%mag_cfield_diff = 0.0_rp
+      this%chg_cfield = 0.0_rp
+      this%chg_cfield_diff = 0.0_rp
+      this%chg_con_val = 0.0_rp
+      this%mag_con_val = 0.0_rp
       this%a = 0.02d0
 
       call this%element%restore_to_default()

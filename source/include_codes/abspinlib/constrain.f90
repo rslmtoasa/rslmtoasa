@@ -38,6 +38,16 @@ contains
       integer, intent(in), optional :: code_prefac
       !
       if (flag > 0) then
+         if (allocated(d_delta)) then
+            if (size(d_delta, 2) == ndim) then
+               if (present(i_cons_in)) i_cons = i_cons_in
+               if (present(code_prefac)) cfd_prefac = code_prefac
+               return
+            end if
+         end if
+         if (allocated(d_delta)) deallocate(d_delta)
+         if (allocated(s_delta)) deallocate(s_delta)
+         if (allocated(dd_delta)) deallocate(dd_delta)
          allocate (d_delta(ncomp, ndim))
          allocate (s_delta(ncomp, ndim))
          allocate (dd_delta(ncomp, ndim))
@@ -50,14 +60,14 @@ contains
          if (present(i_cons_in)) i_cons = i_cons_in
          if (present(code_prefac)) cfd_prefac = code_prefac
       else
-         deallocate (d_delta)
-         deallocate (s_delta)
-         deallocate (dd_delta)
+         if (allocated(d_delta)) deallocate (d_delta)
+         if (allocated(s_delta)) deallocate (s_delta)
+         if (allocated(dd_delta)) deallocate (dd_delta)
       end if
       !
    end subroutine initialize_cfd
    !
-   subroutine constrain(mom_in, mom_ref, bfield, ndim)
+   subroutine constrain(mom_in, mom_ref, bfield, ndim, etcon_out, update_lambda)
       !
       use abspinlib
       !
@@ -68,6 +78,8 @@ contains
       real(dblprec), intent(in) :: mom_in(ncomp, ndim)
       real(dblprec), intent(in) :: mom_ref(ncomp, ndim)
       real(dblprec), intent(inout) :: bfield(ncomp, ndim)
+      real(dblprec), intent(out), optional :: etcon_out
+      logical, intent(in), optional :: update_lambda
       !
       !
       integer :: iidim, na
@@ -75,25 +87,41 @@ contains
       real(dblprec), dimension(3) :: e_i, e_out, c_in
       real(dblprec), dimension(3) :: m_delta, bfield_new
       real(dblprec) :: etcon, ma, mnorm
+      logical :: update_lambda_
 
       !!!   cfd_prefac=b2t*omega/(dfftp%nr1*dfftp%nr2*dfftp%nr3)
 
       allocate (mom_tmp(ncomp, ndim))
+      etcon = 0.0_dblprec
+      constrained_mom_err = 0.0_dblprec
+      mom_tmp = 0.0_dblprec
+      update_lambda_ = .true.
+      if (present(update_lambda)) update_lambda_ = update_lambda
 
       do na = 1, ndim
          if (i_cons == 2) then
             ! Lagrange multiplier without orthogonalization
             !
-            mom_tmp(:, na) = mom_in(:, na)/norm2(mom_in(:, na)) - mom_ref(:, na)
+            ma = norm2(mom_in(:, na))
+            if (ma <= tiny(1.0_dblprec) .or. norm2(mom_ref(:, na)) <= tiny(1.0_dblprec)) cycle
+            e_out = mom_in(:, na)/ma
+            e_i = mom_ref(:, na)/norm2(mom_ref(:, na))
+            mom_tmp(:, na) = e_out - e_i
             ! Gramm-Schmidt step
-            etcon = etcon + lambda_t*sum(mom_tmp(:, na)**2)
+            etcon = etcon + 0.5_dblprec*lambda_t*sum(mom_tmp(:, na)**2)
+            bfield(:, na) = bfield(:, na) - lambda_t*mom_tmp(:, na)
          else if (i_cons == 3) then
             ! Lagrange multiplier with orthogonalization (b _|_ m)
             !
-            mom_tmp(:, na) = mom_in(:, na)/norm2(mom_in(:, na)) - mom_ref(:, na)
+            ma = norm2(mom_in(:, na))
+            if (ma <= tiny(1.0_dblprec) .or. norm2(mom_ref(:, na)) <= tiny(1.0_dblprec)) cycle
+            e_out = mom_in(:, na)/ma
+            e_i = mom_ref(:, na)/norm2(mom_ref(:, na))
+            mom_tmp(:, na) = e_out - e_i
             ! Gramm-Schmidt step
-            mom_tmp(:, na) = mom_tmp(:, na) - sum(mom_tmp(:, na)*mom_ref(:, na))*mom_ref(:, na)
-            etcon = etcon + lambda_t*sum(mom_tmp(:, na)**2)
+            mom_tmp(:, na) = mom_tmp(:, na) - sum(mom_tmp(:, na)*e_i)*e_i
+            etcon = etcon + 0.5_dblprec*lambda_t*sum(mom_tmp(:, na)**2)
+            bfield(:, na) = bfield(:, na) - lambda_t*mom_tmp(:, na)
          else if (i_cons == 4) then
             ! i_cons = 4 means that we try to use a PID regulator
             !
@@ -103,15 +131,19 @@ contains
             !
             ! Check moment magnitude
             mnorm = sqrt(mom_in(1, na)**2 + mom_in(2, na)**2 + mom_in(3, na)**2)
+            c_in = bfield(:, na)
             write (stdout, '(4x,a,i4)') " | - atom: ", na
             if (mnorm .lt. induced_mom_thresh) then
-               write (stdout, '(2x,a,i4,a,f10.4)') ' | Local magnetization for atom ', na, ' is less than threshold', ma
+               write (stdout, '(2x,a,i4,a,f10.4)') ' | Local magnetization for atom ', na, ' is less than threshold', mnorm
                m_delta = 0.0_dblprec
             else
-               c_in = bfield(:, na)
                ! Direction only
-               e_out = mom_in(:, na)/ma
-               e_i = mom_ref(:, na)/norm2(mom_ref(:, na))
+               e_out = mom_in(:, na)/mnorm
+               if (norm2(mom_ref(:, na)) <= tiny(1.0_dblprec)) then
+                  e_i = [0.0_dblprec, 0.0_dblprec, 1.0_dblprec]
+               else
+                  e_i = mom_ref(:, na)/norm2(mom_ref(:, na))
+               end if
                !! Direction and magnitude
                !e_out=mom_in(:,na)
                !e_i =mom_ref(:,na)
@@ -141,12 +173,16 @@ contains
             if (norm2(d_delta(:, na)) > 1e-15) s_delta(:, na) = s_delta(:, na) + m_delta
 
             !bfield(:,na)=lambda_t*(1.20_dblprec*m_delta+0.35_dblprec*s_delta(:,na)+0.10_dblprec*dd_delta(:,na))
-            bfield(:, na) = lambda*(1.30_dblprec*m_delta + 0.35_dblprec*s_delta(:, na) - 0.10_dblprec*dd_delta(:, na))   !<-- use this for atoms
+            if (b_constr_iter == 0) then
+               bfield(:, na) = c_in + lambda*(1.30_dblprec*m_delta + 0.35_dblprec*s_delta(:, na) - 0.10_dblprec*dd_delta(:, na))
+            else
+               bfield(:, na) = lambda*(1.30_dblprec*m_delta + 0.35_dblprec*s_delta(:, na) - 0.10_dblprec*dd_delta(:, na))
+            end if
 
             !bfield_pts(:,ir)=lambda_t*(1.00_dblprec*m_delta+0.12_dblprec*s_delta_pts(:,ir)+0.10_dblprec*dd_delta(:,na))   !ok for grids
 
             ! Calculate Zeeman-like constraining energy cost
-            etcon = etcon + sum(bfield(1:3, na)*mom_in(:, na))
+            etcon = etcon + 0.5_dblprec*lambda*sum(m_delta**2)
             d_delta(:, na) = m_delta
             !
             write (stdout, '(4x,a,i4,3f15.8)') " | P  contribution    for atom ", na, d_delta(:, na)
@@ -176,7 +212,11 @@ contains
                write (stdout, '(4x,a,i4,3f15.8)') " | Input field        for atom ", na, bfield(1:3, na)
                !
                e_out = mom_in(:, na)
-               e_i = mom_ref(:, na)/norm2(mom_ref(:, na))*ma
+               if (norm2(mom_ref(:, na)) <= tiny(1.0_dblprec)) then
+                  e_i = [0.0_dblprec, 0.0_dblprec, ma]
+               else
+                  e_i = mom_ref(:, na)/norm2(mom_ref(:, na))*ma
+               end if
                !e_dot=e_out(1)*e_i (1)+e_out(2)*e_i (2)+e_out(3)*e_i (3)
                ! new constraining field
                !bfield_new=-10.0_dblprec*lambda_t*(e_out-e_i)
@@ -188,7 +228,7 @@ contains
                bfield(:, na) = (1.0_dblprec - bfield_beta)*bfield(:, na) - bfield_beta*bfield_new
                !
                ! calculate zeeman-like constraining energy cost
-               etcon = etcon + lambda_t*(sqrt(sum(mom_in(1:3, na)*mom_in(:, na))) - sum(mom_in(1:3, na)*e_i/ma))
+               etcon = etcon + lambda_t*(ma - sum(mom_in(1:3, na)*e_i/ma))
                constrained_mom_err = constrained_mom_err + sum(e_out - e_i)**2
                ! write (stdout,´(4x,a,i4,3f15.8)´ ) " | new field          for atom ",na,bfield_new
                write (stdout, '(4x,a,i4,4f15.8)') " | Output field       for atom ", na, bfield(1:3, na), &
@@ -201,7 +241,13 @@ contains
          end if
       end do ! na
       !
-      constrained_mom_err = sqrt(constrained_mom_err)/ndim
+      constrained_mom_err = sqrt(constrained_mom_err/max(1, ndim))
+
+      if (.not. update_lambda_) then
+         if (present(etcon_out)) etcon_out = etcon
+         deallocate (mom_tmp)
+         return
+      end if
 
       b_constr_iter = b_constr_iter + 1
       !if(i_cons==5) lambda_t=min(lambda_t+4_dblprec,100.0_dblprec)
@@ -229,6 +275,7 @@ contains
       !if(i_cons==5) lambda_t=lambda_t*(1.0_dblprec+2.0_dblprec*min(constrained_mom_err,0.1_dblprec))
       if (i_cons == 5) write (stdout, '(4x,a,f12.4a,g10.2)') " | New lambda_t: ", lambda_t, "     error: ", constrained_mom_err
       write (stdout, '(4x,a)') " | -  "
+      if (present(etcon_out)) etcon_out = etcon
       deallocate (mom_tmp)
       return
    end subroutine constrain

@@ -134,9 +134,9 @@ constraints_code_prefac
 
 **Default:** ``1``
 
-**Purpose:** Integer prefactor applied to the constraining field before it
-is added to the exchange-correlation potential.  Scales the overall
-magnitude of :math:`\mathbf{B}_i^{\,\mathrm{con}}` entering the Hamiltonian.
+**Purpose:** Retained integer output prefactor for the legacy constraining
+field diagnostics. It does not rescale the physical Ry-valued field entering
+the Hamiltonian; no empirical field scaling is applied by the SCF path.
 
 **Example:**
 
@@ -147,10 +147,10 @@ magnitude of :math:`\mathbf{B}_i^{\,\mathrm{con}}` entering the Hamiltonian.
 **Notes:**
 
 - In most cases this should be left at its default value of ``1``.
-- The value is stored as ``cfd_prefac`` inside the ``cfd`` module and is
-  used for unit-conversion output (e.g. when printing field values in Tesla).
-- Changing this parameter does **not** affect the iterative update of
-  :math:`\lambda_t`.
+- The value is stored as ``cfd_prefac`` inside the ``cfd`` module and only
+  affects diagnostic output.
+- Changing this parameter does **not** affect the Hamiltonian field or the
+  iterative update of :math:`\lambda_t`.
 
 **Code location:** ``source/include_codes/abspinlib/constrain.f90``,
 module variable ``cfd_prefac``.

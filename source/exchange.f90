@@ -1151,9 +1151,6 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: y
       real(rp), dimension(3, 3) :: jtens
       integer :: nv, i, j, k, l, njij, funit, iostatus
-      ! variables for constraining
-      real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
-      integer :: ia_loc
       logical :: isopen
 
       integer :: njij_glob
@@ -1168,29 +1165,9 @@ contains
       allocate (T_comm_xc(13, this%lattice%njij))
       T_comm_xc = 0.0_rp
 
-      ! Apply constraining field for exchange if requested
-      if (associated(this%control)) then
-         if (this%control%constraints_enable) then
-            allocate (mom_in(3, this%lattice%nrec))
-            allocate (mom_ref(3, this%lattice%nrec))
-            allocate (bfield(3, this%lattice%nrec))
-            do ia_loc = 1, this%lattice%nrec
-               mom_in(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom(:)
-               if (allocated(this%control%constraints_mom_ref)) then
-                  if (size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
-                     mom_ref(:, ia_loc) = this%control%constraints_mom_ref(:, ia_loc)
-                  else
-                     mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
-                  end if
-               else
-                  mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
-               end if
-               bfield(:, ia_loc) = 0.0_dblprec
-            end do
-            call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)
-            deallocate(mom_in, mom_ref, bfield)
-         end if
-      end if
+      ! The self SCF loop owns constraint updates.  Exchange consumes the
+      ! already-built Hamiltonian and must not advance or apply the field a
+      ! second time.
 
       inquire (unit=20, opened=isopen)
       if (isopen) then

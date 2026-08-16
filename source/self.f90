@@ -81,6 +81,11 @@ module self_mod
       !> Green
       class(green), pointer :: green
 
+      !> Fixed reference directions used by the constraining-field update.
+      real(rp), dimension(:, :), allocatable :: constraint_reference
+      !> Penalty functional returned by the most recent constraint update (Ry).
+      real(rp) :: constraint_energy
+
       !TODO: check description
       !> If true treats all atoms as inequivalents. Default: true.
       !>
@@ -252,6 +257,8 @@ module self_mod
       procedure :: lmtst
       procedure :: refresh_xc_response_kernel
       procedure :: is_converged
+      procedure, private :: initialize_constraint_state
+      procedure, private :: apply_constraints
       procedure, private :: run_scf
       procedure, private :: atomsc
       procedure, private :: ftype
@@ -515,9 +522,77 @@ contains
       if (associated(this%control)) then
          if (this%control%constraints_enable) then
             call initialize_cfd(this%lattice%nrec, 1, this%control%constraints_i_cons, this%control%constraints_code_prefac)
+            call this%initialize_constraint_state()
          end if
       end if
    end subroutine build_from_file
+
+   !> Capture the fixed reference directions and the optional initial field.
+   !> The state is stored on the same symbolic atoms consumed by the RS and
+   !> reciprocal Hamiltonian builders, so a field is neither lost at the call
+   !> boundary nor applied twice through separate potential paths.
+   subroutine initialize_constraint_state(this)
+      class(self), intent(inout) :: this
+      integer :: ia, plusbulk
+
+      if (.not. allocated(this%constraint_reference)) then
+         allocate(this%constraint_reference(3, this%lattice%nrec))
+      end if
+      this%constraint_reference = 0.0_rp
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         if (allocated(this%control%constraints_mom_ref)) then
+            if (size(this%control%constraints_mom_ref, 1) == 3 .and. &
+                size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
+               this%constraint_reference(:, ia) = this%control%constraints_mom_ref(:, ia)
+            else
+               this%constraint_reference(:, ia) = this%symbolic_atom(plusbulk)%potential%mom0(:)
+            end if
+         else
+            this%constraint_reference(:, ia) = this%symbolic_atom(plusbulk)%potential%mom0(:)
+         end if
+
+         this%symbolic_atom(plusbulk)%mag_cfield = 0.0_rp
+         if (allocated(this%control%constraints_bfield)) then
+            if (size(this%control%constraints_bfield, 1) == 3 .and. &
+                size(this%control%constraints_bfield, 2) == this%lattice%nrec) then
+               this%symbolic_atom(plusbulk)%mag_cfield = this%control%constraints_bfield(:, ia)
+            end if
+         end if
+      end do
+   end subroutine initialize_constraint_state
+
+   !> Compute the next constraining field from the mixed moments and retain it
+   !> on the symbolic atoms for the next Hamiltonian rebuild.
+   subroutine apply_constraints(this)
+      class(self), intent(inout) :: this
+      real(rp), allocatable :: mom_in(:, :), mom_ref(:, :), bfield(:, :)
+      real(rp) :: etcon
+      integer :: ia, plusbulk
+
+      if (.not. this%control%constraints_enable) then
+         this%constraint_energy = 0.0_rp
+         return
+      end if
+
+      allocate(mom_in(3, this%lattice%nrec), mom_ref(3, this%lattice%nrec), bfield(3, this%lattice%nrec))
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         mom_in(:, ia) = this%symbolic_atom(plusbulk)%potential%mom(:)
+         mom_ref(:, ia) = this%constraint_reference(:, ia)
+         bfield(:, ia) = this%symbolic_atom(plusbulk)%mag_cfield
+      end do
+
+      call constrain(mom_in, mom_ref, bfield, this%lattice%nrec, etcon)
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         this%symbolic_atom(plusbulk)%mag_cfield = bfield(:, ia)
+      end do
+      this%constraint_energy = etcon
+      if (rank == 0) call g_logger%info('CONSTRAINT energy (Ry) = '//fmt('f16.10', etcon), __FILE__, __LINE__)
+
+      deallocate(mom_in, mom_ref, bfield)
+   end subroutine apply_constraints
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -579,6 +654,10 @@ contains
 
       this%cold = .false.
       this%use_kspace = .false.
+      if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
+      allocate(this%constraint_reference(3, this%lattice%nrec))
+      this%constraint_reference = 0.0_rp
+      this%constraint_energy = 0.0_rp
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -781,7 +860,7 @@ contains
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
          !=========================================================================
-         this%esumn = sum(this%symbolic_atom(:)%potential%etot)
+         this%esumn = sum(this%symbolic_atom(:)%potential%etot) + this%constraint_energy
          this%esum = this%esumn
 
          !=========================================================================
@@ -932,9 +1011,6 @@ contains
    subroutine run_dos(this)
       class(self), intent(inout) :: this
       integer :: ia, l, lmax_site, li, iorb, plusbulk
-      ! variables for constraining
-      real(dblprec), dimension(:, :), allocatable :: mom_in, mom_ref, bfield
-      integer :: ia_loc
       real(rp) :: q_up, q_dn, mz, mtot
       real(rp), allocatable :: kspace_spin_mom(:,:)
       logical :: use_shifted_kmesh
@@ -1050,6 +1126,7 @@ contains
                            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
                         end do
 
+         call this%apply_constraints()
          call this%bands%calculate_pl()
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
 
@@ -1109,27 +1186,7 @@ contains
          this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
       end do
 
-         ! Apply constraining field in SCF if enabled via control namelist
-         if (this%control%constraints_enable) then
-            allocate (mom_in(3, this%lattice%nrec))
-            allocate (mom_ref(3, this%lattice%nrec))
-            allocate (bfield(3, this%lattice%nrec))
-            do ia_loc = 1, this%lattice%nrec
-               mom_in(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom(:)
-               if (allocated(this%control%constraints_mom_ref)) then
-                  if (size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
-                     mom_ref(:, ia_loc) = this%control%constraints_mom_ref(:, ia_loc)
-                  else
-                     mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
-                  end if
-               else
-                  mom_ref(:, ia_loc) = this%symbolic_atom(this%lattice%nbulk + ia_loc)%potential%mom0(:)
-               end if
-               bfield(:, ia_loc) = 0.0_dblprec
-            end do
-            call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)
-            deallocate(mom_in, mom_ref, bfield)
-         end if
+      call this%apply_constraints()
    
       !=========================================================================
       !                  CALCULATE THE NEW BAND MOMENTS QL
@@ -1264,7 +1321,8 @@ contains
          write (newunit, '(A)') '|                       Total Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
 !         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
-         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(:)%potential%etot)
+         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(:)%potential%etot) + this%constraint_energy
+         write (newunit, '(a,f20.10)') 'Constraint energy:      ', this%constraint_energy
          !===========================================================================
          !                       Band Energy
          !===========================================================================

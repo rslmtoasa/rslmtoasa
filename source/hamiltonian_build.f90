@@ -1250,6 +1250,7 @@ contains
          !write(123, *)´bulkham´
          ! call g_logger%info('Building Hamiltonian for atom type '//fmt('i5', ntype)//' with '//fmt('i5', nr)//' neighbours', __FILE__, __LINE__)
          call this%chbar_nc(ia, nr, ino, ntype)
+         call add_constraining_field_hmag(this, ntype)
          do m = 1, nr
             do i = 1, norb
                do j = 1, norb
@@ -1465,6 +1466,7 @@ contains
                      this%lattice%symbolic_atoms(it)%potential%cx0(i) - &
                      sign_i*this%lattice%symbolic_atoms(it)%potential%cx1(i)
                end do
+               call add_constraining_field_spin_block(this, it, pair_spin)
             end if
 
             call hcpx(pair_spin(1:norb, 1:norb), 'cart2sph')
@@ -1661,6 +1663,7 @@ contains
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
          call this%chbar_nc(nlim, nr, ino, nlim)
+         call add_constraining_field_hmag(this, this%charge%lattice%iz(nlim))
          do m = 1, nr
             do i = 1, norb
                do j = 1, norb
@@ -2292,5 +2295,46 @@ contains
          call g_logger%info(trim(msg), __FILE__, __LINE__)
       end if
    end subroutine compute_hamiltonian_bounds
+
+   !> Add the site-local constraining coefficient to the onsite magnetic
+   !> Hamiltonian.  `mag_cfield` is already in the spin frame of the local
+   !> moment, in Ry, and is inserted exactly once at bond slot m=1.
+   subroutine add_constraining_field_hmag(this, atom_type)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: atom_type
+      integer :: i
+      real(rp) :: bcon(3)
+
+      if (.not. this%control%constraints_enable) return
+      if (atom_type < 1 .or. atom_type > this%lattice%ntype) return
+      bcon = this%lattice%symbolic_atoms(atom_type)%mag_cfield
+      do i = 1, norb
+         this%hmag(i, i, 1, 1) = this%hmag(i, i, 1, 1) + bcon(1)
+         this%hmag(i, i, 1, 2) = this%hmag(i, i, 1, 2) + bcon(2)
+         this%hmag(i, i, 1, 3) = this%hmag(i, i, 1, 3) + bcon(3)
+      end do
+   end subroutine add_constraining_field_hmag
+
+   !> GBT has no ordinary endpoint hmag block.  Its onsite primitive block is
+   !> nevertheless a local spinor, so apply the same Pauli coefficient before
+   !> the Cartesian-to-spherical conversion.  The term is onsite and carries no
+   !> translational phase.
+   subroutine add_constraining_field_spin_block(this, atom_type, block)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: atom_type
+      complex(rp), intent(inout) :: block(nb, nb)
+      integer :: i
+      real(rp) :: bcon(3)
+
+      if (.not. this%control%constraints_enable) return
+      if (atom_type < 1 .or. atom_type > this%lattice%ntype) return
+      bcon = this%lattice%symbolic_atoms(atom_type)%mag_cfield
+      do i = 1, norb
+         block(i, i) = block(i, i) + bcon(3)
+         block(i + spin_off, i + spin_off) = block(i + spin_off, i + spin_off) - bcon(3)
+         block(i, i + spin_off) = block(i, i + spin_off) + bcon(1) - i_unit*bcon(2)
+         block(i + spin_off, i) = block(i + spin_off, i) + bcon(1) + i_unit*bcon(2)
+      end do
+   end subroutine add_constraining_field_spin_block
 
 end submodule hamiltonian_build

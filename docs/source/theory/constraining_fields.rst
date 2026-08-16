@@ -28,6 +28,30 @@ onto site :math:`i`.  The field :math:`\mathbf{B}_i^{\,\mathrm{con}}` is updated
 iteratively so that the self-consistent magnetization direction converges to
 :math:`\hat{\mathbf{e}}_i^{\,\mathrm{ref}}`.
 
+Frame and sign contract
+=======================
+
+``mom_in`` is the current normalized Cartesian spin direction and ``mom_ref``
+is the target direction. Both are expressed in the spin frame used by the
+onsite non-collinear Hamiltonian: the common Cartesian frame for ordinary
+real-space and reciprocal calculations, and the corresponding local rotating
+frame for GBT. The returned ``bfield`` is an energy coefficient in Ry, not a
+Tesla-valued magnetic induction. The electronic block is assembled as
+
+.. math::
+
+   H_{\mathrm{spin}} = H_0\,\sigma_0 + \mathbf{B}^{\,\mathrm{xc}}\!\cdot\!\boldsymbol{\sigma}
+                         + \mathbf{B}^{\,\mathrm{con}}\!\cdot\!\boldsymbol{\sigma}.
+
+With this convention a positive :math:`B_z` raises the up block and favours a
+negative electronic spin moment. The update therefore uses
+:math:`\mathbf{B}^{\,\mathrm{con}}=-\nabla_m E_{\mathrm{con}}` for the
+transverse deviation; a moment canted in +x produces a field coefficient in
+-x. The field is inserted once in the onsite ``m=1`` Hamiltonian block and is
+then shared by RS recursion and reciprocal Fourier assembly. The penalty
+energy returned by ``constrain`` is reported separately from the ordinary
+atomic DFT energy.
+
 RS-LMTO-ASA implements four distinct algorithms for determining
 :math:`\mathbf{B}_i^{\,\mathrm{con}}`, selected by the input parameter
 ``constraints_i_cons``.  They are described in detail in the sections below.
@@ -70,7 +94,7 @@ In each SCF iteration the error vector and penalty energy for site :math:`i` are
 .. math::
 
    \boldsymbol{\delta}_i &= \hat{\mathbf{m}}_i - \hat{\mathbf{e}}_i^{\,\mathrm{ref}}, \\[4pt]
-   E_{\mathrm{con}} &\mathrel{+}= \lambda_t \, |\boldsymbol{\delta}_i|^2.
+   E_{\mathrm{con}} &\mathrel{+}= \frac{1}{2}\lambda_t \, |\boldsymbol{\delta}_i|^2.
 
 Adaptive :math:`\lambda_t` update (end of iteration):
 
@@ -84,10 +108,9 @@ until it reaches a ceiling of :math:`10^4`.
 
 .. note::
 
-   For method 2 the constraining field vector is derived implicitly from
-   :math:`E_{\mathrm{con}}` and fed into the Hamiltonian; the ``bfield`` array
-   carries the accumulated field that enters the exchange-correlation potential
-   on subsequent iterations.
+   For method 2 the constraining field is the negative penalty-gradient update
+   in the Hamiltonian convention above; the ``bfield`` array carries the
+   previous field into the next iteration.
 
 **Code reference:** ``source/include_codes/abspinlib/constrain.f90``,
 ``i_cons == 2`` branch (lines 84–89).
@@ -116,7 +139,7 @@ Method 3 applies a Gram-Schmidt projection to remove the component of
    \boldsymbol{\delta}_i^{\perp} &= \boldsymbol{\delta}_i
      - \left(\boldsymbol{\delta}_i \cdot \hat{\mathbf{e}}_i^{\,\mathrm{ref}}\right)
        \hat{\mathbf{e}}_i^{\,\mathrm{ref}},\\[4pt]
-   E_{\mathrm{con}} &\mathrel{+}= \lambda_t \, |\boldsymbol{\delta}_i^{\perp}|^2.
+   E_{\mathrm{con}} &\mathrel{+}= \frac{1}{2}\lambda_t \, |\boldsymbol{\delta}_i^{\perp}|^2.
 
 The Gram-Schmidt step (second line) ensures that the penalty — and hence the
 constraining field — lies in the plane perpendicular to :math:`\hat{\mathbf{e}}_i^{\,\mathrm{ref}}`.
@@ -187,14 +210,13 @@ The PID gains :math:`(k_P, k_I, k_D) = (1.30, 0.35, -0.10)` were tuned
 empirically for bcc Fe-type magnetic systems.
 
 On the **first iteration** (when :math:`|\mathbf{P}_i^{(0)}| < 10^{-15}`) the
-error is reduced by a factor of 10 to avoid an overshoot from the uninitialized
-derivative term.
+error is reduced by a factor of 10 to avoid an initial derivative overshoot.
 
-The constraining energy is accumulated Zeeman-like:
+The PID diagnostic energy is accumulated as the quadratic controller cost:
 
 .. math::
 
-   E_{\mathrm{con}} \mathrel{+}= \mathbf{B}_i^{\,\mathrm{con}} \cdot \mathbf{m}_i.
+   E_{\mathrm{con}} \mathrel{+}= \frac{1}{2}\lambda \, |\mathbf{m}_{\Delta,i}|^2.
 
 **Code reference:** ``source/include_codes/abspinlib/constrain.f90``,
 ``i_cons == 4`` branch (lines 97–155).
@@ -352,14 +374,18 @@ input.  The call chain is:
        └─ if (constraints_enable)
               mom_in  ← current computed moments
               mom_ref ← reference moments from input or initial guess
-              bfield  ← 0 (re-initialised each call in self.f90)
-              call constrain(mom_in, mom_ref, bfield, nrec)
-              bfield  -> added to effective exchange-correlation field
-                        in the Hamiltonian
+              bfield  ← stored field or constraints_bfield seed
+              call constrain(mom_in, mom_ref, bfield, nrec, etcon)
+              bfield  -> stored on the symbolic atom and added once to the
+                        onsite spin Hamiltonian block
 
-The ``bfield`` array (shape ``(3, natoms)``) is added to the exchange-correlation
-potential before the next diagonalisation step, steering the moments toward
-:math:`\hat{\mathbf{e}}^{\,\mathrm{ref}}`.
+The reciprocal SCF branch calls the same update at the same point in its loop;
+its next k-space Hamiltonian rebuild therefore sees the identical field. The
+exchange post-processing path consumes that already-built Hamiltonian and does
+not advance the controller a second time. The validation scope is ordinary RS
+and reciprocal/KS onsite constraining fields, plus the equivalent onsite GBT
+insertion; no claim is made for SOC constrained dynamics or a converged
+material constrained-SCF campaign.
 
 ----
 
