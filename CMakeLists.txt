@@ -571,6 +571,9 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLmtoPairPotential PROPERTIES LABELS "unit;tddft;ward;lmto;pair-potential")
   add_fortran_unit_test(UnitSpinDensity ${TestDIR}/unit/test_spin_density.f90)
   set_tests_properties(UnitSpinDensity PROPERTIES LABELS "unit;gbt;wp7;density")
+  add_fortran_unit_test(UnitAbspinlibIntegrators ${TestDIR}/validation/test_abspinlib_integrators.f90)
+  set_tests_properties(UnitAbspinlibIntegrators PROPERTIES
+    LABELS "validation;sd;spin_integrators;physics;convergence")
   add_fortran_unit_test(UnitConstrainingField ${TestDIR}/unit/test_constraining_field.f90)
   set_tests_properties(UnitConstrainingField PROPERTIES LABELS "unit;constraints;physics")
   add_test(NAME UnitConstrainingFieldSource
