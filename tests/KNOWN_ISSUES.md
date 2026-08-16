@@ -131,7 +131,25 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   (`docs/dev/B5.3_gilbert_damping_audit.md`) can now re-land — the layout
   perturbation that re-triggered the NaN no longer does.
 
-## `frozen_magnon` `branch_mode = 'auto'`: multi-sublattice acoustic magnon not gapless at Γ — RE-MEASURED CLEAN on the real-space route (WP9, 2026-08-07), k-space route not re-checked
+## [VAL-17 follow-up, 2026-08-16] Current GBT cone-angle and FeCo Gamma gates pass; small-q mesh convergence remains open
+
+- The bcc-Fe reciprocal cone sweep now satisfies the direct same-q invariant:
+  DeltaE = E(q,theta)-E(q,0) is proportional to sin2(theta) over 5–20
+  degrees with a 1.49% omega spread. The old fixed-Gamma subtraction failure
+  was a finite-k q-only gauge offset amplified by 1/sin2(theta).
+- The current reciprocal FeCo run gives an acoustic Gamma value of 6.48e-15
+  Ry with an in-phase Fe/Co eigenvector. The independent RS run gives a zero
+  acoustic candidate of -4.16e-17 Ry with the same in-phase character. No
+  diagonal shift was applied.
+- The same-q reference is now used only on reciprocal GBT MFT probes and is
+  written alongside the raw observable in frozen_magnon_diagnostics.dat. The
+  real-space subtraction remains unchanged.
+- The fine-mesh small-q values are internally quadratic at 12^3 and 16^3,
+  but the inferred stiffness changes by about 55% between those meshes. Keep
+  the material stiffness and broad multi-sublattice maturity claim open until
+  denser/shifted meshes and an independent finite-q reference are added.
+
+## `frozen_magnon` `branch_mode = 'auto'`: multi-sublattice acoustic magnon not gapless at Γ — historical pre-VAL-17 finding; current Gamma gate remeasured clean
 
 - **WP9 update (2026-08-07), real-space route:** re-measured on the current
   `fable_v2_gbt_v2` architecture (post WP1–WP8), two-sublattice bcc FeCo
@@ -200,13 +218,12 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   values. The plain acoustic `Example_frozen_magnon_bccFe` (single-branch
   flat-spiral sweep) is unaffected and is the validated `frozen_magnon`
   deliverable.
-- **Status:** partially re-measured (see the WP9 update above — real-space
-  route now looks clean on one system), not closed. Still open: re-run the
-  same check on the k-space route (where the original violation was
-  measured) before declaring this fixed; the multi-branch magnon spectrum
-  remains the validation target for blueprint **B11** (linear-response
-  TDDFT / transverse magnons) for the general (non-collinear-reference)
-  case. See `docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md` (T5) and commit `d86fe42`.
+- **Status before VAL-17:** partially re-measured and not closed. The current
+  reciprocal Gamma gate is now closed by VAL-17; the remaining open item is
+  finite-q stiffness convergence, and the multi-branch spectrum remains the
+  validation target for blueprint **B11** (linear-response TDDFT /
+  transverse magnons) for the general (non-collinear-reference) case. See
+  `docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md` (T5) and commit `d86fe42`.
 
 ## `processing = 'sd'` (spin dynamics) workflow orchestration
 
@@ -714,7 +731,21 @@ campaign remain outside the established scope.
   cause traced by the WP9 integrator the same day after a targeted question
   about local-vs-global axis handling.
 
-## `frozen_magnon` k-space cone-angle (theta_ss) scaling is not theta-independent, by a large margin
+## [VAL-17 follow-up, 2026-08-16] Reciprocal cone-angle failure resolved by same-q gauge subtraction
+
+- The current bcc-Fe nk=12 sweep gives omega =
+  4.2993e-4, 4.3153e-4, 4.3387e-4, and 4.3636e-4 Ry for theta =
+  5,10,15,20 degrees, respectively. The primitive same-q DeltaE/sin2(theta)
+  invariant has a 1.49% spread.
+- The raw fixed-Gamma subtraction still reproduces the historical angle
+  dependence, so the result is not a hidden empirical theta rescaling. The
+  diagnosed cause is the finite-k q-only GBT gauge offset, not BZ reduction,
+  moment normalization, frame rotation, or electron-count loss.
+- The historical symptom below is retained as an audit trail. The remaining
+  open issue is mesh convergence of the resulting stiffness, recorded in the
+  VAL-17 report.
+
+## `frozen_magnon` k-space cone-angle (theta_ss) scaling is not theta-independent, by a large margin — historical pre-VAL-17 symptom
 
 - **Symptom, verified directly** (bcc Fe, WP9 Battery B,
   `tests/regression/wp9_validation/gammaH_sweep/base_cone/`, k-space route,

@@ -2089,13 +2089,15 @@ contains
       type(self), target, intent(inout) :: self_obj
       type(energy), target, intent(inout) :: energy_obj
       type(reciprocal) :: recip_obj
-      real(rp), allocatable :: etot_q(:), eband_q(:), mtot_q(:, :), omega_q(:)
-      real(rp) :: sin2theta, etot_ref
+      real(rp), allocatable :: etot_q(:), eband_q(:), eband_gauge_q(:), mtot_q(:, :), omega_q(:)
+      real(rp) :: sin2theta, etot_ref, theta_probe
+      real(rp) :: delta_raw, delta_gauge
       logical :: use_kspace
       character(len=200) :: fmt_str
-      integer :: iq, i, newunit
+      integer :: iq, i, newunit, diagnostic_unit
 
       allocate (etot_q(fm_obj%n_q), eband_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
+      if (fm_obj%mode == 'mft') allocate (eband_gauge_q(fm_obj%n_q))
 
       ! Reference point (row 1): converge the flat-spiral cone potential once. Its
       ! magnitudes/moments define the normalization and, in mft mode, are held FIXED
@@ -2157,7 +2159,25 @@ contains
                ! specific q -- never reuse another q's little-group mesh.
                call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
             end if
+
+            ! At finite q the GBT phase is a pure gauge when the cone is
+            ! collapsed onto the collinear reference axis.  In the continuum
+            ! E(q,theta=0) = E(0,theta), but a finite k mesh does not preserve
+            ! that identity when q is not a mesh translation.  Subtracting
+            ! E(0,theta) therefore leaves a q-only integration artifact which
+            ! is amplified by 1/sin^2(theta).  On the reciprocal route,
+            ! evaluate the exact same-q, zero-cone reference on the same
+            ! potential and same k-point set; this is a physical gauge
+            ! identity, not an empirical theta correction.  The real-space
+            ! path retains its established q=0 subtraction for compatibility.
+            if (use_kspace) then
+               theta_probe = hamiltonian_obj%theta_ss
+               hamiltonian_obj%theta_ss = 0.0_rp
+               eband_gauge_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+               hamiltonian_obj%theta_ss = theta_probe
+            end if
             eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+            if (.not. use_kspace) eband_gauge_q(iq) = eband_q(1)
             etot_q(iq) = etot_ref   ! potential frozen; total energy not re-evaluated
          end do
       else
@@ -2182,7 +2202,7 @@ contains
       end if
       do iq = 1, fm_obj%n_q
          if (fm_obj%mode == 'mft') then
-            omega_q(iq) = 4.0_rp*(eband_q(iq) - eband_q(1))/(sum(mtot_q(:, 1))*sin2theta)
+            omega_q(iq) = 4.0_rp*(eband_q(iq) - eband_gauge_q(iq))/(sum(mtot_q(:, 1))*sin2theta)
          else
             omega_q(iq) = 4.0_rp*(etot_q(iq) - etot_q(1))/(sum(mtot_q(:, 1))*sin2theta)
          end if
@@ -2193,6 +2213,9 @@ contains
       write (newunit, '(A)') '# q_ss units: Cartesian 2*pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point'
       write (newunit, '(A,A)') '# q_file coordinates: ', trim(fm_obj%q_coordinates)
       write (newunit, '(A)') '# omega uses eband in mode="mft" and etot in mode="scf"'
+      if (fm_obj%mode == 'mft' .and. use_kspace) then
+         write (newunit, '(A)') '# MFT k-space omega uses E(q,theta)-E(q,theta=0); E(q,theta=0) is the same-q GBT gauge reference'
+      end if
       write (newunit, '(A,I0)') '# Number of sublattices (nrec): ', lattice_obj%nrec
       write (newunit, '(A)') '# Format: q1 q2 q3 etot eband mtot_1 .. mtot_nrec omega'
       write (fmt_str, '(A,I0,A)') '(3F12.6,1X,2(ES16.8E3,1X),', lattice_obj%nrec, '(ES16.8E3,1X),ES16.8E3)'
@@ -2200,6 +2223,23 @@ contains
          write (newunit, fmt_str) q_ss_cart(:, iq), etot_q(iq), eband_q(iq), mtot_q(:, iq), omega_q(iq)
       end do
       close (newunit)
+
+      if (fm_obj%mode == 'mft' .and. use_kspace) then
+         ! Keep the two subtraction choices visible in a separate diagnostic
+         ! file.  This makes the gauge-invariant production observable
+         ! auditable without changing the long-standing frozen_magnon.dat
+         ! column contract used by the quick fixtures.
+         open (newunit=diagnostic_unit, file='frozen_magnon_diagnostics.dat', status='replace', action='write')
+         write (diagnostic_unit, '(A)') '# Frozen-magnon MFT energy diagnostics'
+         write (diagnostic_unit, '(A)') '# Format: q1 q2 q3 E(q,theta) E(0,theta) DeltaE_raw E(q,0) DeltaE_gauge sin2theta Mtot omega'
+         do iq = 1, fm_obj%n_q
+            delta_raw = eband_q(iq) - eband_q(1)
+            delta_gauge = eband_q(iq) - eband_gauge_q(iq)
+            write (diagnostic_unit, '(3F12.6,1X,8(ES20.12E3,1X))') q_ss_cart(:, iq), eband_q(iq), eband_q(1), &
+               delta_raw, eband_gauge_q(iq), delta_gauge, sin2theta, sum(mtot_q(:, 1)), omega_q(iq)
+         end do
+         close (diagnostic_unit)
+      end if
    end subroutine post_processing_frozen_magnon_acoustic
 
    !> @brief Multi-sublattice adiabatic magnon branches via the direct GBT frozen-magnon
@@ -2232,7 +2272,7 @@ contains
       type(energy), target, intent(inout) :: energy_obj
       type(reciprocal) :: recip_obj
       complex(rp), allocatable :: omega_mat(:, :), eigvec(:, :)
-      real(rp), allocatable :: eval(:), mtot_ref(:), ref_theta(:), ref_phi(:), single_energy(:)
+      real(rp), allocatable :: eval(:), mtot_ref(:), ref_theta(:), ref_phi(:), single_energy(:), energy_gauge_q(:)
       real(rp), allocatable :: active_moment(:)
       integer, allocatable :: active_rec(:), active_type(:)
       real(rp) :: etot_ref, energy_ref, theta_probe, dmz_fac, e_pair, off
@@ -2337,7 +2377,8 @@ contains
       call write_frozen_magnon_auto_headers(newunit_branch, newunit_modes, fm_obj, q_ss_cart, theta_probe, &
                                             active_rec, active_type, active_moment, etot_ref, energy_ref)
 
-      allocate (omega_mat(nactive, nactive), eigvec(nactive, nactive), eval(nactive), single_energy(nactive))
+      allocate (omega_mat(nactive, nactive), eigvec(nactive, nactive), eval(nactive), single_energy(nactive), &
+                energy_gauge_q(fm_obj%n_q))
       do iq = 1, fm_obj%n_q
          hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
          if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
@@ -2347,11 +2388,24 @@ contains
          end if
          omega_mat(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
 
+         ! The collinear theta=0 state is a q-dependent pure gauge in the
+         ! continuum.  A finite k mesh can give it a small q-only integration
+         ! offset, which otherwise contaminates every harmonic coefficient.
+         ! Use the same-q collinear probe as the force-theorem reference on the
+         ! reciprocal route.  This is an invariant-preserving subtraction, not
+         ! a fitted diagonal shift; retain the historical RS reference energy.
+         if (use_kspace) then
+            call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, active_rec(1:0))
+            energy_gauge_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+         else
+            energy_gauge_q(iq) = energy_ref
+         end if
+
          ! Diagonal: single-sublattice tilt. d^2E/dtheta_i^2 / M_i, in omega = dE/dm_z units.
          do iact = 1, nactive
             call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, [iact])
             single_energy(iact) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-            omega_mat(iact, iact) = cmplx((single_energy(iact) - energy_ref)/(active_moment(iact)*dmz_fac), &
+            omega_mat(iact, iact) = cmplx((single_energy(iact) - energy_gauge_q(iq))/(active_moment(iact)*dmz_fac), &
                                           0.0_rp, kind=rp)
          end do
 
@@ -2363,7 +2417,7 @@ contains
             do jact = iact + 1, nactive
                call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, [iact, jact])
                e_pair = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-               off = (e_pair - single_energy(iact) - single_energy(jact) + energy_ref) / &
+               off = (e_pair - single_energy(iact) - single_energy(jact) + energy_gauge_q(iq)) / &
                      (2.0_rp*dmz_fac*sqrt(active_moment(iact)*active_moment(jact)))
                omega_mat(iact, jact) = cmplx(off, 0.0_rp, kind=rp)
                omega_mat(jact, iact) = cmplx(off, 0.0_rp, kind=rp)

@@ -524,6 +524,14 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
   set_tests_properties(Val16GbtCommensurateSupercells PROPERTIES
     LABELS "validation;functional;magnetic;supercell;commensurate;convergence"
     TIMEOUT 14400)
+
+  add_test(NAME Val17GbtHarmonicGoldstone
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val17_gbt_harmonic_goldstone.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val17_gbt_harmonic_goldstone")
+  set_tests_properties(Val17GbtHarmonicGoldstone PROPERTIES
+    LABELS "validation;functional;magnetic;gbt;kspace;goldstone;convergence"
+    TIMEOUT 14400)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

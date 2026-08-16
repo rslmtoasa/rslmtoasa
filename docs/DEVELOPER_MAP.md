@@ -11,6 +11,13 @@ atomic LMTO region, test taxonomy, fixture vocabulary, and the Phase-I gate
 record, start with [Phase-I stabilization status](dev/PHASE_I_STABILIZATION.md).
 This map then provides the detailed workflow-level entry points and kernels.
 
+VAL-17 ([GBT harmonic and Goldstone report](dev/VAL-17_GBT_HARMONIC_GOLDSTONE.md))
+supersedes the older frozen-magnon note below: the current reciprocal FeCo
+route has a gapless, in-phase Gamma candidate on the current deck. The same
+report records the reciprocal same-q collinear gauge reference used for
+finite-q probes and keeps the small-q stiffness mesh convergence limitation
+open.
+
 ---
 
 ## 1. Execution skeleton
