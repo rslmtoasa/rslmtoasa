@@ -416,6 +416,7 @@ module lattice_mod
       procedure :: nncal
       procedure, private :: dbar1
       procedure, private :: structb_strux
+      procedure, private :: structb_strux_local
       procedure, private :: init_strux_storage
       procedure, private :: build_strux_inputs
       procedure, private :: strux_mode
@@ -819,6 +820,16 @@ module lattice_mod
       type(strux_result) :: result
 
    end subroutine structb_strux
+
+   !> @brief Compute strux constants from the finite non-periodic cluster.
+   module subroutine structb_strux_local(this, opts, nl, nl2, nspec, species_labels, lmxb, rmt, alpha_in, hcr, result)
+      class(lattice), intent(inout) :: this
+      type(strux_options), intent(in) :: opts
+      integer, intent(in) :: nl, nl2, nspec
+      integer, intent(in) :: species_labels(nspec), lmxb(nspec)
+      real(rp), intent(in) :: rmt(nspec), alpha_in(0:nl - 1, nspec), hcr(nl, nspec)
+      type(strux_result), intent(inout) :: result
+   end subroutine structb_strux_local
 
    !> @brief Write one strux structure-constant neighbor block for diagnostics.
    !> @param[in] this Lattice object containing sbar and neighbor vectors.

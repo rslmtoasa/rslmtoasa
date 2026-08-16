@@ -724,7 +724,7 @@ future reference regeneration will capture genuinely different `vmad` values.
   design (RS route dropped per Anders: long-wavelength spirals can have real
   numerical problems from real-space cluster truncation/PBC artifacts).
 
-## `strux_backend='strux_lib'` badly breaks a `crystal_sym='file'` custom-lattice supercell that `legacy` handles cleanly
+## RESOLVED — `strux_backend='strux_lib'` badly broke a `crystal_sym='file'` custom-lattice supercell
 
 - **Symptom, verified directly** (same bcc-Fe 4-atom `q_ss=(0,0,0.5)`
   explicit supercell deck as the entry above, `periodic_nc`, `crystal_sym=
@@ -739,18 +739,20 @@ future reference regeneration will capture genuinely different `vmad` values.
   `2.452723` mu_B, a ~15% site-to-site spread. Band energy also moves by a
   large amount (`eband_total = -7.1317212193` vs `-7.9268686408` legacy,
   ~0.20 Ry/atom).
-- **What I verified vs. guessed:** ran both decks directly and read
-  `report.out`/`Fe*_out.nml`; the numbers are measured. I did not
-  investigate why `strux_lib` fails specifically on a `crystal_sym='file'`
-  hand-built lattice with 4 distinct types (vs. `crystal_sym='bcc'` +
-  `ntype=1`, where `strux_lib` is required and works fine for the
-  `gbt_single_q` side of the same battery) — that is unexplored.
-- **Impact:** confirms `legacy` (the default) is the right backend choice
+- **What was verified:** the original numbers were measured from both
+  `report.out`/`Fe*_out.nml`. VAL-01 then located the first divergence in the
+  producer `Sbar` blocks: non-PBC custom files were incorrectly sent through
+  the periodic primitive-cell solve, while legacy screened the finite cluster.
+- **Historical impact:** before VAL-01, `legacy` was the only trusted backend
   for the WP9 commensurate-supercell battery's `super/`-side `periodic_nc`
-  decks; `strux_lib` was tried per this task's instruction to check
-  empirically and is unusable there. Flagging per this task's own
-  instruction to report backend disagreement beyond noise rather than
-  paper over it — this is *far* beyond noise.
+  decks; the disagreement was far beyond numerical noise.
 - **Found:** WP9 Battery A, checking empirically (as instructed) whether
   the `super/` side benefits from `strux_backend='strux_lib'` for a clean
   backend-matched comparison against the `gbt/` side.
+- **Resolution (VAL-01):** the non-PBC custom-file path now gives strux a
+  finite local solve around each representative, using the already-built
+  cluster and a non-interacting auxiliary cell. Equivalent local solves are
+  put in a canonical coordinate order before producer assembly. The periodic
+  primitive-cell path is unchanged. The q050 functional reproducer now
+  completes with four moments `2.395895-2.395896` mu_B and zero excess charge;
+  the direct structure-constant contract covers the producer path.

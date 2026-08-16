@@ -395,7 +395,7 @@ contains
       allocate(alpha_in(0:nl - 1, nspec), hcr(nl, nspec))
       lmxb(:) = this%control%lmax
       call this%build_strux_inputs(nspec, nl, species_labels(1:nspec), alpha_in, hcr, rmt)
-      write (17, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX periodic solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
+      write (17, '(a, i6, a, i6, a, f10.4, a, f10.4)') 'STRUX solve nbas=', nbas, ' kk=', this%kk, ' pair_cutoff=', pair_cutoff, ' solve_cutoff=', solve_cutoff
 
       ! DEBUG_STRUX_DIAG_BEGIN (temporary instrumentation; safe to remove as one block)
       write (17, '(a)') 'DEBUG_STRUX_DIAG: begin'
@@ -427,22 +427,39 @@ contains
       if (allocated(result%s)) deallocate(result%s)
       if (allocated(result%sdot)) deallocate(result%sdot)
 
-      select case (effective_screening)
-      case ('manual', 'default')
-         call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, alpha_in=alpha_in)
-         call strux_lmto47_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, alpha_in, alpha_site, adot_site, &
-            tral, trad, screening_mode=opts%screening_mode)
-      case ('sigma')
-         call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, hcr=hcr)
-         call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
-            alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
-            screening_mode=opts%screening_mode)
-      case ('fitted')
-         call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result)
-         call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
-            alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
-            screening_mode=opts%screening_mode)
-      end select
+      if (.not. this%pbc .and. trim(lower(this%crystal_sym)) == 'file') then
+         ! A non-periodic lattice has already been expanded into the finite
+         ! cluster in lattice%bravais.  Preserve that boundary condition for
+         ! screening: a primitive-cell solve would silently reintroduce the
+         ! periodic images that the legacy dbar1 path does not see.
+         select case (effective_screening)
+         case ('manual', 'default')
+            call strux_lmto47_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, alpha_in, alpha_site, adot_site, &
+               tral, trad, screening_mode=opts%screening_mode)
+         case ('sigma', 'fitted')
+            call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
+               alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
+               screening_mode=opts%screening_mode)
+         end select
+         call this%structb_strux_local(opts, nl, nl2, nspec, species_labels(1:nspec), lmxb, rmt, alpha_in, hcr, result)
+      else
+         select case (effective_screening)
+         case ('manual', 'default')
+            call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, alpha_in=alpha_in)
+            call strux_lmto47_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, alpha_in, alpha_site, adot_site, &
+               tral, trad, screening_mode=opts%screening_mode)
+         case ('sigma')
+            call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result, hcr=hcr)
+            call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
+               alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
+               screening_mode=opts%screening_mode)
+         case ('fitted')
+            call strux_compute(opts, nbas, nspec, nl, alat_bohr, this%a, pos, ips, lmxb, wav_bohr, rmt, result)
+            call strux_lmto47_autoalpha_screening(nbas, nspec, nl, wav_bohr, ips, lmxb, rmt, hcr, &
+               alpha_l_out=alpha_l_out, alpha_out=alpha_site, adot=adot_site, tral=tral, trad=trad, &
+               screening_mode=opts%screening_mode)
+         end select
+      end if
       do is = 1, nspec
          alpha_debug = 0.0_rp
          select case (effective_screening)
@@ -462,7 +479,7 @@ contains
 
       nttab = result%nttab
          call cpu_time(t_total_end)
-      write (17, '(a, i8, a, f10.3)') 'STRUX periodic result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
+      write (17, '(a, i8, a, f10.3)') 'STRUX result nttab=', nttab, ' cpu_s=', t_total_end - t_total_start
 
       do ii = 1, this%ntot
          this%alpha(:, :, ii) = 0.0_rp
@@ -498,6 +515,7 @@ contains
             end if
          end select
       end do
+      if (this%pbc .or. trim(lower(this%crystal_sym)) /= 'file') then
       do ii = 1, this%ntot
          ia = representative_atom_index(this, ii)
          ib = primitive_basis_label(this, ia)
@@ -542,6 +560,7 @@ contains
          write (17, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
          flush(17)
       end do
+      end if
 
       if (allocated(alpha_l_out)) deallocate(alpha_l_out)
       if (allocated(tral)) deallocate(tral)
@@ -550,6 +569,158 @@ contains
       if (allocated(adot_site)) deallocate(adot_site)
       deallocate(pos, cralat, ips, lmxb, rmt, alpha_in, hcr, orb_map, species_labels)
    end subroutine structb_strux
+
+   !> @brief Compute strux constants for one finite cluster per representative.
+   !> @details The legacy non-PBC path screens the finite cluster assembled by
+   !>          lattice%bravais independently around each representative.  Use
+   !>          the same local geometry with a non-interacting auxiliary cell so
+   !>          strux does not add periodic images to that solve.
+   module subroutine structb_strux_local(this, opts, nl, nl2, nspec, species_labels, lmxb, rmt, alpha_in, hcr, result)
+      class(lattice), intent(inout) :: this
+      type(strux_options), intent(in) :: opts
+      integer, intent(in) :: nl, nl2, nspec
+      integer, intent(in) :: species_labels(nspec), lmxb(nspec)
+      real(rp), intent(in) :: rmt(nspec), alpha_in(0:nl - 1, nspec), hcr(nl, nspec)
+      type(strux_result), intent(inout) :: result
+
+      integer, parameter :: max_orb = 16
+      real(rp), parameter :: match_tol = 1.0e-5_rp
+      integer :: ii, ia, ja, m, is, js, k, j, key, label, species_idx
+      integer :: nt_store, nsolve, pair_idx, local_target
+      integer :: orb_map(max_orb)
+      integer, allocatable :: local_global(:), local_ips(:)
+      real(rp), allocatable :: local_pos(:,:), local_plat(:,:)
+      real(rp) :: solve_cutoff2, cell_ang, maxdist2, d2, vec_target(3)
+      real(rp) :: alat_bohr
+      if (.not. allocated(this%cr) .or. this%kk <= 0) then
+         call g_logger%fatal('strux local backend requires a non-empty finite cluster', __FILE__, __LINE__)
+      end if
+      if (.not. allocated(this%izp) .or. size(this%izp) < this%kk) then
+         call g_logger%fatal('strux local backend requires cluster species labels', __FILE__, __LINE__)
+      end if
+
+      call build_orbital_map(nl2, orb_map)
+      solve_cutoff2 = (opts%solve_cutoff/ang2au)**2
+      alat_bohr = this%alat*ang2au
+
+      do ii = 1, this%ntot
+         ia = representative_atom_index(this, ii)
+         allocate(local_global(this%kk))
+         local_global = 0
+         nsolve = 1
+         local_global(1) = ia
+         maxdist2 = 0.0_rp
+         do k = 1, this%kk
+            if (k == ia) cycle
+            d2 = sum(((this%cr(:, k) - this%cr(:, ia))*this%alat)**2)
+            if (d2 < solve_cutoff2 .and. d2 > 1.0e-8_rp) then
+               nsolve = nsolve + 1
+               local_global(nsolve) = k
+               maxdist2 = max(maxdist2, d2)
+            end if
+         end do
+
+         ! The finite cluster is translationally equivalent around each
+         ! representative, but its global storage order need not be.  Give
+         ! every local solve one deterministic relative-coordinate order so
+         ! equivalent sites do not acquire order-dependent roundoff.
+         do k = 3, nsolve
+            key = local_global(k)
+            j = k - 1
+            do while (j >= 2)
+               if (this%cr(1, key) > this%cr(1, local_global(j))) exit
+               if (this%cr(1, key) == this%cr(1, local_global(j)) .and. &
+                   this%cr(2, key) > this%cr(2, local_global(j))) exit
+               if (this%cr(1, key) == this%cr(1, local_global(j)) .and. &
+                   this%cr(2, key) == this%cr(2, local_global(j)) .and. &
+                   this%cr(3, key) >= this%cr(3, local_global(j))) exit
+               local_global(j + 1) = local_global(j)
+               j = j - 1
+            end do
+            local_global(j + 1) = key
+         end do
+
+         allocate(local_pos(3, nsolve), local_ips(nsolve), local_plat(3, 3))
+         local_pos = 0.0_rp
+         do k = 2, nsolve
+            local_pos(:, k) = this%cr(:, local_global(k)) - this%cr(:, ia)
+         end do
+         ! Make the auxiliary cell larger than the solve diameter.  It is
+         ! deliberately only a container for the finite local coordinates;
+         ! no image can enter either the solve or stored-pair cutoff.
+         cell_ang = max(4.0_rp*sqrt(solve_cutoff2), 4.0_rp*sqrt(maxdist2) + 2.0_rp*this%alat)
+         local_plat = 0.0_rp
+         do k = 1, 3
+            local_plat(k, k) = cell_ang/this%alat
+         end do
+
+         do k = 1, nsolve
+            label = this%izp(local_global(k))
+            species_idx = 0
+            do is = 1, nspec
+               if (species_labels(is) == label) then
+                  species_idx = is
+                  exit
+               end if
+            end do
+            if (species_idx == 0) then
+               call g_logger%fatal('strux local backend could not map a cluster species label', __FILE__, __LINE__)
+            end if
+            local_ips(k) = species_idx
+         end do
+
+         write (17, '(a, i5, a, i6)') 'STRUX local solve center=', ii, ' nbas=', nsolve
+         select case (opts%screening_mode)
+         case (STRUX_LMTO47_IALPHA_MANUAL)
+            call strux_compute(opts, nsolve, nspec, nl, alat_bohr, local_plat, local_pos, local_ips, lmxb, &
+               this%wav*ang2au, rmt, result, alpha_in=alpha_in)
+         case default
+            call strux_compute(opts, nsolve, nspec, nl, alat_bohr, local_plat, local_pos, local_ips, lmxb, &
+               this%wav*ang2au, rmt, result, hcr=hcr)
+         end select
+
+         nt_store = this%kk
+         call this%clusba(this%r2, this%cr*this%alat, ia, this%kk, this%kk, nt_store)
+         this%nn_max = nt_store
+         do m = 1, nt_store
+            local_target = 0
+            if (m == 1) then
+               local_target = 1
+            else
+               ja = this%nn(ia, m)
+               do k = 1, nsolve
+                  if (local_global(k) == ja) then
+                     local_target = k
+                     exit
+                  end if
+               end do
+            end if
+            if (local_target == 0) then
+               call g_logger%fatal('strux local backend could not map a stored cluster neighbor', __FILE__, __LINE__)
+            end if
+            vec_target = this%sbarvec(:, m)*ang2au
+            pair_idx = find_pair_by_vector(result%nttab, result%iax, local_plat, local_pos, alat_bohr, 1, local_target, &
+               vec_target, match_tol*ang2au)
+            if (pair_idx == 0) then
+               call g_logger%fatal('strux local backend failed to find a local pair block', __FILE__, __LINE__)
+            end if
+            do is = 1, nl2
+               do js = 1, nl2
+                  this%sbar(is, js, m, ii) = cmplx(result%s(orb_map(is), orb_map(js), pair_idx), 0.0_rp, kind=rp)
+                  if (this%strux_want_sdot) then
+                     this%sdot(is, js, m, ii) = cmplx(result%sdot(orb_map(is), orb_map(js), pair_idx), 0.0_rp, kind=rp)
+                  end if
+               end do
+            end do
+            if (m == 1) then
+               call write_strux_block(this, nl2, m, ia, ia)
+            else
+               call write_strux_block(this, nl2, m, ia, ja)
+            end if
+         end do
+         deallocate(local_global, local_pos, local_ips, local_plat)
+      end do
+   end subroutine structb_strux_local
 
    !> @brief Write one strux structure-constant neighbor block for diagnostics.
    !> @param[in] this Lattice object containing sbar and neighbor vectors.
