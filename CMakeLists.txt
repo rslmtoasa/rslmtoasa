@@ -488,6 +488,13 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val08_damping_inertia")
   set_tests_properties(Val08DampingInertia PROPERTIES
     LABELS "validation;functional;exchange;magnetic;damping;inertia;convergence" TIMEOUT 1800)
+
+  add_test(NAME Val09KuboBastinTransport
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val09_kubo_bastin_transport.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val09_kubo_bastin_transport")
+  set_tests_properties(Val09KuboBastinTransport PROPERTIES
+    LABELS "validation;functional;conductivity;transport;kpm;spin_transport;orbital_transport;convergence;tensor" TIMEOUT 1800)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
