@@ -125,8 +125,11 @@ calculation%processing_sd()
        -> include_codes/abspinlib/abSpinlib.f90   (lower-level ASD numerics)
 ```
 `Example_bulk_bccFe_sd_smoke` checks that a one-step production trajectory is
-emitted. It is execution coverage, not a physical validation; the remaining
-impurity-SD output-path limitation is recorded in `tests/KNOWN_ISSUES.md`.
+emitted. The LMTO field/torque seam feeding this workflow is validated
+separately by [`VAL-12`](dev/VAL-12_LMTO_MAGNETIC_FIELDS_TORQUES.md); the smoke
+test remains execution coverage, not a long-trajectory validation. The
+remaining impurity-SD output-path limitation is recorded in
+`tests/KNOWN_ISSUES.md`.
 
 ### PAOFLOW import
 ```text

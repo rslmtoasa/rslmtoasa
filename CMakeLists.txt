@@ -495,6 +495,13 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val09_kubo_bastin_transport")
   set_tests_properties(Val09KuboBastinTransport PROPERTIES
     LABELS "validation;functional;conductivity;transport;kpm;spin_transport;orbital_transport;convergence;tensor" TIMEOUT 1800)
+
+  add_test(NAME Val12LmtoFieldsTorques
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val12_lmto_fields_torques.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val12_lmto_fields_torques")
+  set_tests_properties(Val12LmtoFieldsTorques PROPERTIES
+    LABELS "validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc" TIMEOUT 900)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
