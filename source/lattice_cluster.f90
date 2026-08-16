@@ -416,17 +416,17 @@ contains
       !> off-centre for the active type. Tracking the minimum per type makes
       !> "representative" mean closest-to-origin, as intended.
       real(rp), dimension(:), allocatable :: disi_min
-      real(rp) :: new, one, ds, ds2, disi
-      integer :: n, ilo
+      real(rp) :: new, one, ds, ds2, disi, cr_proj_min, cr_proj_max
+      integer :: n, ilo, lower_layers, upper_layers, margin
       logical :: isUnique, isopen
       !> Extra layers of bulk-like margin below region A, mirroring
-      !> build_surf_full's 15-layer margin past its own frozen (bulk) side
-      !> (zmax = ds2 + 15*zstep). Without it region A's representative atom
-      !> sits at the edge of the selected cluster and its neighbor shell gets
-      !> truncated (e.g. 14 neighbors instead of fcc's 19) -- remd then fails
-      !> to find a symmetric partner ("VECTOR NOT FOUND"). Layers 1..margin
-      !> are selected (for neighbor-shell depth) but assigned to no region.
-      integer, parameter :: margin = 15
+      !> build_surf_full's 15-layer margin past its own frozen (bulk) side.
+      !> The lower margin is increased when the requested normal reaches
+      !> farther into the source cluster than that fixed default. Without
+      !> this geometry-derived guard, an oblique normal can clip valid source
+      !> sites before remd builds the real-space map (and the representative
+      !> neighbor shell is then no longer the bulk shell).
+      integer, parameter :: default_margin = 15
 
       natoms = this%kk
 
@@ -526,13 +526,31 @@ contains
          end do
       end do
 
+      ! Keep the full source cluster available to the layered mapping. The
+      ! old fixed ladder was wide enough for (001), but not for normals whose
+      ! projection range is asymmetric about the representative site. Both
+      ! bounds stay on the same z-step grid as ds2 so ilo remains a layer
+      ! number, independent of the Miller direction.
+      cr_proj_min = huge(1.0_rp)
+      cr_proj_max = -huge(1.0_rp)
+      do k = 1, natoms
+         crh(k) = dot_product([this%dx, this%dy, this%dz], this%cr(:, k))
+         cr_proj_min = min(cr_proj_min, crh(k))
+         cr_proj_max = max(cr_proj_max, crh(k))
+      end do
+      lower_layers = max(this%nlay_a + default_margin, &
+                         ceiling((ds2 - cr_proj_min)/ds) + 1)
+      margin = lower_layers - this%nlay_a
+      upper_layers = max(nlay_tot + 20 - this%nlay_a, &
+                         ceiling((cr_proj_max - ds2)/ds) + 1)
+
       this%zstep = ds
       ! The layer ladder is centred so that the ACTIVE zone starts at layer
       ! margin+nlay_a+1. Layers 1..margin are selected (for neighbor-shell
       ! depth below region A) but assigned to no region; region A occupies
       ! margin+1..margin+nlay_a.
-      this%zmin = ds2 - (this%nlay_a + margin)*this%zstep
-      this%zmax = this%zmin + (margin + nlay_tot + 20)*this%zstep
+      this%zmin = ds2 - lower_layers*this%zstep
+      this%zmax = ds2 + upper_layers*this%zstep
 
       n = int((this%zmax - this%zmin)/this%zstep) + 1
 

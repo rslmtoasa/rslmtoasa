@@ -152,13 +152,16 @@ grids rather than different physics. With it, all four emit an identical mesh
 Cross-checking the committed references (`etot`, and `*_dos.out` col 2):
 
 - `etot` agrees to ~1e-8 Ry across all four; `ws_r` is exact.
-- `L001` reproduces bulk **exactly** at every sampled row.
-- `I` deviates from bulk by ≤1e-5 — the print precision of the `.out` files.
-- **`L111` deviates by 2.05e-3 at row 1200** (near the d-band peak), ~200×
-  larger than `I` or `L001`. This is a real, orientation-specific residual, not
-  a tolerance artifact. It is *not* explained, and is deliberately captured
-  rather than tolerated away — the reference pins the current value so any
-  change in it is visible. See `tests/KNOWN_ISSUES.md`.
+- `L001` is the identity control and agrees with the impurity route at every
+  sampled row.
+- Before VAL-14, **`L111` deviated by 2.05e-3 at row 1200** (near the d-band
+  peak), ~200× larger than the `L001` control. This was an orientation-specific
+  mapping residual, not a tolerance artifact; the reference deliberately
+  exposed it rather than tolerating it away.
+- **After VAL-14, `L111` and `L001` are byte-identical** over the emitted DOS
+  mesh. The generic layered z-ladder fix and its evidence are recorded in
+  `docs/dev/VAL-14_CU111_INTERFACE_MAPPING.md`; the separate direct-bulk
+  versus impurity print-level difference remains outside this fix's scope.
 
 This suite compares each case against its own stored reference; it does not
 assert B ≡ I ≡ L programmatically. When touching the Hamiltonian build, the

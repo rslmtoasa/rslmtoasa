@@ -235,15 +235,15 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   Broader impurity and multi-site dynamics remain unvalidated; see
   `docs/dev/VAL-13_AB_INITIO_SPIN_DYNAMICS.md`.
 
-## `calctype = 'L'` (111) site DOS deviates ~2e-3 from bulk; (001) is exact
+## `calctype = 'L'` (111) site DOS deviated ~2e-3 from the identity control; **RESOLVED in VAL-14**
 
-- **Symptom:** in the cross-calctype fcc Cu oracle (see
+- **Historical symptom:** in the cross-calctype fcc Cu oracle (see
   `tests/scf/README.md`, "Cross-calctype oracle"), a single Cu layer treated
   as an interface between Cu regions must reproduce bulk fcc Cu, because every
   region is the same material starting from the same parameter set with
-  `vmad ~ 0`. `surftype = '0 0 1'` does so **exactly** — zero difference at
-  every sampled DOS row. `surftype = '1 1 1'` deviates by **2.05e-3** at
-  row 1200 (E = 0.686, near the d-band peak), against a peak DOS of 48.3.
+  `vmad ~ 0`. The (001) layered case is the identity control and the (111)
+  case historically deviated by **2.05e-3** at row 1200 (E = 0.686, near the
+  d-band peak), against a peak DOS of 48.3.
   `Example_interface_fccCu001_chebyshev` vs
   `Example_interface_fccCu111_chebyshev`.
 - **Not the cause:** the TB-LMTO Hamiltonian. Instrumenting `build_bulkham`
@@ -266,6 +266,17 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
 - **Found:** B7.5 (`calctype='L'` wiring, commit `97f1e0e`). The earlier
   validation used 001 only and reported agreement at print precision; the 111
   deviation surfaced when both orientations were added to the suite.
+
+- **Resolved in VAL-14:** the first downstream divergence was the layered
+  cluster selection. `build_interface_full` used a fixed z ladder that clipped
+  valid sites from the source cluster for oblique normals: Cu(001) retained
+  4096 sites, while Cu(111) retained 4056. The ladder now derives its bounds
+  from the projected source-cluster geometry while retaining the existing
+  safety margin and layer numbering. The generic mapping restores 4096 sites,
+  the complete `nn` map, and exact Cu(111) ≡ Cu(001) DOS at the pinned mesh.
+  No Miller-index special case or DOS rescaling was added. Interface
+  electrostatics remains on the existing `calctype='L'` path; the separate
+  charge-row alignment issue below remains open.
 
 ## `calctype = 'L'`: raising `&charge nlay_a/nlay_b` breaks the alignment fixed point
 
