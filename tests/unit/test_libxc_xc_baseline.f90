@@ -12,9 +12,9 @@ program test_libxc_xc_baseline
    implicit none
 
    integer, parameter :: sample_count = 4
-   ! These are baseline tolerances, not a claim of route-to-route equivalence.
-   ! They allow small compiler/libXC-version variation while catching changes
-   ! in either production path.
+   ! These tolerances allow small compiler/libXC-version variation while
+   ! catching changes in either production path and their fixed-density
+   ! equivalence.
    real(rp), parameter :: abs_tolerance = 2.0e-7_rp
    real(rp), parameter :: rel_tolerance = 2.0e-6_rp
    real(rp), parameter :: radius = 1.25_rp
@@ -109,6 +109,12 @@ contains
       call require_close(libxc_v_up - libxc_v_down, &
          libxc_v_up_reference(isample) - libxc_v_down_reference(isample), &
          'libXC XC spin splitting', isample)
+      call require_close(libxc_exc, internal_exc, &
+         'internal/libXC XC energy equivalence', isample)
+      call require_close(libxc_v_down, internal_v_down, &
+         'internal/libXC spin-down XC potential equivalence', isample)
+      call require_close(libxc_v_up, internal_v_up, &
+         'internal/libXC spin-up XC potential equivalence', isample)
    end subroutine compare_sample
 
    subroutine require_close(actual, expected, quantity, isample)

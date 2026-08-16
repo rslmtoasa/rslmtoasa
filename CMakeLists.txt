@@ -769,6 +769,22 @@ set_tests_properties(Example_si_chebyshev_kspace_dos_equivalence PROPERTIES
   TIMEOUT 300
 )
 
+if (ENABLE_LIBXC)
+  add_test(
+    NAME Val03LibxcScfEquivalence
+    COMMAND
+      "${EXAMPLE_PYTHON_EXECUTABLE}"
+      "${TestDIR}/validation/val03_libxc_scf.py"
+      --binary "${TestBinary}"
+      --scratch-root "${CMAKE_BINARY_DIR}/Testing/validation/val03_libxc_scf"
+      --kspace-only
+  )
+  set_tests_properties(Val03LibxcScfEquivalence PROPERTIES
+    LABELS "validation;functional;scf;libxc;equivalence;nonmagnetic;magnetic;strux"
+    TIMEOUT 300
+  )
+endif()
+
 endif (RUN_EXAMPLE_TESTS)
  
 ##############################################################################################

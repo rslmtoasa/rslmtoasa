@@ -214,6 +214,11 @@ contains
          !        Linear Airy gas
          !
          obj%TXCH = 'LAG'
+      case (101:109)
+         ! Explicit 100-series libXC mappings are selected in
+         ! setup_libxc_functional_ids.  Keep the functional tag initialized
+         ! here as well so SCF diagnostics do not expose an undefined string.
+         obj%TXCH = 'LXC'
       case default
          ! Check if this is a libXC functional (txc >= 1000)
          if (obj%txc >= 1000) then
@@ -1503,8 +1508,11 @@ contains
       class(xc), intent(in) :: this
       logical :: is_libxc
       
-      ! libXC functionals use txc values >= 1000
-      is_libxc = (this%txc >= 1000)
+      ! Explicit libXC mappings use the historical 100-series codes, while
+      ! direct libXC IDs use txc=1000+ID. Legacy txc=1-9 values remain the
+      ! internal production implementations even though the fixed-density
+      ! unit gate also evaluates their libXC equivalents.
+      is_libxc = ((this%txc >= 100) .and. (this%txc < 200)) .or. (this%txc >= 1000)
    end function is_libxc_functional
 
    !>--------------------------------------------------------------------------
@@ -1518,7 +1526,7 @@ contains
       real(rp), intent(inout) :: EXC, V1, V2
       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
 
-      if (this%use_libxc) then
+      if (this%use_libxc .and. this%is_libxc_functional()) then
          call this%xcpot_libxc_wrapper(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       else
          call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
