@@ -629,10 +629,21 @@ contains
                      typesurf(nsurf) = maxType
                      ! chargetrf_type is TYPE-indexed (dimension nrec, mirroring
                      ! build_surf_full's nbas-sized array): fill it once, when
-                     ! this active type is first discovered, per B7 §1.4 --
-                     ! sites in the lower half of the active zone reference
-                     ! region A, the upper half region B.
-                     if (ilay <= (this%nlay + 1)/2) then
+                     ! this active type is first discovered.  For a metallic
+                     ! A|B interface, the active zone is a contact region and
+                     ! its lower/upper halves use the corresponding frozen
+                     ! references.  A|vacuum is different: vacuum is a
+                     ! boundary lead, not the reference material for the
+                     ! metallic active layers.  Every active metallic layer
+                     ! must therefore use region A's reference, just as the
+                     ! one-sided buildsurf surface path does.  Using the
+                     ! vacuum type for the upper active layers measures
+                     ! metal-vacuum charge transfer as if it were a local
+                     ! reference charge and drives the vacuum alignment by an
+                     ! unphysical multi-layer offset.
+                     if (trim(this%region_b_kind) == 'vacuum') then
+                        chargetrf_type_tmp(maxType - this%nbulk) = mod(maxType, max(nbulk_a, 1)) + 1
+                     else if (ilay <= (this%nlay + 1)/2) then
                         chargetrf_type_tmp(maxType - this%nbulk) = mod(maxType, max(nbulk_a, 1)) + 1
                      else
                         chargetrf_type_tmp(maxType - this%nbulk) = nbulk_a + mod(maxType, max(nbulk_b, 1)) + 1
@@ -713,6 +724,13 @@ contains
       this%chargetrf_type(:) = 0
       if (this%nrec >= 1) this%chargetrf_type(1:this%nrec) = chargetrf_type_tmp(1:this%nrec)
       deallocate (chargetrf_type_tmp)
+
+      ! Keep the load-bearing symbolic/type contract visible in the generated
+      ! deck.  The active counter is what charge_interface walks; recording it
+      ! beside the layer geometry makes a multilayer validation auditable
+      ! without reconstructing the mapping from array allocation order.
+      write (20, *) 'Active type -> charge-transfer reference type:', this%chargetrf_type(:)
+      write (20, *) 'Active layers -> type block starts at:', this%nbulk + 1
 
       do i = 1, this%nrec
          this%irec(i) = ichoicen(this%nbulk + i)

@@ -417,9 +417,9 @@ future reference regeneration will capture genuinely different `vmad` values.
   lead produced no measurable dipole barrier.
 
 
-## `calctype = 'L'`: `A | vacuum` diverges with more than one active layer — UNTRIAGED
+## [MAPPING RESOLVED 2026-08-16; CONVERGENCE OPEN] `calctype = 'L'`: `A | vacuum` multilayer electrostatics
 
-- **Symptom:** with `&lattice nlay = 3` (three active layers) on the
+- **Historical symptom:** with `&lattice nlay = 3` (three active layers) on the
   `A | vacuum` geometry, the reported potential step and the active atoms'
   `vmad` come out physically impossible — hundreds of Rydberg:
 
@@ -431,27 +431,28 @@ future reference regeneration will capture genuinely different `vmad` values.
   The metallic three-layer case is sane, so whatever this is, it involves the
   vacuum region specifically. At `nlay = 1` both geometries are well behaved
   (`A | vacuum` gives a converged `step = -0.0977` Ry).
-- **NOT YET DIAGNOSED, and the test deck is a live suspect.** The three-layer
-  decks above were hand-built by editing `ntype`, `ct(:)` and the `&atoms`
-  `label(:)` list of the one-layer examples and copying `Ac1.nml` to `Ac2.nml`
-  / `Ac3.nml`. That is exactly the kind of setup that can be silently wrong —
-  in particular the active-layer type block and `chargetrf_type` assignment
-  (`build_interface_full`) were not independently verified for `nlay > 1` on
-  the vacuum path. **Do not treat this as a confirmed code bug until a
-  known-good multi-layer deck reproduces it.**
-- **If it is real, the likely area** is the compensation weighting across
-  multiple active rows: with one active row the compensation sites sit
-  symmetrically either side of it, and with three they do not. That is
-  precisely the machinery G-B7-3 exists to sign off, so a genuine finding here
-  belongs to B7.7 rather than to a spot fix.
-- **First triage steps** (in order): build a multi-layer deck from
-  `buildsurf`'s own working three-layer surface case rather than by hand;
-  confirm `chargetrf_type` and the layer→type map for `nlay > 1`; then dump
-  `tdq` per row to see whether the divergence enters through the charge, the
-  compensation, or the kernel.
-- **Found:** B7.6 (vacuum-lead wiring), while probing whether the new
-  electrostatics path had multi-layer coverage. Not investigated further —
-  out of scope for the wiring task.
+- **Deck audit:** the old decks were hand-built by editing `ntype`, `ct(:)` and
+  labels, so they were not evidence. VAL-15 now constructs the mapping from
+  the existing `example/surface/fccCu001` buildsurf path and verifies
+  `Cu → A`, `ES → Ac1`, `Cu-S → Ac2`, `Cu-S-1 → Ac3`, plus the runtime
+  `chargetrf_type = [1, 1, 1]` mapping.
+- **Root cause:** `build_interface_full` assigned the upper active layers to
+  the vacuum frozen type on the `A | vacuum` path. The resulting metal/vacuum
+  reference charge entered compensation, the Madelung kernel, and alignment as
+  if it were a local active-layer deviation. The vacuum path now references
+  all active layers to region A, matching `buildsurf`.
+- **Compensation audit:** with the centered 49-row synthetic stack, rows 23
+  and 27 are the innermost frozen sites; vacuum has zero N(E_F) weight, so the
+  compensation weights are `1.0 / 0.0` and `Q=0`.
+- **Residual numerical behavior:** the undamped three-layer alignment/vacuum
+  feedback can still oscillate or grow from a bad initial offset. The existing
+  internal `vmix` control is now exposed in `&charge`; VAL-15 uses `vmix=0.2`
+  and records finite potential/profile and buffer evidence. The physical
+  vacuum-onset warning remains intentional.
+- **Evidence:** [VAL-15 multilayer vacuum report](../docs/dev/VAL-15_MULTILAYER_VACUUM_ELECTROSTATICS.md)
+  and the registered `Val15MultilayerVacuumElectrostatics` validation.
+- **Scope:** `A | vacuum-gap | B` remains unavailable; the current
+  three-region registry does not express a four-region geometry.
 
 ## [RESOLVED 2026-08-16] Magnetic constraining field was a no-op
 

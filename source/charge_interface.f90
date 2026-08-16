@@ -182,6 +182,13 @@ contains
       if (ideep_lo >= 1 .and. ideep_lo <= nsite) tdq(ideep_lo) = tdq(ideep_lo) - resid*wgt_lo
       if (ideep_hi >= 1 .and. ideep_hi <= nsite) tdq(ideep_hi) = tdq(ideep_hi) - resid*wgt_hi
 
+      if (rank == 0) then
+         call g_logger%info('interfacepot: compensation rows low/high='//fmt('i0', ideep_lo)//'/'// &
+                            fmt('i0', ideep_hi)//' N(E_F)='//fmt('es12.4', nef_lo)//'/'// &
+                            fmt('es12.4', nef_hi)//' weights='//fmt('f10.6', wgt_lo)//'/'// &
+                            fmt('f10.6', wgt_hi), __FILE__, __LINE__)
+      end if
+
       ! --- 3. The moments Q and P (§1.4), reported every iteration ----------
       qtot = 0.0d0
       ptot = 0.0d0
@@ -283,6 +290,15 @@ contains
                this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad*(1.0d0 - this%vmix)
          end do
       end do
+
+      if (rank == 0) then
+         do atomrec = 1, this%lattice%nrec
+            call g_logger%info('interfacepot: active type '//fmt('i0', atomrec)// &
+                               ' vmad='//fmt('f12.6', &
+                               this%symbolic_atom(this%lattice%nbulk + atomrec)%potential%vmad), &
+                               __FILE__, __LINE__)
+         end do
+      end if
 
       call this%overlap_diagnostic(zsite, wsite, nsite)
 
