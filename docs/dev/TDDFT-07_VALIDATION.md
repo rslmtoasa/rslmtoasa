@@ -1,5 +1,15 @@
 # TDDFT-07: transverse LR-TDDFT validation campaign
 
+## VAL-18 bcc Fe result
+
+The first material campaign is documented in
+[VAL-18](VAL-18_TDDFT_BCC_FE.md). It is a deliberate **failed** gate: raw
+pair-potential Γ diagnostics are excellent, but the legacy Ward quality is
+not mesh-stable, the fixed small-q zero-intercept fit is rejected, the
+pair-potential mode fits are incoherent, and the independent Jij record is
+incomplete. Fe maturity remains Experimental. The protocol checklist below
+therefore remains open; no criterion was loosened.
+
 ## Current status
 
 The validation machinery is in place and the small deterministic gate passes.

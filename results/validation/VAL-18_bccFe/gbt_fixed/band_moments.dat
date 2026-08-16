@@ -1,0 +1,18 @@
+# Band Moments
+# Method: tetrahedron
+# Temperature: 300.0000 K
+# Fermi level:    -0.067031 Ry
+# Format: site, orbital_type, spin, m0, m1, m2
+# Orbital types: 1=s, 2=p, 3=d, 4=f
+# Spin: 1=up, 2=down
+# m0 = integrated DOS up to Fermi level with Fermi-Dirac weighting
+# m1 = center of gravity (occupied states)
+# m2 = width of occupied states
+  1  1  1    0.333595   -0.461174    0.145053
+  1  1  2    0.355913   -0.437125    0.131711
+  1  2  1    0.368411   -0.306135    0.122643
+  1  2  2    0.444315   -0.246704    0.122215
+  1  3  1    4.342759   -0.233683    0.101350
+  1  3  2    2.155007   -0.209827    0.074830
+  1  4  1    0.000000    0.000000    0.000000
+  1  4  2    0.000000    0.000000    0.000000

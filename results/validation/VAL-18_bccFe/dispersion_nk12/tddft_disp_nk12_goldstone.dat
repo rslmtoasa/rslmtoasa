@@ -1,0 +1,74 @@
+# legacy Xi = chi_KS K_perp; K_perp provenance = xc_response_kernel
+# raw Goldstone diagnostics are retained for every non-off mode
+# legacy_site_scalar_correction_requested = F
+# legacy_site_scalar_correction_applied = F
+# legacy_site_scalar_correction_disabled = F
+# raw_available = T
+raw_closest_eigenvalue   9.9493969959497175E-01  -1.3509270849386339E-19
+raw_closest_eigenvalue_distance  5.0603004050282507E-03
+raw_magnetization_overlap  1.0000000000000000E+00
+raw_left_magnetization_overlap  1.0000000000000000E+00
+raw_biorthogonal_magnetization_overlap  1.0000000000000000E+00
+raw_imaginary_norm  1.3509270849386339E-19
+raw_residual  5.0603004050282507E-03
+raw_eigenvalue 1   9.9493969959497175E-01  -1.3509270849386339E-19
+raw_closest_eigenvector 1   1.0000000000000000E+00   0.0000000000000000E+00
+raw_closest_left_eigenvector 1   1.0000000000000000E+00   0.0000000000000000E+00
+kernel_raw 1  -2.0679928245797660E-02   0.0000000000000000E+00
+# pair_potential_raw_goldstone_begin
+# legacy_site_scalar_raw_residual =   5.0603004050282507E-03
+# legacy_site_scalar_raw_magnetization_overlap =   1.0000000000000000E+00
+# pair_potential_raw_available = T
+# pair_potential_raw_residual =   3.5057154408089181E-14
+# pair_potential_raw_closest_eigenvalue =    9.9999999999996492E-01   2.1644215518175728E-18
+# pair_potential_raw_magnetization_overlap =   1.0000000000000000E+00
+# pair_potential_raw_left_magnetization_overlap =   1.0000000000000000E+00
+# pair_potential_raw_biorthogonal_magnetization_overlap =   1.0000000000000000E+00
+# pair_potential_raw_imaginary_norm =   2.1644215518175728E-18
+# pair_potential_static_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
+# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator
+# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis
+# signed_moment_source = reconstructed occupied P_site sigma_z population
+# pair_potential_raw_goldstone_end
+# production_metadata_begin
+# channel = transverse
+# chi0_backend = eigenpairs
+# chi0_backend_capability = eigenpair Lehmann response
+# full_response_capability = not selected; production full response is capability-gated
+# longitudinal_capability = not selected; LLB readiness is not claimed
+# xi_backend_requested = compare
+# xi_backend_output = goldstone_compare
+# pair_potential_provenance = not used by this output
+# signed_moment_source = reconstructed occupied P_site sigma_z population
+# reciprocal_mode = ham_only
+# response_projection = site
+# q_mode = list
+# q_coordinates = direct
+# q_index = 0
+# q_direct =   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
+# k_mesh = 12 12 12
+# omega_min_Ry =   0.0000000000000000E+00
+# omega_max_Ry =   8.0000000000000002E-02
+# nomega = 401
+# eta_Ry =   1.0000000000000000E-03
+# ground_state_fermi_level_Ry =   0.0000000000000000E+00
+# electronic_temperature_K =   3.0000000000000000E+02
+# ground_state_electronic_temperature_K =   3.0000000000000000E+02
+# response_fermi_level_Ry =  -6.6796428864292573E-02
+# response_electronic_temperature_overridden = T
+# ground_state_response_electron_count =    8.0000000000000000E+00   8.0000000000085674E+00
+# static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
+# band_window_first_last =  1 0
+# occupation_prune_tolerance =   0.0000000000000000E+00
+# green_eta_Ry =   0.0000000000000000E+00
+# green_energy_window_Ry =    1.7976931348623157+308  -1.7976931348623157+308
+# green_energy_points = 2001
+# goldstone_mode = diagnose
+# goldstone_mode_migrated_from_sum_rule = F
+# goldstone_correction_requested = F
+# goldstone_correction_applied = F
+# spin_orbit_present = F
+# external_symmetry_breaking_field_present = F
+# output_chi0 output_xi output_chi output_modes output_stoner = T T T T T
+# mpi_q_owner_rank = 0
+# production_metadata_end

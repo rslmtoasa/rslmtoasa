@@ -1,0 +1,41 @@
+{
+  "material": "bcc Fe",
+  "protocol": "TDDFT-07",
+  "status": "failed",
+  "goldstone_file": "gamma_nk12/tddft_gamma_nk12_goldstone.dat",
+  "modes_file": "dispersion_nk16/tddft_disp_nk16_legacy_modes.dat",
+  "chi0_file": "dispersion_nk16/tddft_disp_nk16_q000001_chi0.dat",
+  "dyson_file": "dispersion_nk16/tddft_disp_nk16_q000001_legacy_dyson.dat",
+  "q_points": [
+    {"q_direct": [0.01, 0.0, 0.0]},
+    {"q_direct": [0.015, 0.0, 0.0]},
+    {"q_direct": [0.02, 0.0, 0.0]},
+    {"q_direct": [0.03, 0.0, 0.0]},
+    {"q_direct": [0.04, 0.0, 0.0]}
+  ],
+  "eta_sweep": [
+    {"eta_Ry": 0.0005, "observed_fwhm_Ry": 0.0014, "source": "eta_0005 grid FWHM"},
+    {"eta_Ry": 0.001, "observed_fwhm_Ry": 0.0022, "source": "eta_0010 grid FWHM"},
+    {"eta_Ry": 0.002, "observed_fwhm_Ry": 0.0028, "source": "eta_0020 grid FWHM; endpoint-censored"}
+  ],
+  "convergence": [
+    {"axis": "k_mesh", "values": ["4^3", "8^3", "12^3", "16^3"], "status": "assessed; legacy residual nonmonotonic, pair residual ~1e-14"},
+    {"axis": "band_window", "values": ["production Fe window in Fe.nml"], "status": "recorded; no independent window sweep promoted after gate failure"},
+    {"axis": "response_projection", "values": ["site"], "status": "production-supported projection recorded"},
+    {"axis": "electronic_smearing", "values": ["300 K"], "status": "fixed for the material comparison"},
+    {"axis": "eta", "values": ["0.0005", "0.001", "0.002"], "status": "swept at fixed physics; finite width is not called intrinsic damping"},
+    {"axis": "frequency_grid", "values": ["0..0.08 Ry, 401 points"], "status": "fixed for mode extraction"}
+  ],
+  "independent_comparisons": {
+    "gbt_zero_intercept_stiffness": 0.1611627081189232,
+    "gbt_relative_fit_residual": 0.05046379767895119,
+    "jij_status": "incomplete reciprocal Jij record; no stiffness claimed",
+    "comparison_status": "TDDFT inputs frozen before comparison; neither route is a passing material benchmark"
+  },
+  "acceptance": {
+    "max_raw_goldstone_residual": 0.01,
+    "min_magnetization_overlap": 0.99,
+    "max_stiffness_relative_residual": 0.1,
+    "max_eta_fit_relative_residual": 0.1
+  }
+}

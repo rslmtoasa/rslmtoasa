@@ -1,0 +1,3 @@
+# TDDFT transverse chi_KS manifest; one self-describing output file per q point
+# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file pair_raw_dyson_file
+1   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00 tddft_q000001_chi0.dat tddft_q000001_legacy_dyson.dat tddft_q000001_pair_dyson.dat

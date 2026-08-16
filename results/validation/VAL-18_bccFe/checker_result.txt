@@ -1,0 +1,12 @@
+Command:
+python3 tests/regression/tddft_validation/tddft_validation.py \
+  results/validation/VAL-18_bccFe/campaign.json \
+  --report results/validation/VAL-18_bccFe/evidence.json
+
+Exit status: 1
+Output:
+FAIL: small-q dispersion is not quadratic within the campaign limit
+
+No evidence.json was emitted because the campaign checker stops at the first
+failed gate. The complete raw production files and the failed-gate analysis
+are retained alongside this manifest.

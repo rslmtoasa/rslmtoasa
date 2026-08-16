@@ -1542,6 +1542,7 @@ contains
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
          bare_gamma_peak = -1.0_rp; legacy_gamma_peak = -1.0_rp; pair_gamma_peak = -1.0_rp
+         pair_corrected_gamma_peak = -1.0_rp
          kq_workset = reciprocal_obj%k_workset%shifted(config%q_points(:, iq))
          call cpu_time(t_profile_start)
          call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_workset%points, eigenvalues_kq, eigenvectors_kq)

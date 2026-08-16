@@ -1,0 +1,12 @@
+# Frozen-magnon sweep (calculation%post_processing = "frozen_magnon")
+# q_ss units: Cartesian 2*pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point
+# q_file coordinates: cartesian
+# omega uses eband in mode="mft" and etot in mode="scf"
+# MFT k-space omega uses E(q,theta)-E(q,theta=0); E(q,theta=0) is the same-q GBT gauge reference
+# Number of sublattices (nrec): 1
+# Format: q1 q2 q3 etot eband mtot_1 .. mtot_nrec omega
+    0.000000    0.000000    0.000000 -2.54198191E+003 -1.99882959E+000  2.08953040E+000  5.59576549E-014
+    0.000000    0.000000    0.010000 -2.54198191E+003 -1.99882901E+000  2.08953040E+000  1.18552490E-005
+    0.000000    0.000000    0.020000 -2.54198191E+003 -1.99882909E+000  2.08953040E+000  5.42104422E-005
+    0.000000    0.000000    0.030000 -2.54198191E+003 -1.99883123E+000  2.08953040E+000  1.24453219E-004
+    0.000000    0.000000    0.040000 -2.54198191E+003 -1.99883881E+000  2.08953040E+000  2.72273992E-004

@@ -1,0 +1,62 @@
+# Xi branches are frequency-local biorthogonal continuations, then continued between adjacent q points.
+# A collective candidate requires an interpolated Re(lambda_Xi)=1 crossing; Im(lambda), conditioning, and mode weight are retained.
+# FWHM = 2*HWHM. Individual fits are observed widths; eta remains numerical broadening.
+# eta_Ry =   1.0000000000000000E-03
+# profile_mode_analysis_cpu_s =   2.6029999999934716E-03
+candidate 1   3.4000000000000002E-03 1   5.8571117474321057E-03   1.0000000000000000E+00 collective Xi unity crossing
+crossing 1 T   3.3251414058214318E-03   5.8326046964424314E-03   1.0000000000000000E+00   0.0000000000000000E+00   2.6758972888984354E+03   1.0000000000000000E+00 F
+fit 1 T   3.4000000000000002E-03   2.0259445693589936E-03   1.0129722846794968E-03   5.8459311099049928E-02 accepted; observed FWHM/HWHM include numerical eta
+candidate 2   3.4000000000000002E-03 1   5.8393670679612224E-03   1.0000000000000000E+00 collective Xi unity crossing
+crossing 2 T   3.3963985309026141E-03   5.8389488703070504E-03   1.0000000000000000E+00   6.3441738646190238E-06   2.6914421338745046E+03   1.0000000000000000E+00 F
+fit 2 T   3.4000000000000002E-03   2.0022585535992392E-03   1.0011292767996196E-03   1.2842068100917663E-02 accepted; observed FWHM/HWHM include numerical eta
+candidate 3   3.4000000000000002E-03 1   5.8592391235029124E-03   1.0000000000000000E+00 collective Xi unity crossing
+crossing 3 T   3.3456270154954663E-03   5.8450959274085525E-03   1.0000000000000000E+00   6.1470571015020958E-06   2.6784078534667660E+03   1.0000000000000000E+00 F
+fit 3 T   3.4000000000000002E-03   2.0130295750715849E-03   1.0065147875357925E-03   4.5566464210433123E-02 accepted; observed FWHM/HWHM include numerical eta
+candidate 4   3.2000000000000002E-03 1   5.8753202062214261E-03   1.0000000000000000E+00 collective Xi unity crossing
+crossing 4 T   3.1446861824406644E-03   5.8608276246497346E-03   1.0000000000000000E+00   1.5731697241182056E-05   2.6709570164983656E+03   1.0000000000000000E+00 F
+fit 4 T   3.2000000000000002E-03   2.0154665812818326E-03   1.0077332906409163E-03   4.7875339746550095E-02 accepted; observed FWHM/HWHM include numerical eta
+candidate 5   3.2000000000000002E-03 1   5.7695016401988304E-03   1.0000000000000000E+00 collective Xi unity crossing
+crossing 5 T   3.2776581429581372E-03   5.7582843131192604E-03   1.0000000000000000E+00   1.0254331153047424E-04   2.7159259374870471E+03   1.0000000000000000E+00 F
+fit 5 T   3.2000000000000002E-03   2.0117699713174623E-03   1.0058849856587311E-03   5.2875005620601281E-02 accepted; observed FWHM/HWHM include numerical eta
+# production_metadata_begin
+# channel = transverse
+# chi0_backend = eigenpairs
+# chi0_backend_capability = eigenpair Lehmann response
+# full_response_capability = not selected; production full response is capability-gated
+# longitudinal_capability = not selected; LLB readiness is not claimed
+# xi_backend_requested = compare
+# xi_backend_output = legacy_site_scalar_raw
+# pair_potential_provenance = not used by this output
+# signed_moment_source = reconstructed occupied P_site sigma_z population
+# reciprocal_mode = ham_only
+# response_projection = site
+# q_mode = list
+# q_coordinates = direct
+# q_index = 0
+# q_direct =   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
+# k_mesh = 16 16 16
+# omega_min_Ry =   0.0000000000000000E+00
+# omega_max_Ry =   8.0000000000000002E-02
+# nomega = 401
+# eta_Ry =   1.0000000000000000E-03
+# ground_state_fermi_level_Ry =   0.0000000000000000E+00
+# electronic_temperature_K =   3.0000000000000000E+02
+# ground_state_electronic_temperature_K =   3.0000000000000000E+02
+# response_fermi_level_Ry =  -6.7494035553452764E-02
+# response_electronic_temperature_overridden = T
+# ground_state_response_electron_count =    8.0000000000000000E+00   7.9999999999995337E+00
+# static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
+# band_window_first_last =  1 0
+# occupation_prune_tolerance =   0.0000000000000000E+00
+# green_eta_Ry =   0.0000000000000000E+00
+# green_energy_window_Ry =    1.7976931348623157+308  -1.7976931348623157+308
+# green_energy_points = 2001
+# goldstone_mode = diagnose
+# goldstone_mode_migrated_from_sum_rule = F
+# goldstone_correction_requested = F
+# goldstone_correction_applied = F
+# spin_orbit_present = F
+# external_symmetry_breaking_field_present = F
+# output_chi0 output_xi output_chi output_modes output_stoner = T T T T T
+# mpi_q_owner_rank = 0
+# production_metadata_end
