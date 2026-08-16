@@ -592,6 +592,7 @@ contains
       real(rp), allocatable :: local_pos(:,:), local_plat(:,:)
       real(rp) :: solve_cutoff2, cell_ang, maxdist2, d2, vec_target(3)
       real(rp) :: alat_bohr
+      type(strux_options) :: local_opts
       if (.not. allocated(this%cr) .or. this%kk <= 0) then
          call g_logger%fatal('strux local backend requires a non-empty finite cluster', __FILE__, __LINE__)
       end if
@@ -670,12 +671,14 @@ contains
          end do
 
          write (17, '(a, i5, a, i6)') 'STRUX local solve center=', ii, ' nbas=', nsolve
+         local_opts = opts
+         local_opts%source_atom = 1
          select case (opts%screening_mode)
          case (STRUX_LMTO47_IALPHA_MANUAL)
-            call strux_compute(opts, nsolve, nspec, nl, alat_bohr, local_plat, local_pos, local_ips, lmxb, &
+            call strux_compute(local_opts, nsolve, nspec, nl, alat_bohr, local_plat, local_pos, local_ips, lmxb, &
                this%wav*ang2au, rmt, result, alpha_in=alpha_in)
          case default
-            call strux_compute(opts, nsolve, nspec, nl, alat_bohr, local_plat, local_pos, local_ips, lmxb, &
+            call strux_compute(local_opts, nsolve, nspec, nl, alat_bohr, local_plat, local_pos, local_ips, lmxb, &
                this%wav*ang2au, rmt, result, hcr=hcr)
          end select
 

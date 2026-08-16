@@ -488,7 +488,7 @@ subroutine salph1_lmto47_direct(nbas, nenv, nl2, ldot, ndimW, lmaxw, npr, plat, 
 end subroutine salph1_lmto47_direct
 
 subroutine strscr_lmto47(nbas, npadl, npadr, alat, plat, bas, rwats, nl, kap, nkap, lmaxw, &
-    cy, cg, indxcg, jcg, ldot, ntab, iax, alpha, adot, tral, trad, s, sdot)
+    cy, cg, indxcg, jcg, ldot, ntab, iax, alpha, adot, tral, trad, s, sdot, source_atom)
 !> Purpose:
 !>   LMTO47-style `salph0` orchestration for the supported one-kappa path.
 !> Notes:
@@ -509,12 +509,15 @@ subroutine strscr_lmto47(nbas, npadl, npadr, alat, plat, bas, rwats, nl, kap, nk
     double precision, intent(in) :: alpha(nl**2,*), adot(nl**2,*)
     double precision, intent(in) :: tral(4,nl**2,*), trad(4,nl**2,*)
     double precision, intent(inout) :: s(nl*nl, nl*nl, 1, 1, *), sdot(nl*nl, nl*nl, 1, 1, *)
+    integer, intent(in), optional :: source_atom
 
     integer :: i, ik, iat, ndimL, ndimW, nl2, ns, nsk, nitab
     integer :: offik, nbasp, nbaspp, nttab, nclus, iclus, nenv
+    integer :: iat_first, iat_last
     double precision :: xx
     real(8), allocatable :: salph(:,:,:,:), alphv(:), adotv(:), sadot(:,:,:,:)
     integer, allocatable :: sflg(:), sflgd(:)
+    logical :: source_only
 
     if (nkap /= 1) call strux_fail('strscr_lmto47: only one-kappa LMTO47 is implemented')
 
@@ -522,6 +525,14 @@ subroutine strscr_lmto47(nbas, npadl, npadr, alat, plat, bas, rwats, nl, kap, nk
     nbaspp = 2*nbasp - nbas
     nttab  = ntab(nbasp+1)
     nl2    = nl**2
+    source_only = present(source_atom) .and. source_atom > 0
+    iat_first = 1
+    iat_last = nbasp
+    if (source_only) then
+        if (source_atom > nbasp) call strux_fail('strscr_lmto47: source_atom is outside the solve cluster')
+        iat_first = source_atom
+        iat_last = source_atom
+    end if
 
     call dscal(9,        alat, plat, 1)
     call dscal(3*nbaspp, alat, bas,  1)
@@ -531,7 +542,7 @@ subroutine strscr_lmto47(nbas, npadl, npadr, alat, plat, bas, rwats, nl, kap, nk
         nitab = 0
         offik = 1 + (ik-1)*nbasp
 
-        do iat = 1, nbasp
+        do iat = iat_first, iat_last
             nclus = ntab(iat+1) - ntab(iat)
             iclus = ntab(iat) + 1
             if (iclus < 1 .or. iclus > nttab) then
@@ -566,19 +577,26 @@ subroutine strscr_lmto47(nbas, npadl, npadr, alat, plat, bas, rwats, nl, kap, nk
                 plat, bas, alphv, adotv, iax(1,iclus), cy, cg, indxcg, jcg, kap(ik), &
                 tral, trad, salph(:,1,:,1), sadot(:,1,:,1))
 
-            ns = nitab - nclus
+            if (source_only) then
+                ! ntab is a zero-based offset into the global pair table.
+                ns = ntab(iat)
+            else
+                ns = nitab - nclus
+            end if
             call addtos(nl2, ndimW, iax(1,iclus), nl2, 1, nclus, salph, ns+nsk, s)
             if (ldot) call addtos(nl2, ndimW, iax(1,iclus), nl2, 1, nclus, sadot, ns+nsk, sdot)
 
             deallocate(alphv, salph, adotv, sadot)
         end do
 
-        allocate(sflg(nitab));  call iinit(sflg,  nitab)
-        allocate(sflgd(nitab)); call iinit(sflgd, nitab)
-        call symstr(0, nl2, nttab, iax, 1, 1, sflg,  s(1,1,1,1,1+nsk), xx)
-        if (ldot) call symstr(0, nl2, nttab, iax, 1, 1, sflgd, sdot(1,1,1,1,1+nsk), xx)
-        nsk = nsk + ns + nclus
-        deallocate(sflg, sflgd)
+        if (.not. source_only) then
+            allocate(sflg(nitab));  call iinit(sflg,  nitab)
+            allocate(sflgd(nitab)); call iinit(sflgd, nitab)
+            call symstr(0, nl2, nttab, iax, 1, 1, sflg,  s(1,1,1,1,1+nsk), xx)
+            if (ldot) call symstr(0, nl2, nttab, iax, 1, 1, sflgd, sdot(1,1,1,1,1+nsk), xx)
+            nsk = nsk + ns + nclus
+            deallocate(sflg, sflgd)
+        end if
     end do
 
     call dscal(9,        1d0/alat, plat, 1)

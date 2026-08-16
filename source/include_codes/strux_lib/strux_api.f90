@@ -24,6 +24,9 @@ module strux_lib
         logical :: auto_alpha = .false.
         logical :: want_sdot = .false.
         integer :: lmaxw = -1
+        ! 0 assembles every source row; a positive value restricts the solve
+        ! to one source environment while retaining the global pair table.
+        integer :: source_atom = 0
         real(8) :: pair_cutoff = -1d0
         real(8) :: solve_cutoff = -1d0
         integer :: screening_mode = STRUX_LMTO47_IALPHA_MANUAL
@@ -92,24 +95,28 @@ subroutine strux_compute(opts, nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     if (opts%screening_mode == STRUX_LMTO47_IALPHA_FITD) then
         call strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, hcr, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
-            result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode)
+            result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
+            source_atom=opts%source_atom)
     else if (opts%screening_mode == STRUX_LMTO47_IALPHA_SIGMA) then
         if (.not. present(hcr)) call strux_fail('strux_compute: hcr is required for LMTO47 screening_mode=sigma')
         call strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, hcr, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
-            result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode)
+            result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
+            source_atom=opts%source_atom)
     else if (opts%auto_alpha) then
         if (.not. present(hcr)) call strux_fail('strux_compute: hcr is required when auto_alpha=.true.')
         call strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, hcr, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
-            result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode)
+            result%nttab, iax_full, alpha_l_used, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
+            source_atom=opts%source_atom)
     else
         if (.not. present(alpha_in)) call strux_fail('strux_compute: alpha_in is required unless automatic LMTO47 screening is selected')
         allocate(alpha_l_used(0:nl-1, nspec))
         alpha_l_used = alpha_in
         call strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
             rmt, alpha_in, avw, solve_cutoff, opts%lmaxw, opts%want_sdot, &
-            result%nttab, iax_full, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode)
+            result%nttab, iax_full, alpha_full, s_full, sdot_full, screening_mode=opts%screening_mode, &
+            source_atom=opts%source_atom)
     end if
 
     call move_alloc(alpha_l_used, result%alpha_l)
@@ -193,7 +200,7 @@ end subroutine pair_vector
 
 subroutine strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     rmt, alpha_in, avw, rmax, lmaxw, ldot, &
-    nttab, iax, alpha_out, s_out, sdot_out, hcr, screening_mode)
+    nttab, iax, alpha_out, s_out, sdot_out, hcr, screening_mode, source_atom)
     implicit none
     integer,  intent(in)  :: nbas, nspec, nl, lmaxw
     logical,  intent(in)  :: ldot
@@ -207,7 +214,7 @@ subroutine strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     double precision, intent(inout), allocatable :: s_out(:,:,:)
     double precision, intent(inout), allocatable :: sdot_out(:,:,:)
     double precision, intent(in), optional :: hcr(nl, nspec)
-    integer, intent(in), optional :: screening_mode
+    integer, intent(in), optional :: screening_mode, source_atom
 
     integer :: nl2, ntab_arr(nbas+1)
     double precision :: cy(100), cg(1200), kap1(1)
@@ -250,7 +257,7 @@ subroutine strux_lmto47(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
 
     call strscr_lmto47(nbas, 0, 0, alat/avw, plat_loc, bas_loc, rwats, &
         nl, kap1, 1, lmaxw, cy, cg, indxcg, jcg, ldot, &
-        ntab_arr, iax, alpha_out, adot, tral, trad, s_work, sdot_work)
+        ntab_arr, iax, alpha_out, adot, tral, trad, s_work, sdot_work, source_atom)
 
     s_out = s_work(:,:,1,1,:)
     if (ldot) sdot_out = sdot_work(:,:,1,1,:)
@@ -260,7 +267,7 @@ end subroutine strux_lmto47
 
 subroutine strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     rmt, hcr, avw, rmax, lmaxw, ldot, &
-    nttab, iax, alpha_l_out, alpha_out, s_out, sdot_out, screening_mode)
+    nttab, iax, alpha_l_out, alpha_out, s_out, sdot_out, screening_mode, source_atom)
     implicit none
     integer,  intent(in)  :: nbas, nspec, nl, lmaxw
     logical,  intent(in)  :: ldot
@@ -274,7 +281,7 @@ subroutine strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
     double precision, intent(inout), allocatable :: alpha_out(:,:)
     double precision, intent(inout), allocatable :: s_out(:,:,:)
     double precision, intent(inout), allocatable :: sdot_out(:,:,:)
-    integer, intent(in), optional :: screening_mode
+    integer, intent(in), optional :: screening_mode, source_atom
 
     integer :: nl2, ntab_arr(nbas+1)
     double precision :: cy(100), cg(1200), kap1(1)
@@ -312,7 +319,7 @@ subroutine strux_lmto47_autoalpha(nbas, nspec, nl, alat, plat, pos, ips, lmxb, &
 
     call strscr_lmto47(nbas, 0, 0, alat/avw, plat_loc, bas_loc, rwats, &
         nl, kap1, 1, lmaxw, cy, cg, indxcg, jcg, ldot, &
-        ntab_arr, iax, alpha_out, adot, tral, trad, s_work, sdot_work)
+        ntab_arr, iax, alpha_out, adot, tral, trad, s_work, sdot_work, source_atom)
 
     s_out = s_work(:,:,1,1,:)
     if (ldot) sdot_out = sdot_work(:,:,1,1,:)
