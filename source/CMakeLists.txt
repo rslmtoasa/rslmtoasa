@@ -22,6 +22,7 @@ add_library(${PROJECT_NAME} STATIC
     element.f90
     energy.f90
     exchange.f90
+    exchange_dynamics.f90
     face.F90
     frozen_magnon.f90
     globals.f90
