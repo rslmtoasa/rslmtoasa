@@ -9,6 +9,7 @@ add_library(${PROJECT_NAME} STATIC
     calculation_preprocessing.f90
     calculation_reciprocal.f90
     charge.f90
+    charge_interface.f90
     charge_madelung_2d.f90
     chebyshev_fast.f90
     haydock_fast.f90
