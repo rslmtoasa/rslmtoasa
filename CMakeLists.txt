@@ -474,6 +474,13 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val05_green_convergence")
   set_tests_properties(Val05GreenConvergence PROPERTIES
     LABELS "validation;functional;green;lehmann;dyson;kspace;rs;convergence" TIMEOUT 1800)
+
+  add_test(NAME Val07ExchangeFormulations
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val07_exchange_formulations.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val07_exchange_formulations")
+  set_tests_properties(Val07ExchangeFormulations PROPERTIES
+    LABELS "validation;functional;exchange;magnetic;tensor;multisite" TIMEOUT 600)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
