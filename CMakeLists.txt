@@ -516,6 +516,14 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val15_multilayer_vacuum")
   set_tests_properties(Val15MultilayerVacuumElectrostatics PROPERTIES
     LABELS "validation;functional;electrostatics;vacuum;green;convergence" TIMEOUT 1800)
+
+  add_test(NAME Val16GbtCommensurateSupercells
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val16_gbt_supercell.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val16_gbt_supercell")
+  set_tests_properties(Val16GbtCommensurateSupercells PROPERTIES
+    LABELS "validation;functional;magnetic;supercell;commensurate;convergence"
+    TIMEOUT 14400)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

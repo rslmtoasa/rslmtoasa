@@ -613,16 +613,16 @@ campaign remain outside the established scope.
   All four `WP9CommensurateSupercell_*` cases still **FAIL** their derived
   tolerances — but now on the band-energy residual alone, not the moment
   direction. That residual is real, smaller, and separate; see below.
-- **What remains open (the actual physics question, not a fixture bug):**
-  a band-energy gap of 7.2e-4–6.0e-3 Ry/atom (MFT leg, larger for the
-  6-atom q033 case than the 4-atom q050 case) and 2.7-2.8e-4 Ry/atom (SCF
-  leg, q050 only) between the `gbt_single_q` single-atom result and the
-  explicit lab-frame supercell, exceeding tolerances derived with 6x+
-  headroom over the measured noise floor. Leading hypothesis, not confirmed:
-  the MFT leg's frozen starting potential is carried over from the older
-  `3fd21c0` kernel and may not be self-consistent under the current one
-  (the SCF leg, which lets the same starting potential relax, shows a
-  smaller gap, consistent with this). Not traced to a specific source line.
+- **Historical residual, resolved and re-scoped by VAL-16:** a band-energy
+  gap of 7.2e-4–6.0e-3 Ry/atom was measured when the MFT leg reused the
+  `3fd21c0` potential. Refreshing the explicit q=1/2 and q=1/3 states with the
+  current executable and using those outputs on both sides reduced the gaps
+  to 6.25e-5 and 2.28e-4 Ry/atom, respectively. The stale-potential
+  hypothesis is therefore confirmed as the source of the large historical
+  residual. The remaining small residual is an operator-level limitation of
+  the unmatched finite real-space clusters: primitive-bcc and custom
+  commensurate-supercell bases produce different finite pair/structure-
+  constant truncations before diagonalization. See `docs/dev/VAL-16_GBT_SUPERCELL.md`.
 - **Time-reversal checked and ruled out as a contributor to this specific
   finding** (WP9 integrator, 2026-08-07, prompted by a question about
   local/global axis handling): `force_full_bz_for_nonzero_q_gbt`
@@ -638,9 +638,9 @@ campaign remain outside the established scope.
   `gbt_contract_collinear`'s call site in `build_gbt_bulkham`, and the `hoh`
   default (`source/hamiltonian_build.f90:559`, confirms `build_obarm`/
   `build_enim` are dead code for these `hoh`-unset decks), plus the
-  before/after `mom` experiment run directly. The remaining band-energy
-  residual's cause (stale starting potential) is still a guess, not traced
-  further.
+  before/after `mom` experiment run directly. VAL-16 additionally compared
+  current-kernel refreshed potentials and isolated the remaining finite-cluster
+  operator mismatch before the eigenvalue/energy stage.
 - **Original symptom, verified directly (build_13 binary, current `fable_v2_gbt_v2`
   HEAD, bcc Fe, `alat=2.8612`, `nsp=3`, `recur='block'`, `lld=16`,
   `strux_backend='strux_lib'`, single-atom cell, `magnetic_representation=
@@ -703,12 +703,12 @@ campaign remain outside the established scope.
   cleanly and matched `periodic_nc` — pointing at the foreign starting
   potential, not `gbt_single_q` itself, consistent with the current
   understanding above.
-- **Remaining follow-up (not applied, unrelated to the fix above):**
-  diagnose the band-energy residual described in the "what remains open"
-  paragraph above — likely start by regenerating the MFT leg's frozen
-  starting potential from an SCF convergence under the *current* kernel
-  rather than reusing the `3fd21c0` state, to test the leading hypothesis
-  directly. Estimated size: small, mostly rerunning with a modified fixture.
+- **VAL-16 follow-up:** the current-kernel regeneration campaign is now
+  `tests/validation/val16_gbt_supercell.py`. It requires a fresh current-code
+  SCF convergence before running separate MFT and SCF comparisons and does
+  not apply an energy offset. Exact band-energy equality is not claimed for
+  the existing unmatched finite real-space clusters; a matched-operator or
+  periodic/k-space construction is the remaining future scope.
 - **Found:** WP9 Battery A (commensurate-supercell known-answer test), while
   porting the `3fd21c0` supercell decks to the current architecture; root
   cause traced by the WP9 integrator the same day after a targeted question
