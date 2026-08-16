@@ -3,8 +3,13 @@
 A cheat-sheet for humans and AI assistants: for each workflow, the entry
 point, the classes involved, the hot kernels, and where new functionality
 plugs in. Every pointer below was checked against the code at the time of
-writing (Phase 2, P8) — if something has moved, trust the code and fix this
-file, not the other way around.
+writing — if something has moved, trust the code and fix this file, not the
+other way around.
+
+For the stabilized core architecture, module/submodule ownership, protected
+atomic LMTO region, test taxonomy, fixture vocabulary, and the Phase-I gate
+record, start with [Phase-I stabilization status](dev/PHASE_I_STABILIZATION.md).
+This map then provides the detailed workflow-level entry points and kernels.
 
 ---
 
@@ -37,7 +42,7 @@ shared Fortran state.
 | `pre_processing` | `'newclubulk'` | `pre_processing_newclubulk` | Impurity-in-bulk (`calctype='I'`, bulk host). `newclu()`, no `build_surf_full()`. |
 | `pre_processing` | `'newclusurf'` | `pre_processing_newclusurf` | Impurity-in-surface. `build_surf_full()` + `newclu()`. **No example/test input anywhere uses this route** (see `tests/KNOWN_ISSUES.md`). |
 | `pre_processing` | `'buildinterface'` | `pre_processing_buildinterface` | Two-sided layered/interface SCF (`calctype='L'`, B7.5). `build_interface_full()` (region A \| active \| region B), then `surfmat()` (kernel reused unchanged) with its one-sided registry overwritten by `charge%build_interface_registry()`. Per-iteration Madelung update is `charge%interfacepot`, not `surfpot` (`self.f90` dispatch). `buildsurf` itself is untouched and remains the permanent one-sided regression oracle. |
-| `processing` | `'sd'` | `processing_sd` | Spin dynamics. **Known bug:** its pre-processing block is hardcoded to the `newclusurf` sequence regardless of the case's actual route — see `tests/KNOWN_ISSUES.md`. |
+| `processing` | `'sd'` | `processing_sd` | Spin dynamics. Rebuilds its consumer stack from the selected pre-processing route; `Example_bulk_bccFe_sd_smoke` covers one production step. The remaining impurity-SD output-path limitation is recorded in `tests/KNOWN_ISSUES.md`. |
 | `post_processing` | `'exchange'` | `post_processing_exchange` | Real-space intersite J_ij/D_ij. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
@@ -111,15 +116,17 @@ calculation.f90: run_intersite_moments(control_obj, recursion_obj)
 ### Spin dynamics
 ```text
 calculation%processing_sd()
-  -> self(bands_obj, mix_obj)         ! constructed but NOT run() here —
-                                       ! spin_dynamics%sd_run() calls self%run() itself
+  -> prepare_post_processing_stack(..., preprocessing_route=this%pre_processing)
+       rebuilds the selected route's consumer stack from the saved state
+  -> self(bands_obj, mix_obj)
   -> spin_dynamics(self_obj)          [spin_dynamics.f90]
        -> sd_run(): per step, self%run() -> bands%calculate_magnetic_torques()
           -> asd_pred_euler / asd_corr_euler (Landau-Lifshitz-Gilbert integrator)
        -> include_codes/abspinlib/abSpinlib.f90   (lower-level ASD numerics)
 ```
-See `tests/KNOWN_ISSUES.md` for why this route currently has no test case
-(its pre-processing is hardcoded to the never-exercised `newclusurf` shape).
+`Example_bulk_bccFe_sd_smoke` checks that a one-step production trajectory is
+emitted. It is execution coverage, not a physical validation; the remaining
+impurity-SD output-path limitation is recorded in `tests/KNOWN_ISSUES.md`.
 
 ### PAOFLOW import
 ```text
