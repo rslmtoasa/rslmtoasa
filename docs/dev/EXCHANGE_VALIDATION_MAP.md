@@ -28,8 +28,9 @@ The current production exchange workflow has three distinct consumers:
 `calculate_jij`, `calculate_jij_auxgreen`, `calculate_jijk`, and
 `calculate_exchange_rs2pao` are public methods with no current production
 callers.  `calculate_dij` and `calculate_aij` are empty public stubs.  The
-Gilbert damping method is now reachable through `calculation%do_damping`; the
-moment-of-inertia method remains public but has no caller.
+Gilbert damping is reachable through `calculation%do_damping`, and the
+experimental moment-of-inertia diagnostic is reachable through
+`calculation%do_inertia`.
 
 The strongest already-established route oracle is:
 
@@ -360,7 +361,7 @@ exchange-formula oracles for J/D/A.
 | Method | Physical quantity and formulation | Inputs/assumptions and outputs | Callers/tests and valid oracle |
 |---|---|---|---|
 | `calculate_gilbert_damping` | Kamberský torque-correlation tensor.  Forms (A_{ij}=G_{ij}-G_{ji}^\dagger), contracts it with `hamiltonian%tmat`, and evaluates the tensor at the energy mesh point nearest (E_F). | Requires `nsp=2` and SOC torque operators.  The source torque builder is the SOC commutator (T^a=[\sigma^a,H_{SOC}]).  Writes `damping-energy.out` and `alldampings.out`; the latter includes `0.5*(xx+yy)`. | Called from `post_processing_exchange` only when `do_damping=T`, using the same `green%gij/gji` route selected for exchange.  `Triad_triad_bccFe_damping` checks recursion/Lehmann/Dyson alpha: Lehmann and Dyson are tight; recursion is a broadening envelope.  It is not an oracle for J/D/A.  Literature documented in source docs: Miranda et al., PRM **2**, 013801 (2018), and Ebert et al., PRL **107**, 066603 (2011). |
-| `calculate_moment_of_inertia` | Experimental torque-correlation/inertia quantity using anti-Hermitian and Hermitian GF parts plus a numerical second energy derivative of the Hermitian part. | Requires `nsp=2`; uses `tmat`, `gij/gji`, the energy step, and pair list.  Writes `example-real.out` and `example-imag.out`. | No caller and no test.  A future oracle would be a converged finite-difference/derivative campaign against the same production GF, not J/D/A or damping equality.  Source comment cites Sci. Rep. **7**, 931 (2017). |
+| `calculate_moment_of_inertia` | Experimental torque-correlation/inertia quantity using anti-Hermitian and Hermitian GF parts plus a numerical second energy derivative of the Hermitian part. | Requires `nsp=2`; uses `tmat`, `gij/gji`, the uniform energy step, and pair list.  `do_inertia=T` writes `example-real.out`, `example-imag.out`, `inertia-energy.out`, and raw Fermi-point tensors in `allinertias.out`. | VAL-08 finds a symmetry-consistent SOC-zero limit, but the raw imaginary tensor changes strongly with energy resolution and no independent normalization/production relation exists.  It remains Experimental; do not compare it to J/D/A or damping as an oracle.  Source comment cites Sci. Rep. **7**, 931 (2017). |
 
 ## Call-site map
 
@@ -373,6 +374,7 @@ calculation%post_processing='exchange'
   -> exchange%calculate_exchange
   -> exchange%calculate_exchange_twoindex
   -> [do_damping] exchange%calculate_gilbert_damping
+  -> [do_inertia] exchange%calculate_moment_of_inertia (experimental raw kernel)
 
 calculation%post_processing='exchange_p2rs'
   -> PAOFLOW Hamiltonian import
@@ -397,7 +399,7 @@ name `exchange_p2rs` selects the Gauss-Legendre method instead.
 | `Example_exchange_bccFe_hoh` | Same consumers with `hoh=.true.` | J and D reference columns for two pairs | Same A/two-index omissions; HOH/native agreement is not asserted |
 | `Example_paoflow_exchange_p2rs_bccFe` | `calculate_exchange_gauss_legendre` after PAOFLOW import | J and D reference columns for two pairs | No A check and no Simpson-versus-Gauss equivalence; does not call `calculate_exchange_rs2pao` |
 | `Triad_triad_bccFe_jij` | `calculate_exchange` for recursion, Lehmann, Dyson | two J shells; Lehmann==Dyson tight and recursion/Lehmann ratio envelope | No D/A/two-index validation; route comparison is not a fixed-broadening equality |
-| `Triad_triad_bccFe_damping` | `calculate_gilbert_damping` on the same route dispatch | on-site alpha, with SOC and HOH | No inertia or J/D/A tensor assertion |
+| `Triad_triad_bccFe_damping` | `calculate_gilbert_damping` on the same route dispatch | on-site alpha, with SOC and HOH | No inertia or J/D/A tensor assertion; VAL-08 supplies the damping convergence and tensor diagnostics |
 | `Val05GreenConvergence` | upstream RS/Lehmann/Dyson GF production and direct block diagnostics | GF k/eta/window convergence, DOS, and Sigma=0 Dyson==Lehmann | It does not run exchange consumers |
 | `UnitLehmannChain`, `UnitDysonEquivalence`, `UnitGammaSupercell` | upstream reciprocal GF/kernel contracts | chain, backend equivalence, and intersite normalization identities | No end-to-end J/D/A output |
 
@@ -457,10 +459,10 @@ files were changed for this audit.
 7. **P2 — spin-lattice coupling.** If `calculate_jijk` is made reachable,
    validate its nine components against symmetric finite differences in the
    specified displacement direction, including the `wav` unit conversion.
-8. **P3 — dormant import and inertia routes.** First repair/verify their
-   call/output contracts, then validate native/PAOFLOW round trips and the
-   inertia derivative campaign.  Current test absence is a scope limitation,
-   not evidence of correctness.
+8. **P3 — inertia and dormant import routes.** The VAL-08 wiring and output
+   contract make the inertia derivative campaign runnable, but its strong
+   energy-resolution dependence and absent independent normalization keep it
+   Experimental.  Native/PAOFLOW round trips remain a separate priority.
 
 ## VAL-06 checklist
 

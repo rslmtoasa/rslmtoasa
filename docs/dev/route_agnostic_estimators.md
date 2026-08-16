@@ -100,20 +100,20 @@ out of scope.
 - `recursion` vs `lehmann`: ratio in `[0.97, 1.03]` (~0.15 % on this coarse mesh;
   tightens with N_k). This IS the KPM error bound.
 
-## α — Gilbert damping (reserved for B5.3)
+## α — Gilbert damping (B5.3 / VAL-08)
 
-The Kamberský torque-correlation damping runs on the `gij_eta` ladder, which all
-three routes fill (B2.3), so it runs on Lehmann/Dyson input as-is. The α triad and
-the **η → 0 extrapolation protocol** — documented once, here — are the B5.3
-deliverable (which also audits whether the current implementation carries the
-SOC-derivative torque operators or only the exchange-torque flavor). Placeholder
-so the protocol lives in one place:
+The Kamberský torque-correlation damping consumes the canonical energy-grid
+`green%gij/gji` arrays filled by all three route dispatches. The current
+operator audit and convergence campaign are recorded in
+[`VAL-08_DAMPING_INERTIA.md`](VAL-08_DAMPING_INERTIA.md).
 
-- α is evaluated on the `gij_eta` Fermi-point ladder; like J_ij it is
-  broadening-defined, so the route comparison is an **η-band**, extrapolated
-  η → 0 (with N_k → ∞ jointly for the k-space routes). The band and the reference
-  η-grid are pinned when B5.3 lands; `lehmann ≡ dyson` will again be the tight
-  invariant.
+- α is evaluated at the energy point nearest (E_F), with the damping tensor
+  prefactor and SOC-derivative torque convention documented in VAL-08. It is
+  broadening-defined, so recursion versus Lehmann is an eta/k-mesh envelope,
+  not equality at fixed finite eta. The current on-site bcc-Fe measurements
+  are (0.001341155) (recursion, (N_k=8^3)), (0.002527619) (Lehmann,
+  (N_k=12^3)), and (0.002682953) (Lehmann/Dyson, (N_k=8^3,\eta=0.02)).
+  These are convergence evidence, not an intrinsic single-eta value.
 
 ## Running the triads
 

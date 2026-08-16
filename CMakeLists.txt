@@ -481,6 +481,13 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val07_exchange_formulations")
   set_tests_properties(Val07ExchangeFormulations PROPERTIES
     LABELS "validation;functional;exchange;magnetic;tensor;multisite" TIMEOUT 600)
+
+  add_test(NAME Val08DampingInertia
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val08_damping_inertia.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val08_damping_inertia")
+  set_tests_properties(Val08DampingInertia PROPERTIES
+    LABELS "validation;functional;exchange;magnetic;damping;inertia;convergence" TIMEOUT 1800)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

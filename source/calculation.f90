@@ -157,6 +157,13 @@ module calculation_mod
       !> (bit-identical legacy: the damping routine is not invoked).
       logical :: do_damping
 
+      !> Experimental magnetic moment-of-inertia switch for exchange post-processing.
+      !> When true, evaluate the finite-difference torque-correlation kernel
+      !> (`calculate_moment_of_inertia`) on the same canonical Green functions.
+      !> This is diagnostic output only: no independent production relation or
+      !> physical normalization is implied. Default .false.
+      logical :: do_inertia
+
       !> Controller for preprocessing verbosity.
       !>
       !> Controller for preprocessing verbosity. If true, call the subroutines:
@@ -304,6 +311,7 @@ contains
       post_processing = this%post_processing
       gf_route = this%gf_route
       do_damping = this%do_damping
+      do_inertia = this%do_inertia
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -332,6 +340,7 @@ contains
       this%post_processing = post_processing
       this%gf_route = gf_route
       this%do_damping = do_damping
+      this%do_inertia = do_inertia
 
       close (funit)
    end subroutine build_from_file
@@ -828,6 +837,9 @@ contains
       ! kspace_ham_order='second'.
       if (this%do_damping) then
          call exchange_obj%calculate_gilbert_damping()
+      end if
+      if (this%do_inertia) then
+         call exchange_obj%calculate_moment_of_inertia()
       end if
    end subroutine post_processing_exchange
 
@@ -2578,6 +2590,7 @@ contains
       this%post_processing = 'none'
       this%gf_route = 'recursion'
       this%do_damping = .false.
+      this%do_inertia = .false.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
