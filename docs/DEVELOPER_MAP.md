@@ -42,7 +42,7 @@ shared Fortran state.
 | `pre_processing` | `'newclubulk'` | `pre_processing_newclubulk` | Impurity-in-bulk (`calctype='I'`, bulk host). `newclu()`, no `build_surf_full()`. |
 | `pre_processing` | `'newclusurf'` | `pre_processing_newclusurf` | Impurity-in-surface. `build_surf_full()` + `newclu()`. **No example/test input anywhere uses this route** (see `tests/KNOWN_ISSUES.md`). |
 | `pre_processing` | `'buildinterface'` | `pre_processing_buildinterface` | Two-sided layered/interface SCF (`calctype='L'`, B7.5). `build_interface_full()` (region A \| active \| region B), then `surfmat()` (kernel reused unchanged) with its one-sided registry overwritten by `charge%build_interface_registry()`. Per-iteration Madelung update is `charge%interfacepot`, not `surfpot` (`self.f90` dispatch). `buildsurf` itself is untouched and remains the permanent one-sided regression oracle. |
-| `processing` | `'sd'` | `processing_sd` | Spin dynamics. Rebuilds its consumer stack from the selected pre-processing route; `Example_bulk_bccFe_sd_smoke` covers one production step. The remaining impurity-SD output-path limitation is recorded in `tests/KNOWN_ISSUES.md`. |
+| `processing` | `'sd'` | `processing_sd` | Spin dynamics. Rebuilds its consumer stack from the selected pre-processing route; the Depondt predictor/corrector now performs a predictor electronic refresh, corrected update, and post-correction electronic refresh. `Val13AbInitioSpinDynamics` validates the deterministic one-site bcc-Fe zero-torque loop; `Example_impurity_B2FeCo_sd_smoke` covers the production impurity output path. Broader dynamics remain out of scope. |
 | `post_processing` | `'exchange'` | `post_processing_exchange` | Real-space intersite J_ij/D_ij; optional `do_damping=T` evaluates the route-agnostic Gilbert tensor and optional `do_inertia=T` emits the experimental raw magnetic-inertia diagnostic. Both consume the canonical Green functions filled by `gf_route`. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
@@ -125,11 +125,12 @@ calculation%processing_sd()
        -> include_codes/abspinlib/abSpinlib.f90   (lower-level ASD numerics)
 ```
 `Example_bulk_bccFe_sd_smoke` checks that a one-step production trajectory is
-emitted. The LMTO field/torque seam feeding this workflow is validated
-separately by [`VAL-12`](dev/VAL-12_LMTO_MAGNETIC_FIELDS_TORQUES.md); the smoke
-test remains execution coverage, not a long-trajectory validation. The
-remaining impurity-SD output-path limitation is recorded in
-`tests/KNOWN_ISSUES.md`.
+emitted. The deterministic one-site zero-torque loop is validated by
+[`VAL-13`](dev/VAL-13_AB_INITIO_SPIN_DYNAMICS.md), using the LMTO field/torque
+seam from [`VAL-12`](dev/VAL-12_LMTO_MAGNETIC_FIELDS_TORQUES.md) and the
+Depondt evidence from [`VAL-11`](dev/VAL-11_ABSPINLIB_INTEGRATORS.md). The
+impurity output path has a production smoke, but broader impurity physics and
+general trajectories remain outside the scoped claim.
 
 ### PAOFLOW import
 ```text

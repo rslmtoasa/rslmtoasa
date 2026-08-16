@@ -127,6 +127,23 @@ module bands_mod
 
 contains
 
+   !> Return a stable per-site output stem for diagnostic files.
+   !> Impurity/post-processing stacks may carry a site whose element metadata
+   !> is not populated even though its potential is valid.  Output naming is
+   !> owned here, so retain the magnetic/orbital output with a deterministic
+   !> site name instead of passing an empty filename to the runtime.
+   function site_output_stem(symbol, site) result(stem)
+      character(len=*), intent(in) :: symbol
+      integer, intent(in) :: site
+      character(len=64) :: stem
+
+      if (len_trim(symbol) > 0) then
+         stem = trim(symbol)
+      else
+         write(stem, '(A,I0)') 'atom', site
+      end if
+   end function site_output_stem
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -1391,6 +1408,9 @@ contains
 
       integer :: na_loc, unitmag
       character(len=256) :: fnamemag
+      character(len=64) :: output_stem
+      integer :: io_stat
+      character(len=256) :: io_msg
       real(rp), allocatable :: mag_comm(:, :)
 
       call this%calculate_projected_dos()
@@ -1424,10 +1444,15 @@ contains
             end if
          end if
 
-         fnamemag = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol)//'_'// &
+         output_stem = site_output_stem(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol, na)
+         fnamemag = trim(output_stem)//'_'// &
                     trim(adjustl(fmt('i0', na)))//"_spinene.out"
          unitmag = 1000 !rank * 123 + na
-         open(unit=unitmag, file=fnamemag, status='replace', action='write')
+         open(unit=unitmag, file=fnamemag, status='replace', action='write', iostat=io_stat, iomsg=io_msg)
+         if (io_stat /= 0) then
+            call g_logger%error('calculate_magnetic_moments: failed to open '//trim(fnamemag)//' iostat='//fmt('i8', io_stat)//' msg='//trim(io_msg), __FILE__, __LINE__)
+            error stop 'calculate_magnetic_moments: failed to open magnetic DOS output file'
+         end if
 
          do ie = 1, this%en%channels_ldos + 10
             mxe = 0.0d0; mye = 0.d00; mze = 0.0d0
@@ -1799,7 +1824,7 @@ contains
          call simpson_m(ly, this%en%edel, this%en%fermi, this%nv1, lyi, this%e1, 0, this%en%ene)
          call simpson_m(lz, this%en%edel, this%en%fermi, this%nv1, lzi, this%e1, 0, this%en%ene)
 
-         fnameorb = trim(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol) // "_orbene.out"
+         fnameorb = trim(site_output_stem(this%symbolic_atom(this%lattice%nbulk + na)%element%symbol, na)) // "_orbene.out"
          open(newunit=unitorb, file=fnameorb, status='replace', action='write', iostat=io_stat, iomsg=io_msg)
          if (io_stat /= 0) then
             call g_logger%error('calculate_orbital_moments: failed to open '//trim(fnameorb)//' iostat='//fmt('i8', io_stat)//' msg='//trim(io_msg), __FILE__, __LINE__)

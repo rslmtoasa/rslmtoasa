@@ -144,7 +144,7 @@ benchmarking.  Compilation or an unasserted smoke run alone is insufficient.
 | Reciprocal Green function / Lehmann route | Experimental | Unit-level chain coverage exists, but the Phase-I gate has no broad material-level validation for all downstream consumers |
 | Exchange and conductivity | Validated | `quick` exchange coverage and the `conductivity` functional group, including Pt and PAOFLOW routes |
 | Interfaces and vacuum leads | Experimental | Focused unit/wiring and Cu fixtures exist; unresolved interface/vacuum limitations remain below |
-| Spin dynamics | Experimental | The bulk production-step smoke remains non-physical; VAL-11 separately validates the deterministic abspinlib Depondt solver only for its scoped prescribed-field problems |
+| Spin dynamics | Experimental (scoped equilibrium loop validated in VAL-13) | The deterministic one-site bcc-Fe LMTO-to-Depondt-to-electronic-refresh loop is validated in VAL-13; the broader spin-dynamics family remains outside the claim |
 | TDDFT / response | Development | Extensive conventions and unit tests exist, but active response work and limited end-to-end validation remain |
 | GPU reciprocal acceleration | Development | Not part of this CPU Debug gate; no production-maturity evidence is recorded here |
 

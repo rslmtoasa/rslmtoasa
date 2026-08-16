@@ -899,6 +899,26 @@
       }
     },
     {
+      "name": "Example_impurity_B2FeCo_sd_smoke",
+      "labels": ["functional", "sd", "magnetic", "impurity", "legacy_strux"],
+      "case": "impurity/B2FeCo",
+      "timeout": 600,
+      "omp_threads": 2,
+      "_note": "Production-path impurity SD smoke. The magnetic-moment output is part of the contract; this is not a physics invariant campaign.",
+      "namelists": {
+        "lattice": { "strux_backend": "legacy" },
+        "calculation": { "processing": "sd" },
+        "control": { "nsp": 2, "recur": "block", "lld": 20 },
+        "self": { "nstep": 1 },
+        "hamiltonian": { "hoh": false },
+        "sd": { "asd_step": 1, "dt": 0.001, "alpha": 0.0, "sd_temp": 0.0 }
+      },
+      "outputs": [
+        { "file": "output.lammpstrj", "min_lines": 10 },
+        { "file": "Fe_1_spinene.out", "min_lines": 100 }
+      ]
+    },
+    {
       "name": "Example_impurity_fccCu_chebyshev",
       "labels": ["legacy_strux"],
       "case": "impurity/fccCu",

@@ -502,6 +502,13 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val12_lmto_fields_torques")
   set_tests_properties(Val12LmtoFieldsTorques PROPERTIES
     LABELS "validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc" TIMEOUT 900)
+
+  add_test(NAME Val13AbInitioSpinDynamics
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val13_abinitio_spin_dynamics.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val13_abinitio_spin_dynamics")
+  set_tests_properties(Val13AbInitioSpinDynamics PROPERTIES
+    LABELS "validation;functional;magnetic;spin_dynamics;abinitio;trajectory;convergence" TIMEOUT 1800)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################

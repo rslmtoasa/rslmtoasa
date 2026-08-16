@@ -219,12 +219,21 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   `Example_bulk_bccFe_sd_smoke` runs one production SD step and checks only
   that the trajectory is emitted. This is an execution smoke test, not
   physical validation.
-- **Remaining narrow limitation:** an exploratory `newclubulk` SD run reaches
-  the corrected prepared-stack path and reads the saved host/impurity state,
-  but later fails in the existing `bands%calculate_magnetic_moments` output
-  path when it attempts to open an empty filename. No impurity SD fixture is
-  added until that downstream output-handling issue is isolated; the normal
-  impurity SCF workflow remains covered and passing.
+- **Resolved in VAL-13:** the deterministic bulk loop now uses the production
+  abspinlib Depondt predictor/corrector with electronic refreshes around the
+  predictor and corrected moment. `Val13AbInitioSpinDynamics` validates the
+  scoped one-site zero-torque limit; `Example_bulk_bccFe_sd_smoke` remains the
+  quick execution guard.
+- **Resolved in VAL-13:** the impurity magnetic-moment output layer no longer
+  passes a blank site metadata value into an output filename. It uses a
+  deterministic `atom<N>` fallback and checks the open operation, retaining
+  the magnetic-moment output generically. `Example_impurity_B2FeCo_sd_smoke`
+  now exercises the production path and requires `Fe_1_spinene.out`.
+- **Scope limitation:** a current-head serial run of the ordinary B2FeCo deck
+  did not reproduce the historical crash after the STAB-05 stack repair, and
+  MPI launch reproduction was unavailable in the restricted environment.
+  Broader impurity and multi-site dynamics remain unvalidated; see
+  `docs/dev/VAL-13_AB_INITIO_SPIN_DYNAMICS.md`.
 
 ## `calctype = 'L'` (111) site DOS deviates ~2e-3 from bulk; (001) is exact
 
