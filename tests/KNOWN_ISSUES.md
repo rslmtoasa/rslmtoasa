@@ -4,6 +4,36 @@ Bugs surfaced while closing test-matrix coverage gaps (Phase 2, P1). Recorded
 here rather than fixed in place, per the "no further structural refactoring"
 rule for this phase — each entry is a candidate for a future bug-fix task.
 
+## Phase-II closure audit — 2026-08-17
+
+- **Resolved evidence retained:** the Phase-II compact campaigns pass for the
+  scoped VAL-04 onsite collinear LDA+U, VAL-05 Lehmann/Dyson Green-function,
+  VAL-07 exchange tensor, VAL-08 damping/inertia, VAL-09 Kubo-Bastin transport,
+  VAL-12 field/torque, VAL-13 one-site spin-dynamics, VAL-15 multilayer vacuum,
+  and VAL-17 GBT harmonic/Goldstone contracts.
+  Their material, mesh, broadening, and representation boundaries remain in
+  the feature ledger; a passing campaign does not close those limitations.
+- **Retained unresolved VAL-16 defect:** the current-head q=1/2
+  commensurate-supercell campaign did not converge its regenerated explicit
+  supercell reference within 100 steps, so no GBT/supercell comparison is
+  closed by this audit. The earlier VAL-16 report remains historical evidence
+  only; the convergence failure has not been diagnosed or relaxed by changing
+  tolerances.
+- **Retained unresolved scientific defects:** GBT small-\(q\) stiffness remains
+  mesh-sensitive (the 12³-to-16³ shift is about 55%); bcc-Fe and fcc-Ni TDDFT
+  material gates remain failed, with the raw Ward/Goldstone, mode extraction,
+  stiffness, spectral-weight, and reference-state issues recorded in
+  `VAL-18_TDDFT_BCC_FE.md` and `VAL-19_TDDFT_FCC_NI.md`.
+- **Explicit support limitations:** GBT+SOC, GBT local-cluster/impurity,
+  GBT intersite Hubbard-V, noncollinear/SOC onsite U/J, vacuum GF/self-energy,
+  and the four-region `A | vacuum-gap | B` layout are not silently promoted;
+  they remain documented as Development or unavailable combinations in
+  `docs/dev/PHASE_II_VALIDATION.md`.
+- **Audit-only build issue:** the first VAL-04/05 invocation used a stale
+  `build-rf-serial` executable and missed diagnostics that are present in the
+  current source. Rebuilding current HEAD made both campaigns pass. This was
+  a validation-environment issue, not a newly diagnosed production defect.
+
 ## RF-01 GNU debug baseline and ifx diagnostic test issues
 
 - **GNU Fortran 13.3.0 and 14.2.0, verified on 2026-08-11:** the original

@@ -5,15 +5,19 @@ scientific feature establishment.  A status applies only to the stated scope;
 it is not a claim about the whole feature family or a material benchmark unless
 the linked evidence says so.
 
+**Closure audit.** The final Phase-II review was performed on 2026-08-17. The
+rows below remain the authoritative feature maturity/support matrix. No broad
+GBT or TDDFT promotion is made: validated rows are narrow representation,
+operator, or unit contracts, while end-to-end GBT stiffness and TDDFT
+material-response scopes remain below validated status.
+
 ## Reading the ledger
 
 | Maturity | Meaning in this ledger |
 |---|---|
 | **Validated** | A direct mathematical/physical or cross-route contract and a relevant current-head test/fixture exist for the stated scope. |
 | **Experimental** | The path is implemented and has limited evidence, but its material/physical acceptance scope is still incomplete. |
-| **Development** | The path is present or partially wired, but its intended physics/support contract is not yet established; it is not promoted as validated. |
-| **Blocked** | A current known defect prevents the capability from being used as claimed. |
-| **Unavailable** | A kernel may exist, but current HEAD has no end-to-end production route. |
+| **Development** | The path is present or partially wired, its intended physics/support contract is not yet established, or the combination is explicitly unsupported. |
 
 The test taxonomy and the difference between a fixture and a material
 benchmark are defined in [Phase-I stabilization](PHASE_I_STABILIZATION.md) and
@@ -25,6 +29,7 @@ in [CMakeLists.txt](../../CMakeLists.txt) is authoritative.
 
 | Scoped capability | Maturity | Existing evidence and relevant tests/campaigns | Known defect(s) | Missing validation and promotion criterion |
 |---|---|---|---|---|
+| Protected atomic/radial/potential LMTO core | **Production** | The established Phase-I core and its existing SCF/reference contracts remain unchanged; see [Phase-I stabilization](PHASE_I_STABILIZATION.md). | No Phase-II defect is assigned to this protected baseline. | Preserve the existing contracts; new physics around it requires its own scoped evidence. |
 | Real-space recursion SCF: Block, Lanczos, and Chebyshev representative bulk paths | **Validated** | [Phase-I feature record](PHASE_I_STABILIZATION.md) and real-space functional fixtures in [SCF cases](../../tests/scf/cases.json), including bcc-Fe recursion variants; [UnitGreenLifecycle](../../tests/unit/test_green_lifecycle.f90). | No unresolved defect is recorded for this scoped baseline. | Material/convergence claims remain out of scope. Promote a new recursion regime only with a direct invariant or independent route/material contract for that regime. |
 | Real-space GF residual/Haydock scope: residual construction and lifecycle, not a general material error bound | **Validated** | [recursion interface/residual documentation](../../source/recursion.f90), [UnitGreenLifecycle](../../tests/unit/test_green_lifecycle.f90), and representative RS fixtures above. | No documented global residual-to-observable error bound. | Establish a residual stopping/error contract against DOS or GF observables before claiming quantified recursion accuracy. |
 | Reciprocal SCF, bands, and DOS: Si/sp `nsp=1` and bcc-Fe/spd `nsp=2` collinear | **Validated** | [VAL-02 convergence report](VAL-02_RECIPROCAL_SCF.md), [Phase-I reciprocal scope](PHASE_I_STABILIZATION.md), [Si RS/k-space DOS equivalence fixture](../../tests/scf/test_si_dos_equivalence.py), and value-checked reciprocal cases described in the [post-processing README](../../tests/postproc/README.md). | Fe remains finite-mesh sensitive; the 12³→16³ spread is recorded as the compact magnetic envelope, not an infinite-mesh materials benchmark. | Keep the claim within the recorded finite-temperature/finite-mesh Si and Fe fixture scope; expand with denser/shifted meshes and independent material/reference evidence. |
@@ -60,23 +65,58 @@ in [CMakeLists.txt](../../CMakeLists.txt) is authoritative.
 | LMTO magnetic fields and torques: local Antropov-style field, `m × B` torque, SOC separation, and constrained-field boundary | **Validated (scoped)** | [VAL-12 report](VAL-12_LMTO_MAGNETIC_FIELDS_TORQUES.md) and `Val12LmtoFieldsTorques` check the production field/torque relation, collinear SOC-off transverse limit, SOC-free global rotation, finite SOC torque, and the VAL-10 controlled-canting/finite-difference constraint oracle. | The electronic-energy finite-difference relation for the unconstrained LMTO field is not exposed as a fixed-potential production sweep; constraint-plus-SOC dynamics and multi-site response are not established. | Add a matched fixed-potential electronic-energy angle sweep and a multi-site/canted material campaign before broadening the field/torque claim. |
 | Ab-initio spin dynamics: deterministic one-site bcc-Fe zero-torque bulk loop | **Validated (scoped)** | [VAL-13 report](VAL-13_AB_INITIO_SPIN_DYNAMICS.md) and `Val13AbInitioSpinDynamics` exercise LMTO field/torque, abspinlib Depondt predictor/corrector, predicted/corrected electronic refresh, norm/direction, timestep, and energy-envelope checks. `Example_bulk_bccFe_sd_smoke` remains a quick execution guard; `Example_impurity_B2FeCo_sd_smoke` requires magnetic-moment output. | The historical impurity empty-site-output condition is guarded generically in the output naming layer; SOC precession, damping, thermal noise, multi-site exchange, STT/SHE, induced moments, and MPI equivalence remain unvalidated. | Add independent multi-site or controlled transverse material evidence before broadening beyond the deterministic one-site equilibrium loop. |
 | Surface SCF and bulk-host impurity SCF fixtures | **Validated** | Value-checked [surface and impurity cases](../../tests/scf/cases.json), including the [Cu cross-calctype oracle](../../tests/scf/README.md). | These routes retain explicit `legacy_strux` sentinels because the alternate backend has impractical allocations. | Validate alternate structure-constant backend support separately; do not generalize the fixture status to all surface/impurity geometries. |
-| Impurity-in-surface (`newclusurf`) | **Unavailable** | The route is listed in the [developer map](../DEVELOPER_MAP.md). | The map states that no example/test input uses it. | Add a controlled surface-host impurity fixture and a cross-route/known-limit oracle before calling this capability established. |
+| Impurity-in-surface (`newclusurf`) | **Development** | The route is listed in the [developer map](../DEVELOPER_MAP.md), but no current example/test input uses it. | No end-to-end support contract is established. | Add a controlled surface-host impurity fixture and a cross-route/known-limit oracle before calling this capability established. |
 | Layered interfaces (`calctype='L'`) | **Experimental** | [VAL-14 Cu(111) mapping report](VAL-14_CU111_INTERFACE_MAPPING.md), the [Cu cross-calctype oracle](../../tests/scf/README.md), [interface fixtures](../../tests/scf/cases.json), and [interface alignment unit test](../../tests/unit/test_interface_alignment_oracle.f90). | The orientation-specific Cu(111) DOS residual is resolved; the separate charge-row alignment behavior remains open. See [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | Resolve or bound the remaining alignment behavior with orientation/buffer convergence plus an independently justified interface observable before promotion. |
 | `A | vacuum` lead generation and interface electrostatics, multilayer scope | **Experimental** | [VAL-15 multilayer vacuum report](VAL-15_MULTILAYER_VACUUM_ELECTROSTATICS.md), [Val15MultilayerVacuumElectrostatics](../../tests/validation/val15_multilayer_vacuum.py), [UnitVacuumLead](../../tests/unit/test_vacuum_lead.f90), and [UnitVacuumRegionWiring](../../tests/unit/test_vacuum_region_wiring.f90). | The buildsurf-derived three-layer route is finite and neutral with controlled alignment damping; the vacuum-onset margin can still become physically thin, and a separate vacuum local GF is not exposed on `calctype='L'`. | Extend converged work-function/buffer campaigns and expose a vacuum local spectral observable before promotion. |
-| Vacuum GF/self-energy coupling | **Unavailable** | The current vacuum evidence is limited to the lead generator/wiring units above; the [developer map](../DEVELOPER_MAP.md) contains no vacuum-GF post-processing route. | No end-to-end vacuum Green-function consumer or validation fixture is recorded at HEAD. | Define and wire the intended GF boundary contract, then validate a known vacuum/decay limit and a coupled surface calculation. |
-| `A | vacuum-gap | B` four-region interface/vacuum layout | **Unavailable** | Scope and missing four-region layout are documented in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | The current three-region arithmetic cannot express this geometry. | Implement a four-region contract, then add region-registry, electrostatic, and end-to-end fixture evidence. |
+| Vacuum GF/self-energy coupling | **Development** | The current vacuum evidence is limited to the lead generator/wiring units above; the [developer map](../DEVELOPER_MAP.md) contains no vacuum-GF post-processing route. | No end-to-end vacuum Green-function consumer or validation fixture is recorded at HEAD; this is an explicit support limitation. | Define and wire the intended GF boundary contract, then validate a known vacuum/decay limit and a coupled surface calculation. |
+| `A | vacuum-gap | B` four-region interface/vacuum layout | **Development** | Scope and missing four-region layout are documented in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | The current three-region arithmetic cannot express this geometry; this combination is explicitly unavailable. | Implement a four-region contract, then add region-registry, electrostatic, and end-to-end fixture evidence. |
 
 ## GBT and TDDFT
 
 | Scoped capability | Maturity | Existing evidence and relevant tests/campaigns | Known defect(s) | Missing validation and promotion criterion |
 |---|---|---|---|---|
 | GBT representation and single-\(q\) bcc-Fe spiral | **Validated** | [magnetic-representation](../../tests/unit/test_magnetic_representation.f90) and [GBT structure](../../tests/unit/test_gbt_structure.f90) units; plus/minus \(q\) value fixtures in [SCF cases](../../tests/scf/cases.json). | Requires `strux_lib`; nonzero-\(q\) GBT with SOC is rejected, as recorded in [KNOWN_ISSUES](../../tests/KNOWN_ISSUES.md). | New representation/SOC combinations need their own covariance/symmetry and material evidence. |
-| GBT versus commensurate explicit supercells: aligned local observables for q=1/2 and q=1/3, with current-kernel state regeneration | **Experimental (scoped)** | [VAL-16 report](VAL-16_GBT_SUPERCELL.md), [Val16GbtCommensurateSupercells](../../CMakeLists.txt), and [current-state campaign](../../tests/validation/val16_gbt_supercell.py). | Charges, frames, and moments agree after regeneration; exact band-energy equality is not claimed for the unmatched finite real-space cluster operators. | Use matched finite-cluster operators or a periodic/k-space supercell route, then establish eigenvalue/band-energy agreement separately for MFT and SCF. |
+| GBT versus commensurate explicit supercells: aligned local observables for q=1/2 and q=1/3, with current-kernel state regeneration | **Experimental (scoped)** | [VAL-16 report](VAL-16_GBT_SUPERCELL.md) is historical evidence; [Val16GbtCommensurateSupercells](../../CMakeLists.txt) and the [current-state campaign](../../tests/validation/val16_gbt_supercell.py) remain registered. | The current-head q=1/2 regenerated explicit-supercell reference did not converge within 100 steps, so the comparison is not closed. The earlier charge/frame/moment agreement is not treated as a current pass; exact band-energy equality is also not claimed for unmatched finite-cluster operators. | Diagnose the current-state convergence failure, then use matched finite-cluster operators or a periodic/k-space supercell route and establish eigenvalue/band-energy agreement separately for MFT and SCF. |
 | GBT frozen magnons: single-sublattice bcc-Fe sweep | **Validated (scoped)** | [VAL-17 report](VAL-17_GBT_HARMONIC_GOLDSTONE.md), [Val17GbtHarmonicGoldstone](../../CMakeLists.txt), and the [frozen-magnon fixture](../../tests/scf/cases.json) pin the direct cone-angle invariant and output columns. | The same-q gauge subtraction resolves the severe angle dependence, but finite-mesh stiffness convergence remains open; no material stiffness value is promoted. | Establish a denser/shifted-mesh stiffness envelope and an independent production comparison before making a material-accuracy claim. |
 | GBT multi-sublattice automatic branches | **Experimental (scoped)** | [VAL-17 report](VAL-17_GBT_HARMONIC_GOLDSTONE.md) remeasures reciprocal FeCo Gamma, the in-phase acoustic eigenvector, the independent RS Gamma limit, and the small-q mesh axis. | The historical reciprocal Gamma gap is closed on the current route, but the 12^3-to-16^3 small-q stiffness shift is still large and finite-q RS data are not a stiffness comparator. | Converge the reciprocal small-q stiffness across denser/shifted meshes and add an independent finite-q production/reference comparison before promotion. |
 | GBT CCOR audited two-centre slice | **Experimental** | [WP6b CCOR report](GBT_WP6B_CCOR_REPORT.md) links dense/reverse-bond/Hermiticity oracles and production probes; current unit source is [test_gbt_wp6_ccor.py](../../tests/unit/test_gbt_wp6_ccor.py). | The report excludes SOC, incomplete overlap modes, local-cluster assembly, and other terms. | Expand only per combination after its algebraic covariance and end-to-end evidence exist; no broad GBT+CCOR promotion. |
 | TDDFT response kernels, \(\chi_\mathrm{KS}\), Dyson/modes, longitudinal, and four-component unit contracts | **Experimental** | Current unit registrations are in [CMakeLists.txt](../../CMakeLists.txt), with cross-milestone checks in [test_tddft_cross_milestone_equivalence.py](../../tests/unit/test_tddft_cross_milestone_equivalence.py). | No current material validation is claimed by the unit suite. | Retain the unit contracts and meet the real-material gate in the [TDDFT-07 campaign](TDDFT-07_VALIDATION.md). |
-| TDDFT transverse material response/magnons and damping interpretation | **Experimental** | Deterministic campaign checker and its limits are recorded in [TDDFT-07](TDDFT-07_VALIDATION.md); [VAL-18](VAL-18_TDDFT_BCC_FE.md) records the failed bcc-Fe gate and [VAL-19](VAL-19_TDDFT_FCC_NI.md) records the failed fcc-Ni itinerancy campaign. CMake's `TddftValidationCampaign` is tooling, not scientific regression. | The Fe gate failed on raw legacy Ward mesh stability, small-\(q\) quadratic dispersion, pair-potential mode extraction, and incomplete Jij stiffness evidence. Ni additionally has a 2 μB/non-mature reference state, orientation-dependent pair-Xi Goldstone sign, negative dynamic spectral weights, and no coherent mode; no maturity promotion is claimed. | Resolve the classified Fe and Ni blockers, then repeat raw Goldstone, convergence, independent stiffness, collective/Stoner, and multi-η evidence before any material promotion. |
+| TDDFT transverse material response/magnons and damping interpretation | **Development** | Deterministic campaign checker and its limits are recorded in [TDDFT-07](TDDFT-07_VALIDATION.md); [VAL-18](VAL-18_TDDFT_BCC_FE.md) records the failed bcc-Fe gate and [VAL-19](VAL-19_TDDFT_FCC_NI.md) records the failed fcc-Ni itinerancy campaign. CMake's `TddftValidationCampaign` is tooling, not scientific regression. | The Fe gate failed on raw legacy Ward mesh stability, small-\(q\) quadratic dispersion, pair-potential mode extraction, and incomplete Jij stiffness evidence. Ni additionally has a 2 μB/non-mature reference state, orientation-dependent pair-Xi Goldstone sign, negative dynamic spectral weights, and no coherent mode. The intended material physics is not established. | Resolve the classified Fe and Ni blockers, including the theoretical and numerical response conventions, then repeat raw Goldstone, convergence, independent stiffness, collective/Stoner, and multi-η evidence before any material promotion. |
+
+## Final closure record — 2026-08-17
+
+The ledger was audited feature-by-feature against the Phase-II reports, current
+CTest registration, support guards, and the known-issue history. Statuses are
+scoped to the rows above. In particular, the following are not promoted:
+
+- GBT as a general material method; only the recorded single-\(q\), algebraic,
+  single-sublattice, and other explicitly scoped contracts retain validation.
+- TDDFT as a material-response method; response-kernel unit contracts remain
+  Experimental and the Fe/Ni material gates remain Development after failed
+  physical acceptance tests.
+- Noncollinear/SOC onsite U/J, intersite Hubbard-V, vacuum GF/self-energy,
+  four-region vacuum gaps, and impurity-in-surface as supported combinations;
+  each is an explicit Development/support limitation above.
+
+The heavy campaigns remain separate from the lean developer gate. The current
+serial CPU build was reconfigured and rebuilt before the compact reruns; no
+production physics source or workflow was changed for this closure.
+
+| Closure gate | Result |
+|---|---|
+| Unit gate | Pass: 46/46 |
+| Quick gate | Pass: 14/14 |
+| K-space gate | Pass: lean subset 10/10, excluding heavy `Val*` campaigns; VAL-04/05 also pass |
+| Conductivity gate | Pass: 4/4, excluding heavy VAL-09 which also passes |
+| Compact Phase-II subsets | VAL-04, VAL-05, VAL-07, VAL-08, VAL-09, VAL-12, VAL-13, VAL-15, and VAL-17 pass; their material/convergence evidence remains scoped as in the rows above |
+| VAL-16 commensurate-supercell campaign | Fail: the current-head q=1/2 reference supercell did not converge within the campaign's 100 steps; the comparison is not closed |
+| TDDFT material campaigns | VAL-18 Fe and VAL-19 Ni remain failed gates; no promotion |
+
+The one stale-build symptom found during the audit was closed by rebuilding:
+the current source's `HUBBARD_LDM_CHECK` and direct-G report writers were then
+observed by VAL-04/05. It was not a production defect and no tolerance or
+reference was changed. `DEVELOPER_MAP.md` is unchanged because no workflow
+entry point or developer procedure changed.
 
 ## Update discipline
 
@@ -89,10 +129,16 @@ in [CMakeLists.txt](../../CMakeLists.txt) is authoritative.
 
 ## Task checklist
 
-- [x] Current feature inventory audited
-- [x] Maturity assigned by scoped capability
-- [x] Existing evidence linked
-- [x] Known defects distinguished from missing validation
-- [x] Promotion criteria written
-- [x] No feature promoted without evidence
-- [x] No unrelated production physics changed; source changes are validation diagnostics only
+- [x] Every Phase-II feature reviewed
+- [x] Statuses scoped conservatively
+- [x] Resolved defects closed with evidence
+- [x] Unresolved defects retained, including VAL-16
+- [x] Intentionally unavailable combinations documented as support limitations
+- [x] Validation artifacts separated from quick CI
+- [x] Unit gate passes (46/46)
+- [x] Quick gate passes (14/14)
+- [x] K-space gate passes (lean 10/10)
+- [x] Conductivity gate passes (4/4)
+- [ ] Every relevant compact campaign passes (VAL-16 remains unresolved)
+- [x] Phase-II closure record prepared for commit
+- [x] No production physics or workflow changes made
