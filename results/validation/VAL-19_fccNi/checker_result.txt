@@ -1,0 +1,1 @@
+FAIL: q index 1: no accepted coherent-mode fit; do not use it for stiffness

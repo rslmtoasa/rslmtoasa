@@ -10,11 +10,25 @@ pair-potential mode fits are incoherent, and the independent Jij record is
 incomplete. Fe maturity remains Experimental. The protocol checklist below
 therefore remains open; no criterion was loosened.
 
+## VAL-19 fcc Ni result
+
+The fcc-Ni campaign is documented in [VAL-19](VAL-19_TDDFT_FCC_NI.md) and is
+also a deliberate **failed** gate. The 4³, 8³, and 12³ response diagnostics
+are stable, but the current SCF reference has a 2.000 μB moment rather than a
+mature itinerant-Ni reference. The apparent low-q legacy feature shifts under
+smearing, overlaps the finite-η KS/Stoner response, has negative projected
+weight, and has no isolated fit. The pair-potential Xi route has no collective
+crossing; its static Goldstone result also changes from -1 to +1 under spin
+orientation reversal, exposing an implementation defect. The η sweep is
+consistent with numerical broadening only. No q² stiffness, intrinsic damping,
+GBT/Jij comparison, or literature comparison is claimed, and Ni maturity
+remains Experimental.
+
 ## Current status
 
 The validation machinery is in place and the small deterministic gate passes.
-This is not a declaration that a material benchmark has passed: no bcc-Fe,
-fcc-Ni, corrected-GBT, or `Jij` material output is committed with this change.
+This is not a declaration that a material benchmark has passed: VAL-18 and
+VAL-19 are failed material gates, with their raw evidence committed for review.
 The transverse milestone therefore remains open until the real evidence below
 is produced and reviewed.
 
@@ -31,7 +45,8 @@ is produced and reviewed.
   overlap are stable under response-basis, k-mesh, and band-window sweeps.
 - [ ] Stable three-route small-q stiffness for a real material.
 - [ ] bcc Fe credible magnon and KS/Stoner spectra, with damping evolution.
-- [ ] fcc Ni credible magnon and KS/Stoner spectra, with itinerancy sensitivity.
+- [ ] fcc Ni credible magnon and KS/Stoner spectra, with itinerancy sensitivity
+  (VAL-19 measured sensitivity but found no credible collective mode).
 - [ ] Optional Co campaign.
 
 The implementation must not be marked transverse-complete while an unchecked

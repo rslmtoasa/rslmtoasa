@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,23 @@ from typing import Any
 
 class ValidationError(RuntimeError):
     """A missing or scientifically inconsistent validation record."""
+
+
+def _float(token: str) -> float:
+    """Parse ordinary Python and Fortran overflow-float spellings."""
+    normalized = token.replace("D", "E").replace("d", "e")
+    try:
+        return float(normalized)
+    except ValueError:
+        # gfortran writes IEEE overflow as 1.7976931348623157+308 rather
+        # than using an explicit `E+308`.  Preserve the value as infinity;
+        # rejected mode fits must still reach the scientific acceptance
+        # checks instead of failing at the text-format boundary.
+        if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)[+-]\d+", normalized):
+            exponent = re.search(r"[+-]\d+$", normalized)
+            assert exponent is not None
+            return float(normalized[:exponent.start()] + "e" + exponent.group(0))
+        raise
 
 
 @dataclass(frozen=True)
@@ -92,21 +110,21 @@ def read_mode_fits(path: Path) -> dict[int, dict[str, float | bool | str]]:
         elif columns[0] == "fit" and len(columns) >= 7:
             fits[int(columns[1])] = {
                 "accepted": columns[2].upper().startswith("T"),
-                "center": float(columns[3]),
-                "fwhm": float(columns[4]),
-                "hwhm": float(columns[5]),
-                "relative_residual": float(columns[6]),
+                "center": _float(columns[3]),
+                "fwhm": _float(columns[4]),
+                "hwhm": _float(columns[5]),
+                "relative_residual": _float(columns[6]),
                 "reason": " ".join(columns[7:]),
             }
         elif columns[0] == "crossing" and len(columns) >= 10:
             crossings[int(columns[1])] = {
                 "present": columns[2].upper().startswith("T"),
-                "omega": float(columns[3]),
-                "imaginary_part": float(columns[4]),
-                "branch_overlap": float(columns[5]),
-                "eigenvalue_step": float(columns[6]),
-                "projected_weight": float(columns[7]),
-                "condition_number": float(columns[8]),
+                "omega": _float(columns[3]),
+                "imaginary_part": _float(columns[4]),
+                "branch_overlap": _float(columns[5]),
+                "eigenvalue_step": _float(columns[6]),
+                "projected_weight": _float(columns[7]),
+                "condition_number": _float(columns[8]),
                 "exceptional_warning": columns[9].upper().startswith("T"),
             }
     if not fits or candidates != set(fits) or candidates != set(crossings):
@@ -124,9 +142,9 @@ def read_trace_spectrum(path: Path, label: str) -> list[tuple[float, float]]:
         # production interfaces and the campaign must inspect the bare and
         # enhanced spectrum separately.
         if columns[0] == label and len(columns) >= 3:
-            rows.append((float(columns[1]), float(columns[-1])))
+            rows.append((_float(columns[1]), _float(columns[-1])))
         elif len(columns) >= 3 and columns[1] == label:
-            rows.append((float(columns[0]), float(columns[-1])))
+            rows.append((_float(columns[0]), _float(columns[-1])))
     if not rows:
         raise ValidationError(f"{path}: no {label} spectrum records")
     return rows
@@ -187,7 +205,7 @@ def analyse_campaign(manifest_path: Path) -> dict[str, Any]:
         if float(crossing["projected_weight"]) <= 0.0:
             raise ValidationError(f"q index {index}: Xi crossing has no positive mode-projected enhanced weight")
         q_norms.append(_q_norm(point["q_direct"]))
-        centers.append(float(fit["center"]))
+        centers.append(_float(str(fit["center"])))
     stiffness = fit_stiffness(q_norms, centers)
 
     chi0 = read_trace_spectrum(root / manifest["chi0_file"], "trace")
@@ -198,7 +216,7 @@ def analyse_campaign(manifest_path: Path) -> dict[str, Any]:
         raise ValidationError("enhanced spectrum has no spectral feature above the bare KS/Stoner trace")
 
     eta_data = manifest["eta_sweep"]
-    eta_fit = extrapolate_zero_eta([float(row["eta_Ry"]) for row in eta_data], [float(row["observed_fwhm_Ry"]) for row in eta_data])
+    eta_fit = extrapolate_zero_eta([_float(str(row["eta_Ry"])) for row in eta_data], [_float(str(row["observed_fwhm_Ry"])) for row in eta_data])
     if eta_fit.zero_eta_fwhm < -1.0e-12:
         raise ValidationError("zero-eta linewidth extrapolates to an unphysical negative width")
 
@@ -210,19 +228,19 @@ def analyse_campaign(manifest_path: Path) -> dict[str, Any]:
         raise ValidationError(f"missing documented convergence axes: {', '.join(sorted(missing_axes))}")
 
     limits = manifest["acceptance"]
-    if float(goldstone["raw_residual"]) > float(limits["max_raw_goldstone_residual"]):
+    if _float(str(goldstone["raw_residual"])) > _float(str(limits["max_raw_goldstone_residual"])):
         raise ValidationError("raw Goldstone residual exceeds campaign limit")
-    if float(goldstone["raw_magnetization_overlap"]) < float(limits["min_magnetization_overlap"]):
+    if _float(str(goldstone["raw_magnetization_overlap"])) < _float(str(limits["min_magnetization_overlap"])):
         raise ValidationError("Goldstone unity-mode overlap is unstable")
-    if stiffness.relative_residual > float(limits["max_stiffness_relative_residual"]):
+    if stiffness.relative_residual > _float(str(limits["max_stiffness_relative_residual"])):
         raise ValidationError("small-q dispersion is not quadratic within the campaign limit")
-    if eta_fit.relative_residual > float(limits["max_eta_fit_relative_residual"]):
+    if eta_fit.relative_residual > _float(str(limits["max_eta_fit_relative_residual"])):
         raise ValidationError("linewidth cannot be cleanly extrapolated over the selected eta sweep")
 
     routes: dict[str, dict[str, float]] = {"LR-TDDFT": {"D_Ry_per_q2": stiffness.value}}
     for route in ("GBT", "Jij"):
         if route in manifest.get("independent_routes", {}):
-            reference = float(manifest["independent_routes"][route]["D_Ry_per_q2"])
+            reference = _float(str(manifest["independent_routes"][route]["D_Ry_per_q2"]))
             delta = abs(stiffness.value - reference) / max(abs(reference), 1.0e-30)
             routes[route] = {"D_Ry_per_q2": reference, "relative_delta_to_LR": delta}
 

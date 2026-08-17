@@ -1,0 +1,16 @@
+{
+  "material": "fcc Ni",
+  "status": "failed; no material promotion",
+  "raw_goldstone_residual_negative_z": 0.0323798357872,
+  "pair_goldstone_residual_negative_z": 2.0,
+  "pair_goldstone_residual_positive_z": 1.3324795210903683e-15,
+  "k_mesh_raw_residuals": {"4^3": 0.0323798357872, "8^3": 0.0323798357872, "12^3": 0.0323798357873},
+  "legacy_crossing_q01_Ry": {"100 K": 0.0040286993, "300 K": 0.0042177742, "600 K": 0.0074031440},
+  "legacy_crossing_imaginary_part_Ry_300K": -0.0074218879,
+  "observed_trace_fwhm_Ry": {"eta=0.0005": 0.0011, "eta=0.001": 0.0021, "eta=0.002": 0.0041},
+  "small_q": "not coherent: no accepted Xi crossing with positive projected weight and no isolated fit",
+  "stoner": "bare chi0 is nonzero at the lower frequency edge; no clean onset is resolved at finite eta",
+  "spectral_weight": "negative legacy and pair-potential loss weights in both orientation probes",
+  "q2_fit": "not performed; rejected peaks are not fit as a quadratic branch",
+  "literature": "deferred until units, reciprocal coordinates, and observable definitions can be compared for a valid branch"
+}

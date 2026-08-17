@@ -1,0 +1,47 @@
+{
+  "material": "fcc Ni",
+  "protocol": "TDDFT-07",
+  "status": "failed",
+  "reference_potential": "scf_weak/Ni_out.nml; 300 K, no SOC, ham_only",
+  "goldstone_file": "response_nk8/ni_nk8_goldstone.dat",
+  "modes_file": "response_nk8/ni_nk8_pair_modes.dat",
+  "chi0_file": "response_nk8/ni_nk8_q000002_chi0.dat",
+  "dyson_file": "response_nk8/ni_nk8_q000002_pair_dyson.dat",
+  "q_points": [
+    {"q_direct": [0.0, 0.0, 0.0]},
+    {"q_direct": [0.01, 0.0, 0.0]},
+    {"q_direct": [0.02, 0.0, 0.0]},
+    {"q_direct": [0.03, 0.0, 0.0]},
+    {"q_direct": [0.04, 0.0, 0.0]}
+  ],
+  "eta_sweep": [
+    {"eta_Ry": 0.0005, "observed_fwhm_Ry": 0.0011, "source": "response_eta0005 q=0.01 legacy trace feature"},
+    {"eta_Ry": 0.001, "observed_fwhm_Ry": 0.0021, "source": "response_nk8 q=0.01 legacy trace feature"},
+    {"eta_Ry": 0.002, "observed_fwhm_Ry": 0.0041, "source": "response_eta0020 q=0.01 legacy trace feature"}
+  ],
+  "convergence": [
+    {"axis": "k_mesh", "values": ["4^3", "8^3", "12^3"], "status": "assessed; spectra and raw Ward residual are unchanged within printed precision"},
+    {"axis": "band_window", "values": ["1:18", "1:14"], "status": "assessed; no change at 8^3 for the sampled response"},
+    {"axis": "response_projection", "values": ["site"], "status": "only production-supported projection; site-scalar/pair-potential paths retained separately"},
+    {"axis": "electronic_smearing", "values": ["100 K", "300 K", "600 K"], "status": "assessed; apparent legacy crossing shifts 4.03 to 7.40 mRy"},
+    {"axis": "eta", "values": ["0.0005", "0.001", "0.002 Ry"], "status": "assessed; observed trace width scales with eta; no intrinsic damping claim"},
+    {"axis": "frequency_grid", "values": ["0..0.020 Ry, 201 points"], "status": "fixed across the matrix; 0.1 mRy spacing"}
+  ],
+  "orientation_check": {
+    "negative_z": {"moment_muB": -2.0, "pair_goldstone_residual": 2.0, "pair_goldstone_eigenvalue": -1.0},
+    "positive_z": {"moment_muB": 2.0, "pair_goldstone_residual": 1.3324795210903683e-15, "pair_goldstone_eigenvalue": 1.0},
+    "interpretation": "orientation-dependent pair Xi is an implementation defect; positive-z dynamic spectral weights remain negative and no coherent mode is established"
+  },
+  "independent_comparisons": {
+    "GBT": {"status": "not run; no valid coherent Ni stiffness was available to compare"},
+    "Jij": {"status": "not run; no valid coherent Ni stiffness was available to compare"},
+    "literature": {"status": "deferred; no like-for-like collective branch and no aligned observable comparison"},
+    "comparison_status": "TDDFT inputs were frozen before the orientation/sensitivity results were interpreted"
+  },
+  "acceptance": {
+    "max_raw_goldstone_residual": 0.01,
+    "min_magnetization_overlap": 0.99,
+    "max_stiffness_relative_residual": 0.1,
+    "max_eta_fit_relative_residual": 0.1
+  }
+}

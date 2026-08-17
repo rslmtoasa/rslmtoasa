@@ -1,0 +1,63 @@
+# Xi branches are frequency-local biorthogonal continuations, then continued between adjacent q points.
+# A collective candidate requires an interpolated Re(lambda_Xi)=1 crossing; Im(lambda), conditioning, and mode weight are retained.
+# FWHM = 2*HWHM. Individual fits are observed widths; eta remains numerical broadening.
+# eta_Ry =   1.0000000000000000E-03
+# profile_mode_analysis_cpu_s =   1.2409999999984933E-03
+candidate 1   2.0000000000000000E-02 1   1.8674024705781755E+00   1.0000000000000000E+00 noncollective Stoner feature
+crossing 1 F  -1.0000000000000000E+00   1.7976931348623157+308   1.0000000000000000E+00   0.0000000000000000E+00  -3.2170030753375815E-02   1.0000000000000000E+00 F
+fit 1 F   0.0000000000000000E+00  -1.0000000000000000E+00  -1.0000000000000000E+00   1.7976931348623157+308 no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence
+candidate 2   2.0000000000000000E-02 1   1.8674024705781755E+00   1.0000000000000000E+00 noncollective Stoner feature
+crossing 2 F  -1.0000000000000000E+00   1.7976931348623157+308   1.0000000000000000E+00   0.0000000000000000E+00  -3.2170030753375815E-02   1.0000000000000000E+00 F
+fit 2 F   0.0000000000000000E+00  -1.0000000000000000E+00  -1.0000000000000000E+00   1.7976931348623157+308 no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence
+candidate 3   2.0000000000000000E-02 1   1.8674024705781755E+00   1.0000000000000000E+00 noncollective Stoner feature
+crossing 3 F  -1.0000000000000000E+00   1.7976931348623157+308   1.0000000000000000E+00   0.0000000000000000E+00  -3.2170030753375815E-02   1.0000000000000000E+00 F
+fit 3 F   0.0000000000000000E+00  -1.0000000000000000E+00  -1.0000000000000000E+00   1.7976931348623157+308 no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence
+candidate 4   2.0000000000000000E-02 1   1.8674024705781755E+00   1.0000000000000000E+00 noncollective Stoner feature
+crossing 4 F  -1.0000000000000000E+00   1.7976931348623157+308   1.0000000000000000E+00   0.0000000000000000E+00  -3.2170030753375815E-02   1.0000000000000000E+00 F
+fit 4 F   0.0000000000000000E+00  -1.0000000000000000E+00  -1.0000000000000000E+00   1.7976931348623157+308 no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence
+candidate 5   2.0000000000000000E-02 1   1.8674024705781755E+00   1.0000000000000000E+00 noncollective Stoner feature
+crossing 5 F  -1.0000000000000000E+00   1.7976931348623157+308   1.0000000000000000E+00   0.0000000000000000E+00  -3.2170030753375815E-02   1.0000000000000000E+00 F
+fit 5 F   0.0000000000000000E+00  -1.0000000000000000E+00  -1.0000000000000000E+00   1.7976931348623157+308 no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence
+# production_metadata_begin
+# channel = transverse
+# chi0_backend = eigenpairs
+# chi0_backend_capability = eigenpair Lehmann response
+# full_response_capability = not selected; production full response is capability-gated
+# longitudinal_capability = not selected; LLB readiness is not claimed
+# xi_backend_requested = compare
+# xi_backend_output = pair_potential_raw
+# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator
+# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis
+# signed_moment_source = reconstructed occupied P_site sigma_z population
+# reciprocal_mode = ham_only
+# response_projection = site
+# q_mode = list
+# q_coordinates = direct
+# q_index = 0
+# q_direct =   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
+# k_mesh = 8 8 8
+# omega_min_Ry =   0.0000000000000000E+00
+# omega_max_Ry =   2.0000000000000000E-02
+# nomega = 201
+# eta_Ry =   1.0000000000000000E-03
+# ground_state_fermi_level_Ry =   0.0000000000000000E+00
+# electronic_temperature_K =   3.0000000000000000E+02
+# ground_state_electronic_temperature_K =   3.0000000000000000E+02
+# response_fermi_level_Ry =  -4.5778786793830739E-02
+# response_electronic_temperature_overridden = T
+# ground_state_response_electron_count =    1.0000000000000000E+01   9.9999999999761364E+00
+# static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
+# band_window_first_last =  1 0
+# occupation_prune_tolerance =   1.0000000000000000E-14
+# green_eta_Ry =   0.0000000000000000E+00
+# green_energy_window_Ry =    1.7976931348623157+308  -1.7976931348623157+308
+# green_energy_points = 2001
+# goldstone_mode = diagnose
+# goldstone_mode_migrated_from_sum_rule = F
+# goldstone_correction_requested = F
+# goldstone_correction_applied = F
+# spin_orbit_present = F
+# external_symmetry_breaking_field_present = F
+# output_chi0 output_xi output_chi output_modes output_stoner = T T T T T
+# mpi_q_owner_rank = 0
+# production_metadata_end
