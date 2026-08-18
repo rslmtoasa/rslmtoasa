@@ -1256,6 +1256,9 @@ Fe/spd cases, a two-site intermediate case, and a four-site larger case. The
 fixtures exercise the validated dense standard-Hermitian request boundary;
 they are performance fixtures, not regenerated physical references.
 
+The generated full campaign report is committed in
+[`docs/dev/ACC-06_CPU_GPU_CROSSOVER.md`](ACC-06_CPU_GPU_CROSSOVER.md).
+
 `tests/benchmarks/acc06_crossover.py` drives the ACC-00 harness and records
 one warm-up plus three samples for each combination of matrix size, Nk in
 `{1, 8, 32}`, tile size in `{1, 8, 16}`, and eigenvalues-only/eigenvectors
