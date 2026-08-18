@@ -155,6 +155,16 @@ if(ENABLE_CUDA_PLUGIN)
     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CUDA_PLUGIN)
 endif()
 
+if(ENABLE_CUDA_RECIPROCAL)
+    add_library(rslmto_reciprocal_cuda STATIC
+        cuda/reciprocal_cuda.cpp
+    )
+    target_compile_features(rslmto_reciprocal_cuda PUBLIC cxx_std_11)
+    target_link_libraries(rslmto_reciprocal_cuda PUBLIC CUDA::cudart CUDA::cusolver)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CUDA_RECIPROCAL)
+    target_link_libraries(${PROJECT_NAME} PRIVATE rslmto_reciprocal_cuda)
+endif()
+
 add_subdirectory(./include_codes/abspinlib)
 target_link_libraries(${PROJECT_NAME} PRIVATE abspinlib)
 add_subdirectory(./include_codes/strux_lib)

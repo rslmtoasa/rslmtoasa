@@ -32,6 +32,7 @@
 
 module reciprocal_mod
 
+   use, intrinsic :: iso_c_binding, only: c_associated, c_int, c_null_ptr, c_ptr
    use control_mod
    use lattice_mod
    use hamiltonian_mod
@@ -200,6 +201,28 @@ module reciprocal_mod
       procedure :: release => lapack_backend_release
       final :: lapack_backend_destructor
    end type lapack_reciprocal_backend
+
+   !> CUDA lifecycle adapter.  ACC-02 deliberately owns no numerical solver
+   !> buffers; the opaque context owns the CUDA stream and prepared-generation
+   !> marker until ACC-03 selects the cuSOLVER execution API.
+   type, extends(reciprocal_execution_backend), public :: cuda_reciprocal_backend
+      type(c_ptr) :: context = c_null_ptr
+      integer :: device = -1
+      integer :: prepared_operator_generation = -1
+      integer :: execute_batch_requests = 0
+      integer :: operator_prepare_requests = 0
+      integer :: operator_prepare_reuses = 0
+      logical :: initialized = .false.
+   contains
+      procedure :: initialize => cuda_backend_initialize
+      procedure :: capabilities => cuda_backend_capabilities
+      procedure :: prepare_operator => cuda_backend_prepare_operator
+      procedure :: execute_batch => cuda_backend_execute_batch
+      procedure :: execution_metrics => cuda_backend_execution_metrics
+      procedure :: synchronize => cuda_backend_synchronize
+      procedure :: release => cuda_backend_release
+      final :: cuda_backend_destructor
+   end type cuda_reciprocal_backend
 
    !> Module's main procedure
    type, public :: reciprocal
@@ -519,6 +542,41 @@ module reciprocal_mod
       procedure :: constructor
    end interface
 
+#ifdef USE_CUDA_RECIPROCAL
+   interface
+      function rslmto_reciprocal_cuda_device_count(count) bind(C, name='rslmto_reciprocal_cuda_device_count')
+         import c_int
+         integer(c_int) :: count
+         integer(c_int) :: rslmto_reciprocal_cuda_device_count
+      end function rslmto_reciprocal_cuda_device_count
+
+      function rslmto_reciprocal_cuda_create(device) bind(C, name='rslmto_reciprocal_cuda_create')
+         import c_int, c_ptr
+         integer(c_int), value :: device
+         type(c_ptr) :: rslmto_reciprocal_cuda_create
+      end function rslmto_reciprocal_cuda_create
+
+      function rslmto_reciprocal_cuda_prepare_operator(context, operator_generation) &
+         bind(C, name='rslmto_reciprocal_cuda_prepare_operator')
+         import c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: operator_generation
+         integer(c_int) :: rslmto_reciprocal_cuda_prepare_operator
+      end function rslmto_reciprocal_cuda_prepare_operator
+
+      function rslmto_reciprocal_cuda_synchronize(context) bind(C, name='rslmto_reciprocal_cuda_synchronize')
+         import c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int) :: rslmto_reciprocal_cuda_synchronize
+      end function rslmto_reciprocal_cuda_synchronize
+
+      subroutine rslmto_reciprocal_cuda_destroy(context) bind(C, name='rslmto_reciprocal_cuda_destroy')
+         import c_ptr
+         type(c_ptr), value :: context
+      end subroutine rslmto_reciprocal_cuda_destroy
+   end interface
+#endif
+
 
    interface
    subroutine backend_initialize_if(this, assembler)
@@ -599,6 +657,44 @@ module reciprocal_mod
    module subroutine lapack_backend_destructor(this)
       type(lapack_reciprocal_backend), intent(inout) :: this
    end subroutine lapack_backend_destructor
+
+   module subroutine cuda_backend_initialize(this, assembler)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_assembler), intent(in) :: assembler
+   end subroutine cuda_backend_initialize
+
+   module subroutine cuda_backend_capabilities(this, capabilities)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      type(reciprocal_execution_capabilities), intent(out) :: capabilities
+   end subroutine cuda_backend_capabilities
+
+   module subroutine cuda_backend_prepare_operator(this, operator_generation)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      integer, intent(in) :: operator_generation
+   end subroutine cuda_backend_prepare_operator
+
+   module subroutine cuda_backend_execute_batch(this, request, result)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_execution_request), intent(in) :: request
+      type(reciprocal_execution_result), intent(inout) :: result
+   end subroutine cuda_backend_execute_batch
+
+   module subroutine cuda_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
+   end subroutine cuda_backend_execution_metrics
+
+   module subroutine cuda_backend_synchronize(this)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+   end subroutine cuda_backend_synchronize
+
+   module subroutine cuda_backend_release(this)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+   end subroutine cuda_backend_release
+
+   module subroutine cuda_backend_destructor(this)
+      type(cuda_reciprocal_backend), intent(inout) :: this
+   end subroutine cuda_backend_destructor
 
    module subroutine make_execution_backend(this, backend_name)
       class(reciprocal), intent(inout) :: this

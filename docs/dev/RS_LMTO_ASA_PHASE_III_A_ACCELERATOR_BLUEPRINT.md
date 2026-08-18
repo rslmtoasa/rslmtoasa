@@ -804,6 +804,11 @@ CPU-only builds must remain unaffected.
 
 Detect and document the minimum CUDA/cuSOLVER capabilities actually required.
 
+ACC-02 adds the optional `ENABLE_CUDA_RECIPROCAL` build switch. Its CUDA
+target requires the CUDA runtime and cuSOLVER libraries; no cuSOLVER solver
+entry point is selected or called until ACC-03. The existing minimum toolkit
+policy is unchanged.
+
 Do not unnecessarily raise the toolkit minimum version before the eigensolver API decision in ACC-03 is complete.
 
 ## Backend
@@ -828,20 +833,48 @@ Do not invalidate/re-upload an unchanged operator merely because a backend acces
 
 ## Checklist
 
-- [ ] CPU-only build unchanged
-- [ ] CUDA build discovers cuSOLVER conditionally
-- [ ] reciprocal CUDA backend type created
-- [ ] existing reciprocal public API unchanged
-- [ ] capabilities implemented
-- [ ] initialize/release implemented
-- [ ] synchronize implemented
-- [ ] operator-generation reuse implemented
-- [ ] no hidden global CUDA state introduced
-- [ ] unsupported solve reports clearly
-- [ ] LAPACK backend unchanged
-- [ ] focused lifecycle tests pass
+- [x] CPU-only build unchanged
+- [x] CUDA build discovers cuSOLVER conditionally
+- [x] reciprocal CUDA backend type created
+- [x] existing reciprocal public API unchanged
+- [x] capabilities implemented
+- [x] initialize/release implemented
+- [x] synchronize implemented
+- [x] operator-generation reuse implemented
+- [x] no hidden global CUDA state introduced
+- [x] unsupported solve reports clearly
+- [x] LAPACK backend unchanged
+- [x] focused lifecycle tests pass
 
 **Commit message:** `Add reciprocal CUDA backend skeleton`
+
+## ACC-02 completion record
+
+The optional `ENABLE_CUDA_RECIPROCAL` target links CUDA runtime and cuSOLVER
+conditionally and leaves `ENABLE_CUDA_PLUGIN` independent. The concrete
+`cuda_reciprocal_backend` uses the existing reciprocal execution interface;
+its opaque backend-owned context owns the selected device and CUDA stream.
+The node-local MPI rank is mapped through `g_parallel_context%device_index`.
+
+Operator preparation stores the generation in the opaque context and returns
+reuse for repeated preparation of the same generation. The execution method
+clears the result and reports that solve is unsupported, with no CPU fallback.
+Capabilities therefore advertise device residency but no numerical solve
+feature until ACC-03.
+
+**Files changed:** `CMakeLists.txt`, `source/CMakeLists.txt`,
+`source/reciprocal.f90`, `source/reciprocal_backend.f90`,
+`source/cuda/reciprocal_cuda.h`, `source/cuda/reciprocal_cuda.cpp`, and
+`tests/unit/test_reciprocal_cuda_lifecycle.cpp`.
+
+**Checks run:** CPU-only configure/build with `RUN_UNIT_TESTS=ON` (pass),
+CUDA/cuSOLVER configure/build with `ENABLE_CUDA_RECIPROCAL=ON` (pass),
+`UnitArbitraryKEigenpairs` (pass), `ReciprocalCudaLifecycle` (CTest pass;
+hardware-aware skip without a CUDA driver), and `git diff --check` on the
+ACC-02 files (pass).
+
+No eigensolver correctness or performance result is claimed by ACC-02;
+those belong to ACC-03 and later.
 
 ---
 

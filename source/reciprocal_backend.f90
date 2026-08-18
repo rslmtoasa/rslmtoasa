@@ -8,14 +8,158 @@ submodule (reciprocal_mod) reciprocal_backend
 
 contains
 
+   module subroutine cuda_backend_initialize(this, assembler)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_assembler), intent(in) :: assembler
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: device_count, status
+      integer :: selected_device
+      logical :: device_valid
+#endif
+
+      call this%release()
+      this%prepared_operator_generation = -1
+      this%execute_batch_requests = 0
+      this%operator_prepare_requests = 0
+      this%operator_prepare_reuses = 0
+
+#ifdef USE_CUDA_RECIPROCAL
+      device_count = 0_c_int
+      status = rslmto_reciprocal_cuda_device_count(device_count)
+      if (status /= 0_c_int .or. device_count <= 0_c_int) then
+         call g_logger%error('reciprocal CUDA backend: no usable CUDA device was found.', __FILE__, __LINE__)
+         return
+      end if
+      call g_parallel_context%device_index(int(device_count), selected_device, device_valid)
+      if (.not. device_valid) then
+         call g_logger%error('reciprocal CUDA backend: MPI local-rank/device mapping is invalid.', __FILE__, __LINE__)
+         return
+      end if
+      this%context = rslmto_reciprocal_cuda_create(int(selected_device, c_int))
+      if (.not. c_associated(this%context)) then
+         call g_logger%error('reciprocal CUDA backend: context creation failed.', __FILE__, __LINE__)
+         return
+      end if
+      this%device = selected_device
+      this%initialized = .true.
+#else
+      call g_logger%error('reciprocal CUDA backend: executable was built without CUDA support.', __FILE__, __LINE__)
+#endif
+   end subroutine cuda_backend_initialize
+
+   module subroutine cuda_backend_capabilities(this, capabilities)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      type(reciprocal_execution_capabilities), intent(out) :: capabilities
+
+      ! ACC-02 deliberately advertises no numerical solve capability.  This
+      ! prevents callers from treating the lifecycle skeleton as an implicit
+      ! CPU fallback or as a partially implemented eigensolver.
+      capabilities%standard_hermitian = .false.
+      capabilities%generalized_hermitian = .false.
+      capabilities%eigenvalues_only = .false.
+      capabilities%eigenvectors = .false.
+      capabilities%first_order_assembly = .false.
+      capabilities%second_order_assembly = .false.
+      capabilities%overlap = .false.
+      capabilities%preferred_tile_size = 1
+      capabilities%maximum_tile_size = 1
+      capabilities%residency = reciprocal_residency_device
+   end subroutine cuda_backend_capabilities
+
+   module subroutine cuda_backend_prepare_operator(this, operator_generation)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      integer, intent(in) :: operator_generation
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: status
+#endif
+
+      if (.not. this%initialized) then
+         call g_logger%error('reciprocal CUDA backend: prepare requested before initialization.', __FILE__, __LINE__)
+         return
+      end if
+
+#ifdef USE_CUDA_RECIPROCAL
+      status = rslmto_reciprocal_cuda_prepare_operator(this%context, int(operator_generation, c_int))
+      if (status < 0_c_int) then
+         call g_logger%error('reciprocal CUDA backend: operator preparation failed.', __FILE__, __LINE__)
+         return
+      end if
+      if (status == 0_c_int) then
+         this%operator_prepare_reuses = this%operator_prepare_reuses + 1
+      else
+         this%operator_prepare_requests = this%operator_prepare_requests + 1
+      end if
+      this%prepared_operator_generation = operator_generation
+#else
+      call g_logger%error('reciprocal CUDA backend: operator preparation is unavailable in this build.', __FILE__, __LINE__)
+#endif
+   end subroutine cuda_backend_prepare_operator
+
+   module subroutine cuda_backend_execute_batch(this, request, result)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_execution_request), intent(in) :: request
+      type(reciprocal_execution_result), intent(inout) :: result
+
+      call clear_execution_result(result)
+      this%execute_batch_requests = this%execute_batch_requests + 1
+      call g_logger%error('reciprocal CUDA backend: solve is not implemented; use ACC-03 before requesting execution.', &
+                          __FILE__, __LINE__)
+   end subroutine cuda_backend_execute_batch
+
+   module subroutine cuda_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
+
+      execute_requests = this%execute_batch_requests
+      combined_requests = 0
+      assemble_only = 0
+      input_hamiltonian_solves = 0
+   end subroutine cuda_backend_execution_metrics
+
+   module subroutine cuda_backend_synchronize(this)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: status
+#endif
+
+      if (.not. this%initialized) return
+#ifdef USE_CUDA_RECIPROCAL
+      status = rslmto_reciprocal_cuda_synchronize(this%context)
+      if (status /= 0_c_int) then
+         call g_logger%error('reciprocal CUDA backend: stream synchronization failed.', __FILE__, __LINE__)
+      end if
+#endif
+   end subroutine cuda_backend_synchronize
+
+   module subroutine cuda_backend_release(this)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+#ifdef USE_CUDA_RECIPROCAL
+      if (c_associated(this%context)) call rslmto_reciprocal_cuda_destroy(this%context)
+#endif
+      this%context = c_null_ptr
+      this%device = -1
+      this%prepared_operator_generation = -1
+      this%initialized = .false.
+   end subroutine cuda_backend_release
+
+   module subroutine cuda_backend_destructor(this)
+      type(cuda_reciprocal_backend), intent(inout) :: this
+      call this%release()
+   end subroutine cuda_backend_destructor
+
    module subroutine make_execution_backend(this, backend_name)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in), optional :: backend_name
       type(reciprocal_assembler) :: assembler
+      character(len=16) :: selected_backend
 
+      selected_backend = 'lapack'
       if (present(backend_name)) then
-         select case (trim(lower(backend_name)))
+         selected_backend = trim(lower(backend_name))
+         select case (selected_backend)
          case ('', 'lapack', 'cpu')
+            selected_backend = 'lapack'
+         case ('cuda')
          case default
             call g_logger%fatal('reciprocal backend factory: requested backend is unavailable.', __FILE__, __LINE__)
          end select
@@ -24,17 +168,38 @@ contains
       if (allocated(this%execution_backend)) then
          select type (backend => this%execution_backend)
          type is (lapack_reciprocal_backend)
-            ! Geometry/order choices can change across SCF probes.  Refresh
-            ! the non-owning assembler view without discarding its workspace.
-            backend%assembler = assembler
-            backend%prepared_operator_generation = -1
+            if (present(backend_name) .and. selected_backend == 'cuda') then
+               call backend%release()
+               deallocate(this%execution_backend)
+            else
+               ! Geometry/order choices can change across SCF probes.  Refresh
+               ! the non-owning assembler view without discarding its workspace.
+               backend%assembler = assembler
+               backend%prepared_operator_generation = -1
+               return
+            end if
+         type is (cuda_reciprocal_backend)
+            if (.not. present(backend_name) .or. selected_backend == 'cuda') return
+            call backend%release()
+            deallocate(this%execution_backend)
          class default
             call g_logger%fatal('reciprocal backend factory: unknown configured backend.', __FILE__, __LINE__)
          end select
-         return
       end if
-      allocate(lapack_reciprocal_backend :: this%execution_backend)
-      call this%execution_backend%initialize(assembler)
+
+      select case (selected_backend)
+      case ('lapack')
+         allocate(lapack_reciprocal_backend :: this%execution_backend)
+         call this%execution_backend%initialize(assembler)
+      case ('cuda')
+#ifdef USE_CUDA_RECIPROCAL
+         allocate(cuda_reciprocal_backend :: this%execution_backend)
+         call this%execution_backend%initialize(assembler)
+#else
+         call g_logger%fatal('reciprocal backend factory: CUDA backend requested but ENABLE_CUDA_RECIPROCAL=OFF.', &
+                             __FILE__, __LINE__)
+#endif
+      end select
    end subroutine make_execution_backend
 
    module subroutine lapack_backend_initialize(this, assembler)
