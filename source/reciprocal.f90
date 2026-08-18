@@ -32,7 +32,7 @@
 
 module reciprocal_mod
 
-   use, intrinsic :: iso_c_binding, only: c_associated, c_int, c_null_ptr, c_ptr
+   use, intrinsic :: iso_c_binding, only: c_associated, c_double, c_double_complex, c_int, c_null_ptr, c_ptr
    use control_mod
    use lattice_mod
    use hamiltonian_mod
@@ -202,9 +202,8 @@ module reciprocal_mod
       final :: lapack_backend_destructor
    end type lapack_reciprocal_backend
 
-   !> CUDA lifecycle adapter.  ACC-02 deliberately owns no numerical solver
-   !> buffers; the opaque context owns the CUDA stream and prepared-generation
-   !> marker until ACC-03 selects the cuSOLVER execution API.
+   !> CUDA standard-Hermitian adapter.  The opaque context owns the CUDA
+   !> stream, cuSOLVER handle, and reusable tile workspace.
    type, extends(reciprocal_execution_backend), public :: cuda_reciprocal_backend
       type(c_ptr) :: context = c_null_ptr
       integer :: device = -1
@@ -563,6 +562,19 @@ module reciprocal_mod
          integer(c_int), value :: operator_generation
          integer(c_int) :: rslmto_reciprocal_cuda_prepare_operator
       end function rslmto_reciprocal_cuda_prepare_operator
+
+      function rslmto_reciprocal_cuda_solve_zheevd_batch(context, n, batch_size, hamiltonians, eigenvalues, eigenvectors, &
+                                                         request_eigenvectors) &
+         bind(C, name='rslmto_reciprocal_cuda_solve_zheevd_batch')
+         import c_double, c_double_complex, c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: n, batch_size
+         complex(c_double_complex), intent(in) :: hamiltonians(*)
+         real(c_double), intent(out) :: eigenvalues(*)
+         complex(c_double_complex), intent(out) :: eigenvectors(*)
+         integer(c_int), value :: request_eigenvectors
+         integer(c_int) :: rslmto_reciprocal_cuda_solve_zheevd_batch
+      end function rslmto_reciprocal_cuda_solve_zheevd_batch
 
       function rslmto_reciprocal_cuda_synchronize(context) bind(C, name='rslmto_reciprocal_cuda_synchronize')
          import c_int, c_ptr

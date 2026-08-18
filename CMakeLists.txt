@@ -635,6 +635,12 @@ if (RUN_UNIT_TESTS)
     add_test(NAME ReciprocalCudaLifecycle COMMAND ReciprocalCudaLifecycle)
     set_tests_properties(ReciprocalCudaLifecycle PROPERTIES
       LABELS "unit;cuda;reciprocal;lifecycle" SKIP_RETURN_CODE 77)
+    add_executable(ReciprocalCudaEigensolver ${TestDIR}/unit/test_reciprocal_cuda_eigensolver.cpp)
+    target_include_directories(ReciprocalCudaEigensolver PRIVATE ${SRC}/cuda)
+    target_link_libraries(ReciprocalCudaEigensolver PRIVATE rslmto_reciprocal_cuda)
+    add_test(NAME ReciprocalCudaEigensolver COMMAND ReciprocalCudaEigensolver)
+    set_tests_properties(ReciprocalCudaEigensolver PROPERTIES
+      LABELS "unit;cuda;reciprocal;eigensolver" SKIP_RETURN_CODE 77)
   endif()
   add_fortran_unit_test(UnitResponseConventions ${TestDIR}/unit/test_response_conventions.f90)
   set_tests_properties(UnitResponseConventions PROPERTIES LABELS "unit;tddft;conventions")

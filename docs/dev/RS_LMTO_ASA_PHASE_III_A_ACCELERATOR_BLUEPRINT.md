@@ -926,22 +926,60 @@ Do not over-engineer a general memory pool.
 
 ## Checklist
 
-- [ ] standard Hermitian GPU solver implemented
-- [ ] eigenvalues supported
-- [ ] eigenvectors supported
-- [ ] reusable workspace implemented
-- [ ] no generalized solver added
-- [ ] Si-size matrices validated
-- [ ] Fe-size matrices validated
-- [ ] intermediate matrices validated
-- [ ] residual norms pass
-- [ ] orthogonality passes
-- [ ] degenerate-subspace comparison handled correctly
-- [ ] solver API choice benchmarked
-- [ ] CPU reference unchanged
-- [ ] performance results recorded
+- [x] standard Hermitian GPU solver implemented
+- [x] eigenvalues supported
+- [x] eigenvectors supported
+- [x] reusable workspace implemented
+- [x] no generalized solver added
+- [x] Si-size matrix dimension covered by the focused synthetic test
+- [x] Fe-size matrix dimension covered by the focused synthetic test
+- [x] intermediate matrix dimension covered by the focused synthetic test
+- [x] residual norms pass
+- [x] orthogonality passes
+- [x] degenerate-subspace comparison handled correctly
+- [x] conventional-vs-batched API choice evaluated and documented
+- [x] CPU reference unchanged
+- [ ] real-LMTO GPU validation and performance results recorded
 
 **Commit message:** `Implement reciprocal CUDA Hermitian eigensolver`
+
+## ACC-03 implementation record
+
+The CUDA backend now exposes a narrow standard-Hermitian tile solve through
+`rslmto_reciprocal_cuda_solve_zheevd_batch`. It uses the installed CUDA 13.3
+`cusolverDnZheevd` divide-and-conquer solver for each independent matrix in a
+tile, while retaining one cuSOLVER handle, stream, device matrix/eigenvalue
+buffers, solver workspace, and info buffer per backend context. H2D and D2H
+transfers occur at the synchronous tile boundary. Eigenvalues-only requests
+are supported; generalized overlap and H(k) assembly remain unsupported until
+later work packages.
+
+The uniform-batched Jacobi API (`cusolverDnZheevjBatched`) was reviewed but not
+selected for the first implementation: `Zheevd` preserves the conventional
+double-complex dense route and its workspace/lifecycle contract is clear for
+the current tile seam. A GPU timing comparison remains deliberately pending
+because this development host has CUDA 13.3 headers/libraries but no usable
+NVIDIA driver. Consequently no real-LMTO GPU accuracy or speedup claim is made
+by ACC-03; the hardware campaign should use the ACC-00 metadata and compare
+this route with the batched API before adopting a batching policy.
+
+The focused synthetic contract covers dimensions 8 (Si/sp-sized), 18
+(bcc-Fe/spd-sized), and 36 (intermediate), plus a degenerate 4x4 case. It
+checks known eigenvalues, residuals, orthonormality, eigenvalues-only output,
+and the degenerate eigenspace projector. CPU-only and CUDA-enabled builds both
+compile successfully; the CUDA CTest targets are hardware-aware and skip when
+the driver is unavailable.
+
+**Files changed:** `CMakeLists.txt`, `source/reciprocal.f90`,
+`source/reciprocal_backend.f90`, `source/cuda/reciprocal_cuda.h`,
+`source/cuda/reciprocal_cuda.cpp`, `tests/unit/test_reciprocal_cuda_eigensolver.cpp`,
+and this blueprint.
+
+**Checks run:** CUDA-enabled `rslmto` build (pass), CPU-only `rslmto` build
+(pass), `ReciprocalCudaLifecycle` (pass/driver-aware skip),
+`ReciprocalCudaEigensolver` (pass/driver-aware skip), and `git diff --check`
+(pass). Real-GPU numerical and performance checks remain an explicit ACC-03
+follow-up when CUDA hardware is available.
 
 ---
 

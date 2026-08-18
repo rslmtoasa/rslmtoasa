@@ -51,18 +51,15 @@ contains
       class(cuda_reciprocal_backend), intent(in) :: this
       type(reciprocal_execution_capabilities), intent(out) :: capabilities
 
-      ! ACC-02 deliberately advertises no numerical solve capability.  This
-      ! prevents callers from treating the lifecycle skeleton as an implicit
-      ! CPU fallback or as a partially implemented eigensolver.
-      capabilities%standard_hermitian = .false.
+      capabilities%standard_hermitian = .true.
       capabilities%generalized_hermitian = .false.
-      capabilities%eigenvalues_only = .false.
-      capabilities%eigenvectors = .false.
+      capabilities%eigenvalues_only = .true.
+      capabilities%eigenvectors = .true.
       capabilities%first_order_assembly = .false.
       capabilities%second_order_assembly = .false.
       capabilities%overlap = .false.
       capabilities%preferred_tile_size = 1
-      capabilities%maximum_tile_size = 1
+      capabilities%maximum_tile_size = huge(1)
       capabilities%residency = reciprocal_residency_device
    end subroutine cuda_backend_capabilities
 
@@ -99,11 +96,59 @@ contains
       class(cuda_reciprocal_backend), intent(inout) :: this
       type(reciprocal_execution_request), intent(in) :: request
       type(reciprocal_execution_result), intent(inout) :: result
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: status
+      integer :: nmat, nk
+      complex(c_double_complex), target :: eigenvectors_dummy(1)
+#endif
 
       call clear_execution_result(result)
       this%execute_batch_requests = this%execute_batch_requests + 1
-      call g_logger%error('reciprocal CUDA backend: solve is not implemented; use ACC-03 before requesting execution.', &
-                          __FILE__, __LINE__)
+#ifndef USE_CUDA_RECIPROCAL
+      call g_logger%error('reciprocal CUDA backend: executable was built without CUDA support.', __FILE__, __LINE__)
+#else
+      if (.not. this%initialized) then
+         call g_logger%error('reciprocal CUDA backend: execute requested before initialization.', __FILE__, __LINE__)
+         return
+      end if
+      if (request%generalized .or. request%assemble_hamiltonian .or. request%assemble_overlap .or. &
+          request%request_assembled_hamiltonian .or. request%request_assembled_overlap .or. &
+          allocated(request%input_overlap) .or. .not. request%solve_eigensystem .or. &
+          .not. allocated(request%input_hamiltonian)) then
+         call g_logger%error('reciprocal CUDA backend: ACC-03 supports only standard eigensolution of host H(k) tiles.', &
+                             __FILE__, __LINE__)
+         return
+      end if
+      nmat = size(request%input_hamiltonian, 1)
+      nk = size(request%input_hamiltonian, 3)
+      if (nmat < 1 .or. size(request%input_hamiltonian, 2) /= nmat .or. nk < 1) then
+         call g_logger%error('reciprocal CUDA backend: input H(k) tile must be non-empty and square.', __FILE__, __LINE__)
+         return
+      end if
+      call this%prepare_operator(request%operator_generation)
+      allocate(result%eigenvalues(nmat, nk))
+      if (request%request_eigenvectors) allocate(result%eigenvectors(nmat, nmat, nk))
+      if (request%request_eigenvectors) then
+         status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+            request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
+      else
+         status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+            request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
+      end if
+      if (status /= 0_c_int) then
+         if (request%request_eigenvectors) then
+            call g_logger%error('reciprocal CUDA backend: cuSOLVER eigensolution failed.', __FILE__, __LINE__)
+         else
+            call g_logger%error('reciprocal CUDA backend: cuSOLVER eigenvalue solve failed.', __FILE__, __LINE__)
+         end if
+         call clear_execution_result(result)
+         return
+      end if
+      result%local_point_count = nk
+      result%operator_generation = request%operator_generation
+      result%eigenvalues_valid = .true.
+      result%eigenvectors_valid = request%request_eigenvectors
+#endif
    end subroutine cuda_backend_execute_batch
 
    module subroutine cuda_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)

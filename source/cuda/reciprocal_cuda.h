@@ -1,9 +1,9 @@
 /*
  * Narrow C ABI for the reciprocal CUDA execution backend.
  *
- * ACC-02 owns context/lifecycle plumbing only.  Dense eigensolution is
- * intentionally not part of this ABI until the cuSOLVER API is selected in
- * ACC-03.
+ * ACC-03 adds a deliberately narrow standard-Hermitian solve entry point.
+ * Complex arrays use the native Fortran/CUDA double-complex representation:
+ * interleaved (real, imaginary) values in column-major [n,n,batch] order.
  */
 #ifndef RSLMTO_RECIPROCAL_CUDA_H
 #define RSLMTO_RECIPROCAL_CUDA_H
@@ -20,6 +20,14 @@ const char *rslmto_reciprocal_cuda_last_error(void);
 
 int rslmto_reciprocal_cuda_prepare_operator(
     rslmto_reciprocal_cuda_context *context, int operator_generation);
+int rslmto_reciprocal_cuda_solve_zheevd_batch(
+    rslmto_reciprocal_cuda_context *context,
+    int n,
+    int batch_size,
+    const void *host_hamiltonians,
+    double *host_eigenvalues,
+    void *host_eigenvectors,
+    int request_eigenvectors);
 int rslmto_reciprocal_cuda_synchronize(
     rslmto_reciprocal_cuda_context *context);
 void rslmto_reciprocal_cuda_destroy(
