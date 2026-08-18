@@ -65,6 +65,18 @@ PROFILE_MEMORY = re.compile(
     r"^PROFILE_MEMORY_MIB\s+(?P<label>\S+)\s+"
     r"(?P<rest>.*)$"
 )
+ACC06_DIMENSIONS = re.compile(
+    r"^ACC06_DIMENSIONS\s+fixture=(?P<fixture>\S+)\s+"
+    r"backend=(?P<backend>\S+)\s+strategy=(?P<strategy>\S+)\s+"
+    r"sites=(?P<sites>\d+)\s+matrix_dimension=(?P<matrix_dimension>\d+)\s+"
+    r"nk=(?P<k_points>\d+)\s+tile_size=(?P<tile_size>\d+)\s+"
+    r"eigenvectors=(?P<eigenvectors>\d+)\s+lmax=(?P<lmax>\d+)"
+)
+ACC06_TIMING = re.compile(
+    r"^ACC06_TIMING\s+fixture=(?P<fixture>\S+)\s+"
+    r"assembly_s=\s*(?P<assembly_s>\S+)\s+solve_s=\s*(?P<solve_s>\S+)\s+"
+    r"total_s=\s*(?P<total_s>\S+)"
+)
 
 
 def _number(value: str) -> int | float | str:
@@ -99,7 +111,33 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
 
     dimensions: dict[str, dict[str, Any]] = {}
     records: dict[str, dict[str, Any]] = {}
+    acc06_label: str | None = None
     for line in output.splitlines():
+        match = ACC06_DIMENSIONS.match(line.strip())
+        if match:
+            values = match.groupdict()
+            fixture = values.pop("fixture")
+            backend = values.pop("backend")
+            strategy = values.pop("strategy")
+            acc06_label = f"acc06_{fixture}_{backend}_{strategy}"
+            dimensions[acc06_label] = {
+                "fixture": fixture,
+                "backend": backend,
+                "strategy": strategy,
+                **{key: _number(value) for key, value in values.items()},
+            }
+            continue
+        match = ACC06_TIMING.match(line.strip())
+        if match:
+            values = match.groupdict()
+            fixture = values.pop("fixture")
+            label = acc06_label
+            if label is None or dimensions.get(label, {}).get("fixture") != fixture:
+                label = next((key for key, item in dimensions.items() if item.get("fixture") == fixture),
+                             f"acc06_{fixture}")
+            record = records.setdefault(label, {"name": label})
+            record["metrics"] = {key: float(value) for key, value in values.items()}
+            continue
         match = PROFILE_DIMENSIONS.match(line.strip())
         if match:
             values = match.groupdict()

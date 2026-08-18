@@ -1247,6 +1247,95 @@ Do not add automatic dispatch merely because a crossover exists; explicit backen
 
 **Commit message:** `Benchmark reciprocal CPU and CUDA crossover`
 
+## ACC-06 implementation record
+
+The ACC-06 driver is an opt-in benchmark target, not a CTest timing gate. It
+uses the production reciprocal H(R)->H(k) assembler to create deterministic
+Hermitian LMTO-shaped fixtures at the dimensions of the small Si/sp and bcc
+Fe/spd cases, a two-site intermediate case, and a four-site larger case. The
+fixtures exercise the validated dense standard-Hermitian request boundary;
+they are performance fixtures, not regenerated physical references.
+
+`tests/benchmarks/acc06_crossover.py` drives the ACC-00 harness and records
+one warm-up plus three samples for each combination of matrix size, Nk in
+`{1, 8, 32}`, tile size in `{1, 8, 16}`, and eigenvalues-only/eigenvectors
+mode. The full campaign contained 216 executable runs and produced 72
+CPU-vs-GPU rows. GPU timing includes H2D, cuSOLVER, D2H, synchronization, and
+the harness wall time includes executable/backend initialization. The driver
+also reports assembly and backend solve phase times separately.
+
+CPU strategy A is the production typed LAPACK backend with its serial k/tile
+loop and threaded BLAS/LAPACK. Strategy B is a benchmark-only OpenMP loop
+with one independent `zheev` workspace per k point. It is included as an
+exploratory baseline only; no OpenMP loop was added to production reciprocal
+code.
+
+### Representative crossover table
+
+The following rows are the full-campaign medians at Nk=8, tile=8, with
+eigenvectors requested, on GNU Fortran 13.3.0, Intel oneMKL, two OpenMP
+threads, one MPI rank, and two NVIDIA RTX A4000 devices visible. The CUDA
+campaign used driver 610.57.04 and CUDA toolkit 13.3.
+
+| matrix size | Nk | best CPU | GPU | end-to-end speedup | recommended backend |
+|---:|---:|---:|---:|---:|---|
+| 8 (Si/sp) | 8 | 0.009279 s | 0.399418 s | 0.02x | LAPACK |
+| 18 (bcc Fe/spd) | 8 | 0.009149 s | 0.409600 s | 0.02x | LAPACK |
+| 36 (two-site spd) | 8 | 0.013668 s | 0.424761 s | 0.03x | LAPACK |
+| 72 (four-site spd) | 8 | 0.013675 s | 0.444491 s | 0.03x | LAPACK |
+
+No CPU/GPU crossover was observed in the studied 8--72 matrix, Nk=1--32
+range. The best GPU/CPU ratio in the complete table was 0.05x, so this
+campaign provides no evidence for automatic CUDA dispatch or a production GPU
+default. This is a bounded result for the measured fixtures and does not
+claim that larger production matrices cannot cross over.
+
+### Tile and eigenvector policy
+
+Eigenvector cost was separated by running both request modes. At Nk=32 the
+CUDA internal phase generally favored tile 16 for the tested sizes, while
+Nk=1 and Nk=8 results moved between tile 1, 8, and 16 within the run-to-run
+noise. The stable policy is therefore to retain the existing caller default
+tile size of 16 and keep the CUDA capability's `preferred_tile_size=1`
+neutral rather than advertise an unvalidated universal preference. No tile
+autotuning or automatic CPU/GPU dispatch was added. Explicit backend
+selection remains the policy until a larger, production-weighted workload
+shows a material end-to-end crossover.
+
+### Reproduction and checks
+
+```bash
+cmake -S . -B build-acc00
+cmake --build build-acc00 --target ReciprocalCrossoverBenchmark --parallel
+cmake -S . -B build-acc01-cuda
+cmake --build build-acc01-cuda --target ReciprocalCrossoverBenchmark --parallel
+python3 tests/benchmarks/test_benchmark_harness.py
+python3 tests/benchmarks/acc06_crossover.py \
+  --cpu-binary build-acc00/bin/ReciprocalCrossoverBenchmark \
+  --cpu-build-dir build-acc00 \
+  --cuda-binary build-acc01-cuda/bin/ReciprocalCrossoverBenchmark \
+  --cuda-build-dir build-acc01-cuda \
+  --output-dir /tmp/rslmto-acc06-full \
+  --report /tmp/rslmto-acc06-full.md \
+  --warmups 1 --repetitions 3
+```
+
+The CUDA executable and existing reciprocal correctness tests passed on the
+RTX A4000 campaign host. The CPU benchmark target and CPU parser contract
+also passed. Timing JSON and Markdown remain machine-local evidence under
+`/tmp`; no performance result was promoted to a correctness reference.
+
+- [x] representative production-assembler LMTO matrix dimensions benchmarked
+- [x] Nk dependence measured
+- [x] tile-size dependence measured
+- [x] eigenvalue-only versus eigenvector cost separated
+- [x] best reasonable CPU baseline established
+- [x] GPU end-to-end cost recorded
+- [x] crossover documented for the measured range
+- [x] preferred tile policy documented
+- [x] automatic-dispatch decision justified
+- [x] no unsupported performance claim made
+
 ---
 
 # ACC-07 — Reduce unnecessary host materialization if profiling justifies it

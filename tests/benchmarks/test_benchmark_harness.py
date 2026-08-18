@@ -26,6 +26,15 @@ PROFILE_MEMORY_MIB bccFe_one_site hk=1.0 normal_eigenpairs=2.0 arbitrary_kq_eige
     assert records[0]["metrics"]["eigensolver_s"] == 0.02
     assert records[0]["metrics"]["principal_payload_mib"] == 6.0
 
+    acc06 = parse_profile_output(
+        "ACC06_DIMENSIONS fixture=Si_sp backend=cuda strategy=backend sites=1 "
+        "matrix_dimension=8 nk=16 tile_size=4 eigenvectors=1 lmax=1\n"
+        "ACC06_TIMING fixture=Si_sp assembly_s=1.0E-03 solve_s=2.0E-03 total_s=3.0E-03\n"
+    )
+    assert acc06[0]["metadata"]["backend"] == "cuda"
+    assert acc06[0]["metadata"]["tile_size"] == 4
+    assert acc06[0]["metrics"]["total_s"] == 3.0e-3
+
     base = {
         "schema": SCHEMA,
         "benchmark": {
