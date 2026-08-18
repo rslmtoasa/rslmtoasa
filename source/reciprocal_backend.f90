@@ -20,6 +20,7 @@ contains
       call this%release()
       this%prepared_operator_generation = -1
       this%execute_batch_requests = 0
+      this%input_hamiltonian_solve_requests = 0
       this%operator_prepare_requests = 0
       this%operator_prepare_reuses = 0
 
@@ -131,6 +132,7 @@ contains
          return
       end if
       call this%prepare_operator(request%operator_generation)
+      this%input_hamiltonian_solve_requests = this%input_hamiltonian_solve_requests + 1
       allocate(result%eigenvalues(nmat, nk))
       if (request%request_eigenvectors) allocate(result%eigenvectors(nmat, nmat, nk))
       if (request%request_eigenvectors) then
@@ -163,7 +165,7 @@ contains
       execute_requests = this%execute_batch_requests
       combined_requests = 0
       assemble_only = 0
-      input_hamiltonian_solves = 0
+      input_hamiltonian_solves = this%input_hamiltonian_solve_requests
    end subroutine cuda_backend_execution_metrics
 
    module subroutine cuda_backend_synchronize(this)

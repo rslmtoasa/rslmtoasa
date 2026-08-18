@@ -30,8 +30,11 @@ program test_reciprocal_cuda_arbitrary_k
    real(rp), allocatable :: cpu_values(:, :), cuda_values(:, :)
    complex(rp), allocatable :: cpu_vectors(:, :, :), cuda_vectors(:, :, :)
    complex(rp), allocatable :: h(:, :), cpu_projector(:, :), cuda_projector(:, :)
+   complex(rp), allocatable :: cpu_mesh_h(:, :, :), cuda_mesh_h(:, :, :)
+   real(rp), allocatable :: cpu_mesh_values(:, :), cuda_mesh_values(:, :)
+   complex(rp), allocatable :: cpu_mesh_vectors(:, :, :), cuda_mesh_vectors(:, :, :)
    integer(c_int) :: device_count, status
-   integer :: ik
+   integer :: ik, execute_requests, combined_requests, assemble_requests, input_solves
    real(rp) :: eigenvalue_error, projector_error, residual_error, orthogonality_error
 
    call g_logger%init()
@@ -82,8 +85,46 @@ program test_reciprocal_cuda_arbitrary_k
       error stop 1
    end if
 
+   ! ACC-05: the ordinary mesh keeps its host H(k) compatibility cache while
+   ! the selected CUDA backend consumes host-assembled tiles for eigensolution.
+   recip%nk_total = size(points, 2)
+   allocate(recip%k_points(3, recip%nk_total), recip%k_weights(recip%nk_total))
+   recip%k_points = points
+   recip%k_weights = 1.0_rp / real(recip%nk_total, rp)
+   recip%reciprocal_tile_size = 2
+
+   call recip%make_execution_backend('lapack')
+   call recip%build_kspace_hamiltonian()
+   call recip%diagonalize_hamiltonian()
+   allocate(cpu_mesh_h, source=recip%hk_bulk)
+   allocate(cpu_mesh_values, source=recip%eigenvalues)
+   allocate(cpu_mesh_vectors, source=recip%eigenvectors)
+
+   call recip%make_execution_backend('cuda')
+   call recip%build_kspace_hamiltonian()
+   call recip%execution_backend%execution_metrics(execute_requests, combined_requests, assemble_requests, input_solves)
+   if (execute_requests /= 2 .or. combined_requests /= 0 .or. assemble_requests /= 0 .or. input_solves /= 2) then
+      write (*, '(a,4(i0,1x))') 'FAIL: ACC-05 CUDA normal-mesh request metrics = ', execute_requests, &
+         combined_requests, assemble_requests, input_solves
+      error stop 1
+   end if
+   call recip%diagonalize_hamiltonian()
+   allocate(cuda_mesh_h, source=recip%hk_bulk)
+   allocate(cuda_mesh_values, source=recip%eigenvalues)
+   allocate(cuda_mesh_vectors, source=recip%eigenvectors)
+
+   if (maxval(abs(cpu_mesh_h - cuda_mesh_h)) > 5.0e-12_rp .or. &
+       maxval(abs(cpu_mesh_values - cuda_mesh_values)) > 5.0e-11_rp .or. &
+       maxval(abs(cpu_mesh_vectors - cuda_mesh_vectors)) > 5.0e-10_rp) then
+      write (*, '(a,3(es14.6,1x))') 'FAIL: ACC-05 CPU/CUDA normal-mesh errors = ', &
+         maxval(abs(cpu_mesh_h - cuda_mesh_h)), maxval(abs(cpu_mesh_values - cuda_mesh_values)), &
+         maxval(abs(cpu_mesh_vectors - cuda_mesh_vectors))
+      error stop 1
+   end if
+
    write (*, '(a,3(es14.6,1x))') 'PASS: CUDA arbitrary-k eigenpairs; eigenvalue/projector/residual errors = ', &
       eigenvalue_error, projector_error, residual_error
+   write (*, '(a)') 'PASS: CUDA normal-mesh host cache/eigenpair integration'
 
 contains
 

@@ -1147,8 +1147,8 @@ Measure CPU H(k), H2D, GPU eigensolve, D2H eigenpairs, D2H H(k) compatibility tr
 
 ## Checklist
 
-- [ ] normal mesh CUDA execution wired
-- [ ] host semantics preserved
+- [x] normal mesh CUDA execution wired
+- [x] host semantics preserved
 - [ ] Si SCF CPU/GPU matches
 - [ ] Fe SCF CPU/GPU matches
 - [ ] electron count matches
@@ -1157,10 +1157,41 @@ Measure CPU H(k), H2D, GPU eigensolve, D2H eigenpairs, D2H H(k) compatibility tr
 - [ ] Fe moment matches
 - [ ] band/DOS checks pass
 - [ ] transfer costs measured
-- [ ] LAPACK remains selectable
-- [ ] no reference values regenerated without cause
+- [x] LAPACK remains selectable
+- [x] no reference values regenerated without cause
 
 **Commit message:** `Enable CUDA reciprocal mesh eigensolution`
+
+## ACC-05 implementation record
+
+The normal-mesh execution seam now queries typed backend capabilities before
+submitting each tile. LAPACK retains the existing combined host assembly and
+eigensolution request. CUDA v1 instead receives a request-owned host H(k) tile,
+solves the standard Hermitian systems on the device, and returns host
+eigenpairs. The existing `hk_bulk`, `eigenvalues`, and `eigenvectors` caches are
+populated exactly as before; no H(k) materialization was removed.
+
+CUDA input-Hamiltonian solve requests are counted separately from combined
+requests. A focused CUDA integration fixture now covers a tiled ordinary mesh,
+CPU/CUDA cache and eigenpair comparisons, and the request-shape contract. The
+fixture passes on the development GPU: NVIDIA RTX A4000, CUDA 13.3, driver
+610.57.04, with worst eigenvalue, projector, and residual errors of
+5.551115E-17, 0.0, and 5.551115E-17 respectively. This is focused
+normal-mesh evidence; production Si/Fe SCF, DOS/band observable comparisons
+and H2D/solve/D2H/end-to-end timings remain the ACC-05 follow-up.
+
+**Files changed:** `source/reciprocal.f90`,
+`source/reciprocal_backend.f90`, `source/reciprocal_fourier.f90`,
+`tests/unit/test_reciprocal_cuda_arbitrary_k.f90`, `CMakeLists.txt`, and this
+blueprint.
+
+**Checks run:** CUDA-enabled build with `ENABLE_CUDA_RECIPROCAL=ON` (pass),
+`UnitArbitraryKEigenpairs` and `Acc04ArbitraryKSource` in the CUDA-enabled
+build (pass), `ReciprocalCudaLifecycle`, `ReciprocalCudaEigensolver`, and
+`ReciprocalCudaArbitraryK` including the ACC-05 fixture (pass on the RTX
+A4000), CPU-only build plus `UnitArbitraryKEigenpairs` and
+`Acc04ArbitraryKSource` (pass), non-fused CPU compatibility build
+`UnitArbitraryKEigenpairs` (pass), and focused `git diff --check` (pass).
 
 ---
 

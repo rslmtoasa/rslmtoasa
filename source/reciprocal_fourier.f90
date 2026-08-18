@@ -841,10 +841,11 @@ contains
       ! Local variables
       integer :: ik, ik_global, nk, ntype, tile_first, tile_last, tile_length
       character(len=200) :: debug_msg
-      logical :: using_kpath, distribute_mesh
+      logical :: using_kpath, distribute_mesh, backend_assembly_available
       integer :: i, j
       type(reciprocal_execution_request) :: request
       type(reciprocal_execution_result) :: result
+      type(reciprocal_execution_capabilities) :: backend_caps
 
       call this%validate_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
       call this%force_full_bz_for_nonzero_q_gbt('reciprocal%build_kspace_hamiltonian')
@@ -926,6 +927,34 @@ contains
       ! pre-GC-04 compatibility route.
       if (this%nk_local > 0) then
          call this%make_execution_backend()
+         call this%execution_backend%capabilities(backend_caps)
+         select case (trim(this%kspace_ham_order))
+         case ('second')
+            backend_assembly_available = backend_caps%second_order_assembly
+         case ('first')
+            backend_assembly_available = backend_caps%first_order_assembly
+         case default
+            backend_assembly_available = merge(backend_caps%second_order_assembly, backend_caps%first_order_assembly, &
+                                                this%hamiltonian%hoh)
+         end select
+      if (.not. backend_assembly_available) then
+         ! CUDA v1 does not advertise Fourier assembly.  Use the same
+         ! host-assembly/input-H(k) handoff as the fused route so the
+         ! non-fused compatibility build remains a valid CUDA build too.
+         if (allocated(this%eigenvalues)) deallocate(this%eigenvalues)
+         if (allocated(this%eigenvectors)) deallocate(this%eigenvectors)
+         allocate(this%eigenvalues(size(this%hk_bulk,1), this%nk_local))
+         allocate(this%eigenvectors(size(this%hk_bulk,1), size(this%hk_bulk,2), this%nk_local))
+         if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
+#ifdef USE_SAFE_ALLOC
+            call g_safe_alloc%allocate('reciprocal.sk_overlap', this%sk_overlap, shape(this%hk_bulk))
+#else
+            if (allocated(this%sk_overlap)) deallocate(this%sk_overlap)
+            allocate(this%sk_overlap(size(this%hk_bulk,1), size(this%hk_bulk,2), size(this%hk_bulk,3)))
+#endif
+         end if
+         call this%execute_normal_mesh_tiles(using_kpath, trim(this%reciprocal_mode) == 'generalized_overlap_proxy')
+      else
          do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
             tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
             tile_length = tile_last - tile_first + 1
@@ -947,6 +976,7 @@ contains
             call this%execution_backend%execute_batch(request, result)
             this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
          end do
+      end if
       else
          allocate(this%eigenvalues(size(this%hk_bulk,1), 0))
          allocate(this%eigenvectors(size(this%hk_bulk,1), size(this%hk_bulk,2), 0))
@@ -1014,45 +1044,110 @@ contains
    module subroutine execute_normal_mesh_tiles(this, using_kpath, generalized)
       class(reciprocal), intent(inout) :: this
       logical, intent(in) :: using_kpath, generalized
-      integer :: tile_first, tile_last, tile_length
+      integer :: tile_first, tile_last, tile_length, nmat
+      logical :: assemble_on_backend
       type(reciprocal_execution_request) :: request
       type(reciprocal_execution_result) :: result
+      type(reciprocal_execution_capabilities) :: backend_caps
+      type(reciprocal_assembler) :: host_assembler
+      type(reciprocal_workspace) :: host_workspace
 
       if (this%nk_local == 0) return
       call this%make_execution_backend()
+      call this%execution_backend%capabilities(backend_caps)
+      if (.not. backend_caps%standard_hermitian .or. .not. backend_caps%eigenvectors) then
+         call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: selected backend cannot return standard eigenvectors.', &
+                             __FILE__, __LINE__)
+      end if
+      if (generalized .and. .not. backend_caps%generalized_hermitian) then
+         call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: selected backend does not support generalized eigenpairs.', &
+                             __FILE__, __LINE__)
+      end if
+
+      select case (trim(this%kspace_ham_order))
+      case ('second')
+         assemble_on_backend = backend_caps%second_order_assembly
+      case ('first')
+         assemble_on_backend = backend_caps%first_order_assembly
+      case default
+         assemble_on_backend = merge(backend_caps%second_order_assembly, backend_caps%first_order_assembly, &
+                                     this%hamiltonian%hoh)
+      end select
+      if (generalized .and. .not. assemble_on_backend) then
+         call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: generalized host-assembled handoff is unsupported.', &
+                             __FILE__, __LINE__)
+      end if
+      if (.not. assemble_on_backend) then
+         ! CUDA v1 owns only the dense eigensolution.  Keep Fourier assembly
+         ! on the established host route and retain its result as the public
+         ! compatibility cache after the backend solve completes.
+         nmat = size(this%hk_bulk, 1)
+         call this%make_reciprocal_assembler(host_assembler)
+         call host_workspace%ensure_capacity(nmat, max(1, this%reciprocal_tile_size), .false., &
+                                             this%hamiltonian%operator_generation, this%lattice%nn_max, this%lattice%ntype)
+      end if
+
       do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
          tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
          tile_length = tile_last - tile_first + 1
-         request%assemble_hamiltonian = .true.
-         request%assemble_overlap = generalized
+         request%assemble_hamiltonian = assemble_on_backend
+         request%assemble_overlap = assemble_on_backend .and. generalized
          request%solve_eigensystem = .true.
          request%generalized = generalized
          request%request_eigenvectors = .true.
-         request%request_assembled_hamiltonian = .true.
-         request%request_assembled_overlap = generalized
+         request%request_assembled_hamiltonian = assemble_on_backend
+         request%request_assembled_overlap = assemble_on_backend .and. generalized
          request%operator_generation = this%hamiltonian%operator_generation
-         allocate(request%k_points(3,tile_length))
-         if (using_kpath) then
-            request%k_points = this%k_path(:,tile_first:tile_last)
+         if (allocated(request%k_points)) deallocate(request%k_points)
+         if (allocated(request%input_hamiltonian)) deallocate(request%input_hamiltonian)
+         if (allocated(request%input_overlap)) deallocate(request%input_overlap)
+         if (assemble_on_backend) then
+            allocate(request%k_points(3,tile_length))
+            if (using_kpath) then
+               request%k_points = this%k_path(:,tile_first:tile_last)
+            else
+               request%k_points = this%k_workset%points(:,tile_first:tile_last)
+            end if
          else
-            request%k_points = this%k_workset%points(:,tile_first:tile_last)
+            host_workspace%active_tile_length = tile_length
+            if (using_kpath) then
+               host_workspace%points(:,1:tile_length) = this%k_path(:,tile_first:tile_last)
+            else
+               host_workspace%points(:,1:tile_length) = this%k_workset%points(:,tile_first:tile_last)
+            end if
+            call host_assembler%assemble_batch(host_workspace%points(:,1:tile_length), host_workspace)
+            allocate(request%input_hamiltonian(nmat,nmat,tile_length), &
+                     source=host_workspace%h(:,:,1:tile_length))
          end if
          call this%execution_backend%execute_batch(request, result)
          call this%execution_backend%synchronize()
          if (result%local_point_count /= tile_length .or. result%operator_generation /= request%operator_generation .or. &
-             .not. result%assembled_hamiltonian_valid .or. .not. result%eigenvalues_valid .or. &
-             .not. result%eigenvectors_valid) then
-            call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: incomplete combined tile result.', __FILE__, __LINE__)
+             .not. result%eigenvalues_valid .or. .not. result%eigenvectors_valid .or. &
+             .not. allocated(result%eigenvalues) .or. .not. allocated(result%eigenvectors)) then
+            call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: incomplete eigensolution tile result.', __FILE__, __LINE__)
          end if
-         if (generalized .and. .not. result%assembled_overlap_valid) then
+         if (assemble_on_backend .and. .not. result%assembled_hamiltonian_valid) then
+            call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: backend omitted requested H(k) tile.', __FILE__, __LINE__)
+         end if
+         if (generalized .and. assemble_on_backend .and. .not. result%assembled_overlap_valid) then
             call g_logger%fatal('reciprocal%execute_normal_mesh_tiles: generalized tile omitted S(k).', __FILE__, __LINE__)
          end if
-         this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
+         if (assemble_on_backend) then
+            this%hk_bulk(:,:,tile_first:tile_last) = result%hamiltonian
+         else
+            this%hk_bulk(:,:,tile_first:tile_last) = request%input_hamiltonian
+         end if
          this%eigenvalues(:,tile_first:tile_last) = result%eigenvalues
          this%eigenvectors(:,:,tile_first:tile_last) = result%eigenvectors
-         if (generalized) this%sk_overlap(:,:,tile_first:tile_last) = result%overlap
-         deallocate(request%k_points)
+         if (generalized .and. assemble_on_backend) this%sk_overlap(:,:,tile_first:tile_last) = result%overlap
       end do
+      if (.not. assemble_on_backend) then
+         this%workspace%tile_capacity = host_workspace%tile_capacity
+         this%workspace%cached_operator_generation = host_workspace%cached_operator_generation
+         this%workspace%storage_allocations = host_workspace%storage_allocations
+         this%workspace%lapack_workspace_queries = host_workspace%lapack_workspace_queries
+         this%workspace%capacity_reuses = host_workspace%capacity_reuses
+      end if
    end subroutine execute_normal_mesh_tiles
 
    !> @brief Build S(k) for every active mesh or path k-point.

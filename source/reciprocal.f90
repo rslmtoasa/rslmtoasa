@@ -209,6 +209,7 @@ module reciprocal_mod
       integer :: device = -1
       integer :: prepared_operator_generation = -1
       integer :: execute_batch_requests = 0
+      integer :: input_hamiltonian_solve_requests = 0
       integer :: operator_prepare_requests = 0
       integer :: operator_prepare_reuses = 0
       logical :: initialized = .false.

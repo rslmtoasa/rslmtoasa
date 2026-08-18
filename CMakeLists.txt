@@ -637,7 +637,7 @@ if (RUN_UNIT_TESTS)
     set_target_properties(ReciprocalCudaArbitraryK PROPERTIES LINKER_LANGUAGE "Fortran")
     add_test(NAME ReciprocalCudaArbitraryK COMMAND ReciprocalCudaArbitraryK)
     set_tests_properties(ReciprocalCudaArbitraryK PROPERTIES
-      LABELS "unit;cuda;reciprocal;arbitrary-k;integration" SKIP_RETURN_CODE 77)
+      LABELS "unit;cuda;reciprocal;arbitrary-k;normal-mesh;integration" SKIP_RETURN_CODE 77)
     add_executable(ReciprocalCudaLifecycle ${TestDIR}/unit/test_reciprocal_cuda_lifecycle.cpp)
     target_include_directories(ReciprocalCudaLifecycle PRIVATE ${SRC}/cuda)
     target_link_libraries(ReciprocalCudaLifecycle PRIVATE rslmto_reciprocal_cuda)
