@@ -28,6 +28,12 @@ int rslmto_reciprocal_cuda_solve_zheevd_batch(
     double *host_eigenvalues,
     void *host_eigenvectors,
     int request_eigenvectors);
+void rslmto_reciprocal_cuda_get_timings(
+    rslmto_reciprocal_cuda_context *context,
+    double *h2d_seconds,
+    double *solve_seconds,
+    double *d2h_seconds,
+    int *calls);
 int rslmto_reciprocal_cuda_synchronize(
     rslmto_reciprocal_cuda_context *context);
 void rslmto_reciprocal_cuda_destroy(

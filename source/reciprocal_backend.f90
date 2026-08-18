@@ -23,6 +23,10 @@ contains
       this%input_hamiltonian_solve_requests = 0
       this%operator_prepare_requests = 0
       this%operator_prepare_reuses = 0
+      this%h2d_seconds = 0.0_rp
+      this%gpu_solve_seconds = 0.0_rp
+      this%d2h_seconds = 0.0_rp
+      this%timing_calls = 0
 
 #ifdef USE_CUDA_RECIPROCAL
       device_count = 0_c_int
@@ -151,6 +155,8 @@ contains
          call clear_execution_result(result)
          return
       end if
+      call rslmto_reciprocal_cuda_get_timings(this%context, this%h2d_seconds, this%gpu_solve_seconds, &
+                                               this%d2h_seconds, this%timing_calls)
       result%local_point_count = nk
       result%operator_generation = request%operator_generation
       result%eigenvalues_valid = .true.
@@ -191,6 +197,10 @@ contains
       this%context = c_null_ptr
       this%device = -1
       this%prepared_operator_generation = -1
+      this%h2d_seconds = 0.0_rp
+      this%gpu_solve_seconds = 0.0_rp
+      this%d2h_seconds = 0.0_rp
+      this%timing_calls = 0
       this%initialized = .false.
    end subroutine cuda_backend_release
 
@@ -205,7 +215,8 @@ contains
       type(reciprocal_assembler) :: assembler
       character(len=16) :: selected_backend
 
-      selected_backend = 'lapack'
+      selected_backend = trim(this%reciprocal_backend)
+      if (selected_backend == '') selected_backend = 'lapack'
       if (present(backend_name)) then
          selected_backend = trim(lower(backend_name))
          select case (selected_backend)
@@ -215,12 +226,15 @@ contains
          case default
             call g_logger%fatal('reciprocal backend factory: requested backend is unavailable.', __FILE__, __LINE__)
          end select
+         ! An explicit programmatic selection is persistent for the following
+         ! normal-mesh calls, which intentionally omit the optional argument.
+         this%reciprocal_backend = selected_backend
       end if
       call this%make_reciprocal_assembler(assembler)
       if (allocated(this%execution_backend)) then
          select type (backend => this%execution_backend)
          type is (lapack_reciprocal_backend)
-            if (present(backend_name) .and. selected_backend == 'cuda') then
+            if (selected_backend == 'cuda') then
                call backend%release()
                deallocate(this%execution_backend)
             else
@@ -231,7 +245,7 @@ contains
                return
             end if
          type is (cuda_reciprocal_backend)
-            if (.not. present(backend_name) .or. selected_backend == 'cuda') return
+            if (selected_backend == 'cuda') return
             call backend%release()
             deallocate(this%execution_backend)
          class default
@@ -264,6 +278,7 @@ contains
       this%combined_assembly_solve_requests = 0
       this%assemble_only_requests = 0
       this%input_hamiltonian_solve_requests = 0
+      this%host_assembly_seconds = 0.0_rp
       this%initialized = .true.
    end subroutine lapack_backend_initialize
 
@@ -300,7 +315,7 @@ contains
       type(reciprocal_execution_request), intent(in) :: request
       type(reciprocal_execution_result), intent(inout) :: result
 
-      integer :: nmat, nk, ik, nnmax, ntype
+      integer :: nmat, nk, ik, nnmax, ntype, assembly_start, assembly_stop, assembly_rate
       logical :: halt_divide_by_zero, use_assembled_input
       character(len=1) :: jobz
 
@@ -356,7 +371,12 @@ contains
       call this%prepare_operator(request%operator_generation)
       call this%workspace%ensure_capacity(nmat, nk, request%generalized, request%operator_generation, nnmax, ntype)
       if (request%assemble_hamiltonian) then
+         call system_clock(count_rate=assembly_rate)
+         call system_clock(assembly_start)
          call this%assembler%assemble_batch(request%k_points, this%workspace)
+         call system_clock(assembly_stop)
+         this%host_assembly_seconds = this%host_assembly_seconds + &
+                                      real(assembly_stop - assembly_start, rp) / real(assembly_rate, rp)
       else
          this%workspace%h(:,:,1:nk) = request%input_hamiltonian(:,:,1:nk)
          this%workspace%active_tile_length = nk

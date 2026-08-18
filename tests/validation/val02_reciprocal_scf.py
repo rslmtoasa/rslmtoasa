@@ -210,6 +210,9 @@ def main() -> int:
     parser.add_argument("--high-mesh-only", action="store_true")
     parser.add_argument("--dense-fe-only", action="store_true")
     parser.add_argument("--tetra-high-only", action="store_true")
+    parser.add_argument("--backend", choices=("lapack", "cuda"), default="lapack")
+    parser.add_argument("--smoke-only", action="store_true")
+    parser.add_argument("--converged-only", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     case_roots = {
@@ -228,7 +231,12 @@ def main() -> int:
         cases = [case for case in cases if case[0].startswith("fe_mesh12_") or case[0].startswith("fe_mesh16_")]
     if args.tetra_high_only:
         cases = [case for case in cases if case[0] == "fe_tetra_mesh8_n12"]
+    if args.smoke_only:
+        cases = [case for case in cases if case[0] in ("si_scf_n3_mesh4_gaussian", "fe_scf_n3_mesh4_gaussian")]
+    if args.converged_only:
+        cases = [case for case in cases if case[0] in ("si_scf_n12_mesh4_gaussian", "fe_scf_n12_mesh4_gaussian")]
     for name, system, patch in cases:
+        patch["reciprocal"]["reciprocal_backend"] = args.backend
         workdir = args.scratch_root / name
         if workdir.exists():
             shutil.rmtree(workdir)

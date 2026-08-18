@@ -180,6 +180,7 @@ contains
       this%canonical_energy_valid = .false.
       this%auto_find_fermi = .true.  ! Auto-find Fermi level from eigenvalue occupations
       this%reciprocal_mode = 'ham_only'
+      this%reciprocal_backend = 'lapack'
       this%kspace_ham_order = 'auto'
       this%kanpur_diagnostics = .true.
       this%gamma_bounds_diagnostics = .false.
@@ -323,6 +324,7 @@ contains
       auto_find_fermi = this%auto_find_fermi
       suppress_internal_logs = this%suppress_internal_logs
       reciprocal_mode = this%reciprocal_mode
+      reciprocal_backend = this%reciprocal_backend
       kspace_ham_order = this%kspace_ham_order
       kanpur_diagnostics = this%kanpur_diagnostics
       gamma_bounds_diagnostics = this%gamma_bounds_diagnostics
@@ -386,6 +388,12 @@ contains
       this%auto_find_fermi = auto_find_fermi
       this%suppress_internal_logs = suppress_internal_logs
       this%reciprocal_mode = lower(trim(reciprocal_mode))
+      this%reciprocal_backend = lower(trim(reciprocal_backend))
+      if (this%reciprocal_backend == 'cpu') this%reciprocal_backend = 'lapack'
+      if (this%reciprocal_backend /= 'lapack' .and. this%reciprocal_backend /= 'cuda') then
+         call g_logger%warning("reciprocal%build_from_file: reciprocal_backend must be 'lapack' or 'cuda'. Falling back to lapack.", __FILE__, __LINE__)
+         this%reciprocal_backend = 'lapack'
+      end if
       this%kanpur_diagnostics = kanpur_diagnostics
       this%gamma_bounds_diagnostics = gamma_bounds_diagnostics
       this%hall_diag_experimental = hall_diag_experimental
@@ -467,6 +475,7 @@ contains
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
       end if
       call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
+      call root_info('reciprocal%build_from_file: reciprocal_backend = ' // trim(this%reciprocal_backend), __FILE__, __LINE__)
       call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
    end subroutine build_from_file
 

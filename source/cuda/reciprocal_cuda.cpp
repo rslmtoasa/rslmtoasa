@@ -20,6 +20,10 @@ struct rslmto_reciprocal_cuda_context {
     double *device_eigenvalues = nullptr;
     cuDoubleComplex *device_work = nullptr;
     int *device_info = nullptr;
+    double h2d_seconds = 0.0;
+    double solve_seconds = 0.0;
+    double d2h_seconds = 0.0;
+    int timing_calls = 0;
 };
 
 static std::string g_reciprocal_cuda_error;
@@ -201,12 +205,28 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         }
     }
 
+    cudaEvent_t h2d_start = nullptr, h2d_stop = nullptr;
+    cudaEvent_t solve_start = nullptr, solve_stop = nullptr;
+    cudaEvent_t d2h_start = nullptr, d2h_stop = nullptr;
+    const bool timing_enabled =
+        cudaEventCreate(&h2d_start) == cudaSuccess &&
+        cudaEventCreate(&h2d_stop) == cudaSuccess &&
+        cudaEventCreate(&solve_start) == cudaSuccess &&
+        cudaEventCreate(&solve_stop) == cudaSuccess &&
+        cudaEventCreate(&d2h_start) == cudaSuccess &&
+        cudaEventCreate(&d2h_stop) == cudaSuccess;
+    if (timing_enabled) cudaEventRecord(h2d_start, context->stream);
+
     cudaError_t cuda_status = cudaMemcpyAsync(
         context->device_hamiltonians, host_hamiltonians, matrix_bytes,
         cudaMemcpyHostToDevice, context->stream);
     if (cuda_status != cudaSuccess) {
         set_cuda_error("cudaMemcpyAsync(H2D Hamiltonians)", cuda_status);
         return 1;
+    }
+    if (timing_enabled) {
+        cudaEventRecord(h2d_stop, context->stream);
+        cudaEventRecord(solve_start, context->stream);
     }
 
     auto *device_matrices = context->device_hamiltonians;
@@ -221,6 +241,10 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
             set_solver_error("cusolverDnZheevd", solver_status);
             return 1;
         }
+    }
+    if (timing_enabled) {
+        cudaEventRecord(solve_stop, context->stream);
+        cudaEventRecord(d2h_start, context->stream);
     }
 
     cuda_status = cudaMemcpyAsync(host_eigenvalues, context->device_eigenvalues,
@@ -237,6 +261,7 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
             return 1;
         }
     }
+    if (timing_enabled) cudaEventRecord(d2h_stop, context->stream);
     cuda_status = cudaStreamSynchronize(context->stream);
     if (cuda_status != cudaSuccess) {
         set_cuda_error("cudaStreamSynchronize(eigensolution)", cuda_status);
@@ -253,7 +278,33 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         g_reciprocal_cuda_error = "cusolverDnZheevd: solver info " + std::to_string(host_info);
         return 1;
     }
+    if (timing_enabled) {
+        float h2d_ms = 0.0f, solve_ms = 0.0f, d2h_ms = 0.0f;
+        cudaEventElapsedTime(&h2d_ms, h2d_start, h2d_stop);
+        cudaEventElapsedTime(&solve_ms, solve_start, solve_stop);
+        cudaEventElapsedTime(&d2h_ms, d2h_start, d2h_stop);
+        context->h2d_seconds += static_cast<double>(h2d_ms) * 1.0e-3;
+        context->solve_seconds += static_cast<double>(solve_ms) * 1.0e-3;
+        context->d2h_seconds += static_cast<double>(d2h_ms) * 1.0e-3;
+        ++context->timing_calls;
+    }
+    if (h2d_start) cudaEventDestroy(h2d_start);
+    if (h2d_stop) cudaEventDestroy(h2d_stop);
+    if (solve_start) cudaEventDestroy(solve_start);
+    if (solve_stop) cudaEventDestroy(solve_stop);
+    if (d2h_start) cudaEventDestroy(d2h_start);
+    if (d2h_stop) cudaEventDestroy(d2h_stop);
     return 0;
+}
+
+extern "C" void rslmto_reciprocal_cuda_get_timings(
+    rslmto_reciprocal_cuda_context *context,
+    double *h2d_seconds, double *solve_seconds, double *d2h_seconds, int *calls) {
+    if (!context) return;
+    if (h2d_seconds) *h2d_seconds = context->h2d_seconds;
+    if (solve_seconds) *solve_seconds = context->solve_seconds;
+    if (d2h_seconds) *d2h_seconds = context->d2h_seconds;
+    if (calls) *calls = context->timing_calls;
 }
 
 extern "C" int rslmto_reciprocal_cuda_synchronize(

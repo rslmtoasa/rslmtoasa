@@ -190,6 +190,7 @@ module reciprocal_mod
       integer :: combined_assembly_solve_requests = 0
       integer :: assemble_only_requests = 0
       integer :: input_hamiltonian_solve_requests = 0
+      real(rp) :: host_assembly_seconds = 0.0_rp
       logical :: initialized = .false.
    contains
       procedure :: initialize => lapack_backend_initialize
@@ -212,6 +213,10 @@ module reciprocal_mod
       integer :: input_hamiltonian_solve_requests = 0
       integer :: operator_prepare_requests = 0
       integer :: operator_prepare_reuses = 0
+      real(rp) :: h2d_seconds = 0.0_rp
+      real(rp) :: gpu_solve_seconds = 0.0_rp
+      real(rp) :: d2h_seconds = 0.0_rp
+      integer :: timing_calls = 0
       logical :: initialized = .false.
    contains
       procedure :: initialize => cuda_backend_initialize
@@ -280,6 +285,8 @@ module reciprocal_mod
       !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
       !> or 'generalized_overlap_kanpur'.
       character(len=32) :: reciprocal_mode
+      !> Production normal-mesh backend: 'lapack' (default) or 'cuda'.
+      character(len=16) :: reciprocal_backend
       !> K-space Hamiltonian order:
       !>   'first'  -> H(k) = h(k)            (first-order, current behaviour)
       !>   'second' -> H(k) = E_nu + h(k) - [hoh](k) + L.S   (second-order ASA)
@@ -576,6 +583,14 @@ module reciprocal_mod
          integer(c_int), value :: request_eigenvectors
          integer(c_int) :: rslmto_reciprocal_cuda_solve_zheevd_batch
       end function rslmto_reciprocal_cuda_solve_zheevd_batch
+
+      subroutine rslmto_reciprocal_cuda_get_timings(context, h2d_seconds, solve_seconds, d2h_seconds, calls) &
+         bind(C, name='rslmto_reciprocal_cuda_get_timings')
+         import c_double, c_int, c_ptr
+         type(c_ptr), value :: context
+         real(c_double), intent(out) :: h2d_seconds, solve_seconds, d2h_seconds
+         integer(c_int), intent(out) :: calls
+      end subroutine rslmto_reciprocal_cuda_get_timings
 
       function rslmto_reciprocal_cuda_synchronize(context) bind(C, name='rslmto_reciprocal_cuda_synchronize')
          import c_int, c_ptr

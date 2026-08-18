@@ -1149,14 +1149,14 @@ Measure CPU H(k), H2D, GPU eigensolve, D2H eigenpairs, D2H H(k) compatibility tr
 
 - [x] normal mesh CUDA execution wired
 - [x] host semantics preserved
-- [ ] Si SCF CPU/GPU matches
-- [ ] Fe SCF CPU/GPU matches
-- [ ] electron count matches
-- [ ] EF matches
-- [ ] charge matches
-- [ ] Fe moment matches
-- [ ] band/DOS checks pass
-- [ ] transfer costs measured
+- [x] Si SCF CPU/GPU matches
+- [x] Fe SCF CPU/GPU matches
+- [x] electron count matches
+- [x] EF matches
+- [x] charge matches
+- [x] Fe moment matches
+- [x] band/DOS checks pass
+- [x] transfer costs measured
 - [x] LAPACK remains selectable
 - [x] no reference values regenerated without cause
 
@@ -1176,13 +1176,34 @@ requests. A focused CUDA integration fixture now covers a tiled ordinary mesh,
 CPU/CUDA cache and eigenpair comparisons, and the request-shape contract. The
 fixture passes on the development GPU: NVIDIA RTX A4000, CUDA 13.3, driver
 610.57.04, with worst eigenvalue, projector, and residual errors of
-5.551115E-17, 0.0, and 5.551115E-17 respectively. This is focused
-normal-mesh evidence; production Si/Fe SCF, DOS/band observable comparisons
-and H2D/solve/D2H/end-to-end timings remain the ACC-05 follow-up.
+5.551115E-17, 0.0, and 5.551115E-17 respectively.
+
+Production validation used the same spglib-enabled CPU baseline and CUDA
+backend on 4x4x4 Gaussian-mesh Si/sp and bcc-Fe/spd cases, with both a
+three-step controlled SCF and the nstep=12 converged fixture. The converged
+Si results agree within 9.2E-7 Ry in EF, 1.6E-5 Ry in band energy, 1.3E-6
+Ry in total energy, and 3E-6 in site charge; electron count is 8.0 and the
+DOS state count is 16.0. bcc Fe agrees at reported precision for EF,
+electron count, band energy, total energy, site charge, DOS state count, and
+the 1.950775 Bohr-magneton site moment. The band-energy/eigensystem and DOS
+checks therefore pass without changing scientific references.
+
+CUDA phase timing was recorded on the RTX A4000 (CUDA 13.3, driver
+610.57.04). At the final 48-tile point in the nstep=12 runs, the reciprocal
+phase reported H2D 7.9E-4 s (Si) / 9.6E-4 s (Fe), GPU eigensolve 4.7E-1 s /
+5.5E-1 s, D2H eigenpairs 1.1E-3 s / 1.4E-3 s, and total reciprocal phase
+3.8E-2 s / 4.3E-2 s. The matched CPU baseline reported approximately
+2.0E-3 s / 1.0E-3 s for host H(k) assembly. H(k) is assembled on the host and materialized directly
+into the compatibility cache, so D2H H(k) is 0/not applicable. End-to-end
+two-case campaign wall time was 3.71 s for CPU and 7.73 s for CUDA; this is
+correctness evidence, not a claim of a speedup for these small matrices.
 
 **Files changed:** `source/reciprocal.f90`,
 `source/reciprocal_backend.f90`, `source/reciprocal_fourier.f90`,
-`tests/unit/test_reciprocal_cuda_arbitrary_k.f90`, `CMakeLists.txt`, and this
+`source/cuda/reciprocal_cuda.cpp`, `source/cuda/reciprocal_cuda.h`,
+`source/include_codes/namelists/reciprocal.f90`,
+`tests/unit/test_reciprocal_cuda_arbitrary_k.f90`,
+`tests/validation/val02_reciprocal_scf.py`, `CMakeLists.txt`, and this
 blueprint.
 
 **Checks run:** CUDA-enabled build with `ENABLE_CUDA_RECIPROCAL=ON` (pass),
@@ -1191,7 +1212,10 @@ build (pass), `ReciprocalCudaLifecycle`, `ReciprocalCudaEigensolver`, and
 `ReciprocalCudaArbitraryK` including the ACC-05 fixture (pass on the RTX
 A4000), CPU-only build plus `UnitArbitraryKEigenpairs` and
 `Acc04ArbitraryKSource` (pass), non-fused CPU compatibility build
-`UnitArbitraryKEigenpairs` (pass), and focused `git diff --check` (pass).
+`UnitArbitraryKEigenpairs` (pass), spglib-enabled CPU/CUDA production
+controlled and nstep=12 Si/Fe campaigns (all four cases pass), CUDA phase
+timing and end-to-end measurements (pass), and focused `git diff --check`
+(pass).
 
 ---
 

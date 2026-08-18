@@ -1051,6 +1051,8 @@ contains
       type(reciprocal_execution_capabilities) :: backend_caps
       type(reciprocal_assembler) :: host_assembler
       type(reciprocal_workspace) :: host_workspace
+      integer :: timing_start, timing_stop, host_timing_start, host_timing_stop, timing_rate
+      real(rp) :: total_seconds, host_assembly_seconds
 
       if (this%nk_local == 0) return
       call this%make_execution_backend()
@@ -1086,6 +1088,9 @@ contains
          call host_workspace%ensure_capacity(nmat, max(1, this%reciprocal_tile_size), .false., &
                                              this%hamiltonian%operator_generation, this%lattice%nn_max, this%lattice%ntype)
       end if
+      host_assembly_seconds = 0.0_rp
+      call system_clock(count_rate=timing_rate)
+      call system_clock(timing_start)
 
       do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
          tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
@@ -1109,6 +1114,7 @@ contains
                request%k_points = this%k_workset%points(:,tile_first:tile_last)
             end if
          else
+            call system_clock(host_timing_start)
             host_workspace%active_tile_length = tile_length
             if (using_kpath) then
                host_workspace%points(:,1:tile_length) = this%k_path(:,tile_first:tile_last)
@@ -1118,6 +1124,8 @@ contains
             call host_assembler%assemble_batch(host_workspace%points(:,1:tile_length), host_workspace)
             allocate(request%input_hamiltonian(nmat,nmat,tile_length), &
                      source=host_workspace%h(:,:,1:tile_length))
+            call system_clock(host_timing_stop)
+            host_assembly_seconds = host_assembly_seconds + real(host_timing_stop - host_timing_start, rp) / real(timing_rate, rp)
          end if
          call this%execution_backend%execute_batch(request, result)
          call this%execution_backend%synchronize()
@@ -1148,6 +1156,23 @@ contains
          this%workspace%lapack_workspace_queries = host_workspace%lapack_workspace_queries
          this%workspace%capacity_reuses = host_workspace%capacity_reuses
       end if
+      call system_clock(timing_stop)
+      total_seconds = real(timing_stop - timing_start, rp) / real(timing_rate, rp)
+      select type (backend => this%execution_backend)
+      type is (cuda_reciprocal_backend)
+         call root_info('ACC05_TIMING backend=cuda total_seconds=' // trim(real2str(total_seconds, '(ES14.6)')) // &
+                        ' host_assembly_seconds=' // trim(real2str(host_assembly_seconds, '(ES14.6)')) // &
+                        ' h2d_seconds=' // trim(real2str(backend%h2d_seconds, '(ES14.6)')) // &
+                        ' gpu_solve_seconds=' // trim(real2str(backend%gpu_solve_seconds, '(ES14.6)')) // &
+                        ' d2h_seconds=' // trim(real2str(backend%d2h_seconds, '(ES14.6)')) // &
+                        ' timing_calls=' // trim(int2str(backend%timing_calls)) // &
+                        ' d2h_hamiltonian_seconds=0.0(not_applicable)', __FILE__, __LINE__)
+      type is (lapack_reciprocal_backend)
+         call root_info('ACC05_TIMING backend=lapack total_seconds=' // trim(real2str(total_seconds, '(ES14.6)')) // &
+                        ' host_assembly_seconds=' // trim(real2str(backend%host_assembly_seconds, '(ES14.6)')), __FILE__, __LINE__)
+      class default
+         call root_info('ACC05_TIMING backend=unknown total_seconds=' // trim(real2str(total_seconds, '(ES14.6)')), __FILE__, __LINE__)
+      end select
    end subroutine execute_normal_mesh_tiles
 
    !> @brief Build S(k) for every active mesh or path k-point.
