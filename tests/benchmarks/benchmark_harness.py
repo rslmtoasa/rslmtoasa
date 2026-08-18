@@ -428,9 +428,11 @@ def _expand_manifest_command(command: list[str], values: dict[str, str]) -> list
     expanded: list[str] = []
     for token in command:
         try:
-            expanded.append(token.format(**values))
+            value = token.format(**values)
         except KeyError as error:
             raise ValueError(f"manifest command uses unknown placeholder {{{error.args[0]}}}") from error
+        if value:
+            expanded.append(value)
     return expanded
 
 
@@ -444,12 +446,25 @@ def run_manifest(args: argparse.Namespace) -> int:
         "repo": str(repo),
         "binary": str(args.binary.resolve()),
         "profile_binary": str(args.profile_binary.resolve()) if args.profile_binary else "",
+        "gpu_flag": "--gpu-plugin" if args.gpu_plugin else "",
         "python": sys.executable,
         "scratch_root": str(args.scratch_root.resolve()),
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for entry in manifest["benchmarks"]:
         if selected and entry["name"] not in selected:
+            continue
+        needs_profile_binary = any(
+            "{profile_binary}" in token for token in entry.get("command", [])
+        )
+        if needs_profile_binary and not args.profile_binary:
+            message = (
+                f"benchmark {entry['name']!r} requires --profile-binary; "
+                "skipping optional profile entry"
+            )
+            if entry["name"] in selected:
+                raise ValueError(message)
+            print(f"SKIP {message}")
             continue
         command = _expand_manifest_command(entry["command"], values)
         metadata = capture_environment(
@@ -459,6 +474,7 @@ def run_manifest(args: argparse.Namespace) -> int:
             mpi_ranks=args.mpi_ranks,
         )
         metadata.update(entry.get("metadata", {}))
+        metadata["gpu_plugin"] = bool(args.gpu_plugin and "{gpu_flag}" in " ".join(entry.get("command", [])))
         wall_times, profile_samples, last_output = run_command(
             command,
             warmups=args.warmups,
@@ -495,6 +511,8 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser.add_argument("--manifest", type=Path, required=True)
     manifest_parser.add_argument("--binary", type=Path, required=True)
     manifest_parser.add_argument("--profile-binary", type=Path)
+    manifest_parser.add_argument("--gpu-plugin", action="store_true",
+                                 help="Pass --gpu-plugin to manifest commands that opt into CUDA recursion")
     manifest_parser.add_argument("--output-dir", type=Path, required=True)
     manifest_parser.add_argument("--scratch-root", type=Path, default=Path("/tmp/rslmto-acc00"))
     manifest_parser.add_argument("--name", action="append")

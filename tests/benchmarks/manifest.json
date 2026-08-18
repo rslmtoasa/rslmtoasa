@@ -31,7 +31,7 @@
       "class": "end_to_end",
       "labels": ["performance", "end_to_end", "rs", "block"],
       "fixture": "bcc Fe / block recursion",
-      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_bccFe_nsp2_block", "--scratch-root", "{scratch_root}/rs_block_fe", "--force-serial"],
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_bccFe_nsp2_block", "--scratch-root", "{scratch_root}/rs_block_fe", "--force-serial", "{gpu_flag}"],
       "metadata": {"matrix_dimension": 18, "k_points": 0, "tile_size": 0, "eigenvectors": false, "problem_type": "real-space block recursion", "transfer_policy": "not applicable"}
     },
     {
@@ -47,7 +47,7 @@
       "class": "end_to_end",
       "labels": ["performance", "end_to_end", "rs", "chebyshev", "kpm", "moment"],
       "fixture": "diamond Si / Chebyshev moments",
-      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_diamondSi_sp_chebyshev", "--scratch-root", "{scratch_root}/rs_chebyshev_si", "--force-serial"],
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_diamondSi_sp_chebyshev", "--scratch-root", "{scratch_root}/rs_chebyshev_si", "--force-serial", "{gpu_flag}"],
       "metadata": {"matrix_dimension": 16, "k_points": 0, "tile_size": 0, "eigenvectors": false, "problem_type": "real-space Chebyshev moments", "transfer_policy": "not applicable"}
     }
   ]

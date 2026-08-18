@@ -1,259 +1,399 @@
-"""Validation of librsrec against a literal NumPy transcription of the
-Fortran algorithms in recursion.f90 (hop_b/crecal_b, cheb_*_mom/
-chebyshev_recur_ll, hop/crecal, compute_moments_stochastic).
+"""Validate the public RS recursion CUDA ABI against NumPy references.
 
-Builds a random open-boundary cluster with an impurity region (hall) and a
-bulk region (ee, per type), with lsham SOC blocks, exactly the RS-LMTO data
-model. Then compares every driver."""
+This is an executable, hardware-side contract test.  It deliberately binds
+every C argument with ``ctypes``: an ABI mismatch must fail with a useful
+error instead of turning omitted arguments into garbage pointers and a
+segmentation fault.  The test covers matvec, all recursion drivers, orbital
+moments, and the four DOS/GF reconstruction entry points.
+"""
 
+from __future__ import annotations
+
+import argparse
 import ctypes as ct
+from pathlib import Path
+
 import numpy as np
 
+
 rng = np.random.default_rng(3)
+nb, L, kk, ntype, nmax, lld = 6, 4, 4**3, 2, 5, 4
+nnmax = 7
 
-# ---------------------------------------------------------------- cluster --
-nb = 6            # block size (use 6 instead of 18 for test speed)
-L = 4             # 4x4x4 simple-cubic open cluster
-kk = L**3
-ntype = 2
-nmax = 5          # first 5 atoms form the "impurity" region with hall
-lld = 12
-
-# neighbour list: on-site + 6 nearest neighbours (open boundaries)
 pos = np.array([(x, y, z) for x in range(L) for y in range(L) for z in range(L)])
 index = {tuple(p): i for i, p in enumerate(pos)}
-nnmax = 7
-nn = np.zeros((kk, nnmax), dtype=np.int32)        # Fortran nn(k,s), 1-based
+nn = np.zeros((kk, nnmax), dtype=np.int32)
 for k, p in enumerate(pos):
     nbrs = []
-    for d in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]:
+    for d in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
         q = tuple(p + np.array(d))
         if q in index:
             nbrs.append(index[q] + 1)
-    nn[k, 0] = 1 + len(nbrs)       # nn(k,1) counts on-site + neighbour slots
+    nn[k, 0] = 1 + len(nbrs)
     for s, nbi in enumerate(nbrs):
-        nn[k, 1 + s] = nbi
+        nn[k, s + 1] = nbi
 iz = (rng.integers(0, ntype, kk) + 1).astype(np.int32)
 
-def rblock(scale=1.0):
-    return (rng.normal(size=(nb, nb)) + 1j*rng.normal(size=(nb, nb))) * scale
 
-# NOTE on Hermiticity: like the real code, ee blocks are per (shell, type);
-# we don't enforce global Hermiticity of the cluster H -- the algorithms
-# don't require it for agreement testing (they mirror each other regardless).
+def rblock(scale: float = 1.0) -> np.ndarray:
+    return (rng.normal(size=(nb, nb)) + 1j * rng.normal(size=(nb, nb))) * scale
+
+
 ee = np.zeros((nb, nb, nnmax, ntype), dtype=np.complex128, order="F")
+hall = np.zeros((nb, nb, nnmax, nmax), dtype=np.complex128, order="F")
+lsham = np.zeros((nb, nb, ntype), dtype=np.complex128, order="F")
+va = np.zeros_like(ee)
+vb = np.zeros_like(ee)
 for t in range(ntype):
-    D = rblock(); ee[:, :, 0, t] = 0.5*(D + D.conj().T) - 0.4*np.eye(nb)
+    d = rblock()
+    ee[:, :, 0, t] = 0.5 * (d + d.conj().T) - 0.4 * np.eye(nb)
+    d = rblock(0.1)
+    lsham[:, :, t] = 0.5 * (d + d.conj().T)
     for s in range(1, nnmax):
         ee[:, :, s, t] = rblock(0.3)
-hall = np.zeros((nb, nb, nnmax, nmax), dtype=np.complex128, order="F")
+        va[:, :, s, t] = rblock(0.2)
+        vb[:, :, s, t] = rblock(0.2)
 for k in range(nmax):
-    D = rblock(); hall[:, :, 0, k] = 0.5*(D + D.conj().T) + 0.2*np.eye(nb)
+    d = rblock()
+    hall[:, :, 0, k] = 0.5 * (d + d.conj().T) + 0.2 * np.eye(nb)
     for s in range(1, nnmax):
         hall[:, :, s, k] = rblock(0.25)
-lsham = np.zeros((nb, nb, ntype), dtype=np.complex128, order="F")
-for t in range(ntype):
-    D = rblock(0.1); lsham[:, :, t] = 0.5*(D + D.conj().T)
-va = np.zeros_like(ee); vb = np.zeros_like(ee)
-for t in range(ntype):
-    for s in range(nnmax):
-        va[:, :, s, t] = rblock(0.2); vb[:, :, s, t] = rblock(0.2)
 
-# ------------------------------------------------- NumPy Fortran mirror ----
-def np_apply(x, which=0, a=1.0, b=0.0):
-    """x: (nb, nrhs, kk). Literal transcription of ham_vec_matmul /
-    velo_vec_matmul (izero gating dropped: zero psi contributes zero)."""
+
+def np_apply(x: np.ndarray, which: int = 0, a: float = 1.0, b: float = 0.0) -> np.ndarray:
     y = np.zeros_like(x)
     for k in range(kk):
         t = iz[k] - 1
         if which == 0:
-            if k < nmax:
-                blocks = hall[:, :, :, k]
-                y[:, :, k] += (blocks[:, :, 0] + lsham[:, :, t]) @ x[:, :, k]
-            else:
-                blocks = ee[:, :, :, t]
-                y[:, :, k] += (blocks[:, :, 0] + lsham[:, :, t]) @ x[:, :, k]
+            blocks = hall[:, :, :, k] if k < nmax else ee[:, :, :, t]
+            y[:, :, k] += (blocks[:, :, 0] + lsham[:, :, t]) @ x[:, :, k]
         else:
             blocks = (va if which == 1 else vb)[:, :, :, t]
             y[:, :, k] += blocks[:, :, 0] @ x[:, :, k]
-        nr = nn[k, 0]
-        for s in range(1, nr):
+        for s in range(1, nn[k, 0]):
             nbr = nn[k, s] - 1
             if nbr >= 0:
                 y[:, :, k] += blocks[:, :, s] @ x[:, :, nbr]
     return (y - b * x) / a
 
-def np_cheb(psi0, lld, a, b):
-    mu = np.zeros((nb, nb, 2*lld + 2), dtype=complex)
+
+def np_cheb(psi0: np.ndarray, steps: int, a: float, b: float) -> np.ndarray:
+    mu = np.zeros((nb, nb, 2 * steps + 2), dtype=complex)
     p0 = psi0.copy()
     mu[:, :, 0] = np.einsum("lmk,lnk->mn", psi0.conj(), p0)
     p1 = np_apply(p0, 0, a, b)
     mu[:, :, 1] = np.einsum("lmk,lnk->mn", psi0.conj(), p1)
-    for ll in range(1, lld + 1):
-        p2 = 2.0 * np_apply(p1, 0, a, b) - p0
-        d1 = np.einsum("lmk,lnk->mn", p1.conj(), p1)
-        d2 = np.einsum("lmk,lnk->mn", p2.conj(), p1)
-        mu[:, :, 2*ll]     = 2*d1 - mu[:, :, 0]
-        mu[:, :, 2*ll + 1] = 2*d2 - mu[:, :, 1]
+    for ll in range(1, steps + 1):
+        p2 = 2 * np_apply(p1, 0, a, b) - p0
+        mu[:, :, 2 * ll] = 2 * np.einsum("lmk,lnk->mn", p1.conj(), p1) - mu[:, :, 0]
+        mu[:, :, 2 * ll + 1] = 2 * np.einsum("lmk,lnk->mn", p2.conj(), p1) - mu[:, :, 1]
         p0, p1 = p1, p2
     return mu
 
-def np_block_lanczos(psi0, lld):
-    psi = psi0.copy(); pmn = np.zeros_like(psi)
-    a_b = np.zeros((nb, nb, lld), dtype=complex)
-    b2_b = np.zeros((nb, nb, lld), dtype=complex)
-    sum_b = np.eye(nb, dtype=complex)
-    for ll in range(lld - 1):
-        hpsi = np_apply(psi, 0, 1.0, 0.0)
-        An = np.einsum("lmk,lnk->mn", psi.conj(), hpsi)
-        a_b[:, :, ll] = An
-        pmn = hpsi - pmn
-        b2_b[:, :, ll] = sum_b
-        pmn = pmn - np.einsum("lmk,mn->lnk", psi, An)
-        sum_b = np.einsum("lmk,lnk->mn", pmn.conj(), pmn)
-        ev, U = np.linalg.eigh(sum_b)
-        lam = np.sqrt(np.maximum(0.0, ev))
-        B = (U * lam) @ U.conj().T
-        Bi = (U * np.where(lam > 0, 1.0/np.where(lam > 0, lam, 1), 0.0)) @ U.conj().T
-        psi_t = psi.copy()
-        psi = np.einsum("lmk,mn->lnk", pmn, Bi)
-        pmn = np.einsum("lmk,mn->lnk", psi_t, B)
-    b2_b[:, :, lld - 1] = sum_b
-    return a_b, b2_b
 
-def np_scalar_lanczos(site_j, lld):
+def np_orbital(left: np.ndarray, psi: np.ndarray, steps: int, a: float, b: float) -> np.ndarray:
+    out = np.zeros((nb, nb, steps), dtype=complex)
+    p0 = psi.copy()
+    out[:, :, 0] = np.einsum("lmk,lnk->mn", left.conj(), p0)
+    if steps == 1:
+        return out
+    p1 = np_apply(p0, 0, a, b)
+    out[:, :, 1] = np.einsum("lmk,lnk->mn", left.conj(), p1)
+    for n in range(2, steps):
+        p2 = 2 * np_apply(p1, 0, a, b) - p0
+        out[:, :, n] = np.einsum("lmk,lnk->mn", left.conj(), p2)
+        p0, p1 = p1, p2
+    return out
+
+
+def np_block_lanczos(psi0: np.ndarray, steps: int) -> tuple[np.ndarray, np.ndarray]:
+    psi = psi0.copy()
+    pmn = np.zeros_like(psi)
+    aa = np.zeros((nb, nb, steps), dtype=complex)
+    bb = np.zeros((nb, nb, steps), dtype=complex)
+    summ = np.eye(nb, dtype=complex)
+    for ll in range(steps - 1):
+        hpsi = np_apply(psi)
+        an = np.einsum("lmk,lnk->mn", psi.conj(), hpsi)
+        aa[:, :, ll] = an
+        pmn = hpsi - pmn - np.einsum("lmk,mn->lnk", psi, an)
+        bb[:, :, ll] = summ
+        summ = np.einsum("lmk,lnk->mn", pmn.conj(), pmn)
+        ev, u = np.linalg.eigh(summ)
+        lam = np.sqrt(np.maximum(0.0, ev))
+        bmat = (u * lam) @ u.conj().T
+        inv = (u * np.where(lam > 0, 1.0 / np.where(lam > 0, lam, 1), 0.0)) @ u.conj().T
+        psi_old = psi.copy()
+        psi = np.einsum("lmk,mn->lnk", pmn, inv)
+        pmn = np.einsum("lmk,mn->lnk", psi_old, bmat)
+    bb[:, :, steps - 1] = summ
+    return aa, bb
+
+
+def np_scalar_lanczos(site: int, steps: int) -> tuple[np.ndarray, np.ndarray]:
     psi = np.zeros((nb, nb, kk), dtype=complex)
     for l in range(nb):
-        psi[l, l, site_j - 1] = 1.0
+        psi[l, l, site - 1] = 1
     pmn = np.zeros_like(psi)
-    a = np.zeros((lld, nb)); b2 = np.zeros((lld, nb))
+    aa = np.zeros((steps, nb))
+    bb = np.zeros((steps, nb))
     summ = np.ones(nb)
-    for ll in range(lld - 1):
-        hpsi = np_apply(psi, 0, 1.0, 0.0)
+    for ll in range(steps - 1):
+        hpsi = np_apply(psi)
         acol = np.einsum("lck,lck->c", psi.conj(), hpsi).real
-        pmn = pmn + hpsi
-        a[ll] = acol; b2[ll] = summ
+        pmn = hpsi + pmn
+        aa[ll] = acol
+        bb[ll] = summ
         pmn = pmn - acol[None, :, None] * psi
         summ = np.einsum("lck,lck->c", pmn.conj(), pmn).real
-        psi_t = psi.copy()
+        psi_old = psi.copy()
         psi = pmn / np.sqrt(summ)[None, :, None]
-        pmn = -psi_t * np.sqrt(summ)[None, :, None]
-    b2[lld - 1] = summ
-    return a, b2
+        pmn = -psi_old * np.sqrt(summ)[None, :, None]
+    bb[steps - 1] = summ
+    return aa, bb
 
-def np_stochastic(psiref, lld, a, b):
-    left = np.zeros((nb, nb, kk, lld), dtype=complex)
-    w1 = psiref.copy(); left[..., 0] = w1
-    for m in range(2, lld + 1):
+
+def np_stochastic(psiref: np.ndarray, steps: int, a: float, b: float) -> np.ndarray:
+    left = np.zeros((nb, nb, kk, steps), dtype=complex)
+    w1 = psiref.copy()
+    left[..., 0] = w1
+    for m in range(2, steps + 1):
         if m == 2:
-            w0 = w1.copy(); w1 = np_apply(w0, 0, a, b)
+            w0, w1 = w1.copy(), np_apply(w1, 0, a, b)
         else:
-            w2 = 2*np_apply(w1, 0, a, b) - w0
-            w0, w1 = w1, w2
+            w0, w1 = w1, 2 * np_apply(w1, 0, a, b) - w0
         left[..., m - 1] = w1
-    mu = np.zeros((nb, nb, lld, lld), dtype=complex)
-    v0 = np_apply(psiref, 2, 1.0, 0.0)
-    for n in range(1, lld + 1):
+    mu = np.zeros((nb, nb, steps, steps), dtype=complex)
+    v0 = np_apply(psiref, 2)
+    for n in range(1, steps + 1):
         if n == 1:
             v1 = v0.copy()
         elif n == 2:
-            v0 = v1.copy(); v1 = np_apply(v0, 0, a, b)
+            v0, v1 = v1.copy(), np_apply(v1, 0, a, b)
         else:
-            v2 = 2*np_apply(v1, 0, a, b) - v0
-            v0, v1 = v1, v2
-        R = np_apply(v1, 1, 1.0, 0.0)
-        for m in range(lld):
-            mu[:, :, n - 1, m] = np.einsum("lik,ljk->ij",
-                                           left[..., m].conj(), R)
+            v0, v1 = v1, 2 * np_apply(v1, 0, a, b) - v0
+        right = np_apply(v1, 1)
+        for m in range(steps):
+            mu[:, :, n - 1, m] = np.einsum("lik,ljk->ij", left[..., m].conj(), right)
     return mu
 
-# ------------------------------------------------------------ C library ----
-lib = ct.CDLL("./librsrec_cpu.so")
-lib.rsrec_create.restype = ct.c_void_p
-lib.rsrec_last_error.restype = ct.c_char_p
-P = lambda x: x.ctypes.data_as(ct.c_void_p)
 
-ctx = ct.c_void_p(lib.rsrec_create(kk, nb, nnmax, ntype, nmax, 0))
-assert ctx, lib.rsrec_last_error().decode()
-nnF = np.asfortranarray(nn)
-rc = lib.rsrec_set_hamiltonian(ctx, P(ee), P(hall), P(lsham),
-                               nnF.ctypes.data_as(ct.POINTER(ct.c_int)),
-                               iz.ctypes.data_as(ct.POINTER(ct.c_int)))
-assert rc == 0, lib.rsrec_last_error().decode()
-rc = lib.rsrec_set_velocity(ctx, P(va), P(vb)); assert rc == 0
+def jackson(n: int) -> np.ndarray:
+    i = np.arange(n, dtype=float)
+    theta = np.pi * i / (n + 1.0)
+    return ((n - i + 1) * np.cos(theta) + np.sin(theta) * (1 / np.tan(np.pi / (n + 1)))) / (n + 1)
 
-def relerr(x, y):
-    return np.max(np.abs(x - y)) / max(np.max(np.abs(y)), 1e-300)
 
-# 1) matvec ------------------------------------------------------------------
-x = np.asfortranarray(rng.normal(size=(nb, nb, kk))
-                      + 1j*rng.normal(size=(nb, nb, kk)))
-y = np.zeros_like(x, order="F")
-for which in (0, 1, 2):
-    lib.rsrec_op_apply(ctx, which, P(x), P(y), nb, ct.c_double(2.3),
-                       ct.c_double(-0.4))
-    print(f"op_apply which={which}: rel.err =",
-          f"{relerr(y, np_apply(x, which, 2.3, -0.4)):.2e}")
+def cheb_transfer(n: int, energies: np.ndarray, a: float, b: float) -> np.ndarray:
+    x = (energies - b) / a
+    theta = np.arccos(x)
+    pref = 1 / np.sqrt(a * a - (energies - b) ** 2)
+    i = np.arange(n, dtype=float)[:, None]
+    c = np.where(i == 0, 1.0, 2.0)
+    return jackson(n)[:, None] * c * (-1j) * np.exp(-1j * i * theta[None, :]) * pref[None, :]
 
-# 2) Chebyshev moments (single-site init, like chebyshev_recur) --------------
-a_s, b_s = 9.0, 0.1
-psi0 = np.zeros((nb, nb, kk), dtype=complex, order="F")
-for l in range(nb):
-    psi0[l, l, 7] = 1.0
-mu_c = np.zeros((nb, nb, 2*lld + 2), dtype=complex, order="F")
-rc = lib.rsrec_chebyshev_moments(ctx, P(psi0), lld, ct.c_double(a_s),
-                                 ct.c_double(b_s), P(mu_c))
-assert rc == 0, lib.rsrec_last_error().decode()
-print("chebyshev_moments (site): rel.err =",
-      f"{relerr(mu_c, np_cheb(psi0, lld, a_s, b_s)):.2e}")
 
-# 2b) pair init with the reci=3 sign combo, like chebyshev_recur_ij ----------
-psi0 = np.zeros((nb, nb, kk), dtype=complex, order="F")
-i_at, j_at = 2, 30
-for l in range(nb):
-    psi0[l, l, i_at] = 1/np.sqrt(2.0)
-    psi0[l, l, j_at] = 1j/np.sqrt(2.0)
-rc = lib.rsrec_chebyshev_moments(ctx, P(psi0), lld, ct.c_double(a_s),
-                                 ct.c_double(b_s), P(mu_c))
-print("chebyshev_moments (pair): rel.err =",
-      f"{relerr(mu_c, np_cheb(psi0, lld, a_s, b_s)):.2e}")
+def block_reference(a_b: np.ndarray, b2_b: np.ndarray, a_inf: np.ndarray,
+                    b_inf: np.ndarray, energies: np.ndarray, eta_re: np.ndarray,
+                    eta_im: np.ndarray, sym: int) -> np.ndarray:
+    steps, natoms = a_b.shape[2], a_b.shape[3]
+    out = np.zeros((nb, nb, len(energies), natoms), dtype=complex, order="F")
+    for n in range(natoms):
+        ad = 0.5 * (a_inf[0, n] + a_inf[9, n]) if nb >= 10 else a_inf[0, n]
+        bd = 0.5 * (b_inf[0, n] + b_inf[9, n]) if nb >= 10 else b_inf[0, n]
+        for e, energy in enumerate(energies):
+            q = np.zeros((nb, nb), dtype=complex)
+            for i in range(nb):
+                ai = ad if sym else a_inf[i, n]
+                bi = bd if sym else b_inf[i, n]
+                f = 1.025 if (not sym and i == 0) else 1.0
+                det = (energy - ai - 2 * bi * f) * (energy - ai + 2 * bi * f)
+                root = np.sqrt(complex(det, 0))
+                q[i, i] = 0.5 * ((energy + eta_re[e] - ai - root.real)
+                                 + 1j * (eta_im[e] - root.imag))
+            for lc in range(steps - 1, 0, -1):
+                qin = (energy + eta_re[e] + 1j * eta_im[e]) * np.eye(nb) - a_b[:, :, lc - 1, n] - q
+                g = np.linalg.inv(qin)
+                q = b2_b[:, :, lc - 1, n].conj().T @ g @ b2_b[:, :, lc - 1, n]
+            out[:, :, e, n] = q
+    return out
 
-# 3) block Lanczos ------------------------------------------------------------
-psi0 = np.zeros((nb, nb, kk), dtype=complex, order="F")
-for l in range(nb):
-    psi0[l, l, 9] = 1.0
-a_b = np.zeros((nb, nb, lld), dtype=complex, order="F")
-b2_b = np.zeros((nb, nb, lld), dtype=complex, order="F")
-rc = lib.rsrec_block_lanczos(ctx, P(psi0), lld, P(a_b), P(b2_b))
-assert rc == 0, lib.rsrec_last_error().decode()
-a_ref, b2_ref = np_block_lanczos(psi0, lld)
-print("block_lanczos: a rel.err =", f"{relerr(a_b, a_ref):.2e}",
-      " b2 rel.err =", f"{relerr(b2_b, b2_ref):.2e}")
 
-# 4) scalar Lanczos ------------------------------------------------------------
-a_o = np.zeros((lld, nb), order="F"); b2_o = np.zeros((lld, nb), order="F")
-rc = lib.rsrec_scalar_lanczos(ctx, 10, lld,
-                              a_o.ctypes.data_as(ct.POINTER(ct.c_double)),
-                              b2_o.ctypes.data_as(ct.POINTER(ct.c_double)))
-assert rc == 0, lib.rsrec_last_error().decode()
-a_ref, b2_ref = np_scalar_lanczos(10, lld)
-print("scalar_lanczos: a rel.err =", f"{relerr(a_o, a_ref):.2e}",
-      " b2 rel.err =", f"{relerr(b2_o, b2_ref):.2e}")
+def relerr(actual: np.ndarray, expected: np.ndarray) -> float:
+    return float(np.max(np.abs(actual - expected)) / max(float(np.max(np.abs(expected))), 1e-300))
 
-# 5) stochastic moments --------------------------------------------------------
-psiref = np.zeros((nb, nb, kk), dtype=complex, order="F")
-for k in range(kk):
-    ph = np.exp(2j*np.pi*rng.random())
-    for l in range(nb):
-        psiref[l, l, k] = ph
-psiref /= np.sqrt(kk)
-lld_s = 6
-mu_nm = np.zeros((nb, nb, lld_s, lld_s), dtype=complex, order="F")
-rc = lib.rsrec_stochastic_moments(ctx, P(psiref), lld_s, ct.c_double(a_s),
-                                  ct.c_double(b_s), P(mu_nm))
-assert rc == 0, lib.rsrec_last_error().decode()
-print("stochastic_moments: rel.err =",
-      f"{relerr(mu_nm, np_stochastic(psiref, lld_s, a_s, b_s)):.2e}")
 
-lib.rsrec_destroy(ctx)
-print("ALL DRIVERS VALIDATED")
+def check(name: str, actual: np.ndarray, expected: np.ndarray, tol: float = 2e-8) -> None:
+    err = relerr(actual, expected)
+    print(f"{name}: rel.err = {err:.2e} (tol {tol:.1e})")
+    if not np.isfinite(err) or err > tol:
+        raise AssertionError(f"{name} exceeds tolerance: {err:.3e}")
+
+
+def ptr(a: np.ndarray) -> ct.c_void_p:
+    return a.ctypes.data_as(ct.c_void_p)
+
+
+def iptr(a: np.ndarray):
+    return a.ctypes.data_as(ct.POINTER(ct.c_int))
+
+
+def dptr(a: np.ndarray):
+    return a.ctypes.data_as(ct.POINTER(ct.c_double))
+
+
+def configure(lib: ct.CDLL) -> None:
+    v, i, d = ct.c_void_p, ct.c_int, ct.c_double
+    pi, pd = ct.POINTER(i), ct.POINTER(d)
+    lib.rsrec_create.argtypes = [i, i, i, i, i, i]
+    lib.rsrec_create.restype = v
+    lib.rsrec_destroy.argtypes = [v]
+    lib.rsrec_last_error.restype = ct.c_char_p
+    lib.rsrec_set_hamiltonian.argtypes = [v, v, v, v, pi, pi, v, v, v]
+    lib.rsrec_set_hamiltonian.restype = i
+    lib.rsrec_set_velocity.argtypes = [v, v, v, v, v]
+    lib.rsrec_set_velocity.restype = i
+    lib.rsrec_set_precision.argtypes = [v, i]
+    lib.rsrec_set_precision.restype = i
+    lib.rsrec_op_apply.argtypes = [v, i, v, v, i, d, d]
+    lib.rsrec_op_apply.restype = i
+    lib.rsrec_chebyshev_moments.argtypes = [v, v, i, d, d, v]
+    lib.rsrec_chebyshev_moments.restype = i
+    lib.rsrec_block_lanczos.argtypes = [v, v, i, v, v, i]
+    lib.rsrec_block_lanczos.restype = i
+    lib.rsrec_scalar_lanczos.argtypes = [v, i, i, pd, pd]
+    lib.rsrec_scalar_lanczos.restype = i
+    lib.rsrec_stochastic_moments.argtypes = [v, v, i, d, d, v]
+    lib.rsrec_stochastic_moments.restype = i
+    lib.rsrec_orbital_moments.argtypes = [v, v, v, i, d, d, v]
+    lib.rsrec_orbital_moments.restype = i
+    lib.rsrec_chebyshev_dos.argtypes = [v, v, i, i, pd, i, d, d, v]
+    lib.rsrec_chebyshev_dos.restype = i
+    lib.rsrec_chebyshev_gf_eta.argtypes = [v, v, i, i, v, i, v]
+    lib.rsrec_chebyshev_gf_eta.restype = i
+    lib.rsrec_block_dos.argtypes = [v, v, v, pd, pd, pd, i, d, d, i, i, i, v]
+    lib.rsrec_block_dos.restype = i
+    lib.rsrec_block_gf_eta.argtypes = [v, v, v, pd, pd, d, pd, pd, i, i, i, i, v]
+    lib.rsrec_block_gf_eta.restype = i
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--library", default="./librsrec_gpu.so", type=Path)
+    args = parser.parse_args()
+    lib = ct.CDLL(str(args.library.resolve()))
+    configure(lib)
+
+    def error() -> str:
+        msg = lib.rsrec_last_error()
+        return msg.decode() if msg else "unknown rsrec error"
+
+    def call(name: str, rc: int) -> None:
+        if rc:
+            raise RuntimeError(f"{name} failed: {error()}")
+
+    nn_f = np.asfortranarray(nn)
+    ctx = lib.rsrec_create(kk, nb, nnmax, ntype, nmax, 0)
+    if not ctx:
+        raise RuntimeError(error())
+    try:
+        call("set_hamiltonian", lib.rsrec_set_hamiltonian(
+            ctx, ptr(ee), ptr(hall), ptr(lsham), iptr(nn_f), iptr(iz), None, None, None))
+        call("set_velocity", lib.rsrec_set_velocity(ctx, ptr(va), ptr(vb), None, None))
+        call("set_precision", lib.rsrec_set_precision(ctx, 1))
+
+        x = np.asfortranarray(rng.normal(size=(nb, nb, kk)) + 1j * rng.normal(size=(nb, nb, kk)))
+        y = np.zeros_like(x, order="F")
+        for which in (0, 1, 2):
+            call("op_apply", lib.rsrec_op_apply(ctx, which, ptr(x), ptr(y), nb, 2.3, -0.4))
+            check(f"op_apply which={which}", y, np_apply(x, which, 2.3, -0.4))
+
+        a_s, b_s = 9.0, 0.1
+        psi = np.zeros((nb, nb, kk), dtype=complex, order="F")
+        for l in range(nb):
+            psi[l, l, 7] = 1
+        mu = np.zeros((nb, nb, 2 * lld + 2), dtype=complex, order="F")
+        call("chebyshev_moments(site)", lib.rsrec_chebyshev_moments(ctx, ptr(psi), lld, a_s, b_s, ptr(mu)))
+        check("chebyshev_moments site", mu, np_cheb(psi, lld, a_s, b_s))
+        psi[:, :, :] = 0
+        for l in range(nb):
+            psi[l, l, 2] = 1 / np.sqrt(2)
+            psi[l, l, 30] = 1j / np.sqrt(2)
+        call("chebyshev_moments(pair)", lib.rsrec_chebyshev_moments(ctx, ptr(psi), lld, a_s, b_s, ptr(mu)))
+        check("chebyshev_moments pair", mu, np_cheb(psi, lld, a_s, b_s))
+
+        psi[:, :, :] = 0
+        for l in range(nb):
+            psi[l, l, 9] = 1
+        aa = np.zeros((nb, nb, lld), dtype=complex, order="F")
+        bb = np.zeros_like(aa)
+        call("block_lanczos", lib.rsrec_block_lanczos(ctx, ptr(psi), lld, ptr(aa), ptr(bb), 1))
+        aa_ref, bb_ref = np_block_lanczos(psi, lld)
+        check("block_lanczos a", aa, aa_ref)
+        check("block_lanczos b2", bb, bb_ref)
+
+        ao = np.zeros((lld, nb), dtype=np.float64, order="F")
+        bo = np.zeros_like(ao)
+        call("scalar_lanczos", lib.rsrec_scalar_lanczos(ctx, 10, lld, dptr(ao), dptr(bo)))
+        ao_ref, bo_ref = np_scalar_lanczos(10, lld)
+        check("scalar_lanczos a", ao, ao_ref)
+        check("scalar_lanczos b2", bo, bo_ref)
+
+        psiref = np.zeros((nb, nb, kk), dtype=complex, order="F")
+        for k in range(kk):
+            psiref[:, :, k] = np.eye(nb) * np.exp(2j * np.pi * rng.random()) / np.sqrt(kk)
+        steps_s = 6
+        mu_nm = np.zeros((nb, nb, steps_s, steps_s), dtype=complex, order="F")
+        call("stochastic_moments", lib.rsrec_stochastic_moments(ctx, ptr(psiref), steps_s, a_s, b_s, ptr(mu_nm)))
+        check("stochastic_moments", mu_nm, np_stochastic(psiref, steps_s, a_s, b_s), 5e-8)
+
+        left = np.asfortranarray(rng.normal(size=psiref.shape) + 1j * rng.normal(size=psiref.shape))
+        mu_o = np.zeros((nb, nb, lld), dtype=complex, order="F")
+        call("orbital_moments", lib.rsrec_orbital_moments(ctx, ptr(left), ptr(psiref), lld, a_s, b_s, ptr(mu_o)))
+        check("orbital_moments", mu_o, np_orbital(left, psiref, lld, a_s, b_s))
+
+        # Reconstruction contracts use the exact output layouts documented in rsrec.h.
+        natoms, nmom, nv = 2, 2 * lld + 2, 5
+        mu_r = np.asfortranarray(rng.normal(size=(nb, nb, nmom, natoms)) + 1j * rng.normal(size=(nb, nb, nmom, natoms)))
+        energies = np.linspace(-2.0, 2.0, nv)
+        g_dos = np.zeros((nb, nb, nv, natoms), dtype=complex, order="F")
+        energies_c = np.ascontiguousarray(energies, dtype=np.float64)
+        call("chebyshev_dos", lib.rsrec_chebyshev_dos(ctx, ptr(mu_r), nmom, natoms, dptr(energies_c), nv, a_s, b_s, ptr(g_dos)))
+        check("chebyshev_dos", g_dos, np.einsum("ijon,oe->ijen", mu_r, cheb_transfer(nmom, energies, a_s, b_s)), 1e-7)
+
+        eta_re = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+        eta_im = np.array([0.03, 0.07, 0.12], dtype=np.float64)
+        ef = 0.25
+        zenergies = ef + eta_re + 1j * eta_im
+        ztransfer = np.empty((nmom, len(zenergies)), dtype=complex, order="F")
+        for e, z in enumerate(zenergies):
+            ztransfer[:, e] = cheb_transfer(nmom, np.array([z], dtype=complex), a_s, b_s)[:, 0]
+        g_eta = np.zeros((nb, nb, len(zenergies), natoms), dtype=complex, order="F")
+        call("chebyshev_gf_eta", lib.rsrec_chebyshev_gf_eta(ctx, ptr(mu_r), nmom, natoms, ptr(ztransfer), len(zenergies), ptr(g_eta)))
+        check("chebyshev_gf_eta", g_eta, np.einsum("ijon,oe->ijen", mu_r, ztransfer), 1e-7)
+
+        steps_b, nat_b = 3, 2
+        ab = np.zeros((nb, nb, steps_b, nat_b), dtype=complex, order="F")
+        b2 = np.zeros_like(ab)
+        for n in range(nat_b):
+            for l in range(steps_b):
+                ab[:, :, l, n] = np.diag(0.1 * (l + 1) + 0.02 * np.arange(nb))
+                b2[:, :, l, n] = np.diag(0.8 + 0.03 * np.arange(nb))
+        a_inf = np.asfortranarray(0.1 * np.arange(nb)[:, None] + 0.01 * np.arange(nat_b)[None, :])
+        b_inf = np.asfortranarray(0.9 + 0.02 * np.arange(nb)[:, None] + 0.01 * np.arange(nat_b)[None, :])
+        energies_b = np.linspace(-1.0, 1.0, 4)
+        g_block = np.zeros((nb, nb, len(energies_b), nat_b), dtype=complex, order="F")
+        energies_b_c = np.ascontiguousarray(energies_b, dtype=np.float64)
+        call("block_dos", lib.rsrec_block_dos(ctx, ptr(ab), ptr(b2), dptr(a_inf), dptr(b_inf), dptr(energies_b_c), len(energies_b), 0.0, 0.05, nat_b, steps_b, 0, ptr(g_block)))
+        check("block_dos", g_block, block_reference(ab, b2, a_inf, b_inf, energies_b, np.zeros(4), np.full(4, 0.05), 0), 1e-7)
+        g_block_eta = np.zeros((nb, nb, len(eta_im), nat_b), dtype=complex, order="F")
+        call("block_gf_eta", lib.rsrec_block_gf_eta(ctx, ptr(ab), ptr(b2), dptr(a_inf), dptr(b_inf), ef, dptr(eta_re), dptr(eta_im), len(eta_im), nat_b, steps_b, 0, ptr(g_block_eta)))
+        check("block_gf_eta", g_block_eta, block_reference(ab, b2, a_inf, b_inf, np.full(3, ef), eta_re, eta_im, 0), 1e-7)
+    finally:
+        lib.rsrec_destroy(ctx)
+    print("ALL LOW-LEVEL CUDA ROUTES VALIDATED")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

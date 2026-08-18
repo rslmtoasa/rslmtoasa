@@ -46,8 +46,14 @@ python3 tests/benchmarks/benchmark_harness.py run-manifest \
   --output-dir results/benchmarks
 ```
 
+For RS CUDA timings, add `--gpu-plugin`. The manifest opts the Block and
+Chebyshev RS entries into `control%gpu_plugin=true`; reciprocal entries remain
+CPU routes, and the current nsp=2 scalar-Lanczos fixture remains CPU-only by
+design.
+
 Run one entry with `--name reciprocal_si_sp`, or omit `--profile-binary` when
-running only production entries. For a single production command, the
+running only production entries; the optional `reciprocal_cpu_profile` entry
+is skipped automatically in that case. For a single production command, the
 equivalent explicit form is:
 
 ```bash

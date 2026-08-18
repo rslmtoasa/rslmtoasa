@@ -12,7 +12,7 @@ submodule (green_mod) green_chebyshev
    use chebyshev_fast_mod, only: cheb_green_fast
    use math_mod, only: i_unit, jackson_kernel, t_polynomial
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
-   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context
+   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
    use logger_mod, only: g_logger
    implicit none
 
@@ -96,6 +96,11 @@ contains
       real(rp) :: a, b, emin_win, emax_win
       integer :: nv, n_mom
       type(rsrec_cuda_backend), pointer :: gpu_backend
+
+      if (.not. rsrec_cuda_plugin_compiled()) then
+         call this%chebyshev_green_ij(istart)
+         return
+      end if
 
       this%g0 = 0.0d0
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
@@ -268,6 +273,12 @@ contains
 
       do_gpu = this%control%gpu_plugin
       if (present(use_gpu)) do_gpu = use_gpu
+      if (do_gpu .and. .not. rsrec_cuda_plugin_compiled()) then
+         call g_logger%warning('GPU Chebyshev Green reconstruction requested, but this executable '// &
+            'was built without ENABLE_CUDA_PLUGIN. Falling back to the CPU reconstruction.', &
+            __FILE__, __LINE__)
+         do_gpu = .false.
+      end if
       if (present(eta)) then
          g_ef = 0.0d0
       else

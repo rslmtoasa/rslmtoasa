@@ -632,6 +632,8 @@ def main() -> None:
                              "set to the base case name so a serial/mpi pair shares one reference")
     parser.add_argument("--force-serial", action="store_true",
                         help="Force mpi_procs=1 regardless of case mpi_procs or --mpi-enabled")
+    parser.add_argument("--gpu-plugin", action="store_true",
+                        help="Set the GPU recursion control flag for CUDA routes")
     parser.add_argument("--mpi-procs", type=int, default=None,
                         help="Override the case MPI rank count (requires --mpi-enabled)")
 
@@ -646,6 +648,8 @@ def main() -> None:
     args = parser.parse_args()
 
     case = load_case(args.cases_json, args.case_name)
+    if args.gpu_plugin:
+        case.setdefault("namelists", {}).setdefault("control", {})["gpu_plugin"] = True
     binary = os.path.abspath(args.binary)
     cases_dir = os.path.join(os.path.dirname(os.path.abspath(args.cases_json)), "cases")
     case_dir = os.path.join(cases_dir, case["case"])

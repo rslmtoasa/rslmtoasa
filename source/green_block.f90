@@ -10,7 +10,8 @@
 submodule (green_mod) green_block
 
    use mpi_mod
-   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context
+   use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
+   use logger_mod, only: g_logger
    implicit none
 
 contains
@@ -85,6 +86,11 @@ contains
       real(rp), dimension(nb, nb, 4) :: a_inf, b_inf
       real(rp), dimension(nb, 4) :: a_inf_d, b_inf_d
       type(rsrec_cuda_backend), pointer :: gpu_backend
+
+      if (.not. rsrec_cuda_plugin_compiled()) then
+         call this%block_green_ij(istart)
+         return
+      end if
 
       ll = this%control%lld
       ldim = nb
@@ -178,7 +184,7 @@ contains
       real(rp), dimension(64) :: x, w
 
       if (eta_mode) then
-         if (this%control%gpu_plugin .and. &
+         if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled() .and. &
              (this%control%recur == 'block' .or. this%control%recur == 'chebyshev')) then
             call this%calculate_intersite_gf_eta_gpu()
             return
@@ -245,13 +251,13 @@ contains
          ja_temp = (ia - 1)*4 + 1
          select case (this%control%recur)
          case ('block')
-            if (this%control%gpu_plugin) then
+            if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
                call this%block_green_ij_gpu(ja_temp)
             else
                call this%block_green_ij(ja_temp)
             end if
          case ('chebyshev')
-            if (this%control%gpu_plugin) then
+            if (this%control%gpu_plugin .and. rsrec_cuda_plugin_compiled()) then
                call this%chebyshev_green_ij_gpu(ja_temp)
             else
                call this%chebyshev_green_ij(ja_temp)
@@ -442,7 +448,12 @@ contains
          return
       end if
 
-      if (.not. this%control%gpu_plugin) then
+      if (.not. this%control%gpu_plugin .or. .not. rsrec_cuda_plugin_compiled()) then
+         if (this%control%gpu_plugin .and. .not. rsrec_cuda_plugin_compiled()) then
+            call g_logger%warning('GPU block Green reconstruction requested, but this executable '// &
+               'was built without ENABLE_CUDA_PLUGIN. Falling back to the CPU reconstruction.', &
+               __FILE__, __LINE__)
+         end if
          do n_glob = start_atom, end_atom
             n = g2l_map(n_glob)
             call this%bgreen(this%g0(:, :, :, n), n, 1, nv, a_inf(:, :, n), b_inf(:, :, n), eta0)

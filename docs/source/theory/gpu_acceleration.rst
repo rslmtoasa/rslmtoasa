@@ -108,10 +108,17 @@ Fallback and correctness
 
 The GPU path is designed to be **numerically consistent** with the CPU path,
 not a separate approximation: it computes the same recursion coefficients /
-moments to the same tolerances. If any precondition fails (plugin not compiled
-in, no device, incompatible backend, feature guard such as the ``nsp=1``
+moments to the same tolerances. If any checked precondition fails (plugin not
+compiled in, incompatible backend, feature guard such as the ``nsp=1``
 restriction on scalar Lanczos or the periodicity requirement on ``fft``/``conv``),
-the run emits a warning and continues on the CPU path rather than aborting.
+the run emits a warning and continues on the CPU path. A CUDA-enabled build
+still requires a working CUDA device when the GPU route is actually selected.
+
+The current route inventory and evidence level are recorded in
+``docs/dev/ACC-01_RS_CUDA_COVERAGE.md``. In particular, direct DOS/GF,
+orbital-moment, and conductivity-moment array comparisons remain hardware
+validation work; the existing production matrix primarily checks Chebyshev
+SCF observables.
 
 Device data is fingerprinted and cached (context creation, BSR upload) so that
 repeated calls with the same Hamiltonian — e.g. across energy points — do not

@@ -771,18 +771,56 @@ Run the ACC-00 harness on the established GPU routes and record which existing G
 
 ## Checklist
 
-- [ ] RS GPU API inventoried
-- [ ] CPU counterpart mapped for each route
-- [ ] existing GPU tests mapped
-- [ ] Chebyshev CPU/GPU contract established
-- [ ] Block CPU/GPU contract established
-- [ ] Lanczos CPU/GPU contract established where supported
-- [ ] GF outputs compared where supported
-- [ ] KPM/moment outputs compared where supported
-- [ ] HOH/CCOR GPU scope documented
-- [ ] unsupported combinations not hidden by fallback
-- [ ] benchmark results recorded
-- [ ] support matrix updated
+- [x] RS GPU API inventoried
+- [x] CPU counterpart mapped for each route
+- [x] existing GPU tests mapped
+- [x] Chebyshev CPU/GPU contract established on GPU hardware
+- [x] Block CPU/GPU contract established on GPU hardware
+- [x] Lanczos CPU/GPU contract established on GPU hardware where supported
+- [x] GF outputs compared where supported
+- [x] KPM/moment outputs compared where supported
+- [x] HOH/CCOR GPU scope documented
+- [x] unsupported combinations not hidden by fallback
+- [x] benchmark results recorded on GPU hardware
+- [x] support matrix updated
+
+## ACC-01 completion record
+
+The inventory and evidence matrix is in
+`docs/dev/ACC-01_RS_CUDA_COVERAGE.md`. The no-GPU source/API contract is
+`tests/cuda/test_plugin_surface.py` and is registered as `CudaPluginSurface`
+when standalone unit tests are enabled. The executable low-level contract is
+`tests/cuda/rsrec_validate.py`, built and launched by
+`tests/cuda/build_and_validate.sh`; it now binds every public C argument and
+compares recursion, orbital, DOS, and eta-GF outputs with NumPy references.
+ACC-01 also closes two dispatch issues found during the audit: structured
+FFT/conv orbital moments are rejected before entering an implementation that
+cannot support them, and Green reconstruction falls back when the executable
+was built without the CUDA plugin.
+
+ACC-01 is complete. The user-provided hardware
+campaign passed all low-level CUDA routes (15 reported comparisons) at
+approximately 1e-15 relative error, the CPU regression matrix at 10/10, and the production Chebyshev
+CPU/GPU consistency matrix at 8/8. The ACC-00 harness then measured 2.872801
+s for RS Block Fe and 1.922788 s for RS Chebyshev Si with `gpu_plugin=true`
+on an NVIDIA RTX A4000. Compared with the same-build CPU medians, these are
+1.14x and 5.73x speedups respectively. The build reported
+`ENABLE_MKL_KERNELS=OFF`; optional MKL backend cases were skipped.
+
+**Files changed:** `source/recursion_core.f90`, `source/green_chebyshev.f90`,
+`source/green_block.f90`, `tests/cuda/test_plugin_surface.py`,
+`tests/cuda/rsrec_validate.py`, `tests/cuda/build_and_validate.sh`,
+`tests/run_test.py`, `tests/benchmarks/benchmark_harness.py`,
+`tests/benchmarks/manifest.json`, `tests/benchmarks/README.md`,
+`docs/dev/ACC-01_RS_CUDA_COVERAGE.md`, `docs/source/theory/gpu_acceleration.rst`,
+and this blueprint.
+
+**Checks run:** `python3 tests/cuda/test_plugin_surface.py` (pass), Python
+syntax compilation (pass), CUDA compilation through the project CUDA build
+(pass), standalone numerical validator (15 reported comparisons pass), CPU regression matrix
+(10/10 pass), production CPU/GPU consistency matrix (8/8 pass), and the
+GPU-specific ACC-00 Block/Chebyshev benchmark (3 repetitions each). The
+optional MKL cases were skipped because `ENABLE_MKL_KERNELS=OFF`.
 
 **Commit message:** `Establish RS CUDA correctness coverage`
 

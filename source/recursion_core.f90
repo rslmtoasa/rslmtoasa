@@ -120,6 +120,12 @@ contains
          return
       end if
       if (gpu_periodic_backend(this)) then
+         if (trim(feature) == 'chebyshev_orbital_mod()') then
+            call g_logger%warning('gpu_backend='//trim(this%control%gpu_backend)// &
+               ' does not support orbital moments. Falling back to current recursion path.', &
+               __FILE__, __LINE__)
+            return
+         end if
          if (.not. this%lattice%pbc) then
             call g_logger%warning('gpu_backend='//trim(this%control%gpu_backend)// &
                ' requires lattice%pbc=.true.. Falling back to current recursion path.', &
