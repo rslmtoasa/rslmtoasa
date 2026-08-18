@@ -548,6 +548,10 @@ contains
       integer, allocatable :: representative(:), unique_of_k(:)
       real(rp), allocatable :: folded(:, :)
       logical :: use_generalized
+      logical :: assemble_on_backend
+      type(reciprocal_execution_capabilities) :: backend_caps
+      type(reciprocal_assembler) :: host_assembler
+      type(reciprocal_workspace) :: host_workspace
       type(reciprocal_execution_request) :: request
       type(reciprocal_execution_result) :: result
 
@@ -601,11 +605,41 @@ contains
       ! Fold/deduplicate once, then process unique points in persistent CPU
       ! tiles.  The deferred call is once per tile, never per k-point or band.
       call this%make_execution_backend()
+      call this%execution_backend%capabilities(backend_caps)
+      if (.not. backend_caps%standard_hermitian .or. .not. backend_caps%eigenvectors) then
+         call g_logger%fatal('calculate_eigenpairs_at_kpoints: selected backend cannot return standard eigenvectors.', &
+                             __FILE__, __LINE__)
+      end if
+      if (use_generalized .and. .not. backend_caps%generalized_hermitian) then
+         call g_logger%fatal('calculate_eigenpairs_at_kpoints: selected backend does not support generalized eigenpairs.', &
+                             __FILE__, __LINE__)
+      end if
+
+      ! CUDA v1 deliberately keeps Fourier assembly on the host.  Select this
+      ! path from the typed capability contract rather than from a backend
+      ! name, so the reciprocal physics remains vendor-neutral and a future
+      ! accelerator can advertise its own assembly capability.
+      select case (trim(this%kspace_ham_order))
+      case ('second')
+         assemble_on_backend = backend_caps%second_order_assembly
+      case ('first')
+         assemble_on_backend = backend_caps%first_order_assembly
+      case default
+         assemble_on_backend = merge(backend_caps%second_order_assembly, backend_caps%first_order_assembly, &
+                                     this%hamiltonian%hoh)
+      end select
+      if (use_generalized .and. .not. assemble_on_backend) then
+         call g_logger%fatal('calculate_eigenpairs_at_kpoints: generalized host-assembled handoff is unsupported.', &
+                             __FILE__, __LINE__)
+      end if
+      if (.not. assemble_on_backend) then
+         call this%make_reciprocal_assembler(host_assembler)
+      end if
       do tile_first = 1, nunique, max(1, this%reciprocal_tile_size)
          tile_last = min(nunique, tile_first + max(1, this%reciprocal_tile_size) - 1)
          tile_length = tile_last - tile_first + 1
-         request%assemble_hamiltonian = .true.
-         request%assemble_overlap = use_generalized
+         request%assemble_hamiltonian = assemble_on_backend
+         request%assemble_overlap = assemble_on_backend .and. use_generalized
          request%solve_eigensystem = .true.
          request%generalized = use_generalized
          request%request_eigenvectors = .true.
@@ -613,12 +647,41 @@ contains
          request%request_assembled_overlap = .false.
          request%operator_generation = this%hamiltonian%operator_generation
          if (allocated(request%k_points)) deallocate(request%k_points)
-         allocate(request%k_points(3,tile_length))
-         do slot = 1, tile_length
-            ik = representative(tile_first + slot - 1)
-            request%k_points(:,slot) = folded(:,ik)
-         end do
+         if (allocated(request%input_hamiltonian)) deallocate(request%input_hamiltonian)
+         if (assemble_on_backend) then
+            allocate(request%k_points(3,tile_length))
+            do slot = 1, tile_length
+               ik = representative(tile_first + slot - 1)
+               request%k_points(:,slot) = folded(:,ik)
+            end do
+         else
+            ! The CUDA backend consumes a host tile and performs only the
+            ! H2D/eigensolve/D2H portion.  Assembly stays on the established
+            ! reciprocal Fourier route and is copied into request-owned
+            ! storage at the backend boundary.
+            call host_workspace%ensure_capacity(nmat, tile_length, .false., this%hamiltonian%operator_generation, &
+                                                this%lattice%nn_max, this%lattice%ntype)
+            do slot = 1, tile_length
+               ik = representative(tile_first + slot - 1)
+               host_workspace%points(:,slot) = folded(:,ik)
+            end do
+            call host_assembler%assemble_batch(host_workspace%points(:,1:tile_length), host_workspace)
+            allocate(request%input_hamiltonian(nmat,nmat,tile_length), source=host_workspace%h(:,:,1:tile_length))
+         end if
          call this%execution_backend%execute_batch(request, result)
+         call this%execution_backend%synchronize()
+         if (result%local_point_count /= tile_length .or. result%operator_generation /= request%operator_generation .or. &
+             .not. result%eigenvalues_valid .or. &
+             .not. result%eigenvectors_valid .or. .not. allocated(result%eigenvalues) .or. &
+             .not. allocated(result%eigenvectors)) then
+            call g_logger%fatal('calculate_eigenpairs_at_kpoints: backend returned an incomplete eigenpair tile.', &
+                                __FILE__, __LINE__)
+         end if
+         if (any(shape(result%eigenvalues) /= [nmat, tile_length]) .or. &
+             any(shape(result%eigenvectors) /= [nmat, nmat, tile_length])) then
+            call g_logger%fatal('calculate_eigenpairs_at_kpoints: backend returned an incorrectly shaped eigenpair tile.', &
+                                __FILE__, __LINE__)
+         end if
          do slot = 1, tile_length
             ik = representative(tile_first + slot - 1)
             eigenvalues(:,ik) = result%eigenvalues(:,slot)
@@ -635,6 +698,13 @@ contains
          this%workspace%lapack_workspace_queries = backend%workspace%lapack_workspace_queries
          this%workspace%capacity_reuses = backend%workspace%capacity_reuses
       end select
+      if (.not. assemble_on_backend) then
+         this%workspace%tile_capacity = host_workspace%tile_capacity
+         this%workspace%cached_operator_generation = host_workspace%cached_operator_generation
+         this%workspace%storage_allocations = host_workspace%storage_allocations
+         this%workspace%lapack_workspace_queries = host_workspace%lapack_workspace_queries
+         this%workspace%capacity_reuses = host_workspace%capacity_reuses
+      end if
       do ik = 1, nk
          iu = unique_of_k(ik)
          if (representative(iu) /= ik) then

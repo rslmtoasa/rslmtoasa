@@ -51,10 +51,15 @@ contains
       class(cuda_reciprocal_backend), intent(in) :: this
       type(reciprocal_execution_capabilities), intent(out) :: capabilities
 
-      capabilities%standard_hermitian = .true.
+      ! Do not advertise a usable numerical route after context creation
+      ! failed (for example when a CUDA-enabled executable runs on a CPU-only
+      ! node).  This lets callers reject the request at the typed seam instead
+      ! of submitting an incomplete result and accidentally looking like a
+      ! successful CPU fallback.
+      capabilities%standard_hermitian = this%initialized
       capabilities%generalized_hermitian = .false.
-      capabilities%eigenvalues_only = .true.
-      capabilities%eigenvectors = .true.
+      capabilities%eigenvalues_only = this%initialized
+      capabilities%eigenvectors = this%initialized
       capabilities%first_order_assembly = .false.
       capabilities%second_order_assembly = .false.
       capabilities%overlap = .false.

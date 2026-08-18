@@ -1026,18 +1026,56 @@ Benchmark assembly, H2D, solve, D2H, and total arbitrary-k request. Record tile-
 
 ## Checklist
 
-- [ ] arbitrary-k caller uses backend cleanly
-- [ ] CPU H(k) assembly retained
-- [ ] no H(k) compatibility return added unnecessarily
+- [x] arbitrary-k caller uses backend cleanly
+- [x] CPU H(k) assembly retained
+- [x] no H(k) compatibility return added unnecessarily
 - [ ] Si arbitrary-k CPU/GPU matches
 - [ ] Fe arbitrary-k CPU/GPU matches
-- [ ] duplicate/folded-k behavior preserved
+- [x] duplicate/folded-k behavior preserved on the CPU reference route
 - [ ] timings decomposed
-- [ ] LAPACK path unchanged
-- [ ] no CUDA conditionals leaked into physics code
+- [x] LAPACK path unchanged
+- [x] no CUDA conditionals leaked into physics code
 - [ ] end-to-end benchmark recorded
 
 **Commit message:** `Enable CUDA arbitrary-k eigensolution`
+
+## ACC-04 implementation record
+
+The arbitrary-k service now queries the typed execution-backend capabilities
+before submitting each deduplicated tile. LAPACK retains its existing combined
+CPU Fourier-assembly/eigensolution request. A CUDA v1 backend, which advertises
+host-H(k)-input but no device Fourier assembly, receives a request-owned host
+tile assembled by the existing `reciprocal_assembler`; no CUDA conditionals or
+backend-name tests enter the reciprocal physics path. The service synchronizes
+at the result boundary and rejects incomplete or unsupported feature results
+instead of silently falling back to CPU.
+
+The existing arbitrary-k CPU fixture continues to cover exact folded-point
+duplicates, multi-tile scattering, and the Si-sized one-site route. The CPU
+baseline profile recorded on this development host reports the arbitrary-k
+assembly/eigensolution phase as 1.9700e-4 s for bcc Fe/spd-sized matrices
+(18 x 18, 16 points) and 4.2840e-3 s for the two-site 36 x 36 profile (32
+points). These are CPU reference measurements, not GPU speedup claims.
+
+`ReciprocalCudaArbitraryK` now exercises the same arbitrary-k service with a
+real CUDA context, two-point tiles, exact folded duplicates, CPU/GPU
+eigenvalue comparison, projector comparison, residuals, and orthonormality.
+On the external NVIDIA run (CUDA 13.3, driver 610.57.04, RTX A4000), the
+worst eigenvalue, projector, and residual errors were respectively
+5.551115e-17, 0.0, and 5.551115e-17. This is focused backend-integration
+evidence; the real assembled Si/sp and bcc-Fe/spd production fixtures and the
+H2D/solve/D2H timing decomposition remain pending.
+
+**Files changed:** `CMakeLists.txt`, `source/reciprocal_backend.f90`,
+`source/reciprocal_fourier.f90`, `tests/unit/test_acc04_arbitrary_k_source.py`,
+`tests/unit/test_reciprocal_cuda_arbitrary_k.f90`, and this blueprint.
+
+**Checks run:** CPU `UnitArbitraryKEigenpairs` and `Acc04ArbitraryKSource`
+(pass), CUDA-enabled build with `ENABLE_CUDA_RECIPROCAL=ON` (pass), CUDA
+`UnitArbitraryKEigenpairs`, `Acc04ArbitraryKSource`, and
+`ReciprocalCudaArbitraryK` (pass on external hardware), and the
+`ReciprocalCudaLifecycle`/`ReciprocalCudaEigensolver` checks (pass on external
+hardware; driver-aware skip in the sandbox). `git diff --check` (pass).
 
 ---
 
