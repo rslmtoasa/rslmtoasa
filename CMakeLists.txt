@@ -700,6 +700,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitManifestDefaults
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_manifest_defaults.py)
   set_tests_properties(UnitManifestDefaults PROPERTIES LABELS "tooling;manifest")
+  add_test(NAME BenchmarkHarnessSchema
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/benchmarks/test_benchmark_harness.py)
+  set_tests_properties(BenchmarkHarnessSchema PROPERTIES LABELS "tooling;performance;benchmark")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE

@@ -1,0 +1,54 @@
+{
+  "schema": "rslmto.accelerator-benchmark-manifest.v1",
+  "description": "ACC-00 CPU benchmark commands. Run with benchmark_harness.py and a trusted binary; commands deliberately reuse production test runners.",
+  "benchmarks": [
+    {
+      "name": "reciprocal_cpu_profile",
+      "class": "component",
+      "labels": ["performance", "component", "reciprocal", "eigensolver", "fourier"],
+      "fixture": "deterministic reciprocal profile; phase records are parsed from UnitTddftCpuProfile",
+      "command": ["{profile_binary}"],
+      "metadata": {"matrix_dimension": "profile-reported", "k_points": "profile-reported", "tile_size": "internal", "eigenvectors": true, "problem_type": "standard Hermitian", "transfer_policy": "host-only"}
+    },
+    {
+      "name": "reciprocal_si_sp",
+      "class": "end_to_end",
+      "labels": ["performance", "end_to_end", "reciprocal", "eigensolver", "fourier"],
+      "fixture": "diamond Si / sp",
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_k_space_scf_diamondSi_sp", "--scratch-root", "{scratch_root}/reciprocal_si_sp", "--force-serial"],
+      "metadata": {"matrix_dimension": 16, "k_points": 8, "tile_size": 16, "eigenvectors": true, "problem_type": "standard Hermitian", "transfer_policy": "host-only"}
+    },
+    {
+      "name": "reciprocal_fe_spd",
+      "class": "end_to_end",
+      "labels": ["performance", "end_to_end", "reciprocal", "eigensolver", "fourier"],
+      "fixture": "bcc Fe / spd magnetic",
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_k_space_scf_bccFe_spd_magnetic", "--scratch-root", "{scratch_root}/reciprocal_fe_spd", "--force-serial"],
+      "metadata": {"matrix_dimension": 18, "k_points": 8, "tile_size": 16, "eigenvectors": true, "problem_type": "standard Hermitian", "transfer_policy": "host-only"}
+    },
+    {
+      "name": "rs_block_fe",
+      "class": "end_to_end",
+      "labels": ["performance", "end_to_end", "rs", "block"],
+      "fixture": "bcc Fe / block recursion",
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_bccFe_nsp2_block", "--scratch-root", "{scratch_root}/rs_block_fe", "--force-serial"],
+      "metadata": {"matrix_dimension": 18, "k_points": 0, "tile_size": 0, "eigenvectors": false, "problem_type": "real-space block recursion", "transfer_policy": "not applicable"}
+    },
+    {
+      "name": "rs_lanczos_fe",
+      "class": "end_to_end",
+      "labels": ["performance", "end_to_end", "rs", "lanczos"],
+      "fixture": "bcc Fe / Lanczos recursion",
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_bccFe_nsp2_lanczos", "--scratch-root", "{scratch_root}/rs_lanczos_fe", "--force-serial"],
+      "metadata": {"matrix_dimension": 18, "k_points": 0, "tile_size": 0, "eigenvectors": false, "problem_type": "real-space Lanczos recursion", "transfer_policy": "not applicable"}
+    },
+    {
+      "name": "rs_chebyshev_si",
+      "class": "end_to_end",
+      "labels": ["performance", "end_to_end", "rs", "chebyshev", "kpm", "moment"],
+      "fixture": "diamond Si / Chebyshev moments",
+      "command": ["{python}", "{repo}/tests/run_test.py", "--binary", "{binary}", "--cases-json", "{repo}/tests/scf/cases.json", "--case-name", "Example_bulk_diamondSi_sp_chebyshev", "--scratch-root", "{scratch_root}/rs_chebyshev_si", "--force-serial"],
+      "metadata": {"matrix_dimension": 16, "k_points": 0, "tile_size": 0, "eigenvectors": false, "problem_type": "real-space Chebyshev moments", "transfer_policy": "not applicable"}
+    }
+  ]
+}

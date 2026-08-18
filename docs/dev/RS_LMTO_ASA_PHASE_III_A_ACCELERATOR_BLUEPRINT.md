@@ -1,0 +1,1518 @@
+# RS-LMTO-ASA Phase III-A Accelerator Blueprint and Luna Work Packages
+
+**Target branch:** `fable_v3`  
+**Phase:** III-A — Performance and accelerator establishment  
+**Status entering this phase:** TEST, STAB, and VAL campaigns completed; GBT and TD-DFT remain separate Development tracks and are not on the accelerator critical path.
+
+---
+
+# 1. Purpose
+
+Phase III-A introduces and establishes accelerator support for the parts of RS-LMTO-ASA that now have trustworthy CPU scientific reference paths.
+
+The objective is **not** to "move RS-LMTO-ASA to the GPU".
+
+The objective is to accelerate demonstrable bottlenecks while preserving:
+
+- the real-space LMTO / Green-function identity of the code;
+- the existing physical domain objects and public APIs;
+- validated CPU production routes as correctness references;
+- the established parent-module/submodule architecture;
+- developer readability and maintainability;
+- single-GPU usability as the primary design point;
+- MPI rank-to-device extensibility without premature distributed-GPU complexity.
+
+The first reciprocal accelerator target is deliberately narrow:
+
+```text
+short-range H(R)
+      |
+      | CPU Fourier assembly
+      v
+H(k) tile on host
+      |
+      | H2D
+      v
+GPU dense Hermitian eigensolver
+      |
+      | D2H
+      v
+eigenvalues/eigenvectors
+      |
+      v
+existing validated CPU consumers
+```
+
+Only after that route is correct and profiled should the project decide whether device-resident eigenstates, GPU Lehmann contractions, GPU H(k) assembly, asynchronous overlap, or other accelerator extensions are justified.
+
+---
+
+# 2. Scientific and architectural constraints
+
+## 2.1 Preserve the RS-LMTO-ASA center of gravity
+
+RS-LMTO-ASA remains fundamentally a real-space LMTO / Green-function code.
+
+The accelerator program must not reorganize the code around reciprocal space.
+
+Existing real-space CUDA functionality remains a separate numerical implementation suited to the RS algorithms.
+
+The reciprocal accelerator implementation should use the existing reciprocal execution-backend seam rather than creating a new global accelerator abstraction.
+
+## 2.2 Protect the atomic LMTO core
+
+The mature atomic/radial/potential routines in `self.f90` and related files are protected scientific infrastructure.
+
+They should remain CPU-side and should not be modified for GPU convenience, memory-layout uniformity, stylistic modernization, kernel fusion, or device-residency schemes.
+
+The accelerator boundary should start downstream of the established atomic LMTO physics.
+
+## 2.3 Accelerators are execution technologies
+
+The physical architecture remains:
+
+```text
+physical LMTO state
+      |
+      +---- real-space algorithms ---- RS CPU/CUDA execution
+      |
+      +---- reciprocal algorithms ---- CPU/LAPACK or CUDA execution
+```
+
+Do not introduce generic "GPU data providers", universal device arrays, or application-wide device ownership.
+
+A new abstraction is acceptable only when at least two real production consumers require it and the performance evidence demonstrates its value.
+
+---
+
+# 3. Phase III-A non-goals
+
+The following are explicitly outside the initial accelerator critical path:
+
+- GBT-specific GPU kernels;
+- TD-DFT-specific GPU kernels;
+- GPU atomic/radial LMTO;
+- GPU electrostatics;
+- GPU surface/interface orchestration;
+- distributed dense eigensolvers;
+- NCCL;
+- CUDA-aware MPI;
+- mandatory multi-GPU execution;
+- simultaneous CUDA and HIP implementations;
+- speculative device-resident state frameworks;
+- automatic GPU H(k) assembly before profiling;
+- changing validated CPU numerical algorithms merely to resemble GPU code.
+
+GBT and TD-DFT may later benefit automatically from shared reciprocal infrastructure after their scientific Development issues are resolved.
+
+---
+
+# 4. Correctness reference policy
+
+The CPU implementation is the accelerator oracle only where Phase II established the CPU scope.
+
+Accelerator validation must compare against the **same production physical route**, not a new Python physics implementation.
+
+## 4.1 Reciprocal eigensolver contracts
+
+Do not compare complex eigenvectors element-by-element.
+
+For standard Hermitian problems test:
+
+\[
+|\epsilon_n^{GPU}-\epsilon_n^{CPU}|
+\]
+
+\[
+r_n =
+\frac{\|H v_n-\epsilon_n v_n\|}
+     {\max(\|H\|,1)}
+\]
+
+\[
+\|V^\dagger V-I\|
+\]
+
+For degenerate or nearly degenerate groups compare subspace projectors
+
+\[
+P = VV^\dagger
+\]
+
+rather than individual vector phases/orientations.
+
+For generalized Hermitian problems, once supported:
+
+\[
+V^\dagger S V \simeq I
+\]
+
+and the generalized residual must be checked.
+
+## 4.2 Downstream physical contracts
+
+Use established functional fixtures to compare:
+
+- electron count;
+- Fermi energy;
+- band energy;
+- site charge;
+- magnetic moment;
+- selected eigenvalues;
+- DOS/state count;
+- selected Green-function entries;
+- selected conductivity/exchange/damping quantities where the accelerated route feeds them.
+
+## 4.3 Reference changes
+
+Never update CPU scientific references merely because a GPU implementation differs.
+
+First determine whether the discrepancy is due to legitimate floating-point ordering, degenerate-subspace freedom, tolerance choice, CPU bug, GPU bug, or unsupported algorithmic difference.
+
+---
+
+# 5. Benchmark-first policy
+
+Performance decisions must be based on measured end-to-end cost.
+
+A kernel is not considered successfully accelerated merely because the kernel itself is faster.
+
+For reciprocal eigensolution measure:
+
+\[
+T_{\mathrm{total}} =
+T_{H(k)} +
+T_{\mathrm{H2D}} +
+T_{\mathrm{eig}} +
+T_{\mathrm{D2H}} +
+T_{\mathrm{consumer}}
+\]
+
+as applicable.
+
+For existing RS GPU paths measure comparable end-to-end production observables and timings.
+
+Performance tests are not ordinary correctness gates. They should be reproducible, machine-described, and stored as benchmark evidence rather than flaky pass/fail timing assertions.
+
+---
+
+# 6. Benchmark fixture vocabulary
+
+Use real LMTO Hamiltonians wherever possible.
+
+| Fixture | Main performance role |
+|---|---|
+| diamond Si / sp | very small reciprocal matrix |
+| bcc Fe / spd | small magnetic reciprocal matrix |
+| B2 FeCo or another multisublattice metal | intermediate matrix / multi-site |
+| larger existing multi-site primitive or controlled supercell | larger reciprocal matrix |
+| existing metallic RS fixture | Block/Lanczos performance |
+| existing Si/sp fixture | Chebyshev performance |
+| existing Pt/SOC transport fixture | KPM/Kubo-Bastin performance |
+
+Synthetic Hermitian matrices may be used for isolated eigensolver microbenchmarks, but every performance conclusion must also be checked on real assembled LMTO matrices.
+
+---
+
+# 7. Benchmark metadata
+
+Every recorded benchmark should include enough environment metadata to interpret it later:
+
+- git commit;
+- compiler and version;
+- build type;
+- BLAS/LAPACK implementation;
+- OpenMP thread count;
+- MPI rank count;
+- CUDA toolkit version;
+- cuSOLVER version/API path if known;
+- GPU model;
+- GPU driver/runtime;
+- CPU model;
+- matrix dimension;
+- number of k points;
+- tile size;
+- eigenvalues-only vs eigenvectors;
+- standard vs generalized problem;
+- transfer inclusion/exclusion;
+- warm-up policy;
+- number of repetitions.
+
+Do not compare performance numbers from materially different environments as if they were controlled speedups.
+
+---
+
+# 8. Reciprocal backend design
+
+The existing reciprocal execution backend is the correct seam.
+
+The CUDA implementation should remain behind the same physical caller interface.
+
+## 8.1 CUDA v1 supported scope
+
+Initial CUDA reciprocal support should target:
+
+- standard Hermitian problem;
+- ordinary Hamiltonian-only representation;
+- eigenvalues;
+- eigenvectors;
+- arbitrary-k API;
+- ordinary reciprocal mesh;
+- Si/sp nonmagnetic fixture;
+- bcc-Fe/spd collinear magnetic fixture;
+- single GPU;
+- synchronous execution;
+- CPU H(k) assembly.
+
+## 8.2 Explicitly deferred from CUDA v1
+
+Defer:
+
+- generalized overlap;
+- higher-order overlap paths not already scientifically established;
+- noncollinear/SOC extensions until ordinary support is correct;
+- GBT;
+- TD-DFT;
+- GPU H(k) assembly;
+- device-resident spectral handoff;
+- asynchronous multi-buffer execution;
+- multi-GPU collectives.
+
+---
+
+# 9. Backend lifecycle and operator residency
+
+The execution contract already contains operator generations.
+
+A CUDA backend should use them to avoid repeated device uploads:
+
+```text
+if requested_operator_generation != prepared_generation:
+    upload/rebuild persistent operator data
+    prepared_generation = requested_operator_generation
+else:
+    reuse device state
+```
+
+Backend recreation or ordinary caller reuse must not invalidate a resident operator unless the physical operator actually changed.
+
+Device state must have explicit ownership and release semantics. Avoid hidden global CUDA state.
+
+---
+
+# 10. H(R) -> H(k) policy
+
+Initial policy:
+
+> Keep reciprocal Fourier assembly on CPU.
+
+After GPU eigensolution is working, profile H(k) assembly separately.
+
+Only port it if it becomes a meaningful end-to-end bottleneck.
+
+A Phase III-A work package is allowed to conclude:
+
+> GPU H(k) assembly is not justified for the measured workload.
+
+That is a successful performance result, not a failed task.
+
+---
+
+# 11. Eigenstate residency policy
+
+CUDA v1 should return ordinary host eigenpairs to existing consumers.
+
+Do not introduce a device-resident spectral handle before a real second GPU consumer exists.
+
+If GPU Lehmann contractions later demonstrate that repeated D2H/H2D movement of eigenpairs is material, introduce the narrowest residency-aware mechanism required by the eigensolver + Lehmann pair.
+
+Do not generalize it across the whole application.
+
+---
+
+# 12. MPI policy
+
+Primary design points:
+
+```text
+single MPI rank + single GPU
+```
+
+and later:
+
+```text
+one MPI rank per GPU
+```
+
+Use the existing node-local rank/device-index machinery.
+
+Do not add NCCL or CUDA-aware MPI during the first reciprocal implementation.
+
+Multi-rank numerical equivalence should be established only after the one-rank/one-GPU route is stable.
+
+---
+
+# 13. CUDA/HIP policy
+
+Implement CUDA first.
+
+The Fortran reciprocal interface should remain vendor-neutral enough that a HIP backend can be introduced later if there is actual demand.
+
+Do not introduce a portability framework merely to anticipate HIP.
+
+The CUDA backend will require dense eigensolver support, so the build must add cuSOLVER cleanly and conditionally.
+
+Do not impose CUDA/cuSOLVER dependencies on CPU-only builds.
+
+---
+
+# 14. Existing RS CUDA policy
+
+The existing RS accelerator implementation is not to be rewritten.
+
+Phase III-A should first determine exactly which existing RS GPU functionality is scientifically established.
+
+Therefore:
+
+1. inventory actual supported GPU kernels;
+2. establish CPU<->GPU correctness for them;
+3. profile them;
+4. only then decide whether new RS kernels are needed.
+
+This is especially important for KPM/Kubo-Bastin transport, where existing moment/velocity GPU machinery may already cover much of the expensive work.
+
+---
+
+# 15. CPU performance remains relevant
+
+The LAPACK reciprocal backend is the permanent reference implementation.
+
+Benchmark at least:
+
+```text
+A. serial k loop + threaded BLAS/LAPACK
+B. parallel k loop + single-threaded BLAS/LAPACK
+```
+
+for representative small matrix sizes.
+
+Do not add OpenMP parallelism until benchmarks show a clear benefit and nested-thread behavior is controlled.
+
+GPU speedup should be reported against the best reasonable CPU reference, not an artificially slow configuration.
+
+---
+
+# 16. Tile-size policy
+
+The backend already advertises preferred/maximum tile concepts.
+
+Eventually the effective tile size should respect matrix dimension, eigenvectors vs eigenvalues only, backend preference, device memory, and solver API limitations.
+
+Do not expose new user-facing tuning parameters until benchmarks demonstrate a need.
+
+The first implementation may use a conservative fixed/internal tile policy.
+
+---
+
+# 17. Asynchrony policy
+
+CUDA v1 should be synchronous and correct.
+
+Do not begin with streams/double buffering.
+
+Only add asynchronous overlap if profiling shows material benefit from overlapping CPU H(k) assembly, H2D, eigensolution, and D2H.
+
+Correct synchronous code is the prerequisite.
+
+---
+
+# 18. Performance test tiers
+
+Use three levels:
+
+## Microbenchmark
+
+Measures a narrow kernel or backend call.
+
+Examples: batched eigensolver, H2D/D2H throughput, H(k) assembler, Lehmann contraction.
+
+## Component benchmark
+
+Measures a production component.
+
+Examples: arbitrary-k eigenpair request, reciprocal SCF eigensystem phase, KPM moments, Lehmann GF for selected pairs/energies.
+
+## End-to-end benchmark
+
+Measures the real user workflow.
+
+Examples: small/medium reciprocal SCF, representative transport calculation, representative Green-function post-processing.
+
+Do not infer user speedup from microbenchmarks alone.
+
+---
+
+# 19. Definition of done for accelerator work
+
+A work package is complete only when:
+
+- [ ] CPU correctness baseline recorded;
+- [ ] accelerator result satisfies the appropriate numerical contracts;
+- [ ] invalid feature combinations were not hidden;
+- [ ] no CPU scientific reference was silently changed;
+- [ ] performance measured end-to-end where relevant;
+- [ ] environment metadata recorded;
+- [ ] memory/transfer overhead included where relevant;
+- [ ] unsupported scope documented;
+- [ ] no unrelated physics altered;
+- [ ] focused tests pass;
+- [ ] lean CPU test gate remains green;
+- [ ] one focused commit created.
+
+---
+
+# 20. Work-package sequence
+
+```text
+ACC-00  benchmark harness
+ACC-01  establish existing RS GPU coverage
+ACC-02  reciprocal CUDA backend skeleton
+ACC-03  isolated Hermitian GPU eigensolver
+ACC-04  arbitrary-k integration
+ACC-05  normal mesh / SCF integration
+ACC-06  CPU-vs-GPU crossover and batching study
+ACC-07  transfer/materialization reduction if justified
+ACC-08  MPI rank-to-device establishment
+ACC-09  validated reciprocal feature-scope extension
+ACC-10  GPU Lehmann contractions
+ACC-11  device-resident eigensystem handoff if justified
+ACC-12  GPU H(k) assembly only if justified
+ACC-13  RS KPM/transport GPU completeness and performance
+ACC-14  accelerator support matrix and release gate
+```
+
+ACC-01 can run largely independently of ACC-02..12.
+
+ACC-10 should wait until reciprocal eigensolution is established.
+
+ACC-07, ACC-11, and ACC-12 are explicitly evidence-gated: they may finish with a documented decision not to add code.
+
+---
+
+# 21. Common Luna header
+
+Prepend this section to every ACC prompt.
+
+```text
+You are working on the current HEAD of the fable_v3 branch of:
+
+https://github.com/rslmtoasa/rslmtoasa
+
+This task belongs to Phase III-A — Performance and Accelerator Establishment.
+
+Before editing anything, inspect the CURRENT repository state, current CTest
+labels, benchmark/test infrastructure, accelerator sources, and relevant
+Phase-II validation evidence.
+
+============================================================
+GLOBAL ACCELERATOR RULES
+============================================================
+
+1. PRESERVE SCIENTIFIC CORRECTNESS
+
+The validated CPU production route is the scientific reference for the
+accelerated scope.
+
+Do not change CPU reference values merely because GPU output differs.
+
+2. ROOT CAUSES, NOT SYMPTOMS
+
+Do not hide accelerator discrepancies by:
+- loosening tolerances without analysis;
+- silently falling back to CPU;
+- disabling valid combinations;
+- zeroing/clipping values;
+- changing references;
+- skipping failing data.
+
+Identify the first violated numerical contract.
+
+3. PROTECT LEGACY ATOMIC LMTO PHYSICS
+
+Do not modify mature atomic/radial/potential routines in self.f90 and related
+files for accelerator convenience.
+
+4. USE EXISTING ARCHITECTURE
+
+Prefer the existing reciprocal execution backend and existing RS CUDA plugin.
+
+Do not create:
+- a global GPU manager;
+- generic device-data providers;
+- new solver hierarchies;
+- application-wide device arrays.
+
+5. CPU-FIRST BASELINE
+
+Before editing:
+- run the smallest relevant correctness tests;
+- record CPU observables;
+- record performance baseline where relevant;
+- record build/runtime environment.
+
+6. PERFORMANCE CLAIMS
+
+A kernel speedup is not an end-to-end speedup.
+
+Include transfers, setup, synchronization, and materialization where relevant.
+
+Compare against a reasonable CPU configuration.
+
+7. TEST ORACLE POLICY
+
+Do not implement a second physics algorithm in Python.
+
+Python may:
+- drive benchmarks;
+- parse outputs;
+- compute residual norms;
+- compare timings;
+- produce benchmark tables.
+
+8. CUDA v1 SCOPE DISCIPLINE
+
+Unless this task explicitly extends scope, do not add:
+- GBT-specific support;
+- TDDFT-specific support;
+- GPU H(k) assembly;
+- generalized eigensolvers;
+- multi-GPU collectives;
+- HIP;
+- asynchronous stream pipelines.
+
+9. GBT/TDDFT
+
+GBT and TDDFT remain Development tracks.
+
+Shared validated infrastructure may later serve them, but do not use them as
+the accelerator correctness oracle in Phase III-A.
+
+10. ONE FOCUSED COMMIT
+
+When complete:
+- tick every completed checkbox;
+- leave genuinely incomplete items unticked;
+- list files changed;
+- list tests and benchmarks run;
+- record correctness evidence;
+- record performance evidence;
+- state remaining unsupported scope;
+- make one focused commit with the supplied one-line commit message.
+```
+
+---
+
+# ACC-00 — Build the performance benchmark harness
+
+## Objective
+
+Create a stable benchmark harness that can measure CPU and later GPU execution without turning timing noise into a correctness gate.
+
+This task should land **before new reciprocal CUDA kernels**.
+
+## Scope
+
+Inspect and extend the existing test/performance infrastructure rather than creating an unrelated benchmark framework.
+
+The harness should support at minimum:
+
+- metadata capture;
+- repeated runs;
+- warm-up runs;
+- component timing records;
+- machine-readable output;
+- comparison of two benchmark runs;
+- optional human-readable summary.
+
+Use JSON or another simple repository-native format.
+
+## Benchmark classes
+
+Support labels/categories such as:
+
+```text
+performance
+microbenchmark
+component
+end_to_end
+rs
+reciprocal
+eigensolver
+fourier
+lehmann
+transport
+```
+
+Do not make benchmark runtime thresholds normal CTest correctness assertions.
+
+## Required initial CPU benchmarks
+
+Add representative CPU baselines for reciprocal H(k) assembly where cleanly separable, eigensystem requests, arbitrary-k eigenpair requests, and the normal reciprocal eigensystem phase.
+
+For RS add representative Block, Lanczos, Chebyshev, and KPM/moment timings where existing production entry points permit clean measurement.
+
+Do not force all of these into one executable.
+
+## Fixtures
+
+At minimum cover:
+
+- Si/sp;
+- bcc Fe/spd;
+- one multi-site metallic reciprocal fixture.
+
+For RS use existing established metallic and Si fixtures as appropriate.
+
+## Metrics
+
+Record at minimum:
+
+- wall time;
+- repetition count;
+- matrix dimension;
+- number of k points;
+- tile size;
+- thread count;
+- rank count.
+
+Design the schema so later GPU runs can add H2D, D2H, eigensolver kernel time, device allocation/preparation time, and GPU model.
+
+## Benchmark comparison
+
+Provide a small script/tool that reports median, minimum, spread, speedup, and environment mismatch warnings.
+
+Do not fail because performance differs by a fixed percentage.
+
+## Checklist
+
+- [x] Existing performance infrastructure audited
+- [x] Benchmark schema defined
+- [x] Environment metadata captured
+- [x] Warm-up policy supported
+- [x] Repetition/median supported
+- [x] Machine-readable output implemented
+- [x] Human-readable comparison implemented
+- [x] Si reciprocal benchmark added
+- [x] Fe reciprocal benchmark added
+- [x] multi-site reciprocal benchmark added where practical
+- [x] representative RS benchmark(s) added
+- [x] no timing threshold added to ordinary correctness CI
+- [x] benchmark usage documented
+- [x] CPU baseline report recorded
+
+## ACC-00 completion record
+
+Implementation is in `tests/benchmarks/benchmark_harness.py`, with the initial
+production inventory in `tests/benchmarks/manifest.json`, usage documentation
+in `tests/benchmarks/README.md`, and the recorded CPU evidence in
+`docs/dev/ACC-00_CPU_BASELINE.md`.
+
+The focused tooling test is `BenchmarkHarnessSchema`; it validates profile
+parsing, schema output, repetition capture, and comparison warnings without a
+timing threshold. The completed CPU campaign covered the reciprocal profile,
+Si/sp, bcc-Fe/spd, Block, Lanczos, and Chebyshev routes with one warm-up and
+three repetitions. No GPU or cuSOLVER scope is claimed by ACC-00.
+
+**Commit message:** `Add accelerator performance benchmark harness`
+
+---
+
+# ACC-01 — Establish existing RS CUDA correctness coverage
+
+## Objective
+
+Audit the existing RS CUDA plugin against the currently validated CPU RS functionality and close the gap between implemented GPU API and tested GPU API.
+
+Do not rewrite the RS GPU architecture.
+
+## Inventory
+
+Map every public GPU route in the current RS accelerator layer, including where present:
+
+- scalar Lanczos;
+- Block Lanczos;
+- Block DOS/GF;
+- Chebyshev DOS/GF;
+- Chebyshev moments;
+- stochastic moments;
+- orbital moments;
+- velocity/current-related data;
+- HOH/CCOR combinations actually supported.
+
+For each record the CPU production counterpart, input limitations, current GPU tests, and missing correctness evidence.
+
+## Validation
+
+Use the strongest corresponding CPU contract.
+
+Compare physical outputs, not only execution success: DOS, selected GF entries, recursion-derived moments, conductivity/KPM moments, and orbital moments where supported.
+
+Use appropriate tolerances for GPU floating-point ordering. Do not demand bitwise equality.
+
+## Unsupported combinations
+
+If the plugin does not implement a CPU-supported combination, document it.
+
+Do not add a CPU fallback and call the GPU feature supported.
+
+## Performance
+
+Run the ACC-00 harness on the established GPU routes and record which existing GPU kernels already deliver useful end-to-end benefit.
+
+## Checklist
+
+- [ ] RS GPU API inventoried
+- [ ] CPU counterpart mapped for each route
+- [ ] existing GPU tests mapped
+- [ ] Chebyshev CPU/GPU contract established
+- [ ] Block CPU/GPU contract established
+- [ ] Lanczos CPU/GPU contract established where supported
+- [ ] GF outputs compared where supported
+- [ ] KPM/moment outputs compared where supported
+- [ ] HOH/CCOR GPU scope documented
+- [ ] unsupported combinations not hidden by fallback
+- [ ] benchmark results recorded
+- [ ] support matrix updated
+
+**Commit message:** `Establish RS CUDA correctness coverage`
+
+---
+
+# ACC-02 — Add reciprocal CUDA backend skeleton
+
+## Objective
+
+Introduce a CUDA reciprocal execution backend behind the existing reciprocal backend interface, without yet implementing the full eigensolver path.
+
+This task establishes build, ownership, capability reporting, and lifecycle only.
+
+## Build
+
+Add CUDA/cuSOLVER dependencies conditionally.
+
+CPU-only builds must remain unaffected.
+
+Detect and document the minimum CUDA/cuSOLVER capabilities actually required.
+
+Do not unnecessarily raise the toolkit minimum version before the eigensolver API decision in ACC-03 is complete.
+
+## Backend
+
+Create the smallest concrete backend implementation compatible with the existing reciprocal execution interface.
+
+Implement initialize, capabilities, prepare_operator, synchronize, release, metrics, and a clear unsupported execution result if solve is not yet implemented.
+
+Do not create a second public reciprocal API.
+
+## Device ownership
+
+Use explicit backend-owned state. No global CUDA singleton.
+
+Use existing MPI/device-index information where available, but one rank/one GPU is sufficient in this task.
+
+## Operator generation
+
+Make persistent device preparation generation-aware.
+
+Do not invalidate/re-upload an unchanged operator merely because a backend accessor is called again.
+
+## Checklist
+
+- [ ] CPU-only build unchanged
+- [ ] CUDA build discovers cuSOLVER conditionally
+- [ ] reciprocal CUDA backend type created
+- [ ] existing reciprocal public API unchanged
+- [ ] capabilities implemented
+- [ ] initialize/release implemented
+- [ ] synchronize implemented
+- [ ] operator-generation reuse implemented
+- [ ] no hidden global CUDA state introduced
+- [ ] unsupported solve reports clearly
+- [ ] LAPACK backend unchanged
+- [ ] focused lifecycle tests pass
+
+**Commit message:** `Add reciprocal CUDA backend skeleton`
+
+---
+
+# ACC-03 — Implement standard Hermitian GPU eigensolution
+
+## Objective
+
+Implement the first actual reciprocal CUDA numerical kernel:
+
+> many independent standard complex-Hermitian eigensystems.
+
+Do not integrate it into every reciprocal workflow yet.
+
+## Scope
+
+Support:
+
+- standard Hermitian `H v = e v`;
+- eigenvalues;
+- eigenvectors;
+- host input Hamiltonian tile;
+- host output eigenpairs;
+- synchronous execution;
+- single GPU.
+
+Do not support generalized overlap in this task.
+
+## Solver API selection
+
+Use ACC-00 benchmark metadata and the installed CUDA toolkit to compare plausible cuSOLVER strategies for the small-matrix regime.
+
+Evaluate the appropriate conventional dense Hermitian route and batched/uniform-batched route where available.
+
+Do not choose solely from API novelty.
+
+Use real LMTO matrices in addition to synthetic Hermitian microbenchmarks.
+
+## Numerical contracts
+
+For each matrix check eigenvalue agreement, residual norm, orthonormality, and projector comparison for degenerate groups.
+
+Test dimensions representative of Si/sp, bcc Fe/spd, and an intermediate multi-site matrix.
+
+## Workspace
+
+Allocate reusable device workspace per backend/tile rather than malloc/free per k point.
+
+Do not over-engineer a general memory pool.
+
+## Checklist
+
+- [ ] standard Hermitian GPU solver implemented
+- [ ] eigenvalues supported
+- [ ] eigenvectors supported
+- [ ] reusable workspace implemented
+- [ ] no generalized solver added
+- [ ] Si-size matrices validated
+- [ ] Fe-size matrices validated
+- [ ] intermediate matrices validated
+- [ ] residual norms pass
+- [ ] orthogonality passes
+- [ ] degenerate-subspace comparison handled correctly
+- [ ] solver API choice benchmarked
+- [ ] CPU reference unchanged
+- [ ] performance results recorded
+
+**Commit message:** `Implement reciprocal CUDA Hermitian eigensolver`
+
+---
+
+# ACC-04 — Integrate CUDA eigensolution into arbitrary-k requests
+
+## Objective
+
+Make the existing arbitrary-k reciprocal eigenpair API use the CUDA backend without changing its physics contract.
+
+This is the preferred first end-to-end reciprocal integration because arbitrary-k requests already operate tile-wise and do not need the H(k) compatibility cache.
+
+## Path
+
+Preserve:
+
+```text
+k points
+ -> existing CPU H(k) assembly
+ -> host tile
+ -> CUDA eigensolver
+ -> host eigenpairs
+ -> existing caller
+```
+
+Do not GPU-port Fourier assembly.
+
+## Backend selection
+
+Use the existing backend-selection mechanism.
+
+Do not scatter CUDA conditionals through reciprocal physics routines.
+
+If no CUDA backend is requested/available, LAPACK behavior must remain unchanged.
+
+## Correctness fixtures
+
+Use Si/sp arbitrary-k points, bcc Fe/spd arbitrary-k points, and duplicate/folded k-point behavior already tested by the CPU route.
+
+Compare eigenvalues, residuals, and projectors/subspaces where required.
+
+## Performance
+
+Benchmark assembly, H2D, solve, D2H, and total arbitrary-k request. Record tile-size dependence.
+
+## Checklist
+
+- [ ] arbitrary-k caller uses backend cleanly
+- [ ] CPU H(k) assembly retained
+- [ ] no H(k) compatibility return added unnecessarily
+- [ ] Si arbitrary-k CPU/GPU matches
+- [ ] Fe arbitrary-k CPU/GPU matches
+- [ ] duplicate/folded-k behavior preserved
+- [ ] timings decomposed
+- [ ] LAPACK path unchanged
+- [ ] no CUDA conditionals leaked into physics code
+- [ ] end-to-end benchmark recorded
+
+**Commit message:** `Enable CUDA arbitrary-k eigensolution`
+
+---
+
+# ACC-05 — Integrate CUDA eigensolution into the normal reciprocal mesh
+
+## Objective
+
+Use the CUDA backend for the ordinary reciprocal eigensystem path used by validated SCF/bands/DOS workflows while preserving current host semantics.
+
+Do not optimize away H(k) materialization yet.
+
+## Initial semantic rule
+
+CUDA v1 must return the same host-side products currently expected by normal reciprocal workflows, including the compatibility H(k) cache where requested.
+
+Correctness comes before transfer minimization.
+
+## Validate
+
+### Si/sp
+Check electron count, EF, band energy, charge, band eigenvalues, and DOS/state count.
+
+### bcc Fe/spd
+Also check magnetic moment.
+
+Run one controlled SCF/eigensystem path and the lean converged functional fixture where practical.
+
+## Performance
+
+Measure CPU H(k), H2D, GPU eigensolve, D2H eigenpairs, D2H H(k) compatibility transfer if applicable, total reciprocal solve phase, and end-to-end SCF workflow.
+
+## Checklist
+
+- [ ] normal mesh CUDA execution wired
+- [ ] host semantics preserved
+- [ ] Si SCF CPU/GPU matches
+- [ ] Fe SCF CPU/GPU matches
+- [ ] electron count matches
+- [ ] EF matches
+- [ ] charge matches
+- [ ] Fe moment matches
+- [ ] band/DOS checks pass
+- [ ] transfer costs measured
+- [ ] LAPACK remains selectable
+- [ ] no reference values regenerated without cause
+
+**Commit message:** `Enable CUDA reciprocal mesh eigensolution`
+
+---
+
+# ACC-06 — Determine CPU/GPU crossover and tile policy
+
+## Objective
+
+Use the benchmark harness to establish when the reciprocal CUDA eigensolver is actually beneficial.
+
+This task is primarily measurement and policy.
+
+Do not add major new numerical functionality.
+
+## Matrix-size study
+
+Use real LMTO matrices spanning very small Si/sp, bcc Fe/spd, multi-site intermediate, and one larger existing cell.
+
+For each sweep k count, tile size, eigenvalues-only vs eigenvectors where supported, CPU thread configuration, and GPU batching strategy.
+
+## CPU strategies
+
+Compare at least:
+
+A. scalar k loop + threaded BLAS/LAPACK  
+B. parallel k loop + controlled single-threaded BLAS/LAPACK, if a minimal benchmark implementation can be tested without destabilizing production code.
+
+Do not merge OpenMP code into production solely for the benchmark unless evidence is already strong.
+
+## Deliverable
+
+Produce a crossover table such as:
+
+```text
+matrix size | Nk | best CPU | GPU | end-to-end speedup | recommended backend
+```
+
+Determine default tile-size policy, whether backend-reported preferred tile size should influence the caller, and whether automatic CPU/GPU dispatch is justified.
+
+Do not add automatic dispatch merely because a crossover exists; explicit backend selection may remain preferable initially.
+
+## Checklist
+
+- [ ] representative real matrix sizes benchmarked
+- [ ] Nk dependence measured
+- [ ] tile-size dependence measured
+- [ ] eigenvector cost separated
+- [ ] best reasonable CPU baseline established
+- [ ] GPU end-to-end cost recorded
+- [ ] crossover documented
+- [ ] preferred tile policy documented
+- [ ] automatic-dispatch decision justified
+- [ ] no unsupported performance claim made
+
+**Commit message:** `Benchmark reciprocal CPU and CUDA crossover`
+
+---
+
+# ACC-07 — Reduce unnecessary host materialization if profiling justifies it
+
+## Objective
+
+Inspect the validated normal reciprocal workflows and determine whether returning/materializing host H(k) is a meaningful performance or memory cost.
+
+This task is evidence-gated.
+
+## First step
+
+Profile current CUDA normal-mesh execution from ACC-05/06.
+
+Determine the fraction of time spent transferring H(k) back, host memory consumed by the full H(k) cache, and actual downstream consumers requiring H(k).
+
+Map every consumer before changing semantics.
+
+## Decision A — not material
+
+If H(k) transfer/materialization is not significant:
+
+- do not change production code;
+- document the result;
+- close the task.
+
+This is a successful outcome.
+
+## Decision B — material
+
+If significant, introduce the smallest explicit request distinction needed, for example:
+
+```text
+eigensystem-only
+eigensystem + H(k) compatibility cache
+```
+
+or reuse an existing request flag if already present.
+
+Do not make H(k) laziness implicit or surprising.
+
+Preserve old behavior for callers that require it.
+
+## Checklist
+
+- [ ] H(k) consumers mapped
+- [ ] H(k) transfer measured
+- [ ] H(k) host memory measured
+- [ ] optimization threshold justified
+- [ ] no code added if benefit is insignificant
+- [ ] if optimized, request semantics explicit
+- [ ] legacy callers preserved
+- [ ] SCF/bands/DOS unchanged
+- [ ] benchmark repeated after change
+- [ ] net end-to-end benefit demonstrated if code changed
+
+**Commit message:** `Reduce reciprocal Hk materialization overhead`
+
+---
+
+# ACC-08 — Establish MPI rank-to-GPU execution
+
+## Objective
+
+Validate the existing MPI/device-index model for accelerator execution.
+
+Do not implement distributed eigensolvers.
+
+## Scope
+
+Support and validate:
+
+```text
+one MPI rank -> one selected GPU
+```
+
+for nodes with one or more GPUs.
+
+Use existing node-local rank/device-index logic.
+
+Do not add NCCL or CUDA-aware MPI.
+
+## Tests
+
+At minimum:
+
+- single rank / single GPU;
+- two ranks mapped deterministically if two GPUs are available;
+- explicit device override if the code supports one.
+
+Validate device selection, no accidental same-device oversubscription unless explicitly configured, and numerical equality with one-rank CPU/GPU reference for decomposable workflows.
+
+If hardware with multiple GPUs is unavailable, add unit-level mapping coverage and document the unverified hardware gate.
+
+## Checklist
+
+- [ ] existing device mapping audited
+- [ ] reciprocal CUDA backend uses existing device index
+- [ ] one-rank/one-GPU validated
+- [ ] multi-rank mapping validated where hardware permits
+- [ ] explicit override validated where supported
+- [ ] no NCCL added
+- [ ] no CUDA-aware MPI dependency added
+- [ ] numerical equivalence checked
+- [ ] unsupported multi-GPU scope documented
+
+**Commit message:** `Validate MPI rank-to-GPU execution`
+
+---
+
+# ACC-09 — Extend reciprocal CUDA support to validated operator variants
+
+## Objective
+
+Extend the reciprocal CUDA eigensolver path beyond the initial ordinary Hamiltonian scope only for operator variants already scientifically established on CPU.
+
+Do not broaden scope by assumption.
+
+## Audit first
+
+Inventory currently validated reciprocal combinations involving second-order/HOH, CCOR, and other ordinary standard-Hermitian variants.
+
+Separate:
+
+- variants that still reduce to the same standard Hermitian eigensystem;
+- genuinely generalized-overlap problems;
+- scientifically Development combinations.
+
+## Implementation
+
+For standard-Hermitian variants, reuse the existing CPU assembly and feed the same CUDA eigensolver.
+
+Do not duplicate operator construction on GPU.
+
+For generalized problems, defer unless Phase-II evidence clearly supports them and the current task is explicitly expanded.
+
+## Validation
+
+Use corresponding CPU functional fixtures and compare physical downstream outputs, not only eigenvalues.
+
+## Checklist
+
+- [ ] reciprocal operator variants inventoried
+- [ ] CPU maturity checked for each
+- [ ] standard-Hermitian validated variants enabled
+- [ ] generalized variants not accidentally claimed
+- [ ] HOH/CCOR outputs compared where supported
+- [ ] no GPU operator duplication added
+- [ ] unsupported combinations documented
+- [ ] benchmark impact recorded
+
+**Commit message:** `Extend CUDA reciprocal operator coverage`
+
+---
+
+# ACC-10 — Implement GPU Lehmann Green-function contractions
+
+## Objective
+
+Accelerate the validated Lehmann Green-function contraction while preserving canonical `green` outputs and existing downstream consumers.
+
+Do not create a separate GPU Green-function object.
+
+## Baseline
+
+Use existing validated Lehmann/Dyson Sigma=0 equivalence, direct selected G(z) validation, and Jij/conductivity/damping route triads.
+
+Record CPU performance for representative k counts, energy counts, and site/pair counts.
+
+## Initial data path
+
+The first GPU Lehmann implementation may consume host eigenpairs copied to device.
+
+Do not require device-resident eigensolver handoff in this task.
+
+Parallelize the expensive contraction dimensions as appropriate: k, band, energy, pair.
+
+Preserve Green-function sign conventions, pair indexing, complex-energy conventions, and canonical output arrays.
+
+## Validation
+
+Compare GPU and CPU selected onsite G, selected intersite G, all requested pair outputs for a tiny fixture, and downstream Jij/damping/transport triads where relevant.
+
+## Performance
+
+Measure eigenpair H2D, contraction, output D2H, and total Lehmann request.
+
+## Checklist
+
+- [ ] CPU Lehmann baseline recorded
+- [ ] GPU contraction implemented
+- [ ] canonical green arrays preserved
+- [ ] onsite G matches
+- [ ] intersite G matches
+- [ ] pair indexing preserved
+- [ ] energy conventions preserved
+- [ ] downstream triads remain valid
+- [ ] transfer cost measured
+- [ ] end-to-end speedup recorded
+- [ ] no device-residency framework introduced yet
+
+**Commit message:** `Accelerate Lehmann Green functions on CUDA`
+
+---
+
+# ACC-11 — Add device-resident eigensystem handoff only if justified
+
+## Objective
+
+Determine whether avoiding host round trips between the CUDA eigensolver and CUDA Lehmann contraction yields enough benefit to justify a narrow device-residency mechanism.
+
+This task is explicitly conditional.
+
+## Measure first
+
+Using ACC-10, quantify eigensolver D2H eigenpair cost, Lehmann H2D eigenpair cost, frequency of eigensystem reuse, and memory footprint.
+
+## Decision A — not significant
+
+If transfer overhead is small relative to solve+contraction:
+
+- make no new residency abstraction;
+- document the result;
+- close the task.
+
+## Decision B — significant
+
+Introduce the narrowest backend-owned handle/state required for:
+
+```text
+CUDA eigensolver -> CUDA Lehmann
+```
+
+Do not expose device pointers throughout physics modules.
+
+Requirements:
+
+- explicit validity generation;
+- explicit release;
+- host materialization remains available;
+- CPU backend remains unaffected;
+- no global device state.
+
+## Checklist
+
+- [ ] eigensystem transfer overhead measured
+- [ ] reuse frequency measured
+- [ ] memory cost measured
+- [ ] no code added if benefit insignificant
+- [ ] if added, residency scope limited to real consumers
+- [ ] generation/lifecycle explicit
+- [ ] host materialization retained
+- [ ] CPU backend unchanged
+- [ ] eigensolver and Lehmann correctness retained
+- [ ] end-to-end benefit demonstrated if code changed
+
+**Commit message:** `Add CUDA eigensystem residency when beneficial`
+
+---
+
+# ACC-12 — Port H(k) assembly only if profiling justifies it
+
+## Objective
+
+Determine whether CPU H(R)->H(k) assembly has become a material bottleneck after eigensolution acceleration.
+
+Do not assume that it has.
+
+## Measurement
+
+Use ACC-06/10 representative workloads.
+
+Measure assembly time, eigensolve time, transfer time, and total workflow time for small and larger reciprocal matrices.
+
+## Decision A — assembly insignificant
+
+If assembly remains a small fraction of total runtime:
+
+- do not port it;
+- document the result;
+- close the task.
+
+## Decision B — assembly material
+
+Only then prototype GPU assembly.
+
+Preserve the exact existing phase convention and short-range operator semantics.
+
+Prefer a narrow backend/private kernel.
+
+Do not replace the canonical CPU assembler.
+
+Validate assembled H(k) directly using elementwise/norm comparison, Hermiticity, and downstream eigenvalues.
+
+Do not use final SCF energy as the first oracle.
+
+## Checklist
+
+- [ ] H(k) assembly fraction measured
+- [ ] representative workloads measured
+- [ ] port decision justified quantitatively
+- [ ] no GPU assembler added if unnecessary
+- [ ] if added, phase convention preserved
+- [ ] H(k) direct comparison passes
+- [ ] Hermiticity passes
+- [ ] eigenvalues unchanged
+- [ ] CPU assembler retained
+- [ ] net end-to-end benefit demonstrated if code changed
+
+**Commit message:** `Accelerate reciprocal Hk assembly when justified`
+
+---
+
+# ACC-13 — Establish RS KPM/transport GPU completeness and performance
+
+## Objective
+
+Use the Phase-II validated charge/spin/orbital Kubo-Bastin contracts to establish how much of the transport workload is already accelerated by the existing RS CUDA plugin and fill only genuine high-value gaps.
+
+Do not rewrite KPM transport.
+
+## Audit
+
+Map CPU KPM stages, current GPU moment kernels, velocity/current operator transfer, spin-current path, orbital-current path, and remaining CPU contractions/postprocessing.
+
+Identify the true runtime hotspots using ACC-00.
+
+## Correctness
+
+For existing GPU-supported stages compare:
+
+- KPM moments;
+- charge conductivity;
+- spin conductivity;
+- orbital conductivity;
+- symmetry-forbidden components.
+
+Use the same conventions established in Phase II.
+
+## Performance
+
+Measure convergence-representative workloads over polynomial order, system size, and number of stochastic vectors if applicable.
+
+Separate kernel time, data transfer, and CPU postprocessing.
+
+## New kernels
+
+Add a new GPU kernel only if profiling identifies a material CPU bottleneck, the scientific CPU path is validated, and the kernel has a clear narrow contract.
+
+## Checklist
+
+- [ ] transport CPU/GPU dataflow mapped
+- [ ] existing GPU moment support validated
+- [ ] charge conductivity CPU/GPU compared
+- [ ] spin conductivity CPU/GPU compared
+- [ ] orbital conductivity CPU/GPU compared
+- [ ] symmetry constraints retained
+- [ ] performance hotspots measured
+- [ ] no redundant kernel added
+- [ ] new kernels added only with benchmark evidence
+- [ ] end-to-end transport speedup recorded
+- [ ] support matrix updated
+
+**Commit message:** `Establish CUDA KPM transport coverage`
+
+---
+
+# ACC-14 — Accelerator release gate and support matrix
+
+## Objective
+
+Close Phase III-A by documenting exactly what accelerator functionality is scientifically correct, performance-beneficial, and supported.
+
+This is primarily a validation/documentation task.
+
+Do not broaden GPU scope merely to make the support matrix look larger.
+
+## Support matrix
+
+Document at minimum:
+
+### RS CUDA
+For each relevant route:
+- supported;
+- validated;
+- performance-tested;
+- known limitations.
+
+### Reciprocal CUDA
+Record:
+- standard Hermitian;
+- eigenvalues/eigenvectors;
+- arbitrary-k;
+- normal mesh;
+- Si/sp;
+- Fe/spd;
+- second-order/HOH/CCOR where established;
+- generalized overlap status;
+- MPI rank-device status;
+- H(k) assembly location;
+- eigenstate residency status;
+- Lehmann status.
+
+### Deferred
+State clearly that GBT- and TD-DFT-specific GPU claims are not part of this release gate.
+
+## Performance report
+
+Summarize CPU/GPU crossover, recommended tile/batch policy, representative end-to-end speedups, cases where GPU is slower and CPU should be preferred, and transfer/memory limitations.
+
+Do not report only best-case speedups.
+
+## Correctness gate
+
+Run lean CPU unit/quick gates, relevant RS GPU correctness matrix, reciprocal CPU/GPU fixtures, Lehmann CPU/GPU contracts if implemented, and transport CPU/GPU contracts if implemented.
+
+## Build matrix
+
+Verify:
+- CPU-only build;
+- CUDA build;
+- MPI+CUDA build where available.
+
+## Documentation
+
+Update developer/accelerator documentation with build requirements, backend selection, supported feature table, benchmark methodology, and known limitations.
+
+## Checklist
+
+- [ ] RS CUDA support matrix completed
+- [ ] reciprocal CUDA support matrix completed
+- [ ] unsupported generalized scope documented
+- [ ] H(k) CPU/GPU decision documented
+- [ ] eigensystem residency decision documented
+- [ ] Lehmann status documented
+- [ ] transport status documented
+- [ ] CPU/GPU crossover table published
+- [ ] representative speedups published honestly
+- [ ] slow-GPU regimes documented
+- [ ] CPU-only build passes
+- [ ] CUDA build passes
+- [ ] MPI+CUDA checked where hardware permits
+- [ ] lean CPU gate remains green
+- [ ] accelerator correctness gate passes
+- [ ] GBT/TDDFT accelerator scope explicitly deferred
+
+**Commit message:** `Document validated accelerator support`
