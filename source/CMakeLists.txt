@@ -57,6 +57,7 @@ add_library(${PROJECT_NAME} STATIC
     os.f90
     potential.f90
     precision.f90
+    kpm_profile.f90
     kpoint_workset.f90
     reciprocal.f90
     reciprocal_backend.f90

@@ -65,6 +65,7 @@ PROFILE_MEMORY = re.compile(
     r"^PROFILE_MEMORY_MIB\s+(?P<label>\S+)\s+"
     r"(?P<rest>.*)$"
 )
+KPM_PROFILE = re.compile(r"^KPM_PROFILE\s+(?P<rest>.*)$")
 ACC06_DIMENSIONS = re.compile(
     r"^ACC06_DIMENSIONS\s+fixture=(?P<fixture>\S+)\s+"
     r"backend=(?P<backend>\S+)\s+strategy=(?P<strategy>\S+)\s+"
@@ -116,6 +117,22 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
     acc06_label: str | None = None
     accp0_label: str | None = None
     for line in output.splitlines():
+        match = KPM_PROFILE.match(line.strip())
+        if match:
+            values = _parse_key_values(match.group("rest"))
+            record = records.setdefault("kpm_transport", {"name": "kpm_transport"})
+            record["metadata"] = {
+                key: values.pop(key)
+                for key in ("backend", "precision", "estimator", "N", "nnz", "M", "lld", "Ntrace")
+                if key in values
+            }
+            record["metrics"] = {
+                key: value for key, value in values.items()
+                if key.startswith("T_") or key.startswith("bytes_")
+            }
+            record["class"] = "component"
+            record["labels"] = ["performance", "component", "rs", "kpm", "transport"]
+            continue
         match = ACCP0_DIMENSIONS.match(line.strip())
         if match:
             values = _parse_key_values(match.group("rest"))
@@ -199,7 +216,10 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
             )
 
     for label, record in records.items():
-        record["metadata"] = dimensions.get(label, {})
+        if label in dimensions:
+            record["metadata"] = dimensions[label]
+        else:
+            record.setdefault("metadata", {})
         record.setdefault("class", "component")
         record.setdefault("labels", ["performance", "reciprocal"])
     return list(records.values())

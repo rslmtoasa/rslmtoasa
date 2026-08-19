@@ -1,5 +1,8 @@
 submodule(recursion_mod) recursion_transport
 
+   use iso_fortran_env, only: int64
+   use kpm_profile_mod, only: g_kpm_profile
+
 contains
 
    !> @brief Apply a real-space velocity-like operator to a Chebyshev block state.
@@ -375,6 +378,8 @@ contains
       class(recursion), intent(inout) :: this
       ! Local variables
       integer :: ineigh, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, loop_over, ie, lmax, ntype
+      integer(int64) :: matrix_dimension, nnz, complex_bytes, integer_bytes, operator_h2d_bytes
+      integer(int64) :: gpu_h2d_bytes, gpu_d2h_bytes
       complex(rp), dimension(nb, nb) :: dum, dum1, dum2
       complex(rp), dimension(:, :), allocatable :: S_op, L_op
       complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
@@ -384,7 +389,10 @@ contains
       real(rp), dimension(this%control%cond_ll) :: kernel
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10) :: g0
       real(rp) :: a, b, rng, emin_win, emax_win
+      real(rp) :: gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds
       complex(rp) :: exp_factor
+      logical :: use_gpu
+      character(len=48) :: precision_label
 
       lmax = lmax_basis
       hblocksize = nb
@@ -419,6 +427,56 @@ contains
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
 
+      ! Decide the backend once for the complete transport moment request.
+      ! Repeating the readiness checks for every trace both obscures the
+      ! profile and can produce misleading fallback diagnostics.
+      use_gpu = gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)
+
+      select case(this%control%cond_calctype)
+      case('per_type')
+         loop_over = this%lattice%ntype
+      case('random_vec')
+         loop_over = this%control%random_vec_num
+      end select
+
+      matrix_dimension = int(nb, int64) * int(nat, int64)
+      if (size(this%lattice%nn, 2) > 1) then
+         nnz = int(count(this%lattice%nn(:, 2:) > 0), int64) * int(nb, int64) * int(nb, int64)
+      else
+         nnz = 0_int64
+      end if
+      complex_bytes = int(storage_size(this%hamiltonian%ee) / 8, int64)
+      integer_bytes = int(storage_size(this%lattice%nn) / 8, int64)
+      operator_h2d_bytes = 0_int64
+      if (use_gpu) then
+         operator_h2d_bytes = int(size(this%hamiltonian%ee), int64) * complex_bytes
+         if (this%lattice%nmax > 0) operator_h2d_bytes = operator_h2d_bytes + &
+            int(size(this%hamiltonian%hall), int64) * complex_bytes
+         operator_h2d_bytes = operator_h2d_bytes + int(size(this%hamiltonian%lsham), int64) * complex_bytes + &
+            int(size(this%lattice%nn), int64) * integer_bytes + int(size(this%lattice%iz), int64) * integer_bytes
+         if (this%hamiltonian%hoh) then
+            operator_h2d_bytes = operator_h2d_bytes + int(size(this%hamiltonian%eeo), int64) * complex_bytes + &
+               int(size(this%hamiltonian%enim), int64) * complex_bytes
+            if (this%lattice%nmax > 0) operator_h2d_bytes = operator_h2d_bytes + &
+               int(size(this%hamiltonian%hallo), int64) * complex_bytes
+         end if
+         operator_h2d_bytes = operator_h2d_bytes + int(size(this%hamiltonian%v_a), int64) * complex_bytes + &
+            int(size(this%hamiltonian%v_b), int64) * complex_bytes
+         if (this%hamiltonian%hoh) operator_h2d_bytes = operator_h2d_bytes + &
+            int(size(this%hamiltonian%vo_a), int64) * complex_bytes + int(size(this%hamiltonian%vo_b), int64) * complex_bytes
+         precision_label = 'cuda_fp32_moments_fp64_host'
+      else if (trim(this%control%cheb_backend) == 'legacy') then
+         precision_label = 'cpu_fp64'
+      else if (trim(this%control%cheb_backend) == 'fast_dp') then
+         precision_label = 'cpu_fp64_fast'
+      else
+         precision_label = 'cpu_fp32_moments_fp64_host'
+      end if
+      call g_kpm_profile%configure(merge('cuda', 'cpu ', use_gpu), precision_label, &
+         trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+         this%control%lld, loop_over)
+
+      call g_kpm_profile%start('T_operator')
       call this%hamiltonian%build_realspace_velocity_operators()
 
       ! Check the type of conductivity
@@ -486,16 +544,11 @@ contains
             this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
          end do
       end select
+      call g_kpm_profile%stop('T_operator')
 
       ! Check what kind of calculation
-      select case(this%control%cond_calctype)
-      case('per_type')
-         loop_over = this%lattice%ntype
-      case('random_vec')
-         loop_over = this%control%random_vec_num
-      end select  
-
       do i = 1, loop_over
+         call g_kpm_profile%start('T_trace_setup')
          call random_seed()
 
          ! Initializing wave functions
@@ -534,9 +587,11 @@ contains
             ! Normalize the full matrix 
             psiref(:, :, :) = psiref(:, :, :) / sqrt(real(this%lattice%kk))
          end select
+         call g_kpm_profile%stop('T_trace_setup')
 
-         if (gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)) then
+         if (use_gpu) then
             if (i == 1) then
+               call g_kpm_profile%start('T_H2D')
                call gpu_plugin_upload_hamiltonian(this)
                if (this%hamiltonian%hoh) then
                   call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b, &
@@ -544,9 +599,18 @@ contains
                else
                   call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
                end if
+               call g_kpm_profile%stop('T_H2D')
+               call g_kpm_profile%add_bytes('H2D', operator_h2d_bytes)
             end if
             call this%gpu_backend%stochastic_moments(psiref, this%control%cond_ll, a, b, &
                this%mu_nm_stochastic(:, :, :, :, i))
+            call this%gpu_backend%stochastic_profile(gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, &
+               gpu_h2d_bytes, gpu_d2h_bytes)
+            call g_kpm_profile%add_seconds('T_H2D', gpu_h2d_seconds)
+            call g_kpm_profile%add_seconds('T_cheb_moments', gpu_cheb_seconds)
+            call g_kpm_profile%add_seconds('T_D2H', gpu_d2h_seconds)
+            call g_kpm_profile%add_bytes('H2D', gpu_h2d_bytes)
+            call g_kpm_profile%add_bytes('D2H', gpu_d2h_bytes)
             cycle
          end if
 
@@ -558,6 +622,7 @@ contains
          if (trim(this%control%cheb_backend) /= 'legacy' .and. &
              .not. (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh)) then
             if (this%hamiltonian%hoh) then
+               call g_kpm_profile%start('T_cheb_moments')
                call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
@@ -565,8 +630,10 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .true., this%hamiltonian%eeo, &
                   this%hamiltonian%hallo, this%hamiltonian%enim, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%vo_a, this%hamiltonian%vo_b)
+               call g_kpm_profile%stop('T_cheb_moments')
             else if (this%hamiltonian%ccor_2c) then
                call ensure_ccor_operator_blocks(this)
+               call g_kpm_profile%start('T_cheb_moments')
                call cheb_moments_stochastic_fast(psiref, this%ee_ccor_work, &
                   this%hall_ccor_work, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
@@ -574,7 +641,9 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .false., this%ee_ccor_work, &
                   this%hall_ccor_work, this%hamiltonian%lsham, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%v_a, this%hamiltonian%v_b)
+               call g_kpm_profile%stop('T_cheb_moments')
             else
+               call g_kpm_profile%start('T_cheb_moments')
                call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
@@ -582,11 +651,13 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .false., this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%v_a, this%hamiltonian%v_b)
+               call g_kpm_profile%stop('T_cheb_moments')
             end if
             cycle
          end if
 
          ! Computing the left vector <r|Tm(H)
+         call g_kpm_profile%start('T_cheb_moments')
          do m=1, this%control%cond_ll 
             if (m == 1) then
                w1(:, :, :) = psiref(:, :, :)
@@ -1276,6 +1347,7 @@ contains
                g0(l, m, ie) = g0(l, m, ie)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
             end do
          end do
+         call g_kpm_profile%stop('T_cheb_moments')
       end do
       !$omp end parallel do
       do ie = 1, this%en%channels_ldos + 10

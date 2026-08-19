@@ -46,6 +46,7 @@ module calculation_mod
    use precision_mod, only: rp
    use string_mod, only: sl, fmt, real2str, int2str
    use timer_mod, only: g_timer
+   use kpm_profile_mod, only: g_kpm_profile
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init, norb
    use magnetic_representation_mod, only: gbt_single_q
@@ -874,6 +875,9 @@ contains
       logical :: rec_moments
       real(rp) :: emin_win, emax_win, a_scale, b_scale
 
+      call g_kpm_profile%reset()
+      call g_kpm_profile%start('T_transport_total')
+
       ! Route the Chebyshev transport moments (mu_nm_stochastic) through the
       ! selected producer (B5.1 dispatch). 'recursion' (default) fills them
       ! stochastically inside the prepared stack -- the bit-identical legacy
@@ -908,6 +912,8 @@ contains
       conductivity_obj = conductivity(self_obj)
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
+      call g_kpm_profile%stop('T_transport_total')
+      call g_kpm_profile%emit()
    end subroutine post_processing_conductivity
 
 
@@ -934,6 +940,9 @@ contains
       type(mix), target :: mix_obj
       type(conductivity), target :: conductivity_obj
 
+      call g_kpm_profile%reset()
+      call g_kpm_profile%start('T_transport_total')
+
       call prepare_post_processing_stack(this, .true., .false., .true., .true., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
@@ -942,6 +951,8 @@ contains
       conductivity_obj = conductivity(self_obj)
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
+      call g_kpm_profile%stop('T_transport_total')
+      call g_kpm_profile%emit()
    end subroutine post_processing_conductivity_p2rs
 
 

@@ -32,7 +32,8 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
                energy_min: float = -2.5, energy_max: float = 1.2,
                route: str = "recursion", rc: int = 20,
                kmesh: int | None = None, gpu_plugin: bool = False,
-               gpu_backend: str = "csr") -> None:
+               gpu_backend: str = "csr", lld: int | None = None,
+               cheb_backend: str = "legacy") -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
     shutil.copytree(base, workdir)
@@ -45,11 +46,13 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
         "energy": {"fermi": fermi, "energy_min": energy_min,
                     "energy_max": energy_max, "channels_ldos": channels},
         "control": {"cond_ll": cond_ll, "cond_type": cond_type,
-                     "cond_calctype": "per_type", "cheb_backend": "legacy",
+                     "cond_calctype": "per_type", "cheb_backend": cheb_backend,
                      "gpu_plugin": gpu_plugin, "gpu_backend": gpu_backend},
         "reciprocal": {"nk1": kmesh or replication, "nk2": kmesh or replication,
                         "nk3": kmesh or replication, "use_symmetry_reduction": False},
     }
+    if lld is not None:
+        patch["control"]["lld"] = lld
     patched = workdir / "input.patched.nml"
     f90nml.patch(str(workdir / "input.nml"), patch, str(patched))
     patched.replace(workdir / "input.nml")

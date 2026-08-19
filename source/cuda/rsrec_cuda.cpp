@@ -282,6 +282,26 @@ extern "C" int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx,
     return status;
 }
 
+extern "C" int rsrec_cuda_stochastic_profile(rsrec_cuda_ctx *ctx,
+                                              double *h2d_seconds,
+                                              double *cheb_seconds,
+                                              double *d2h_seconds,
+                                              long long *h2d_bytes,
+                                              long long *d2h_bytes) {
+    if (!ctx) {
+        set_error("rsrec_cuda_stochastic_profile: null ctx");
+        return 1;
+    }
+    const int status = rsrec_stochastic_profile(ctx->inner, h2d_seconds,
+                                                cheb_seconds, d2h_seconds,
+                                                h2d_bytes, d2h_bytes);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_stochastic_profile: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec) {
     if (!ctx) {
         set_error("rsrec_cuda_set_precision: null ctx");

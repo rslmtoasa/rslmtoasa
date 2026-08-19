@@ -67,6 +67,9 @@ int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j, int lld,
                               double *a_out, double *b2_out);
 int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx, const void *psiref,
                                   int lld, double a, double b, void *mu_nm);
+int rsrec_cuda_stochastic_profile(rsrec_cuda_ctx *ctx, double *h2d_seconds,
+                                  double *cheb_seconds, double *d2h_seconds,
+                                  long long *h2d_bytes, long long *d2h_bytes);
 int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec);
 int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu, int n_moments,
                              int natoms, const double *ene, int nv,

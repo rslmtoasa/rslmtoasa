@@ -40,6 +40,7 @@ module conductivity_mod
    use string_mod
    use self_mod
    use timer_mod, only: g_timer
+   use kpm_profile_mod, only: g_kpm_profile
    use logger_mod, only: g_logger
    use cfd
    use basis_mod, only: nb, norb, spin_off
@@ -174,6 +175,8 @@ contains
       real(rp), dimension(:), allocatable :: acos_x, sqrt_term, wscale
       real(rp), dimension(:, :), allocatable :: chebyshev_poly
       complex(rp), dimension(:, :), allocatable :: cn, cm
+
+      call g_kpm_profile%start('T_gamma')
       
       ! Initialize global variable
 #ifdef USE_SAFE_ALLOC
@@ -229,6 +232,7 @@ contains
 
       ! Clean up
       deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
+      call g_kpm_profile%stop('T_gamma')
    end subroutine 
 
    subroutine calculate_conductivity_tensor(this)
@@ -285,6 +289,7 @@ contains
       factor = 16 / (pi * (de**2))
       write(*,*) factor, volume, de
       !write(*,*) (16 * hbar_const * (e_const**2)) / (pi * volume * ((de * ry2joule)**2))
+      call g_kpm_profile%start('T_gamma_mu')
       do ntype = 1, loop_over
          !$omp parallel do default(shared) private(i, n, m, l2) schedule(dynamic)
          do i = 1, this%en%channels_ldos + 10
@@ -305,7 +310,9 @@ contains
          end do
          !$omp end parallel do
       end do
+      call g_kpm_profile%stop('T_gamma_mu')
 
+      call g_kpm_profile%start('T_energy_integral')
       integrand_tot_real(:) = 0.0d0
       integrand_tot_im(:) = 0.0d0
 
@@ -379,6 +386,7 @@ contains
          end do  ! end do over ntype
       end if
       ! End writing statements
+      call g_kpm_profile%stop('T_energy_integral')
 
       deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at)
    end subroutine calculate_conductivity_tensor

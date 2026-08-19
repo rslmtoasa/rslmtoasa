@@ -50,6 +50,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -110,6 +111,12 @@ struct rsrec_ctx {
     double f_a = 0.0, f_b = 0.0;
     int f_ver = -1;
 
+    /* Last stochastic transport request.  These are intentionally request-
+     * local rather than cumulative: the Fortran transport loop records one
+     * profile interval per reference state. */
+    double stoch_h2d_s = 0.0, stoch_cheb_s = 0.0, stoch_d2h_s = 0.0;
+    long long stoch_h2d_bytes = 0, stoch_d2h_bytes = 0;
+
     /* site-major scratch fields, each ld*nb cplx (single-state size)        */
     zc *d_s0 = nullptr, *d_s1 = nullptr, *d_s2 = nullptr, *d_s3 = nullptr;
     zc *d_blk = nullptr;
@@ -135,6 +142,11 @@ struct rsrec_ctx {
     zc **d_cC = nullptr;
     size_t c_nnz = 0;
 };
+
+static inline double host_seconds() {
+    using clock = std::chrono::steady_clock;
+    return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+}
 
 static inline size_t fieldsz(const rsrec_ctx *c) {
     return (size_t)c->nb * c->nb * c->kk;
@@ -1955,7 +1967,11 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     const CT zero = {(RT)0, (RT)0};
     const int tpb = 256;
     const int nbl = (int)((nf + tpb - 1) / tpb);
+    const double h2d_start = host_seconds();
     CUCHK(cudaMemcpy(stage, psiref_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    c->stoch_h2d_s += host_seconds() - h2d_start;
+    c->stoch_h2d_bytes += (long long)(nf * sizeof(zc));
+    const double cheb_start = host_seconds();
     k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, w1);
     CUCHK(cudaGetLastError());
 
@@ -1994,10 +2010,18 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
                            (long long)bb * lld, lld));
     }
 
+    /* The device recurrence/contractions are the numerical moment stage.
+     * Keep the final synchronous copy separate so the transport profile can
+     * distinguish arithmetic from host/device traffic. */
+    CUCHK(cudaDeviceSynchronize());
+    const double d2h_start = host_seconds();
+    c->stoch_cheb_s += d2h_start - cheb_start;
     /* copy moments back, widening to cplx (fp64) for the Fortran side. */
     std::vector<CT> h(bb * (size_t)lld * lld);
     CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
                      cudaMemcpyDeviceToHost));
+    c->stoch_d2h_s += host_seconds() - d2h_start;
+    c->stoch_d2h_bytes += (long long)(h.size() * sizeof(CT));
     cplx *mu = (cplx *)mu_;
     for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
 
@@ -2019,6 +2043,12 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
     if (!c->have_v) FAIL("stochastic_moments: velocity operators not set");
     if (c->have_hoh && !c->have_vo)
         FAIL("stochastic_moments: hoh active but velocity ortho (vo) not set");
+
+    c->stoch_h2d_s = 0.0;
+    c->stoch_cheb_s = 0.0;
+    c->stoch_d2h_s = 0.0;
+    c->stoch_h2d_bytes = 0;
+    c->stoch_d2h_bytes = 0;
 
     if (!c->use_struct) {
         if (c->have_hoh) {
@@ -2073,7 +2103,11 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
     zc *w0 = c->d_s0, *w1 = c->d_s1, *w2 = c->d_s2, *tmp = c->d_s3;
     const int tpb = 256;
     const int nbl = (int)((nf + tpb - 1) / tpb);
+    const double h2d_start = host_seconds();
     CUCHK(cudaMemcpy(R, psiref_, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    c->stoch_h2d_s = host_seconds() - h2d_start;
+    c->stoch_h2d_bytes = (long long)(nf * sizeof(zc));
+    const double cheb_start = host_seconds();
     k_pack<zc><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, R, w1);
     CUCHK(cudaGetLastError());
 
@@ -2115,9 +2149,32 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                            &Z_ZERO, dmu + bb * (size_t)(n - 1), nb,
                            (long long)bb * lld, lld));
     }
+    CUCHK(cudaDeviceSynchronize());
+    const double d2h_start = host_seconds();
+    c->stoch_cheb_s = d2h_start - cheb_start;
     CUCHK(cudaMemcpy(mu_, dmu, bb * (size_t)lld * lld * sizeof(zc),
                      cudaMemcpyDeviceToHost));
+    c->stoch_d2h_s = host_seconds() - d2h_start;
+    c->stoch_d2h_bytes = (long long)(bb * (size_t)lld * lld * sizeof(zc));
     cudaFree(left); cudaFree(dmu); cudaFree(R);
+    return 0;
+}
+
+extern "C" int rsrec_stochastic_profile(rsrec_ctx *c, double *h2d_seconds,
+                                         double *cheb_seconds,
+                                         double *d2h_seconds,
+                                         long long *h2d_bytes,
+                                         long long *d2h_bytes) {
+    if (!c || !h2d_seconds || !cheb_seconds || !d2h_seconds ||
+        !h2d_bytes || !d2h_bytes) {
+        g_err = "stochastic_profile: null argument";
+        return 1;
+    }
+    *h2d_seconds = c->stoch_h2d_s;
+    *cheb_seconds = c->stoch_cheb_s;
+    *d2h_seconds = c->stoch_d2h_s;
+    *h2d_bytes = c->stoch_h2d_bytes;
+    *d2h_bytes = c->stoch_d2h_bytes;
     return 0;
 }
 

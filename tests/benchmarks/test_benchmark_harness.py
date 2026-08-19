@@ -26,6 +26,18 @@ PROFILE_MEMORY_MIB bccFe_one_site hk=1.0 normal_eigenpairs=2.0 arbitrary_kq_eige
     assert records[0]["metrics"]["eigensolver_s"] == 0.02
     assert records[0]["metrics"]["principal_payload_mib"] == 6.0
 
+    kpm = parse_profile_output(
+        "KPM_PROFILE backend=cpu precision=cpu_fp64 estimator=per_type "
+        "N=144 nnz=5184 M=500 lld=150 Ntrace=1 bytes_h2d=0 bytes_d2h=0 "
+        "T_operator=1.0E-03 T_trace_setup=2.0E-03 T_cheb_moments=3.0E-02 "
+        "T_H2D=0.0 T_D2H=0.0 T_gamma=4.0E-03 T_gamma_mu=5.0E-03 "
+        "T_energy_integral=6.0E-03 T_transport_total=5.0E-02"
+    )
+    assert kpm[0]["metadata"]["M"] == 500
+    assert kpm[0]["metadata"]["precision"] == "cpu_fp64"
+    assert kpm[0]["metrics"]["T_cheb_moments"] == 0.03
+    assert kpm[0]["metrics"]["bytes_h2d"] == 0
+
     acc06 = parse_profile_output(
         "ACC06_DIMENSIONS fixture=Si_sp backend=cuda strategy=backend sites=1 "
         "matrix_dimension=8 nk=16 tile_size=4 eigenvectors=1 lmax=1\n"
