@@ -123,14 +123,24 @@ only interval timing accumulators. The persistent context, handle, stream,
 workspace, and lifetime request counters remain intact. ACC-P1 adds the
 explicit strategy option described below.
 
-## ACC-P1 selectable CUDA eigensolver strategies
+## ACC-P1/P1b selectable CUDA eigensolver strategies
 
-The same persistent driver now accepts `--solver-strategy
-zheevd_serial|zheevj_batched` for CUDA. The first retains the original
-one-matrix `cusolverDnZheevd` reference path; the second makes one contiguous
-`cusolverDnZheevjBatched` call for each same-size tile. The Jacobi strategy is
-reported as explicitly unsupported for matrices larger than the cuSOLVER
-batched API limit (`n > 32`); it never falls back to CPU or serial Zheevd.
+The same persistent driver accepts explicit `--solver-strategy` values
+`fp64_zheevd|fp64_zheevj_batched|fp32_cheevd|fp32_cheevj_batched` (the legacy
+`zheevd_serial` and `zheevj_batched` spellings remain aliases). FP64 retains
+the original `cuDoubleComplex` path. FP32 converts host H64 into reusable
+host `cuComplex` staging before H2D, solves with `cusolverDnCheevd` or
+`cusolverDnCheevjBatched`, and widens eigenpairs back to the existing FP64
+result arrays. Conversion and widening are reported separately from H2D,
+solver, and D2H time. Jacobi strategies are explicitly unsupported for
+matrices larger than the cuSOLVER batched API limit (`n > 32`); they never
+fall back to CPU or the other precision.
+
+The validation record retains the original H64 matrix and reports H64-based
+residual, orthogonality, eigenvalue, and degenerate-projector errors together
+with `||H64-H32||/||H64||`. The FP32 campaign is an experimental reciprocal
+study only: normal physics arrays and the production FP64 defaults are
+unchanged.
 
 The ACC-P1 campaign includes both strategies across the real bccFe L=1…5
 supercell set, plus Si and primitive Fe, and emits an `ACCP1_VALIDATION` record
@@ -144,6 +154,17 @@ python3 tests/benchmarks/accp0_real_material.py \
   --meshes 1 --tiles 1 --warmups 1 --repetitions 5
 ```
 
+`ReciprocalAccP1bPhysicalSCF` and `accp1b_physical_scf.py` are opt-in physical
+probes for the canonical Si and bcc-Fe reciprocal-SCF workflows. They report
+canonical electron count, EF, projection-free band energy, site occupation and
+charge transfer, Fe moment, DOS state count, near-EF distance, SCF residual,
+and iteration count. Fe is run at several Gaussian widths. The probe installs
+the selected strategy only on its private reciprocal cache; it is not a
+production precision switch. The JSON compares every available CUDA row with
+FP64 CPU and also compares FP32 rows with direct FP64 GPU. Its report
+intentionally leaves mixed-SCF and delicate response-energy studies out of
+scope.
+
 ## ACC-P0 supplied bcc-Fe supercells
 
 `accp0_supercell_fe.py` benchmarks the exact explicit supercells under
@@ -155,3 +176,26 @@ See
 `docs/dev/ACC-P0_SUPERCELL_FE_BENCHMARKS.md` for the input audit and the full
 campaign command. The scaling campaign requires at least five measured
 repetitions and input `nstep >= 5`.
+
+## ACC-P2 vector-first real-material campaign
+
+ACC-P2 uses reciprocal SCF with `--vectors` as the primary case and covers
+primitive Fe, Fe 3^3 (`n=486`), Fe 4^3 (`n=1152`), and Fe 5^3 (`n=2250`). It
+records the interval timing budget, separate eigenvalue/eigenvector D2H bytes
+and times, and before/after resource counters. FP32 is not selected for
+production optimization unless a supported ACC-P1b scientific gate accepts
+it.
+
+```bash
+python3 tests/benchmarks/accp2_real_material.py \
+  --binary build-acc09-cuda/bin/ReciprocalAccP0Benchmark \
+  --build-dir build-acc09-cuda \
+  --output-dir results/benchmarks/accp2 \
+  --warmups 2 --repetitions 5
+```
+
+The driver compares persistent pageable and pinned staging for the three
+large Fe cases. Pinned staging is backend-owned and enabled only for
+`n>=486`; retain it only if end-to-end steady time improves. Use
+`--skip-cuda` on a CPU-only host to produce controls without treating missing
+CUDA as a scientific or performance pass.

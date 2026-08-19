@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import re
 import shutil
 import statistics
@@ -30,6 +31,21 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmark_harness import capture_environment, make_document, run_command  # noqa: E402
+
+
+STRATEGIES = (
+    "fp64_zheevd",
+    "fp64_zheevj_batched",
+    "fp32_cheevd",
+    "fp32_cheevj_batched",
+)
+
+
+def parse_strategies(text: str) -> list[str]:
+    values = [item.strip() for item in text.split(",") if item.strip()]
+    if not values or any(value not in STRATEGIES for value in values):
+        raise argparse.ArgumentTypeError(f"strategies must be drawn from {list(STRATEGIES)}")
+    return values
 
 
 REQUIRED_COLUMNS = [
@@ -53,13 +69,43 @@ REQUIRED_COLUMNS = [
     "steady_solve_median_s",
     "metric_repetitions",
     "Hk_CPU_s",
+    "H64_to_H32_s",
     "H2D_s",
     "solver_s",
     "D2H_s",
+    "T_Hk_CPU_s",
+    "T_host_staging_s",
+    "T_D2H_values_s",
+    "T_D2H_vectors_s",
+    "T_sync_s",
+    "T_other_backend_s",
+    "T_total_s",
+    "H32_to_H64_s",
+    "total_reciprocal_s",
     "total_steady_s",
     "memory_estimate_mib",
     "memory_free_before_mib",
     "memory_total_mib",
+    "H2D_bytes",
+    "D2H_values_bytes",
+    "D2H_vectors_bytes",
+    "pinned_host_active",
+    "cuda_malloc_count",
+    "cuda_free_count",
+    "workspace_query_count",
+    "workspace_reuse_count",
+    "event_create_count",
+    "event_destroy_count",
+    "pinned_alloc_count",
+    "pinned_free_count",
+    "cuda_malloc_count_before",
+    "cuda_free_count_before",
+    "workspace_query_count_before",
+    "workspace_reuse_count_before",
+    "event_create_count_before",
+    "event_destroy_count_before",
+    "pinned_alloc_count_before",
+    "pinned_free_count_before",
 ]
 
 
@@ -199,6 +245,7 @@ def run_oracle(
     mesh: tuple[int, int, int],
     length: int,
     backend: str = "lapack",
+    solver_strategy: str = "zheevd_serial",
 ) -> list[float]:
     dump = output.with_suffix(".eig")
     command = [
@@ -207,6 +254,8 @@ def run_oracle(
         "oracle",
         "--backend",
         backend,
+        "--solver-strategy",
+        solver_strategy,
         "--fixture",
         "bccFe",
         "--input",
@@ -256,6 +305,8 @@ def compare_oracle(
     left = sorted(primitive)
     right = sorted(supercell)
     error = max((abs(a - b) for a, b in zip(left, right)), default=0.0)
+    squared_error = sum((a - b) ** 2 for a, b in zip(left, right))
+    rms_error = math.sqrt(squared_error / len(left)) if left else 0.0
     left_degeneracy = degeneracy_signature(left)
     right_degeneracy = degeneracy_signature(right)
     return {
@@ -263,6 +314,7 @@ def compare_oracle(
         "primitive_eigenvalues": len(primitive),
         "supercell_eigenvalues": len(supercell),
         "max_abs_error": error,
+        "rms_abs_error": rms_error,
         "degeneracy_match": left_degeneracy == right_degeneracy,
         "degeneracy_required": require_degeneracy,
         "primitive_degeneracy": left_degeneracy,
@@ -287,6 +339,7 @@ def run_measurement(
     vectors: bool,
     warmups: int,
     repetitions: int,
+    pinned_host: str,
 ) -> dict[str, Any]:
     command = [
         str(binary),
@@ -320,6 +373,7 @@ def run_measurement(
     wall_times, profiles, last_output = run_command(
         command,
         cwd=fixture_dir,
+        env={**os.environ, "RSLMTO_CUDA_PINNED_HOST": pinned_host},
         warmups=0,
         repetitions=1,
         persistent=True,
@@ -330,7 +384,7 @@ def run_measurement(
         profile.setdefault("metrics", {})["cold_process_wall_s"] = wall_times[0]
     metadata = capture_environment(ROOT, build_dir, omp_threads=None, mpi_ranks=1)
     metadata.update({"fixture": fixture, "source": source, "workload": workload, "L": length})
-    name = f"accp1_{workload}_{fixture}_L{length}_{mesh[0]}x{mesh[1]}x{mesh[2]}_{backend}_{solver_strategy}_tile{tile}_v{int(vectors)}"
+    name = f"accp2_{workload}_{fixture}_L{length}_{mesh[0]}x{mesh[1]}x{mesh[2]}_{backend}_{solver_strategy}_tile{tile}_v{int(vectors)}_pin{pinned_host}"
     document = make_document(
         name=name,
         benchmark_class="component",
@@ -407,11 +461,9 @@ def run_validation(
     ]
     completed = subprocess.run(command, cwd=fixture_dir, capture_output=True, text=True)
     text = (completed.stdout or "") + (completed.stderr or "")
-    if completed.returncode:
-        raise RuntimeError(f"ACC-P1 validation failed ({completed.returncode}):\n{text}")
     line = next((line for line in text.splitlines() if line.startswith("ACCP1_VALIDATION ")), None)
     if line is None:
-        raise RuntimeError(f"ACC-P1 validation emitted no record:\n{text}")
+        raise RuntimeError(f"ACC-P1 validation emitted no record (return code {completed.returncode}):\n{text}")
     values: dict[str, Any] = {}
     for token in line.split()[1:]:
         key, value = token.split("=", 1)
@@ -419,13 +471,37 @@ def run_validation(
             values[key] = float(value.replace("D", "E").replace("d", "e"))
         except ValueError:
             values[key] = value
-    values.update({"fixture": fixture, "L": length, "solver_strategy": solver_strategy, "mesh": "x".join(map(str, mesh))})
+    values.update({
+        "fixture": fixture,
+        "L": length,
+        "solver_strategy": solver_strategy,
+        "mesh": "x".join(map(str, mesh)),
+        "returncode": completed.returncode,
+    })
     return values
 
 
 def matched_mesh(base: int, length: int) -> tuple[int, int, int]:
     value = max(1, int(round(base / length)))
     return (value, value, value)
+
+
+def classify_eigensystem_validation(validation: list[dict[str, Any]]) -> dict[str, str]:
+    """Classify only completed FP32 eigensystem checks; never infer a GPU result."""
+
+    classified: dict[str, str] = {}
+    for strategy in ("fp32_cheevd", "fp32_cheevj_batched"):
+        rows = [row for row in validation if row.get("solver_strategy") == strategy]
+        completed = [row for row in rows if row.get("status") in ("PASS", "FAIL")]
+        if not completed:
+            classified[strategy] = "not_run"
+        elif any(row.get("status") == "FAIL" for row in completed):
+            classified[strategy] = "unacceptable"
+        elif len(completed) < len(rows):
+            classified[strategy] = "partially_evaluated"
+        else:
+            classified[strategy] = "acceptable"
+    return classified
 
 
 def main() -> int:
@@ -435,11 +511,21 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=ROOT / "results/benchmarks/accp0")
     parser.add_argument("--quick", action="store_true", help="small validation campaign; still exercises both workloads")
     parser.add_argument("--skip-cuda", action="store_true")
+    parser.add_argument("--skip-cpu", action="store_true",
+                        help="omit LAPACK control rows; useful for a CUDA-only staging comparison")
+    parser.add_argument("--skip-cuda-validation", action="store_true",
+                        help="omit the expensive ACC-P1 eigenpair validation; keep persistent timing rows")
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--tiles", type=parse_int_list, default=[1, 8, 16])
     parser.add_argument("--meshes", type=parse_int_list, default=[1, 2, 4, 8])
     parser.add_argument("--vectors", action="store_true", help="include eigenvector requests in addition to values-only")
+    parser.add_argument("--pinned-host", choices=("0", "1"), default="0",
+                        help="enable persistent pinned staging for n>=486; primitive cases stay pageable")
+    parser.add_argument("--fe-lengths", type=parse_int_list, default=None,
+                        help="restrict bcc-Fe supercell lengths, e.g. 1,3,4,5")
+    parser.add_argument("--cuda-strategies", type=parse_strategies, default=list(STRATEGIES),
+                        help="explicit CUDA strategies to include in the campaign")
     args = parser.parse_args()
 
     binary = args.binary.resolve()
@@ -463,19 +549,21 @@ def main() -> int:
         tiles = args.tiles
         vectors = [False, True] if args.vectors else [False]
         fe_lengths = [1, 2, 3, 4, 5]
+    if args.fe_lengths is not None:
+        fe_lengths = args.fe_lengths
 
     rows: list[dict[str, Any]] = []
     folding: list[dict[str, Any]] = []
     validation: list[dict[str, Any]] = []
-    configurations = [("lapack", "lapack")]
+    configurations = [] if args.skip_cpu else [("lapack", "lapack")]
     if not args.skip_cuda:
-        configurations.extend([("cuda", "zheevd_serial"), ("cuda", "zheevj_batched")])
+        configurations.extend(("cuda", strategy) for strategy in args.cuda_strategies)
     with tempfile.TemporaryDirectory(prefix="rslmto-accp0-", dir="/tmp") as temporary:
         scratch = Path(temporary)
         si_dir = scratch / "diamondSi"
         fixture_input(si_source, si_dir)
         for backend, solver_strategy in configurations:
-            if backend == "cuda":
+            if backend == "cuda" and not args.skip_cuda_validation:
                 validation.append(run_validation(
                     binary=binary, fixture_dir=si_dir, fixture="diamondSi", length=1,
                     mesh=(1, 1, 1), solver_strategy=solver_strategy, tile=max(1, tiles[0]),
@@ -502,6 +590,7 @@ def main() -> int:
                                 vectors=vectors_value,
                                 warmups=args.warmups,
                                 repetitions=args.repetitions,
+                                pinned_host=args.pinned_host,
                             )
                         )
 
@@ -525,16 +614,17 @@ def main() -> int:
                 if not oracle_info["passed"]:
                     raise RuntimeError(f"ACC-P0 band-folding oracle failed for bccFe L={length}: {oracle_info}")
 
-            if length <= 3:
-                for backend, solver_strategy in configurations:
-                    if backend == "cuda":
-                        validation.append(run_validation(
-                            binary=binary, fixture_dir=fe_dir, fixture="bccFe", length=length,
-                            mesh=(1, 1, 1), solver_strategy=solver_strategy, tile=max(1, tiles[0]),
-                        ))
+            for backend, solver_strategy in configurations:
+                if backend == "cuda" and not args.skip_cuda_validation:
+                    validation.append(run_validation(
+                        binary=binary, fixture_dir=fe_dir, fixture="bccFe", length=length,
+                        mesh=(1, 1, 1), solver_strategy=solver_strategy, tile=max(1, tiles[0]),
+                    ))
 
             workload_meshes = [("crossover", (mesh_value,) * 3) for mesh_value in meshes]
-            workload_meshes.extend(("matched-density", matched_mesh(max(meshes), length)) for _ in [0])
+            matched_density_mesh = matched_mesh(max(meshes), length)
+            if matched_density_mesh not in [mesh for _, mesh in workload_meshes]:
+                workload_meshes.append(("matched-density", matched_density_mesh))
             for workload, mesh in workload_meshes:
                 for vectors_value in vectors:
                     for tile in tiles:
@@ -563,6 +653,7 @@ def main() -> int:
                                     vectors=vectors_value,
                                     warmups=args.warmups,
                                     repetitions=args.repetitions,
+                                    pinned_host=args.pinned_host,
                                 )
                             )
 
@@ -579,6 +670,19 @@ def main() -> int:
             "warmups_inside_process": args.warmups,
             "measured_repetitions_inside_process": args.repetitions,
             "cuda_solver_algorithm_changed": True,
+            "precision_study": True,
+            "normal_production_precision": {
+                "cpu": "LAPACK ZHEEV/ZHEGV complex double",
+                "cuda": "cuDoubleComplex, double eigenvalues, cusolverDnZheevd/current FP64 batched strategy",
+            },
+            "fp32_is_default": False,
+            "fp32_physics_arrays_unchanged": True,
+            "validation_tolerance_contract": {
+                "eigenvalue_max_abs": 1.0e-8,
+                "residual_max": 1.0e-8,
+                "orthogonality_max": 1.0e-8,
+                "degenerate_projector_max": 1.0e-7,
+            },
             "solver_strategies": sorted({str(row.get("solver_strategy")) for row in rows}),
         },
         "rows": rows,
@@ -586,6 +690,7 @@ def main() -> int:
         "validation": validation,
         "summary": {
             "rows": len(rows),
+            "fp32_eigensystem_classification": classify_eigensystem_validation(validation),
             "configuration_totals": {
                 f"{backend}:{strategy}": sum(
                     1 for row in rows

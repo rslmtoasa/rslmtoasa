@@ -2,7 +2,7 @@
  * Narrow C ABI for the reciprocal CUDA execution backend.
  *
  * ACC-03 adds a deliberately narrow standard-Hermitian solve entry point.
- * Complex arrays use the native Fortran/CUDA double-complex representation:
+ * Complex arrays use the native Fortran/CUDA complex representations:
  * interleaved (real, imaginary) values in column-major [n,n,batch] order.
  */
 #ifndef RSLMTO_RECIPROCAL_CUDA_H
@@ -14,12 +14,13 @@ extern "C" {
 
 typedef struct rslmto_reciprocal_cuda_context rslmto_reciprocal_cuda_context;
 
-/* Keep the strategy surface deliberately narrow: ACC-P1 compares the
- * established one-matrix Zheevd reference with cuSOLVER's same-size
- * Jacobi batch routine.  No automatic production dispatch is implied. */
+/* Keep the strategy surface deliberately explicit.  FP32 routes are an
+ * experimental precision study; they are never selected implicitly. */
 enum rslmto_reciprocal_cuda_solver_strategy {
-    RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL = 0,
-    RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED = 1
+    RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL = 0,       /* fp64_zheevd */
+    RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED = 1,      /* fp64_zheevj_batched */
+    RSLMTO_RECIPROCAL_CUDA_CHEEVD_SERIAL = 2,       /* fp32_cheevd */
+    RSLMTO_RECIPROCAL_CUDA_CHEEVJ_BATCHED = 3       /* fp32_cheevj_batched */
 };
 
 int rslmto_reciprocal_cuda_device_count(int *count);
@@ -39,6 +40,17 @@ int rslmto_reciprocal_cuda_solver_strategy_supported(
     int batch_size,
     int request_eigenvectors);
 int rslmto_reciprocal_cuda_solve_zheevd_batch(
+    rslmto_reciprocal_cuda_context *context,
+    int n,
+    int batch_size,
+    const void *host_hamiltonians,
+    double *host_eigenvalues,
+    void *host_eigenvectors,
+    int request_eigenvectors);
+/* The FP32 entry point deliberately accepts the original host H64 and returns
+ * widened FP64 eigenpairs.  Conversion is owned by the persistent CUDA
+ * context, so callers do not allocate conversion buffers per matrix. */
+int rslmto_reciprocal_cuda_solve_cheevd_batch(
     rslmto_reciprocal_cuda_context *context,
     int n,
     int batch_size,
@@ -70,6 +82,33 @@ void rslmto_reciprocal_cuda_get_timings(
     double *solve_seconds,
     double *d2h_seconds,
     int *calls);
+void rslmto_reciprocal_cuda_get_detailed_timings(
+    rslmto_reciprocal_cuda_context *context,
+    double *host_conversion_seconds,
+    double *host_staging_seconds,
+    double *h2d_seconds,
+    double *solve_seconds,
+    double *d2h_seconds,
+    double *d2h_values_seconds,
+    double *d2h_vectors_seconds,
+    double *sync_seconds,
+    double *host_widen_seconds,
+    double *total_seconds,
+    long long *h2d_bytes,
+    long long *d2h_values_bytes,
+    long long *d2h_vectors_bytes,
+    int *pinned_host_active,
+    int *calls);
+void rslmto_reciprocal_cuda_get_resource_counters(
+    rslmto_reciprocal_cuda_context *context,
+    long long *cuda_malloc_count,
+    long long *cuda_free_count,
+    long long *workspace_query_count,
+    long long *workspace_reuse_count,
+    long long *event_create_count,
+    long long *event_destroy_count,
+    long long *pinned_alloc_count,
+    long long *pinned_free_count);
 void rslmto_reciprocal_cuda_reset_timings(
     rslmto_reciprocal_cuda_context *context);
 int rslmto_reciprocal_cuda_get_memory(

@@ -6,7 +6,7 @@
 ! requested warm-ups, resets interval counters, and then measures repetitions.
 ! It is opt-in and is not registered as a default CTest test.
 program accp0_real_material
-   use, intrinsic :: iso_c_binding, only: c_long_long
+   use, intrinsic :: iso_c_binding, only: c_float, c_long_long
    use, intrinsic :: iso_fortran_env, only: int64
    use precision_mod, only: rp
    use basis_mod, only: basis_init, nb
@@ -64,7 +64,7 @@ program accp0_real_material
    call g_logger%init()
 
    if (trim(mode) == 'oracle') then
-      call run_oracle(trim(input_file), trim(dump_file), trim(fixture), trim(backend), mesh, supercell_l)
+      call run_oracle(trim(input_file), trim(dump_file), trim(fixture), trim(backend), trim(solver_strategy), mesh, supercell_l)
    else if (trim(mode) == 'preflight') then
       call run_preflight(trim(input_file), trim(fixture), trim(backend), trim(solver_strategy), mesh, tile_size, eigenvectors == 1, supercell_l)
    else if (trim(mode) == 'validate') then
@@ -219,11 +219,10 @@ contains
          if (allocated(result%eigenvalues)) deallocate(result%eigenvalues)
          if (allocated(result%eigenvectors)) deallocate(result%eigenvectors)
       end do
-      call recip%execution_backend%synchronize()
    end subroutine solve_tiles
 
-   subroutine run_oracle(input_file, dump_file, fixture, backend_name, mesh, supercell_l)
-      character(len=*), intent(in) :: input_file, dump_file, fixture, backend_name
+   subroutine run_oracle(input_file, dump_file, fixture, backend_name, solver_strategy, mesh, supercell_l)
+      character(len=*), intent(in) :: input_file, dump_file, fixture, backend_name, solver_strategy
       integer, intent(in) :: mesh(3), supercell_l
       type(reciprocal) :: recip
       type(hamiltonian), target :: ham
@@ -240,6 +239,8 @@ contains
       allocate(hamiltonians(nb * lat%nrec, nb * lat%nrec, size(points, 2)))
       call assemble_all(recip, points, hamiltonians)
       call recip%make_execution_backend(backend_name)
+      call configure_solver_strategy(recip, backend_name, solver_strategy, status)
+      if (status /= 0) error stop 'ACCP1: failed to configure oracle solver strategy'
       call recip%execution_backend%prepare_operator(ham%operator_generation)
       open (newunit=dump_unit, file=dump_file, status='replace', action='write')
       call solve_tiles(recip, hamiltonians, size(points, 2), .false., status, dump_unit)
@@ -248,7 +249,7 @@ contains
       unique_nk = count_unique_points(recip, points)
       write (*, '(a)') 'ACCP0_ORACLE fixture='//trim(fixture)//' L='//trim(int_token(supercell_l))// &
          ' backend='//trim(backend_name)//' nmat='//trim(int_token(nb * lat%nrec))// &
-         ' actual_unique_nk='//trim(int_token(unique_nk))
+         ' solver_strategy='//trim(solver_strategy)//' actual_unique_nk='//trim(int_token(unique_nk))
    end subroutine run_oracle
 
    subroutine run_persistent(input_file, fixture, source_name, workload, backend_name, solver_strategy, mesh, tile_size, want_vectors, &
@@ -265,15 +266,24 @@ contains
       complex(rp), allocatable :: hamiltonians(:, :, :)
       real(rp) :: start, finish, hk_start, hk_finish, solve_start, solve_finish
       real(rp) :: backend_init, prepare_seconds, first_solve, hk_cpu, total_median, solve_median
-      real(rp) :: steady_min, steady_max, steady_spread, h2d, solver, d2h, post_seconds
+      real(rp) :: steady_min, steady_max, steady_spread, conversion, staging, h2d, solver, d2h, d2h_values, d2h_vectors
+      real(rp) :: sync, widening, total_reciprocal, other_backend, post_seconds
       real(rp) :: memory_estimate, free_memory, total_memory
       integer :: status, i, nk, unique_nk, nmat, strategy_status
       logical :: supported
       character(len=128) :: unsupported_reason
       integer(c_long_long) :: free_bytes, total_bytes
+      integer(c_long_long) :: h2d_bytes, d2h_values_bytes, d2h_vectors_bytes
+      integer(c_long_long) :: cuda_malloc_count, cuda_free_count, workspace_query_count, workspace_reuse_count
+      integer(c_long_long) :: event_create_count, event_destroy_count, pinned_alloc_count, pinned_free_count
+      integer(c_long_long) :: cuda_malloc_before, cuda_free_before, workspace_query_before, workspace_reuse_before
+      integer(c_long_long) :: event_create_before, event_destroy_before, pinned_alloc_before, pinned_free_before
+      integer :: pinned_host_active
       character(len=2048) :: line
 
       call setup_production(input_file, recip, ham, lat, chg, ctl)
+      write (*, '(a)') 'ACCP1_PRECISION cpu_solver=LAPACK_ZHEEV_ZHEGV_complex128 cuda_solver=cuDoubleComplex_eigenvalue_float64_'// &
+         'cusolverDnZheevd_or_ZheevjBatched fp32_route_explicit_only=1 normal_physics_precision=complex128_real64'
       call make_mesh(mesh, points)
       nk = size(points, 2)
       unique_nk = count_unique_points(recip, points)
@@ -293,7 +303,7 @@ contains
       call backend_memory(recip, free_bytes, total_bytes)
       free_memory = real(free_bytes, rp) / (1024.0_rp * 1024.0_rp)
       total_memory = real(total_bytes, rp) / (1024.0_rp * 1024.0_rp)
-      memory_estimate = estimate_memory_mib(nmat, tile_size, want_vectors)
+      memory_estimate = estimate_memory_mib(nmat, tile_size, want_vectors, solver_strategy)
       if (trim(backend_name) == 'cuda' .and. total_memory > 0.0_rp .and. free_memory < 2.0_rp * memory_estimate) then
          error stop 'ACCP0: CUDA memory preflight rejected this workload'
       end if
@@ -328,9 +338,30 @@ contains
          call append_real(line, 'steady_solve_spread_s', 0.0_rp)
          call append_token(line, 'metric_repetitions=0')
          call append_real(line, 'Hk_CPU_s', 0.0_rp)
+         call append_real(line, 'H64_to_H32_s', 0.0_rp)
+         call append_real(line, 'T_host_staging_s', 0.0_rp)
          call append_real(line, 'H2D_s', 0.0_rp)
          call append_real(line, 'solver_s', 0.0_rp)
          call append_real(line, 'D2H_s', 0.0_rp)
+         call append_real(line, 'T_D2H_values_s', 0.0_rp)
+         call append_real(line, 'T_D2H_vectors_s', 0.0_rp)
+         call append_real(line, 'T_sync_s', 0.0_rp)
+         call append_real(line, 'H32_to_H64_s', 0.0_rp)
+         call append_real(line, 'T_other_backend_s', 0.0_rp)
+         call append_real(line, 'T_total_s', 0.0_rp)
+         call append_real(line, 'total_reciprocal_s', 0.0_rp)
+         call append_token(line, 'H2D_bytes=0')
+         call append_token(line, 'D2H_values_bytes=0')
+         call append_token(line, 'D2H_vectors_bytes=0')
+         call append_token(line, 'pinned_host_active=0')
+         call append_token(line, 'cuda_malloc_count=0')
+         call append_token(line, 'cuda_free_count=0')
+         call append_token(line, 'workspace_query_count=0')
+         call append_token(line, 'workspace_reuse_count=0')
+         call append_token(line, 'event_create_count=0')
+         call append_token(line, 'event_destroy_count=0')
+         call append_token(line, 'pinned_alloc_count=0')
+         call append_token(line, 'pinned_free_count=0')
          call append_real(line, 'post_s', 0.0_rp)
          call append_real(line, 'total_steady_s', 0.0_rp)
          call append_real(line, 'memory_estimate_mib', memory_estimate)
@@ -357,6 +388,8 @@ contains
          call solve_tiles(recip, hamiltonians, tile_size, want_vectors, status)
          if (status /= 0) error stop 'ACCP0: warm-up eigensolution failed'
       end do
+      call backend_resource_counters(recip, cuda_malloc_before, cuda_free_before, workspace_query_before, workspace_reuse_before, &
+         event_create_before, event_destroy_before, pinned_alloc_before, pinned_free_before)
       call reset_backend_metrics(recip)
 
       do i = 1, repetitions
@@ -380,15 +413,26 @@ contains
       steady_min = minval(steady_times)
       steady_max = maxval(steady_times)
       steady_spread = steady_max - steady_min
-      call backend_timings(recip, h2d, solver, d2h)
+      call backend_timings(recip, conversion, staging, h2d, solver, d2h, d2h_values, d2h_vectors, sync, widening, &
+         total_reciprocal, h2d_bytes, d2h_values_bytes, d2h_vectors_bytes, pinned_host_active, cuda_malloc_count, &
+         cuda_free_count, workspace_query_count, workspace_reuse_count, event_create_count, event_destroy_count, &
+         pinned_alloc_count, pinned_free_count)
       ! CUDA counters are reset immediately before this measured interval and
       ! accumulate over all measured repetitions.  Normalize them to the
       ! same per-repetition unit as the reported steady medians; retain the
       ! interval sample count in the machine-readable record.
+      conversion = conversion / real(repetitions, rp)
+      staging = staging / real(repetitions, rp)
       h2d = h2d / real(repetitions, rp)
       solver = solver / real(repetitions, rp)
       d2h = d2h / real(repetitions, rp)
+      d2h_values = d2h_values / real(repetitions, rp)
+      d2h_vectors = d2h_vectors / real(repetitions, rp)
+      sync = sync / real(repetitions, rp)
+      widening = widening / real(repetitions, rp)
+      total_reciprocal = total_reciprocal / real(repetitions, rp)
       post_seconds = max(0.0_rp, total_median - hk_cpu - solve_median)
+      other_backend = max(0.0_rp, solve_median - total_reciprocal)
 
       line = 'ACCP0_DIMENSIONS'
       call append_token(line, 'fixture='//trim(fixture))
@@ -419,9 +463,39 @@ contains
       call append_real(line, 'steady_solve_spread_s', maxval(solve_times) - minval(solve_times))
       call append_token(line, 'metric_repetitions='//trim(int_token(repetitions)))
       call append_real(line, 'Hk_CPU_s', hk_cpu)
+      call append_real(line, 'H64_to_H32_s', conversion)
+      call append_real(line, 'T_Hk_CPU_s', hk_cpu)
+      call append_real(line, 'T_host_staging_s', staging)
       call append_real(line, 'H2D_s', h2d)
       call append_real(line, 'solver_s', solver)
       call append_real(line, 'D2H_s', d2h)
+      call append_real(line, 'T_D2H_values_s', d2h_values)
+      call append_real(line, 'T_D2H_vectors_s', d2h_vectors)
+      call append_real(line, 'T_sync_s', sync)
+      call append_real(line, 'H32_to_H64_s', widening)
+      call append_real(line, 'T_other_backend_s', other_backend)
+      call append_real(line, 'T_total_s', total_median)
+      call append_real(line, 'total_reciprocal_s', total_reciprocal)
+      call append_token(line, 'H2D_bytes='//trim(int64_token(h2d_bytes / int(repetitions, c_long_long))))
+      call append_token(line, 'D2H_values_bytes='//trim(int64_token(d2h_values_bytes / int(repetitions, c_long_long))))
+      call append_token(line, 'D2H_vectors_bytes='//trim(int64_token(d2h_vectors_bytes / int(repetitions, c_long_long))))
+      call append_token(line, 'pinned_host_active='//trim(int_token(pinned_host_active)))
+      call append_token(line, 'cuda_malloc_count='//trim(int64_token(cuda_malloc_count)))
+      call append_token(line, 'cuda_free_count='//trim(int64_token(cuda_free_count)))
+      call append_token(line, 'workspace_query_count='//trim(int64_token(workspace_query_count)))
+      call append_token(line, 'workspace_reuse_count='//trim(int64_token(workspace_reuse_count)))
+      call append_token(line, 'event_create_count='//trim(int64_token(event_create_count)))
+      call append_token(line, 'event_destroy_count='//trim(int64_token(event_destroy_count)))
+      call append_token(line, 'pinned_alloc_count='//trim(int64_token(pinned_alloc_count)))
+      call append_token(line, 'pinned_free_count='//trim(int64_token(pinned_free_count)))
+      call append_token(line, 'cuda_malloc_count_before='//trim(int64_token(cuda_malloc_before)))
+      call append_token(line, 'cuda_free_count_before='//trim(int64_token(cuda_free_before)))
+      call append_token(line, 'workspace_query_count_before='//trim(int64_token(workspace_query_before)))
+      call append_token(line, 'workspace_reuse_count_before='//trim(int64_token(workspace_reuse_before)))
+      call append_token(line, 'event_create_count_before='//trim(int64_token(event_create_before)))
+      call append_token(line, 'event_destroy_count_before='//trim(int64_token(event_destroy_before)))
+      call append_token(line, 'pinned_alloc_count_before='//trim(int64_token(pinned_alloc_before)))
+      call append_token(line, 'pinned_free_count_before='//trim(int64_token(pinned_free_before)))
       call append_real(line, 'post_s', post_seconds)
       call append_real(line, 'total_steady_s', total_median)
       call append_real(line, 'steady_total_min_s', steady_min)
@@ -450,7 +524,7 @@ contains
       integer :: nmat, nk, status, strategy_status
       logical :: supported
       character(len=128) :: reason
-      real(rp) :: eigenvalue_error, residual_error, orthogonality_error, projector_error
+      real(rp) :: eigenvalue_error, residual_error, orthogonality_error, projector_error, hamiltonian_rounding_error
       character(len=2048) :: line
 
       if (trim(backend_name) /= 'cuda') error stop 'ACCP1: validation requires the CUDA backend'
@@ -486,7 +560,7 @@ contains
       call solve_tiles_capture(recip, hamiltonians, tile_size, cuda_values, cuda_vectors, status)
       if (status /= 0) error stop 'ACC-P1: CUDA validation eigensolution failed'
       call compare_eigenpairs(hamiltonians, cpu_values, cpu_vectors, cuda_values, cuda_vectors, &
-         eigenvalue_error, residual_error, orthogonality_error, projector_error)
+         eigenvalue_error, residual_error, orthogonality_error, projector_error, hamiltonian_rounding_error)
 
       line = 'ACCP1_VALIDATION'
       call append_token(line, 'fixture='//trim(fixture))
@@ -498,6 +572,10 @@ contains
       call append_real(line, 'residual_max', residual_error)
       call append_real(line, 'orthogonality_max', orthogonality_error)
       call append_real(line, 'degenerate_projector_max', projector_error)
+      call append_real(line, 'H64_H32_relative_max', hamiltonian_rounding_error)
+      ! Keep the established ACC-P1 numerical contract unchanged for the
+      ! experimental FP32 route.  A failed FP32 result is data to classify,
+      ! not a reason to loosen the production/reference tolerance.
       if (eigenvalue_error <= 1.0e-8_rp .and. residual_error <= 1.0e-8_rp .and. &
           orthogonality_error <= 1.0e-8_rp .and. projector_error <= 1.0e-7_rp) then
          call append_token(line, 'status=PASS')
@@ -505,10 +583,6 @@ contains
          call append_token(line, 'status=FAIL')
       end if
       write (*, '(a)') trim(line)
-      if (eigenvalue_error > 1.0e-8_rp .or. residual_error > 1.0e-8_rp .or. &
-          orthogonality_error > 1.0e-8_rp .or. projector_error > 1.0e-7_rp) then
-         error stop 'ACC-P1: real-material CUDA numerical validation failed'
-      end if
    end subroutine run_validation
 
    subroutine solve_tiles_capture(recip, hamiltonians, tile_size, eigenvalues, eigenvectors, status)
@@ -547,16 +621,15 @@ contains
          if (allocated(result%eigenvalues)) deallocate(result%eigenvalues)
          if (allocated(result%eigenvectors)) deallocate(result%eigenvectors)
       end do
-      call recip%execution_backend%synchronize()
    end subroutine solve_tiles_capture
 
    subroutine compare_eigenpairs(hamiltonians, cpu_values, cpu_vectors, cuda_values, cuda_vectors, &
-                                 eigenvalue_error, residual_error, orthogonality_error, projector_error)
+                                 eigenvalue_error, residual_error, orthogonality_error, projector_error, hamiltonian_rounding_error)
       complex(rp), intent(in) :: hamiltonians(:, :, :), cpu_vectors(:, :, :), cuda_vectors(:, :, :)
       real(rp), intent(in) :: cpu_values(:, :), cuda_values(:, :)
-      real(rp), intent(out) :: eigenvalue_error, residual_error, orthogonality_error, projector_error
+      real(rp), intent(out) :: eigenvalue_error, residual_error, orthogonality_error, projector_error, hamiltonian_rounding_error
       integer :: nmat, nk, ik, row, column, inner, group_start, group_end, group_size
-      real(rp) :: hnorm, residual, group_tolerance
+      real(rp) :: hnorm, residual, group_tolerance, hdelta, hnorm2, real64, imag64
     complex(rp) :: left_value, projector_cpu, projector_cuda
 
       nmat = size(cpu_values, 1)
@@ -565,9 +638,22 @@ contains
       residual_error = 0.0_rp
       orthogonality_error = 0.0_rp
       projector_error = 0.0_rp
+      hamiltonian_rounding_error = 0.0_rp
       group_tolerance = 1.0e-8_rp
       do ik = 1, nk
          hnorm = max(1.0_rp, sqrt(sum(abs(hamiltonians(:, :, ik))**2)))
+         hdelta = 0.0_rp
+         hnorm2 = 0.0_rp
+         do row = 1, nmat
+            do inner = 1, nmat
+               real64 = real(real(hamiltonians(row, inner, ik), kind=c_float), rp)
+               imag64 = real(real(aimag(hamiltonians(row, inner, ik)), kind=c_float), rp)
+               hdelta = hdelta + (real(hamiltonians(row, inner, ik)) - real64)**2 + &
+                        (aimag(hamiltonians(row, inner, ik)) - imag64)**2
+               hnorm2 = hnorm2 + abs(hamiltonians(row, inner, ik))**2
+            end do
+         end do
+         hamiltonian_rounding_error = max(hamiltonian_rounding_error, sqrt(hdelta) / max(1.0_rp, sqrt(hnorm2)))
          do column = 1, nmat
             residual = 0.0_rp
             do row = 1, nmat
@@ -675,7 +761,8 @@ contains
       write (*, '(a)') 'ACCP0_PREFLIGHT fixture='//trim(fixture)//' backend='//trim(backend_name)// &
          ' solver_strategy='//trim(solver_strategy)//' support_status='//trim(support_word)// &
          ' L='//trim(int_token(supercell_l))//' nmat='//trim(int_token(nmat))// &
-         ' tile='//trim(int_token(tile_size))//' reason='//trim(underscored(reason))//' memory_estimate_mib='//trim(real_token(estimate_memory_mib(nmat, tile_size, want_vectors)))// &
+         ' tile='//trim(int_token(tile_size))//' reason='//trim(underscored(reason))//' memory_estimate_mib='// &
+         trim(real_token(estimate_memory_mib(nmat, tile_size, want_vectors, solver_strategy)))// &
          ' free_mib='//trim(real_token(free_mib))//' total_mib='//trim(real_token(total_mib))
    end subroutine run_preflight
 
@@ -727,22 +814,89 @@ contains
       end select
    end subroutine reset_backend_metrics
 
-   subroutine backend_timings(recip, h2d, solver, d2h)
+   subroutine backend_resource_counters(recip, cuda_malloc_count, cuda_free_count, workspace_query_count, workspace_reuse_count, &
+                                        event_create_count, event_destroy_count, pinned_alloc_count, pinned_free_count)
       type(reciprocal), intent(in) :: recip
-      real(rp), intent(out) :: h2d, solver, d2h
+      integer(c_long_long), intent(out) :: cuda_malloc_count, cuda_free_count, workspace_query_count, workspace_reuse_count
+      integer(c_long_long), intent(out) :: event_create_count, event_destroy_count, pinned_alloc_count, pinned_free_count
+
+      cuda_malloc_count = 0_c_long_long; cuda_free_count = 0_c_long_long
+      workspace_query_count = 0_c_long_long; workspace_reuse_count = 0_c_long_long
+      event_create_count = 0_c_long_long; event_destroy_count = 0_c_long_long
+      pinned_alloc_count = 0_c_long_long; pinned_free_count = 0_c_long_long
+      if (.not. allocated(recip%execution_backend)) return
+      select type (backend => recip%execution_backend)
+      type is (cuda_reciprocal_backend)
+         cuda_malloc_count = backend%cuda_malloc_count
+         cuda_free_count = backend%cuda_free_count
+         workspace_query_count = backend%workspace_query_count
+         workspace_reuse_count = backend%workspace_reuse_count
+         event_create_count = backend%event_create_count
+         event_destroy_count = backend%event_destroy_count
+         pinned_alloc_count = backend%pinned_alloc_count
+         pinned_free_count = backend%pinned_free_count
+      class default
+         continue
+      end select
+   end subroutine backend_resource_counters
+
+   subroutine backend_timings(recip, conversion, staging, h2d, solver, d2h, d2h_values, d2h_vectors, sync, widening, &
+                              total_reciprocal, h2d_bytes, d2h_values_bytes, d2h_vectors_bytes, pinned_host_active, &
+                              cuda_malloc_count, cuda_free_count, workspace_query_count, workspace_reuse_count, &
+                              event_create_count, event_destroy_count, pinned_alloc_count, pinned_free_count)
+      type(reciprocal), intent(in) :: recip
+      real(rp), intent(out) :: conversion, staging, h2d, solver, d2h, d2h_values, d2h_vectors, sync, widening, total_reciprocal
+      integer(c_long_long), intent(out) :: h2d_bytes, d2h_values_bytes, d2h_vectors_bytes
+      integer, intent(out) :: pinned_host_active
+      integer(c_long_long), intent(out) :: cuda_malloc_count, cuda_free_count, workspace_query_count, workspace_reuse_count
+      integer(c_long_long), intent(out) :: event_create_count, event_destroy_count, pinned_alloc_count, pinned_free_count
       integer :: execute_requests, combined_requests, assemble_only, input_solves
 
+      conversion = 0.0_rp
+      staging = 0.0_rp
       h2d = 0.0_rp
       solver = 0.0_rp
       d2h = 0.0_rp
+      d2h_values = 0.0_rp
+      d2h_vectors = 0.0_rp
+      sync = 0.0_rp
+      widening = 0.0_rp
+      total_reciprocal = 0.0_rp
+      h2d_bytes = 0_c_long_long
+      d2h_values_bytes = 0_c_long_long
+      d2h_vectors_bytes = 0_c_long_long
+      pinned_host_active = 0
+      cuda_malloc_count = 0_c_long_long; cuda_free_count = 0_c_long_long
+      workspace_query_count = 0_c_long_long; workspace_reuse_count = 0_c_long_long
+      event_create_count = 0_c_long_long; event_destroy_count = 0_c_long_long
+      pinned_alloc_count = 0_c_long_long; pinned_free_count = 0_c_long_long
       execute_requests = 0; combined_requests = 0; assemble_only = 0; input_solves = 0
       if (.not. allocated(recip%execution_backend)) return
       call recip%execution_backend%execution_metrics(execute_requests, combined_requests, assemble_only, input_solves)
       select type (backend => recip%execution_backend)
       type is (cuda_reciprocal_backend)
+         conversion = backend%host_conversion_seconds
+         staging = backend%host_staging_seconds
          h2d = backend%h2d_seconds
          solver = backend%gpu_solve_seconds
          d2h = backend%d2h_seconds
+         d2h_values = backend%d2h_values_seconds
+         d2h_vectors = backend%d2h_vectors_seconds
+         sync = backend%sync_seconds
+         widening = backend%host_widen_seconds
+         total_reciprocal = backend%total_reciprocal_seconds
+         h2d_bytes = backend%h2d_bytes
+         d2h_values_bytes = backend%d2h_values_bytes
+         d2h_vectors_bytes = backend%d2h_vectors_bytes
+         pinned_host_active = backend%pinned_host_active
+         cuda_malloc_count = backend%cuda_malloc_count
+         cuda_free_count = backend%cuda_free_count
+         workspace_query_count = backend%workspace_query_count
+         workspace_reuse_count = backend%workspace_reuse_count
+         event_create_count = backend%event_create_count
+         event_destroy_count = backend%event_destroy_count
+         pinned_alloc_count = backend%pinned_alloc_count
+         pinned_free_count = backend%pinned_free_count
       class default
          continue
       end select
@@ -780,14 +934,24 @@ contains
       deallocate(sorted)
    end function median
 
-   function estimate_memory_mib(nmat, tile_size, want_vectors) result(memory_mib)
+   function estimate_memory_mib(nmat, tile_size, want_vectors, solver_strategy) result(memory_mib)
       integer, intent(in) :: nmat, tile_size
       logical, intent(in) :: want_vectors
+      character(len=*), intent(in), optional :: solver_strategy
       real(rp) :: memory_mib
+      real(rp) :: complex_bytes, real_bytes
 
-      memory_mib = real(tile_size, rp) * real(nmat * nmat, rp) * 16.0_rp
-      if (want_vectors) memory_mib = memory_mib + real(tile_size, rp) * real(nmat * nmat, rp) * 16.0_rp
-      memory_mib = memory_mib + real(tile_size * nmat, rp) * 8.0_rp
+      complex_bytes = 16.0_rp
+      real_bytes = 8.0_rp
+      if (present(solver_strategy)) then
+         if (index(trim(solver_strategy), 'fp32_') == 1) then
+            complex_bytes = 8.0_rp
+            real_bytes = 4.0_rp
+         end if
+      end if
+      memory_mib = real(tile_size, rp) * real(nmat * nmat, rp) * complex_bytes
+      if (want_vectors) memory_mib = memory_mib + real(tile_size, rp) * real(nmat * nmat, rp) * complex_bytes
+      memory_mib = memory_mib + real(tile_size * nmat, rp) * real_bytes
       memory_mib = memory_mib / (1024.0_rp * 1024.0_rp)
    end function estimate_memory_mib
 
@@ -818,6 +982,12 @@ contains
       character(len=64) :: token
       write(token, '(i0)') value
    end function int_token
+
+   function int64_token(value) result(token)
+      integer(c_long_long), intent(in) :: value
+      character(len=64) :: token
+      write(token, '(i0)') value
+   end function int64_token
 
    function underscored(value) result(token)
       character(len=*), intent(in) :: value

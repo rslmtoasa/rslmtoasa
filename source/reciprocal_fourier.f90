@@ -669,7 +669,6 @@ contains
             allocate(request%input_hamiltonian(nmat,nmat,tile_length), source=host_workspace%h(:,:,1:tile_length))
          end if
          call this%execution_backend%execute_batch(request, result)
-         call this%execution_backend%synchronize()
          if (result%local_point_count /= tile_length .or. result%operator_generation /= request%operator_generation .or. &
              .not. result%eigenvalues_valid .or. &
              .not. result%eigenvectors_valid .or. .not. allocated(result%eigenvalues) .or. &
@@ -1128,7 +1127,6 @@ contains
             host_assembly_seconds = host_assembly_seconds + real(host_timing_stop - host_timing_start, rp) / real(timing_rate, rp)
          end if
          call this%execution_backend%execute_batch(request, result)
-         call this%execution_backend%synchronize()
          if (result%local_point_count /= tile_length .or. result%operator_generation /= request%operator_generation .or. &
              .not. result%eigenvalues_valid .or. .not. result%eigenvectors_valid .or. &
              .not. allocated(result%eigenvalues) .or. .not. allocated(result%eigenvectors)) then

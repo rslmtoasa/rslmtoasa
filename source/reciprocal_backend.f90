@@ -76,6 +76,25 @@ contains
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp
+      this%d2h_values_seconds = 0.0_rp
+      this%d2h_vectors_seconds = 0.0_rp
+      this%sync_seconds = 0.0_rp
+      this%host_staging_seconds = 0.0_rp
+      this%host_conversion_seconds = 0.0_rp
+      this%host_widen_seconds = 0.0_rp
+      this%total_reciprocal_seconds = 0.0_rp
+      this%h2d_bytes = 0_c_long_long
+      this%d2h_values_bytes = 0_c_long_long
+      this%d2h_vectors_bytes = 0_c_long_long
+      this%cuda_malloc_count = 0_c_long_long
+      this%cuda_free_count = 0_c_long_long
+      this%workspace_query_count = 0_c_long_long
+      this%workspace_reuse_count = 0_c_long_long
+      this%event_create_count = 0_c_long_long
+      this%event_destroy_count = 0_c_long_long
+      this%pinned_alloc_count = 0_c_long_long
+      this%pinned_free_count = 0_c_long_long
+      this%pinned_host_active = 0
       this%timing_calls = 0
 
 #ifdef USE_CUDA_RECIPROCAL
@@ -190,12 +209,18 @@ contains
          return
       end if
       select case (normalized)
-      case ('zheevd_serial', 'zheevd', 'serial')
+      case ('zheevd_serial', 'zheevd', 'serial', 'fp64_zheevd')
          normalized = 'zheevd_serial'
          c_strategy = 0_c_int
-      case ('zheevj_batched', 'zheevj', 'batched')
+      case ('zheevj_batched', 'zheevj', 'batched', 'fp64_zheevj_batched')
          normalized = 'zheevj_batched'
          c_strategy = 1_c_int
+      case ('fp32_cheevd', 'cheevd')
+         normalized = 'fp32_cheevd'
+         c_strategy = 2_c_int
+      case ('fp32_cheevj_batched', 'cheevj_batched')
+         normalized = 'fp32_cheevj_batched'
+         c_strategy = 3_c_int
       case default
          call g_logger%error('reciprocal CUDA backend: unknown solver strategy '//trim(strategy)//'.', __FILE__, __LINE__)
          return
@@ -233,8 +258,9 @@ contains
          supported = .true.
          reason = 'supported'
       else if (c_status > 0_c_int) then
-         if (trim(this%solver_strategy) == 'zheevj_batched') then
-            reason = 'cuSOLVER ZheevjBatched requires n <= 32'
+         if (index(trim(this%solver_strategy), 'zheevj_batched') > 0 .or. &
+             index(trim(this%solver_strategy), 'cheevj_batched') > 0) then
+            reason = 'cuSOLVER *heevjBatched requires n <= 32'
          else
             reason = 'CUDA solver strategy does not support this request'
          end if
@@ -283,12 +309,22 @@ contains
       this%input_hamiltonian_solve_requests = this%input_hamiltonian_solve_requests + 1
       allocate(result%eigenvalues(nmat, nk))
       if (request%request_eigenvectors) allocate(result%eigenvectors(nmat, nmat, nk))
-      if (request%request_eigenvectors) then
-         status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
-            request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
+      if (index(trim(this%solver_strategy), 'fp32_') == 1) then
+         if (request%request_eigenvectors) then
+            status = rslmto_reciprocal_cuda_solve_cheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+               request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
+         else
+            status = rslmto_reciprocal_cuda_solve_cheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+               request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
+         end if
       else
-         status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
-            request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
+         if (request%request_eigenvectors) then
+            status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+               request%input_hamiltonian, result%eigenvalues, result%eigenvectors, 1_c_int)
+         else
+            status = rslmto_reciprocal_cuda_solve_zheevd_batch(this%context, int(nmat, c_int), int(nk, c_int), &
+               request%input_hamiltonian, result%eigenvalues, eigenvectors_dummy, 0_c_int)
+         end if
       end if
       if (status /= 0_c_int) then
          if (request%request_eigenvectors) then
@@ -299,8 +335,13 @@ contains
          call clear_execution_result(result)
          return
       end if
-      call rslmto_reciprocal_cuda_get_timings(this%context, this%h2d_seconds, this%gpu_solve_seconds, &
-                                               this%d2h_seconds, this%timing_calls)
+      call rslmto_reciprocal_cuda_get_detailed_timings(this%context, this%host_conversion_seconds, this%host_staging_seconds, &
+         this%h2d_seconds, this%gpu_solve_seconds, this%d2h_seconds, this%d2h_values_seconds, this%d2h_vectors_seconds, &
+         this%sync_seconds, this%host_widen_seconds, this%total_reciprocal_seconds, this%h2d_bytes, this%d2h_values_bytes, &
+         this%d2h_vectors_bytes, this%pinned_host_active, this%timing_calls)
+      call rslmto_reciprocal_cuda_get_resource_counters(this%context, this%cuda_malloc_count, this%cuda_free_count, &
+         this%workspace_query_count, this%workspace_reuse_count, this%event_create_count, this%event_destroy_count, &
+         this%pinned_alloc_count, this%pinned_free_count)
       result%local_point_count = nk
       result%operator_generation = request%operator_generation
       result%eigenvalues_valid = .true.
@@ -386,6 +427,16 @@ contains
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp
+      this%d2h_values_seconds = 0.0_rp
+      this%d2h_vectors_seconds = 0.0_rp
+      this%sync_seconds = 0.0_rp
+      this%host_staging_seconds = 0.0_rp
+      this%host_conversion_seconds = 0.0_rp
+      this%host_widen_seconds = 0.0_rp
+      this%total_reciprocal_seconds = 0.0_rp
+      this%h2d_bytes = 0_c_long_long
+      this%d2h_values_bytes = 0_c_long_long
+      this%d2h_vectors_bytes = 0_c_long_long
       this%timing_calls = 0
    end subroutine cuda_backend_reset_timing_metrics
 
@@ -436,6 +487,17 @@ contains
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp
+      this%d2h_values_seconds = 0.0_rp
+      this%d2h_vectors_seconds = 0.0_rp
+      this%sync_seconds = 0.0_rp
+      this%host_staging_seconds = 0.0_rp
+      this%host_conversion_seconds = 0.0_rp
+      this%host_widen_seconds = 0.0_rp
+      this%total_reciprocal_seconds = 0.0_rp
+      this%h2d_bytes = 0_c_long_long
+      this%d2h_values_bytes = 0_c_long_long
+      this%d2h_vectors_bytes = 0_c_long_long
+      this%pinned_host_active = 0
       this%timing_calls = 0
       this%initialized = .false.
    end subroutine cuda_backend_release

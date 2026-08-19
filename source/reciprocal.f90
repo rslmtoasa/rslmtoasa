@@ -237,10 +237,31 @@ module reciprocal_mod
       integer :: input_hamiltonian_solve_requests = 0
       integer :: operator_prepare_requests = 0
       integer :: operator_prepare_reuses = 0
+      ! FP64 is the normal production path.  The fp32_* names are explicit
+      ! ACC-P1b probes and are never selected by normal reciprocal workflows.
       character(len=32) :: solver_strategy = 'zheevd_serial'
       real(rp) :: h2d_seconds = 0.0_rp
       real(rp) :: gpu_solve_seconds = 0.0_rp
       real(rp) :: d2h_seconds = 0.0_rp
+      real(rp) :: d2h_values_seconds = 0.0_rp
+      real(rp) :: d2h_vectors_seconds = 0.0_rp
+      real(rp) :: sync_seconds = 0.0_rp
+      real(rp) :: host_staging_seconds = 0.0_rp
+      real(rp) :: host_conversion_seconds = 0.0_rp
+      real(rp) :: host_widen_seconds = 0.0_rp
+      real(rp) :: total_reciprocal_seconds = 0.0_rp
+      integer(c_long_long) :: h2d_bytes = 0_c_long_long
+      integer(c_long_long) :: d2h_values_bytes = 0_c_long_long
+      integer(c_long_long) :: d2h_vectors_bytes = 0_c_long_long
+      integer(c_long_long) :: cuda_malloc_count = 0_c_long_long
+      integer(c_long_long) :: cuda_free_count = 0_c_long_long
+      integer(c_long_long) :: workspace_query_count = 0_c_long_long
+      integer(c_long_long) :: workspace_reuse_count = 0_c_long_long
+      integer(c_long_long) :: event_create_count = 0_c_long_long
+      integer(c_long_long) :: event_destroy_count = 0_c_long_long
+      integer(c_long_long) :: pinned_alloc_count = 0_c_long_long
+      integer(c_long_long) :: pinned_free_count = 0_c_long_long
+      integer :: pinned_host_active = 0
       integer :: timing_calls = 0
       logical :: initialized = .false.
    contains
@@ -630,6 +651,19 @@ module reciprocal_mod
          integer(c_int) :: rslmto_reciprocal_cuda_solve_zheevd_batch
       end function rslmto_reciprocal_cuda_solve_zheevd_batch
 
+      function rslmto_reciprocal_cuda_solve_cheevd_batch(context, n, batch_size, hamiltonians, eigenvalues, eigenvectors, &
+                                                         request_eigenvectors) &
+         bind(C, name='rslmto_reciprocal_cuda_solve_cheevd_batch')
+         import c_double, c_double_complex, c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: n, batch_size
+         complex(c_double_complex), intent(in) :: hamiltonians(*)
+         real(c_double), intent(out) :: eigenvalues(*)
+         complex(c_double_complex), intent(out) :: eigenvectors(*)
+         integer(c_int), value :: request_eigenvectors
+         integer(c_int) :: rslmto_reciprocal_cuda_solve_cheevd_batch
+      end function rslmto_reciprocal_cuda_solve_cheevd_batch
+
       function rslmto_reciprocal_cuda_contract_lehmann(context, nmat, nk, ne, npair, nblk, eigenvalues, eigenvectors, &
                                                         k_points, z_contour, dr, ioffset, joffset, blocks, h2d_seconds, &
                                                         contraction_seconds, d2h_seconds) &
@@ -652,6 +686,34 @@ module reciprocal_mod
          real(c_double), intent(out) :: h2d_seconds, solve_seconds, d2h_seconds
          integer(c_int), intent(out) :: calls
       end subroutine rslmto_reciprocal_cuda_get_timings
+
+      subroutine rslmto_reciprocal_cuda_get_detailed_timings(context, host_conversion_seconds, host_staging_seconds, h2d_seconds, &
+                                                              solve_seconds, d2h_seconds, d2h_values_seconds, &
+                                                              d2h_vectors_seconds, sync_seconds, host_widen_seconds, &
+                                                              total_seconds, h2d_bytes, d2h_values_bytes, d2h_vectors_bytes, &
+                                                              pinned_host_active, calls) &
+         bind(C, name='rslmto_reciprocal_cuda_get_detailed_timings')
+         import c_double, c_int, c_long_long, c_ptr
+         type(c_ptr), value :: context
+         real(c_double), intent(out) :: host_conversion_seconds, host_staging_seconds, h2d_seconds, solve_seconds
+         real(c_double), intent(out) :: d2h_seconds, d2h_values_seconds, d2h_vectors_seconds, sync_seconds
+         real(c_double), intent(out) :: host_widen_seconds, total_seconds
+         integer(c_long_long), intent(out) :: h2d_bytes, d2h_values_bytes, d2h_vectors_bytes
+         integer(c_int), intent(out) :: pinned_host_active
+         integer(c_int), intent(out) :: calls
+      end subroutine rslmto_reciprocal_cuda_get_detailed_timings
+
+      subroutine rslmto_reciprocal_cuda_get_resource_counters(context, cuda_malloc_count, cuda_free_count, &
+                                                               workspace_query_count, workspace_reuse_count, &
+                                                               event_create_count, event_destroy_count, &
+                                                               pinned_alloc_count, pinned_free_count) &
+         bind(C, name='rslmto_reciprocal_cuda_get_resource_counters')
+         import c_long_long, c_ptr
+         type(c_ptr), value :: context
+         integer(c_long_long), intent(out) :: cuda_malloc_count, cuda_free_count, workspace_query_count
+         integer(c_long_long), intent(out) :: workspace_reuse_count, event_create_count, event_destroy_count
+         integer(c_long_long), intent(out) :: pinned_alloc_count, pinned_free_count
+      end subroutine rslmto_reciprocal_cuda_get_resource_counters
 
       subroutine rslmto_reciprocal_cuda_reset_timings(context) bind(C, name='rslmto_reciprocal_cuda_reset_timings')
          import c_ptr
