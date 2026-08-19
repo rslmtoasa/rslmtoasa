@@ -57,7 +57,7 @@ module mpi_mod
    end interface assignment(=)
 
    public :: get_mpi_range, get_mpi_variables, get_mpi_mapping
-   public :: split_range_for_worker, map_local_rank_to_device
+   public :: split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
    public :: assignment(=)
 
 contains
@@ -210,7 +210,7 @@ contains
       logical, intent(out) :: valid
       integer, intent(in), optional :: override
 
-      call map_local_rank_to_device(this%local_rank, available_device_count, index, valid, override)
+      call map_local_rank_to_device(this%local_rank, available_device_count, index, valid, override, this%local_size)
    end subroutine device_index
 
    !> @brief Deterministically split an item range for an explicit worker set.
@@ -242,27 +242,65 @@ contains
       end if
    end subroutine split_range_for_worker
 
-   !> @brief Select a device by local rank, optionally honoring a programmatic override.
-   !> @details The default is round-robin `mod(local_rank, device_count)`. An
-   !> invalid local rank, device count, or override is rejected with `valid=.false.`
-   !> and `device_index=-1`; no accelerator runtime is queried here.
-   pure subroutine map_local_rank_to_device(local_rank, available_device_count, device_index, valid, override)
+   !> @brief Select a device by local rank, optionally honoring an override.
+   !> @details The default is one-to-one `local_rank` mapping.  An explicit
+   !> override may intentionally select a shared device.  When `local_size` is
+   !> supplied, an unconfigured local-rank/device oversubscription is rejected.
+   !> This helper does not query an accelerator runtime.
+   pure subroutine map_local_rank_to_device(local_rank, available_device_count, device_index, valid, override, local_size)
       integer, intent(in) :: local_rank, available_device_count
       integer, intent(out) :: device_index
       logical, intent(out) :: valid
       integer, intent(in), optional :: override
+      integer, intent(in), optional :: local_size
 
       device_index = -1
       valid = .false.
       if (local_rank < 0 .or. available_device_count <= 0) return
+      if (present(local_size)) then
+         if (local_size <= 0 .or. local_rank >= local_size) return
+      end if
       if (present(override)) then
          if (override < 0 .or. override >= available_device_count) return
          device_index = override
       else
-         device_index = mod(local_rank, available_device_count)
+         if (present(local_size)) then
+            if (local_size > available_device_count) return
+            device_index = local_rank
+         else
+            ! Preserve the standalone helper's historical round-robin behavior
+            ! for callers that do not provide a node-local size.
+            device_index = mod(local_rank, available_device_count)
+         end if
       end if
       valid = .true.
    end subroutine map_local_rank_to_device
+
+   !> @brief Read the optional process-local CUDA device override.
+   !> @details `RSLMTO_CUDA_DEVICE` is interpreted in CUDA's visible-device
+   !> namespace (the same namespace as `CUDA_VISIBLE_DEVICES`).  A configured
+   !> override is allowed to share a device intentionally; invalid text is
+   !> reported separately from an unset variable so callers can fail clearly.
+   subroutine get_cuda_device_override(device, configured, valid)
+      integer, intent(out) :: device
+      logical, intent(out) :: configured, valid
+      character(len=64) :: value
+      integer :: length, status, read_status
+
+      device = -1
+      configured = .false.
+      valid = .true.
+      value = ''
+      call get_environment_variable('RSLMTO_CUDA_DEVICE', value, length, status)
+      if (status /= 0 .or. length == 0) return
+
+      configured = .true.
+      read(value(:length), *, iostat=read_status) device
+      if (read_status /= 0 .or. device < 0) then
+         device = -1
+         valid = .false.
+      end if
+   end subroutine get_cuda_device_override
 
    !> @brief Synchronize compatibility globals from the one runtime context.
    subroutine synchronize_compatibility_globals(context)

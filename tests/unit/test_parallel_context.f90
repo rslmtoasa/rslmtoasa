@@ -3,16 +3,16 @@
 !------------------------------------------------------------------------------
 program test_parallel_context
    use mpi_mod, only: parallel_context, assignment(=), rank, numprocs, ierr, get_mpi_range, &
-      split_range_for_worker, map_local_rank_to_device
+      split_range_for_worker, map_local_rank_to_device, get_cuda_device_override
 #ifdef USE_MPI
    use mpi
 #endif
    implicit none
 
    type(parallel_context) :: context
-   integer :: first, last, count, device, global_count
+   integer :: first, last, count, device, global_count, override
    integer, allocatable :: l2g(:), g2l(:)
-   logical :: valid, failed
+   logical :: valid, failed, override_configured, override_valid
 
 #ifdef USE_MPI
    call MPI_INIT(ierr)
@@ -50,12 +50,28 @@ program test_parallel_context
    call check_true('four ranks/four devices rank three', valid .and. device == 3, failed)
    call map_local_rank_to_device(3, 2, device, valid)
    call check_true('four ranks/two devices wraps', valid .and. device == 1, failed)
+   call map_local_rank_to_device(3, 2, device, valid, local_size=4)
+   call check_true('unconfigured local oversubscription rejected', .not. valid .and. device == -1, failed)
+   call map_local_rank_to_device(3, 2, device, valid, override=1, local_size=4)
+   call check_true('explicit override permits shared device', valid .and. device == 1, failed)
    call map_local_rank_to_device(1, 2, device, valid, override=0)
    call check_true('programmatic device override', valid .and. device == 0, failed)
    call map_local_rank_to_device(1, 2, device, valid, override=2)
    call check_true('invalid device override rejected', .not. valid .and. device == -1, failed)
    call map_local_rank_to_device(0, 0, device, valid)
    call check_true('zero device count rejected', .not. valid .and. device == -1, failed)
+   call context%device_index(4, device, valid)
+   call check_true('context maps local rank to device', valid .and. device == context%local_rank, failed)
+   if (context%local_size > 1) then
+      call context%device_index(1, device, valid)
+      call check_true('context rejects local oversubscription', .not. valid .and. device == -1, failed)
+   end if
+   call get_cuda_device_override(override, override_configured, override_valid)
+   if (override_configured) then
+      call check_true('configured CUDA override is valid', override_valid .and. override >= 0, failed)
+   else
+      call check_true('unset CUDA override is valid', override_valid, failed)
+   end if
 
    call context%split_range(2, first, last, count)
 #ifdef USE_MPI

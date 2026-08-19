@@ -50,7 +50,7 @@ module reciprocal_mod
    use basis_mod, only: bdg_mode, lmax_basis, nb, norb, spin_off
    use spin_density_mod, only: spin_density
    use lmto_pair_potential_mod, only: lmto_pair_transition_metadata
-   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context
+   use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context, get_cuda_device_override
    use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset
 #ifdef USE_MPI
    use mpi

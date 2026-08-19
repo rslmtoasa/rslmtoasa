@@ -599,6 +599,9 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitParallelContext ${TestDIR}/unit/test_parallel_context.f90)
   add_fortran_unit_test(UnitKpointWorkset ${TestDIR}/unit/test_kpoint_workset.f90)
   set_tests_properties(UnitParallelContext PROPERTIES LABELS "unit;mpi;parallel_context")
+  add_test(NAME UnitParallelContext_cuda_override COMMAND $<TARGET_FILE:UnitParallelContext>)
+  set_tests_properties(UnitParallelContext_cuda_override PROPERTIES
+    LABELS "unit;mpi;parallel_context;device-mapping" ENVIRONMENT "RSLMTO_CUDA_DEVICE=1")
   add_fortran_unit_test(UnitArbitraryKEigenpairs ${TestDIR}/unit/test_arbitrary_k_eigenpairs.f90)
   add_test(NAME Acc04ArbitraryKSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc04_arbitrary_k_source.py)
@@ -631,6 +634,18 @@ if (RUN_UNIT_TESTS)
   add_test(NAME CudaPluginSurface
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/cuda/test_plugin_surface.py)
   set_tests_properties(CudaPluginSurface PROPERTIES LABELS "unit;cuda;gpu;coverage;source-contract")
+  if(ENABLE_CUDA_PLUGIN)
+    add_fortran_unit_test(CudaMpiDeviceMapping ${TestDIR}/unit/test_cuda_mpi_device_mapping.f90)
+    target_link_libraries(CudaMpiDeviceMapping rsrec_cuda)
+    set_tests_properties(CudaMpiDeviceMapping PROPERTIES LABELS "unit;cuda;mpi;device-mapping" SKIP_RETURN_CODE 77)
+    if(ENABLE_MPI AND MPI_Fortran_FOUND)
+      add_test(NAME CudaMpiDeviceMapping_mpi_2
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+                $<TARGET_FILE:CudaMpiDeviceMapping> ${MPIEXEC_POSTFLAGS})
+      set_tests_properties(CudaMpiDeviceMapping_mpi_2 PROPERTIES
+        LABELS "unit;cuda;mpi;device-mapping" PROCESSORS 2 SKIP_RETURN_CODE 77)
+    endif()
+  endif()
   if(ENABLE_CUDA_RECIPROCAL)
     add_executable(ReciprocalCudaArbitraryK ${TestDIR}/unit/test_reciprocal_cuda_arbitrary_k.f90)
     target_link_libraries(ReciprocalCudaArbitraryK PRIVATE ${COMMON_LIBRARIES} rslmto_reciprocal_cuda)
@@ -638,6 +653,13 @@ if (RUN_UNIT_TESTS)
     add_test(NAME ReciprocalCudaArbitraryK COMMAND ReciprocalCudaArbitraryK)
     set_tests_properties(ReciprocalCudaArbitraryK PROPERTIES
       LABELS "unit;cuda;reciprocal;arbitrary-k;normal-mesh;integration" SKIP_RETURN_CODE 77)
+    if(ENABLE_MPI AND MPI_Fortran_FOUND)
+      add_test(NAME ReciprocalCudaArbitraryK_mpi_2
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+                $<TARGET_FILE:ReciprocalCudaArbitraryK> ${MPIEXEC_POSTFLAGS})
+      set_tests_properties(ReciprocalCudaArbitraryK_mpi_2 PROPERTIES
+        LABELS "unit;cuda;reciprocal;mpi;device-mapping;integration" PROCESSORS 2 SKIP_RETURN_CODE 77)
+    endif()
     add_executable(ReciprocalCudaLifecycle ${TestDIR}/unit/test_reciprocal_cuda_lifecycle.cpp)
     target_include_directories(ReciprocalCudaLifecycle PRIVATE ${SRC}/cuda)
     target_link_libraries(ReciprocalCudaLifecycle PRIVATE rslmto_reciprocal_cuda)

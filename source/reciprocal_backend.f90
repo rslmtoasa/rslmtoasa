@@ -13,8 +13,9 @@ contains
       type(reciprocal_assembler), intent(in) :: assembler
 #ifdef USE_CUDA_RECIPROCAL
       integer(c_int) :: device_count, status
-      integer :: selected_device
-      logical :: device_valid
+      integer :: selected_device, override_device
+      logical :: device_valid, override_configured, override_valid
+      character(len=256) :: mapping_message
 #endif
 
       call this%release()
@@ -35,11 +36,26 @@ contains
          call g_logger%error('reciprocal CUDA backend: no usable CUDA device was found.', __FILE__, __LINE__)
          return
       end if
-      call g_parallel_context%device_index(int(device_count), selected_device, device_valid)
-      if (.not. device_valid) then
-         call g_logger%error('reciprocal CUDA backend: MPI local-rank/device mapping is invalid.', __FILE__, __LINE__)
+      call get_cuda_device_override(override_device, override_configured, override_valid)
+      if (override_configured .and. .not. override_valid) then
+         call g_logger%error('reciprocal CUDA backend: RSLMTO_CUDA_DEVICE must be a non-negative integer.', __FILE__, __LINE__)
          return
       end if
+      if (override_configured) then
+         call g_parallel_context%device_index(int(device_count), selected_device, device_valid, override_device)
+      else
+         call g_parallel_context%device_index(int(device_count), selected_device, device_valid)
+      end if
+      if (.not. device_valid) then
+         call g_logger%error('reciprocal CUDA backend: MPI local-rank/device mapping is invalid; '// &
+                             'set RSLMTO_CUDA_DEVICE only for intentional sharing.', __FILE__, __LINE__)
+         return
+      end if
+      write(mapping_message, '(a,i0,a,i0,a,i0,a,i0,a,i0)') 'CUDA_DEVICE_MAPPING world_rank=', &
+         g_parallel_context%rank, ' local_rank=', g_parallel_context%local_rank, &
+         ' local_size=', g_parallel_context%local_size, ' visible_devices=', int(device_count), &
+         ' selected_device=', selected_device
+      call g_logger%info(trim(mapping_message), __FILE__, __LINE__)
       this%context = rslmto_reciprocal_cuda_create(int(selected_device, c_int))
       if (.not. c_associated(this%context)) then
          call g_logger%error('reciprocal CUDA backend: context creation failed.', __FILE__, __LINE__)

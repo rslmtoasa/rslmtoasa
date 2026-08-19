@@ -4,6 +4,7 @@ module rsrec_cuda_plugin_mod
       c_double_complex, c_int, c_null_char, c_null_ptr, c_ptr, c_f_pointer, c_loc
    use precision_mod, only: rp
    use logger_mod, only: g_logger
+   use mpi_mod, only: g_parallel_context, get_cuda_device_override
    use sparse_mod, only: sparse
    implicit none
 
@@ -50,6 +51,12 @@ module rsrec_cuda_plugin_mod
 
 #ifdef USE_CUDA_PLUGIN
    interface
+      function rsrec_cuda_device_count(count) bind(C, name='rsrec_cuda_device_count')
+         import :: c_int
+         integer(c_int), intent(out) :: count
+         integer(c_int) :: rsrec_cuda_device_count
+      end function rsrec_cuda_device_count
+
       function rsrec_cuda_create(kk, nb, nnmax, ntype, nmax, device) bind(C, name='rsrec_cuda_create')
          import :: c_int, c_ptr
          integer(c_int), value :: kk, nb, nnmax, ntype, nmax, device
@@ -218,14 +225,43 @@ contains
       class(rsrec_cuda_backend), intent(inout) :: this
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax
 #ifdef USE_CUDA_PLUGIN
+      integer(c_int) :: device_count, status
+      integer :: selected_device, override_device
+      logical :: device_valid, override_configured, override_valid
+      character(len=256) :: mapping_message
+
       if (c_associated(this%ctx)) then
          if (this%kk == kk .and. this%nb == nb .and. this%nnmax == nnmax .and. &
              this%ntype == ntype .and. this%nmax == nmax) return
          call this%destroy()
       end if
 
+      device_count = 0_c_int
+      status = rsrec_cuda_device_count(device_count)
+      if (status /= 0_c_int .or. device_count <= 0_c_int) then
+         call g_logger%fatal('Failed to discover a usable CUDA device for the recursion plugin.', __FILE__, __LINE__)
+      end if
+      call get_cuda_device_override(override_device, override_configured, override_valid)
+      if (override_configured .and. .not. override_valid) then
+         call g_logger%fatal('RSLMTO_CUDA_DEVICE must be a non-negative integer.', __FILE__, __LINE__)
+      end if
+      if (override_configured) then
+         call g_parallel_context%device_index(int(device_count), selected_device, device_valid, override_device)
+      else
+         call g_parallel_context%device_index(int(device_count), selected_device, device_valid)
+      end if
+      if (.not. device_valid) then
+         call g_logger%fatal('CUDA recursion plugin refuses unconfigured MPI local-rank/device oversubscription.', &
+            __FILE__, __LINE__)
+      end if
+      write(mapping_message, '(a,i0,a,i0,a,i0,a,i0,a,i0)') 'CUDA_DEVICE_MAPPING world_rank=', &
+         g_parallel_context%rank, ' local_rank=', g_parallel_context%local_rank, &
+         ' local_size=', g_parallel_context%local_size, ' visible_devices=', int(device_count), &
+         ' selected_device=', selected_device
+      call g_logger%info(trim(mapping_message), __FILE__, __LINE__)
+
       this%ctx = rsrec_cuda_create(int(kk, c_int), int(nb, c_int), int(nnmax, c_int), &
-         int(ntype, c_int), int(nmax, c_int), 0_c_int)
+         int(ntype, c_int), int(nmax, c_int), int(selected_device, c_int))
       if (.not. c_associated(this%ctx)) then
          call g_logger%fatal('Failed to create CUDA plugin context: '// &
             trim(last_error_string()), __FILE__, __LINE__)

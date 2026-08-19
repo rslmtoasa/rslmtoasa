@@ -1495,15 +1495,69 @@ If hardware with multiple GPUs is unavailable, add unit-level mapping coverage a
 
 ## Checklist
 
-- [ ] existing device mapping audited
-- [ ] reciprocal CUDA backend uses existing device index
-- [ ] one-rank/one-GPU validated
-- [ ] multi-rank mapping validated where hardware permits
-- [ ] explicit override validated where supported
-- [ ] no NCCL added
-- [ ] no CUDA-aware MPI dependency added
-- [ ] numerical equivalence checked
-- [ ] unsupported multi-GPU scope documented
+- [x] existing device mapping audited
+- [x] reciprocal CUDA backend uses existing device index
+- [x] one-rank/one-GPU validated
+- [x] multi-rank mapping validated where hardware permits
+- [x] explicit override validated where supported
+- [x] no NCCL added
+- [x] no CUDA-aware MPI dependency added
+- [x] numerical equivalence checked
+- [x] unsupported multi-GPU scope documented
+
+## ACC-08 completion record
+
+ACC-08 is closed with the existing node-local `MPI_Comm_split_type` context as
+the single rank/device source for both CUDA paths. The RS CUDA recursion plugin
+no longer passes device 0 unconditionally. It queries the CUDA-visible device
+count, maps `local_rank -> device_index`, and logs
+`CUDA_DEVICE_MAPPING world_rank=... local_rank=... local_size=...
+visible_devices=... selected_device=...`. The reciprocal CUDA backend uses the
+same context and mapping helper.
+
+Production mapping rejects unconfigured local oversubscription: if more local
+MPI ranks than visible GPUs are present, initialization fails instead of
+silently wrapping ranks onto a shared device. An intentional override is
+available through `RSLMTO_CUDA_DEVICE`, interpreted in the
+`CUDA_VISIBLE_DEVICES` namespace; it is range-checked and explicitly permits
+shared-device execution. The pure mapping helper and MPI unit tests also cover
+invalid counts, four ranks/four devices, four ranks/two devices, and programmatic
+override cases.
+
+On the validation host, two NVIDIA RTX A4000 GPUs were visible with CUDA 13.3,
+driver 610.57.04, and Open MPI 4.1.6. The clean MPI+CUDA build passed the
+one-rank RS mapping test, the two-rank RS mapping test, the reciprocal
+arbitrary-k/normal-mesh CPU-vs-CUDA test in one- and two-rank modes, and the
+reciprocal CUDA lifecycle test. The two-rank logs selected device 0 for local
+rank 0 and device 1 for local rank 1 in both RS and reciprocal backends; CPU/GPU
+eigenvalue, residual, orthogonality, and projector comparisons passed at the
+existing ACC-04 tolerances. `RSLMTO_CUDA_DEVICE=1` was validated in both
+backends, including intentional two-rank sharing. A four-rank launch without
+the override failed with the expected unconfigured-oversubscription diagnostic.
+
+The supported multi-GPU scope remains one MPI rank per selected GPU on a shared
+node. There is no distributed eigensolver, GPU-to-GPU collective, cross-rank
+CUDA data exchange, NCCL, or CUDA-aware MPI dependency. Cross-node placement
+and scheduler-specific GPU allocation remain outside this task; use
+`CUDA_VISIBLE_DEVICES` to define each process's visible-device namespace.
+
+- [x] mapping helper and local communicator audited
+- [x] RS CUDA plugin uses the shared device index
+- [x] reciprocal CUDA backend uses the shared device index
+- [x] one-rank/one-GPU hardware test passed
+- [x] two-rank/two-GPU deterministic mapping passed
+- [x] explicit `RSLMTO_CUDA_DEVICE` override passed
+- [x] unconfigured oversubscription rejected
+- [x] CPU/GPU numerical equivalence passed
+- [x] no NCCL or CUDA-aware MPI dependency added
+- [x] unsupported distributed/multi-node scope documented
+
+**Checks run:** CPU Open MPI `UnitParallelContext` at 1, 2, and 4 ranks plus
+the override test; CUDA/Open MPI `CudaMpiDeviceMapping` at one and two ranks;
+`ReciprocalCudaArbitraryK` in serial and two-rank modes;
+`ReciprocalCudaLifecycle`; reciprocal two-rank mapping with and without the
+explicit override; and the expected four-rank/two-GPU oversubscription failure.
+The ACC-08 source diff passes `git diff --check`.
 
 **Commit message:** `Validate MPI rank-to-GPU execution`
 

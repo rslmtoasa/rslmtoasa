@@ -29,6 +29,20 @@ extern "C" const char *rsrec_cuda_last_error(void) {
     return g_cuda_err.c_str();
 }
 
+extern "C" int rsrec_cuda_device_count(int *count) {
+    if (!count) {
+        set_error("rsrec_cuda_device_count: null output");
+        return 1;
+    }
+    const cudaError_t status = cudaGetDeviceCount(count);
+    if (status != cudaSuccess) {
+        *count = 0;
+        set_error(std::string("rsrec_cuda_device_count: ") + cudaGetErrorString(status));
+        return 1;
+    }
+    return 0;
+}
+
 static bool fft_eligible(const rsrec_cuda_ctx *ctx) {
     return ctx->pbc && ctx->nmax == 0 && ctx->nbas > 0 &&
            ctx->n1 > 0 && ctx->n2 > 0 && ctx->n3 > 0 &&

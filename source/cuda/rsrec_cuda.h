@@ -38,6 +38,7 @@ enum {
     RSREC_CUDA_BACKEND_CONV = 3
 };
 
+int rsrec_cuda_device_count(int *count);
 rsrec_cuda_ctx *rsrec_cuda_create(int kk, int nb, int nnmax, int ntype,
                                   int nmax, int device);
 void rsrec_cuda_destroy(rsrec_cuda_ctx *ctx);

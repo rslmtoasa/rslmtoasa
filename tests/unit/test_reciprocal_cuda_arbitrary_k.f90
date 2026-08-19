@@ -9,6 +9,10 @@ program test_reciprocal_cuda_arbitrary_k
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
+   use mpi_mod, only: parallel_context, g_parallel_context, ierr
+#ifdef USE_MPI
+   use mpi
+#endif
    implicit none
 
    interface
@@ -38,9 +42,16 @@ program test_reciprocal_cuda_arbitrary_k
    real(rp) :: eigenvalue_error, projector_error, residual_error, orthogonality_error
 
    call g_logger%init()
+#ifdef USE_MPI
+   call MPI_INIT(ierr)
+   g_parallel_context = parallel_context()
+#endif
    status = cuda_device_count(device_count)
    if (status /= 0_c_int .or. device_count <= 0_c_int) then
       write (*, '(a)') 'SKIP: no CUDA device is available'
+#ifdef USE_MPI
+      call MPI_FINALIZE(ierr)
+#endif
       stop 77
    end if
 
@@ -125,6 +136,10 @@ program test_reciprocal_cuda_arbitrary_k
    write (*, '(a,3(es14.6,1x))') 'PASS: CUDA arbitrary-k eigenpairs; eigenvalue/projector/residual errors = ', &
       eigenvalue_error, projector_error, residual_error
    write (*, '(a)') 'PASS: CUDA normal-mesh host cache/eigenpair integration'
+
+#ifdef USE_MPI
+   call MPI_FINALIZE(ierr)
+#endif
 
 contains
 
