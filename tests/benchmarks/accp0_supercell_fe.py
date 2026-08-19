@@ -13,8 +13,8 @@ The campaign records persistent CPU/GPU timings at the scheduled k meshes and pe
 independent correctness checks:
 
 * CPU LAPACK versus CUDA eigenvalues for the identical assembled Hamiltonian;
-* a CPU band-folding comparison using the same canonical ``Fe1.nml`` potential,
-  which isolates geometry/assembler correctness.
+* CPU and FP32-GPU band-folding comparisons using the same canonical ``Fe1.nml``
+  potential, which isolates geometry/assembler correctness from solver error.
 
 The default k-point policy is a geometric workload schedule anchored at a
 32x32x32 primitive-cell mesh and halved per added supercell level: 16x16x16,
@@ -56,6 +56,14 @@ def parse_int_list(text: str) -> list[int]:
     values = [int(part) for part in text.split(",") if part]
     if not values or any(value < 1 for value in values):
         raise argparse.ArgumentTypeError("expected a comma-separated list of positive integers")
+    return values
+
+
+def parse_strategy_list(text: str) -> list[str]:
+    values = [part.strip() for part in text.split(",") if part.strip()]
+    allowed = {"fp64_zheevd", "fp64_zheevj_batched", "fp32_cheevd", "fp32_cheevj_batched"}
+    if not values or any(value not in allowed for value in values):
+        raise argparse.ArgumentTypeError(f"strategies must be drawn from {sorted(allowed)}")
     return values
 
 
@@ -235,6 +243,12 @@ def main() -> int:
     )
     parser.add_argument("--output-dir", type=Path, default=ROOT / "results/benchmarks/accp0-supercellFe")
     parser.add_argument("--skip-cuda", action="store_true")
+    parser.add_argument(
+        "--solver-strategies",
+        type=parse_strategy_list,
+        default=["fp64_zheevd", "fp64_zheevj_batched", "fp32_cheevd", "fp32_cheevj_batched"],
+        help="explicit CUDA strategies to evaluate",
+    )
     parser.add_argument("--skip-folding", action="store_true")
     parser.add_argument("--lengths", type=parse_int_list, default=[2, 3, 4, 5])
     parser.add_argument(
@@ -271,11 +285,14 @@ def main() -> int:
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(exist_ok=True)
 
-    backends = ["lapack"] if args.skip_cuda else ["lapack", "cuda"]
+    configurations = [("lapack", "lapack")]
+    if not args.skip_cuda:
+        configurations.extend(("cuda", strategy) for strategy in args.solver_strategies)
     vectors = [False, True] if args.vectors else [False]
     rows: list[dict[str, Any]] = []
     backend_agreement: list[dict[str, Any]] = []
     folding_oracle: list[dict[str, Any]] = []
+    fp32_folding_oracle: list[dict[str, Any]] = []
     adaptations: list[dict[str, Any]] = []
 
     with tempfile.TemporaryDirectory(prefix="rslmto-accp0-supercellFe-", dir="/tmp") as temporary:
@@ -306,24 +323,38 @@ def main() -> int:
                 binary, fixture_dir, raw_dir / f"{fixture['name']}_oracle_cpu.log", mesh, length, "lapack"
             )
             if not args.skip_cuda:
-                gpu_values = run_oracle(
-                    binary, fixture_dir, raw_dir / f"{fixture['name']}_oracle_cuda.log", mesh, length, "cuda"
-                )
-                # For very dense meshes, tiny backend-dependent perturbations
-                # can split a nominally degenerate group despite sub-1e-12
-                # eigenvalue agreement. State degeneracy matching as a
-                # diagnostic, but make the backend correctness gate the
-                # sorted eigenvalue multiset and state count.
-                agreement = compare_oracle(cpu_values, gpu_values, require_degeneracy=False)
-                agreement.update(
-                    {
-                        "fixture": fixture["name"],
-                        "L": length,
-                        "check": "cpu_lapack_vs_cuda",
-                        "tolerance_energy": 1.0e-7,
-                    }
-                )
-                backend_agreement.append(agreement)
+                for strategy in args.solver_strategies:
+                    if strategy.endswith("batched") and length > 1:
+                        backend_agreement.append(
+                            {
+                                "fixture": fixture["name"], "L": length,
+                                "check": f"cpu_lapack_vs_cuda_{strategy}",
+                                "solver_strategy": strategy, "status": "UNSUPPORTED",
+                                "passed": None,
+                                "reason": "cuSOLVER *heevjBatched requires n <= 32",
+                            }
+                        )
+                        continue
+                    gpu_values = run_oracle(
+                        binary, fixture_dir,
+                        raw_dir / f"{fixture['name']}_oracle_cuda_{strategy}.log",
+                        mesh, length, "cuda", strategy,
+                    )
+                    # For very dense meshes, tiny backend-dependent perturbations
+                    # can split a nominally degenerate group despite sub-1e-12
+                    # eigenvalue agreement. State degeneracy matching remains a
+                    # diagnostic, while the gate is the sorted state multiset.
+                    agreement = compare_oracle(cpu_values, gpu_values, require_degeneracy=False)
+                    agreement.update(
+                        {
+                            "fixture": fixture["name"],
+                            "L": length,
+                            "check": f"cpu_lapack_vs_cuda_{strategy}",
+                            "solver_strategy": strategy,
+                            "tolerance_energy": 1.0e-7,
+                        }
+                    )
+                    backend_agreement.append(agreement)
 
             if not args.skip_folding:
                 primitive_dir = scratch / f"{fixture['name']}_uniform_primitive"
@@ -361,7 +392,32 @@ def main() -> int:
                 )
                 folding_oracle.append(folding)
 
-            for backend in backends:
+                if not args.skip_cuda:
+                    for strategy in args.solver_strategies:
+                        if not strategy.startswith("fp32_") or strategy.endswith("batched"):
+                            continue
+                        primitive_gpu = run_oracle(
+                            binary, primitive_dir,
+                            raw_dir / f"{fixture['name']}_uniform_folding_primitive_{strategy}.log",
+                            primitive_mesh, 1, "cuda", strategy,
+                        )
+                        supercell_gpu = run_oracle(
+                            binary, uniform_dir,
+                            raw_dir / f"{fixture['name']}_uniform_folding_supercell_{strategy}.log",
+                            mesh, length, "cuda", strategy,
+                        )
+                        fp32_folding = compare_oracle(primitive_gpu, supercell_gpu)
+                        fp32_folding.update(
+                            {
+                                "fixture": fixture["name"],
+                                "L": length,
+                                "check": "uniform_Fe1_gpu_band_folding",
+                                "solver_strategy": strategy,
+                            }
+                        )
+                        fp32_folding_oracle.append(fp32_folding)
+
+            for backend, strategy in configurations:
                 for tile in args.tiles:
                     for vectors_value in vectors:
                         if backend == "cuda":
@@ -372,11 +428,12 @@ def main() -> int:
                                 length,
                                 mesh,
                                 backend,
+                                strategy,
                                 tile,
                                 vectors_value,
                             )
                         output = raw_dir / (
-                            f"{fixture['name']}_k_density_{backend}_tile{tile}_v{int(vectors_value)}.json"
+                            f"{fixture['name']}_k_density_{backend}_{strategy}_tile{tile}_v{int(vectors_value)}.json"
                         )
                         rows.append(
                             run_measurement(
@@ -390,6 +447,7 @@ def main() -> int:
                                 length=length,
                                 mesh=mesh,
                                 backend=backend,
+                                solver_strategy=strategy,
                                 tile=tile,
                                 vectors=vectors_value,
                                 warmups=args.warmups,
@@ -397,7 +455,7 @@ def main() -> int:
                             )
                         )
 
-    rows.sort(key=lambda row: (int(row.get("L", 0)), str(row.get("backend", "")), int(row.get("vectors", 0))))
+    rows.sort(key=lambda row: (int(row.get("L", 0)), str(row.get("backend", "")), str(row.get("solver_strategy", "")), int(row.get("vectors", 0))))
     with (output_dir / "supercellFe_accp0_table.csv").open("w", newline="", encoding="utf-8") as stream:
         fieldnames = REQUIRED_COLUMNS + ["name", "vectors"]
         writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
@@ -407,9 +465,10 @@ def main() -> int:
     speedups: dict[str, float] = {}
     for length in args.lengths:
         cpu = [float(row["total_steady_s"]) for row in rows if row.get("L") == length and row.get("backend") == "lapack"]
-        cuda = [float(row["total_steady_s"]) for row in rows if row.get("L") == length and row.get("backend") == "cuda"]
-        if cpu and cuda:
-            speedups[str(length)] = statistics.median(cpu) / statistics.median(cuda)
+        for strategy in args.solver_strategies:
+            cuda = [float(row["total_steady_s"]) for row in rows if row.get("L") == length and row.get("backend") == "cuda" and row.get("solver_strategy") == strategy]
+            if cpu and cuda:
+                speedups[f"{length}:{strategy}"] = statistics.median(cpu) / statistics.median(cuda)
 
     report = {
         "schema": "rslmto.accp0-supercell-fe.v1",
@@ -424,6 +483,11 @@ def main() -> int:
             "mesh_policy": f"floor({args.base_mesh}/2**(L-1)) per axis",
             "base_mesh": f"{args.base_mesh}x{args.base_mesh}x{args.base_mesh}",
             "cuda_solver_algorithm_changed": False,
+            "normal_production_precision": {
+                "cpu": "LAPACK ZHEEV/ZHEGV complex double",
+                "cuda": "cuDoubleComplex, double eigenvalues, cusolverDnZheevd/current FP64 batched strategy",
+            },
+            "fp32_is_default": False,
             "source_inputs_staged_unchanged": True,
             "source_potentials_replaced_in_staging": True,
             "canonical_potential_source": str(canonical_potential),
@@ -433,10 +497,15 @@ def main() -> int:
         "correctness": {
             "backend_agreement": backend_agreement,
             "uniform_band_folding_oracle": folding_oracle,
+            "fp32_gpu_band_folding_oracle": fp32_folding_oracle,
         },
         "summary": {
             "rows": len(rows),
-            "backend_totals": {backend: sum(1 for row in rows if row.get("backend") == backend) for backend in backends},
+            "backend_totals": {
+                f"{backend}:{strategy}": sum(
+                    1 for row in rows if row.get("backend") == backend and row.get("solver_strategy") == strategy
+                ) for backend, strategy in configurations
+            },
             "cpu_over_cuda_speedup_by_L": speedups,
             "source_potentials_uniform_after_symbol_normalization": all(
                 bool(fixture["potential_uniform_after_symbol_normalization"]) for fixture in selected
@@ -446,6 +515,7 @@ def main() -> int:
             ),
             "backend_agreement_passed": all(item["passed"] for item in backend_agreement) if backend_agreement else None,
             "uniform_folding_passed": all(item["passed"] for item in folding_oracle) if folding_oracle else None,
+            "fp32_gpu_folding_passed": all(item["passed"] for item in fp32_folding_oracle) if fp32_folding_oracle else None,
         },
     }
     (output_dir / "supercellFe_accp0_results.json").write_text(

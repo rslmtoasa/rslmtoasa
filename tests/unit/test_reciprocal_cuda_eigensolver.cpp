@@ -173,6 +173,31 @@ bool solve_values_only_and_check(rslmto_reciprocal_cuda_context *context,
     return true;
 }
 
+bool solve_fp32_and_check(rslmto_reciprocal_cuda_context *context, int n,
+                          int batch, const std::vector<double> &h) {
+    std::vector<double> w(static_cast<std::size_t>(n) * batch);
+    std::vector<double> v(h.size());
+    if (rslmto_reciprocal_cuda_solve_cheevd_batch(
+            context, n, batch, h.data(), w.data(), v.data(), 1) != 0) {
+        std::fprintf(stderr, "FAIL: FP32 eigensolver: %s\n",
+                     rslmto_reciprocal_cuda_last_error());
+        return false;
+    }
+    if (n == 2) {
+        const double gap = std::sqrt(17.0);
+        for (int ibatch = 0; ibatch < batch; ++ibatch) {
+            const double expected_low = (7.0 + 2.0 * ibatch - gap) / 2.0;
+            const double expected_high = (7.0 + 2.0 * ibatch + gap) / 2.0;
+            if (std::abs(w[static_cast<std::size_t>(2) * ibatch] - expected_low) > 2.e-5 ||
+                std::abs(w[static_cast<std::size_t>(2) * ibatch + 1] - expected_high) > 2.e-5) {
+                std::fprintf(stderr, "FAIL: FP32 eigenvalue batch=%d\n", ibatch);
+                return false;
+            }
+        }
+    }
+    return check_batch(h, w, v, n, batch, 2.e-5);
+}
+
 bool select_strategy(rslmto_reciprocal_cuda_context *context, int strategy) {
     if (rslmto_reciprocal_cuda_set_solver_strategy(context, strategy) != 0) {
         std::fprintf(stderr, "FAIL: selecting CUDA solver strategy %d: %s\n",
@@ -254,6 +279,19 @@ int main() {
     /* Restore the reference strategy explicitly; no automatic threshold or
      * hidden CPU fallback is permitted by ACC-P1. */
     passed = select_strategy(context, RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL) && passed;
+
+    /* ACC-P1b: explicit FP32 direct and small-batch routes use the same H64
+     * input boundary and widen eigenpairs back to the C ABI. */
+    passed = select_strategy(context, RSLMTO_RECIPROCAL_CUDA_CHEEVD_SERIAL) && passed;
+    passed = solve_fp32_and_check(context, 2, 3, h2) && passed;
+    passed = solve_fp32_and_check(context, 18, 1, h18) && passed;
+    passed = select_strategy(context, RSLMTO_RECIPROCAL_CUDA_CHEEVJ_BATCHED) && passed;
+    passed = solve_fp32_and_check(context, 2, 3, h2) && passed;
+    passed = solve_fp32_and_check(context, 18, 1, h18) && passed;
+    if (rslmto_reciprocal_cuda_solver_strategy_supported(context, 36, 1, 1) != 1) {
+        std::fprintf(stderr, "FAIL: CheevjBatched n=36 was not reported unsupported\n");
+        passed = false;
+    }
 
     rslmto_reciprocal_cuda_destroy(context);
     if (!passed) return 1;
