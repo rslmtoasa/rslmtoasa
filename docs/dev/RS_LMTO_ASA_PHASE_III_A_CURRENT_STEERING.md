@@ -1,5 +1,5 @@
 # RS-LMTO-ASA Phase III-A — Current GPU Performance Steering
-## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 / ACC-11 / ACC-12 / ACC-13 complete; active entry point: ACC-14
+## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 / ACC-11 / ACC-12 / ACC-13 / ACC-14 complete
 
 **Target branch:** `fable_v3`
 **Purpose:** keep the accelerator campaign focused on measured GPU performance after the original ACC-00...ACC-09 work and the subsequent ACC-P rescue campaign.
@@ -57,12 +57,12 @@ Use this table as the primary steering reference.
 | **ACC-P1b** | **Evidence input** | FP32/mixed-precision study; consume its current result if present on HEAD | Do not restart; include result in P4, or record FP32 as not yet established |
 | **ACC-P2** | **Completed** | Hot-path optimization has been performed | Use its post-optimization timings as P4 evidence |
 | **ACC-P3** | **Completed** | Decisive real-material 2D crossover campaign is done | Reuse its corpus/results; only rerun targeted rows if P2 changed their timings materially |
-| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10/11/12/13 closed; proceed to ACC-14 |
+| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10/11/12/13 closed; supplied the ACC-14 release-gate inputs |
 | **ACC-10** | **Completed on current HEAD** | Backend-owned CUDA Lehmann contraction over the existing host-eigenpair contract | Reuse; do not reopen unless a new residency or mixed-routing question is justified |
 | **ACC-11** | **Completed on current HEAD** | Narrow backend-owned CUDA FP64 resident eigensystem handoff for Lehmann | Reuse only for the explicit normal-mesh CUDA Lehmann path; no general residency framework |
 | **ACC-12** | **Completed — not justified** | Post-P2/P4 profiling leaves CPU H(k) assembly below the materiality gate; no GPU assembler added | Keep the canonical CPU Fourier assembler; reopen only with new evidence |
 | **ACC-13** | **Completed on current HEAD** | Existing RS CUDA KPM moment path validated for production charge/spin/orbital transport; no new kernel justified by the measured audit | Reuse; keep the focused production probe as the hardware evidence |
-| ACC-14 | Final gate | Accelerator support/performance matrix | Active next task |
+| **ACC-14** | **Completed on current HEAD** | Accelerator release support/performance matrix and final gate | Phase III-A closed; retain only explicitly conditional follow-ups |
 
 ---
 
@@ -367,7 +367,7 @@ ACC-P4 checklist is therefore complete: policy frozen, FP32 not promoted,
 LAPACK default retained, no automatic dispatch added, ACC-11 completed only in
 its evidence-backed narrow scope, ACC-12 closed without a GPU assembler,
 ACC-10 closed, ACC-13 completed for the existing RS KPM transport path, and
-ACC-14 is the next implementation/documentation track.
+ACC-14 has now closed the accelerator release gate.
 
 # 12. Revised relevance of original ACC-10...ACC-14
 
@@ -669,28 +669,146 @@ sign checks, convergence sweeps, and the recursion-versus-Lehmann check.
 ## ACC-14 — accelerator release gate
 
 ### Status
-**Still required as the final task.**
+**Completed on current HEAD (2026-08-19).**
 
-It must publish an honest support/performance map, not merely a feature list.
+ACC-14 closes Phase III-A with an honest support/performance map, not merely a
+feature list.  The status words below are intentionally separate:
 
-The final documentation should distinguish:
+- **supported:** an implementation path exists and its documented guards are
+  explicit;
+- **validated:** the path passed its source/ABI or numerical correctness
+  contract;
+- **performance-beneficial:** a measured end-to-end GPU advantage exists for
+  the stated workload and hardware;
+- **performance-tested but CPU-preferred:** CUDA ran and was compared, but CPU
+  remains the production choice;
+- **experimental:** available for scoped probes only, with no production
+  selection;
+- **unsupported:** rejected or unavailable; it must not silently fall back.
 
-```text
-supported
-validated
-performance-beneficial
-performance-tested but CPU-preferred
-experimental
-unsupported
-```
+### RS CUDA support matrix
 
-for both RS and reciprocal GPU paths.
+| Route | Support/validation | Measured policy and limitations |
+|---|---|---|
+| Scalar Lanczos | Supported and low-level validated | Performance not established as a production claim; `nsp=1` guard remains. |
+| Block Lanczos and intersite block starts | Supported and low-level validated | Existing HOH/block-ELL route retained; no universal GPU speed claim. |
+| Chebyshev charge, spin, and orbital moments | Supported and validated by the 15-route ABI gate and production matrix | CPU-preferred for the small measured case; CUDA-beneficial for the larger fcc-Pt case on the validation RTX A4000. |
+| Separate orbital-moment workflow | Supported and low-level validated | Uses the existing orbital CUDA entry point; structured FFT/conv orbital moments remain unsupported. |
+| Chebyshev and block DOS/GF reconstruction | Supported and low-level validated | CPU reconstruction and canonical output remain authoritative; no portable threshold is claimed. |
+| Ordinary CSR/BSR and compatible HOH | Supported and validated | `ccor_2c` without HOH is supported through the existing operator work arrays. |
+| `ccor_2c+hoh`, local-axis rotation, structured FFT/conv, and stochastic HOH without required velocity-orthogonalization operators | Unsupported with explicit guards | No CPU result is labelled as a CUDA result. |
+
+The broad RS gate passed the backend regression matrix `10/10`, the CPU/GPU
+Chebyshev consistency matrix `8/8` (two optional MKL rows skipped because
+`ENABLE_MKL_KERNELS=OFF`), and the standalone CUDA ABI validator `15/15` with
+maximum displayed FP64 relative error `2.20e-15`.
+
+### Reciprocal CUDA support matrix
+
+| Route or feature | Support/validation | Measured policy and limitations |
+|---|---|---|
+| Standard orthonormal Hermitian eigensolution | Supported and validated | CUDA owns dense FP64 `zheevd_serial`; CPU H(k) assembly remains canonical. |
+| Eigenvalues and eigenvectors | Supported and validated | Both passed the CUDA eigensolver and production reciprocal contracts; `vectors=yes` is the SCF policy input. |
+| Arbitrary-k | Supported and validated | Serial and MPI-2 CUDA arbitrary-k contracts pass; no separate arbitrary-k speed claim. |
+| Normal reciprocal mesh | Supported and validated | Explicit `reciprocal_backend='cuda'` works for production Si/Fe requests; no silent CPU fallback. |
+| Si/sp and Fe/spd small/medium matrices | Supported and performance-tested but CPU-preferred or boundary | `nmat=16,18,144` remain CPU-preferred; `nmat=486` is a boundary case and keeps the CPU default. |
+| Fe/spd large supercells | Supported, validated, and performance-beneficial in the measured regime | Persistent FP64 `vectors=yes` CUDA is preferred at `nmat=1152` and `2250` on the RTX A4000. |
+| First-order, second-order/HOH, and first-order+CCOR | Supported through host assembly and validated in the established variant contracts | No CUDA operator-construction kernel is present; HOH+CCOR is not claimed. |
+| Generalized overlap / overlap eigensolution | Unsupported by CUDA | CPU LAPACK remains the supported route; the typed capability boundary rejects CUDA requests. |
+| MPI rank-to-device mapping | Supported and validated within-node | Clean Open MPI + CUDA gate passed serial, 2-rank, and 4-rank mapping/arbitrary-k checks; multi-node collectives and multi-GPU solver collectives are not claimed. |
+| Device eigensystem residency | Supported and validated only for the narrow normal-mesh CUDA FP64 Lehmann handoff | Backend-owned token/shape checks protect the resident route; no general residency framework is exposed. |
+| Lehmann contraction | Supported and validated for the established full-BZ orthonormal route | CUDA Lehmann is production-beneficial for the measured bcc-Fe request; generalized overlap and a broad CPU-eigensolver-to-CUDA-contraction mode remain outside scope. |
+| FP32 reciprocal/SCF | Experimental and unestablished | The completed physical FP32 probe had no usable CUDA device; no production precision promotion or automatic selection is allowed. |
+
+### Performance report and frozen execution policy
+
+All ratios below are CPU time divided by CUDA time, so values above `1x`
+favour CUDA.  They include the timing boundaries stated by their source
+reports; they are not portable thresholds.
+
+| Workload | Representative CPU/CUDA result | Classification |
+|---|---:|---|
+| RS Block Fe | `1.14x` | CUDA-beneficial on the measured fixture |
+| RS Chebyshev Si | `5.73x` | CUDA-beneficial on the measured fixture |
+| RS fcc-Pt SOC, `cond_ll=20`, replication 4 | charge `0.88x`, spin `0.83x`, orbital `0.87x`; max complex error `7.3e-7` | CPU-preferred |
+| RS fcc-Pt SOC, `cond_ll=40`, replication 6 | charge `1.40x`, spin `1.33x`, orbital `1.35x`; max complex error `1.0e-6` | CUDA-beneficial on the RTX A4000 |
+| Reciprocal Si `nmat=16`, Fe `1^3` `nmat=18` | `0.048x`, `0.066x` for persistent `vectors=yes` | CPU-preferred |
+| Reciprocal Fe `3^3` `nmat=486` | `1.46x` for persistent `vectors=yes` | Boundary; CPU remains the conservative default |
+| Reciprocal Fe `4^3`/`5^3` `nmat=1152/2250` | `3.98x`/`4.27x` for persistent `vectors=yes` | FP64 CUDA-preferred on the campaign GPU |
+| Reciprocal bcc-Fe Lehmann `12^3` | approximately `5.96x` end-to-end contraction speedup | CUDA-beneficial for the measured full-BZ orthonormal request |
+
+The reciprocal solver policy is therefore explicit: CPU LAPACK remains the
+global default; persistent large standard-Hermitian CUDA requests may select
+FP64 `zheevd_serial` with tile size 1; true batched Jacobi remains limited to
+the small supported API regime and does not change primitive-cell policy.
+There is no automatic CPU/GPU threshold, no global CUDA default, and no
+portable claim beyond the measured hardware/workload envelope.
+
+### Correctness and build gate evidence
+
+The release gate was rerun on the available NVIDIA RTX A4000 host (two visible
+GPUs, driver `610.57.04`, CUDA `13.3.73`):
+
+- CPU-only Release build: passed; lean unit gate `53/53`.
+- CUDA reciprocal Release build: passed; unit/source/correctness gate
+  `57/57`, including arbitrary-k, lifecycle, eigensolver, Lehmann, and ACC-10
+  / ACC-11 source contracts.
+- Clean Open MPI + CUDA Release build with explicit matching Open MPI library
+  paths: passed; full unit/device-mapping gate `64/64`, including serial,
+  2-rank, and 4-rank MPI checks.
+- RS CUDA low-level validator: `15/15` routes passed.
+- Existing RS production CPU/GPU matrix: `10/10` backend regressions and
+  `8/8` consistency cases passed.
+- ACC-13 production fcc-Pt charge/spin/orbital probes: both small and large
+  workloads passed their `5e-3` observable envelope.
+
+The pre-existing cached MPI+CUDA build was not used as release evidence: it
+mixed Open MPI Fortran bindings with Intel MPI `libmpi.so.12` and failed before
+`MPI_Init`.  Reconfiguring with matching Open MPI libraries removed that
+environment error; no source defect was found.
+
+### ACC-14 completion checklist
+
+- [x] RS CUDA support matrix completed
+- [x] reciprocal CUDA support matrix completed
+- [x] unsupported generalized scope documented
+- [x] H(k) CPU/GPU decision documented
+- [x] eigensystem residency decision documented
+- [x] Lehmann status documented
+- [x] transport status documented
+- [x] CPU/GPU crossover and representative speedups published honestly
+- [x] slow-GPU regimes documented
+- [x] CPU-only build passes
+- [x] CUDA build passes
+- [x] MPI+CUDA checked with a consistent runtime where hardware permits
+- [x] GBT/TDDFT accelerator scope explicitly deferred
+
+### Retrospective review — dangling tasks
+
+No unowned implementation task remains in the current steering sequence.
+The following items are intentionally closed or conditional rather than
+dangling:
+
+| Item | Retrospective disposition |
+|---|---|
+| FP32 reciprocal/SCF | Closed as **unestablished**, not silently promoted; reopen only with a usable GPU and a fresh scientific precision gate. |
+| Automatic reciprocal backend dispatch | Intentionally not added; the current one-GPU/request-shape evidence is insufficient for a portable threshold. |
+| GPU H(k) assembly | Closed as **not justified** by the measured post-P2 materiality gate; reopen only if a new workload changes that balance. |
+| General residency framework or broad mixed CPU/GPU routing | Intentionally out of scope; ACC-11's backend-owned normal-mesh Lehmann handoff is the complete evidence-backed boundary. |
+| Generalized overlap, HOH+CCOR, structured RS FFT/conv orbital routes, multi-node collectives | Explicitly unsupported/not claimed; each requires independent correctness and performance evidence before promotion. |
+| GBT and TD-DFT GPU acceleration | Explicitly deferred from Phase III-A, not a release-gate omission. |
+| MPI+CUDA gate | Completed after correcting the build environment to use one MPI implementation; future builds must preserve that toolchain invariant. |
+
+The only legitimate future work is a new, separately justified accelerator
+campaign triggered by new hardware, a new production workload, or a concrete
+correctness/performance question.  ACC-00...ACC-14 and the Phase III-A
+benchmark/solver-rescue sequence are otherwise closed.
 
 ---
 
-# 13. Recommended sequence from the current point
+# 13. Completed sequence and release disposition
 
-The live sequence is now simple:
+The Phase III-A sequence is complete:
 
 ```text
 CURRENT HEAD
@@ -710,7 +828,7 @@ ACC-12  <-- COMPLETE (CPU H(k) assembly retained; GPU port not justified)
 
     |
     v
-ACC-14 final accelerator support/performance gate  <-- NEXT
+ACC-14 final accelerator support/performance gate  <-- COMPLETE
 ```
 
 ACC-P1b, ACC-P2, and ACC-P3 are **completed evidence inputs to P4**, not preliminary gates that the next assistant should execute again.
@@ -850,7 +968,7 @@ Every remaining implementation work package should end with:
 
 ---
 
-# 17. CURRENT HANDOFF — instruction for the next assistant
+# 17. FINAL HANDOFF — Phase III-A disposition
 
 **Do not start at the top of this document.**
 
@@ -867,18 +985,19 @@ ACC-10       completed
 ACC-11       completed (narrow CUDA resident Lehmann handoff)
 ACC-12       completed (CPU H(k) assembly retained; GPU port not justified)
 ACC-13       completed (existing CUDA KPM transport path)
+ACC-14       completed (final support/performance release gate)
 ```
 
 ACC-P1b was an evidence input.  Its physical CUDA rows were unsupported on
 the completed local probe, so P4 left FP32 unestablished.
 
-## The next active work package is ACC-14.
+## There is no next active work package in Phase III-A.
 
 ACC-10 is closed with the existing host-eigenpair contract, ACC-11 is complete
 in its evidence-backed narrow CUDA scope, ACC-12 is closed without a GPU
-assembler, and ACC-13 is complete for the existing RS KPM transport path.
-ACC-14 should proceed next.  Do not reopen ACC-P1b/P2/P3 or expand ACC-11/12
-beyond the evidence gates stated above.
+assembler, ACC-13 is complete for the existing RS KPM transport path, and
+ACC-14 has published the final support/performance gate.  Do not reopen
+ACC-P1b/P2/P3 or expand ACC-11/12 beyond the evidence gates stated above.
 
 Do not repeat:
 - benchmark-harness construction;
@@ -889,14 +1008,13 @@ Do not repeat:
 
 Only rerun established benchmark rows when needed to obtain current post-P2 numbers on the same corpus.
 
-The remaining sequence is:
+The final disposition is:
 
 ```text
 ACC-10 is complete; ACC-11 is complete in its narrow resident-Lehmann scope;
 ACC-12 is complete with the measured no-port decision;
 ACC-13 is complete for the existing CUDA KPM transport path.
-ACC-14 is the next implementation/documentation track.
-ACC-14 closes the accelerator campaign.
+ACC-14 is complete and closes the accelerator campaign.
 ```
 
 The current steering principle is:
