@@ -365,6 +365,37 @@ extern "C" void rslmto_reciprocal_cuda_get_timings(
     if (calls) *calls = context->timing_calls;
 }
 
+extern "C" void rslmto_reciprocal_cuda_reset_timings(
+    rslmto_reciprocal_cuda_context *context) {
+    if (!context) return;
+    context->h2d_seconds = 0.0;
+    context->solve_seconds = 0.0;
+    context->d2h_seconds = 0.0;
+    context->timing_calls = 0;
+}
+
+extern "C" int rslmto_reciprocal_cuda_get_memory(
+    rslmto_reciprocal_cuda_context *context,
+    long long *free_bytes, long long *total_bytes) {
+    if (!context || !free_bytes || !total_bytes) {
+        set_error("rslmto_reciprocal_cuda_get_memory: invalid arguments");
+        return 1;
+    }
+    cudaSetDevice(context->device);
+    std::size_t free_size = 0;
+    std::size_t total_size = 0;
+    const cudaError_t status = cudaMemGetInfo(&free_size, &total_size);
+    if (status != cudaSuccess) {
+        set_cuda_error("cudaMemGetInfo", status);
+        *free_bytes = 0;
+        *total_bytes = 0;
+        return 1;
+    }
+    *free_bytes = static_cast<long long>(free_size);
+    *total_bytes = static_cast<long long>(total_size);
+    return 0;
+}
+
 extern "C" int rslmto_reciprocal_cuda_synchronize(
     rslmto_reciprocal_cuda_context *context) {
     if (!context) {

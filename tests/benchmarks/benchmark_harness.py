@@ -77,6 +77,8 @@ ACC06_TIMING = re.compile(
     r"assembly_s=\s*(?P<assembly_s>\S+)\s+solve_s=\s*(?P<solve_s>\S+)\s+"
     r"total_s=\s*(?P<total_s>\S+)"
 )
+ACCP0_DIMENSIONS = re.compile(r"^ACCP0_DIMENSIONS\s+(?P<rest>.*)$")
+ACCP0_TIMING = re.compile(r"^ACCP0_TIMING\s+(?P<rest>.*)$")
 
 
 def _number(value: str) -> int | float | str:
@@ -112,7 +114,40 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
     dimensions: dict[str, dict[str, Any]] = {}
     records: dict[str, dict[str, Any]] = {}
     acc06_label: str | None = None
+    accp0_label: str | None = None
     for line in output.splitlines():
+        match = ACCP0_DIMENSIONS.match(line.strip())
+        if match:
+            values = _parse_key_values(match.group("rest"))
+            fixture = str(values.get("fixture", "unknown"))
+            backend = str(values.get("backend", "unknown"))
+            workload = str(values.get("workload", "crossover"))
+            accp0_label = "accp0_" + "_".join(
+                str(values.get(key, "unknown"))
+                for key in ("fixture", "backend", "L", "nominal_mesh", "tile", "eigenvectors")
+            )
+            dimensions[accp0_label] = {
+                "fixture": fixture,
+                "backend": backend,
+                "workload": workload,
+                **values,
+            }
+            continue
+        match = ACCP0_TIMING.match(line.strip())
+        if match:
+            values = _parse_key_values(match.group("rest"))
+            fixture = str(values.get("fixture", "unknown"))
+            label = accp0_label
+            if label is None or dimensions.get(label, {}).get("fixture") != fixture:
+                label = next(
+                    (key for key, item in dimensions.items() if item.get("fixture") == fixture),
+                    f"accp0_{fixture}",
+                )
+            record = records.setdefault(label, {"name": label})
+            record["metrics"] = {
+                key: value for key, value in values.items() if key not in {"fixture", "backend"}
+            }
+            continue
         match = ACC06_DIMENSIONS.match(line.strip())
         if match:
             values = match.groupdict()
@@ -288,11 +323,20 @@ def run_command(
     repetitions: int,
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
+    persistent: bool = False,
 ) -> tuple[list[float], list[dict[str, Any]], str]:
     command = _normalise_command(command)
     if warmups < 0 or repetitions < 1:
         raise ValueError("warmups must be non-negative and repetitions must be positive")
     last_output = ""
+    if persistent:
+        start = time.perf_counter()
+        completed = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True)
+        elapsed = time.perf_counter() - start
+        last_output = (completed.stdout or "") + (completed.stderr or "")
+        if completed.returncode:
+            raise RuntimeError(f"persistent benchmark command failed ({completed.returncode}):\n{last_output}")
+        return [elapsed], [{item["name"]: item for item in parse_profile_output(last_output)}], last_output
     for _ in range(warmups):
         completed = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True)
         if completed.returncode:
@@ -335,6 +379,7 @@ def make_document(
     profile_samples: list[dict[str, Any]],
     last_output: str,
     warmups: int,
+    persistent: bool = False,
 ) -> dict[str, Any]:
     workload_metadata = {
         "matrix_dimension": None,
@@ -373,7 +418,11 @@ def make_document(
             "labels": labels,
             "command": command,
             "metadata": workload_metadata,
-            "policy": {"warmups": warmups, "repetitions": len(wall_times)},
+            "policy": {
+                "warmups": warmups,
+                "repetitions": len(wall_times),
+                "persistent_process": persistent,
+            },
             "samples": samples,
         },
         "profile_records": records,
@@ -460,6 +509,11 @@ def _add_common_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--eigenvectors", action="store_true")
     parser.add_argument("--problem-type")
     parser.add_argument("--transfer-policy")
+    parser.add_argument(
+        "--persistent",
+        action="store_true",
+        help="run the command once; the command owns warm-ups and repetitions inside one process",
+    )
 
 
 def _expand_manifest_command(command: list[str], values: dict[str, str]) -> list[str]:
@@ -518,6 +572,7 @@ def run_manifest(args: argparse.Namespace) -> int:
             warmups=args.warmups,
             repetitions=args.repetitions,
             cwd=repo,
+            persistent=False,
         )
         document = make_document(
             name=entry["name"],
@@ -529,6 +584,7 @@ def run_manifest(args: argparse.Namespace) -> int:
             profile_samples=profile_samples,
             last_output=last_output,
             warmups=args.warmups,
+            persistent=False,
         )
         output = args.output_dir / f"{entry['name']}.json"
         output.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -590,6 +646,7 @@ def main(argv: list[str] | None = None) -> int:
         warmups=args.warmups,
         repetitions=args.repetitions,
         cwd=args.cwd.resolve() if args.cwd else None,
+        persistent=args.persistent,
     )
     document = make_document(
         name=args.name,
@@ -598,9 +655,10 @@ def main(argv: list[str] | None = None) -> int:
         command=command,
         metadata=metadata,
         wall_times=wall_times,
-            profile_samples=profile_samples,
-            last_output=last_output,
-            warmups=args.warmups,
+        profile_samples=profile_samples,
+        last_output=last_output,
+        warmups=args.warmups,
+        persistent=args.persistent,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")

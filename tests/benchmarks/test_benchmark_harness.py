@@ -35,6 +35,19 @@ PROFILE_MEMORY_MIB bccFe_one_site hk=1.0 normal_eigenpairs=2.0 arbitrary_kq_eige
     assert acc06[0]["metadata"]["tile_size"] == 4
     assert acc06[0]["metrics"]["total_s"] == 3.0e-3
 
+    accp0 = parse_profile_output(
+        "ACCP0_DIMENSIONS fixture=diamondSi source=scf workload=crossover backend=cuda "
+        "L=1 natom=2 nmat=16 nominal_mesh=8x8x8 actual_unique_nk=512 tile=16 eigenvectors=0\n"
+        "ACCP0_TIMING fixture=diamondSi backend=cuda cold_process_wall_s=0.4 "
+        "cuda_context_backend_init_s=0.2 first_solve_s=0.1 steady_solve_median_s=0.03 "
+        "Hk_CPU_s=0.01 H2D_s=0.002 solver_s=0.02 D2H_s=0.001 total_steady_s=0.04 "
+        "memory_estimate_mib=3 memory_free_before_mib=1000 memory_total_mib=16000\n"
+    )
+    assert accp0[0]["metadata"]["actual_unique_nk"] == 512
+    assert accp0[0]["metadata"]["nominal_mesh"] == "8x8x8"
+    assert accp0[0]["metrics"]["cold_process_wall_s"] == 0.4
+    assert accp0[0]["metrics"]["total_steady_s"] == 0.04
+
     base = {
         "schema": SCHEMA,
         "benchmark": {
@@ -78,6 +91,26 @@ PROFILE_MEMORY_MIB bccFe_one_site hk=1.0 normal_eigenpairs=2.0 arbitrary_kq_eige
         document = json.loads(output_path.read_text(encoding="utf-8"))
         assert document["schema"] == SCHEMA
         assert len(document["benchmark"]["samples"]) == 2
+
+        persistent_path = Path(directory) / "persistent.json"
+        persistent_command = [
+            sys.executable,
+            str(ROOT / "tests/benchmarks/benchmark_harness.py"),
+            "run",
+            "--name",
+            "persistent-smoke",
+            "--persistent",
+            "--output",
+            str(persistent_path),
+            "--command",
+            sys.executable,
+            "-c",
+            "print('ACCP0_DIMENSIONS fixture=smoke backend=lapack L=1 natom=1 nmat=1 nominal_mesh=1x1x1 actual_unique_nk=1 tile=1 eigenvectors=0'); print('ACCP0_TIMING fixture=smoke backend=lapack total_steady_s=0.01')",
+        ]
+        subprocess.run(persistent_command, check=True, cwd=ROOT, capture_output=True, text=True)
+        persistent_document = json.loads(persistent_path.read_text(encoding="utf-8"))
+        assert persistent_document["benchmark"]["policy"]["persistent_process"] is True
+        assert len(persistent_document["benchmark"]["samples"]) == 1
     print("PASS: ACC-00 benchmark harness contract")
     return 0
 

@@ -32,7 +32,7 @@
 
 module reciprocal_mod
 
-   use, intrinsic :: iso_c_binding, only: c_associated, c_double, c_double_complex, c_int, c_null_ptr, c_ptr
+   use, intrinsic :: iso_c_binding, only: c_associated, c_double, c_double_complex, c_int, c_long_long, c_null_ptr, c_ptr
    use control_mod
    use lattice_mod
    use hamiltonian_mod
@@ -249,6 +249,8 @@ module reciprocal_mod
       procedure :: execute_batch => cuda_backend_execute_batch
       procedure :: contract_lehmann => cuda_backend_contract_lehmann
       procedure :: execution_metrics => cuda_backend_execution_metrics
+      procedure :: reset_timing_metrics => cuda_backend_reset_timing_metrics
+      procedure :: memory_info => cuda_backend_memory_info
       procedure :: synchronize => cuda_backend_synchronize
       procedure :: release => cuda_backend_release
       final :: cuda_backend_destructor
@@ -632,6 +634,19 @@ module reciprocal_mod
          integer(c_int), intent(out) :: calls
       end subroutine rslmto_reciprocal_cuda_get_timings
 
+      subroutine rslmto_reciprocal_cuda_reset_timings(context) bind(C, name='rslmto_reciprocal_cuda_reset_timings')
+         import c_ptr
+         type(c_ptr), value :: context
+      end subroutine rslmto_reciprocal_cuda_reset_timings
+
+      function rslmto_reciprocal_cuda_get_memory(context, free_bytes, total_bytes) &
+         bind(C, name='rslmto_reciprocal_cuda_get_memory')
+         import c_int, c_long_long, c_ptr
+         type(c_ptr), value :: context
+         integer(c_long_long), intent(out) :: free_bytes, total_bytes
+         integer(c_int) :: rslmto_reciprocal_cuda_get_memory
+      end function rslmto_reciprocal_cuda_get_memory
+
       function rslmto_reciprocal_cuda_synchronize(context) bind(C, name='rslmto_reciprocal_cuda_synchronize')
          import c_int, c_ptr
          type(c_ptr), value :: context
@@ -773,6 +788,15 @@ module reciprocal_mod
       class(cuda_reciprocal_backend), intent(in) :: this
       integer, intent(out) :: execute_requests, combined_requests, assemble_only, input_hamiltonian_solves
    end subroutine cuda_backend_execution_metrics
+
+   module subroutine cuda_backend_reset_timing_metrics(this)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+   end subroutine cuda_backend_reset_timing_metrics
+
+   module subroutine cuda_backend_memory_info(this, free_bytes, total_bytes)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer(c_long_long), intent(out) :: free_bytes, total_bytes
+   end subroutine cuda_backend_memory_info
 
    module subroutine cuda_backend_synchronize(this)
       class(cuda_reciprocal_backend), intent(inout) :: this

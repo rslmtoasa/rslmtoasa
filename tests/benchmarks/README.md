@@ -94,3 +94,30 @@ dimension, k-point count, tile size, eigenvector mode, problem type, and
 transfer policy when the benchmark knows them. Keep benchmark JSON as evidence
 from a controlled run; do not commit machine-local timing results as
 correctness references.
+
+## ACC-P0 persistent real-material campaign
+
+ACC-06 remains the legacy cold-process inventory. Its per-repetition command
+launches are useful for cold wall time, but they are not steady-state GPU
+measurements. ACC-P0 uses the dedicated production driver and keeps the
+backend alive while it performs warm-ups and measured repetitions:
+
+```bash
+python3 tests/benchmarks/accp0_real_material.py \
+  --binary build-acc09-cuda/bin/ReciprocalAccP0Benchmark \
+  --build-dir build-acc09-cuda \
+  --output-dir results/benchmarks/accp0 \
+  --warmups 2 --repetitions 5
+```
+
+Use `--quick --skip-cuda` for a CPU-only fixture/oracle smoke run. The full
+campaign creates temporary explicit bcc-Fe L=2,3,4,5 production supercells,
+validates each against the CPU primitive band-folding oracle, performs a
+large-case CUDA memory preflight, and writes `accp0_table.csv` plus
+`accp0_results.json`. The table reports cold process wall time separately from
+backend initialization, first solve, interval-local H2D/solver/D2H metrics,
+steady solve statistics, H(k) CPU assembly, and total steady workload time.
+
+The driver does not change the CUDA solver algorithm. Its reset hook clears
+only interval timing accumulators; the persistent context, handle, stream,
+workspace, and lifetime request counters remain intact.

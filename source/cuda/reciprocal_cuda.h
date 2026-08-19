@@ -52,6 +52,12 @@ void rslmto_reciprocal_cuda_get_timings(
     double *solve_seconds,
     double *d2h_seconds,
     int *calls);
+void rslmto_reciprocal_cuda_reset_timings(
+    rslmto_reciprocal_cuda_context *context);
+int rslmto_reciprocal_cuda_get_memory(
+    rslmto_reciprocal_cuda_context *context,
+    long long *free_bytes,
+    long long *total_bytes);
 int rslmto_reciprocal_cuda_synchronize(
     rslmto_reciprocal_cuda_context *context);
 void rslmto_reciprocal_cuda_destroy(

@@ -302,6 +302,39 @@ contains
       input_hamiltonian_solves = this%input_hamiltonian_solve_requests
    end subroutine cuda_backend_execution_metrics
 
+   !> Reset interval timing counters without discarding lifetime request
+   !> counters or the persistent CUDA context/workspace.
+   module subroutine cuda_backend_reset_timing_metrics(this)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+#ifdef USE_CUDA_RECIPROCAL
+      if (this%initialized) call rslmto_reciprocal_cuda_reset_timings(this%context)
+#endif
+      this%h2d_seconds = 0.0_rp
+      this%gpu_solve_seconds = 0.0_rp
+      this%d2h_seconds = 0.0_rp
+      this%timing_calls = 0
+   end subroutine cuda_backend_reset_timing_metrics
+
+   !> Return a point-in-time device-memory snapshot for benchmark preflight.
+   module subroutine cuda_backend_memory_info(this, free_bytes, total_bytes)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer(c_long_long), intent(out) :: free_bytes, total_bytes
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: status
+      free_bytes = 0_c_long_long
+      total_bytes = 0_c_long_long
+      if (.not. this%initialized) return
+      status = rslmto_reciprocal_cuda_get_memory(this%context, free_bytes, total_bytes)
+      if (status /= 0_c_int) then
+         free_bytes = 0_c_long_long
+         total_bytes = 0_c_long_long
+      end if
+#else
+      free_bytes = 0_c_long_long
+      total_bytes = 0_c_long_long
+#endif
+   end subroutine cuda_backend_memory_info
+
    module subroutine cuda_backend_synchronize(this)
       class(cuda_reciprocal_backend), intent(inout) :: this
 #ifdef USE_CUDA_RECIPROCAL
