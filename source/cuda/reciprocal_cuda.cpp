@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 extern "C" int rslmto_reciprocal_cuda_launch_lehmann(
     cudaStream_t stream,
@@ -31,10 +32,13 @@ struct rslmto_reciprocal_cuda_context {
     int prepared_operator_generation = -1;
     cudaStream_t stream = nullptr;
     cusolverDnHandle_t solver = nullptr;
+    syevjInfo_t jacobi_params = nullptr;
+    int solver_strategy = RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL;
     int workspace_n = 0;
     int workspace_batch = 0;
     int workspace_lwork = 0;
     int workspace_jobz = -1;
+    int workspace_strategy = -1;
     cuDoubleComplex *device_hamiltonians = nullptr;
     double *device_eigenvalues = nullptr;
     cuDoubleComplex *device_work = nullptr;
@@ -75,6 +79,7 @@ static void release_solver_workspace(rslmto_reciprocal_cuda_context *context) {
     context->workspace_batch = 0;
     context->workspace_lwork = 0;
     context->workspace_jobz = -1;
+    context->workspace_strategy = -1;
 }
 
 extern "C" const char *rslmto_reciprocal_cuda_last_error(void) {
@@ -136,6 +141,27 @@ rslmto_reciprocal_cuda_create(int device) {
         delete context;
         return nullptr;
     }
+    solver_status = cusolverDnCreateSyevjInfo(&context->jacobi_params);
+    if (solver_status != CUSOLVER_STATUS_SUCCESS) {
+        set_solver_error("cusolverDnCreateSyevjInfo", solver_status);
+        cusolverDnDestroy(context->solver);
+        cudaStreamDestroy(context->stream);
+        delete context;
+        return nullptr;
+    }
+    /* Keep the documented/default Jacobi tolerance and sweep limit.  The
+     * benchmark needs sorted eigenvalues, which is also cuSOLVER's default;
+     * set it explicitly so the output contract is not toolkit-version
+     * dependent. */
+    solver_status = cusolverDnXsyevjSetSortEig(context->jacobi_params, 1);
+    if (solver_status != CUSOLVER_STATUS_SUCCESS) {
+        set_solver_error("cusolverDnXsyevjSetSortEig", solver_status);
+        cusolverDnDestroySyevjInfo(context->jacobi_params);
+        cusolverDnDestroy(context->solver);
+        cudaStreamDestroy(context->stream);
+        delete context;
+        return nullptr;
+    }
     return context;
 }
 
@@ -156,6 +182,44 @@ extern "C" int rslmto_reciprocal_cuda_prepare_operator(
     return 1;
 }
 
+extern "C" int rslmto_reciprocal_cuda_set_solver_strategy(
+    rslmto_reciprocal_cuda_context *context, int strategy) {
+    if (!context || !context->solver) {
+        set_error("rslmto_reciprocal_cuda_set_solver_strategy: null context");
+        return 1;
+    }
+    if (strategy != RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL &&
+        strategy != RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED) {
+        set_error("rslmto_reciprocal_cuda_set_solver_strategy: unknown strategy");
+        return 1;
+    }
+    if (context->solver_strategy != strategy) {
+        release_solver_workspace(context);
+        context->solver_strategy = strategy;
+    }
+    return 0;
+}
+
+extern "C" int rslmto_reciprocal_cuda_solver_strategy_supported(
+    rslmto_reciprocal_cuda_context *context,
+    int n,
+    int batch_size,
+    int request_eigenvectors) {
+    if (!context || !context->solver || !context->jacobi_params) {
+        set_error("rslmto_reciprocal_cuda_solver_strategy_supported: null context");
+        return -1;
+    }
+    if (n < 1 || batch_size < 1 || (request_eigenvectors != 0 && request_eigenvectors != 1)) {
+        set_error("rslmto_reciprocal_cuda_solver_strategy_supported: invalid dimensions");
+        return -1;
+    }
+    if (context->solver_strategy == RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED && n > 32) {
+        set_error("zheevj_batched unsupported: cuSOLVER requires n <= 32");
+        return 1;
+    }
+    return 0;
+}
+
 extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
     rslmto_reciprocal_cuda_context *context,
     int n,
@@ -173,13 +237,17 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         set_error("rslmto_reciprocal_cuda_solve_zheevd_batch: invalid arguments");
         return 1;
     }
+    const int strategy = context->solver_strategy;
+    const int support = rslmto_reciprocal_cuda_solver_strategy_supported(
+        context, n, batch_size, request_eigenvectors);
+    if (support != 0) return support > 0 ? 2 : 1;
 
     const std::size_t matrix_elements = static_cast<std::size_t>(n) * n;
     const std::size_t matrix_bytes = matrix_elements * batch_size * sizeof(cuDoubleComplex);
     const std::size_t eigenvalue_bytes = static_cast<std::size_t>(n) * batch_size * sizeof(double);
     const int jobz = request_eigenvectors ? 1 : 0;
     if (n != context->workspace_n || batch_size > context->workspace_batch ||
-        jobz != context->workspace_jobz) {
+        jobz != context->workspace_jobz || strategy != context->workspace_strategy) {
         release_solver_workspace(context);
         context->workspace_n = n;
         context->workspace_batch = batch_size;
@@ -196,7 +264,8 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
             release_solver_workspace(context);
             return 1;
         }
-        cuda_status = cudaMalloc(reinterpret_cast<void **>(&context->device_info), sizeof(int));
+        cuda_status = cudaMalloc(reinterpret_cast<void **>(&context->device_info),
+                                  static_cast<std::size_t>(batch_size) * sizeof(int));
         if (cuda_status != cudaSuccess) {
             set_cuda_error("cudaMalloc(device_info)", cuda_status);
             release_solver_workspace(context);
@@ -204,17 +273,29 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         }
 
         int lwork = 0;
-        cusolverStatus_t solver_status = cusolverDnZheevd_bufferSize(
-            context->solver, request_eigenvectors ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR,
-            CUBLAS_FILL_MODE_UPPER, n, context->device_hamiltonians, n,
-            context->device_eigenvalues, &lwork);
+        cusolverStatus_t solver_status;
+        if (strategy == RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED) {
+            solver_status = cusolverDnZheevjBatched_bufferSize(
+                context->solver,
+                request_eigenvectors ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR,
+                CUBLAS_FILL_MODE_UPPER, n, context->device_hamiltonians, n,
+                context->device_eigenvalues, &lwork, context->jacobi_params, batch_size);
+        } else {
+            solver_status = cusolverDnZheevd_bufferSize(
+                context->solver, request_eigenvectors ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR,
+                CUBLAS_FILL_MODE_UPPER, n, context->device_hamiltonians, n,
+                context->device_eigenvalues, &lwork);
+        }
         if (solver_status != CUSOLVER_STATUS_SUCCESS || lwork < 1) {
-            set_solver_error("cusolverDnZheevd_bufferSize", solver_status);
+            set_solver_error(strategy == RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED
+                                 ? "cusolverDnZheevjBatched_bufferSize"
+                                 : "cusolverDnZheevd_bufferSize", solver_status);
             release_solver_workspace(context);
             return 1;
         }
         context->workspace_lwork = lwork;
         context->workspace_jobz = jobz;
+        context->workspace_strategy = strategy;
         cuda_status = cudaMalloc(reinterpret_cast<void **>(&context->device_work),
                                  static_cast<std::size_t>(lwork) * sizeof(cuDoubleComplex));
         if (cuda_status != cudaSuccess) {
@@ -248,18 +329,34 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         cudaEventRecord(solve_start, context->stream);
     }
 
+    cusolverStatus_t solver_status = CUSOLVER_STATUS_SUCCESS;
     auto *device_matrices = context->device_hamiltonians;
-    for (int ibatch = 0; ibatch < batch_size; ++ibatch) {
-        cusolverStatus_t solver_status = cusolverDnZheevd(
+    if (strategy == RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED) {
+        /* This is the one true batched call.  The device buffers are laid out
+         * as [n,n,batch] column-major matrices, exactly the layout described
+         * by cuSOLVER's ZheevjBatched contract. */
+        solver_status = cusolverDnZheevjBatched(
             context->solver,
             request_eigenvectors ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR,
-            CUBLAS_FILL_MODE_UPPER, n, device_matrices + static_cast<std::size_t>(ibatch) * matrix_elements, n,
-            context->device_eigenvalues + static_cast<std::size_t>(ibatch) * n,
-            context->device_work, context->workspace_lwork, context->device_info);
-        if (solver_status != CUSOLVER_STATUS_SUCCESS) {
-            set_solver_error("cusolverDnZheevd", solver_status);
-            return 1;
+            CUBLAS_FILL_MODE_UPPER, n, device_matrices, n,
+            context->device_eigenvalues, context->device_work, context->workspace_lwork,
+            context->device_info, context->jacobi_params, batch_size);
+    } else {
+        for (int ibatch = 0; ibatch < batch_size; ++ibatch) {
+            solver_status = cusolverDnZheevd(
+                context->solver,
+                request_eigenvectors ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR,
+                CUBLAS_FILL_MODE_UPPER, n, device_matrices + static_cast<std::size_t>(ibatch) * matrix_elements, n,
+                context->device_eigenvalues + static_cast<std::size_t>(ibatch) * n,
+                context->device_work, context->workspace_lwork, context->device_info + ibatch);
+            if (solver_status != CUSOLVER_STATUS_SUCCESS) break;
         }
+    }
+    if (solver_status != CUSOLVER_STATUS_SUCCESS) {
+        set_solver_error(strategy == RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED
+                             ? "cusolverDnZheevjBatched"
+                             : "cusolverDnZheevd", solver_status);
+        return 1;
     }
     if (timing_enabled) {
         cudaEventRecord(solve_stop, context->stream);
@@ -280,6 +377,14 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
             return 1;
         }
     }
+    std::vector<int> host_info(static_cast<std::size_t>(batch_size), 0);
+    cuda_status = cudaMemcpyAsync(host_info.data(), context->device_info,
+                                  static_cast<std::size_t>(batch_size) * sizeof(int),
+                                  cudaMemcpyDeviceToHost, context->stream);
+    if (cuda_status != cudaSuccess) {
+        set_cuda_error("cudaMemcpyAsync(D2H solver info)", cuda_status);
+        return 1;
+    }
     if (timing_enabled) cudaEventRecord(d2h_stop, context->stream);
     cuda_status = cudaStreamSynchronize(context->stream);
     if (cuda_status != cudaSuccess) {
@@ -287,15 +392,16 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         return 1;
     }
 
-    int host_info = 0;
-    cuda_status = cudaMemcpy(&host_info, context->device_info, sizeof(host_info), cudaMemcpyDeviceToHost);
-    if (cuda_status != cudaSuccess) {
-        set_cuda_error("cudaMemcpy(D2H solver info)", cuda_status);
-        return 1;
-    }
-    if (host_info != 0) {
-        g_reciprocal_cuda_error = "cusolverDnZheevd: solver info " + std::to_string(host_info);
-        return 1;
+    for (int ibatch = 0; ibatch < batch_size; ++ibatch) {
+        if (host_info[static_cast<std::size_t>(ibatch)] != 0) {
+            g_reciprocal_cuda_error =
+                std::string(strategy == RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED
+                                ? "cusolverDnZheevjBatched"
+                                : "cusolverDnZheevd") +
+                ": solver info[" + std::to_string(ibatch) + "]=" +
+                std::to_string(host_info[static_cast<std::size_t>(ibatch)]);
+            return 1;
+        }
     }
     if (timing_enabled) {
         float h2d_ms = 0.0f, solve_ms = 0.0f, d2h_ms = 0.0f;
@@ -417,6 +523,9 @@ extern "C" void rslmto_reciprocal_cuda_destroy(
     }
     cudaSetDevice(context->device);
     release_solver_workspace(context);
+    if (context->jacobi_params) {
+        cusolverDnDestroySyevjInfo(context->jacobi_params);
+    }
     if (context->solver) {
         cusolverDnDestroy(context->solver);
     }

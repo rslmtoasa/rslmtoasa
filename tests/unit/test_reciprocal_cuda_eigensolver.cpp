@@ -173,6 +173,15 @@ bool solve_values_only_and_check(rslmto_reciprocal_cuda_context *context,
     return true;
 }
 
+bool select_strategy(rslmto_reciprocal_cuda_context *context, int strategy) {
+    if (rslmto_reciprocal_cuda_set_solver_strategy(context, strategy) != 0) {
+        std::fprintf(stderr, "FAIL: selecting CUDA solver strategy %d: %s\n",
+                     strategy, rslmto_reciprocal_cuda_last_error());
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -222,6 +231,29 @@ int main() {
     std::vector<double> h36(2 * 36 * 36, 0.0);
     for (int i = 0; i < 36; ++i) set_real(h36, 36, 0, i, i, -4.0 + 0.125 * i);
     passed = solve_and_check(context, 36, 1, h36) && passed;
+
+    /* ACC-P1: exercise one true same-size batch call for every supported
+     * small real/complex layout used by the reciprocal path. */
+    passed = select_strategy(context, RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED) && passed;
+    passed = solve_and_check(context, 2, 3, h2) && passed;
+    passed = solve_values_only_and_check(context, h2, 2, 3) && passed;
+    passed = solve_and_check(context, 4, 1, h4) && passed;
+    passed = solve_and_check(context, 8, 2, h8) && passed;
+    passed = solve_and_check(context, 18, 1, h18) && passed;
+    if (rslmto_reciprocal_cuda_solver_strategy_supported(context, 36, 1, 1) != 1) {
+        std::fprintf(stderr, "FAIL: ZheevjBatched n=36 was not reported unsupported\n");
+        passed = false;
+    }
+    std::vector<double> unsupported_w(36, 0.0);
+    std::vector<double> unsupported_v(h36.size(), 0.0);
+    if (rslmto_reciprocal_cuda_solve_zheevd_batch(
+            context, 36, 1, h36.data(), unsupported_w.data(), unsupported_v.data(), 1) != 2) {
+        std::fprintf(stderr, "FAIL: unsupported ZheevjBatched request did not fail explicitly\n");
+        passed = false;
+    }
+    /* Restore the reference strategy explicitly; no automatic threshold or
+     * hidden CPU fallback is permitted by ACC-P1. */
+    passed = select_strategy(context, RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL) && passed;
 
     rslmto_reciprocal_cuda_destroy(context);
     if (!passed) return 1;

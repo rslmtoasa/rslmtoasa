@@ -118,9 +118,31 @@ large-case CUDA memory preflight, and writes `accp0_table.csv` plus
 backend initialization, first solve, interval-local H2D/solver/D2H metrics,
 steady solve statistics, H(k) CPU assembly, and total steady workload time.
 
-The driver does not change the CUDA solver algorithm. Its reset hook clears
-only interval timing accumulators; the persistent context, handle, stream,
-workspace, and lifetime request counters remain intact.
+The default ACC-P0 invocation selects `zheevd_serial`; its reset hook clears
+only interval timing accumulators. The persistent context, handle, stream,
+workspace, and lifetime request counters remain intact. ACC-P1 adds the
+explicit strategy option described below.
+
+## ACC-P1 selectable CUDA eigensolver strategies
+
+The same persistent driver now accepts `--solver-strategy
+zheevd_serial|zheevj_batched` for CUDA. The first retains the original
+one-matrix `cusolverDnZheevd` reference path; the second makes one contiguous
+`cusolverDnZheevjBatched` call for each same-size tile. The Jacobi strategy is
+reported as explicitly unsupported for matrices larger than the cuSOLVER
+batched API limit (`n > 32`); it never falls back to CPU or serial Zheevd.
+
+The ACC-P1 campaign includes both strategies across the real bccFe L=1…5
+supercell set, plus Si and primitive Fe, and emits an `ACCP1_VALIDATION` record
+for residual, orthogonality, eigenvalue, and degenerate-projector checks. A
+focused five-repetition scaling run is:
+
+```bash
+python3 tests/benchmarks/accp0_real_material.py \
+  --binary build-acc09-cuda/bin/ReciprocalAccP0Benchmark \
+  --build-dir build-acc09-cuda --output-dir /tmp/accp1-supercell \
+  --meshes 1 --tiles 1 --warmups 1 --repetitions 5
+```
 
 ## ACC-P0 supplied bcc-Fe supercells
 

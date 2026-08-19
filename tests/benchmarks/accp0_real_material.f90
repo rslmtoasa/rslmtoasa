@@ -22,7 +22,7 @@ program accp0_real_material
    use logger_mod, only: g_logger
    implicit none
 
-   character(len=64) :: mode, backend, fixture, workload
+   character(len=64) :: mode, backend, solver_strategy, fixture, workload
    character(len=128) :: source_name
    character(len=512) :: input_file, dump_file
    integer :: mesh(3), tile_size, eigenvectors, warmups, repetitions, supercell_l
@@ -30,6 +30,7 @@ program accp0_real_material
 
    mode = 'persistent'
    backend = 'lapack'
+   solver_strategy = 'zheevd_serial'
    fixture = 'unknown'
    source_name = 'production'
    workload = 'crossover'
@@ -42,16 +43,19 @@ program accp0_real_material
    repetitions = 5
    supercell_l = 1
 
-   call parse_arguments(mode, backend, fixture, source_name, workload, input_file, dump_file, mesh, tile_size, &
+   call parse_arguments(mode, backend, solver_strategy, fixture, source_name, workload, input_file, dump_file, mesh, tile_size, &
       eigenvectors, warmups, repetitions, supercell_l)
    if (any(mesh < 1) .or. tile_size < 1 .or. eigenvectors < 0 .or. eigenvectors > 1 .or. warmups < 0 .or. repetitions < 1) then
       error stop 'ACCP0: invalid benchmark dimensions or repetition policy'
    end if
-   if (trim(mode) /= 'persistent' .and. trim(mode) /= 'oracle' .and. trim(mode) /= 'preflight') then
-      error stop 'ACCP0: mode must be persistent, oracle, or preflight'
+   if (trim(mode) /= 'persistent' .and. trim(mode) /= 'oracle' .and. trim(mode) /= 'preflight' .and. trim(mode) /= 'validate') then
+      error stop 'ACCP0: mode must be persistent, oracle, preflight, or validate'
    end if
    if (trim(backend) /= 'lapack' .and. trim(backend) /= 'cuda') then
       error stop 'ACCP0: backend must be lapack or cuda'
+   end if
+   if (trim(backend) == 'cuda' .and. trim(solver_strategy) == 'lapack') then
+      error stop 'ACCP1: CUDA backend requires zheevd_serial or zheevj_batched'
    end if
    call g_parallel_context%restore_to_default()
    g_parallel_context = parallel_context()
@@ -62,17 +66,19 @@ program accp0_real_material
    if (trim(mode) == 'oracle') then
       call run_oracle(trim(input_file), trim(dump_file), trim(fixture), trim(backend), mesh, supercell_l)
    else if (trim(mode) == 'preflight') then
-      call run_preflight(trim(input_file), trim(fixture), trim(backend), mesh, tile_size, eigenvectors == 1, supercell_l)
+      call run_preflight(trim(input_file), trim(fixture), trim(backend), trim(solver_strategy), mesh, tile_size, eigenvectors == 1, supercell_l)
+   else if (trim(mode) == 'validate') then
+      call run_validation(trim(input_file), trim(fixture), trim(backend), trim(solver_strategy), mesh, tile_size, supercell_l)
    else
-      call run_persistent(trim(input_file), trim(fixture), trim(source_name), trim(workload), trim(backend), mesh, &
+      call run_persistent(trim(input_file), trim(fixture), trim(source_name), trim(workload), trim(backend), trim(solver_strategy), mesh, &
          tile_size, eigenvectors == 1, warmups, repetitions, supercell_l)
    end if
 
 contains
 
-   subroutine parse_arguments(mode, backend, fixture, source_name, workload, input_file, dump_file, mesh, tile_size, &
+   subroutine parse_arguments(mode, backend, solver_strategy, fixture, source_name, workload, input_file, dump_file, mesh, tile_size, &
                               eigenvectors, warmups, repetitions, supercell_l)
-      character(len=*), intent(inout) :: mode, backend, fixture, source_name, workload, input_file, dump_file
+      character(len=*), intent(inout) :: mode, backend, solver_strategy, fixture, source_name, workload, input_file, dump_file
       integer, intent(inout) :: mesh(3), tile_size, eigenvectors, warmups, repetitions, supercell_l
       integer :: i, narg
       character(len=128) :: key, value
@@ -86,6 +92,7 @@ contains
          select case (trim(key))
          case ('--mode'); mode = trim(value)
          case ('--backend'); backend = trim(value)
+         case ('--solver-strategy'); solver_strategy = trim(value)
          case ('--fixture'); fixture = trim(value)
          case ('--source'); source_name = trim(value)
          case ('--workload'); workload = trim(value)
@@ -244,9 +251,9 @@ contains
          ' actual_unique_nk='//trim(int_token(unique_nk))
    end subroutine run_oracle
 
-   subroutine run_persistent(input_file, fixture, source_name, workload, backend_name, mesh, tile_size, want_vectors, &
+   subroutine run_persistent(input_file, fixture, source_name, workload, backend_name, solver_strategy, mesh, tile_size, want_vectors, &
                              warmups, repetitions, supercell_l)
-      character(len=*), intent(in) :: input_file, fixture, source_name, workload, backend_name
+      character(len=*), intent(in) :: input_file, fixture, source_name, workload, backend_name, solver_strategy
       integer, intent(in) :: mesh(3), tile_size, warmups, repetitions, supercell_l
       logical, intent(in) :: want_vectors
       type(reciprocal) :: recip
@@ -260,7 +267,9 @@ contains
       real(rp) :: backend_init, prepare_seconds, first_solve, hk_cpu, total_median, solve_median
       real(rp) :: steady_min, steady_max, steady_spread, h2d, solver, d2h, post_seconds
       real(rp) :: memory_estimate, free_memory, total_memory
-      integer :: status, i, nk, unique_nk, nmat
+      integer :: status, i, nk, unique_nk, nmat, strategy_status
+      logical :: supported
+      character(len=128) :: unsupported_reason
       integer(c_long_long) :: free_bytes, total_bytes
       character(len=2048) :: line
 
@@ -273,6 +282,8 @@ contains
       call recip%make_execution_backend(backend_name)
       call wall_clock(finish)
       backend_init = finish - start
+      call configure_solver_strategy(recip, backend_name, solver_strategy, strategy_status)
+      if (strategy_status /= 0) error stop 'ACCP1: failed to configure CUDA solver strategy'
 
       call wall_clock(start)
       call recip%execution_backend%prepare_operator(ham%operator_generation)
@@ -285,6 +296,49 @@ contains
       memory_estimate = estimate_memory_mib(nmat, tile_size, want_vectors)
       if (trim(backend_name) == 'cuda' .and. total_memory > 0.0_rp .and. free_memory < 2.0_rp * memory_estimate) then
          error stop 'ACCP0: CUDA memory preflight rejected this workload'
+      end if
+      call backend_solver_supported(recip, nmat, tile_size, want_vectors, supported, unsupported_reason)
+      if (.not. supported) then
+         line = 'ACCP0_DIMENSIONS'
+         call append_token(line, 'fixture='//trim(fixture))
+         call append_token(line, 'source='//trim(source_name))
+         call append_token(line, 'workload='//trim(workload))
+         call append_token(line, 'backend='//trim(backend_name))
+         call append_token(line, 'solver_strategy='//trim(solver_strategy))
+         call append_token(line, 'L='//trim(int_token(supercell_l)))
+         call append_token(line, 'natom='//trim(int_token(lat%nrec)))
+         call append_token(line, 'nmat='//trim(int_token(nmat)))
+         call append_token(line, 'nominal_mesh='//trim(mesh_token(mesh)))
+         call append_token(line, 'actual_unique_nk='//trim(int_token(unique_nk)))
+         call append_token(line, 'tile='//trim(int_token(tile_size)))
+         call append_token(line, 'eigenvectors='//trim(int_token(merge(1, 0, want_vectors))))
+         write (*, '(a)') trim(line)
+         line = 'ACCP0_TIMING'
+         call append_token(line, 'fixture='//trim(fixture))
+         call append_token(line, 'backend='//trim(backend_name))
+         call append_token(line, 'solver_strategy='//trim(solver_strategy))
+         call append_token(line, 'support_status=unsupported')
+         call append_token(line, 'unsupported_reason='//trim(underscored(unsupported_reason)))
+         call append_real(line, 'cold_process_wall_s', 0.0_rp)
+         call append_real(line, 'cuda_context_backend_init_s', backend_init)
+         call append_real(line, 'operator_prepare_s', 0.0_rp)
+         call append_real(line, 'first_solve_s', 0.0_rp)
+         call append_real(line, 'steady_solve_median_s', 0.0_rp)
+         call append_real(line, 'steady_solve_min_s', 0.0_rp)
+         call append_real(line, 'steady_solve_spread_s', 0.0_rp)
+         call append_token(line, 'metric_repetitions=0')
+         call append_real(line, 'Hk_CPU_s', 0.0_rp)
+         call append_real(line, 'H2D_s', 0.0_rp)
+         call append_real(line, 'solver_s', 0.0_rp)
+         call append_real(line, 'D2H_s', 0.0_rp)
+         call append_real(line, 'post_s', 0.0_rp)
+         call append_real(line, 'total_steady_s', 0.0_rp)
+         call append_real(line, 'memory_estimate_mib', memory_estimate)
+         call append_real(line, 'memory_free_before_mib', free_memory)
+         call append_real(line, 'memory_total_mib', total_memory)
+         write (*, '(a)') trim(line)
+         write (*, '(a)') 'RESULT: UNSUPPORTED'
+         return
       end if
 
       allocate(hamiltonians(nmat, nmat, nk), steady_times(repetitions), solve_times(repetitions))
@@ -341,6 +395,7 @@ contains
       call append_token(line, 'source='//trim(source_name))
       call append_token(line, 'workload='//trim(workload))
       call append_token(line, 'backend='//trim(backend_name))
+      call append_token(line, 'solver_strategy='//trim(solver_strategy))
       call append_token(line, 'L='//trim(int_token(supercell_l)))
       call append_token(line, 'natom='//trim(int_token(lat%nrec)))
       call append_token(line, 'nmat='//trim(int_token(nmat)))
@@ -353,6 +408,8 @@ contains
       line = 'ACCP0_TIMING'
       call append_token(line, 'fixture='//trim(fixture))
       call append_token(line, 'backend='//trim(backend_name))
+      call append_token(line, 'solver_strategy='//trim(solver_strategy))
+      call append_token(line, 'support_status=supported')
       call append_real(line, 'cold_process_wall_s', 0.0_rp)
       call append_real(line, 'cuda_context_backend_init_s', backend_init)
       call append_real(line, 'operator_prepare_s', prepare_seconds)
@@ -375,6 +432,188 @@ contains
       write (*, '(a)') trim(line)
       write (*, '(a)') 'RESULT: PASS'
    end subroutine run_persistent
+
+   ! ACC-P1 real-material correctness gate.  The CPU LAPACK result is kept as
+   ! the oracle; CUDA is checked for eigenvalues, residuals, orthogonality,
+   ! and projectors of degenerate eigenspaces.  Raw eigenvector phases are
+   ! intentionally never compared.
+   subroutine run_validation(input_file, fixture, backend_name, solver_strategy, mesh, tile_size, supercell_l)
+      character(len=*), intent(in) :: input_file, fixture, backend_name, solver_strategy
+      integer, intent(in) :: mesh(3), tile_size, supercell_l
+      type(reciprocal) :: recip
+      type(hamiltonian), target :: ham
+      type(lattice), target :: lat
+      type(charge), target :: chg
+      type(control), target :: ctl
+      real(rp), allocatable :: points(:, :), cpu_values(:, :), cuda_values(:, :)
+      complex(rp), allocatable :: hamiltonians(:, :, :), cpu_vectors(:, :, :), cuda_vectors(:, :, :)
+      integer :: nmat, nk, status, strategy_status
+      logical :: supported
+      character(len=128) :: reason
+      real(rp) :: eigenvalue_error, residual_error, orthogonality_error, projector_error
+      character(len=2048) :: line
+
+      if (trim(backend_name) /= 'cuda') error stop 'ACCP1: validation requires the CUDA backend'
+      call setup_production(input_file, recip, ham, lat, chg, ctl)
+      call make_mesh(mesh, points)
+      nk = size(points, 2)
+      nmat = nb * lat%nrec
+      allocate(hamiltonians(nmat, nmat, nk))
+      call assemble_all(recip, points, hamiltonians)
+
+      call recip%make_execution_backend('lapack')
+      call recip%execution_backend%prepare_operator(ham%operator_generation)
+      call solve_tiles_capture(recip, hamiltonians, tile_size, cpu_values, cpu_vectors, status)
+      if (status /= 0) error stop 'ACC-P1: CPU validation eigensolution failed'
+
+      call recip%make_execution_backend('cuda')
+      call configure_solver_strategy(recip, backend_name, solver_strategy, strategy_status)
+      if (strategy_status /= 0) error stop 'ACC-P1: failed to configure validation solver strategy'
+      call backend_solver_supported(recip, nmat, tile_size, .true., supported, reason)
+      if (.not. supported) then
+         line = 'ACCP1_VALIDATION'
+         call append_token(line, 'fixture='//trim(fixture))
+         call append_token(line, 'L='//trim(int_token(supercell_l)))
+         call append_token(line, 'solver_strategy='//trim(solver_strategy))
+         call append_token(line, 'nmat='//trim(int_token(nmat)))
+         call append_token(line, 'nk='//trim(int_token(nk)))
+         call append_token(line, 'status=UNSUPPORTED')
+         call append_token(line, 'reason='//trim(underscored(reason)))
+         write (*, '(a)') trim(line)
+         return
+      end if
+      call recip%execution_backend%prepare_operator(ham%operator_generation)
+      call solve_tiles_capture(recip, hamiltonians, tile_size, cuda_values, cuda_vectors, status)
+      if (status /= 0) error stop 'ACC-P1: CUDA validation eigensolution failed'
+      call compare_eigenpairs(hamiltonians, cpu_values, cpu_vectors, cuda_values, cuda_vectors, &
+         eigenvalue_error, residual_error, orthogonality_error, projector_error)
+
+      line = 'ACCP1_VALIDATION'
+      call append_token(line, 'fixture='//trim(fixture))
+      call append_token(line, 'L='//trim(int_token(supercell_l)))
+      call append_token(line, 'solver_strategy='//trim(solver_strategy))
+      call append_token(line, 'nmat='//trim(int_token(nmat)))
+      call append_token(line, 'nk='//trim(int_token(nk)))
+      call append_real(line, 'eigenvalue_max_abs', eigenvalue_error)
+      call append_real(line, 'residual_max', residual_error)
+      call append_real(line, 'orthogonality_max', orthogonality_error)
+      call append_real(line, 'degenerate_projector_max', projector_error)
+      if (eigenvalue_error <= 1.0e-8_rp .and. residual_error <= 1.0e-8_rp .and. &
+          orthogonality_error <= 1.0e-8_rp .and. projector_error <= 1.0e-7_rp) then
+         call append_token(line, 'status=PASS')
+      else
+         call append_token(line, 'status=FAIL')
+      end if
+      write (*, '(a)') trim(line)
+      if (eigenvalue_error > 1.0e-8_rp .or. residual_error > 1.0e-8_rp .or. &
+          orthogonality_error > 1.0e-8_rp .or. projector_error > 1.0e-7_rp) then
+         error stop 'ACC-P1: real-material CUDA numerical validation failed'
+      end if
+   end subroutine run_validation
+
+   subroutine solve_tiles_capture(recip, hamiltonians, tile_size, eigenvalues, eigenvectors, status)
+      type(reciprocal), intent(inout) :: recip
+      complex(rp), intent(in) :: hamiltonians(:, :, :)
+      integer, intent(in) :: tile_size
+      real(rp), allocatable, intent(out) :: eigenvalues(:, :)
+      complex(rp), allocatable, intent(out) :: eigenvectors(:, :, :)
+      integer, intent(out) :: status
+      type(reciprocal_execution_request) :: request
+      type(reciprocal_execution_result) :: result
+      integer :: nmat, nk, first, last, length
+
+      nmat = size(hamiltonians, 1)
+      nk = size(hamiltonians, 3)
+      allocate(eigenvalues(nmat, nk), eigenvectors(nmat, nmat, nk))
+      status = 0
+      do first = 1, nk, tile_size
+         last = min(nk, first + tile_size - 1)
+         length = last - first + 1
+         request%assemble_hamiltonian = .false.
+         request%assemble_overlap = .false.
+         request%solve_eigensystem = .true.
+         request%generalized = .false.
+         request%request_eigenvectors = .true.
+         request%operator_generation = 1
+         if (allocated(request%input_hamiltonian)) deallocate(request%input_hamiltonian)
+         allocate(request%input_hamiltonian(nmat, nmat, length), source=hamiltonians(:, :, first:last))
+         call recip%execution_backend%execute_batch(request, result)
+         if (.not. result%eigenvalues_valid .or. .not. result%eigenvectors_valid .or. result%local_point_count /= length) then
+            status = 1
+            return
+         end if
+         eigenvalues(:, first:last) = result%eigenvalues
+         eigenvectors(:, :, first:last) = result%eigenvectors
+         if (allocated(result%eigenvalues)) deallocate(result%eigenvalues)
+         if (allocated(result%eigenvectors)) deallocate(result%eigenvectors)
+      end do
+      call recip%execution_backend%synchronize()
+   end subroutine solve_tiles_capture
+
+   subroutine compare_eigenpairs(hamiltonians, cpu_values, cpu_vectors, cuda_values, cuda_vectors, &
+                                 eigenvalue_error, residual_error, orthogonality_error, projector_error)
+      complex(rp), intent(in) :: hamiltonians(:, :, :), cpu_vectors(:, :, :), cuda_vectors(:, :, :)
+      real(rp), intent(in) :: cpu_values(:, :), cuda_values(:, :)
+      real(rp), intent(out) :: eigenvalue_error, residual_error, orthogonality_error, projector_error
+      integer :: nmat, nk, ik, row, column, inner, group_start, group_end, group_size
+      real(rp) :: hnorm, residual, group_tolerance
+    complex(rp) :: left_value, projector_cpu, projector_cuda
+
+      nmat = size(cpu_values, 1)
+      nk = size(cpu_values, 2)
+      eigenvalue_error = maxval(abs(cpu_values - cuda_values))
+      residual_error = 0.0_rp
+      orthogonality_error = 0.0_rp
+      projector_error = 0.0_rp
+      group_tolerance = 1.0e-8_rp
+      do ik = 1, nk
+         hnorm = max(1.0_rp, sqrt(sum(abs(hamiltonians(:, :, ik))**2)))
+         do column = 1, nmat
+            residual = 0.0_rp
+            do row = 1, nmat
+               left_value = (0.0_rp, 0.0_rp)
+               do inner = 1, nmat
+                  left_value = left_value + hamiltonians(row, inner, ik) * cuda_vectors(inner, column, ik)
+               end do
+               left_value = left_value - cuda_values(column, ik) * cuda_vectors(row, column, ik)
+               residual = residual + abs(left_value)**2
+            end do
+            residual_error = max(residual_error, sqrt(residual) / hnorm)
+         end do
+         do row = 1, nmat
+            do column = 1, nmat
+               left_value = (0.0_rp, 0.0_rp)
+               do inner = 1, nmat
+                  left_value = left_value + conjg(cuda_vectors(inner, row, ik)) * cuda_vectors(inner, column, ik)
+               end do
+               if (row == column) left_value = left_value - (1.0_rp, 0.0_rp)
+               orthogonality_error = max(orthogonality_error, abs(left_value))
+            end do
+         end do
+         group_start = 1
+         do while (group_start <= nmat)
+            group_end = group_start
+            do while (group_end < nmat .and. abs(cpu_values(group_end + 1, ik) - cpu_values(group_end, ik)) <= group_tolerance)
+               group_end = group_end + 1
+            end do
+            group_size = group_end - group_start + 1
+            if (group_size > 1) then
+               do row = 1, nmat
+                  do column = 1, nmat
+                     projector_cpu = (0.0_rp, 0.0_rp)
+                     projector_cuda = (0.0_rp, 0.0_rp)
+                     do inner = group_start, group_end
+                        projector_cpu = projector_cpu + cpu_vectors(row, inner, ik) * conjg(cpu_vectors(column, inner, ik))
+                        projector_cuda = projector_cuda + cuda_vectors(row, inner, ik) * conjg(cuda_vectors(column, inner, ik))
+                     end do
+                     projector_error = max(projector_error, abs(projector_cpu - projector_cuda))
+                  end do
+               end do
+            end if
+            group_start = group_end + 1
+         end do
+      end do
+   end subroutine compare_eigenpairs
 
    integer function count_unique_points(recip, points) result(unique_count)
       type(reciprocal), intent(in) :: recip
@@ -403,8 +642,8 @@ contains
       deallocate(folded)
    end function count_unique_points
 
-   subroutine run_preflight(input_file, fixture, backend_name, mesh, tile_size, want_vectors, supercell_l)
-      character(len=*), intent(in) :: input_file, fixture, backend_name
+   subroutine run_preflight(input_file, fixture, backend_name, solver_strategy, mesh, tile_size, want_vectors, supercell_l)
+      character(len=*), intent(in) :: input_file, fixture, backend_name, solver_strategy
       integer, intent(in) :: mesh(3), tile_size, supercell_l
       logical, intent(in) :: want_vectors
       type(reciprocal) :: recip
@@ -415,18 +654,67 @@ contains
       integer(c_long_long) :: free_bytes, total_bytes
       real(rp) :: free_mib, total_mib
       integer :: nmat
+      integer :: strategy_status
+      logical :: supported
+      character(len=128) :: reason, support_word
 
       call setup_production(input_file, recip, ham, lat, chg, ctl)
       nmat = nb * lat%nrec
       call recip%make_execution_backend(backend_name)
+      call configure_solver_strategy(recip, backend_name, solver_strategy, strategy_status)
+      if (strategy_status /= 0) error stop 'ACCP1: failed to configure CUDA solver strategy'
+      call backend_solver_supported(recip, nmat, tile_size, want_vectors, supported, reason)
+      if (supported) then
+         support_word = 'supported'
+      else
+         support_word = 'unsupported'
+      end if
       call backend_memory(recip, free_bytes, total_bytes)
       free_mib = real(free_bytes, rp) / (1024.0_rp * 1024.0_rp)
       total_mib = real(total_bytes, rp) / (1024.0_rp * 1024.0_rp)
       write (*, '(a)') 'ACCP0_PREFLIGHT fixture='//trim(fixture)//' backend='//trim(backend_name)// &
+         ' solver_strategy='//trim(solver_strategy)//' support_status='//trim(support_word)// &
          ' L='//trim(int_token(supercell_l))//' nmat='//trim(int_token(nmat))// &
-         ' tile='//trim(int_token(tile_size))//' memory_estimate_mib='//trim(real_token(estimate_memory_mib(nmat, tile_size, want_vectors)))// &
+         ' tile='//trim(int_token(tile_size))//' reason='//trim(underscored(reason))//' memory_estimate_mib='//trim(real_token(estimate_memory_mib(nmat, tile_size, want_vectors)))// &
          ' free_mib='//trim(real_token(free_mib))//' total_mib='//trim(real_token(total_mib))
    end subroutine run_preflight
+
+   subroutine configure_solver_strategy(recip, backend_name, solver_strategy, status)
+      type(reciprocal), intent(inout) :: recip
+      character(len=*), intent(in) :: backend_name, solver_strategy
+      integer, intent(out) :: status
+
+      status = 0
+      if (trim(backend_name) /= 'cuda') return
+      if (.not. allocated(recip%execution_backend)) then
+         status = 1
+         return
+      end if
+      select type (backend => recip%execution_backend)
+      type is (cuda_reciprocal_backend)
+         status = backend%set_solver_strategy(solver_strategy)
+      class default
+         status = 1
+      end select
+   end subroutine configure_solver_strategy
+
+   subroutine backend_solver_supported(recip, nmat, batch_size, want_vectors, supported, reason)
+      type(reciprocal), intent(in) :: recip
+      integer, intent(in) :: nmat, batch_size
+      logical, intent(in) :: want_vectors
+      logical, intent(out) :: supported
+      character(len=*), intent(out) :: reason
+
+      supported = .true.
+      reason = 'supported'
+      if (.not. allocated(recip%execution_backend)) return
+      select type (backend => recip%execution_backend)
+      type is (cuda_reciprocal_backend)
+         call backend%solver_strategy_supported(nmat, batch_size, want_vectors, supported, reason)
+      class default
+         continue
+      end select
+   end subroutine backend_solver_supported
 
    subroutine reset_backend_metrics(recip)
       type(reciprocal), intent(inout) :: recip
@@ -530,6 +818,19 @@ contains
       character(len=64) :: token
       write(token, '(i0)') value
    end function int_token
+
+   function underscored(value) result(token)
+      character(len=*), intent(in) :: value
+      character(len=128) :: token
+      integer :: i, n
+
+      token = ' '
+      n = min(len(token), len_trim(value))
+      if (n > 0) token(:n) = value(:n)
+      do i = 1, n
+         if (token(i:i) == ' ') token(i:i) = '_'
+      end do
+   end function underscored
 
    function real_token(value) result(token)
       real(rp), intent(in) :: value

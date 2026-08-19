@@ -870,24 +870,59 @@ Keep strategy explicitly selectable for measurement.
 
 ## Checklist
 
-- [ ] Existing serial GPU solver behavior confirmed
-- [ ] narrow solver-strategy selection added
-- [ ] true `ZheevjBatched` path implemented
-- [ ] matrices passed as one contiguous batch
-- [ ] batched workspace queried/reused
-- [ ] Jacobi parameter object reused
-- [ ] per-matrix device info implemented
-- [ ] no silent CPU fallback exists
-- [ ] Si real-matrix residuals pass
-- [ ] primitive Fe residuals pass
-- [ ] Fe 2^3 tested
-- [ ] Fe 3^3 tested where feasible
-- [ ] eigenvalue agreement passes
-- [ ] orthogonality passes
-- [ ] degenerate subspaces compared correctly
-- [ ] CPU/Zheevd/Zheevj performance compared
-- [ ] no final automatic threshold hard-coded
-- [ ] benchmark report records non-convergence/unsupported cases honestly
+- [x] Existing serial GPU solver behavior confirmed
+- [x] narrow solver-strategy selection added
+- [x] true `ZheevjBatched` path implemented
+- [x] matrices passed as one contiguous batch
+- [x] batched workspace queried/reused
+- [x] Jacobi parameter object reused
+- [x] per-matrix device info implemented
+- [x] no silent CPU fallback exists
+- [x] Si real-matrix residuals pass
+- [x] primitive Fe residuals pass
+- [x] Fe 2^3 tested
+- [x] Fe 3^3 tested where feasible
+- [x] eigenvalue agreement passes
+- [x] orthogonality passes
+- [x] degenerate subspaces compared correctly
+- [x] CPU/Zheevd/Zheevj performance compared
+- [x] no final automatic threshold hard-coded
+- [x] benchmark report records non-convergence/unsupported cases honestly
+
+ACC-P1 evidence on the CUDA host (CUDA 13.3, NVIDIA RTX A4000, five measured
+repetitions inside one persistent process) is recorded by the expanded
+`tests/benchmarks/accp0_real_material.py` campaign. The focused all-supercell
+run covered both crossover and matched-density labels for Si and bccFe
+L=1,2,3,4,5, with actual dimensions 16/18/144/486/1152/2250 as reported by
+the production state. A quick Nk=1,2 run also covered values-only and
+eigenvector requests.
+
+Representative matched-density values-only rows (`total_steady_s`, including
+the production H(k) assembly) were:
+
+| fixture | nmat | CPU LAPACK | CUDA `zheevd_serial` | CUDA `zheevj_batched` |
+|---|---:|---:|---:|---:|
+| Si primitive | 16 | 2.44e-5 | 5.88e-4 | 3.70e-4 |
+| bccFe 1^3 | 18 | 3.49e-5 | 6.44e-4 | 3.21e-4 |
+| bccFe 2^3 | 144 | 1.83e-3 | 6.82e-3 | unsupported (`n > 32`) |
+| bccFe 3^3 | 486 | 1.93e-2 | 2.60e-2 | unsupported (`n > 32`) |
+| bccFe 4^3 | 1152 | 1.62e-1 | 1.02e-1 | unsupported (`n > 32`) |
+| bccFe 5^3 | 2250 | 1.30e0 | 4.82e-1 | unsupported (`n > 32`) |
+
+The batched path is therefore a real one-call strategy, but the documented
+cuSOLVER API limit means it applies only to the small-matrix region here. It
+improves the primitive Fe steady total over serial Zheevd by about 2.0x, yet
+CPU remains about 9x faster; the larger GPU wins are from the retained serial
+Zheevd path. No ACC-P1 result justifies automatic dispatch or making CUDA the
+default.
+
+The real-material correctness gate passed for Si n=16, primitive Fe n=18, and
+the serial CUDA Fe 2^3 and Fe 3^3 cases. Maximum observed values were
+`|delta eigenvalue|=4.2e-15`, residual `4.9e-14`, orthogonality `4.5e-15`,
+and degenerate-projector error `1.2e-13`. The batched Fe 2^3/3^3 validation
+records explicitly report unsupported rather than falling back. CPU band
+folding for every bccFe supercell passed, with maximum sorted-multiset error
+`5.2e-13`.
 
 **Commit message:** `Add true batched CUDA Hermitian eigensolver`
 

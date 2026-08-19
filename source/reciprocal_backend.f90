@@ -72,6 +72,7 @@ contains
       this%input_hamiltonian_solve_requests = 0
       this%operator_prepare_requests = 0
       this%operator_prepare_reuses = 0
+      this%solver_strategy = 'zheevd_serial'
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp
@@ -171,6 +172,79 @@ contains
       call g_logger%error('reciprocal CUDA backend: operator preparation is unavailable in this build.', __FILE__, __LINE__)
 #endif
    end subroutine cuda_backend_prepare_operator
+
+   module function cuda_backend_set_solver_strategy(this, strategy) result(status)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      character(len=*), intent(in) :: strategy
+      character(len=32) :: normalized
+      integer(c_int) :: c_strategy
+      integer :: status
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: c_status
+#endif
+
+      status = 1
+      normalized = trim(lower(strategy))
+      if (.not. this%initialized) then
+         call g_logger%error('reciprocal CUDA backend: solver strategy requested before initialization.', __FILE__, __LINE__)
+         return
+      end if
+      select case (normalized)
+      case ('zheevd_serial', 'zheevd', 'serial')
+         normalized = 'zheevd_serial'
+         c_strategy = 0_c_int
+      case ('zheevj_batched', 'zheevj', 'batched')
+         normalized = 'zheevj_batched'
+         c_strategy = 1_c_int
+      case default
+         call g_logger%error('reciprocal CUDA backend: unknown solver strategy '//trim(strategy)//'.', __FILE__, __LINE__)
+         return
+      end select
+#ifdef USE_CUDA_RECIPROCAL
+      c_status = rslmto_reciprocal_cuda_set_solver_strategy(this%context, c_strategy)
+      if (c_status /= 0_c_int) then
+         call g_logger%error('reciprocal CUDA backend: failed to select '//trim(normalized)//'.', __FILE__, __LINE__)
+         return
+      end if
+      this%solver_strategy = normalized
+      status = 0
+#else
+      call g_logger%error('reciprocal CUDA backend: solver strategy is unavailable in this build.', __FILE__, __LINE__)
+#endif
+   end function cuda_backend_set_solver_strategy
+
+   module subroutine cuda_backend_solver_strategy_supported(this, n, batch_size, request_eigenvectors, supported, reason)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer, intent(in) :: n, batch_size
+      logical, intent(in) :: request_eigenvectors
+      logical, intent(out) :: supported
+      character(len=*), intent(out) :: reason
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: c_status
+#endif
+
+      supported = .false.
+      reason = 'CUDA backend is not initialized'
+      if (.not. this%initialized) return
+#ifdef USE_CUDA_RECIPROCAL
+      c_status = rslmto_reciprocal_cuda_solver_strategy_supported(this%context, int(n, c_int), int(batch_size, c_int), &
+                                                                   merge(1_c_int, 0_c_int, request_eigenvectors))
+      if (c_status == 0_c_int) then
+         supported = .true.
+         reason = 'supported'
+      else if (c_status > 0_c_int) then
+         if (trim(this%solver_strategy) == 'zheevj_batched') then
+            reason = 'cuSOLVER ZheevjBatched requires n <= 32'
+         else
+            reason = 'CUDA solver strategy does not support this request'
+         end if
+      else
+         reason = 'invalid CUDA solver request'
+      end if
+#else
+      reason = 'executable was built without CUDA support'
+#endif
+   end subroutine cuda_backend_solver_strategy_supported
 
    module subroutine cuda_backend_execute_batch(this, request, result)
       class(cuda_reciprocal_backend), intent(inout) :: this
@@ -358,6 +432,7 @@ contains
       this%context = c_null_ptr
       this%device = -1
       this%prepared_operator_generation = -1
+      this%solver_strategy = 'zheevd_serial'
       this%h2d_seconds = 0.0_rp
       this%gpu_solve_seconds = 0.0_rp
       this%d2h_seconds = 0.0_rp

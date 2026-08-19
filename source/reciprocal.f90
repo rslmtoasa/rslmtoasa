@@ -237,6 +237,7 @@ module reciprocal_mod
       integer :: input_hamiltonian_solve_requests = 0
       integer :: operator_prepare_requests = 0
       integer :: operator_prepare_reuses = 0
+      character(len=32) :: solver_strategy = 'zheevd_serial'
       real(rp) :: h2d_seconds = 0.0_rp
       real(rp) :: gpu_solve_seconds = 0.0_rp
       real(rp) :: d2h_seconds = 0.0_rp
@@ -246,6 +247,8 @@ module reciprocal_mod
       procedure :: initialize => cuda_backend_initialize
       procedure :: capabilities => cuda_backend_capabilities
       procedure :: prepare_operator => cuda_backend_prepare_operator
+      procedure :: set_solver_strategy => cuda_backend_set_solver_strategy
+      procedure :: solver_strategy_supported => cuda_backend_solver_strategy_supported
       procedure :: execute_batch => cuda_backend_execute_batch
       procedure :: contract_lehmann => cuda_backend_contract_lehmann
       procedure :: execution_metrics => cuda_backend_execution_metrics
@@ -598,6 +601,22 @@ module reciprocal_mod
          integer(c_int) :: rslmto_reciprocal_cuda_prepare_operator
       end function rslmto_reciprocal_cuda_prepare_operator
 
+      function rslmto_reciprocal_cuda_set_solver_strategy(context, strategy) &
+         bind(C, name='rslmto_reciprocal_cuda_set_solver_strategy')
+         import c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: strategy
+         integer(c_int) :: rslmto_reciprocal_cuda_set_solver_strategy
+      end function rslmto_reciprocal_cuda_set_solver_strategy
+
+      function rslmto_reciprocal_cuda_solver_strategy_supported(context, n, batch_size, request_eigenvectors) &
+         bind(C, name='rslmto_reciprocal_cuda_solver_strategy_supported')
+         import c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: n, batch_size, request_eigenvectors
+         integer(c_int) :: rslmto_reciprocal_cuda_solver_strategy_supported
+      end function rslmto_reciprocal_cuda_solver_strategy_supported
+
       function rslmto_reciprocal_cuda_solve_zheevd_batch(context, n, batch_size, hamiltonians, eigenvalues, eigenvectors, &
                                                          request_eigenvectors) &
          bind(C, name='rslmto_reciprocal_cuda_solve_zheevd_batch')
@@ -770,6 +789,20 @@ module reciprocal_mod
       class(cuda_reciprocal_backend), intent(inout) :: this
       integer, intent(in) :: operator_generation
    end subroutine cuda_backend_prepare_operator
+
+   module function cuda_backend_set_solver_strategy(this, strategy) result(status)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      character(len=*), intent(in) :: strategy
+      integer :: status
+   end function cuda_backend_set_solver_strategy
+
+   module subroutine cuda_backend_solver_strategy_supported(this, n, batch_size, request_eigenvectors, supported, reason)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer, intent(in) :: n, batch_size
+      logical, intent(in) :: request_eigenvectors
+      logical, intent(out) :: supported
+      character(len=*), intent(out) :: reason
+   end subroutine cuda_backend_solver_strategy_supported
 
    module subroutine cuda_backend_execute_batch(this, request, result)
       class(cuda_reciprocal_backend), intent(inout) :: this

@@ -609,6 +609,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME Acc09ReciprocalVariantsSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc09_reciprocal_variants_source.py)
   set_tests_properties(Acc09ReciprocalVariantsSource PROPERTIES LABELS "unit;cuda;reciprocal;variants;source-contract")
+  add_test(NAME AccP1ReciprocalBatchedSource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_accp1_batched_source.py)
+  set_tests_properties(AccP1ReciprocalBatchedSource PROPERTIES LABELS "unit;cuda;reciprocal;batched;source-contract")
   add_test(NAME Acc10LehmannSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc10_lehmann_source.py)
   set_tests_properties(Acc10LehmannSource PROPERTIES LABELS "unit;cuda;reciprocal;lehmann;green;source-contract")

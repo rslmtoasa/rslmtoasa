@@ -14,12 +14,30 @@ extern "C" {
 
 typedef struct rslmto_reciprocal_cuda_context rslmto_reciprocal_cuda_context;
 
+/* Keep the strategy surface deliberately narrow: ACC-P1 compares the
+ * established one-matrix Zheevd reference with cuSOLVER's same-size
+ * Jacobi batch routine.  No automatic production dispatch is implied. */
+enum rslmto_reciprocal_cuda_solver_strategy {
+    RSLMTO_RECIPROCAL_CUDA_ZHEEVD_SERIAL = 0,
+    RSLMTO_RECIPROCAL_CUDA_ZHEEVJ_BATCHED = 1
+};
+
 int rslmto_reciprocal_cuda_device_count(int *count);
 rslmto_reciprocal_cuda_context *rslmto_reciprocal_cuda_create(int device);
 const char *rslmto_reciprocal_cuda_last_error(void);
 
 int rslmto_reciprocal_cuda_prepare_operator(
     rslmto_reciprocal_cuda_context *context, int operator_generation);
+int rslmto_reciprocal_cuda_set_solver_strategy(
+    rslmto_reciprocal_cuda_context *context, int strategy);
+/* Returns 0 when the selected strategy can accept this request, 1 when the
+ * request is explicitly unsupported, and -1 for invalid/uninitialized state.
+ * In particular, cuSOLVER ZheevjBatched requires n <= 32. */
+int rslmto_reciprocal_cuda_solver_strategy_supported(
+    rslmto_reciprocal_cuda_context *context,
+    int n,
+    int batch_size,
+    int request_eigenvectors);
 int rslmto_reciprocal_cuda_solve_zheevd_batch(
     rslmto_reciprocal_cuda_context *context,
     int n,

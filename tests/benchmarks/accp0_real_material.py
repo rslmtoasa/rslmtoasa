@@ -44,6 +44,9 @@ REQUIRED_COLUMNS = [
     "tile",
     "eigenvectors",
     "backend",
+    "solver_strategy",
+    "support_status",
+    "unsupported_reason",
     "cold_process_wall_s",
     "cuda_context_backend_init_s",
     "first_solve_s",
@@ -279,6 +282,7 @@ def run_measurement(
     length: int,
     mesh: tuple[int, int, int],
     backend: str,
+    solver_strategy: str,
     tile: int,
     vectors: bool,
     warmups: int,
@@ -290,6 +294,8 @@ def run_measurement(
         "persistent",
         "--backend",
         backend,
+        "--solver-strategy",
+        solver_strategy,
         "--fixture",
         fixture,
         "--source",
@@ -324,11 +330,11 @@ def run_measurement(
         profile.setdefault("metrics", {})["cold_process_wall_s"] = wall_times[0]
     metadata = capture_environment(ROOT, build_dir, omp_threads=None, mpi_ranks=1)
     metadata.update({"fixture": fixture, "source": source, "workload": workload, "L": length})
-    name = f"accp0_{workload}_{fixture}_L{length}_{mesh[0]}x{mesh[1]}x{mesh[2]}_{backend}_tile{tile}_v{int(vectors)}"
+    name = f"accp1_{workload}_{fixture}_L{length}_{mesh[0]}x{mesh[1]}x{mesh[2]}_{backend}_{solver_strategy}_tile{tile}_v{int(vectors)}"
     document = make_document(
         name=name,
         benchmark_class="component",
-        labels=["performance", "reciprocal", "accp0", workload, backend],
+        labels=["performance", "reciprocal", "accp1", workload, backend, solver_strategy],
         command=command,
         metadata=metadata,
         wall_times=wall_times,
@@ -342,17 +348,22 @@ def run_measurement(
     record = document["profile_records"][0]
     row = dict(record.get("metadata", {}))
     row.update(record.get("samples", [{}])[0])
-    row.update({"name": name, "backend": backend, "vectors": int(vectors), "nominal_mesh": "x".join(map(str, mesh))})
+    row.update({"name": name, "backend": backend, "solver_strategy": solver_strategy,
+                "vectors": int(vectors), "nominal_mesh": "x".join(map(str, mesh))})
+    row.setdefault("support_status", "supported")
+    row.setdefault("unsupported_reason", "")
     return row
 
 
-def preflight(binary: Path, fixture_dir: Path, fixture: str, length: int, mesh: tuple[int, int, int], backend: str, tile: int, vectors: bool) -> dict[str, float]:
+def preflight(binary: Path, fixture_dir: Path, fixture: str, length: int, mesh: tuple[int, int, int], backend: str, solver_strategy: str, tile: int, vectors: bool) -> dict[str, float]:
     command = [
         str(binary),
         "--mode",
         "preflight",
         "--backend",
         backend,
+        "--solver-strategy",
+        solver_strategy,
         "--fixture",
         fixture,
         "--input",
@@ -381,6 +392,34 @@ def preflight(binary: Path, fixture_dir: Path, fixture: str, length: int, mesh: 
         except ValueError:
             continue
     values["output"] = text  # type: ignore[assignment]
+    return values
+
+
+def run_validation(
+    *, binary: Path, fixture_dir: Path, fixture: str, length: int,
+    mesh: tuple[int, int, int], solver_strategy: str, tile: int,
+) -> dict[str, Any]:
+    command = [
+        str(binary), "--mode", "validate", "--backend", "cuda",
+        "--solver-strategy", solver_strategy, "--fixture", fixture,
+        "--input", "input.nml", "--mesh", "%dx%dx%d" % mesh,
+        "--tile-size", str(tile), "--L", str(length),
+    ]
+    completed = subprocess.run(command, cwd=fixture_dir, capture_output=True, text=True)
+    text = (completed.stdout or "") + (completed.stderr or "")
+    if completed.returncode:
+        raise RuntimeError(f"ACC-P1 validation failed ({completed.returncode}):\n{text}")
+    line = next((line for line in text.splitlines() if line.startswith("ACCP1_VALIDATION ")), None)
+    if line is None:
+        raise RuntimeError(f"ACC-P1 validation emitted no record:\n{text}")
+    values: dict[str, Any] = {}
+    for token in line.split()[1:]:
+        key, value = token.split("=", 1)
+        try:
+            values[key] = float(value.replace("D", "E").replace("d", "e"))
+        except ValueError:
+            values[key] = value
+    values.update({"fixture": fixture, "L": length, "solver_strategy": solver_strategy, "mesh": "x".join(map(str, mesh))})
     return values
 
 
@@ -427,16 +466,25 @@ def main() -> int:
 
     rows: list[dict[str, Any]] = []
     folding: list[dict[str, Any]] = []
-    backends = ["lapack"] if args.skip_cuda else ["lapack", "cuda"]
+    validation: list[dict[str, Any]] = []
+    configurations = [("lapack", "lapack")]
+    if not args.skip_cuda:
+        configurations.extend([("cuda", "zheevd_serial"), ("cuda", "zheevj_batched")])
     with tempfile.TemporaryDirectory(prefix="rslmto-accp0-", dir="/tmp") as temporary:
         scratch = Path(temporary)
         si_dir = scratch / "diamondSi"
         fixture_input(si_source, si_dir)
+        for backend, solver_strategy in configurations:
+            if backend == "cuda":
+                validation.append(run_validation(
+                    binary=binary, fixture_dir=si_dir, fixture="diamondSi", length=1,
+                    mesh=(1, 1, 1), solver_strategy=solver_strategy, tile=max(1, tiles[0]),
+                ))
         for mesh_value in meshes:
             for tile in tiles:
                 for vectors_value in vectors:
-                    for backend in backends:
-                        output = raw_dir / f"si_{mesh_value}_{backend}_{tile}_{int(vectors_value)}.json"
+                    for backend, solver_strategy in configurations:
+                        output = raw_dir / f"si_{mesh_value}_{backend}_{solver_strategy}_{tile}_{int(vectors_value)}.json"
                         rows.append(
                             run_measurement(
                                 binary=binary,
@@ -449,6 +497,7 @@ def main() -> int:
                                 length=1,
                                 mesh=(mesh_value, mesh_value, mesh_value),
                                 backend=backend,
+                                solver_strategy=solver_strategy,
                                 tile=tile,
                                 vectors=vectors_value,
                                 warmups=args.warmups,
@@ -476,19 +525,27 @@ def main() -> int:
                 if not oracle_info["passed"]:
                     raise RuntimeError(f"ACC-P0 band-folding oracle failed for bccFe L={length}: {oracle_info}")
 
+            if length <= 3:
+                for backend, solver_strategy in configurations:
+                    if backend == "cuda":
+                        validation.append(run_validation(
+                            binary=binary, fixture_dir=fe_dir, fixture="bccFe", length=length,
+                            mesh=(1, 1, 1), solver_strategy=solver_strategy, tile=max(1, tiles[0]),
+                        ))
+
             workload_meshes = [("crossover", (mesh_value,) * 3) for mesh_value in meshes]
             workload_meshes.extend(("matched-density", matched_mesh(max(meshes), length)) for _ in [0])
             for workload, mesh in workload_meshes:
                 for vectors_value in vectors:
                     for tile in tiles:
-                        for backend in backends:
+                        for backend, solver_strategy in configurations:
                             if backend == "cuda":
                                 # The driver repeats this check immediately
                                 # before solving; doing it here makes the
                                 # campaign log explicit and keeps large jobs
                                 # from being launched blindly.
-                                preflight(binary, fe_dir, "bccFe", length, mesh, backend, tile, vectors_value)
-                            output = raw_dir / f"fe_L{length}_{workload}_{mesh[0]}_{backend}_{tile}_{int(vectors_value)}.json"
+                                preflight(binary, fe_dir, "bccFe", length, mesh, backend, solver_strategy, tile, vectors_value)
+                            output = raw_dir / f"fe_L{length}_{workload}_{mesh[0]}_{backend}_{solver_strategy}_{tile}_{int(vectors_value)}.json"
                             rows.append(
                                 run_measurement(
                                     binary=binary,
@@ -501,6 +558,7 @@ def main() -> int:
                                     length=length,
                                     mesh=mesh,
                                     backend=backend,
+                                    solver_strategy=solver_strategy,
                                     tile=tile,
                                     vectors=vectors_value,
                                     warmups=args.warmups,
@@ -520,19 +578,35 @@ def main() -> int:
             "persistent_process": True,
             "warmups_inside_process": args.warmups,
             "measured_repetitions_inside_process": args.repetitions,
-            "cuda_solver_algorithm_changed": False,
+            "cuda_solver_algorithm_changed": True,
+            "solver_strategies": sorted({str(row.get("solver_strategy")) for row in rows}),
         },
         "rows": rows,
         "folding_oracle": folding,
+        "validation": validation,
         "summary": {
             "rows": len(rows),
-            "backend_totals": {backend: sum(1 for row in rows if row.get("backend") == backend) for backend in backends},
-            "steady_total_medians_by_backend": {
-                backend: statistics.median(
-                    float(row["total_steady_s"]) for row in rows if row.get("backend") == backend
+            "configuration_totals": {
+                f"{backend}:{strategy}": sum(
+                    1 for row in rows
+                    if row.get("backend") == backend and row.get("solver_strategy") == strategy
                 )
-                for backend in backends
-                if any(row.get("backend") == backend for row in rows)
+                for backend, strategy in configurations
+            },
+            "steady_total_medians_by_backend": {
+                f"{backend}:{strategy}": statistics.median(
+                    float(row["total_steady_s"]) for row in rows
+                    if row.get("backend") == backend
+                    and row.get("solver_strategy") == strategy
+                    and row.get("support_status") == "supported"
+                )
+                for backend, strategy in configurations
+                if any(
+                    row.get("backend") == backend
+                    and row.get("solver_strategy") == strategy
+                    and row.get("support_status") == "supported"
+                    for row in rows
+                )
             },
         },
     }
