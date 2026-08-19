@@ -1,5 +1,5 @@
 # RS-LMTO-ASA Phase III-A — Current GPU Performance Steering
-## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — active entry points: ACC-10 and ACC-13
+## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 complete; active entry point: ACC-13
 
 **Target branch:** `fable_v3`
 **Purpose:** keep the accelerator campaign focused on measured GPU performance after the original ACC-00...ACC-09 work and the subsequent ACC-P rescue campaign.
@@ -57,8 +57,8 @@ Use this table as the primary steering reference.
 | **ACC-P1b** | **Evidence input** | FP32/mixed-precision study; consume its current result if present on HEAD | Do not restart; include result in P4, or record FP32 as not yet established |
 | **ACC-P2** | **Completed** | Hot-path optimization has been performed | Use its post-optimization timings as P4 evidence |
 | **ACC-P3** | **Completed** | Decisive real-material 2D crossover campaign is done | Reuse its corpus/results; only rerun targeted rows if P2 changed their timings materially |
-| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | Proceed to ACC-10 / ACC-13 |
-| ACC-10 | Pending, likely relevant | GPU Lehmann contractions | Proceed now, starting from the P4 host-eigenpair/residency decision |
+| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10 closed; proceed to ACC-13 |
+| **ACC-10** | **Completed on current HEAD** | Backend-owned CUDA Lehmann contraction over the existing host-eigenpair contract | Reuse; do not reopen unless a new residency or mixed-routing question is justified |
 | ACC-11 | Conditional | Device-resident eigensystem handoff | Only if GPU eigensolver + GPU Lehmann and transfer cost justify it |
 | ACC-12 | Conditional / low priority | GPU H(R)->H(k) assembly | Only if P2/P4 show H(k) assembly has become material |
 | ACC-13 | Pending and relevant | RS KPM/Kubo-Bastin GPU completeness/performance | High priority regardless of reciprocal eigensolver outcome |
@@ -353,15 +353,14 @@ does not silently execute LAPACK.
 - **ACC-12:** defer GPU H(R)->H(k) assembly.  CPU H(k) is about `11.9%`,
   `10.0%`, and `6.3%` of those requests while the GPU eigensolver dominates;
   the canonical CPU Fourier assembler remains appropriate.
-- **ACC-10:** proceed with the existing host-eigenpair contract first.  It
-  may consume CPU eigenpairs in CPU-preferred regimes and CUDA eigenpairs in
-  the large-matrix regime; residency is not a prerequisite.
-- **ACC-13:** remains a high-priority, largely independent RS GPU track and
-  should proceed in parallel with ACC-10.
+- **ACC-10:** the existing host-eigenpair CUDA contraction is now validated and
+  closed.  Its measured production route uses CUDA eigenpairs in the large-
+  matrix regime; CPU-preferred reciprocal cases remain on the CPU route.
+- **ACC-13:** remains the next high-priority, largely independent RS GPU track.
 
 ACC-P4 checklist is therefore complete: policy frozen, FP32 not promoted,
 LAPACK default retained, no automatic dispatch added, ACC-11/12 gated by
-evidence, and ACC-10/13 promoted as the next implementation tracks.
+evidence, ACC-10 closed, and ACC-13 promoted as the next implementation track.
 
 # 12. Revised relevance of original ACC-10...ACC-14
 
@@ -372,7 +371,7 @@ This is the main steering section for the work that follows P4.
 ## ACC-10 — GPU Lehmann Green-function contractions
 
 ### Status
-**Still relevant and likely high value.**
+**Completed on current HEAD for the initial host-eigenpair contract.**
 
 ### Why
 
@@ -398,12 +397,59 @@ CPU eigensolver
 Therefore ACC-10 should **not depend on GPU eigensolution winning everywhere**.
 
 ### Action
-Proceed now, using the P4 route decision above.
+The initial implementation is now closed and uses the P4-compatible host boundary:
+CPU Fourier assembly and the selected reciprocal eigensolver produce ordinary host
+eigenpairs, one CUDA request evaluates all directed pair blocks for the normal and
+eta contours, and the result is copied into the existing canonical Green arrays.
+The established Pauli decomposition still owns the torque-resolved arrays.
+
+The production selection remains explicit.  The P4 large-matrix route may use
+CUDA-produced host eigenpairs, while CPU-preferred reciprocal cases remain on the
+CPU route.  No automatic mixed CPU-eigensolver/CUDA-contraction dispatch or device
+residency framework is added by ACC-10.
 
 Use P4 to select whether ACC-10 starts from:
 - CPU eigenpairs;
 - GPU eigenpairs;
 - both, depending on regime.
+
+For the current implementation, the selected measured route is the CUDA
+eigensolver plus host-eigenpair handoff in the large-matrix regime.  A separate
+CPU-eigensolver-to-CUDA-contraction mode remains outside this focused completion;
+it must be justified by a new workload measurement before expanding the API.
+
+### Completion evidence on current HEAD
+
+The focused CUDA build and tests completed successfully on the NVIDIA host:
+
+```text
+Acc10LehmannSource       PASS
+UnitLehmannChain         PASS
+UnitDysonEquivalence     PASS
+ReciprocalCudaLehmann   PASS
+```
+
+The isolated complete pair/energy/block request reports:
+
+```text
+max_error=5.64785e-17
+```
+
+The current production bcc-Fe VAL-05 CUDA campaign passed all k-mesh,
+broadening, energy-window, selected onsite/intersite Green, and Sigma=0
+Lehmann/Dyson checks.  The three CUDA route triads also passed with the
+established values:
+
+| Consumer | CUDA Lehmann | Dyson(Sigma=0) | Recursion |
+|---|---:|---:|---:|
+| bcc-Fe Jij, pair 1-335 | 0.2547380660120 | 0.2547380660129 | 0.5078779010703 |
+| bcc-Fe conductivity `sigma_xx` | 3.235054 | 3.235054 | 3.239956 |
+| bcc-Fe damping `alpha` | 0.002527619 | 0.002527619 | 0.001341155 |
+
+Full implementation scope and earlier end-to-end timing evidence remain in
+[`ACC-10_LEHMANN_CUDA.md`](ACC-10_LEHMANN_CUDA.md).  ACC-11 remains deferred:
+the current task does not provide combined eigensolver/Lehmann residency
+evidence that would justify a device-resident eigensystem.
 
 ---
 
@@ -498,8 +544,8 @@ ACC-P4  <-- COMPLETE
     +-----------------------------+
     |                             |
     v                             v
-ACC-10                         ACC-13
-GPU Lehmann                    RS KPM/transport
+ACC-10  <-- COMPLETE           ACC-13
+host-eigenpair CUDA             RS KPM/transport
     |
     +--> ACC-11 only if P2/P4 transfer evidence justifies residency
 
@@ -660,16 +706,16 @@ ACC-P1       completed
 ACC-P2       completed
 ACC-P3       completed
 ACC-P4       completed
+ACC-10       completed
 ```
 
 ACC-P1b was an evidence input.  Its physical CUDA rows were unsupported on
 the completed local probe, so P4 left FP32 unestablished.
 
-## The next active work packages are ACC-10 and ACC-13.
+## The next active work package is ACC-13.
 
-Begin ACC-10 with the existing host-eigenpair contract and use the P4 regime
-classification when choosing CPU or CUDA eigenpairs.  ACC-13 may proceed in
-parallel.  Do not reopen ACC-P1b/P2/P3 or add ACC-11/12 without the evidence
+ACC-10 is closed with the existing host-eigenpair contract.  ACC-13 should
+proceed next.  Do not reopen ACC-P1b/P2/P3 or add ACC-11/12 without the evidence
 gates stated above.
 
 Do not repeat:
@@ -684,7 +730,7 @@ Only rerun established benchmark rows when needed to obtain current post-P2 numb
 The remaining sequence is:
 
 ```text
-ACC-10 and ACC-13 are the main implementation tracks.
+ACC-10 is complete; ACC-13 is the next implementation track.
 ACC-11 is conditional on transfer evidence.
 ACC-12 is conditional on H(k)-assembly evidence.
 ACC-14 closes the accelerator campaign.
