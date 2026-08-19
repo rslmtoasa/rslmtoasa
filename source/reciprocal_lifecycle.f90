@@ -147,6 +147,8 @@ contains
       this%include_so = .false.
       this%max_orbs = nb
       this%cached_operator_generation = -1
+      this%device_eigensystem_token = 0
+      this%resident_lehmann_handoff_requested = .false.
 
       ! WP8: full BZ stays the default/oracle for finite-q GBT (WP0). Opt-in
       ! to 'little_group' or 'little_group_common' via &reciprocal.
@@ -260,6 +262,7 @@ contains
       this%canonical_band_energy = 0.0_rp
       this%canonical_weight_sum = 0.0_rp
       this%canonical_energy_valid = .false.
+      this%device_eigensystem_token = 0
    end subroutine invalidate_spectral_cache
 
    !> @brief Invalidate H(k), eigensystem, DOS, and density projections after

@@ -112,6 +112,12 @@ contains
       call this%execution_backend%execute_batch(request, result)
       this%eigenvalues = result%eigenvalues
       this%eigenvectors = result%eigenvectors
+      select type (backend => this%execution_backend)
+      type is (cuda_reciprocal_backend)
+         this%device_eigensystem_token = result%resident_token
+      class default
+         this%device_eigensystem_token = 0
+      end select
       if (this%gamma_bounds_diagnostics) call this%run_gamma_bounds_diagnostics()
       if (this%hall_diag_experimental) call this%diagonalize_hall_experimental()
       call root_info('diagonalize_hamiltonian: Completed successfully', __FILE__, __LINE__)

@@ -58,6 +58,17 @@ int rslmto_reciprocal_cuda_solve_cheevd_batch(
     double *host_eigenvalues,
     void *host_eigenvectors,
     int request_eigenvectors);
+/* ACC-11: reuse the eigenpairs left in the persistent solver context.  The
+ * context validates the shape and generation token before this entry point
+ * can consume its device buffers; no device pointer is exposed to Fortran or
+ * physics code. */
+int rslmto_reciprocal_cuda_get_resident_token(
+    rslmto_reciprocal_cuda_context *context);
+int rslmto_reciprocal_cuda_resident_eigensystem_matches(
+    rslmto_reciprocal_cuda_context *context,
+    int n,
+    int batch_size,
+    int token);
 int rslmto_reciprocal_cuda_contract_lehmann(
     rslmto_reciprocal_cuda_context *context,
     int nmat,
@@ -67,6 +78,23 @@ int rslmto_reciprocal_cuda_contract_lehmann(
     int nblk,
     const double *host_eigenvalues,
     const void *host_eigenvectors,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds);
+int rslmto_reciprocal_cuda_contract_lehmann_resident(
+    rslmto_reciprocal_cuda_context *context,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    int resident_token,
     const double *host_k_points,
     const void *host_z_contour,
     const double *host_dr,

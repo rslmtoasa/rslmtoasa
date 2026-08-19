@@ -30,6 +30,24 @@ extern "C" int rslmto_reciprocal_cuda_launch_lehmann(
     double *h2d_seconds,
     double *contraction_seconds,
     double *d2h_seconds);
+extern "C" int rslmto_reciprocal_cuda_launch_lehmann_device(
+    cudaStream_t stream,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    const double *device_eigenvalues,
+    const void *device_eigenvectors,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds);
 
 struct rslmto_reciprocal_cuda_context {
     int device = -1;
@@ -110,6 +128,10 @@ struct rslmto_reciprocal_cuda_context {
     long long event_destroy_count = 0;
     long long pinned_alloc_count = 0;
     long long pinned_free_count = 0;
+    int resident_token = 0;
+    int resident_n = 0;
+    int resident_batch = 0;
+    bool resident_valid = false;
 };
 
 static std::string g_reciprocal_cuda_error;
@@ -422,6 +444,13 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         context, n, batch_size, request_eigenvectors);
     if (support != 0) return support > 0 ? 2 : 1;
 
+    /* Any new solve invalidates the previous handoff immediately.  The
+     * monotonically increasing token prevents an old Fortran reciprocal
+     * object from accidentally matching a later solve with the same shape. */
+    context->resident_valid = false;
+    context->resident_n = 0;
+    context->resident_batch = 0;
+
     const std::size_t matrix_elements = static_cast<std::size_t>(n) * n;
     const std::size_t matrix_bytes = matrix_elements * batch_size * sizeof(cuDoubleComplex);
     const std::size_t eigenvalue_bytes = static_cast<std::size_t>(n) * batch_size * sizeof(double);
@@ -690,6 +719,12 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
         context->d2h_vectors_seconds += static_cast<double>(d2h_vectors_ms) * 1.0e-3;
         ++context->timing_calls;
     }
+    ++context->resident_token;
+    if (request_eigenvectors) {
+        context->resident_valid = true;
+        context->resident_n = n;
+        context->resident_batch = batch_size;
+    }
     context->h2d_bytes += static_cast<long long>(matrix_bytes);
     context->d2h_values_bytes += static_cast<long long>(eigenvalue_bytes);
     if (request_eigenvectors) context->d2h_vectors_bytes += static_cast<long long>(matrix_bytes);
@@ -723,6 +758,10 @@ extern "C" int rslmto_reciprocal_cuda_solve_cheevd_batch(
     const int support = rslmto_reciprocal_cuda_solver_strategy_supported(
         context, n, batch_size, request_eigenvectors);
     if (support != 0) return support > 0 ? 2 : 1;
+
+    context->resident_valid = false;
+    context->resident_n = 0;
+    context->resident_batch = 0;
 
     const std::size_t matrix_elements = static_cast<std::size_t>(n) * n;
     const std::size_t matrix_count = matrix_elements * batch_size;
@@ -1007,6 +1046,9 @@ extern "C" int rslmto_reciprocal_cuda_solve_cheevd_batch(
         context->d2h_vectors_seconds += static_cast<double>(d2h_vectors_ms) * 1.0e-3;
         ++context->timing_calls;
     }
+    ++context->resident_token;
+    /* The FP32 buffers have a different layout/type and are deliberately not
+     * eligible for the FP64 Lehmann resident handoff. */
     context->h2d_bytes += static_cast<long long>(matrix_bytes);
     context->d2h_values_bytes += static_cast<long long>(eigenvalue_bytes);
     if (request_eigenvectors) context->d2h_vectors_bytes += static_cast<long long>(matrix_bytes);
@@ -1050,6 +1092,74 @@ extern "C" int rslmto_reciprocal_cuda_contract_lehmann(
         contraction_seconds, d2h_seconds);
     if (status != 0) {
         set_error("rslmto_reciprocal_cuda_contract_lehmann: CUDA kernel failed");
+    }
+    return status;
+}
+
+extern "C" int rslmto_reciprocal_cuda_get_resident_token(
+    rslmto_reciprocal_cuda_context *context) {
+    if (!context) {
+        set_error("rslmto_reciprocal_cuda_get_resident_token: null context");
+        return 0;
+    }
+    return context->resident_valid ? context->resident_token : 0;
+}
+
+extern "C" int rslmto_reciprocal_cuda_resident_eigensystem_matches(
+    rslmto_reciprocal_cuda_context *context,
+    int n,
+    int batch_size,
+    int token) {
+    if (!context || !context->stream) {
+        set_error("rslmto_reciprocal_cuda_resident_eigensystem_matches: null context");
+        return 1;
+    }
+    return context->resident_valid && context->resident_n == n &&
+                   context->resident_batch == batch_size &&
+                   context->resident_token == token
+               ? 0
+               : 1;
+}
+
+extern "C" int rslmto_reciprocal_cuda_contract_lehmann_resident(
+    rslmto_reciprocal_cuda_context *context,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    int resident_token,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds) {
+    if (!context || !context->stream) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann_resident: null context");
+        return 1;
+    }
+    if (nmat < 1 || nk < 1 || ne < 1 || npair < 1 || nblk < 1 || nblk > nmat ||
+        !host_k_points || !host_z_contour || !host_dr || !host_ioffset ||
+        !host_joffset || !host_blocks) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann_resident: invalid arguments");
+        return 1;
+    }
+    if (rslmto_reciprocal_cuda_resident_eigensystem_matches(
+            context, nmat, nk, resident_token) != 0) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann_resident: resident eigensystem is stale or unavailable");
+        return 2;
+    }
+    const int status = rslmto_reciprocal_cuda_launch_lehmann_device(
+        context->stream, nmat, nk, ne, npair, nblk,
+        context->device_eigenvalues, context->device_hamiltonians,
+        host_k_points, host_z_contour, host_dr, host_ioffset, host_joffset,
+        host_blocks, h2d_seconds, contraction_seconds, d2h_seconds);
+    if (status != 0) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann_resident: CUDA kernel failed");
     }
     return status;
 }

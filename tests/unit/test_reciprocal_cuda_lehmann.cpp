@@ -148,12 +148,79 @@ int main() {
         context, nmat, nk, ne, npair, nblk, eigenvalues.data(),
         eigenvectors.data(), k_points.data(), z_contour.data(), dr.data(),
         ioffset.data(), joffset.data(), actual.data(), &h2d, &contraction, &d2h);
-    rslmto_reciprocal_cuda_destroy(context);
     if (status != 0) {
         std::fprintf(stderr, "FAIL: CUDA Lehmann contraction: %s\n",
                      rslmto_reciprocal_cuda_last_error());
         return 1;
     }
+
+    /* ACC-11: solve a complete k tile, consume the context-owned FP64
+     * eigenpairs without presenting them to the Lehmann ABI, and prove that a
+     * later values-only solve invalidates the handoff token. */
+    std::vector<double> resident_h(2 * nmat * nmat * nk, 0.0);
+    std::vector<double> resident_values(nmat * nk);
+    std::vector<double> resident_vectors(resident_h.size());
+    for (int ik = 0; ik < nk; ++ik) {
+        for (int iband = 0; iband < nmat; ++iband) {
+            set_complex(resident_h,
+                        complex_index_3d(iband, iband, ik, nmat, nmat),
+                        -0.7 + 0.31 * iband + 0.09 * ik, 0.0);
+        }
+    }
+    const int resident_solve_status = rslmto_reciprocal_cuda_solve_zheevd_batch(
+        context, nmat, nk, resident_h.data(), resident_values.data(),
+        resident_vectors.data(), 1);
+    if (resident_solve_status != 0) {
+        std::fprintf(stderr, "FAIL: ACC-11 resident eigensolve: %s\n",
+                     rslmto_reciprocal_cuda_last_error());
+        return 1;
+    }
+    const int resident_token = rslmto_reciprocal_cuda_get_resident_token(context);
+    if (resident_token <= 0 ||
+        rslmto_reciprocal_cuda_resident_eigensystem_matches(
+            context, nmat, nk, resident_token) != 0) {
+        std::fprintf(stderr, "FAIL: ACC-11 resident token was not valid\n");
+        return 1;
+    }
+    std::vector<double> resident_expected(expected.size());
+    std::vector<double> resident_actual(expected.size());
+    cpu_reference(nmat, nk, ne, npair, nblk, resident_values, resident_vectors,
+                  k_points, z_contour, dr, ioffset, joffset, resident_expected);
+    double resident_h2d = 0.0, resident_contraction = 0.0, resident_d2h = 0.0;
+    const int resident_status = rslmto_reciprocal_cuda_contract_lehmann_resident(
+        context, nmat, nk, ne, npair, nblk, resident_token, k_points.data(), z_contour.data(),
+        dr.data(), ioffset.data(), joffset.data(), resident_actual.data(),
+        &resident_h2d, &resident_contraction, &resident_d2h);
+    if (resident_status != 0) {
+        std::fprintf(stderr, "FAIL: ACC-11 resident Lehmann contraction: %s\n",
+                     rslmto_reciprocal_cuda_last_error());
+        return 1;
+    }
+    double resident_error = 0.0;
+    for (std::size_t i = 0; i < resident_actual.size(); i += 2) {
+        resident_error = std::max(
+            resident_error,
+            std::hypot(resident_actual[i] - resident_expected[i],
+                       resident_actual[i + 1] - resident_expected[i + 1]));
+    }
+    if (resident_error > 3.e-11 || resident_h2d < 0.0 ||
+        resident_contraction < 0.0 || resident_d2h < 0.0) {
+        std::fprintf(stderr, "FAIL: ACC-11 resident error=%g timings=(%g,%g,%g)\n",
+                     resident_error, resident_h2d, resident_contraction, resident_d2h);
+        return 1;
+    }
+    std::vector<double> resident_values_only(nmat * nk);
+    if (rslmto_reciprocal_cuda_solve_zheevd_batch(
+            context, nmat, nk, resident_h.data(), resident_values_only.data(),
+            nullptr, 0) != 0 ||
+        rslmto_reciprocal_cuda_get_resident_token(context) != 0 ||
+        rslmto_reciprocal_cuda_resident_eigensystem_matches(
+            context, nmat, nk, resident_token) == 0) {
+        std::fprintf(stderr, "FAIL: ACC-11 stale resident token was accepted\n");
+        return 1;
+    }
+
+    rslmto_reciprocal_cuda_destroy(context);
     double error = 0.0;
     for (std::size_t i = 0; i < actual.size(); i += 2) {
         error = std::max(error, std::hypot(actual[i] - expected[i], actual[i + 1] - expected[i + 1]));
@@ -163,7 +230,7 @@ int main() {
                      error, h2d, contraction, d2h);
         return 1;
     }
-    std::printf("PASS: CUDA Lehmann contraction max_error=%g h2d=%g contraction=%g d2h=%g\n",
-                error, h2d, contraction, d2h);
+    std::printf("PASS: CUDA Lehmann contraction max_error=%g resident_error=%g resident_h2d=%g resident_contraction=%g resident_d2h=%g\n",
+                error, resident_error, resident_h2d, resident_contraction, resident_d2h);
     return 0;
 }

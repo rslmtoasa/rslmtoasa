@@ -1043,7 +1043,7 @@ contains
    module subroutine execute_normal_mesh_tiles(this, using_kpath, generalized)
       class(reciprocal), intent(inout) :: this
       logical, intent(in) :: using_kpath, generalized
-      integer :: tile_first, tile_last, tile_length, nmat
+      integer :: tile_first, tile_last, tile_length, nmat, execution_tile_size
       logical :: assemble_on_backend
       type(reciprocal_execution_request) :: request
       type(reciprocal_execution_result) :: result
@@ -1084,15 +1084,24 @@ contains
          ! compatibility cache after the backend solve completes.
          nmat = size(this%hk_bulk, 1)
          call this%make_reciprocal_assembler(host_assembler)
-         call host_workspace%ensure_capacity(nmat, max(1, this%reciprocal_tile_size), .false., &
+         execution_tile_size = max(1, this%reciprocal_tile_size)
+         select type (backend => this%execution_backend)
+         type is (cuda_reciprocal_backend)
+            if (this%resident_lehmann_handoff_requested) execution_tile_size = this%nk_local
+         class default
+         end select
+         call host_workspace%ensure_capacity(nmat, execution_tile_size, .false., &
                                              this%hamiltonian%operator_generation, this%lattice%nn_max, this%lattice%ntype)
+      else
+         execution_tile_size = max(1, this%reciprocal_tile_size)
+         if (this%resident_lehmann_handoff_requested) execution_tile_size = this%nk_local
       end if
       host_assembly_seconds = 0.0_rp
       call system_clock(count_rate=timing_rate)
       call system_clock(timing_start)
 
-      do tile_first = 1, this%nk_local, max(1, this%reciprocal_tile_size)
-         tile_last = min(this%nk_local, tile_first + max(1, this%reciprocal_tile_size) - 1)
+      do tile_first = 1, this%nk_local, execution_tile_size
+         tile_last = min(this%nk_local, tile_first + execution_tile_size - 1)
          tile_length = tile_last - tile_first + 1
          request%assemble_hamiltonian = assemble_on_backend
          request%assemble_overlap = assemble_on_backend .and. generalized
@@ -1145,6 +1154,12 @@ contains
          end if
          this%eigenvalues(:,tile_first:tile_last) = result%eigenvalues
          this%eigenvectors(:,:,tile_first:tile_last) = result%eigenvectors
+         select type (backend => this%execution_backend)
+         type is (cuda_reciprocal_backend)
+            this%device_eigensystem_token = result%resident_token
+         class default
+            this%device_eigensystem_token = 0
+         end select
          if (generalized .and. assemble_on_backend) this%sk_overlap(:,:,tile_first:tile_last) = result%overlap
       end do
       if (.not. assemble_on_backend) then

@@ -176,7 +176,7 @@ contains
       integer :: pair, pair_glob, ioff, joff, ipair, npair_local, ncontour
       integer :: lehmann_status
       integer :: lehmann_clock_start, lehmann_clock_stop, lehmann_clock_rate
-      logical :: do_eta, use_gpu_contraction
+      logical :: do_eta, use_gpu_contraction, use_gpu_resident
       real(rp), allocatable :: kfrac(:, :)
       real(rp) :: dr(3)
       complex(rp), allocatable :: gblk(:, :, :), gblk_eta(:, :, :)
@@ -186,6 +186,11 @@ contains
       type(reciprocal_lehmann_request) :: lehmann_request
       type(reciprocal_lehmann_result) :: lehmann_result
       character(len=512) :: lehmann_timing_message
+
+      ! Set this before the normal-mesh build so ACC-11 can retain one
+      ! complete CUDA k tile for the immediate Lehmann consumer.  CPU and
+      ! non-Lehmann paths ignore the request.
+      this%resident_lehmann_handoff_requested = .true.
 
       ! Ensure the eigenpairs exist (one Hermitian solve per k, reused for all
       ! energies and pairs).
@@ -247,13 +252,17 @@ contains
       call system_clock(lehmann_clock_start)
 
       ! ACC-10 uses one all-pair backend request.  The host eigenpair arrays
-      ! and canonical Green object remain the public data path; only the
-      ! numerical contraction crosses the CUDA boundary.
+      ! and canonical Green object remain the public data path; ACC-11 may
+      ! avoid only the redundant CUDA eigensystem H2D copy when the persistent
+      ! solver context still owns the matching normal-mesh result.
       use_gpu_contraction = .false.
+      use_gpu_resident = .false.
       if (allocated(this%execution_backend)) then
          select type (backend => this%execution_backend)
          type is (cuda_reciprocal_backend)
             use_gpu_contraction = backend%initialized
+            if (use_gpu_contraction) use_gpu_resident = backend%resident_eigensystem_matches(&
+               size(this%eigenvalues, 1), nk, this%device_eigensystem_token)
          class default
             use_gpu_contraction = .false.
          end select
@@ -264,13 +273,17 @@ contains
          allocate(z_lehmann(ncontour))
          z_lehmann(1:ne) = z_contour
          if (do_eta) z_lehmann(ne + 1:ne + 64) = z_eta
-         allocate(lehmann_request%eigenvalues(size(this%eigenvalues, 1), size(this%eigenvalues, 2)), &
-                  lehmann_request%eigenvectors(size(this%eigenvectors, 1), size(this%eigenvectors, 2), size(this%eigenvectors, 3)), &
-                  lehmann_request%k_points(3, nk), lehmann_request%z_contour(ncontour), &
+         allocate(lehmann_request%k_points(3, nk), lehmann_request%z_contour(ncontour), &
                   lehmann_request%dr(3, 2*npair_local), lehmann_request%ioffset(2*npair_local), &
                   lehmann_request%joffset(2*npair_local))
-         lehmann_request%eigenvalues = this%eigenvalues
-         lehmann_request%eigenvectors = this%eigenvectors
+         lehmann_request%nmat = size(this%eigenvalues, 1)
+         lehmann_request%nk = nk
+         if (.not. use_gpu_resident) then
+            allocate(lehmann_request%eigenvalues(size(this%eigenvalues, 1), size(this%eigenvalues, 2)), &
+                     lehmann_request%eigenvectors(size(this%eigenvectors, 1), size(this%eigenvectors, 2), size(this%eigenvectors, 3)))
+            lehmann_request%eigenvalues = this%eigenvalues
+            lehmann_request%eigenvectors = this%eigenvectors
+         end if
          lehmann_request%k_points = kfrac
          lehmann_request%z_contour = z_lehmann
          lehmann_request%nblk = nb
@@ -284,7 +297,16 @@ contains
             lehmann_request%ioffset(npair_local + ipair) = joff
             lehmann_request%joffset(npair_local + ipair) = ioff
          end do
-         call this%execution_backend%contract_lehmann(lehmann_request, lehmann_result, lehmann_status)
+         if (use_gpu_resident) then
+            select type (backend => this%execution_backend)
+            type is (cuda_reciprocal_backend)
+               call backend%contract_lehmann_resident(lehmann_request, lehmann_result, lehmann_status)
+            class default
+               lehmann_status = 1
+            end select
+         else
+            call this%execution_backend%contract_lehmann(lehmann_request, lehmann_result, lehmann_status)
+         end if
          if (lehmann_status /= 0 .or. .not. lehmann_result%valid) then
             call g_logger%error('fill_green_lehmann: CUDA Lehmann contraction failed; canonical arrays were not updated.', &
                __FILE__, __LINE__)
@@ -365,7 +387,7 @@ contains
       call system_clock(lehmann_clock_stop)
       if (use_gpu_contraction) then
          write(lehmann_timing_message, '(a,es16.8,a,es16.8,a,es16.8,a,es16.8)') &
-            'ACC10_TIMING backend=cuda total_seconds=', &
+            'ACC10_TIMING backend=cuda resident='//merge('1', '0', use_gpu_resident)//' total_seconds=', &
             real(lehmann_clock_stop - lehmann_clock_start, rp) / real(max(1, lehmann_clock_rate), rp), &
             ' h2d_seconds=', lehmann_result%h2d_seconds, &
             ' contraction_seconds=', lehmann_result%contraction_seconds, &

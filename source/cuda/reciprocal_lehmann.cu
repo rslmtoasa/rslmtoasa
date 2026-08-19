@@ -186,3 +186,97 @@ extern "C" int rslmto_reciprocal_cuda_launch_lehmann(
     cudaEventDestroy(d2h_stop);
     return status;
 }
+
+/* ACC-11 variant: the solver-owned eigenpairs are already on the device.  The
+ * small metadata arrays still cross the host boundary, while the canonical
+ * Green blocks remain the only D2H result. */
+extern "C" int rslmto_reciprocal_cuda_launch_lehmann_device(
+    cudaStream_t stream,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    const double *device_eigenvalues,
+    const void *device_eigenvectors,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds) {
+    double *device_k_points = nullptr;
+    double2 *device_z_contour = nullptr;
+    double *device_dr = nullptr;
+    int *device_ioffset = nullptr;
+    int *device_joffset = nullptr;
+    double2 *device_blocks = nullptr;
+    cudaEvent_t h2d_start = nullptr, h2d_stop = nullptr;
+    cudaEvent_t contraction_start = nullptr, contraction_stop = nullptr;
+    cudaEvent_t d2h_start = nullptr, d2h_stop = nullptr;
+    int status = 1;
+
+    const std::size_t block_count = static_cast<std::size_t>(nblk) * nblk * ne * npair;
+
+    do {
+        if (cudaEventCreate(&h2d_start) != cudaSuccess ||
+            cudaEventCreate(&h2d_stop) != cudaSuccess ||
+            cudaEventCreate(&contraction_start) != cudaSuccess ||
+            cudaEventCreate(&contraction_stop) != cudaSuccess ||
+            cudaEventCreate(&d2h_start) != cudaSuccess ||
+            cudaEventCreate(&d2h_stop) != cudaSuccess) break;
+        if (cudaEventRecord(h2d_start, stream) != cudaSuccess) break;
+        if (allocate_and_copy(&device_k_points, host_k_points,
+                              static_cast<std::size_t>(3) * nk, stream) != 0) break;
+        if (allocate_and_copy(&device_z_contour,
+                              static_cast<const double2 *>(host_z_contour), ne, stream) != 0) break;
+        if (allocate_and_copy(&device_dr, host_dr,
+                              static_cast<std::size_t>(3) * npair, stream) != 0) break;
+        if (allocate_and_copy(&device_ioffset, host_ioffset, npair, stream) != 0) break;
+        if (allocate_and_copy(&device_joffset, host_joffset, npair, stream) != 0) break;
+        if (cudaMalloc(reinterpret_cast<void **>(&device_blocks), block_count * sizeof(double2)) != cudaSuccess) break;
+        if (cudaEventRecord(h2d_stop, stream) != cudaSuccess) break;
+        if (cudaEventRecord(contraction_start, stream) != cudaSuccess) break;
+
+        const long long total = static_cast<long long>(block_count);
+        const unsigned int grid = static_cast<unsigned int>((total + 255) / 256);
+        lehmann_contract_kernel<<<grid, 256, 0, stream>>>(
+            nmat, nk, ne, npair, nblk, device_eigenvalues,
+            static_cast<const double2 *>(device_eigenvectors), device_k_points,
+            device_z_contour, device_dr, device_ioffset, device_joffset,
+            device_blocks);
+        if (cudaGetLastError() != cudaSuccess) break;
+        if (cudaEventRecord(contraction_stop, stream) != cudaSuccess) break;
+        if (cudaEventRecord(d2h_start, stream) != cudaSuccess) break;
+        if (cudaMemcpyAsync(host_blocks, device_blocks, block_count * sizeof(double2),
+                            cudaMemcpyDeviceToHost, stream) != cudaSuccess) break;
+        if (cudaEventRecord(d2h_stop, stream) != cudaSuccess) break;
+        if (cudaStreamSynchronize(stream) != cudaSuccess) break;
+
+        float h2d_ms = 0.0f, contraction_ms = 0.0f, d2h_ms = 0.0f;
+        if (cudaEventElapsedTime(&h2d_ms, h2d_start, h2d_stop) != cudaSuccess ||
+            cudaEventElapsedTime(&contraction_ms, contraction_start, contraction_stop) != cudaSuccess ||
+            cudaEventElapsedTime(&d2h_ms, d2h_start, d2h_stop) != cudaSuccess) break;
+        if (h2d_seconds) *h2d_seconds = static_cast<double>(h2d_ms) * 1.e-3;
+        if (contraction_seconds) *contraction_seconds = static_cast<double>(contraction_ms) * 1.e-3;
+        if (d2h_seconds) *d2h_seconds = static_cast<double>(d2h_ms) * 1.e-3;
+        status = 0;
+    } while (false);
+
+    cudaFree(device_k_points);
+    cudaFree(device_z_contour);
+    cudaFree(device_dr);
+    cudaFree(device_ioffset);
+    cudaFree(device_joffset);
+    cudaFree(device_blocks);
+    cudaEventDestroy(h2d_start);
+    cudaEventDestroy(h2d_stop);
+    cudaEventDestroy(contraction_start);
+    cudaEventDestroy(contraction_stop);
+    cudaEventDestroy(d2h_start);
+    cudaEventDestroy(d2h_stop);
+    return status;
+}

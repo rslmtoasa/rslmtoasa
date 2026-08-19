@@ -615,6 +615,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME Acc10LehmannSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc10_lehmann_source.py)
   set_tests_properties(Acc10LehmannSource PROPERTIES LABELS "unit;cuda;reciprocal;lehmann;green;source-contract")
+  add_test(NAME Acc11ResidentSource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc11_resident_source.py)
+  set_tests_properties(Acc11ResidentSource PROPERTIES LABELS "unit;cuda;reciprocal;lehmann;residency;source-contract")
   add_fortran_unit_test(UnitMagneticRepresentation ${TestDIR}/unit/test_magnetic_representation.f90)
   set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
   add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)

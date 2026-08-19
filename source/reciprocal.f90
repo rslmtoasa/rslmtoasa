@@ -160,6 +160,7 @@ module reciprocal_mod
       logical :: assembled_overlap_valid = .false.
       logical :: eigenvalues_valid = .false.
       logical :: eigenvectors_valid = .false.
+      integer :: resident_token = 0
       complex(rp), allocatable :: hamiltonian(:, :, :)
       complex(rp), allocatable :: overlap(:, :, :)
       real(rp), allocatable :: eigenvalues(:, :)
@@ -178,6 +179,10 @@ module reciprocal_mod
       real(rp), allocatable :: dr(:, :)
       integer, allocatable :: ioffset(:), joffset(:)
       integer :: nblk = 0
+      ! ACC-11 resident requests may omit host eigenpairs; these dimensions
+      ! identify the backend-owned device tile in that case.
+      integer :: nmat = 0
+      integer :: nk = 0
    end type reciprocal_lehmann_request
 
    type, public :: reciprocal_lehmann_result
@@ -263,6 +268,7 @@ module reciprocal_mod
       integer(c_long_long) :: pinned_free_count = 0_c_long_long
       integer :: pinned_host_active = 0
       integer :: timing_calls = 0
+      integer :: resident_token = 0
       logical :: initialized = .false.
    contains
       procedure :: initialize => cuda_backend_initialize
@@ -272,6 +278,8 @@ module reciprocal_mod
       procedure :: solver_strategy_supported => cuda_backend_solver_strategy_supported
       procedure :: execute_batch => cuda_backend_execute_batch
       procedure :: contract_lehmann => cuda_backend_contract_lehmann
+      procedure :: contract_lehmann_resident => cuda_backend_contract_lehmann_resident
+      procedure :: resident_eigensystem_matches => cuda_backend_resident_eigensystem_matches
       procedure :: execution_metrics => cuda_backend_execution_metrics
       procedure :: reset_timing_metrics => cuda_backend_reset_timing_metrics
       procedure :: memory_info => cuda_backend_memory_info
@@ -333,6 +341,10 @@ module reciprocal_mod
       !> Hamiltonian operator_generation used to build the current H(k) and
       !> every spectrum/DOS/density object derived from it.
       integer :: cached_operator_generation
+      ! ACC-11 token for the last complete normal-mesh CUDA eigensystem.  The
+      ! token is opaque to physics code and is invalidated by later backend
+      ! solves or backend recreation.
+      integer :: device_eigensystem_token = 0
       !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
       !> or 'generalized_overlap_kanpur'.
       character(len=32) :: reciprocal_mode
@@ -357,6 +369,10 @@ module reciprocal_mod
       !> Persistent default execution context.  Legacy workspace remains a
       !> compatibility diagnostic view while this backend owns active tiles.
       class(reciprocal_execution_backend), allocatable :: execution_backend
+      !> ACC-11: a Lehmann consumer requested a complete CUDA-resident normal
+      !> mesh.  This is set by fill_green_lehmann before the first build; all
+      !> other CUDA workflows retain their configured tile size.
+      logical :: resident_lehmann_handoff_requested = .false.
 
       ! Band structure variables
       !> Maximum number of orbital channels per atom type
@@ -664,6 +680,21 @@ module reciprocal_mod
          integer(c_int) :: rslmto_reciprocal_cuda_solve_cheevd_batch
       end function rslmto_reciprocal_cuda_solve_cheevd_batch
 
+      function rslmto_reciprocal_cuda_get_resident_token(context) &
+         bind(C, name='rslmto_reciprocal_cuda_get_resident_token')
+         import c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int) :: rslmto_reciprocal_cuda_get_resident_token
+      end function rslmto_reciprocal_cuda_get_resident_token
+
+      function rslmto_reciprocal_cuda_resident_eigensystem_matches(context, n, batch_size, token) &
+         bind(C, name='rslmto_reciprocal_cuda_resident_eigensystem_matches')
+         import c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: n, batch_size, token
+         integer(c_int) :: rslmto_reciprocal_cuda_resident_eigensystem_matches
+      end function rslmto_reciprocal_cuda_resident_eigensystem_matches
+
       function rslmto_reciprocal_cuda_contract_lehmann(context, nmat, nk, ne, npair, nblk, eigenvalues, eigenvectors, &
                                                         k_points, z_contour, dr, ioffset, joffset, blocks, h2d_seconds, &
                                                         contraction_seconds, d2h_seconds) &
@@ -678,6 +709,22 @@ module reciprocal_mod
          real(c_double), intent(out) :: h2d_seconds, contraction_seconds, d2h_seconds
          integer(c_int) :: rslmto_reciprocal_cuda_contract_lehmann
       end function rslmto_reciprocal_cuda_contract_lehmann
+
+      function rslmto_reciprocal_cuda_contract_lehmann_resident(context, nmat, nk, ne, npair, nblk, resident_token, k_points, z_contour, &
+                                                                 dr, ioffset, joffset, blocks, h2d_seconds, contraction_seconds, &
+                                                                 d2h_seconds) &
+         bind(C, name='rslmto_reciprocal_cuda_contract_lehmann_resident')
+         import c_double, c_double_complex, c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: nmat, nk, ne, npair, nblk
+         integer(c_int), value :: resident_token
+         real(c_double), intent(in) :: k_points(*), dr(*)
+         complex(c_double_complex), intent(in) :: z_contour(*)
+         integer(c_int), intent(in) :: ioffset(*), joffset(*)
+         complex(c_double_complex), intent(out) :: blocks(*)
+         real(c_double), intent(out) :: h2d_seconds, contraction_seconds, d2h_seconds
+         integer(c_int) :: rslmto_reciprocal_cuda_contract_lehmann_resident
+      end function rslmto_reciprocal_cuda_contract_lehmann_resident
 
       subroutine rslmto_reciprocal_cuda_get_timings(context, h2d_seconds, solve_seconds, d2h_seconds, calls) &
          bind(C, name='rslmto_reciprocal_cuda_get_timings')
@@ -872,12 +919,25 @@ module reciprocal_mod
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine cuda_backend_execute_batch
 
+   module function cuda_backend_resident_eigensystem_matches(this, n, batch_size, token) result(matches)
+      class(cuda_reciprocal_backend), intent(in) :: this
+      integer, intent(in) :: n, batch_size, token
+      logical :: matches
+   end function cuda_backend_resident_eigensystem_matches
+
    module subroutine cuda_backend_contract_lehmann(this, request, result, status)
       class(cuda_reciprocal_backend), intent(inout) :: this
       type(reciprocal_lehmann_request), intent(in) :: request
       type(reciprocal_lehmann_result), intent(inout) :: result
       integer, intent(out) :: status
    end subroutine cuda_backend_contract_lehmann
+
+   module subroutine cuda_backend_contract_lehmann_resident(this, request, result, status)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_lehmann_request), intent(in) :: request
+      type(reciprocal_lehmann_result), intent(inout) :: result
+      integer, intent(out) :: status
+   end subroutine cuda_backend_contract_lehmann_resident
 
    module subroutine cuda_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       class(cuda_reciprocal_backend), intent(in) :: this
