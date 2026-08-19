@@ -1663,17 +1663,51 @@ Measure eigenpair H2D, contraction, output D2H, and total Lehmann request.
 
 ## Checklist
 
-- [ ] CPU Lehmann baseline recorded
-- [ ] GPU contraction implemented
-- [ ] canonical green arrays preserved
-- [ ] onsite G matches
-- [ ] intersite G matches
-- [ ] pair indexing preserved
-- [ ] energy conventions preserved
-- [ ] downstream triads remain valid
-- [ ] transfer cost measured
-- [ ] end-to-end speedup recorded
-- [ ] no device-residency framework introduced yet
+- [x] CPU Lehmann baseline recorded
+- [x] GPU contraction implemented
+- [x] canonical green arrays preserved
+- [x] onsite G matches
+- [x] intersite G matches
+- [x] pair indexing preserved
+- [x] energy conventions preserved
+- [x] downstream triads remain valid
+- [x] transfer cost measured
+- [x] end-to-end speedup recorded
+- [x] no device-residency framework introduced yet
+
+## ACC-10 completion record
+
+ACC-10 is closed with a backend-owned all-pair CUDA contraction.  The request
+uses the host eigenpairs produced by the existing reciprocal eigensolver and
+contains both directed pair orientations plus the ordinary energy contour and
+the canonical 64-point Fermi-eta contour.  The CUDA kernel parallelizes the
+requested output over pair, energy, and block indices while streaming the k and
+band dimensions.  Results are copied into the existing `green%gij/gji` and eta
+arrays; the established Pauli decomposition continues to populate torque
+families, so exchange, damping, and conductivity consumers remain unchanged.
+
+The isolated CUDA request agrees with the CPU contraction to `5.65e-17` max
+absolute complex error.  Current CPU/CUDA VAL-05 campaigns pass all selected
+onsite/intersite Green checks and the Sigma=0 Dyson invariant.  CUDA Jij,
+conductivity, and damping triads pass with their existing route envelopes.
+For a representative bcc-Fe `12^3` request, measured total contraction time
+was 16.770 s on LAPACK and 2.813 s on CUDA, including 0.001641 s H2D and
+0.001679 s D2H, giving a 5.96x end-to-end contraction speedup.
+
+The full evidence and commands are recorded in
+[`ACC-10_LEHMANN_CUDA.md`](ACC-10_LEHMANN_CUDA.md).
+
+**Files changed:** `source/reciprocal.f90`, `source/reciprocal_backend.f90`,
+`source/reciprocal_green.f90`, `source/cuda/reciprocal_cuda.h`,
+`source/cuda/reciprocal_cuda.cpp`, `source/cuda/reciprocal_lehmann.cu`,
+`source/CMakeLists.txt`, `CMakeLists.txt`,
+`tests/unit/test_reciprocal_cuda_lehmann.cpp`,
+`tests/unit/test_acc10_lehmann_source.py`,
+`tests/validation/val05_green_convergence.py`,
+`tests/regression/run_triad.py`, this blueprint, and
+[`ACC-10_LEHMANN_CUDA.md`](ACC-10_LEHMANN_CUDA.md).
+
+**Commit message:** `Accelerate Lehmann Green functions on CUDA`
 
 **Commit message:** `Accelerate Lehmann Green functions on CUDA`
 

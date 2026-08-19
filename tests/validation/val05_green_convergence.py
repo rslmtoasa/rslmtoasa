@@ -46,7 +46,8 @@ def close(a: float, b: float, atol: float, rtol: float = 0.0) -> bool:
     return math.isfinite(a) and math.isfinite(b) and abs(a - b) <= atol + rtol * max(abs(a), abs(b), 1.0)
 
 
-def patch_case(base: Path, workdir: Path, nk: int, eta: float, energy_min: float = -1.2, energy_max: float = 1.2) -> None:
+def patch_case(base: Path, workdir: Path, nk: int, eta: float, energy_min: float = -1.2,
+               energy_max: float = 1.2, reciprocal_backend: str = "lapack") -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
     shutil.copytree(base, workdir)
@@ -66,6 +67,7 @@ def patch_case(base: Path, workdir: Path, nk: int, eta: float, energy_min: float
             "use_time_reversal": False,
             "green_backend": "lehmann",
             "green_eta": eta,
+            "reciprocal_backend": reciprocal_backend,
         },
         "lattice": {"njij": 2},
     }
@@ -78,8 +80,9 @@ def patch_case(base: Path, workdir: Path, nk: int, eta: float, energy_min: float
     patched.replace(workdir / "input.nml")
 
 
-def run_case(binary: Path, base: Path, workdir: Path, nk: int, eta: float, energy_min: float = -1.2, energy_max: float = 1.2) -> dict:
-    patch_case(base, workdir, nk, eta, energy_min, energy_max)
+def run_case(binary: Path, base: Path, workdir: Path, nk: int, eta: float, energy_min: float = -1.2,
+             energy_max: float = 1.2, reciprocal_backend: str = "lapack") -> dict:
+    patch_case(base, workdir, nk, eta, energy_min, energy_max, reciprocal_backend)
     runner = Path(__file__).resolve().parents[1] / "run_binary.sh"
     env = os.environ.copy()
     env["RSLMTO_OMP_THREADS_SERIAL"] = "1"
@@ -158,6 +161,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--scratch-root", type=Path, required=True)
+    parser.add_argument("--reciprocal-backend", choices=("lapack", "cuda"), default="lapack")
     args = parser.parse_args()
     binary = args.binary.resolve()
     root = Path(__file__).resolve().parents[2]
@@ -168,14 +172,16 @@ def main() -> int:
     cases: dict[str, dict] = {}
     for nk in (4, 8, 12, 16):
         name = f"k{nk}_eta002"
-        cases[name] = run_case(binary, base, scratch / name, nk, 0.02)
+        cases[name] = run_case(binary, base, scratch / name, nk, 0.02, reciprocal_backend=args.reciprocal_backend)
     for eta in (0.01, 0.04):
         name = f"k12_eta{int(eta * 1000):03d}"
-        cases[name] = run_case(binary, base, scratch / name, 12, eta)
+        cases[name] = run_case(binary, base, scratch / name, 12, eta, reciprocal_backend=args.reciprocal_backend)
     # The recursion route uses this window for Chebyshev scaling.  A too-small
     # window (e.g. [-0.8,0.8]) is intentionally outside the supported regime
     # and can signal in the fast kernel; compare two safe windows instead.
-    cases["k12_eta002_wide_window"] = run_case(binary, base, scratch / "k12_eta002_wide_window", 12, 0.02, -1.5, 1.5)
+    cases["k12_eta002_wide_window"] = run_case(
+        binary, base, scratch / "k12_eta002_wide_window", 12, 0.02, -1.5, 1.5,
+        args.reciprocal_backend)
 
     failures: list[str] = []
     for name, case in cases.items():

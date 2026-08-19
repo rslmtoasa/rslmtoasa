@@ -28,6 +28,24 @@ int rslmto_reciprocal_cuda_solve_zheevd_batch(
     double *host_eigenvalues,
     void *host_eigenvectors,
     int request_eigenvectors);
+int rslmto_reciprocal_cuda_contract_lehmann(
+    rslmto_reciprocal_cuda_context *context,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    const double *host_eigenvalues,
+    const void *host_eigenvectors,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds);
 void rslmto_reciprocal_cuda_get_timings(
     rslmto_reciprocal_cuda_context *context,
     double *h2d_seconds,

@@ -7,6 +7,25 @@
 #include <cstddef>
 #include <string>
 
+extern "C" int rslmto_reciprocal_cuda_launch_lehmann(
+    cudaStream_t stream,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    const double *host_eigenvalues,
+    const void *host_eigenvectors,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds);
+
 struct rslmto_reciprocal_cuda_context {
     int device = -1;
     int prepared_operator_generation = -1;
@@ -295,6 +314,45 @@ extern "C" int rslmto_reciprocal_cuda_solve_zheevd_batch(
     if (d2h_start) cudaEventDestroy(d2h_start);
     if (d2h_stop) cudaEventDestroy(d2h_stop);
     return 0;
+}
+
+extern "C" int rslmto_reciprocal_cuda_contract_lehmann(
+    rslmto_reciprocal_cuda_context *context,
+    int nmat,
+    int nk,
+    int ne,
+    int npair,
+    int nblk,
+    const double *host_eigenvalues,
+    const void *host_eigenvectors,
+    const double *host_k_points,
+    const void *host_z_contour,
+    const double *host_dr,
+    const int *host_ioffset,
+    const int *host_joffset,
+    void *host_blocks,
+    double *h2d_seconds,
+    double *contraction_seconds,
+    double *d2h_seconds) {
+    if (!context || !context->stream) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann: null context");
+        return 1;
+    }
+    if (nmat < 1 || nk < 1 || ne < 1 || npair < 1 || nblk < 1 || nblk > nmat ||
+        !host_eigenvalues || !host_eigenvectors || !host_k_points || !host_z_contour ||
+        !host_dr || !host_ioffset || !host_joffset || !host_blocks) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann: invalid arguments");
+        return 1;
+    }
+    const int status = rslmto_reciprocal_cuda_launch_lehmann(
+        context->stream, nmat, nk, ne, npair, nblk, host_eigenvalues,
+        host_eigenvectors, host_k_points, host_z_contour, host_dr,
+        host_ioffset, host_joffset, host_blocks, h2d_seconds,
+        contraction_seconds, d2h_seconds);
+    if (status != 0) {
+        set_error("rslmto_reciprocal_cuda_contract_lehmann: CUDA kernel failed");
+    }
+    return status;
 }
 
 extern "C" void rslmto_reciprocal_cuda_get_timings(

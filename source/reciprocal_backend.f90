@@ -4,9 +4,57 @@
 ! reciprocal_mod is visible to reciprocal SCF and response orchestration.
 !------------------------------------------------------------------------------
 submodule (reciprocal_mod) reciprocal_backend
+   use lehmann_kernel_mod, only: lehmann_pair_block
    implicit none
 
 contains
+
+   module subroutine lapack_backend_contract_lehmann(this, request, result, status)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_lehmann_request), intent(in) :: request
+      type(reciprocal_lehmann_result), intent(inout) :: result
+      integer, intent(out) :: status
+      integer :: nmat, nk, ne, npair, nblk, ipair, clock_start, clock_stop, clock_rate
+
+      status = 0
+      result%valid = .false.
+      result%h2d_seconds = 0.0_rp
+      result%contraction_seconds = 0.0_rp
+      result%d2h_seconds = 0.0_rp
+      if (allocated(result%blocks)) deallocate(result%blocks)
+
+      if (.not. allocated(request%eigenvalues) .or. .not. allocated(request%eigenvectors) .or. &
+          .not. allocated(request%k_points) .or. .not. allocated(request%z_contour) .or. &
+          .not. allocated(request%dr) .or. .not. allocated(request%ioffset) .or. .not. allocated(request%joffset)) then
+         status = 1
+         return
+      end if
+      nmat = size(request%eigenvalues, 1)
+      nk = size(request%eigenvalues, 2)
+      ne = size(request%z_contour)
+      npair = size(request%ioffset)
+      nblk = request%nblk
+      if (nmat < 1 .or. nk < 1 .or. ne < 1 .or. npair < 1 .or. nblk < 1 .or. &
+          size(request%eigenvectors, 1) /= nmat .or. size(request%eigenvectors, 2) /= nmat .or. &
+          size(request%eigenvectors, 3) /= nk .or. size(request%k_points, 1) /= 3 .or. &
+          size(request%k_points, 2) /= nk .or. size(request%dr, 1) /= 3 .or. size(request%dr, 2) /= npair .or. &
+          size(request%joffset) /= npair .or. nblk > nmat) then
+         status = 1
+         return
+      end if
+
+      allocate(result%blocks(nblk, nblk, ne, npair))
+      call system_clock(count_rate=clock_rate)
+      call system_clock(clock_start)
+      do ipair = 1, npair
+         call lehmann_pair_block(request%eigenvalues, request%eigenvectors, request%k_points, request%z_contour, &
+                                 request%dr(:, ipair), request%ioffset(ipair), request%joffset(ipair), nblk, &
+                                 result%blocks(:, :, :, ipair))
+      end do
+      call system_clock(clock_stop)
+      result%contraction_seconds = real(clock_stop - clock_start, rp) / real(max(1, clock_rate), rp)
+      result%valid = .true.
+   end subroutine lapack_backend_contract_lehmann
 
    module subroutine cuda_backend_initialize(this, assembler)
       class(cuda_reciprocal_backend), intent(inout) :: this
@@ -185,6 +233,64 @@ contains
       result%eigenvectors_valid = request%request_eigenvectors
 #endif
    end subroutine cuda_backend_execute_batch
+
+   module subroutine cuda_backend_contract_lehmann(this, request, result, status)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_lehmann_request), intent(in) :: request
+      type(reciprocal_lehmann_result), intent(inout) :: result
+      integer, intent(out) :: status
+#ifdef USE_CUDA_RECIPROCAL
+      integer(c_int) :: c_status
+      integer :: nmat, nk, ne, npair, nblk
+#endif
+
+      status = 1
+      result%valid = .false.
+      result%h2d_seconds = 0.0_rp
+      result%contraction_seconds = 0.0_rp
+      result%d2h_seconds = 0.0_rp
+      if (allocated(result%blocks)) deallocate(result%blocks)
+#ifndef USE_CUDA_RECIPROCAL
+      call g_logger%error('reciprocal CUDA backend: Lehmann contraction is unavailable in this build.', __FILE__, __LINE__)
+#else
+      if (.not. this%initialized .or. .not. c_associated(this%context)) then
+         call g_logger%error('reciprocal CUDA backend: Lehmann contraction requested before initialization.', __FILE__, __LINE__)
+         return
+      end if
+      if (.not. allocated(request%eigenvalues) .or. .not. allocated(request%eigenvectors) .or. &
+          .not. allocated(request%k_points) .or. .not. allocated(request%z_contour) .or. &
+          .not. allocated(request%dr) .or. .not. allocated(request%ioffset) .or. .not. allocated(request%joffset)) then
+         call g_logger%error('reciprocal CUDA backend: incomplete Lehmann request.', __FILE__, __LINE__)
+         return
+      end if
+      nmat = size(request%eigenvalues, 1)
+      nk = size(request%eigenvalues, 2)
+      ne = size(request%z_contour)
+      npair = size(request%ioffset)
+      nblk = request%nblk
+      if (nmat < 1 .or. nk < 1 .or. ne < 1 .or. npair < 1 .or. nblk < 1 .or. &
+          size(request%eigenvectors, 1) /= nmat .or. size(request%eigenvectors, 2) /= nmat .or. &
+          size(request%eigenvectors, 3) /= nk .or. size(request%k_points, 1) /= 3 .or. &
+          size(request%k_points, 2) /= nk .or. size(request%dr, 1) /= 3 .or. size(request%dr, 2) /= npair .or. &
+          size(request%joffset) /= npair .or. nblk > nmat) then
+         call g_logger%error('reciprocal CUDA backend: invalid Lehmann request dimensions.', __FILE__, __LINE__)
+         return
+      end if
+
+      allocate(result%blocks(nblk, nblk, ne, npair))
+      c_status = rslmto_reciprocal_cuda_contract_lehmann(this%context, int(nmat, c_int), int(nk, c_int), &
+         int(ne, c_int), int(npair, c_int), int(nblk, c_int), request%eigenvalues, request%eigenvectors, &
+         request%k_points, request%z_contour, request%dr, request%ioffset, request%joffset, result%blocks, &
+         result%h2d_seconds, result%contraction_seconds, result%d2h_seconds)
+      status = int(c_status)
+      if (status /= 0) then
+         call g_logger%error('reciprocal CUDA backend: Lehmann contraction failed.', __FILE__, __LINE__)
+         deallocate(result%blocks)
+         return
+      end if
+      result%valid = .true.
+#endif
+   end subroutine cuda_backend_contract_lehmann
 
    module subroutine cuda_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       class(cuda_reciprocal_backend), intent(in) :: this

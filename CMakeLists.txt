@@ -609,6 +609,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME Acc09ReciprocalVariantsSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc09_reciprocal_variants_source.py)
   set_tests_properties(Acc09ReciprocalVariantsSource PROPERTIES LABELS "unit;cuda;reciprocal;variants;source-contract")
+  add_test(NAME Acc10LehmannSource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc10_lehmann_source.py)
+  set_tests_properties(Acc10LehmannSource PROPERTIES LABELS "unit;cuda;reciprocal;lehmann;green;source-contract")
   add_fortran_unit_test(UnitMagneticRepresentation ${TestDIR}/unit/test_magnetic_representation.f90)
   set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
   add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
@@ -675,6 +678,12 @@ if (RUN_UNIT_TESTS)
     add_test(NAME ReciprocalCudaEigensolver COMMAND ReciprocalCudaEigensolver)
     set_tests_properties(ReciprocalCudaEigensolver PROPERTIES
       LABELS "unit;cuda;reciprocal;eigensolver" SKIP_RETURN_CODE 77)
+    add_executable(ReciprocalCudaLehmann ${TestDIR}/unit/test_reciprocal_cuda_lehmann.cpp)
+    target_include_directories(ReciprocalCudaLehmann PRIVATE ${SRC}/cuda)
+    target_link_libraries(ReciprocalCudaLehmann PRIVATE rslmto_reciprocal_cuda)
+    add_test(NAME ReciprocalCudaLehmann COMMAND ReciprocalCudaLehmann)
+    set_tests_properties(ReciprocalCudaLehmann PROPERTIES
+      LABELS "unit;cuda;reciprocal;lehmann;green;contraction" SKIP_RETURN_CODE 77)
   endif()
   add_fortran_unit_test(UnitResponseConventions ${TestDIR}/unit/test_response_conventions.f90)
   set_tests_properties(UnitResponseConventions PROPERTIES LABELS "unit;tddft;conventions")

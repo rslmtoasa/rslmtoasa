@@ -158,6 +158,7 @@ endif()
 if(ENABLE_CUDA_RECIPROCAL)
     add_library(rslmto_reciprocal_cuda STATIC
         cuda/reciprocal_cuda.cpp
+        cuda/reciprocal_lehmann.cu
     )
     target_compile_features(rslmto_reciprocal_cuda PUBLIC cxx_std_11)
     target_link_libraries(rslmto_reciprocal_cuda PUBLIC CUDA::cudart CUDA::cusolver)

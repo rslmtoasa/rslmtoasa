@@ -166,12 +166,35 @@ module reciprocal_mod
       complex(rp), allocatable :: eigenvectors(:, :, :)
    end type reciprocal_execution_result
 
+   !> One host-side Lehmann request.  The execution backend consumes the
+   !> established eigenpair representation and returns the canonical Green
+   !> blocks; it does not own a second Green-function object or expose device
+   !> pointers to physics code.
+   type, public :: reciprocal_lehmann_request
+      real(rp), allocatable :: eigenvalues(:, :)
+      complex(rp), allocatable :: eigenvectors(:, :, :)
+      real(rp), allocatable :: k_points(:, :)
+      complex(rp), allocatable :: z_contour(:)
+      real(rp), allocatable :: dr(:, :)
+      integer, allocatable :: ioffset(:), joffset(:)
+      integer :: nblk = 0
+   end type reciprocal_lehmann_request
+
+   type, public :: reciprocal_lehmann_result
+      complex(rp), allocatable :: blocks(:, :, :, :)
+      real(rp) :: h2d_seconds = 0.0_rp
+      real(rp) :: contraction_seconds = 0.0_rp
+      real(rp) :: d2h_seconds = 0.0_rp
+      logical :: valid = .false.
+   end type reciprocal_lehmann_result
+
    type, abstract, public :: reciprocal_execution_backend
    contains
       procedure(backend_initialize_if), deferred :: initialize
       procedure(backend_capabilities_if), deferred :: capabilities
       procedure(backend_prepare_if), deferred :: prepare_operator
       procedure(backend_execute_if), deferred :: execute_batch
+      procedure(backend_contract_lehmann_if), deferred :: contract_lehmann
       procedure(backend_execution_metrics_if), deferred :: execution_metrics
       procedure(backend_synchronize_if), deferred :: synchronize
       procedure(backend_release_if), deferred :: release
@@ -197,6 +220,7 @@ module reciprocal_mod
       procedure :: capabilities => lapack_backend_capabilities
       procedure :: prepare_operator => lapack_backend_prepare_operator
       procedure :: execute_batch => lapack_backend_execute_batch
+      procedure :: contract_lehmann => lapack_backend_contract_lehmann
       procedure :: execution_metrics => lapack_backend_execution_metrics
       procedure :: synchronize => lapack_backend_synchronize
       procedure :: release => lapack_backend_release
@@ -223,6 +247,7 @@ module reciprocal_mod
       procedure :: capabilities => cuda_backend_capabilities
       procedure :: prepare_operator => cuda_backend_prepare_operator
       procedure :: execute_batch => cuda_backend_execute_batch
+      procedure :: contract_lehmann => cuda_backend_contract_lehmann
       procedure :: execution_metrics => cuda_backend_execution_metrics
       procedure :: synchronize => cuda_backend_synchronize
       procedure :: release => cuda_backend_release
@@ -584,6 +609,21 @@ module reciprocal_mod
          integer(c_int) :: rslmto_reciprocal_cuda_solve_zheevd_batch
       end function rslmto_reciprocal_cuda_solve_zheevd_batch
 
+      function rslmto_reciprocal_cuda_contract_lehmann(context, nmat, nk, ne, npair, nblk, eigenvalues, eigenvectors, &
+                                                        k_points, z_contour, dr, ioffset, joffset, blocks, h2d_seconds, &
+                                                        contraction_seconds, d2h_seconds) &
+         bind(C, name='rslmto_reciprocal_cuda_contract_lehmann')
+         import c_double, c_double_complex, c_int, c_ptr
+         type(c_ptr), value :: context
+         integer(c_int), value :: nmat, nk, ne, npair, nblk
+         real(c_double), intent(in) :: eigenvalues(*), k_points(*), dr(*)
+         complex(c_double_complex), intent(in) :: eigenvectors(*), z_contour(*)
+         integer(c_int), intent(in) :: ioffset(*), joffset(*)
+         complex(c_double_complex), intent(out) :: blocks(*)
+         real(c_double), intent(out) :: h2d_seconds, contraction_seconds, d2h_seconds
+         integer(c_int) :: rslmto_reciprocal_cuda_contract_lehmann
+      end function rslmto_reciprocal_cuda_contract_lehmann
+
       subroutine rslmto_reciprocal_cuda_get_timings(context, h2d_seconds, solve_seconds, d2h_seconds, calls) &
          bind(C, name='rslmto_reciprocal_cuda_get_timings')
          import c_double, c_int, c_ptr
@@ -632,6 +672,14 @@ module reciprocal_mod
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine backend_execute_if
 
+   subroutine backend_contract_lehmann_if(this, request, result, status)
+      import reciprocal_execution_backend, reciprocal_lehmann_request, reciprocal_lehmann_result
+      class(reciprocal_execution_backend), intent(inout) :: this
+      type(reciprocal_lehmann_request), intent(in) :: request
+      type(reciprocal_lehmann_result), intent(inout) :: result
+      integer, intent(out) :: status
+   end subroutine backend_contract_lehmann_if
+
    subroutine backend_execution_metrics_if(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       import reciprocal_execution_backend
       class(reciprocal_execution_backend), intent(in) :: this
@@ -668,6 +716,13 @@ module reciprocal_mod
       type(reciprocal_execution_request), intent(in) :: request
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine lapack_backend_execute_batch
+
+   module subroutine lapack_backend_contract_lehmann(this, request, result, status)
+      class(lapack_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_lehmann_request), intent(in) :: request
+      type(reciprocal_lehmann_result), intent(inout) :: result
+      integer, intent(out) :: status
+   end subroutine lapack_backend_contract_lehmann
 
    module subroutine lapack_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       class(lapack_reciprocal_backend), intent(in) :: this
@@ -706,6 +761,13 @@ module reciprocal_mod
       type(reciprocal_execution_request), intent(in) :: request
       type(reciprocal_execution_result), intent(inout) :: result
    end subroutine cuda_backend_execute_batch
+
+   module subroutine cuda_backend_contract_lehmann(this, request, result, status)
+      class(cuda_reciprocal_backend), intent(inout) :: this
+      type(reciprocal_lehmann_request), intent(in) :: request
+      type(reciprocal_lehmann_result), intent(inout) :: result
+      integer, intent(out) :: status
+   end subroutine cuda_backend_contract_lehmann
 
    module subroutine cuda_backend_execution_metrics(this, execute_requests, combined_requests, assemble_only, input_hamiltonian_solves)
       class(cuda_reciprocal_backend), intent(in) :: this

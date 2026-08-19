@@ -60,10 +60,15 @@ def setup_workdir(base_dir: Path, workdir: Path) -> None:
             path.unlink()
 
 
-def run_route(binary: Path, base_dir: Path, workdir: Path, route: str, timeout: int) -> str:
+def run_route(binary: Path, base_dir: Path, workdir: Path, route: str, timeout: int,
+               reciprocal_backend: str) -> str:
     setup_workdir(base_dir, workdir)
     tmp = workdir / "input.nml.tmp"
-    f90nml.patch(str(workdir / "input.nml"), ROUTE_PATCH[route], str(tmp))
+    patch = dict(ROUTE_PATCH[route])
+    if route in ("lehmann", "dyson"):
+        patch["reciprocal"] = {**patch.get("reciprocal", {}),
+                                "reciprocal_backend": reciprocal_backend}
+    f90nml.patch(str(workdir / "input.nml"), patch, str(tmp))
     tmp.replace(workdir / "input.nml")
     result = subprocess.run(
         [str(binary)], cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -141,6 +146,7 @@ def main() -> int:
     parser.add_argument("--case-name", required=True)
     parser.add_argument("--scratch-root", required=True)
     parser.add_argument("--references", required=True)
+    parser.add_argument("--reciprocal-backend", choices=("lapack", "cuda"), default="lapack")
     parser.add_argument("--gen-ref", action="store_true")
     args = parser.parse_args()
 
@@ -156,7 +162,7 @@ def main() -> int:
 
     values: dict[str, dict[str, float]] = {}
     for route in ("recursion", "lehmann", "dyson"):
-        log = run_route(binary, base_dir, scratch / route, route, timeout)
+        log = run_route(binary, base_dir, scratch / route, route, timeout, args.reciprocal_backend)
         values[route] = extract(case, scratch / route, log)
 
     ref_dir = Path(args.references).resolve()

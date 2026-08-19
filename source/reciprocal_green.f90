@@ -173,13 +173,19 @@ contains
       complex(rp), intent(in) :: z_contour(:)
 
       integer :: nk, ne, ik, ikg, ie
-      integer :: pair, pair_glob, ioff, joff
-      logical :: do_eta
+      integer :: pair, pair_glob, ioff, joff, ipair, npair_local, ncontour
+      integer :: lehmann_status
+      integer :: lehmann_clock_start, lehmann_clock_stop, lehmann_clock_rate
+      logical :: do_eta, use_gpu_contraction
       real(rp), allocatable :: kfrac(:, :)
       real(rp) :: dr(3)
       complex(rp), allocatable :: gblk(:, :, :), gblk_eta(:, :, :)
       complex(rp), allocatable :: z_eta(:)
       complex(rp), allocatable :: tnmag(:, :, :), tz(:, :, :), ty(:, :, :), tx(:, :, :)
+      complex(rp), allocatable :: z_lehmann(:)
+      type(reciprocal_lehmann_request) :: lehmann_request
+      type(reciprocal_lehmann_result) :: lehmann_result
+      character(len=512) :: lehmann_timing_message
 
       ! Ensure the eigenpairs exist (one Hermitian solve per k, reused for all
       ! energies and pairs).
@@ -237,19 +243,77 @@ contains
          green_obj%gjy = (0.0_rp, 0.0_rp); green_obj%gjz = (0.0_rp, 0.0_rp)
       end if
 
+      call system_clock(count_rate=lehmann_clock_rate)
+      call system_clock(lehmann_clock_start)
+
+      ! ACC-10 uses one all-pair backend request.  The host eigenpair arrays
+      ! and canonical Green object remain the public data path; only the
+      ! numerical contraction crosses the CUDA boundary.
+      use_gpu_contraction = .false.
+      if (allocated(this%execution_backend)) then
+         select type (backend => this%execution_backend)
+         type is (cuda_reciprocal_backend)
+            use_gpu_contraction = backend%initialized
+         class default
+            use_gpu_contraction = .false.
+         end select
+      end if
+      if (use_gpu_contraction) then
+         npair_local = end_atom - start_atom + 1
+         ncontour = ne + merge(64, 0, do_eta)
+         allocate(z_lehmann(ncontour))
+         z_lehmann(1:ne) = z_contour
+         if (do_eta) z_lehmann(ne + 1:ne + 64) = z_eta
+         allocate(lehmann_request%eigenvalues(size(this%eigenvalues, 1), size(this%eigenvalues, 2)), &
+                  lehmann_request%eigenvectors(size(this%eigenvectors, 1), size(this%eigenvectors, 2), size(this%eigenvectors, 3)), &
+                  lehmann_request%k_points(3, nk), lehmann_request%z_contour(ncontour), &
+                  lehmann_request%dr(3, 2*npair_local), lehmann_request%ioffset(2*npair_local), &
+                  lehmann_request%joffset(2*npair_local))
+         lehmann_request%eigenvalues = this%eigenvalues
+         lehmann_request%eigenvectors = this%eigenvectors
+         lehmann_request%k_points = kfrac
+         lehmann_request%z_contour = z_lehmann
+         lehmann_request%nblk = nb
+         do pair_glob = start_atom, end_atom
+            ipair = pair_glob - start_atom + 1
+            call pair_geometry(this, pair_glob, ioff, joff, dr)
+            lehmann_request%dr(:, ipair) = dr
+            lehmann_request%ioffset(ipair) = ioff
+            lehmann_request%joffset(ipair) = joff
+            lehmann_request%dr(:, npair_local + ipair) = -dr
+            lehmann_request%ioffset(npair_local + ipair) = joff
+            lehmann_request%joffset(npair_local + ipair) = ioff
+         end do
+         call this%execution_backend%contract_lehmann(lehmann_request, lehmann_result, lehmann_status)
+         if (lehmann_status /= 0 .or. .not. lehmann_result%valid) then
+            call g_logger%error('fill_green_lehmann: CUDA Lehmann contraction failed; canonical arrays were not updated.', &
+               __FILE__, __LINE__)
+            return
+         end if
+      end if
+
       do pair_glob = start_atom, end_atom
          pair = g2l_map(pair_glob)
+         ipair = pair_glob - start_atom + 1
          call pair_geometry(this, pair_glob, ioff, joff, dr)
 
          ! G_ij (on-site block when site_i == site_j and dR = 0). Delivered in the
          ! GLOBAL spin frame -- the same frame recur_b_ij stores the RS gij in.
-         call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
-                                 dr, ioff, joff, nb, gblk)
+         if (use_gpu_contraction) then
+            gblk = lehmann_result%blocks(:, :, 1:ne, ipair)
+         else
+            call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
+                                    dr, ioff, joff, nb, gblk)
+         end if
          green_obj%gij(:, :, :, pair) = gblk
 
          ! G_ji: swap the site blocks and negate the bond vector (dR_ji = -dR_ij).
-         call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
-                                 -dr, joff, ioff, nb, gblk)
+         if (use_gpu_contraction) then
+            gblk = lehmann_result%blocks(:, :, 1:ne, npair_local + ipair)
+         else
+            call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_contour, &
+                                    -dr, joff, ioff, nb, gblk)
+         end if
          green_obj%gji(:, :, :, pair) = gblk
 
          ! Non-eta torque families from the (rotated) blocks -- the exact Pauli
@@ -264,8 +328,12 @@ contains
          end if
 
          if (do_eta) then
-            call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
-                                    dr, ioff, joff, nb, gblk_eta)
+            if (use_gpu_contraction) then
+               gblk_eta = lehmann_result%blocks(:, :, ne + 1:ne + 64, ipair)
+            else
+               call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
+                                       dr, ioff, joff, nb, gblk_eta)
+            end if
             do ie = 1, 64
                green_obj%gij_eta(ie, :, :, pair) = gblk_eta(:, :, ie)
             end do
@@ -276,8 +344,12 @@ contains
                   green_obj%gix_eta(:, :, :, pair))
             end if
 
-            call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
-                                    -dr, joff, ioff, nb, gblk_eta)
+            if (use_gpu_contraction) then
+               gblk_eta = lehmann_result%blocks(:, :, ne + 1:ne + 64, npair_local + ipair)
+            else
+               call lehmann_pair_block(this%eigenvalues, this%eigenvectors, kfrac, z_eta, &
+                                       -dr, joff, ioff, nb, gblk_eta)
+            end if
             do ie = 1, 64
                green_obj%gji_eta(ie, :, :, pair) = gblk_eta(:, :, ie)
             end do
@@ -290,9 +362,29 @@ contains
          end if
       end do
 
+      call system_clock(lehmann_clock_stop)
+      if (use_gpu_contraction) then
+         write(lehmann_timing_message, '(a,es16.8,a,es16.8,a,es16.8,a,es16.8)') &
+            'ACC10_TIMING backend=cuda total_seconds=', &
+            real(lehmann_clock_stop - lehmann_clock_start, rp) / real(max(1, lehmann_clock_rate), rp), &
+            ' h2d_seconds=', lehmann_result%h2d_seconds, &
+            ' contraction_seconds=', lehmann_result%contraction_seconds, &
+            ' d2h_seconds=', lehmann_result%d2h_seconds
+      else
+         write(lehmann_timing_message, '(a,es16.8,a,es16.8,a,es16.8,a,es16.8)') &
+            'ACC10_TIMING backend=lapack total_seconds=', &
+            real(lehmann_clock_stop - lehmann_clock_start, rp) / real(max(1, lehmann_clock_rate), rp), &
+            ' h2d_seconds=', 0.0_rp, ' contraction_seconds=', &
+            real(lehmann_clock_stop - lehmann_clock_start, rp) / real(max(1, lehmann_clock_rate), rp), &
+            ' d2h_seconds=', 0.0_rp
+      end if
+      call g_logger%info(trim(lehmann_timing_message), __FILE__, __LINE__)
+
       if (allocated(z_eta)) deallocate (z_eta)
+      if (allocated(z_lehmann)) deallocate (z_lehmann)
       if (allocated(gblk_eta)) deallocate (gblk_eta)
       if (allocated(tnmag)) deallocate (tnmag, tz, ty, tx)
+      if (allocated(lehmann_result%blocks)) deallocate (lehmann_result%blocks)
       deallocate (kfrac, gblk)
    end subroutine fill_green_lehmann
 
