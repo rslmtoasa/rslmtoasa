@@ -1,0 +1,34 @@
+{
+  "schema": "rslmto.accp0-supercell-fe-examples.v1",
+  "source_root": "example/bulk/supercellFe",
+  "fixtures": [
+    {
+      "name": "supercellFe_2x2x2",
+      "directory": "2x2x2",
+      "length": 2,
+      "atom_count": 8
+    },
+    {
+      "name": "supercellFe_3x3x3",
+      "directory": "3x3x3",
+      "length": 3,
+      "atom_count": 27
+    },
+    {
+      "name": "supercellFe_4x4x4",
+      "directory": "4x4x4",
+      "length": 4,
+      "atom_count": 64
+    },
+    {
+      "name": "supercellFe_5x5x5",
+      "directory": "5x5x5",
+      "length": 5,
+      "atom_count": 125
+    }
+  ],
+  "input_contract": {
+    "required_crystal_sym": "file",
+    "reason": "The explicit L^3 geometry is in lattice.nml and must be selected by crystal_sym='file'. The benchmark rejects a fixture that regresses to the one-site bcc path."
+  }
+}

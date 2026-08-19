@@ -53,8 +53,6 @@ program accp0_real_material
    if (trim(backend) /= 'lapack' .and. trim(backend) /= 'cuda') then
       error stop 'ACCP0: backend must be lapack or cuda'
    end if
-   if (trim(mode) == 'oracle' .and. trim(backend) /= 'lapack') error stop 'ACCP0: oracle requires lapack'
-
    call g_parallel_context%restore_to_default()
    g_parallel_context = parallel_context()
    g_timer = timer()
@@ -62,7 +60,7 @@ program accp0_real_material
    call g_logger%init()
 
    if (trim(mode) == 'oracle') then
-      call run_oracle(trim(input_file), trim(dump_file), trim(fixture), mesh, supercell_l)
+      call run_oracle(trim(input_file), trim(dump_file), trim(fixture), trim(backend), mesh, supercell_l)
    else if (trim(mode) == 'preflight') then
       call run_preflight(trim(input_file), trim(fixture), trim(backend), mesh, tile_size, eigenvectors == 1, supercell_l)
    else
@@ -217,8 +215,8 @@ contains
       call recip%execution_backend%synchronize()
    end subroutine solve_tiles
 
-   subroutine run_oracle(input_file, dump_file, fixture, mesh, supercell_l)
-      character(len=*), intent(in) :: input_file, dump_file, fixture
+   subroutine run_oracle(input_file, dump_file, fixture, backend_name, mesh, supercell_l)
+      character(len=*), intent(in) :: input_file, dump_file, fixture, backend_name
       integer, intent(in) :: mesh(3), supercell_l
       type(reciprocal) :: recip
       type(hamiltonian), target :: ham
@@ -234,15 +232,16 @@ contains
       call make_mesh(mesh, points)
       allocate(hamiltonians(nb * lat%nrec, nb * lat%nrec, size(points, 2)))
       call assemble_all(recip, points, hamiltonians)
-      call recip%make_execution_backend('lapack')
+      call recip%make_execution_backend(backend_name)
       call recip%execution_backend%prepare_operator(ham%operator_generation)
       open (newunit=dump_unit, file=dump_file, status='replace', action='write')
       call solve_tiles(recip, hamiltonians, size(points, 2), .false., status, dump_unit)
       close(dump_unit)
-      if (status /= 0) error stop 'ACCP0: CPU oracle eigensolution failed'
+      if (status /= 0) error stop 'ACCP0: oracle eigensolution failed'
       unique_nk = count_unique_points(recip, points)
       write (*, '(a)') 'ACCP0_ORACLE fixture='//trim(fixture)//' L='//trim(int_token(supercell_l))// &
-         ' nmat='//trim(int_token(nb * lat%nrec))//' actual_unique_nk='//trim(int_token(unique_nk))
+         ' backend='//trim(backend_name)//' nmat='//trim(int_token(nb * lat%nrec))// &
+         ' actual_unique_nk='//trim(int_token(unique_nk))
    end subroutine run_oracle
 
    subroutine run_persistent(input_file, fixture, source_name, workload, backend_name, mesh, tile_size, want_vectors, &

@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import shutil
 import statistics
 import subprocess
@@ -188,14 +189,21 @@ def make_bcc_supercell(source: Path, destination: Path, length: int) -> Path:
     return destination / "input.nml"
 
 
-def run_oracle(binary: Path, fixture_dir: Path, output: Path, mesh: tuple[int, int, int], length: int) -> list[float]:
+def run_oracle(
+    binary: Path,
+    fixture_dir: Path,
+    output: Path,
+    mesh: tuple[int, int, int],
+    length: int,
+    backend: str = "lapack",
+) -> list[float]:
     dump = output.with_suffix(".eig")
     command = [
         str(binary),
         "--mode",
         "oracle",
         "--backend",
-        "lapack",
+        backend,
         "--fixture",
         "bccFe",
         "--input",
@@ -211,7 +219,7 @@ def run_oracle(binary: Path, fixture_dir: Path, output: Path, mesh: tuple[int, i
     text = (completed.stdout or "") + (completed.stderr or "")
     output.write_text(text, encoding="utf-8")
     if completed.returncode:
-        raise RuntimeError(f"CPU folding oracle failed ({completed.returncode}):\n{text}")
+        raise RuntimeError(f"{backend} eigenvalue oracle failed ({completed.returncode}):\n{text}")
     return [float(line) for line in dump.read_text(encoding="utf-8").split()]
 
 
@@ -231,7 +239,9 @@ def degeneracy_signature(values: list[float], tolerance: float = 1.0e-8) -> list
     return groups
 
 
-def compare_oracle(primitive: list[float], supercell: list[float]) -> dict[str, Any]:
+def compare_oracle(
+    primitive: list[float], supercell: list[float], *, require_degeneracy: bool = True
+) -> dict[str, Any]:
     if len(primitive) != len(supercell):
         return {
             "passed": False,
@@ -246,11 +256,12 @@ def compare_oracle(primitive: list[float], supercell: list[float]) -> dict[str, 
     left_degeneracy = degeneracy_signature(left)
     right_degeneracy = degeneracy_signature(right)
     return {
-        "passed": error <= 1.0e-7 and left_degeneracy == right_degeneracy,
+        "passed": error <= 1.0e-7 and (not require_degeneracy or left_degeneracy == right_degeneracy),
         "primitive_eigenvalues": len(primitive),
         "supercell_eigenvalues": len(supercell),
         "max_abs_error": error,
         "degeneracy_match": left_degeneracy == right_degeneracy,
+        "degeneracy_required": require_degeneracy,
         "primitive_degeneracy": left_degeneracy,
         "supercell_degeneracy": right_degeneracy,
     }

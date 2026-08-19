@@ -447,11 +447,13 @@ report metric deltas
 ```
 
 Recommended measured repetitions:
-- at least 5 for fast small cases;
-- at least 3 for expensive 4^3/5^3 cases.
+- at least 5 for every scaling fixture and backend;
+- keep `nstep >= 5` in the production input as part of the fixture contract.
 
-Do not force five repetitions of a very expensive 2250x2250 solve if runtime is
-unreasonable; document the chosen count.
+Do not use fewer than five measured steps to avoid startup/cleanup samples
+dominating the reported steady-state result. If a future workload cannot
+afford this policy, record it as an explicit exception rather than silently
+comparing it with the standard campaign.
 
 Report separately:
 
@@ -592,8 +594,42 @@ Fe 4^3:
 - Nk = 1 and one small/matched-density case.
 
 Fe 5^3:
-- Gamma first;
+- 2x2x2 in the standard scaling schedule;
 - add more k points only if memory/runtime permit.
+
+## I-A. Reusable explicit-supercell scaling fixtures
+
+The supplied production examples are the reusable ACC-P0 scaling corpus:
+
+```text
+example/bulk/supercellFe/2x2x2
+example/bulk/supercellFe/3x3x3
+example/bulk/supercellFe/4x4x4
+example/bulk/supercellFe/5x5x5
+```
+
+Their benchmark contract is `crystal_sym='file'`, `lmax=2`, explicit
+`nrec=L^3`, and the normal LMTO `lattice.nml` -> structure constants -> H(R) ->
+H(k) path. The machine-readable manifest and runner are
+`tests/benchmarks/supercellFe_accp0_examples.json` and
+`tests/benchmarks/accp0_supercell_fe.py`.
+
+For a dense-small-cell to sparse-large-cell workload, use the geometric mesh
+schedule anchored at a 32x32x32 primitive-cell option:
+
+```text
+L=2: 16x16x16 = 4096 k points, nmat=144
+L=3:  8x8x8    =  512 k points, nmat=486
+L=4:  4x4x4    =   64 k points, nmat=1152
+L=5:  2x2x2    =    8 k points, nmat=2250
+```
+
+Future workpackages should reuse this corpus for CPU/GPU correctness,
+steady-state timing, memory preflight, batching studies, and solver-strategy
+comparisons. The runner stages the canonical `2x2x2/Fe1.nml` potential into
+every site-labelled file, changing only the site symbol, so the measured
+workload is translationally uniform even though the supplied source files are
+site-dependent. The report retains both source and staged potential audits.
 
 For every case test eigenvalues-only and eigenvectors where production supports both.
 
@@ -646,22 +682,30 @@ memory estimate
 - [x] no CUDA solver algorithm changed
 - [x] benchmark methodology documented honestly
 
-ACC-P0 evidence from the CUDA-enabled host: the three-repetition Gamma
-confirmation measured bcc-Fe steady GPU/CPU speedups of 0.05x (L=1, nmat=18),
-0.24x (L=2, nmat=144), 0.71x (L=3, nmat=486), 1.55x (L=4, nmat=1152), and
-2.68x (L=5, nmat=2250). The L=2,3,4,5 CPU folding checks passed with maximum
-sorted-eigenvalue errors of 1.55e-13, 5.92e-13, 5.16e-13, and 4.28e-13,
-respectively, with matching degeneracy groups. The quick Si/Fe campaign also
-covered values-only and eigenvector requests, crossover and matched-density
-labels, tiles 1/8, and nominal 1x1x1 and 2x2x2 meshes. GPU preflight reported
-approximately 15.7 GiB free on the selected RTX A4000; no case was skipped for
-memory. Raw JSON/CSV evidence was kept machine-local under `/tmp`.
+ACC-P0 evidence from the CUDA-enabled host now includes the five-repetition
+scaling campaign using `nstep=5`, persistent processes, and the
+32^3 -> 16^3 -> 8^3 -> 4^3 -> 2^3 per-axis mesh schedule:
 
-The full suggested Nk grid was intentionally not forced for L=4/5: one dense
-2250x2250 solve is already materially more expensive than the small cases.
-The campaign driver supports the broader grid and records the chosen
-repetition policy, but the committed evidence uses the safe Gamma-heavy
-campaign described above.
+| fixture | nmat | Nk | CPU steady (s) | CUDA steady (s) | CPU/CUDA |
+|---|---:|---:|---:|---:|---:|
+| 2^3 | 144 | 4096 | 6.503 | 23.061 | 0.282x |
+| 3^3 | 486 | 512 | 9.705 | 11.297 | 0.859x |
+| 4^3 | 1152 | 64 | 10.345 | 6.511 | 1.589x |
+| 5^3 | 2250 | 8 | 10.539 | 3.831 | 2.751x |
+
+The CPU/CUDA eigenvalue multisets agreed to at worst 1.8e-12; exact
+degeneracy grouping is retained as a diagnostic because it is sensitive to
+backend perturbations over the 589,824-state L=2 mesh. Uniform-Fe1 folding
+checks passed with maximum errors below 2.7e-11. GPU preflight reported
+approximately 15.7 GiB free on the selected RTX A4000; no case was skipped for
+memory. Raw JSON/CSV evidence is machine-local under
+`/tmp/accp0-supercellFe-kmesh-uniform-full-5`.
+
+The source inputs select `crystal_sym='file'` and each has `nstep=5`. The
+source audit reports 5, 6, 6, and 8 normalized potential contents in the 2^3
+through 5^3 directories, but the measured staged copies use one canonical
+`Fe1.nml` potential everywhere; the report records this adaptation explicitly
+and confirms one staged normalized potential per fixture.
 
 **Commit message:** `Build persistent real-material GPU benchmarks`
 

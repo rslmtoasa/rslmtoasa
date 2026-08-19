@@ -121,3 +121,15 @@ steady solve statistics, H(k) CPU assembly, and total steady workload time.
 The driver does not change the CUDA solver algorithm. Its reset hook clears
 only interval timing accumulators; the persistent context, handle, stream,
 workspace, and lifetime request counters remain intact.
+
+## ACC-P0 supplied bcc-Fe supercells
+
+`accp0_supercell_fe.py` benchmarks the exact explicit supercells under
+`example/bulk/supercellFe` and records CPU-versus-CUDA eigenvalue agreement.
+It asserts the corrected `crystal_sym='file'` selector so the supplied
+`lattice.nml` is consumed; source inputs remain unchanged, while staged
+`FeX.nml` files use one canonical `Fe1.nml` potential with relabelled sites.
+See
+`docs/dev/ACC-P0_SUPERCELL_FE_BENCHMARKS.md` for the input audit and the full
+campaign command. The scaling campaign requires at least five measured
+repetitions and input `nstep >= 5`.
