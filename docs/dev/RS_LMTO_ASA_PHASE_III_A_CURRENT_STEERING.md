@@ -1,5 +1,5 @@
 # RS-LMTO-ASA Phase III-A — Current GPU Performance Steering
-## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 / ACC-11 / ACC-13 complete; active entry point: ACC-14
+## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 / ACC-11 / ACC-12 / ACC-13 complete; active entry point: ACC-14
 
 **Target branch:** `fable_v3`
 **Purpose:** keep the accelerator campaign focused on measured GPU performance after the original ACC-00...ACC-09 work and the subsequent ACC-P rescue campaign.
@@ -57,10 +57,10 @@ Use this table as the primary steering reference.
 | **ACC-P1b** | **Evidence input** | FP32/mixed-precision study; consume its current result if present on HEAD | Do not restart; include result in P4, or record FP32 as not yet established |
 | **ACC-P2** | **Completed** | Hot-path optimization has been performed | Use its post-optimization timings as P4 evidence |
 | **ACC-P3** | **Completed** | Decisive real-material 2D crossover campaign is done | Reuse its corpus/results; only rerun targeted rows if P2 changed their timings materially |
-| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10/11/13 closed; proceed to ACC-14 |
+| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10/11/12/13 closed; proceed to ACC-14 |
 | **ACC-10** | **Completed on current HEAD** | Backend-owned CUDA Lehmann contraction over the existing host-eigenpair contract | Reuse; do not reopen unless a new residency or mixed-routing question is justified |
 | **ACC-11** | **Completed on current HEAD** | Narrow backend-owned CUDA FP64 resident eigensystem handoff for Lehmann | Reuse only for the explicit normal-mesh CUDA Lehmann path; no general residency framework |
-| ACC-12 | Conditional / low priority | GPU H(R)->H(k) assembly | Only if P2/P4 show H(k) assembly has become material |
+| **ACC-12** | **Completed — not justified** | Post-P2/P4 profiling leaves CPU H(k) assembly below the materiality gate; no GPU assembler added | Keep the canonical CPU Fourier assembler; reopen only with new evidence |
 | **ACC-13** | **Completed on current HEAD** | Existing RS CUDA KPM moment path validated for production charge/spin/orbital transport; no new kernel justified by the measured audit | Reuse; keep the focused production probe as the hardware evidence |
 | ACC-14 | Final gate | Accelerator support/performance matrix | Active next task |
 
@@ -353,8 +353,9 @@ does not silently execute LAPACK.
   The measured benefit is removal of the redundant ACC-10 eigenpair H2D copy;
   the contraction still dominates total production time, so no broad end-to-end
   speedup claim is made.
-- **ACC-12:** defer GPU H(R)->H(k) assembly.  CPU H(k) is about `11.9%`,
-  `10.0%`, and `6.3%` of those requests while the GPU eigensolver dominates;
+- **ACC-12:** close GPU H(R)->H(k) assembly as not justified by the measured
+  workload.  CPU H(k) is about `11.9%`, `10.0%`, and `6.3%` of the post-P2
+  Fe `3^3`, `4^3`, and `5^3` requests while the GPU eigensolver dominates;
   the canonical CPU Fourier assembler remains appropriate.
 - **ACC-10:** the existing host-eigenpair CUDA contraction is now validated and
   closed.  Its measured production route uses CUDA eigenpairs in the large-
@@ -364,9 +365,9 @@ does not silently execute LAPACK.
 
 ACC-P4 checklist is therefore complete: policy frozen, FP32 not promoted,
 LAPACK default retained, no automatic dispatch added, ACC-11 completed only in
-its evidence-backed narrow scope, ACC-12 remains gated by evidence, ACC-10
-closed, ACC-13 completed for the existing RS KPM transport path, and ACC-14
-is the next implementation/documentation track.
+its evidence-backed narrow scope, ACC-12 closed without a GPU assembler,
+ACC-10 closed, ACC-13 completed for the existing RS KPM transport path, and
+ACC-14 is the next implementation/documentation track.
 
 # 12. Revised relevance of original ACC-10...ACC-14
 
@@ -518,17 +519,41 @@ the whole production request is materially faster.
 ## ACC-12 — GPU H(R)->H(k) assembly
 
 ### Status
-**Conditional and currently lower priority.**
+**Completed on current HEAD — no production-code change justified.**
 
-P2 must report the new H(k)-assembly fraction after solver optimization.
+### Decision and measured result
 
-Proceed only if CPU H(k) assembly has become a material bottleneck.
+The post-P2 `vectors=yes` real-material campaign measured the CPU Fourier
+assembly fraction of the persistent CUDA reciprocal requests as:
 
-If it remains small:
-- close ACC-12 with "not justified";
-- keep the canonical CPU Fourier assembler.
+| Fixture | nmat | CPU H(k) assembly fraction | Decision |
+|---|---:|---:|---|
+| bcc Fe `3^3` | 486 | 11.9% | retain CPU assembly |
+| bcc Fe `4^3` | 1152 | 10.0% | retain CPU assembly |
+| bcc Fe `5^3` | 2250 | 6.3% | retain CPU assembly |
 
-Do not port Fourier assembly preemptively.
+The CUDA eigensolver remains the dominant component in all three measured
+requests.  Earlier ACC-07 evidence also established that the public H(k)
+compatibility cache is filled from the already assembled host tile, so there
+is no redundant device-to-host H(k) transfer for a GPU assembler to remove.
+H(k) remains a real compatibility product for Dyson, BSF, and legacy/bands
+consumers.
+
+The quantitative action gate therefore closes ACC-12 without code: H(k) has
+not become a material end-to-end bottleneck after solver optimization.  The
+canonical CPU `reciprocal_assembler` is retained, no GPU Fourier kernel or
+new residency/cache flag is added, and the established phase conventions and
+physics are unchanged.  ACC-12 may be reopened only if a new validated
+workload makes H(k) material or creates a repeated-residency consumer that
+changes this cost balance.
+
+### Completion checklist
+
+- [x] post-P2/P4 H(k) assembly fraction measured
+- [x] representative real Fe `3^3`, `4^3`, and `5^3` workloads measured
+- [x] quantitative no-port decision recorded
+- [x] no GPU assembler added when the evidence did not justify one
+- [x] H(k) phase conventions and downstream compatibility retained
 
 ---
 
@@ -593,6 +618,24 @@ sweeps, and recursion-versus-Lehmann consistency.  The configured GPU matrix
 also passed all `10/10` CPU backend regression cases and `8/8` CPU-vs-GPU
 consistency checks; its two MKL-specific cases were explicitly skipped because
 `ENABLE_MKL_KERNELS=OFF`.
+
+### ACC-13 closeout rerun on current hardware
+
+The closeout was independently rerun on 2026-08-19 with the RTX A4000.  The
+low-level validator again passed all 15 CUDA ABI routes, with a maximum
+displayed FP64 relative error of `2.20e-15`.  The focused production probe
+passed charge, spin, and orbital conductivity at both workload sizes:
+
+| Probe | Charge CPU/GPU | Spin CPU/GPU | Orbital CPU/GPU | max complex error |
+|---|---:|---:|---:|---:|
+| `cond_ll=20`, replication 4 | 0.622x | 0.655x | 0.631x | `7.3e-7` |
+| `cond_ll=40`, replication 6 | 1.382x | 1.341x | 1.348x | `1.0e-6` |
+
+These are single current-host process-wall samples and are consistent with
+the existing policy: the small case remains CPU-preferred, while the larger
+case is CUDA-beneficial on this RTX A4000.  The full current CUDA VAL-09
+campaign also passed all 59 cases, including charge/spin/orbital tensor and
+sign checks, convergence sweeps, and the recursion-versus-Lehmann check.
 
 ### Retained boundary and negative results
 
@@ -663,7 +706,7 @@ host-eigenpair CUDA             RS KPM/transport
     |
     +--> ACC-11  <-- COMPLETE (narrow CUDA resident Lehmann handoff)
 
-ACC-12 only if P2/P4 show H(k) assembly is material
+ACC-12  <-- COMPLETE (CPU H(k) assembly retained; GPU port not justified)
 
     |
     v
@@ -822,6 +865,7 @@ ACC-P3       completed
 ACC-P4       completed
 ACC-10       completed
 ACC-11       completed (narrow CUDA resident Lehmann handoff)
+ACC-12       completed (CPU H(k) assembly retained; GPU port not justified)
 ACC-13       completed (existing CUDA KPM transport path)
 ```
 
@@ -831,9 +875,10 @@ the completed local probe, so P4 left FP32 unestablished.
 ## The next active work package is ACC-14.
 
 ACC-10 is closed with the existing host-eigenpair contract, ACC-11 is complete
-in its evidence-backed narrow CUDA scope, and ACC-13 is complete for the
-existing RS KPM transport path.  ACC-14 should proceed next.  Do not reopen
-ACC-P1b/P2/P3 or expand ACC-11/12 beyond the evidence gates stated above.
+in its evidence-backed narrow CUDA scope, ACC-12 is closed without a GPU
+assembler, and ACC-13 is complete for the existing RS KPM transport path.
+ACC-14 should proceed next.  Do not reopen ACC-P1b/P2/P3 or expand ACC-11/12
+beyond the evidence gates stated above.
 
 Do not repeat:
 - benchmark-harness construction;
@@ -848,8 +893,8 @@ The remaining sequence is:
 
 ```text
 ACC-10 is complete; ACC-11 is complete in its narrow resident-Lehmann scope;
+ACC-12 is complete with the measured no-port decision;
 ACC-13 is complete for the existing CUDA KPM transport path.
-ACC-12 is conditional on H(k)-assembly evidence.
 ACC-14 is the next implementation/documentation track.
 ACC-14 closes the accelerator campaign.
 ```
