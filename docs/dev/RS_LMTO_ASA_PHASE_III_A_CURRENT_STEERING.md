@@ -1,5 +1,5 @@
 # RS-LMTO-ASA Phase III-A — Current GPU Performance Steering
-## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 / ACC-11 complete; active entry point: ACC-13
+## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / ACC-P4 update — ACC-10 / ACC-11 / ACC-13 complete; active entry point: ACC-14
 
 **Target branch:** `fable_v3`
 **Purpose:** keep the accelerator campaign focused on measured GPU performance after the original ACC-00...ACC-09 work and the subsequent ACC-P rescue campaign.
@@ -57,12 +57,12 @@ Use this table as the primary steering reference.
 | **ACC-P1b** | **Evidence input** | FP32/mixed-precision study; consume its current result if present on HEAD | Do not restart; include result in P4, or record FP32 as not yet established |
 | **ACC-P2** | **Completed** | Hot-path optimization has been performed | Use its post-optimization timings as P4 evidence |
 | **ACC-P3** | **Completed** | Decisive real-material 2D crossover campaign is done | Reuse its corpus/results; only rerun targeted rows if P2 changed their timings materially |
-| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10 closed; proceed to ACC-13 |
+| **ACC-P4** | **Completed** | Production CPU/GPU/precision policy frozen from post-P2 `vectors=yes` evidence | ACC-10/11/13 closed; proceed to ACC-14 |
 | **ACC-10** | **Completed on current HEAD** | Backend-owned CUDA Lehmann contraction over the existing host-eigenpair contract | Reuse; do not reopen unless a new residency or mixed-routing question is justified |
 | **ACC-11** | **Completed on current HEAD** | Narrow backend-owned CUDA FP64 resident eigensystem handoff for Lehmann | Reuse only for the explicit normal-mesh CUDA Lehmann path; no general residency framework |
 | ACC-12 | Conditional / low priority | GPU H(R)->H(k) assembly | Only if P2/P4 show H(k) assembly has become material |
-| ACC-13 | Pending and relevant | RS KPM/Kubo-Bastin GPU completeness/performance | High priority regardless of reciprocal eigensolver outcome |
-| ACC-14 | Final gate | Accelerator support/performance matrix | Run last |
+| **ACC-13** | **Completed on current HEAD** | Existing RS CUDA KPM moment path validated for production charge/spin/orbital transport; no new kernel justified by the measured audit | Reuse; keep the focused production probe as the hardware evidence |
+| ACC-14 | Final gate | Accelerator support/performance matrix | Active next task |
 
 ---
 
@@ -359,12 +359,14 @@ does not silently execute LAPACK.
 - **ACC-10:** the existing host-eigenpair CUDA contraction is now validated and
   closed.  Its measured production route uses CUDA eigenpairs in the large-
   matrix regime; CPU-preferred reciprocal cases remain on the CPU route.
-- **ACC-13:** remains the next high-priority, largely independent RS GPU track.
+- **ACC-13:** is now closed for the existing RS CUDA KPM transport path; the
+  focused production evidence is recorded in `ACC-13_KPM_TRANSPORT_CUDA.md`.
 
 ACC-P4 checklist is therefore complete: policy frozen, FP32 not promoted,
 LAPACK default retained, no automatic dispatch added, ACC-11 completed only in
 its evidence-backed narrow scope, ACC-12 remains gated by evidence, ACC-10
-closed, and ACC-13 promoted as the next implementation track.
+closed, ACC-13 completed for the existing RS KPM transport path, and ACC-14
+is the next implementation/documentation track.
 
 # 12. Revised relevance of original ACC-10...ACC-14
 
@@ -533,16 +535,74 @@ Do not port Fourier assembly preemptively.
 ## ACC-13 — RS KPM/Kubo-Bastin GPU completeness and performance
 
 ### Status
-**Still strongly relevant.**
+**Completed on current HEAD for the existing CUDA moment path.**
 
-This task is largely orthogonal to reciprocal eigensolver policy.
+### Completion decision
 
-It should remain a major Phase III-A target because:
-- RS large-system algorithms are natural GPU workloads;
-- existing CUDA machinery already covers substantial recursion/moment functionality;
-- Phase II established charge/spin/orbital Kubo-Bastin CPU scientific contracts.
+The audit found no missing high-value transport kernel.  The existing CUDA
+plugin already covers the production dataflow:
 
-If P4 concludes reciprocal GPU has only a narrow useful regime, ACC-13 becomes even more important.
+```text
+CPU Hamiltonian/current-operator construction
+    -> CUDA stochastic Chebyshev moments
+    -> existing CPU Gamma/Kubo-Bastin reconstruction and output
+```
+
+The same backend-owned stochastic moment entry point is used for charge, spin,
+and orbital conductivity.  The separate orbital-moment route is also covered
+by the existing CUDA orbital-moment entry point.  CPU postprocessing remains
+the canonical consumer; no transport formula or operator convention was
+changed.
+
+### Current evidence
+
+The low-level CUDA ABI validator passed all 15 existing recursion,
+stochastic/orbital-moment, and DOS/GF comparisons at a maximum reported
+relative error of approximately `2.2e-15` in the FP64 validation mode.
+
+The focused production probe
+[`acc13_kpm_cuda.py`](../../tests/validation/acc13_kpm_cuda.py) then ran the
+real SOC fcc-Pt conductivity fixture through the same CUDA-enabled binary in
+CPU and CUDA modes.  For `cond_ll=20`, replication 4, and `rc=20`, charge,
+spin, and orbital conductivity all passed the `5e-3` complex-observable
+envelope; the measured CPU/GPU wall ratios were `0.61x`, `0.66x`, and `0.62x`
+respectively, so this small workload remains CPU-preferred.
+
+On the larger `cond_ll=40`, replication-6 probe, the same three observables
+passed with complex relative errors below `1.0e-6`; CPU/GPU wall ratios were
+`1.26x`, `1.33x`, and `1.34x` for charge, spin, and orbital respectively.
+This establishes a useful measured regime without claiming a portable
+automatic threshold or a universal transport speedup.
+
+Full scope, limitations, and reproduction commands are recorded in
+[`ACC-13_KPM_TRANSPORT_CUDA.md`](ACC-13_KPM_TRANSPORT_CUDA.md).
+
+### Retained boundary and negative results
+
+- Existing CPU Hamiltonian/current-operator construction and CPU
+  Gamma/Kubo-Bastin postprocessing are retained.
+- No redundant charge/spin/orbital-specific CUDA kernel was added: the
+  shared stochastic moment contract is the correct reuse point.
+- The default CUDA Chebyshev transport arithmetic remains FP32 for moments
+  with FP64 host outputs; the low-level FP64 run is a reference check, not a
+  production precision-policy promotion.
+- Small production transport cases are CPU-preferred; larger cases can be
+  CUDA-beneficial on the measured RTX A4000.  No automatic dispatch was added.
+- Structured FFT/conv orbital moments, `ccor_2c+hoh`, and local-axis routes
+  remain explicitly unsupported as recorded by the existing guards.
+
+### Completion checklist
+
+- [x] transport CPU/GPU dataflow mapped
+- [x] existing GPU moment support validated
+- [x] charge conductivity CPU/GPU compared
+- [x] spin conductivity CPU/GPU compared
+- [x] orbital conductivity CPU/GPU compared
+- [x] symmetry/operator conventions retained through the existing VAL-09 path
+- [x] performance hotspots measured on small and larger real workloads
+- [x] no redundant kernel added
+- [x] end-to-end transport speedup recorded, including the CPU-preferred result
+- [x] support matrix input prepared for ACC-14
 
 ---
 
@@ -581,7 +641,7 @@ ACC-P4  <-- COMPLETE
     +-----------------------------+
     |                             |
     v                             v
-ACC-10  <-- COMPLETE           ACC-13
+ACC-10  <-- COMPLETE           ACC-13  <-- COMPLETE
 host-eigenpair CUDA             RS KPM/transport
     |
     +--> ACC-11  <-- COMPLETE (narrow CUDA resident Lehmann handoff)
@@ -590,7 +650,7 @@ ACC-12 only if P2/P4 show H(k) assembly is material
 
     |
     v
-ACC-14 final accelerator support/performance gate
+ACC-14 final accelerator support/performance gate  <-- NEXT
 ```
 
 ACC-P1b, ACC-P2, and ACC-P3 are **completed evidence inputs to P4**, not preliminary gates that the next assistant should execute again.
@@ -745,17 +805,18 @@ ACC-P3       completed
 ACC-P4       completed
 ACC-10       completed
 ACC-11       completed (narrow CUDA resident Lehmann handoff)
+ACC-13       completed (existing CUDA KPM transport path)
 ```
 
 ACC-P1b was an evidence input.  Its physical CUDA rows were unsupported on
 the completed local probe, so P4 left FP32 unestablished.
 
-## The next active work package is ACC-13.
+## The next active work package is ACC-14.
 
-ACC-10 is closed with the existing host-eigenpair contract, and ACC-11 is
-complete in its evidence-backed narrow CUDA scope.  ACC-13 should proceed next.
-Do not reopen ACC-P1b/P2/P3 or expand ACC-11/12 beyond the evidence gates
-stated above.
+ACC-10 is closed with the existing host-eigenpair contract, ACC-11 is complete
+in its evidence-backed narrow CUDA scope, and ACC-13 is complete for the
+existing RS KPM transport path.  ACC-14 should proceed next.  Do not reopen
+ACC-P1b/P2/P3 or expand ACC-11/12 beyond the evidence gates stated above.
 
 Do not repeat:
 - benchmark-harness construction;
@@ -770,8 +831,9 @@ The remaining sequence is:
 
 ```text
 ACC-10 is complete; ACC-11 is complete in its narrow resident-Lehmann scope;
-ACC-13 is the next implementation track.
+ACC-13 is complete for the existing CUDA KPM transport path.
 ACC-12 is conditional on H(k)-assembly evidence.
+ACC-14 is the next implementation/documentation track.
 ACC-14 closes the accelerator campaign.
 ```
 

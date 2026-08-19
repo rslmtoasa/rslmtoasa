@@ -31,7 +31,8 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
                replication: int = 4, fermi: float = -0.085837,
                energy_min: float = -2.5, energy_max: float = 1.2,
                route: str = "recursion", rc: int = 20,
-               kmesh: int | None = None) -> None:
+               kmesh: int | None = None, gpu_plugin: bool = False,
+               gpu_backend: str = "csr") -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
     shutil.copytree(base, workdir)
@@ -44,7 +45,8 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
         "energy": {"fermi": fermi, "energy_min": energy_min,
                     "energy_max": energy_max, "channels_ldos": channels},
         "control": {"cond_ll": cond_ll, "cond_type": cond_type,
-                     "cond_calctype": "per_type", "cheb_backend": "legacy"},
+                     "cond_calctype": "per_type", "cheb_backend": "legacy",
+                     "gpu_plugin": gpu_plugin, "gpu_backend": gpu_backend},
         "reciprocal": {"nk1": kmesh or replication, "nk2": kmesh or replication,
                         "nk3": kmesh or replication, "use_symmetry_reduction": False},
     }
@@ -117,6 +119,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True, type=Path)
     parser.add_argument("--scratch-root", required=True, type=Path)
+    parser.add_argument("--gpu-plugin", action="store_true",
+                        help="run the same validation campaign through the CUDA RS plugin")
+    parser.add_argument("--gpu-backend", default="csr",
+                        choices=("csr", "bsr", "fft", "conv"),
+                        help="CUDA RS backend when --gpu-plugin is enabled")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[2]
@@ -137,7 +144,9 @@ def main() -> int:
     }
 
     def add(name: str, *, case_base: Path = base, **kwargs: object) -> None:
-        cases[name] = run_case(binary, case_base, scratch / name, **kwargs)
+        cases[name] = run_case(binary, case_base, scratch / name,
+                               gpu_plugin=args.gpu_plugin,
+                               gpu_backend=args.gpu_backend, **kwargs)
 
     # Tensor structure and component/sign conventions at a common point.
     for cond_type in ("charge", "spin", "orbital"):
@@ -256,6 +265,8 @@ def main() -> int:
         "scope": "fcc Pt, SOC, one-site fcc, real-space PBC fixture; reduced rc/n/energy/order campaign",
         "kernel": {"name": "Lorentz", "alpha": 6.0,
                    "source": "source/conductivity.f90 calculate_gamma_nm; no eta/kernel-alpha namelist is exposed"},
+        "execution": {"gpu_plugin": args.gpu_plugin,
+                      "gpu_backend": args.gpu_backend if args.gpu_plugin else None},
         "operator_conventions": {
             "charge": "v_a/b(R) = (1/i) (direction dot (r_i-r_j) alat) H_ij(R), with optional velocity_scale on v_b",
             "spin": "J^s_a = 1/2 {S_z, v_a}; js_alpha selects S_z here",

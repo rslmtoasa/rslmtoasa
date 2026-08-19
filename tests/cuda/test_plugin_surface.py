@@ -133,6 +133,14 @@ def main() -> int:
 
     require("does not support orbital moments" in core,
             "structured orbital-moment rejection must remain explicit")
+    transport = (ROOT / "source/recursion_transport.f90").read_text()
+    require("case ('charge')" in transport and "case('spin')" in transport and
+            "case('orbital')" in transport,
+            "charge/spin/orbital transport operator families are not all present")
+    require("gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)" in transport,
+            "stochastic transport does not expose the CUDA dispatch gate")
+    require("gpu_plugin_ready(this, 'chebyshev_orbital_mod()', allow_hoh=.true.)" in transport,
+            "orbital transport does not expose the CUDA dispatch gate")
     require("allow_hoh=.true." in (ROOT / "source/recursion_haydock.f90").read_text(),
             "Block Lanczos HOH capability guard is missing")
     require("allow_hoh=.true." in (ROOT / "source/recursion_transport.f90").read_text(),
