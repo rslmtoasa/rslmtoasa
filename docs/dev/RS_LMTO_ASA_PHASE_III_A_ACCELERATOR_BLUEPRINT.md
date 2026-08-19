@@ -1595,14 +1595,35 @@ Use corresponding CPU functional fixtures and compare physical downstream output
 
 ## Checklist
 
-- [ ] reciprocal operator variants inventoried
-- [ ] CPU maturity checked for each
-- [ ] standard-Hermitian validated variants enabled
-- [ ] generalized variants not accidentally claimed
-- [ ] HOH/CCOR outputs compared where supported
-- [ ] no GPU operator duplication added
-- [ ] unsupported combinations documented
-- [ ] benchmark impact recorded
+- [x] reciprocal operator variants inventoried
+- [x] CPU maturity checked for each
+- [x] standard-Hermitian validated variants enabled
+- [x] generalized variants not accidentally claimed
+- [x] HOH/CCOR outputs compared where supported
+- [x] no GPU operator duplication added
+- [x] unsupported combinations documented
+- [x] benchmark impact recorded
+
+## ACC-09 completion record
+
+The scoped audit and reproduction campaign are recorded in
+[`ACC-09_RECIPROCAL_VARIANTS.md`](ACC-09_RECIPROCAL_VARIANTS.md).  The
+validated standard-Hermitian rows are first-order H(k), second-order/HOH H(k),
+and first-order + CCOR H(k).  CPU Fourier assembly remains authoritative for
+all three; CUDA receives the assembled H(k) tile and reuses the existing
+cuSOLVER eigensolver.  The CUDA capability contract explicitly reports no
+generalized-overlap support, and the source contract proves that the CUDA
+translation unit does not construct HOH or CCOR operators.
+
+The CPU/CUDA campaign compares the complete compact bcc-Fe reciprocal DOS
+output plus canonical EF, electron count, and band energy for both HOH and
+CCOR.  Its JSON report retains CPU assembly, H2D, eigensolver, D2H, and total
+timings without imposing a speedup claim.  The committed CPU references also
+pass when the two existing post-processing fixtures are run with CUDA.
+
+**Files changed:** `source/reciprocal_backend.f90`, `tests/unit/test_acc09_reciprocal_variants_source.py`, `tests/validation/val09_reciprocal_variants.py`, `CMakeLists.txt`, `docs/dev/ACC-09_RECIPROCAL_VARIANTS.md`, and this blueprint.
+
+**Checks run:** ACC-09 source contract, fresh CPU/CUDA build, CPU/CUDA HOH and CCOR campaign, and the existing reciprocal HOH/CCOR post-processing reference checks.  Generalized-overlap CUDA rejection remains covered by the capability/source contract and existing reciprocal backend boundary tests.
 
 **Commit message:** `Extend CUDA reciprocal operator coverage`
 

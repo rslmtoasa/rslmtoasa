@@ -77,6 +77,12 @@ contains
       ! node).  This lets callers reject the request at the typed seam instead
       ! of submitting an incomplete result and accidentally looking like a
       ! successful CPU fallback.
+      ! ACC-09: first-order, second-order/HOH, and CCOR are all ordinary
+      ! standard-Hermitian operators after the established CPU Fourier
+      ! assembly.  CUDA owns only the dense eigensolution; leaving both
+      ! assembly capabilities false deliberately selects that host handoff,
+      ! rather than declaring those scientifically validated variants
+      ! unsupported or duplicating their construction on the device.
       capabilities%standard_hermitian = this%initialized
       capabilities%generalized_hermitian = .false.
       capabilities%eigenvalues_only = this%initialized
@@ -141,7 +147,7 @@ contains
           request%request_assembled_hamiltonian .or. request%request_assembled_overlap .or. &
           allocated(request%input_overlap) .or. .not. request%solve_eigensystem .or. &
           .not. allocated(request%input_hamiltonian)) then
-         call g_logger%error('reciprocal CUDA backend: ACC-03 supports only standard eigensolution of host H(k) tiles.', &
+         call g_logger%error('reciprocal CUDA backend: only standard-Hermitian eigensolution of host-assembled H(k) tiles is supported.', &
                              __FILE__, __LINE__)
          return
       end if

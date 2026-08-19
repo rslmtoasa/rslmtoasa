@@ -606,6 +606,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME Acc04ArbitraryKSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc04_arbitrary_k_source.py)
   set_tests_properties(Acc04ArbitraryKSource PROPERTIES LABELS "unit;cuda;reciprocal;arbitrary-k;source-contract")
+  add_test(NAME Acc09ReciprocalVariantsSource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc09_reciprocal_variants_source.py)
+  set_tests_properties(Acc09ReciprocalVariantsSource PROPERTIES LABELS "unit;cuda;reciprocal;variants;source-contract")
   add_fortran_unit_test(UnitMagneticRepresentation ${TestDIR}/unit/test_magnetic_representation.f90)
   set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
   add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
