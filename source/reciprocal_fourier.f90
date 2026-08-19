@@ -669,6 +669,7 @@ contains
             allocate(request%input_hamiltonian(nmat,nmat,tile_length), source=host_workspace%h(:,:,1:tile_length))
          end if
          call this%execution_backend%execute_batch(request, result)
+         call this%execution_backend%synchronize()
          if (result%local_point_count /= tile_length .or. result%operator_generation /= request%operator_generation .or. &
              .not. result%eigenvalues_valid .or. &
              .not. result%eigenvectors_valid .or. .not. allocated(result%eigenvalues) .or. &

@@ -577,6 +577,23 @@ automatic threshold or a universal transport speedup.
 Full scope, limitations, and reproduction commands are recorded in
 [`ACC-13_KPM_TRANSPORT_CUDA.md`](ACC-13_KPM_TRANSPORT_CUDA.md).
 
+### Post-run verification on the current CUDA build
+
+On 2026-08-19, the complete requested validation was rerun after restoring
+the explicit `execution_backend%synchronize()` boundary required by the
+existing arbitrary-k source contract.  The low-level validator again passed
+all 15 CUDA ABI routes.  The CUDA-enabled unit/source gate passed `58/58`,
+including the CUDA lifecycle, device-mapping, reciprocal, KPM transport, and
+ACC source-contract tests.
+
+The full VAL-09 campaign passed all `59/59` CPU cases and all `59/59` CUDA
+cases using `--gpu-plugin --gpu-backend csr`.  The campaigns covered the
+charge, spin, and orbital tensor/sign checks, Fermi/order/replication/window
+sweeps, and recursion-versus-Lehmann consistency.  The configured GPU matrix
+also passed all `10/10` CPU backend regression cases and `8/8` CPU-vs-GPU
+consistency checks; its two MKL-specific cases were explicitly skipped because
+`ENABLE_MKL_KERNELS=OFF`.
+
 ### Retained boundary and negative results
 
 - Existing CPU Hamiltonian/current-operator construction and CPU
