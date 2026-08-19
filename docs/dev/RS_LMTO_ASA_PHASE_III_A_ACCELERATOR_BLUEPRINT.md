@@ -1408,18 +1408,54 @@ Preserve old behavior for callers that require it.
 
 ## Checklist
 
-- [ ] H(k) consumers mapped
-- [ ] H(k) transfer measured
-- [ ] H(k) host memory measured
-- [ ] optimization threshold justified
-- [ ] no code added if benefit is insignificant
-- [ ] if optimized, request semantics explicit
-- [ ] legacy callers preserved
-- [ ] SCF/bands/DOS unchanged
-- [ ] benchmark repeated after change
-- [ ] net end-to-end benefit demonstrated if code changed
+- [x] H(k) consumers mapped
+- [x] H(k) transfer measured
+- [x] H(k) host memory measured
+- [x] optimization threshold justified
+- [x] no code added because the measured benefit is insignificant
+- [x] no request semantics changed because no optimization was justified
+- [x] legacy callers preserved
+- [x] SCF/bands/DOS unchanged
+- [x] benchmark repeated after the Decision-A assessment (no code change)
+- [x] net end-to-end benefit not applicable because no production code changed
 
 **Commit message:** `Reduce reciprocal Hk materialization overhead`
+
+## ACC-07 completion record
+
+ACC-07 is closed with Decision A. The consumer map, transfer/memory
+measurements, thresholds, fresh CPU/CUDA validation, and repeat benchmark are
+recorded in [`docs/dev/ACC-07_HK_MATERIALIZATION.md`](ACC-07_HK_MATERIALIZATION.md).
+
+The validated CUDA normal-mesh path reports zero H(k) device-to-host transfer:
+host Fourier assembly produces the request tile and the compatibility cache is
+populated from that same host data. H(k) remains required by the reciprocal
+Dyson Green and BSF consumers, so removing it would change established caller
+semantics. The measured 4x4x4 cache payloads are 0.0625 MiB for Si/sp and
+0.3164 MiB for bcc-Fe/spd; the ACC-06 72x72, Nk=32 larger fixture is 2.5313
+MiB. No production code or request semantics were changed.
+
+Fresh current-build CUDA and LAPACK converged Si/Fe SCF/DOS runs matched at
+reported precision, including EF, band energy, total energy, DOS integral, and
+the Fe moment. The representative ACC-06 repeat remained CPU-favored across
+all four fixtures, so no end-to-end materialization benefit was demonstrated
+or claimed.
+
+- [x] H(k) consumers mapped
+- [x] H(k) transfer measured
+- [x] H(k) host memory measured
+- [x] optimization threshold justified
+- [x] no code added if benefit is insignificant
+- [x] if optimized, request semantics explicit (not applicable; Decision A)
+- [x] legacy callers preserved
+- [x] SCF/bands/DOS unchanged
+- [x] benchmark repeated after decision
+- [x] net end-to-end benefit demonstrated if code changed (not applicable; no code changed)
+
+**Checks run:** fresh CUDA and current-build LAPACK `val02_reciprocal_scf.py
+--converged-only` campaigns (2/2 cases pass each), representative ACC-06
+repeat (24/24 benchmark runs pass), and the focused reciprocal CUDA/CPU tests
+listed in the handoff. `git diff --check` passes.
 
 ---
 
