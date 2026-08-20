@@ -252,6 +252,18 @@ def main() -> int:
                         ))
 
     add_speedups(rows)
+    campaign_environment = capture_environment(ROOT, build_dir, mpi_ranks=1)
+    # A campaign contains multiple thread settings, so the top-level record
+    # must not inherit one arbitrary setting from the parent process.  The
+    # per-row environment remains authoritative for the actual run.
+    campaign_environment.update({
+        "omp_threads": args.omp_threads[0] if len(args.omp_threads) == 1 else None,
+        "blas_threads": args.blas_threads[0] if len(args.blas_threads) == 1 else None,
+        "omp_threads_sweep": args.omp_threads,
+        "blas_threads_sweep": args.blas_threads,
+        "omp_proc_bind": os.environ.get("OMP_PROC_BIND", "close"),
+        "omp_places": os.environ.get("OMP_PLACES", "cores"),
+    })
     report = {
         "schema": "rslmto.kpm-g1.2.v1",
         "scope": "precision-fair, exclusive-phase KPM/Kubo-Bastin transport benchmark",
@@ -272,7 +284,7 @@ def main() -> int:
             "blas_sweep": args.blas_threads,
             "correctness": "performance rows require an attached precision-matched moment/conductivity comparison before publication",
         },
-        "environment": capture_environment(ROOT, build_dir, mpi_ranks=1),
+        "environment": campaign_environment,
         "rows": rows,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
