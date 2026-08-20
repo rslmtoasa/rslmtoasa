@@ -53,6 +53,11 @@ validated FP32 reconstruction path is selected. See
 `docs/dev/RS_LMTO_ASA_KPM_G1_2_REPORT.md` for the timer contract and evidence
 policy.
 
+On a CUDA host, add `--gpu` to collect CUDA FP32/FP64 rows. If the CPU matrix
+has already been measured, also add `--gpu-only`; this skips the CPU rows and
+avoids rerunning those data points. Store the CUDA output separately from the
+CPU output because speedups require matched builds and precision.
+
 ## Run production fixtures
 
 `manifest.json` is the initial ACC-00 inventory. Its reciprocal entries use

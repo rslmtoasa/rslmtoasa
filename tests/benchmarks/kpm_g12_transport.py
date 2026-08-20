@@ -217,8 +217,11 @@ def main() -> int:
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--cheb-backends", nargs="+", choices=("legacy", "fast", "fast_dp"), default=["legacy", "fast", "fast_dp"])
     parser.add_argument("--gpu", action="store_true")
+    parser.add_argument("--gpu-only", action="store_true", help="run only CUDA rows; requires --gpu")
     parser.add_argument("--gpu-precisions", nargs="+", choices=("fp32", "fp64"), default=["fp32", "fp64"])
     args = parser.parse_args()
+    if args.gpu_only and not args.gpu:
+        parser.error("--gpu-only requires --gpu")
 
     binary = args.binary.resolve()
     build_dir = args.build_dir.resolve() if args.build_dir else binary.parent.parent
@@ -228,17 +231,18 @@ def main() -> int:
 
     for replication in args.replications:
         for cond_type in args.cond_types:
-            for backend in args.cheb_backends:
-                for omp_threads in args.omp_threads:
-                    for blas_threads in args.blas_threads:
-                        rows.append(run_one(
-                            binary, scratch_root / f"r{replication}_{cond_type}_{backend}_omp{omp_threads}_blas{blas_threads}",
-                            replication=replication, cond_type=cond_type, cheb_backend=backend,
-                            gpu_plugin=False, gpu_precision="fp64", omp_threads=omp_threads,
-                            blas_threads=blas_threads, cond_ll=args.cond_ll, lld=args.lld,
-                            channels=args.channels, rc=args.rc, warmups=args.warmups,
-                            repetitions=args.repetitions,
-                        ))
+            if not args.gpu_only:
+                for backend in args.cheb_backends:
+                    for omp_threads in args.omp_threads:
+                        for blas_threads in args.blas_threads:
+                            rows.append(run_one(
+                                binary, scratch_root / f"r{replication}_{cond_type}_{backend}_omp{omp_threads}_blas{blas_threads}",
+                                replication=replication, cond_type=cond_type, cheb_backend=backend,
+                                gpu_plugin=False, gpu_precision="fp64", omp_threads=omp_threads,
+                                blas_threads=blas_threads, cond_ll=args.cond_ll, lld=args.lld,
+                                channels=args.channels, rc=args.rc, warmups=args.warmups,
+                                repetitions=args.repetitions,
+                            ))
             if args.gpu:
                 for gpu_precision in args.gpu_precisions:
                     for omp_threads in args.omp_threads:
@@ -282,6 +286,8 @@ def main() -> int:
             "persistent_process": False,
             "omp_sweep": args.omp_threads,
             "blas_sweep": args.blas_threads,
+            "cpu_rows_included": not args.gpu_only,
+            "gpu_only": args.gpu_only,
             "correctness": "performance rows require an attached precision-matched moment/conductivity comparison before publication",
         },
         "environment": campaign_environment,

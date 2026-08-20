@@ -5,9 +5,11 @@
 The KPM transport profile now has an exclusive phase contract, nested
 implementation timers, precision/backend metadata, controlled thread
 settings, parser validation, and a Pt campaign driver. The complete CPU
-r4/r6/r8 campaign was run on 2026-08-20; the GPU portion was not run because
-this host has no active NVIDIA driver. The measured CPU results and that
-limitation are recorded below.
+r4/r6/r8 campaign was run on 2026-08-20. A separate CUDA-only r4/r6/r8
+campaign was then run outside the sandbox on the CUDA host, using one NVIDIA
+RTX A4000 and the CUDA 13.3 toolchain. The two result sets are kept separate
+because they use different builds and the completed CPU points were not
+rerun.
 
 ## G1.1 timer audit
 
@@ -105,6 +107,8 @@ per-type spin transport, and the legacy/fast/fast-double CPU routes. Charge
 and orbital r4 rows can be selected with `--replications 4 --cond-types
 charge orbital`. GPU fp32/fp64 rows are opt-in with `--gpu`; the driver only
 computes speedups inside equal moment/reconstruction precision groups.
+When completed CPU points already exist, `--gpu-only` can be combined with
+`--gpu` to collect only the CUDA rows and avoid rerunning the CPU matrix.
 
 For publication-quality claims, the paired rows must additionally pass the
 existing moment and conductivity correctness comparisons at the same Pt
@@ -179,18 +183,66 @@ about 1.42x, 1.71x, and 1.84x for r4/r6/r8 respectively, but these are timing
 observations only until the required precision-matched moment and conductivity
 comparisons are attached.
 
-No GPU rows are included. `nvidia-smi` is present on the host, but reports
-that it cannot communicate with the NVIDIA driver, so the driver correctly
-ran no CUDA route and did not silently fall back to CPU. The JSON result is
-machine-local evidence at `results/benchmarks/kpm_g12_pt_full.json`; it is
-not a source-controlled timing artifact. A CUDA-host rerun with `--gpu` is
-required before answering the GPU FP32/FP64 and equal-precision speedup
-questions.
+The CPU JSON is machine-local evidence at
+`results/benchmarks/kpm_g12_pt_full.json`; it is not a source-controlled
+timing artifact. Its rows were not rerun for the CUDA campaign.
+
+## CUDA campaign results
+
+The CUDA campaign used the existing CUDA build and ran only GPU rows, so the
+completed CPU data points were preserved without duplication:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python3 tests/benchmarks/kpm_g12_transport.py \
+  --binary build-acc01-cuda/bin/rslmto.x \
+  --build-dir build-acc01-cuda \
+  --scratch-root /tmp/rslmto-kpm-g12-gpu-only \
+  --output results/benchmarks/kpm_g12_pt_gpu_cuda.json \
+  --warmups 2 --repetitions 5 --gpu --gpu-only
+```
+
+This produced 24 valid rows and 120 measured samples: eight rows each for
+r4, r6, and r8, covering CUDA FP32 and FP64 moments with OpenMP settings
+1/2/4/8 and BLAS held at one thread. All 120 profiles passed exclusive-phase
+closure and nested-child validation. The host exposed two NVIDIA RTX A4000
+devices; the selected device used the CUDA 13.3 runtime/toolchain. The
+machine-local JSON is evidence only and is intentionally not committed.
+
+The table reports the best transport median over the four OpenMP settings for
+each CUDA precision; `wall` is the corresponding whole-process median. CUDA
+FP32 is mixed precision because reconstruction remains FP64.
+
+| Size | N | nnz | CUDA FP32 (OMP; transport / wall, s) | CUDA FP64 (OMP; transport / wall, s) |
+| --- | ---: | ---: | ---: | ---: |
+| r4 | 1,152 | 215,784 | 1; 14.429730 / 14.864752 | 8; 22.742839 / 23.175361 |
+| r6 | 3,888 | 884,520 | 4; 15.238123 / 15.661824 | 8; 42.956478 / 43.389293 |
+| r8 | 9,216 | 2,299,752 | 8; 17.073480 / 17.508882 | 1; 82.643065 / 83.071630 |
+
+The corresponding exclusive phase medians are:
+
+| Size | Precision | OMP | P_moments_total | P_gamma | P_reconstruction_total | P_energy_integration | P_output_io | P_other |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| r4 | FP32 | 1 | 0.895338 | 7.951416 | 1.890178 | 0.001355 | 2.848227 | 0.562395 |
+| r4 | FP64 | 8 | 9.188711 | 7.925991 | 1.947832 | 0.001312 | 2.816313 | 0.580190 |
+| r6 | FP32 | 4 | 1.507951 | 7.910922 | 1.878531 | 0.001350 | 2.867337 | 0.671164 |
+| r6 | FP64 | 8 | 29.076695 | 7.967724 | 1.950188 | 0.001443 | 2.891997 | 0.708792 |
+| r8 | FP32 | 8 | 2.747664 | 7.914061 | 1.958969 | 0.001290 | 2.829269 | 1.041209 |
+| r8 | FP64 | 1 | 68.257468 | 7.940620 | 1.959078 | 0.001331 | 2.840060 | 1.065991 |
+
+These CUDA timings are not an equal-build CPU-versus-GPU speedup result. The
+completed CPU campaign used the serial/OpenBLAS reference build, while the
+CUDA campaign used `build-acc01-cuda` with Intel oneMKL metadata. The initial
+combined GPU invocation was stopped before it could write a result when it
+became clear that it was repeating the CPU rows; the final `--gpu-only`
+campaign above is the authoritative CUDA result. A same-build CPU rerun is
+not required for this report, but it would be required for a publication-grade
+matched speedup claim.
 
 The campaign's `correctness_status` remains
 `attach validated moment/conductivity comparison before speedup claim` for
-all rows. A profile `PASS` establishes timing integrity only; it does not
-establish physical equivalence between the legacy and fast routes.
+all CPU and CUDA rows. A profile `PASS` establishes timing integrity only; it
+does not establish physical equivalence between the legacy, fast, and CUDA
+routes.
 
 ## Verification
 
@@ -208,4 +260,5 @@ python3 -m py_compile tests/benchmarks/kpm_g12_transport.py
 The CUDA build validates the expanded stochastic profiling ABI, while the
 serial Pt run validates a real production profile and the parser's closure
 checks. The full CPU campaign above validates all 180 measured profiles with
-the same parser and closure contract.
+the same parser and closure contract; the CUDA-only campaign validates a
+further 120 CUDA profiles under the same contract.
