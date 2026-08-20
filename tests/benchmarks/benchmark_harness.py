@@ -48,6 +48,45 @@ REQUIRED_METADATA = (
     "cpu_model",
 )
 
+KPM_PROFILE_METADATA = (
+    "backend",
+    "moment_backend",
+    "moment_precision",
+    "reconstruction_backend",
+    "reconstruction_precision",
+    "precision",
+    "estimator",
+    "N",
+    "nnz",
+    "M",
+    "lld",
+    "Ntrace",
+    "OMP_NUM_THREADS",
+    "BLAS_NUM_THREADS",
+    "omp_threads",
+    "blas_threads",
+    "clock_source",
+)
+
+KPM_PHASES = (
+    "P_operator",
+    "P_trace_setup",
+    "P_moments_total",
+    "P_gamma",
+    "P_reconstruction_total",
+    "P_energy_integration",
+    "P_output_io",
+    "P_other",
+)
+KPM_MOMENT_CHILDREN = (
+    "D_moment_H2D",
+    "D_moment_GPU_kernel",
+    "D_moment_D2H",
+    "D_conversion",
+)
+KPM_RECONSTRUCTION_CHILDREN = ("D_mu_pack", "D_reconstruction_BLAS")
+KPM_GAMMA_CHILDREN = ("D_gamma_basis", "D_gamma_fill")
+
 PROFILE_DIMENSIONS = re.compile(
     r"^PROFILE_DIMENSIONS\s+(?P<label>\S+)\s+"
     r"sites=(?P<sites>\d+)\s+spinor_basis=(?P<matrix_dimension>\d+)\s+"
@@ -109,6 +148,64 @@ def _parse_key_values(text: str) -> dict[str, int | float | str]:
     return result
 
 
+def validate_kpm_profile(
+    profile: dict[str, Any], *, closure_tolerance: float = 0.05,
+    child_tolerance: float | None = None,
+) -> dict[str, Any]:
+    """Validate the fixed KPM phase/detail accounting contract.
+
+    Legacy ``T_*``-only records remain parseable as historical evidence, but
+    they are deliberately not valid G1.2 profiles because their scopes cannot
+    establish closure.
+    """
+
+    metrics = profile.get("metrics", {})
+    if not all(name in metrics for name in KPM_PHASES):
+        return {
+            "valid": False,
+            "status": "LEGACY_UNVALIDATED",
+            "reason": "missing exclusive P_* phase namespace",
+        }
+    total = float(metrics.get("T_transport_total", 0.0))
+    exclusive_sum = sum(float(metrics[name]) for name in KPM_PHASES)
+    calculated_error = abs(exclusive_sum - total) / max(abs(total), 1.0e-12)
+    tolerance = child_tolerance if child_tolerance is not None else max(0.05 * max(total, 1.0e-12), 0.01)
+
+    def child_sum(names: tuple[str, ...]) -> float:
+        return sum(float(metrics.get(name, 0.0)) for name in names)
+
+    moment_children = child_sum(KPM_MOMENT_CHILDREN)
+    reconstruction_children = child_sum(KPM_RECONSTRUCTION_CHILDREN)
+    gamma_children = child_sum(KPM_GAMMA_CHILDREN)
+    parents = {
+        "moments": float(metrics["P_moments_total"]),
+        "reconstruction": float(metrics["P_reconstruction_total"]),
+        "gamma": float(metrics["P_gamma"]),
+    }
+    children_ok = (
+        moment_children <= parents["moments"] + tolerance
+        and reconstruction_children <= parents["reconstruction"] + tolerance
+        and gamma_children <= parents["gamma"] + tolerance
+    )
+    other_ok = float(metrics["P_other"]) >= -tolerance
+    reported_status = str(metrics.get("PROFILE_STATUS", "UNKNOWN"))
+    valid = calculated_error <= closure_tolerance and children_ok and other_ok and reported_status != "FAIL"
+    return {
+        "valid": valid,
+        "status": "PASS" if valid else "FAIL",
+        "reported_status": reported_status,
+        "exclusive_sum_s": exclusive_sum,
+        "transport_total_s": total,
+        "profile_closure_error": calculated_error,
+        "moment_children_s": moment_children,
+        "reconstruction_children_s": reconstruction_children,
+        "gamma_children_s": gamma_children,
+        "child_tolerance_s": tolerance,
+        "children_ok": children_ok,
+        "other_ok": other_ok,
+    }
+
+
 def parse_profile_output(output: str) -> list[dict[str, Any]]:
     """Extract phase records emitted by the existing CPU profile executable."""
 
@@ -123,13 +220,14 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
             record = records.setdefault("kpm_transport", {"name": "kpm_transport"})
             record["metadata"] = {
                 key: values.pop(key)
-                for key in ("backend", "precision", "estimator", "N", "nnz", "M", "lld", "Ntrace")
+                for key in KPM_PROFILE_METADATA
                 if key in values
             }
             record["metrics"] = {
                 key: value for key, value in values.items()
-                if key.startswith("T_") or key.startswith("bytes_")
+                if key.startswith(("P_", "D_", "T_", "bytes_", "profile_")) or key == "PROFILE_STATUS"
             }
+            record["validation"] = validate_kpm_profile(record)
             record["class"] = "component"
             record["labels"] = ["performance", "component", "rs", "kpm", "transport"]
             continue
@@ -222,6 +320,8 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
             record.setdefault("metadata", {})
         record.setdefault("class", "component")
         record.setdefault("labels", ["performance", "reciprocal"])
+        if record.get("name") == "kpm_transport":
+            record["validation"] = validate_kpm_profile(record)
     return list(records.values())
 
 
@@ -292,6 +392,7 @@ def capture_environment(
     build_dir: Path | None = None,
     *,
     omp_threads: int | None = None,
+    blas_threads: int | None = None,
     mpi_ranks: int | None = None,
 ) -> dict[str, Any]:
     """Capture stable environment fields, retaining nulls for unavailable GPU data."""
@@ -314,6 +415,14 @@ def capture_environment(
     else:
         blas = cache.get("BLA_VENDOR") or library_text or None
     omp = omp_threads if omp_threads is not None else os.environ.get("OMP_NUM_THREADS")
+    if blas_threads is not None:
+        blas_thread_value = str(blas_threads)
+    else:
+        blas_thread_value = (
+            os.environ.get("BLAS_NUM_THREADS")
+            or os.environ.get("MKL_NUM_THREADS")
+            or os.environ.get("OPENBLAS_NUM_THREADS")
+        )
     ranks = mpi_ranks if mpi_ranks is not None else os.environ.get("RSLMTO_MPI_RANKS", "1")
     return {
         "git_commit": _git_commit(repo),
@@ -321,6 +430,9 @@ def capture_environment(
         "build_type": cache.get("CMAKE_BUILD_TYPE") or "unspecified",
         "blas_lapack": blas,
         "omp_threads": int(omp) if str(omp).isdigit() else omp,
+        "blas_threads": int(blas_thread_value) if str(blas_thread_value).isdigit() else blas_thread_value,
+        "omp_proc_bind": os.environ.get("OMP_PROC_BIND"),
+        "omp_places": os.environ.get("OMP_PLACES"),
         "mpi_ranks": int(ranks) if str(ranks).isdigit() else ranks,
         "cuda_toolkit": cache.get("CUDAToolkit_VERSION") or cache.get("CMAKE_CUDA_COMPILER_VERSION"),
         "cusolver": cache.get("CUDAToolkit_cusolver_VERSION"),
@@ -376,6 +488,22 @@ def run_command(
     return wall_times, profile_samples, last_output
 
 
+def benchmark_environment(omp_threads: int | None, blas_threads: int | None) -> dict[str, str] | None:
+    """Return a controlled child environment when thread counts were given."""
+
+    if omp_threads is None and blas_threads is None:
+        return None
+    environment = os.environ.copy()
+    if omp_threads is not None:
+        environment["OMP_NUM_THREADS"] = str(omp_threads)
+    if blas_threads is not None:
+        value = str(blas_threads)
+        environment["BLAS_NUM_THREADS"] = value
+        environment["MKL_NUM_THREADS"] = value
+        environment["OPENBLAS_NUM_THREADS"] = value
+    return environment
+
+
 def _metadata_with_overrides(metadata: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     overrides = {
         "matrix_dimension": args.matrix_dimension,
@@ -414,6 +542,11 @@ def make_document(
     records: list[dict[str, Any]] = []
     for sample_index, profiles in enumerate(profile_samples):
         for profile_name, profile in profiles.items():
+            validation = profile.get("validation")
+            if validation and validation.get("status") == "FAIL":
+                raise ValueError(
+                    f"KPM profile failed stage accounting: {validation.get('reason', validation)}"
+                )
             if sample_index == 0:
                 records.append(
                     {
@@ -421,6 +554,7 @@ def make_document(
                         "class": profile.get("class", "component"),
                         "labels": profile.get("labels", labels),
                         "metadata": workload_metadata | profile.get("metadata", {}),
+                        "validation": profile.get("validation"),
                         "samples": [],
                     }
                 )
@@ -474,10 +608,18 @@ def _sample_values(document: dict[str, Any]) -> dict[str, list[float]]:
 
 
 def _summary(values: list[float]) -> dict[str, float]:
+    median = statistics.median(values)
+    deviations = [abs(value - median) for value in values]
+    sorted_values = sorted(values)
     return {
-        "median": statistics.median(values),
+        "median": median,
         "minimum": min(values),
+        "maximum": max(values),
         "spread": max(values) - min(values),
+        "mad": statistics.median(deviations),
+        "iqr": statistics.quantiles(sorted_values, n=4, method="inclusive")[2] -
+               statistics.quantiles(sorted_values, n=4, method="inclusive")[0]
+               if len(sorted_values) >= 2 else 0.0,
     }
 
 
@@ -522,6 +664,7 @@ def _add_common_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--omp-threads", type=int)
+    parser.add_argument("--blas-threads", type=int)
     parser.add_argument("--mpi-ranks", type=int)
     parser.add_argument("--matrix-dimension", type=int)
     parser.add_argument("--k-points", type=int)
@@ -583,6 +726,7 @@ def run_manifest(args: argparse.Namespace) -> int:
             repo,
             args.build_dir.resolve() if args.build_dir else None,
             omp_threads=args.omp_threads,
+            blas_threads=args.blas_threads,
             mpi_ranks=args.mpi_ranks,
         )
         metadata.update(entry.get("metadata", {}))
@@ -592,6 +736,7 @@ def run_manifest(args: argparse.Namespace) -> int:
             warmups=args.warmups,
             repetitions=args.repetitions,
             cwd=repo,
+            env=benchmark_environment(args.omp_threads, args.blas_threads),
             persistent=False,
         )
         document = make_document(
@@ -635,6 +780,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser.add_argument("--warmups", type=int, default=1)
     manifest_parser.add_argument("--repetitions", type=int, default=3)
     manifest_parser.add_argument("--omp-threads", type=int)
+    manifest_parser.add_argument("--blas-threads", type=int)
     manifest_parser.add_argument("--mpi-ranks", type=int)
     args = parser.parse_args(argv)
 
@@ -658,6 +804,7 @@ def main(argv: list[str] | None = None) -> int:
         args.repo.resolve(),
         args.build_dir.resolve() if args.build_dir else None,
         omp_threads=args.omp_threads,
+        blas_threads=args.blas_threads,
         mpi_ranks=args.mpi_ranks,
     )
     metadata = _metadata_with_overrides(metadata, args)
@@ -666,6 +813,7 @@ def main(argv: list[str] | None = None) -> int:
         warmups=args.warmups,
         repetitions=args.repetitions,
         cwd=args.cwd.resolve() if args.cwd else None,
+        env=benchmark_environment(args.omp_threads, args.blas_threads),
         persistent=args.persistent,
     )
     document = make_document(

@@ -69,6 +69,7 @@ int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx, const void *psiref,
                                   int lld, double a, double b, void *mu_nm);
 int rsrec_cuda_stochastic_profile(rsrec_cuda_ctx *ctx, double *h2d_seconds,
                                   double *cheb_seconds, double *d2h_seconds,
+                                  double *conversion_seconds,
                                   long long *h2d_bytes, long long *d2h_bytes);
 int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec);
 int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu, int n_moments,

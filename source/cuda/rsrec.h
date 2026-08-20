@@ -230,6 +230,7 @@ int rsrec_stochastic_moments(rsrec_ctx *ctx, const void *psiref, int lld,
  * Values are zero until a stochastic request has completed. */
 int rsrec_stochastic_profile(rsrec_ctx *ctx, double *h2d_seconds,
                              double *cheb_seconds, double *d2h_seconds,
+                             double *conversion_seconds,
                              long long *h2d_bytes, long long *d2h_bytes);
 
 #ifdef __cplusplus

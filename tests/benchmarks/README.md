@@ -29,6 +29,30 @@ The command must be placed last because all remaining arguments after
 for a normal measurement campaign. The default is one warm-up and three
 recorded runs.
 
+## KPM-G1.2 transport campaign
+
+`kpm_g12_transport.py` runs the precision-aware KPM transport campaign for
+real Pt r4/r6/r8 cases. It sweeps CPU OpenMP threads, controls BLAS threads,
+keeps fresh-process repetitions, rejects profiles with phase-closure or
+nested-timer failures, and reports median/min/max/MAD/IQR statistics for the
+exclusive phases and detail timers:
+
+```bash
+python3 tests/benchmarks/kpm_g12_transport.py \
+  --binary build-ci-reference-serial/bin/rslmto.x \
+  --build-dir build-ci-reference-serial \
+  --output results/benchmarks/kpm_g12_pt.json \
+  --scratch-root /tmp/rslmto-kpm-g12 \
+  --warmups 2 --repetitions 5
+```
+
+The driver records moment and reconstruction precision separately. The
+current CPU fast route is therefore labelled mixed (`fp32` moments with
+`fp64` reconstruction); it is not presented as a full FP32 speedup until a
+validated FP32 reconstruction path is selected. See
+`docs/dev/RS_LMTO_ASA_KPM_G1_2_REPORT.md` for the timer contract and evidence
+policy.
+
 ## Run production fixtures
 
 `manifest.json` is the initial ACC-00 inventory. Its reciprocal entries use

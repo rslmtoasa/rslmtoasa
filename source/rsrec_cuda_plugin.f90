@@ -141,11 +141,12 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_stochastic_moments
       end function rsrec_cuda_stochastic_moments
 
-      function rsrec_cuda_stochastic_profile(ctx, h2d_seconds, cheb_seconds, d2h_seconds, h2d_bytes, d2h_bytes) &
+      function rsrec_cuda_stochastic_profile(ctx, h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, &
+         h2d_bytes, d2h_bytes) &
          bind(C, name='rsrec_cuda_stochastic_profile')
          import :: c_double, c_int, c_long_long, c_ptr
          type(c_ptr), value :: ctx
-         real(c_double), intent(out) :: h2d_seconds, cheb_seconds, d2h_seconds
+         real(c_double), intent(out) :: h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds
          integer(c_long_long), intent(out) :: h2d_bytes, d2h_bytes
          integer(c_int) :: rsrec_cuda_stochastic_profile
       end function rsrec_cuda_stochastic_profile
@@ -583,19 +584,20 @@ contains
 #endif
    end subroutine stochastic_moments
 
-   subroutine stochastic_profile(this, h2d_seconds, cheb_seconds, d2h_seconds, h2d_bytes, d2h_bytes)
+   subroutine stochastic_profile(this, h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, h2d_bytes, d2h_bytes)
       class(rsrec_cuda_backend), intent(inout) :: this
-      real(rp), intent(out) :: h2d_seconds, cheb_seconds, d2h_seconds
+      real(rp), intent(out) :: h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds
       integer(c_long_long), intent(out) :: h2d_bytes, d2h_bytes
 #ifdef USE_CUDA_PLUGIN
       integer(c_int) :: status
-      status = rsrec_cuda_stochastic_profile(this%ctx, h2d_seconds, cheb_seconds, d2h_seconds, &
+      status = rsrec_cuda_stochastic_profile(this%ctx, h2d_seconds, cheb_seconds, d2h_seconds, conversion_seconds, &
          h2d_bytes, d2h_bytes)
       call check_status(status, 'rsrec_cuda_stochastic_profile')
 #else
       h2d_seconds = 0.0_rp
       cheb_seconds = 0.0_rp
       d2h_seconds = 0.0_rp
+      conversion_seconds = 0.0_rp
       h2d_bytes = 0
       d2h_bytes = 0
 #endif

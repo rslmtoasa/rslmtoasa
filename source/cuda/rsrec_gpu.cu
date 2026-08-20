@@ -115,6 +115,7 @@ struct rsrec_ctx {
      * local rather than cumulative: the Fortran transport loop records one
      * profile interval per reference state. */
     double stoch_h2d_s = 0.0, stoch_cheb_s = 0.0, stoch_d2h_s = 0.0;
+    double stoch_conversion_s = 0.0;
     long long stoch_h2d_bytes = 0, stoch_d2h_bytes = 0;
 
     /* Capacity-owned stochastic transport workspace.  The moment driver is
@@ -2104,8 +2105,10 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
                      cudaMemcpyDeviceToHost));
     c->stoch_d2h_s += host_seconds() - d2h_start;
     c->stoch_d2h_bytes += (long long)(h.size() * sizeof(CT));
+    const double conversion_start = host_seconds();
     cplx *mu = (cplx *)mu_;
     for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
+    c->stoch_conversion_s += host_seconds() - conversion_start;
 
     return 0;
 }
@@ -2126,6 +2129,7 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
     c->stoch_h2d_s = 0.0;
     c->stoch_cheb_s = 0.0;
     c->stoch_d2h_s = 0.0;
+    c->stoch_conversion_s = 0.0;
     c->stoch_h2d_bytes = 0;
     c->stoch_d2h_bytes = 0;
 
@@ -2234,16 +2238,18 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
 extern "C" int rsrec_stochastic_profile(rsrec_ctx *c, double *h2d_seconds,
                                          double *cheb_seconds,
                                          double *d2h_seconds,
+                                         double *conversion_seconds,
                                          long long *h2d_bytes,
                                          long long *d2h_bytes) {
     if (!c || !h2d_seconds || !cheb_seconds || !d2h_seconds ||
-        !h2d_bytes || !d2h_bytes) {
+        !conversion_seconds || !h2d_bytes || !d2h_bytes) {
         g_err = "stochastic_profile: null argument";
         return 1;
     }
     *h2d_seconds = c->stoch_h2d_s;
     *cheb_seconds = c->stoch_cheb_s;
     *d2h_seconds = c->stoch_d2h_s;
+    *conversion_seconds = c->stoch_conversion_s;
     *h2d_bytes = c->stoch_h2d_bytes;
     *d2h_bytes = c->stoch_d2h_bytes;
     return 0;

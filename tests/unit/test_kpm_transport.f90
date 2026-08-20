@@ -6,6 +6,7 @@
 ! matrix Chebyshev recurrence for the same finite Hamiltonian; it does not
 ! implement a second Kubo-Bastin or conductivity solver.
 program test_kpm_transport
+   use iso_fortran_env, only: real32
    use precision_mod, only: rp
    use basis_mod, only: basis_init, nb, spin_off
    use control_mod, only: control
@@ -15,7 +16,7 @@ program test_kpm_transport
    use logger_mod, only: g_logger
    use math_mod, only: L_z, S_z, hcpx, init_math_operators, i_unit
    use moment_kernel_mod, only: moment_onsite_block
-   use conductivity_mod, only: gamma_mu_blas, gamma_mu_reference, pack_gamma_mu_diagonal
+   use conductivity_mod, only: gamma_mu_blas, gamma_mu_cblas, gamma_mu_reference, pack_gamma_mu_diagonal
    implicit none
 
    integer, parameter :: nsite = 2
@@ -42,6 +43,7 @@ program test_kpm_transport
    call test_transport_moments()
    call test_s_only_orbital_symmetry()
    call test_gamma_mu_layout()
+   call test_gamma_mu_cblas()
    call test_gamma_mu_trace_modes()
 
    if (failed) then
@@ -247,6 +249,34 @@ contains
          call require(abs(c(i, 2)) < tolerance, 'Gamma layout leaves inactive orbital column zero')
       end do
    end subroutine test_gamma_mu_layout
+
+   subroutine test_gamma_mu_cblas()
+      integer, parameter :: ne_test = 3, k_test = 4, ncol_test = 2
+      complex(real32) :: gamma_sp(ne_test, k_test), u_sp(k_test, ncol_test), c_sp(ne_test, ncol_test)
+      complex(real32) :: expected
+      integer :: i, j, k
+
+      do k = 1, k_test
+         do i = 1, ne_test
+            gamma_sp(i, k) = cmplx(real(i + 2*k, real32), real(k - i, real32), kind=real32)
+         end do
+         do j = 1, ncol_test
+            u_sp(k, j) = cmplx(real(k + j, real32), real(2*j - k, real32), kind=real32)
+         end do
+      end do
+
+      call gamma_mu_cblas(gamma_sp, u_sp, 0.25_real32, c_sp)
+      do j = 1, ncol_test
+         do i = 1, ne_test
+            expected = (0.0_real32, 0.0_real32)
+            do k = 1, k_test
+               expected = expected + 0.25_real32*gamma_sp(i, k)*u_sp(k, j)
+            end do
+            call require(abs(real(c_sp(i, j) - expected, rp)) < 1.0e-5_rp, &
+               'CGEMM precision-fair reconstruction analogue')
+         end do
+      end do
+   end subroutine test_gamma_mu_cblas
 
    subroutine test_gamma_mu_trace_modes()
       integer, parameter :: ne_test = 5, m_test = 3, nb_test = 3, ntrace = 2

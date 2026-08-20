@@ -389,7 +389,7 @@ contains
       real(rp), dimension(this%control%cond_ll) :: kernel
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10) :: g0
       real(rp) :: a, b, rng, emin_win, emax_win
-      real(rp) :: gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds
+      real(rp) :: gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, gpu_conversion_seconds
       complex(rp) :: exp_factor
       logical :: use_gpu
       character(len=48) :: precision_label
@@ -470,22 +470,32 @@ contains
          if (this%hamiltonian%hoh) operator_h2d_bytes = operator_h2d_bytes + &
             int(size(this%hamiltonian%vo_a), int64) * complex_bytes + int(size(this%hamiltonian%vo_b), int64) * complex_bytes
          if (trim(this%control%gpu_precision) == 'fp64') then
-            precision_label = 'cuda_fp64'
+            precision_label = 'fp64'
          else
-            precision_label = 'cuda_fp32_moments_fp64_host'
+            precision_label = 'fp32'
          end if
       else if (trim(this%control%cheb_backend) == 'legacy') then
-         precision_label = 'cpu_fp64'
+         precision_label = 'fp64'
       else if (trim(this%control%cheb_backend) == 'fast_dp') then
-         precision_label = 'cpu_fp64_fast'
+         precision_label = 'fp64'
       else
-         precision_label = 'cpu_fp32_moments_fp64_host'
+         precision_label = 'fp32'
       end if
-      call g_kpm_profile%configure(merge('cuda', 'cpu ', use_gpu), precision_label, &
-         trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
-         this%control%lld, loop_over)
+      if (use_gpu) then
+         call g_kpm_profile%configure('cuda', precision_label, 'cpu_blas', 'fp64', &
+            trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+            this%control%lld, loop_over)
+      else if (trim(this%control%cheb_backend) == 'legacy') then
+         call g_kpm_profile%configure('cpu_legacy', precision_label, 'cpu_blas', 'fp64', &
+            trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+            this%control%lld, loop_over)
+      else
+         call g_kpm_profile%configure('cpu_fast', precision_label, 'cpu_blas', 'fp64', &
+            trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+            this%control%lld, loop_over)
+      end if
 
-      call g_kpm_profile%start('T_operator')
+      call g_kpm_profile%start('P_operator')
       call this%hamiltonian%build_realspace_velocity_operators()
 
       ! Check the type of conductivity
@@ -553,7 +563,20 @@ contains
             this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
          end do
       end select
-      call g_kpm_profile%stop('T_operator')
+      ! The one-time CUDA operator upload belongs to the same exclusive
+      ! operator phase. It must not be nested inside P_moments_total.
+      if (use_gpu) then
+         call gpu_plugin_upload_hamiltonian(this)
+         if (this%hamiltonian%hoh) then
+            call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b, &
+               vo_a=this%hamiltonian%vo_a, vo_b=this%hamiltonian%vo_b)
+         else
+            call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
+         end if
+         call this%gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
+         call g_kpm_profile%add_bytes('H2D', operator_h2d_bytes)
+      end if
+      call g_kpm_profile%stop('P_operator')
 
       ! Check what kind of calculation
       do i = 1, loop_over
@@ -598,29 +621,24 @@ contains
          end select
          call g_kpm_profile%stop('T_trace_setup')
 
+         ! The parent moment interval has the same semantic boundary for CPU
+         ! and CUDA: the reference/projector is ready here and host mu_nm is
+         ! available when the interval stops. CUDA event components below are
+         ! detail timers, never substitutes for this parent wall interval.
+         call g_kpm_profile%start('P_moments_total')
+
          if (use_gpu) then
-            if (i == 1) then
-               call g_kpm_profile%start('T_H2D')
-               call gpu_plugin_upload_hamiltonian(this)
-               if (this%hamiltonian%hoh) then
-                  call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b, &
-                     vo_a=this%hamiltonian%vo_a, vo_b=this%hamiltonian%vo_b)
-               else
-                  call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
-               end if
-               call this%gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
-               call g_kpm_profile%stop('T_H2D')
-               call g_kpm_profile%add_bytes('H2D', operator_h2d_bytes)
-            end if
             call this%gpu_backend%stochastic_moments(psiref, this%control%cond_ll, a, b, &
                this%mu_nm_stochastic(:, :, :, :, i))
             call this%gpu_backend%stochastic_profile(gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, &
-               gpu_h2d_bytes, gpu_d2h_bytes)
-            call g_kpm_profile%add_seconds('T_H2D', gpu_h2d_seconds)
-            call g_kpm_profile%add_seconds('T_cheb_moments', gpu_cheb_seconds)
-            call g_kpm_profile%add_seconds('T_D2H', gpu_d2h_seconds)
+               gpu_conversion_seconds, gpu_h2d_bytes, gpu_d2h_bytes)
+            call g_kpm_profile%add_seconds('D_moment_H2D', gpu_h2d_seconds)
+            call g_kpm_profile%add_seconds('D_moment_GPU_kernel', gpu_cheb_seconds)
+            call g_kpm_profile%add_seconds('D_moment_D2H', gpu_d2h_seconds)
+            call g_kpm_profile%add_seconds('D_conversion', gpu_conversion_seconds)
             call g_kpm_profile%add_bytes('H2D', gpu_h2d_bytes)
             call g_kpm_profile%add_bytes('D2H', gpu_d2h_bytes)
+            call g_kpm_profile%stop('P_moments_total')
             cycle
          end if
 
@@ -632,7 +650,6 @@ contains
          if (trim(this%control%cheb_backend) /= 'legacy' .and. &
              .not. (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh)) then
             if (this%hamiltonian%hoh) then
-               call g_kpm_profile%start('T_cheb_moments')
                call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
@@ -640,10 +657,8 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .true., this%hamiltonian%eeo, &
                   this%hamiltonian%hallo, this%hamiltonian%enim, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%vo_a, this%hamiltonian%vo_b)
-               call g_kpm_profile%stop('T_cheb_moments')
             else if (this%hamiltonian%ccor_2c) then
                call ensure_ccor_operator_blocks(this)
-               call g_kpm_profile%start('T_cheb_moments')
                call cheb_moments_stochastic_fast(psiref, this%ee_ccor_work, &
                   this%hall_ccor_work, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
@@ -651,9 +666,7 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .false., this%ee_ccor_work, &
                   this%hall_ccor_work, this%hamiltonian%lsham, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%v_a, this%hamiltonian%v_b)
-               call g_kpm_profile%stop('T_cheb_moments')
             else
-               call g_kpm_profile%start('T_cheb_moments')
                call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                   this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), &
@@ -661,13 +674,12 @@ contains
                   this%mu_nm_stochastic(:, :, :, :, i), .false., this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%hamiltonian%v_a, &
                   this%hamiltonian%v_b, this%hamiltonian%v_a, this%hamiltonian%v_b)
-               call g_kpm_profile%stop('T_cheb_moments')
             end if
+            call g_kpm_profile%stop('P_moments_total')
             cycle
          end if
 
          ! Computing the left vector <r|Tm(H)
-         call g_kpm_profile%start('T_cheb_moments')
          do m=1, this%control%cond_ll 
             if (m == 1) then
                w1(:, :, :) = psiref(:, :, :)
@@ -752,6 +764,7 @@ contains
             end do
             !$omp end parallel do
          end do
+         call g_kpm_profile%stop('P_moments_total')
       end do
 
       deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, S_op, L_op)
@@ -1357,7 +1370,6 @@ contains
                g0(l, m, ie) = g0(l, m, ie)/((sqrt((a**2) - ((this%en%ene(ie) - b)**2))))
             end do
          end do
-         call g_kpm_profile%stop('T_cheb_moments')
       end do
       !$omp end parallel do
       do ie = 1, this%en%channels_ldos + 10

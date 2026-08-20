@@ -21,7 +21,7 @@
 
 module conductivity_mod
 
-   use iso_fortran_env, only: int64
+   use iso_fortran_env, only: int64, real32
    use iso_c_binding, only: c_f_pointer, c_int, c_loc
    use mpi_mod
    use control_mod
@@ -49,7 +49,7 @@ module conductivity_mod
    implicit none
 
    private
-   public :: gamma_mu_reference, gamma_mu_blas, pack_gamma_mu_diagonal
+   public :: gamma_mu_reference, gamma_mu_blas, gamma_mu_cblas, pack_gamma_mu_diagonal
 
    type, public :: conductivity
       !> Control
@@ -162,6 +162,27 @@ contains
                  u, size(u, 1), beta, c, ne)
    end subroutine gamma_mu_blas
 
+   !> @brief Single-precision BLAS analogue for precision-fair reconstruction.
+   !> @details This is intentionally a small helper rather than a second
+   !> transport path.  A caller that owns FP32 Gamma and mu workspaces can use
+   !> CGEMM with the same column-major pair mapping as gamma_mu_blas.
+   subroutine gamma_mu_cblas(gamma_matrix, u, factor, c)
+      complex(real32), intent(in) :: gamma_matrix(:, :)
+      complex(real32), intent(in) :: u(:, :)
+      real(real32), intent(in) :: factor
+      complex(real32), intent(out) :: c(:, :)
+
+      complex(real32) :: alpha, beta
+      integer :: ne
+      external :: cgemm
+
+      ne = size(gamma_matrix, 1)
+      alpha = cmplx(factor, 0.0_real32, kind=real32)
+      beta = (0.0_real32, 0.0_real32)
+      call cgemm('N', 'N', ne, size(u, 2), size(u, 1), alpha, gamma_matrix, ne, &
+                 u, size(u, 1), beta, c, ne)
+   end subroutine gamma_mu_cblas
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -258,7 +279,7 @@ contains
       real(rp), dimension(:, :), allocatable :: chebyshev_poly
       complex(rp), dimension(:, :), allocatable :: cn, cm
 
-      call g_kpm_profile%start('T_gamma')
+      call g_kpm_profile%start('P_gamma')
       
       ! Initialize global variable
 #ifdef USE_SAFE_ALLOC
@@ -273,6 +294,7 @@ contains
       allocate(cn(this%en%channels_ldos + 10, this%control%cond_ll), cm(this%en%channels_ldos + 10, this%control%cond_ll))
       allocate(g_kernel(this%control%cond_ll), weights(this%control%cond_ll))
 
+      call g_kpm_profile%start('D_gamma_basis')
       ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
@@ -299,8 +321,10 @@ contains
       do n = 3, this%control%cond_ll
          chebyshev_poly(:, n) = 2.0_rp * wscale(:) * chebyshev_poly(:, n - 1) - chebyshev_poly(:, n - 2)
       end do
+      call g_kpm_profile%stop('D_gamma_basis')
 
       ! Initialize Gamma_nm
+      call g_kpm_profile%start('D_gamma_fill')
       this%gamma_nm(:, :, :) = 0.0_rp
 
       ! Compute Gamma_nm
@@ -313,8 +337,9 @@ contains
       end do
 
       ! Clean up
+      call g_kpm_profile%stop('D_gamma_fill')
       deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
-      call g_kpm_profile%stop('T_gamma')
+      call g_kpm_profile%stop('P_gamma')
    end subroutine 
 
    subroutine calculate_conductivity_tensor(this)
@@ -382,17 +407,18 @@ contains
       factor = 16 / (pi * (de**2))
       write(*,*) factor, volume, de
       !write(*,*) (16 * hbar_const * (e_const**2)) / (pi * volume * ((de * ry2joule)**2))
+      call g_kpm_profile%start('P_reconstruction_total')
       do ntype = 1, loop_over
-         call g_kpm_profile%start('T_mu_pack')
+         call g_kpm_profile%start('D_mu_pack')
          call pack_gamma_mu_diagonal(this%recursion%mu_nm_stochastic(:, :, :, :, ntype), mu_diag)
-         call g_kpm_profile%stop('T_mu_pack')
+         call g_kpm_profile%stop('D_mu_pack')
 
          ! Do not wrap this call in an outer OpenMP region.  BLAS owns the
          ! parallelism for this dense reconstruction, avoiding nested
          ! OpenMP/BLAS oversubscription in the CPU benchmark.
-         call g_kpm_profile%start('T_gamma_mu')
+         call g_kpm_profile%start('D_reconstruction_BLAS')
          call gamma_mu_blas(this%gamma_nm, mu_diag, factor, gamma_mu)
-         call g_kpm_profile%stop('T_gamma_mu')
+         call g_kpm_profile%stop('D_reconstruction_BLAS')
 
          do l2 = 1, nb
             integrand(l2, l2, :) = integrand(l2, l2, :) + gamma_mu(:, l2)
@@ -401,8 +427,9 @@ contains
             end if
          end do
       end do
+      call g_kpm_profile%stop('P_reconstruction_total')
 
-      call g_kpm_profile%start('T_energy_integral')
+      call g_kpm_profile%start('P_energy_integration')
       integrand_tot_real(:) = 0.0d0
       integrand_tot_im(:) = 0.0d0
 
@@ -412,8 +439,10 @@ contains
          integrand_l_real(l2, :) = real(integrand(l2, l2, :))
          integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
       end do
+      call g_kpm_profile%stop('P_energy_integration')
 
       ! Starting writing statements
+      call g_kpm_profile%start('P_output_io')
       open(unit=3, file=fname_cond_total, status='replace', action='write')
       open(unit=32, file=fname_cond_orb_real, status='replace', action='write')
       open(unit=33, file=fname_cond_orb_im,   status='replace', action='write')
@@ -431,12 +460,17 @@ contains
          write(32,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:nb) / real(loop_over)
          write(33,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:nb) / real(loop_over)
       end do
+      close(3)
+      close(32)
+      close(33)
+      call g_kpm_profile%stop('P_output_io')
 
 
       if (this%control%cond_calctype == 'per_type') then
          ! Loop over each atomic type
          do ntype = 1, loop_over
 
+            call g_kpm_profile%start('P_energy_integration')
             integrand_tot_real(:) = 0.0d0
             integrand_tot_im(:)   = 0.0d0
             integrand_l_real(:, :) = 0.0d0
@@ -448,11 +482,13 @@ contains
                integrand_l_real(l2, :) = real(integrand_at(l2, l2, :, ntype))
                integrand_l_im(l2, :) = aimag(integrand_at(l2, l2, :, ntype))
             end do
+            call g_kpm_profile%stop('P_energy_integration')
          
             fname_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond.out"
             fname_orb_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond_orb_real.out"
             fname_orb_i = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond_orb_im.out"
 
+            call g_kpm_profile%start('P_output_io')
             open(unit=100+ntype, file=fname_r, status='replace', action='write')
             open(unit=300+ntype, file=fname_orb_r, status='replace', action='write')
             open(unit=400+ntype, file=fname_orb_i, status='replace', action='write')
@@ -473,10 +509,10 @@ contains
             close(100+ntype)
             close(300+ntype)
             close(400+ntype)
+            call g_kpm_profile%stop('P_output_io')
          end do  ! end do over ntype
       end if
       ! End writing statements
-      call g_kpm_profile%stop('T_energy_integral')
 
       deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at, &
                  mu_diag, gamma_mu)

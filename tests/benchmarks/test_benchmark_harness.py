@@ -11,7 +11,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from benchmark_harness import SCHEMA, compare_documents, parse_profile_output  # noqa: E402
+from benchmark_harness import (  # noqa: E402
+    SCHEMA,
+    compare_documents,
+    parse_profile_output,
+    validate_kpm_profile,
+)
 
 
 def main() -> int:
@@ -40,6 +45,31 @@ PROFILE_MEMORY_MIB bccFe_one_site hk=1.0 normal_eigenpairs=2.0 arbitrary_kq_eige
     assert kpm[0]["metrics"]["T_mu_pack"] == 0.0045
     assert kpm[0]["metrics"]["bytes_gamma"] == 100000
     assert kpm[0]["metrics"]["bytes_h2d"] == 0
+
+    precision_fair_kpm = parse_profile_output(
+        "KPM_PROFILE backend=cpu moment_backend=cpu_fast moment_precision=fp32 "
+        "reconstruction_backend=cpu_blas reconstruction_precision=fp64 "
+        "estimator=per_type N=144 nnz=5184 M=500 lld=150 Ntrace=1 "
+        "bytes_gamma=100000 bytes_mu=72000 "
+        "P_operator=1.0 P_trace_setup=1.0 P_moments_total=10.0 P_gamma=2.0 "
+        "P_reconstruction_total=3.0 P_energy_integration=1.0 P_output_io=1.0 "
+        "P_other=1.0 T_transport_total=20.0 "
+        "D_moment_H2D=0.1 D_moment_GPU_kernel=0.2 D_moment_D2H=0.1 "
+        "D_conversion=0.0 D_mu_pack=0.2 D_reconstruction_BLAS=0.3 "
+        "D_gamma_basis=0.3 D_gamma_fill=0.5 PROFILE_STATUS=PASS"
+    )
+    assert validate_kpm_profile(precision_fair_kpm[0])["valid"]
+    assert precision_fair_kpm[0]["metadata"]["moment_precision"] == "fp32"
+    assert precision_fair_kpm[0]["metadata"]["reconstruction_precision"] == "fp64"
+
+    invalid_kpm = parse_profile_output(
+        "KPM_PROFILE moment_backend=cpu_fast moment_precision=fp32 "
+        "reconstruction_backend=cpu_blas reconstruction_precision=fp64 "
+        "P_operator=1 P_trace_setup=1 P_moments_total=10 P_gamma=2 "
+        "P_reconstruction_total=3 P_energy_integration=1 P_output_io=1 "
+        "P_other=-2 T_transport_total=20 PROFILE_STATUS=FAIL"
+    )
+    assert not validate_kpm_profile(invalid_kpm[0])["valid"]
 
     acc06 = parse_profile_output(
         "ACC06_DIMENSIONS fixture=Si_sp backend=cuda strategy=backend sites=1 "
