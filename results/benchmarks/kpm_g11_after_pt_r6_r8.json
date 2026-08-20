@@ -1,0 +1,114 @@
+{
+  "policy": {
+    "cond_ll": 500,
+    "estimator": "per_type",
+    "gpu_precision": "fp32",
+    "lld": 150,
+    "note": "G0 baseline; use B0 for persistent repeated timing",
+    "persistent_process": false
+  },
+  "rows": [
+    {
+      "backend_requested": "cpu",
+      "channels_ldos": 2500,
+      "cheb_backend": "legacy",
+      "cond_ll": 500,
+      "gpu_precision": "fp32",
+      "lld": 150,
+      "material": "fccPt_SOC",
+      "omp_threads": 1,
+      "profile": {
+        "class": "component",
+        "labels": [
+          "performance",
+          "component",
+          "rs",
+          "kpm",
+          "transport"
+        ],
+        "metadata": {
+          "M": 500,
+          "N": 3888,
+          "Ntrace": 1,
+          "backend": "cpu",
+          "estimator": "per_type",
+          "lld": 150,
+          "nnz": 884520,
+          "precision": "cpu_fp64"
+        },
+        "metrics": {
+          "T_D2H": 0,
+          "T_H2D": 0,
+          "T_cheb_moments": 83.339441708,
+          "T_energy_integral": 2.858242222,
+          "T_gamma": 8.245266316,
+          "T_gamma_mu": 1.871006262,
+          "T_mu_pack": 0.09484757,
+          "T_operator": 0.000226699,
+          "T_trace_setup": 0.136482911,
+          "T_transport_total": 84.01046846,
+          "bytes_d2h": 0,
+          "bytes_gamma": 10040000000,
+          "bytes_h2d": 0,
+          "bytes_mu_pack": 72000000
+        },
+        "name": "kpm_transport"
+      },
+      "rc": 20,
+      "replication": 6,
+      "wall_time_s": 84.3215047440026
+    },
+    {
+      "backend_requested": "cpu",
+      "channels_ldos": 2500,
+      "cheb_backend": "legacy",
+      "cond_ll": 500,
+      "gpu_precision": "fp32",
+      "lld": 150,
+      "material": "fccPt_SOC",
+      "omp_threads": 1,
+      "profile": {
+        "class": "component",
+        "labels": [
+          "performance",
+          "component",
+          "rs",
+          "kpm",
+          "transport"
+        ],
+        "metadata": {
+          "M": 500,
+          "N": 9216,
+          "Ntrace": 1,
+          "backend": "cpu",
+          "estimator": "per_type",
+          "lld": 150,
+          "nnz": 2299752,
+          "precision": "cpu_fp64"
+        },
+        "metrics": {
+          "T_D2H": 0,
+          "T_H2D": 0,
+          "T_cheb_moments": 177.465814428,
+          "T_energy_integral": 2.831440949,
+          "T_gamma": 8.245869605,
+          "T_gamma_mu": 1.868795986,
+          "T_mu_pack": 0.09413607,
+          "T_operator": 0.000241774,
+          "T_trace_setup": 0.329439765,
+          "T_transport_total": 178.704471043,
+          "bytes_d2h": 0,
+          "bytes_gamma": 10040000000,
+          "bytes_h2d": 0,
+          "bytes_mu_pack": 72000000
+        },
+        "name": "kpm_transport"
+      },
+      "rc": 20,
+      "replication": 8,
+      "wall_time_s": 179.0395769730676
+    }
+  ],
+  "schema": "rslmto.kpm-g0.v1",
+  "scope": "real-material KPM/Kubo-Bastin stage profile"
+}

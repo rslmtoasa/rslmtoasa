@@ -1,0 +1,61 @@
+{
+  "policy": {
+    "cond_ll": 500,
+    "estimator": "per_type",
+    "gpu_precision": "fp32",
+    "lld": 150,
+    "note": "G0 baseline; use B0 for persistent repeated timing",
+    "persistent_process": false
+  },
+  "rows": [
+    {
+      "backend_requested": "cpu",
+      "channels_ldos": 2500,
+      "cheb_backend": "legacy",
+      "cond_ll": 500,
+      "gpu_precision": "fp32",
+      "lld": 150,
+      "material": "fccPt_SOC",
+      "omp_threads": 1,
+      "profile": {
+        "class": "component",
+        "labels": [
+          "performance",
+          "component",
+          "rs",
+          "kpm",
+          "transport"
+        ],
+        "metadata": {
+          "M": 500,
+          "N": 1152,
+          "Ntrace": 1,
+          "backend": "cpu",
+          "estimator": "per_type",
+          "lld": 150,
+          "nnz": 215784,
+          "precision": "cpu_fp64"
+        },
+        "metrics": {
+          "T_D2H": 0,
+          "T_H2D": 0,
+          "T_cheb_moments": 522.056926064,
+          "T_energy_integral": 2.845149733,
+          "T_gamma": 8.023682865,
+          "T_gamma_mu": 490.635816664,
+          "T_operator": 0.00022473,
+          "T_trace_setup": 0.040578775,
+          "T_transport_total": 522.526472561,
+          "bytes_d2h": 0,
+          "bytes_h2d": 0
+        },
+        "name": "kpm_transport"
+      },
+      "rc": 20,
+      "replication": 4,
+      "wall_time_s": 522.8159863259643
+    }
+  ],
+  "schema": "rslmto.kpm-g0.v1",
+  "scope": "real-material KPM/Kubo-Bastin stage profile"
+}

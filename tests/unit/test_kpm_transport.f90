@@ -15,6 +15,7 @@ program test_kpm_transport
    use logger_mod, only: g_logger
    use math_mod, only: L_z, S_z, hcpx, init_math_operators, i_unit
    use moment_kernel_mod, only: moment_onsite_block
+   use conductivity_mod, only: gamma_mu_blas, gamma_mu_reference, pack_gamma_mu_diagonal
    implicit none
 
    integer, parameter :: nsite = 2
@@ -40,6 +41,8 @@ program test_kpm_transport
    call test_orbital_current()
    call test_transport_moments()
    call test_s_only_orbital_symmetry()
+   call test_gamma_mu_layout()
+   call test_gamma_mu_trace_modes()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -214,6 +217,101 @@ contains
       call require(maxval(abs(ham%jl_a(:, :, 2:3, 1))) < tolerance, &
          'orbital current vanishes for s-only hopping by angular-momentum symmetry')
    end subroutine test_s_only_orbital_symmetry
+
+   subroutine test_gamma_mu_layout()
+      integer, parameter :: ne_test = 4, m_test = 3, nb_test = 2
+      complex(rp) :: gamma(ne_test, m_test, m_test)
+      complex(rp) :: mu(nb_test, nb_test, m_test, m_test)
+      complex(rp) :: u(m_test*m_test, nb_test), c(ne_test, nb_test)
+      integer :: i, l, n, m
+      real(rp), parameter :: factor_test = 2.5_rp
+
+      ! Encode the Fortran storage position in Gamma.  With only the first
+      ! diagonal mu entry active, this directly checks that q=n+(m-1)*M is
+      ! the zero-copy matrix view used by ZGEMM.
+      do m = 1, m_test
+         do n = 1, m_test
+            do i = 1, ne_test
+               gamma(i, n, m) = cmplx(real(i + ne_test*(n - 1 + m_test*(m - 1)), rp), 0.0_rp, rp)
+            end do
+         end do
+      end do
+      mu = (0.0_rp, 0.0_rp)
+      mu(1, 1, 1, 1) = (1.0_rp, 0.0_rp)
+
+      call pack_gamma_mu_diagonal(mu, u)
+      call gamma_mu_blas(gamma, u, factor_test, c)
+      do i = 1, ne_test
+         call require(abs(c(i, 1) - factor_test*gamma(i, 1, 1)) < tolerance, &
+            'Gamma storage flattening q=n+(m-1)*M')
+         call require(abs(c(i, 2)) < tolerance, 'Gamma layout leaves inactive orbital column zero')
+      end do
+   end subroutine test_gamma_mu_layout
+
+   subroutine test_gamma_mu_trace_modes()
+      integer, parameter :: ne_test = 5, m_test = 3, nb_test = 3, ntrace = 2
+      complex(rp) :: gamma(ne_test, m_test, m_test)
+      complex(rp) :: mu(nb_test, nb_test, m_test, m_test, ntrace)
+      integer :: i, l1, l2, n, m, trace
+
+      do m = 1, m_test
+         do n = 1, m_test
+            do i = 1, ne_test
+               gamma(i, n, m) = cmplx(0.01_rp*real(i + 2*n + 3*m, rp), &
+                  0.02_rp*real(2*i + n + m, rp), rp)
+            end do
+         end do
+      end do
+      do trace = 1, ntrace
+         do m = 1, m_test
+            do n = 1, m_test
+               do l2 = 1, nb_test
+                  do l1 = 1, nb_test
+                     mu(l1, l2, n, m, trace) = cmplx(0.003_rp*real(l1 + 2*l2 + n + m + trace, rp), &
+                        -0.002_rp*real(2*l1 + l2 + 2*n + m + trace, rp), rp)
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      ! The same accumulation is the production meaning of both supported
+      ! modes: per_type retains each contribution and adds all of them to the
+      ! total, while random_vec adds each stochastic realization to the total.
+      call compare_trace_mode('per_type', gamma, mu)
+      call compare_trace_mode('random_vec', gamma, mu)
+   end subroutine test_gamma_mu_trace_modes
+
+   subroutine compare_trace_mode(mode, gamma, mu)
+      character(len=*), intent(in) :: mode
+      complex(rp), intent(in) :: gamma(:, :, :)
+      complex(rp), intent(in) :: mu(:, :, :, :, :)
+      complex(rp) :: u(size(mu, 3)*size(mu, 4), size(mu, 1))
+      complex(rp) :: c_blas(size(gamma, 1), size(mu, 1)), c_ref(size(gamma, 1), size(mu, 1))
+      complex(rp) :: total_blas(size(gamma, 1), size(mu, 1)), total_ref(size(gamma, 1), size(mu, 1))
+      complex(rp) :: resolved_blas(size(gamma, 1), size(mu, 1), size(mu, 5))
+      complex(rp) :: resolved_ref(size(gamma, 1), size(mu, 1), size(mu, 5))
+      integer :: trace
+      real(rp), parameter :: factor_test = 0.75_rp
+
+      total_blas = (0.0_rp, 0.0_rp)
+      total_ref = (0.0_rp, 0.0_rp)
+      do trace = 1, size(mu, 5)
+         call pack_gamma_mu_diagonal(mu(:, :, :, :, trace), u)
+         call gamma_mu_blas(gamma, u, factor_test, c_blas)
+         call gamma_mu_reference(gamma, mu(:, :, :, :, trace), factor_test, c_ref)
+         resolved_blas(:, :, trace) = c_blas
+         resolved_ref(:, :, trace) = c_ref
+         total_blas = total_blas + c_blas
+         total_ref = total_ref + c_ref
+      end do
+      call require(maxval(abs(total_blas - total_ref)) < tolerance, &
+         trim(mode)//' total Gamma-mu accumulation')
+      if (trim(mode) == 'per_type') then
+         call require(maxval(abs(resolved_blas - resolved_ref)) < tolerance, &
+            'per_type resolved Gamma-mu contributions')
+      end if
+   end subroutine compare_trace_mode
 
    function make_hamiltonian() result(hk)
       complex(rp) :: hk(nsite*nb, nsite*nb)

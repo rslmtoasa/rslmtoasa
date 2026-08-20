@@ -521,7 +521,7 @@ HEAD are:
 | Left/right recurrence and `mu_nm` | CPU legacy FP64, CPU `fast` FP32 with FP64 host output, CPU `fast_dp` FP64, or CUDA block-ELL selected by `control%gpu_precision` (`fp32` with FP64 host output or `fp64`) | Measured as `T_cheb_moments`; current CUDA API reports its arithmetic interval separately from its synchronous transfers. |
 | H2D / D2H | CUDA plugin | Operator upload and per-trace `psiref`/`mu_nm` copies are measured separately; byte counters are recorded as `bytes_h2d` and `bytes_d2h`. |
 | `Gamma_nm(E)` | `conductivity%calculate_gamma_nm` / host FP64 | `O(NE*M^2)` construction; measured as `T_gamma`. |
-| `Gamma*mu` contraction | `conductivity%calculate_conductivity_tensor` / host FP64 + OpenMP | Current `ntype * NE * M^2 * nb` diagonal contraction; measured as `T_gamma_mu`. |
+| `Gamma*mu` contraction | `conductivity%calculate_conductivity_tensor` / host FP64 + BLAS `ZGEMM` | `mu(l,l,n,m,t)` is packed into reusable `U(K,nb)` and contracted with a zero-copy `G(NE,K)` view; packing and GEMM are measured separately as `T_mu_pack` and `T_gamma_mu`. |
 | Energy integration/output | `conductivity%calculate_conductivity_tensor` / host FP64 + host I/O | Simpson integrations and per-type output; measured as `T_energy_integral`. |
 | Complete transport phase | `post_processing_conductivity` / mixed according to the selected route | Includes stack construction, moments, reconstruction, and output; measured as `T_transport_total`. |
 
@@ -638,6 +638,7 @@ whole run
 - [x] production call chain documented
 - [x] precision of every numerical stage documented
 - [x] stage-level timers added
+- [x] diagonal-moment packing and BLAS reconstruction timers added
 - [x] transfer bytes recorded
 - [x] realistic Pt M=500/lld=150 anchor run
 - [ ] several real Pt sizes run
@@ -791,6 +792,124 @@ Use the same real workloads and repeated persistent timing from G0.
 **Commit message:** `Add persistent precision-matched KPM CUDA paths`
 
 ---
+
+# KPM-G1.1 — Optimize the host Kubo-Bastin Gamma-moment contraction
+
+## Status at CURRENT HEAD
+
+The host `Gamma*mu` contraction is now implemented as a canonical FP64 BLAS-3
+reconstruction. This is a focused interlude before KPM-G2 stochastic-vector
+batching. No Kubo-Bastin physics, stochastic estimator, observable convention,
+energy grid, or output normalization was changed. Production closure evidence
+was recorded on 2026-08-20 with real SOC-Pt at the required `M=500/lld=150`
+workload, including scalar before/BLAS after output comparisons.
+
+## Mathematical contract
+
+The pre-existing scalar loop computes, for one type or random-vector trace
+`t`,
+
+```text
+I_l^t(E_i) = factor * sum_(n,m) Gamma_nm(E_i) * mu_nm_stochastic(l,l,n,m,t)
+```
+
+For `per_type`, this contribution is retained in the type-resolved output and
+also added to the total result. For `random_vec`, every stochastic-vector
+contribution is added to the total result. The later division by `loop_over`
+is unchanged.
+
+With `M = cond_ll`, `NE = channels_ldos + 10`, and `K = M*M`, the optimized
+path defines
+
+```text
+G(i,q)   = Gamma_nm(E_i),       q = n + (m-1)*M
+U_t(q,l) = mu_nm_stochastic(l,l,n,m,t)
+C_t      = factor * G * U_t
+```
+
+The actual Fortran storage of `gamma_nm(NE,M,M)` has energy as its fastest
+dimension. It is therefore already laid out as the columns of `G(NE,K)` in
+the stated `(n,m)` order. `C_F_POINTER` creates a zero-copy rank-2 view of
+that storage; no `reshape`, transpose, packed Gamma tensor, or second
+`O(NE*M^2)` allocation is introduced. `ZGEMM('N','N',...)` is used because
+the scalar expression contains no complex conjugation.
+
+Only the diagonal moment blocks are packed. The reusable `U(K,nb)` workspace
+is about 72 MB for `M=500`, `nb=18`, and complex FP64, while the reusable
+`C(NE,nb)` workspace is small by comparison. Both are allocated once per
+conductivity call and reused across all types/traces.
+
+## Implementation and validation surface
+
+`source/conductivity.f90` now contains:
+
+- `gamma_mu_reference`, the scalar reference helper retained for focused
+  validation;
+- `pack_gamma_mu_diagonal`, implementing the exact `(n,m)` flattening;
+- `gamma_mu_blas`, the zero-copy `ZGEMM` reconstruction helper.
+
+The existing `UnitKpmTransport` test now checks an encoded Gamma layout and
+compares scalar versus BLAS results for arbitrary complex Gamma/moment data,
+including total accumulation and per-type-resolved results for both
+`per_type` and `random_vec` semantics. The focused test passes on the current
+serial/OpenBLAS build.
+
+The profiler now emits `T_mu_pack` separately from `T_gamma_mu`; the latter
+contains only the BLAS reconstruction interval. It also emits exact
+`bytes_gamma` and `bytes_mu_pack` counts. The GEMM call is not wrapped in an
+outer OpenMP region, so CPU thread sweeps can control the BLAS thread count
+without nested oversubscription.
+
+## Production closure evidence
+
+The following runs used the real SOC-Pt conductivity fixture, `per_type`, CPU
+FP64 moments, `lld=150`, one MPI rank, and the normal transport driver. The
+controlled scalar row was built from a clean archive of pre-interlude `HEAD`
+with the same GNU Fortran/OpenBLAS toolchain; the after rows use the current
+BLAS implementation.
+
+| run | `N` | `M` | `NE` | `T_cheb_moments` (s) | `T_gamma` (s) | `T_mu_pack` (s) | `T_gamma_mu` (s) | transport (s) | wall (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| before scalar, spin, r4 | 1,152 | 500 | 2,510 | 522.057 | 8.024 | — | 490.636 | 522.526 | 522.816 |
+| after BLAS, spin, r4 | 1,152 | 500 | 2,510 | 33.359 | 8.298 | 0.095 | 1.874 | 33.822 | 34.153 |
+| after BLAS, charge, r4 | 1,152 | 500 | 2,510 | 33.163 | 8.237 | 0.099 | 1.856 | 33.627 | 33.934 |
+| after BLAS, orbital, r4 | 1,152 | 500 | 2,510 | 33.712 | 8.229 | 0.095 | 1.873 | 34.196 | 34.511 |
+| after BLAS, spin, r6 | 3,888 | 500 | 2,510 | 83.339 | 8.245 | 0.095 | 1.871 | 84.010 | 84.322 |
+| after BLAS, spin, r8 | 9,216 | 500 | 2,510 | 177.466 | 8.246 | 0.094 | 1.869 | 178.704 | 179.040 |
+
+The direct target speedup on the controlled r4 anchor is `490.636/1.874 =
+261.7x` for `Gamma*mu`; whole-run wall time is `15.3x` lower. The whole-run
+ratio must not be attributed entirely to G1.1 because the unchanged
+Chebyshev stage also measured differently between the two isolated runs; the
+`T_gamma_mu` comparison is the reconstruction-specific claim.
+
+The optimized r4 spin outputs agree with the scalar run over all 2,510 energy
+rows at relative L2 differences of `1.12e-13` for total conductivity,
+`1.12e-14` for real orbital output, and `5.03e-14` for imaginary orbital
+output. The established 120-channel `M=500/lld=150` closure case agrees for
+charge, spin, and orbital selectors to at most `3.54e-15` relative L2. The
+r6/r8 production outputs contain finite values for all 2,510 rows.
+
+At `M=500`, the profile reports `bytes_gamma=10,040,000,000` and
+`bytes_mu_pack=72,000,000`; a `/usr/bin/time -v` r4 run reached 11,708,968
+kB maximum resident memory. No second full Gamma tensor is allocated.
+
+An `OMP_NUM_THREADS` sweep of the optimized r4 anchor (`OPENBLAS_NUM_THREADS=1`)
+was stable at 1/2/4/8 threads: `T_gamma_mu` was 1.883/1.910/1.907/1.973 s
+and wall time was 34.684/27.296/24.255/25.989 s. Four host threads was the
+best measured point for this machine.
+
+## Remaining scope
+
+- The production CPU reconstruction is validated; later tuning can repeat the
+  sweep with a deliberately threaded BLAS policy.
+- No GPU `Gamma*mu` kernel belongs to G1.1. KPM-G2 remains a separate decision
+  after the CPU baseline and estimator coverage are considered.
+- The full production campaign above is `per_type`; `random_vec` semantics
+  remain covered by the focused scalar/BLAS unit test rather than a separate
+  production material run.
+
+**Commit message:** `Optimize Kubo-Bastin Gamma-moment contraction`
 
 # KPM-G2 — Block stochastic traces and expose vector-level GPU parallelism
 

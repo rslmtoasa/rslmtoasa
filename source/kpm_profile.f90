@@ -18,20 +18,21 @@ module kpm_profile_mod
 
    private
 
-   integer, parameter, public :: kpm_stage_count = 9
+   integer, parameter, public :: kpm_stage_count = 10
    integer, parameter :: stage_operator = 1
    integer, parameter :: stage_trace_setup = 2
    integer, parameter :: stage_cheb_moments = 3
    integer, parameter :: stage_h2d = 4
    integer, parameter :: stage_d2h = 5
    integer, parameter :: stage_gamma = 6
-   integer, parameter :: stage_gamma_mu = 7
-   integer, parameter :: stage_energy_integral = 8
-   integer, parameter :: stage_transport_total = 9
+   integer, parameter :: stage_mu_pack = 7
+   integer, parameter :: stage_gamma_mu = 8
+   integer, parameter :: stage_energy_integral = 9
+   integer, parameter :: stage_transport_total = 10
 
    character(len=*), parameter :: stage_names(kpm_stage_count) = [ character(len=20) :: &
       'T_operator', 'T_trace_setup', 'T_cheb_moments', 'T_H2D', 'T_D2H', &
-      'T_gamma', 'T_gamma_mu', 'T_energy_integral', 'T_transport_total' ]
+      'T_gamma', 'T_mu_pack', 'T_gamma_mu', 'T_energy_integral', 'T_transport_total' ]
 
    type, public :: kpm_profile
       private
@@ -50,6 +51,8 @@ module kpm_profile_mod
       integer :: ntrace = 0
       integer(int64) :: bytes_h2d = 0_int64
       integer(int64) :: bytes_d2h = 0_int64
+      integer(int64) :: bytes_gamma = 0_int64
+      integer(int64) :: bytes_mu_pack = 0_int64
    contains
       procedure :: reset => kpm_profile_reset
       procedure :: configure => kpm_profile_configure
@@ -57,6 +60,7 @@ module kpm_profile_mod
       procedure :: stop => kpm_profile_stop
       procedure :: add_seconds => kpm_profile_add_seconds
       procedure :: add_bytes => kpm_profile_add_bytes
+      procedure :: set_reconstruction_bytes => kpm_profile_set_reconstruction_bytes
       procedure :: emit => kpm_profile_emit
    end type kpm_profile
 
@@ -82,6 +86,8 @@ contains
       this%ntrace = 0
       this%bytes_h2d = 0_int64
       this%bytes_d2h = 0_int64
+      this%bytes_gamma = 0_int64
+      this%bytes_mu_pack = 0_int64
    end subroutine kpm_profile_reset
 
    subroutine kpm_profile_configure(this, backend, precision, estimator, matrix_dimension, nnz, moments, lld, ntrace)
@@ -164,6 +170,14 @@ contains
       end select
    end subroutine kpm_profile_add_bytes
 
+   subroutine kpm_profile_set_reconstruction_bytes(this, gamma_bytes, mu_pack_bytes)
+      class(kpm_profile), intent(inout) :: this
+      integer(int64), intent(in) :: gamma_bytes, mu_pack_bytes
+
+      this%bytes_gamma = max(0_int64, gamma_bytes)
+      this%bytes_mu_pack = max(0_int64, mu_pack_bytes)
+   end subroutine kpm_profile_set_reconstruction_bytes
+
    subroutine kpm_profile_emit(this)
       class(kpm_profile), intent(inout) :: this
 
@@ -180,11 +194,13 @@ contains
          'N= ', this%matrix_dimension, 'nnz= ', this%nnz, &
          'M= ', this%moments, 'lld= ', this%lld, 'Ntrace= ', this%ntrace, &
          'bytes_h2d= ', this%bytes_h2d, 'bytes_d2h= ', this%bytes_d2h, &
+         'bytes_gamma= ', this%bytes_gamma, 'bytes_mu_pack= ', this%bytes_mu_pack, &
          'T_operator= ', this%seconds(stage_operator), &
          'T_trace_setup= ', this%seconds(stage_trace_setup), &
          'T_cheb_moments= ', this%seconds(stage_cheb_moments), &
          'T_H2D= ', this%seconds(stage_h2d), 'T_D2H= ', this%seconds(stage_d2h), &
-         'T_gamma= ', this%seconds(stage_gamma), 'T_gamma_mu= ', this%seconds(stage_gamma_mu), &
+         'T_gamma= ', this%seconds(stage_gamma), 'T_mu_pack= ', this%seconds(stage_mu_pack), &
+         'T_gamma_mu= ', this%seconds(stage_gamma_mu), &
          'T_energy_integral= ', this%seconds(stage_energy_integral), &
          'T_transport_total= ', this%seconds(stage_transport_total)
    end subroutine kpm_profile_emit

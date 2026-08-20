@@ -21,6 +21,8 @@
 
 module conductivity_mod
 
+   use iso_fortran_env, only: int64
+   use iso_c_binding, only: c_f_pointer, c_int, c_loc
    use mpi_mod
    use control_mod
    use self_mod
@@ -47,6 +49,8 @@ module conductivity_mod
    implicit none
 
    private
+   public :: gamma_mu_reference, gamma_mu_blas, pack_gamma_mu_diagonal
+
    type, public :: conductivity
       !> Control
       class(control), pointer :: control
@@ -79,6 +83,84 @@ module conductivity_mod
    end interface
 
 contains
+
+   !> @brief Pack the diagonal orbital blocks consumed by Gamma*mu.
+   !> @details The conductivity reconstruction only reads
+   !> `mu_nm_stochastic(l,l,n,m,t)`.  The packed matrix uses the exact
+   !> column-major pair mapping q = n + (m-1)*M, so it can be consumed by
+   !> ZGEMM as U(q,l).  The workspace is supplied by the caller and is
+   !> intentionally reusable across trace/type contributions.
+   subroutine pack_gamma_mu_diagonal(mu_nm, u)
+      complex(rp), intent(in) :: mu_nm(:, :, :, :)
+      complex(rp), intent(out) :: u(:, :)
+
+      integer :: l, m, n, q, nb_local, m_local
+
+      nb_local = size(mu_nm, 1)
+      m_local = size(mu_nm, 3)
+      u = (0.0_rp, 0.0_rp)
+      do l = 1, nb_local
+         do m = 1, m_local
+            do n = 1, m_local
+               q = n + (m - 1)*m_local
+               u(q, l) = mu_nm(l, l, n, m)
+            end do
+         end do
+      end do
+   end subroutine pack_gamma_mu_diagonal
+
+   !> @brief Scalar reference for one stochastic trace/type contribution.
+   !> @details This is the unoptimized production algebra retained for focused
+   !> validation.  In particular, it has no conjugation and preserves the
+   !> existing n-then-m summation order.
+   subroutine gamma_mu_reference(gamma_nm, mu_nm, factor, c)
+      complex(rp), intent(in) :: gamma_nm(:, :, :)
+      complex(rp), intent(in) :: mu_nm(:, :, :, :)
+      real(rp), intent(in) :: factor
+      complex(rp), intent(out) :: c(:, :)
+
+      integer :: i, l, m, n
+
+      c = (0.0_rp, 0.0_rp)
+      do i = 1, size(gamma_nm, 1)
+         do n = 1, size(gamma_nm, 2)
+            do m = 1, size(gamma_nm, 3)
+               do l = 1, size(mu_nm, 1)
+                  c(i, l) = c(i, l) + factor*gamma_nm(i, n, m)*mu_nm(l, l, n, m)
+               end do
+            end do
+         end do
+      end do
+   end subroutine gamma_mu_reference
+
+   !> @brief Reconstruct one trace/type contribution with a BLAS-3 contraction.
+   !> @details `gamma_nm` is already allocated as (NE,M,M).  Its first
+   !> dimension is contiguous in Fortran storage, so C_F_POINTER supplies a
+   !> zero-copy view with shape (NE,M*M), where column q is the (n,m) pair
+   !> q=n+(m-1)*M.  No conjugation or transpose is used: this computes
+   !> C = factor * G * U exactly as the scalar Gamma*mu expression requires.
+   !> `u` and `c` are caller-owned reusable workspaces.
+   subroutine gamma_mu_blas(gamma_nm, u, factor, c)
+      complex(rp), target, intent(in) :: gamma_nm(:, :, :)
+      complex(rp), intent(in) :: u(:, :)
+      real(rp), intent(in) :: factor
+      complex(rp), intent(out) :: c(:, :)
+
+      complex(rp), pointer, contiguous :: gamma_matrix(:, :)
+      complex(rp) :: alpha, beta
+      integer :: ne
+      integer(c_int) :: shape(2)
+      external :: zgemm
+
+      ne = size(gamma_nm, 1)
+      shape = [int(ne, c_int), int(size(gamma_nm, 2)*size(gamma_nm, 3), c_int)]
+      call c_f_pointer(c_loc(gamma_nm), gamma_matrix, shape)
+
+      alpha = cmplx(factor, 0.0_rp, kind=rp)
+      beta = (0.0_rp, 0.0_rp)
+      call zgemm('N', 'N', ne, size(u, 2), size(u, 1), alpha, gamma_matrix, ne, &
+                 u, size(u, 1), beta, c, ne)
+   end subroutine gamma_mu_blas
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -240,9 +322,10 @@ contains
       ! Input
       class(conductivity), intent(inout) :: this
       ! Local variables
-      integer :: i, m, n, l1, l2, ntype, loop_over
+      integer :: i, m, n, l1, l2, ntype, loop_over, ne, m_cond, k_cond
       complex(rp), dimension(:, :, :), allocatable :: integrand
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
+      complex(rp), dimension(:, :), allocatable :: mu_diag, gamma_mu
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
       complex(rp), dimension(nb) :: temp
@@ -258,6 +341,16 @@ contains
       allocate(wscale(this%en%channels_ldos + 10))
       allocate(integrand_l_real(nb, this%en%channels_ldos + 10), integrand_l_im(nb, this%en%channels_ldos + 10))
       allocate(integrand_at(nb, nb, this%en%channels_ldos + 10, this%lattice%ntype))
+
+      ! Only the diagonal orbital blocks enter Gamma*mu.  These two workspaces
+      ! are allocated once per conductivity call and reused for every trace.
+      ne = this%en%channels_ldos + 10
+      m_cond = this%control%cond_ll
+      k_cond = m_cond*m_cond
+      allocate(mu_diag(k_cond, nb), gamma_mu(ne, nb))
+      call g_kpm_profile%set_reconstruction_bytes( &
+         int(size(this%gamma_nm), int64)*int(storage_size(this%gamma_nm)/8, int64), &
+         int(size(mu_diag), int64)*int(storage_size(mu_diag)/8, int64))
       
       integrand(:, :, :) = (0.0d0, 0.0d0)
       real_part_l(:) = 0.0d0
@@ -289,28 +382,25 @@ contains
       factor = 16 / (pi * (de**2))
       write(*,*) factor, volume, de
       !write(*,*) (16 * hbar_const * (e_const**2)) / (pi * volume * ((de * ry2joule)**2))
-      call g_kpm_profile%start('T_gamma_mu')
       do ntype = 1, loop_over
-         !$omp parallel do default(shared) private(i, n, m, l2) schedule(dynamic)
-         do i = 1, this%en%channels_ldos + 10
-            
-            ! Accumulate the contributions over the Chebyshev recursion indices.
-            do n = 1, this%control%cond_ll
-               do m = 1, this%control%cond_ll
-                  do l2 = 1, nb
-                     integrand(l2, l2, i) = integrand(l2, l2, i) + factor * this%gamma_nm(i, n, m) * &
-                                this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
-                     if (this%control%cond_calctype == 'per_type') then
-                        integrand_at(l2, l2, i, ntype) = integrand_at(l2, l2, i, ntype) + factor * this%gamma_nm(i, n, m) * &
-                                this%recursion%mu_nm_stochastic(l2, l2, n, m, ntype)
-                     end if
-                   end do
-               end do
-            end do
+         call g_kpm_profile%start('T_mu_pack')
+         call pack_gamma_mu_diagonal(this%recursion%mu_nm_stochastic(:, :, :, :, ntype), mu_diag)
+         call g_kpm_profile%stop('T_mu_pack')
+
+         ! Do not wrap this call in an outer OpenMP region.  BLAS owns the
+         ! parallelism for this dense reconstruction, avoiding nested
+         ! OpenMP/BLAS oversubscription in the CPU benchmark.
+         call g_kpm_profile%start('T_gamma_mu')
+         call gamma_mu_blas(this%gamma_nm, mu_diag, factor, gamma_mu)
+         call g_kpm_profile%stop('T_gamma_mu')
+
+         do l2 = 1, nb
+            integrand(l2, l2, :) = integrand(l2, l2, :) + gamma_mu(:, l2)
+            if (this%control%cond_calctype == 'per_type') then
+               integrand_at(l2, l2, :, ntype) = gamma_mu(:, l2)
+            end if
          end do
-         !$omp end parallel do
       end do
-      call g_kpm_profile%stop('T_gamma_mu')
 
       call g_kpm_profile%start('T_energy_integral')
       integrand_tot_real(:) = 0.0d0
@@ -388,7 +478,8 @@ contains
       ! End writing statements
       call g_kpm_profile%stop('T_energy_integral')
 
-      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at)
+      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at, &
+                 mu_diag, gamma_mu)
    end subroutine calculate_conductivity_tensor
 
 end module conductivity_mod
