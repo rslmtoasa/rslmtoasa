@@ -580,6 +580,16 @@ CPU legacy route as the reference, the FP32 CUDA route reduced
 dominated by the shared host `Gamma*mu` contraction (`T_gamma_mu=489.938 s`),
 which is the next numerical-efficiency target after G1.
 
+Correctness closure was run separately from the 2500-channel performance
+anchor with a 120-channel energy grid. For the four-cell Pt fixture
+(`N=1152`, `M=500`, `lld=150`), CPU legacy FP64 versus CUDA FP64 produced zero
+reported complex error for charge, spin, and orbital conductivity. CPU `fast`
+FP32 versus CUDA FP32 produced relative complex errors of `4.10e-6` charge,
+`8.85e-6` orbital, and `1.23e-4` spin. A larger replication-5 Pt fixture
+(`N=2232`) passed the spin check as well: zero reported error in FP64 and
+`6.78e-6` in the FP32-vs-FP32 comparison. The low-level moment-tensor check
+remains at `1.66e-15` FP64 reference error and `8.92e-7` FP32 reference error.
+
 The production baseline command is:
 
 ```bash
@@ -772,11 +782,11 @@ Use the same real workloads and repeated persistent timing from G0.
 - [x] repeated CUDA allocations removed where material
 - [x] sparse operator upload/reuse audited
 - [x] safe invalidation implemented where reused
-- [ ] Pt M=500 FP64 correctness passes
-- [ ] Pt M=500 FP32 same-precision correctness passes
-- [ ] larger Pt correctness passes
+- [x] Pt M=500 FP64 correctness passes
+- [x] Pt M=500 FP32 same-precision correctness passes
+- [x] larger Pt correctness passes
 - [ ] pre/post optimization timing recorded
-- [ ] no global precision framework introduced
+- [x] no global precision framework introduced
 
 **Commit message:** `Add persistent precision-matched KPM CUDA paths`
 
