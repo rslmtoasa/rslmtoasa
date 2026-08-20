@@ -27,7 +27,8 @@ RUNNER = Path(__file__).resolve().parents[1] / "run_binary.sh"
 
 
 def run_case(binary: Path, scratch: Path, cond_type: str, gpu: bool,
-             cond_ll: int, channels: int, replication: int, rc: int) -> dict[str, float | bool]:
+             cond_ll: int, channels: int, replication: int, rc: int,
+             gpu_precision: str, lld: int) -> dict[str, float | bool]:
     if scratch.exists():
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
@@ -43,6 +44,8 @@ def run_case(binary: Path, scratch: Path, cond_type: str, gpu: bool,
         rc=rc,
         gpu_plugin=gpu,
         gpu_backend="csr",
+        gpu_precision=gpu_precision,
+        lld=lld,
     )
     env = os.environ.copy()
     env["RSLMTO_OMP_THREADS_SERIAL"] = "1"
@@ -74,9 +77,11 @@ def main() -> int:
     parser.add_argument("--scratch-root", required=True, type=Path)
     parser.add_argument("--relative-tolerance", type=float, default=5.0e-3)
     parser.add_argument("--cond-ll", type=int, default=20)
+    parser.add_argument("--lld", type=int, default=50)
     parser.add_argument("--channels", type=int, default=120)
     parser.add_argument("--replication", type=int, default=4)
     parser.add_argument("--rc", type=int, default=20)
+    parser.add_argument("--gpu-precision", choices=("fp32", "fp64"), default="fp32")
     args = parser.parse_args()
 
     binary = args.binary.resolve()
@@ -85,9 +90,11 @@ def main() -> int:
     failures: list[str] = []
     for cond_type in ("charge", "spin", "orbital"):
         cpu = run_case(binary, scratch / f"{cond_type}_cpu", cond_type, False,
-                       args.cond_ll, args.channels, args.replication, args.rc)
+                       args.cond_ll, args.channels, args.replication, args.rc,
+                       args.gpu_precision, args.lld)
         gpu = run_case(binary, scratch / f"{cond_type}_gpu", cond_type, True,
-                       args.cond_ll, args.channels, args.replication, args.rc)
+                       args.cond_ll, args.channels, args.replication, args.rc,
+                       args.gpu_precision, args.lld)
         scale = max(abs(float(cpu["real"])), abs(float(gpu["real"])),
                     abs(float(cpu["imag"])), abs(float(gpu["imag"])), 1.0e-12)
         relative_error = (
@@ -109,8 +116,8 @@ def main() -> int:
 
     report = {
         "scope": (f"fcc Pt SOC production conductivity fixture; cond_ll={args.cond_ll}, "
-                  f"channels={args.channels}, replication={args.replication}, rc={args.rc}"),
-        "gpu_precision": "default CUDA Chebyshev precision (fp32 moments, fp64 host outputs)",
+                  f"lld={args.lld}, channels={args.channels}, replication={args.replication}, rc={args.rc}"),
+        "gpu_precision": f"CUDA {args.gpu_precision} moments, fp64 host outputs",
         "relative_tolerance": args.relative_tolerance,
         "results": results,
     }

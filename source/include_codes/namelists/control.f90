@@ -5,7 +5,7 @@ logical :: lrot, incorb, do_asd, svac, blockrec, do_cochg, asd_jij, do_comom, hy
 logical :: cpp_plugin
 logical :: gpu_plugin
 logical :: dipole_electrostatics
-character(len=sl) :: calctype, recur, cond_type, cond_calctype, gpu_backend, cheb_backend
+character(len=sl) :: calctype, recur, cond_type, cond_calctype, gpu_backend, gpu_precision, cheb_backend
 character(len=sl) :: linear_in, linear_out
 character(len=sl) :: density_policy
 ! Constraints are provided in a separate namelist file `constraints.f90`
@@ -13,6 +13,6 @@ character(len=sl) :: density_policy
 namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    idos, lrot, incorb, do_asd, mext, &
    svac, calctype, txc, blockrec, partype, do_cochg, asd_jij, terminator, conca, &
-   concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, cheb_backend, &
+   concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, gpu_precision, cheb_backend, &
    random_vec_num, cond_ll, cond_type, cond_calctype, linear_in, linear_out, lmax, &
    dipole_electrostatics, dipole_mix, density_policy

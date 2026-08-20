@@ -431,6 +431,11 @@ contains
       ! Repeating the readiness checks for every trace both obscures the
       ! profile and can produce misleading fallback diagnostics.
       use_gpu = gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)
+      if (use_gpu .and. trim(this%control%gpu_precision) == 'fp32' .and. &
+          (trim(this%control%gpu_backend) == 'fft' .or. trim(this%control%gpu_backend) == 'conv')) then
+         call g_logger%fatal('gpu_precision=fp32 is not supported by the structured CUDA stochastic transport backend; '// &
+            'select gpu_backend=csr/bsr or gpu_precision=fp64.', __FILE__, __LINE__)
+      end if
 
       select case(this%control%cond_calctype)
       case('per_type')
@@ -464,7 +469,11 @@ contains
             int(size(this%hamiltonian%v_b), int64) * complex_bytes
          if (this%hamiltonian%hoh) operator_h2d_bytes = operator_h2d_bytes + &
             int(size(this%hamiltonian%vo_a), int64) * complex_bytes + int(size(this%hamiltonian%vo_b), int64) * complex_bytes
-         precision_label = 'cuda_fp32_moments_fp64_host'
+         if (trim(this%control%gpu_precision) == 'fp64') then
+            precision_label = 'cuda_fp64'
+         else
+            precision_label = 'cuda_fp32_moments_fp64_host'
+         end if
       else if (trim(this%control%cheb_backend) == 'legacy') then
          precision_label = 'cpu_fp64'
       else if (trim(this%control%cheb_backend) == 'fast_dp') then
@@ -599,6 +608,7 @@ contains
                else
                   call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
                end if
+               call this%gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
                call g_kpm_profile%stop('T_H2D')
                call g_kpm_profile%add_bytes('H2D', operator_h2d_bytes)
             end if

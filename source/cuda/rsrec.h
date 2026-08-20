@@ -217,8 +217,10 @@ int rsrec_scalar_lanczos(rsrec_ctx *ctx, int site_j, int lld,
  *   right : v_a T_{n-1}(H~) v_b |psiref>               n = 1..lld
  *   mu_nm(:,:,n,m) = sum_k  left_m(k)^H right_n(k)
  *   psiref: (nb, nb, kk),  mu_nm: (nb, nb, lld, lld)
- * Memory: keeps all lld left states resident (lld*kk*nb*nb*16 bytes); the
- * call fails with a clear message if this does not fit on the device.      */
+ * Memory: keeps all lld left states resident (lld*kk*nb*nb*16 bytes). The
+ * left/moment/recurrence workspace is context-owned and grows monotonically,
+ * so repeated traces do not repeat the cudaMalloc/cudaFree cycle; it is
+ * released by rsrec_destroy().                                              */
 int rsrec_stochastic_moments(rsrec_ctx *ctx, const void *psiref, int lld,
                              double a, double b, void *mu_nm);
 

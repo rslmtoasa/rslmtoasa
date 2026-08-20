@@ -33,7 +33,7 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
                route: str = "recursion", rc: int = 20,
                kmesh: int | None = None, gpu_plugin: bool = False,
                gpu_backend: str = "csr", lld: int | None = None,
-               cheb_backend: str = "legacy") -> None:
+               cheb_backend: str = "legacy", gpu_precision: str = "fp32") -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
     shutil.copytree(base, workdir)
@@ -47,7 +47,8 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
                     "energy_max": energy_max, "channels_ldos": channels},
         "control": {"cond_ll": cond_ll, "cond_type": cond_type,
                      "cond_calctype": "per_type", "cheb_backend": cheb_backend,
-                     "gpu_plugin": gpu_plugin, "gpu_backend": gpu_backend},
+                     "gpu_plugin": gpu_plugin, "gpu_backend": gpu_backend,
+                     "gpu_precision": gpu_precision},
         "reciprocal": {"nk1": kmesh or replication, "nk2": kmesh or replication,
                         "nk3": kmesh or replication, "use_symmetry_reduction": False},
     }
@@ -127,6 +128,8 @@ def main() -> int:
     parser.add_argument("--gpu-backend", default="csr",
                         choices=("csr", "bsr", "fft", "conv"),
                         help="CUDA RS backend when --gpu-plugin is enabled")
+    parser.add_argument("--gpu-precision", default="fp32", choices=("fp32", "fp64"),
+                        help="CUDA stochastic Chebyshev arithmetic precision")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[2]
@@ -149,7 +152,8 @@ def main() -> int:
     def add(name: str, *, case_base: Path = base, **kwargs: object) -> None:
         cases[name] = run_case(binary, case_base, scratch / name,
                                gpu_plugin=args.gpu_plugin,
-                               gpu_backend=args.gpu_backend, **kwargs)
+                               gpu_backend=args.gpu_backend,
+                               gpu_precision=args.gpu_precision, **kwargs)
 
     # Tensor structure and component/sign conventions at a common point.
     for cond_type in ("charge", "spin", "orbital"):

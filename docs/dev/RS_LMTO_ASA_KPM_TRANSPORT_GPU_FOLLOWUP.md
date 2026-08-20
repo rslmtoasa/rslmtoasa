@@ -518,7 +518,7 @@ HEAD are:
 | Current/operator construction | `compute_moments_stochastic` / host FP64 | `build_realspace_velocity_operators` plus charge/spin/orbital specialization; measured as `T_operator`. |
 | Chebyshev scaling | `resolve_chebyshev_window` / host FP64 | The same affine `(H-b)/a` window is passed to CPU and CUDA routes. |
 | Trace/projector setup | `compute_moments_stochastic` / host FP64 | `per_type` uses one identity block on the selected type; `random_vec` uses the existing normalized random phase block; measured as `T_trace_setup`. |
-| Left/right recurrence and `mu_nm` | CPU legacy FP64, CPU `fast` FP32 with FP64 host output, CPU `fast_dp` FP64, or CUDA block-ELL FP32 with FP64 host output by default | Measured as `T_cheb_moments`; current CUDA API reports its arithmetic interval separately from its synchronous transfers. |
+| Left/right recurrence and `mu_nm` | CPU legacy FP64, CPU `fast` FP32 with FP64 host output, CPU `fast_dp` FP64, or CUDA block-ELL selected by `control%gpu_precision` (`fp32` with FP64 host output or `fp64`) | Measured as `T_cheb_moments`; current CUDA API reports its arithmetic interval separately from its synchronous transfers. |
 | H2D / D2H | CUDA plugin | Operator upload and per-trace `psiref`/`mu_nm` copies are measured separately; byte counters are recorded as `bytes_h2d` and `bytes_d2h`. |
 | `Gamma_nm(E)` | `conductivity%calculate_gamma_nm` / host FP64 | `O(NE*M^2)` construction; measured as `T_gamma`. |
 | `Gamma*mu` contraction | `conductivity%calculate_conductivity_tensor` / host FP64 + OpenMP | Current `ntype * NE * M^2 * nb` diagonal contraction; measured as `T_gamma_mu`. |
@@ -537,6 +537,49 @@ non-overlapping intervals `T_H2D`, `T_cheb_moments`, and `T_D2H` directly; CPU
 `T_H2D`/`T_D2H` are zero by construction. This avoids presenting a host-side
 wall interval that double-counts a transfer as arithmetic.
 
+## G1 implementation status at CURRENT HEAD
+
+The production transport route now selects CUDA stochastic arithmetic through
+the narrow `control%gpu_precision` keyword:
+
+```fortran
+gpu_precision = 'fp32'  ! default mixed production route
+gpu_precision = 'fp64'  ! scientific FP64 GPU route
+```
+
+`fp32` keeps the Hamiltonian/current mirrors, recurrence states, velocity
+applications, cuBLAS moment contractions, and device `mu_nm` in complex FP32.
+The host input projector and final moment transfer remain complex FP64; each
+FP32 moment is widened to FP64 before the canonical Fortran conductivity path
+consumes it. `fp64` uses complex FP64 for those same device states and moment
+contractions, with no FP32 down-conversion. The profile labels these routes as
+`cuda_fp32_moments_fp64_host` and `cuda_fp64`, respectively.
+
+The CUDA stochastic workspace is owned by the recursion context and contains
+the left-state ladder, `mu_nm`, recurrence/velocity scratch, HOH scratch, and
+host moment staging. Each buffer grows only when a later request needs more
+capacity; repeated projector/trace calls reuse it. FP32 and FP64 requests use
+the same capacity-owned storage, so changing precision does not retain a
+second full workspace. The cuBLAS handle and uploaded operators already have
+context lifetime. A fresh explicit Hamiltonian or velocity setter remains the
+invalidation/upload boundary, while the transport loop does not call either
+setter for each trace.
+
+The structured FFT/CONV stochastic route is currently FP64-only. Its
+left-state, moment, and input-vector buffers use the same context-lifetime
+capacity policy. Requesting `gpu_precision='fp32'` for it is rejected
+explicitly rather than silently running a different precision.
+
+The production-order Pt spin anchor was also run on the host CUDA machine at
+`cond_ll=500`, `lld=150`, `N=1152`, and 2500 energy channels. With the existing
+CPU legacy route as the reference, the FP32 CUDA route reduced
+`T_cheb_moments` from 527.427 s to 0.282 s and `T_transport_total` from
+527.889 s to 503.390 s. The text-output relative L2 differences were
+`5.13e-6` for `cond_total`, `4.90e-7` for the real orbital output, and
+`3.65e-7` for the imaginary orbital output. The remaining wall interval is
+dominated by the shared host `Gamma*mu` contraction (`T_gamma_mu=489.938 s`),
+which is the next numerical-efficiency target after G1.
+
 The production baseline command is:
 
 ```bash
@@ -544,7 +587,7 @@ python3 tests/benchmarks/kpm_g0_transport.py \
   --binary build-acc01-cuda/bin/rslmto.x \
   --scratch-root /tmp/rslmto-kpm-g0 \
   --output results/benchmarks/kpm_g0.json \
-  --cond-ll 500 --lld 150 --channels 2500 \
+  --cond-ll 500 --lld 150 --channels 2500 --gpu-precision fp32 \
   --replications 4 6 8 --omp-threads 1
 ```
 
@@ -586,17 +629,17 @@ whole run
 - [x] precision of every numerical stage documented
 - [x] stage-level timers added
 - [x] transfer bytes recorded
-- [ ] realistic Pt M=500/lld=150 anchor run
+- [x] realistic Pt M=500/lld=150 anchor run
 - [ ] several real Pt sizes run
 - [ ] one magnetic real-material case run
-- [ ] CPU FP64 baseline measured
+- [x] CPU FP64 baseline measured
 - [ ] CPU FP32 baseline measured if supported
-- [ ] GPU FP32 baseline measured
-- [ ] GPU FP64 status established
+- [x] GPU FP32 baseline measured
+- [x] GPU FP64 status established
 - [ ] CPU OMP 1/2/4/8 sweep complete
 - [ ] best CPU comparator recorded
 - [x] no major GPU optimization introduced
-- [ ] no small-M result presented as production representative
+- [x] no small-M result presented as production representative
 
 **Commit message:** `Profile realistic KPM transport workloads`
 
@@ -721,14 +764,14 @@ Use the same real workloads and repeated persistent timing from G0.
 
 ## Checklist
 
-- [ ] explicit GPU FP64 transport route available
-- [ ] explicit GPU FP32 transport route available
-- [ ] FP32 conversion/accumulation semantics documented
-- [ ] persistent recurrence workspace implemented
-- [ ] persistent moment workspace implemented
-- [ ] repeated CUDA allocations removed where material
-- [ ] sparse operator upload/reuse audited
-- [ ] safe invalidation implemented where reused
+- [x] explicit GPU FP64 transport route available
+- [x] explicit GPU FP32 transport route available
+- [x] FP32 conversion/accumulation semantics documented
+- [x] persistent recurrence workspace implemented
+- [x] persistent moment workspace implemented
+- [x] repeated CUDA allocations removed where material
+- [x] sparse operator upload/reuse audited
+- [x] safe invalidation implemented where reused
 - [ ] Pt M=500 FP64 correctness passes
 - [ ] Pt M=500 FP32 same-precision correctness passes
 - [ ] larger Pt correctness passes

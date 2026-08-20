@@ -117,6 +117,23 @@ struct rsrec_ctx {
     double stoch_h2d_s = 0.0, stoch_cheb_s = 0.0, stoch_d2h_s = 0.0;
     long long stoch_h2d_bytes = 0, stoch_d2h_bytes = 0;
 
+    /* Capacity-owned stochastic transport workspace.  The moment driver is
+     * called once per trace/projector, so these buffers deliberately live at
+     * context lifetime rather than request lifetime.  Capacity only grows;
+     * changing lld or precision reuses the existing allocation when possible. */
+    struct stochastic_workspace {
+        void *left = nullptr, *dmu = nullptr, *R = nullptr;
+        void *w0 = nullptr, *w1 = nullptr, *w2 = nullptr;
+        void *ht = nullptr, *he = nullptr, *ho = nullptr, *vtmp = nullptr;
+        void *stage = nullptr;
+        size_t field_bytes = 0;
+        size_t left_bytes = 0;
+        size_t mu_bytes = 0;
+        size_t stage_bytes = 0;
+        std::vector<zc> host_moments64;
+        std::vector<fc> host_moments32;
+    } stoch_workspace;
+
     /* site-major scratch fields, each ld*nb cplx (single-state size)        */
     zc *d_s0 = nullptr, *d_s1 = nullptr, *d_s2 = nullptr, *d_s3 = nullptr;
     zc *d_blk = nullptr;
@@ -152,8 +169,84 @@ static inline size_t fieldsz(const rsrec_ctx *c) {
     return (size_t)c->nb * c->nb * c->kk;
 }
 
+static int grow_stochastic_buffer(void **ptr, size_t *capacity, size_t bytes,
+                                  const char *name) {
+    if (*ptr && *capacity >= bytes) return 0;
+    void *replacement = nullptr;
+    const cudaError_t status = cudaMalloc(&replacement, bytes);
+    if (status != cudaSuccess) {
+        g_err = std::string("stochastic workspace ") + name + ": " +
+                cudaGetErrorString(status);
+        return 1;
+    }
+    if (*ptr) cudaFree(*ptr);
+    *ptr = replacement;
+    *capacity = bytes;
+    return 0;
+}
+
+static std::vector<zc> &stochastic_host_moments(
+    rsrec_ctx::stochastic_workspace *ws, zc *) {
+    return ws->host_moments64;
+}
+
+static std::vector<fc> &stochastic_host_moments(
+    rsrec_ctx::stochastic_workspace *ws, fc *) {
+    return ws->host_moments32;
+}
+
+static void release_stochastic_workspace(rsrec_ctx::stochastic_workspace *ws) {
+    if (!ws) return;
+    for (void *p : {ws->left, ws->dmu, ws->R, ws->w0, ws->w1, ws->w2,
+                    ws->ht, ws->he, ws->ho, ws->vtmp, ws->stage})
+        if (p) cudaFree(p);
+    *ws = rsrec_ctx::stochastic_workspace();
+}
+
+template <class CT>
+static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh) {
+    auto *ws = &c->stoch_workspace;
+    const size_t field_bytes = fieldsz(c) * sizeof(CT);
+    const size_t left_bytes = (size_t)lld * field_bytes;
+    const size_t mu_bytes = (size_t)c->nb * c->nb * (size_t)lld * lld * sizeof(CT);
+    const size_t stage_bytes = fieldsz(c) * sizeof(zc);
+
+    if (grow_stochastic_buffer(&ws->w0, &ws->field_bytes, field_bytes, "w0") ||
+        grow_stochastic_buffer(&ws->w1, &ws->field_bytes, field_bytes, "w1") ||
+        grow_stochastic_buffer(&ws->w2, &ws->field_bytes, field_bytes, "w2") ||
+        grow_stochastic_buffer(&ws->R, &ws->field_bytes, field_bytes, "R") ||
+        grow_stochastic_buffer(&ws->left, &ws->left_bytes, left_bytes, "left") ||
+        grow_stochastic_buffer(&ws->dmu, &ws->mu_bytes, mu_bytes, "mu_nm") ||
+        grow_stochastic_buffer(&ws->stage, &ws->stage_bytes, stage_bytes, "host_stage"))
+        return 1;
+
+    if (do_hoh &&
+        (grow_stochastic_buffer(&ws->ht, &ws->field_bytes, field_bytes, "ht") ||
+         grow_stochastic_buffer(&ws->he, &ws->field_bytes, field_bytes, "he") ||
+         grow_stochastic_buffer(&ws->ho, &ws->field_bytes, field_bytes, "ho") ||
+         grow_stochastic_buffer(&ws->vtmp, &ws->field_bytes, field_bytes, "vtmp")))
+        return 1;
+
+    stochastic_host_moments(ws, static_cast<CT *>(nullptr)).resize(
+        mu_bytes / sizeof(CT));
+    return 0;
+}
+
+static int ensure_structured_stochastic_workspace(rsrec_ctx *c, int lld) {
+    auto *ws = &c->stoch_workspace;
+    const size_t field_bytes = fieldsz(c) * sizeof(zc);
+    const size_t left_bytes = (size_t)lld * field_bytes;
+    const size_t mu_bytes = (size_t)c->nb * c->nb * (size_t)lld * lld * sizeof(zc);
+    if (grow_stochastic_buffer(&ws->R, &ws->field_bytes, field_bytes, "structured R") ||
+        grow_stochastic_buffer(&ws->left, &ws->left_bytes, left_bytes, "structured left") ||
+        grow_stochastic_buffer(&ws->dmu, &ws->mu_bytes, mu_bytes, "structured mu_nm"))
+        return 1;
+    return 0;
+}
+
 extern "C" void rsrec_destroy(rsrec_ctx *c) {
     if (!c) return;
+    release_stochastic_workspace(&c->stoch_workspace);
     for (void *p : {(void *)c->d_ee, (void *)c->d_hall, (void *)c->d_va,
                     (void *)c->d_vb, (void *)c->d_s0, (void *)c->d_s1,
                     (void *)c->d_s2, (void *)c->d_s3, (void *)c->d_blk,
@@ -1918,31 +2011,19 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     const size_t ld = (size_t)nb * c->kk;
     const bool do_hoh = c->have_hoh;
 
-    size_t freeb, totalb;
-    cudaMemGetInfo(&freeb, &totalb);
-    size_t scratch = (do_hoh ? 9 : 5) * nf;   /* w0..2, R, tmp [+ t,e,o,vtmp] */
-    size_t need = ((size_t)lld * nf + scratch + bb * (size_t)lld * lld)
-                  * sizeof(CT);
-    if (need > freeb * 9 / 10)
-        FAIL("stochastic_moments: left states do not fit on the device; "
-             "reduce lld or split over reference vectors / devices");
-
-    CT *left, *dmu, *R, *w0, *w1, *w2;
-    CT *ht = nullptr, *he = nullptr, *ho = nullptr, *vtmp = nullptr;
-    zc *stage;
-    CUCHK(cudaMalloc(&left, (size_t)lld * nf * sizeof(CT)));
-    CUCHK(cudaMalloc(&dmu, bb * (size_t)lld * lld * sizeof(CT)));
-    CUCHK(cudaMalloc(&R, nf * sizeof(CT)));
-    CUCHK(cudaMalloc(&w0, nf * sizeof(CT)));
-    CUCHK(cudaMalloc(&w1, nf * sizeof(CT)));
-    CUCHK(cudaMalloc(&w2, nf * sizeof(CT)));
-    CUCHK(cudaMalloc(&stage, nf * sizeof(zc)));   /* fp64 host staging */
-    if (do_hoh) {
-        CUCHK(cudaMalloc(&ht, nf * sizeof(CT)));
-        CUCHK(cudaMalloc(&he, nf * sizeof(CT)));
-        CUCHK(cudaMalloc(&ho, nf * sizeof(CT)));
-        CUCHK(cudaMalloc(&vtmp, nf * sizeof(CT)));
-    }
+    if (ensure_stochastic_workspace<CT>(c, lld, do_hoh)) return 1;
+    auto *ws = &c->stoch_workspace;
+    CT *left = static_cast<CT *>(ws->left);
+    CT *dmu = static_cast<CT *>(ws->dmu);
+    CT *R = static_cast<CT *>(ws->R);
+    CT *w0 = static_cast<CT *>(ws->w0);
+    CT *w1 = static_cast<CT *>(ws->w1);
+    CT *w2 = static_cast<CT *>(ws->w2);
+    CT *ht = static_cast<CT *>(ws->ht);
+    CT *he = static_cast<CT *>(ws->he);
+    CT *ho = static_cast<CT *>(ws->ho);
+    CT *vtmp = static_cast<CT *>(ws->vtmp);
+    zc *stage = static_cast<zc *>(ws->stage);
     CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * sizeof(CT)));
 
     /* H~ apply (Chebyshev recurrence operator), hoh-aware. */
@@ -2017,7 +2098,8 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     const double d2h_start = host_seconds();
     c->stoch_cheb_s += d2h_start - cheb_start;
     /* copy moments back, widening to cplx (fp64) for the Fortran side. */
-    std::vector<CT> h(bb * (size_t)lld * lld);
+    std::vector<CT> &h = stochastic_host_moments(ws, static_cast<CT *>(nullptr));
+    h.resize(bb * (size_t)lld * lld);
     CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
                      cudaMemcpyDeviceToHost));
     c->stoch_d2h_s += host_seconds() - d2h_start;
@@ -2025,9 +2107,6 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     cplx *mu = (cplx *)mu_;
     for (size_t i = 0; i < h.size(); ++i) mu[i] = cplx(h[i].x, h[i].y);
 
-    cudaFree(left); cudaFree(dmu); cudaFree(R); cudaFree(stage);
-    cudaFree(w0); cudaFree(w1); cudaFree(w2);
-    if (ht) { cudaFree(ht); cudaFree(he); cudaFree(ho); cudaFree(vtmp); }
     return 0;
 }
 
@@ -2086,18 +2165,11 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
     const size_t ld = (size_t)nb * c->kk;
 
-    size_t freeb, totalb;
-    cudaMemGetInfo(&freeb, &totalb);
-    size_t need = ((size_t)lld * nf + nf + bb * (size_t)lld * lld)
-                  * sizeof(zc);
-    if (need > freeb * 9 / 10)
-        FAIL("stochastic_moments: left states do not fit on the device; "
-             "reduce lld or split over reference vectors / devices");
-
-    zc *left, *dmu, *R;
-    CUCHK(cudaMalloc(&left, (size_t)lld * nf * sizeof(zc)));
-    CUCHK(cudaMalloc(&dmu, bb * (size_t)lld * lld * sizeof(zc)));
-    CUCHK(cudaMalloc(&R, nf * sizeof(zc)));
+    if (ensure_structured_stochastic_workspace(c, lld)) return 1;
+    auto *ws = &c->stoch_workspace;
+    zc *left = static_cast<zc *>(ws->left);
+    zc *dmu = static_cast<zc *>(ws->dmu);
+    zc *R = static_cast<zc *>(ws->R);
     CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * sizeof(zc)));
 
     zc *w0 = c->d_s0, *w1 = c->d_s1, *w2 = c->d_s2, *tmp = c->d_s3;
@@ -2156,7 +2228,6 @@ extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref_,
                      cudaMemcpyDeviceToHost));
     c->stoch_d2h_s = host_seconds() - d2h_start;
     c->stoch_d2h_bytes = (long long)(bb * (size_t)lld * lld * sizeof(zc));
-    cudaFree(left); cudaFree(dmu); cudaFree(R);
     return 0;
 }
 

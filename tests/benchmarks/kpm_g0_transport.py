@@ -35,7 +35,8 @@ FE_BASE = ROOT / "tests/regression/triad_bccFe_conductivity"
 def run_case(binary: Path, scratch: Path, *, material: str, base: Path,
              cond_type: str, va: list[int], vb: list[int], replication: int,
              cond_ll: int, lld: int, channels: int, rc: int,
-             gpu_plugin: bool, omp_threads: int, cheb_backend: str) -> dict[str, Any]:
+             gpu_plugin: bool, omp_threads: int, cheb_backend: str,
+             gpu_precision: str) -> dict[str, Any]:
     if scratch.exists():
         shutil.rmtree(scratch)
     patch_case(
@@ -52,6 +53,7 @@ def run_case(binary: Path, scratch: Path, *, material: str, base: Path,
         gpu_plugin=gpu_plugin,
         gpu_backend="csr",
         cheb_backend=cheb_backend,
+        gpu_precision=gpu_precision,
     )
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(omp_threads)
@@ -93,6 +95,7 @@ def run_case(binary: Path, scratch: Path, *, material: str, base: Path,
         "rc": rc,
         "omp_threads": omp_threads,
         "cheb_backend": cheb_backend,
+        "gpu_precision": gpu_precision,
         "wall_time_s": wall_time_s,
         "profile": profiles[0],
     }
@@ -112,6 +115,8 @@ def main() -> int:
     parser.add_argument("--cheb-backend", choices=("legacy", "fast", "fast_dp"),
                         default="legacy",
                         help="CPU moment route; CUDA bypasses this setting")
+    parser.add_argument("--gpu-precision", choices=("fp32", "fp64"), default="fp32",
+                        help="CUDA stochastic Chebyshev arithmetic precision")
     parser.add_argument("--skip-fe", action="store_true")
     parser.add_argument("--skip-gpu", action="store_true",
                         help="record CPU baselines only")
@@ -130,6 +135,7 @@ def main() -> int:
                 cond_ll=args.cond_ll, lld=args.lld, channels=args.channels,
                 rc=args.rc, gpu_plugin=gpu_plugin, omp_threads=args.omp_threads,
                 cheb_backend=args.cheb_backend,
+                gpu_precision=args.gpu_precision,
             ))
         if not args.skip_fe:
             rows.append(run_case(
@@ -140,6 +146,7 @@ def main() -> int:
                 rc=max(args.rc, 80), gpu_plugin=gpu_plugin,
                 omp_threads=args.omp_threads,
                 cheb_backend=args.cheb_backend,
+                gpu_precision=args.gpu_precision,
             ))
 
     report = {
@@ -150,6 +157,7 @@ def main() -> int:
             "lld": args.lld,
             "estimator": "per_type",
             "persistent_process": False,
+            "gpu_precision": args.gpu_precision,
             "note": "G0 baseline; use B0 for persistent repeated timing",
         },
         "rows": rows,

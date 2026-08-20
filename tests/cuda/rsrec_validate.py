@@ -346,6 +346,22 @@ def main() -> int:
         mu_nm = np.zeros((nb, nb, steps_s, steps_s), dtype=complex, order="F")
         call("stochastic_moments", lib.rsrec_stochastic_moments(ctx, ptr(psiref), steps_s, a_s, b_s, ptr(mu_nm)))
         check("stochastic_moments", mu_nm, np_stochastic(psiref, steps_s, a_s, b_s), 5e-8)
+        # A second request reuses the context-lifetime left/moment/recurrence
+        # workspace.  The result must remain independent of the reuse.
+        mu_repeat = np.zeros_like(mu_nm)
+        call("stochastic_moments(reuse)", lib.rsrec_stochastic_moments(
+            ctx, ptr(psiref), steps_s, a_s, b_s, ptr(mu_repeat)))
+        check("stochastic_moments reuse", mu_repeat, mu_nm, 5e-8)
+
+        # Exercise the explicit production FP32 route against the same
+        # deterministic reference vector and physics.
+        call("set_precision(fp32)", lib.rsrec_set_precision(ctx, 0))
+        mu_fp32 = np.zeros_like(mu_nm)
+        call("stochastic_moments(fp32)", lib.rsrec_stochastic_moments(
+            ctx, ptr(psiref), steps_s, a_s, b_s, ptr(mu_fp32)))
+        check("stochastic_moments fp32", mu_fp32,
+              np_stochastic(psiref, steps_s, a_s, b_s), 5e-5)
+        call("set_precision(fp64)", lib.rsrec_set_precision(ctx, 1))
 
         left = np.asfortranarray(rng.normal(size=psiref.shape) + 1j * rng.normal(size=psiref.shape))
         mu_o = np.zeros((nb, nb, lld), dtype=complex, order="F")
