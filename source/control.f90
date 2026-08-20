@@ -184,6 +184,9 @@ module control_mod
       !> CUDA stochastic Chebyshev arithmetic precision: 'fp32' or 'fp64'.
       !> The Fortran transport arrays and reconstructed output remain FP64.
       character(len=16) :: gpu_precision
+      !> Retain the full CUDA stochastic moment download for diagnostics. The
+      !> optimized transport route keeps only packed diagonal moments on device.
+      logical :: gpu_moment_download
       character(len=16) :: cheb_backend
 
       !> Number of recursion levels for the conductivity tensor calculation
@@ -339,6 +342,7 @@ contains
       gpu_plugin = this%gpu_plugin
       gpu_backend = this%gpu_backend
       gpu_precision = this%gpu_precision
+      gpu_moment_download = this%gpu_moment_download
       cheb_backend = this%cheb_backend
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
@@ -404,6 +408,7 @@ contains
       this%gpu_plugin = gpu_plugin
       this%gpu_backend = gpu_backend
       this%gpu_precision = gpu_precision
+      this%gpu_moment_download = gpu_moment_download
       this%cheb_backend = cheb_backend
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
@@ -500,6 +505,7 @@ contains
       this%dipole_mix = 0.5d0
       this%gpu_backend = 'csr'
       this%gpu_precision = 'fp32'
+      this%gpu_moment_download = .false.
       this%cheb_backend = 'fast'
       this%fname = ''
       this%hyperfine = .false.
@@ -566,6 +572,7 @@ contains
       gpu_plugin = this%gpu_plugin
       gpu_backend = this%gpu_backend
       gpu_precision = this%gpu_precision
+      gpu_moment_download = this%gpu_moment_download
       cheb_backend = this%cheb_backend
 
       if (present(unit) .and. present(file)) then
@@ -630,6 +637,7 @@ contains
       call nml%add('gpu_plugin', this%gpu_plugin)
       call nml%add('gpu_backend', this%gpu_backend)
       call nml%add('gpu_precision', this%gpu_precision)
+      call nml%add('gpu_moment_download', this%gpu_moment_download)
       call nml%add('cheb_backend', this%cheb_backend)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)

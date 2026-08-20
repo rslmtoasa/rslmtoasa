@@ -83,8 +83,13 @@ KPM_MOMENT_CHILDREN = (
     "D_moment_GPU_kernel",
     "D_moment_D2H",
     "D_conversion",
+    "D_gpu_mu_pack",
 )
-KPM_RECONSTRUCTION_CHILDREN = ("D_mu_pack", "D_reconstruction_BLAS")
+KPM_RECONSTRUCTION_CHILDREN = (
+    "D_mu_pack",
+    "D_reconstruction_BLAS",
+    "D_reconstruction_D2H",
+)
 KPM_GAMMA_CHILDREN = ("D_gamma_basis", "D_gamma_fill")
 
 PROFILE_DIMENSIONS = re.compile(
@@ -225,7 +230,8 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
             }
             record["metrics"] = {
                 key: value for key, value in values.items()
-                if key.startswith(("P_", "D_", "T_", "bytes_", "profile_")) or key == "PROFILE_STATUS"
+                if key.startswith(("P_", "D_", "T_", "bytes_", "profile_")) or
+                key in {"PROFILE_STATUS", "gpu_energy_block"}
             }
             record["validation"] = validate_kpm_profile(record)
             record["class"] = "component"

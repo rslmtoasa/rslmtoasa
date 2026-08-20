@@ -67,10 +67,32 @@ int rsrec_cuda_scalar_lanczos(rsrec_cuda_ctx *ctx, int site_j, int lld,
                               double *a_out, double *b2_out);
 int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx, const void *psiref,
                                   int lld, double a, double b, void *mu_nm);
+int rsrec_cuda_stochastic_moments_resident(rsrec_cuda_ctx *ctx,
+                                           const void *psiref, int lld,
+                                           double a, double b, int trace_index,
+                                           int download_host, void *mu_nm);
+int rsrec_cuda_clear_resident_moments(rsrec_cuda_ctx *ctx);
+int rsrec_cuda_resident_count(rsrec_cuda_ctx *ctx, int *count);
+int rsrec_cuda_reconstruct_conductivity(rsrec_cuda_ctx *ctx,
+                                        const double *energy, int n_energy,
+                                        int moments, double a, double b,
+                                        double factor, int ntrace,
+                                        int energy_block, void *c_out,
+                                        double *gamma_seconds,
+                                        double *gamma_basis_seconds,
+                                        double *gamma_fill_seconds,
+                                        double *gemm_seconds,
+                                        double *result_d2h_seconds,
+                                        long long *gamma_h2d_bytes,
+                                        long long *gamma_block_bytes,
+                                        long long *result_d2h_bytes,
+                                        int *actual_energy_block);
 int rsrec_cuda_stochastic_profile(rsrec_cuda_ctx *ctx, double *h2d_seconds,
                                   double *cheb_seconds, double *d2h_seconds,
                                   double *conversion_seconds,
-                                  long long *h2d_bytes, long long *d2h_bytes);
+                                  double *mu_pack_seconds,
+                                  long long *h2d_bytes, long long *d2h_bytes,
+                                  long long *mu_pack_bytes);
 int rsrec_cuda_set_precision(rsrec_cuda_ctx *ctx, int prec);
 int rsrec_cuda_chebyshev_dos(rsrec_cuda_ctx *ctx, const void *mu, int n_moments,
                              int natoms, const double *ene, int nv,

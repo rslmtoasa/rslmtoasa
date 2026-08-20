@@ -379,7 +379,7 @@ contains
       ! Local variables
       integer :: ineigh, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, loop_over, ie, lmax, ntype
       integer(int64) :: matrix_dimension, nnz, complex_bytes, integer_bytes, operator_h2d_bytes
-      integer(int64) :: gpu_h2d_bytes, gpu_d2h_bytes
+      integer(int64) :: gpu_h2d_bytes, gpu_d2h_bytes, gpu_mu_pack_bytes
       complex(rp), dimension(nb, nb) :: dum, dum1, dum2
       complex(rp), dimension(:, :), allocatable :: S_op, L_op
       complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
@@ -389,7 +389,7 @@ contains
       real(rp), dimension(this%control%cond_ll) :: kernel
       complex(rp), dimension(nb, nb, this%en%channels_ldos + 10) :: g0
       real(rp) :: a, b, rng, emin_win, emax_win
-      real(rp) :: gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, gpu_conversion_seconds
+      real(rp) :: gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, gpu_conversion_seconds, gpu_mu_pack_seconds
       complex(rp) :: exp_factor
       logical :: use_gpu
       character(len=48) :: precision_label
@@ -482,7 +482,7 @@ contains
          precision_label = 'fp32'
       end if
       if (use_gpu) then
-         call g_kpm_profile%configure('cuda', precision_label, 'cpu_blas', 'fp64', &
+         call g_kpm_profile%configure('cuda', precision_label, 'cuda_blas', precision_label, &
             trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
             this%control%lld, loop_over)
       else if (trim(this%control%cheb_backend) == 'legacy') then
@@ -574,7 +574,9 @@ contains
             call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
          end if
          call this%gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
+         call this%gpu_backend%clear_resident_moments()
          call g_kpm_profile%add_bytes('H2D', operator_h2d_bytes)
+         this%mu_nm_stochastic = (0.0_rp, 0.0_rp)
       end if
       call g_kpm_profile%stop('P_operator')
 
@@ -628,14 +630,15 @@ contains
          call g_kpm_profile%start('P_moments_total')
 
          if (use_gpu) then
-            call this%gpu_backend%stochastic_moments(psiref, this%control%cond_ll, a, b, &
-               this%mu_nm_stochastic(:, :, :, :, i))
+            call this%gpu_backend%stochastic_moments_resident(psiref, this%control%cond_ll, a, b, i, &
+               this%control%gpu_moment_download, this%mu_nm_stochastic(:, :, :, :, i))
             call this%gpu_backend%stochastic_profile(gpu_h2d_seconds, gpu_cheb_seconds, gpu_d2h_seconds, &
-               gpu_conversion_seconds, gpu_h2d_bytes, gpu_d2h_bytes)
+               gpu_conversion_seconds, gpu_mu_pack_seconds, gpu_h2d_bytes, gpu_d2h_bytes, gpu_mu_pack_bytes)
             call g_kpm_profile%add_seconds('D_moment_H2D', gpu_h2d_seconds)
             call g_kpm_profile%add_seconds('D_moment_GPU_kernel', gpu_cheb_seconds)
             call g_kpm_profile%add_seconds('D_moment_D2H', gpu_d2h_seconds)
             call g_kpm_profile%add_seconds('D_conversion', gpu_conversion_seconds)
+            call g_kpm_profile%add_seconds('D_gpu_mu_pack', gpu_mu_pack_seconds)
             call g_kpm_profile%add_bytes('H2D', gpu_h2d_bytes)
             call g_kpm_profile%add_bytes('D2H', gpu_d2h_bytes)
             call g_kpm_profile%stop('P_moments_total')

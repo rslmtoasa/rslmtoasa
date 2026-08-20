@@ -224,6 +224,35 @@ int rsrec_scalar_lanczos(rsrec_ctx *ctx, int site_j, int lld,
 int rsrec_stochastic_moments(rsrec_ctx *ctx, const void *psiref, int lld,
                              double a, double b, void *mu_nm);
 
+/* Optimized transport moment request. The backend retains only the diagonal
+ * packed U(K,nb) representation on device, indexed by trace_index. If
+ * download_host is non-zero the canonical full mu_nm output is also filled;
+ * otherwise the full-moment D2H is deliberately avoided. */
+int rsrec_stochastic_moments_resident(rsrec_ctx *ctx, const void *psiref,
+                                      int lld, double a, double b,
+                                      int trace_index, int download_host,
+                                      void *mu_nm);
+int rsrec_clear_resident_moments(rsrec_ctx *ctx);
+int rsrec_resident_count(rsrec_ctx *ctx, int *count);
+
+/* Tiled GPU Kubo-Bastin reconstruction. Gamma is generated block-by-block
+ * from the production basis formula and multiplied by retained U matrices
+ * with cuBLAS ZGEMM/CGEMM. c_out is complex double for fp64 precision and
+ * complex float for fp32 precision; its Fortran layout is (NE,nb,ntrace). */
+int rsrec_reconstruct_conductivity(rsrec_ctx *ctx, const double *energy,
+                                    int n_energy, int moments, double a,
+                                    double b, double factor, int ntrace,
+                                    int energy_block, void *c_out,
+                                    double *gamma_seconds,
+                                    double *gamma_basis_seconds,
+                                    double *gamma_fill_seconds,
+                                    double *gemm_seconds,
+                                    double *result_d2h_seconds,
+                                    long long *gamma_h2d_bytes,
+                                    long long *gamma_block_bytes,
+                                    long long *result_d2h_bytes,
+                                    int *actual_energy_block);
+
 /* Timing for the most recent stochastic-moment request.  The core interval
  * excludes the host/device copies of psiref and mu_nm.  Bytes describe those
  * same synchronous copies and are useful for a stage-level transport profile.
@@ -231,7 +260,9 @@ int rsrec_stochastic_moments(rsrec_ctx *ctx, const void *psiref, int lld,
 int rsrec_stochastic_profile(rsrec_ctx *ctx, double *h2d_seconds,
                              double *cheb_seconds, double *d2h_seconds,
                              double *conversion_seconds,
-                             long long *h2d_bytes, long long *d2h_bytes);
+                             double *mu_pack_seconds,
+                             long long *h2d_bytes, long long *d2h_bytes,
+                             long long *mu_pack_bytes);
 
 #ifdef __cplusplus
 }

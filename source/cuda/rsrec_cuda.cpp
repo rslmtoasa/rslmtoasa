@@ -282,21 +282,88 @@ extern "C" int rsrec_cuda_stochastic_moments(rsrec_cuda_ctx *ctx,
     return status;
 }
 
+extern "C" int rsrec_cuda_stochastic_moments_resident(
+    rsrec_cuda_ctx *ctx, const void *psiref, int lld, double a, double b,
+    int trace_index, int download_host, void *mu_nm) {
+    if (!ctx || !ctx->have_h || !ctx->have_v) {
+        set_error("rsrec_cuda_stochastic_moments_resident: Hamiltonian/velocity not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_stochastic_moments_resident(
+        ctx->inner, psiref, lld, a, b, trace_index, download_host, mu_nm);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_stochastic_moments_resident: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_clear_resident_moments(rsrec_cuda_ctx *ctx) {
+    if (!ctx) {
+        set_error("rsrec_cuda_clear_resident_moments: null ctx");
+        return 1;
+    }
+    const int status = rsrec_clear_resident_moments(ctx->inner);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_clear_resident_moments: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
+extern "C" int rsrec_cuda_resident_count(rsrec_cuda_ctx *ctx, int *count) {
+    if (!ctx || !count) {
+        set_error("rsrec_cuda_resident_count: null argument");
+        return 1;
+    }
+    return rsrec_resident_count(ctx->inner, count);
+}
+
+extern "C" int rsrec_cuda_reconstruct_conductivity(
+    rsrec_cuda_ctx *ctx, const double *energy, int n_energy, int moments,
+    double a, double b, double factor, int ntrace, int energy_block,
+    void *c_out, double *gamma_seconds, double *gamma_basis_seconds,
+    double *gamma_fill_seconds, double *gemm_seconds,
+    double *result_d2h_seconds, long long *gamma_h2d_bytes,
+    long long *gamma_block_bytes, long long *result_d2h_bytes,
+    int *actual_energy_block) {
+    if (!ctx || !ctx->have_h) {
+        set_error("rsrec_cuda_reconstruct_conductivity: Hamiltonian not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_reconstruct_conductivity(
+        ctx->inner, energy, n_energy, moments, a, b, factor, ntrace,
+        energy_block, c_out, gamma_seconds, gamma_basis_seconds,
+        gamma_fill_seconds, gemm_seconds, result_d2h_seconds,
+        gamma_h2d_bytes, gamma_block_bytes, result_d2h_bytes,
+        actual_energy_block);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_reconstruct_conductivity: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_stochastic_profile(rsrec_cuda_ctx *ctx,
                                               double *h2d_seconds,
                                               double *cheb_seconds,
                                               double *d2h_seconds,
                                               double *conversion_seconds,
+                                              double *mu_pack_seconds,
                                               long long *h2d_bytes,
-                                              long long *d2h_bytes) {
+                                              long long *d2h_bytes,
+                                              long long *mu_pack_bytes) {
     if (!ctx) {
         set_error("rsrec_cuda_stochastic_profile: null ctx");
         return 1;
     }
     const int status = rsrec_stochastic_profile(ctx->inner, h2d_seconds,
                                                 cheb_seconds, d2h_seconds,
-                                                conversion_seconds, h2d_bytes,
-                                                d2h_bytes);
+                                                conversion_seconds,
+                                                mu_pack_seconds, h2d_bytes,
+                                                d2h_bytes, mu_pack_bytes);
     if (status != 0) {
         set_error(std::string("rsrec_cuda_stochastic_profile: ") +
                   rsrec_last_error());

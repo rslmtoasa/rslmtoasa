@@ -22,7 +22,7 @@
 module conductivity_mod
 
    use iso_fortran_env, only: int64, real32
-   use iso_c_binding, only: c_f_pointer, c_int, c_loc
+   use iso_c_binding, only: c_f_pointer, c_int, c_loc, c_long_long
    use mpi_mod
    use control_mod
    use self_mod
@@ -279,6 +279,16 @@ contains
       real(rp), dimension(:, :), allocatable :: chebyshev_poly
       complex(rp), dimension(:, :), allocatable :: cn, cm
 
+      ! The optimized CUDA transport path retains only packed diagonal moments
+      ! and constructs Gamma in energy tiles during reconstruction.  Keep the
+      ! canonical host Gamma allocation available for CPU and diagnostic paths.
+      if (associated(this%recursion%gpu_backend)) then
+         if (this%recursion%gpu_backend%resident_moments_available()) then
+            call g_logger%info('CUDA KPM reconstruction uses tiled resident Gamma blocks.', __FILE__, __LINE__)
+            return
+         end if
+      end if
+
       call g_kpm_profile%start('P_gamma')
       
       ! Initialize global variable
@@ -351,10 +361,17 @@ contains
       complex(rp), dimension(:, :, :), allocatable :: integrand
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
       complex(rp), dimension(:, :), allocatable :: mu_diag, gamma_mu
+      complex(rp), dimension(:, :, :), allocatable :: gpu_reconstruction
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
       complex(rp), dimension(nb) :: temp
       real(rp) :: a, b, real_part, im_part, factor, volume, de
+      real(rp) :: gpu_gamma_seconds, gpu_gamma_basis_seconds, gpu_gamma_fill_seconds
+      real(rp) :: gpu_gemm_seconds, gpu_result_d2h_seconds
+      integer(c_long_long) :: gpu_gamma_h2d_bytes, gpu_gamma_block_bytes, gpu_result_d2h_bytes
+      integer :: gpu_energy_block
+      integer(int64) :: gpu_complex_bytes
+      logical :: use_gpu_reconstruction
       ! Printing variables
       character(len=*), parameter :: fname_cond_total = "cond_total.out"
       character(len=*), parameter :: fname_cond_orb_real = "cond_total_orb_real.out"
@@ -367,16 +384,10 @@ contains
       allocate(integrand_l_real(nb, this%en%channels_ldos + 10), integrand_l_im(nb, this%en%channels_ldos + 10))
       allocate(integrand_at(nb, nb, this%en%channels_ldos + 10, this%lattice%ntype))
 
-      ! Only the diagonal orbital blocks enter Gamma*mu.  These two workspaces
-      ! are allocated once per conductivity call and reused for every trace.
       ne = this%en%channels_ldos + 10
       m_cond = this%control%cond_ll
       k_cond = m_cond*m_cond
-      allocate(mu_diag(k_cond, nb), gamma_mu(ne, nb))
-      call g_kpm_profile%set_reconstruction_bytes( &
-         int(size(this%gamma_nm), int64)*int(storage_size(this%gamma_nm)/8, int64), &
-         int(size(mu_diag), int64)*int(storage_size(mu_diag)/8, int64))
-      
+
       integrand(:, :, :) = (0.0d0, 0.0d0)
       real_part_l(:) = 0.0d0
       im_part_l(:) = 0.0d0
@@ -400,6 +411,26 @@ contains
          loop_over = this%control%random_vec_num
       end select  
 
+      use_gpu_reconstruction = .false.
+      if (associated(this%recursion%gpu_backend)) then
+         use_gpu_reconstruction = this%recursion%gpu_backend%resident_moments_available(loop_over)
+      end if
+      gpu_energy_block = 0
+      if (use_gpu_reconstruction) then
+         gpu_complex_bytes = int(merge(8, 16, trim(this%control%gpu_precision) == 'fp32'), int64)
+         allocate(gpu_reconstruction(ne, nb, loop_over))
+         gpu_reconstruction = (0.0_rp, 0.0_rp)
+         call g_kpm_profile%set_reconstruction_bytes(0_int64, int(k_cond*nb, int64)*gpu_complex_bytes)
+      else
+         ! Only the diagonal orbital blocks enter Gamma*mu.  These two
+         ! workspaces are allocated once per conductivity call and reused for
+         ! every trace.
+         allocate(mu_diag(k_cond, nb), gamma_mu(ne, nb))
+         call g_kpm_profile%set_reconstruction_bytes( &
+            int(size(this%gamma_nm), int64)*int(storage_size(this%gamma_nm)/8, int64), &
+            int(size(mu_diag), int64)*int(storage_size(mu_diag)/8, int64))
+      end if
+
       volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3))))
       !factor = 1 !(e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
       !factor = (hbar_const / e_const) * ((4 * e_const * hbar_const) / (pi * volume))
@@ -407,6 +438,33 @@ contains
       factor = 16 / (pi * (de**2))
       write(*,*) factor, volume, de
       !write(*,*) (16 * hbar_const * (e_const**2)) / (pi * volume * ((de * ry2joule)**2))
+      if (use_gpu_reconstruction) then
+         call this%recursion%gpu_backend%reconstruct_conductivity( &
+            this%en%ene, a, b, factor, m_cond, loop_over, 0, gpu_reconstruction, &
+            gpu_gamma_seconds, gpu_gamma_basis_seconds, gpu_gamma_fill_seconds, &
+            gpu_gemm_seconds, gpu_result_d2h_seconds, gpu_gamma_h2d_bytes, &
+            gpu_gamma_block_bytes, gpu_result_d2h_bytes, gpu_energy_block)
+         call g_kpm_profile%add_seconds('P_gamma', gpu_gamma_seconds)
+         call g_kpm_profile%add_seconds('D_gamma_basis', gpu_gamma_basis_seconds)
+         call g_kpm_profile%add_seconds('D_gamma_fill', gpu_gamma_fill_seconds)
+         call g_kpm_profile%add_seconds('P_reconstruction_total', gpu_gemm_seconds + gpu_result_d2h_seconds)
+         call g_kpm_profile%add_seconds('D_reconstruction_BLAS', gpu_gemm_seconds)
+         call g_kpm_profile%add_seconds('D_reconstruction_D2H', gpu_result_d2h_seconds)
+         call g_kpm_profile%add_bytes('H2D', int(gpu_gamma_h2d_bytes, int64))
+         call g_kpm_profile%add_bytes('D2H', int(gpu_result_d2h_bytes, int64))
+         call g_kpm_profile%set_gpu_energy_block(gpu_energy_block)
+         call g_kpm_profile%set_reconstruction_bytes( &
+            int(gpu_gamma_block_bytes, int64), int(k_cond*nb, int64)*gpu_complex_bytes)
+
+         do ntype = 1, loop_over
+            do l2 = 1, nb
+               integrand(l2, l2, :) = integrand(l2, l2, :) + gpu_reconstruction(:, l2, ntype)
+               if (this%control%cond_calctype == 'per_type') then
+                  integrand_at(l2, l2, :, ntype) = gpu_reconstruction(:, l2, ntype)
+               end if
+            end do
+         end do
+      else
       call g_kpm_profile%start('P_reconstruction_total')
       do ntype = 1, loop_over
          call g_kpm_profile%start('D_mu_pack')
@@ -428,6 +486,7 @@ contains
          end do
       end do
       call g_kpm_profile%stop('P_reconstruction_total')
+      end if
 
       call g_kpm_profile%start('P_energy_integration')
       integrand_tot_real(:) = 0.0d0
@@ -514,8 +573,9 @@ contains
       end if
       ! End writing statements
 
-      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at, &
-                 mu_diag, gamma_mu)
+      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at)
+      if (allocated(gpu_reconstruction)) deallocate(gpu_reconstruction)
+      if (allocated(mu_diag)) deallocate(mu_diag, gamma_mu)
    end subroutine calculate_conductivity_tensor
 
 end module conductivity_mod

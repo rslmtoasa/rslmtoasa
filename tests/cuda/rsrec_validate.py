@@ -178,6 +178,42 @@ def np_stochastic(psiref: np.ndarray, steps: int, a: float, b: float) -> np.ndar
     return mu
 
 
+def transport_reconstruction_reference(energies: np.ndarray, moments: int,
+                                       a: float, b: float, factor: float,
+                                       mu: np.ndarray) -> np.ndarray:
+    """Reference for the G1.3 flattened Gamma*U contraction."""
+    x = (energies - b) / a
+    root = np.sqrt(1.0 - x * x)
+    theta = np.arccos(x)
+    cheb = np.empty((len(energies), moments), dtype=np.float64)
+    cheb[:, 0] = 1.0
+    if moments > 1:
+        cheb[:, 1] = x
+    for n in range(2, moments):
+        cheb[:, n] = 2.0 * x * cheb[:, n - 1] - cheb[:, n - 2]
+
+    kernel = np.sinh(6.0 * (1.0 - np.arange(moments) / moments)) / np.sinh(6.0)
+    weights = np.ones(moments, dtype=np.float64)
+    weights[0] = 0.5
+    gamma = np.empty((len(energies), moments, moments), dtype=np.complex128)
+    for n in range(moments):
+        cn = (x - 1j * n * root) * np.exp(1j * n * theta)
+        for m in range(moments):
+            cm = (x + 1j * m * root) * np.exp(-1j * m * theta)
+            gamma[:, n, m] = ((cn * cheb[:, m] + cm * cheb[:, n]) /
+                              ((1.0 - x * x) ** 2) * kernel[n] * kernel[m] *
+                              weights[n] * weights[m])
+
+    packed = np.empty((moments * moments, mu.shape[1]), dtype=np.complex128,
+                      order="F")
+    for l in range(mu.shape[1]):
+        for m in range(moments):
+            for n in range(moments):
+                packed[n + moments * m, l] = mu[l, l, n, m]
+    gamma_matrix = gamma.reshape((len(energies), moments * moments), order="F")
+    return factor * gamma_matrix @ packed
+
+
 def jackson(n: int) -> np.ndarray:
     i = np.arange(n, dtype=float)
     theta = np.pi * i / (n + 1.0)
@@ -265,6 +301,20 @@ def configure(lib: ct.CDLL) -> None:
     lib.rsrec_scalar_lanczos.restype = i
     lib.rsrec_stochastic_moments.argtypes = [v, v, i, d, d, v]
     lib.rsrec_stochastic_moments.restype = i
+    lib.rsrec_stochastic_moments_resident.argtypes = [v, v, i, d, d, i, i, v]
+    lib.rsrec_stochastic_moments_resident.restype = i
+    lib.rsrec_clear_resident_moments.argtypes = [v]
+    lib.rsrec_clear_resident_moments.restype = i
+    lib.rsrec_resident_count.argtypes = [v, pi]
+    lib.rsrec_resident_count.restype = i
+    ll = ct.POINTER(ct.c_longlong)
+    lib.rsrec_reconstruct_conductivity.argtypes = [
+        v, pd, i, i, d, d, d, i, i, v, pd, pd, pd, pd, pd,
+        ll, ll, ll, pi,
+    ]
+    lib.rsrec_reconstruct_conductivity.restype = i
+    lib.rsrec_stochastic_profile.argtypes = [v, pd, pd, pd, pd, pd, ll, ll, ll]
+    lib.rsrec_stochastic_profile.restype = i
     lib.rsrec_orbital_moments.argtypes = [v, v, v, i, d, d, v]
     lib.rsrec_orbital_moments.restype = i
     lib.rsrec_chebyshev_dos.argtypes = [v, v, i, i, pd, i, d, d, v]
@@ -362,6 +412,80 @@ def main() -> int:
         check("stochastic_moments fp32", mu_fp32,
               np_stochastic(psiref, steps_s, a_s, b_s), 5e-5)
         call("set_precision(fp64)", lib.rsrec_set_precision(ctx, 1))
+
+        # G1.3: retain only packed diagonal moments, reconstruct with a
+        # non-divisible energy tile, and prove that the optimized request did
+        # not perform the full-moment D2H transfer.
+        energies_g13 = np.linspace(-2.0, 2.0, 5).astype(np.float64)
+        energies_g13 = np.ascontiguousarray(energies_g13)
+        c64 = np.zeros((len(energies_g13), nb, 1), dtype=np.complex128, order="F")
+        resident_mu = np.zeros_like(mu_nm)
+        call("stochastic_moments_resident(fp64 diagnostic)", lib.rsrec_stochastic_moments_resident(
+            ctx, ptr(psiref), steps_s, a_s, b_s, 1, 1, ptr(resident_mu)))
+        check("resident moments fp64", resident_mu, mu_nm, 5e-8)
+        call("stochastic_moments_resident(fp64)", lib.rsrec_stochastic_moments_resident(
+            ctx, ptr(psiref), steps_s, a_s, b_s, 1, 0, ptr(resident_mu)))
+        resident_count = np.zeros(1, dtype=np.int32)
+        call("resident_count", lib.rsrec_resident_count(ctx, iptr(resident_count)))
+        if int(resident_count[0]) != 1:
+            raise AssertionError(f"expected one resident trace, got {resident_count[0]}")
+        h2d_s = np.zeros(1, dtype=np.float64)
+        cheb_s = np.zeros(1, dtype=np.float64)
+        d2h_s = np.zeros(1, dtype=np.float64)
+        conversion_s = np.zeros(1, dtype=np.float64)
+        pack_s = np.zeros(1, dtype=np.float64)
+        h2d_b = np.zeros(1, dtype=np.int64)
+        d2h_b = np.zeros(1, dtype=np.int64)
+        pack_b = np.zeros(1, dtype=np.int64)
+        ll = ct.POINTER(ct.c_longlong)
+        call("stochastic_profile(fp64 resident)", lib.rsrec_stochastic_profile(
+            ctx, dptr(h2d_s), dptr(cheb_s), dptr(d2h_s), dptr(conversion_s),
+            dptr(pack_s), h2d_b.ctypes.data_as(ll), d2h_b.ctypes.data_as(ll),
+            pack_b.ctypes.data_as(ll)))
+        if int(d2h_b[0]) != 0:
+            raise AssertionError(f"resident route performed full-moment D2H: {d2h_b[0]} bytes")
+        gamma_s = np.zeros(1, dtype=np.float64)
+        gamma_basis_s = np.zeros(1, dtype=np.float64)
+        gamma_fill_s = np.zeros(1, dtype=np.float64)
+        gemm_s = np.zeros(1, dtype=np.float64)
+        result_d2h_s = np.zeros(1, dtype=np.float64)
+        gamma_h2d_b = np.zeros(1, dtype=np.int64)
+        gamma_block_b = np.zeros(1, dtype=np.int64)
+        result_d2h_b = np.zeros(1, dtype=np.int64)
+        actual_be = np.zeros(1, dtype=np.int32)
+        call("reconstruct_conductivity(fp64)", lib.rsrec_reconstruct_conductivity(
+            ctx, dptr(energies_g13), len(energies_g13), steps_s, a_s, b_s, 1.7,
+            1, 3, ptr(c64), dptr(gamma_s), dptr(gamma_basis_s), dptr(gamma_fill_s),
+            dptr(gemm_s), dptr(result_d2h_s), gamma_h2d_b.ctypes.data_as(ll),
+            gamma_block_b.ctypes.data_as(ll), result_d2h_b.ctypes.data_as(ll),
+            iptr(actual_be)))
+        g13_ref64 = transport_reconstruction_reference(energies_g13, steps_s, a_s, b_s,
+                                                       1.7, mu_nm)
+        check("G1.3 reconstruction fp64", c64[:, :, 0], g13_ref64, 2e-8)
+        if int(actual_be[0]) != 3:
+            raise AssertionError(f"requested BE=3, got {actual_be[0]}")
+        print(f"G1.3 fp64: BE={actual_be[0]}, Gamma={gamma_s[0]:.4f}s, "
+              f"GEMM={gemm_s[0]:.4f}s, result D2H={result_d2h_b[0]} bytes")
+        call("clear_resident_moments(fp64)", lib.rsrec_clear_resident_moments(ctx))
+
+        call("set_precision(fp32 reconstruction)", lib.rsrec_set_precision(ctx, 0))
+        mu_fp32 = np.zeros_like(mu_nm)
+        call("stochastic_moments(fp32 reference)", lib.rsrec_stochastic_moments(
+            ctx, ptr(psiref), steps_s, a_s, b_s, ptr(mu_fp32)))
+        c32 = np.zeros((len(energies_g13), nb, 1), dtype=np.complex64, order="F")
+        call("stochastic_moments_resident(fp32)", lib.rsrec_stochastic_moments_resident(
+            ctx, ptr(psiref), steps_s, a_s, b_s, 1, 0, ptr(resident_mu)))
+        call("reconstruct_conductivity(fp32)", lib.rsrec_reconstruct_conductivity(
+            ctx, dptr(energies_g13), len(energies_g13), steps_s, a_s, b_s, 1.7,
+            1, 3, ptr(c32), dptr(gamma_s), dptr(gamma_basis_s), dptr(gamma_fill_s),
+            dptr(gemm_s), dptr(result_d2h_s), gamma_h2d_b.ctypes.data_as(ll),
+            gamma_block_b.ctypes.data_as(ll), result_d2h_b.ctypes.data_as(ll),
+            iptr(actual_be)))
+        check("G1.3 reconstruction fp32", c32[:, :, 0],
+              transport_reconstruction_reference(energies_g13, steps_s, a_s, b_s,
+                                                  1.7, mu_fp32), 5e-4)
+        call("clear_resident_moments(fp32)", lib.rsrec_clear_resident_moments(ctx))
+        call("set_precision(fp64 final)", lib.rsrec_set_precision(ctx, 1))
 
         left = np.asfortranarray(rng.normal(size=psiref.shape) + 1j * rng.normal(size=psiref.shape))
         mu_o = np.zeros((nb, nb, lld), dtype=complex, order="F")

@@ -279,6 +279,16 @@ contains
             __FILE__, __LINE__)
          do_gpu = .false.
       end if
+      ! G1.3 keeps transport moments resident in the shared CUDA context.
+      ! The DOS helper uses a different context shape and would otherwise
+      ! destroy that residency before conductivity reconstruction. Keep this
+      ! independent DOS stage on its canonical CPU path in that case.
+      if (do_gpu .and. associated(this%recursion%gpu_backend)) then
+         if (this%recursion%gpu_backend%resident_moments_available()) then
+            call g_logger%info('CUDA transport moments resident; keeping Chebyshev DOS on CPU.', __FILE__, __LINE__)
+            do_gpu = .false.
+         end if
+      end if
       if (present(eta)) then
          g_ef = 0.0d0
       else

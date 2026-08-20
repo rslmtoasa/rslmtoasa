@@ -22,7 +22,7 @@ module kpm_profile_mod
    private
 
    integer, parameter, public :: kpm_phase_count = 8
-   integer, parameter, public :: kpm_detail_count = 8
+   integer, parameter, public :: kpm_detail_count = 10
 
    integer, parameter :: phase_operator = 1
    integer, parameter :: phase_trace_setup = 2
@@ -41,6 +41,8 @@ module kpm_profile_mod
    integer, parameter :: detail_reconstruction_blas = 6
    integer, parameter :: detail_gamma_basis = 7
    integer, parameter :: detail_gamma_fill = 8
+   integer, parameter :: detail_gpu_mu_pack = 9
+   integer, parameter :: detail_reconstruction_d2h = 10
 
    character(len=*), parameter :: phase_names(kpm_phase_count) = [ character(len=24) :: &
       'P_operator', 'P_trace_setup', 'P_moments_total', 'P_gamma', &
@@ -48,7 +50,8 @@ module kpm_profile_mod
 
    character(len=*), parameter :: detail_names(kpm_detail_count) = [ character(len=28) :: &
       'D_moment_H2D', 'D_moment_GPU_kernel', 'D_moment_D2H', 'D_conversion', &
-      'D_mu_pack', 'D_reconstruction_BLAS', 'D_gamma_basis', 'D_gamma_fill' ]
+      'D_mu_pack', 'D_reconstruction_BLAS', 'D_gamma_basis', 'D_gamma_fill', &
+      'D_gpu_mu_pack', 'D_reconstruction_D2H' ]
 
    type, public :: kpm_profile
       private
@@ -81,6 +84,7 @@ module kpm_profile_mod
       integer(int64) :: bytes_d2h = 0_int64
       integer(int64) :: bytes_gamma = 0_int64
       integer(int64) :: bytes_mu_pack = 0_int64
+      integer :: gpu_energy_block = 0
       real(rp) :: closure_error = 0.0_rp
       real(rp) :: child_error = 0.0_rp
       character(len=8) :: status = 'UNKNOWN'
@@ -92,6 +96,7 @@ module kpm_profile_mod
       procedure :: add_seconds => kpm_profile_add_seconds
       procedure :: add_bytes => kpm_profile_add_bytes
       procedure :: set_reconstruction_bytes => kpm_profile_set_reconstruction_bytes
+      procedure :: set_gpu_energy_block => kpm_profile_set_gpu_energy_block
       procedure :: emit => kpm_profile_emit
    end type kpm_profile
 
@@ -131,6 +136,7 @@ contains
       this%bytes_d2h = 0_int64
       this%bytes_gamma = 0_int64
       this%bytes_mu_pack = 0_int64
+      this%gpu_energy_block = 0
       this%closure_error = 0.0_rp
       this%child_error = 0.0_rp
       this%status = 'UNKNOWN'
@@ -164,7 +170,7 @@ contains
       if (trim(this%blas_threads) == 'unset') this%blas_threads = environment_value('OPENBLAS_NUM_THREADS')
       this%matrix_dimension = matrix_dimension
       this%nnz = nnz
-      this%moments = moments
+         this%moments = moments
       this%lld = lld
       this%ntrace = ntrace
    end subroutine kpm_profile_configure
@@ -311,6 +317,13 @@ contains
       this%bytes_mu_pack = max(0_int64, mu_pack_bytes)
    end subroutine kpm_profile_set_reconstruction_bytes
 
+   subroutine kpm_profile_set_gpu_energy_block(this, energy_block)
+      class(kpm_profile), intent(inout) :: this
+      integer, intent(in) :: energy_block
+
+      this%gpu_energy_block = max(0, energy_block)
+   end subroutine kpm_profile_set_gpu_energy_block
+
    subroutine kpm_profile_emit(this)
       class(kpm_profile), intent(inout) :: this
       real(rp) :: exclusive_sum, raw_other, total, tolerance
@@ -328,8 +341,10 @@ contains
       tolerance = max(0.05_rp * max(total, 1.0e-12_rp), 0.01_rp)
       this%closure_error = abs(exclusive_sum - total) / max(total, 1.0e-12_rp)
 
-      moment_children = sum(this%detail_seconds(detail_moment_h2d:detail_moment_conversion))
+      moment_children = sum(this%detail_seconds(detail_moment_h2d:detail_moment_conversion)) + &
+         this%detail_seconds(detail_gpu_mu_pack)
       reconstruction_children = sum(this%detail_seconds(detail_mu_pack:detail_reconstruction_blas))
+      reconstruction_children = reconstruction_children + this%detail_seconds(detail_reconstruction_d2h)
       gamma_children = sum(this%detail_seconds(detail_gamma_basis:detail_gamma_fill))
       this%child_error = max(0.0_rp, max(moment_children - this%phase_seconds(phase_moments_total), &
          max(reconstruction_children - this%phase_seconds(phase_reconstruction_total), &
@@ -360,6 +375,7 @@ contains
          'clock_source=system_clock_wall ', &
          'bytes_h2d= ', this%bytes_h2d, 'bytes_d2h= ', this%bytes_d2h, &
          'bytes_gamma= ', this%bytes_gamma, 'bytes_mu_pack= ', this%bytes_mu_pack, &
+         'gpu_energy_block= ', this%gpu_energy_block, &
          'P_operator= ', this%phase_seconds(phase_operator), &
          'P_trace_setup= ', this%phase_seconds(phase_trace_setup), &
          'P_moments_total= ', this%phase_seconds(phase_moments_total), &
@@ -376,6 +392,8 @@ contains
          'D_reconstruction_BLAS= ', this%detail_seconds(detail_reconstruction_blas), &
          'D_gamma_basis= ', this%detail_seconds(detail_gamma_basis), &
          'D_gamma_fill= ', this%detail_seconds(detail_gamma_fill), &
+         'D_gpu_mu_pack= ', this%detail_seconds(detail_gpu_mu_pack), &
+         'D_reconstruction_D2H= ', this%detail_seconds(detail_reconstruction_d2h), &
          'T_operator= ', this%phase_seconds(phase_operator), &
          'T_trace_setup= ', this%phase_seconds(phase_trace_setup), &
          'T_cheb_moments= ', this%phase_seconds(phase_moments_total), &

@@ -139,6 +139,21 @@ def main() -> int:
             "charge/spin/orbital transport operator families are not all present")
     require("gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)" in transport,
             "stochastic transport does not expose the CUDA dispatch gate")
+    require("stochastic_moments_resident" in transport,
+            "stochastic transport does not use the resident-moment request")
+    conductivity = (ROOT / "source/conductivity.f90").read_text()
+    require("resident_moments_available" in conductivity and
+            "reconstruct_conductivity" in conductivity,
+            "conductivity does not expose the tiled resident reconstruction")
+    require("k_fill_transport_gamma" in cuda and "cublasZgemm" in cuda and
+            "cublasCgemm3m" in cuda,
+            "CUDA transport reconstruction is missing tiled Gamma/cuBLAS paths")
+    require("RSLMTO_KPM_GPU_BE" in cuda,
+            "GPU energy-tile override is not exposed")
+    green = (ROOT / "source/green_chebyshev.f90").read_text()
+    require("resident_moments_available" in green and
+            "keeping Chebyshev DOS on CPU" in green,
+            "GPU DOS path does not preserve resident transport moments")
     require("gpu_plugin_ready(this, 'chebyshev_orbital_mod()', allow_hoh=.true.)" in transport,
             "orbital transport does not expose the CUDA dispatch gate")
     require("allow_hoh=.true." in (ROOT / "source/recursion_haydock.f90").read_text(),
