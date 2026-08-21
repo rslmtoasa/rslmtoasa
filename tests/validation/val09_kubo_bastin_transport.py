@@ -33,7 +33,9 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
                route: str = "recursion", rc: int = 20,
                kmesh: int | None = None, gpu_plugin: bool = False,
                gpu_backend: str = "csr", lld: int | None = None,
-               cheb_backend: str = "legacy", gpu_precision: str = "fp32") -> None:
+               cheb_backend: str = "legacy", gpu_precision: str = "fp32",
+               cond_calctype: str = "per_type", random_vec_num: int = 1,
+               gpu_stochastic_block: int = 1) -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
     shutil.copytree(base, workdir)
@@ -46,7 +48,9 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
         "energy": {"fermi": fermi, "energy_min": energy_min,
                     "energy_max": energy_max, "channels_ldos": channels},
         "control": {"cond_ll": cond_ll, "cond_type": cond_type,
-                     "cond_calctype": "per_type", "cheb_backend": cheb_backend,
+                     "cond_calctype": cond_calctype, "random_vec_num": random_vec_num,
+                     "gpu_stochastic_block": gpu_stochastic_block,
+                     "cheb_backend": cheb_backend,
                      "gpu_plugin": gpu_plugin, "gpu_backend": gpu_backend,
                      "gpu_precision": gpu_precision},
         "reciprocal": {"nk1": kmesh or replication, "nk2": kmesh or replication,

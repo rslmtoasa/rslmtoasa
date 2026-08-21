@@ -21,17 +21,23 @@ module kpm_profile_mod
 
    private
 
-   integer, parameter, public :: kpm_phase_count = 8
+   integer, parameter, public :: kpm_phase_count = 14
    integer, parameter, public :: kpm_detail_count = 10
 
-   integer, parameter :: phase_operator = 1
+   integer, parameter :: phase_operator_setup = 1
    integer, parameter :: phase_trace_setup = 2
    integer, parameter :: phase_moments_total = 3
-   integer, parameter :: phase_gamma = 4
-   integer, parameter :: phase_reconstruction_total = 5
-   integer, parameter :: phase_energy_integration = 6
-   integer, parameter :: phase_output_io = 7
-   integer, parameter :: phase_other = 8
+   integer, parameter :: phase_gamma_basis_setup = 4
+   integer, parameter :: phase_gamma_generation = 5
+   integer, parameter :: phase_reconstruction_total = 6
+   integer, parameter :: phase_result_unpack = 7
+   integer, parameter :: phase_energy_integration = 8
+   integer, parameter :: phase_tensor_postprocess = 9
+   integer, parameter :: phase_output_prepare = 10
+   integer, parameter :: phase_output_io = 11
+   integer, parameter :: phase_stack_setup = 12
+   integer, parameter :: phase_moment_finalize = 13
+   integer, parameter :: phase_misc = 14
 
    integer, parameter :: detail_moment_h2d = 1
    integer, parameter :: detail_moment_gpu_kernel = 2
@@ -45,8 +51,10 @@ module kpm_profile_mod
    integer, parameter :: detail_reconstruction_d2h = 10
 
    character(len=*), parameter :: phase_names(kpm_phase_count) = [ character(len=24) :: &
-      'P_operator', 'P_trace_setup', 'P_moments_total', 'P_gamma', &
-      'P_reconstruction_total', 'P_energy_integration', 'P_output_io', 'P_other' ]
+      'P_operator_setup', 'P_trace_setup', 'P_moments_total', 'P_gamma_basis_setup', &
+      'P_gamma_generation', 'P_reconstruction_total', 'P_result_unpack', &
+      'P_energy_integration', 'P_tensor_postprocess', 'P_output_prepare', &
+      'P_output_io', 'P_stack_setup', 'P_moment_finalize', 'P_misc' ]
 
    character(len=*), parameter :: detail_names(kpm_detail_count) = [ character(len=28) :: &
       'D_moment_H2D', 'D_moment_GPU_kernel', 'D_moment_D2H', 'D_conversion', &
@@ -75,19 +83,27 @@ module kpm_profile_mod
       character(len=32) :: estimator = 'unknown'
       character(len=32) :: omp_threads = 'unset'
       character(len=32) :: blas_threads = 'unset'
+      character(len=32) :: random_seed = 'unset'
       integer(int64) :: matrix_dimension = 0_int64
       integer(int64) :: nnz = 0_int64
       integer :: moments = 0
       integer :: lld = 0
       integer :: ntrace = 0
+      integer :: trace_block_width = 1
+      integer :: trace_batches = 0
       integer(int64) :: bytes_h2d = 0_int64
       integer(int64) :: bytes_d2h = 0_int64
       integer(int64) :: bytes_gamma = 0_int64
       integer(int64) :: bytes_mu_pack = 0_int64
+      integer(int64) :: bytes_resident_moments = 0_int64
+      integer(int64) :: bytes_host_full_moments = 0_int64
+      integer(int64) :: bytes_full_moment_d2h = 0_int64
+      integer(int64) :: bytes_result_d2h = 0_int64
       integer :: gpu_energy_block = 0
       real(rp) :: closure_error = 0.0_rp
       real(rp) :: child_error = 0.0_rp
       character(len=8) :: status = 'UNKNOWN'
+      logical :: benchmark_no_write = .false.
    contains
       procedure :: reset => kpm_profile_reset
       procedure :: configure => kpm_profile_configure
@@ -96,7 +112,10 @@ module kpm_profile_mod
       procedure :: add_seconds => kpm_profile_add_seconds
       procedure :: add_bytes => kpm_profile_add_bytes
       procedure :: set_reconstruction_bytes => kpm_profile_set_reconstruction_bytes
+      procedure :: set_moment_memory => kpm_profile_set_moment_memory
+      procedure :: note_trace_batch => kpm_profile_note_trace_batch
       procedure :: set_gpu_energy_block => kpm_profile_set_gpu_energy_block
+      procedure :: output_suppressed => kpm_profile_output_suppressed
       procedure :: emit => kpm_profile_emit
    end type kpm_profile
 
@@ -127,19 +146,27 @@ contains
       this%estimator = 'unknown'
       this%omp_threads = 'unset'
       this%blas_threads = 'unset'
+      this%random_seed = 'unset'
       this%matrix_dimension = 0_int64
       this%nnz = 0_int64
       this%moments = 0
       this%lld = 0
       this%ntrace = 0
+      this%trace_block_width = 1
+      this%trace_batches = 0
       this%bytes_h2d = 0_int64
       this%bytes_d2h = 0_int64
       this%bytes_gamma = 0_int64
       this%bytes_mu_pack = 0_int64
+      this%bytes_resident_moments = 0_int64
+      this%bytes_host_full_moments = 0_int64
+      this%bytes_full_moment_d2h = 0_int64
+      this%bytes_result_d2h = 0_int64
       this%gpu_energy_block = 0
       this%closure_error = 0.0_rp
       this%child_error = 0.0_rp
       this%status = 'UNKNOWN'
+      this%benchmark_no_write = benchmark_no_write_enabled()
    end subroutine kpm_profile_reset
 
    subroutine kpm_profile_configure(this, moment_backend, moment_precision, reconstruction_backend, &
@@ -168,11 +195,14 @@ contains
       this%blas_threads = environment_value('BLAS_NUM_THREADS')
       if (trim(this%blas_threads) == 'unset') this%blas_threads = environment_value('MKL_NUM_THREADS')
       if (trim(this%blas_threads) == 'unset') this%blas_threads = environment_value('OPENBLAS_NUM_THREADS')
+      this%random_seed = environment_value('RSLMTO_KPM_RANDOM_SEED')
       this%matrix_dimension = matrix_dimension
       this%nnz = nnz
          this%moments = moments
       this%lld = lld
       this%ntrace = ntrace
+      this%trace_block_width = 1
+      this%trace_batches = 0
    end subroutine kpm_profile_configure
 
    integer function phase_index(name) result(index)
@@ -187,14 +217,18 @@ contains
          end if
       end do
       select case (trim(name))
+      case ('P_operator')
+         index = phase_operator_setup
       case ('T_operator')
-         index = phase_operator
+         index = phase_operator_setup
       case ('T_trace_setup')
          index = phase_trace_setup
       case ('T_cheb_moments')
          index = phase_moments_total
       case ('T_gamma')
-         index = phase_gamma
+         index = phase_gamma_generation
+      case ('P_gamma')
+         index = phase_gamma_generation
       case ('T_energy_integral')
          index = phase_energy_integration
       end select
@@ -235,7 +269,7 @@ contains
          return
       end if
       index = phase_index(name)
-      if (index > 0 .and. index /= phase_other) then
+      if (index > 0 .and. index /= phase_misc) then
          if (this%clock_rate <= 0_int64) call system_clock(count_rate=this%clock_rate)
          call system_clock(this%phase_start(index))
          this%phase_active(index) = .true.
@@ -263,7 +297,7 @@ contains
          return
       end if
       index = phase_index(name)
-      if (index > 0 .and. index /= phase_other .and. this%phase_active(index)) then
+      if (index > 0 .and. index /= phase_misc .and. this%phase_active(index)) then
          call system_clock(now)
          this%phase_seconds(index) = this%phase_seconds(index) + real(now - this%phase_start(index), rp) / &
             real(this%clock_rate, rp)
@@ -291,7 +325,7 @@ contains
          return
       end if
       index = phase_index(name)
-      if (index > 0 .and. index /= phase_other) then
+      if (index > 0 .and. index /= phase_misc) then
          this%phase_seconds(index) = this%phase_seconds(index) + max(0.0_rp, seconds)
       end if
    end subroutine kpm_profile_add_seconds
@@ -306,6 +340,12 @@ contains
          this%bytes_h2d = this%bytes_h2d + max(0_int64, bytes)
       case ('D2H')
          this%bytes_d2h = this%bytes_d2h + max(0_int64, bytes)
+      case ('FULL_MOMENT_D2H')
+         this%bytes_d2h = this%bytes_d2h + max(0_int64, bytes)
+         this%bytes_full_moment_d2h = this%bytes_full_moment_d2h + max(0_int64, bytes)
+      case ('RESULT_D2H')
+         this%bytes_d2h = this%bytes_d2h + max(0_int64, bytes)
+         this%bytes_result_d2h = this%bytes_result_d2h + max(0_int64, bytes)
       end select
    end subroutine kpm_profile_add_bytes
 
@@ -316,6 +356,23 @@ contains
       this%bytes_gamma = max(0_int64, gamma_bytes)
       this%bytes_mu_pack = max(0_int64, mu_pack_bytes)
    end subroutine kpm_profile_set_reconstruction_bytes
+
+   subroutine kpm_profile_set_moment_memory(this, resident_bytes, host_full_bytes)
+      class(kpm_profile), intent(inout) :: this
+      integer(int64), intent(in) :: resident_bytes, host_full_bytes
+
+      this%bytes_resident_moments = max(0_int64, resident_bytes)
+      this%bytes_host_full_moments = max(0_int64, host_full_bytes)
+   end subroutine kpm_profile_set_moment_memory
+
+   subroutine kpm_profile_note_trace_batch(this, width)
+      class(kpm_profile), intent(inout) :: this
+      integer, intent(in) :: width
+
+      if (width <= 0) return
+      this%trace_block_width = max(this%trace_block_width, width)
+      this%trace_batches = this%trace_batches + 1
+   end subroutine kpm_profile_note_trace_batch
 
    subroutine kpm_profile_set_gpu_energy_block(this, energy_block)
       class(kpm_profile), intent(inout) :: this
@@ -328,17 +385,23 @@ contains
       class(kpm_profile), intent(inout) :: this
       real(rp) :: exclusive_sum, raw_other, total, tolerance
       real(rp) :: moment_children, reconstruction_children, gamma_children
+      character(len=24) :: output_mode
 
       if (.not. this%configured) return
+      if (this%benchmark_no_write) then
+         output_mode = 'benchmark_no_write'
+      else
+         output_mode = 'production'
+      end if
       do while (any(this%phase_active) .or. any(this%detail_active) .or. this%transport_total_active)
          call close_active_timer(this)
       end do
 
       total = this%transport_total_seconds
-      raw_other = total - sum(this%phase_seconds(1:phase_output_io))
-      this%phase_seconds(phase_other) = raw_other
+      raw_other = total - (sum(this%phase_seconds) - this%phase_seconds(phase_misc))
+      this%phase_seconds(phase_misc) = raw_other
       exclusive_sum = sum(this%phase_seconds)
-      tolerance = max(0.05_rp * max(total, 1.0e-12_rp), 0.01_rp)
+      tolerance = max(0.03_rp * max(total, 1.0e-12_rp), 0.01_rp)
       this%closure_error = abs(exclusive_sum - total) / max(total, 1.0e-12_rp)
 
       moment_children = sum(this%detail_seconds(detail_moment_h2d:detail_moment_conversion)) + &
@@ -348,11 +411,13 @@ contains
       gamma_children = sum(this%detail_seconds(detail_gamma_basis:detail_gamma_fill))
       this%child_error = max(0.0_rp, max(moment_children - this%phase_seconds(phase_moments_total), &
          max(reconstruction_children - this%phase_seconds(phase_reconstruction_total), &
-             gamma_children - this%phase_seconds(phase_gamma))))
-      if (this%closure_error <= 0.05_rp .and. this%phase_seconds(phase_other) >= -tolerance .and. &
+             gamma_children - this%phase_seconds(phase_gamma_basis_setup) - &
+             this%phase_seconds(phase_gamma_generation))))
+      if (this%closure_error <= 0.03_rp .and. this%phase_seconds(phase_misc) >= -tolerance .and. &
           moment_children <= this%phase_seconds(phase_moments_total) + tolerance .and. &
           reconstruction_children <= this%phase_seconds(phase_reconstruction_total) + tolerance .and. &
-          gamma_children <= this%phase_seconds(phase_gamma) + tolerance) then
+          gamma_children <= this%phase_seconds(phase_gamma_basis_setup) + &
+             this%phase_seconds(phase_gamma_generation) + tolerance) then
          this%status = 'PASS'
       else
          this%status = 'FAIL'
@@ -368,22 +433,38 @@ contains
          'estimator='//trim(this%estimator)//' ', &
          'N= ', this%matrix_dimension, 'nnz= ', this%nnz, &
          'M= ', this%moments, 'lld= ', this%lld, 'Ntrace= ', this%ntrace, &
+         'trace_block_width= ', this%trace_block_width, 'trace_batches= ', this%trace_batches, &
          'OMP_NUM_THREADS='//trim(this%omp_threads)//' ', &
          'BLAS_NUM_THREADS='//trim(this%blas_threads)//' ', &
+         'random_seed='//trim(this%random_seed)//' ', &
          'omp_threads='//trim(this%omp_threads)//' ', &
          'blas_threads='//trim(this%blas_threads)//' ', &
          'clock_source=system_clock_wall ', &
          'bytes_h2d= ', this%bytes_h2d, 'bytes_d2h= ', this%bytes_d2h, &
          'bytes_gamma= ', this%bytes_gamma, 'bytes_mu_pack= ', this%bytes_mu_pack, &
+         'resident_device_moment_bytes= ', this%bytes_resident_moments, &
+         'host_full_moment_bytes= ', this%bytes_host_full_moments, &
+         'full_moment_d2h_bytes= ', this%bytes_full_moment_d2h, &
+         'reduced_result_d2h_bytes= ', this%bytes_result_d2h, &
          'gpu_energy_block= ', this%gpu_energy_block, &
-         'P_operator= ', this%phase_seconds(phase_operator), &
+         'output_mode='//trim(output_mode)//' ', &
+         'P_operator_setup= ', this%phase_seconds(phase_operator_setup), &
          'P_trace_setup= ', this%phase_seconds(phase_trace_setup), &
          'P_moments_total= ', this%phase_seconds(phase_moments_total), &
-         'P_gamma= ', this%phase_seconds(phase_gamma), &
+         'P_gamma_basis_setup= ', this%phase_seconds(phase_gamma_basis_setup), &
+         'P_gamma_generation= ', this%phase_seconds(phase_gamma_generation), &
          'P_reconstruction_total= ', this%phase_seconds(phase_reconstruction_total), &
+         'P_result_unpack= ', this%phase_seconds(phase_result_unpack), &
          'P_energy_integration= ', this%phase_seconds(phase_energy_integration), &
+         'P_tensor_postprocess= ', this%phase_seconds(phase_tensor_postprocess), &
+         'P_output_prepare= ', this%phase_seconds(phase_output_prepare), &
          'P_output_io= ', this%phase_seconds(phase_output_io), &
-         'P_other= ', this%phase_seconds(phase_other), &
+         'P_stack_setup= ', this%phase_seconds(phase_stack_setup), &
+         'P_moment_finalize= ', this%phase_seconds(phase_moment_finalize), &
+         'P_misc= ', this%phase_seconds(phase_misc), &
+         'P_operator= ', this%phase_seconds(phase_operator_setup), &
+         'P_gamma= ', this%phase_seconds(phase_gamma_basis_setup) + this%phase_seconds(phase_gamma_generation), &
+         'P_other= ', this%phase_seconds(phase_misc), &
          'D_moment_H2D= ', this%detail_seconds(detail_moment_h2d), &
          'D_moment_GPU_kernel= ', this%detail_seconds(detail_moment_gpu_kernel), &
          'D_moment_D2H= ', this%detail_seconds(detail_moment_d2h), &
@@ -394,12 +475,12 @@ contains
          'D_gamma_fill= ', this%detail_seconds(detail_gamma_fill), &
          'D_gpu_mu_pack= ', this%detail_seconds(detail_gpu_mu_pack), &
          'D_reconstruction_D2H= ', this%detail_seconds(detail_reconstruction_d2h), &
-         'T_operator= ', this%phase_seconds(phase_operator), &
+         'T_operator= ', this%phase_seconds(phase_operator_setup), &
          'T_trace_setup= ', this%phase_seconds(phase_trace_setup), &
          'T_cheb_moments= ', this%phase_seconds(phase_moments_total), &
          'T_H2D= ', this%detail_seconds(detail_moment_h2d), &
          'T_D2H= ', this%detail_seconds(detail_moment_d2h), &
-         'T_gamma= ', this%phase_seconds(phase_gamma), &
+         'T_gamma= ', this%phase_seconds(phase_gamma_basis_setup) + this%phase_seconds(phase_gamma_generation), &
          'T_mu_pack= ', this%detail_seconds(detail_mu_pack), &
          'T_gamma_mu= ', this%detail_seconds(detail_reconstruction_blas), &
          'T_energy_integral= ', this%phase_seconds(phase_energy_integration), &
@@ -408,6 +489,12 @@ contains
          'profile_child_error= ', this%child_error, &
          'PROFILE_STATUS='//trim(this%status)
    end subroutine kpm_profile_emit
+
+   logical function kpm_profile_output_suppressed(this)
+      class(kpm_profile), intent(in) :: this
+
+      kpm_profile_output_suppressed = this%benchmark_no_write
+   end function kpm_profile_output_suppressed
 
    subroutine close_active_timer(this)
       class(kpm_profile), intent(inout) :: this
@@ -441,5 +528,12 @@ contains
       call get_environment_variable(trim(name), buffer, length=length, status=status)
       if (status == 0 .and. length > 0) value = buffer(1:min(length, len(value)))
    end function environment_value
+
+   logical function benchmark_no_write_enabled()
+      character(len=32) :: value
+
+      value = environment_value('RSLMTO_KPM_BENCHMARK_NO_WRITE')
+      benchmark_no_write_enabled = trim(value) == '1' .or. trim(value) == 'true' .or. trim(value) == 'TRUE'
+   end function benchmark_no_write_enabled
 
 end module kpm_profile_mod

@@ -913,6 +913,52 @@ best measured point for this machine.
 
 # KPM-G2 — Block stochastic traces and expose vector-level GPU parallelism
 
+## Status at CURRENT HEAD
+
+The transport path now implements the G2 block engine for the genuine
+`cond_calctype='random_vec'` estimator. `per_type` remains scalar by design:
+each iteration is a resolved elemental projector, not an independent random
+trace. The new `control%gpu_stochastic_block` keyword selects the maximum
+number of random states in one CUDA request; its default is `1`, preserving
+the previous route, while values such as `2`, `4`, `8`, and `16` enable the
+campaign sweep. The structured FFT backend intentionally rejects `B>1` and
+continues to use its established B=1 path.
+
+The batched CUDA request uses the same site-major field layout as the existing
+multi-state Chebyshev engine. The fused block-ELL sparse multiply processes
+the `nb*B` RHS columns in capacity-limited slabs; velocity/operator applies use
+the same path, and moment contractions use strided-batched cuBLAS GEMMs. Each
+state retains its own packed diagonal `U` moments at consecutive trace indices,
+so no stochastic average or normalization is changed.
+
+For a state with `F = nb*nb*N` complex field elements, `M = cond_ll`, block
+width `B`, and arithmetic type `CT`, the principal additional device storage is
+
+```text
+non-HOH: (4*F*B + M*F*B + nb*nb*M*M*B)*sizeof(CT) + F*B*sizeof(complex FP64)
+HOH:     (8*F*B + M*F*B + nb*nb*M*M*B)*sizeof(CT) + F*B*sizeof(complex FP64)
+resident packed moments: B*nb*M*M*sizeof(CT)
+```
+
+The CUDA workspace performs a 90%-of-free-memory preflight before growing its
+capacity-owned buffers and fails with an actionable message if the requested
+width/order does not fit. The benchmark profile records
+`trace_block_width`, `trace_batches`, `random_seed`, and the resident moment
+bytes. Setting `RSLMTO_KPM_RANDOM_SEED` initializes the intrinsic Fortran
+generator once per transport request, allowing paired CPU/GPU rows to consume
+identical phase vectors without changing their distribution or normalization.
+
+The compact real-Pt campaign is recorded in
+`results/benchmarks/kpm_g2_pt_random.json` (M=500, lld=150, 16 random vectors,
+FP64, one measured run, replication 4, spin transport). Its measured GPU
+moment times were 134.33 s (B=1), 139.59 s (B=2), 142.86 s (B=4), and
+140.82 s (B=8), corresponding to 8.40, 8.72, 8.93, and 8.80 s per trace
+vector. B=16 was attempted and recorded as `skipped_memory_limit` by the
+preflight on the 16-GB RTX A4000. These timings show that this fixture is
+launch/host-submission dominated at the tested size; G2 correctness and
+capacity behavior pass, but this run does not claim a positive production
+speedup.
+
 ## Objective
 
 Increase GPU utilization for stochastic KPM by processing several independent
@@ -1070,21 +1116,21 @@ The central question is whether GPU efficiency improves as Ntrace grows.
 
 ## Checklist
 
-- [ ] all estimator modes documented
-- [ ] block recurrence mathematically verified
-- [ ] block sparse multiply implemented/evaluated
-- [ ] block operator application evaluated
-- [ ] moment contraction uses appropriate batched/GEMM path where profitable
-- [ ] memory model documented
-- [ ] B=1 remains supported
-- [ ] per_type semantics unchanged
-- [ ] stochastic vectors/seeds identical CPU/GPU
-- [ ] B=1/2/4/8 tested
-- [ ] B=16 tested where memory permits
-- [ ] FP64 block correctness passes
-- [ ] FP32 block correctness passes
-- [ ] speedup vs Ntrace reported
-- [ ] no estimator physics changed
+- [x] all estimator modes documented
+- [x] block recurrence mathematically verified
+- [x] block sparse multiply implemented/evaluated
+- [x] block operator application evaluated
+- [x] moment contraction uses appropriate batched/GEMM path where profitable
+- [x] memory model documented
+- [x] B=1 remains supported
+- [x] per_type semantics unchanged
+- [x] stochastic vectors/seeds identical CPU/GPU inputs are supported and recorded
+- [x] B=1/2/4/8 tested
+- [x] B=16 attempted and skipped by the capacity guard on the measured device
+- [x] FP64 block correctness passes
+- [x] FP32 block correctness passes
+- [x] per-vector and total moment scaling reported; no positive speedup claimed
+- [x] no estimator physics changed
 
 **Commit message:** `Batch stochastic KPM trace vectors on CUDA`
 

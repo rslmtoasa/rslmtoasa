@@ -232,8 +232,17 @@ int rsrec_stochastic_moments_resident(rsrec_ctx *ctx, const void *psiref,
                                       int lld, double a, double b,
                                       int trace_index, int download_host,
                                       void *mu_nm);
+/* Batched random-vector transport request. psiref contains nstates consecutive
+ * Fortran (nb,nb,kk) states and mu_nm, when requested, contains the matching
+ * nstates consecutive (nb,nb,lld,lld) moment tensors. Each state is retained
+ * at trace_index + state, with exactly the scalar estimator semantics. */
+int rsrec_stochastic_moments_resident_batch(rsrec_ctx *ctx, const void *psiref,
+                                            int nstates, int lld, double a,
+                                            double b, int trace_index,
+                                            int download_host, void *mu_nm);
 int rsrec_clear_resident_moments(rsrec_ctx *ctx);
 int rsrec_resident_count(rsrec_ctx *ctx, int *count);
+int rsrec_resident_bytes(rsrec_ctx *ctx, long long *bytes);
 
 /* Tiled GPU Kubo-Bastin reconstruction. Gamma is generated block-by-block
  * from the production basis formula and multiplied by retained U matrices

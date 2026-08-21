@@ -74,6 +74,10 @@ def run_one(
     rc: int,
     warmups: int,
     repetitions: int,
+    no_write: bool = False,
+    cond_calctype: str = "per_type",
+    random_vec_num: int = 1,
+    gpu_stochastic_block: int = 1,
 ) -> dict[str, Any]:
     patch_case(
         PT_BASE,
@@ -90,8 +94,18 @@ def run_one(
         gpu_backend="csr",
         cheb_backend=cheb_backend,
         gpu_precision=gpu_precision,
+        cond_calctype=cond_calctype,
+        random_vec_num=random_vec_num,
+        gpu_stochastic_block=gpu_stochastic_block,
     )
     env = environment(omp_threads, blas_threads)
+    if cond_calctype == "random_vec":
+        # Pair CPU/GPU rows on the same Fortran random realization. The
+        # production code consumes the sequence in trace order, independent
+        # of whether traces are grouped into CUDA blocks.
+        env["RSLMTO_KPM_RANDOM_SEED"] = "271828"
+    if no_write:
+        env["RSLMTO_KPM_BENCHMARK_NO_WRITE"] = "1"
     for _ in range(warmups):
         result = subprocess.run(
             ["/bin/bash", str(RUNNER), str(binary)], cwd=scratch, env=env,
@@ -127,6 +141,15 @@ def run_one(
 
     first = samples[0]["profile"]
     metrics = first["metrics"]
+    trace_count = int(first["metadata"].get("Ntrace") or random_vec_num)
+    moment_per_trace = [
+        float(item["profile"]["metrics"]["P_moments_total"]) / trace_count
+        for item in samples
+    ]
+    traces_per_second = [
+        trace_count / float(item["profile"]["metrics"]["P_moments_total"])
+        for item in samples
+    ]
     return {
         "size": f"r{replication}",
         "replication": replication,
@@ -136,7 +159,9 @@ def run_one(
         "NE": channels + 10,
         "lld": lld,
         "cond_type": cond_type,
-        "cond_calctype": "per_type",
+        "cond_calctype": cond_calctype,
+        "random_vec_num": random_vec_num,
+        "gpu_stochastic_block": gpu_stochastic_block,
         "moment_backend": first["metadata"].get("moment_backend"),
         "moment_precision": first["metadata"].get("moment_precision"),
         "reconstruction_backend": first["metadata"].get("reconstruction_backend"),
@@ -158,10 +183,18 @@ def run_one(
             **{
                 name: summary([float(item["profile"]["metrics"][name]) for item in samples])
                 for name in (
-                    "P_moments_total", "P_gamma", "P_reconstruction_total",
-                    "P_energy_integration", "P_output_io", "P_other", "T_transport_total",
+                    "P_operator_setup", "P_trace_setup", "P_moments_total",
+                    "P_gamma_basis_setup", "P_gamma_generation",
+                    "P_reconstruction_total", "P_result_unpack", "P_energy_integration",
+                    "P_tensor_postprocess", "P_output_prepare", "P_output_io",
+                    "P_stack_setup", "P_moment_finalize", "P_misc",
+                    "T_transport_total",
                 )
             },
+        },
+        "derived": {
+            "moment_time_per_trace_s": summary(moment_per_trace),
+            "traces_per_second": summary(traces_per_second),
         },
         "gamma_bytes": metrics.get("bytes_gamma"),
         "mu_packed_bytes": metrics.get("bytes_mu_pack"),
@@ -199,6 +232,30 @@ def add_speedups(rows: list[dict[str, Any]]) -> None:
             }
 
 
+def memory_limited_row(*, replication: int, cond_type: str, gpu_precision: str,
+                       omp_threads: int, cond_ll: int, lld: int,
+                       random_vec_num: int, gpu_stochastic_block: int,
+                       error: str) -> dict[str, Any]:
+    reason = next((line.strip() for line in reversed(error.splitlines())
+                   if "stochastic workspace does not fit" in line),
+                  "stochastic workspace does not fit")
+    return {
+        "size": f"r{replication}",
+        "replication": replication,
+        "cond_type": cond_type,
+        "cond_calctype": "random_vec",
+        "random_vec_num": random_vec_num,
+        "gpu_stochastic_block": gpu_stochastic_block,
+        "M": cond_ll,
+        "lld": lld,
+        "gpu_plugin": True,
+        "gpu_precision_request": gpu_precision,
+        "OMP_NUM_THREADS": omp_threads,
+        "status": "skipped_memory_limit",
+        "reason": reason,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True, type=Path)
@@ -219,6 +276,12 @@ def main() -> int:
     parser.add_argument("--gpu", action="store_true")
     parser.add_argument("--gpu-only", action="store_true", help="run only CUDA rows; requires --gpu")
     parser.add_argument("--gpu-precisions", nargs="+", choices=("fp32", "fp64"), default=["fp32", "fp64"])
+    parser.add_argument("--cond-calctype", choices=("per_type", "random_vec"), default="per_type")
+    parser.add_argument("--random-vec-num", type=int, default=16)
+    parser.add_argument("--gpu-stochastic-block", type=int, nargs="+", default=[1],
+                        help="KPM-G2 random-vector block widths")
+    parser.add_argument("--no-write", action="store_true",
+                        help="benchmark-only mode: prepare output but suppress filesystem writes")
     args = parser.parse_args()
     if args.gpu_only and not args.gpu:
         parser.error("--gpu-only requires --gpu")
@@ -228,6 +291,7 @@ def main() -> int:
     scratch_root = args.scratch_root.resolve()
     scratch_root.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
+    skipped_rows: list[dict[str, Any]] = []
 
     for replication in args.replications:
         for cond_type in args.cond_types:
@@ -241,19 +305,41 @@ def main() -> int:
                                 gpu_plugin=False, gpu_precision="fp64", omp_threads=omp_threads,
                                 blas_threads=blas_threads, cond_ll=args.cond_ll, lld=args.lld,
                                 channels=args.channels, rc=args.rc, warmups=args.warmups,
-                                repetitions=args.repetitions,
+                                repetitions=args.repetitions, no_write=args.no_write,
+                                cond_calctype=args.cond_calctype,
+                                random_vec_num=args.random_vec_num,
+                                gpu_stochastic_block=1,
                             ))
             if args.gpu:
                 for gpu_precision in args.gpu_precisions:
-                    for omp_threads in args.omp_threads:
-                        rows.append(run_one(
-                            binary, scratch_root / f"r{replication}_{cond_type}_cuda_{gpu_precision}_omp{omp_threads}",
-                            replication=replication, cond_type=cond_type, cheb_backend="legacy",
-                            gpu_plugin=True, gpu_precision=gpu_precision, omp_threads=omp_threads,
-                            blas_threads=1, cond_ll=args.cond_ll, lld=args.lld,
-                            channels=args.channels, rc=args.rc, warmups=args.warmups,
-                            repetitions=args.repetitions,
-                        ))
+                    for gpu_stochastic_block in (args.gpu_stochastic_block
+                                                 if args.cond_calctype == "random_vec" else [1]):
+                        for omp_threads in args.omp_threads:
+                            try:
+                                rows.append(run_one(
+                                    binary, scratch_root / f"r{replication}_{cond_type}_cuda_{gpu_precision}_b{gpu_stochastic_block}_omp{omp_threads}",
+                                    replication=replication, cond_type=cond_type, cheb_backend="legacy",
+                                    gpu_plugin=True, gpu_precision=gpu_precision, omp_threads=omp_threads,
+                                    blas_threads=1, cond_ll=args.cond_ll, lld=args.lld,
+                                    channels=args.channels, rc=args.rc, warmups=args.warmups,
+                                    repetitions=args.repetitions, no_write=args.no_write,
+                                    cond_calctype=args.cond_calctype,
+                                    random_vec_num=args.random_vec_num,
+                                    gpu_stochastic_block=gpu_stochastic_block,
+                                ))
+                            except RuntimeError as exc:
+                                message = str(exc)
+                                if (args.cond_calctype == "random_vec" and
+                                        "stochastic workspace does not fit" in message):
+                                    skipped_rows.append(memory_limited_row(
+                                        replication=replication, cond_type=cond_type,
+                                        gpu_precision=gpu_precision, omp_threads=omp_threads,
+                                        cond_ll=args.cond_ll, lld=args.lld,
+                                        random_vec_num=args.random_vec_num,
+                                        gpu_stochastic_block=gpu_stochastic_block,
+                                        error=message))
+                                    continue
+                                raise
 
     add_speedups(rows)
     campaign_environment = capture_environment(ROOT, build_dir, mpi_ranks=1)
@@ -269,14 +355,17 @@ def main() -> int:
         "omp_places": os.environ.get("OMP_PLACES", "cores"),
     })
     report = {
-        "schema": "rslmto.kpm-g1.2.v1",
+        "schema": "rslmto.kpm-g2.v1" if args.cond_calctype == "random_vec" else "rslmto.kpm-g1.2.v1",
         "scope": "precision-fair, exclusive-phase KPM/Kubo-Bastin transport benchmark",
         "physics": {
             "material": "real Pt SOC fixture",
             "M": args.cond_ll,
             "NE": args.channels + 10,
             "lld": args.lld,
-            "estimator": "per_type",
+            "estimator": args.cond_calctype,
+            "cond_calctype": args.cond_calctype,
+            "random_vec_num": args.random_vec_num,
+            "gpu_stochastic_block": args.gpu_stochastic_block,
             "kernel": "Lorentz(alpha=6)",
             "paired_rows_share_input": True,
         },
@@ -289,13 +378,15 @@ def main() -> int:
             "cpu_rows_included": not args.gpu_only,
             "gpu_only": args.gpu_only,
             "correctness": "performance rows require an attached precision-matched moment/conductivity comparison before publication",
+            "output_mode": "benchmark_no_write" if args.no_write else "production",
         },
         "environment": campaign_environment,
         "rows": rows,
+        "skipped_rows": skipped_rows,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
-    print(f"WROTE {args.output}: {len(rows)} valid rows")
+    print(f"WROTE {args.output}: {len(rows)} valid rows, {len(skipped_rows)} skipped rows")
     return 0
 
 

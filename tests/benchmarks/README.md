@@ -58,6 +58,33 @@ has already been measured, also add `--gpu-only`; this skips the CPU rows and
 avoids rerunning those data points. Store the CUDA output separately from the
 CPU output because speedups require matched builds and precision.
 
+For KPM-G2 random-vector batching, use the same driver with the real
+`random_vec` estimator and sweep explicit block widths. The CPU rows are the
+scalar reference; CUDA rows exercise B=1/2/4/8/16 while retaining each trace
+separately:
+
+```bash
+python3 tests/benchmarks/kpm_g12_transport.py \
+  --binary build-acc09-cuda/bin/rslmto.x \
+  --build-dir build-acc09-cuda \
+  --output results/benchmarks/kpm_g2_pt_random.json \
+  --scratch-root /tmp/rslmto-kpm-g2 \
+  --cond-calctype random_vec --random-vec-num 16 \
+  --gpu-stochastic-block 1 2 4 8 16 --gpu \
+  --replications 4 6 8 --cond-ll 500 --lld 150
+```
+
+The emitted `trace_block_width`/`trace_batches` fields and the per-row
+`gpu_stochastic_block` identify the actual block experiment. `per_type`
+remains the mandatory production estimator and is never silently converted to
+random-vector batching. If a requested width exceeds the capacity-aware CUDA
+preflight, the driver records it in `skipped_rows` with
+`status=skipped_memory_limit` and continues the remaining widths.
+
+For a benchmark-only output diagnostic, add `--no-write`. This preserves the
+numerical work and output formatting but sets the transport diagnostic mode
+that suppresses filesystem writes; production runs do not use this flag.
+
 ## Run production fixtures
 
 `manifest.json` is the initial ACC-00 inventory. Its reciprocal entries use

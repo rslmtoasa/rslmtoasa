@@ -187,6 +187,10 @@ module control_mod
       !> Retain the full CUDA stochastic moment download for diagnostics. The
       !> optimized transport route keeps only packed diagonal moments on device.
       logical :: gpu_moment_download
+      !> Number of independent random-vector transport traces processed by one
+      !> CUDA request. 1 preserves scalar behavior; larger values enable the
+      !> KPM-G2 block path. This control is ignored for per_type transport.
+      integer :: gpu_stochastic_block
       character(len=16) :: cheb_backend
 
       !> Number of recursion levels for the conductivity tensor calculation
@@ -343,6 +347,7 @@ contains
       gpu_backend = this%gpu_backend
       gpu_precision = this%gpu_precision
       gpu_moment_download = this%gpu_moment_download
+      gpu_stochastic_block = this%gpu_stochastic_block
       cheb_backend = this%cheb_backend
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
@@ -409,6 +414,7 @@ contains
       this%gpu_backend = gpu_backend
       this%gpu_precision = gpu_precision
       this%gpu_moment_download = gpu_moment_download
+      this%gpu_stochastic_block = gpu_stochastic_block
       this%cheb_backend = cheb_backend
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
@@ -506,6 +512,7 @@ contains
       this%gpu_backend = 'csr'
       this%gpu_precision = 'fp32'
       this%gpu_moment_download = .false.
+      this%gpu_stochastic_block = 1
       this%cheb_backend = 'fast'
       this%fname = ''
       this%hyperfine = .false.
@@ -573,6 +580,7 @@ contains
       gpu_backend = this%gpu_backend
       gpu_precision = this%gpu_precision
       gpu_moment_download = this%gpu_moment_download
+      gpu_stochastic_block = this%gpu_stochastic_block
       cheb_backend = this%cheb_backend
 
       if (present(unit) .and. present(file)) then
@@ -638,6 +646,7 @@ contains
       call nml%add('gpu_backend', this%gpu_backend)
       call nml%add('gpu_precision', this%gpu_precision)
       call nml%add('gpu_moment_download', this%gpu_moment_download)
+      call nml%add('gpu_stochastic_block', this%gpu_stochastic_block)
       call nml%add('cheb_backend', this%cheb_backend)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
@@ -683,6 +692,9 @@ contains
       end if
       if (this%gpu_precision /= 'fp32' .and. this%gpu_precision /= 'fp64') then
          call g_logger%fatal('control%gpu_precision must be ''fp32'' or ''fp64''.', __FILE__, __LINE__)
+      end if
+      if (this%gpu_stochastic_block < 1) then
+         call g_logger%fatal('control%gpu_stochastic_block must be >= 1.', __FILE__, __LINE__)
       end if
       if (this%cheb_backend /= 'fast' &
           .and. this%cheb_backend /= 'fast_dp' &

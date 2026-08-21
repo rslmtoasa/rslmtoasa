@@ -71,8 +71,14 @@ int rsrec_cuda_stochastic_moments_resident(rsrec_cuda_ctx *ctx,
                                            const void *psiref, int lld,
                                            double a, double b, int trace_index,
                                            int download_host, void *mu_nm);
+int rsrec_cuda_stochastic_moments_resident_batch(rsrec_cuda_ctx *ctx,
+                                                 const void *psiref, int nstates,
+                                                 int lld, double a, double b,
+                                                 int trace_index, int download_host,
+                                                 void *mu_nm);
 int rsrec_cuda_clear_resident_moments(rsrec_cuda_ctx *ctx);
 int rsrec_cuda_resident_count(rsrec_cuda_ctx *ctx, int *count);
+int rsrec_cuda_resident_bytes(rsrec_cuda_ctx *ctx, long long *bytes);
 int rsrec_cuda_reconstruct_conductivity(rsrec_cuda_ctx *ctx,
                                         const double *energy, int n_energy,
                                         int moments, double a, double b,

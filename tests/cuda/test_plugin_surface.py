@@ -57,6 +57,12 @@ ROUTES = {
         "rsrec_cuda_stochastic_moments",
         "rsrec_stochastic_moments",
     ),
+    "batched stochastic moments": (
+        "stochastic_moments_resident_batch",
+        "stochastic_moments_resident_batch",
+        "rsrec_cuda_stochastic_moments_resident_batch",
+        "rsrec_stochastic_moments_resident_batch",
+    ),
     "orbital moments": (
         "chebyshev_orbital_mod()",
         "orbital_moments",

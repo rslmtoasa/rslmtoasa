@@ -299,6 +299,23 @@ extern "C" int rsrec_cuda_stochastic_moments_resident(
     return status;
 }
 
+extern "C" int rsrec_cuda_stochastic_moments_resident_batch(
+    rsrec_cuda_ctx *ctx, const void *psiref, int nstates, int lld,
+    double a, double b, int trace_index, int download_host, void *mu_nm) {
+    if (!ctx || !ctx->have_h || !ctx->have_v) {
+        set_error("rsrec_cuda_stochastic_moments_resident_batch: Hamiltonian/velocity not set");
+        return 1;
+    }
+    if (validate_backend(ctx) != 0) return 1;
+    const int status = rsrec_stochastic_moments_resident_batch(
+        ctx->inner, psiref, nstates, lld, a, b, trace_index, download_host, mu_nm);
+    if (status != 0) {
+        set_error(std::string("rsrec_cuda_stochastic_moments_resident_batch: ") +
+                  rsrec_last_error());
+    }
+    return status;
+}
+
 extern "C" int rsrec_cuda_clear_resident_moments(rsrec_cuda_ctx *ctx) {
     if (!ctx) {
         set_error("rsrec_cuda_clear_resident_moments: null ctx");
@@ -318,6 +335,14 @@ extern "C" int rsrec_cuda_resident_count(rsrec_cuda_ctx *ctx, int *count) {
         return 1;
     }
     return rsrec_resident_count(ctx->inner, count);
+}
+
+extern "C" int rsrec_cuda_resident_bytes(rsrec_cuda_ctx *ctx, long long *bytes) {
+    if (!ctx || !bytes) {
+        set_error("rsrec_cuda_resident_bytes: null argument");
+        return 1;
+    }
+    return rsrec_resident_bytes(ctx->inner, bytes);
 }
 
 extern "C" int rsrec_cuda_reconstruct_conductivity(

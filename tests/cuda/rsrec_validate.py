@@ -303,6 +303,8 @@ def configure(lib: ct.CDLL) -> None:
     lib.rsrec_stochastic_moments.restype = i
     lib.rsrec_stochastic_moments_resident.argtypes = [v, v, i, d, d, i, i, v]
     lib.rsrec_stochastic_moments_resident.restype = i
+    lib.rsrec_stochastic_moments_resident_batch.argtypes = [v, v, i, i, d, d, i, i, v]
+    lib.rsrec_stochastic_moments_resident_batch.restype = i
     lib.rsrec_clear_resident_moments.argtypes = [v]
     lib.rsrec_clear_resident_moments.restype = i
     lib.rsrec_resident_count.argtypes = [v, pi]
@@ -411,6 +413,36 @@ def main() -> int:
             ctx, ptr(psiref), steps_s, a_s, b_s, ptr(mu_fp32)))
         check("stochastic_moments fp32", mu_fp32,
               np_stochastic(psiref, steps_s, a_s, b_s), 5e-5)
+
+        # KPM-G2: independent random/projector states are one RHS block. The
+        # scalar calls below are the reference concatenation; the batched API
+        # must preserve each state rather than only its average.
+        batch_states = [2, 4, 8, 16]
+        # Use normalized phase projectors so the input has the exact production
+        # shape/distribution for every width.
+        psiref_batch = np.zeros((nb, nb, kk, max(batch_states)), dtype=complex, order="F")
+        for state in range(max(batch_states)):
+            for site in range(kk):
+                psiref_batch[:, :, site, state] = np.eye(nb) * np.exp(2j * np.pi * rng.random()) / np.sqrt(kk)
+        scalar_refs = np.stack([
+            np_stochastic(psiref_batch[:, :, :, state], steps_s, a_s, b_s)
+            for state in range(max(batch_states))
+        ], axis=4)
+        for precision, tolerance in ((1, 5e-8), (0, 5e-5)):
+            call(f"set_precision(fp{64 if precision else 32})", lib.rsrec_set_precision(ctx, precision))
+            for width in batch_states:
+                batch_mu = np.zeros((nb, nb, steps_s, steps_s, width), dtype=complex, order="F")
+                call(f"stochastic_moments_resident_batch B={width}",
+                     lib.rsrec_stochastic_moments_resident_batch(
+                         ctx, ptr(psiref_batch[:, :, :, :width]), width, steps_s,
+                         a_s, b_s, 1, 1, ptr(batch_mu)))
+                check(f"G2 batch B={width} fp{64 if precision else 32}", batch_mu,
+                      scalar_refs[:, :, :, :, :width], tolerance)
+                resident_count = np.zeros(1, dtype=np.int32)
+                call("G2 resident_count", lib.rsrec_resident_count(ctx, iptr(resident_count)))
+                if int(resident_count[0]) != width:
+                    raise AssertionError(f"G2 B={width}: expected {width} resident traces, got {resident_count[0]}")
+                call(f"G2 clear B={width}", lib.rsrec_clear_resident_moments(ctx))
         call("set_precision(fp64)", lib.rsrec_set_precision(ctx, 1))
 
         # G1.3: retain only packed diagonal moments, reconstruct with a

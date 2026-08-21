@@ -61,14 +61,34 @@ KPM_PROFILE_METADATA = (
     "M",
     "lld",
     "Ntrace",
+    "trace_block_width",
+    "trace_batches",
     "OMP_NUM_THREADS",
     "BLAS_NUM_THREADS",
     "omp_threads",
     "blas_threads",
+    "random_seed",
     "clock_source",
+    "output_mode",
 )
 
 KPM_PHASES = (
+    "P_operator_setup",
+    "P_trace_setup",
+    "P_moments_total",
+    "P_gamma_basis_setup",
+    "P_gamma_generation",
+    "P_reconstruction_total",
+    "P_result_unpack",
+    "P_energy_integration",
+    "P_tensor_postprocess",
+    "P_output_prepare",
+    "P_output_io",
+    "P_stack_setup",
+    "P_moment_finalize",
+    "P_misc",
+)
+KPM_PHASES_LEGACY = (
     "P_operator",
     "P_trace_setup",
     "P_moments_total",
@@ -154,7 +174,7 @@ def _parse_key_values(text: str) -> dict[str, int | float | str]:
 
 
 def validate_kpm_profile(
-    profile: dict[str, Any], *, closure_tolerance: float = 0.05,
+    profile: dict[str, Any], *, closure_tolerance: float = 0.03,
     child_tolerance: float | None = None,
 ) -> dict[str, Any]:
     """Validate the fixed KPM phase/detail accounting contract.
@@ -165,14 +185,15 @@ def validate_kpm_profile(
     """
 
     metrics = profile.get("metrics", {})
-    if not all(name in metrics for name in KPM_PHASES):
+    phase_names = KPM_PHASES if all(name in metrics for name in KPM_PHASES) else KPM_PHASES_LEGACY
+    if not all(name in metrics for name in phase_names):
         return {
             "valid": False,
             "status": "LEGACY_UNVALIDATED",
             "reason": "missing exclusive P_* phase namespace",
         }
     total = float(metrics.get("T_transport_total", 0.0))
-    exclusive_sum = sum(float(metrics[name]) for name in KPM_PHASES)
+    exclusive_sum = sum(float(metrics[name]) for name in phase_names)
     calculated_error = abs(exclusive_sum - total) / max(abs(total), 1.0e-12)
     tolerance = child_tolerance if child_tolerance is not None else max(0.05 * max(total, 1.0e-12), 0.01)
 
@@ -185,14 +206,19 @@ def validate_kpm_profile(
     parents = {
         "moments": float(metrics["P_moments_total"]),
         "reconstruction": float(metrics["P_reconstruction_total"]),
-        "gamma": float(metrics["P_gamma"]),
+        "gamma": (
+            float(metrics["P_gamma_basis_setup"]) + float(metrics["P_gamma_generation"])
+            if "P_gamma_basis_setup" in metrics
+            else float(metrics["P_gamma"])
+        ),
     }
     children_ok = (
         moment_children <= parents["moments"] + tolerance
         and reconstruction_children <= parents["reconstruction"] + tolerance
         and gamma_children <= parents["gamma"] + tolerance
     )
-    other_ok = float(metrics["P_other"]) >= -tolerance
+    other_name = "P_misc" if "P_misc" in metrics else "P_other"
+    other_ok = float(metrics[other_name]) >= -tolerance
     reported_status = str(metrics.get("PROFILE_STATUS", "UNKNOWN"))
     valid = calculated_error <= closure_tolerance and children_ok and other_ok and reported_status != "FAIL"
     return {
@@ -231,7 +257,11 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
             record["metrics"] = {
                 key: value for key, value in values.items()
                 if key.startswith(("P_", "D_", "T_", "bytes_", "profile_")) or
-                key in {"PROFILE_STATUS", "gpu_energy_block"}
+                key in {
+                    "PROFILE_STATUS", "gpu_energy_block", "resident_device_moment_bytes",
+                    "host_full_moment_bytes", "full_moment_d2h_bytes",
+                    "reduced_result_d2h_bytes",
+                }
             }
             record["validation"] = validate_kpm_profile(record)
             record["class"] = "component"

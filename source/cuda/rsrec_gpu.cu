@@ -226,12 +226,42 @@ static void clear_resident_moments(rsrec_ctx *c) {
 }
 
 template <class CT>
-static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh) {
+static int ensure_stochastic_workspace(rsrec_ctx *c, int lld, bool do_hoh,
+                                       int nstates) {
     auto *ws = &c->stoch_workspace;
-    const size_t field_bytes = fieldsz(c) * sizeof(CT);
+    if (nstates < 1) FAIL("stochastic workspace: nstates must be positive");
+    const size_t nfield = fieldsz(c) * (size_t)nstates;
+    const size_t field_bytes = nfield * sizeof(CT);
     const size_t left_bytes = (size_t)lld * field_bytes;
-    const size_t mu_bytes = (size_t)c->nb * c->nb * (size_t)lld * lld * sizeof(CT);
-    const size_t stage_bytes = fieldsz(c) * sizeof(zc);
+    const size_t mu_bytes = (size_t)c->nb * c->nb * (size_t)lld * lld * nstates * sizeof(CT);
+    const size_t stage_bytes = nfield * sizeof(zc);
+
+    /* Capacity-aware preflight. Existing allocations are reused, while a
+     * larger request is rejected before a sequence of cudaMalloc calls can
+     * leave the context partially grown. The 90% guard leaves room for the
+     * resident diagonal moments and CUDA runtime workspaces. */
+    size_t freeb = 0, totalb = 0;
+    CUCHK(cudaMemGetInfo(&freeb, &totalb));
+    const size_t required = (do_hoh ? 8 : 4) * field_bytes + left_bytes +
+                            mu_bytes + stage_bytes;
+    const bool field_growth = ws->field_bytes < field_bytes;
+    const bool needs_growth = !ws->w0 || !ws->w1 || !ws->w2 || !ws->R ||
+                              field_growth || !ws->left || ws->left_bytes < left_bytes ||
+                              !ws->dmu || ws->mu_bytes < mu_bytes ||
+                              !ws->stage || ws->stage_bytes < stage_bytes;
+    if (needs_growth && required > freeb * 9 / 10)
+        FAIL("stochastic workspace does not fit; reduce gpu_stochastic_block or cond_ll");
+
+    /* field_bytes is shared as the capacity token for the same-sized
+     * recurrence/operator buffers.  If the request grows, invalidate the
+     * whole set before allocating the replacement set; growing only w0 would
+     * falsely make the old w1/w2/R allocations look large enough. */
+    if (field_growth) {
+        for (void **p : {&ws->w0, &ws->w1, &ws->w2, &ws->R,
+                         &ws->ht, &ws->he, &ws->ho, &ws->vtmp})
+            if (*p) { cudaFree(*p); *p = nullptr; }
+        ws->field_bytes = 0;
+    }
 
     if (grow_stochastic_buffer(&ws->w0, &ws->field_bytes, field_bytes, "w0") ||
         grow_stochastic_buffer(&ws->w1, &ws->field_bytes, field_bytes, "w1") ||
@@ -2074,7 +2104,8 @@ extern "C" int rsrec_scalar_lanczos(rsrec_ctx *c, int site_j, int lld,
  *    step_velo_hoh (va/vb + voa/vob + h_bare); operators raw.
  * ------------------------------------------------------------------------ */
 template <class CT, class RT>
-static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
+static int stoch_engine_batch(rsrec_ctx *c, const void *psiref_h, int nstates,
+                        int lld,
                         RT inva, RT bsc, void *mu_,
                         const CT *Hop, const CT *Himp,
                         const CT *va, const CT *vb,
@@ -2085,9 +2116,11 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     const int nb = c->nb;
     const size_t bb = (size_t)nb * nb, nf = fieldsz(c);
     const size_t ld = (size_t)nb * c->kk;
+    const int nrhs = nb * nstates;
+    const size_t nfield = nf * (size_t)nstates;
     const bool do_hoh = c->have_hoh;
 
-    if (ensure_stochastic_workspace<CT>(c, lld, do_hoh)) return 1;
+    if (ensure_stochastic_workspace<CT>(c, lld, do_hoh, nstates)) return 1;
     auto *ws = &c->stoch_workspace;
     CT *left = static_cast<CT *>(ws->left);
     CT *dmu = static_cast<CT *>(ws->dmu);
@@ -2100,40 +2133,40 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     CT *ho = static_cast<CT *>(ws->ho);
     CT *vtmp = static_cast<CT *>(ws->vtmp);
     zc *stage = static_cast<zc *>(ws->stage);
-    CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * sizeof(CT)));
+    CUCHK(cudaMemset(dmu, 0, bb * (size_t)lld * lld * nstates * sizeof(CT)));
 
     /* H~ apply (Chebyshev recurrence operator), hoh-aware. */
     auto matvec = [&](const CT *x1, const CT *x0, CT *yv, RT al, RT be) -> int {
         if (do_hoh)
             return step_apply_hoh<CT, RT>(c, h_bare, h_bare_imp, h_eeo,
                                           h_eeo_imp, h_hons, ht, he, ho,
-                                          x1, x0, yv, nb, al, be, inva, bsc);
-        return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nb,
+                                          x1, x0, yv, nrhs, al, be, inva, bsc);
+        return step_apply<CT, RT>(c, Hop, Himp, c->nmax > 0, x1, x0, yv, nrhs,
                                   al, be, inva, bsc);
     };
     /* velocity apply (raw, hoh-aware). */
     auto velo = [&](const CT *v_op, const CT *vo_op, const CT *x1, CT *yv) -> int {
         if (do_hoh)
             return step_velo_hoh<CT, RT>(c, v_op, vo_op, h_bare, h_bare_imp,
-                                         vtmp, x1, yv, nb);
-        return step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, yv, nb,
+                                         vtmp, x1, yv, nrhs);
+        return step_apply<CT, RT>(c, v_op, nullptr, 0, x1, nullptr, yv, nrhs,
                                   (RT)1, (RT)0, (RT)1, (RT)0);
     };
 
     const CT one = {(RT)1, (RT)0};
     const CT zero = {(RT)0, (RT)0};
     const int tpb = 256;
-    const int nbl = (int)((nf + tpb - 1) / tpb);
     const double h2d_start = host_seconds();
-    CUCHK(cudaMemcpy(stage, psiref_h, nf * sizeof(zc), cudaMemcpyHostToDevice));
+    CUCHK(cudaMemcpy(stage, psiref_h, nfield * sizeof(zc), cudaMemcpyHostToDevice));
     c->stoch_h2d_s += host_seconds() - h2d_start;
-    c->stoch_h2d_bytes += (long long)(nf * sizeof(zc));
+    c->stoch_h2d_bytes += (long long)(nfield * sizeof(zc));
     const double cheb_start = host_seconds();
-    k_pack<CT><<<nbl, tpb>>>(nf, nb, nb, c->kk, ld, stage, w1);
+    const int nbl_batch = (int)((nfield + tpb - 1) / tpb);
+    k_pack<CT><<<nbl_batch, tpb>>>(nfield, nb, nb, c->kk, ld, stage, w1);
     CUCHK(cudaGetLastError());
 
     /* left states L_m = T_{m-1}(H~)|psiref>, stored device-resident. */
-    CUCHK(cudaMemcpy(left, w1, nf * sizeof(CT), cudaMemcpyDeviceToDevice));
+    CUCHK(cudaMemcpy(left, w1, nfield * sizeof(CT), cudaMemcpyDeviceToDevice));
     for (int m = 2; m <= lld; ++m) {
         if (m == 2) {
             CT *t = w0; w0 = w1; w1 = t;
@@ -2142,7 +2175,7 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
             if (matvec(w1, w0, w2, (RT)2, (RT)-1)) return 1;
             CT *t = w0; w0 = w1; w1 = w2; w2 = t;
         }
-        CUCHK(cudaMemcpy(left + (size_t)(m - 1) * nf, w1, nf * sizeof(CT),
+        CUCHK(cudaMemcpy(left + (size_t)(m - 1) * nfield, w1, nfield * sizeof(CT),
                          cudaMemcpyDeviceToDevice));
     }
 
@@ -2151,34 +2184,46 @@ static int stoch_engine(rsrec_ctx *c, const void *psiref_h, int lld,
     CT *v0 = w0, *v1 = w1, *v2 = w2;
     for (int n = 1; n <= lld; ++n) {
         if (n == 1) {
-            CUCHK(cudaMemcpy(v1, v0, nf * sizeof(CT), cudaMemcpyDeviceToDevice));
+            CUCHK(cudaMemcpy(v1, v0, nfield * sizeof(CT), cudaMemcpyDeviceToDevice));
         } else if (n == 2) {
-            CUCHK(cudaMemcpy(v0, v1, nf * sizeof(CT), cudaMemcpyDeviceToDevice));
+            CUCHK(cudaMemcpy(v0, v1, nfield * sizeof(CT), cudaMemcpyDeviceToDevice));
             if (matvec(v0, nullptr, v1, (RT)1, (RT)0)) return 1;
         } else {
             if (matvec(v1, v0, v2, (RT)2, (RT)-1)) return 1;
             CT *t = v0; v0 = v1; v1 = v2; v2 = t;
         }
         if (velo(va, voa, v1, R)) return 1;        /* R = V_a v_n */
-        CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
-                           &one, left, (int)ld, (long long)nf,
-                           R, (int)ld, 0,
-                           &zero, dmu + bb * (size_t)(n - 1), nb,
-                           (long long)bb * lld, lld));
+        /* left is m-major, with each m block containing all B states;
+         * R is state-major.  Keep the existing efficient m-batched GEMM
+         * and issue one strided-batched call per state so both operands and
+         * the Fortran (n,m,state) output layout have constant strides. */
+        const size_t per_state_mu = bb * (size_t)lld * lld;
+        for (int s = 0; s < nstates; ++s)
+            CBCHK(blas_gemm_sb(c->blas, CUBLAS_OP_C, CUBLAS_OP_N, nb, nb, (int)ld,
+                               &one, left + (size_t)s * nf, (int)ld,
+                               (long long)nfield,
+                               R + (size_t)s * nf, (int)ld, 0,
+                               &zero, dmu + (size_t)s * per_state_mu +
+                                      bb * (size_t)(n - 1), nb,
+                               (long long)bb * lld, lld));
     }
 
     /* The device recurrence/contractions are the numerical moment stage.
      * Keep the final synchronous copy separate so the transport profile can
      * distinguish arithmetic from host/device traffic. */
     CUCHK(cudaDeviceSynchronize());
-    if (retain_device && retain_transport_diagonal(c, dmu, lld, trace_index))
-        return 1;
+    if (retain_device) {
+        const size_t per_state_mu = bb * (size_t)lld * lld;
+        for (int s = 0; s < nstates; ++s)
+            if (retain_transport_diagonal(c, dmu + (size_t)s * per_state_mu,
+                                          lld, trace_index + s)) return 1;
+    }
     const double d2h_start = host_seconds();
     c->stoch_cheb_s += d2h_start - cheb_start;
     if (!download_host) return 0;
     /* copy moments back, widening to cplx (fp64) for the Fortran side. */
     std::vector<CT> &h = stochastic_host_moments(ws, static_cast<CT *>(nullptr));
-    h.resize(bb * (size_t)lld * lld);
+    h.resize(bb * (size_t)lld * lld * nstates);
     CUCHK(cudaMemcpy(h.data(), dmu, h.size() * sizeof(CT),
                      cudaMemcpyDeviceToHost));
     c->stoch_d2h_s += host_seconds() - d2h_start;
@@ -2204,6 +2249,8 @@ static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
     if (!c->have_v) FAIL("stochastic_moments: velocity operators not set");
     if (c->have_hoh && !c->have_vo)
         FAIL("stochastic_moments: hoh active but velocity ortho (vo) not set");
+    if (download_host && !mu_)
+        FAIL("stochastic_moments: host moment output is required when download_host is enabled");
 
     c->stoch_h2d_s = 0.0;
     c->stoch_cheb_s = 0.0;
@@ -2219,15 +2266,15 @@ static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
             if (c->cheb_prec == 0) {
                 if (ensure_f32_hoh(c)) return 1;
                 if (ensure_f32_velocity(c)) return 1;
-                return stoch_engine<fc, float>(
-                    c, psiref_, lld, (float)(1.0 / a), (float)b, mu_,
+                return stoch_engine_batch<fc, float>(
+                    c, psiref_, 1, lld, (float)(1.0 / a), (float)b, mu_,
                     c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
                     c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
                     c->f_hons, c->f_voa, c->f_vob, retain_device,
                     download_host, trace_index);
             }
-            return stoch_engine<zc, double>(
-                c, psiref_, lld, 1.0 / a, b, mu_,
+            return stoch_engine_batch<zc, double>(
+                c, psiref_, 1, lld, 1.0 / a, b, mu_,
                 c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
                 c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
                 c->d_voa, c->d_vob, retain_device, download_host, trace_index);
@@ -2235,13 +2282,13 @@ static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
         if (c->cheb_prec == 0) {
             if (ensure_f32_ham(c, a, b)) return 1;
             if (ensure_f32_velocity(c)) return 1;
-            return stoch_engine<fc, float>(
-                c, psiref_, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+            return stoch_engine_batch<fc, float>(
+                c, psiref_, 1, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
                 c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
                 nullptr, nullptr, retain_device, download_host, trace_index);
         }
-        return stoch_engine<zc, double>(
-            c, psiref_, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+        return stoch_engine_batch<zc, double>(
+            c, psiref_, 1, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
             c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
             nullptr, nullptr, retain_device, download_host, trace_index);
     }
@@ -2320,6 +2367,68 @@ static int stochastic_moments_impl(rsrec_ctx *c, const void *psiref_,
     return 0;
 }
 
+/* Batched random-vector transport request. The block-ELL backend accepts the
+ * independent states as one RHS block; the structured FFT backend remains a
+ * scalar-B=1 route because its stencil plan is intentionally restricted to
+ * nb current columns. */
+static int stochastic_moments_batch_impl(rsrec_ctx *c, const void *psiref_,
+                                         int nstates, int lld, double a,
+                                         double b, void *mu_,
+                                         bool retain_device, bool download_host,
+                                         int trace_index) {
+    if (!c->have_h) FAIL("stochastic_moments_batch: Hamiltonian not set");
+    if (!c->have_v) FAIL("stochastic_moments_batch: velocity operators not set");
+    if (nstates < 1) FAIL("stochastic_moments_batch: nstates must be positive");
+    if (retain_device && trace_index < 1)
+        FAIL("stochastic_moments_batch: trace index must be positive");
+    if (download_host && !mu_)
+        FAIL("stochastic_moments_batch: host moment output is required when download_host is enabled");
+    if (c->use_struct && nstates != 1)
+        FAIL("stochastic_moments_batch: structured backend supports only B=1");
+    if (c->have_hoh && !c->have_vo)
+        FAIL("stochastic_moments_batch: hoh active but velocity ortho (vo) not set");
+    if (c->use_struct)
+        return stochastic_moments_impl(c, psiref_, lld, a, b, mu_, retain_device,
+                                       download_host, trace_index);
+
+    c->stoch_h2d_s = 0.0;
+    c->stoch_cheb_s = 0.0;
+    c->stoch_d2h_s = 0.0;
+    c->stoch_conversion_s = 0.0;
+    c->stoch_mu_pack_s = 0.0;
+    c->stoch_h2d_bytes = 0;
+    c->stoch_d2h_bytes = 0;
+    c->stoch_mu_pack_bytes = 0;
+
+    if (c->have_hoh) {
+        if (c->cheb_prec == 0) {
+            if (ensure_f32_hoh(c) || ensure_f32_velocity(c)) return 1;
+            return stoch_engine_batch<fc, float>(
+                c, psiref_, nstates, lld, (float)(1.0 / a), (float)b, mu_,
+                c->f_ee_bare, c->f_hall_bare, c->f_va, c->f_vb,
+                c->f_ee_bare, c->f_hall_bare, c->f_eeo, c->f_hallo,
+                c->f_hons, c->f_voa, c->f_vob, retain_device,
+                download_host, trace_index);
+        }
+        return stoch_engine_batch<zc, double>(
+            c, psiref_, nstates, lld, 1.0 / a, b, mu_,
+            c->d_ee_bare, c->d_hall_bare, c->d_va, c->d_vb,
+            c->d_ee_bare, c->d_hall_bare, c->d_eeo, c->d_hallo, c->d_hons,
+            c->d_voa, c->d_vob, retain_device, download_host, trace_index);
+    }
+    if (c->cheb_prec == 0) {
+        if (ensure_f32_ham(c, a, b) || ensure_f32_velocity(c)) return 1;
+        return stoch_engine_batch<fc, float>(
+            c, psiref_, nstates, lld, 1.0f, 0.0f, mu_, c->f_ee, c->f_hall,
+            c->f_va, c->f_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, retain_device, download_host, trace_index);
+    }
+    return stoch_engine_batch<zc, double>(
+        c, psiref_, nstates, lld, 1.0 / a, b, mu_, c->d_ee, c->d_hall,
+        c->d_va, c->d_vb, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, retain_device, download_host, trace_index);
+}
+
 extern "C" int rsrec_stochastic_moments(rsrec_ctx *c, const void *psiref,
                                         int lld, double a, double b,
                                         void *mu_nm) {
@@ -2334,6 +2443,13 @@ extern "C" int rsrec_stochastic_moments_resident(
                                    true, download_host != 0, trace_index);
 }
 
+extern "C" int rsrec_stochastic_moments_resident_batch(
+    rsrec_ctx *c, const void *psiref, int nstates, int lld, double a,
+    double b, int trace_index, int download_host, void *mu_nm) {
+    return stochastic_moments_batch_impl(c, psiref, nstates, lld, a, b, mu_nm,
+                                         true, download_host != 0, trace_index);
+}
+
 extern "C" int rsrec_clear_resident_moments(rsrec_ctx *c) {
     if (!c) FAIL("clear_resident_moments: null context");
     clear_resident_moments(c);
@@ -2345,6 +2461,14 @@ extern "C" int rsrec_resident_count(rsrec_ctx *c, int *count) {
     *count = 0;
     for (const auto &entry : c->resident_moments)
         if (entry.u) ++*count;
+    return 0;
+}
+
+extern "C" int rsrec_resident_bytes(rsrec_ctx *c, long long *bytes) {
+    if (!c || !bytes) FAIL("resident_bytes: null argument");
+    *bytes = 0;
+    for (const auto &entry : c->resident_moments)
+        if (entry.u) *bytes += static_cast<long long>(entry.bytes);
     return 0;
 }
 
