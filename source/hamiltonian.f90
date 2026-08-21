@@ -1578,58 +1578,190 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Build the spin-orbit coupling hamiltonian according to Wu/Freeman PRB 54, 61 (1996)
+   !> Build the spin-orbit coupling Hamiltonian according to
+   !> Wu/Freeman, Phys. Rev. B 54, 61 (1996).
+   !>
+   !> The SOC parameters xi_p and xi_d are combined using a signed
+   !> geometric mean, allowing negative SOC values to be specified
+   !> in the potential files.
    !---------------------------------------------------------------------------
    subroutine build_lsham(this)
+   
       class(hamiltonian), intent(inout) :: this
+   
       ! Local variables
       integer :: i, j, k
+   
       complex(rp) :: prefac, sg
+   
       real(rp) :: soc_p, soc_d
+      real(rp) :: xi_p1, xi_p2
+      real(rp) :: xi_d1, xi_d2
+   
       complex(rp), dimension(2) :: rac
       complex(rp), dimension(9, 9) :: Lx, Ly, Lz
+   
       real(rp) :: lz_loc
-      !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
+   
+      !-----------------------------------------------------------------------
+      ! Getting the angular momentum operators from math_mod.
+      ! They are initially given in Cartesian coordinates.
+      !-----------------------------------------------------------------------
       Lx(:, :) = L_x(:, :)
       Ly(:, :) = L_y(:, :)
       Lz(:, :) = L_z(:, :)
-
-      ! Transforming them into the spherical harmonics coordinates
+   
+      !-----------------------------------------------------------------------
+      ! Transform them into the spherical-harmonics basis.
+      !-----------------------------------------------------------------------
       call hcpx(Lx, 'cart2sph')
       call hcpx(Ly, 'cart2sph')
       call hcpx(Lz, 'cart2sph')
-
-      ! Writing the L.S hamiltonian
-      this%lsham(:, :, :) = cmplx(0.0d0, 0.0d0)
+   
+      !-----------------------------------------------------------------------
+      ! Initialize the L.S Hamiltonian.
+      !-----------------------------------------------------------------------
+      this%lsham(:, :, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
+   
+      !-----------------------------------------------------------------------
+      ! Loop over atomic types.
+      !-----------------------------------------------------------------------
       do k = 1, this%charge%lattice%ntype
-         sg = cmplx(0.5d0, 0.0d0)
-         soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
-         soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
-         ! Check if orbital polarization is enabled
+   
+         sg = cmplx(0.5_rp, 0.0_rp, kind=rp)
+   
+         !--------------------------------------------------------------------
+         ! Read SOC parameters from the potential.
+         !--------------------------------------------------------------------
+         xi_p1 = this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)
+         xi_p2 = this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2)
+   
+         xi_d1 = this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)
+         xi_d2 = this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2)
+   
+         !--------------------------------------------------------------------
+         ! The two SOC parameters belonging to the same orbital channel
+         ! must have the same sign.
+         !--------------------------------------------------------------------
+         if (xi_p1 * xi_p2 < 0.0_rp) then
+            error stop &
+               'build_lsham: xi_p(1) and xi_p(2) must have the same sign'
+         end if
+   
+         if (xi_d1 * xi_d2 < 0.0_rp) then
+            error stop &
+               'build_lsham: xi_d(1) and xi_d(2) must have the same sign'
+         end if
+   
+         !--------------------------------------------------------------------
+         ! Signed geometric mean.
+         !
+         ! (+a,+b) --> +sqrt(a*b)
+         ! (-a,-b) --> -sqrt(a*b)
+         !
+         ! This preserves the sign supplied in the potential file.
+         !--------------------------------------------------------------------
+         soc_p = sign(sqrt(abs(xi_p1 * xi_p2)), xi_p1)
+         soc_d = sign(sqrt(abs(xi_d1 * xi_d2)), xi_d1)
+   
+         !--------------------------------------------------------------------
+         ! WARNING:
+         !
+         ! The orbital-polarization part below is intentionally left
+         ! unchanged from the original implementation.
+         !
+         ! If xi_d(1) is negative, expressions such as
+         !
+         !   sqrt(xi_d(1) * rac)
+         !   sqrt(xi_d(1) * lmom(3))
+         !
+         ! may have negative real arguments and may therefore produce NaNs.
+         !
+         ! The negative-SOC modification above is therefore safe by itself,
+         ! but calculations with orb_pol = .true. require separate analysis
+         ! of the orbital-polarization terms.
+         !--------------------------------------------------------------------
+         if (this%orb_pol .and. xi_d1 < 0.0_rp) then
+            write(*, '(a)') &
+               'WARNING(build_lsham): negative xi_d with orb_pol=.true.;'
+            write(*, '(a)') &
+               'rac/lz_loc square roots are unchanged and may produce NaNs.'
+         end if
+   
+         !--------------------------------------------------------------------
+         ! Check if orbital polarization is enabled.
+         !
+         ! NOTE: This block is unchanged from the original implementation.
+         !--------------------------------------------------------------------
          if (this%orb_pol) then
-            rac = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%rac)
-            lz_loc = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%lmom(3))
+   
+            rac = sqrt( &
+               this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1) * &
+               this%charge%lattice%symbolic_atoms(k)%potential%rac )
+   
+            lz_loc = sqrt( &
+               this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1) * &
+               this%charge%lattice%symbolic_atoms(k)%potential%lmom(3) )
+   
          else
+   
             rac = 0.0_rp
             lz_loc = 0.0_rp
+   
          end if
-
-         prefac = 0.0_rp
+   
+         !--------------------------------------------------------------------
+         ! Construct the L.S Hamiltonian.
+         !--------------------------------------------------------------------
          do i = 1, 9
             do j = 1, 9
-               if (i >= 2 .and. i <= 4 .and. j >= 2 .and. j <= 4) prefac = sg*soc_p
-               if (i >= 5 .and. i <= 9 .and. j >= 5 .and. j <= 9) prefac = sg*soc_d
-               this%lsham(j, i, k) = this%lsham(j, i, k) + prefac*Lz(j, i) + Lz(j, i)*rac(1)*lz_loc ! H11
-               this%lsham(j, i + 9, k) = this%lsham(j, i + 9, k) + prefac*(Lx(j, i) - i_unit*Ly(j, i)) ! H12
-               this%lsham(j + 9, i, k) = this%lsham(j + 9, i, k) + prefac*(Lx(j, i) + i_unit*Ly(j, i)) ! H21
-               this%lsham(j + 9, i + 9, k) = this%lsham(j + 9, i + 9, k) - prefac*Lz(j, i) - Lz(j, i)*rac(2)*lz_loc ! H22
-               !write(50,*) ´ntype=´, k
-               !write(51,*) ´ntype=´, k
-               !write(50,´(18f10.6)´) real(this%lsham(:,:,k))
-               !write(51,´(18f10.6)´) aimag(this%lsham(:,:,k))
+   
+               ! Reset prefactor for every matrix element.
+               prefac = cmplx(0.0_rp, 0.0_rp, kind=rp)
+   
+               ! p-orbital block
+               if (i >= 2 .and. i <= 4 .and. &
+                   j >= 2 .and. j <= 4) then
+   
+                  prefac = sg * soc_p
+   
+               end if
+   
+               ! d-orbital block
+               if (i >= 5 .and. i <= 9 .and. &
+                   j >= 5 .and. j <= 9) then
+   
+                  prefac = sg * soc_d
+   
+               end if
+   
+               ! H11
+               this%lsham(j, i, k) = &
+                  this%lsham(j, i, k) + &
+                  prefac * Lz(j, i) + &
+                  Lz(j, i) * rac(1) * lz_loc
+   
+               ! H12
+               this%lsham(j, i + 9, k) = &
+                  this%lsham(j, i + 9, k) + &
+                  prefac * (Lx(j, i) - i_unit * Ly(j, i))
+   
+               ! H21
+               this%lsham(j + 9, i, k) = &
+                  this%lsham(j + 9, i, k) + &
+                  prefac * (Lx(j, i) + i_unit * Ly(j, i))
+   
+               ! H22
+               this%lsham(j + 9, i + 9, k) = &
+                  this%lsham(j + 9, i + 9, k) - &
+                  prefac * Lz(j, i) - &
+                  Lz(j, i) * rac(2) * lz_loc
+   
             end do
          end do
+   
       end do
+   
    end subroutine build_lsham
 
    !---------------------------------------------------------------------------
