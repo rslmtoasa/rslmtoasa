@@ -105,6 +105,10 @@ def environment(omp_threads: int, blas_threads: int) -> dict[str, str]:
 
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(omp_threads)
+    # run_binary.sh uses this explicit control for serial launches. Keep it
+    # synchronized with the requested sweep instead of silently pinning all
+    # benchmark rows to OMP=1.
+    env["RSLMTO_OMP_THREADS_SERIAL"] = str(omp_threads)
     env["OMP_PROC_BIND"] = env.get("OMP_PROC_BIND", "close")
     env["OMP_PLACES"] = env.get("OMP_PLACES", "cores")
     env["BLAS_NUM_THREADS"] = str(blas_threads)
@@ -461,6 +465,8 @@ def main() -> int:
     parser.add_argument("--replications", type=int, nargs="+", default=[4, 6, 8])
     parser.add_argument("--cond-types", nargs="+", choices=("charge", "spin", "orbital"), default=None)
     parser.add_argument("--omp-threads", type=int, nargs="+", default=[1, 2, 4, 8])
+    parser.add_argument("--gpu-omp-threads", type=int, nargs="+", default=None,
+                        help="OMP sweep for GPU rows; defaults to --omp-threads")
     parser.add_argument("--blas-threads", type=int, nargs="+", default=[1])
     parser.add_argument("--cond-ll", type=int, default=500)
     parser.add_argument("--lld", type=int, default=150)
@@ -481,6 +487,7 @@ def main() -> int:
     if args.gpu_only and not args.gpu:
         parser.error("--gpu-only requires --gpu")
     materials = args.material_one or args.materials or ["pt"]
+    gpu_omp_threads = args.gpu_omp_threads or args.omp_threads
     binary = args.binary.resolve()
     build_dir = args.build_dir.resolve() if args.build_dir else binary.parent.parent
     scratch_root = args.scratch_root.resolve()
@@ -514,7 +521,7 @@ def main() -> int:
                     for gpu_precision in args.gpu_precisions:
                         widths = args.gpu_stochastic_block if args.cond_calctype == "random_vec" else [1]
                         for block_width in widths:
-                            for omp_threads in args.omp_threads:
+                            for omp_threads in gpu_omp_threads:
                                 try:
                                     rows.append(run_one(
                                         binary, scratch_root / f"{material_name}_r{replication}_{cond_type}_cuda_{gpu_precision}_b{block_width}_omp{omp_threads}",
