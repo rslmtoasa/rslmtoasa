@@ -6,6 +6,7 @@ logical :: cpp_plugin
 logical :: gpu_plugin
 logical :: dipole_electrostatics
 character(len=sl) :: calctype, recur, cond_type, cond_calctype, gpu_backend, gpu_precision, cheb_backend
+character(len=sl) :: cpu_reconstruction_precision
 logical :: gpu_moment_download
 character(len=sl) :: linear_in, linear_out
 character(len=sl) :: density_policy
@@ -15,6 +16,6 @@ namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    idos, lrot, incorb, do_asd, mext, &
    svac, calctype, txc, blockrec, partype, do_cochg, asd_jij, terminator, conca, &
    concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, gpu_precision, gpu_moment_download, cheb_backend, &
-   gpu_stochastic_block, &
+   gpu_stochastic_block, cpu_reconstruction_precision, &
    random_vec_num, cond_ll, cond_type, cond_calctype, linear_in, linear_out, lmax, &
    dipole_electrostatics, dipole_mix, density_policy

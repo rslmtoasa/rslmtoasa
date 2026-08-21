@@ -340,6 +340,15 @@ contains
          end if
       end if
 
+      ! The opt-in CPU FP32 route computes Gamma in single precision and
+      ! leaves only the reduced conductivity result in the canonical FP64
+      ! host representation.  The default route below remains unchanged.
+      if (trim(this%control%cheb_backend) == 'fast' .and. &
+          trim(this%control%cpu_reconstruction_precision) == 'fp32') then
+         call calculate_gamma_nm_fp32(this)
+         return
+      end if
+
       call g_kpm_profile%start('P_gamma_basis_setup')
       
       ! Initialize global variable
@@ -405,6 +414,67 @@ contains
       call g_kpm_profile%stop('P_gamma_generation')
    end subroutine 
 
+   !> @brief Build the CPU precision-matched FP32 Gamma tensor.
+   !> @details This is deliberately local to the transport reconstruction
+   !> route.  Gamma is formed with real32/complex(real32) arithmetic and
+   !> widened only when stored in the existing canonical host tensor.
+   subroutine calculate_gamma_nm_fp32(this)
+      class(conductivity), intent(inout) :: this
+
+      integer :: i, n, m, ne, m_cond
+      real(real32) :: a_sp, b_sp, theta
+      real(real32), allocatable :: g_kernel(:), weights(:), acos_x(:), sqrt_term(:), wscale(:)
+      real(real32), allocatable :: chebyshev_poly(:, :)
+      complex(real32), allocatable :: cn(:, :), cm(:, :), gamma_sp(:)
+
+      ne = this%en%channels_ldos + 10
+      m_cond = this%control%cond_ll
+      call g_kpm_profile%start('P_gamma_basis_setup')
+#ifdef USE_SAFE_ALLOC
+      call g_safe_alloc%allocate('recursion.gamma_nm', this%gamma_nm, (/ne, m_cond, m_cond/))
+#else
+      allocate(this%gamma_nm(ne, m_cond, m_cond))
+#endif
+      allocate(acos_x(ne), sqrt_term(ne), wscale(ne), chebyshev_poly(ne, m_cond))
+      allocate(cn(ne, m_cond), cm(ne, m_cond), g_kernel(m_cond), weights(m_cond), gamma_sp(ne))
+
+      a_sp = real((this%en%energy_max - this%en%energy_min)/(2.0_rp - 0.3_rp), real32)
+      b_sp = real((this%en%energy_max + this%en%energy_min)/2.0_rp, real32)
+      wscale(:) = real((this%en%ene(:) - real(b_sp, rp))/real(a_sp, rp), real32)
+      acos_x(:) = acos(wscale(:))
+      sqrt_term(:) = sqrt(1.0_real32 - wscale(:)**2)
+      do i = 1, m_cond
+         theta = 6.0_real32 * (1.0_real32 - (real(i, real32) - 1.0_real32)/real(m_cond, real32))
+         g_kernel(i) = sinh(theta)/sinh(6.0_real32)
+         weights(i) = 1.0_real32
+         if (i == 1) weights(i) = 0.5_real32
+      end do
+      do n = 1, m_cond
+         cn(:, n) = (wscale(:) - cmplx(0.0_real32, real(n - 1, real32), real32)*sqrt_term(:)) * &
+            exp(cmplx(0.0_real32, real(n - 1, real32), real32)*acos_x(:))
+         cm(:, n) = (wscale(:) + cmplx(0.0_real32, real(n - 1, real32), real32)*sqrt_term(:)) * &
+            exp(-cmplx(0.0_real32, real(n - 1, real32), real32)*acos_x(:))
+      end do
+      chebyshev_poly(:, 1) = 1.0_real32
+      if (m_cond >= 2) chebyshev_poly(:, 2) = wscale(:)
+      do n = 3, m_cond
+         chebyshev_poly(:, n) = 2.0_real32*wscale(:)*chebyshev_poly(:, n - 1) - chebyshev_poly(:, n - 2)
+      end do
+      call g_kpm_profile%stop('P_gamma_basis_setup')
+
+      call g_kpm_profile%start('P_gamma_generation')
+      do n = 1, m_cond
+         do m = 1, m_cond
+            gamma_sp(:) = (cn(:, n)*chebyshev_poly(:, m) + cm(:, m)*chebyshev_poly(:, n)) / &
+               ((1.0_real32 - wscale(:)**2)**2)
+            gamma_sp(:) = gamma_sp(:)*g_kernel(n)*g_kernel(m)*weights(n)*weights(m)
+            this%gamma_nm(:, n, m) = cmplx(real(gamma_sp(:), real32), aimag(gamma_sp(:)), kind=rp)
+         end do
+      end do
+      deallocate(acos_x, sqrt_term, wscale, chebyshev_poly, cn, cm, g_kernel, weights, gamma_sp)
+      call g_kpm_profile%stop('P_gamma_generation')
+   end subroutine calculate_gamma_nm_fp32
+
    subroutine calculate_conductivity_tensor(this)
       implicit none
       ! Input
@@ -415,6 +485,7 @@ contains
       complex(rp), dimension(:, :, :, :), allocatable :: integrand_at
       complex(rp), dimension(:, :), allocatable :: mu_diag, gamma_mu
       complex(rp), dimension(:, :, :), allocatable :: gpu_reconstruction
+      complex(real32), dimension(:, :), allocatable :: gamma_sp, mu_diag_sp, gamma_mu_sp
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
       real(rp), dimension(:), allocatable :: integrated_tot_real, integrated_tot_im
@@ -431,6 +502,7 @@ contains
       integer :: gpu_energy_block
       integer(int64) :: gpu_complex_bytes
       logical :: use_gpu_reconstruction, no_write
+      logical :: use_cpu_fp32_reconstruction
       character(len=48), allocatable :: output_debug(:), output_total(:), output_type(:,:)
       character(len=304), allocatable :: output_orb_real(:), output_orb_im(:)
       character(len=304), allocatable :: output_type_orb_real(:,:), output_type_orb_im(:,:)
@@ -486,6 +558,9 @@ contains
       if (associated(this%recursion%gpu_backend)) then
          use_gpu_reconstruction = this%recursion%gpu_backend%resident_moments_available(loop_over)
       end if
+      use_cpu_fp32_reconstruction = .not. use_gpu_reconstruction .and. &
+         trim(this%control%cheb_backend) == 'fast' .and. &
+         trim(this%control%cpu_reconstruction_precision) == 'fp32'
       gpu_energy_block = 0
       if (use_gpu_reconstruction) then
          gpu_complex_bytes = int(merge(8, 16, trim(this%control%gpu_precision) == 'fp32'), int64)
@@ -500,6 +575,10 @@ contains
          call g_kpm_profile%set_reconstruction_bytes( &
             int(size(this%gamma_nm), int64)*int(storage_size(this%gamma_nm)/8, int64), &
             int(size(mu_diag), int64)*int(storage_size(mu_diag)/8, int64))
+         if (use_cpu_fp32_reconstruction) then
+            allocate(gamma_sp(ne, k_cond), mu_diag_sp(k_cond, nb), gamma_mu_sp(ne, nb))
+            gamma_sp = cmplx(reshape(this%gamma_nm, [ne, k_cond]), kind=real32)
+         end if
       end if
 
       volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3))))
@@ -549,7 +628,13 @@ contains
          ! parallelism for this dense reconstruction, avoiding nested
          ! OpenMP/BLAS oversubscription in the CPU benchmark.
          call g_kpm_profile%start('D_reconstruction_BLAS')
-         call gamma_mu_blas(this%gamma_nm, mu_diag, factor, gamma_mu)
+         if (use_cpu_fp32_reconstruction) then
+            mu_diag_sp = cmplx(mu_diag, kind=real32)
+            call gamma_mu_cblas(gamma_sp, mu_diag_sp, real(factor, real32), gamma_mu_sp)
+            gamma_mu = cmplx(gamma_mu_sp, kind=rp)
+         else
+            call gamma_mu_blas(this%gamma_nm, mu_diag, factor, gamma_mu)
+         end if
          call g_kpm_profile%stop('D_reconstruction_BLAS')
 
          do l2 = 1, nb
@@ -689,6 +774,7 @@ contains
          integrated_type_l_real, integrated_type_l_im, output_type, output_type_orb_real, output_type_orb_im)
       if (allocated(gpu_reconstruction)) deallocate(gpu_reconstruction)
       if (allocated(mu_diag)) deallocate(mu_diag, gamma_mu)
+      if (allocated(gamma_sp)) deallocate(gamma_sp, mu_diag_sp, gamma_mu_sp)
    end subroutine calculate_conductivity_tensor
 
 end module conductivity_mod

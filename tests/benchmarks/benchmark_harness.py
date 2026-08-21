@@ -21,8 +21,11 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
+import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -70,6 +73,27 @@ KPM_PROFILE_METADATA = (
     "random_seed",
     "clock_source",
     "output_mode",
+)
+
+NUMERIC_MODES = frozenset(("fp64", "fp32", "mixed"))
+KPM_TOLERANCE_SETS = {
+    # These envelopes are the established G1/G1.3/VAL-09 closure contract:
+    # FP64 comparisons are effectively reference-equal, while the FP32
+    # envelope covers the largest validated same-precision Pt spin case.
+    # Production files are emitted with ES16.6 formatting.  The FP64
+    # comparison envelope is therefore two printed ulps, while the numerical
+    # FP64 route remains otherwise reference precision.
+    "fp64": {"max_abs": 2.0e-6, "rel_l2": 5.0e-6, "integrated_rel": 5.0e-6},
+    "fp32": {"max_abs": 5.0e-4, "rel_l2": 5.0e-4, "integrated_rel": 5.0e-4},
+    "mixed": {"max_abs": 5.0e-4, "rel_l2": 5.0e-4, "integrated_rel": 5.0e-4},
+}
+
+COMPARISON_KEY_FIELDS = (
+    "material", "fixture_id", "fixture_revision", "replication", "N", "nnz",
+    "nsp", "soc_state", "cond_type", "current_operator", "cond_calctype",
+    "Ntrace", "projector_count", "random_seed", "vector_contract", "M", "lld",
+    "NE", "channels", "rc", "energy_min", "energy_max", "fermi", "kernel",
+    "chebyshev_scaling", "numeric_mode", "canonical_output_precision",
 )
 
 KPM_PHASES = (
@@ -171,6 +195,242 @@ def _parse_key_values(text: str) -> dict[str, int | float | str]:
                 index += 1
         index += 1
     return result
+
+
+def numeric_mode(moment_precision: Any, reconstruction_precision: Any) -> str:
+    """Classify the end-to-end arithmetic contract, never by backend name."""
+
+    moment = str(moment_precision).lower()
+    reconstruction = str(reconstruction_precision).lower()
+    if moment == reconstruction == "fp64":
+        return "fp64"
+    if moment == reconstruction == "fp32":
+        return "fp32"
+    return "mixed"
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def stable_json(value: Any) -> str:
+    return json.dumps(_jsonable(value), sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def stable_hash(value: Any, *, length: int = 16) -> str:
+    return hashlib.sha256(stable_json(value).encode("utf-8")).hexdigest()[:length]
+
+
+def build_comparison_key(row: dict[str, Any]) -> dict[str, Any]:
+    """Build the physics/numerics fingerprint shared by CPU/GPU rows.
+
+    Performance-strategy fields (OMP count, BLAS count, backend spelling,
+    CUDA tiles and stochastic block width) are intentionally absent.
+    """
+
+    mode = row.get("numeric_mode") or numeric_mode(
+        row.get("moment_precision"), row.get("reconstruction_precision")
+    )
+    operator = row.get("current_operator")
+    if operator is None:
+        operator = {
+            "va": row.get("va"),
+            "vb": row.get("vb"),
+            "spin_orbital_selector": row.get("spin_orbital_selector"),
+        }
+    key = {
+        "material": row.get("material"),
+        "fixture_id": row.get("fixture_id"),
+        "fixture_revision": row.get("fixture_revision"),
+        "replication": row.get("replication"),
+        "N": row.get("N"),
+        "nnz": row.get("nnz"),
+        "nsp": row.get("nsp"),
+        "soc_state": row.get("soc_state"),
+        "cond_type": row.get("cond_type"),
+        "current_operator": operator,
+        "cond_calctype": row.get("cond_calctype"),
+        "Ntrace": row.get("Ntrace", row.get("random_vec_num")),
+        "projector_count": row.get("projector_count", row.get("Ntrace")),
+        "random_seed": row.get("random_seed") if row.get("cond_calctype") == "random_vec" else
+                       row.get("projector_identifier", "per_type_projectors"),
+        "vector_contract": row.get(
+            "vector_contract",
+            "uniform_unit_phase_normalized_by_sqrt_sites" if row.get("cond_calctype") == "random_vec"
+            else "deterministic_type_projectors",
+        ),
+        "M": row.get("M"),
+        "lld": row.get("lld"),
+        "NE": row.get("NE"),
+        "channels": row.get("channels", row.get("NE")),
+        "rc": row.get("rc"),
+        "energy_min": row.get("energy_min"),
+        "energy_max": row.get("energy_max"),
+        "fermi": row.get("fermi"),
+        "kernel": row.get("kernel", {"name": "Lorentz", "alpha": 6.0}),
+        "chebyshev_scaling": row.get(
+            "chebyshev_scaling",
+            {"contract": "(E-b)/a", "window": [row.get("energy_min"), row.get("energy_max")]},
+        ),
+        "numeric_mode": mode,
+        "canonical_output_precision": row.get("canonical_output_precision", "fp64"),
+    }
+    return {field: key[field] for field in COMPARISON_KEY_FIELDS}
+
+
+def comparison_key_fingerprint(row: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    key = build_comparison_key(row)
+    return key, stable_hash(key)
+
+
+def _comparison_key_without_mode(row: dict[str, Any]) -> dict[str, Any]:
+    key = build_comparison_key(row)
+    key.pop("numeric_mode", None)
+    return key
+
+
+def empty_correctness(reason: str = "correctness_missing") -> dict[str, Any]:
+    return {
+        "status": "NOT_APPLICABLE",
+        "reference_row_id": None,
+        "tolerance_set": None,
+        "moment": {"available": False, "max_abs": None, "rel_l2": None},
+        "conductivity_spectrum": {"available": False, "max_abs": None, "rel_l2": None},
+        "integrated_or_tensor": {"available": False, "max_abs": None, "rel": None},
+        "validation_evidence_id": None,
+        "reason": reason,
+    }
+
+
+def _numeric_file_values(path: Path) -> list[float]:
+    values: list[float] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        for token in line.split():
+            try:
+                value = float(token.replace("D", "E").replace("d", "e"))
+            except ValueError:
+                continue
+            if math.isfinite(value):
+                values.append(value)
+    return values
+
+
+def _file_metrics(reference: list[float], candidate: list[float]) -> dict[str, Any]:
+    if len(reference) != len(candidate) or not reference:
+        return {"available": False, "max_abs": None, "rel_l2": None, "reason": "shape_mismatch_or_empty"}
+    differences = [abs(left - right) for left, right in zip(reference, candidate)]
+    scale = math.sqrt(sum(value * value for value in reference))
+    diff_norm = math.sqrt(sum(value * value for value in (left - right for left, right in zip(reference, candidate))))
+    return {
+        "available": True,
+        "max_abs": max(differences),
+        "rel_l2": diff_norm / max(scale, 1.0e-30),
+    }
+
+
+def compare_production_outputs(reference_dir: Path, candidate_dir: Path, *, mode: str,
+                               reference_row_id: str | None = None,
+                               evidence_dir: Path | None = None) -> dict[str, Any]:
+    """Compare canonical production conductivity files without reimplementing physics."""
+
+    if mode not in KPM_TOLERANCE_SETS:
+        result = empty_correctness("mixed_rows_are_not_equal_precision_evidence")
+        result["reference_row_id"] = reference_row_id
+        return result
+    reference_files = {path.name: path for path in reference_dir.glob("*cond*.out")}
+    candidate_files = {path.name: path for path in candidate_dir.glob("*cond*.out")}
+    common = sorted(set(reference_files) & set(candidate_files))
+    if not common:
+        result = empty_correctness("production_conductivity_outputs_missing")
+        result["reference_row_id"] = reference_row_id
+        return result
+    file_results = {
+        name: _file_metrics(_numeric_file_values(reference_files[name]), _numeric_file_values(candidate_files[name]))
+        for name in common
+    }
+    available = [item for item in file_results.values() if item.get("available")]
+    if not available:
+        result = empty_correctness("production_conductivity_output_shape_mismatch")
+        result["reference_row_id"] = reference_row_id
+        result["conductivity_spectrum"]["files"] = file_results
+        return result
+    max_abs = max(float(item["max_abs"]) for item in available)
+    rel_l2 = max(float(item["rel_l2"]) for item in available)
+    # The first numeric row nearest the Fermi edge is the established VAL-09
+    # tensor/integrated-value anchor; all energy samples remain in the spectrum
+    # metric above.
+    tensor_files = [name for name in common if "cond_total" in name]
+    tensor_values = [file_results[name] for name in tensor_files if file_results[name].get("available")]
+    tensor_abs = max((float(item["max_abs"]) for item in tensor_values), default=max_abs)
+    tensor_rel = max((float(item["rel_l2"]) for item in tensor_values), default=rel_l2)
+    tolerance = KPM_TOLERANCE_SETS[mode]
+    passed = max_abs <= tolerance["max_abs"] and rel_l2 <= tolerance["rel_l2"] and tensor_rel <= tolerance["integrated_rel"]
+    evidence_id = stable_hash({"reference": str(reference_dir), "candidate": str(candidate_dir),
+                               "files": common, "mode": mode})
+    result = {
+        "status": "PASS" if passed else "FAIL",
+        "reference_row_id": reference_row_id,
+        "tolerance_set": {"name": mode, **tolerance},
+        "moment": {"available": False, "max_abs": None, "rel_l2": None,
+                   "evidence": "optimized production path intentionally keeps full moments off host",
+                   "evidence_id": evidence_id},
+        "conductivity_spectrum": {"available": True, "max_abs": max_abs, "rel_l2": rel_l2,
+                                   "files": file_results},
+        "integrated_or_tensor": {"available": True, "max_abs": tensor_abs, "rel": tensor_rel},
+        "validation_evidence_id": evidence_id,
+        "compared_files": common,
+    }
+    if evidence_dir is not None:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_dir / "comparison.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return result
+
+
+def validate_pairing(cpu: dict[str, Any], gpu: dict[str, Any]) -> dict[str, Any]:
+    """Return an auditable decision; never select a nearby row implicitly."""
+
+    reasons: list[str] = []
+    cpu_mode = cpu.get("numeric_mode") or numeric_mode(cpu.get("moment_precision"), cpu.get("reconstruction_precision"))
+    gpu_mode = gpu.get("numeric_mode") or numeric_mode(gpu.get("moment_precision"), gpu.get("reconstruction_precision"))
+    if _comparison_key_without_mode(cpu) != _comparison_key_without_mode(gpu):
+        reasons.append("physics_mismatch")
+    if cpu_mode != gpu_mode:
+        reasons.append("precision_mismatch")
+    if cpu_mode not in {"fp32", "fp64"} or gpu_mode not in {"fp32", "fp64"}:
+        reasons.append("mixed_precision_not_headline")
+    if cpu.get("cond_calctype") == "random_vec" or gpu.get("cond_calctype") == "random_vec":
+        if cpu.get("random_seed") != gpu.get("random_seed"):
+            reasons.append("seed_mismatch")
+        if cpu.get("Ntrace") != gpu.get("Ntrace"):
+            reasons.append("Ntrace_mismatch")
+        if cpu.get("vector_contract") != gpu.get("vector_contract"):
+            reasons.append("vector_contract_mismatch")
+    for row in (cpu, gpu):
+        correctness = row.get("correctness") or {}
+        if correctness.get("status") == "FAIL":
+            reasons.append("correctness_failed")
+        elif correctness.get("status") != "PASS":
+            reasons.append("correctness_missing")
+        if row.get("profile_status") != "PASS":
+            reasons.append("profile_failed")
+        if row.get("output_mode", "production") == "benchmark_no_write":
+            reasons.append("benchmark_no_write")
+    unique_reasons = list(dict.fromkeys(reasons))
+    return {
+        "eligible": not unique_reasons,
+        "reasons": unique_reasons,
+        "cpu_numeric_mode": cpu_mode,
+        "gpu_numeric_mode": gpu_mode,
+        "comparison_key_equal": _comparison_key_without_mode(cpu) == _comparison_key_without_mode(gpu),
+    }
 
 
 def validate_kpm_profile(
@@ -406,21 +666,117 @@ def _git_commit(repo: Path) -> str | None:
     return completed.stdout.strip() or None
 
 
-def _gpu_model() -> str | None:
+def _git_dirty(repo: Path) -> bool | None:
     try:
         completed = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=2,
+            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=no"],
+            check=False, capture_output=True, text=True, timeout=3,
         )
     except (OSError, subprocess.SubprocessError):
         return None
     if completed.returncode:
         return None
-    names = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-    return ", ".join(names) if names else None
+    if completed.stdout.strip():
+        return True
+    try:
+        untracked = subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "--others", "--exclude-standard", "--directory", "-z"],
+            check=False, capture_output=True, timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        # A repository with a very large build tree is conservatively dirty;
+        # provenance must never claim a clean tree after an incomplete scan.
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if untracked.returncode:
+        return None
+    return bool(untracked.stdout)
+
+
+def _command_text(command: list[str], timeout: float = 2.0) -> str | None:
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode:
+        return None
+    return completed.stdout.strip() or None
+
+
+def _selected_gpu_metadata() -> dict[str, Any]:
+    selected = os.environ.get("RSLMTO_GPU_DEVICE") or os.environ.get("CUDA_DEVICE")
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    selected_index = selected if selected is not None else (visible.split(",")[0].strip() if visible else "0")
+    query = _command_text([
+        "nvidia-smi", f"--id={selected_index}",
+        "--query-gpu=index,name,memory.total,compute_cap,driver_version",
+        "--format=csv,noheader,nounits",
+    ])
+    if not query:
+        return {
+            "selected_gpu_index": selected_index if visible or selected else None,
+            "gpu_model": None, "gpu_vram_mib": None, "gpu_compute_capability": None,
+            "cuda_driver": None,
+        }
+    fields = [part.strip() for part in query.splitlines()[0].split(",")]
+    return {
+        "selected_gpu_index": fields[0] if len(fields) > 0 else selected_index,
+        "gpu_model": fields[1] if len(fields) > 1 else None,
+        "gpu_vram_mib": int(float(fields[2])) if len(fields) > 2 and fields[2].replace(".", "", 1).isdigit() else None,
+        "gpu_compute_capability": fields[3] if len(fields) > 3 else None,
+        "cuda_driver": fields[4] if len(fields) > 4 else None,
+    }
+
+
+def _cpu_model() -> str | None:
+    try:
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.lower().startswith("model name") and ":" in line:
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or platform.machine() or None
+
+
+def _memory_mib() -> int | None:
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _cpu_counts() -> tuple[int | None, int | None]:
+    logical = os.cpu_count()
+    physical: int | None = None
+    cores: str | None = None
+    sockets: str | None = None
+    text = _command_text(["lscpu"])
+    if text:
+        for line in text.splitlines():
+            if line.startswith("Core(s) per socket:"):
+                cores = line.split(":", 1)[1].strip()
+            elif line.startswith("Socket(s):"):
+                sockets = line.split(":", 1)[1].strip()
+            else:
+                continue
+            if cores is None or sockets is None:
+                continue
+    if cores is not None and sockets is not None:
+        try:
+            physical = int(cores) * int(sockets)
+        except ValueError:
+            physical = None
+    return physical, logical
 
 
 def capture_environment(
@@ -430,6 +786,7 @@ def capture_environment(
     omp_threads: int | None = None,
     blas_threads: int | None = None,
     mpi_ranks: int | None = None,
+    selected_gpu_index: str | None = None,
 ) -> dict[str, Any]:
     """Capture stable environment fields, retaining nulls for unavailable GPU data."""
 
@@ -460,20 +817,51 @@ def capture_environment(
             or os.environ.get("OPENBLAS_NUM_THREADS")
         )
     ranks = mpi_ranks if mpi_ranks is not None else os.environ.get("RSLMTO_MPI_RANKS", "1")
+    gpu = _selected_gpu_metadata()
+    if selected_gpu_index is not None:
+        gpu["selected_gpu_index"] = selected_gpu_index
+    cuda_version = cache.get("CUDAToolkit_VERSION") or cache.get("CMAKE_CUDA_COMPILER_VERSION")
+    if cuda_version is None:
+        nvcc_version = _command_text(["nvcc", "--version"])
+        if nvcc_version:
+            match = re.search(r"release\s+([0-9.]+)", nvcc_version)
+            cuda_version = match.group(1) if match else nvcc_version.splitlines()[-1]
+    flags = {
+        key: value for key, value in cache.items()
+        if key in {"CMAKE_Fortran_FLAGS", "CMAKE_Fortran_FLAGS_RELEASE", "CMAKE_C_FLAGS", "CMAKE_CUDA_FLAGS"}
+    }
+    physical_cpu_count, logical_cpu_count = _cpu_counts()
+    unavailable: dict[str, str] = {}
+    for key in ("cpu_governor", "numa_topology"):
+        unavailable[key] = "not collected by default" if not os.environ.get("RSLMTO_CAPTURE_OPTIONAL_HW") else "unavailable"
     return {
         "git_commit": _git_commit(repo),
+        "git_dirty": _git_dirty(repo),
         "compiler": compiler,
+        "compiler_version": compiler_version,
         "build_type": cache.get("CMAKE_BUILD_TYPE") or "unspecified",
+        "optimization_flags": flags or None,
         "blas_lapack": blas,
         "omp_threads": int(omp) if str(omp).isdigit() else omp,
         "blas_threads": int(blas_thread_value) if str(blas_thread_value).isdigit() else blas_thread_value,
         "omp_proc_bind": os.environ.get("OMP_PROC_BIND"),
         "omp_places": os.environ.get("OMP_PLACES"),
         "mpi_ranks": int(ranks) if str(ranks).isdigit() else ranks,
-        "cuda_toolkit": cache.get("CUDAToolkit_VERSION") or cache.get("CMAKE_CUDA_COMPILER_VERSION"),
+        "cuda_toolkit": cuda_version,
         "cusolver": cache.get("CUDAToolkit_cusolver_VERSION"),
-        "gpu_model": _gpu_model(),
-        "cpu_model": platform.processor() or platform.machine(),
+        "cuda_driver": gpu["cuda_driver"],
+        "gpu_model": gpu["gpu_model"],
+        "gpu_vram_mib": gpu["gpu_vram_mib"],
+        "gpu_compute_capability": gpu["gpu_compute_capability"],
+        "selected_gpu_index": gpu["selected_gpu_index"],
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "cpu_model": _cpu_model(),
+        "physical_cpu_count": physical_cpu_count,
+        "logical_cpu_count": logical_cpu_count,
+        "ram_mib": _memory_mib(),
+        "os": platform.platform(),
+        "kernel": platform.release(),
+        "optional_metadata_unavailable": unavailable,
     }
 
 

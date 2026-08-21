@@ -5,6 +5,30 @@
 
 **Purpose:** establish the true GPU performance of the real-space KPM/Kubo–Bastin transport implementation under realistic production workloads, improve the stochastic-moment GPU path where profiling justifies it, and produce like-for-like CPU/GPU evidence suitable for scientific and performance discussions.
 
+## Consolidated task status
+
+The optimization campaign is closed and the fair benchmark harness is now
+consolidated in the B0C workflow (`tests/benchmarks/kpm_g12_transport.py`):
+
+```text
+G0    DONE
+G1    DONE
+G1.1  DONE
+G1.2  DONE
+G1.3  DONE
+G1.4  DONE
+G2    DONE
+G3    SUPERSEDED by G1.3/G1.4
+B0C   DONE after this task
+B1    NEXT
+```
+
+The old G3 reconstruction plan is retained below as historical discussion and
+is superseded by the resident GPU reconstruction already delivered in G1.3
+and the fixed-overhead cleanup in G1.4. B1 is the next and final substantive
+real-material campaign; no further harness redesign is expected unless B0C
+finds a correctness or pairing defect.
+
 ---
 
 # 0. Why this follow-up is needed
@@ -1449,21 +1473,21 @@ Never mix these.
 
 ## Checklist
 
-- [ ] all benchmark dimensions recorded
-- [ ] OMP 1/2/4/8 sweep automated
-- [ ] BLAS/OpenMP oversubscription controlled
-- [ ] same-precision pairing enforced
-- [ ] mixed precision separately labelled
-- [ ] stochastic seeds paired
-- [ ] warmups automated
-- [ ] repeated medians/spread reported
-- [ ] stage timing captured
-- [ ] correctness result attached to each paired row
-- [ ] CPU-best comparator selected transparently
-- [ ] CSV generated
-- [ ] JSON generated
-- [ ] Markdown generated
-- [ ] git/hardware/build metadata generated
+- [x] all benchmark dimensions recorded
+- [x] OMP 1/2/4/8 sweep automated
+- [x] BLAS/OpenMP oversubscription controlled
+- [x] same-precision pairing enforced
+- [x] mixed precision separately labelled
+- [x] stochastic seeds paired
+- [x] warmups automated
+- [x] repeated medians/spread reported
+- [x] stage timing captured
+- [x] correctness result attached to each paired row
+- [x] CPU-best comparator selected transparently
+- [x] CSV generated
+- [x] JSON generated
+- [x] Markdown generated
+- [x] git/hardware/build metadata generated
 
 **Commit message:** `Add fair KPM CPU GPU benchmark harness`
 

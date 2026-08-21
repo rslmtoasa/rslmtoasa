@@ -555,7 +555,9 @@ contains
             trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
             this%control%lld, loop_over)
       else
-         call g_kpm_profile%configure('cpu_fast', precision_label, 'cpu_blas', 'fp64', &
+         call g_kpm_profile%configure('cpu_fast', precision_label, &
+            merge('cpu_cblas', 'cpu_blas ', trim(this%control%cpu_reconstruction_precision) == 'fp32'), &
+            merge('fp32', 'fp64', trim(this%control%cpu_reconstruction_precision) == 'fp32'), &
             trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
             this%control%lld, loop_over)
       end if

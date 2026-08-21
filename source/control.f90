@@ -192,6 +192,9 @@ module control_mod
       !> KPM-G2 block path. This control is ignored for per_type transport.
       integer :: gpu_stochastic_block
       character(len=16) :: cheb_backend
+      !> CPU transport reconstruction precision. The default preserves the
+      !> historical FP32-moment/FP64-reconstruction mixed route.
+      character(len=16) :: cpu_reconstruction_precision
 
       !> Number of recursion levels for the conductivity tensor calculation
       !>
@@ -349,6 +352,7 @@ contains
       gpu_moment_download = this%gpu_moment_download
       gpu_stochastic_block = this%gpu_stochastic_block
       cheb_backend = this%cheb_backend
+      cpu_reconstruction_precision = this%cpu_reconstruction_precision
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
       cond_type = this%cond_type
@@ -416,6 +420,7 @@ contains
       this%gpu_moment_download = gpu_moment_download
       this%gpu_stochastic_block = gpu_stochastic_block
       this%cheb_backend = cheb_backend
+      this%cpu_reconstruction_precision = cpu_reconstruction_precision
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
       this%cond_type = cond_type
@@ -514,6 +519,7 @@ contains
       this%gpu_moment_download = .false.
       this%gpu_stochastic_block = 1
       this%cheb_backend = 'fast'
+      this%cpu_reconstruction_precision = 'fp64'
       this%fname = ''
       this%hyperfine = .false.
       this%sym_term = .false.
@@ -582,6 +588,7 @@ contains
       gpu_moment_download = this%gpu_moment_download
       gpu_stochastic_block = this%gpu_stochastic_block
       cheb_backend = this%cheb_backend
+      cpu_reconstruction_precision = this%cpu_reconstruction_precision
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -648,6 +655,7 @@ contains
       call nml%add('gpu_moment_download', this%gpu_moment_download)
       call nml%add('gpu_stochastic_block', this%gpu_stochastic_block)
       call nml%add('cheb_backend', this%cheb_backend)
+      call nml%add('cpu_reconstruction_precision', this%cpu_reconstruction_precision)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
 
@@ -695,6 +703,10 @@ contains
       end if
       if (this%gpu_stochastic_block < 1) then
          call g_logger%fatal('control%gpu_stochastic_block must be >= 1.', __FILE__, __LINE__)
+      end if
+      if (this%cpu_reconstruction_precision /= 'fp32' .and. &
+          this%cpu_reconstruction_precision /= 'fp64') then
+         call g_logger%fatal('control%cpu_reconstruction_precision must be ''fp32'' or ''fp64''.', __FILE__, __LINE__)
       end if
       if (this%cheb_backend /= 'fast' &
           .and. this%cheb_backend /= 'fast_dp' &

@@ -35,7 +35,8 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
                gpu_backend: str = "csr", lld: int | None = None,
                cheb_backend: str = "legacy", gpu_precision: str = "fp32",
                cond_calctype: str = "per_type", random_vec_num: int = 1,
-               gpu_stochastic_block: int = 1) -> None:
+               gpu_stochastic_block: int = 1,
+               cpu_reconstruction_precision: str | None = None) -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
     shutil.copytree(base, workdir)
@@ -58,6 +59,8 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
     }
     if lld is not None:
         patch["control"]["lld"] = lld
+    if cpu_reconstruction_precision is not None:
+        patch["control"]["cpu_reconstruction_precision"] = cpu_reconstruction_precision
     patched = workdir / "input.patched.nml"
     f90nml.patch(str(workdir / "input.nml"), patch, str(patched))
     patched.replace(workdir / "input.nml")
