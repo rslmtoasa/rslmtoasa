@@ -183,6 +183,57 @@ contains
                  u, size(u, 1), beta, c, ne)
    end subroutine gamma_mu_cblas
 
+   !> @brief Batch the zero-temperature Fermi-weighted Simpson integral.
+   !> @details The conductivity route always calls simpson_f with
+   !>          fermi=.true., dfermi=.false., and T=0.  With the same energy
+   !>          grid used for both Ene and EF, fermifun is exactly one below
+   !>          the requested grid point, one half at that point, and zero
+   !>          above it (the 1e-15 kBT floor is many orders below the grid
+   !>          spacing).  Prefixing the fixed Simpson weights preserves that
+   !>          calculation while reducing the repeated NE-by-NE work to
+   !>          O(NE*ncolumn).
+   subroutine integrate_fermi_batch(ene, y, result)
+      real(rp), intent(in) :: ene(:), y(:, :)
+      real(rp), intent(out) :: result(:, :)
+      integer :: i, j, n, ncolumn, simpson_end
+      real(rp) :: h, coefficient, running
+
+      n = size(ene)
+      ncolumn = size(y, 2)
+      if (size(y, 1) /= n .or. size(result, 1) /= n .or. size(result, 2) /= ncolumn) then
+         result = 0.0_rp
+         return
+      end if
+
+      h = ene(2) - ene(1)
+      ! simpson_f is called with NPTS = size(Ene)-9 and its last panel ends
+      ! at NPTS+8 = size(Ene)-1.  The final grid point is retained for the
+      ! Fermi-edge query but is not part of the Simpson domain.
+      simpson_end = n - 1
+      result = 0.0_rp
+      do j = 1, ncolumn
+         running = 0.0_rp
+         do i = 1, n
+            if (i == 1 .or. i == simpson_end) then
+               coefficient = 1.0_rp
+            else if (i < simpson_end .and. mod(i, 2) == 0) then
+               coefficient = 4.0_rp
+            else if (i < simpson_end) then
+               ! Interior odd points occur as the upper endpoint of one
+               ! Simpson panel and the lower endpoint of the next one.
+               coefficient = 2.0_rp
+            else
+               coefficient = 0.0_rp
+            end if
+            ! Add the half-weight endpoint before advancing the prefix.  This
+            ! retains the same ascending summation order as simpson_f for the
+            ! zero-temperature grid-point Fermi edge.
+            result(i, j) = h*(running + 0.5_rp*coefficient*y(i, j))/3.0_rp
+            running = running + coefficient*y(i, j)
+         end do
+      end do
+   end subroutine integrate_fermi_batch
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -289,7 +340,7 @@ contains
          end if
       end if
 
-      call g_kpm_profile%start('P_gamma')
+      call g_kpm_profile%start('P_gamma_basis_setup')
       
       ! Initialize global variable
 #ifdef USE_SAFE_ALLOC
@@ -332,8 +383,10 @@ contains
          chebyshev_poly(:, n) = 2.0_rp * wscale(:) * chebyshev_poly(:, n - 1) - chebyshev_poly(:, n - 2)
       end do
       call g_kpm_profile%stop('D_gamma_basis')
+      call g_kpm_profile%stop('P_gamma_basis_setup')
 
       ! Initialize Gamma_nm
+      call g_kpm_profile%start('P_gamma_generation')
       call g_kpm_profile%start('D_gamma_fill')
       this%gamma_nm(:, :, :) = 0.0_rp
 
@@ -349,7 +402,7 @@ contains
       ! Clean up
       call g_kpm_profile%stop('D_gamma_fill')
       deallocate(acos_x, sqrt_term, chebyshev_poly, cn, cm, g_kernel, weights)
-      call g_kpm_profile%stop('P_gamma')
+      call g_kpm_profile%stop('P_gamma_generation')
    end subroutine 
 
    subroutine calculate_conductivity_tensor(this)
@@ -364,6 +417,12 @@ contains
       complex(rp), dimension(:, :, :), allocatable :: gpu_reconstruction
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
+      real(rp), dimension(:), allocatable :: integrated_tot_real, integrated_tot_im
+      real(rp), dimension(:), allocatable :: raw_integrand_tot_real, raw_integrand_tot_im
+      real(rp), dimension(:, :), allocatable :: integrated_l_real, integrated_l_im
+      real(rp), dimension(:, :), allocatable :: integrated_type_real, integrated_type_im
+      real(rp), dimension(:, :, :), allocatable :: integrated_type_l_real, integrated_type_l_im
+      real(rp), dimension(:, :), allocatable :: integration_y, integration_result
       complex(rp), dimension(nb) :: temp
       real(rp) :: a, b, real_part, im_part, factor, volume, de
       real(rp) :: gpu_gamma_seconds, gpu_gamma_basis_seconds, gpu_gamma_fill_seconds
@@ -371,7 +430,10 @@ contains
       integer(c_long_long) :: gpu_gamma_h2d_bytes, gpu_gamma_block_bytes, gpu_result_d2h_bytes
       integer :: gpu_energy_block
       integer(int64) :: gpu_complex_bytes
-      logical :: use_gpu_reconstruction
+      logical :: use_gpu_reconstruction, no_write
+      character(len=48), allocatable :: output_debug(:), output_total(:), output_type(:,:)
+      character(len=304), allocatable :: output_orb_real(:), output_orb_im(:)
+      character(len=304), allocatable :: output_type_orb_real(:,:), output_type_orb_im(:,:)
       ! Printing variables
       character(len=*), parameter :: fname_cond_total = "cond_total.out"
       character(len=*), parameter :: fname_cond_orb_real = "cond_total_orb_real.out"
@@ -387,6 +449,11 @@ contains
       ne = this%en%channels_ldos + 10
       m_cond = this%control%cond_ll
       k_cond = m_cond*m_cond
+      allocate(integrated_tot_real(ne), integrated_tot_im(ne))
+      allocate(raw_integrand_tot_real(ne), raw_integrand_tot_im(ne))
+      allocate(integrated_l_real(nb, ne), integrated_l_im(nb, ne))
+      allocate(integration_y(ne, 2*(nb + 1)), integration_result(ne, 2*(nb + 1)))
+      allocate(output_debug(ne), output_total(ne), output_orb_real(ne), output_orb_im(ne))
 
       integrand(:, :, :) = (0.0d0, 0.0d0)
       real_part_l(:) = 0.0d0
@@ -407,9 +474,13 @@ contains
       select case(this%control%cond_calctype)
       case('per_type')
          loop_over = this%lattice%ntype
+         allocate(integrated_type_real(ne, loop_over), integrated_type_im(ne, loop_over))
+         allocate(integrated_type_l_real(nb, ne, loop_over), integrated_type_l_im(nb, ne, loop_over))
+         allocate(output_type(ne, loop_over), output_type_orb_real(ne, loop_over), output_type_orb_im(ne, loop_over))
       case('random_vec')
          loop_over = this%control%random_vec_num
       end select  
+      no_write = g_kpm_profile%output_suppressed()
 
       use_gpu_reconstruction = .false.
       if (associated(this%recursion%gpu_backend)) then
@@ -444,18 +515,20 @@ contains
             gpu_gamma_seconds, gpu_gamma_basis_seconds, gpu_gamma_fill_seconds, &
             gpu_gemm_seconds, gpu_result_d2h_seconds, gpu_gamma_h2d_bytes, &
             gpu_gamma_block_bytes, gpu_result_d2h_bytes, gpu_energy_block)
-         call g_kpm_profile%add_seconds('P_gamma', gpu_gamma_seconds)
+         call g_kpm_profile%add_seconds('P_gamma_basis_setup', gpu_gamma_basis_seconds)
+         call g_kpm_profile%add_seconds('P_gamma_generation', gpu_gamma_fill_seconds)
          call g_kpm_profile%add_seconds('D_gamma_basis', gpu_gamma_basis_seconds)
          call g_kpm_profile%add_seconds('D_gamma_fill', gpu_gamma_fill_seconds)
          call g_kpm_profile%add_seconds('P_reconstruction_total', gpu_gemm_seconds + gpu_result_d2h_seconds)
          call g_kpm_profile%add_seconds('D_reconstruction_BLAS', gpu_gemm_seconds)
          call g_kpm_profile%add_seconds('D_reconstruction_D2H', gpu_result_d2h_seconds)
          call g_kpm_profile%add_bytes('H2D', int(gpu_gamma_h2d_bytes, int64))
-         call g_kpm_profile%add_bytes('D2H', int(gpu_result_d2h_bytes, int64))
+         call g_kpm_profile%add_bytes('RESULT_D2H', int(gpu_result_d2h_bytes, int64))
          call g_kpm_profile%set_gpu_energy_block(gpu_energy_block)
          call g_kpm_profile%set_reconstruction_bytes( &
             int(gpu_gamma_block_bytes, int64), int(k_cond*nb, int64)*gpu_complex_bytes)
 
+         call g_kpm_profile%start('P_result_unpack')
          do ntype = 1, loop_over
             do l2 = 1, nb
                integrand(l2, l2, :) = integrand(l2, l2, :) + gpu_reconstruction(:, l2, ntype)
@@ -464,6 +537,7 @@ contains
                end if
             end do
          end do
+         call g_kpm_profile%stop('P_result_unpack')
       else
       call g_kpm_profile%start('P_reconstruction_total')
       do ntype = 1, loop_over
@@ -488,92 +562,131 @@ contains
       call g_kpm_profile%stop('P_reconstruction_total')
       end if
 
-      call g_kpm_profile%start('P_energy_integration')
+      call g_kpm_profile%start('P_tensor_postprocess')
       integrand_tot_real(:) = 0.0d0
       integrand_tot_im(:) = 0.0d0
-
       do l2 = 1, nb
          integrand_tot_real(:) = integrand_tot_real(:) + real(integrand(l2, l2, :))
          integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand(l2, l2, :))
          integrand_l_real(l2, :) = real(integrand(l2, l2, :))
          integrand_l_im(l2, :) = aimag(integrand(l2, l2, :))
       end do
-      call g_kpm_profile%stop('P_energy_integration')
+      raw_integrand_tot_real = integrand_tot_real
+      raw_integrand_tot_im = integrand_tot_im
+      call g_kpm_profile%stop('P_tensor_postprocess')
 
-      ! Starting writing statements
-      call g_kpm_profile%start('P_output_io')
-      open(unit=3, file=fname_cond_total, status='replace', action='write')
-      open(unit=32, file=fname_cond_orb_real, status='replace', action='write')
-      open(unit=33, file=fname_cond_orb_im,   status='replace', action='write')
-
-      do i = 1, this%en%channels_ldos + 10
-         real_part = 0.0d0; im_part = 0.0d0; real_part_l(:) = 0.0d0; im_part_l(:) = 0.0d0
-         write(123,'(3es16.6)') (a*wscale(i)+b) - this%en%fermi, integrand_tot_real(i), integrand_tot_im(i) 
-         call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
-         call simpson_f(im_part, wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
-         write(3, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part / real(loop_over),  im_part / real(loop_over)
-         do l2 = 1, nb
-            call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
-            call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
-         end do
-         write(32,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:nb) / real(loop_over)
-         write(33,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:nb) / real(loop_over)
+      call g_kpm_profile%start('P_energy_integration')
+      integration_y(:, 1) = integrand_tot_real
+      integration_y(:, 2) = integrand_tot_im
+      do l2 = 1, nb
+         integration_y(:, 2 + l2) = integrand_l_real(l2, :)
+         integration_y(:, 2 + nb + l2) = integrand_l_im(l2, :)
       end do
-      close(3)
-      close(32)
-      close(33)
-      call g_kpm_profile%stop('P_output_io')
-
-
+      call integrate_fermi_batch(wscale, integration_y, integration_result)
+      integrated_tot_real = integration_result(:, 1)
+      integrated_tot_im = integration_result(:, 2)
+      do l2 = 1, nb
+         integrated_l_real(l2, :) = integration_result(:, 2 + l2)
+         integrated_l_im(l2, :) = integration_result(:, 2 + nb + l2)
+      end do
       if (this%control%cond_calctype == 'per_type') then
-         ! Loop over each atomic type
          do ntype = 1, loop_over
-
-            call g_kpm_profile%start('P_energy_integration')
             integrand_tot_real(:) = 0.0d0
-            integrand_tot_im(:)   = 0.0d0
-            integrand_l_real(:, :) = 0.0d0
-            integrand_l_im(:, :) = 0.0d0 
-
+            integrand_tot_im(:) = 0.0d0
             do l2 = 1, nb
                integrand_tot_real(:) = integrand_tot_real(:) + real(integrand_at(l2, l2, :, ntype))
-               integrand_tot_im(:)   = integrand_tot_im(:)   + aimag(integrand_at(l2, l2, :, ntype))
+               integrand_tot_im(:) = integrand_tot_im(:) + aimag(integrand_at(l2, l2, :, ntype))
                integrand_l_real(l2, :) = real(integrand_at(l2, l2, :, ntype))
                integrand_l_im(l2, :) = aimag(integrand_at(l2, l2, :, ntype))
             end do
-            call g_kpm_profile%stop('P_energy_integration')
-         
-            fname_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond.out"
-            fname_orb_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond_orb_real.out"
-            fname_orb_i = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // "_cond_orb_im.out"
-
-            call g_kpm_profile%start('P_output_io')
-            open(unit=100+ntype, file=fname_r, status='replace', action='write')
-            open(unit=300+ntype, file=fname_orb_r, status='replace', action='write')
-            open(unit=400+ntype, file=fname_orb_i, status='replace', action='write')
-         
-            do i = 1, this%en%channels_ldos + 10
-               real_part = 0.0d0; im_part = 0.0d0; real_part_l(:) = 0.0d0; im_part_l(:) = 0.0d0
-               ! Integrate over wscale for real and imaginary
-               call simpson_f(real_part, wscale, wscale(i), this%en%nv1, integrand_tot_real(:), .true., .false., 0.0d0)
-               call simpson_f(im_part,   wscale, wscale(i), this%en%nv1, integrand_tot_im(:), .true., .false., 0.0d0)
-               write(100+ntype, '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part, im_part
-               do l2 = 1, nb
-                  call simpson_f(real_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_real(l2, :), .true., .false., 0.0d0)
-                  call simpson_f(im_part_l(l2), wscale, wscale(i), this%en%nv1, integrand_l_im(l2, :), .true., .false., 0.0d0)
-               end do
-               write(300+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, real_part_l(1:nb) 
-               write(400+ntype,'(19es16.6)') (a*wscale(i)+b) - this%en%fermi, im_part_l(1:nb) 
-               end do
-            close(100+ntype)
-            close(300+ntype)
-            close(400+ntype)
-            call g_kpm_profile%stop('P_output_io')
-         end do  ! end do over ntype
+            integration_y(:, 1) = integrand_tot_real
+            integration_y(:, 2) = integrand_tot_im
+            do l2 = 1, nb
+               integration_y(:, 2 + l2) = integrand_l_real(l2, :)
+               integration_y(:, 2 + nb + l2) = integrand_l_im(l2, :)
+            end do
+            call integrate_fermi_batch(wscale, integration_y, integration_result)
+            integrated_type_real(:, ntype) = integration_result(:, 1)
+            integrated_type_im(:, ntype) = integration_result(:, 2)
+            do l2 = 1, nb
+               integrated_type_l_real(l2, :, ntype) = integration_result(:, 2 + l2)
+               integrated_type_l_im(l2, :, ntype) = integration_result(:, 2 + nb + l2)
+            end do
+         end do
       end if
-      ! End writing statements
+      call g_kpm_profile%stop('P_energy_integration')
 
-      deallocate(integrand, integrand_tot_real, integrand_tot_im, wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at)
+      ! Format all output records before opening any output file. This keeps
+      ! formatting/buffer preparation measurable and lets the benchmark-only
+      ! no-write mode execute the same preparation without filesystem writes.
+      call g_kpm_profile%start('P_output_prepare')
+      do i = 1, ne
+         write(output_debug(i), '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+            raw_integrand_tot_real(i), raw_integrand_tot_im(i)
+         write(output_total(i), '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+            integrated_tot_real(i) / real(loop_over), integrated_tot_im(i) / real(loop_over)
+         write(output_orb_real(i), '(19es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+            integrated_l_real(:, i) / real(loop_over)
+         write(output_orb_im(i), '(19es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+            integrated_l_im(:, i) / real(loop_over)
+      end do
+      if (this%control%cond_calctype == 'per_type') then
+         do ntype = 1, loop_over
+            do i = 1, ne
+               write(output_type(i, ntype), '(3es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+                  integrated_type_real(i, ntype), integrated_type_im(i, ntype)
+               write(output_type_orb_real(i, ntype), '(19es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+                  integrated_type_l_real(:, i, ntype)
+               write(output_type_orb_im(i, ntype), '(19es16.6)') (a*wscale(i)+b) - this%en%fermi, &
+                  integrated_type_l_im(:, i, ntype)
+            end do
+         end do
+      end if
+      call g_kpm_profile%stop('P_output_prepare')
+
+      call g_kpm_profile%start('P_output_io')
+      if (.not. no_write) then
+         open(unit=3, file=fname_cond_total, status='replace', action='write')
+         open(unit=32, file=fname_cond_orb_real, status='replace', action='write')
+         open(unit=33, file=fname_cond_orb_im, status='replace', action='write')
+         do i = 1, ne
+            write(123, '(A)') output_debug(i)
+            write(3, '(A)') output_total(i)
+            write(32, '(A)') output_orb_real(i)
+            write(33, '(A)') output_orb_im(i)
+         end do
+         close(3)
+         close(32)
+         close(33)
+
+         if (this%control%cond_calctype == 'per_type') then
+            do ntype = 1, loop_over
+               fname_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond.out'
+               fname_orb_r = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond_orb_real.out'
+               fname_orb_i = trim(this%lattice%symbolic_atoms(ntype)%element%symbol) // '_cond_orb_im.out'
+               open(unit=100+ntype, file=fname_r, status='replace', action='write')
+               open(unit=300+ntype, file=fname_orb_r, status='replace', action='write')
+               open(unit=400+ntype, file=fname_orb_i, status='replace', action='write')
+               do i = 1, ne
+                  write(100+ntype, '(A)') output_type(i, ntype)
+                  write(300+ntype, '(A)') output_type_orb_real(i, ntype)
+                  write(400+ntype, '(A)') output_type_orb_im(i, ntype)
+               end do
+               close(100+ntype)
+               close(300+ntype)
+               close(400+ntype)
+            end do
+         end if
+      end if
+      call g_kpm_profile%stop('P_output_io')
+
+      deallocate(integrand, integrand_tot_real, integrand_tot_im, raw_integrand_tot_real, raw_integrand_tot_im, &
+         wscale, real_part_l, im_part_l, integrand_l_real, integrand_l_im, integrand_at, &
+         integrated_tot_real, integrated_tot_im, integrated_l_real, integrated_l_im, &
+         integration_y, integration_result, &
+         output_debug, output_total, output_orb_real, output_orb_im)
+      if (allocated(integrated_type_real)) deallocate(integrated_type_real, integrated_type_im, &
+         integrated_type_l_real, integrated_type_l_im, output_type, output_type_orb_real, output_type_orb_im)
       if (allocated(gpu_reconstruction)) deallocate(gpu_reconstruction)
       if (allocated(mu_diag)) deallocate(mu_diag, gamma_mu)
    end subroutine calculate_conductivity_tensor

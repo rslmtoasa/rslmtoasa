@@ -886,9 +886,12 @@ contains
       ! runs unchanged. exact-vs-recursion on the same crystal is the direct KPM
       ! error bound (see docs/dev/route_agnostic_estimators.md).
       rec_moments = (trim(this%gf_route) == 'recursion')
-      call prepare_post_processing_stack(this, .false., .false., .true., rec_moments, control_obj, lattice_obj, &
+      call g_kpm_profile%start('P_stack_setup')
+      call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
+      call g_kpm_profile%stop('P_stack_setup')
+      if (rec_moments) call recursion_obj%compute_moments_stochastic()
       if (.not. rec_moments) then
          ! Exact k-space moments on the SAME Chebyshev window the recursion route
          ! and gamma_nm use (resolve_chebyshev_window -> a, b). The reciprocal
@@ -908,7 +911,9 @@ contains
          call reciprocal_obj%fill_moments(recursion_obj%mu_nm_stochastic, a_scale, b_scale)
       end if
       self_obj = self(bands_obj, mix_obj)
+      call g_kpm_profile%start('P_moment_finalize')
       call finish_conductivity_moments(green_obj, bands_obj)
+      call g_kpm_profile%stop('P_moment_finalize')
       conductivity_obj = conductivity(self_obj)
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
@@ -943,11 +948,16 @@ contains
       call g_kpm_profile%reset()
       call g_kpm_profile%start('T_transport_total')
 
-      call prepare_post_processing_stack(this, .true., .false., .true., .true., control_obj, lattice_obj, &
+      call g_kpm_profile%start('P_stack_setup')
+      call prepare_post_processing_stack(this, .true., .false., .true., .false., control_obj, lattice_obj, &
                                          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, &
                                          green_obj, bands_obj)
+      call g_kpm_profile%stop('P_stack_setup')
+      call recursion_obj%compute_moments_stochastic()
       self_obj = self(bands_obj, mix_obj)
+      call g_kpm_profile%start('P_moment_finalize')
       call finish_conductivity_moments(green_obj, bands_obj)
+      call g_kpm_profile%stop('P_moment_finalize')
       conductivity_obj = conductivity(self_obj)
       call conductivity_obj%calculate_gamma_nm()
       call conductivity_obj%calculate_conductivity_tensor()
