@@ -1,0 +1,36 @@
+[Aug 21 2026 15:47:45.992] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Aug 21 2026 15:47:46.436] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Aug 21 2026 15:47:46.528] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+[Aug 21 2026 15:47:46.571] [recursion_transport.f90:711]  [1m[32m<info> [0m[0mChebyshev moments being calculated taking atom type 1
+[Aug 21 2026 15:47:59.360] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+[Aug 21 2026 15:47:59.388] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:        8.000000
+[Aug 21 2026 15:47:59.391] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.069099
+  0.37202031986418188       0.50000000000000000        3.7000000000000002     
+ KPM_PROFILE backend=cpu moment_backend=cpu_fast moment_precision=fp32 reconstruction_backend=cpu_cblas reconstruction_precision=fp32 precision=fp32_fp32 estimator=per_type N=                  1152 nnz=                180792 M=          500 lld=          150 Ntrace=            1 trace_block_width=            1 trace_batches=            0 OMP_NUM_THREADS=8 BLAS_NUM_THREADS=1 random_seed=unset omp_threads=8 blas_threads=1 clock_source=system_clock_wall bytes_h2d=                     0 bytes_d2h=                     0 bytes_gamma=           10040000000 bytes_mu_pack=              72000000 resident_device_moment_bytes=                     0 host_full_moment_bytes=            1296000000 full_moment_d2h_bytes=                     0 reduced_result_d2h_bytes=                     0 gpu_energy_block=            0 output_mode=production P_operator_setup=    1.9434199999999999E-004 P_trace_setup=    4.1942440999999997E-002 P_moments_total=    12.781269066000000      P_gamma_basis_setup=   0.10583225600000000      P_gamma_generation=    6.6126168600000002      P_reconstruction_total=   0.97936862800000002      P_result_unpack=    0.0000000000000000      P_energy_integration=    2.6418440000000000E-003 P_tensor_postprocess=    6.7201800000000003E-004 P_output_prepare=    6.0745263000000001E-002 P_output_io=    3.7922260000000001E-003 P_stack_setup=   0.53653002100000002      P_moment_finalize=    4.4842294999999997E-002 P_misc=    4.8894050419999999      P_operator=    1.9434199999999999E-004 P_gamma=    6.7184491160000004      P_other=    4.8894050419999999      D_moment_H2D=    0.0000000000000000      D_moment_GPU_kernel=    0.0000000000000000      D_moment_D2H=    0.0000000000000000      D_conversion=    0.0000000000000000      D_mu_pack=    9.2047643999999998E-002 D_reconstruction_BLAS=   0.88636188500000002      D_gamma_basis=    0.0000000000000000      D_gamma_fill=    0.0000000000000000      D_gpu_mu_pack=    0.0000000000000000      D_reconstruction_D2H=    0.0000000000000000      T_operator=    1.9434199999999999E-004 T_trace_setup=    4.1942440999999997E-002 T_cheb_moments=    12.781269066000000      T_H2D=    0.0000000000000000      T_D2H=    0.0000000000000000      T_gamma=    6.7184491160000004      T_mu_pack=    9.2047643999999998E-002 T_gamma_mu=   0.88636188500000002      T_energy_integral=    2.6418440000000000E-003 T_transport_total=    26.059852301999999      profile_closure_error=    0.0000000000000000      profile_child_error=    0.0000000000000000      PROFILE_STATUS=PASS
+----------------------------------------------------------- TIMER REPORT ------------------------------------------------------------
+  CATEGORY                           MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                 -              -              -        26.4474          100.0              1              5   
+  └─ Calculation                        -              -              -        26.4474          100.0              1              4   
+     ├─ Calculation*                    -              -              -        26.2344           99.2              -              1   
+     └─ pre-processing                  -              -              -         0.2130            0.8              1              3   
+        ├─ pre-processing*              -              -              -         0.0128            0.0              -              1   
+        ├─ build_data                   -              -              -         0.0000            0.0              1              1   
+        ├─ bravais                      -              -              -         0.1865            0.7              1              1   
+        └─ structb                      -              -              -         0.0137            0.1              1              1   
+-------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+-------------------------------------------------------------------------------------------------------------------------------------

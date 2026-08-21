@@ -1,0 +1,68 @@
+{
+  "compared_files": [
+    "Fe_cond.out",
+    "Fe_cond_orb_im.out",
+    "Fe_cond_orb_real.out",
+    "cond_total.out",
+    "cond_total_orb_im.out",
+    "cond_total_orb_real.out"
+  ],
+  "conductivity_spectrum": {
+    "available": true,
+    "files": {
+      "Fe_cond.out": {
+        "available": true,
+        "max_abs": 1.100000000020529e-05,
+        "rel_l2": 1.2023949631069116e-06
+      },
+      "Fe_cond_orb_im.out": {
+        "available": true,
+        "max_abs": 2.9999999999752447e-06,
+        "rel_l2": 6.615890849394451e-07
+      },
+      "Fe_cond_orb_real.out": {
+        "available": true,
+        "max_abs": 2.6000000000192536e-06,
+        "rel_l2": 4.6074354350841064e-07
+      },
+      "cond_total.out": {
+        "available": true,
+        "max_abs": 1.100000000020529e-05,
+        "rel_l2": 1.2023949631069116e-06
+      },
+      "cond_total_orb_im.out": {
+        "available": true,
+        "max_abs": 2.9999999999752447e-06,
+        "rel_l2": 6.615890849394451e-07
+      },
+      "cond_total_orb_real.out": {
+        "available": true,
+        "max_abs": 2.6000000000192536e-06,
+        "rel_l2": 4.6074354350841064e-07
+      }
+    },
+    "max_abs": 1.100000000020529e-05,
+    "rel_l2": 1.2023949631069116e-06
+  },
+  "integrated_or_tensor": {
+    "available": true,
+    "max_abs": 1.100000000020529e-05,
+    "rel": 1.2023949631069116e-06
+  },
+  "moment": {
+    "available": false,
+    "evidence": "optimized production path intentionally keeps full moments off host",
+    "evidence_id": "c090eed5a902667e",
+    "max_abs": null,
+    "rel_l2": null
+  },
+  "reference_row_id": "bccFe_magnetic_2e151cec07b25ca4",
+  "status": "FAIL",
+  "tolerance_set": {
+    "integrated_rel": 5e-06,
+    "max_abs": 2e-06,
+    "name": "fp64",
+    "rel_l2": 5e-06
+  },
+  "validation_evidence_id": "c090eed5a902667e"
+}

@@ -1,0 +1,42 @@
+[Aug 21 2026 21:17:01.624] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Aug 21 2026 21:17:02.052] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Aug 21 2026 21:17:02.142] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+[Aug 21 2026 21:17:02.142] [recursion_transport.f90:459]  [1m[32m<info> [0m[0mKPM random-vector seed=271828
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+[Aug 21 2026 21:17:02.183] [recursion_transport.f90:720]  [1m[32m<info> [0m[0mChebyshev moments being calculated for random vector 1
+[Aug 21 2026 21:17:13.403] [recursion_transport.f90:720]  [1m[32m<info> [0m[0mChebyshev moments being calculated for random vector 2
+[Aug 21 2026 21:17:24.707] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+[Aug 21 2026 21:17:24.738] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Aug 21 2026 21:17:24.741] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.085837
+  0.37202031986418188       0.25000000000000000        3.7000000000000002     
+ KPM_PROFILE backend=cpu moment_backend=cpu_fast moment_precision=fp64 reconstruction_backend=cpu_blas reconstruction_precision=fp64 precision=fp64_fp64 estimator=random_vec N=                  1152 nnz=                215784 M=          500 lld=          150 Ntrace=            2 trace_block_width=            1 trace_batches=            0 OMP_NUM_THREADS=4 BLAS_NUM_THREADS=1 random_seed=271828 omp_threads=4 blas_threads=1 clock_source=system_clock_wall bytes_h2d=                     0 bytes_d2h=                     0 bytes_gamma=           10040000000 bytes_mu_pack=              72000000 resident_device_moment_bytes=                     0 host_full_moment_bytes=            2592000000 full_moment_d2h_bytes=                     0 reduced_result_d2h_bytes=                     0 gpu_energy_block=            0 output_mode=production P_operator_setup=    2.2941899999999999E-004 P_trace_setup=    5.0974269000000003E-002 P_moments_total=    22.507833928000000      P_gamma_basis_setup=    6.6064471000000000E-002 P_gamma_generation=    7.8496370029999998      P_reconstruction_total=    3.9521256490000001      P_result_unpack=    0.0000000000000000      P_energy_integration=    1.2654730000000000E-003 P_tensor_postprocess=    7.0704899999999996E-004 P_output_prepare=    3.2270778000000000E-002 P_output_io=    3.2106570000000000E-003 P_stack_setup=   0.51758514600000005      P_moment_finalize=    4.7662441000000000E-002 P_misc=    1.1519596000006516E-002 P_operator=    2.2941899999999999E-004 P_gamma=    7.9157014739999996      P_other=    1.1519596000006516E-002 D_moment_H2D=    0.0000000000000000      D_moment_GPU_kernel=    0.0000000000000000      D_moment_D2H=    0.0000000000000000      D_conversion=    0.0000000000000000      D_mu_pack=   0.16856942999999999      D_reconstruction_BLAS=    3.7824124680000000      D_gamma_basis=    6.6044642000000001E-002 D_gamma_fill=    7.8482323129999996      D_gpu_mu_pack=    0.0000000000000000      D_reconstruction_D2H=    0.0000000000000000      T_operator=    2.2941899999999999E-004 T_trace_setup=    5.0974269000000003E-002 T_cheb_moments=    22.507833928000000      T_H2D=    0.0000000000000000      T_D2H=    0.0000000000000000      T_gamma=    7.9157014739999996      T_mu_pack=   0.16856942999999999      T_gamma_mu=    3.7824124680000000      T_energy_integral=    1.2654730000000000E-003 T_transport_total=    35.041085879000001      profile_closure_error=    0.0000000000000000      profile_child_error=    0.0000000000000000      PROFILE_STATUS=PASS
+----------------------------------------------------------- TIMER REPORT ------------------------------------------------------------
+  CATEGORY                           MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                 -              -              -        35.4063          100.0              1              5   
+  └─ Calculation                        -              -              -        35.4063          100.0              1              4   
+     ├─ Calculation*                    -              -              -        35.2045           99.4              -              1   
+     └─ pre-processing                  -              -              -         0.2018            0.6              1              3   
+        ├─ pre-processing*              -              -              -         0.0076            0.0              -              1   
+        ├─ build_data                   -              -              -         0.0000            0.0              1              1   
+        ├─ bravais                      -              -              -         0.1809            0.5              1              1   
+        └─ structb                      -              -              -         0.0133            0.0              1              1   
+-------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+-------------------------------------------------------------------------------------------------------------------------------------

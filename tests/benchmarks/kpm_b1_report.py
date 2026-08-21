@@ -115,20 +115,40 @@ def best_cpu(rows: list[dict[str, Any]], gpu: dict[str, Any]) -> dict[str, Any] 
 
 def headline_table(rows: list[dict[str, Any]], mode: str) -> list[str]:
     lines = [
-        "| material | size | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |",
-        "|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| material | size | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |",
+        "|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for gpu in rows:
-        if not (gpu.get("gpu_plugin") and gpu.get("numeric_mode") == mode and eligible(gpu)):
+        if not (gpu.get("gpu_plugin") and gpu.get("cond_calctype") == "per_type" and gpu.get("numeric_mode") == mode and eligible(gpu)):
             continue
         cpu = best_cpu(rows, gpu)
         ref = cpu or {}
-        lines.append("| {material} | {size} | {N} | {nnz} | {M} | {estimator} | {Ntrace} | {omp} | {ct} | {gt} | {st} | {cw} | {gw} | {sw} | {corr} |".format(
+        lines.append("| {material} | {size} | {N} | {nnz} | {M} | {estimator} | {Ntrace} | {omp} | {cm} | {gm} | {sm} | {ct} | {gt} | {st} | {cw} | {gw} | {sw} | {corr} |".format(
             material=gpu.get("material"), size=gpu.get("size"), N=gpu.get("N"), nnz=gpu.get("nnz"), M=gpu.get("M"),
             estimator=gpu.get("cond_calctype"), Ntrace=gpu.get("Ntrace"), omp=ref.get("OMP_threads", "-"),
+            cm=fmt(median(ref, "P_moments_total")), gm=fmt(median(gpu, "P_moments_total")),
+            sm=fmt(gpu.get("speedups", {}).get("S_moments")),
             ct=fmt(median(ref, "T_transport_total")), gt=fmt(median(gpu, "T_transport_total")),
             st=fmt(gpu.get("speedups", {}).get("S_transport")), cw=fmt(median(ref, "wall_time_s")),
             gw=fmt(median(gpu, "wall_time_s")), sw=fmt(gpu.get("speedups", {}).get("S_whole")),
+            corr=gpu.get("correctness", {}).get("status", "-")))
+    return lines
+
+
+def m_scaling_table(rows: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| material | size | mode | M | CPU OMP | CPU moments (s) | GPU moments (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | correctness |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for gpu in rows:
+        if not (gpu.get("gpu_plugin") and eligible(gpu) and gpu.get("cond_type") == "spin" and gpu.get("cond_calctype") == "per_type"):
+            continue
+        cpu = best_cpu(rows, gpu) or {}
+        lines.append("| {material} | {size} | {mode} | {M} | {omp} | {cm} | {gm} | {sm} | {ct} | {gt} | {st} | {corr} |".format(
+            material=gpu.get("material"), size=gpu.get("size"), mode=gpu.get("numeric_mode"), M=gpu.get("M"),
+            omp=cpu.get("OMP_threads", "-"), cm=fmt(median(cpu, "P_moments_total")), gm=fmt(median(gpu, "P_moments_total")),
+            sm=fmt(gpu.get("speedups", {}).get("S_moments")), ct=fmt(median(cpu, "T_transport_total")),
+            gt=fmt(median(gpu, "T_transport_total")), st=fmt(gpu.get("speedups", {}).get("S_transport")),
             corr=gpu.get("correctness", {}).get("status", "-")))
     return lines
 
@@ -235,7 +255,7 @@ def make_plots(rows: list[dict[str, Any]], plot_dir: Path) -> list[str]:
 
     representative = []
     for mode, gpu in (("CPU FP64", False), ("GPU FP64", True), ("CPU FP32", False), ("GPU FP32", True)):
-        candidate = next((row for row in pt if int(row.get("replication", 0)) == 4 and row.get("numeric_mode") == mode.split()[-1] and bool(row.get("gpu_plugin")) == gpu and int(row.get("M", 0)) == 500), None)
+        candidate = next((row for row in pt if int(row.get("replication", 0)) == 4 and row.get("numeric_mode") == mode.split()[-1].lower() and bool(row.get("gpu_plugin")) == gpu and int(row.get("M", 0)) == 500), None)
         if candidate:
             representative.append((mode, candidate))
     if representative:
@@ -263,7 +283,8 @@ def make_report(campaign: dict[str, Any], output: Path, plot_paths: list[str]) -
     rows = campaign["rows"]
     skipped = campaign["skipped_rows"]
     env = campaign["environment"]
-    headlines = [row for row in rows if row.get("gpu_plugin") and eligible(row)]
+    headlines = [row for row in rows if row.get("gpu_plugin") and row.get("cond_calctype") == "per_type" and eligible(row)]
+    ineligible = [row for row in rows if row.get("gpu_plugin") and not eligible(row)]
     fp64 = [row for row in headlines if row.get("numeric_mode") == "fp64"]
     fp32 = [row for row in headlines if row.get("numeric_mode") == "fp32"]
     pt_spin = [row for row in rows if row.get("material") == "fccPt_SOC" and row.get("cond_type") == "spin" and row.get("cond_calctype") == "per_type"]
@@ -283,20 +304,22 @@ def make_report(campaign: dict[str, Any], output: Path, plot_paths: list[str]) -
         "# KPM-B1 final CPU/GPU benchmark campaign", "",
         "This report is generated from `campaign.json`; numerical tables and plots are derived from the same canonical rows.", "",
         "## Executive summary", "",
-        f"- Frozen implementation commit: `{env.get('git_commit')}`; campaign rows: `{len(rows)}`; skipped/ineligible records retained: `{len(skipped)}`.",
+        f"- Frozen implementation commit: `{env.get('git_commit')}`; campaign rows: `{len(rows)}`; explicit skips plus ineligible GPU records retained: `{len(skipped) + len(ineligible)}`.",
         f"- Primary GPU: `{env.get('gpu_model')}` device `{env.get('selected_gpu_index')}`, `{env.get('gpu_vram_mib')} MiB`, compute `{env.get('gpu_compute_capability')}`, CUDA `{env.get('cuda_toolkit')}`.",
         f"- Headline pairs: FP64 `{len(fp64)}`, FP32 `{len(fp32)}`; every published pair has profile and production-output correctness PASS.",
         "- CPU rows retain OMP=1/2/4/8; GPU rows use one process and one selected GPU at OMP=1.", "",
         "## Methodology and freeze", "",
         f"- Compiler/build: `{env.get('compiler')}`, `{env.get('build_type')}`, BLAS/LAPACK `{env.get('blas_lapack')}`.",
         f"- CPU: `{env.get('cpu_model')}`; MPI ranks recorded as `{env.get('mpi_ranks')}`. The host could not configure the MPI Fortran wrapper reliably, so the executable is serial and the one-rank policy is satisfied without an MPI-scaling claim.",
-        "- Production output is enabled for timed rows. Two warmups and five measurements are used unless the campaign manifest says otherwise; medians are used for speedups and spread remains in JSON.",
+        "- Production output is enabled for timed rows. Two warmups and five measurements are used for default anchors; genuinely expensive r6/r8 and secondary M/G2 rows use three measurements, recorded in their source JSON policy. Medians are used for speedups and spread remains in JSON.",
         "- FP64 means FP64 moments plus FP64 reconstruction. FP32 means FP32 moments plus FP32 reconstruction. The mixed route is FP32 moments plus FP64 reconstruction on CPU; current CUDA profiling couples its moment and reconstruction precision, so no mixed GPU claim is made.",
         "- The tracked implementation was clean at freeze. Pre-existing untracked build/result artifacts were preserved and are not part of the B1 commit; `git_dirty` in the raw environment remains an honest record of that state.", "",
         "## FP64 headline", "",
         *headline_table(rows, "fp64"), "",
         "## FP32 headline", "",
         *headline_table(rows, "fp32"), "",
+        "## M-order scaling", "",
+        *m_scaling_table(rows), "",
         "## Mixed practical route", "",
         *mixed_table(rows), "",
         "## CPU OMP scaling", "",
@@ -308,22 +331,38 @@ def make_report(campaign: dict[str, Any], output: Path, plot_paths: list[str]) -
         "## Interpretation", "",
         f"1. FP64 crossover: {crossover(fp64)}.",
         f"2. FP32 crossover: {crossover(fp32)}.",
-        "3. Size scaling is read from the measured r4/r6/r8 rows; the report does not fit an unsupported crossover model.",
-        "4. M scaling is plotted where the requested M=250/500/750 rows completed; M=1000 is reported as an explicit skip when the A4000 memory preflight made it impractical.",
-        "5. Moment speedup is a kernel attribution metric; transport speedup includes Gamma, reconstruction, post-processing, and other stages.",
-        "6. FP64 GPU usefulness depends on system size and non-moment overhead; FP32 is the high-throughput route only when its attached production-output tolerance passes.",
-        "7. Charge/spin/orbital and random_vec conclusions are limited to rows actually present in the canonical dataset; unsupported or failed rows remain visible rather than being promoted to headline status.",
-        "8. Block stochastic processing is judged from measured time/trace and traces/s; a neutral or negative result is retained.",
-        "9. Production recommendation: use CPU FP64 for small workloads when launch/overhead dominates, GPU FP64 for larger validated workloads requiring FP64, and GPU FP32 only when the scientific tolerance permits it. Do not hard-code these A4000 thresholds as universal policy.",
-        "10. Further KPM GPU optimization is not justified by B1 unless a new workload shows a dominant, reproducible stage outside the already-optimized moment path.", "",
+        "3. Size scaling is read from measured r4/r6/r8 rows; no unsupported crossover fit is applied.",
+        "4. M scaling is reported from the completed medium-size series and the anchor rows; omitted large extensions are explicit skips below.",
+        "5. Moment speedup is a kernel-attribution metric, while transport speedup includes Gamma, reconstruction, post-processing, and other stages.",
+        "6. FP64 GPU speedup is limited by non-moment stages and memory-bound work on this A4000; FP32 has a different balance and is only recommended when its production-output tolerance passes.",
+        "7. CPU OpenMP changes the selected baseline and therefore materially affects the measured crossover; every anchor retains OMP=1/2/4/8.",
+        "8. FP32 scientific acceptability is a correctness/tolerance decision, not a performance assumption; the report exposes the attached PASS evidence.",
+        "9. FP64 GPU use is worthwhile only in the larger or otherwise GPU-favorable measured regimes; small-workload overhead can leave CPU competitive.",
+        "10. Charge, spin, and orbital rows are reported separately; shared-stage conclusions are limited to the measured Pt fixtures.",
+        "11. random_vec scaling and per-trace throughput are reported separately from the primary per_type production workflow.",
+        "12. Block stochastic processing is judged from measured time/trace and traces/s; neutral or negative results are retained.",
+        "13. Pt and magnetic Fe are compared as qualitative cross-checks, not as identical-size performance claims.",
+        "14. Production recommendation: use CPU FP64 for small workloads when overhead dominates, GPU FP64 for larger validated FP64 workloads, and GPU FP32 only when its scientific tolerance is acceptable; do not hard-code A4000 thresholds.",
+        "15. Further KPM GPU optimization is not justified by B1 unless a new workload exposes a dominant, reproducible stage outside the optimized moment path.",
+        "16. Remaining limitations are the one-rank serial executable, single A4000 device, bounded stochastic matrix, and explicitly skipped memory/runtime extensions.", "",
         "## Skips, failures, and limitations", "",
     ]
     if skipped:
         lines.extend(f"- `{item.get('row_id', item.get('status', 'skipped'))}`: {item.get('reason', item.get('status', 'skipped'))}" for item in skipped)
     else:
         lines.append("- No runner-generated skipped rows.")
+    if ineligible:
+        lines.append("")
+        lines.append("### Failed or non-headline GPU rows retained")
+        lines.append("")
+        for item in ineligible:
+            corr = item.get("correctness", {})
+            reason = ", ".join(filter(None, [f"profile={item.get('profile_status')}", f"correctness={corr.get('status')}", ", ".join(corr.get('reasons', []))]))
+            lines.append(f"- `{item.get('row_id')}` ({item.get('material')} {item.get('size')} {item.get('cond_type')} {item.get('numeric_mode')} M={item.get('M')}): {reason or 'not headline eligible'}")
     lines += ["", "## Generated outputs", "", f"- Canonical JSON: `{output.name}`", f"- CSV: `{output.with_suffix('.csv').name}`", f"- Plots: `{len(plot_paths)}`", "- Raw logs and correctness JSON are under `raw/` and `correctness/` beside the canonical dataset.", ""]
-    output.parents[3].joinpath("docs", "dev", "RS_LMTO_ASA_KPM_B1_REPORT.md").write_text("\n".join(lines), encoding="utf-8")
+    report_text = "\n".join(lines).rstrip() + "\n"
+    output.with_suffix(".md").write_text(report_text, encoding="utf-8")
+    output.parents[3].joinpath("docs", "dev", "RS_LMTO_ASA_KPM_B1_REPORT.md").write_text(report_text, encoding="utf-8")
 
 
 def main() -> int:

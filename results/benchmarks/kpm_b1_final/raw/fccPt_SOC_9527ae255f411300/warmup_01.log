@@ -1,0 +1,40 @@
+[Aug 21 2026 15:01:48.809] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Aug 21 2026 15:01:49.249] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Aug 21 2026 15:01:49.347] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+[Aug 21 2026 15:01:49.389] [recursion_transport.f90:711]  [1m[32m<info> [0m[0mChebyshev moments being calculated taking atom type 1
+[Aug 21 2026 15:02:00.454] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+[Aug 21 2026 15:02:00.483] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Aug 21 2026 15:02:00.487] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.085837
+  0.37202031986418188       0.25000000000000000        3.7000000000000002     
+ KPM_PROFILE backend=cpu moment_backend=cpu_fast moment_precision=fp64 reconstruction_backend=cpu_blas reconstruction_precision=fp64 precision=fp64_fp64 estimator=per_type N=                  1152 nnz=                215784 M=          500 lld=          150 Ntrace=            1 trace_block_width=            1 trace_batches=            0 OMP_NUM_THREADS=4 BLAS_NUM_THREADS=1 random_seed=unset omp_threads=4 blas_threads=1 clock_source=system_clock_wall bytes_h2d=                     0 bytes_d2h=                     0 bytes_gamma=           10040000000 bytes_mu_pack=              72000000 resident_device_moment_bytes=                     0 host_full_moment_bytes=            1296000000 full_moment_d2h_bytes=                     0 reduced_result_d2h_bytes=                     0 gpu_energy_block=            0 output_mode=production P_operator_setup=    7.1006000000000004E-005 P_trace_setup=    4.2324239999999999E-002 P_moments_total=    11.057183995000001      P_gamma_basis_setup=    6.6034076999999997E-002 P_gamma_generation=    7.8482152049999998      P_reconstruction_total=    1.9591179580000000      P_result_unpack=    0.0000000000000000      P_energy_integration=    2.7482700000000001E-003 P_tensor_postprocess=    7.3531099999999999E-004 P_output_prepare=    5.9468869000000001E-002 P_output_io=    3.8871209999999999E-003 P_stack_setup=   0.53837699500000002      P_moment_finalize=    4.5645808000000003E-002 P_misc=    1.3515938999997701E-002 P_operator=    7.1006000000000004E-005 P_gamma=    7.9142492820000001      P_other=    1.3515938999997701E-002 D_moment_H2D=    0.0000000000000000      D_moment_GPU_kernel=    0.0000000000000000      D_moment_D2H=    0.0000000000000000      D_conversion=    0.0000000000000000      D_mu_pack=    9.2340715000000004E-002 D_reconstruction_BLAS=    1.8657185469999999      D_gamma_basis=    6.6015878000000000E-002 D_gamma_fill=    7.8469840089999998      D_gpu_mu_pack=    0.0000000000000000      D_reconstruction_D2H=    0.0000000000000000      T_operator=    7.1006000000000004E-005 T_trace_setup=    4.2324239999999999E-002 T_cheb_moments=    11.057183995000001      T_H2D=    0.0000000000000000      T_D2H=    0.0000000000000000      T_gamma=    7.9142492820000001      T_mu_pack=    9.2340715000000004E-002 T_gamma_mu=    1.8657185469999999      T_energy_integral=    2.7482700000000001E-003 T_transport_total=    21.637324794000001      profile_closure_error=    0.0000000000000000      profile_child_error=    0.0000000000000000      PROFILE_STATUS=PASS
+----------------------------------------------------------- TIMER REPORT ------------------------------------------------------------
+  CATEGORY                           MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                 -              -              -        22.0012          100.0              1              5   
+  └─ Calculation                        -              -              -        22.0012          100.0              1              4   
+     ├─ Calculation*                    -              -              -        21.7877           99.0              -              1   
+     └─ pre-processing                  -              -              -         0.2135            1.0              1              3   
+        ├─ pre-processing*              -              -              -         0.0109            0.0              -              1   
+        ├─ build_data                   -              -              -         0.0000            0.0              1              1   
+        ├─ bravais                      -              -              -         0.1889            0.9              1              1   
+        └─ structb                      -              -              -         0.0137            0.1              1              1   
+-------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+-------------------------------------------------------------------------------------------------------------------------------------

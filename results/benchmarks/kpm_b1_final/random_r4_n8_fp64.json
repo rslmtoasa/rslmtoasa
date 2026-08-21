@@ -1,0 +1,1542 @@
+{
+  "correctness_contract": {
+    "moment_evidence": "optimized resident GPU path avoids full-moment D2H; diagnostic evidence is referenced when available",
+    "source": "production *_cond.out files; no parallel Python Kubo-Bastin estimator",
+    "tolerances": {
+      "fp32": {
+        "integrated_rel": 0.0005,
+        "max_abs": 0.0005,
+        "rel_l2": 0.0005
+      },
+      "fp64": {
+        "integrated_rel": 5e-06,
+        "max_abs": 2e-06,
+        "rel_l2": 5e-06
+      },
+      "mixed": {
+        "integrated_rel": 0.0005,
+        "max_abs": 0.0005,
+        "rel_l2": 0.0005
+      }
+    }
+  },
+  "environment": {
+    "blas_lapack": "Intel oneMKL",
+    "blas_threads": 1,
+    "blas_threads_sweep": [
+      1
+    ],
+    "build_type": "Release",
+    "compiler": "/usr/bin/gfortran (GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0)",
+    "compiler_version": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "cpu_model": "11th Gen Intel(R) Core(TM) i9-11900 @ 2.50GHz",
+    "cuda_driver": "610.57.04",
+    "cuda_toolkit": "13.3",
+    "cuda_visible_devices": "0",
+    "cusolver": null,
+    "git_commit": "e23fab86f10dda9ddc1d5dd9452f9586b2fc428a",
+    "git_dirty": true,
+    "gpu_compute_capability": "8.6",
+    "gpu_model": "NVIDIA RTX A4000",
+    "gpu_vram_mib": 16376,
+    "kernel": "6.8.0-137-generic",
+    "logical_cpu_count": 16,
+    "mpi_ranks": 1,
+    "omp_places": "cores",
+    "omp_proc_bind": "close",
+    "omp_threads": 4,
+    "omp_threads_sweep": [
+      4
+    ],
+    "optimization_flags": {
+      "CMAKE_CUDA_FLAGS": "",
+      "CMAKE_C_FLAGS": "",
+      "CMAKE_Fortran_FLAGS": " -ffree-line-length-0 -cpp -march=native",
+      "CMAKE_Fortran_FLAGS_RELEASE": "-O3 -DNDEBUG -O3 -fbacktrace -g -g -O0"
+    },
+    "optional_metadata_unavailable": {
+      "cpu_governor": "not collected by default",
+      "numa_topology": "not collected by default"
+    },
+    "os": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39",
+    "physical_cpu_count": 8,
+    "ram_mib": 64095,
+    "selected_gpu_index": "0"
+  },
+  "pairing_contract": {
+    "headline_requirements": [
+      "identical comparison key",
+      "same numeric mode",
+      "correctness PASS",
+      "profile PASS",
+      "production output mode"
+    ],
+    "key_fields": [
+      "material",
+      "fixture_id",
+      "fixture_revision",
+      "replication",
+      "N",
+      "nnz",
+      "nsp",
+      "soc_state",
+      "cond_type",
+      "current_operator",
+      "cond_calctype",
+      "Ntrace",
+      "projector_count",
+      "random_seed",
+      "vector_contract",
+      "M",
+      "lld",
+      "NE",
+      "channels",
+      "rc",
+      "energy_min",
+      "energy_max",
+      "fermi",
+      "kernel",
+      "chebyshev_scaling",
+      "numeric_mode",
+      "canonical_output_precision"
+    ],
+    "performance_strategy_exclusions": [
+      "OMP_threads",
+      "BLAS_threads",
+      "GPU_strategy",
+      "block_width",
+      "backend"
+    ]
+  },
+  "physics": {
+    "M": 500,
+    "NE": 2510,
+    "cond_calctype": "random_vec",
+    "estimator": "random_vec",
+    "gpu_stochastic_block": [
+      1
+    ],
+    "kernel": {
+      "alpha": 6.0,
+      "name": "Lorentz"
+    },
+    "lld": 150,
+    "materials": [
+      "fccPt_SOC"
+    ],
+    "paired_rows_share_input": true,
+    "random_vec_num": 8
+  },
+  "policy": {
+    "blas_sweep": [
+      1
+    ],
+    "cpu_rows_included": true,
+    "gpu_only": false,
+    "omp_sweep": [
+      4
+    ],
+    "output_mode": "production",
+    "persistent_process": false,
+    "repetitions": 3,
+    "speedup_definitions": {
+      "S_moments": "best_same_precision_CPU(P_moments_total)/GPU(P_moments_total)",
+      "S_transport": "best_same_precision_CPU(T_transport_total)/GPU(T_transport_total)",
+      "S_whole": "best_same_precision_CPU(whole_wall)/GPU(whole_wall)"
+    },
+    "warmups": 2
+  },
+  "precision_contract": {
+    "fp32": "moment_precision=fp32 and reconstruction_precision=fp32",
+    "fp64": "moment_precision=fp64 and reconstruction_precision=fp64",
+    "mixed": "all other supported combinations; canonical host output may still be FP64"
+  },
+  "rows": [
+    {
+      "BLAS_NUM_THREADS": 1,
+      "BLAS_threads": 1,
+      "GPU_strategy": null,
+      "M": 500,
+      "N": 1152,
+      "NE": 2510,
+      "Ntrace": 8,
+      "OMP_NUM_THREADS": 4,
+      "OMP_threads": 4,
+      "backend": "cpu",
+      "best_cpu_row_id": null,
+      "block_width": 1,
+      "canonical_output_precision": "fp64",
+      "channels": 2500,
+      "chebyshev_scaling": {
+        "a_denominator": 1.7,
+        "contract": "(E-b)/a",
+        "window": [
+          -2.5,
+          1.2
+        ]
+      },
+      "comparison_key": {
+        "M": 500,
+        "N": 1152,
+        "NE": 2510,
+        "Ntrace": 8,
+        "canonical_output_precision": "fp64",
+        "channels": 2500,
+        "chebyshev_scaling": {
+          "a_denominator": 1.7,
+          "contract": "(E-b)/a",
+          "window": [
+            -2.5,
+            1.2
+          ]
+        },
+        "cond_calctype": "random_vec",
+        "cond_type": "spin",
+        "current_operator": {
+          "spin_orbital_selector": "S_z",
+          "va": [
+            0,
+            1,
+            0
+          ],
+          "vb": [
+            1,
+            0,
+            0
+          ]
+        },
+        "energy_max": 1.2,
+        "energy_min": -2.5,
+        "fermi": -0.085837,
+        "fixture_id": "fccPt_SOC_val09",
+        "fixture_revision": "e15e8639dd0882ea",
+        "kernel": {
+          "alpha": 6.0,
+          "name": "Lorentz"
+        },
+        "lld": 150,
+        "material": "fccPt_SOC",
+        "nnz": 215784,
+        "nsp": 2,
+        "numeric_mode": "fp64",
+        "projector_count": 8,
+        "random_seed": 271828,
+        "rc": 20,
+        "replication": 4,
+        "soc_state": "SOC",
+        "vector_contract": "uniform_unit_phase_normalized_by_sqrt_sites"
+      },
+      "comparison_key_hash": "7a082e1a34508a7a",
+      "cond_calctype": "random_vec",
+      "cond_type": "spin",
+      "correctness": {
+        "compared_files": [
+          "cond_total.out",
+          "cond_total_orb_im.out",
+          "cond_total_orb_real.out"
+        ],
+        "conductivity_spectrum": {
+          "available": true,
+          "files": {
+            "cond_total.out": {
+              "available": true,
+              "max_abs": 0.0,
+              "rel_l2": 0.0
+            },
+            "cond_total_orb_im.out": {
+              "available": true,
+              "max_abs": 0.0,
+              "rel_l2": 0.0
+            },
+            "cond_total_orb_real.out": {
+              "available": true,
+              "max_abs": 0.0,
+              "rel_l2": 0.0
+            }
+          },
+          "max_abs": 0.0,
+          "rel_l2": 0.0
+        },
+        "integrated_or_tensor": {
+          "available": true,
+          "max_abs": 0.0,
+          "rel": 0.0
+        },
+        "moment": {
+          "available": false,
+          "evidence": "optimized production path intentionally keeps full moments off host",
+          "evidence_id": "5cfe7da1dd3a60b5",
+          "max_abs": null,
+          "rel_l2": null
+        },
+        "reference_row_id": "fccPt_SOC_b0b4dc8a7e960d21",
+        "status": "PASS",
+        "tolerance_set": {
+          "integrated_rel": 5e-06,
+          "max_abs": 2e-06,
+          "name": "fp64",
+          "rel_l2": 5e-06
+        },
+        "validation_evidence_id": "8a9b849c6c7a35a2"
+      },
+      "current_operator": {
+        "spin_orbital_selector": "S_z",
+        "va": [
+          0,
+          1,
+          0
+        ],
+        "vb": [
+          1,
+          0,
+          0
+        ]
+      },
+      "derived": {
+        "moment_time_per_trace_s": {
+          "iqr": 0.26487140393749975,
+          "mad": 0.04402985887499966,
+          "maximum": 11.8725100395,
+          "median": 11.3867970905,
+          "minimum": 11.342767231625
+        },
+        "traces_per_second": {
+          "iqr": 0.0019668602714555117,
+          "mad": 0.00034089975715859144,
+          "maximum": 0.08816190789950089,
+          "median": 0.0878210081423423,
+          "minimum": 0.08422818735658985
+        }
+      },
+      "energy_max": 1.2,
+      "energy_min": -2.5,
+      "environment": {
+        "OMP_PLACES": "cores",
+        "OMP_PROC_BIND": "close"
+      },
+      "fermi": -0.085837,
+      "fixture_id": "fccPt_SOC_val09",
+      "fixture_revision": "e15e8639dd0882ea",
+      "gamma_bytes": 10040000000,
+      "gpu_plugin": false,
+      "gpu_precision_request": null,
+      "gpu_stochastic_block": 1,
+      "headline_speedup_eligible": false,
+      "ineligible_reasons": [],
+      "kernel": {
+        "alpha": 6.0,
+        "name": "Lorentz"
+      },
+      "lld": 150,
+      "material": "fccPt_SOC",
+      "moment_backend": "cpu_fast",
+      "moment_precision": "fp64",
+      "moment_strategy": "fast_dp",
+      "mu_packed_bytes": 72000000,
+      "nnz": 215784,
+      "nsp": 2,
+      "numeric_mode": "fp64",
+      "output_directory": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/outputs",
+      "output_mode": "production",
+      "output_provenance": {
+        "directory": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/outputs",
+        "files": {
+          "cond_total.out": "ec30955980fb554fca04af3e146df8ae18571d066bc4e82983a075f57906ae5d",
+          "cond_total_orb_im.out": "8d21346612a00f6981b463ee4f13ce25c04349b3d3e80034fc5009caeafee10c",
+          "cond_total_orb_real.out": "60924ac66c0ff4127d2b341fd0a483b161f842fd11ebc9008d82878e252e25b6"
+        }
+      },
+      "pairing_fingerprint": "7a082e1a34508a7a",
+      "profile_metadata": {
+        "BLAS_NUM_THREADS": 1,
+        "M": 500,
+        "N": 1152,
+        "Ntrace": 8,
+        "OMP_NUM_THREADS": 4,
+        "backend": "cpu",
+        "blas_threads": 1,
+        "clock_source": "system_clock_wall",
+        "estimator": "random_vec",
+        "lld": 150,
+        "moment_backend": "cpu_fast",
+        "moment_precision": "fp64",
+        "nnz": 215784,
+        "omp_threads": 4,
+        "output_mode": "production",
+        "precision": "fp64_fp64",
+        "random_seed": 271828,
+        "reconstruction_backend": "cpu_blas",
+        "reconstruction_precision": "fp64",
+        "trace_batches": 0,
+        "trace_block_width": 1
+      },
+      "profile_status": "PASS",
+      "profile_validation": {
+        "child_tolerance_s": 5.768498593,
+        "children_ok": true,
+        "exclusive_sum_s": 115.36997185999999,
+        "gamma_children_s": 8.008804869,
+        "moment_children_s": 0.0,
+        "other_ok": true,
+        "profile_closure_error": 1.231763732459491e-16,
+        "reconstruction_children_s": 15.528028506,
+        "reported_status": "PASS",
+        "status": "PASS",
+        "transport_total_s": 115.36997186,
+        "valid": true
+      },
+      "projector_count": 8,
+      "random_seed": 271828,
+      "raw_logs": {
+        "sample_01": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/sample_01.log",
+        "sample_02": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/sample_02.log",
+        "sample_03": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/sample_03.log",
+        "warmup_01": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/warmup_01.log",
+        "warmup_02": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/warmup_02.log"
+      },
+      "rc": 20,
+      "reconstruction_backend": "cpu_blas",
+      "reconstruction_precision": "fp64",
+      "repetitions": 3,
+      "replication": 4,
+      "row_id": "fccPt_SOC_b0b4dc8a7e960d21",
+      "samples": [
+        {
+          "profile": {
+            "class": "component",
+            "labels": [
+              "performance",
+              "component",
+              "rs",
+              "kpm",
+              "transport"
+            ],
+            "metadata": {
+              "BLAS_NUM_THREADS": 1,
+              "M": 500,
+              "N": 1152,
+              "Ntrace": 8,
+              "OMP_NUM_THREADS": 4,
+              "backend": "cpu",
+              "blas_threads": 1,
+              "clock_source": "system_clock_wall",
+              "estimator": "random_vec",
+              "lld": 150,
+              "moment_backend": "cpu_fast",
+              "moment_precision": "fp64",
+              "nnz": 215784,
+              "omp_threads": 4,
+              "output_mode": "production",
+              "precision": "fp64_fp64",
+              "random_seed": 271828,
+              "reconstruction_backend": "cpu_blas",
+              "reconstruction_precision": "fp64",
+              "trace_batches": 0,
+              "trace_block_width": 1
+            },
+            "metrics": {
+              "D_conversion": 0,
+              "D_gamma_basis": 0.066229489,
+              "D_gamma_fill": 7.94257538,
+              "D_gpu_mu_pack": 0,
+              "D_moment_D2H": 0,
+              "D_moment_GPU_kernel": 0,
+              "D_moment_H2D": 0,
+              "D_mu_pack": 0.645080176,
+              "D_reconstruction_BLAS": 14.88294833,
+              "D_reconstruction_D2H": 0,
+              "PROFILE_STATUS": "PASS",
+              "P_energy_integration": 0.001248303,
+              "P_gamma": 8.00989698,
+              "P_gamma_basis_setup": 0.066246816,
+              "P_gamma_generation": 7.943650164,
+              "P_misc": 0.011118531999997572,
+              "P_moment_finalize": 0.048315503,
+              "P_moments_total": 91.094376724,
+              "P_operator": 0.000227103,
+              "P_operator_setup": 0.000227103,
+              "P_other": 0.011118531999997572,
+              "P_output_io": 0.003085595,
+              "P_output_prepare": 0.032317215,
+              "P_reconstruction_total": 15.532713011,
+              "P_result_unpack": 0,
+              "P_stack_setup": 0.521077152,
+              "P_tensor_postprocess": 0.000725285,
+              "P_trace_setup": 0.11487045700000001,
+              "T_D2H": 0,
+              "T_H2D": 0,
+              "T_cheb_moments": 91.094376724,
+              "T_energy_integral": 0.001248303,
+              "T_gamma": 8.00989698,
+              "T_gamma_mu": 14.88294833,
+              "T_mu_pack": 0.645080176,
+              "T_operator": 0.000227103,
+              "T_trace_setup": 0.11487045700000001,
+              "T_transport_total": 115.36997186,
+              "bytes_d2h": 0,
+              "bytes_gamma": 10040000000,
+              "bytes_h2d": 0,
+              "bytes_mu_pack": 72000000,
+              "full_moment_d2h_bytes": 0,
+              "gpu_energy_block": 0,
+              "host_full_moment_bytes": 10368000000,
+              "profile_child_error": 0,
+              "profile_closure_error": 0,
+              "reduced_result_d2h_bytes": 0,
+              "resident_device_moment_bytes": 0
+            },
+            "name": "kpm_transport",
+            "validation": {
+              "child_tolerance_s": 5.768498593,
+              "children_ok": true,
+              "exclusive_sum_s": 115.36997185999999,
+              "gamma_children_s": 8.008804869,
+              "moment_children_s": 0.0,
+              "other_ok": true,
+              "profile_closure_error": 1.231763732459491e-16,
+              "reconstruction_children_s": 15.528028506,
+              "reported_status": "PASS",
+              "status": "PASS",
+              "transport_total_s": 115.36997186,
+              "valid": true
+            }
+          },
+          "raw_log": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/sample_01.log",
+          "repetition": 1,
+          "sample_id": "fccPt_SOC_b0b4dc8a7e960d21:sample:01",
+          "wall_time_s": 115.99203068995848
+        },
+        {
+          "profile": {
+            "class": "component",
+            "labels": [
+              "performance",
+              "component",
+              "rs",
+              "kpm",
+              "transport"
+            ],
+            "metadata": {
+              "BLAS_NUM_THREADS": 1,
+              "M": 500,
+              "N": 1152,
+              "Ntrace": 8,
+              "OMP_NUM_THREADS": 4,
+              "backend": "cpu",
+              "blas_threads": 1,
+              "clock_source": "system_clock_wall",
+              "estimator": "random_vec",
+              "lld": 150,
+              "moment_backend": "cpu_fast",
+              "moment_precision": "fp64",
+              "nnz": 215784,
+              "omp_threads": 4,
+              "output_mode": "production",
+              "precision": "fp64_fp64",
+              "random_seed": 271828,
+              "reconstruction_backend": "cpu_blas",
+              "reconstruction_precision": "fp64",
+              "trace_batches": 0,
+              "trace_block_width": 1
+            },
+            "metrics": {
+              "D_conversion": 0,
+              "D_gamma_basis": 0.066809197,
+              "D_gamma_fill": 7.923004308,
+              "D_gpu_mu_pack": 0,
+              "D_moment_D2H": 0,
+              "D_moment_GPU_kernel": 0,
+              "D_moment_H2D": 0,
+              "D_mu_pack": 0.6493457229999999,
+              "D_reconstruction_BLAS": 14.546634314999999,
+              "D_reconstruction_D2H": 0,
+              "PROFILE_STATUS": "PASS",
+              "P_energy_integration": 0.001265011,
+              "P_gamma": 7.991170704,
+              "P_gamma_basis_setup": 0.066826792,
+              "P_gamma_generation": 7.924343912,
+              "P_misc": 0.0117189889999878,
+              "P_moment_finalize": 0.04596076,
+              "P_moments_total": 94.980080316,
+              "P_operator": 0.000225535,
+              "P_operator_setup": 0.000225535,
+              "P_other": 0.0117189889999878,
+              "P_output_io": 0.00315904,
+              "P_output_prepare": 0.032496831,
+              "P_reconstruction_total": 15.200506196,
+              "P_result_unpack": 0,
+              "P_stack_setup": 0.52170784,
+              "P_tensor_postprocess": 0.000745639,
+              "P_trace_setup": 0.117257712,
+              "T_D2H": 0,
+              "T_H2D": 0,
+              "T_cheb_moments": 94.980080316,
+              "T_energy_integral": 0.001265011,
+              "T_gamma": 7.991170704,
+              "T_gamma_mu": 14.546634314999999,
+              "T_mu_pack": 0.6493457229999999,
+              "T_operator": 0.000225535,
+              "T_trace_setup": 0.117257712,
+              "T_transport_total": 118.906294573,
+              "bytes_d2h": 0,
+              "bytes_gamma": 10040000000,
+              "bytes_h2d": 0,
+              "bytes_mu_pack": 72000000,
+              "full_moment_d2h_bytes": 0,
+              "gpu_energy_block": 0,
+              "host_full_moment_bytes": 10368000000,
+              "profile_child_error": 0,
+              "profile_closure_error": 0,
+              "reduced_result_d2h_bytes": 0,
+              "resident_device_moment_bytes": 0
+            },
+            "name": "kpm_transport",
+            "validation": {
+              "child_tolerance_s": 5.9453147286500005,
+              "children_ok": true,
+              "exclusive_sum_s": 118.90629457299998,
+              "gamma_children_s": 7.989813505000001,
+              "moment_children_s": 0.0,
+              "other_ok": true,
+              "profile_closure_error": 1.1951305661516138e-16,
+              "reconstruction_children_s": 15.195980037999998,
+              "reported_status": "PASS",
+              "status": "PASS",
+              "transport_total_s": 118.906294573,
+              "valid": true
+            }
+          },
+          "raw_log": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/sample_02.log",
+          "repetition": 2,
+          "sample_id": "fccPt_SOC_b0b4dc8a7e960d21:sample:02",
+          "wall_time_s": 119.52290395996533
+        },
+        {
+          "profile": {
+            "class": "component",
+            "labels": [
+              "performance",
+              "component",
+              "rs",
+              "kpm",
+              "transport"
+            ],
+            "metadata": {
+              "BLAS_NUM_THREADS": 1,
+              "M": 500,
+              "N": 1152,
+              "Ntrace": 8,
+              "OMP_NUM_THREADS": 4,
+              "backend": "cpu",
+              "blas_threads": 1,
+              "clock_source": "system_clock_wall",
+              "estimator": "random_vec",
+              "lld": 150,
+              "moment_backend": "cpu_fast",
+              "moment_precision": "fp64",
+              "nnz": 215784,
+              "omp_threads": 4,
+              "output_mode": "production",
+              "precision": "fp64_fp64",
+              "random_seed": 271828,
+              "reconstruction_backend": "cpu_blas",
+              "reconstruction_precision": "fp64",
+              "trace_batches": 0,
+              "trace_block_width": 1
+            },
+            "metrics": {
+              "D_conversion": 0,
+              "D_gamma_basis": 0.066341543,
+              "D_gamma_fill": 7.84389914,
+              "D_gpu_mu_pack": 0,
+              "D_moment_D2H": 0,
+              "D_moment_GPU_kernel": 0,
+              "D_moment_H2D": 0,
+              "D_mu_pack": 0.650968569,
+              "D_reconstruction_BLAS": 14.518148030999999,
+              "D_reconstruction_D2H": 0,
+              "PROFILE_STATUS": "PASS",
+              "P_energy_integration": 0.001272395,
+              "P_gamma": 7.911331102,
+              "P_gamma_basis_setup": 0.066359954,
+              "P_gamma_generation": 7.844971148,
+              "P_misc": 0.011210328999993635,
+              "P_moment_finalize": 0.046075691,
+              "P_moments_total": 90.742137853,
+              "P_operator": 0.000230295,
+              "P_operator_setup": 0.000230295,
+              "P_other": 0.011210328999993635,
+              "P_output_io": 0.003040945,
+              "P_output_prepare": 0.032368387,
+              "P_reconstruction_total": 15.173757115,
+              "P_result_unpack": 0,
+              "P_stack_setup": 0.519664382,
+              "P_tensor_postprocess": 0.000692183,
+              "P_trace_setup": 0.11598737400000002,
+              "T_D2H": 0,
+              "T_H2D": 0,
+              "T_cheb_moments": 90.742137853,
+              "T_energy_integral": 0.001272395,
+              "T_gamma": 7.911331102,
+              "T_gamma_mu": 14.518148030999999,
+              "T_mu_pack": 0.650968569,
+              "T_operator": 0.000230295,
+              "T_trace_setup": 0.11598737400000002,
+              "T_transport_total": 114.557768051,
+              "bytes_d2h": 0,
+              "bytes_gamma": 10040000000,
+              "bytes_h2d": 0,
+              "bytes_mu_pack": 72000000,
+              "full_moment_d2h_bytes": 0,
+              "gpu_energy_block": 0,
+              "host_full_moment_bytes": 10368000000,
+              "profile_child_error": 0,
+              "profile_closure_error": 0,
+              "reduced_result_d2h_bytes": 0,
+              "resident_device_moment_bytes": 0
+            },
+            "name": "kpm_transport",
+            "validation": {
+              "child_tolerance_s": 5.7278884025500005,
+              "children_ok": true,
+              "exclusive_sum_s": 114.557768051,
+              "gamma_children_s": 7.9102406830000005,
+              "moment_children_s": 0.0,
+              "other_ok": true,
+              "profile_closure_error": 0.0,
+              "reconstruction_children_s": 15.169116599999999,
+              "reported_status": "PASS",
+              "status": "PASS",
+              "transport_total_s": 114.557768051,
+              "valid": true
+            }
+          },
+          "raw_log": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_b0b4dc8a7e960d21/sample_03.log",
+          "repetition": 3,
+          "sample_id": "fccPt_SOC_b0b4dc8a7e960d21:sample:03",
+          "wall_time_s": 115.18756460491568
+        }
+      ],
+      "size": "r4",
+      "soc_state": "SOC",
+      "speedups": {},
+      "statistics": {
+        "P_energy_integration": {
+          "iqr": 1.2045999999999932e-05,
+          "mad": 7.384000000000036e-06,
+          "maximum": 0.001272395,
+          "median": 0.001265011,
+          "minimum": 0.001248303
+        },
+        "P_gamma_basis_setup": {
+          "iqr": 0.0002899880000000049,
+          "mad": 0.00011313799999999874,
+          "maximum": 0.066826792,
+          "median": 0.066359954,
+          "minimum": 0.066246816
+        },
+        "P_gamma_generation": {
+          "iqr": 0.04933950800000009,
+          "mad": 0.0193062519999998,
+          "maximum": 7.943650164,
+          "median": 7.924343912,
+          "minimum": 7.844971148
+        },
+        "P_misc": {
+          "iqr": 0.00030022849999511436,
+          "mad": 9.179699999606328e-05,
+          "maximum": 0.0117189889999878,
+          "median": 0.011210328999993635,
+          "minimum": 0.011118531999997572
+        },
+        "P_moment_finalize": {
+          "iqr": 0.0011773715000000032,
+          "mad": 0.00011493099999999867,
+          "maximum": 0.048315503,
+          "median": 0.046075691,
+          "minimum": 0.04596076
+        },
+        "P_moments_total": {
+          "iqr": 2.118971231499998,
+          "mad": 0.3522388709999973,
+          "maximum": 94.980080316,
+          "median": 91.094376724,
+          "minimum": 90.742137853
+        },
+        "P_operator_setup": {
+          "iqr": 2.3800000000000145e-06,
+          "mad": 1.568000000000023e-06,
+          "maximum": 0.000230295,
+          "median": 0.000227103,
+          "minimum": 0.000225535
+        },
+        "P_output_io": {
+          "iqr": 5.9047500000000176e-05,
+          "mad": 4.464999999999981e-05,
+          "maximum": 0.00315904,
+          "median": 0.003085595,
+          "minimum": 0.003040945
+        },
+        "P_output_prepare": {
+          "iqr": 8.980799999999678e-05,
+          "mad": 5.1171999999995166e-05,
+          "maximum": 0.032496831,
+          "median": 0.032368387,
+          "minimum": 0.032317215
+        },
+        "P_reconstruction_total": {
+          "iqr": 0.17947794799999883,
+          "mad": 0.026749080999998398,
+          "maximum": 15.532713011,
+          "median": 15.200506196,
+          "minimum": 15.173757115
+        },
+        "P_result_unpack": {
+          "iqr": 0.0,
+          "mad": 0.0,
+          "maximum": 0.0,
+          "median": 0.0,
+          "minimum": 0.0
+        },
+        "P_stack_setup": {
+          "iqr": 0.0010217290000000823,
+          "mad": 0.0006306879999999904,
+          "maximum": 0.52170784,
+          "median": 0.521077152,
+          "minimum": 0.519664382
+        },
+        "P_tensor_postprocess": {
+          "iqr": 2.672800000000006e-05,
+          "mad": 2.035399999999999e-05,
+          "maximum": 0.000745639,
+          "median": 0.000725285,
+          "minimum": 0.000692183
+        },
+        "P_trace_setup": {
+          "iqr": 0.0011936275000000024,
+          "mad": 0.001116917000000009,
+          "maximum": 0.117257712,
+          "median": 0.11598737400000002,
+          "minimum": 0.11487045700000001
+        },
+        "T_transport_total": {
+          "iqr": 2.174263260999993,
+          "mad": 0.8122038090000103,
+          "maximum": 118.906294573,
+          "median": 115.36997186,
+          "minimum": 114.557768051
+        },
+        "wall_time_s": {
+          "iqr": 2.1676696775248274,
+          "mad": 0.8044660850428045,
+          "maximum": 119.52290395996533,
+          "median": 115.99203068995848,
+          "minimum": 115.18756460491568
+        }
+      },
+      "vector_contract": "uniform_unit_phase_normalized_by_sqrt_sites",
+      "warmups": 2
+    },
+    {
+      "BLAS_NUM_THREADS": 1,
+      "BLAS_threads": 1,
+      "GPU_strategy": "resident_tiled",
+      "M": 500,
+      "N": 1152,
+      "NE": 2510,
+      "Ntrace": 8,
+      "OMP_NUM_THREADS": 1,
+      "OMP_threads": 1,
+      "backend": "cuda",
+      "best_cpu_reference": {
+        "BLAS_threads": 1,
+        "OMP_threads": 4,
+        "moment_backend": "cpu_fast",
+        "reconstruction_backend": "cpu_blas",
+        "row_id": "fccPt_SOC_b0b4dc8a7e960d21",
+        "transport_median": 115.36997186,
+        "wall_median": 115.99203068995848
+      },
+      "best_cpu_row_id": "fccPt_SOC_b0b4dc8a7e960d21",
+      "block_width": 1,
+      "canonical_output_precision": "fp64",
+      "channels": 2500,
+      "chebyshev_scaling": {
+        "a_denominator": 1.7,
+        "contract": "(E-b)/a",
+        "window": [
+          -2.5,
+          1.2
+        ]
+      },
+      "comparison_key": {
+        "M": 500,
+        "N": 1152,
+        "NE": 2510,
+        "Ntrace": 8,
+        "canonical_output_precision": "fp64",
+        "channels": 2500,
+        "chebyshev_scaling": {
+          "a_denominator": 1.7,
+          "contract": "(E-b)/a",
+          "window": [
+            -2.5,
+            1.2
+          ]
+        },
+        "cond_calctype": "random_vec",
+        "cond_type": "spin",
+        "current_operator": {
+          "spin_orbital_selector": "S_z",
+          "va": [
+            0,
+            1,
+            0
+          ],
+          "vb": [
+            1,
+            0,
+            0
+          ]
+        },
+        "energy_max": 1.2,
+        "energy_min": -2.5,
+        "fermi": -0.085837,
+        "fixture_id": "fccPt_SOC_val09",
+        "fixture_revision": "e15e8639dd0882ea",
+        "kernel": {
+          "alpha": 6.0,
+          "name": "Lorentz"
+        },
+        "lld": 150,
+        "material": "fccPt_SOC",
+        "nnz": 215784,
+        "nsp": 2,
+        "numeric_mode": "fp64",
+        "projector_count": 8,
+        "random_seed": 271828,
+        "rc": 20,
+        "replication": 4,
+        "soc_state": "SOC",
+        "vector_contract": "uniform_unit_phase_normalized_by_sqrt_sites"
+      },
+      "comparison_key_hash": "7a082e1a34508a7a",
+      "cond_calctype": "random_vec",
+      "cond_type": "spin",
+      "correctness": {
+        "compared_files": [
+          "cond_total.out",
+          "cond_total_orb_im.out",
+          "cond_total_orb_real.out"
+        ],
+        "conductivity_spectrum": {
+          "available": true,
+          "files": {
+            "cond_total.out": {
+              "available": true,
+              "max_abs": 4.0000000001150227e-07,
+              "rel_l2": 7.846088601534985e-08
+            },
+            "cond_total_orb_im.out": {
+              "available": true,
+              "max_abs": 3.000000000086267e-07,
+              "rel_l2": 6.770679876594642e-08
+            },
+            "cond_total_orb_real.out": {
+              "available": true,
+              "max_abs": 2.200000000021629e-07,
+              "rel_l2": 6.600422186329118e-08
+            }
+          },
+          "max_abs": 4.0000000001150227e-07,
+          "rel_l2": 7.846088601534985e-08
+        },
+        "integrated_or_tensor": {
+          "available": true,
+          "max_abs": 4.0000000001150227e-07,
+          "rel": 7.846088601534985e-08
+        },
+        "moment": {
+          "available": false,
+          "evidence": "optimized production path intentionally keeps full moments off host",
+          "evidence_id": "989b59f0b392149e",
+          "max_abs": null,
+          "rel_l2": null
+        },
+        "reference_row_id": "fccPt_SOC_b0b4dc8a7e960d21",
+        "status": "PASS",
+        "tolerance_set": {
+          "integrated_rel": 5e-06,
+          "max_abs": 2e-06,
+          "name": "fp64",
+          "rel_l2": 5e-06
+        },
+        "validation_evidence_id": "2a553c3a04a2748e"
+      },
+      "current_operator": {
+        "spin_orbital_selector": "S_z",
+        "va": [
+          0,
+          1,
+          0
+        ],
+        "vb": [
+          1,
+          0,
+          0
+        ]
+      },
+      "derived": {
+        "moment_time_per_trace_s": {
+          "iqr": 0.09920999418749865,
+          "mad": 0.09074356225000102,
+          "maximum": 8.70865520325,
+          "median": 8.617911641,
+          "minimum": 8.510235214875001
+        },
+        "traces_per_second": {
+          "iqr": 0.0013386368137368598,
+          "mad": 0.001209101307842922,
+          "maximum": 0.1175055653282185,
+          "median": 0.11603739300858772,
+          "minimum": 0.1148282917007448
+        }
+      },
+      "energy_max": 1.2,
+      "energy_min": -2.5,
+      "environment": {
+        "OMP_PLACES": "cores",
+        "OMP_PROC_BIND": "close"
+      },
+      "fermi": -0.085837,
+      "fixture_id": "fccPt_SOC_val09",
+      "fixture_revision": "e15e8639dd0882ea",
+      "gamma_bytes": 256000000,
+      "gpu_plugin": true,
+      "gpu_precision_request": "fp64",
+      "gpu_stochastic_block": 1,
+      "headline_speedup_eligible": true,
+      "ineligible_reasons": [],
+      "kernel": {
+        "alpha": 6.0,
+        "name": "Lorentz"
+      },
+      "lld": 150,
+      "material": "fccPt_SOC",
+      "moment_backend": "cuda",
+      "moment_precision": "fp64",
+      "moment_strategy": "cuda_resident",
+      "mu_packed_bytes": 72000000,
+      "nnz": 215784,
+      "nsp": 2,
+      "numeric_mode": "fp64",
+      "output_directory": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/outputs",
+      "output_mode": "production",
+      "output_provenance": {
+        "directory": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/outputs",
+        "files": {
+          "cond_total.out": "ef214cb35c2f03ab81624ea29d6995d626ac1ac22816fea0ac7469ce7fb92fe9",
+          "cond_total_orb_im.out": "8b9e69b57fb76c3af11fb18a2661ff109e6171a144b45ad16d45dce507148287",
+          "cond_total_orb_real.out": "9a1313b9a04b8a46ada9a843e36ce4c1ff584211577c49b9b8889ad19861785c"
+        }
+      },
+      "pairing_fingerprint": "7a082e1a34508a7a",
+      "profile_metadata": {
+        "BLAS_NUM_THREADS": 1,
+        "M": 500,
+        "N": 1152,
+        "Ntrace": 8,
+        "OMP_NUM_THREADS": 1,
+        "backend": "cuda",
+        "blas_threads": 1,
+        "clock_source": "system_clock_wall",
+        "estimator": "random_vec",
+        "lld": 150,
+        "moment_backend": "cuda",
+        "moment_precision": "fp64",
+        "nnz": 215784,
+        "omp_threads": 1,
+        "output_mode": "production",
+        "precision": "fp64_fp64",
+        "random_seed": 271828,
+        "reconstruction_backend": "cuda_blas",
+        "reconstruction_precision": "fp64",
+        "trace_batches": 8,
+        "trace_block_width": 1
+      },
+      "profile_status": "PASS",
+      "profile_validation": {
+        "child_tolerance_s": 3.7741078033500006,
+        "children_ok": true,
+        "exclusive_sum_s": 75.48215606700002,
+        "gamma_children_s": 0.7138089856598526,
+        "moment_children_s": 67.80252280668356,
+        "other_ok": true,
+        "profile_closure_error": 1.8826773711376321e-16,
+        "reconstruction_children_s": 5.714343205792829,
+        "reported_status": "PASS",
+        "status": "PASS",
+        "transport_total_s": 75.482156067,
+        "valid": true
+      },
+      "projector_count": 8,
+      "random_seed": 271828,
+      "raw_logs": {
+        "sample_01": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/sample_01.log",
+        "sample_02": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/sample_02.log",
+        "sample_03": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/sample_03.log",
+        "warmup_01": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/warmup_01.log",
+        "warmup_02": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/warmup_02.log"
+      },
+      "rc": 20,
+      "reconstruction_backend": "cuda_blas",
+      "reconstruction_precision": "fp64",
+      "repetitions": 3,
+      "replication": 4,
+      "row_id": "fccPt_SOC_200b48f0a73f7f35",
+      "samples": [
+        {
+          "profile": {
+            "class": "component",
+            "labels": [
+              "performance",
+              "component",
+              "rs",
+              "kpm",
+              "transport"
+            ],
+            "metadata": {
+              "BLAS_NUM_THREADS": 1,
+              "M": 500,
+              "N": 1152,
+              "Ntrace": 8,
+              "OMP_NUM_THREADS": 1,
+              "backend": "cuda",
+              "blas_threads": 1,
+              "clock_source": "system_clock_wall",
+              "estimator": "random_vec",
+              "lld": 150,
+              "moment_backend": "cuda",
+              "moment_precision": "fp64",
+              "nnz": 215784,
+              "omp_threads": 1,
+              "output_mode": "production",
+              "precision": "fp64_fp64",
+              "random_seed": 271828,
+              "reconstruction_backend": "cuda_blas",
+              "reconstruction_precision": "fp64",
+              "trace_batches": 8,
+              "trace_block_width": 1
+            },
+            "metrics": {
+              "D_conversion": 0,
+              "D_gamma_basis": 0.5907321905251592,
+              "D_gamma_fill": 0.12307679513469338,
+              "D_gpu_mu_pack": 0.010197774972766638,
+              "D_moment_D2H": 0,
+              "D_moment_GPU_kernel": 67.7667132075876,
+              "D_moment_H2D": 0.025611824123188853,
+              "D_mu_pack": 0,
+              "D_reconstruction_BLAS": 5.711382531793788,
+              "D_reconstruction_D2H": 0.002960673999041319,
+              "PROFILE_STATUS": "PASS",
+              "P_energy_integration": 0.001017424,
+              "P_gamma": 0.7138089856598526,
+              "P_gamma_basis_setup": 0.5907321905251592,
+              "P_gamma_generation": 0.12307679513469338,
+              "P_misc": 0.024974780547324826,
+              "P_moment_finalize": 0.072204284,
+              "P_moments_total": 68.08188171900001,
+              "P_operator": 0.20230308,
+              "P_operator_setup": 0.20230308,
+              "P_other": 0.024974780547324826,
+              "P_output_io": 0.003068316,
+              "P_output_prepare": 0.032177368,
+              "P_reconstruction_total": 5.714343205792829,
+              "P_result_unpack": 0.002316267,
+              "P_stack_setup": 0.519177038,
+              "P_tensor_postprocess": 0.000563768,
+              "P_trace_setup": 0.11431983100000001,
+              "T_D2H": 0,
+              "T_H2D": 0.025611824123188853,
+              "T_cheb_moments": 68.08188171900001,
+              "T_energy_integral": 0.001017424,
+              "T_gamma": 0.7138089856598526,
+              "T_gamma_mu": 5.711382531793788,
+              "T_mu_pack": 0,
+              "T_operator": 0.20230308,
+              "T_trace_setup": 0.11431983100000001,
+              "T_transport_total": 75.482156067,
+              "bytes_d2h": 5783040,
+              "bytes_gamma": 256000000,
+              "bytes_h2d": 92955632,
+              "bytes_mu_pack": 72000000,
+              "full_moment_d2h_bytes": 0,
+              "gpu_energy_block": 64,
+              "host_full_moment_bytes": 0,
+              "profile_child_error": 0,
+              "profile_closure_error": 0,
+              "reduced_result_d2h_bytes": 5783040,
+              "resident_device_moment_bytes": 576000000
+            },
+            "name": "kpm_transport",
+            "validation": {
+              "child_tolerance_s": 3.7741078033500006,
+              "children_ok": true,
+              "exclusive_sum_s": 75.48215606700002,
+              "gamma_children_s": 0.7138089856598526,
+              "moment_children_s": 67.80252280668356,
+              "other_ok": true,
+              "profile_closure_error": 1.8826773711376321e-16,
+              "reconstruction_children_s": 5.714343205792829,
+              "reported_status": "PASS",
+              "status": "PASS",
+              "transport_total_s": 75.482156067,
+              "valid": true
+            }
+          },
+          "raw_log": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/sample_01.log",
+          "repetition": 1,
+          "sample_id": "fccPt_SOC_200b48f0a73f7f35:sample:01",
+          "wall_time_s": 75.68626869702712
+        },
+        {
+          "profile": {
+            "class": "component",
+            "labels": [
+              "performance",
+              "component",
+              "rs",
+              "kpm",
+              "transport"
+            ],
+            "metadata": {
+              "BLAS_NUM_THREADS": 1,
+              "M": 500,
+              "N": 1152,
+              "Ntrace": 8,
+              "OMP_NUM_THREADS": 1,
+              "backend": "cuda",
+              "blas_threads": 1,
+              "clock_source": "system_clock_wall",
+              "estimator": "random_vec",
+              "lld": 150,
+              "moment_backend": "cuda",
+              "moment_precision": "fp64",
+              "nnz": 215784,
+              "omp_threads": 1,
+              "output_mode": "production",
+              "precision": "fp64_fp64",
+              "random_seed": 271828,
+              "reconstruction_backend": "cuda_blas",
+              "reconstruction_precision": "fp64",
+              "trace_batches": 8,
+              "trace_block_width": 1
+            },
+            "metrics": {
+              "D_conversion": 0,
+              "D_gamma_basis": 0.592948465840891,
+              "D_gamma_fill": 0.12306027906015515,
+              "D_gpu_mu_pack": 0.010241432813927531,
+              "D_moment_D2H": 0,
+              "D_moment_GPU_kernel": 68.62850941391662,
+              "D_moment_H2D": 0.025609981501474977,
+              "D_mu_pack": 0,
+              "D_reconstruction_BLAS": 5.783326274482533,
+              "D_reconstruction_D2H": 0.0029575966764241457,
+              "PROFILE_STATUS": "PASS",
+              "P_energy_integration": 0.001053517,
+              "P_gamma": 0.7160087449010462,
+              "P_gamma_basis_setup": 0.592948465840891,
+              "P_gamma_generation": 0.12306027906015515,
+              "P_misc": 0.02532052294000664,
+              "P_moment_finalize": 0.071883552,
+              "P_moments_total": 68.943293128,
+              "P_operator": 0.20216265,
+              "P_operator_setup": 0.20216265,
+              "P_other": 0.02532052294000664,
+              "P_output_io": 0.002989781,
+              "P_output_prepare": 0.032303641,
+              "P_reconstruction_total": 5.7862838711589575,
+              "P_result_unpack": 0.002393881,
+              "P_stack_setup": 0.514247278,
+              "P_tensor_postprocess": 0.0005942,
+              "P_trace_setup": 0.114448957,
+              "T_D2H": 0,
+              "T_H2D": 0.025609981501474977,
+              "T_cheb_moments": 68.943293128,
+              "T_energy_integral": 0.001053517,
+              "T_gamma": 0.7160087449010462,
+              "T_gamma_mu": 5.783326274482533,
+              "T_mu_pack": 0,
+              "T_operator": 0.20216265,
+              "T_trace_setup": 0.114448957,
+              "T_transport_total": 76.412983724,
+              "bytes_d2h": 5783040,
+              "bytes_gamma": 256000000,
+              "bytes_h2d": 92955632,
+              "bytes_mu_pack": 72000000,
+              "full_moment_d2h_bytes": 0,
+              "gpu_energy_block": 64,
+              "host_full_moment_bytes": 0,
+              "profile_child_error": 0,
+              "profile_closure_error": 0,
+              "reduced_result_d2h_bytes": 5783040,
+              "resident_device_moment_bytes": 576000000
+            },
+            "name": "kpm_transport",
+            "validation": {
+              "child_tolerance_s": 3.8206491862000003,
+              "children_ok": true,
+              "exclusive_sum_s": 76.412983724,
+              "gamma_children_s": 0.7160087449010462,
+              "moment_children_s": 68.66436082823202,
+              "other_ok": true,
+              "profile_closure_error": 0.0,
+              "reconstruction_children_s": 5.7862838711589575,
+              "reported_status": "PASS",
+              "status": "PASS",
+              "transport_total_s": 76.412983724,
+              "valid": true
+            }
+          },
+          "raw_log": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/sample_02.log",
+          "repetition": 2,
+          "sample_id": "fccPt_SOC_200b48f0a73f7f35:sample:02",
+          "wall_time_s": 76.61340414779261
+        },
+        {
+          "profile": {
+            "class": "component",
+            "labels": [
+              "performance",
+              "component",
+              "rs",
+              "kpm",
+              "transport"
+            ],
+            "metadata": {
+              "BLAS_NUM_THREADS": 1,
+              "M": 500,
+              "N": 1152,
+              "Ntrace": 8,
+              "OMP_NUM_THREADS": 1,
+              "backend": "cuda",
+              "blas_threads": 1,
+              "clock_source": "system_clock_wall",
+              "estimator": "random_vec",
+              "lld": 150,
+              "moment_backend": "cuda",
+              "moment_precision": "fp64",
+              "nnz": 215784,
+              "omp_threads": 1,
+              "output_mode": "production",
+              "precision": "fp64_fp64",
+              "random_seed": 271828,
+              "reconstruction_backend": "cuda_blas",
+              "reconstruction_precision": "fp64",
+              "trace_batches": 8,
+              "trace_block_width": 1
+            },
+            "metrics": {
+              "D_conversion": 0,
+              "D_gamma_basis": 0.5907816952094436,
+              "D_gamma_fill": 0.12304432177916169,
+              "D_gpu_mu_pack": 0.010162544902414083,
+              "D_moment_D2H": 0,
+              "D_moment_GPU_kernel": 69.35388491977938,
+              "D_moment_H2D": 0.025631261756643653,
+              "D_mu_pack": 0,
+              "D_reconstruction_BLAS": 5.840086072217673,
+              "D_reconstruction_D2H": 0.002938847290351987,
+              "PROFILE_STATUS": "PASS",
+              "P_energy_integration": 0.001057784,
+              "P_gamma": 0.7138260169886053,
+              "P_gamma_basis_setup": 0.5907816952094436,
+              "P_gamma_generation": 0.12304432177916169,
+              "P_misc": 0.025204723503378546,
+              "P_moment_finalize": 0.072387036,
+              "P_moments_total": 69.669241626,
+              "P_operator": 0.206321036,
+              "P_operator_setup": 0.206321036,
+              "P_other": 0.025204723503378546,
+              "P_output_io": 0.002577207,
+              "P_output_prepare": 0.032169818,
+              "P_reconstruction_total": 5.843024919508025,
+              "P_result_unpack": 0.002493209,
+              "P_stack_setup": 0.517072488,
+              "P_tensor_postprocess": 0.000508069,
+              "P_trace_setup": 0.11605852500000001,
+              "T_D2H": 0,
+              "T_H2D": 0.025631261756643653,
+              "T_cheb_moments": 69.669241626,
+              "T_energy_integral": 0.001057784,
+              "T_gamma": 0.7138260169886053,
+              "T_gamma_mu": 5.840086072217673,
+              "T_mu_pack": 0,
+              "T_operator": 0.206321036,
+              "T_trace_setup": 0.11605852500000001,
+              "T_transport_total": 77.201942458,
+              "bytes_d2h": 5783040,
+              "bytes_gamma": 256000000,
+              "bytes_h2d": 92955632,
+              "bytes_mu_pack": 72000000,
+              "full_moment_d2h_bytes": 0,
+              "gpu_energy_block": 64,
+              "host_full_moment_bytes": 0,
+              "profile_child_error": 0,
+              "profile_closure_error": 0,
+              "reduced_result_d2h_bytes": 5783040,
+              "resident_device_moment_bytes": 576000000
+            },
+            "name": "kpm_transport",
+            "validation": {
+              "child_tolerance_s": 3.8600971229000005,
+              "children_ok": true,
+              "exclusive_sum_s": 77.201942458,
+              "gamma_children_s": 0.7138260169886053,
+              "moment_children_s": 69.38967872643843,
+              "other_ok": true,
+              "profile_closure_error": 0.0,
+              "reconstruction_children_s": 5.843024919508025,
+              "reported_status": "PASS",
+              "status": "PASS",
+              "transport_total_s": 77.201942458,
+              "valid": true
+            }
+          },
+          "raw_log": "/home/andersb/Nano/rslmto_fable_v3/results/benchmarks/kpm_b1_final/raw/fccPt_SOC_200b48f0a73f7f35/sample_03.log",
+          "repetition": 3,
+          "sample_id": "fccPt_SOC_200b48f0a73f7f35:sample:03",
+          "wall_time_s": 77.4027860169299
+        }
+      ],
+      "size": "r4",
+      "soc_state": "SOC",
+      "speedups": {
+        "S_moments": 1.3212942490993917,
+        "S_transport": 1.509821580540694,
+        "S_whole": 1.5139913436844779
+      },
+      "statistics": {
+        "P_energy_integration": {
+          "iqr": 2.0180000000000068e-05,
+          "mad": 4.267000000000073e-06,
+          "maximum": 0.001057784,
+          "median": 0.001053517,
+          "minimum": 0.001017424
+        },
+        "P_gamma_basis_setup": {
+          "iqr": 0.001108137657865882,
+          "mad": 4.9504684284329414e-05,
+          "maximum": 0.592948465840891,
+          "median": 0.5907816952094436,
+          "minimum": 0.5907321905251592
+        },
+        "P_gamma_generation": {
+          "iqr": 1.6236677765846252e-05,
+          "mad": 1.595728099346161e-05,
+          "maximum": 0.12307679513469338,
+          "median": 0.12306027906015515,
+          "minimum": 0.12304432177916169
+        },
+        "P_misc": {
+          "iqr": 0.00017287119634090686,
+          "mad": 0.00011579943662809455,
+          "maximum": 0.02532052294000664,
+          "median": 0.025204723503378546,
+          "minimum": 0.024974780547324826
+        },
+        "P_moment_finalize": {
+          "iqr": 0.00025174199999999924,
+          "mad": 0.00018275200000000824,
+          "maximum": 0.072387036,
+          "median": 0.072204284,
+          "minimum": 0.071883552
+        },
+        "P_moments_total": {
+          "iqr": 0.7936799534999892,
+          "mad": 0.7259484980000082,
+          "maximum": 69.669241626,
+          "median": 68.943293128,
+          "minimum": 68.08188171900001
+        },
+        "P_operator_setup": {
+          "iqr": 0.0020791930000000347,
+          "mad": 0.00014042999999999695,
+          "maximum": 0.206321036,
+          "median": 0.20230308,
+          "minimum": 0.20216265
+        },
+        "P_output_io": {
+          "iqr": 0.0002455545,
+          "mad": 7.853500000000024e-05,
+          "maximum": 0.003068316,
+          "median": 0.002989781,
+          "minimum": 0.002577207
+        },
+        "P_output_prepare": {
+          "iqr": 6.691150000000257e-05,
+          "mad": 7.549999999995061e-06,
+          "maximum": 0.032303641,
+          "median": 0.032177368,
+          "minimum": 0.032169818
+        },
+        "P_reconstruction_total": {
+          "iqr": 0.06434085685759783,
+          "mad": 0.05674104834906757,
+          "maximum": 5.843024919508025,
+          "median": 5.7862838711589575,
+          "minimum": 5.714343205792829
+        },
+        "P_result_unpack": {
+          "iqr": 8.847100000000012e-05,
+          "mad": 7.761400000000016e-05,
+          "maximum": 0.002493209,
+          "median": 0.002393881,
+          "minimum": 0.002316267
+        },
+        "P_stack_setup": {
+          "iqr": 0.0024648800000000026,
+          "mad": 0.002104549999999983,
+          "maximum": 0.519177038,
+          "median": 0.517072488,
+          "minimum": 0.514247278
+        },
+        "P_tensor_postprocess": {
+          "iqr": 4.306550000000007e-05,
+          "mad": 3.043200000000005e-05,
+          "maximum": 0.0005942,
+          "median": 0.000563768,
+          "minimum": 0.000508069
+        },
+        "P_trace_setup": {
+          "iqr": 0.0008693470000000064,
+          "mad": 0.0001291259999999933,
+          "maximum": 0.11605852500000001,
+          "median": 0.114448957,
+          "minimum": 0.11431983100000001
+        },
+        "T_transport_total": {
+          "iqr": 0.8598931954999927,
+          "mad": 0.7889587340000048,
+          "maximum": 77.201942458,
+          "median": 76.412983724,
+          "minimum": 75.482156067
+        },
+        "wall_time_s": {
+          "iqr": 0.8582586599513888,
+          "mad": 0.7893818691372871,
+          "maximum": 77.4027860169299,
+          "median": 76.61340414779261,
+          "minimum": 75.68626869702712
+        }
+      },
+      "vector_contract": "uniform_unit_phase_normalized_by_sqrt_sites",
+      "warmups": 2
+    }
+  ],
+  "schema": "rslmto.kpm-b0c.v1",
+  "scope": "strict fair CPU/GPU KPM/Kubo-Bastin transport benchmark evidence",
+  "skipped_rows": []
+}

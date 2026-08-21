@@ -1,0 +1,50 @@
+{
+  "compared_files": [
+    "cond_total.out",
+    "cond_total_orb_im.out",
+    "cond_total_orb_real.out"
+  ],
+  "conductivity_spectrum": {
+    "available": true,
+    "files": {
+      "cond_total.out": {
+        "available": true,
+        "max_abs": 6.000000000033756e-07,
+        "rel_l2": 1.0494214688139584e-07
+      },
+      "cond_total_orb_im.out": {
+        "available": true,
+        "max_abs": 4.0000000001150227e-07,
+        "rel_l2": 1.0006219971076539e-07
+      },
+      "cond_total_orb_real.out": {
+        "available": true,
+        "max_abs": 3.199999999980996e-07,
+        "rel_l2": 8.99164222664575e-08
+      }
+    },
+    "max_abs": 6.000000000033756e-07,
+    "rel_l2": 1.0494214688139584e-07
+  },
+  "integrated_or_tensor": {
+    "available": true,
+    "max_abs": 6.000000000033756e-07,
+    "rel": 1.0494214688139584e-07
+  },
+  "moment": {
+    "available": false,
+    "evidence": "optimized production path intentionally keeps full moments off host",
+    "evidence_id": "c74fbdac967f48b8",
+    "max_abs": null,
+    "rel_l2": null
+  },
+  "reference_row_id": "fccPt_SOC_95bf32e1d9bea95f",
+  "status": "PASS",
+  "tolerance_set": {
+    "integrated_rel": 5e-06,
+    "max_abs": 2e-06,
+    "name": "fp64",
+    "rel_l2": 5e-06
+  },
+  "validation_evidence_id": "c74fbdac967f48b8"
+}

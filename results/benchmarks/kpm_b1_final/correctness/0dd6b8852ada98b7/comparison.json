@@ -1,0 +1,68 @@
+{
+  "compared_files": [
+    "Pt_cond.out",
+    "Pt_cond_orb_im.out",
+    "Pt_cond_orb_real.out",
+    "cond_total.out",
+    "cond_total_orb_im.out",
+    "cond_total_orb_real.out"
+  ],
+  "conductivity_spectrum": {
+    "available": true,
+    "files": {
+      "Pt_cond.out": {
+        "available": true,
+        "max_abs": 1.0900000000035881e-05,
+        "rel_l2": 3.8940689780552634e-06
+      },
+      "Pt_cond_orb_im.out": {
+        "available": true,
+        "max_abs": 4.2000000000097515e-06,
+        "rel_l2": 2.9769588845349847e-06
+      },
+      "Pt_cond_orb_real.out": {
+        "available": true,
+        "max_abs": 4.299999999998749e-06,
+        "rel_l2": 3.127917732353385e-06
+      },
+      "cond_total.out": {
+        "available": true,
+        "max_abs": 1.0900000000035881e-05,
+        "rel_l2": 3.8940689780552634e-06
+      },
+      "cond_total_orb_im.out": {
+        "available": true,
+        "max_abs": 4.2000000000097515e-06,
+        "rel_l2": 2.9769588845349847e-06
+      },
+      "cond_total_orb_real.out": {
+        "available": true,
+        "max_abs": 4.299999999998749e-06,
+        "rel_l2": 3.127917732353385e-06
+      }
+    },
+    "max_abs": 1.0900000000035881e-05,
+    "rel_l2": 3.8940689780552634e-06
+  },
+  "integrated_or_tensor": {
+    "available": true,
+    "max_abs": 1.0900000000035881e-05,
+    "rel": 3.8940689780552634e-06
+  },
+  "moment": {
+    "available": false,
+    "evidence": "optimized production path intentionally keeps full moments off host",
+    "evidence_id": "bac309b0606259e2",
+    "max_abs": null,
+    "rel_l2": null
+  },
+  "reference_row_id": "fccPt_SOC_f0ebb03dd7df67ad",
+  "status": "PASS",
+  "tolerance_set": {
+    "integrated_rel": 0.0005,
+    "max_abs": 0.0005,
+    "name": "fp32",
+    "rel_l2": 0.0005
+  },
+  "validation_evidence_id": "bac309b0606259e2"
+}

@@ -1,0 +1,43 @@
+[Aug 21 2026 13:58:01.468] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Aug 21 2026 13:58:01.912] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Aug 21 2026 13:58:02.103] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+           1           1   1.0000000000000000     
+[Aug 21 2026 13:58:02.168] [rsrec_cuda_plugin.f90:332]  [1m[32m<info> [0m[0mCUDA_DEVICE_MAPPING world_rank=0 local_rank=0 local_size=1 visible_devices=1 selected_device=0
+[Aug 21 2026 13:58:02.464] [recursion_transport.f90:711]  [1m[32m<info> [0m[0mChebyshev moments being calculated taking atom type 1
+[Aug 21 2026 13:58:30.917] [green_chebyshev.f90:288]   [1m[32m<info> [0m[0mCUDA transport moments resident; keeping Chebyshev DOS on CPU.
+[Aug 21 2026 13:58:30.918] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -2.500000,    1.200000]
+[Aug 21 2026 13:58:30.973] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Aug 21 2026 13:58:30.976] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.085837
+[Aug 21 2026 13:58:30.988] [conductivity.f90:338]      [1m[32m<info> [0m[0mCUDA KPM reconstruction uses tiled resident Gamma blocks.
+  0.37202031986418188       0.25000000000000000        3.7000000000000002     
+ KPM_PROFILE backend=cuda moment_backend=cuda moment_precision=fp64 reconstruction_backend=cuda_blas reconstruction_precision=fp64 precision=fp64_fp64 estimator=per_type N=                  3888 nnz=                884520 M=          500 lld=          150 Ntrace=            1 trace_block_width=            1 trace_batches=            1 OMP_NUM_THREADS=1 BLAS_NUM_THREADS=1 random_seed=unset omp_threads=1 blas_threads=1 clock_source=system_clock_wall bytes_h2d=              91433328 bytes_d2h=                722880 bytes_gamma=             256000000 bytes_mu_pack=              72000000 resident_device_moment_bytes=              72000000 host_full_moment_bytes=                     0 full_moment_d2h_bytes=                     0 reduced_result_d2h_bytes=                722880 gpu_energy_block=           64 output_mode=production P_operator_setup=   0.21201358600000000      P_trace_setup=   0.14873905400000001      P_moments_total=    28.427448042999998      P_gamma_basis_setup=   0.59036761475726962      P_gamma_generation=   0.12347699957899749      P_reconstruction_total=   0.70025117462500930      P_result_unpack=    9.9913200000000001E-004 P_energy_integration=    2.2727300000000001E-003 P_tensor_postprocess=    6.8207299999999995E-004 P_output_prepare=    6.0093167000000003E-002 P_output_io=    5.3894019999999997E-003 P_stack_setup=   0.63477553600000003      P_moment_finalize=    7.1633850999999998E-002 P_misc=    3.7561663038722770E-002 P_operator=   0.21201358600000000      P_gamma=   0.71384461433626711      P_other=    3.7561663038722770E-002 D_moment_H2D=    3.2652770169079304E-003 D_moment_GPU_kernel=    28.129817144013941      D_moment_D2H=    0.0000000000000000      D_conversion=    0.0000000000000000      D_mu_pack=    0.0000000000000000      D_reconstruction_BLAS=   0.69978715549223125      D_gamma_basis=   0.59036761475726962      D_gamma_fill=   0.12347699957899749      D_gpu_mu_pack=    1.2776339426636696E-003 D_reconstruction_D2H=    4.6401913277804852E-004 T_operator=   0.21201358600000000      T_trace_setup=   0.14873905400000001      T_cheb_moments=    28.427448042999998      T_H2D=    3.2652770169079304E-003 T_D2H=    0.0000000000000000      T_gamma=   0.71384461433626711      T_mu_pack=    0.0000000000000000      T_gamma_mu=   0.69978715549223125      T_energy_integral=    2.2727300000000001E-003 T_transport_total=    31.015704026000002      profile_closure_error=    0.0000000000000000      profile_child_error=    0.0000000000000000      PROFILE_STATUS=PASS
+----------------------------------------------------------- TIMER REPORT ------------------------------------------------------------
+  CATEGORY                           MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                 -              -              -        31.0375          100.0              1              5   
+  └─ Calculation                        -              -              -        31.0375          100.0              1              4   
+     ├─ Calculation*                    -              -              -        30.7327           99.0              -              1   
+     └─ pre-processing                  -              -              -         0.3048            1.0              1              3   
+        ├─ pre-processing*              -              -              -         0.0104            0.0              -              1   
+        ├─ build_data                   -              -              -         0.0000            0.0              1              1   
+        ├─ bravais                      -              -              -         0.1868            0.6              1              1   
+        └─ structb                      -              -              -         0.1076            0.3              1              1   
+-------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+-------------------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,68 @@
+{
+  "compared_files": [
+    "Pt_cond.out",
+    "Pt_cond_orb_im.out",
+    "Pt_cond_orb_real.out",
+    "cond_total.out",
+    "cond_total_orb_im.out",
+    "cond_total_orb_real.out"
+  ],
+  "conductivity_spectrum": {
+    "available": true,
+    "files": {
+      "Pt_cond.out": {
+        "available": true,
+        "max_abs": 0.0,
+        "rel_l2": 0.0
+      },
+      "Pt_cond_orb_im.out": {
+        "available": true,
+        "max_abs": 0.0,
+        "rel_l2": 0.0
+      },
+      "Pt_cond_orb_real.out": {
+        "available": true,
+        "max_abs": 0.0,
+        "rel_l2": 0.0
+      },
+      "cond_total.out": {
+        "available": true,
+        "max_abs": 0.0,
+        "rel_l2": 0.0
+      },
+      "cond_total_orb_im.out": {
+        "available": true,
+        "max_abs": 0.0,
+        "rel_l2": 0.0
+      },
+      "cond_total_orb_real.out": {
+        "available": true,
+        "max_abs": 0.0,
+        "rel_l2": 0.0
+      }
+    },
+    "max_abs": 0.0,
+    "rel_l2": 0.0
+  },
+  "integrated_or_tensor": {
+    "available": true,
+    "max_abs": 0.0,
+    "rel": 0.0
+  },
+  "moment": {
+    "available": false,
+    "evidence": "optimized production path intentionally keeps full moments off host",
+    "evidence_id": "6bd3477f811d3fe4",
+    "max_abs": null,
+    "rel_l2": null
+  },
+  "reference_row_id": "fccPt_SOC_e10b1abfc75e087e",
+  "status": "PASS",
+  "tolerance_set": {
+    "integrated_rel": 0.0005,
+    "max_abs": 0.0005,
+    "name": "fp32",
+    "rel_l2": 0.0005
+  },
+  "validation_evidence_id": "6bd3477f811d3fe4"
+}
