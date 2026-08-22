@@ -4,7 +4,7 @@ This report is generated from `campaign.json`; numerical tables and plots are de
 
 ## Executive summary
 
-- Frozen implementation commit: `e23fab86f10dda9ddc1d5dd9452f9586b2fc428a`; campaign rows: `84`; explicit skips plus ineligible GPU records retained: `11`.
+- Frozen implementation commit: `3a57f2d0e32033ae3470b868207601b6e84cdeb9`; campaign rows: `84`; explicit skips plus ineligible GPU records retained: `11`.
 - Primary GPU: `NVIDIA RTX A4000` device `0`, `16376 MiB`, compute `8.6`, CUDA `13.3`.
 - Headline pairs: FP64 `5`, FP32 `9`; every published pair has profile and production-output correctness PASS.
 - CPU rows retain OMP=1/2/4/8; GPU rows use one process and one selected GPU at OMP=1.
@@ -19,44 +19,44 @@ This report is generated from `campaign.json`; numerical tables and plots are de
 
 ## FP64 headline
 
-| material | size | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |
-|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| fccPt_SOC | r4 | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.8 | 8.61 | 1.25 | 21.4 | 11 | 1.94 | 21.8 | 11.2 | 1.94 | PASS |
-| fccPt_SOC | r6 | 3888 | 884520 | 250 | per_type | 1 | 4 | 9.04 | 7.9 | 1.14 | 12.4 | 9.31 | 1.33 | 12.6 | 9.51 | 1.32 | PASS |
-| fccPt_SOC | r6 | 3888 | 884520 | 500 | per_type | 1 | 4 | 34.3 | 28.5 | 1.2 | 45.2 | 31.1 | 1.45 | 45.6 | 31.3 | 1.46 | PASS |
-| fccPt_SOC | r8 | 9216 | 2299752 | 250 | per_type | 1 | 8 | 21.5 | 18.6 | 1.16 | 25.3 | 20.5 | 1.24 | 25.6 | 20.7 | 1.24 | PASS |
-| fccPt_SOC | r8 | 9216 | 2299752 | 500 | per_type | 1 | 8 | 81.9 | 67.9 | 1.21 | 93.4 | 71.1 | 1.31 | 93.8 | 71.3 | 1.32 | PASS |
+| material | size | cond_type | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |
+|---|---:|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| fccPt_SOC | r4 | spin | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.8 | 8.61 | 1.25 | 21.4 | 11 | 1.94 | 21.8 | 11.2 | 1.94 | PASS |
+| fccPt_SOC | r6 | spin | 3888 | 884520 | 250 | per_type | 1 | 4 | 9.04 | 7.9 | 1.14 | 12.4 | 9.31 | 1.33 | 12.6 | 9.51 | 1.32 | PASS |
+| fccPt_SOC | r6 | spin | 3888 | 884520 | 500 | per_type | 1 | 4 | 34.3 | 28.5 | 1.2 | 45.2 | 31.1 | 1.45 | 45.6 | 31.3 | 1.46 | PASS |
+| fccPt_SOC | r8 | spin | 9216 | 2299752 | 250 | per_type | 1 | 8 | 21.5 | 18.6 | 1.16 | 25.3 | 20.5 | 1.24 | 25.6 | 20.7 | 1.24 | PASS |
+| fccPt_SOC | r8 | spin | 9216 | 2299752 | 500 | per_type | 1 | 8 | 81.9 | 67.9 | 1.21 | 93.4 | 71.1 | 1.31 | 93.8 | 71.3 | 1.32 | PASS |
 
 ## FP32 headline
 
-| material | size | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |
-|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| bccFe_magnetic | r4 | 1152 | 180792 | 500 | per_type | 1 | 2 | 10.6 | 0.43 | 24.6 | 23.8 | 2.09 | 11.4 | 24.3 | 2.3 | 10.6 | PASS |
-| fccPt_SOC | r4 | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.8 | 0.446 | 24.1 | 24.1 | 2.1 | 11.4 | 24.5 | 2.31 | 10.6 | PASS |
-| fccPt_SOC | r4 | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.8 | 0.445 | 24.3 | 24.1 | 2.11 | 11.4 | 24.6 | 2.31 | 10.6 | PASS |
-| fccPt_SOC | r4 | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.9 | 0.445 | 24.4 | 24.1 | 2.11 | 11.4 | 24.6 | 2.31 | 10.6 | PASS |
-| fccPt_SOC | r6 | 3888 | 884520 | 250 | per_type | 1 | 4 | 9.11 | 0.28 | 32.5 | 13.2 | 1.54 | 8.54 | 13.4 | 1.72 | 7.77 | PASS |
-| fccPt_SOC | r6 | 3888 | 884520 | 500 | per_type | 1 | 4 | 34.4 | 1.02 | 33.7 | 47.9 | 2.89 | 16.5 | 48.3 | 3.1 | 15.6 | PASS |
-| fccPt_SOC | r6 | 3888 | 884520 | 750 | per_type | 1 | 4 | 77.4 | 2.17 | 35.6 | 107 | 5.01 | 21.3 | 108 | 5.25 | 20.5 | PASS |
-| fccPt_SOC | r8 | 9216 | 2299752 | 250 | per_type | 1 | 8 | 21.2 | 0.591 | 35.8 | 25.7 | 2.32 | 11.1 | 26 | 2.5 | 10.4 | PASS |
-| fccPt_SOC | r8 | 9216 | 2299752 | 500 | per_type | 1 | 8 | 82.5 | 2.22 | 37.2 | 96.5 | 4.65 | 20.8 | 96.9 | 4.83 | 20.1 | PASS |
+| material | size | cond_type | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |
+|---|---:|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| bccFe_magnetic | r4 | spin | 1152 | 180792 | 500 | per_type | 1 | 2 | 10.6 | 0.43 | 24.6 | 23.8 | 2.09 | 11.4 | 24.3 | 2.3 | 10.6 | PASS |
+| fccPt_SOC | r4 | charge | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.8 | 0.446 | 24.1 | 24.1 | 2.1 | 11.4 | 24.5 | 2.31 | 10.6 | PASS |
+| fccPt_SOC | r4 | orbital | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.8 | 0.445 | 24.3 | 24.1 | 2.11 | 11.4 | 24.6 | 2.31 | 10.6 | PASS |
+| fccPt_SOC | r4 | spin | 1152 | 215784 | 500 | per_type | 1 | 2 | 10.9 | 0.445 | 24.4 | 24.1 | 2.11 | 11.4 | 24.6 | 2.31 | 10.6 | PASS |
+| fccPt_SOC | r6 | spin | 3888 | 884520 | 250 | per_type | 1 | 4 | 9.11 | 0.28 | 32.5 | 13.2 | 1.54 | 8.54 | 13.4 | 1.72 | 7.77 | PASS |
+| fccPt_SOC | r6 | spin | 3888 | 884520 | 500 | per_type | 1 | 4 | 34.4 | 1.02 | 33.7 | 47.9 | 2.89 | 16.5 | 48.3 | 3.1 | 15.6 | PASS |
+| fccPt_SOC | r6 | spin | 3888 | 884520 | 750 | per_type | 1 | 4 | 77.4 | 2.17 | 35.6 | 107 | 5.01 | 21.3 | 108 | 5.25 | 20.5 | PASS |
+| fccPt_SOC | r8 | spin | 9216 | 2299752 | 250 | per_type | 1 | 8 | 21.2 | 0.591 | 35.8 | 25.7 | 2.32 | 11.1 | 26 | 2.5 | 10.4 | PASS |
+| fccPt_SOC | r8 | spin | 9216 | 2299752 | 500 | per_type | 1 | 8 | 82.5 | 2.22 | 37.2 | 96.5 | 4.65 | 20.8 | 96.9 | 4.83 | 20.1 | PASS |
 
 ## M-order scaling
 
-| material | size | mode | M | CPU OMP | CPU moments (s) | GPU moments (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | correctness |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| bccFe_magnetic | r4 | fp32 | 500 | 2 | 10.6 | 0.43 | 24.6 | 23.8 | 2.09 | 11.4 | PASS |
-| fccPt_SOC | r4 | fp32 | 500 | 2 | 10.9 | 0.445 | 24.4 | 24.1 | 2.11 | 11.4 | PASS |
-| fccPt_SOC | r4 | fp64 | 500 | 2 | 10.8 | 8.61 | 1.25 | 21.4 | 11 | 1.94 | PASS |
-| fccPt_SOC | r6 | fp32 | 250 | 4 | 9.11 | 0.28 | 32.5 | 13.2 | 1.54 | 8.54 | PASS |
-| fccPt_SOC | r6 | fp64 | 250 | 4 | 9.04 | 7.9 | 1.14 | 12.4 | 9.31 | 1.33 | PASS |
-| fccPt_SOC | r6 | fp32 | 500 | 4 | 34.4 | 1.02 | 33.7 | 47.9 | 2.89 | 16.5 | PASS |
-| fccPt_SOC | r6 | fp64 | 500 | 4 | 34.3 | 28.5 | 1.2 | 45.2 | 31.1 | 1.45 | PASS |
-| fccPt_SOC | r6 | fp32 | 750 | 4 | 77.4 | 2.17 | 35.6 | 107 | 5.01 | 21.3 | PASS |
-| fccPt_SOC | r8 | fp32 | 250 | 8 | 21.2 | 0.591 | 35.8 | 25.7 | 2.32 | 11.1 | PASS |
-| fccPt_SOC | r8 | fp64 | 250 | 8 | 21.5 | 18.6 | 1.16 | 25.3 | 20.5 | 1.24 | PASS |
-| fccPt_SOC | r8 | fp32 | 500 | 8 | 82.5 | 2.22 | 37.2 | 96.5 | 4.65 | 20.8 | PASS |
-| fccPt_SOC | r8 | fp64 | 500 | 8 | 81.9 | 67.9 | 1.21 | 93.4 | 71.1 | 1.31 | PASS |
+| material | size | cond_type | mode | M | CPU OMP | CPU moments (s) | GPU moments (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | correctness |
+|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| bccFe_magnetic | r4 | spin | fp32 | 500 | 2 | 10.6 | 0.43 | 24.6 | 23.8 | 2.09 | 11.4 | PASS |
+| fccPt_SOC | r4 | spin | fp32 | 500 | 2 | 10.9 | 0.445 | 24.4 | 24.1 | 2.11 | 11.4 | PASS |
+| fccPt_SOC | r4 | spin | fp64 | 500 | 2 | 10.8 | 8.61 | 1.25 | 21.4 | 11 | 1.94 | PASS |
+| fccPt_SOC | r6 | spin | fp32 | 250 | 4 | 9.11 | 0.28 | 32.5 | 13.2 | 1.54 | 8.54 | PASS |
+| fccPt_SOC | r6 | spin | fp64 | 250 | 4 | 9.04 | 7.9 | 1.14 | 12.4 | 9.31 | 1.33 | PASS |
+| fccPt_SOC | r6 | spin | fp32 | 500 | 4 | 34.4 | 1.02 | 33.7 | 47.9 | 2.89 | 16.5 | PASS |
+| fccPt_SOC | r6 | spin | fp64 | 500 | 4 | 34.3 | 28.5 | 1.2 | 45.2 | 31.1 | 1.45 | PASS |
+| fccPt_SOC | r6 | spin | fp32 | 750 | 4 | 77.4 | 2.17 | 35.6 | 107 | 5.01 | 21.3 | PASS |
+| fccPt_SOC | r8 | spin | fp32 | 250 | 8 | 21.2 | 0.591 | 35.8 | 25.7 | 2.32 | 11.1 | PASS |
+| fccPt_SOC | r8 | spin | fp64 | 250 | 8 | 21.5 | 18.6 | 1.16 | 25.3 | 20.5 | 1.24 | PASS |
+| fccPt_SOC | r8 | spin | fp32 | 500 | 8 | 82.5 | 2.22 | 37.2 | 96.5 | 4.65 | 20.8 | PASS |
+| fccPt_SOC | r8 | spin | fp64 | 500 | 8 | 81.9 | 67.9 | 1.21 | 93.4 | 71.1 | 1.31 | PASS |
 
 ## Mixed practical route
 

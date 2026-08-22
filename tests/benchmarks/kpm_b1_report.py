@@ -115,16 +115,16 @@ def best_cpu(rows: list[dict[str, Any]], gpu: dict[str, Any]) -> dict[str, Any] 
 
 def headline_table(rows: list[dict[str, Any]], mode: str) -> list[str]:
     lines = [
-        "| material | size | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |",
-        "|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| material | size | cond_type | N | nnz | M | estimator | Ntrace | best CPU OMP | CPU moment (s) | GPU moment (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | CPU wall (s) | GPU wall (s) | S_whole | correctness |",
+        "|---|---:|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for gpu in rows:
         if not (gpu.get("gpu_plugin") and gpu.get("cond_calctype") == "per_type" and gpu.get("numeric_mode") == mode and eligible(gpu)):
             continue
         cpu = best_cpu(rows, gpu)
         ref = cpu or {}
-        lines.append("| {material} | {size} | {N} | {nnz} | {M} | {estimator} | {Ntrace} | {omp} | {cm} | {gm} | {sm} | {ct} | {gt} | {st} | {cw} | {gw} | {sw} | {corr} |".format(
-            material=gpu.get("material"), size=gpu.get("size"), N=gpu.get("N"), nnz=gpu.get("nnz"), M=gpu.get("M"),
+        lines.append("| {material} | {size} | {cond_type} | {N} | {nnz} | {M} | {estimator} | {Ntrace} | {omp} | {cm} | {gm} | {sm} | {ct} | {gt} | {st} | {cw} | {gw} | {sw} | {corr} |".format(
+            material=gpu.get("material"), size=gpu.get("size"), cond_type=gpu.get("cond_type"), N=gpu.get("N"), nnz=gpu.get("nnz"), M=gpu.get("M"),
             estimator=gpu.get("cond_calctype"), Ntrace=gpu.get("Ntrace"), omp=ref.get("OMP_threads", "-"),
             cm=fmt(median(ref, "P_moments_total")), gm=fmt(median(gpu, "P_moments_total")),
             sm=fmt(gpu.get("speedups", {}).get("S_moments")),
@@ -137,15 +137,15 @@ def headline_table(rows: list[dict[str, Any]], mode: str) -> list[str]:
 
 def m_scaling_table(rows: list[dict[str, Any]]) -> list[str]:
     lines = [
-        "| material | size | mode | M | CPU OMP | CPU moments (s) | GPU moments (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | correctness |",
-        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| material | size | cond_type | mode | M | CPU OMP | CPU moments (s) | GPU moments (s) | S_moments | CPU transport (s) | GPU transport (s) | S_transport | correctness |",
+        "|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for gpu in rows:
         if not (gpu.get("gpu_plugin") and eligible(gpu) and gpu.get("cond_type") == "spin" and gpu.get("cond_calctype") == "per_type"):
             continue
         cpu = best_cpu(rows, gpu) or {}
-        lines.append("| {material} | {size} | {mode} | {M} | {omp} | {cm} | {gm} | {sm} | {ct} | {gt} | {st} | {corr} |".format(
-            material=gpu.get("material"), size=gpu.get("size"), mode=gpu.get("numeric_mode"), M=gpu.get("M"),
+        lines.append("| {material} | {size} | {cond_type} | {mode} | {M} | {omp} | {cm} | {gm} | {sm} | {ct} | {gt} | {st} | {corr} |".format(
+            material=gpu.get("material"), size=gpu.get("size"), cond_type=gpu.get("cond_type"), mode=gpu.get("numeric_mode"), M=gpu.get("M"),
             omp=cpu.get("OMP_threads", "-"), cm=fmt(median(cpu, "P_moments_total")), gm=fmt(median(gpu, "P_moments_total")),
             sm=fmt(gpu.get("speedups", {}).get("S_moments")), ct=fmt(median(cpu, "T_transport_total")),
             gt=fmt(median(gpu, "T_transport_total")), st=fmt(gpu.get("speedups", {}).get("S_transport")),
