@@ -4,7 +4,7 @@ This report is generated from `campaign.json`; numerical tables and plots are de
 
 ## Executive summary
 
-- Frozen implementation commit: `3a57f2d0e32033ae3470b868207601b6e84cdeb9`; campaign rows: `84`; explicit skips plus ineligible GPU records retained: `11`.
+- Frozen implementation commit: `e23fab86f10dda9ddc1d5dd9452f9586b2fc428a`; campaign rows: `84`; explicit skips plus ineligible GPU records retained: `11`.
 - Primary GPU: `NVIDIA RTX A4000` device `0`, `16376 MiB`, compute `8.6`, CUDA `13.3`.
 - Headline pairs: FP64 `5`, FP32 `9`; every published pair has profile and production-output correctness PASS.
 - CPU rows retain OMP=1/2/4/8; GPU rows use one process and one selected GPU at OMP=1.
@@ -40,6 +40,18 @@ This report is generated from `campaign.json`; numerical tables and plots are de
 | fccPt_SOC | r6 | spin | 3888 | 884520 | 750 | per_type | 1 | 4 | 77.4 | 2.17 | 35.6 | 107 | 5.01 | 21.3 | 108 | 5.25 | 20.5 | PASS |
 | fccPt_SOC | r8 | spin | 9216 | 2299752 | 250 | per_type | 1 | 8 | 21.2 | 0.591 | 35.8 | 25.7 | 2.32 | 11.1 | 26 | 2.5 | 10.4 | PASS |
 | fccPt_SOC | r8 | spin | 9216 | 2299752 | 500 | per_type | 1 | 8 | 82.5 | 2.22 | 37.2 | 96.5 | 4.65 | 20.8 | 96.9 | 4.83 | 20.1 | PASS |
+
+## FP32 accuracy evidence
+
+Stored production-output correctness evidence for the FP32 Pt anchors below (per_type, M=500, Ntrace=1); these values are summarized from the attached correctness records.
+
+| workload | mode | max abs | relative L2 | tolerance | result |
+|---|---|---:|---:|---|---|
+| Pt r4 spin | FP32 | 6.17e-06 | 1.71e-06 | max abs ≤ 0.0005; relative L2 ≤ 0.0005 | PASS |
+| Pt r6 spin | FP32 | 3.3e-06 | 1.57e-06 | max abs ≤ 0.0005; relative L2 ≤ 0.0005 | PASS |
+| Pt r8 spin | FP32 | 3.5e-06 | 1.44e-06 | max abs ≤ 0.0005; relative L2 ≤ 0.0005 | PASS |
+| Pt r4 charge | FP32 | 1.7e-05 | 5.78e-06 | max abs ≤ 0.0005; relative L2 ≤ 0.0005 | PASS |
+| Pt r4 orbital | FP32 | 1.24e-05 | 3.17e-06 | max abs ≤ 0.0005; relative L2 ≤ 0.0005 | PASS |
 
 ## M-order scaling
 
@@ -147,7 +159,7 @@ Headline Fe rows retained: `1`. The table above is generated from the real `bccF
 5. Moment speedup is a kernel-attribution metric, while transport speedup includes Gamma, reconstruction, post-processing, and other stages.
 6. FP64 GPU speedup is limited by non-moment stages and memory-bound work on this A4000; FP32 has a different balance and is only recommended when its production-output tolerance passes.
 7. CPU OpenMP changes the selected baseline and therefore materially affects the measured crossover; every anchor retains OMP=1/2/4/8.
-8. FP32 scientific acceptability is a correctness/tolerance decision, not a performance assumption; the report exposes the attached PASS evidence.
+8. FP32 scientific acceptability is a correctness/tolerance decision, not a performance assumption; the table above exposes the stored production-output error magnitudes and PASS tolerances directly.
 9. FP64 GPU use is worthwhile only in the larger or otherwise GPU-favorable measured regimes; small-workload overhead can leave CPU competitive.
 10. Charge, spin, and orbital rows are reported separately; shared-stage conclusions are limited to the measured Pt fixtures.
 11. random_vec scaling and per-trace throughput are reported separately from the primary per_type production workflow.

@@ -153,6 +153,35 @@ def m_scaling_table(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def fp32_accuracy_table(rows: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "Stored production-output correctness evidence for the FP32 Pt anchors below (per_type, M=500, Ntrace=1); these values are summarized from the attached correctness records.",
+        "",
+        "| workload | mode | max abs | relative L2 | tolerance | result |",
+        "|---|---|---:|---:|---|---|",
+    ]
+    requested = ((4, "spin"), (6, "spin"), (8, "spin"), (4, "charge"), (4, "orbital"))
+    for replication, cond_type in requested:
+        row = next((item for item in rows if (
+            item.get("gpu_plugin") and item.get("material") == "fccPt_SOC"
+            and int(item.get("replication", 0) or 0) == replication
+            and item.get("cond_type") == cond_type and item.get("cond_calctype") == "per_type"
+            and item.get("numeric_mode") == "fp32" and int(item.get("M", 0) or 0) == 500
+            and int(item.get("Ntrace", 1) or 1) == 1)), None)
+        correctness = row.get("correctness", {}) if row else {}
+        summary = correctness.get("conductivity_spectrum") or correctness.get("integrated_or_tensor", {})
+        tolerance = correctness.get("tolerance_set", {})
+        relative_l2 = summary.get("rel_l2", summary.get("rel"))
+        tolerance_text = "max abs ≤ {max_abs}; relative L2 ≤ {rel_l2}".format(
+            max_abs=fmt(tolerance.get("max_abs")),
+            rel_l2=fmt(tolerance.get("rel_l2", tolerance.get("integrated_rel"))))
+        lines.append("| Pt r{size} {cond_type} | FP32 | {max_abs} | {relative_l2} | {tolerance} | {result} |".format(
+            size=replication, cond_type=cond_type, max_abs=fmt(summary.get("max_abs")),
+            relative_l2=fmt(relative_l2), tolerance=tolerance_text,
+            result=correctness.get("status", "-")))
+    return lines
+
+
 def mixed_table(rows: list[dict[str, Any]]) -> list[str]:
     lines = ["| material | size | M | backend | moments | reconstruction | OMP | transport (s) | wall (s) | correctness |", "|---|---:|---:|---|---|---|---:|---:|---:|---|"]
     for row in rows:
@@ -318,6 +347,8 @@ def make_report(campaign: dict[str, Any], output: Path, plot_paths: list[str]) -
         *headline_table(rows, "fp64"), "",
         "## FP32 headline", "",
         *headline_table(rows, "fp32"), "",
+        "## FP32 accuracy evidence", "",
+        *fp32_accuracy_table(rows), "",
         "## M-order scaling", "",
         *m_scaling_table(rows), "",
         "## Mixed practical route", "",
@@ -336,7 +367,7 @@ def make_report(campaign: dict[str, Any], output: Path, plot_paths: list[str]) -
         "5. Moment speedup is a kernel-attribution metric, while transport speedup includes Gamma, reconstruction, post-processing, and other stages.",
         "6. FP64 GPU speedup is limited by non-moment stages and memory-bound work on this A4000; FP32 has a different balance and is only recommended when its production-output tolerance passes.",
         "7. CPU OpenMP changes the selected baseline and therefore materially affects the measured crossover; every anchor retains OMP=1/2/4/8.",
-        "8. FP32 scientific acceptability is a correctness/tolerance decision, not a performance assumption; the report exposes the attached PASS evidence.",
+        "8. FP32 scientific acceptability is a correctness/tolerance decision, not a performance assumption; the table above exposes the stored production-output error magnitudes and PASS tolerances directly.",
         "9. FP64 GPU use is worthwhile only in the larger or otherwise GPU-favorable measured regimes; small-workload overhead can leave CPU competitive.",
         "10. Charge, spin, and orbital rows are reported separately; shared-stage conclusions are limited to the measured Pt fixtures.",
         "11. random_vec scaling and per-trace throughput are reported separately from the primary per_type production workflow.",
