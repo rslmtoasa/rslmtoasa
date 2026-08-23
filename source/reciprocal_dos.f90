@@ -2,6 +2,7 @@ submodule (reciprocal_mod) reciprocal_dos
 #ifdef USE_MPI
    use mpi
 #endif
+   use scf_benchmark_profile_mod, only: g_scf_benchmark_profile
    implicit none
 
 contains
@@ -100,9 +101,12 @@ contains
 
       ! EF, electron count, and the source-of-truth EBAND are properties of
       ! eigenvalues/weights/occupations, not of the chosen DOS output grid.
+      call g_scf_benchmark_profile%start_stage('P_occupations_fermi')
       canonical_eband = this%calculate_canonical_band_energy(this%auto_find_fermi)
+      call g_scf_benchmark_profile%stop_stage('P_occupations_fermi')
 
       ! Calculate DOS based on method
+      call g_scf_benchmark_profile%start_stage('P_density_build')
       select case (trim(this%dos_method))
       case ('tetrahedron')
          call root_info('calculate_density_of_states: Using tetrahedron method', __FILE__, __LINE__)
@@ -121,6 +125,7 @@ contains
       ! Calculate orbital projections and band moments
       call this%project_dos_orbitals()
       call this%calculate_band_moments()
+      call g_scf_benchmark_profile%stop_stage('P_density_build')
 
       ! Grid/projection routes are diagnostics only.  They intentionally run
       ! after the canonical result and never feed EF or EBAND back into it.
@@ -136,7 +141,9 @@ contains
       call root_info(trim(energy_message), __FILE__, __LINE__)
 
       ! Write results to file
+      call g_scf_benchmark_profile%start_stage('P_scf_io')
       call this%write_dos_to_file(filename)
+      call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
       call root_info('calculate_density_of_states: DOS calculation completed', __FILE__, __LINE__)
    end subroutine calculate_density_of_states

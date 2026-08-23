@@ -255,3 +255,61 @@ large Fe cases. Pinned staging is backend-owned and enabled only for
 `n>=486`; retain it only if end-to-end steady time improves. Use
 `--skip-cuda` on a CPU-only host to produce controls without treating missing
 CUDA as a scientific or performance pass.
+
+## SCF-B0C canonical CPU/GPU campaign
+
+`scf_b0c.py` is the single SCF-level entry point. It reuses the existing
+`ReciprocalAccP1bPhysicalSCF` real-material probe and enables the exclusive
+`SCF_B0C_ITER` profile inside the production SCF loop. The shared probe accepts
+both `--scf-route reciprocal` and `--scf-route real_space`; the latter selects
+the production block, Chebyshev, or scalar/Lanczos recursion route with
+`--rs-solvers` and records the route-specific profile phases and metadata.
+The driver stages validated diamond-Si and bcc-Fe fixtures, retains CPU OMP
+rows, runs explicit CUDA solver strategies, archives raw logs, and derives one
+JSON/CSV/Markdown package. CUDA initialization failures or explicit RS fallback
+are recorded as `UNSUPPORTED`; they never become CPU rows.
+
+```bash
+python3 tests/benchmarks/scf_b0c.py \
+  --binary build-acc09-cuda/bin/ReciprocalAccP1bPhysicalSCF \
+  --build-dir build-acc09-cuda \
+  --output results/benchmarks/scf_b0c/campaign.json \
+  --materials si,fe --strategies fp64_zheevd \
+  --omp-threads 1,2,4,8 --dos-method gaussian --nstep 40
+```
+
+Use `--strategies fp64_zheevd,fp64_zheevj_batched,fp32_cheevd,
+fp32_cheevj_batched` to exercise the current explicit CUDA kernels. The FP32
+eigensolver routes are honestly classified as `mixed` for end-to-end SCF
+because Hamiltonian construction, density accumulation, and canonical SCF
+outputs remain FP64. `--dos-method gaussian|tetrahedron|blochl` selects the
+production occupation/DOS kernel and is part of the strict comparison key.
+
+The emitted `S_solver`, `S_reciprocal`, `S_iteration`, and `S_convergence`
+ratios are independent. For RS rows, `S_rs_kernel` and `S_rs_phase` compare
+the production `P_rs_solver_kernel` boundary and the sum of RS electronic
+structure phases. A GPU row is headline-eligible only with matching physics,
+starting state, numeric mode, profile closure, physical correctness, and an
+explicit CUDA route. Nested reciprocal detail timers (`T_H2D`, `T_solver`,
+`T_D2H`, `T_total_steady`) and RS detail fields (`T_rs_H2D`, `T_rs_kernel`,
+`T_rs_D2H`, `T_rs_sync`, `T_rs_setup`) remain available without being added to
+the exclusive SCF phase sum. The current RS plugin exposes the outer kernel
+boundary but not separate transfer counters, so those RS detail fields remain
+zero and are not inferred from wall time.
+
+For a real-space block campaign on a CUDA host:
+
+```bash
+python3 tests/benchmarks/scf_b0c.py \
+  --binary build-b1-frozen-cuda/bin/ReciprocalAccP1bPhysicalSCF \
+  --build-dir build-b1-frozen-cuda \
+  --output results/benchmarks/scf_b0c_rs/campaign.json \
+  --materials fe --scf-route real_space --rs-solvers block \
+  --rs-backend csr --omp-threads 1,2,4 --nstep 40 \
+  --benchmark-level scf_convergence
+```
+
+`rs_kernel_correctness_status=PASS` is the structured finite-coefficient and
+no-fallback kernel invariant; converged rows are additionally checked against
+the FP64 CPU oracle. The route-specific report records the current plugin
+precision and correctness limits.

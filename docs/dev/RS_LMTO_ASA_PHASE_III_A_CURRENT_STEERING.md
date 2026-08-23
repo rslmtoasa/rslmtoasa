@@ -1,8 +1,28 @@
 # RS-LMTO-ASA Phase III-A — Current GPU Performance Steering
-## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 update — active entry point: ACC-P4
+## Post ACC-P0 / ACC-P1 / ACC-P2 / ACC-P3 / SCF-B0C / SCF-B0C-RS update — next: SCF-B1
 
 **Target branch:** `fable_v3`
 **Purpose:** keep the accelerator campaign focused on measured GPU performance after the original ACC-00...ACC-09 work and the subsequent ACC-P rescue campaign.
+**Status:** `SCF-B0C DONE` · `SCF-B0C-RS DONE` · `SCF-B1 NEXT`
+
+## Current status after SCF-B0C
+
+This block is the current steering authority; the detailed ACC-P4 material
+below is retained as historical decision context.
+
+| Area | Status | Current direction |
+|---|---|---|
+| ACC reciprocal infrastructure and correctness | Complete | Preserve and reuse the validated CPU/CUDA backend and real-material corpus |
+| ACC-P reciprocal performance rescue | Complete | Treat the measured CPU/FP64-CUDA/precision evidence as established inputs |
+| KPM B0C/B1 | Complete | Preserve the validated KPM benchmark contract; no KPM redesign is part of SCF-B0C |
+| SCF-B0C | Complete | Canonical reciprocal SCF CPU/GPU/precision harness and closure evidence are in `RS_LMTO_ASA_SCF_B0C_REPORT.md` |
+| SCF-B0C-RS | Complete | The same harness now covers production real-space block/Chebyshev/Lanczos routes, route metadata, RS phase timers, CUDA fallback rejection, and CPU-oracle pairing; evidence is in `RS_LMTO_ASA_SCF_B0C_RS_REPORT.md` |
+| SCF-B1 | Next | Freeze fixtures, executable, repetitions, precision matrix, and acceptance tolerances for the final campaign |
+
+SCF-B0C and SCF-B0C-RS confirm that the remaining work is campaign freezing
+and execution, not another reciprocal or real-space backend or benchmark-
+harness redesign. The full-FP32 SCF route remains unsupported; mixed CUDA
+solver rows are experimental and are not equal-precision headline results.
 
 ---
 
@@ -28,7 +48,7 @@ It is now:
 
 > **Determine the best precision/solver/transfer strategy as a function of real LMTO matrix size and workload, optimize the already-useful medium/large-matrix CUDA path, and then decide which downstream GPU work packages are justified.**
 
-## Current KPM interlude
+## Current KPM interlude (historical context; KPM B0C/B1 complete)
 
 The established production Pt anchor has exposed a separate CPU bottleneck:
 the host `Gamma_nm * mu_nm` reconstruction, not the CUDA stochastic-moment
@@ -63,14 +83,14 @@ Use this table as the primary steering reference.
 | ACC-09 | Completed | Validated standard-Hermitian operator variants use CUDA path | Keep |
 | **ACC-P0** | **Completed** | Persistent real Si/Fe + Fe-supercell benchmark corpus established | Permanent benchmark foundation |
 | **ACC-P1** | **Completed** | True batched Jacobi implemented for supported small matrices; large matrices remain dense Zheevd | Permanent solver evidence |
-| **ACC-P1b** | **Evidence input** | FP32/mixed-precision study; consume its current result if present on HEAD | Do not restart; include result in P4, or record FP32 as not yet established |
+| **ACC-P1b** | **Completed / consumed by SCF-B0C** | FP32/mixed-precision evidence is now represented in the SCF pairing and precision contract | Do not claim full-FP32 SCF |
 | **ACC-P2** | **Completed** | Hot-path optimization has been performed | Use its post-optimization timings as P4 evidence |
 | **ACC-P3** | **Completed** | Decisive real-material 2D crossover campaign is done | Reuse its corpus/results; only rerun targeted rows if P2 changed their timings materially |
-| **ACC-P4** | **NEXT ACTIVE WP** | Convert current P1/P1b/P2/P3 evidence into production CPU/GPU/precision policy | Start here |
+| **ACC-P4** | **Completed predecessor** | Its reciprocal evidence is consolidated and reused by SCF-B0C | Freeze the SCF-B1 matrix next |
 | ACC-10 | Pending, likely relevant | GPU Lehmann contractions | Proceed after P4, with route chosen from P4 evidence |
 | ACC-11 | Conditional | Device-resident eigensystem handoff | Only if GPU eigensolver + GPU Lehmann and transfer cost justify it |
 | ACC-12 | Conditional / low priority | GPU H(R)->H(k) assembly | Only if P2/P4 show H(k) assembly has become material |
-| **ACC-13 / KPM-G1.1** | **CPU VALIDATION COMPLETE; TUNING REMAINS** | Establish the production CPU `Gamma*mu` reconstruction baseline with zero-copy Gamma storage and reusable diagonal-moment packing | Preserve the validated CPU path; defer KPM-G2/GPU reconstruction until separately justified |
+| **ACC-13 / KPM-G1.1** | **KPM B0C/B1 completed** | Preserve the validated KPM benchmark contract and measured CPU reconstruction baseline | Return to it only under a separately scoped follow-up |
 | ACC-14 | Final gate | Accelerator support/performance matrix | Run last |
 
 ---

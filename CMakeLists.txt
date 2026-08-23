@@ -612,6 +612,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME AccP1ReciprocalBatchedSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_accp1_batched_source.py)
   set_tests_properties(AccP1ReciprocalBatchedSource PROPERTIES LABELS "unit;cuda;reciprocal;batched;source-contract")
+  add_test(NAME ScfB0cBenchmarkContract
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/benchmarks/test_scf_b0c_contract.py)
+  set_tests_properties(ScfB0cBenchmarkContract PROPERTIES LABELS "unit;benchmark;scf;cpu;gpu;contract")
   add_test(NAME Acc10LehmannSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc10_lehmann_source.py)
   set_tests_properties(Acc10LehmannSource PROPERTIES LABELS "unit;cuda;reciprocal;lehmann;green;source-contract")
@@ -733,9 +736,9 @@ if (RUN_UNIT_TESTS)
     target_link_libraries(ReciprocalAccP0Benchmark ${COMMON_LIBRARIES})
   endif()
   set_target_properties(ReciprocalAccP0Benchmark PROPERTIES LINKER_LANGUAGE "Fortran")
-  # ACC-P1b is an opt-in physical SCF probe.  It configures an explicit
-  # reciprocal solver strategy only on its private self%reciprocal_scf_cache;
-  # the normal rslmto executable and namelist defaults are untouched.
+  # SCF-B0C is an opt-in physical SCF probe.  It selects reciprocal or
+  # real-space production routes only for this benchmark executable; the
+  # normal rslmto executable and namelist defaults are untouched.
   add_executable(ReciprocalAccP1bPhysicalSCF ${TestDIR}/benchmarks/accp1b_physical_scf.f90)
   if(ENABLE_OPENMP AND ENABLE_MPI AND OpenMP_Fortran_FOUND AND MPI_Fortran_FOUND)
     target_link_libraries(ReciprocalAccP1bPhysicalSCF ${COMMON_LIBRARIES} MPI::MPI_Fortran OpenMP::OpenMP_Fortran)
