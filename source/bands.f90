@@ -77,7 +77,7 @@ module bands_mod
       !> Energy bands (?)
       real(rp), dimension(:, :, :), allocatable :: dspd
       real(rp) :: eband
-      !> Magnetic force
+      !> Effective magnetic field in mRy/mu_B
       real(rp), dimension(:, :), allocatable :: mag_for
    contains
       procedure :: calculate_projected_green
@@ -1272,7 +1272,19 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Calculates the magnetic moments mx, my, mz and mtot
+   !> Calculates the magnetic force and effective magnetic field.
+   !>
+   !> The magnetic force I = dE/de is evaluated from Eq. (33) of
+   !> V. P. Antropov et al., J. Magn. Magn. Mater. 200, 148 (1999), using
+   !> tight-binding band centers and widths. Each angular-momentum channel
+   !> is combined with its own zeroth- and first-order spin-DOS moments.
+   !>
+   !> The stored quantity is the effective magnetic field
+   !>
+   !>    B_eff = -I/m
+   !>
+   !> in mRy/mu_B, where m is the moment magnitude in mu_B. The torque
+   !> e x I is reported in mRy.
    !---------------------------------------------------------------------------
    subroutine calculate_magnetic_torques(this)
       use mpi_mod
@@ -1281,33 +1293,84 @@ contains
       integer :: na ! Atom index
 
       real(rp), dimension(3) :: I_loc
+      real(rp), dimension(3) :: mom0_l, mom1_l
       real(rp), dimension(3) :: tau_loc
+      real(rp), dimension(this%en%channels_ldos + 10, 3) :: spin_dos_l
       real(rp) :: pref_0, pref_1, fx, fy, fz, tx, ty, tz
+      real(rp) :: sqrt_delta_up, sqrt_delta_dw, moment_norm
+      real(rp), parameter :: ry_to_mry = 1000.0_rp
+      real(rp), parameter :: moment_tolerance = 1.0e-12_rp
       integer :: up = 1
       integer :: dw = 2
-      integer :: d = 2
+      integer :: l, m, ie, component, lmax
+      integer :: first_orbital, last_orbital
       integer :: na_loc
       integer :: plusbulk
-
-      call this%calculate_projected_dos()
 
       !do na=1, this%lattice%nrec
       do na = start_atom, end_atom
          plusbulk = this%lattice%nbulk + na
          na_loc = g2l_map(na)
 
-         pref_0 = this%symbolic_atom(plusbulk)%potential%c(d, up)*this%symbolic_atom(plusbulk)%potential%srdel(d, dw) &
-                  /this%symbolic_atom(plusbulk)%potential%srdel(d, up) - this%symbolic_atom(plusbulk)%potential%c(d, dw) &
-                  *this%symbolic_atom(plusbulk)%potential%srdel(d, up)/this%symbolic_atom(plusbulk)%potential%srdel(d, dw)
-         pref_1 = this%symbolic_atom(plusbulk)%potential%srdel(d, dw)/this%symbolic_atom(plusbulk)%potential%srdel(d, up) &
-                  - this%symbolic_atom(plusbulk)%potential%srdel(d, up)/this%symbolic_atom(plusbulk)%potential%srdel(d, dw)
+         I_loc = 0.0_rp
+         lmax = min(this%symbolic_atom(plusbulk)%potential%lmax, 2)
 
-         I_loc = pref_0*this%symbolic_atom(plusbulk)%potential%mom0 &
-                 - pref_1*this%symbolic_atom(plusbulk)%potential%mom1
+         do l = 0, lmax
+            spin_dos_l = 0.0_rp
+            first_orbital = l*l + 1
+            last_orbital = (l + 1)*(l + 1)
 
-         tau_loc = cross_product(this%symbolic_atom(plusbulk)%potential%mom, I_loc)*ry2tesla
+            do ie = 1, this%en%channels_ldos + 10
+               do m = first_orbital, last_orbital
+                  spin_dos_l(ie, 1) = spin_dos_l(ie, 1) &
+                     - aimag(this%green%g0(m, m + 9, ie, na_loc) &
+                              + this%green%g0(m + 9, m, ie, na_loc))/pi
+                  spin_dos_l(ie, 2) = spin_dos_l(ie, 2) &
+                     - aimag(i_unit*this%green%g0(m, m + 9, ie, na_loc) &
+                              - i_unit*this%green%g0(m + 9, m, ie, na_loc))/pi
+                  spin_dos_l(ie, 3) = spin_dos_l(ie, 3) &
+                     - aimag(this%green%g0(m, m, ie, na_loc) &
+                              - this%green%g0(m + 9, m + 9, ie, na_loc))/pi
+               end do
+            end do
 
-         this%mag_for(:, na_loc) = I_loc(:)*ry2tesla
+            do component = 1, 3
+               call simpson_m(mom0_l(component), this%en%edel, this%en%fermi, &
+                              this%nv1, spin_dos_l(:, component), this%e1, 0, this%en%ene)
+               call simpson_m(mom1_l(component), this%en%edel, this%en%fermi, &
+                              this%nv1, spin_dos_l(:, component), this%e1, 1, this%en%ene)
+            end do
+
+            ! width_band stores sqrt(Delta) in the tight-binding representation.
+            sqrt_delta_up = this%symbolic_atom(plusbulk)%potential%width_band(l + 1, up)
+            sqrt_delta_dw = this%symbolic_atom(plusbulk)%potential%width_band(l + 1, dw)
+
+            if (abs(sqrt_delta_up) <= tiny(1.0_rp) .or. &
+                abs(sqrt_delta_dw) <= tiny(1.0_rp)) then
+               call g_logger%warning('Skipping zero-width angular-momentum channel l='// &
+                                     int2str(l)//' for atom'//fmt('i4', na), __FILE__, __LINE__)
+               cycle
+            end if
+
+            pref_0 = this%symbolic_atom(plusbulk)%potential%center_band(l + 1, up) &
+                     *sqrt_delta_dw/sqrt_delta_up &
+                   - this%symbolic_atom(plusbulk)%potential%center_band(l + 1, dw) &
+                     *sqrt_delta_up/sqrt_delta_dw
+            pref_1 = sqrt_delta_dw/sqrt_delta_up - sqrt_delta_up/sqrt_delta_dw
+
+            I_loc = I_loc + pref_0*mom0_l - pref_1*mom1_l
+         end do
+
+         tau_loc = ry_to_mry*cross_product(this%symbolic_atom(plusbulk)%potential%mom, I_loc)
+
+         moment_norm = this%symbolic_atom(plusbulk)%potential%mtot
+         if (moment_norm > moment_tolerance) then
+            this%mag_for(:, na_loc) = -ry_to_mry*I_loc/moment_norm
+         else
+            this%mag_for(:, na_loc) = 0.0_rp
+            call g_logger%warning('Effective magnetic field is undefined for the vanishing moment on atom'// &
+                                  fmt('i4', na), __FILE__, __LINE__)
+         end if
 
          !this%mag_for(1:2,na_loc) = 0.0d0
 
@@ -1319,8 +1382,12 @@ contains
          ty = tau_loc(2)
          tz = tau_loc(3)
 
-         call g_logger%info('Magnetic field on atom'//fmt('i4', na)//' is '//fmt('f16.6', fx)//' '//fmt('f16.6', fy)//' '//fmt('f16.6', fz), __FILE__, __LINE__)
-         call g_logger%info('Magnetic torque on atom'//fmt('i4', na)//' is '//fmt('f16.6', tx)//' '//fmt('f16.6', ty)//' '//fmt('f16.6', tz), __FILE__, __LINE__)
+         call g_logger%info('Effective magnetic field (mRy/mu_B) on atom'// &
+                            fmt('i4', na)//' is '//fmt('f16.6', fx)//' '// &
+                            fmt('f16.6', fy)//' '//fmt('f16.6', fz), __FILE__, __LINE__)
+         call g_logger%info('Magnetic torque (mRy) on atom'//fmt('i4', na)// &
+                            ' is '//fmt('f16.6', tx)//' '//fmt('f16.6', ty)//' '// &
+                            fmt('f16.6', tz), __FILE__, __LINE__)
 
          !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom0 for atom ", na, "=",this%symbolic_atom(plusbulk)%potential%mom0
          !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom1 for atom ", na, "=", this%symbolic_atom(plusbulk)%potential%mom1
