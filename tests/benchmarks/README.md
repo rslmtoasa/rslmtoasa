@@ -313,3 +313,23 @@ python3 tests/benchmarks/scf_b0c.py \
 no-fallback kernel invariant; converged rows are additionally checked against
 the FP64 CPU oracle. The route-specific report records the current plugin
 precision and correctness limits.
+
+## SCF-B1R2 tiered closure campaign
+
+The B1R2 wrapper defaults to the desktop-friendly `lean` tier. It measures
+representative Si1/Si2 Chebyshev CPU/GPU rows and Fe2/Fe3 reciprocal rows with
+one measured process per case and no warmups:
+
+```bash
+bash tests/benchmarks/run_scf_b1r2_all.sh --tier lean
+```
+
+The full HPC matrix retains Si1--Si4 scaling, the complete CPU OMP sweep,
+warmups, and repeated measurements:
+
+```bash
+bash tests/benchmarks/run_scf_b1r2_all.sh --tier full
+```
+
+Results are isolated under `results/benchmarks/scf_b1r2/lean/` and
+`results/benchmarks/scf_b1r2/full/` respectively.

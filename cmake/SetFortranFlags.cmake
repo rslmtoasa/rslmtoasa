@@ -224,13 +224,9 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELWI
 ### RELEASE FLAGS ###
 #####################
 
-# NOTE: agressive optimizations (-O3) are already turned on by default
-# For GNU, force conservative optimization in RELEASE to match stable runtime
-# behavior observed in DEBUG for strux/SPDF workflows.
-if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-                   Fortran REQUIRED "-O0")
-endif()
+# NOTE: the compiler's Release defaults provide the optimization level.  Do
+# not append a debug-level flag here: GNU uses the last optimization option,
+# so a trailing -O0 would silently invalidate Release performance builds.
 
 # Optimizations
 #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
