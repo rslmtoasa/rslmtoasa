@@ -495,6 +495,12 @@ def aggregate_rows(rows: list[dict[str, Any]], spec: dict[str, Any]) -> dict[str
         values = [row.get(field) for row in rows if row.get(field) is not None]
         if values:
             result[field] = values[0]
+    # Runtime metadata uses canonical uppercase names; expose lowercase
+    # aliases too so the CSV/Markdown presentation remains readable.
+    if "OMP_threads" in result:
+        result["omp_threads"] = result["OMP_threads"]
+    if "BLAS_threads" in result:
+        result["blas_threads"] = result["BLAS_threads"]
     result["steady_iteration_median"] = result.get("steady_iteration_median", result.get("P_scf_iteration_total"))
     result["final_state"] = rows[0].get("final_state", {}) if rows else {}
     if spec["lane"] == "chebyshev":
@@ -677,9 +683,14 @@ def row_reason(row: dict[str, Any]) -> str:
 def write_campaign_outputs(output: Path, states: list[dict[str, Any]], manifest: dict[str, Any], preflight: dict[str, Any], provenance: dict[str, Any]) -> dict[str, Any]:
     correctness = annotate_correctness(states)
     rows = [state["aggregate"] for state in states]
+    for row in rows:
+        if "OMP_threads" in row:
+            row["omp_threads"] = row["OMP_threads"]
+        if "BLAS_threads" in row:
+            row["blas_threads"] = row["BLAS_threads"]
     annotate_ratios(rows, correctness)
     campaign = {
-        "schema": SCHEMA, "created": manifest.get("created"), "updated": utc_now(), "manifest": manifest,
+        "schema": SCHEMA, "created": manifest.get("created"), "updated": utc_now(), "tier": manifest.get("tier"), "manifest": manifest,
         "build_preflight": preflight, "provenance": provenance, "rows": rows, "correctness": correctness,
         "chebyshev_configuration": {
             "order_M": CHEB_ORDER, "kernel": "fast", "spectral_bounds_policy": "resolved_runtime",
@@ -713,29 +724,37 @@ def write_campaign_outputs(output: Path, states: list[dict[str, Any]], manifest:
             values = {field: row.get(field) for field in CSV_FIELDS}
             values["reason"] = row_reason(row)
             writer.writerow(values)
-    lines = ["# SCF-B1R2 campaign evidence", "", f"Schema: `{SCHEMA}`", "", "## Table C1 — CPU Chebyshev scaling", "", "| size | Natom | nmat | M | OMP | kernel s | phase s | iteration s | status |", "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
+    tier = manifest.get("tier", "unknown")
+    lines = ["# SCF-B1R2 campaign evidence", "", f"Schema: `{SCHEMA}`", f"Tier: `{tier}`", "", "## Table C1 — CPU Chebyshev scaling", "", "| size | Natom | nmat | M | OMP | kernel s | phase s | iteration s | status |", "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
     for row in rows:
         if row.get("lane") == "chebyshev" and row.get("kind") == "timing" and row.get("backend") == "lapack":
-            lines.append(f"| Si{row.get('size')} | {row.get('Natom','-')} | {row.get('nmat','-')} | {row.get('chebyshev_order','-')} | {row.get('omp_threads','-')} | {row.get('P_rs_solver_kernel','-')} | {row.get('P_rs_phase','-')} | {row.get('steady_iteration_median','-')} | {row.get('status','-')} |")
+            omp = row.get("omp_threads", row.get("OMP_threads", "-"))
+            if isinstance(omp, float) and omp.is_integer():
+                omp = int(omp)
+            lines.append(f"| Si{row.get('size')} | {row.get('Natom','-')} | {row.get('nmat','-')} | {row.get('chebyshev_order','-')} | {omp} | {row.get('P_rs_solver_kernel','-')} | {row.get('P_rs_phase','-')} | {row.get('steady_iteration_median','-')} | {row.get('status','-')} |")
     lines += ["", "## Table C2 — CPU/GPU Chebyshev production comparison", "", "| size | best CPU OMP (iteration) | CPU kernel | GPU kernel | kernel ratio | CPU phase | GPU phase | phase ratio | CPU iteration | GPU iteration | iteration ratio | correctness | mode |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|"]
     for size in SI_SIZES:
         cpus = [row for row in rows if row.get("lane") == "chebyshev" and row.get("kind") == "timing" and row.get("size") == size and row.get("backend") == "lapack" and row.get("status") == "PASS"]
         gpu = next((row for row in rows if row.get("lane") == "chebyshev" and row.get("kind") == "timing" and row.get("size") == size and row.get("backend") == "cuda"), None)
         if cpus and gpu:
             best = min(cpus, key=lambda row: float(row.get("steady_iteration_median") or math.inf))
-            lines.append(f"| Si{size} | OMP{best.get('omp_threads')} | {best.get('P_rs_solver_kernel','-')} | {gpu.get('P_rs_solver_kernel','-')} | {gpu.get('R_cheb_kernel_production','-')} | {best.get('P_rs_phase','-')} | {gpu.get('P_rs_phase','-')} | {gpu.get('R_cheb_phase_production','-')} | {best.get('steady_iteration_median','-')} | {gpu.get('steady_iteration_median','-')} | {gpu.get('R_iteration_production','-')} | {gpu.get('correctness_status','-')} | {gpu.get('numeric_mode','-')} |")
+            common = next((item for item in correctness if item.get("lane") == "chebyshev" and item.get("size") == size), {})
+            omp = best.get("omp_threads", best.get("OMP_threads", "-"))
+            if isinstance(omp, float) and omp.is_integer():
+                omp = int(omp)
+            lines.append(f"| Si{size} | OMP{omp} | {best.get('P_rs_solver_kernel','-')} | {gpu.get('P_rs_solver_kernel','-')} | {gpu.get('R_cheb_kernel_production','-')} | {best.get('P_rs_phase','-')} | {gpu.get('P_rs_phase','-')} | {gpu.get('R_cheb_phase_production','-')} | {best.get('steady_iteration_median','-')} | {gpu.get('steady_iteration_median','-')} | {gpu.get('R_iteration_production','-')} | {common.get('status','-')} | {gpu.get('numeric_mode','-')} |")
     lines += ["", "## Table C3 — Chebyshev common-state correctness", "", "| size | common state | Fermi diff | charge diff | energy/atom diff | DOS rel L2 | DOS max abs | integrated DOS diff | status | reason |", "|---|---|---:|---:|---:|---:|---:|---:|---|---|"]
     for item in correctness:
         if item.get("lane") != "chebyshev":
             continue
         differences = item.get("differences", {})
         dos = item.get("dos", {})
-        lines.append(f"| Si{item.get('size')} | {item.get('common_state_id','-')} | {differences.get('fermi_energy','-')} | {differences.get('total_charge','-')} | {differences.get('energy_per_atom','-')} | {dos.get('relative_l2','-')} | {dos.get('max_abs','-')} | {dos.get('integrated_difference','-')} | {item.get('status','-')} | {item.get('reason','-')} |")
+        lines.append(f"| Si{item.get('size')} | {item.get('common_state_id','-')} | {differences.get('fermi_energy','-')} | {differences.get('total_charge','-')} | {differences.get('energy_per_atom','-')} | {dos.get('relative_l2','-')} | {dos.get('max_abs','-')} | {dos.get('integrated_difference','-')} | {item.get('status','-')} | {item.get('reason') or '-'} |")
     lines += ["", "## Reciprocal Fe2/Fe3 common-state gate", "", "| size | status | iteration ratio | reason |", "|---|---|---:|---|"]
     for length in (2, 3):
         row = next((item for item in rows if item.get("lane") == "reciprocal" and item.get("kind") == "timing" and item.get("size") == length and item.get("backend") == "cuda"), {})
         item = next((item for item in correctness if item.get("lane") == "reciprocal" and item.get("size") == length), {})
-        lines.append(f"| Fe{length} | {item.get('status','-')} | {row.get('S_iteration','-')} | {item.get('reason','-')} |")
+        lines.append(f"| Fe{length} | {item.get('status','-')} | {row.get('S_iteration','-')} | {item.get('reason') or '-'} |")
     lines += ["", "K1 component solver timing is explicitly suppressed as `INVALID_FOR_K1`; K2 frozen-potential evidence remains authoritative.", "", "RS-vs-k-space formulation equivalence remains `INCONCLUSIVE` and deferred."]
     (output / "campaign.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     for row in rows:
@@ -757,11 +776,13 @@ def write_plots(output: Path, campaign: dict[str, Any]) -> None:
     plot_dir.mkdir(parents=True, exist_ok=True)
     cpu = [row for row in rows if row.get("lane") == "chebyshev" and row.get("kind") == "timing" and row.get("backend") == "lapack" and row.get("status") == "PASS"]
     gpu = [row for row in rows if row.get("lane") == "chebyshev" and row.get("kind") == "timing" and row.get("backend") == "cuda" and row.get("status") == "PASS"]
-    best = {size: min((row for row in cpu if row.get("size") == size), key=lambda row: float(row.get("P_rs_solver_kernel") or math.inf), default=None) for size in SI_SIZES}
+    best_kernel = {size: min((row for row in cpu if row.get("size") == size), key=lambda row: float(row.get("P_rs_solver_kernel") or math.inf), default=None) for size in SI_SIZES}
+    best_iteration = {size: min((row for row in cpu if row.get("size") == size), key=lambda row: float(row.get("steady_iteration_median") or math.inf), default=None) for size in SI_SIZES}
     for field, name, ylabel in (("P_rs_solver_kernel", "C1_chebyshev_kernel_vs_size.png", "Chebyshev kernel wall time (s)"), ("steady_iteration_median", "C2_chebyshev_iteration_vs_size.png", "Chebyshev SCF iteration wall time (s)")):
         plt.figure()
-        xs = [size for size, row in best.items() if row and row.get(field) is not None]
-        plt.plot(xs, [best[size][field] for size in xs], "o-", label="CPU best threaded")
+        selected = best_kernel if field == "P_rs_solver_kernel" else best_iteration
+        xs = [size for size, row in selected.items() if row and row.get(field) is not None]
+        plt.plot(xs, [selected[size][field] for size in xs], "o-", label="CPU best threaded")
         gx = [row.get("size") for row in gpu if row.get(field) is not None]
         plt.plot(gx, [row[field] for row in gpu if row.get(field) is not None], "o-", label="GPU mixed")
         plt.xlabel("Si replication")
