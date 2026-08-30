@@ -216,7 +216,11 @@ end subroutine project_dos_orbitals_gaussian
       axis = [0.0_rp, 0.0_rp, 1.0_rp]
       atom_idx = this%lattice%nbulk + isite
       if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
-         axis = this%lattice%symbolic_atoms(atom_idx)%potential%mom(:)
+         if (sqrt(sum(this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)**2)) > 1.0e-12_rp) then
+            axis = this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)
+         else
+            axis = this%lattice%symbolic_atoms(atom_idx)%potential%mom(:)
+         end if
       end if
 
       axis_norm = sqrt(sum(axis**2))
@@ -738,7 +742,9 @@ module subroutine calculate_band_moments(this)
       reference(:, isite) = [0.0_rp, 0.0_rp, 1.0_rp]
       atom_idx = this%lattice%nbulk + isite
       if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
-         if (allocated(this%lattice%symbolic_atoms(atom_idx)%potential%mom)) then
+         if (sqrt(sum(this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)**2)) > 1.0e-12_rp) then
+            reference(:, isite) = this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)
+         else if (allocated(this%lattice%symbolic_atoms(atom_idx)%potential%mom)) then
             reference(:, isite) = this%lattice%symbolic_atoms(atom_idx)%potential%mom(1:3)
          end if
       end if

@@ -4,8 +4,13 @@
 ! relative to it).
 !
 ! mode = 'mft' (default): converge SCF fully at q_ss_list(:,1), then reuse
-!   that converged potential for a single-iteration band-energy pass at every
-!   other q (magnetic force theorem).
+!   that converged potential for a single-shot band-energy pass at every other
+!   q (magnetic force theorem).
+! mode = 'mft_constrained' (alias 'corrected_mft'): converge the ordinary
+!   reference potential once, then hold it fixed while a q-specific constraining
+!   field is iterated to the requested target. Freeze that field and evaluate the
+!   final occupied-eigenvalue sum in one shot. This mode requires the separate
+!   constraints namelist and is currently the acoustic branch only.
 ! mode = 'scf': converge SCF fully, independently, at every q.
 !
 ! Prefer q_file for long paths. Its format is:
@@ -20,7 +25,7 @@
 ! file alone in a way this codebase already exercises elsewhere; n_q_points
 ! selects how many of those columns are actually used.
 integer, parameter :: frozen_magnon_max_q = 500
-character(len=10) :: mode
+character(len=24) :: mode
 character(len=16) :: branch_mode
 character(len=sl) :: output_file
 character(len=sl) :: q_file
@@ -28,7 +33,10 @@ character(len=16) :: q_coordinates
 integer :: n_q_points
 real(rp) :: theta_probe
 real(rp) :: active_moment_threshold
+integer :: constraint_max_iterations
+real(rp) :: constraint_tolerance
+logical :: constraint_start_from_zero
 real(rp), dimension(3, frozen_magnon_max_q) :: q_ss_list
 
 namelist /frozen_magnon/ mode, branch_mode, output_file, q_file, q_coordinates, n_q_points, q_ss_list, &
-   theta_probe, active_moment_threshold
+   theta_probe, active_moment_threshold, constraint_max_iterations, constraint_tolerance, constraint_start_from_zero

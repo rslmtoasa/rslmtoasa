@@ -20,6 +20,7 @@ rslmto.x
 *.mod
 
 # Test generated files and logs
+**/fort.*
 **/data.nml
 **/testrun.log
 

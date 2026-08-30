@@ -23,6 +23,7 @@ module self_mod
 
    use mpi_mod
    use symbolic_atom_mod, only: symbolic_atom, save_state_scf
+   use potential_mod, only: potential
    use logger_mod, only: g_logger
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
@@ -38,6 +39,7 @@ module self_mod
    use bands_mod
    use energy_mod
    use hamiltonian_mod
+   use magnetic_representation_mod, only: gbt_single_q
    use mix_mod
    use reciprocal_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
@@ -84,8 +86,35 @@ module self_mod
 
       !> Fixed reference directions used by the constraining-field update.
       real(rp), dimension(:, :), allocatable :: constraint_reference
-      !> Penalty functional returned by the most recent constraint update (Ry).
+      !> Physical DFT total energy of the current density, excluding the
+      !> auxiliary constraining-field operator (Ry).
+      real(rp) :: physical_total_energy
+      !> Numerical penalty/controller merit value returned by the most recent
+      !> constraint update (Ry).  This is not part of physical_total_energy.
+      real(rp) :: constraint_penalty_energy
+      !> Expectation value <V_constraint> = sum_i B_i^con dot m_i (Ry).  This
+      !> is a field/eigenvalue bookkeeping diagnostic, not a DFT energy term.
+      real(rp) :: constraint_field_coupling_energy
+      !> Deprecated compatibility alias for constraint_penalty_energy.
       real(rp) :: constraint_energy
+      !> RMS angular constraint metric from the most recent update (radians).
+      real(rp) :: constraint_metric
+      !> Declared convergence tolerance for the angular constraint metric.
+      real(rp) :: constraint_tolerance
+      !> Whether the most recent constraint update satisfies its tolerance.
+      logical :: constraint_converged
+      !> Controller-update number represented by the stored diagnostics.
+      integer :: constraint_iteration
+      !> True after the optional machine-readable file has received its header.
+      logical :: constraint_diagnostics_header_written
+      !> L1 checksum of the ordinary potential used by a fixed-potential pass.
+      real(rp) :: fixed_potential_checksum = 0.0_rp
+      !> Maximum ordinary-potential drift after restoration in the most recent
+      !> fixed-potential constraint step; this is the frozen-potential audit value.
+      real(rp) :: fixed_potential_max_drift = 0.0_rp
+      !> Diagnostic magnitude of the temporary DOS-side update before the fixed
+      !> potential snapshot is restored.
+      real(rp) :: fixed_potential_transient_drift = 0.0_rp
 
       !TODO: check description
       !> If true treats all atoms as inequivalents. Default: true.
@@ -254,6 +283,9 @@ module self_mod
       procedure :: print_state
       procedure :: print_state_full
       procedure :: run
+      procedure :: run_fixed_potential_constraint_step
+      procedure :: reset_constraint_for_fixed_potential
+      procedure :: potential_checksum
       procedure :: report
       procedure :: lmtst
       procedure :: refresh_xc_response_kernel
@@ -522,7 +554,8 @@ contains
       ! Initialize constraining facility if requested in control namelist
       if (associated(this%control)) then
          if (this%control%constraints_enable) then
-            call initialize_cfd(this%lattice%nrec, 1, this%control%constraints_i_cons, this%control%constraints_code_prefac)
+            call initialize_cfd(this%lattice%nrec, 1, this%control%constraints_i_cons, this%control%constraints_code_prefac, &
+                                this%control%constraints_diagnostics)
             call this%initialize_constraint_state()
          end if
       end if
@@ -536,31 +569,60 @@ contains
       class(self), intent(inout) :: this
       integer :: ia, plusbulk
 
-      if (.not. allocated(this%constraint_reference)) then
-         allocate(this%constraint_reference(3, this%lattice%nrec))
-      end if
+      integer :: unit, io_status
+
+      if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
+      allocate(this%constraint_reference(3, this%lattice%nrec))
       this%constraint_reference = 0.0_rp
       do ia = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + ia
-         if (allocated(this%control%constraints_mom_ref)) then
-            if (size(this%control%constraints_mom_ref, 1) == 3 .and. &
-                size(this%control%constraints_mom_ref, 2) == this%lattice%nrec) then
-               this%constraint_reference(:, ia) = this%control%constraints_mom_ref(:, ia)
-            else
-               this%constraint_reference(:, ia) = this%symbolic_atom(plusbulk)%potential%mom0(:)
+         if (allocated(this%control%constraints_mom_ref) .and. &
+             .not. (size(this%control%constraints_mom_ref, 1) == 1 .and. &
+                    size(this%control%constraints_mom_ref, 2) == 1 .and. &
+                    abs(this%control%constraints_mom_ref(1, 1)) <= tiny(1.0_rp))) then
+            if (size(this%control%constraints_mom_ref, 1) /= 3 .or. &
+                size(this%control%constraints_mom_ref, 2) /= this%lattice%nrec) then
+               call g_logger%fatal('constraints_mom_ref must have shape (3,nrec); got ('// &
+                                   fmt('i0', size(this%control%constraints_mom_ref, 1))//','// &
+                                   fmt('i0', size(this%control%constraints_mom_ref, 2))//').', __FILE__, __LINE__)
             end if
+            this%constraint_reference(:, ia) = this%control%constraints_mom_ref(:, ia)
          else
             this%constraint_reference(:, ia) = this%symbolic_atom(plusbulk)%potential%mom0(:)
          end if
+         if (norm2(this%constraint_reference(:, ia)) <= tiny(1.0_rp)) then
+            call g_logger%fatal('Constraint target for site '//fmt('i0', ia)//' has zero length.', __FILE__, __LINE__)
+         end if
+         this%symbolic_atom(plusbulk)%constraint_target = this%constraint_reference(:, ia)
 
          this%symbolic_atom(plusbulk)%mag_cfield = 0.0_rp
-         if (allocated(this%control%constraints_bfield)) then
-            if (size(this%control%constraints_bfield, 1) == 3 .and. &
-                size(this%control%constraints_bfield, 2) == this%lattice%nrec) then
-               this%symbolic_atom(plusbulk)%mag_cfield = this%control%constraints_bfield(:, ia)
+         if (allocated(this%control%constraints_bfield) .and. &
+             .not. (size(this%control%constraints_bfield, 1) == 1 .and. &
+                    size(this%control%constraints_bfield, 2) == 1 .and. &
+                    abs(this%control%constraints_bfield(1, 1)) <= tiny(1.0_rp))) then
+            if (size(this%control%constraints_bfield, 1) /= 3 .or. &
+                size(this%control%constraints_bfield, 2) /= this%lattice%nrec) then
+               call g_logger%fatal('constraints_bfield must have shape (3,nrec); got ('// &
+                                   fmt('i0', size(this%control%constraints_bfield, 1))//','// &
+                                   fmt('i0', size(this%control%constraints_bfield, 2))//').', __FILE__, __LINE__)
             end if
+            this%symbolic_atom(plusbulk)%mag_cfield = this%control%constraints_bfield(:, ia)
          end if
       end do
+      this%constraint_tolerance = this%control%constraints_tolerance
+      this%constraint_metric = huge(1.0_rp)
+      this%constraint_converged = .false.
+      this%constraint_iteration = 0
+      this%constraint_diagnostics_header_written = .false.
+      if (this%control%constraints_diagnostics .and. rank == 0) then
+         open(newunit=unit, file='constraint_diagnostics.dat', status='replace', action='write', iostat=io_status)
+         if (io_status == 0) then
+            write(unit, '(a)') '# frame=active_spin_frame; field_units=Ry; angle_units=rad'
+            write(unit, '(a)') '# iteration site target_x target_y target_z actual_x actual_y actual_z moment_magnitude angular_error transverse_x transverse_y transverse_z Bx By Bz B_magnitude B_dot_target torque_x torque_y torque_z rms_angle'
+            close(unit)
+            this%constraint_diagnostics_header_written = .true.
+         end if
+      end if
    end subroutine initialize_constraint_state
 
    !> Compute the next constraining field from the mixed moments and retain it
@@ -569,9 +631,13 @@ contains
       class(self), intent(inout) :: this
       real(rp), allocatable :: mom_in(:, :), mom_ref(:, :), bfield(:, :)
       real(rp) :: etcon
-      integer :: ia, plusbulk
+      type(constraint_diagnostics) :: diagnostics
+      integer :: ia, plusbulk, unit, io_status
+      real(rp) :: marker_sign
 
       if (.not. this%control%constraints_enable) then
+         this%constraint_penalty_energy = 0.0_rp
+         this%constraint_field_coupling_energy = 0.0_rp
          this%constraint_energy = 0.0_rp
          return
       end if
@@ -579,18 +645,72 @@ contains
       allocate(mom_in(3, this%lattice%nrec), mom_ref(3, this%lattice%nrec), bfield(3, this%lattice%nrec))
       do ia = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + ia
-         mom_in(:, ia) = this%symbolic_atom(plusbulk)%potential%mom(:)
+         ! The Hamiltonian keeps a collinear reference marker in GBT so the
+         ! operator boundary cannot mistake a lab-frame transverse moment for
+         ! the rotating-frame reference.  The actual measured vector remains
+         ! the controller input through this separate state slot.
+         if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
+             norm2(this%symbolic_atom(plusbulk)%constraint_actual) > tiny(1.0_rp)) then
+            mom_in(:, ia) = this%symbolic_atom(plusbulk)%constraint_actual(:)
+         else
+            ! Pass the measured moment, not its normalized direction.  The
+            ! controller normalizes where required; the un-normalized vector
+            ! is needed for the field-coupling diagnostic.
+            mom_in(:, ia) = [this%symbolic_atom(plusbulk)%potential%mx, &
+                             this%symbolic_atom(plusbulk)%potential%my, &
+                             this%symbolic_atom(plusbulk)%potential%mz]
+            if (norm2(mom_in(:, ia)) <= tiny(1.0_rp)) then
+               mom_in(:, ia) = this%symbolic_atom(plusbulk)%potential%mom(:)
+            end if
+         end if
          mom_ref(:, ia) = this%constraint_reference(:, ia)
          bfield(:, ia) = this%symbolic_atom(plusbulk)%mag_cfield
       end do
 
-      call constrain(mom_in, mom_ref, bfield, this%lattice%nrec, etcon)
+      call constrain(mom_in, mom_ref, bfield, this%lattice%nrec, etcon, diagnostics_out=diagnostics)
       do ia = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + ia
          this%symbolic_atom(plusbulk)%mag_cfield = bfield(:, ia)
+         this%symbolic_atom(plusbulk)%constraint_actual = mom_in(:, ia)
+         if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+            marker_sign = 1.0_rp
+            if (mom_in(3, ia) < 0.0_rp) marker_sign = -1.0_rp
+            this%symbolic_atom(plusbulk)%potential%mom(:) = [0.0_rp, 0.0_rp, marker_sign]
+         end if
       end do
+      this%constraint_penalty_energy = diagnostics%controller_penalty_energy
+      this%constraint_field_coupling_energy = diagnostics%field_coupling_energy
+      ! Keep the old member as a source-compatible alias.  It is explicitly
+      ! the controller penalty, never a contribution to physical_total_energy.
       this%constraint_energy = etcon
-      if (rank == 0) call g_logger%info('CONSTRAINT energy (Ry) = '//fmt('f16.10', etcon), __FILE__, __LINE__)
+      this%constraint_metric = diagnostics%convergence_metric
+      this%constraint_converged = this%constraint_metric <= this%constraint_tolerance
+      this%constraint_iteration = diagnostics%iteration
+      if (rank == 0) then
+         call g_logger%info('CONSTRAINT penalty/controller energy (Ry) = '//fmt('f16.10', this%constraint_penalty_energy)// &
+                            ' field coupling <Vcon> (Ry) = '//fmt('f16.10', this%constraint_field_coupling_energy)// &
+                            ' RMS-angle = '//fmt('es12.4', this%constraint_metric), __FILE__, __LINE__)
+      end if
+
+      if (this%control%constraints_diagnostics .and. rank == 0) then
+         open(newunit=unit, file='constraint_diagnostics.dat', status='unknown', action='write', &
+              position='append', iostat=io_status)
+         if (io_status == 0) then
+            if (.not. this%constraint_diagnostics_header_written) then
+               write(unit, '(a)') '# frame=active_spin_frame; field_units=Ry; angle_units=rad'
+               write(unit, '(a)') '# iteration site target_x target_y target_z actual_x actual_y actual_z moment_magnitude angular_error transverse_x transverse_y transverse_z Bx By Bz B_magnitude B_dot_target torque_x torque_y torque_z rms_angle'
+               this%constraint_diagnostics_header_written = .true.
+            end if
+            do ia = 1, this%lattice%nrec
+               write(unit, '(2i8,20(1x,es20.12))') diagnostics%iteration, ia, &
+                  diagnostics%target(:, ia), diagnostics%actual(:, ia), diagnostics%moment_magnitude(ia), &
+                  diagnostics%angular_error(ia), diagnostics%transverse_residual(:, ia), diagnostics%bfield(:, ia), &
+                  diagnostics%bfield_magnitude(ia), diagnostics%bfield_longitudinal(ia), diagnostics%torque(:, ia), &
+                  diagnostics%convergence_metric
+            end do
+            close(unit)
+         end if
+      end if
 
       deallocate(mom_in, mom_ref, bfield)
    end subroutine apply_constraints
@@ -658,7 +778,15 @@ contains
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       allocate(this%constraint_reference(3, this%lattice%nrec))
       this%constraint_reference = 0.0_rp
+      this%physical_total_energy = 0.0_rp
+      this%constraint_penalty_energy = 0.0_rp
+      this%constraint_field_coupling_energy = 0.0_rp
       this%constraint_energy = 0.0_rp
+      this%constraint_metric = 0.0_rp
+      this%constraint_tolerance = 1.0e-6_rp
+      this%constraint_converged = .false.
+      this%constraint_iteration = 0
+      this%constraint_diagnostics_header_written = .false.
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -841,7 +969,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine run(this)
       class(self), intent(inout) :: this
-      integer :: i, ia, niter
+      integer :: i, ia, plusbulk, niter
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
       integer :: na_glob, pot_size
@@ -876,7 +1004,9 @@ contains
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
          !=========================================================================
-         this%esumn = sum(this%symbolic_atom(:)%potential%etot) + this%constraint_energy
+         ! Constraint penalty is a controller diagnostic, not part of the
+         ! ordinary DFT total-energy convergence signal.
+         this%esumn = sum(this%symbolic_atom(:)%potential%etot)
          this%esum = this%esumn
 
          !=========================================================================
@@ -891,7 +1021,14 @@ contains
          !                      SAVE THE MAGNETIC MOMENTS
          !=========================================================================
          do ia = 1, this%lattice%nrec
-            this%mix%mag_old(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
+            plusbulk = this%lattice%nbulk + ia
+            if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
+                norm2(this%symbolic_atom(plusbulk)%constraint_actual) > tiny(1.0_rp)) then
+               this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%constraint_actual(:) / &
+                                         norm2(this%symbolic_atom(plusbulk)%constraint_actual)
+            else
+               this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%potential%mom(:)
+            end if
          end do
    
          !=========================================================================
@@ -948,7 +1085,8 @@ contains
          if (rank == 0) call save_state_scf(this%lattice%symbolic_atoms(:))
          call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
-         total_energy = sum(this%symbolic_atom(:)%potential%etot) + this%constraint_energy
+         this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         total_energy = this%physical_total_energy
          magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
          call g_scf_benchmark_profile%finish_iteration(this%mix%delta, total_energy, this%en%fermi, magnetic_moment)
 
@@ -970,6 +1108,126 @@ contains
          end if
       end do
    end subroutine run
+
+   !> @brief Perform one constraint-controller update without an SCF potential update.
+   !> @details This is the inner loop of the corrected frozen-magnon MFT mode.
+   !>          The ordinary LMTO potential is copied before the Hamiltonian/DOS
+   !>          pass and restored afterwards.  Thus the density may respond to
+   !>          the current constraining field, while QL/PL, radial potentials,
+   !>          energies, and all other ordinary potential state remain fixed.
+   subroutine run_fixed_potential_constraint_step(this, iteration)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: iteration
+      type(potential), allocatable :: frozen_potential(:)
+      real(rp), allocatable :: reference_flat(:), current_flat(:)
+      integer :: ia, pot_size
+      real(rp) :: max_drift
+
+      if (.not. this%control%constraints_enable) then
+         call g_logger%fatal('run_fixed_potential_constraint_step requires constraints_enable = .true.', &
+                            __FILE__, __LINE__)
+      end if
+      if (this%lattice%ntype <= 0) then
+         call g_logger%fatal('run_fixed_potential_constraint_step requires at least one atom type.', &
+                            __FILE__, __LINE__)
+      end if
+
+      allocate(frozen_potential(this%lattice%ntype))
+      do ia = 1, this%lattice%ntype
+         frozen_potential(ia) = this%symbolic_atom(ia)%potential
+      end do
+      pot_size = frozen_potential(1)%sizeof_potential_full()
+      allocate(reference_flat(pot_size), current_flat(pot_size))
+      reference_flat = 0.0_rp
+      do ia = 1, this%lattice%ntype
+         call frozen_potential(ia)%flatten_potential_full(current_flat)
+         reference_flat = reference_flat + abs(current_flat)
+      end do
+      this%fixed_potential_checksum = sum(reference_flat)
+
+      ! Deliberately bypass self%run(): it would mix the density and call
+      ! run_scf(), which is precisely the q-dependent ordinary-potential drift
+      ! that corrected MFT must exclude.
+      call run_recursion(this, iteration)
+      call run_dos(this)
+
+      max_drift = 0.0_rp
+      do ia = 1, this%lattice%ntype
+         call this%symbolic_atom(ia)%potential%flatten_potential_full(current_flat)
+         call frozen_potential(ia)%flatten_potential_full(reference_flat)
+         max_drift = max(max_drift, maxval(abs(current_flat - reference_flat)))
+      end do
+      this%fixed_potential_transient_drift = max_drift
+
+      ! Restore after the diagnostic comparison.  The controller state and the
+      ! measured constraint_actual vectors intentionally survive this restore.
+      do ia = 1, this%lattice%ntype
+         this%symbolic_atom(ia)%potential = frozen_potential(ia)
+      end do
+      max_drift = 0.0_rp
+      do ia = 1, this%lattice%ntype
+         call this%symbolic_atom(ia)%potential%flatten_potential_full(current_flat)
+         call frozen_potential(ia)%flatten_potential_full(reference_flat)
+         max_drift = max(max_drift, maxval(abs(current_flat - reference_flat)))
+      end do
+      this%fixed_potential_max_drift = max_drift
+      this%physical_total_energy = sum(frozen_potential(:)%etot)
+      this%esumn = this%physical_total_energy
+      this%esum = this%physical_total_energy
+
+      deallocate(reference_flat, current_flat, frozen_potential)
+   end subroutine run_fixed_potential_constraint_step
+
+   !> @brief Reset the controller state between independent fixed-potential q passes.
+   !> @param[in] zero_field When true (the default), start this q point with no
+   !>        carried constraining field or controller history.  False preserves
+   !>        the field and controller history for an explicit continuation run.
+   subroutine reset_constraint_for_fixed_potential(this, zero_field)
+      class(self), intent(inout) :: this
+      logical, intent(in), optional :: zero_field
+      logical :: zero_field_
+      integer :: ia, plusbulk
+
+      if (.not. this%control%constraints_enable) return
+      zero_field_ = .true.
+      if (present(zero_field)) zero_field_ = zero_field
+      if (zero_field_) then
+         do ia = 1, this%lattice%nrec
+            plusbulk = this%lattice%nbulk + ia
+            this%symbolic_atom(plusbulk)%mag_cfield = 0.0_rp
+            this%symbolic_atom(plusbulk)%constraint_actual = 0.0_rp
+         end do
+         call initialize_cfd(this%lattice%nrec, 0)
+         call initialize_cfd(this%lattice%nrec, 1, this%control%constraints_i_cons, &
+                             this%control%constraints_code_prefac, this%control%constraints_diagnostics)
+      end if
+      this%constraint_metric = huge(1.0_rp)
+      this%constraint_converged = .false.
+      this%constraint_iteration = 0
+      this%constraint_penalty_energy = 0.0_rp
+      this%constraint_field_coupling_energy = 0.0_rp
+      this%constraint_energy = 0.0_rp
+   end subroutine reset_constraint_for_fixed_potential
+
+   !> @brief Return a deterministic L1 checksum of all ordinary potential fields.
+   !> @details The full flattening intentionally excludes the separate
+   !>          constraining field, which lives on symbolic_atom%mag_cfield.
+   function potential_checksum(this) result(checksum)
+      class(self), intent(inout) :: this
+      real(rp) :: checksum
+      real(rp), allocatable :: flat(:)
+      integer :: ia, pot_size
+
+      checksum = 0.0_rp
+      if (this%lattice%ntype <= 0) return
+      pot_size = this%symbolic_atom(1)%potential%sizeof_potential_full()
+      allocate(flat(pot_size))
+      do ia = 1, this%lattice%ntype
+         call this%symbolic_atom(ia)%potential%flatten_potential_full(flat)
+         checksum = checksum + sum(abs(flat))
+      end do
+      deallocate(flat)
+   end function potential_checksum
    
    !=========================================================================
    !                   RUN RECURSION STEP
@@ -1169,6 +1427,12 @@ contains
                    this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz]/mtot
             else
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+            end if
+            if (this%control%constraints_enable) then
+               this%symbolic_atom(this%lattice%nbulk + ia)%constraint_actual(:) = &
+                  [this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx, &
+                   this%symbolic_atom(this%lattice%nbulk + ia)%potential%my, &
+                   this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz]
             end if
             call this%symbolic_atom(this%lattice%nbulk + ia)%potential%copy_mom_to_scal()
             if (rank == 0) then
@@ -1375,6 +1639,10 @@ contains
       lmom = 0.0d0
       do ia = start_atom, end_atom
          ia_loc = g2l_map(ia)
+         ! `potential%mom0` is the integrated moment in the solver's active
+         ! spin basis.  For gbt_single_q that basis is the primitive rotating
+         ! frame; lab-cell phases are reconstructed only by an explicit GBT
+         ! frame transformation for output/comparison.
          magmom(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom0(:)
          lmom(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmom(:)
          mag_for(:, ia) = this%bands%mag_for(:, ia_loc)        
@@ -1400,7 +1668,13 @@ contains
          write (newunit, '(A)') '|                       Total Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
 !         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
-         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(:)%potential%etot) + this%constraint_energy
+         this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         write (newunit, '(a,f20.10)') 'Physical DFT total energy of system: ', this%physical_total_energy
+         ! Keep the historical key for downstream parsers, but make the
+         ! physical meaning explicit through the dedicated line above.
+         write (newunit, '(a,f20.10)') 'Total energy of system: ', this%physical_total_energy
+         write (newunit, '(a,f20.10)') 'Constraint penalty/controller energy (diagnostic only): ', this%constraint_penalty_energy
+         write (newunit, '(a,f20.10)') 'Constraint-field coupling <V_con> (band diagnostic only): ', this%constraint_field_coupling_energy
          write (newunit, '(a,f20.10)') 'Constraint energy:      ', this%constraint_energy
          !===========================================================================
          !                       Band Energy
@@ -1420,6 +1694,11 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                     Spin moment                                         |'
          write (newunit, '(A)') '==========================================================================='
+         if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+            write (newunit, '(A)') 'Spin-moment frame: rotating primitive frame (GBT; lab phases not applied)'
+         else
+            write (newunit, '(A)') 'Spin-moment frame: active calculation frame'
+         end if
          write (newunit, '(a,3f16.10)') 'Total spin moment: ', sum(magmom(1:this%lattice%nrec, 1:3), dim=1)
          do ia = 1, this%lattice%nrec
             write (newunit, '(a,i4,a,f10.6)') 'Spin moment of atom', ia, ':', norm2(magmom(ia, :))
@@ -1497,6 +1776,14 @@ contains
       logical :: l
 
       l = delta_en < this%conv_thr
+      if (this%control%constraints_enable) then
+         l = l .and. this%constraint_converged
+         if (rank == 0 .and. .not. this%constraint_converged) then
+            call g_logger%info('Constraint convergence pending: RMS-angle='// &
+                               fmt('es12.4', this%constraint_metric)//' tolerance='// &
+                               fmt('es12.4', this%constraint_tolerance), __FILE__, __LINE__)
+         end if
+      end if
    end function is_converged
 
    subroutine update_fermi_in_input(fermi_value, filename)

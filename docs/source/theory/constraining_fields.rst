@@ -31,8 +31,10 @@ iteratively so that the self-consistent magnetization direction converges to
 Frame and sign contract
 =======================
 
-``mom_in`` is the current normalized Cartesian spin direction and ``mom_ref``
-is the target direction. Both are expressed in the spin frame used by the
+``mom_in`` is the current Cartesian spin moment and ``mom_ref``
+is the target direction. Methods 2 and 3 normalize the moment internally;
+method 4 uses its transverse component and method 5 retains its magnitude.
+Both are expressed in the spin frame used by the
 onsite non-collinear Hamiltonian: the common Cartesian frame for ordinary
 real-space and reciprocal calculations, and the corresponding local rotating
 frame for GBT. The returned ``bfield`` is an energy coefficient in Ry, not a
@@ -48,9 +50,20 @@ negative electronic spin moment. The update therefore uses
 :math:`\mathbf{B}^{\,\mathrm{con}}=-\nabla_m E_{\mathrm{con}}` for the
 transverse deviation; a moment canted in +x produces a field coefficient in
 -x. The field is inserted once in the onsite ``m=1`` Hamiltonian block and is
-then shared by RS recursion and reciprocal Fourier assembly. The penalty
-energy returned by ``constrain`` is reported separately from the ordinary
-atomic DFT energy.
+then shared by RS recursion and reciprocal Fourier assembly. The value returned
+as ``etcon`` by ``constrain`` is a controller merit value, not a variational
+DFT contribution. It is reported as ``constraint_penalty_energy`` and kept
+separate from the physical atomic DFT energy. The field expectation
+:math:`\sum_i \mathbf{B}_i^{\mathrm{con}}\cdot\mathbf{m}_i` is exposed
+independently as the band/eigenvalue bookkeeping diagnostic
+``constraint_field_coupling_energy``.
+
+For ``gbt_single_q``, the target and field are stored in the primitive
+cell-independent rotating spin frame.  The onsite field has no translational
+phase.  For an explicit commensurate supercell, a lab-frame site field is
+reconstructed only for comparison or output as
+:math:`\mathbf{B}_{na,\mathrm{lab}}^{\mathrm{con}}=\mathcal{R}[U_{na}]
+\bar{\mathbf{B}}_a^{\mathrm{con}}`.
 
 RS-LMTO-ASA implements four distinct algorithms for determining
 :math:`\mathbf{B}_i^{\,\mathrm{con}}`, selected by the input parameter
@@ -64,17 +77,17 @@ RS-LMTO-ASA implements four distinct algorithms for determining
 
 ----
 
-Method 2 — Lagrange Multiplier (no orthogonalization)
-======================================================
+Method 2 — Multiplier-style Penalty Controller (no orthogonalization)
+=======================================================================
 
 **Physical idea**
 
-The simplest approach adds a penalty energy proportional to the squared deviation
+The simplest approach adds a controller merit value proportional to the squared deviation
 of the unit magnetization vector from the reference direction:
 
 .. math::
 
-   E_{\mathrm{con}} = \lambda_t \sum_i \left| \hat{\mathbf{m}}_i - \hat{\mathbf{e}}_i^{\,\mathrm{ref}} \right|^2,
+   E_{\mathrm{con}} = \frac{1}{2}\lambda_t \sum_i \left| \hat{\mathbf{m}}_i - \hat{\mathbf{e}}_i^{\,\mathrm{ref}} \right|^2,
 
 where :math:`\hat{\mathbf{m}}_i = \mathbf{m}_i / |\mathbf{m}_i|` is the
 normalised magnetization on site :math:`i`.
@@ -117,8 +130,8 @@ until it reaches a ceiling of :math:`10^4`.
 
 ----
 
-Method 3 — Lagrange Multiplier with Orthogonalization (:math:`\mathbf{B} \perp \mathbf{m}`)
-==============================================================================================
+Method 3 — Multiplier-style Penalty Controller with Orthogonalization (:math:`\mathbf{B} \perp \mathbf{m}`)
+===============================================================================================================
 
 **Physical idea**
 
@@ -167,8 +180,8 @@ Method 4 — PID Controller (AMN Non-Collinear Constraints)
 
 **Physical idea**
 
-The Lagrange approaches update the field based only on the instantaneous error
-(proportional control).  A **PID (Proportional-Integral-Derivative)** controller
+The multiplier-style approaches update the field based only on the instantaneous
+error (proportional control).  A **PID (Proportional-Integral-Derivative)** controller
 uses three components to improve convergence speed and stability, especially for
 slowly varying or oscillating moments:
 
@@ -223,8 +236,9 @@ The PID diagnostic energy is accumulated as the quadratic controller cost:
 
 .. tip::
 
-   Method 4 prints detailed per-atom PID diagnostics to standard output at every
-   iteration, which is useful for understanding convergence behaviour.
+   Method 4's detailed legacy trace is opt-in through
+   ``constraints_diagnostics``.  The same switch enables the machine-readable
+   ``constraint_diagnostics.dat`` trace used for convergence audits.
 
 ----
 
@@ -282,6 +296,9 @@ For each atom :math:`i` (skipped if :math:`|\mathbf{m}_i| < m_{\mathrm{thresh}} 
         - \frac{\mathbf{m}_i \cdot \hat{\mathbf{e}}_i}{|\mathbf{m}_i|}
       \right).
 
+   This is a legacy linear merit value used by the controller; it is not a
+   physical Zeeman or constrained-DFT energy contribution.
+
 **Adaptive** :math:`\lambda_t` — two update rules are applied each iteration:
 
 .. math::
@@ -303,6 +320,34 @@ providing rapid initial growth of :math:`\lambda_t` toward :math:`\lambda_{\max}
 
 ----
 
+Energy and Functional Semantics
+===============================
+
+The implementation has three related but distinct quantities:
+
+* ``constraint_penalty_energy`` (the historical ``etcon`` return value) is
+  the current controller merit value. For methods 2 and 3 it is a quadratic
+  residual, for method 4 it is a PID controller cost, and for method 5 it is
+  the legacy linear merit value. It is useful for diagnostics and adaptive
+  updates, but no method currently supplies an exact variational Lagrange
+  functional.
+* ``constraint_field_coupling_energy`` is the instantaneous field expectation
+  :math:`\sum_i \mathbf{B}_i^{\mathrm{con}}\cdot\mathbf{m}_i`. It is a
+  field/eigenvalue bookkeeping diagnostic, not an energy correction to add to
+  the physical DFT total.
+* ``physical_total_energy`` is the ordinary DFT energy evaluated from the
+  self-consistent density. The historical ``constraint_energy`` output name
+  remains as a compatibility alias for the controller merit value, while new
+  output labels identify the semantics explicitly.
+
+This separation follows the constrained-DFT distinction between the physical
+energy evaluated at the constrained density and the auxiliary multiplier field.
+It also leaves the bare-MFT and corrected-MFT bookkeeping choices for a later
+workflow step: WP07 does not subtract the field coupling from a one-shot band
+energy and does not implement corrected MFT.
+
+----
+
 Comparison of Methods
 =====================
 
@@ -316,19 +361,19 @@ Comparison of Methods
      - Orthogonalization
      - Best for
    * - 2
-     - Lagrange (plain)
+     - Multiplier-style controller (plain)
      - Gradient of :math:`\lambda_t|\boldsymbol{\delta}|^2`
      - None
      - Simple collinear-like cases
    * - 3
-     - Lagrange (:math:`\mathbf{B}\perp\mathbf{m}`)
+     - Multiplier-style controller (:math:`\mathbf{B}\perp\mathbf{m}`)
      - Same + Gram-Schmidt
      - Yes (:math:`\mathbf{B}\perp\hat{\mathbf{e}}^{\,\mathrm{ref}}`)
      - General non-collinear
    * - 4
      - PID controller
      - Proportional + integral + derivative
-     - Implicit (perpendicular error signal)
+     - Explicit transverse projection
      - Oscillating or slowly converging moments
    * - 5
      - Ma-Dudarev
@@ -341,8 +386,8 @@ Comparison of Methods
 Adaptive Lambda Schedule
 =========================
 
-All methods share a common infrastructure for adaptively growing the Lagrange
-multiplier (penalty strength) :math:`\lambda_t` across SCF iterations, starting
+Methods 2, 3, and 5 share a common infrastructure for adaptively growing the
+controller strength :math:`\lambda_t` across SCF iterations, starting
 from :math:`\lambda_t^{(0)} = \lambda_{\max}` at initialisation.  The update
 rules applied at the end of each call to ``constrain()`` are:
 
@@ -367,7 +412,7 @@ input.  The call chain is:
 .. code-block:: text
 
    constructor (self / exchange / conductivity)
-       └─ initialize_cfd(nrec, 1, i_cons, code_prefac)
+       └─ initialize_cfd(nrec, 1, i_cons, code_prefac, diagnostics)
               Allocates PID arrays; sets lambda_t = lambda_max
 
    each SCF / exchange iteration
@@ -375,9 +420,11 @@ input.  The call chain is:
               mom_in  ← current computed moments
               mom_ref ← reference moments from input or initial guess
               bfield  ← stored field or constraints_bfield seed
-              call constrain(mom_in, mom_ref, bfield, nrec, etcon)
+              call constrain(..., etcon, diagnostics_out)
               bfield  -> stored on the symbolic atom and added once to the
                         onsite spin Hamiltonian block
+              diagnostics_out -> angular/torque/field metrics; the SCF gate
+                                 also requires RMS angle <= constraints_tolerance
 
 The reciprocal SCF branch calls the same update at the same point in its loop;
 its next k-space Hamiltonian rebuild therefore sees the identical field. The

@@ -30,10 +30,11 @@ program test_constraining_field
    call check('canted field longitudinal component', field(3, 1), 0.0d0, failures)
    call check('canted energy', energy, 5.0d0*sin(theta)**2, failures)
 
-   ! The seed is an old Lagrange field, not discarded at the call boundary.
+   ! A restart seed is retained only in the transverse subspace; a
+   ! longitudinal component is not a constraint torque.
    field(:, 1) = [0.0d0, 0.0d0, 0.25d0]
    call constrain(mom, ref, field, 1, energy, .false.)
-   call check('seed preserved', field(3, 1), 0.25d0, failures)
+   call check('seed longitudinal component removed', field(3, 1), 0.0d0, failures)
 
    ! For E = lambda*|m_perp|^2/2, B = -dE/dm_perp.
    h = 1.0d-6

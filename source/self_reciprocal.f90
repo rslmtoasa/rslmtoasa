@@ -79,6 +79,11 @@ contains
    !=========================================================================
    !  SPINOR-RIGOROUS SITE MOMENTS FROM k-SPACE EIGENVECTORS (nsp=2/SOC path)
    !=========================================================================
+   !> The returned components are in the eigenvector spin basis.  For
+   !> `gbt_single_q` this is the primitive rotating frame: no cell-dependent
+   !> spiral phase is present in a primitive k-space eigenvector sum.  The
+   !> lab-frame moment belongs to output/comparison code and must be obtained
+   !> through `gbt_structure_mod`'s authoritative frame transformation.
    module subroutine compute_kspace_spin_moments_spinor(this, reciprocal_obj, site_mom)
       class(self), intent(in) :: this
       type(reciprocal), intent(in) :: reciprocal_obj

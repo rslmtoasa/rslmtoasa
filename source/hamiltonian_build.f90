@@ -1,7 +1,8 @@
 submodule(hamiltonian_mod) hamiltonian_build
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q, explicit_texture, &
       normalize_magnetic_representation, select_endpoint_moments, texture_bulk_reuse_is_valid
-   use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear
+   use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear, &
+                                gbt_reference_moment_is_collinear
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_tangent, lmto_endpoint_tangent_record, &
       lmto_make_endpoint_record, lmto_ordinary_tangent_supported
 
@@ -1375,6 +1376,8 @@ contains
          end if
       end if
 
+      call validate_gbt_reference_moments(this)
+
       if (this%hubbard_u_general_check) call this%calculate_hubbard_u_potential_general()
       this%ee = cmplx(0.0_rp, 0.0_rp, rp)
       this%hxc = cmplx(0.0_rp, 0.0_rp, rp)
@@ -1605,6 +1608,33 @@ contains
          'explicit_texture (real-space spiral carried by the cluster), or remove '// &
          'q_ss for an ordinary non-spiral calculation.', __FILE__, __LINE__)
    end subroutine validate_spiral_keys_are_consumed
+
+   !> Validate the meaning of `potential%mom` at the GBT representation
+   !> boundary.  In `gbt_single_q` it is a cell-independent rotating-frame
+   !> collinear reference axis; only the sign of z selects the local up/down
+   !> radial channels.  The physical cone and sublattice phase offsets belong
+   !> to `theta_ss`, `theta_ss_sublattice`, and `phi_ss_sublattice`.
+   !>
+   !> A transverse value is therefore not an alternate way to specify the
+   !> cone.  Reject it before operator construction so a caller cannot feed a
+   !> lab-frame moment into a routine that silently reads only its z component.
+   subroutine validate_gbt_reference_moments(this)
+      class(hamiltonian), intent(in) :: this
+      integer :: itype
+      real(rp), parameter :: transverse_tolerance = 1.0e-10_rp
+      real(rp) :: moment(3)
+
+      do itype = 1, this%lattice%ntype
+         moment(:) = this%lattice%symbolic_atoms(itype)%potential%mom(:)
+         if (.not. gbt_reference_moment_is_collinear(moment, transverse_tolerance)) then
+            call g_logger%fatal('gbt_single_q requires potential%mom for atom type '//fmt('i4', itype)// &
+               ' to be a collinear rotating-frame reference (mx,my must be <= '// &
+               fmt('es10.2', transverse_tolerance)//'). The physical cone direction belongs in '// &
+               'theta_ss and the optional theta_ss_sublattice/phi_ss_sublattice reference angles; '// &
+               'a lab-frame transverse moment is not accepted as potential%mom.', __FILE__, __LINE__)
+         end if
+      end do
+   end subroutine validate_gbt_reference_moments
 
    subroutine gbt_endpoint_angles(this, itype, theta, phi, axis_sign)
       class(hamiltonian), intent(in) :: this

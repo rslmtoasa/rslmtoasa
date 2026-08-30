@@ -794,7 +794,11 @@ contains
 
       do ia = 1, nrec
          plusbulk = nbulk + ia
-         reference(:) = symbolic_atoms(plusbulk)%potential%mom(:)
+         if (sqrt(sum(symbolic_atoms(plusbulk)%constraint_target(:)**2)) > 1.0e-12_rp) then
+            reference(:) = symbolic_atoms(plusbulk)%constraint_target(:)
+         else
+            reference(:) = symbolic_atoms(plusbulk)%potential%mom(:)
+         end if
          if (sqrt(sum(reference(:)**2)) <= 1.0e-12_rp) reference(:) = [0.0_rp, 0.0_rp, 1.0_rp]
 
          call sd%resolve_site_axis(ia, reference, axis, site_charge, m_long, m_transverse, torque)
@@ -1532,6 +1536,14 @@ contains
       end do
       deallocate(mag_comm)
 #endif
+      if (this%control%constraints_enable) then
+         do na = 1, this%lattice%nrec
+            this%symbolic_atom(this%lattice%nbulk + na)%constraint_actual(:) = &
+               [this%symbolic_atom(this%lattice%nbulk + na)%potential%mx, &
+                this%symbolic_atom(this%lattice%nbulk + na)%potential%my, &
+                this%symbolic_atom(this%lattice%nbulk + na)%potential%mz]
+         end do
+      end if
    end subroutine calculate_magnetic_moments
 
    !---------------------------------------------------------------------------

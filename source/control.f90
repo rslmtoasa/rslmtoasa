@@ -246,6 +246,10 @@ module control_mod
       logical :: constraints_enable
       integer :: constraints_i_cons
       integer :: constraints_code_prefac
+      !> Emit the detailed constraint trace and constraint_diagnostics.dat.
+      logical :: constraints_diagnostics
+      !> RMS angular tolerance used by the SCF convergence gate.
+      real(rp) :: constraints_tolerance
       real(rp), dimension(:, :), allocatable :: constraints_mom_ref
       real(rp), dimension(:, :), allocatable :: constraints_bfield
    contains
@@ -364,6 +368,8 @@ contains
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
       constraints_code_prefac = this%constraints_code_prefac
+      constraints_diagnostics = this%constraints_diagnostics
+      constraints_tolerance = this%constraints_tolerance
       if (allocated(this%constraints_mom_ref)) then
          allocate(constraints_mom_ref, mold=this%constraints_mom_ref)
          constraints_mom_ref = this%constraints_mom_ref
@@ -439,6 +445,8 @@ contains
             this%constraints_enable = constraints_enable
             this%constraints_i_cons = constraints_i_cons
             this%constraints_code_prefac = constraints_code_prefac
+            this%constraints_diagnostics = constraints_diagnostics
+            this%constraints_tolerance = constraints_tolerance
             if (allocated(constraints_mom_ref)) then
                if (allocated(this%constraints_mom_ref)) deallocate(this%constraints_mom_ref)
                allocate(this%constraints_mom_ref(size(constraints_mom_ref,1), size(constraints_mom_ref,2)))
@@ -534,6 +542,8 @@ contains
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
       this%constraints_code_prefac = 1
+      this%constraints_diagnostics = .false.
+      this%constraints_tolerance = 1.0e-6_rp
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -720,6 +730,15 @@ contains
           .and. this%density_policy /= sd_relaxed_reference) then
          call g_logger%fatal('control%density_policy must be one of: '''//trim(sd_constrained_spiral)// &
                              ''' or '''//trim(sd_relaxed_reference)//'''.', __FILE__, __LINE__)
+      end if
+      if (this%constraints_enable) then
+         if (this%constraints_i_cons < 2 .or. this%constraints_i_cons > 5) then
+            call g_logger%fatal('control%constraints_i_cons must be 2, 3, 4, or 5 when constraints are enabled.', &
+                                __FILE__, __LINE__)
+         end if
+         if (this%constraints_tolerance <= 0.0_rp) then
+            call g_logger%fatal('control%constraints_tolerance must be positive.', __FILE__, __LINE__)
+         end if
       end if
    end subroutine check_all
 

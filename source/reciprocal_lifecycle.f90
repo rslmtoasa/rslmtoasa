@@ -139,6 +139,10 @@ contains
       this%k_end = 0
       this%k_mesh_distributed_active = .false.
       call this%k_workset%restore_to_default()
+      this%fs_nk1 = 0
+      this%fs_nk2 = 0
+      this%fs_nk3 = 0
+      this%fs_use_symmetry_reduction = .false.
       this%use_time_reversal = .true.
       this%strict_symmetry_checks = .false.
       this%dump_symmetry_kmap = .false.
@@ -209,6 +213,9 @@ contains
       ! the 0.01 Ry placeholder from gate G-B2-1.
       this%green_eta = 0.02_rp        ! Ry; gate G-B2-2 working point (was 0.01, G-B2-1)
       this%green_backend = 'lehmann'  ! backend E (Sigma = 0) by default
+      this%write_eigenpair_projections = .false.
+      this%write_spin_resolved_eigenpairs = .false.
+      this%eigenpair_output_file = 'fermi_surface'
    end subroutine restore_to_default
 
    !> @brief Invalidate every spectrum-derived cache while retaining the k mesh.
@@ -308,6 +315,10 @@ contains
       nk1 = this%nk_mesh(1)
       nk2 = this%nk_mesh(2)
       nk3 = this%nk_mesh(3)
+      fs_nk1 = this%fs_nk1
+      fs_nk2 = this%fs_nk2
+      fs_nk3 = this%fs_nk3
+      fs_use_symmetry_reduction = this%fs_use_symmetry_reduction
       k_offset_x = this%k_offset(1)
       k_offset_y = this%k_offset(2)
       k_offset_z = this%k_offset(3)
@@ -334,6 +345,9 @@ contains
       hall_diag_experimental = this%hall_diag_experimental
       green_eta = this%green_eta
       green_backend = this%green_backend
+      write_eigenpair_projections = this%write_eigenpair_projections
+      write_spin_resolved_eigenpairs = this%write_spin_resolved_eigenpairs
+      eigenpair_output_file = this%eigenpair_output_file
 
       ! K-path settings
       auto_kpath = this%auto_kpath
@@ -364,6 +378,10 @@ contains
 
       ! Assign values back to type members
       this%nk_mesh = [nk1, nk2, nk3]
+      this%fs_nk1 = fs_nk1
+      this%fs_nk2 = fs_nk2
+      this%fs_nk3 = fs_nk3
+      this%fs_use_symmetry_reduction = fs_use_symmetry_reduction
       this%k_offset = [k_offset_x, k_offset_y, k_offset_z]
       this%use_symmetry_reduction = use_symmetry_reduction
       this%use_time_reversal = use_time_reversal
@@ -407,6 +425,10 @@ contains
             "'lehmann' or 'dyson'. Falling back to lehmann.", __FILE__, __LINE__)
          this%green_backend = 'lehmann'
       end if
+      this%write_eigenpair_projections = write_eigenpair_projections
+      this%write_spin_resolved_eigenpairs = write_spin_resolved_eigenpairs
+      this%eigenpair_output_file = trim(eigenpair_output_file)
+      if (len_trim(this%eigenpair_output_file) == 0) this%eigenpair_output_file = 'fermi_surface'
       if (this%reciprocal_mode == 'generalized_overlap') then
          this%reciprocal_mode = 'generalized_overlap_proxy'
          call g_logger%warning("reciprocal_mode='generalized_overlap' is deprecated alias; using 'generalized_overlap_proxy'.", __FILE__, __LINE__)
@@ -480,6 +502,14 @@ contains
       call root_info('reciprocal%build_from_file: reciprocal_mode = ' // trim(this%reciprocal_mode), __FILE__, __LINE__)
       call root_info('reciprocal%build_from_file: reciprocal_backend = ' // trim(this%reciprocal_backend), __FILE__, __LINE__)
       call root_info('reciprocal%build_from_file: kspace_ham_order = ' // trim(this%kspace_ham_order), __FILE__, __LINE__)
+      if (this%write_eigenpair_projections) then
+         call root_info('reciprocal%build_from_file: site/orbital/local-spin projections enabled for Fermi-surface export', &
+                        __FILE__, __LINE__)
+      end if
+      if (this%write_spin_resolved_eigenpairs) then
+         call root_info('reciprocal%build_from_file: guarded collinear spin-resolved Fermi-surface export enabled', &
+                        __FILE__, __LINE__)
+      end if
    end subroutine build_from_file
 
    module logical function has_nonzero_q_gbt(this)

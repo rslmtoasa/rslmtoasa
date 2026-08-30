@@ -24,9 +24,11 @@ require(ham, "block(i, i + spin_off) = block(i, i + spin_off) + bcon(1) - i_unit
 # The SCF loop starts from the namelist seed, returns the computed energy, and
 # stores the field on the atoms consumed by the next Hamiltonian build.
 require(self_src, "this%symbolic_atom(plusbulk)%mag_cfield = this%control%constraints_bfield(:, ia)")
-require(self_src, "call constrain(mom_in, mom_ref, bfield, this%lattice%nrec, etcon)")
+require(self_src, "call constrain(mom_in, mom_ref, bfield, this%lattice%nrec, etcon, diagnostics_out=diagnostics)")
 require(self_src, "this%symbolic_atom(plusbulk)%mag_cfield = bfield(:, ia)")
 require(self_src, "this%constraint_energy = etcon")
+if "sum(this%symbolic_atom(:)%potential%etot) + this%constraint_energy" in self_src:
+    raise AssertionError("constraint penalty is merged into ordinary total energy")
 if "call constrain(mom_in, mom_ref, bfield, this%lattice%nrec)" in self_src:
     raise AssertionError("constraint field is still discarded at a call site")
 

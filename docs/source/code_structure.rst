@@ -60,6 +60,7 @@ Directory Layout
    │   ├── reciprocal_lifecycle.f90   #   submodule: construction / lifecycle
    │   ├── reciprocal_fourier.f90     #   submodule: H(k) via Fourier transform of hoppings
    │   ├── reciprocal_bands.f90       #   submodule: diagonalization, band structure
+   │   ├── reciprocal_export.f90      #   submodule: dense Fermi-surface eigenpair export
    │   ├── reciprocal_dos.f90         #   submodule: tetrahedron / gaussian DOS integration
    │   ├── reciprocal_projection.f90  #   submodule: orbital-projected DOS, band moments
    │   ├── reciprocal_green.f90       #   submodule: B2 k-space Green's-function engine (2 backends)

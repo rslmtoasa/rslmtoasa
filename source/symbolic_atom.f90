@@ -62,6 +62,13 @@ module symbolic_atom_mod
       ! TODO
       ! From common_cnstr
       real(rp), dimension(3) :: mag_cfield, mag_cfield_diff
+      !> Fixed constraint target in the site's active spin frame.  For
+      !> gbt_single_q this is the primitive rotating frame; an explicit
+      !> supercell stores the corresponding lab-frame target per site/type.
+      real(rp), dimension(3) :: constraint_target
+      !> Last measured moment retained when GBT exposes a collinear reference
+      !> marker to the Hamiltonian validator.
+      real(rp), dimension(3) :: constraint_actual
       real(rp) :: chg_cfield, chg_cfield_diff
       real(rp) :: chg_con_val, mag_con_val
       ! TODO
@@ -156,6 +163,8 @@ contains
       this%rb = -1
       this%mag_cfield = 0.0_rp
       this%mag_cfield_diff = 0.0_rp
+      this%constraint_target = 0.0_rp
+      this%constraint_actual = 0.0_rp
       this%chg_cfield = 0.0_rp
       this%chg_cfield_diff = 0.0_rp
       this%chg_con_val = 0.0_rp

@@ -17,12 +17,22 @@ modelling a metastable magnetic state.
 
 The namelist is **optional**.  If omitted, no constraining field is applied.
 
+The constraining field is an auxiliary SCF controller.  Its reported
+``constraint_penalty_energy`` is a convergence/merit diagnostic, not an
+additive DFT total-energy term.  The physical DFT total is reported separately
+as ``physical_total_energy``; ``constraint_field_coupling_energy`` exposes the
+instantaneous :math:`\sum_i \mathbf{B}_i^{\mathrm{con}}\cdot\mathbf{m}_i`
+field/eigenvalue bookkeeping diagnostic.  The historical ``constraint_energy``
+name remains as a compatibility alias for the controller merit value.
+
 .. code-block:: fortran
 
    &constraints
      constraints_enable      = .true.
      constraints_i_cons      = 3
      constraints_code_prefac = 1
+     constraints_diagnostics = .false.
+     constraints_tolerance   = 1.0e-6
      constraints_mom_ref(1,1) =  0.0
      constraints_mom_ref(2,1) =  0.0
      constraints_mom_ref(3,1) =  1.0
@@ -84,11 +94,11 @@ constraints_i_cons
    * - Value
      - Algorithm
    * - ``2``
-     - **Lagrange multiplier without orthogonalization.**
-       Penalty energy :math:`E_{\mathrm{con}} = \lambda_t \sum_i |\hat{\mathbf{m}}_i - \hat{\mathbf{e}}_i^{\,\mathrm{ref}}|^2`.
+     - **Multiplier-style penalty controller without orthogonalization.**
+       Controller merit value :math:`E_{\mathrm{con}} = \frac{1}{2}\lambda_t \sum_i |\hat{\mathbf{m}}_i - \hat{\mathbf{e}}_i^{\,\mathrm{ref}}|^2`.
        Simple and robust; no constraint on the field direction.
    * - ``3``
-     - **Lagrange multiplier with Gram-Schmidt orthogonalization**
+     - **Multiplier-style penalty controller with Gram-Schmidt orthogonalization**
        (:math:`\mathbf{B} \perp \hat{\mathbf{e}}^{\,\mathrm{ref}}`).
        Removes the component of the error vector parallel to the reference
        direction so that the constraining field is purely transverse.
@@ -109,7 +119,7 @@ constraints_i_cons
 
 .. code-block:: fortran
 
-   constraints_i_cons = 3   ! Lagrange + orthogonalization (recommended)
+   constraints_i_cons = 3   ! transverse multiplier-style controller (recommended)
 
 **Guidance:**
 
@@ -160,7 +170,7 @@ module variable ``cfd_prefac``.
 constraints_mom_ref
 -------------------
 
-**Type:** Real array, shape ``(3, natoms)``
+**Type:** Real array, shape ``(3, nrec)``
 
 **Default:** Not allocated (reference moments are taken from the initial
 spin configuration if not provided)
@@ -206,7 +216,7 @@ read from namelist at lines 340–360.
 constraints_bfield
 ------------------
 
-**Type:** Real array, shape ``(3, natoms)``
+**Type:** Real array, shape ``(3, nrec)``
 
 **Default:** Not allocated (constraining field initialized to zero)
 
@@ -229,8 +239,47 @@ convergence when restarting from a previous run.
   :math:`\mathbf{B}_i^{\,\mathrm{con}} = 0`).
 - Useful when the calculation is restarted from a partially converged
   configuration and a meaningful estimate of the field is available.
+- For methods 3, 4, and 5, any component parallel to the target direction is
+  removed because the physical control field is transverse.
 
 **Code location:** ``source/control.f90``, member ``constraints_bfield``.
+
+----
+
+constraints_diagnostics
+-----------------------
+
+**Type:** Logical
+
+**Default:** ``.false.``
+
+**Purpose:** Enables the detailed legacy controller trace and the
+machine-readable ``constraint_diagnostics.dat`` file.  The file contains one
+row per site and controller update with the target/actual directions, moment
+magnitude, angular and transverse residuals, field components/magnitude,
+field projection on the target, torque proxy, and RMS angular metric.
+
+The header declares ``frame=active_spin_frame``, ``field_units=Ry``, and
+``angle_units=rad``.  Leave this disabled for normal runs.
+
+----
+
+constraints_tolerance
+---------------------
+
+**Type:** Real
+
+**Default:** ``1.0e-6``
+
+**Purpose:** RMS angular tolerance in radians for the constraint convergence
+gate.  When constraints are enabled, SCF convergence requires both the usual
+energy criterion and ``constraint_metric <= constraints_tolerance``.
+
+**Frame note:** For ``gbt_single_q``, ``constraints_mom_ref`` and the evolving
+``mag_cfield`` are primitive rotating-frame vectors.  They are onsite terms
+and receive no translational phase.  Explicit-supercell lab vectors are
+reconstructed with the GBT frame transform only for output or covariance
+checks.
 
 ----
 
@@ -293,8 +342,9 @@ Convergence Tips
 
 - If the SCF oscillates after adding constraints, reduce the overall mixing
   parameter ``alpha`` (in ``&self``) to 0.2–0.3.
-- Monitor the ``lambda_t`` printed to stdout (methods 4 and 5): it should
-  grow toward ``lambda_max = 10`` and stabilise.
+- Set ``constraints_diagnostics = .true.`` when auditing the per-site field,
+  angular residual, torque, or convergence metric in
+  ``constraint_diagnostics.dat``.
 - If a moment never reaches its reference direction, check that
   ``constraints_mom_ref`` is correctly indexed (Fortran column-major order:
   first index is the Cartesian component, second is the atom index).

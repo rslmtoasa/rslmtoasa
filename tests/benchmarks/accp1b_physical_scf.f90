@@ -390,7 +390,9 @@ contains
          'nmat='//int_token(result_nmat), &
          'nk_unique='//int_token(result_nk_unique), &
          'nk_mesh='//mesh_token(result_nk_mesh), &
-         'final_total_energy='//real_token(sum(self_obj%symbolic_atom(:)%potential%etot) + self_obj%constraint_energy), &
+         'final_total_energy='//real_token(self_obj%physical_total_energy), &
+         'constraint_penalty_energy='//real_token(self_obj%constraint_penalty_energy), &
+         'constraint_field_coupling_energy='//real_token(self_obj%constraint_field_coupling_energy), &
          'fermi_energy='//real_token(final_fermi), &
          'total_charge='//real_token(total_charge), &
          'electron_count='//real_token(total_charge), &

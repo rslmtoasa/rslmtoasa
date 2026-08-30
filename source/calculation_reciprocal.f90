@@ -295,6 +295,64 @@ contains
            reciprocal_obj%auto_find_fermi, 'dos_kspace.dat')
    end subroutine post_processing_density_of_states
 
+   !> @brief Dense k-space eigenpair export for Fermi-surface analysis.
+   !> @details Rebuilds the converged bulk post-processing Hamiltonian, then
+   !>          samples it on a mesh independent of the SCF mesh. The writer
+   !>          always emits the complete BZ so that each k-point has its own
+   !>          eigenvectors for later site/orbital/spin colouring.
+   !> @param[in] this Calculation object. fname selects the namelist input.
+   module subroutine post_processing_fermi_surface(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(energy), target :: energy_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(reciprocal), target :: reciprocal_obj
+      integer :: i
+      integer :: fs_mesh(3)
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.true.)
+      call lattice_obj%atomlist()
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      energy_obj = energy(lattice_obj)
+      hamiltonian_obj = hamiltonian(charge_obj)
+      do i = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(i)%build_pot()
+      end do
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
+
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      ! With auto_find_fermi disabled, use the Fermi level loaded from the
+      ! converged &energy state, just as the normal post-processing routes do.
+      reciprocal_obj%fermi_level = energy_obj%fermi
+      fs_mesh = reciprocal_obj%nk_mesh
+      if (reciprocal_obj%fs_nk1 > 0) fs_mesh(1) = reciprocal_obj%fs_nk1
+      if (reciprocal_obj%fs_nk2 > 0) fs_mesh(2) = reciprocal_obj%fs_nk2
+      if (reciprocal_obj%fs_nk3 > 0) fs_mesh(3) = reciprocal_obj%fs_nk3
+      if (any(fs_mesh <= 0)) then
+         call g_logger%fatal('post_processing_fermi_surface: FS mesh dimensions must be positive.', __FILE__, __LINE__)
+      end if
+      reciprocal_obj%nk_mesh = fs_mesh
+
+      ! A reduced mesh is useful for scalar integrals, but cannot provide the
+      ! per-k eigenvectors needed by a Fermi-surface payload. Keep this route
+      ! deterministic and full-BZ even if the compatibility knob is set.
+      if (reciprocal_obj%fs_use_symmetry_reduction) then
+         call g_logger%warning('post_processing_fermi_surface: fs_use_symmetry_reduction is ignored; using the full BZ mesh.', &
+                               __FILE__, __LINE__)
+      end if
+      reciprocal_obj%use_symmetry_reduction = .false.
+      call reciprocal_obj%generate_mp_mesh()
+      call reciprocal_obj%write_kspace_eigenpairs()
+   end subroutine post_processing_fermi_surface
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief B2 validation driver (C1/C3 + C2): cross-check the k-space Lehmann

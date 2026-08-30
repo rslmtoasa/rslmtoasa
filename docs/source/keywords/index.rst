@@ -151,9 +151,11 @@ Alphabetical Listing (All Parameters)
 - ``conca``, ``concb`` - Alloy concentrations
 - ``constraints_bfield`` - Initial constraining field values per atom
 - ``constraints_code_prefac`` - Scaling prefactor for constraining field
+- ``constraints_diagnostics`` - Enable detailed constraint diagnostics
 - ``constraints_enable`` - Enable constraining field functionality
 - ``constraints_i_cons`` - Constraint algorithm selector (2–5)
 - ``constraints_mom_ref`` - Reference magnetization directions per atom
+- ``constraints_tolerance`` - RMS angular constraint convergence tolerance
 - ``conv_thr`` - SCF convergence threshold (self module)
 - ``core`` - Number of core electrons
 

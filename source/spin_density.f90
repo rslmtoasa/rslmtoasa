@@ -62,6 +62,7 @@
 !------------------------------------------------------------------------------
 module spin_density_mod
    use precision_mod, only: rp
+   use gbt_structure_mod, only: gbt_frame_t, gbt_frame_from_phase, gbt_rotating_to_lab_vector
    use logger_mod, only: g_logger
    use string_mod, only: int2str, real2str
    implicit none
@@ -441,14 +442,16 @@ contains
       real(rp), intent(in) :: phase
       real(rp), intent(out) :: n
       real(rp), dimension(3), intent(out) :: m_lab
-      real(rp) :: m(3), c, s
+      real(rp) :: m(3)
+      type(gbt_frame_t) :: frame
 
       call this%cartesian(isite, il, iorder, n, m)
-      c = cos(phase)
-      s = sin(phase)
-      m_lab(1) = c*m(1) - s*m(2)
-      m_lab(2) = s*m(1) + c*m(2)
-      m_lab(3) = m(3)
+      ! A density stored by the SCF contract is already in the rotating
+      ! reference coordinates.  For output/comparison, use the same
+      ! authoritative frame map as the Hamiltonian rather than duplicating a
+      ! z-rotation here.
+      call gbt_frame_from_phase(0.0_rp, 0.0_rp, phase, frame)
+      call gbt_rotating_to_lab_vector(frame, m, m_lab)
    end subroutine lab_frame_moment
 
    !---------------------------------------------------------------------------

@@ -192,6 +192,7 @@ module calculation_mod
       procedure, private :: post_processing_band_structure
       procedure, private :: post_processing_bsf
       procedure, private :: post_processing_density_of_states
+      procedure, private :: post_processing_fermi_surface
       procedure, private :: post_processing_kspace_green
       procedure, private :: post_processing_frozen_magnon
       procedure, private :: post_processing_susceptibility
@@ -233,6 +234,10 @@ module calculation_mod
       module subroutine post_processing_density_of_states(this)
          class(calculation), intent(in) :: this
       end subroutine post_processing_density_of_states
+
+      module subroutine post_processing_fermi_surface(this)
+         class(calculation), intent(in) :: this
+      end subroutine post_processing_fermi_surface
 
       module subroutine post_processing_kspace_green(this)
          class(calculation), intent(in) :: this
@@ -394,6 +399,8 @@ contains
          call this%post_processing_bsf()
       case ('density_of_states')
          call this%post_processing_density_of_states()
+      case ('fermi_surface')
+         call this%post_processing_fermi_surface()
       case ('kspace_green')
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
@@ -1165,6 +1172,10 @@ contains
       end if
 
       if (fm_obj%branch_mode == 'auto') then
+         if (fm_obj%mode == 'mft_constrained') then
+            call g_logger%fatal('[calculation.post_processing_frozen_magnon]: mode=''mft_constrained'' is currently supported for branch_mode=''acoustic'' only.', &
+                               __FILE__, __LINE__)
+         end if
          call post_processing_frozen_magnon_auto(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, &
                                                 mix_obj, self_obj, energy_obj)
       else
@@ -2112,35 +2123,86 @@ contains
       type(energy), target, intent(inout) :: energy_obj
       type(reciprocal) :: recip_obj
       real(rp), allocatable :: etot_q(:), eband_q(:), eband_gauge_q(:), mtot_q(:, :), omega_q(:)
-      real(rp) :: sin2theta, etot_ref, theta_probe
-      real(rp) :: delta_raw, delta_gauge
-      logical :: use_kspace
+      real(rp), allocatable :: fermi_q(:), electron_count_q(:), electron_error_q(:), target_electrons_q(:), weight_sum_q(:)
+      integer, allocatable :: nk_total_q(:), nk_mesh_q(:, :)
+      real(rp), allocatable :: constraint_metric_q(:), constraint_penalty_q(:), constraint_coupling_q(:)
+      real(rp), allocatable :: potential_drift_q(:), potential_transient_drift_q(:), field_magnitude_q(:, :)
+      integer, allocatable :: constraint_iteration_q(:)
+      logical, allocatable :: constraint_converged_q(:)
+      real(rp) :: sin2theta, etot_ref, theta_probe, ordinary_checksum
+      real(rp) :: delta_raw, delta_gauge, delta_final, e_q0, e_ref0
+      logical :: use_kspace, constraints_enabled, bare_mft, corrected_mft
       character(len=200) :: fmt_str
-      integer :: iq, i, newunit, diagnostic_unit
+      integer :: iq, i, iter, newunit, diagnostic_unit
 
-      allocate (etot_q(fm_obj%n_q), eband_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), omega_q(fm_obj%n_q))
-      if (fm_obj%mode == 'mft') allocate (eband_gauge_q(fm_obj%n_q))
+      bare_mft = fm_obj%mode == 'mft'
+      corrected_mft = fm_obj%mode == 'mft_constrained'
+      allocate (etot_q(fm_obj%n_q), eband_q(fm_obj%n_q), mtot_q(lattice_obj%nrec, fm_obj%n_q), &
+                omega_q(fm_obj%n_q), constraint_metric_q(fm_obj%n_q), constraint_penalty_q(fm_obj%n_q), &
+                constraint_coupling_q(fm_obj%n_q), potential_drift_q(fm_obj%n_q), &
+                potential_transient_drift_q(fm_obj%n_q), &
+                field_magnitude_q(lattice_obj%nrec, fm_obj%n_q), constraint_iteration_q(fm_obj%n_q), &
+                constraint_converged_q(fm_obj%n_q), fermi_q(fm_obj%n_q), electron_count_q(fm_obj%n_q), &
+                electron_error_q(fm_obj%n_q), target_electrons_q(fm_obj%n_q), weight_sum_q(fm_obj%n_q), nk_total_q(fm_obj%n_q), &
+                nk_mesh_q(3, fm_obj%n_q))
+      if (bare_mft) allocate (eband_gauge_q(fm_obj%n_q))
+      constraint_metric_q = 0.0_rp
+      constraint_penalty_q = 0.0_rp
+      constraint_coupling_q = 0.0_rp
+      potential_drift_q = 0.0_rp
+      potential_transient_drift_q = 0.0_rp
+      field_magnitude_q = 0.0_rp
+      constraint_iteration_q = 0
+      constraint_converged_q = .true.
+      fermi_q = 0.0_rp
+      electron_count_q = 0.0_rp
+      electron_error_q = 0.0_rp
+      target_electrons_q = 0.0_rp
+      weight_sum_q = 0.0_rp
+      nk_total_q = 0
+      nk_mesh_q = 0
 
       ! Reference point (row 1): converge the flat-spiral cone potential once. Its
-      ! magnitudes/moments define the normalization and, in mft mode, are held FIXED
-      ! for every q (magnetic force theorem).
+      ! magnitudes/moments define the normalization.  Corrected MFT first obtains
+      ! this ordinary reference with the auxiliary constraint operator disabled.
+      constraints_enabled = lattice_obj%control%constraints_enable
+      if ((bare_mft .or. corrected_mft) .and. constraints_enabled) then
+         ! Disable before constructing self_obj: its constructor initializes the
+         ! constraint state, so delaying this switch would reject an ordinary
+         ! reference whose input potential has no explicit constraint target.
+         lattice_obj%control%constraints_enable = .false.
+      end if
       self_obj = self(bands_obj, mix_obj)
       use_kspace = self_obj%use_kspace
       ! GBT is a magnetic representation shared by both solvers.
       hamiltonian_obj%magnetic_representation = gbt_single_q
       hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
+      if ((bare_mft .or. corrected_mft) .and. constraints_enabled) then
+         ! Bare MFT and the ordinary reference of corrected MFT are explicitly
+         ! constraint-free.  The corrected mode creates a fresh constrained self
+         ! object after this run, retaining the converged ordinary potential.
+         self_obj%control%constraints_enable = .false.
+      else if (fm_obj%mode == 'scf' .and. constraints_enabled) then
+         call set_constrained_spiral_targets(self_obj)
+      end if
       call self_obj%run()
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+      ordinary_checksum = self_obj%potential_checksum()
+
+      if (corrected_mft .and. constraints_enabled) then
+         self_obj%control%constraints_enable = .true.
+         self_obj = self(bands_obj, mix_obj)
+         if (fm_obj%constraint_tolerance > 0.0_rp) then
+            self_obj%constraint_tolerance = fm_obj%constraint_tolerance
+         end if
+      end if
       do i = 1, lattice_obj%nrec
          mtot_q(i, :) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
       end do
 
-      if (fm_obj%mode == 'mft') then
-         ! Force theorem: rebuild ONLY the Hamiltonian per q and take the band energy
-         ! at the fixed reference potential (frozen_magnon_probe_energy). Running a
-         ! single self-consistency step here instead would mix the potential once per
-         ! q, letting the reference random-walk across the sweep -- so E(q) would fail
-         ! to return to its value at symmetry-equivalent q (e.g. the two Gamma points).
+      if (bare_mft .or. (corrected_mft .and. .not. constraints_enabled)) then
+         ! Bare MFT and the corrected zero-field limit rebuild ONLY the Hamiltonian
+         ! per q and take a band-energy probe at the fixed ordinary potential.
          if (use_kspace) then
             recip_obj = reciprocal(hamiltonian_obj)
             ! WP8: the mesh must never be built once from row 1's q_ss and
@@ -2192,21 +2254,102 @@ contains
             ! potential and same k-point set; this is a physical gauge
             ! identity, not an empirical theta correction.  The real-space
             ! path retains its established q=0 subtraction for compatibility.
-            if (use_kspace) then
+            if (bare_mft .and. use_kspace) then
                theta_probe = hamiltonian_obj%theta_ss
                hamiltonian_obj%theta_ss = 0.0_rp
                eband_gauge_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
                hamiltonian_obj%theta_ss = theta_probe
             end if
             eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-            if (.not. use_kspace) eband_gauge_q(iq) = eband_q(1)
+            if (use_kspace) then
+               fermi_q(iq) = recip_obj%fermi_level
+               electron_count_q(iq) = recip_obj%canonical_electron_count
+               target_electrons_q(iq) = recip_obj%total_electrons
+               electron_error_q(iq) = recip_obj%canonical_electron_count - target_electrons_q(iq)
+               weight_sum_q(iq) = recip_obj%canonical_weight_sum
+               nk_total_q(iq) = recip_obj%nk_total
+               nk_mesh_q(:, iq) = recip_obj%nk_mesh
+            end if
+            if (bare_mft .and. .not. use_kspace) eband_gauge_q(iq) = eband_q(1)
             etot_q(iq) = etot_ref   ! potential frozen; total energy not re-evaluated
+            mtot_q(:, iq) = mtot_q(:, 1)
+         end do
+      else if (corrected_mft) then
+         if (.not. constraints_enabled) then
+            call g_logger%fatal('[calculation.post_processing_frozen_magnon]: corrected MFT requires constraints_enable = .true. or an explicit zero-field comparison path.', &
+                               __FILE__, __LINE__)
+         end if
+         ! Corrected constrained MFT (Jacobsson convention): the ordinary
+         ! potential is fixed, but the constraining field is converged separately
+         ! at every q.  Only the final one-shot occupied-eigenvalue sum is used.
+         if (use_kspace) then
+            recip_obj = reciprocal(hamiltonian_obj)
+            select case (trim(recip_obj%q_symmetry_policy))
+            case ('little_group_common')
+               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
+                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
+                                                 q_list_cart=q_ss_cart)
+            case ('little_group')
+               ! Built for the current q inside the loop.
+            case default
+               if (.not. allocated(recip_obj%k_points)) then
+                  if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
+                     recip_obj%use_symmetry_reduction = .false.
+                     recip_obj%use_time_reversal = .false.
+                     call recip_obj%generate_mp_mesh()
+                  else if (recip_obj%use_symmetry_reduction) then
+                     call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
+                                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+                  else
+                     call recip_obj%generate_mp_mesh()
+                  end if
+               end if
+            end select
+         end if
+         do iq = 1, fm_obj%n_q
+            hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+            if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
+               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
+            end if
+            call set_constrained_spiral_targets(self_obj)
+            call self_obj%reset_constraint_for_fixed_potential(fm_obj%constraint_start_from_zero)
+            do iter = 1, fm_obj%constraint_max_iterations
+               call self_obj%run_fixed_potential_constraint_step(iter)
+               if (self_obj%constraint_converged) exit
+            end do
+            if (.not. self_obj%constraint_converged) then
+               call g_logger%fatal('[calculation.post_processing_frozen_magnon]: constraining field did not converge at q index '// &
+                                  int2str(iq)//' within constraint_max_iterations.', __FILE__, __LINE__)
+            end if
+            eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+            if (use_kspace) then
+               fermi_q(iq) = recip_obj%fermi_level
+               electron_count_q(iq) = recip_obj%canonical_electron_count
+               target_electrons_q(iq) = recip_obj%total_electrons
+               electron_error_q(iq) = recip_obj%canonical_electron_count - target_electrons_q(iq)
+               weight_sum_q(iq) = recip_obj%canonical_weight_sum
+               nk_total_q(iq) = recip_obj%nk_total
+               nk_mesh_q(:, iq) = recip_obj%nk_mesh
+            end if
+            etot_q(iq) = etot_ref
+            mtot_q(:, iq) = mtot_q(:, 1)
+            constraint_metric_q(iq) = self_obj%constraint_metric
+            constraint_penalty_q(iq) = self_obj%constraint_penalty_energy
+            constraint_coupling_q(iq) = self_obj%constraint_field_coupling_energy
+            potential_drift_q(iq) = self_obj%fixed_potential_max_drift
+            potential_transient_drift_q(iq) = self_obj%fixed_potential_transient_drift
+            constraint_iteration_q(iq) = self_obj%constraint_iteration
+            constraint_converged_q(iq) = self_obj%constraint_converged
+            do i = 1, lattice_obj%nrec
+               field_magnitude_q(i, iq) = norm2(lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%mag_cfield)
+            end do
          end do
       else
          ! scf: fully self-consistent spiral at each q (each q independently relaxed).
          do iq = 1, fm_obj%n_q
             hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
             self_obj = self(bands_obj, mix_obj)
+            if (self_obj%control%constraints_enable) call set_constrained_spiral_targets(self_obj)
             call self_obj%run()
             etot_q(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
             if (.not. self_obj%use_kspace) call bands_obj%calculate_band_energy()
@@ -2214,6 +2357,16 @@ contains
             do i = 1, lattice_obj%nrec
                mtot_q(i, iq) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
             end do
+            if (self_obj%control%constraints_enable) then
+               constraint_metric_q(iq) = self_obj%constraint_metric
+               constraint_penalty_q(iq) = self_obj%constraint_penalty_energy
+               constraint_coupling_q(iq) = self_obj%constraint_field_coupling_energy
+               constraint_iteration_q(iq) = self_obj%constraint_iteration
+               constraint_converged_q(iq) = self_obj%constraint_converged
+               do i = 1, lattice_obj%nrec
+                  field_magnitude_q(i, iq) = norm2(lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%mag_cfield)
+               end do
+            end if
          end do
       end if
 
@@ -2222,9 +2375,15 @@ contains
          call g_logger%fatal('[calculation.post_processing_frozen_magnon]: '// &
                              'theta_ss must be nonzero (a finite cone angle) to define omega(q)', __FILE__, __LINE__)
       end if
+      if (abs(sum(mtot_q(:, 1))) < 1.0e-12_rp) then
+         call g_logger%fatal('[calculation.post_processing_frozen_magnon]: total reference moment is zero; omega normalization is undefined.', &
+                            __FILE__, __LINE__)
+      end if
       do iq = 1, fm_obj%n_q
-         if (fm_obj%mode == 'mft') then
+         if (bare_mft) then
             omega_q(iq) = 4.0_rp*(eband_q(iq) - eband_gauge_q(iq))/(sum(mtot_q(:, 1))*sin2theta)
+         else if (corrected_mft) then
+            omega_q(iq) = 4.0_rp*(eband_q(iq) - eband_q(1))/(sum(mtot_q(:, 1))*sin2theta)
          else
             omega_q(iq) = 4.0_rp*(etot_q(iq) - etot_q(1))/(sum(mtot_q(:, 1))*sin2theta)
          end if
@@ -2234,9 +2393,13 @@ contains
       write (newunit, '(A)') '# Frozen-magnon sweep (calculation%post_processing = "frozen_magnon")'
       write (newunit, '(A)') '# q_ss units: Cartesian 2*pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point'
       write (newunit, '(A,A)') '# q_file coordinates: ', trim(fm_obj%q_coordinates)
-      write (newunit, '(A)') '# omega uses eband in mode="mft" and etot in mode="scf"'
-      if (fm_obj%mode == 'mft' .and. use_kspace) then
+      write (newunit, '(A)') '# omega uses eband in modes="mft"/"mft_constrained" and etot in mode="scf"'
+      if (bare_mft .and. use_kspace) then
          write (newunit, '(A)') '# MFT k-space omega uses E(q,theta)-E(q,theta=0); E(q,theta=0) is the same-q GBT gauge reference'
+      end if
+      if (corrected_mft) then
+         write (newunit, '(A)') '# corrected MFT: ordinary potential frozen; q-specific constraint field converged before one-shot band energy'
+         write (newunit, '(A)') '# detailed field, residual, checksum, and energy-component records are in frozen_magnon_constrained_diagnostics.dat'
       end if
       write (newunit, '(A,I0)') '# Number of sublattices (nrec): ', lattice_obj%nrec
       write (newunit, '(A)') '# Format: q1 q2 q3 etot eband mtot_1 .. mtot_nrec omega'
@@ -2246,7 +2409,7 @@ contains
       end do
       close (newunit)
 
-      if (fm_obj%mode == 'mft' .and. use_kspace) then
+      if (bare_mft .and. use_kspace) then
          ! Keep the two subtraction choices visible in a separate diagnostic
          ! file.  This makes the gauge-invariant production observable
          ! auditable without changing the long-standing frozen_magnon.dat
@@ -2262,7 +2425,100 @@ contains
          end do
          close (diagnostic_unit)
       end if
+
+      if (corrected_mft) then
+         open (newunit=diagnostic_unit, file='frozen_magnon_constrained_diagnostics.dat', status='replace', action='write')
+         write (diagnostic_unit, '(A)') '# Frozen-magnon corrected constrained-MFT diagnostics'
+         write (diagnostic_unit, '(A)') '# mode = mft_constrained'
+         write (diagnostic_unit, '(A,3(1X,ES24.16))') '# reference_q =', q_ss_cart(:, 1)
+         write (diagnostic_unit, '(A)') '# ordinary_potential_frozen = T'
+         write (diagnostic_unit, '(A,ES24.16)') '# ordinary_potential_checksum_L1 = ', ordinary_checksum
+         write (diagnostic_unit, '(A)') '# constraint_field_converged = per_q_column'
+         write (diagnostic_unit, '(A,L1)') '# constraint_start_from_zero = ', fm_obj%constraint_start_from_zero
+         write (diagnostic_unit, '(A)') '# gauge_reference_used = F'
+         write (diagnostic_unit, '(A)') '# field_coupling_and_controller_penalty_are_diagnostics_only = T'
+         write (diagnostic_unit, '(A)') '# energy_bookkeeping = occupied_eigenvalue_sum(fixed_ordinary_potential + converged_q_field)'
+         write (diagnostic_unit, '(A)') '# cone_normalization = 4*DeltaE/(sum(M_reference)*sin(theta_ss)^2)'
+         write (diagnostic_unit, '(A)') '# Format: q1 q2 q3 E_phys_reference E_band_raw E_band_reference DeltaE_raw DeltaE_final gauge_reference residual penalty field_coupling potential_checksum potential_max_drift potential_transient_drift controller_iteration field_converged sin2theta M_reference omega Bmag_1 .. Bmag_nrec'
+         do iq = 1, fm_obj%n_q
+            delta_raw = eband_q(iq) - eband_q(1)
+            delta_final = delta_raw
+            delta_gauge = 0.0_rp
+            write (diagnostic_unit, *) q_ss_cart(:, iq), etot_q(iq), eband_q(iq), eband_q(1), delta_raw, &
+               delta_final, delta_gauge, constraint_metric_q(iq), constraint_penalty_q(iq), constraint_coupling_q(iq), &
+               ordinary_checksum, potential_drift_q(iq), potential_transient_drift_q(iq), constraint_iteration_q(iq), &
+               merge(1, 0, constraint_converged_q(iq)), sin2theta, sum(mtot_q(:, 1)), omega_q(iq), &
+               field_magnitude_q(:, iq)
+         end do
+         close (diagnostic_unit)
+      end if
+
+      if (use_kspace) then
+         ! WP09 machine-readable contract.  Keep this file independent of the
+         ! legacy frozen_magnon.dat and of the mode-specific constraint audit:
+         ! every reciprocal acoustic run emits the raw q/theta energies plus
+         ! the canonical occupation and mesh metadata needed to distinguish a
+         ! physical cone response from finite-k quadrature noise.  For
+         ! corrected MFT, the zero-cone columns are zero and gauge_available is
+         ! false because the q-specific constraint field is not a pure-gauge
+         ! reference at theta=0.
+         open (newunit=diagnostic_unit, file='frozen_magnon_harmonic_diagnostics.dat', status='replace', action='write')
+         write (diagnostic_unit, '(A)') '# GBT WP09 harmonic cone-angle and k-grid diagnostics'
+         write (diagnostic_unit, '(A)') '# schema = gbt_wp09_harmonic_v1'
+         write (diagnostic_unit, '(A,A)') '# mode = ', trim(fm_obj%mode)
+         write (diagnostic_unit, '(A,A)') '# q_coordinates = ', trim(fm_obj%q_coordinates)
+         write (diagnostic_unit, '(A)') '# q_units = Cartesian 2*pi/alat, matching hamiltonian%q_ss'
+         write (diagnostic_unit, '(A,ES24.16)') '# alat_angstrom = ', lattice_obj%alat
+         write (diagnostic_unit, '(A)') '# gauge_available = true only for bare reciprocal MFT same-q theta=0 probes'
+         write (diagnostic_unit, '(A)') '# energy_bookkeeping = raw occupied-eigenvalue energies; no controller penalty or field coupling added'
+         write (diagnostic_unit, '(A)') '# columns = q1 q2 q3 theta_deg E_q_theta E_q0 E_qref_theta E_qref0 DeltaE_raw DeltaE_gauge DeltaE_pure sin2theta Mtot omega fermi_level electron_count electron_error target_electrons weight_sum nk1 nk2 nk3 nk_total gauge_available'
+         do iq = 1, fm_obj%n_q
+            if (bare_mft .and. use_kspace) then
+               e_q0 = eband_gauge_q(iq)
+               e_ref0 = eband_gauge_q(1)
+               delta_gauge = eband_q(iq) - eband_gauge_q(iq)
+               delta_final = eband_gauge_q(iq) - eband_gauge_q(1)
+            else
+               e_q0 = 0.0_rp
+               e_ref0 = 0.0_rp
+               delta_gauge = 0.0_rp
+               delta_final = 0.0_rp
+            end if
+            delta_raw = eband_q(iq) - eband_q(1)
+            write (diagnostic_unit, *) q_ss_cart(:, iq), hamiltonian_obj%theta_ss*180.0_rp/acos(-1.0_rp), &
+               eband_q(iq), e_q0, eband_q(1), e_ref0, delta_raw, delta_gauge, delta_final, &
+               sin2theta, sum(mtot_q(:, 1)), omega_q(iq), fermi_q(iq), electron_count_q(iq), electron_error_q(iq), &
+               target_electrons_q(iq), weight_sum_q(iq), nk_mesh_q(:, iq), nk_total_q(iq), &
+               merge(1, 0, bare_mft .and. use_kspace)
+         end do
+         close (diagnostic_unit)
+      end if
    end subroutine post_processing_frozen_magnon_acoustic
+
+   !> @brief Set the controller targets to the collinear axis of the GBT frame.
+   !> @details GBT keeps potential%mom as a collinear reference marker and puts
+   !>          the physical cone in the bond rotation.  The constraint controller
+   !>          therefore targets the local +/-z axis, not the lab-frame cone
+   !>          vector.  This is also the axis consumed by the shared density
+   !>          contract; using the cone vector here would ask a local onsite field
+   !>          to rotate a moment that GBT has already rotated in the hopping.
+   subroutine set_constrained_spiral_targets(self_obj)
+      type(self), intent(inout) :: self_obj
+      integer :: ia, itype
+      real(rp) :: axis_sign
+
+      if (.not. allocated(self_obj%constraint_reference)) then
+         call g_logger%fatal('[calculation.set_constrained_spiral_targets]: constraint state is not initialized.', &
+                            __FILE__, __LINE__)
+      end if
+      do ia = 1, self_obj%lattice%nrec
+         itype = self_obj%lattice%nbulk + ia
+         axis_sign = 1.0_rp
+         if (self_obj%symbolic_atom(itype)%potential%mom(3) < 0.0_rp) axis_sign = -1.0_rp
+         self_obj%constraint_reference(:, ia) = [0.0_rp, 0.0_rp, axis_sign]
+         self_obj%symbolic_atom(itype)%constraint_target = self_obj%constraint_reference(:, ia)
+      end do
+   end subroutine set_constrained_spiral_targets
 
    !> @brief Multi-sublattice adiabatic magnon branches via the direct GBT frozen-magnon
    !>        method (Essenberger et al., PRB 84, 174425 (2011), Eqs. 24-27; Sandratskii,
@@ -2688,13 +2944,14 @@ contains
           .and. post_processing /= 'band_structure' &
           .and. post_processing /= 'bsf' &
           .and. post_processing /= 'density_of_states' &
+          .and. post_processing /= 'fermi_surface' &
           .and. post_processing /= 'kspace_green' &
           .and. post_processing /= 'frozen_magnon' &
           .and. post_processing /= 'susceptibility') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'kspace_green', 'frozen_magnon', 'susceptibility'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'susceptibility'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

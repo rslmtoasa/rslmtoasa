@@ -14,9 +14,10 @@
 !>          plus the q-coordinate convention ('cartesian': Cartesian units of
 !>          2*pi/alat, matching &hamiltonian q_ss; 'direct': reciprocal-lattice
 !>          coordinates), the execution mode ('scf': full SCF at every point;
-!>          'mft': full SCF at the
-!>          reference point only, single-iteration band-energy pass for the
-!>          rest), and the output filename. The sweep itself is driven from
+!>          'mft': full SCF at the reference point only, single-shot band-energy
+!>          pass for the rest; 'mft_constrained': fixed ordinary reference
+!>          potential plus a converged q-specific constraining field before each
+!>          single-shot band-energy pass), and the output filename. The sweep itself is driven from
 !>          calculation.f90::post_processing_frozen_magnon, which owns the
 !>          control/lattice/hamiltonian/self object orchestration; this type
 !>          is pure namelist-driven configuration, following the same
@@ -35,8 +36,8 @@ module frozen_magnon_mod
    type, public :: frozen_magnon
       !> Input file name
       character(len=sl) :: fname
-      !> 'scf' or 'mft' (magnetic force theorem / single-shot)
-      character(len=10) :: mode
+      !> 'scf', 'mft', or 'mft_constrained' (corrected constrained MFT)
+      character(len=24) :: mode
       !> 'acoustic' for the legacy single branch, 'auto' for sublattice branches
       character(len=16) :: branch_mode
       !> Number of q-points in the sweep (>= 2: reference + at least one q)
@@ -56,6 +57,12 @@ module frozen_magnon_mod
       real(rp) :: theta_probe
       !> Minimum absolute reference moment for active auto-branch sublattices
       real(rp) :: active_moment_threshold
+      !> Maximum q-local controller updates in corrected constrained MFT.
+      integer :: constraint_max_iterations
+      !> Optional override for control%constraints_tolerance; <=0 uses control.
+      real(rp) :: constraint_tolerance
+      !> Reset the field/controller at each q by default for q-order independence.
+      logical :: constraint_start_from_zero
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -99,6 +106,9 @@ contains
       this%output_file = 'frozen_magnon.dat'
       this%theta_probe = -1.0_rp
       this%active_moment_threshold = 1.0e-6_rp
+      this%constraint_max_iterations = 100
+      this%constraint_tolerance = -1.0_rp
+      this%constraint_start_from_zero = .true.
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -124,6 +134,9 @@ contains
       q_coordinates = this%q_coordinates
       theta_probe = this%theta_probe
       active_moment_threshold = this%active_moment_threshold
+      constraint_max_iterations = this%constraint_max_iterations
+      constraint_tolerance = this%constraint_tolerance
+      constraint_start_from_zero = this%constraint_start_from_zero
       n_q_points = 0
       q_ss_list = 0.0_rp
 
@@ -142,8 +155,10 @@ contains
       close (funit)
 
       this%mode = lower(trim(mode))
-      if (this%mode /= 'mft' .and. this%mode /= 'scf') then
-         call g_logger%fatal("[frozen_magnon.build_from_file]: mode must be 'mft' or 'scf'", __FILE__, __LINE__)
+      if (this%mode == 'corrected_mft') this%mode = 'mft_constrained'
+      if (this%mode /= 'mft' .and. this%mode /= 'mft_constrained' .and. this%mode /= 'scf') then
+         call g_logger%fatal("[frozen_magnon.build_from_file]: mode must be 'mft', 'mft_constrained' ('corrected_mft'), or 'scf'", &
+                             __FILE__, __LINE__)
       end if
 
       this%branch_mode = lower(trim(branch_mode))
@@ -160,6 +175,13 @@ contains
          call g_logger%fatal('[frozen_magnon.build_from_file]: active_moment_threshold must be non-negative', &
                               __FILE__, __LINE__)
       end if
+      this%constraint_max_iterations = constraint_max_iterations
+      if (this%constraint_max_iterations <= 0) then
+         call g_logger%fatal('[frozen_magnon.build_from_file]: constraint_max_iterations must be positive', &
+                             __FILE__, __LINE__)
+      end if
+      this%constraint_tolerance = constraint_tolerance
+      this%constraint_start_from_zero = constraint_start_from_zero
       this%q_file = trim(q_file)
       this%q_coordinates = lower(trim(q_coordinates))
       if (len_trim(this%q_coordinates) == 0) this%q_coordinates = 'cartesian'

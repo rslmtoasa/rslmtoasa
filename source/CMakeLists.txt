@@ -65,6 +65,7 @@ add_library(${PROJECT_NAME} STATIC
     reciprocal_lifecycle.f90
     reciprocal_fourier.f90
     reciprocal_bands.f90
+    reciprocal_export.f90
     reciprocal_occupations.f90
     reciprocal_dos.f90
     reciprocal_projection.f90

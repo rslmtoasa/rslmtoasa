@@ -300,6 +300,12 @@ module reciprocal_mod
       ! K-point mesh variables
       !> Number of k-points in each direction (nx, ny, nz)
       integer, dimension(3) :: nk_mesh
+      !> Dense mesh dimensions for post_processing='fermi_surface'.
+      !> Non-positive values fall back to the regular nk_mesh dimensions.
+      integer :: fs_nk1, fs_nk2, fs_nk3
+      !> Requested symmetry reduction for FS post-processing. The export
+      !> itself is always promoted to the complete BZ mesh.
+      logical :: fs_use_symmetry_reduction
       !> Authoritative k-point ownership.  points/weights in this object are
       !> local to the current rank; replicated worksets own the entire mesh.
       type(kpoint_workset) :: k_workset
@@ -531,6 +537,15 @@ module reciprocal_mod
       !> Backend selector for fill_green: 'lehmann' (E, Sigma=0) or 'dyson' (D)
       character(len=16) :: green_backend
 
+      ! Fermi-surface post-processing eigenpair export. The configured name is
+      ! a base name; '.bin' and '.meta' are appended.
+      logical :: write_eigenpair_projections
+      !> Write independently diagonalized global collinear spin sectors to a
+      !> separate '<base>.spin.bin' payload when H(k) and S(k) are spin-block
+      !> diagonal over the complete exported mesh.
+      logical :: write_spin_resolved_eigenpairs
+      character(len=256) :: eigenpair_output_file
+
    contains
       procedure :: generate_mp_mesh
       procedure :: generate_reciprocal_vectors
@@ -609,6 +624,7 @@ module reciprocal_mod
       procedure :: fill_moments
       procedure :: build_green_contour
       procedure :: calculate_bsf
+      procedure :: write_kspace_eigenpairs
       final     :: destructor
    end type reciprocal
 
@@ -2321,6 +2337,20 @@ end function integrate_dos_up_to_energy
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in), optional :: output_file
    end subroutine calculate_bsf
+
+   !> @brief Write a dense k-space eigensystem for external Fermi-surface use.
+   !> @details The post-processing caller promotes any reduced mesh to the
+   !>          complete Monkhorst-Pack mesh, refreshes a stale spectrum against
+   !>          the current Hamiltonian generation, gathers distributed k-points
+   !>          on rank zero, and writes a stream-binary payload plus a text
+   !>          metadata/index sidecar. Eigenvectors are stored as separate real
+   !>          and imaginary float64 arrays in Fortran column-major order.
+   !> @param[inout] this Reciprocal object containing the eigensystem.
+   !> @param[in] scf_iteration Optional source SCF iteration recorded in metadata.
+   module subroutine write_kspace_eigenpairs(this, scf_iteration)
+      class(reciprocal), intent(inout) :: this
+      integer, intent(in), optional :: scf_iteration
+   end subroutine write_kspace_eigenpairs
 
    end interface
 

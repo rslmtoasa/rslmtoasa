@@ -541,6 +541,32 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
   set_tests_properties(Val17GbtHarmonicGoldstone PROPERTIES
     LABELS "validation;functional;magnetic;gbt;kspace;goldstone;convergence"
     TIMEOUT 14400)
+
+  add_test(NAME Val18GbtWp01Q0BccFe
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val18_gbt_wp01_q0.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val18_gbt_wp01_q0")
+  set_tests_properties(Val18GbtWp01Q0BccFe PROPERTIES
+    LABELS "validation;functional;magnetic;gbt;wp01;q0;kspace"
+    TIMEOUT 300)
+
+  add_test(NAME Val19GbtHarmonicKgrid
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val19_gbt_harmonic_kgrid.py"
+      "--binary" "${TestBinary}"
+      "--modes" "mft"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val19_gbt_harmonic_kgrid")
+  set_tests_properties(Val19GbtHarmonicKgrid PROPERTIES
+    LABELS "validation;functional;magnetic;gbt;wp09;harmonic;kgrid;convergence"
+    TIMEOUT 14400)
+
+  add_test(NAME Val20GbtSmallQ
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val20_gbt_small_q.py"
+      "--binary" "${TestBinary}"
+      "--modes" "mft"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val20_gbt_small_q")
+  set_tests_properties(Val20GbtSmallQ PROPERTIES
+    LABELS "validation;functional;magnetic;gbt;wp10;small-q;quadratic;convergence"
+    TIMEOUT 14400)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
@@ -625,6 +651,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitMagneticRepresentation PROPERTIES LABELS "unit;gbt;wp3")
   add_fortran_unit_test(UnitGbtStructure ${TestDIR}/unit/test_gbt_structure.f90)
   set_tests_properties(UnitGbtStructure PROPERTIES LABELS "unit;gbt;wp4")
+  add_fortran_unit_test(UnitGbtFrameContract ${TestDIR}/unit/test_gbt_frame_contract.f90)
+  set_tests_properties(UnitGbtFrameContract PROPERTIES LABELS "unit;gbt;wp05;frame;density")
+  add_fortran_unit_test(UnitGbtWp01Q0 ${TestDIR}/unit/test_gbt_wp01_q0.f90)
+  set_tests_properties(UnitGbtWp01Q0 PROPERTIES LABELS "unit;gbt;wp01;q0")
+  add_fortran_unit_test(UnitGbtWp02GaugeShiftedK ${TestDIR}/unit/test_gbt_wp02_gauge_shifted_k.f90)
+  set_tests_properties(UnitGbtWp02GaugeShiftedK PROPERTIES LABELS "unit;gbt;wp02;gauge;hermiticity;shifted-k")
   add_fortran_unit_test(UnitStructureConstantsBackends ${TestDIR}/unit/test_structure_constants_backends.f90)
   target_compile_definitions(UnitStructureConstantsBackends PRIVATE
     TEST_STRUCTURE_CONSTANT_DATABASE="${CMAKE_SOURCE_DIR}/tests/scf/cases/bulk/bccFe")
@@ -643,9 +675,28 @@ if (RUN_UNIT_TESTS)
     LABELS "validation;sd;spin_integrators;physics;convergence")
   add_fortran_unit_test(UnitConstrainingField ${TestDIR}/unit/test_constraining_field.f90)
   set_tests_properties(UnitConstrainingField PROPERTIES LABELS "unit;constraints;physics")
+  add_fortran_unit_test(UnitGbtConstraintCovariance ${TestDIR}/unit/test_gbt_constraint_covariance.f90)
+  set_tests_properties(UnitGbtConstraintCovariance PROPERTIES LABELS "unit;gbt;wp06;constraints;covariance")
+  add_fortran_unit_test(UnitGbtWp07ConstraintEnergy ${TestDIR}/unit/test_gbt_wp07_constraint_energy.f90)
+  set_tests_properties(UnitGbtWp07ConstraintEnergy PROPERTIES LABELS "unit;gbt;wp07;constraints;energy")
   add_test(NAME UnitConstrainingFieldSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_constraining_field_source.py)
   set_tests_properties(UnitConstrainingFieldSource PROPERTIES LABELS "unit;constraints;source-contract")
+  add_test(NAME UnitGbtWp06Source
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp06_source.py)
+  set_tests_properties(UnitGbtWp06Source PROPERTIES LABELS "unit;gbt;wp06;constraints;source-contract")
+  add_test(NAME GbtWp07ConstraintEnergySource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp07_constraint_energy_source.py)
+  set_tests_properties(GbtWp07ConstraintEnergySource PROPERTIES LABELS "unit;gbt;wp07;constraints;energy;source-contract")
+  add_test(NAME GbtWp08CorrectedMftSource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp08_corrected_mft_source.py)
+  set_tests_properties(GbtWp08CorrectedMftSource PROPERTIES LABELS "unit;gbt;wp08;frozen-magnon;constraints;source-contract")
+  add_test(NAME GbtWp09HarmonicKgrid
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp09_harmonic_kgrid.py)
+  set_tests_properties(GbtWp09HarmonicKgrid PROPERTIES LABELS "unit;gbt;wp09;frozen-magnon;harmonic;kgrid;source-contract")
+  add_test(NAME GbtWp10SmallQ
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_small_q.py)
+  set_tests_properties(GbtWp10SmallQ PROPERTIES LABELS "unit;gbt;wp10;frozen-magnon;small-q;quadratic;q-reversal")
   add_test(NAME CudaPluginSurface
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/cuda/test_plugin_surface.py)
   set_tests_properties(CudaPluginSurface PROPERTIES LABELS "unit;cuda;gpu;coverage;source-contract")
@@ -805,6 +856,12 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp6Hoh
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
   set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")
+  add_test(NAME UnitGbtWp03CompositeCovariance
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp03_composite_covariance.py)
+  set_tests_properties(UnitGbtWp03CompositeCovariance PROPERTIES LABELS "unit;gbt;wp03;hoh;ccor;overlap;hubbard")
+  add_test(NAME UnitGbtWp04CommensurateSupercell
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp04_commensurate_supercell.py)
+  set_tests_properties(UnitGbtWp04CommensurateSupercell PROPERTIES LABELS "unit;gbt;wp04;supercell;commensurate;folding")
   add_test(NAME UnitGbtWp6Ccor
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_ccor.py)
   set_tests_properties(UnitGbtWp6Ccor PROPERTIES LABELS "unit;gbt;wp6;ccor")
