@@ -15,5 +15,7 @@ python3 tests/xc_reconciliation/run_xc_lda_reconciliation.py \
 The output directory contains the comparison CSV, Stoner-response CSV,
 exchange-validation CSV, energy-gradient audit CSV, a JSON summary, a run log,
 and two diagnostic PNGs.
-The exact fully polarized rows are recorded separately with the legacy
-zero-density guard status; they are not included in regular-range maxima.
+The exact fully polarized rows are recorded separately with
+`FULLY_POLARIZED_LIMIT` status; they are not included in regular-range
+maxima. The direct legacy endpoint checks cover `zeta=0, 0.9, 0.99, 0.999999,
+1` without imposing a physical density floor.

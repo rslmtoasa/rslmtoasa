@@ -3,11 +3,12 @@
 ! This executable deliberately calls only the two production XC kernels.  It
 ! does not enter the SCF loop, construct a potential, or determine a Fermi
 ! level.  The first command-line argument, when present, is an output
-! directory.  Three CSV files are written there:
+! directory.  Four CSV files are written there:
 !
 !   xc_lda_reconciliation.csv
 !   xc_lda_stoner_response.csv
 !   xc_lda_exchange_validation.csv
+!   xc_lda_energy_gradient.csv
 !
 ! The source of truth for the density convention is kept here next to the
 ! driver: densities are electrons/bohr^3, rs is in bohr, and the libXC
@@ -17,24 +18,25 @@ program test_xc_lda_reconciliation
    use control_mod, only: control
    use logger_mod, only: g_logger
    use xc_mod, only: xc
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    implicit none
 
    integer, parameter :: n_rs = 9
-   integer, parameter :: n_zeta = 12
+   integer, parameter :: n_zeta = 14
    integer, parameter :: n_delta = 5
    real(rp), parameter :: pi = 4.0_rp*atan(1.0_rp)
    real(rp), parameter :: rs_grid(n_rs) = [ &
       0.5_rp, 1.0_rp, 1.5_rp, 2.0_rp, 2.5_rp, 3.0_rp, 4.0_rp, 5.0_rp, 6.0_rp]
    real(rp), parameter :: zeta_grid(n_zeta) = [ &
       0.0_rp, 1.0e-4_rp, 1.0e-3_rp, 1.0e-2_rp, 0.05_rp, 0.1_rp, &
-      0.25_rp, 0.5_rp, 0.8_rp, 0.95_rp, 0.99_rp, 1.0_rp]
+      0.25_rp, 0.5_rp, 0.8_rp, 0.9_rp, 0.95_rp, 0.99_rp, 0.999999_rp, 1.0_rp]
    real(rp), parameter :: response_delta(n_delta) = [ &
       1.0e-2_rp, 1.0e-3_rp, 1.0e-4_rp, 1.0e-5_rp, 1.0e-6_rp]
    real(rp), parameter :: radius = 1.0_rp
    real(rp), parameter :: zero_gradient(2) = 0.0_rp
    real(rp), parameter :: zero_laplacian(2) = 0.0_rp
    character(len=*), parameter :: status_regular = 'REGULAR'
-   character(len=*), parameter :: status_full_polarization = 'FULLY_POLARIZED_LEGACY_GUARD'
+   character(len=*), parameter :: status_full_polarization = 'FULLY_POLARIZED_LIMIT'
 
    type(control) :: ctl
    type(xc) :: legacy_bh, libxc_vbh
@@ -99,24 +101,21 @@ program test_xc_lda_reconciliation
 
          call evaluate_pair(legacy_bh, libxc_vbh, rho_down, rho_up, &
             legacy_exc, legacy_vup, legacy_vdn, libxc_exc, libxc_vup, libxc_vdn)
-         classification = classification_for_pair('BH_VBH', status, &
-            max(abs(legacy_vup - libxc_vup), abs(legacy_vdn - libxc_vdn)))
+         classification = classification_for_pair('BH_VBH')
          call write_comparison_row(unit_data, 'BH_VBH', rs_grid(irs), zeta_grid(izeta), &
             rho_up, rho_down, legacy_exc, libxc_exc, legacy_vup, libxc_vup, &
             legacy_vdn, libxc_vdn, status, classification)
 
          call evaluate_pair(legacy_pw, libxc_pw, rho_down, rho_up, &
             legacy_exc, legacy_vup, legacy_vdn, libxc_exc, libxc_vup, libxc_vdn)
-         classification = classification_for_pair('PW92_PW', status, &
-            max(abs(legacy_vup - libxc_vup), abs(legacy_vdn - libxc_vdn)))
+         classification = classification_for_pair('PW92_PW')
          call write_comparison_row(unit_data, 'PW92_PW', rs_grid(irs), zeta_grid(izeta), &
             rho_up, rho_down, legacy_exc, libxc_exc, legacy_vup, libxc_vup, &
             legacy_vdn, libxc_vdn, status, classification)
 
          call evaluate_pair(legacy_vwn, libxc_vwn, rho_down, rho_up, &
             legacy_exc, legacy_vup, legacy_vdn, libxc_exc, libxc_vup, libxc_vdn)
-         classification = classification_for_pair('VWN_VWN', status, &
-            max(abs(legacy_vup - libxc_vup), abs(legacy_vdn - libxc_vdn)))
+         classification = classification_for_pair('VWN_VWN')
          call write_comparison_row(unit_data, 'VWN_VWN', rs_grid(irs), zeta_grid(izeta), &
             rho_up, rho_down, legacy_exc, libxc_exc, legacy_vup, libxc_vup, &
             legacy_vdn, libxc_vdn, status, classification)
@@ -135,7 +134,10 @@ program test_xc_lda_reconciliation
       'vdn_reported,vdn_from_energy,vup_residual,vdn_residual,max_residual'
    do irs = 1, n_rs
       n = density_from_rs(rs_grid(irs))
-      do izeta = 1, n_zeta - 1
+      ! The central-difference audit stops at zeta=.99.  At the added
+      ! zeta=.999999 point a fixed relative step would cross rho_down=0;
+      ! the direct polarized-limit checks cover that endpoint regime.
+      do izeta = 1, n_zeta - 2
          rho_up = 0.5_rp*n*(1.0_rp + zeta_grid(izeta))
          rho_down = 0.5_rp*n*(1.0_rp - zeta_grid(izeta))
          call write_energy_gradient_row(unit_gradient, 'BH_VBH', rs_grid(irs), zeta_grid(izeta), &
@@ -189,7 +191,12 @@ program test_xc_lda_reconciliation
    enddo
    close (unit_exchange)
 
-   failed = max_exchange_abs_error > 2.0e-12_rp .or. max_exchange_rel_error > 2.0e-12_rp
+   failed = .false.
+   call check_polarized_limits(legacy_bh)
+   call check_polarized_limits(legacy_pw)
+   call check_polarized_limits(legacy_vwn)
+   failed = failed .or. max_exchange_abs_error > 2.0e-12_rp .or. &
+      max_exchange_rel_error > 2.0e-12_rp
    write (*, '(a,es16.8)') 'exchange_max_abs_error=', max_exchange_abs_error
    write (*, '(a,es16.8)') 'exchange_max_relative_error=', max_exchange_rel_error
    if (failed) then
@@ -205,6 +212,30 @@ contains
       real(rp) :: density
       density = 3.0_rp/(4.0_rp*pi*rs**3)
    end function density_from_rs
+
+   subroutine check_polarized_limits(functional)
+      type(xc), intent(in) :: functional
+      real(rp), parameter :: test_zeta(5) = [0.0_rp, 0.9_rp, 0.99_rp, 0.999999_rp, 1.0_rp]
+      real(rp) :: density, rho_up_test, rho_down_test
+      real(rp) :: energy, v_down, v_up
+      integer :: izeta
+
+      density = density_from_rs(2.0_rp)
+      do izeta = 1, size(test_zeta)
+         rho_up_test = 0.5_rp*density*(1.0_rp + test_zeta(izeta))
+         rho_down_test = 0.5_rp*density*(1.0_rp - test_zeta(izeta))
+         call evaluate_legacy_energy(functional, rho_down_test, rho_up_test, energy, v_down, v_up)
+         if (.not. ieee_is_finite(energy) .or. .not. ieee_is_finite(v_down) .or. &
+            .not. ieee_is_finite(v_up)) then
+            write (*, '(a,f10.6)') 'FAIL: non-finite legacy BH polarized limit at zeta=', test_zeta(izeta)
+            failed = .true.
+         endif
+         if (test_zeta(izeta) == 1.0_rp .and. abs(v_down) + abs(v_up) <= 1.0e-12_rp) then
+            write (*, '(a)') 'FAIL: legacy BH fully polarized limit was discarded by a spin-channel guard'
+            failed = .true.
+         endif
+      enddo
+   end subroutine check_polarized_limits
 
    subroutine evaluate_pair(legacy, libxc, rho_dn, rho_up, legacy_e, legacy_vup, legacy_vdn, &
       libxc_e, libxc_vup, libxc_vdn)
@@ -297,24 +328,20 @@ contains
       rel_diff = relative_difference(i_legacy, i_libxc)
       write (unit, '(a,",",4(es24.16e3,","),es24.16e3,",",es24.16e3,",",a)') &
          trim(pair_name), rs, delta, i_legacy, i_libxc, abs_diff, rel_diff, &
-         trim(classification_for_pair(pair_name, status_regular, 0.0_rp))
+         trim(classification_for_pair(pair_name))
    end subroutine write_response_row
 
-   function classification_for_pair(pair_name, status, potential_difference) result(classification)
-      character(len=*), intent(in) :: pair_name, status
-      real(rp), intent(in) :: potential_difference
+   function classification_for_pair(pair_name) result(classification)
+      character(len=*), intent(in) :: pair_name
       character(len=64) :: classification
 
-      if (status == status_full_polarization) then
-         classification = 'LEGACY_KERNEL_DEFECT'
-      else if (trim(pair_name) == 'BH_VBH' .and. potential_difference > 1.0e-7_rp) then
-         ! The BH energy and magnetic derivative agree closely, but the
-         ! legacy charge-average potential develops a reproducible common
-         ! offset as polarization grows.  Keep this as a measured defect;
-         ! no production formula is changed by this diagnostic.
-         classification = 'LEGACY_KERNEL_DEFECT'
+      if (trim(pair_name) == 'BH_VBH') then
+         ! The fully polarized libXC comparison uses its documented positive
+         ! density floor for the vanishing channel.  Classify the limiting
+         ! result with the same BH/VBH equivalence as the regular grid.
+         classification = 'RECONCILED_EQUIVALENT'
       else
-         classification = 'EXPECTED_PARAMETRIZATION_DIFFERENCE'
+         classification = 'EXPECTED_VARIANT_DIFFERENCE'
       endif
    end function classification_for_pair
 

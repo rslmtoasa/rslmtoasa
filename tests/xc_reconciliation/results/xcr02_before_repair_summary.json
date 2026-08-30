@@ -1,0 +1,53 @@
+{
+  "description": "XCR-01 fixed-density baseline captured before the XCR-02 legacy-kernel repair",
+  "comparison_rows": 324,
+  "regular_comparison_rows": 297,
+  "fully_polarized_rows": 27,
+  "fully_polarized_status": "FULLY_POLARIZED_LEGACY_GUARD",
+  "exchange_validation": {
+    "max_abs_difference_ry": 1.5543122344752192e-15,
+    "max_relative_difference": 2.9524599598337837e-15
+  },
+  "pairs": {
+    "BH_VBH": {
+      "max_exc_abs_difference_ry": 8.826361419522755e-09,
+      "max_vup_abs_difference_ry": 1.545552143477602e-02,
+      "max_vdn_abs_difference_ry": 1.5455531165107672e-02,
+      "max_bxc_abs_difference_ry": 4.865165825762574e-09,
+      "max_relative_difference": 1.5598792067159075e-02,
+      "max_legacy_energy_gradient_residual_ry": 1.545553319157067e-02,
+      "max_stoner_relative_difference_at_delta_1e-4": 7.522654120856244e-09,
+      "xcr02_decision": "LEGACY_DEFECT_FIXED",
+      "xcr01_classifications": [
+        "EXPECTED_PARAMETRIZATION_DIFFERENCE",
+        "LEGACY_KERNEL_DEFECT"
+      ]
+    },
+    "PW_PW": {
+      "max_exc_abs_difference_ry": 6.616633325684518e-07,
+      "max_vup_abs_difference_ry": 8.731541032425127e-07,
+      "max_vdn_abs_difference_ry": 1.4833181609441581e-05,
+      "max_bxc_abs_difference_ry": 7.853167856231025e-06,
+      "max_relative_difference": 1.4868638509093743e-05,
+      "max_legacy_energy_gradient_residual_ry": 7.418670122660842e-10,
+      "max_stoner_relative_difference_at_delta_1e-4": 9.417298603718136e-07,
+      "xcr02_decision": "EXPECTED_VARIANT_DIFFERENCE",
+      "xcr01_classifications": [
+        "EXPECTED_PARAMETRIZATION_DIFFERENCE"
+      ]
+    },
+    "VWN_VWN": {
+      "max_exc_abs_difference_ry": 5.075452430882699e-04,
+      "max_vup_abs_difference_ry": 8.364879308898621e-04,
+      "max_vdn_abs_difference_ry": 1.0692845066583745e-02,
+      "max_bxc_abs_difference_ry": 5.345589186889876e-03,
+      "max_relative_difference": 9.43013218583168e-02,
+      "max_legacy_energy_gradient_residual_ry": 4.47299902672782e-09,
+      "max_stoner_relative_difference_at_delta_1e-4": 5.1602130407290396e-02,
+      "xcr02_decision": "EXPECTED_VARIANT_DIFFERENCE",
+      "xcr01_classifications": [
+        "EXPECTED_PARAMETRIZATION_DIFFERENCE"
+      ]
+    }
+  }
+}

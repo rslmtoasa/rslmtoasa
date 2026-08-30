@@ -1,50 +1,256 @@
-# XCR-01 — Fixed-density legacy/libXC LDA reconciliation
+# XCR-02 — Reconcile legacy LDA kernels against the XCR-01 oracle
 
 Date: 2026-08-30
 
 Binary: `UnitXcLdaReconciliation`, GNU Fortran 13.3.0, libXC 5.2.3, serial CPU
 
-## Conclusion first
+## Decision
 
-The legacy Barth–Hedin route (`TXC=1`) is reconciled with libXC
-`LDA_X + LDA_C_VBH` (`TXC=101`) for the quantities that drive the local
-magnetic response:
+XCR-01 was reviewed before changing production code. It ruled out units,
+spin ordering, energy normalization, and exchange as explanations for the
+BH discrepancy. It did identify two demonstrated legacy defects:
 
-* the largest regular-grid energy difference is `8.83e-9 Ry` per electron;
-* the largest regular-grid `B_xc` difference is `4.87e-9 Ry`;
-* the largest relative difference in the symmetric small-polarization
-  `I_xc` response is `7.53e-9`.
+1. the default Barth–Hedin potential reconstruction was not the spin
+   derivative of its own reported energy at finite polarization; and
+2. `XCPOT` discarded every finite-density state with one zero spin channel.
 
-It is not, however, a full mathematical reconciliation of the two reported
-spin potentials. At large polarization the legacy `V_xc^up` and `V_xc^down`
-have a common charge-channel offset, reaching `1.55e-2 Ry` at
-`(r_s,zeta)=(0.5,0.99)`. An independent finite-difference audit of the legacy
-energy shows the same offset: the reported legacy potential is not the exact
-spin derivative of the energy expression at those polarized points. The
-magnetic difference cancels this common offset, which explains why the
-`B_xc` and Stoner results agree while `V_0` does not.
+The first defect was repaired by differentiating the implemented BH energy
+expression. The second was repaired by guarding only the total-density-zero
+case; the zero-channel exchange loops in the legacy PBE/LAG helpers were also
+made safe for their exact zero contribution. No libXC call replaced a legacy
+functional, and `NEWRHO`, `ATOMSC`, radial solvers, and LMTO potential
+parameter routines were not changed.
 
-No production XC expression was changed. The fixed-density evidence gate is
-complete; a possible legacy repair must be derived and reviewed separately.
+## Pre-edit XCR-01 decision table
 
-## Scope and driver
+The following is the evidence table before the source correction. Values are
+maximum absolute differences over the original regular grid, in Ry per
+electron for `epsilon_xc` and the potentials.
 
-The driver is [test_xc_lda_reconciliation.f90](../tests/unit/test_xc_lda_reconciliation.f90).
-It calls the production `XCPOT` method for the legacy route and the production
-`xcpot_libxc_wrapper` for the libXC route. It does not call band structure,
-Fermi-level determination, charge mixing, `NEWRHO`, `ATOMSC`, potential
-parameter construction, or Hamiltonian construction.
+| Pair | epsilon_xc | Vxc up | Vxc down | Bxc / Stoner | Classification | Action |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| TXC=1 / TXC=101 BH/VBH | 8.83e-9 | 1.55e-2 | 1.55e-2 | 4.87e-9 | LEGACY_DEFECT_FIXED | Repair the common charge-channel derivative and polarized guard |
+| TXC=5 / TXC=105 PW/PW | 6.62e-7 | 8.73e-7 | 1.48e-5 | 7.85e-6 | EXPECTED_VARIANT_DIFFERENCE | No formula replacement; retain historical PBE-LDA path |
+| TXC=4 / TXC=106 VWN/VWN | 5.08e-4 | 8.36e-4 | 1.07e-2 | 5.35e-3 | EXPECTED_VARIANT_DIFFERENCE | No formula replacement; retain historical VWN path |
 
-The sweep contains nine Wigner–Seitz radii
-`0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6 bohr`, and the requested polarizations
-`0, 1e-4, 1e-3, 1e-2, 0.05, 0.1, 0.25, 0.5, 0.8, 0.95, 0.99`.
-The exactly fully polarized point `zeta=1` is emitted separately for every
-radius and pair. It is not included in regular-range maxima because the
-legacy routine intentionally returns zero when either input channel is below
-`1e-20`; the libXC wrapper instead clamps the channel to `1e-20`.
+The pre-edit BH energy and `B_xc` already agreed closely, while both spin
+potentials acquired almost the same offset as polarization increased. The
+XCR-01 finite-difference audit of `rho*EXC` localized that offset to the
+legacy `ARS/BRS` reconstruction. The old exact fully polarized rows were all
+zero because of the one-channel guard and were therefore not valid XC values.
 
-The reproducible runner is
-[run_xc_lda_reconciliation.py](../tests/xc_reconciliation/run_xc_lda_reconciliation.py):
+## Conventions and exchange gate
+
+The oracle uses
+
+\[
+n=n_\uparrow+n_\downarrow=\frac{3}{4\pi r_s^3},\qquad
+\zeta=\frac{n_\uparrow-n_\downarrow}{n},
+\]
+
+with `RHO1 = n_down`, `RHO2 = n_up`, `V1 = V_down`, and `V2 = V_up`.
+`EXC` is energy per electron; potentials and energies are reported in Ry.
+The production libXC wrapper converts native Hartree results by two.
+
+The independent spin-LDA exchange reference is
+
+\[
+\epsilon_x=-\frac{3}{2}\left(\frac{6}{\pi}\right)^{1/3}
+\frac{n_\uparrow^{4/3}+n_\downarrow^{4/3}}{n},
+\qquad
+v_{x,\sigma}=-2\left(\frac{6}{\pi}\right)^{1/3}n_\sigma^{1/3}.
+\]
+
+The post-repair exchange validation remains at maximum absolute error
+`1.55e-15 Ry` and maximum relative error `1.69e-14`. This validates the
+sign, factor of two, density convention, and spin ordering. The small
+relative maximum is caused by the near-fully-polarized test point and remains
+well below the `2e-12` gate.
+
+## Barth–Hedin equivalence audit
+
+The legacy TXC=1 constructor cites von Barth and Hedin, J. Phys. C 5, 1629
+(1972), and uses
+
+| Constant | TXC=1 value |
+| --- | ---: |
+| `XCCP` | 0.0504 |
+| `XCCF` | 0.0254 |
+| `XCRP` | 30 |
+| `XCRF` | 75 |
+| interpolation exponent | `FTH = 4/3` |
+| interpolation constants | `AA = 2^(-1/3)`, `BB = 1-AA` |
+
+The legacy exchange term is `EPSXP = -0.91633059/rs`. The source’s
+polarization variable is `X = RHO1/RHO = (1-zeta)/2`, so it is the
+spin-down fraction. Its energy interpolation is the standard normalized
+paramagnetic/ferromagnetic interpolation in that variable.
+
+libXC identifies native ID 17 as `XC_LDA_C_VBH`, also citing von Barth and
+Hedin. The native ID is documented in the [libXC functional list](https://libxc.gitlab.io/functionals/)
+and in the [libXC 5.2.3 function-ID header](https://sources.debian.org/src/libxc/5.2.3-3.1/src/xc_funcs.h).
+The original reference is [von Barth and Hedin](https://doi.org/10.1088/0022-3719/5/13/012).
+
+Thus TXC=1 and TXC=101 are the correct same-family comparison. They are not
+bitwise identical: the retained historical constants are rounded legacy
+values and the independent implementations evaluate the parametrization
+differently. The residual energy difference, about `8.9e-9 Ry`, is therefore
+classified as `RECONCILED_EQUIVALENT` after the derivative defect is removed.
+TXC=3 and TXC=11 use distinct BH-family constants and remain variants, not
+aliases of TXC=1.
+
+## Derivative audit and exact correction
+
+Write `x = RHO1/RHO`, `k = 5.1297628`, and
+
+\[
+F(x)=\frac{x^{4/3}+(1-x)^{4/3}-2^{-1/3}}{1-2^{-1/3}}.
+\]
+
+The legacy energy expression is
+
+\[
+\epsilon=\epsilon_x^0+\epsilon_c^P
+ +F(x)\frac{CNY+FTH\,\epsilon_x^0}{k},
+\qquad CNY=k(\epsilon_c^F-\epsilon_c^P).
+\]
+
+For any radial component define
+
+\[
+U_a=\epsilon_a-\frac{r_s}{3}\frac{d\epsilon_a}{dr_s}.
+\]
+
+For `q = rs/XCRP` or `rs/XCRF`, the source evaluates the needed
+`q F'(q)` as
+
+\[
+3q^3\ln(1+1/q)-\frac{1+q^3}{1+q}+\frac q2-2q^2.
+\]
+
+The exact derivatives of `rho*EXC` are therefore
+
+\[
+V_0=\frac43\epsilon_x^0+U_P
+ +F\left(U_F-U_P+\frac{FTH}{k}\frac43\epsilon_x^0\right),
+\]
+
+\[
+S=F'(x)\frac{CNY+FTH\,\epsilon_x^0}{k},qquad
+V_\downarrow=V_0+(1-x)S,\qquad V_\uparrow=V_0-xS.
+\]
+
+The source correction implements exactly these expressions in the default
+BH-family branch. It includes both the total-density derivative and the
+polarization derivative. The exchange and energy-interpolation definitions
+are unchanged.
+
+At `(rs,zeta)=(0.5,0.99)`, the before/after values are:
+
+| Quantity | Before | After |
+| --- | ---: | ---: |
+| `Vxc up` | -3.18584800795 | -3.20130354121 |
+| `Vxc down` | -1.02235528135 | -1.03781081356 |
+
+The after values agree with symmetric finite differences of the reported
+legacy energy to below `1e-8 Ry`; the old common residual was about
+`1.55e-2 Ry`.
+
+## Post-repair fixed-density results
+
+The rerun contains 378 rows: 351 regular points and nine exact fully
+polarized rows per pair. The regular grid is
+`rs = 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6 bohr` and
+`zeta = 0, 1e-4, 1e-3, 1e-2, 0.05, 0.1, 0.25, 0.5, 0.8, 0.9, 0.95, 0.99, 0.999999`.
+
+| Pair | max |Delta epsilon_xc| | max |Delta V_up| | max |Delta V_down| | max |Delta B_xc| | Classification |
+| --- | ---: | ---: | ---: | ---: | --- |
+| TXC=1 / TXC=101 BH/VBH | 8.88e-9 | 1.18e-8 | 9.16e-9 | 6.46e-9 | RECONCILED_EQUIVALENT |
+| TXC=5 / TXC=105 PW/PW | 7.44e-7 | 8.94e-7 | 1.70e-5 | 8.95e-6 | EXPECTED_VARIANT_DIFFERENCE |
+| TXC=4 / TXC=106 VWN/VWN | 5.08e-4 | 8.36e-4 | 1.17e-2 | 5.83e-3 | EXPECTED_VARIANT_DIFFERENCE |
+
+For BH/VBH, the largest regular potential difference is now at the numerical
+or parameter-rounding level and no longer grows as a common charge offset.
+The PW and VWN differences are retained as expected variant differences; no
+historical formula was forced to match libXC.
+
+## Small-polarization/Stoner response
+
+The oracle computes the signed magnetic derivative
+
+\[
+I_{xc}=\frac{[V_\downarrow-V_\uparrow](+\delta)
+ -[V_\downarrow-V_\uparrow](-\delta)}{2n\delta}
+\]
+
+at `delta = 1e-2, 1e-3, 1e-4, 1e-5, 1e-6`. The converged `delta=1e-4`
+relative differences are unchanged in character by the charge-channel
+repair:
+
+| Pair | representative `rs` | Legacy | libXC | Relative difference |
+| --- | ---: | ---: | ---: | ---: |
+| BH/VBH | 2 | 9.08014137 | 9.08014131 | 6.36e-9 |
+| BH/VBH | 6 | 64.89597433 | 64.89597381 | 8.01e-9 |
+| PW/PW | 2 | 9.48136335 | 9.48135618 | 7.57e-7 |
+| PW/PW | 6 | 57.18527416 | 57.18522030 | 9.42e-7 |
+| VWN/VWN | 2 | 9.45401827 | 9.61937341 | 1.72e-2 |
+| VWN/VWN | 6 | 57.73400406 | 60.87529921 | 5.16e-2 |
+
+The BH magnetic derivative was already correct because the old common
+charge-channel error cancels in `B_xc`. The repair makes the scalar and spin
+potentials consistent with the same energy without altering that magnetic
+result.
+
+## Polarized-density limits
+
+The old guard
+
+```fortran
+if (RHO1 < TOL .or. RHO2 < TOL) then ...
+```
+
+was changed to a total-density guard. For a finite total density, the source
+now evaluates `zeta = 0, 0.9, 0.99, 0.999999, 1` directly. At exact `zeta=1`,
+the vanishing spin contribution is evaluated through its finite
+`n_sigma^(1/3)` limit. No artificial density floor is introduced in the
+legacy path.
+
+At `rs=2`, the corrected BH endpoint is
+`EXC=-0.6618345150 Ry`, `V_down=-0.3503034631 Ry`, and
+`V_up=-0.8623961854 Ry`. The libXC wrapper’s comparison endpoint still uses
+its existing `1e-20` positive floor for the zero channel, so its endpoint
+potential differs by up to `1.17e-5 Ry`; this is a wrapper evaluation
+convention, not a legacy discontinuity. The direct legacy regression confirms
+finite values for TXC=1, 3, 4, 5, and 11 at all five requested polarizations.
+
+## Legacy functional status
+
+| Legacy selector | Status | Evidence/action |
+| ---: | --- | --- |
+| TXC=1 Barth–Hedin | LEGACY_DEFECT_FIXED; RECONCILED_EQUIVALENT to TXC=101 after repair | Exact energy derivative and BH/VBH grid agree; full polarized limit finite |
+| TXC=2 Slater X-alpha | RECONCILED_EQUIVALENT for its analytic exchange form | No formula change; common polarized guard now does not discard a zero channel |
+| TXC=3 Barth–Hedin–Janak | LEGACY_DEFECT_FIXED for the shared BH-family derivative; EXPECTED_VARIANT_DIFFERENCE from VBH | Same source defect fixed with its own constants; no identity with TXC=1 claimed |
+| TXC=4 VWN | EXPECTED_VARIANT_DIFFERENCE to native VWN | Energy-gradient audit is at `4.47e-9 Ry`; no formula replacement; polarized guard fixed |
+| TXC=5 PBE 1996 LDA | EXPECTED_VARIANT_DIFFERENCE to native PW | Energy-gradient audit is at `7.42e-10 Ry`; no formula replacement; zero-channel helper path fixed |
+| TXC=6 Wigner | OUT_OF_SCOPE_BY_LEGACY_CONTRACT | Spin-polarized construction is intentionally unsupported |
+| TXC=7 Perdew–Zunger | OUT_OF_SCOPE_BY_LEGACY_CONTRACT | Spin-polarized construction is intentionally unsupported |
+| TXC=11 ASW BH variant | LEGACY_DEFECT_FIXED for the shared BH-family derivative; EXPECTED_VARIANT_DIFFERENCE from VBH | Same source defect fixed with its own constants |
+
+TXC=8 and TXC=9 are GGA paths rather than legacy LDA kernels. No claim is
+made about their general GGA behavior by this task.
+
+## Artifacts and tests
+
+The complete machine-readable evidence is in:
+
+* [xc_lda_reconciliation.csv](../tests/xc_reconciliation/results/xc_lda_reconciliation.csv)
+* [xc_lda_energy_gradient.csv](../tests/xc_reconciliation/results/xc_lda_energy_gradient.csv)
+* [xc_lda_stoner_response.csv](../tests/xc_reconciliation/results/xc_lda_stoner_response.csv)
+* [xc_lda_exchange_validation.csv](../tests/xc_reconciliation/results/xc_lda_exchange_validation.csv)
+* [summary.json](../tests/xc_reconciliation/results/summary.json)
+* [xcr02_before_repair_summary.json](../tests/xc_reconciliation/results/xcr02_before_repair_summary.json)
+
+The reproducible command is:
 
 ```text
 python3 tests/xc_reconciliation/run_xc_lda_reconciliation.py \
@@ -52,221 +258,34 @@ python3 tests/xc_reconciliation/run_xc_lda_reconciliation.py \
   --output-dir tests/xc_reconciliation/results
 ```
 
-## Conventions established before comparison
+Focused checks added or rerun:
 
-The density parameterization is
+* `UnitXcLdaLegacyKernel` — corrected BH derivative and polarized limits for
+  TXC=1, 3, 4, 5, and 11;
+* `UnitXcLdaReconciliation` — full fixed-density grid, exchange gate, Stoner
+  response, energy-gradient audit, and endpoint checks; and
+* `UnitLibxcXcBaseline` — existing legacy/libXC production baseline.
 
-\[
-n = n_\uparrow+n_\downarrow = \frac{3}{4\pi r_s^3},
-\qquad
-\zeta = \frac{n_\uparrow-n_\downarrow}{n},
-\]
+The bounded fcc-Fe follow-up from XCR-01 remains separate. Its four tested
+SCF cases did not converge within 24 iterations, so their last iterates are
+not used as an XC formula oracle. Different genuinely parameterized LDA
+functionals may still produce different nonlinear solid-state magnetic
+solutions.
 
-with
+## Completion checklist
 
-\[
-n_\uparrow=\frac{n(1+\zeta)}{2},\qquad
-n_\downarrow=\frac{n(1-\zeta)}{2}.
-\]
-
-The historical argument order is established by the call and the wrapper
-mapping in [source/xc.f90](../source/xc.f90):
-
-| Quantity | Legacy `XCPOT` argument/output | libXC array/production mapping |
-|---|---|---|
-| spin-up density | `RHO2` | `rho_libxc(1)` |
-| spin-down density | `RHO1` | `rho_libxc(2)` |
-| spin-up potential | `V2` | `vrho_libxc(1)` |
-| spin-down potential | `V1` | `vrho_libxc(2)` |
-
-The driver therefore passes `RHO1=rho_down` and `RHO2=rho_up` to both
-production paths. The fixed-density calls use zero gradients and a positive
-dummy radius of `1 bohr`; the radius is irrelevant for LDA.
-
-| Item | Convention |
-|---|---|
-| density | electrons/bohr³ |
-| `r_s` and radius | bohr |
-| `EXC` | XC energy per electron, not energy density |
-| potential | Rydberg per electron |
-| libXC native output | Hartree per electron and Hartree potential |
-| libXC conversion | production wrapper multiplies `exc`, `vrho`, and `vsigma` by 2 to obtain Rydberg |
-| scalar component | `V0=(V_up+V_down)/2` |
-| magnetic component | `B_xc=(V_down-V_up)/2` |
-| splitting | `Delta V_xc=V_up-V_down=-2 B_xc` |
-
-The factor-of-two conversion is visible in the wrapper immediately before its
-LDA/GGA output dispatch. The exchange-only calibration below independently
-checks the density, spin ordering, sign, and Hartree-to-Rydberg conversion.
-
-## Analytic exchange validation
-
-For spin-LDA exchange in the driver's Rydberg convention, the analytic
-reference is
-
-\[
-\epsilon_x = -\frac{3}{2}\left(\frac{6}{\pi}\right)^{1/3}
-\frac{n_\uparrow^{4/3}+n_\downarrow^{4/3}}{n},
-\]
-
-\[
-v_{x,\sigma}=-2\left(\frac{6}{\pi}\right)^{1/3}n_\sigma^{1/3}.
-\]
-
-The driver evaluates native libXC `XC_LDA_X` through the production wrapper
-(`TXC=1001`) against these expressions over the non-endpoint grid. The maximum
-errors were:
-
-| quantity | maximum absolute error | maximum relative error |
-|---|---:|---:|
-| exchange energy/potentials together | `1.55e-15 Ry` | `2.95e-15` |
-
-This passes the analytic exchange gate and rules out a unit or spin-ordering
-explanation for the later correlation/potential differences.
-
-## Pairwise fixed-density results
-
-The complete machine-readable table is
-[xc_lda_reconciliation.csv](../tests/xc_reconciliation/results/xc_lda_reconciliation.csv).
-It contains `324` rows: `297` regular points and `27` separately marked fully
-polarized points. The requested fields are present, along with per-quantity
-absolute/relative differences, `V0`, `B_xc`, `Delta V_xc`, evaluation status,
-and classification.
-
-Regular-grid maxima:
-
-| pair | `max |Delta EXC|` (Ry) | `max |Delta V_up|` (Ry) | `max |Delta V_down|` (Ry) | `max |Delta B_xc|` (Ry) | max reported relative difference | classification |
-|---|---:|---:|---:|---:|---:|---|
-| `TXC=1` / `TXC=101` BH/VBH | `8.83e-9` | `1.55e-2` | `1.55e-2` | `4.87e-9` | `1.56e-2` | `EXPECTED_PARAMETRIZATION_DIFFERENCE` at numerical-level rows; `LEGACY_KERNEL_DEFECT` once the common potential residual exceeds `1e-7 Ry` |
-| `TXC=5` / `TXC=105` PW92/PW | `6.62e-7` | `8.73e-7` | `1.48e-5` | `7.85e-6` | `1.49e-5` | `EXPECTED_PARAMETRIZATION_DIFFERENCE` |
-| `TXC=4` / `TXC=106` VWN/VWN | `5.08e-4` | `8.36e-4` | `1.07e-2` | `5.35e-3` | `9.43e-2` | `EXPECTED_PARAMETRIZATION_DIFFERENCE` |
-
-Pair B is a useful control, but the legacy `PBEGGA` LDA branch and libXC's
-native `LDA_C_PW` are corresponding implementations, not an established
-bitwise identity. Pair C shows that the legacy VWN expression and the native
-ID-7 VWN implementation cannot be treated as the same version without a
-separate parametrization audit.
-
-## Legacy energy-derivative localization
-
-The additional
-[xc_lda_energy_gradient.csv](../tests/xc_reconciliation/results/xc_lda_energy_gradient.csv)
-file compares the reported legacy potentials to symmetric finite differences
-of the reported legacy energy density `n*EXC`. Its maximum residuals are:
-
-| pair | maximum legacy potential-vs-energy-derivative residual |
-|---|---:|
-| BH/VBH | `1.55e-2 Ry` |
-| PW92/PW | `7.42e-10 Ry` |
-| VWN/VWN | `4.47e-9 Ry` |
-
-For legacy BH, the first differing expression is the potential reconstruction
-in the default Barth–Hedin branch of `XCPOT`, not the reported energy
-interpolation. In [source/xc.f90](../source/xc.f90), that is the `ARS`/`BRS`
-construction and the two `TRX` assignments following the `EXC` expression.
-Writing `x=RHO1/RHO`, `F(x)` for the legacy spin interpolation, and
-`K(n)=(CNY+(4/3)EPSXP)/5.1297628`, the reported energy has the form
-
-\[
-\epsilon(n,x)=\epsilon_0(n)+F(x)K(n).
-\]
-
-The exact derivatives of the energy density `n epsilon` are
-
-\[
-v_\downarrow = \epsilon_0+n\epsilon_0'
- +F(K+nK') +(1-x)F'K,
-\]
-
-\[
-v_\uparrow = \epsilon_0+n\epsilon_0'
- +F(K+nK') -xF'K.
-\]
-
-The measured legacy residual is almost the same in both spin channels, so it
-is a common charge-channel term. It cancels from `B_xc` and therefore does not
-appear in the small-polarization magnetic derivative. This is a localization,
-not a repair: the legacy formula remains unchanged in this diagnostic.
-
-## Small-polarization Stoner response
-
-The response CSV is
-[xc_lda_stoner_response.csv](../tests/xc_reconciliation/results/xc_lda_stoner_response.csv).
-At fixed `n`, the driver uses symmetric `+delta` and `-delta` polarizations
-and evaluates
-
-\[
-I_{xc}=\frac{[V_\downarrow-V_\uparrow](+\delta)
-              -[V_\downarrow-V_\uparrow](-\delta)}
-             {2n\delta}.
-\]
-
-This is the signed derivative requested in the task, in `Ry bohr³`. The
-response was evaluated at `delta=1e-2, 1e-3, 1e-4, 1e-5, 1e-6`; the first
-three values demonstrate convergence before roundoff begins to affect the
-smallest step.
-
-Representative `delta=1e-4` values:
-
-| pair | `r_s` | legacy `I_xc` | libXC `I_xc` | relative difference |
-|---|---:|---:|---:|---:|
-| BH/VBH | 2 | `9.08014136` | `9.08014131` | `5.87e-9` |
-| BH/VBH | 6 | `64.89597429` | `64.89597381` | `7.52e-9` |
-| PW92/PW | 2 | `9.48136335` | `9.48135618` | `7.57e-7` |
-| PW92/PW | 6 | `57.18527416` | `57.18522030` | `9.42e-7` |
-| VWN/VWN | 2 | `9.45401827` | `9.61937341` | `1.72e-2` |
-| VWN/VWN | 6 | `57.73400406` | `60.87529921` | `5.16e-2` |
-
-Plots are diagnostic only:
-
-* [bxc_vs_zeta.png](../tests/xc_reconciliation/results/bxc_vs_zeta.png)
-* [stoner_response.png](../tests/xc_reconciliation/results/stoner_response.png)
-
-## Discrepancy classification
-
-The classifications in the CSV use the requested vocabulary:
-
-| classification | use in this run |
-|---|---|
-| `EXPECTED_PARAMETRIZATION_DIFFERENCE` | Pair B and Pair C, and BH rows whose residual is at numerical/reference level |
-| `LEGACY_KERNEL_DEFECT` | BH polarized rows with the reproducible common potential residual, and all exact fully polarized legacy-guard rows |
-| `UNIT_OR_CONVENTION_DIFFERENCE` | not observed after the analytic exchange gate |
-| `SPIN_ORDERING_DIFFERENCE` | not observed; the exchange test and zero-polarization symmetry pass |
-| `ENERGY_NORMALIZATION_DIFFERENCE` | not observed; `EXC` is per particle and the factor two is reconciled |
-| `LIBXC_WRAPPER_DEFECT` | not indicated by the exchange gate or the magnetic response |
-| `UNCERTAIN` | none in the emitted classification column |
-
-## SCF follow-up
-
-A bounded optional fcc-Fe sanity check was performed for `TXC=1`, `TXC=101`,
-`TXC=5`, and `TXC=105`, using `a=3.683 Å`, the corresponding Wigner–Seitz
-radius `1.43930285 Å`, `conv_thr=1e-6`, and `24` maximum iterations. None of
-the four cases converged; the final RMS differences were `9.58e-3` (BH),
-`9.58e-3` (VBH), `5.63e-3` (legacy PW), and `5.64e-3` (libXC PW). Therefore
-these last iterates are not used to attribute a magnetic collapse or to claim
-an SCF XC spin splitting.
-
-For traceability, the last-iterate total energies, Fermi energies, moments,
-and internal d-channel `pl` potential parameters are recorded in
-[fcc_fe_scf_followup.json](../tests/xc_reconciliation/results/fcc_fe_scf_followup.json).
-The d-channel `pl` up-minus-down splittings were `0.1725833` (TXC=1),
-`0.1726112` (TXC=101), `0.1697256` (TXC=5), and `0.1697628` (TXC=105).
-Those are unconverged internal potential parameters, not XC-only spin
-splittings. Representative fixed-density `Delta V_xc` values remain in the
-main reconciliation CSV.
-
-## Test and change checklist
-
-- [x] legacy and libXC paths callable at identical fixed density
-- [x] spin ordering established
-- [x] units and energy normalization established
-- [x] analytic exchange test passed
-- [x] `TXC=1` versus `TXC=101` evaluated
-- [x] `TXC=5` versus `TXC=105` evaluated
-- [x] optional `TXC=4` versus `TXC=106` evaluated
-- [x] small-polarization Stoner kernel extracted with step convergence
-- [x] discrepancies classified
-- [x] no legacy formula changed before diagnosis
-- [x] machine-readable evidence and plots produced
+- [x] XCR-01 evidence reviewed before editing production code
+- [x] TXC=1 versus TXC=101 equivalence status established
+- [x] exchange contribution independently validated
+- [x] spin interpolation analytically audited
+- [x] small-polarization magnetic kernel audited
+- [x] only demonstrated legacy defects changed
+- [x] polarized-density limit repaired
+- [x] full XCR-01 oracle rerun after the repair
+- [x] focused LDA regression tests pass
+- [x] fcc-Fe result kept separate from fixed-density proof
 - [x] documentation completed
-- [x] fcc-Fe SCF follow-up attempted and recorded as non-converged; excluded from conclusions
+
+The Barth–Hedin suspicion is closed as a parametrization/implementation
+question: TXC=1 is now reconciled with the TXC=101 reference at fixed density,
+and the demonstrated legacy derivative and polarized-guard defects are fixed.

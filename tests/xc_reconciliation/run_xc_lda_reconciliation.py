@@ -102,6 +102,7 @@ def summarize(
     energy_gradient: list[dict[str, str]],
 ) -> dict:
     regular = [row for row in comparison if row["evaluation_status"].strip() == "REGULAR"]
+    fully_polarized = [row for row in comparison if row["evaluation_status"].strip() != "REGULAR"]
     summary: dict[str, object] = {
         "comparison_rows": len(comparison),
         "regular_comparison_rows": len(regular),
@@ -110,12 +111,24 @@ def summarize(
             "max_absolute_error": max(number(row, "max_abs_error") for row in exchange),
             "max_relative_error": max(number(row, "max_relative_error") for row in exchange),
         },
+        "fully_polarized_limits": {},
         "pairs": {},
     }
     pair_summary = summary["pairs"]
     assert isinstance(pair_summary, dict)
+    limit_summary = summary["fully_polarized_limits"]
+    assert isinstance(limit_summary, dict)
     for pair in PAIR_LABELS:
         rows = [row for row in regular if row["functional_pair"].strip() == pair]
+        limit_rows = [row for row in fully_polarized if row["functional_pair"].strip() == pair]
+        limit_summary[pair] = {
+            "rows": len(limit_rows),
+            "max_exc_absolute_difference": max(number(row, "exc_abs_difference") for row in limit_rows),
+            "max_vup_absolute_difference": max(number(row, "vup_abs_difference") for row in limit_rows),
+            "max_vdn_absolute_difference": max(number(row, "vdn_abs_difference") for row in limit_rows),
+            "max_bxc_absolute_difference": max(number(row, "bxc_abs_difference") for row in limit_rows),
+            "classifications": sorted({row["classification"].strip() for row in limit_rows}),
+        }
         pair_summary[pair] = {
             "rows": len(rows),
             "max_exc_absolute_difference": max(number(row, "exc_abs_difference") for row in rows),

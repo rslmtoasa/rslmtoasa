@@ -322,13 +322,13 @@ contains
       integer :: IXC
       integer :: LGGA
       real(rp) :: AP = 0.0621814
-      real(rp) :: AMYX1, AMYX2, ARS, ATNF, ATNP, BETA, BRS, CNY, &
+      real(rp) :: AMYX1, AMYX2, ATNF, ATNP, BETA, CNY, &
                   DBETA, DENOM1, DFS, DUC, DUC1, DUC2, EC, ECF, ECP, &
                   EPSCF, EPSCP, EPSXP, EPX, EX, FCF, FCP, FS, FX, RS78, &
                   RSF, RSF2, RSF3, RSLN, RSLOG, RSP, RSP2, RSP3, S, S4, &
                   SM, SP, SQRTRS
-      real(rp) :: TF1, TP1, TRX1, TRX2, UC0, UC1, UC10, UC2, UC20, UCF, &
-                  UCP, X, XFX, XPX
+      real(rp) :: DFCF, DFCP, DFX, TF1, TP1, UC0, UC1, UC10, UC2, UC20, &
+                  UCF, UCP, UCFBH, UCPBH, V0BH, VSPINBH, X, XFX, XPX
       real(rp) :: AF = 0.0310907, BF = 7.060428, BP = 3.72744, &
                   CF = 18.0578, CF1 = 2.9847935, &
                   CF2 = 2.7100059, CF3 = -0.1446006, &
@@ -350,7 +350,10 @@ contains
       ! ... Executable Statements ...
       !
       !
-      if (RHO1 < TOLD .or. RHO2 < TOLDD) then
+      ! A vanishing spin channel is a valid fully polarized density.  Only
+      ! the total-density limit is singular; do not discard a finite-density
+      ! spin-polarized evaluation merely because one channel is zero.
+      if (RHO <= TOLD) then
          V1 = 0.d0
          V2 = 0.d0
          EXC = 0.d0
@@ -515,12 +518,24 @@ contains
          X = MIN(1.d0, MAX(0.d0, RHO1/MAX(RHO, TOLDD)))
          FX = (X**this%FTH + (1.d0 - X)**this%FTH - this%AA)/MAX(this%BB, TOLDD)
          EXC = EPSXP + EPSCP + FX*(CNY + this%FTH*EPSXP)/5.1297628d0
-         ARS = -1.22177412d0/RS + CNY
-         BRS = -this%XCCP*LOG(1.d0 + this%XCRP/RS) - CNY
-         TRX1 = (2.d0*X)**this%OTH
-         V1 = ARS*TRX1 + BRS
-         TRX2 = (2.d0*RHO2/MAX(RHO, TOLDD))**this%OTH
-         V2 = ARS*TRX2 + BRS
+         ! The historical ARS/BRS reconstruction omitted the total-density
+         ! derivative of the spin-interpolated energy.  Differentiate the
+         ! implemented EXC expression directly.  DFCP/DFCF are y*dF(y)/dy
+         ! for y=rs/XCRP and rs/XCRF, so UCPBH/UCFBH are the corresponding
+         ! correlation contributions to d(rho*EXC)/d(rho).
+         DFCP = 3.d0*RSP3*LOG(1.d0 + 1.d0/RSP) - (1.d0 + RSP3)/(1.d0 + RSP) + &
+            0.5d0*RSP - 2.d0*RSP2
+         DFCF = 3.d0*RSF3*LOG(1.d0 + 1.d0/RSF) - (1.d0 + RSF3)/(1.d0 + RSF) + &
+            0.5d0*RSF - 2.d0*RSF2
+         UCPBH = EPSCP + this%XCCP*DFCP/3.d0
+         UCFBH = EPSCF + this%XCCF*DFCF/3.d0
+         V0BH = 4.d0*EPSXP/3.d0 + UCPBH + FX*(UCFBH - UCPBH + &
+            this%FTH*4.d0*EPSXP/(3.d0*5.1297628d0))
+         DFX = this%FTH*(X**(this%FTH - 1.d0) - &
+            (1.d0 - X)**(this%FTH - 1.d0))/MAX(this%BB, TOLDD)
+         VSPINBH = DFX*(CNY + this%FTH*EPSXP)/5.1297628d0
+         V1 = V0BH + (1.d0 - X)*VSPINBH
+         V2 = V0BH - X*VSPINBH
       end select
       return
       !
@@ -586,6 +601,10 @@ contains
          NI = N(I) + N(I)
          EXI = 0.d0
          MUXI = 0.d0
+         if (NI <= 0.d0) then
+            VX(I) = 0.d0
+            cycle
+         endif
          ! Fixed: Don't double the gradient inputs
          NDI = ND(I)
          NDDI = NDD(I)
@@ -941,6 +960,10 @@ contains
          NI = N(I) + N(I)
          EXI = 0.d0
          MUXI = 0.d0
+         if (NI <= 0.d0) then
+            VX(I) = 0.d0
+            cycle
+         endif
          NDI = ND(I) + ND(I)
          if (ABS(NDI) < 1d-15) then
             NDI = 1d-15
