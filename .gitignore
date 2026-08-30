@@ -1,6 +1,6 @@
 # Build artifacts
 /build/
-/build_*/
+/build*/
 /CMakeFiles/
 /CMakeCache.txt
 /source/CMakeCache.txt
@@ -23,6 +23,16 @@ rslmto.x
 **/fort.*
 **/data.nml
 **/testrun.log
+**/clust
+**/mad.mat
+**/sbar
+**/view.sbar
+**/str.out
+**/map
+
+# Per-iteration SCF output; examples may retain curated copies.
+/tests/**/Fe_scf.nml
+
 
 # CTest / Testing folders
 /Testing/
