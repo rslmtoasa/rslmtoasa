@@ -1,0 +1,71 @@
+{
+  "status": "attempted_not_converged",
+  "purpose": "bounded optional fcc-Fe SCF sanity check; not used as fixed-density evidence",
+  "binary": "build-xcr/bin/rslmto.x",
+  "structure": {
+    "element": "Fe",
+    "crystal_sym": "fcc",
+    "alat_angstrom": 3.683,
+    "wigner_seitz_radius_angstrom": 1.439302849868756
+  },
+  "scf": {
+    "max_steps": 24,
+    "conv_thr": 1e-6,
+    "all_cases_converged": false
+  },
+  "note": "The final iterate is reported for traceability. Because the cases are unconverged, no SCF XC spin splitting is accepted or inferred. The fixed-density Delta V_xc values remain in xc_lda_reconciliation.csv.",
+  "cases": [
+    {
+      "txc": 1,
+      "functional": "legacy Barth-Hedin",
+      "converged": false,
+      "last_rms_diff": 0.0095830489,
+      "total_energy_ry": -2541.9496629182,
+      "fermi_energy_ry": -0.065067,
+      "spin_moment": 1.9515415638,
+      "d_pl_up": 3.8741933939566278,
+      "d_pl_down": 3.7016100751720247,
+      "d_pl_up_minus_down": 0.1725833187846031,
+      "fixed_density_reference_delta_vxc_rs2_zeta05_ry": -0.14266891534088799
+    },
+    {
+      "txc": 101,
+      "functional": "libXC Slater + von Barth-Hedin",
+      "converged": false,
+      "last_rms_diff": 0.0095804680,
+      "total_energy_ry": -2541.9495631891,
+      "fermi_energy_ry": -0.064978,
+      "spin_moment": 1.9526441452,
+      "d_pl_up": 3.8742413250229157,
+      "d_pl_down": 3.7016301506339473,
+      "d_pl_up_minus_down": 0.1726111743889684,
+      "fixed_density_reference_delta_vxc_rs2_zeta05_ry": -0.14266891450261709
+    },
+    {
+      "txc": 5,
+      "functional": "legacy PW92/PBE LDA branch",
+      "converged": false,
+      "last_rms_diff": 0.0056270325,
+      "total_energy_ry": -2541.0370474273,
+      "fermi_energy_ry": -0.022521,
+      "spin_moment": 2.0246644370,
+      "d_pl_up": 3.8752734915134517,
+      "d_pl_down": 3.7055479195522629,
+      "d_pl_up_minus_down": 0.1697255719611888,
+      "fixed_density_reference_delta_vxc_rs2_zeta05_ry": -0.14719926424777108
+    },
+    {
+      "txc": 105,
+      "functional": "libXC Slater + Perdew-Wang",
+      "converged": false,
+      "last_rms_diff": 0.0056362764,
+      "total_energy_ry": -2541.0371382224,
+      "fermi_energy_ry": -0.022530,
+      "spin_moment": 2.0246886459,
+      "d_pl_up": 3.8752738881097200,
+      "d_pl_down": 3.7055110846230220,
+      "d_pl_up_minus_down": 0.1697628034866980,
+      "fixed_density_reference_delta_vxc_rs2_zeta05_ry": -0.14719902898989146
+    }
+  ]
+}

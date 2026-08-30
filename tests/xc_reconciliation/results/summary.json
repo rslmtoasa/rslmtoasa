@@ -1,0 +1,243 @@
+{
+  "comparison_rows": 324,
+  "regular_comparison_rows": 297,
+  "fully_polarized_rows": 27,
+  "exchange_validation": {
+    "max_absolute_error": 1.5543122344752192e-15,
+    "max_relative_error": 2.9524599598337837e-15
+  },
+  "pairs": {
+    "BH_VBH": {
+      "rows": 99,
+      "max_exc_absolute_difference": 8.826361419522755e-09,
+      "max_vup_absolute_difference": 0.01545552143477602,
+      "max_vdn_absolute_difference": 0.015455531165107672,
+      "max_bxc_absolute_difference": 4.865165825762574e-09,
+      "max_relative_difference": 0.015598792067159075,
+      "classifications": [
+        "EXPECTED_PARAMETRIZATION_DIFFERENCE",
+        "LEGACY_KERNEL_DEFECT"
+      ],
+      "stoner_at_delta_1e-4": [
+        {
+          "rs": 0.5,
+          "i_xc_legacy": 0.7245012661578577,
+          "i_xc_libxc": 0.7245012628978633,
+          "absolute_difference": 3.259994385551579e-09,
+          "relative_difference": 4.499639321322147e-09
+        },
+        {
+          "rs": 1.0,
+          "i_xc_legacy": 2.618742998754012,
+          "i_xc_libxc": 2.6187429855745195,
+          "absolute_difference": 1.3179492608372811e-08,
+          "relative_difference": 5.032755262598722e-09
+        },
+        {
+          "rs": 1.5,
+          "i_xc_legacy": 5.445387780252181,
+          "i_xc_libxc": 5.44538775041521,
+          "absolute_difference": 2.9836971116026234e-08,
+          "relative_difference": 5.479310623979924e-09
+        },
+        {
+          "rs": 2.0,
+          "i_xc_legacy": 9.080141362020571,
+          "i_xc_libxc": 9.08014130870734,
+          "absolute_difference": 5.331323116308795e-08,
+          "relative_difference": 5.87140982034495e-09
+        },
+        {
+          "rs": 2.5,
+          "i_xc_legacy": 13.457920177878256,
+          "i_xc_libxc": 13.457920094242075,
+          "absolute_difference": 8.363618064777256e-08,
+          "relative_difference": 6.214643833692172e-09
+        },
+        {
+          "rs": 3.0,
+          "i_xc_legacy": 18.550529468284193,
+          "i_xc_libxc": 18.550529347366766,
+          "absolute_difference": 1.2091742718212117e-07,
+          "relative_difference": 6.518273636817401e-09
+        },
+        {
+          "rs": 4.0,
+          "i_xc_legacy": 30.883703220828423,
+          "i_xc_libxc": 30.883703004599177,
+          "absolute_difference": 2.162292460639037e-07,
+          "relative_difference": 7.0014027954418215e-09
+        },
+        {
+          "rs": 5.0,
+          "i_xc_legacy": 46.2313156932438,
+          "i_xc_libxc": 46.231315354629906,
+          "absolute_difference": 3.38613894257378e-07,
+          "relative_difference": 7.3243404212020446e-09
+        },
+        {
+          "rs": 6.0,
+          "i_xc_legacy": 64.8959742941103,
+          "i_xc_libxc": 64.89597380592033,
+          "absolute_difference": 4.881899684505697e-07,
+          "relative_difference": 7.522654120856244e-09
+        }
+      ],
+      "max_legacy_energy_gradient_residual": 0.01545553319157067
+    },
+    "PW92_PW": {
+      "rows": 99,
+      "max_exc_absolute_difference": 6.616633325684518e-07,
+      "max_vup_absolute_difference": 8.731541032425127e-07,
+      "max_vdn_absolute_difference": 1.4833181609441581e-05,
+      "max_bxc_absolute_difference": 7.853167856231025e-06,
+      "max_relative_difference": 1.4868638509093741e-05,
+      "classifications": [
+        "EXPECTED_PARAMETRIZATION_DIFFERENCE"
+      ],
+      "stoner_at_delta_1e-4": [
+        {
+          "rs": 0.5,
+          "i_xc_legacy": 0.7477139433059652,
+          "i_xc_libxc": 0.7477136582866526,
+          "absolute_difference": 2.8501931259583557e-07,
+          "relative_difference": 3.811876388657974e-07
+        },
+        {
+          "rs": 1.0,
+          "i_xc_legacy": 2.7362571513724507,
+          "i_xc_libxc": 2.7362556288108904,
+          "absolute_difference": 1.522561560385327e-06,
+          "relative_difference": 5.564394997091707e-07
+        },
+        {
+          "rs": 1.5,
+          "i_xc_legacy": 5.707271726217392,
+          "i_xc_libxc": 5.707267883290857,
+          "absolute_difference": 3.842926535213564e-06,
+          "relative_difference": 6.733386317599671e-07
+        },
+        {
+          "rs": 2.0,
+          "i_xc_legacy": 9.481363352837969,
+          "i_xc_libxc": 9.48135617802274,
+          "absolute_difference": 7.174815229049614e-06,
+          "relative_difference": 7.567282216752132e-07
+        },
+        {
+          "rs": 2.5,
+          "i_xc_legacy": 13.923953967177894,
+          "i_xc_libxc": 13.923942584446387,
+          "absolute_difference": 1.1382731507580957e-05,
+          "relative_difference": 8.174927563257384e-07
+        },
+        {
+          "rs": 3.0,
+          "i_xc_legacy": 18.930837584532146,
+          "i_xc_libxc": 18.93082126953197,
+          "absolute_difference": 1.6315000173960925e-05,
+          "relative_difference": 8.618213589921373e-07
+        },
+        {
+          "rs": 4.0,
+          "i_xc_legacy": 30.325215270510004,
+          "i_xc_libxc": 30.325187497478144,
+          "absolute_difference": 2.7773031860078845e-05,
+          "relative_difference": 9.158395616431765e-07
+        },
+        {
+          "rs": 5.0,
+          "i_xc_legacy": 43.182909008186876,
+          "i_xc_libxc": 43.18286847101657,
+          "absolute_difference": 4.053717030672033e-05,
+          "relative_difference": 9.387318093608526e-07
+        },
+        {
+          "rs": 6.0,
+          "i_xc_legacy": 57.18527415557987,
+          "i_xc_libxc": 57.18522030249962,
+          "absolute_difference": 5.385308024585811e-05,
+          "relative_difference": 9.417298603718136e-07
+        }
+      ],
+      "max_legacy_energy_gradient_residual": 7.418670122660842e-10
+    },
+    "VWN_VWN": {
+      "rows": 99,
+      "max_exc_absolute_difference": 0.0005075452430882699,
+      "max_vup_absolute_difference": 0.0008364879308898621,
+      "max_vdn_absolute_difference": 0.010692845066583745,
+      "max_bxc_absolute_difference": 0.005345589186889876,
+      "max_relative_difference": 0.0943013218583168,
+      "classifications": [
+        "EXPECTED_PARAMETRIZATION_DIFFERENCE"
+      ],
+      "stoner_at_delta_1e-4": [
+        {
+          "rs": 0.5,
+          "i_xc_legacy": 0.7465622149026319,
+          "i_xc_libxc": 0.7480913991605851,
+          "absolute_difference": 0.001529184257953231,
+          "relative_difference": 0.0020441142080621314
+        },
+        {
+          "rs": 1.0,
+          "i_xc_legacy": 2.7271189466037984,
+          "i_xc_libxc": 2.7467276350919705,
+          "absolute_difference": 0.0196086884881721,
+          "relative_difference": 0.007138927150130606
+        },
+        {
+          "rs": 1.5,
+          "i_xc_legacy": 5.686636385994631,
+          "i_xc_libxc": 5.757117670459334,
+          "absolute_difference": 0.07048128446470336,
+          "relative_difference": 0.01224246028986932
+        },
+        {
+          "rs": 2.0,
+          "i_xc_legacy": 9.454018266223505,
+          "i_xc_libxc": 9.619373405937724,
+          "absolute_difference": 0.16535513971421878,
+          "relative_difference": 0.017189803611548177
+        },
+        {
+          "rs": 2.5,
+          "i_xc_legacy": 13.902418049383053,
+          "i_xc_libxc": 14.214699924523977,
+          "absolute_difference": 0.31228187514092376,
+          "relative_difference": 0.021968938971561266
+        },
+        {
+          "rs": 3.0,
+          "i_xc_legacy": 18.933072310192774,
+          "i_xc_libxc": 19.45026787134194,
+          "absolute_difference": 0.5171955611491654,
+          "relative_difference": 0.026590665206786296
+        },
+        {
+          "rs": 4.0,
+          "i_xc_legacy": 30.438144758405034,
+          "i_xc_libxc": 31.555573462724393,
+          "absolute_difference": 1.1174287043193587,
+          "relative_difference": 0.035411452928888844
+        },
+        {
+          "rs": 5.0,
+          "i_xc_legacy": 43.48604115971357,
+          "i_xc_libxc": 45.474723528089754,
+          "absolute_difference": 1.9886823683761818,
+          "relative_difference": 0.04373159887707227
+        },
+        {
+          "rs": 6.0,
+          "i_xc_legacy": 57.73400405736051,
+          "i_xc_libxc": 60.87529920513549,
+          "absolute_difference": 3.141295147774983,
+          "relative_difference": 0.051602130729403964
+        }
+      ],
+      "max_legacy_energy_gradient_residual": 4.47299902672782e-09
+    }
+  }
+}

@@ -2,4 +2,4 @@ pyyaml
 pytest
 f90nml
 numpy
-
+matplotlib

@@ -613,6 +613,11 @@ if (RUN_UNIT_TESTS)
   if(ENABLE_LIBXC)
     add_fortran_unit_test(UnitLibxcXcBaseline ${TestDIR}/unit/test_libxc_xc_baseline.f90)
     set_tests_properties(UnitLibxcXcBaseline PROPERTIES LABELS "unit;libxc;xc")
+    add_fortran_unit_test(UnitXcLdaReconciliation ${TestDIR}/unit/test_xc_lda_reconciliation.f90)
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/xc_lda_reconciliation")
+    set_tests_properties(UnitXcLdaReconciliation PROPERTIES
+      LABELS "unit;libxc;xc;reconciliation"
+      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/xc_lda_reconciliation")
   else()
     add_fortran_unit_test(UnitXcSelectorRequiresLibxc ${TestDIR}/unit/test_xc_selector_requires_libxc.f90)
     set_tests_properties(UnitXcSelectorRequiresLibxc PROPERTIES
