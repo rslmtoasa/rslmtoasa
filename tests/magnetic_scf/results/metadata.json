@@ -1,0 +1,26 @@
+{
+  "campaign": "XCR-04 ordinary q=0 collinear magnetic SCF closure",
+  "binary": "/home/andersb/Nano/rslmto_fable_v4/build-xcr/bin/rslmto.x",
+  "max_steps": 6,
+  "fcc_fe": {
+    "alat_angstrom": 3.683,
+    "ws_radius_angstrom": 1.439302849868756,
+    "nominal_seed_mub": [
+      0.0,
+      0.1,
+      0.5,
+      1.0,
+      2.0,
+      3.0
+    ],
+    "seed_field_rule": "0.005 Ry per nominal mu_B label"
+  },
+  "functionals": {
+    "1": "legacy Barth-Hedin",
+    "101": "libXC Slater + von Barth-Hedin",
+    "5": "legacy PW/PBE-LDA branch",
+    "105": "libXC Slater + Perdew-Wang"
+  },
+  "temporary_seed": "B_fsm applied for first four outer iterations, then released; no constraint namelist is enabled",
+  "rows": 28
+}

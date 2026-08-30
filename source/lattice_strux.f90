@@ -193,7 +193,7 @@ contains
       
       if (.not. allocated(this%symbolic_atoms)) then
          ! 2. Assign the function result to the standard local variable
-         temp_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype)
+         temp_atoms = array_of_symbolic_atoms(this%control%fname, this%ntype, reload=.not.this%control%fresh_start)
          
          ! 3. Safely move the memory allocation into the derived type component
          call move_alloc(from=temp_atoms, to=this%symbolic_atoms)

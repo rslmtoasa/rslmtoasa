@@ -27,25 +27,32 @@ contains
       integer :: ia
 
 #ifdef USE_MPI
-      allocate(packed(4, this%lattice%nrec))
+      allocate(packed(7, this%lattice%nrec))
       packed = 0.0_rp
       do ia = 1, this%lattice%nrec
-         if (this%xc_response_provider%site(ia)%has_k_perp_circular) then
+         if (this%xc_response_provider%site(ia)%has_radial_projection) then
             packed(1, ia) = this%xc_response_provider%site(ia)%radial_spin_population
             packed(2, ia) = this%xc_response_provider%site(ia)%vxc_scalar
             packed(3, ia) = this%xc_response_provider%site(ia)%bxc_spin_moment
-            packed(4, ia) = 1.0_rp
+            packed(4, ia) = this%xc_response_provider%site(ia)%radial_spin_abs_population
+            packed(5, ia) = this%xc_response_provider%site(ia)%radial_vxc_spin_difference
+            packed(6, ia) = this%xc_response_provider%site(ia)%radial_vxc_spin_difference_abs
+            packed(7, ia) = 1.0_rp
          end if
       end do
       call MPI_ALLREDUCE(MPI_IN_PLACE, packed, product(shape(packed)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       do ia = 1, this%lattice%nrec
-         if (packed(4, ia) > 1.5_rp) then
+         if (packed(7, ia) > 1.5_rp) then
             call g_logger%fatal('SCF XC response provider received duplicate site records across MPI ranks.', __FILE__, __LINE__)
          end if
-         if (packed(4, ia) > 0.5_rp) then
+         if (packed(7, ia) > 0.5_rp) then
             this%xc_response_provider%site(ia)%radial_spin_population = packed(1, ia)
             this%xc_response_provider%site(ia)%vxc_scalar = packed(2, ia)
             this%xc_response_provider%site(ia)%bxc_spin_moment = packed(3, ia)
+            this%xc_response_provider%site(ia)%radial_spin_abs_population = packed(4, ia)
+            this%xc_response_provider%site(ia)%radial_vxc_spin_difference = packed(5, ia)
+            this%xc_response_provider%site(ia)%radial_vxc_spin_difference_abs = packed(6, ia)
+            this%xc_response_provider%site(ia)%has_radial_projection = .true.
             this%xc_response_provider%site(ia)%has_k_perp_circular = .false.
          end if
       end do

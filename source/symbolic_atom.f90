@@ -24,6 +24,10 @@ module symbolic_atom_mod
    use element_mod, only: element
    use potential_mod, only: potential
    use string_mod, only: sl, replace, endswith, fmt
+   use string_mod, only: path_join
+   use os_mod, only: exists
+   use globals_mod, only: GLOBAL_DATABASE_FOLDER
+   use mpi_mod, only: rank
    use precision_mod, only: rp
    use potential_mod
    use math_mod
@@ -109,6 +113,45 @@ module symbolic_atom_mod
 
 contains
 
+   !> Resolve the same source-selection policy used by element and potential.
+   !> Keeping this small audit beside the symbolic-atom constructor makes the
+   !> selected restart/fresh source visible before either component is read.
+   function selected_symbolic_atom_source(label, database, reload, is_restart) result(path)
+      character(len=*), intent(in) :: label
+      character(len=*), intent(in), optional :: database
+      logical, intent(in) :: reload
+      logical, intent(out) :: is_restart
+      character(len=sl) :: path
+      character(len=sl) :: directory, filename
+      character(len=sl), dimension(2) :: path_parts
+
+      path = ''
+      is_restart = .false.
+      if (present(database)) then
+         directory = database
+      else
+         directory = './'
+      end if
+
+      if (reload) then
+         filename = trim(label)//'_out.nml'
+         path_parts = [directory, filename]
+         path = path_join(path_parts)
+         if (exists(path)) then
+            is_restart = .true.
+            return
+         end if
+      end if
+
+      filename = trim(label)//'.nml'
+      path_parts = [directory, filename]
+      path = path_join(path_parts)
+      if (exists(path)) return
+
+      path_parts = [character(len=sl) :: GLOBAL_DATABASE_FOLDER, filename]
+      path = path_join(path_parts)
+   end function selected_symbolic_atom_source
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -124,6 +167,8 @@ contains
       character(len=*), intent(in), optional :: database
       logical, optional, intent(in) :: reload
       logical :: reload_
+      logical :: source_is_restart
+      character(len=sl) :: source_path
 
       !reload_ = merge(reload, .True., present(reload))
       if (present(reload)) then
@@ -132,6 +177,14 @@ contains
          reload_ = .True.
       end if
       call obj%restore_to_default()
+      source_path = selected_symbolic_atom_source(label, database, reload_, source_is_restart)
+      if (rank == 0) then
+         if (source_is_restart) then
+            call g_logger%info('SCF input provenance: restart loaded from '//trim(source_path), __FILE__, __LINE__)
+         else
+            call g_logger%info('SCF input provenance: fresh atomic starting potential from '//trim(source_path), __FILE__, __LINE__)
+         end if
+      end if
       obj%element = element(label, database, reload_)
       obj%potential = potential(label, database, reload_)
    end function constructor
@@ -651,19 +704,28 @@ contains
    !> @param[in] database Directory with files used as database
    !> @return type(symbolic_atom), dimension(:), allocatable
    !---------------------------------------------------------------------------
-   function array_of_symbolic_atoms_from_memory(symbolic_atoms, database)
+   function array_of_symbolic_atoms_from_memory(symbolic_atoms, database, reload)
       type(symbolic_atom), dimension(:), allocatable :: array_of_symbolic_atoms_from_memory
       character(len=*), dimension(:), intent(in) :: symbolic_atoms
       character(len=*), intent(in), optional :: database
+      logical, intent(in), optional :: reload
       integer :: i, j
       allocate (array_of_symbolic_atoms_from_memory(size(symbolic_atoms)))
       if (present(database)) then
          do i = 1, size(symbolic_atoms)
-            array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), database)
+            if (present(reload)) then
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), database, reload)
+            else
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), database)
+            end if
          end do
       else
          do i = 1, size(symbolic_atoms)
-            array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i))
+            if (present(reload)) then
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i), reload=reload)
+            else
+               array_of_symbolic_atoms_from_memory(i) = symbolic_atom(symbolic_atoms(i))
+            end if
          end do
       end if
    end function array_of_symbolic_atoms_from_memory
@@ -676,11 +738,12 @@ contains
    !> @param[in] size Size (integer) or array
    !> @return type(symbolic_atom), dimension(:), allocatable
    !---------------------------------------------------------------------------
-   function array_of_symbolic_atoms_from_file(fname, size)
+   function array_of_symbolic_atoms_from_file(fname, size, reload)
       use string_mod, only: sl
       type(symbolic_atom), dimension(:), allocatable :: array_of_symbolic_atoms_from_file
       integer, intent(in) :: size
       character(len=*), intent(in) :: fname
+      logical, intent(in), optional :: reload
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
@@ -701,7 +764,11 @@ contains
       end if
       close (funit)
 
-      array_of_symbolic_atoms_from_file = array_of_symbolic_atoms(label, database)
+      if (present(reload)) then
+         array_of_symbolic_atoms_from_file = array_of_symbolic_atoms(label, database, reload)
+      else
+         array_of_symbolic_atoms_from_file = array_of_symbolic_atoms(label, database)
+      end if
 
    end function array_of_symbolic_atoms_from_file
 

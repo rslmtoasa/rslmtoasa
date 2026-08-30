@@ -234,6 +234,10 @@ module control_mod
       !> The trace is intended for the WP12 frame/closure audit and is off by
       !> default because it performs additional file I/O.
       logical :: gbt_scf_diagnostics
+      !> If true, load the named elemental starting files even when a local
+      !> <element>_out.nml restart is present.  The default preserves the
+      !> historical restart preference.
+      logical :: fresh_start
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -369,6 +373,7 @@ contains
       cond_calctype = this%cond_calctype
       density_policy = this%density_policy
       gbt_scf_diagnostics = this%gbt_scf_diagnostics
+      fresh_start = this%fresh_start
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
@@ -440,6 +445,7 @@ contains
       this%cond_calctype = cond_calctype
       this%density_policy = trim(adjustl(density_policy))
       this%gbt_scf_diagnostics = gbt_scf_diagnostics
+      this%fresh_start = fresh_start
 
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
@@ -545,6 +551,7 @@ contains
       this%cond_calctype = 'per_type'
       this%density_policy = 'constrained_spiral'
       this%gbt_scf_diagnostics = .false.
+      this%fresh_start = .false.
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
@@ -590,6 +597,7 @@ contains
       sym_term = this%sym_term
       density_policy = this%density_policy
       gbt_scf_diagnostics = this%gbt_scf_diagnostics
+      fresh_start = this%fresh_start
       txc = this%txc
       blockrec = this%blockrec
       partype = this%partype
@@ -679,6 +687,7 @@ contains
       call nml%add('do_comom', this%do_comom)
       call nml%add('density_policy', this%density_policy)
       call nml%add('gbt_scf_diagnostics', this%gbt_scf_diagnostics)
+      call nml%add('fresh_start', this%fresh_start)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)

@@ -28,7 +28,7 @@ module self_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
-   use string_mod, only: real2str, int2str, fmt
+   use string_mod, only: real2str, int2str, fmt, sl
    use control_mod
    use lattice_mod
    use charge_mod
@@ -111,6 +111,18 @@ module self_mod
       logical :: constraint_diagnostics_header_written
       !> True after the optional WP12 SCF trace has received its header.
       logical :: gbt_scf_diagnostics_header_written
+      !> True after the optional ordinary collinear magnetic trace has its header.
+      logical :: magnetic_scf_diagnostics_header_written
+      !> True after the optional ATOMSC residual audit has its header.
+      logical :: atomic_scf_residual_header_written
+      !> User-controlled temporary symmetry-breaking field state.  This is
+      !> deliberately separate from the persistent constraint machinery.
+      logical :: magnetic_seed_active
+      integer :: magnetic_seed_steps
+      real(rp) :: magnetic_seed_field
+      logical :: magnetic_scf_diagnostics
+      logical :: magnetic_seed_enable
+      integer :: magnetic_scf_outer_iteration
       !> Measured moment entering the current SCF iteration.  `mix%mag_old`
       !> intentionally stores the frame marker, not this physical vector.
       real(rp), dimension(:, :), allocatable :: gbt_scf_in_moment
@@ -299,6 +311,10 @@ module self_mod
       procedure :: is_converged
       procedure, private :: initialize_constraint_state
       procedure, private :: initialize_gbt_scf_diagnostics
+      procedure, private :: initialize_magnetic_scf_diagnostics
+      procedure, private :: set_magnetic_seed_state
+      procedure, private :: write_magnetic_scf_diagnostics
+      procedure, private :: write_atomic_scf_residual
       procedure, private :: apply_constraints
       procedure, private :: mix_magnetic_state
       procedure, private :: write_gbt_scf_diagnostics
@@ -454,6 +470,10 @@ contains
       soc_scale = this%soc_scale
       cold = this%cold
       use_kspace = this%use_kspace
+      magnetic_scf_diagnostics = this%magnetic_scf_diagnostics
+      magnetic_seed_enable = this%magnetic_seed_enable
+      magnetic_seed_steps = this%magnetic_seed_steps
+      magnetic_seed_field = this%magnetic_seed_field
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -563,6 +583,26 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
+      this%magnetic_scf_diagnostics = magnetic_scf_diagnostics
+      this%magnetic_seed_enable = magnetic_seed_enable
+      this%magnetic_seed_steps = magnetic_seed_steps
+      this%magnetic_seed_field = magnetic_seed_field
+      this%magnetic_seed_active = .false.
+      this%magnetic_scf_outer_iteration = 0
+      if (this%magnetic_seed_enable) then
+         if (associated(this%control) .and. this%control%constraints_enable) then
+            call g_logger%fatal('magnetic_seed_enable cannot be combined with persistent magnetic constraints.', __FILE__, __LINE__)
+         end if
+         if (this%magnetic_seed_steps < 1) then
+            call g_logger%fatal('magnetic_seed_steps must be positive when magnetic_seed_enable is true.', __FILE__, __LINE__)
+         end if
+         if (abs(this%magnetic_seed_field) <= tiny(1.0_rp)) then
+            call g_logger%fatal('magnetic_seed_field must be nonzero when magnetic_seed_enable is true.', __FILE__, __LINE__)
+         end if
+         if (this%nstep > 0 .and. this%magnetic_seed_steps >= this%nstep) then
+            call g_logger%fatal('magnetic_seed_steps must leave at least one fully unconstrained SCF iteration.', __FILE__, __LINE__)
+         end if
+      end if
       ! Initialize constraining facility if requested in control namelist
       if (associated(this%control)) then
          if (this%control%constraints_enable) then
@@ -572,6 +612,7 @@ contains
          end if
          if (this%control%gbt_scf_diagnostics) call this%initialize_gbt_scf_diagnostics()
       end if
+      if (this%magnetic_scf_diagnostics) call this%initialize_magnetic_scf_diagnostics()
       if (associated(this%hamiltonian) .and. associated(this%control)) then
          if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
              trim(this%control%density_policy) == sd_relaxed_reference) then
@@ -605,6 +646,114 @@ contains
       close(unit)
       this%gbt_scf_diagnostics_header_written = .true.
    end subroutine initialize_gbt_scf_diagnostics
+
+   !> Initialize the ordinary q=0 collinear magnetic feedback trace.
+   !> Columns are deliberately scalar and human-readable; no GBT state is
+   !> involved in this file.
+   subroutine initialize_magnetic_scf_diagnostics(this)
+      class(self), intent(inout) :: this
+      integer :: unit, io_status
+
+      this%magnetic_scf_diagnostics_header_written = .false.
+      this%atomic_scf_residual_header_written = .false.
+      if (rank /= 0) return
+      open(newunit=unit, file='magnetic_scf_diagnostics.dat', status='replace', action='write', iostat=io_status)
+      if (io_status /= 0) then
+         call g_logger%warning('Could not open magnetic_scf_diagnostics.dat; ordinary magnetic trace disabled.', &
+                               __FILE__, __LINE__)
+         return
+      end if
+      write(unit, '(a)') '# frame=ordinary q=0 collinear active spin frame; energies=Ry; moments=mu_B'
+      write(unit, '(a)') '# one row per outer iteration, site, and l; up/down follow potential channel convention'
+      write(unit, '(a)') '# iteration site l element ql_up ql_down ql_up_minus_down radial_rho_up_minus_down radial_abs_spin radial_vxc_up_minus_down radial_abs_vxc_up_minus_down C_up C_down C_up_minus_down moment_x moment_y moment_z moment_magnitude'
+      close(unit)
+      this%magnetic_scf_diagnostics_header_written = .true.
+   end subroutine initialize_magnetic_scf_diagnostics
+
+   !> Set or release the explicitly requested temporary B_fsm seed.
+   !> No constraint target, mixer state, or magnetic moment is modified here.
+   subroutine set_magnetic_seed_state(this, iteration)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: iteration
+      logical :: active_now
+
+      active_now = this%magnetic_seed_enable .and. iteration <= this%magnetic_seed_steps
+      if (active_now .and. .not. this%magnetic_seed_active) then
+         if (rank == 0) call g_logger%info('MAGNETIC_SEED temporary symmetry-breaking seed active: outer iteration '// &
+                                           int2str(iteration)//', B_fsm='//real2str(this%magnetic_seed_field), __FILE__, __LINE__)
+      else if (.not. active_now .and. this%magnetic_seed_active) then
+         if (rank == 0) call g_logger%info('MAGNETIC_SEED released; subsequent SCF iterations are fully unconstrained.', &
+                                           __FILE__, __LINE__)
+      end if
+      this%magnetic_seed_active = active_now
+   end subroutine set_magnetic_seed_state
+
+   !> Append the ordinary feedback quantities after the final atomic update of
+   !> an outer iteration.  The XC radial fields are supplied by the exact
+   !> VXC0SP call used to build the current potential.
+   subroutine write_magnetic_scf_diagnostics(this, iteration)
+      class(self), intent(in) :: this
+      integer, intent(in) :: iteration
+      integer :: ia, plusbulk, l, lmax_site, unit, io_status
+      real(rp) :: q_up, q_down, c_up, c_down, radial_spin, radial_abs_spin
+      real(rp) :: radial_dvxc, radial_abs_dvxc, moment_magnitude
+
+      if (.not. this%magnetic_scf_diagnostics .or. rank /= 0) return
+      if (.not. this%magnetic_scf_diagnostics_header_written) return
+      if (.not. allocated(this%xc_response_provider%site)) return
+      open(newunit=unit, file='magnetic_scf_diagnostics.dat', status='unknown', action='write', &
+           position='append', iostat=io_status)
+      if (io_status /= 0) return
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         lmax_site = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis)
+         radial_spin = this%xc_response_provider%site(ia)%radial_spin_population
+         radial_abs_spin = this%xc_response_provider%site(ia)%radial_spin_abs_population
+         radial_dvxc = this%xc_response_provider%site(ia)%radial_vxc_spin_difference
+         radial_abs_dvxc = this%xc_response_provider%site(ia)%radial_vxc_spin_difference_abs
+         moment_magnitude = this%symbolic_atom(plusbulk)%potential%mtot
+         do l = 0, lmax_site
+            q_up = this%symbolic_atom(plusbulk)%potential%ql(1, l, 1)
+            q_down = this%symbolic_atom(plusbulk)%potential%ql(1, l, 2)
+            c_up = this%symbolic_atom(plusbulk)%potential%c(l, 1)
+            c_down = this%symbolic_atom(plusbulk)%potential%c(l, 2)
+            write(unit, '(3i8,1x,a10,14(1x,es20.12))') iteration, ia, l, &
+               this%symbolic_atom(plusbulk)%element%symbol, q_up, q_down, q_up-q_down, &
+               radial_spin, radial_abs_spin, radial_dvxc, radial_abs_dvxc, c_up, c_down, c_up-c_down, &
+               this%symbolic_atom(plusbulk)%potential%mx, this%symbolic_atom(plusbulk)%potential%my, &
+               this%symbolic_atom(plusbulk)%potential%mz, moment_magnitude
+         end do
+      end do
+      close(unit)
+   end subroutine write_magnetic_scf_diagnostics
+
+   !> Record both the historical unweighted ATOMSC L1 residual and the
+   !> radial-quadrature residual.  The stored RHO is r^2 times the physical
+   !> spherical density, so DRDI=d r/d(log r) is required by the integral.
+   subroutine write_atomic_scf_residual(this, outer_iteration, site, inner_iteration, residual_unweighted, &
+                                        residual_integrated, beta, q_integrated)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: outer_iteration, site, inner_iteration
+      real(rp), intent(in) :: residual_unweighted, residual_integrated, beta, q_integrated
+      integer :: unit, io_status
+      character(len=sl) :: filename
+
+      if (.not. this%magnetic_scf_diagnostics) return
+      if (rank == 0) then
+         filename = 'atomic_scf_residuals.dat'
+      else
+         write(filename, '("atomic_scf_residuals.rank",i0,".dat")') rank
+      end if
+      open(newunit=unit, file=trim(filename), status='unknown', action='write', position='append', iostat=io_status)
+      if (io_status /= 0) return
+      if (.not. this%atomic_scf_residual_header_written) then
+         write(unit, '(a)') '# outer_iteration site inner_iteration residual_unweighted residual_integrated beta q_integrated'
+         this%atomic_scf_residual_header_written = .true.
+      end if
+      write(unit, '(3i8,4(1x,es20.12))') outer_iteration, site, inner_iteration, residual_unweighted, &
+         residual_integrated, beta, q_integrated
+      close(unit)
+   end subroutine write_atomic_scf_residual
 
    !> Capture the fixed reference directions and the optional initial field.
    !> The state is stored on the same symbolic atoms consumed by the RS and
@@ -959,6 +1108,12 @@ contains
 
       this%cold = .false.
       this%use_kspace = .false.
+      this%magnetic_scf_diagnostics = .false.
+      this%magnetic_seed_enable = .false.
+      this%magnetic_seed_steps = 0
+      this%magnetic_seed_field = 0.0_rp
+      this%magnetic_seed_active = .false.
+      this%magnetic_scf_outer_iteration = 0
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       allocate(this%constraint_reference(3, this%lattice%nrec))
       this%constraint_reference = 0.0_rp
@@ -975,6 +1130,8 @@ contains
       this%constraint_iteration = 0
       this%constraint_diagnostics_header_written = .false.
       this%gbt_scf_diagnostics_header_written = .false.
+      this%magnetic_scf_diagnostics_header_written = .false.
+      this%atomic_scf_residual_header_written = .false.
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -1071,6 +1228,10 @@ contains
       nstep = this%nstep
       init = this%init
       cold = this%cold
+      magnetic_scf_diagnostics = this%magnetic_scf_diagnostics
+      magnetic_seed_enable = this%magnetic_seed_enable
+      magnetic_seed_steps = this%magnetic_seed_steps
+      magnetic_seed_field = this%magnetic_seed_field
 
       ! 1d allocatable
 
@@ -1123,6 +1284,10 @@ contains
       nstep = this%nstep
       init = this%init
       cold = this%cold
+      magnetic_scf_diagnostics = this%magnetic_scf_diagnostics
+      magnetic_seed_enable = this%magnetic_seed_enable
+      magnetic_seed_steps = this%magnetic_seed_steps
+      magnetic_seed_field = this%magnetic_seed_field
       ! 1d allocatable
 
       if (allocated(this%ws)) then
@@ -1173,6 +1338,8 @@ contains
       niter = 0
       do i = 1, this%nstep
          call g_scf_benchmark_profile%start_iteration(i)
+         this%magnetic_scf_outer_iteration = i
+         call this%set_magnetic_seed_state(i)
          if (this%cold .and. i==1) then
             if (this%use_kspace) then
                call g_scf_benchmark_profile%start_stage('P_hamiltonian_prepare')
@@ -1286,6 +1453,7 @@ contains
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
          call this%write_gbt_scf_diagnostics(i)
+         call this%write_magnetic_scf_diagnostics(i)
          total_energy = this%physical_total_energy
          magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
          call g_scf_benchmark_profile%finish_iteration(this%mix%delta, total_energy, this%en%fermi, magnetic_moment)
@@ -2096,7 +2264,7 @@ contains
 
       if (rank == 0) call g_logger%info(atom%element%symbol, __FILE__, __LINE__)
 
-      call this%atomsc(atom, v, rofi, "RHO", xc_projection)
+      call this%atomsc(atom, v, rofi, "RHO", xc_projection, isite)
       if (present(isite)) call this%xc_response_provider%record_radial_projection(isite, xc_projection)
 
       this%VZT(1, 1) = this%VZT(2, 1)
@@ -2134,7 +2302,7 @@ contains
       end if
    end function lmtst
 
-   subroutine atomsc(this, atom, v, rofi, job, xc_projection)
+   subroutine atomsc(this, atom, v, rofi, job, xc_projection, isite)
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
       type(xc) :: xc_obj
@@ -2142,14 +2310,15 @@ contains
       real(rp), dimension(:), allocatable, intent(out) :: rofi
       character(LEN=3), intent(in) :: JOB
       type(xc_response_radial_projection), intent(out) :: xc_projection
+      integer, intent(in), optional :: isite
 
       integer, parameter :: NCMX = 50
       integer, parameter :: NVMX = 20
 
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
-      real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
+      real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO, DRHO_OLD, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
       integer :: ISP, ncore, nval, l, nsp, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
-      integer :: qn_default
+      integer :: qn_default, site_id
       logical :: LAST
 
       real(rp), dimension(NCMX) :: EC
@@ -2159,6 +2328,8 @@ contains
       real(rp), dimension(2) :: qval
 
       call xc_projection%clear()
+      site_id = 0
+      if (present(isite)) site_id = isite
 
       ipr = 0
       nsp = 2
@@ -2173,6 +2344,7 @@ contains
 
       nr = size(rofi)
       B_fsm = merge(-atom%mag_cfield(3), real(0.0, rp), this%lattice%control%do_comom)
+      if (this%magnetic_seed_active) B_fsm = B_fsm + this%magnetic_seed_field
       xc_obj = xc(this%lattice%control)
       b = atom%B()
 
@@ -2351,6 +2523,7 @@ contains
          call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP, B_fsm, xc_projection)
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, NSP, IPR1)
          DRHO = 0.d0
+         DRHO_OLD = 0.d0
          SUM = 0.d0
          RHO0T = 0.d0
          do ISP = 1, NSP
@@ -2361,11 +2534,13 @@ contains
                   WGT = 1.d0/3.d0
                end if
                DRDI = atom%a*(rofi(IR) + B)
-               DRHO = DRHO + WGT*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
+               DRHO_OLD = DRHO_OLD + WGT*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
+               DRHO = DRHO + WGT*DRDI*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
                rho_in(IR, ISP) = BETA1*RHO(IR, ISP) + (1.d0 - BETA1)*rho_in(IR, ISP)
                SUM = SUM + WGT*DRDI*RHO(IR, ISP)
             end do
          end do
+         call this%write_atomic_scf_residual(this%magnetic_scf_outer_iteration, site_id, ITER, DRHO_OLD, DRHO, BETA1, SUM)
          if (LAST) exit
          if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
             write (6, 10004) ITER, SUM, DRHO, VNUCL, RHO0T, VSUM, BETA1

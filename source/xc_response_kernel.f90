@@ -40,6 +40,11 @@ module xc_response_kernel_mod
       ! Numerator of the radial ALSDA projection, retained until the
       ! P_site-sigma population has been supplied.
       real(rp) :: bxc_spin_moment = 0.0_rp
+      ! Additional ordinary collinear diagnostics.  These are radial
+      ! quadratures, not response-kernel parameters.
+      real(rp) :: radial_spin_abs_population = 0.0_rp
+      real(rp) :: radial_vxc_spin_difference = 0.0_rp
+      real(rp) :: radial_vxc_spin_difference_abs = 0.0_rp
       real(rp) :: vxc_scalar = 0.0_rp
       real(rp) :: bxc_energy = 0.0_rp
       real(rp) :: dvxc_dn = 0.0_rp
@@ -58,6 +63,7 @@ module xc_response_kernel_mod
       logical :: has_dbxc_dn = .false.
       logical :: has_dbxc_dm = .false.
       logical :: has_k_perp_circular = .false.
+      logical :: has_radial_projection = .false.
       logical :: has_magnetization_direction = .false.
    end type xc_response_site
 
@@ -69,6 +75,9 @@ module xc_response_kernel_mod
       real(rp) :: spin_population = 0.0_rp
       real(rp) :: vxc_charge_moment = 0.0_rp
       real(rp) :: bxc_spin_moment = 0.0_rp
+      real(rp) :: spin_abs_population = 0.0_rp
+      real(rp) :: vxc_spin_difference = 0.0_rp
+      real(rp) :: vxc_spin_difference_abs = 0.0_rp
    contains
       procedure :: clear => xc_radial_projection_clear
       procedure :: accumulate => xc_radial_projection_accumulate
@@ -126,6 +135,9 @@ contains
       this%spin_population = 0.0_rp
       this%vxc_charge_moment = 0.0_rp
       this%bxc_spin_moment = 0.0_rp
+      this%spin_abs_population = 0.0_rp
+      this%vxc_spin_difference = 0.0_rp
+      this%vxc_spin_difference_abs = 0.0_rp
    end subroutine xc_radial_projection_clear
 
    !> Accumulate an XC sample already evaluated by VXC0SP.  No second XC
@@ -143,6 +155,9 @@ contains
       this%spin_population = this%spin_population + radial_weight*spin_density
       this%vxc_charge_moment = this%vxc_charge_moment + radial_weight*charge_density*vxc_scalar
       this%bxc_spin_moment = this%bxc_spin_moment + radial_weight*spin_density*bxc_energy
+      this%spin_abs_population = this%spin_abs_population + radial_weight*abs(spin_density)
+      this%vxc_spin_difference = this%vxc_spin_difference + radial_weight*(vxc_up - vxc_down)
+      this%vxc_spin_difference_abs = this%vxc_spin_difference_abs + radial_weight*abs(vxc_up - vxc_down)
    end subroutine xc_radial_projection_accumulate
 
    subroutine xc_kernel_initialize(this, nsite, functional_label)
@@ -204,6 +219,10 @@ contains
          this%site(isite)%vxc_scalar = 0.0_rp
       end if
       this%site(isite)%bxc_spin_moment = projection%bxc_spin_moment
+      this%site(isite)%radial_spin_abs_population = projection%spin_abs_population
+      this%site(isite)%radial_vxc_spin_difference = projection%vxc_spin_difference
+      this%site(isite)%radial_vxc_spin_difference_abs = projection%vxc_spin_difference_abs
+      this%site(isite)%has_radial_projection = .true.
       call finalize_site_k_perp(this%site(isite))
    end subroutine xc_kernel_record_radial_projection
 
