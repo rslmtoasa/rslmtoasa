@@ -32,11 +32,26 @@ module xc_mod
    implicit none
    private
 
+   ! XC selector namespaces are deliberately disjoint:
+   !
+   !   TXC
+   !   ----
+   !   1-99        historical/internal RS-LMTO selectors
+   !   100-199     predefined explicit libXC aliases
+   !   >=1000      direct native libXC request, libXC_ID = TXC - 1000
+   !
+   !   libxc_func_id(:)
+   !   -----------------
+   !   native libXC functional IDs only; these are never RS-LMTO TXC values.
+
    type, public :: xc
       real(rp) :: AA, ACA, ALPM, AW, BB, BCA, BLPM, BW, CCA, CW, DCA, &
                   FCA, FOURPI, FTH, OCA, OTH, PCA, QCA, RCA, SCA, TCA, &
                   UCA, XALPHA, XCCF, XCCP, XCRF, XCRP, EXCHF
       character(LEN=3) :: TXCH
+      character(len=32) :: backend_name = ''
+      character(len=512) :: functional_name = ''
+      character(len=32) :: mapping_quality = ''
       integer :: NSS, txc
       integer :: LPOT
       
@@ -45,9 +60,6 @@ module xc_mod
       integer, dimension(:), allocatable :: libxc_func_id
       integer :: libxc_family = -1
       integer :: libxc_nspin = -1  ! Store initialization nspin for consistency
-#ifdef HAVE_LIBXC
-      type(xc_f03_func_info_t) :: libxc_info
-#endif
    contains
       procedure :: PBEGGA
       procedure :: CORPBE
@@ -61,7 +73,7 @@ module xc_mod
       procedure :: DIFFN
       procedure :: init_libxc
       procedure :: cleanup_libxc
-      procedure :: get_libxc_functional_mapping
+      procedure :: get_libxc_functional_ids
       procedure :: setup_libxc_functional_ids
       procedure :: validate_libxc_compatibility
       procedure :: is_libxc_functional
@@ -73,22 +85,6 @@ module xc_mod
    end interface xc
 
 contains
-
-   !> Simple helper: convert a string to lower-case (ASCII only)
-   pure function str_tolower(s) result(out)
-      character(len=*), intent(in) :: s
-      character(len=len(s)) :: out
-      integer :: i, c
-      do i = 1, len(s)
-         c = iachar(s(i:i))
-         if (c >= iachar('A') .and. c <= iachar('Z')) then
-            out(i:i) = achar(c + 32)
-         else
-            out(i:i) = s(i:i)
-         end if
-      end do
-   end function str_tolower
-
 
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -124,12 +120,17 @@ contains
       obj%EXCHF = 1.0
       obj%OTH = 1.d0/3.d0
       obj%LPOT = 1
+      obj%backend_name = 'legacy RS-LMTO'
+      obj%functional_name = 'unrecognized RS-LMTO selector'
+      obj%mapping_quality = 'NO_EQUIVALENT'
       select case (obj%txc)
       case (1)
          !
          !        Barth-Hedin J. Phys. C5, 1629(1972)
          !
          obj%TXCH = 'B-H'
+         obj%functional_name = 'Barth-Hedin'
+         obj%mapping_quality = 'REFERENCE_EQUIVALENT'
          obj%XCCP = 0.0504d0
          obj%XCCF = 0.0254d0
          obj%XCRP = 30.d0
@@ -142,6 +143,8 @@ contains
          !        Barth-Hedin J. Phys. C5, 1629(1972)
          !
          obj%TXCH = 'ASW'
+         obj%functional_name = 'Barth-Hedin ASW variant'
+         obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
          obj%XCCP = 0.0450d0
          obj%XCCF = 0.0225d0
          obj%XCRP = 21.d0
@@ -154,6 +157,8 @@ contains
          !        Slater X-Alpha
          !
          obj%TXCH = 'X-A'
+         obj%functional_name = 'Slater X-alpha'
+         obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
          obj%XALPHA = 6.d0*obj%EXCHF*(3.d0/(4.d0*PI))**obj%OTH
          call g_logger%debug(' SETXCP: '//obj%TXCH//' Slater exchange alpha = '//real2str(obj%XALPHA), __FILE__, __LINE__)
       case (3)
@@ -161,6 +166,8 @@ contains
          !        Barth-Hedin-Janak Phys. Rev. B12, 1257(1975)
          !
          obj%TXCH = 'BHJ'
+         obj%functional_name = 'Barth-Hedin-Janak'
+         obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
          obj%XCCP = 0.045d0
          obj%XCCF = 0.0225d0
          obj%XCRP = 21.d0
@@ -173,6 +180,8 @@ contains
          !        Vosko-Wilk-Nusair Can. J. Phys. 58, 1200(1980)
          !
          obj%TXCH = 'VWN'
+         obj%functional_name = 'Vosko-Wilk-Nusair'
+         obj%mapping_quality = 'REFERENCE_EQUIVALENT'
          obj%FTH = 4.d0/3.d0
          obj%AA = 2.d0**obj%FTH - 2.d0
       case (5)
@@ -180,11 +189,14 @@ contains
          !        Perdew-Burke-Enzerhof 96 LDA
          !
          obj%TXCH = 'PBE'
+         obj%functional_name = 'Perdew-Burke-Enzerhof 96 LDA'
+         obj%mapping_quality = 'REFERENCE_EQUIVALENT'
       case (6)
          !
          !        Wigner exchange
          !
          obj%TXCH = 'WXC'
+         obj%functional_name = 'Wigner exchange'
          if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** Spin polarization not implemented for IXC = '//int2str(obj%txc)//' Xcpot = '//obj%TXCH, __FILE__, __LINE__)
          obj%AW = 0.916d0*4.d0/3.d0
          obj%BW = 0.88d0*4.d0/3.d0
@@ -194,6 +206,8 @@ contains
          !        Ceperley-Alder. Parametrization by Perdew and Zunger
          !
          obj%TXCH = 'P-Z'
+         obj%functional_name = 'Perdew-Zunger'
+         obj%mapping_quality = 'REFERENCE_EQUIVALENT'
          if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** Spin polarization not implemented for IXC = '//int2str(obj%txc)//' Xcpot = '//obj%TXCH, __FILE__, __LINE__)
          obj%ACA = 1.0529d0
          obj%BCA = 0.3334d0
@@ -209,21 +223,62 @@ contains
          obj%UCA = 2.d0*obj%RCA/3.d0
       case (8)
          obj%TXCH = 'GGA'
+         obj%functional_name = 'Perdew-Burke-Enzerhof 96 GGA'
+         obj%mapping_quality = 'REFERENCE_EQUIVALENT'
       case (9)
          !
          !        Linear Airy gas
          !
          obj%TXCH = 'LAG'
-      case (101:109)
-         ! Explicit 100-series libXC mappings are selected in
-         ! setup_libxc_functional_ids.  Keep the functional tag initialized
-         ! here as well so SCF diagnostics do not expose an undefined string.
+         obj%functional_name = 'Local Airy gas'
+      case (100:199)
+         ! Explicit 100-series selectors are always libXC requests.  The
+         ! authoritative native-ID mapping is in setup_libxc_functional_ids.
          obj%TXCH = 'LXC'
+         obj%backend_name = 'libXC'
+         select case (obj%txc)
+         case (101)
+            obj%functional_name = 'LDA exchange + von Barth-Hedin correlation'
+            obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+         case (102)
+            obj%functional_name = 'LDA exchange + Gombas correlation'
+            obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
+         case (103)
+            obj%functional_name = 'LDA exchange'
+            obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
+         case (104)
+            obj%functional_name = 'LDA exchange + Perdew-Zunger correlation'
+            obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+         case (105)
+            obj%functional_name = 'LDA exchange + Perdew-Wang correlation'
+            obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+         case (106)
+            obj%functional_name = 'LDA exchange + Vosko-Wilk-Nusair correlation'
+            obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+         case (107)
+            obj%functional_name = 'LDA exchange + Gunnarsson-Lundqvist correlation'
+            obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
+         case (108)
+            obj%functional_name = 'PBE exchange + PBE correlation'
+            obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+         case (109)
+            obj%functional_name = 'RPBE exchange + PBE correlation'
+            obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
+         case default
+            obj%functional_name = 'unrecognized predefined libXC alias'
+            obj%mapping_quality = 'NO_EQUIVALENT'
+         end select
       case default
-         ! Check if this is a libXC functional (txc >= 1000)
+         ! Check if this is a direct native libXC functional (txc >= 1000).
          if (obj%txc >= 1000) then
-            ! libXC functional - will be handled in init_libxc
-            obj%TXCH = 'LXC'  ! Mark as libXC functional
+            obj%TXCH = 'LXC'
+            obj%backend_name = 'libXC'
+            obj%functional_name = 'direct native libXC functional'
+            ! Direct native requests have no legacy-to-libXC equivalence claim.
+            obj%mapping_quality = 'NO_EQUIVALENT'
+         else if (obj%txc >= 200) then
+            call g_logger%fatal(' SETXCP:** TXC = '//int2str(obj%txc)// &
+                                ' is outside the defined XC selector namespaces', __FILE__, __LINE__)
          else
             ! Unknown legacy functional
             if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** IXC = '//int2str(obj%txc)//' not implemented', __FILE__, __LINE__)
@@ -1121,149 +1176,90 @@ contains
    subroutine init_libxc(this, ctrl)
       class(xc), intent(inout) :: this
       type(control), intent(in) :: ctrl
-      
-      integer :: libxc_id, nspin
+
+      logical :: selector_is_libxc
 
 #ifdef HAVE_LIBXC
-   type(xc_f03_func_t) :: temp_func
-   character(len=256) :: func_name
-   ! Variables used for automatic pairing heuristics
-   logical :: paired
-   integer :: cand_id, scan_id, j, ntok, itok, k, orig_len
-   character(len=256) :: orig_name_low, cand_name_low
-   character(len=256) :: token
-   character(len=32), dimension(20) :: tokens
-            logical :: orig_is_exchange, orig_is_corr
-                     logical :: cand_is_exchange, cand_is_corr
-            integer :: pos_c, pos_x, prefix_len, suffix_len
-            character(len=256) :: prefix, suffix
-               logical :: need_x
+      integer :: libxc_id, nspin, i_func, family
+      type(xc_f03_func_t) :: temp_func
+      type(xc_f03_func_info_t) :: temp_info
+      character(len=256) :: func_name
+      character(len=1024) :: functional_names, functional_ids
 #endif
 
-      ! Set up the functional ID array based on txc
+      this%use_libxc = .false.
+      this%libxc_family = -1
+      this%libxc_nspin = -1
+
+      selector_is_libxc = this%is_libxc_functional()
       call this%setup_libxc_functional_ids()
-      
-      ! Check if we should use libXC
-      if (.not. allocated(this%libxc_func_id)) then
-         this%use_libxc = .false.
+
+      if (.not. selector_is_libxc) then
+         ! TXC=1-99 is the historical RS-LMTO namespace.  Any native-ID
+         ! references for these selectors are documentation-only comparisons;
+         ! they are never placed in the active libxc_func_id array.
+         call g_logger%info('XC selector: TXC='//int2str(this%txc), __FILE__, __LINE__)
+         call g_logger%info('XC backend: legacy RS-LMTO', __FILE__, __LINE__)
+         call g_logger%info('XC functional: '//trim(this%functional_name), __FILE__, __LINE__)
+         call g_logger%info('XC libXC mapping quality: '//trim(this%mapping_quality)// &
+                            ' (reference only; not selected)', __FILE__, __LINE__)
          return
       endif
-      
-      ! Validate all functionals in the array
-      this%use_libxc = .true.
+
+#ifndef HAVE_LIBXC
+      call g_logger%fatal('XC selector TXC='//int2str(this%txc)// &
+                          ' requests the libXC backend, but this executable was built without libXC; '// &
+                          'refusing to fall back to legacy XCPOT.', __FILE__, __LINE__)
+      return
+#else
+      if (.not. allocated(this%libxc_func_id)) then
+         call g_logger%fatal('XC selector TXC='//int2str(this%txc)// &
+                             ' is a libXC selector but has no predefined native-ID mapping. '// &
+                             'Use TXC=1000+ID for a direct request.', __FILE__, __LINE__)
+         return
+      endif
+
+      ! RS-LMTO uses two spin channels for the libXC wrapper.
+      nspin = 2
       do libxc_id = 1, size(this%libxc_func_id)
          if (.not. this%validate_libxc_compatibility(this%libxc_func_id(libxc_id))) then
-            call g_logger%error('Stopping due to incompatible libXC functional (txc='//int2str(this%txc)//')', __FILE__, __LINE__)
-            call g_logger%info('Valid options for ASA:', __FILE__, __LINE__)
-            call g_logger%info('  Legacy functionals: txc=1-9 (with libXC equivalents)', __FILE__, __LINE__)  
-            call g_logger%info('  Direct libXC: txc=1000+ID', __FILE__, __LINE__)
-            call g_logger%info('  See XC_FUNCTIONAL_GUIDE.md for complete list', __FILE__, __LINE__)
-            stop 'Incompatible XC functional for ASA'
+            call g_logger%fatal('XC selector TXC='//int2str(this%txc)// &
+                                ' requests an incompatible native libXC ID '// &
+                                int2str(this%libxc_func_id(libxc_id))//'.', __FILE__, __LINE__)
+            return
          endif
       enddo
-      
-      ! Determine spin treatment - RS-LMTO always uses spin-polarized calculations
-      nspin = 2  ! XC_POLARIZED
-      
-#ifdef HAVE_LIBXC
-      ! Create a temporary functional to get info for the first functional in array
-      call xc_f03_func_init(temp_func, this%libxc_func_id(1), nspin)
-      this%libxc_info = xc_f03_func_get_info(temp_func)
-      this%libxc_family = xc_f03_func_info_get_family(this%libxc_info)
-      this%libxc_nspin = nspin  ! Store for consistent usage
 
-      ! Get the name before destroying the functional
-      func_name = trim(xc_f03_func_info_get_name(this%libxc_info))
-
-      call xc_f03_func_end(temp_func)
-
-      ! If only a single functional is provided and it is a GGA, attempt to
-      ! automatically pair a correlation-only functional with a sensible
-      ! exchange partner (common case: user passed GGA_C only). Warn the user.
-      if (size(this%libxc_func_id) == 1) then
-         call g_logger%info('Using libXC functional: '//trim(func_name)// &
-                          ' (ID: '//int2str(this%libxc_func_id(1))//')', __FILE__, __LINE__)
-         if (this%libxc_family == 1 .or. this%libxc_family == 2) then
-            ! Attempt a smarter auto-pair: if the provided functional appears to be a
-            ! correlation-only variant (name contains 'correlation' or 'corr'), try
-            ! to find a matching exchange partner (same family and matching key tokens
-            ! such as 'pbe', 'rpbe', 'pz', etc.) by scanning common libXC IDs.
-            paired = .false.
-            orig_name_low = str_tolower(func_name)
-
-            ! Simplified matching using prefix/suffix around '_c_' / '_x_'
-            pos_c = index(orig_name_low, '_c_')
-            pos_x = index(orig_name_low, '_x_')
-            if (pos_c > 0 .or. pos_x > 0) then
-               need_x = .false.
-               if (pos_c > 0) then
-                  need_x = .true.
-                  prefix_len = pos_c - 1
-                  prefix = orig_name_low(1:prefix_len)
-                  suffix_len = len_trim(orig_name_low) - (pos_c + 2)
-                  if (suffix_len > 0) then
-                     suffix = orig_name_low(pos_c + 3:pos_c + 2 + suffix_len)
-                  else
-                     suffix = ''
-                  end if
-               else
-                  prefix_len = pos_x - 1
-                  prefix = orig_name_low(1:prefix_len)
-                  suffix_len = len_trim(orig_name_low) - (pos_x + 2)
-                  if (suffix_len > 0) then
-                     suffix = orig_name_low(pos_x + 3:pos_x + 2 + suffix_len)
-                  else
-                     suffix = ''
-                  end if
-               end if
-
-               ! Scan candidates for matching opposite variant
-               do scan_id = 1, 600
-                  if (scan_id == this%libxc_func_id(1)) cycle
-                  call xc_f03_func_init(temp_func, scan_id, nspin)
-                  cand_name_low = str_tolower(trim(xc_f03_func_info_get_name(xc_f03_func_get_info(temp_func))))
-                  call xc_f03_func_end(temp_func)
-                  if (xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func)) /= this%libxc_family) cycle
-                  if (need_x) then
-                     if (index(cand_name_low, '_x_') == 0) cycle
-                  else
-                     if (index(cand_name_low, '_c_') == 0) cycle
-                  end if
-
-                  ! Check prefix
-                  if (prefix_len > 0) then
-                     if (len_trim(cand_name_low) < prefix_len) cycle
-                     if (cand_name_low(1:prefix_len) /= prefix) cycle
-                  end if
-                  ! Check suffix
-                  if (suffix_len > 0) then
-                     if (len_trim(cand_name_low) < suffix_len) cycle
-                     if (cand_name_low(len_trim(cand_name_low)-suffix_len+1:len_trim(cand_name_low)) /= suffix) cycle
-                  end if
-
-                  cand_id = scan_id
-                  paired = .true.
-                  exit
-               end do
-
-               if (paired) then
-                  allocate(this%libxc_func_id(2))
-                  if (pos_c > 0) then
-                     this%libxc_func_id = [cand_id, this%libxc_func_id(1)]
-                  else
-                     this%libxc_func_id = [this%libxc_func_id(1), cand_id]
-                  end if
-                  call g_logger%warning('Auto-paired functional IDs: '//int2str(this%libxc_func_id(1))//','//int2str(this%libxc_func_id(2))//'. Review pairing for correctness.', __FILE__, __LINE__)
-               else
-                  call g_logger%warning('Single libXC functional looks like X/C variant but no partner found. Please provide matching X/C functional.', __FILE__, __LINE__)
-               end if
-            else
-               call g_logger%warning('Single libXC functional provided; consider providing matching exchange+correlation pair for LDA/GGA.', __FILE__, __LINE__)
-            end if
+      ! Query all metadata while each temporary functional is alive.  No
+      ! xc_f03_func_t or related metadata is accessed after func_end().
+      functional_names = ''
+      functional_ids = ''
+      do i_func = 1, size(this%libxc_func_id)
+         call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
+         temp_info = xc_f03_func_get_info(temp_func)
+         family = xc_f03_func_info_get_family(temp_info)
+         func_name = trim(xc_f03_func_info_get_name(temp_info))
+         if (i_func == 1) this%libxc_family = family
+         if (i_func == 1) then
+            functional_names = trim(func_name)
+            functional_ids = trim(int2str(this%libxc_func_id(i_func)))
+         else
+            functional_names = trim(functional_names)//' + '//trim(func_name)
+            functional_ids = trim(functional_ids)//','//trim(int2str(this%libxc_func_id(i_func)))
          endif
-      else
-         call g_logger%info('Using libXC functional combination: IDs '// &
-                          int2str(this%libxc_func_id(1))//','//int2str(this%libxc_func_id(2)), __FILE__, __LINE__)
+         call xc_f03_func_end(temp_func)
+      enddo
+
+      this%libxc_nspin = nspin
+      this%functional_name = trim(functional_names)
+      this%use_libxc = .true.
+
+      call g_logger%info('XC selector: TXC='//int2str(this%txc), __FILE__, __LINE__)
+      call g_logger%info('XC backend: libXC', __FILE__, __LINE__)
+      call g_logger%info('XC functional IDs: '//trim(functional_ids), __FILE__, __LINE__)
+      call g_logger%info('XC functional names: '//trim(functional_names), __FILE__, __LINE__)
+      if (this%txc < 1000) then
+         call g_logger%info('XC mapping quality: '//trim(this%mapping_quality), __FILE__, __LINE__)
       endif
 #endif
    end subroutine init_libxc
@@ -1278,110 +1274,57 @@ contains
       ! Clean up allocated arrays
       if (allocated(this%libxc_func_id)) deallocate(this%libxc_func_id)
       this%use_libxc = .false.
+      this%libxc_family = -1
+      this%libxc_nspin = -1
    end subroutine cleanup_libxc
 
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Set up the libxc_func_id array based on the txc value
-   !> Handles legacy IXC 1-9 mapping to libXC functional combinations
+   !> Set up the active native libXC ID array based on TXC.
+   !> The array contains native libXC IDs only. Legacy TXC reference
+   !> mappings are intentionally not selected here.
    !>--------------------------------------------------------------------------
    subroutine setup_libxc_functional_ids(this)
       class(xc), intent(inout) :: this
       
 #ifdef HAVE_LIBXC
-      ! Clean up any previous allocation
-      if (allocated(this%libxc_func_id)) deallocate(this%libxc_func_id)
-      
-      ! Map txc to libXC functional ID(s)
+      ! Only explicit libXC aliases and direct native-ID selectors populate
+      ! the active array. TXC=1-99 stays on the legacy XCPOT path.
       select case(this%txc)
-      
-      ! ==============================================================
-      ! Legacy RS-LMTO functionals (IXC 1-9) → libXC equivalents
-      ! ==============================================================
-      case (1, 3, 11)  ! Barth-Hedin, Barth-Hedin-Janak, ASW variant
-         ! Use XC_LDA_X (1) + XC_LDA_C_VBH (11) von Barth-Hedin
+      case (101)
          allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 17]
-         
-      case (2)  ! Slater X-Alpha → exchange only
+         this%libxc_func_id = [1, 17]  ! native XC_LDA_X + XC_LDA_C_VBH
+      case (102)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [1, 24]  ! native XC_LDA_X + XC_LDA_C_GOMBAS
+      case (103)
          allocate(this%libxc_func_id(1))
-         this%libxc_func_id(1) = 1  ! XC_LDA_X
-         
-      case (4)  ! Vosko-Wilk-Nusair
-         ! Use XC_LDA_X (1) + XC_LDA_C_VWN (7)
+         this%libxc_func_id(1) = 1     ! native XC_LDA_X
+      case (104)
          allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 7]
-         
-      case (5)  ! PBE 96 LDA → use PW92 correlation
-         ! Use XC_LDA_X (1) + XC_LDA_C_PW (12)
+         this%libxc_func_id = [1, 9]   ! native XC_LDA_X + XC_LDA_C_PZ
+      case (105)
          allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 12]
-         
-      case (6)  ! Wigner exchange → no good libXC equivalent, use legacy
-         ! Leave unallocated to signal legacy use
-         
-      case (7)  ! Perdew-Zunger
-         ! Use XC_LDA_X (1) + XC_LDA_C_PZ (9)
+         this%libxc_func_id = [1, 12]  ! native XC_LDA_X + XC_LDA_C_PW
+      case (106)
          allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 9]
-         
-      case (8)  ! PBE GGA
-         ! Use XC_GGA_X_PBE (101) + XC_GGA_C_PBE (130)
+         this%libxc_func_id = [1, 7]   ! native XC_LDA_X + XC_LDA_C_VWN
+      case (107)
          allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [101, 130]
-         
-      case (9)  ! Local Airy gas → no libXC equivalent, use legacy
-         ! Leave unallocated to signal legacy use
-         
-      ! ==============================================================
-      ! Direct libXC functional ID: txc >= 1000 → subtract 1000
-      ! ==============================================================
+         this%libxc_func_id = [1, 5]   ! native XC_LDA_X + XC_LDA_C_GL
+      case (108)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [101, 130]  ! native XC_GGA_X_PBE + XC_GGA_C_PBE
+      case (109)
+         allocate(this%libxc_func_id(2))
+         this%libxc_func_id = [117, 130]  ! native XC_GGA_X_RPBE + XC_GGA_C_PBE
       case (1000:)
          allocate(this%libxc_func_id(1))
          this%libxc_func_id(1) = this%txc - 1000
-         
-      ! ==============================================================
-      ! Extended legacy mappings for explicit libXC use (100-199)
-      ! ==============================================================
-      case (101)  ! von Barth–Hedin (LDA)
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 17]
-         
-      case (102)  ! Slater exchange + Gaspari correlation (use closest)
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 15]  ! XC_LDA_C_GOMBAS closest to Gauss
-         
-      case (103)  ! Slater exchange only (Xα model)
-         allocate(this%libxc_func_id(1))
-         this%libxc_func_id(1) = 1  ! XC_LDA_X
-         
-      case (104)  ! Perdew–Zunger (1981) LDA
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 9]
-         
-      case (105)  ! Perdew–Wang (1992) LDA
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 12]
-         
-      case (106)  ! Vosko–Wilk–Nusair
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 7]
-         
-      case (107)  ! Gunnarsson–Lundqvist
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 5]
-         
-      case (108)  ! PBE GGA
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [101, 130]
-         
-      case (109)  ! RPBE GGA
-         allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [117, 130]  ! XC_GGA_X_RPBE (117) + XC_GGA_C_PBE (130)
-         
       case default
-         ! Unknown txc or legacy-only functional - leave unallocated
+         ! TXC=100 and unused 100-series values are rejected by init_libxc;
+         ! they must never fall through to legacy XCPOT.
       end select
 #endif
    end subroutine setup_libxc_functional_ids
@@ -1389,41 +1332,20 @@ contains
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Map RS-LMTO txc values to libXC functional IDs
-   !> Returns -1 if no libXC equivalent exists
+   !> Return the selected native libXC IDs.
+   !> An empty array means that TXC selects the legacy RS-LMTO backend.
    !>--------------------------------------------------------------------------
-   function get_libxc_functional_mapping(this) result(libxc_id)
+   function get_libxc_functional_ids(this) result(libxc_ids)
       class(xc), intent(in) :: this
-      integer :: libxc_id
+      integer, allocatable :: libxc_ids(:)
 
-#ifdef HAVE_LIBXC
-      if (this%txc >= 1000) then
-         ! General mapping: txc = 1000 + libxc_id
-         libxc_id = this%txc - 1000
-         call g_logger%debug('General libXC mapping: txc='//int2str(this%txc)//' -> libxc_id='//int2str(libxc_id), __FILE__, __LINE__)
+      if (allocated(this%libxc_func_id)) then
+         allocate(libxc_ids(size(this%libxc_func_id)))
+         libxc_ids = this%libxc_func_id
       else
-         ! Map legacy functionals (IXC 1-9) to libXC equivalents
-         select case(this%txc)
-         case (1, 3)  ! Barth-Hedin, Barth-Hedin-Janak → use VBH correlation
-            libxc_id = 17  ! Will need XC_LDA_X (1) + XC_LDA_C_VBH (11)
-         case (2)  ! Slater X-Alpha → exchange only
-            libxc_id = 1   ! XC_LDA_X
-         case (4)  ! Vosko-Wilk-Nusair
-            libxc_id = 7   ! Will need XC_LDA_X (1) + XC_LDA_C_VWN (7)
-         case (5)  ! PBE LDA (use PW92 correlation)
-            libxc_id = 12  ! Will need XC_LDA_X (1) + XC_LDA_C_PW (12)
-         case (7)  ! Perdew-Zunger
-            libxc_id = 9   ! Will need XC_LDA_X (1) + XC_LDA_C_PZ (9)
-         case (8)  ! PBE GGA
-            libxc_id = 130 ! Will need XC_GGA_X_PBE (101) + XC_GGA_C_PBE (130)
-         case default
-            libxc_id = -1  ! No libXC mapping (use legacy)
-         end select
+         allocate(libxc_ids(0))
       endif
-#else
-      libxc_id = -1  ! libXC not available
-#endif
-   end function get_libxc_functional_mapping
+   end function get_libxc_functional_ids
 
    !>--------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -1509,9 +1431,9 @@ contains
       logical :: is_libxc
       
       ! Explicit libXC mappings use the historical 100-series codes, while
-      ! direct libXC IDs use txc=1000+ID. Legacy txc=1-9 values remain the
-      ! internal production implementations even though the fixed-density
-      ! unit gate also evaluates their libXC equivalents.
+      ! direct native libXC IDs use TXC=1000+ID. Legacy TXC values remain the
+      ! internal production implementations; their libXC references are used
+      ! only through explicitly selected 100-series aliases.
       is_libxc = ((this%txc >= 100) .and. (this%txc < 200)) .or. (this%txc >= 1000)
    end function is_libxc_functional
 
@@ -1526,7 +1448,13 @@ contains
       real(rp), intent(inout) :: EXC, V1, V2
       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
 
-      if (this%use_libxc .and. this%is_libxc_functional()) then
+      if (this%is_libxc_functional()) then
+         if (.not. this%use_libxc) then
+            call g_logger%fatal('XC selector TXC='//int2str(this%txc)// &
+                                ' requires the libXC backend; refusing to fall back to legacy XCPOT.', &
+                                __FILE__, __LINE__)
+            return
+         endif
          call this%xcpot_libxc_wrapper(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       else
          call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
@@ -1641,9 +1569,10 @@ contains
             vsigma_libxc = vsigma_libxc + vsigma_tmp
             
          case default
-            call g_logger%error('libXC functional family '//int2str(family)//' not supported', __FILE__, __LINE__)
             call xc_f03_func_end(temp_func)
-            call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
+            call g_logger%fatal('Native libXC functional family '//int2str(family)// &
+                                ' is not supported by the libXC backend; refusing legacy XCPOT fallback.', &
+                                __FILE__, __LINE__)
             return
          end select
          
@@ -1712,152 +1641,6 @@ contains
       stop 'libXC not available'
 #endif
    end subroutine xcpot_libxc_wrapper
-
-!!!    !>--------------------------------------------------------------------------
-!!!    ! DESCRIPTION:
-!!!    !> @brief
-!!!    !> Wrapper to call libXC for exchange-correlation potential calculation
-!!!    !> Handles both single functionals and exchange+correlation combinations
-!!!    !>--------------------------------------------------------------------------
-!!!    subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
-!!!       class(xc), intent(in) :: this
-!!!       real(rp), intent(in) :: RHO, RHO1, RHO2, RR
-!!!       real(rp), intent(inout) :: EXC, V1, V2
-!!!       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
-!!! 
-!!! #ifdef HAVE_LIBXC
-!!!       real(rp), parameter :: TOLD = 1.d-20
-!!!       real(rp), parameter :: TOLDD = 1.d-20
-!!!       
-!!!       ! libXC arrays - use proper dimensions for spin treatment
-!!!       real(rp), dimension(2) :: rho_libxc  ! For spin-polarized: [rho_up, rho_down]
-!!!       real(rp), dimension(3) :: sigma_libxc ! For GGA: [grad_up^2, grad_up*grad_down, grad_down^2]
-!!!       real(rp), dimension(1) :: exc_libxc, exc_tmp
-!!!       real(rp), dimension(2) :: vrho_libxc, vrho_tmp  ! Potentials for each spin
-!!!       real(rp), dimension(3) :: vsigma_libxc, vsigma_tmp ! GGA gradient potentials
-!!!       type(xc_f03_func_t) :: temp_func
-!!!       integer :: nspin, family, i_func
-!!!       
-!!!       ! Initialize outputs
-!!!       V1 = 0.0d0
-!!!       V2 = 0.0d0  
-!!!       EXC = 0.0d0
-!!!       
-!!!       ! Check for negligible densities
-!!!       if (RHO1 < TOLD .or. RHO2 < TOLDD) then
-!!!          return
-!!!       endif
-!!!       
-!!!       ! Determine spin treatment - use the same as initialization
-!!!       nspin = this%libxc_nspin
-!!!       family = this%libxc_family
-!!!       
-!!!       ! Set up density arrays
-!!!       if (nspin == 2) then
-!!!          ! Spin-polarized calculation
-!!!          ! In RS-LMTO: RHO1 = spin-down, RHO2 = spin-up
-!!!          ! In libXC: rho_libxc(1) = spin-up, rho_libxc(2) = spin-down
-!!!          rho_libxc(1) = RHO2  ! spin-up density
-!!!          rho_libxc(2) = RHO1  ! spin-down density
-!!!       else
-!!!          ! Unpolarized calculation  
-!!!          rho_libxc(1) = RHO   ! total density
-!!!       endif
-!!!       
-!!!       ! Additional safety check for libXC call
-!!!       if (rho_libxc(1) <= 0.0d0) then
-!!!          return
-!!!       endif
-!!!       
-!!!       ! Initialize accumulators
-!!!       exc_libxc = 0.0d0
-!!!       vrho_libxc = 0.0d0
-!!!       vsigma_libxc = 0.0d0
-!!!       
-!!!       ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
-!!!       do i_func = 1, size(this%libxc_func_id)
-!!!          ! Create functional
-!!!          call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
-!!!          family = xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func))
-!!!          
-!!!          select case(family)
-!!!          case(1)  ! XC_FAMILY_LDA
-!!!             call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
-!!!             
-!!!             ! Accumulate contributions
-!!!             exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
-!!!             vrho_libxc = vrho_libxc + vrho_tmp
-!!!             
-!!!          case(2)  ! XC_FAMILY_GGA  
-!!!             ! Set up gradient arrays for spherical coordinates (ASA)
-!!!             ! In ASA, gradients are purely radial, so sigma = (drho/dr)^2
-!!!             if (nspin == 2) then
-!!!                ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
-!!!                sigma_libxc(1) = RHOP(2)**2        ! |grad rho_up|^2
-!!!                sigma_libxc(2) = RHOP(2)*RHOP(1)   ! grad rho_up . grad rho_down  
-!!!                sigma_libxc(3) = RHOP(1)**2        ! |grad rho_down|^2
-!!!                
-!!!                call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
-!!!                                        exc_tmp, vrho_tmp, vsigma_tmp)
-!!!             else
-!!!                sigma_libxc(1) = (RHOP(1) + RHOP(2))**2  ! |grad rho_total|^2
-!!!                
-!!!                call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
-!!!                                        exc_tmp, vrho_tmp(1:1), vsigma_tmp(1:1))
-!!!             endif
-!!!             
-!!!             ! Accumulate contributions
-!!!             exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
-!!!             vrho_libxc = vrho_libxc + vrho_tmp
-!!!             vsigma_libxc = vsigma_libxc + vsigma_tmp
-!!!             
-!!!          case default
-!!!             call g_logger%error('libXC functional family '//int2str(family)//' not supported', __FILE__, __LINE__)
-!!!             call xc_f03_func_end(temp_func)
-!!!             call this%XCPOT(RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
-!!!             return
-!!!          end select
-!!!          
-!!!          call xc_f03_func_end(temp_func)
-!!!       enddo
-!!!       
-!!!       ! Convert libXC outputs from Hartree to Rydberg (internal units)
-!!!       exc_libxc(1) = 2.0d0 * exc_libxc(1)
-!!!       vrho_libxc = 2.0d0 * vrho_libxc
-!!!       vsigma_libxc = 2.0d0 * vsigma_libxc
-!!!       
-!!!       ! Assign outputs based on family (use the last functional's family)
-!!!       if (family == 2) then
-!!!          ! GGA: include gradient contributions
-!!!          ! In spherical coordinates, the potential has additional terms from chain rule
-!!!          ! V = vrho + 2 * vsigma * d(sigma)/dρ
-!!!          ! For radial gradients: sigma = (drho/dr)^2, so d(sigma)/dρ = 2 * (drho/dr) * d(drho/dr)/dρ
-!!!          if (nspin == 2) then
-!!!             ! For spin-polarized: account for cross terms in spherical coordinates
-!!!             V1 = vrho_libxc(2) + 2.0d0 * (vsigma_libxc(3) * RHOP(1) + vsigma_libxc(2) * RHOP(2))  ! spin-down potential
-!!!             V2 = vrho_libxc(1) + 2.0d0 * (vsigma_libxc(1) * RHOP(2) + vsigma_libxc(2) * RHOP(1))  ! spin-up potential
-!!!          else
-!!!             ! For unpolarized: simpler case
-!!!             V1 = vrho_libxc(1) + 2.0d0 * vsigma_libxc(1) * (RHOP(1) + RHOP(2))
-!!!             V2 = V1
-!!!          endif
-!!!       else
-!!!          ! LDA: no gradient contributions
-!!!          if (nspin == 2) then
-!!!             V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
-!!!             V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
-!!!          else
-!!!             V1 = vrho_libxc(1)
-!!!             V2 = vrho_libxc(1)
-!!!          endif
-!!!       endif
-!!!       EXC = exc_libxc(1)
-!!!       
-!!! #else
-!!!       call g_logger%error('libXC not available - cannot use libXC functionals', __FILE__, __LINE__)
-!!!       stop 'libXC not available'
-!!! #endif
-!!!    end subroutine xcpot_libxc_wrapper
 
    ! DESCRIPTION:
    subroutine destructor(this)

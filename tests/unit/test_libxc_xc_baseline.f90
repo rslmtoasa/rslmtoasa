@@ -44,7 +44,7 @@ program test_libxc_xc_baseline
       -2.4158691110126762_rp, -2.1936278661632440_rp]
 
    type(control) :: ctl
-   type(xc) :: functional
+   type(xc) :: internal_functional, libxc_functional
    logical :: failed
    integer :: isample
 
@@ -53,16 +53,19 @@ program test_libxc_xc_baseline
    call ctl%restore_to_default()
    ctl%nsp = 2
    ctl%txc = 5
-   functional = xc(ctl)
+   internal_functional = xc(ctl)
+   ctl%txc = 105
+   libxc_functional = xc(ctl)
 
-   call require(functional%use_libxc, 'txc=5 enables the libXC production route')
-   call require(functional%libxc_nspin == 2, 'libXC route is initialized for two spin channels')
-   call require(allocated(functional%libxc_func_id), 'PBE LDA libXC functional IDs are available')
-   if (allocated(functional%libxc_func_id)) then
-      call require(size(functional%libxc_func_id) == 2, 'PBE LDA route contains exchange and correlation')
-      if (size(functional%libxc_func_id) == 2) then
-         call require(all(functional%libxc_func_id == [1, 12]), &
-            'txc=5 maps to libXC LDA_X plus LDA_C_PW')
+   call require(.not. internal_functional%use_libxc, 'txc=5 stays on the legacy production route')
+   call require(libxc_functional%use_libxc, 'txc=105 enables the explicit libXC production route')
+   call require(libxc_functional%libxc_nspin == 2, 'libXC route is initialized for two spin channels')
+   call require(allocated(libxc_functional%libxc_func_id), 'PBE LDA libXC functional IDs are available')
+   if (allocated(libxc_functional%libxc_func_id)) then
+      call require(size(libxc_functional%libxc_func_id) == 2, 'PBE LDA route contains exchange and correlation')
+      if (size(libxc_functional%libxc_func_id) == 2) then
+         call require(all(libxc_functional%libxc_func_id == [1, 12]), &
+            'txc=105 maps to native libXC LDA_X plus LDA_C_PW')
       end if
    end if
 
@@ -86,9 +89,9 @@ contains
       real(rp) :: libxc_exc, libxc_v_down, libxc_v_up
 
       rho_total = rho_down(isample) + rho_up(isample)
-      call functional%XCPOT(rho_down(isample), rho_up(isample), rho_total, rho_gradient, rho_laplacian, &
+      call internal_functional%XCPOT(rho_down(isample), rho_up(isample), rho_total, rho_gradient, rho_laplacian, &
          radius, internal_v_down, internal_v_up, internal_exc)
-      call functional%xcpot_libxc_wrapper(rho_down(isample), rho_up(isample), rho_total, rho_gradient, rho_laplacian, &
+      call libxc_functional%xcpot_libxc_wrapper(rho_down(isample), rho_up(isample), rho_total, rho_gradient, rho_laplacian, &
          radius, libxc_v_down, libxc_v_up, libxc_exc)
 
       call require_close(internal_exc, internal_exc_reference(isample), &

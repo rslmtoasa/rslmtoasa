@@ -44,7 +44,7 @@ txc Parameter
      - LDA
      - [4]
    * - 5
-     - Perdew-Zunger
+     - Perdew-Burke-Enzerhof 96 LDA
      - LDA
      - [5]
    * - 8
@@ -53,6 +53,12 @@ txc Parameter
      - [6]
 
 **Default:** 1 (Barth-Hedin)
+
+The selector namespace is intentionally separate from native libXC IDs.  Values
+``1-99`` remain historical RS-LMTO selectors, ``100-199`` are explicit libXC
+aliases, and ``1000+ID`` requests exactly native libXC ID ``ID``.  The complete
+mapping table, equivalence classifications, and backend diagnostics are in
+:download:`the XC selector and libXC mapping contract <../../XC_SELECTOR_AND_LIBXC_MAPPING.md>`.
 
 **Example:**
 
