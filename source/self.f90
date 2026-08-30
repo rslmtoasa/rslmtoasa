@@ -33,6 +33,7 @@ module self_mod
    use lattice_mod
    use charge_mod
    use xc_mod
+   use xc_radial_mod, only: radgra
    use recursion_mod
    use density_of_states_mod
    use green_mod
@@ -3661,6 +3662,8 @@ contains
       real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
       real(rp), dimension(2) :: RHOD, RHODD
       real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
+      real(rp), allocatable :: vxc_up_radial(:), vxc_down_radial(:), exc_radial(:)
+      logical :: use_libxc_gga
       !.. External Calls ..
       ! external EVXC
       !
@@ -3672,6 +3675,7 @@ contains
       PI = 4.d0*ATAN(1.d0)
       OB4PI = 1.d0/(4.d0*PI)
       IXC = xc_obj%txc
+      use_libxc_gga = xc_obj%use_libxc .and. xc_obj%libxc_family == 2
       !
       ! Constraining field related hacks below
       Bxc_up = 0.0d0
@@ -3694,49 +3698,82 @@ contains
             tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
          end do
          if (IXC == 5 .or. IXC >= 8) then
-            !subroutine radgra(a, b, nr, rofi, f, gradf)
-            !call DIFFN(tRHO(1, ISP), RHOP(1, ISP), RHOPP(1, ISP), NR, A)
+            ! radgra returns d(tRHO)/dr; a second call returns d2(tRHO)/dr2.
+            ! These are physical radial derivatives, not derivatives with
+            ! respect to the logarithmic mesh coordinate.
             call radgra(a, b, NR, rofi, tRHO(1, ISP), RHOP(1, ISP))
+            ! Enforce the regular spherical boundary condition before taking
+            ! the second derivative, so RHOPP(1) is based on zero slope too.
+            RHOP(1, ISP) = 0.d0
             call radgra(a, b, NR, rofi, RHOP(1, ISP), RHOPP(1, ISP))
-            !Comment line below or not?
-            !call DIFFN(tRHO(2, ISP), RHOP(2, ISP), RHOPP(2, ISP), NR, A)
-            !call radgra(a, b, NR, rofi, tRHO(2, ISP), RHOP(2, ISP))
-            !call radgra(a, b, NR, rofi, RHOP(2, ISP), RHOPP(2, ISP))
          else
             RHOP = 0.0d0
             RHOPP = 0.0d0
          end if
       end do
-      if (NSP == 1) then
-         RHO1 = 0.5*tRHO(1, 1)
-         RHO2 = RHO1
-         R = (rofi(3) - rofi(2))
-         RCE = R*R
-         if (IXC == 5 .or. IXC >= 8) then
-            ! RHODD(2) = RHODD(1)
-            RHOD(1) = 0.5*RHOP(1, 1)/R
-            RHODD(1) = 0.5*(RHOPP(1, 1) - RHOP(1, 1))/RCE
-            RHOD(2) = RHOD(1)
-            RHODD(2) = RHODD(1)
+
+      if (use_libxc_gga) then
+         allocate (vxc_up_radial(NR), vxc_down_radial(NR), exc_radial(NR))
+         if (NSP == 1) then
+            call xc_obj%xcpot_libxc_gga_radial(A, B, rofi, 0.5d0*tRHO(:, 1), 0.5d0*tRHO(:, 1), &
+                                               0.5d0*RHOP(:, 1), 0.5d0*RHOP(:, 1), &
+                                               vxc_up_radial, vxc_down_radial, exc_radial)
+         else
+            ! The radial helper uses explicit libXC order (up, down); the
+            ! historical VXC0SP outputs remain V1=up and V2=down.
+            call xc_obj%xcpot_libxc_gga_radial(A, B, rofi, tRHO(:, 1), tRHO(:, 2), &
+                                               RHOP(:, 1), RHOP(:, 2), &
+                                               vxc_up_radial, vxc_down_radial, exc_radial)
          end if
-         ! CALL EVXC(RHO0(1), 0.5D0*RHO0(1), EXC, VXC)
-         call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
+      end if
+      if (NSP == 1) then
+         RHO1 = 0.5d0*tRHO(1, 1)
+         RHO2 = RHO1
+         if (use_libxc_gga) then
+            VXC1 = vxc_up_radial(1)
+            VXC2 = vxc_down_radial(1)
+            EXC = exc_radial(1)
+         else if (IXC >= 8) then
+            ! The VXC0SP RHO1/RHO2 contract is down/up.  radgra already
+            ! returned d n/dr and d2 n/dr2; do not transform them again.
+            ! At r=0 use zero slope and the regular limit laplacian=3*d2n/dr2.
+            RHOD = 0.d0
+            RHODD = 1.5d0*RHOPP(1, 1)
+            if (IXC == 8) then
+               R = 0.d0
+            else
+               ! LAG enhancement is defined by its s->0 limit; use the
+               ! first physical radius only as its non-singular coordinate.
+               R = rofi(2)
+            end if
+            call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
+         else
+            ! Preserve the established pointwise LDA path byte-for-byte in
+            ! its inputs; the radial derivative machinery is GGA-only.
+            R = (rofi(3) - rofi(2))
+            call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
+         end if
          V(1, 1) = V(1, 1) + VXC1
          do IR = 2, NR
-            RHO1 = 0.5*tRHO(1, 1)
-            RHO2 = RHO1
-            R = (rofi(3) - rofi(2))
-            RCE = R*R
-            if (IXC == 5 .or. IXC >= 8) then
-               RHOD(1) = 0.5*RHOP(IR, 1)/R
-               RHODD(1) = 0.5*(RHOPP(IR, 1) - RHOP(IR, 1))/RCE
+            if (use_libxc_gga) then
+               VXC1 = vxc_up_radial(IR)
+               VXC2 = vxc_down_radial(IR)
+               EXC1 = exc_radial(IR)
+            else if (IXC >= 8) then
+               RHO1 = 0.5d0*tRHO(IR, 1)
+               RHO2 = RHO1
+               R = rofi(IR)
+               RHOD(1) = 0.5d0*RHOP(IR, 1)
                RHOD(2) = RHOD(1)
+               RHODD(1) = 0.5d0*RHOPP(IR, 1)
                RHODD(2) = RHODD(1)
+               call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(IR, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
+            else
+               RHO1 = 0.5d0*tRHO(1, 1)
+               RHO2 = RHO1
+               R = (rofi(3) - rofi(2))
+               call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
             end if
-            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
-            !RHOTRU = RHO(IR, 1) * OB4PI / rofi(IR)**2
-        !!       Call EVXC(RHOTRU, 0.5D0*RHOTRU, EXC, VXC)
-            !call EVXC(RHOTRU, 0.5*RHOTRU, EXC, VXC)
             V(IR, 1) = V(IR, 1) + VXC1
             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
             if (IR == 1 .or. IR == NR) then
@@ -3751,19 +3788,28 @@ contains
          ! call EVXC(RHO0(1)+RHO0(2), RHO0(2), EXC2, VXC2)
          RHO1 = tRHO(1, 1)
          RHO2 = tRHO(1, 2)
-         R = (rofi(3) - rofi(2))
-         RCE = R*R
-         if (IXC == 5 .or. IXC >= 8) then
-            ! RHOD(2) = RHOP(IR, 1) / R
-            ! RHOD(1) = RHOP(IR, 2) / R
-            ! RHODD(2) = (RHOPP(IR, 1)-RHOP(IR, 1)) / RCE
-            ! RHODD(1) = (RHOPP(IR, 2)-RHOP(IR, 2)) / RCE
-            RHOD(2) = RHOP(1, 1)/R
-            RHOD(1) = RHOP(1, 2)/R
-            RHODD(2) = (RHOPP(1, 1) - RHOP(1, 1))/RCE
-            RHODD(1) = (RHOPP(1, 2) - RHOP(1, 2))/RCE
+         if (use_libxc_gga) then
+            VXC1 = vxc_up_radial(1)
+            VXC2 = vxc_down_radial(1)
+            EXC1 = exc_radial(1)
+         else if (IXC >= 8) then
+            ! The radial derivative producer supplies dn/dr and d2n/dr2.
+            ! At the extrapolated origin, use zero slope and laplacian(n)=3*d2n/dr2.
+            RHOD = 0.d0
+            RHODD(2) = 3.d0*RHOPP(1, 1)
+            RHODD(1) = 3.d0*RHOPP(1, 2)
+            if (IXC == 8) then
+               R = 0.d0
+            else
+               R = rofi(2)
+            end if
+            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO1 + RHO2, RHOD, RHODD, R, VXC2, VXC1, EXC1)
+         else
+            ! Preserve the established pointwise LDA path and its origin
+            ! endpoint; no radial GGA operation is entered for LDA.
+            R = (rofi(3) - rofi(2))
+            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
          end if
-         call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
          !V(1, 1) = V(1, 1) + VXC1
          !V(1, 2) = V(1, 2) + VXC2
          V(1, 1) = V(1, 1) + VXC1 + B_fsm
@@ -3774,13 +3820,22 @@ contains
             RHO3 = tRHO(IR, 1) + tRHO(IR, 2)
             RHO1 = tRHO(IR, 1)
             RHO2 = tRHO(IR, 2)
-            if (IXC == 5 .or. IXC >= 8) then
-               RHOD(2) = RHOP(IR, 1)/R
-               RHOD(1) = RHOP(IR, 2)/R
-               RHODD(2) = (RHOPP(IR, 1) - RHOP(IR, 1))/RCE
-               RHODD(1) = (RHOPP(IR, 2) - RHOP(IR, 2))/RCE
+            if (use_libxc_gga) then
+               VXC1 = vxc_up_radial(IR)
+               VXC2 = vxc_down_radial(IR)
+               EXC1 = exc_radial(IR)
+            else if (IXC >= 8) then
+               ! RHOP/RHOPP are already dn/dr and d2n/dr2.  Passing a
+               ! further 1/r or 1/r2 transform would differentiate in the
+               ! logarithmic coordinate a second time.
+               RHOD(2) = RHOP(IR, 1)
+               RHOD(1) = RHOP(IR, 2)
+               RHODD(2) = RHOPP(IR, 1)
+               RHODD(1) = RHOPP(IR, 2)
+               call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
+            else
+               call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
             end if
-            call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO3, RHOD, RHODD, R, VXC2, VXC1, EXC1)
             !
             !RHOT1 = RHO(IR, 1) * (OB4PI/rofi(IR)**2)
             !RHOT2 = RHO(IR, 2) * (OB4PI/rofi(IR)**2)
@@ -3820,57 +3875,6 @@ contains
          !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
       end if
    end subroutine VXC0SP
-
-   subroutine radgra(a, b, nr, rofi, f, gradf)
-      !- radial gradient
-      !-----------------------------------------------------------------------
-      !i Inputs:
-      !i   a     :the mesh points are given by rofi(i) = b [e^(a(i-1)) -1]
-      !i   b     :                 -//-
-      !i   nr    :number of mesh points
-      !i   rofi  :radial mesh points
-      !i   f     :given function defined in a mesh rofi(i)
-      !o Outputs:
-      !o  gradf  :derivative of the function f defined in a mesh rofi(i)
-      !-----------------------------------------------------------------------
-      implicit none
-      ! Passed variables:
-      integer, intent(in) ::  nr
-      real(rp), intent(in) :: a, b
-      real(rp), dimension(nr), intent(in) :: rofi
-      real(rp), dimension(nr), intent(in) :: f
-      real(rp), dimension(nr), intent(out) :: gradf
-
-      ! Local variables:
-      integer :: nm2, i
-      !
-      nm2 = nr - 2
-      ! for the first and second point are used the Forward edifferences
-      ! (Handbook, 25.3.9 with 25.1.1)
-      gradf(1) = ((6.d0*f(2) + 20.d0/3.d0*f(4) + 1.2d0*f(6)) &
-                  - (2.45d0*f(1) + 7.5d0*f(3) + 3.75d0*f(5) + 1.d0/6.d0*f(7)))/a
-      !
-      gradf(2) = ((6.d0*f(3) + 20.d0/3.d0*f(5) + 1.2d0*f(7)) &
-                  - (2.45d0*f(2) + 7.5d0*f(4) + 3.75d0*f(6) + 1.d0/6.d0*f(8)))/a
-      !
-      ! --- Five points´ formula  (25.3.6)
-      do i = 3, nm2
-         gradf(i) = ((f(i - 2) + 8.d0*f(i + 1)) - (8.d0*f(i - 1) + f(i + 2)))/12.d0/a
-      end do
-      ! --- Five points´ formula  (25.3.6)
-      gradf(nr - 1) = (-1.d0/12.d0*f(nr - 4) + 0.5d0*f(nr - 3) - 1.5d0*f(nr - 2) &
-                       + 5.d0/6.d0*f(nr - 1) + 0.25d0*f(nr))/a
-      gradf(nr) = (0.25d0*f(nr - 4) - 4.d0/3.d0*f(nr - 3) + 3.d0*f(nr - 2) &
-                   - 4.d0*f(nr - 1) + 25.d0/12.d0*f(nr))/a
-      !
-      ! --- Three points´ formula  (25.3.4)
-      !     gradf(nr-1)=(f(nr)-f(nr-2))/2.d0/a
-      !     gradf(nr)=(f(nr-2)/2.d0-2.d0*f(nr-1)+1.5d0*f(nr))/a
-      do i = 1, nr
-         gradf(i) = gradf(i)/(rofi(i) + b)
-      end do
-      return
-   end subroutine radgra
 
    subroutine RACSI(this, atom, ROFI, QSL)
       ! use common_pri

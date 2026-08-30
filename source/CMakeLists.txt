@@ -108,6 +108,7 @@ add_library(${PROJECT_NAME} STATIC
     symmetry.f90
     timer.f90
     vacuum_lead.f90
+    xc_radial.f90
     xc.f90
     xc_response_kernel.f90
 )

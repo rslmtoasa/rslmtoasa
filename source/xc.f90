@@ -25,6 +25,7 @@ module xc_mod
    use string_mod, only: int2str, real2str
    use precision_mod, only: rp
    use math_mod
+   use xc_radial_mod, only: radial_flux_divergence
    use iso_c_binding, only: c_size_t
 #ifdef HAVE_LIBXC
    use xc_f03_lib_m
@@ -68,6 +69,7 @@ module xc_mod
       procedure :: XCPOT
       procedure :: XCPOT_hybrid
       procedure :: xcpot_libxc_wrapper
+      procedure :: xcpot_libxc_gga_radial
       procedure :: exchlag
       procedure :: GCOR2
       procedure :: DIFFN
@@ -465,40 +467,20 @@ contains
          !
          !     GGA version
          !
-         if (RR < 1.d-10) then
-!  #ifdef MPI
-!         if (myid==0) then
-!  #endif
-            write (6, 10000) IXC
-!  #ifdef MPI
-!         end if
-!  #endif
-            stop
-         else
-            LGGA = 1
-            RHOS(1) = RHO1
-            RHOS(2) = RHO2
-            call this%PBEGGA(this%LPOT, LGGA, RHOS, RHOP, RHOPP, RR, EXC, V1, V2)
-         end if
+         ! RR=0 is the extrapolated origin.  PBEGGA handles its regular
+         ! spherical limit analytically, so the origin is a valid input.
+         LGGA = 1
+         RHOS(1) = RHO1
+         RHOS(2) = RHO2
+         call this%PBEGGA(this%LPOT, LGGA, RHOS, RHOP, RHOPP, RR, EXC, V1, V2)
       case (9)
          !
          !     Local Airy Gas plus PBE correlation
          !
-         if (RR < 1.d-10) then
-! #ifdef MPI
-!         if (myid==0) then
-! #endif
-            write (6, 10000) IXC
-! #ifdef MPI
-!         end if
-! #endif
-            stop
-         else
-            LGGA = 0
-            RHOS(1) = RHO1
-            RHOS(2) = RHO2
-            call this%LAGGGA(this%LPOT, LGGA, RHOS, RHOP, RHOPP, RR, EXC, V1, V2)
-         end if
+         LGGA = 0
+         RHOS(1) = RHO1
+         RHOS(2) = RHO2
+         call this%LAGGGA(this%LPOT, LGGA, RHOS, RHOP, RHOPP, RR, EXC, V1, V2)
       case default
          !
          !     Barth-Hedin  J. PHYS. C5, 1629(1972)
@@ -605,14 +587,22 @@ contains
             VX(I) = 0.d0
             cycle
          endif
-         ! Fixed: Don't double the gradient inputs
-         NDI = ND(I)
-         NDDI = NDD(I)
+         ! PBE exchange uses the spin-scaling identity
+         !   E_x[n_up,n_down] = 1/2 sum_s E_x[2*n_s].
+         ! NI is the transformed density 2*n_s, so its first and second
+         ! radial derivatives must be transformed as well.
+         NDI = ND(I) + ND(I)
+         NDDI = NDD(I) + NDD(I)
          KF = (3.d0*PI*PI*NI)**this%OTH
          NABLA = ABS(NDI)
          S = 0.5d0*NABLA/KF/NI
-         ! Fixed: Correct Laplacian in spherical coordinates
-         NABLA2 = NDDI + 2.d0/R*NDI
+         ! For a regular spherical density, the origin limit of the
+         ! spherical Laplacian is 3*d2n/dr2 at zero.
+         if (R > 0.d0) then
+            NABLA2 = NDDI + 2.d0/R*NDI
+         else
+            NABLA2 = 3.d0*NDDI
+         end if
          T = NABLA2/4.d0/KF/KF/NI
          U = NABLA*NDDI/8.d0/KF/KF/KF/NI/NI
          call this%EXCHPBE(NI, S, U, T, LGGA, LPOTT, EXI, MUXI)
@@ -634,7 +624,11 @@ contains
       ZET = (N(1) - N(2))/NI
       G = ((1.d0 + ZET)**(2.d0/3.d0) + (1.d0 - ZET)**(2.d0/3.d0))/2.d0
       NABLA = ABS(NDI)
-      NABLA2 = NDDI + 2.d0/R*NDI  ! Fixed: Correct Laplacian
+      if (R > 0.d0) then
+         NABLA2 = NDDI + 2.d0/R*NDI
+      else
+         NABLA2 = 3.d0*NDDI
+      end if
       FK = (3.d0*PI*PI*NI)**this%OTH
       SK = SQRT(4.d0*FK/PI)
       T = NABLA/2.d0/SK/NI/G
@@ -965,14 +959,15 @@ contains
             cycle
          endif
          NDI = ND(I) + ND(I)
-         if (ABS(NDI) < 1d-15) then
-            NDI = 1d-15
-         end if
          NDDI = NDD(I) + NDD(I)
          KF = (3.d0*PI*PI*NI)**this%OTH
          NABLA = ABS(NDI)
          S = 0.5d0*NABLA/KF/NI
-         NABLA2 = NDDI + 2.d0/R*NDI  ! Fixed: Correct Laplacian
+         if (R > 0.d0) then
+            NABLA2 = NDDI + 2.d0/R*NDI
+         else
+            NABLA2 = 3.d0*NDDI
+         end if
          T = NABLA2/4.d0/KF/KF/NI
          U = NABLA*NDDI/8.d0/KF/KF/KF/NI/NI
          call this%exchlag(NI, S, U, T, LGGA, LPOTT, EXI, MUXI)
@@ -994,7 +989,11 @@ contains
       ZET = (N(1) - N(2))/NI
       G = ((1.d0 + ZET)**(2.d0/3.d0) + (1.d0 - ZET)**(2.d0/3.d0))/2.d0
       NABLA = ABS(NDI)
-      NABLA2 = NDDI + 2.d0/R*NDI  ! Fixed: Correct Laplacian
+      if (R > 0.d0) then
+         NABLA2 = NDDI + 2.d0/R*NDI
+      else
+         NABLA2 = 3.d0*NDDI
+      end if
       FK = (3.d0*PI*PI*NI)**this%OTH
       SK = SQRT(4.d0*FK/PI)
       T = NABLA/2.d0/SK/NI/G
@@ -1077,20 +1076,26 @@ contains
       if (lpot /= 0) then
          !----------------------------------------------------------------------
          !  potential
-         xsd = a4*xs/s
-         xsdd = (a4 - 1.d0)*xsd/s
-         zsd = a2*xsd/a1
-         zsdd = a2*xsdd/a1
-         ysd = a3*ys*zsd/zs
-         ysdd = (a3 - 1.d0)*ysd*zsd/zs + ysd*zsdd/zsd
-         fs = xsd/ys - xs*ysd/ys/ys
-         fs = fs/s
-         fss = xsdd/ys - 2.d0*xsd*ysd/ys/ys + 2.d0*xs*ysd*ysd/ys/ys/ys - &
-               xs*ysdd/ys/ys
-         fss = (fss - fs)/s
-         !----------------------------------------------------------------------
-         ! calculate potential
-         vx = exunif*(thrd4*fxlag - (u - thrd4*s*s*s)*fss - v*fs)
+         if (ABS(s) <= 1.d-14) then
+            ! The LAG enhancement tends to one and its gradient correction
+            ! tends to zero at a regular spherical origin.
+            vx = exunif*thrd4
+         else
+            xsd = a4*xs/s
+            xsdd = (a4 - 1.d0)*xsd/s
+            zsd = a2*xsd/a1
+            zsdd = a2*xsdd/a1
+            ysd = a3*ys*zsd/zs
+            ysdd = (a3 - 1.d0)*ysd*zsd/zs + ysd*zsdd/zsd
+            fs = xsd/ys - xs*ysd/ys/ys
+            fs = fs/s
+            fss = xsdd/ys - 2.d0*xsd*ysd/ys/ys + 2.d0*xs*ysd*ysd/ys/ys/ys - &
+                  xs*ysdd/ys/ys
+            fss = (fss - fs)/s
+            !----------------------------------------------------------------------
+            ! calculate potential
+            vx = exunif*(thrd4*fxlag - (u - thrd4*s*s*s)*fss - v*fs)
+         end if
       end if
    end subroutine exchlag
 !----------------------------------------------------------------------
@@ -1487,9 +1492,9 @@ contains
 !>--------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Wrapper to call libXC for exchange-correlation potential calculation
-   !> Handles both single functionals and exchange+correlation combinations
-   !> Properly handles GGA potentials in spherical coordinates
+   !> Pointwise libXC wrapper for LDA exchange-correlation potentials.
+   !> GGA selectors must use xcpot_libxc_gga_radial, because their
+   !> multiplicative potential contains a radial flux divergence.
    !>--------------------------------------------------------------------------
    subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       class(xc), intent(in) :: this
@@ -1500,23 +1505,18 @@ contains
 #ifdef HAVE_LIBXC
       real(rp), parameter :: TOLD = 1.d-20
       real(rp), parameter :: TOLDD = 1.d-20
-      
-      ! libXC arrays - use proper dimensions for spin treatment
-      real(rp), dimension(2) :: rho_libxc  ! For spin-polarized: [rho_up, rho_down]
-      real(rp), dimension(3) :: sigma_libxc ! For GGA: [grad_up^2, grad_up*grad_down, grad_down^2]
+
+      real(rp), dimension(2) :: rho_libxc
       real(rp), dimension(1) :: exc_libxc, exc_tmp
-      real(rp), dimension(2) :: vrho_libxc, vrho_tmp  ! Potentials for each spin
-      real(rp), dimension(3) :: vsigma_libxc, vsigma_tmp ! GGA gradient potentials
+      real(rp), dimension(2) :: vrho_libxc, vrho_tmp
       type(xc_f03_func_t) :: temp_func
-   integer :: nspin, family, i_func
-   logical :: any_gga
-      real(rp) :: laplacian_up, laplacian_dn, inv_r
-      
+      integer :: nspin, family, i_func
+
       ! Initialize outputs
       V1 = 0.0d0
-      V2 = 0.0d0  
+      V2 = 0.0d0
       EXC = 0.0d0
-      
+
       ! Check for negligible densities
       if (RHO < TOLD) then
          return
@@ -1524,11 +1524,10 @@ contains
       if (RHO1 < TOLDD .and. RHO2 < TOLDD) then
          return
       endif
-      
+
       ! Determine spin treatment - use the same as initialization
       nspin = this%libxc_nspin
-      family = this%libxc_family
-      
+
       ! Set up density arrays
       if (nspin == 2) then
          ! Spin-polarized calculation
@@ -1537,60 +1536,28 @@ contains
          rho_libxc(1) = max(RHO2, TOLDD)  ! spin-up density
          rho_libxc(2) = max(RHO1, TOLDD)  ! spin-down density
       else
-         ! Unpolarized calculation  
+         ! Unpolarized calculation
          rho_libxc(1) = max(RHO, TOLD)   ! total density
       endif
-      
-      ! Initialize accumulators
+
       exc_libxc = 0.0d0
       vrho_libxc = 0.0d0
-      vsigma_libxc = 0.0d0
-      ! LDA combinations must not enter the GGA potential branch.
-      any_gga = .false.
-      
-   ! Loop over all functionals in the array (typically 1 or 2: exchange + correlation)
-   ! Track whether any functional is a GGA so we can correctly apply gradient contributions
-   ! (any_gga declared in the declaration section)
-   do i_func = 1, size(this%libxc_func_id)
-         ! Create functional
+
+      ! This routine intentionally handles only pointwise LDA components.
+      do i_func = 1, size(this%libxc_func_id)
          call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
          family = xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func))
-         
+
          select case(family)
          case(1)  ! XC_FAMILY_LDA
             call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
-            
-            ! Accumulate contributions
             exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
             vrho_libxc = vrho_libxc + vrho_tmp
-            
-         case(2)  ! XC_FAMILY_GGA  
-            any_gga = .true.
-            ! Set up gradient arrays for spherical coordinates (ASA)
-            ! In spherical coordinates with radial symmetry: sigma = (dρ/dr)^2
-            ! RHOP(1) = d(rho_down)/dr, RHOP(2) = d(rho_up)/dr
-            if (nspin == 2) then
-               sigma_libxc(1) = RHOP(2)**2        ! |grad rho_up|^2
-               sigma_libxc(2) = RHOP(2)*RHOP(1)   ! grad rho_up · grad rho_down  
-               sigma_libxc(3) = RHOP(1)**2        ! |grad rho_down|^2
-               
-               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc, sigma_libxc, &
-                                       exc_tmp, vrho_tmp, vsigma_tmp)
-            else
-               ! Unpolarized: only one gradient component
-               ! RHOP contains gradient of each spin component, but for unpolarized
-               ! we treat it as gradient of total density
-               sigma_libxc(1) = RHOP(1)**2  ! |grad rho_total|^2 for unpolarized
-               
-               call xc_f03_gga_exc_vxc(temp_func, 1_c_size_t, rho_libxc(1:1), sigma_libxc(1:1), &
-                                       exc_tmp, vrho_tmp(1:1), vsigma_tmp(1:1))
-            endif
-            
-            ! Accumulate contributions
-            exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
-            vrho_libxc = vrho_libxc + vrho_tmp
-            vsigma_libxc = vsigma_libxc + vsigma_tmp
-            
+         case(2)  ! XC_FAMILY_GGA
+            call xc_f03_func_end(temp_func)
+            call g_logger%fatal('Pointwise libXC GGA potential requested; use the radial GGA helper.', &
+                                __FILE__, __LINE__)
+            return
          case default
             call xc_f03_func_end(temp_func)
             call g_logger%fatal('Native libXC functional family '//int2str(family)// &
@@ -1598,64 +1565,18 @@ contains
                                 __FILE__, __LINE__)
             return
          end select
-         
          call xc_f03_func_end(temp_func)
-   enddo
-      
+      enddo
+
       ! Convert libXC outputs from Hartree to Rydberg (internal units)
       exc_libxc(1) = 2.0d0 * exc_libxc(1)
       vrho_libxc = 2.0d0 * vrho_libxc
-      vsigma_libxc = 2.0d0 * vsigma_libxc
-      
-   ! Assign outputs based on whether any GGA functional was present
-   if (any_gga) then
-         ! GGA: include gradient contributions using proper spherical formula
-         ! V_XC = v_rho - 2*v_sigma*∇²ρ - (4/r)*v_sigma*(dρ/dr)
-         ! where v_sigma = ∂ε_XC/∂σ and σ = |∇ρ|² = (dρ/dr)²
-         
-         ! Handle r=0 case
-         if (RR > 1.d-10) then
-            inv_r = 1.0d0 / RR
-         else
-            inv_r = 0.0d0
-         endif
-         
-         if (nspin == 2) then
-            ! Spin-polarized GGA
-            ! Laplacian in spherical coordinates: ∇²ρ = d²ρ/dr² + (2/r)*dρ/dr
-            ! But we have RHOPP which is d²ρ/dr² already
-            laplacian_dn = RHOPP(1) + 2.0d0 * inv_r * RHOP(1)  ! ∇²ρ_down
-            laplacian_up = RHOPP(2) + 2.0d0 * inv_r * RHOP(2)  ! ∇²ρ_up
-            
-            ! V_σ↓ = v_ρ↓ - 2*v_σ↓↓*∇²ρ↓ - 2*v_σ↑↓*∇²ρ↑ - (4/r)*(v_σ↓↓*dρ↓/dr + v_σ↑↓*dρ↑/dr)
-            V1 = vrho_libxc(2) &
-                 - 2.0d0 * vsigma_libxc(3) * laplacian_dn &
-                 - 2.0d0 * vsigma_libxc(2) * laplacian_up &
-                 - 4.0d0 * inv_r * (vsigma_libxc(3) * RHOP(1) + vsigma_libxc(2) * RHOP(2))
-            
-            ! V_σ↑ = v_ρ↑ - 2*v_σ↑↑*∇²ρ↑ - 2*v_σ↑↓*∇²ρ↓ - (4/r)*(v_σ↑↑*dρ↑/dr + v_σ↑↓*dρ↓/dr)
-            V2 = vrho_libxc(1) &
-                 - 2.0d0 * vsigma_libxc(1) * laplacian_up &
-                 - 2.0d0 * vsigma_libxc(2) * laplacian_dn &
-                 - 4.0d0 * inv_r * (vsigma_libxc(1) * RHOP(2) + vsigma_libxc(2) * RHOP(1))
-         else
-            ! Unpolarized GGA
-            laplacian_up = RHOPP(1) + 2.0d0 * inv_r * RHOP(1)
-            
-            V1 = vrho_libxc(1) &
-                 - 2.0d0 * vsigma_libxc(1) * laplacian_up &
-                 - 4.0d0 * inv_r * vsigma_libxc(1) * RHOP(1)
-            V2 = V1
-         endif
+      if (nspin == 2) then
+         V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
+         V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
       else
-         ! LDA: no gradient contributions
-         if (nspin == 2) then
-            V1 = vrho_libxc(2)  ! spin-down potential (for RHO1)
-            V2 = vrho_libxc(1)  ! spin-up potential (for RHO2)
-         else
-            V1 = vrho_libxc(1)
-            V2 = vrho_libxc(1)
-         endif
+         V1 = vrho_libxc(1)
+         V2 = vrho_libxc(1)
       endif
       EXC = exc_libxc(1)
       
@@ -1664,6 +1585,141 @@ contains
       stop 'libXC not available'
 #endif
    end subroutine xcpot_libxc_wrapper
+
+   !> Evaluate a libXC GGA over the complete spherical radial mesh.
+   !>
+   !> The pointwise libXC outputs vrho and vsigma are not themselves the
+   !> multiplicative potential.  This routine constructs the radial flux
+   !> F_sigma and differentiates r**2 F_sigma over the full mesh, thereby
+   !> retaining the radial derivatives of vsigma.
+   !>
+   !> Inputs and outputs use explicit libXC channel order: up, down.  This is
+   !> deliberately different from the historical VXC0SP call order, where
+   !> RHO1/V1 are down and RHO2/V2 are up.
+   subroutine xcpot_libxc_gga_radial(this, a, b, rofi, rho_up, rho_down, drho_up, drho_down, &
+                                     v_up, v_down, exc)
+      class(xc), intent(in) :: this
+      real(rp), intent(in) :: a, b
+      real(rp), dimension(:), intent(in) :: rofi, rho_up, rho_down, drho_up, drho_down
+      real(rp), dimension(:), intent(out) :: v_up, v_down, exc
+
+#ifdef HAVE_LIBXC
+      real(rp), parameter :: TOLD = 1.d-20
+      real(rp), dimension(2) :: rho_libxc, vrho_point, vrho_tmp
+      real(rp), dimension(3) :: sigma_libxc, vsigma_point, vsigma_tmp
+      real(rp), dimension(1) :: exc_point, exc_tmp
+      real(rp), allocatable :: vrho_up(:), vrho_down(:), flux_up(:), flux_down(:)
+      real(rp), allocatable :: div_up(:), div_down(:)
+      type(xc_f03_func_t), allocatable :: funcs(:)
+      integer, allocatable :: family_ids(:)
+      integer :: i_func, ir, nr, nspin
+      logical :: any_gga
+      real(rp) :: grad_up, grad_down
+
+      nr = size(rofi)
+      if (size(rho_up) /= nr .or. size(rho_down) /= nr .or. size(drho_up) /= nr .or. &
+          size(drho_down) /= nr .or. size(v_up) /= nr .or. size(v_down) /= nr .or. size(exc) /= nr) then
+         error stop 'xcpot_libxc_gga_radial array sizes do not agree'
+      end if
+      if (.not. allocated(this%libxc_func_id)) then
+         call g_logger%fatal('Radial libXC GGA evaluation requested without active functional IDs.', &
+                             __FILE__, __LINE__)
+         v_up = 0.d0
+         v_down = 0.d0
+         exc = 0.d0
+         return
+      end if
+
+      nspin = this%libxc_nspin
+      if (nspin /= 2) then
+         call g_logger%fatal('Radial libXC GGA evaluation requires two spin channels.', __FILE__, __LINE__)
+         v_up = 0.d0
+         v_down = 0.d0
+         exc = 0.d0
+         return
+      end if
+
+      allocate (funcs(size(this%libxc_func_id)), family_ids(size(this%libxc_func_id)))
+      do i_func = 1, size(this%libxc_func_id)
+         call xc_f03_func_init(funcs(i_func), this%libxc_func_id(i_func), nspin)
+         family_ids(i_func) = xc_f03_func_info_get_family(xc_f03_func_get_info(funcs(i_func)))
+         if (family_ids(i_func) /= 1 .and. family_ids(i_func) /= 2) then
+            call g_logger%fatal('Radial libXC helper supports only LDA and GGA components.', __FILE__, __LINE__)
+            do ir = 1, i_func
+               call xc_f03_func_end(funcs(ir))
+            end do
+            v_up = 0.d0
+            v_down = 0.d0
+            exc = 0.d0
+            return
+         end if
+      end do
+
+      allocate (vrho_up(nr), vrho_down(nr), flux_up(nr), flux_down(nr), div_up(nr), div_down(nr))
+      any_gga = any(family_ids == 2)
+      if (.not. any_gga) then
+         call g_logger%fatal('Radial libXC GGA helper received no GGA component.', __FILE__, __LINE__)
+      end if
+
+      do ir = 1, nr
+         rho_libxc(1) = max(rho_up(ir), TOLD)
+         rho_libxc(2) = max(rho_down(ir), TOLD)
+         if (ir == 1) then
+            ! A regular spherical density has zero radial derivative at r=0.
+            grad_up = 0.d0
+            grad_down = 0.d0
+         else
+            grad_up = drho_up(ir)
+            grad_down = drho_down(ir)
+         end if
+         sigma_libxc(1) = grad_up*grad_up
+         sigma_libxc(2) = grad_up*grad_down
+         sigma_libxc(3) = grad_down*grad_down
+
+         exc_point = 0.d0
+         vrho_point = 0.d0
+         vsigma_point = 0.d0
+         do i_func = 1, size(funcs)
+            select case (family_ids(i_func))
+            case (1)
+               call xc_f03_lda_exc_vxc(funcs(i_func), 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
+               exc_point(1) = exc_point(1) + exc_tmp(1)
+               vrho_point = vrho_point + vrho_tmp
+            case (2)
+               call xc_f03_gga_exc_vxc(funcs(i_func), 1_c_size_t, rho_libxc, sigma_libxc, &
+                                       exc_tmp, vrho_tmp, vsigma_tmp)
+               exc_point(1) = exc_point(1) + exc_tmp(1)
+               vrho_point = vrho_point + vrho_tmp
+               vsigma_point = vsigma_point + vsigma_tmp
+            end select
+         end do
+
+         ! libXC is Hartree-valued.  Convert after the radial functional
+         ! derivative is assembled; the flux remains an explicitly auditable
+         ! representation of 2*vsigma_uu*d n_up/dr + vsigma_ud*d n_down/dr,
+         ! etc.
+         vrho_up(ir) = vrho_point(1)
+         vrho_down(ir) = vrho_point(2)
+         flux_up(ir) = 2.d0*vsigma_point(1)*grad_up + vsigma_point(2)*grad_down
+         flux_down(ir) = 2.d0*vsigma_point(3)*grad_down + vsigma_point(2)*grad_up
+         exc(ir) = 2.d0*exc_point(1)
+      end do
+
+      call radial_flux_divergence(a, b, rofi, flux_up, div_up)
+      call radial_flux_divergence(a, b, rofi, flux_down, div_down)
+      v_up = 2.d0*(vrho_up - div_up)
+      v_down = 2.d0*(vrho_down - div_down)
+
+      do i_func = 1, size(funcs)
+         call xc_f03_func_end(funcs(i_func))
+      end do
+#else
+      call g_logger%error('libXC not available - cannot use radial libXC GGA evaluation', __FILE__, __LINE__)
+      v_up = 0.d0
+      v_down = 0.d0
+      exc = 0.d0
+#endif
+   end subroutine xcpot_libxc_gga_radial
 
    ! DESCRIPTION:
    subroutine destructor(this)
