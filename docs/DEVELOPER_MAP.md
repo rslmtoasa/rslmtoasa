@@ -89,6 +89,25 @@ calculation%pre_processing_bravais / _buildsurf / _newclubulk / _newclusurf
        -> charge.f90 / mix.f90    (charge transfer, mixing, convergence check)
 ```
 
+### GBT SCF frame contract (WP12)
+
+`self%run_dos()` has two density producers: the real-space Green-function
+route and the optional reciprocal eigenvector route. Both feed the shared
+rotating-frame density contract before radial up/down projection. At the
+magnetic-state boundary, `density_policy='constrained_spiral'` keeps
+`potential%mom` as a fixed frame marker; only charge and longitudinal radial
+channels are mixed, while the measured transverse vector remains a residual
+for the constraint controller. `relaxed_reference` retains full Cartesian
+mixing for ordinary SCF but is explicitly unsupported with `gbt_single_q`
+until a moving-reference GBT Hamiltonian contract is audited.
+
+Set `gbt_scf_diagnostics = .true.` in `&control` to emit
+`gbt_scf_diagnostics.dat`. Each row joins incoming frame/moment/radial
+channels, the solver-frame density matrix and moment, target/field,
+magnetic-mixer state, next radial channels and marker, exchange parameters,
+physical energy, and separated constraint diagnostics. The trace is opt-in
+and does not alter the equations.
+
 ### k-space (reciprocal)
 ```text
 post_processing_band_structure / _density_of_states

@@ -1346,7 +1346,7 @@ contains
       ! ==============================================================
       case (101)  ! von Barth–Hedin (LDA)
          allocate(this%libxc_func_id(2))
-         this%libxc_func_id = [1, 11]
+         this%libxc_func_id = [1, 17]
          
       case (102)  ! Slater exchange + Gaspari correlation (use closest)
          allocate(this%libxc_func_id(2))

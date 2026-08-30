@@ -802,6 +802,27 @@ afterwards, against the axis this policy resolves.
 (``accumulate_spin_density_rs``, ``resolve_density_axes``),
 ``source/reciprocal_spin_density.f90``
 
+gbt_scf_diagnostics (WP12)
+--------------------------
+
+**Type:** Logical
+
+**Default:** ``.false.``
+
+**Purpose:** Emit ``gbt_scf_diagnostics.dat`` with one row per site and SCF
+iteration. The record joins the incoming frame/moment and radial channels,
+the eigenstate density-matrix components and moment, constraint target/field,
+magnetic mixer inputs/outputs, next radial channels and ``potential%mom``,
+Hamiltonian exchange markers, physical DFT energy, and separate constraint
+diagnostics. In ``gbt_single_q`` the density-matrix components and moments are
+reported in the primitive rotating frame; ordinary SCF rows use the active
+solver frame.
+
+This is an audit trace and is off by default because it performs file I/O.
+It does not change the SCF equations.
+
+**Related code:** ``source/self.f90``
+
 hyperfine
 ---------
 

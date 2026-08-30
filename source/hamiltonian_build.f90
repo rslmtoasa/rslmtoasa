@@ -1604,7 +1604,7 @@ contains
          'periodic_nc, which has no spiral wavevector -- q_ss would be silently '// &
          'ignored and every q would return the same collinear answer. Select '// &
          'magnetic_representation=gbt_single_q (single-q spiral/cone through the '// &
-         'bond gauge; needs nsp=3 and no SOC), or magnetic_representation='// &
+         'bond gauge; requires scalar-relativistic nsp=1 or nsp=3 and no SOC), or magnetic_representation='// &
          'explicit_texture (real-space spiral carried by the cluster), or remove '// &
          'q_ss for an ordinary non-spiral calculation.', __FILE__, __LINE__)
    end subroutine validate_spiral_keys_are_consumed
@@ -1754,8 +1754,9 @@ contains
 
    !> @brief Build a noncollinear spin-orbital hopping block from orbital data.
    !> @details Lifts an orbital hopping/structure block hhh into the spin-orbital
-   !>          basis using the local moments of atom sites ia and ja, including
-   !>          spin-spiral phase handling where enabled.
+   !>          basis using the local moments of atom sites ia and ja. This is the
+   !>          ordinary q-agnostic NC/texture path; gbt_single_q is dispatched
+   !>          separately by build_bulkham and must not enter this routine.
    !> @param[inout] this Hamiltonian object containing magnetic moment state.
    !> @param[in] ia Site index of the source atom.
    !> @param[in] ja Site index of the neighbor atom.

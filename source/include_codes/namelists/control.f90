@@ -10,6 +10,7 @@ character(len=sl) :: cpu_reconstruction_precision
 logical :: gpu_moment_download
 character(len=sl) :: linear_in, linear_out
 character(len=sl) :: density_policy
+logical :: gbt_scf_diagnostics
 ! Constraints are provided in a separate namelist file `constraints.f90`
 
 namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
@@ -18,4 +19,4 @@ namelist /control/ recur, lld, llsp, nlim, npold, nsp, &
    concb, ruban, do_comom, hyperfine, sym_term, cpp_plugin, gpu_plugin, gpu_backend, gpu_precision, gpu_moment_download, cheb_backend, &
    gpu_stochastic_block, cpu_reconstruction_precision, &
    random_vec_num, cond_ll, cond_type, cond_calctype, linear_in, linear_out, lmax, &
-   dipole_electrostatics, dipole_mix, density_policy
+   dipole_electrostatics, dipole_mix, density_policy, gbt_scf_diagnostics

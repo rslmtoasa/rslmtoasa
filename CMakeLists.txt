@@ -567,6 +567,14 @@ set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" T
   set_tests_properties(Val20GbtSmallQ PROPERTIES
     LABELS "validation;functional;magnetic;gbt;wp10;small-q;quadratic;convergence"
     TIMEOUT 14400)
+
+  add_test(NAME Val21GbtWp12Scf
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val21_gbt_wp12_scf.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val21_gbt_wp12_scf")
+  set_tests_properties(Val21GbtWp12Scf PROPERTIES
+    LABELS "validation;functional;magnetic;gbt;wp12;scf;frame"
+    TIMEOUT 1800)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
@@ -697,6 +705,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME GbtWp10SmallQ
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_small_q.py)
   set_tests_properties(GbtWp10SmallQ PROPERTIES LABELS "unit;gbt;wp10;frozen-magnon;small-q;quadratic;q-reversal")
+  add_test(NAME GbtWp11LkagJq
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp11_lkag_jq.py)
+  set_tests_properties(GbtWp11LkagJq PROPERTIES LABELS "unit;gbt;wp11;frozen-magnon;lkag;jq")
   add_test(NAME CudaPluginSurface
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/cuda/test_plugin_surface.py)
   set_tests_properties(CudaPluginSurface PROPERTIES LABELS "unit;cuda;gpu;coverage;source-contract")
@@ -853,6 +864,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp10SourceContract
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_source_contract.py)
   set_tests_properties(UnitGbtWp10SourceContract PROPERTIES LABELS "tooling;gbt;wp10")
+  add_test(NAME UnitGbtWp12ScfSourceContract
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp12_scf_source.py)
+  set_tests_properties(UnitGbtWp12ScfSourceContract PROPERTIES LABELS "tooling;gbt;wp12;scf")
   add_test(NAME UnitGbtWp6Hoh
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
   set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")

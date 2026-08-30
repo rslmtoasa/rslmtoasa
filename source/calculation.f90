@@ -2799,10 +2799,15 @@ contains
          if (use_kspace) then
             call recip_obj%build_kspace_hamiltonian()
             call recip_obj%diagonalize_hamiltonian()
-            ! MFT must not depend on DOS window/grid/projections.  This solves
-            ! EF from the target electron count and uses exactly those Fermi
-            ! occupations in sum_k,n w_k f_nk epsilon_nk.
-            e_band = recip_obj%calculate_canonical_band_energy(find_fermi=.true.)
+            ! MFT must not depend on DOS window/grid/projections.  Seed the
+            ! reciprocal occupation evaluator from the converged SCF EF and
+            ! let the reciprocal namelist decide whether EF is re-solved from
+            ! the target electron count.  The previous unconditional
+            ! find_fermi=.true. made auto_find_fermi=.false. ineffective on
+            ! this force-theorem path and silently changed the occupation
+            ! contract at every q.
+            recip_obj%fermi_level = energy_obj%fermi
+            e_band = recip_obj%calculate_canonical_band_energy()
          else
             select case (ctl%recur)
             case ('block')

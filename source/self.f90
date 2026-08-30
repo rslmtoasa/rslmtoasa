@@ -40,6 +40,7 @@ module self_mod
    use energy_mod
    use hamiltonian_mod
    use magnetic_representation_mod, only: gbt_single_q
+   use spin_density_mod, only: sd_constrained_spiral, sd_relaxed_reference
    use mix_mod
    use reciprocal_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
@@ -107,6 +108,11 @@ module self_mod
       integer :: constraint_iteration
       !> True after the optional machine-readable file has received its header.
       logical :: constraint_diagnostics_header_written
+      !> True after the optional WP12 SCF trace has received its header.
+      logical :: gbt_scf_diagnostics_header_written
+      !> Measured moment entering the current SCF iteration.  `mix%mag_old`
+      !> intentionally stores the frame marker, not this physical vector.
+      real(rp), dimension(:, :), allocatable :: gbt_scf_in_moment
       !> L1 checksum of the ordinary potential used by a fixed-potential pass.
       real(rp) :: fixed_potential_checksum = 0.0_rp
       !> Maximum ordinary-potential drift after restoration in the most recent
@@ -291,7 +297,10 @@ module self_mod
       procedure :: refresh_xc_response_kernel
       procedure :: is_converged
       procedure, private :: initialize_constraint_state
+      procedure, private :: initialize_gbt_scf_diagnostics
       procedure, private :: apply_constraints
+      procedure, private :: mix_magnetic_state
+      procedure, private :: write_gbt_scf_diagnostics
       procedure, private :: run_scf
       procedure, private :: atomsc
       procedure, private :: ftype
@@ -408,6 +417,8 @@ contains
       if (allocated(this%mixmag)) deallocate (this%mixmag)
       if (allocated(this%rb)) deallocate (this%rb)
 #endif
+      if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
+      if (allocated(this%gbt_scf_in_moment)) deallocate(this%gbt_scf_in_moment)
       if (allocated(this%reciprocal_scf_cache)) deallocate(this%reciprocal_scf_cache)
    end subroutine destructor
 
@@ -558,8 +569,41 @@ contains
                                 this%control%constraints_diagnostics)
             call this%initialize_constraint_state()
          end if
+         if (this%control%gbt_scf_diagnostics) call this%initialize_gbt_scf_diagnostics()
+      end if
+      if (associated(this%hamiltonian) .and. associated(this%control)) then
+         if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
+             trim(this%control%density_policy) == sd_relaxed_reference) then
+            call g_logger%fatal('gbt_single_q with density_policy="relaxed_reference" is unsupported: '// &
+                                'the GBT Hamiltonian requires a fixed rotating-frame reference axis.', &
+                                __FILE__, __LINE__)
+         end if
       end if
    end subroutine build_from_file
+
+   !> Initialize the opt-in WP12 end-to-end SCF trace.
+   !> The trace is one row per site and iteration, assembled after the radial
+   !> update so old density, newly accumulated density, mixer state, next
+   !> radial channels, Hamiltonian exchange, and separated energies are visible
+   !> in a single record.
+   subroutine initialize_gbt_scf_diagnostics(this)
+      class(self), intent(inout) :: this
+      integer :: unit, io_status
+
+      this%gbt_scf_diagnostics_header_written = .false.
+      if (rank /= 0) return
+      open(newunit=unit, file='gbt_scf_diagnostics.dat', status='replace', action='write', iostat=io_status)
+      if (io_status /= 0) then
+         call g_logger%warning('Could not open gbt_scf_diagnostics.dat; WP12 trace disabled for this run.', &
+                               __FILE__, __LINE__)
+         return
+      end if
+      write(unit, '(a)') '# frame=GBT rotating primitive frame for gbt_single_q; ordinary active frame otherwise; energies=Ry'
+      write(unit, '(a)') '# one row per site and SCF iteration; radial columns are summed l-channel ql(1,:,spin) values'
+      write(unit, '(a)') '# iteration site policy representation in_frame_x in_frame_y in_frame_z in_moment_x in_moment_y in_moment_z incoming_magnitude in_ql_up in_ql_dn output_moment_x output_moment_y output_moment_z output_magnitude output_charge rho_uu rho_dd rho_ud_re rho_ud_im output_ql_up output_ql_dn projection_axis_x projection_axis_y projection_axis_z longitudinal_moment transverse_magnitude mixer_old_x mixer_old_y mixer_old_z mixer_new_x mixer_new_y mixer_new_z mixer_mix_x mixer_mix_y mixer_mix_z next_ql_up next_ql_dn next_potential_mom_x next_potential_mom_y next_potential_mom_z exchange_c0 exchange_w0 target_x target_y target_z field_x field_y field_z physical_total_energy constraint_penalty_energy constraint_field_coupling_energy constraint_metric'
+      close(unit)
+      this%gbt_scf_diagnostics_header_written = .true.
+   end subroutine initialize_gbt_scf_diagnostics
 
    !> Capture the fixed reference directions and the optional initial field.
    !> The state is stored on the same symbolic atoms consumed by the RS and
@@ -574,6 +618,9 @@ contains
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       allocate(this%constraint_reference(3, this%lattice%nrec))
       this%constraint_reference = 0.0_rp
+      if (allocated(this%gbt_scf_in_moment)) deallocate(this%gbt_scf_in_moment)
+      allocate(this%gbt_scf_in_moment(3, this%lattice%nrec))
+      this%gbt_scf_in_moment = 0.0_rp
       do ia = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + ia
          if (allocated(this%control%constraints_mom_ref) .and. &
@@ -614,6 +661,7 @@ contains
       this%constraint_converged = .false.
       this%constraint_iteration = 0
       this%constraint_diagnostics_header_written = .false.
+      this%gbt_scf_diagnostics_header_written = .false.
       if (this%control%constraints_diagnostics .and. rank == 0) then
          open(newunit=unit, file='constraint_diagnostics.dat', status='replace', action='write', iostat=io_status)
          if (io_status == 0) then
@@ -624,6 +672,135 @@ contains
          end if
       end if
    end subroutine initialize_constraint_state
+
+   !> Write one complete WP12 SCF record per self-consistent site.
+   !> `mix%qia_old` and `mix%qia_new` retain the radial channels entering and
+   !> leaving the density step, while the current potential contains the
+   !> channels that will enter the next Hamiltonian after `run_scf`.
+   subroutine write_gbt_scf_diagnostics(this, iteration)
+      class(self), intent(in) :: this
+      integer, intent(in) :: iteration
+
+      integer :: ia, plusbulk, lcount, unit, io_status
+      real(rp) :: in_ql_up, in_ql_dn, out_ql_up, out_ql_dn
+      real(rp) :: next_ql_up, next_ql_dn, in_moment(3), out_moment(3)
+      real(rp) :: in_frame(3), target(3), axis(3), field(3), next_mom(3)
+      real(rp) :: longitudinal, transverse, exchange_c0, exchange_w0, axis_norm
+      real(rp) :: output_magnitude, incoming_magnitude, output_charge
+      complex(rp) :: rho_uu, rho_dd, rho_ud
+
+      if (.not. this%control%gbt_scf_diagnostics .or. rank /= 0) return
+      if (.not. this%gbt_scf_diagnostics_header_written) return
+
+      open(newunit=unit, file='gbt_scf_diagnostics.dat', status='unknown', action='write', &
+           position='append', iostat=io_status)
+      if (io_status /= 0) return
+
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         lcount = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
+         in_frame(:) = this%mix%mag_old(ia, :)
+         if (sqrt(sum(in_frame(:)**2)) <= tiny(1.0_rp)) in_frame(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         in_moment(:) = this%gbt_scf_in_moment(:, ia)
+         incoming_magnitude = sqrt(sum(in_moment(:)**2))
+         out_moment(:) = this%symbolic_atom(plusbulk)%potential%mom0(:)
+         output_magnitude = this%symbolic_atom(plusbulk)%potential%mtot
+
+         target(:) = this%symbolic_atom(plusbulk)%constraint_target(:)
+         if (sqrt(sum(target(:)**2)) <= tiny(1.0_rp)) target(:) = in_frame(:)
+         axis_norm = sqrt(sum(target(:)**2))
+         if (axis_norm <= tiny(1.0_rp)) then
+            axis(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+         else
+            axis(:) = target(:)/axis_norm
+         end if
+         longitudinal = sum(out_moment(:)*axis(:))
+         transverse = sqrt(max(sum(out_moment(:)**2) - longitudinal*longitudinal, 0.0_rp))
+         field(:) = this%symbolic_atom(plusbulk)%mag_cfield(:)
+         next_mom(:) = this%symbolic_atom(plusbulk)%potential%mom(:)
+
+         in_ql_up = sum(this%mix%qia_old(ia, 1:lcount))
+         in_ql_dn = sum(this%mix%qia_old(ia, lcount + 1:2*lcount))
+         out_ql_up = sum(this%mix%qia_new(ia, 1:lcount))
+         out_ql_dn = sum(this%mix%qia_new(ia, lcount + 1:2*lcount))
+         output_charge = out_ql_up + out_ql_dn
+         next_ql_up = sum(this%symbolic_atom(plusbulk)%potential%ql(1, 0:this%symbolic_atom(plusbulk)%potential%lmax, 1))
+         next_ql_dn = sum(this%symbolic_atom(plusbulk)%potential%ql(1, 0:this%symbolic_atom(plusbulk)%potential%lmax, 2))
+
+         exchange_c0 = 0.0_rp
+         exchange_w0 = 0.0_rp
+         if (allocated(this%symbolic_atom(plusbulk)%potential%cx1)) exchange_c0 = real(this%symbolic_atom(plusbulk)%potential%cx1(1), rp)
+         if (allocated(this%symbolic_atom(plusbulk)%potential%wx1)) exchange_w0 = real(this%symbolic_atom(plusbulk)%potential%wx1(1), rp)
+
+         rho_uu = (0.0_rp, 0.0_rp)
+         rho_dd = (0.0_rp, 0.0_rp)
+         rho_ud = (0.0_rp, 0.0_rp)
+         if (this%use_kspace) then
+            if (allocated(this%reciprocal_scf_cache)) then
+               if (allocated(this%reciprocal_scf_cache%rf_density%rho)) then
+                  rho_uu = sum(this%reciprocal_scf_cache%rf_density%rho(1, 1, :, ia, 1))
+                  rho_dd = sum(this%reciprocal_scf_cache%rf_density%rho(2, 2, :, ia, 1))
+                  rho_ud = sum(this%reciprocal_scf_cache%rf_density%rho(1, 2, :, ia, 1))
+               end if
+            end if
+         else if (allocated(this%bands%rf_density%rho)) then
+            rho_uu = sum(this%bands%rf_density%rho(1, 1, :, ia, 1))
+            rho_dd = sum(this%bands%rf_density%rho(2, 2, :, ia, 1))
+            rho_ud = sum(this%bands%rf_density%rho(1, 2, :, ia, 1))
+         end if
+
+         write(unit, '(2i8,1x,a,1x,a,51(1x,es20.12))') iteration, ia, &
+            trim(this%control%density_policy), trim(this%hamiltonian%magnetic_representation), &
+            in_frame(:), in_moment(:), incoming_magnitude, in_ql_up, in_ql_dn, out_moment(:), output_magnitude, &
+            output_charge, real(rho_uu, rp), real(rho_dd, rp), real(rho_ud, rp), aimag(rho_ud), &
+            out_ql_up, out_ql_dn, axis(:), longitudinal, transverse, this%mix%mag_old(ia, :), &
+            this%mix%mag_new(ia, :), this%mix%mag_mix(ia, :), next_ql_up, next_ql_dn, next_mom(:), &
+            exchange_c0, exchange_w0, target(:), field(:), this%physical_total_energy, &
+            this%constraint_penalty_energy, this%constraint_field_coupling_energy, this%constraint_metric
+      end do
+      close(unit)
+   end subroutine write_gbt_scf_diagnostics
+
+   !> Apply the SCF magnetic-state contract at the mixer boundary.
+   !> Under `constrained_spiral`, `mag_mix` is only a frame marker.  The
+   !> longitudinal magnitude is carried by the mixed radial ql channels; the
+   !> transverse output remains the measured residual and never rotates the
+   !> reference used by the next Hamiltonian/density projection.  The legacy
+   !> Cartesian mixer remains the explicit `relaxed_reference` behavior.
+   subroutine mix_magnetic_state(this)
+      class(self), intent(inout) :: this
+      integer :: ia, plusbulk
+      real(rp) :: axis(3), axis_norm
+
+      if (trim(this%control%density_policy) == sd_constrained_spiral) then
+         do ia = 1, this%lattice%nrec
+            plusbulk = this%lattice%nbulk + ia
+            axis(:) = this%mix%mag_old(ia, :)
+            if (allocated(this%constraint_reference)) then
+               if (sqrt(sum(this%constraint_reference(:, ia)**2)) > tiny(1.0_rp)) then
+                  axis(:) = this%constraint_reference(:, ia)
+               end if
+            end if
+            axis_norm = sqrt(sum(axis(:)**2))
+            if (axis_norm <= tiny(1.0_rp)) axis(:) = [0.0_rp, 0.0_rp, 1.0_rp]
+            if (axis_norm > tiny(1.0_rp)) axis(:) = axis(:)/axis_norm
+            this%mix%mag_mix(ia, :) = axis(:)
+            ! Keep this assignment explicit: `potential%mom` is the marker
+            ! consumed by the Hamiltonian, not the transverse measured moment.
+            this%symbolic_atom(plusbulk)%potential%mom(:) = axis(:)
+         end do
+      else if (trim(this%control%density_policy) == sd_relaxed_reference) then
+         call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, &
+                                            this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+         do ia = 1, this%lattice%nrec
+            plusbulk = this%lattice%nbulk + ia
+            this%symbolic_atom(plusbulk)%potential%mom(:) = this%mix%mag_mix(ia, :)
+         end do
+      else
+         call g_logger%fatal('Unknown density policy at SCF magnetic mixing boundary: '// &
+                             trim(this%control%density_policy), __FILE__, __LINE__)
+      end if
+   end subroutine mix_magnetic_state
 
    !> Compute the next constraining field from the mixed moments and retain it
    !> on the symbolic atoms for the next Hamiltonian rebuild.
@@ -674,7 +851,13 @@ contains
          this%symbolic_atom(plusbulk)%constraint_actual = mom_in(:, ia)
          if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
             marker_sign = 1.0_rp
-            if (mom_in(3, ia) < 0.0_rp) marker_sign = -1.0_rp
+            ! In the fixed-axis policy the GBT marker follows the target
+            ! reference, never the measured transverse/longitudinal output.
+            if (trim(this%control%density_policy) == sd_constrained_spiral) then
+               if (this%constraint_reference(3, ia) < 0.0_rp) marker_sign = -1.0_rp
+            else if (mom_in(3, ia) < 0.0_rp) then
+               marker_sign = -1.0_rp
+            end if
             this%symbolic_atom(plusbulk)%potential%mom(:) = [0.0_rp, 0.0_rp, marker_sign]
          end if
       end do
@@ -778,6 +961,9 @@ contains
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       allocate(this%constraint_reference(3, this%lattice%nrec))
       this%constraint_reference = 0.0_rp
+      if (allocated(this%gbt_scf_in_moment)) deallocate(this%gbt_scf_in_moment)
+      allocate(this%gbt_scf_in_moment(3, this%lattice%nrec))
+      this%gbt_scf_in_moment = 0.0_rp
       this%physical_total_energy = 0.0_rp
       this%constraint_penalty_energy = 0.0_rp
       this%constraint_field_coupling_energy = 0.0_rp
@@ -787,6 +973,7 @@ contains
       this%constraint_converged = .false.
       this%constraint_iteration = 0
       this%constraint_diagnostics_header_written = .false.
+      this%gbt_scf_diagnostics_header_written = .false.
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -1022,13 +1209,24 @@ contains
          !=========================================================================
          do ia = 1, this%lattice%nrec
             plusbulk = this%lattice%nbulk + ia
-            if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
-                norm2(this%symbolic_atom(plusbulk)%constraint_actual) > tiny(1.0_rp)) then
-               this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%constraint_actual(:) / &
-                                         norm2(this%symbolic_atom(plusbulk)%constraint_actual)
+            if (trim(this%control%density_policy) == sd_constrained_spiral) then
+               if (allocated(this%constraint_reference) .and. &
+                   sqrt(sum(this%constraint_reference(:, ia)**2)) > tiny(1.0_rp)) then
+                  this%mix%mag_old(ia, :) = this%constraint_reference(:, ia) / &
+                                            sqrt(sum(this%constraint_reference(:, ia)**2))
+               else
+                  this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%potential%mom(:)
+               end if
             else
-               this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%potential%mom(:)
+               if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
+                   norm2(this%symbolic_atom(plusbulk)%constraint_actual) > tiny(1.0_rp)) then
+                  this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%constraint_actual(:) / &
+                                            norm2(this%symbolic_atom(plusbulk)%constraint_actual)
+               else
+                  this%mix%mag_old(ia, :) = this%symbolic_atom(plusbulk)%potential%mom(:)
+               end if
             end if
+            this%gbt_scf_in_moment(:, ia) = this%symbolic_atom(plusbulk)%potential%mom0(:)
          end do
    
          !=========================================================================
@@ -1086,6 +1284,7 @@ contains
          call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         call this%write_gbt_scf_diagnostics(i)
          total_energy = this%physical_total_energy
          magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
          call g_scf_benchmark_profile%finish_iteration(this%mix%delta, total_energy, this%en%fermi, magnetic_moment)
@@ -1450,7 +1649,7 @@ contains
                            this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
                         end do
 
-                        call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+                        call this%mix_magnetic_state()
 
                         do ia = 1, this%lattice%nrec
                            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)
@@ -1521,7 +1720,7 @@ contains
          this%mix%mag_new(ia, :) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:)
       end do
    
-      call this%mix%mix_magnetic_moments(this%mix%mag_old, this%mix%mag_new, this%mix%mag_mix, this%symbolic_atom(:)%potential%mtot)
+      call this%mix_magnetic_state()
    
       do ia = 1, this%lattice%nrec
          this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = this%mix%mag_mix(ia, :)

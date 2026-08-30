@@ -837,7 +837,7 @@ contains
             if (this%lattice%a_cart_inv_ready) then
                ! a_cart_inv expects input in units of alat, so divide by alat
                this%ham_vec_type_direct(:, nn_max_loc, ntype) = &
-                  matmul(this%lattice%a_cart_inv, this%ham_vec_type(:, nn_max_loc, ntype) ) !/ this%lattice%alat
+                  matmul(this%lattice%a_cart_inv, this%ham_vec_type(:, nn_max_loc, ntype) / this%lattice%alat)
             else
                ! Fallback: use inverse of lattice vectors directly.
                this%ham_vec_type_direct(:, nn_max_loc, ntype) = &

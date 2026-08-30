@@ -230,6 +230,10 @@ module control_mod
       !>
       !> Default: 'constrained_spiral'.
       character(len=30) :: density_policy
+      !> Emit one machine-readable per-site record for every SCF iteration.
+      !> The trace is intended for the WP12 frame/closure audit and is off by
+      !> default because it performs additional file I/O.
+      logical :: gbt_scf_diagnostics
 
       integer :: txc ! xcdata
       logical :: blockrec ! common_defs
@@ -364,6 +368,7 @@ contains
       linear_out = this%linear_out
       cond_calctype = this%cond_calctype
       density_policy = this%density_policy
+      gbt_scf_diagnostics = this%gbt_scf_diagnostics
       ! Save previous constraints values
       constraints_enable = this%constraints_enable
       constraints_i_cons = this%constraints_i_cons
@@ -434,6 +439,7 @@ contains
       this%linear_out = linear_out
       this%cond_calctype = cond_calctype
       this%density_policy = trim(adjustl(density_policy))
+      this%gbt_scf_diagnostics = gbt_scf_diagnostics
 
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
@@ -538,6 +544,7 @@ contains
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
       this%density_policy = 'constrained_spiral'
+      this%gbt_scf_diagnostics = .false.
       ! default constraints settings
       this%constraints_enable = .false.
       this%constraints_i_cons = 0
@@ -581,6 +588,8 @@ contains
       dipole_electrostatics = this%dipole_electrostatics
       dipole_mix = this%dipole_mix
       sym_term = this%sym_term
+      density_policy = this%density_policy
+      gbt_scf_diagnostics = this%gbt_scf_diagnostics
       txc = this%txc
       blockrec = this%blockrec
       partype = this%partype
@@ -668,6 +677,8 @@ contains
       call nml%add('cpu_reconstruction_precision', this%cpu_reconstruction_precision)
       call nml%add('ruban', this%ruban)
       call nml%add('do_comom', this%do_comom)
+      call nml%add('density_policy', this%density_policy)
+      call nml%add('gbt_scf_diagnostics', this%gbt_scf_diagnostics)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
