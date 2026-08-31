@@ -306,7 +306,7 @@ contains
                                 ' is outside the defined XC selector namespaces', __FILE__, __LINE__)
          else
             ! Unknown legacy functional
-            if (ctrl%nsp == 2) call g_logger%fatal(' SETXCP:** IXC = '//int2str(obj%txc)//' not implemented', __FILE__, __LINE__)
+            call g_logger%fatal(' SETXCP:** IXC = '//int2str(obj%txc)//' not implemented', __FILE__, __LINE__)
          endif
       end select
       
@@ -636,6 +636,12 @@ contains
       !     Correlation energy and potential
       !
       NI = N(1) + N(2)
+      if (NI <= 0.d0) then
+         EXC = 0.d0
+         MUXC1 = 0.d0
+         MUXC2 = 0.d0
+         return
+      endif
       EC = 0.d0
       VCUP = 0.d0
       DVCUP = 0.d0
@@ -1001,6 +1007,12 @@ contains
       !     Correlation energy and potential
       !
       NI = N(1) + N(2)
+      if (NI <= 0.d0) then
+         EXC = 0.d0
+         MUXC1 = 0.d0
+         MUXC2 = 0.d0
+         return
+      endif
       EC = 0.d0
       VCUP = 0.d0
       DVCUP = 0.d0

@@ -71,6 +71,7 @@ program test_legacy_pbe_gga
          call require(error_value < 2.e-4_rp, 'legacy PBE gradient path passes fixed-density derivative test')
       end if
    end do
+   call check_zero_density()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -79,6 +80,30 @@ program test_legacy_pbe_gga
    write (*, '(a)') 'RESULT: PASS'
 
 contains
+
+   subroutine check_zero_density()
+      type(control) :: zero_ctl
+      type(xc) :: zero_functional
+      real(rp) :: n(2), nd(2), ndd(2), zero_exc, zero_down, zero_up
+
+      n = 0.0_rp
+      nd = [0.25_rp, -0.15_rp]
+      ndd = [0.4_rp, -0.2_rp]
+      call zero_ctl%restore_to_default()
+      zero_ctl%nsp = 2
+
+      zero_ctl%txc = 8
+      zero_functional = xc(zero_ctl)
+      call zero_functional%PBEGGA(1, 1, n, nd, ndd, 0.0_rp, zero_exc, zero_down, zero_up)
+      call require(zero_exc == 0.0_rp .and. zero_down == 0.0_rp .and. zero_up == 0.0_rp, &
+         'legacy PBE returns zero for zero total density')
+
+      zero_ctl%txc = 9
+      zero_functional = xc(zero_ctl)
+      call zero_functional%LAGGGA(1, 1, n, nd, ndd, 0.0_rp, zero_exc, zero_down, zero_up)
+      call require(zero_exc == 0.0_rp .and. zero_down == 0.0_rp .and. zero_up == 0.0_rp, &
+         'legacy LAG returns zero for zero total density')
+   end subroutine check_zero_density
 
    subroutine evaluate(functional, rho_up, rho_down, drho_up, drho_down, d2rho_up, d2rho_down, &
                        v_up, v_down, exc)

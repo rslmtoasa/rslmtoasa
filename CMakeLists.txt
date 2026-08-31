@@ -610,6 +610,10 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitGreenLifecycle PROPERTIES LABELS "unit;green;lifecycle")
   add_fortran_unit_test(UnitXcSelectorSemantics ${TestDIR}/unit/test_xc_selector_semantics.f90)
   set_tests_properties(UnitXcSelectorSemantics PROPERTIES LABELS "unit;xc;selector;libxc")
+  add_fortran_unit_test(UnitXcUnknownSelectorRequiresFatal ${TestDIR}/unit/test_xc_unknown_selector_requires_fatal.f90)
+  set_tests_properties(UnitXcUnknownSelectorRequiresFatal PROPERTIES
+    LABELS "unit;xc;selector;negative;unsupported"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitXcLdaLegacyKernel ${TestDIR}/unit/test_xc_lda_legacy_kernel.f90)
   set_tests_properties(UnitXcLdaLegacyKernel PROPERTIES LABELS "unit;xc;lda;legacy;polarization")
   add_fortran_unit_test(UnitRadialGga ${TestDIR}/unit/test_radial_gga.f90)

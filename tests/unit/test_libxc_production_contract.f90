@@ -26,6 +26,7 @@ program test_libxc_production_contract
    call check_lda_grid_and_exchange_oracle()
    call check_spin_and_units()
    call check_gga_routes_and_components()
+   call check_gga_polarization_and_tail()
    call check_density_floor_and_zero_density()
    call check_object_lifecycle()
 
@@ -311,6 +312,72 @@ contains
          vup, vdown, exc, zero, expected_vup, expected_vdown, expected_exc, expected_flux_up, &
          expected_flux_down, expected_div_up, expected_div_down)
    end subroutine check_gga_routes_and_components
+
+   subroutine check_gga_polarization_and_tail()
+      integer, parameter :: nr = 32
+      real(rp), parameter :: a = log(1.0_rp + 3.0_rp/0.02_rp)/real(nr - 1, rp)
+      real(rp), parameter :: b = 0.02_rp
+      real(rp), parameter :: zeta_values(5) = [0.0_rp, 0.5_rp, 0.9_rp, 0.99_rp, 1.0_rp]
+      type(control) :: ctl
+      type(xc) :: functional
+      real(rp), allocatable :: rofi(:), rho_up(:), rho_down(:), zero(:), vup(:), vdown(:), exc(:)
+      real(rp) :: rho(2), sigma(3), direct_exc(1), direct_vrho(2), direct_vsigma(3)
+      real(rp) :: total_density, zeta, expected_up, expected_down, expected_exc
+      integer :: ir, iz
+
+      allocate(rofi(nr), rho_up(nr), rho_down(nr), zero(nr), vup(nr), vdown(nr), exc(nr))
+      do ir = 1, nr
+         rofi(ir) = b*(exp(a*real(ir - 1, rp)) - 1.0_rp)
+      end do
+      zero = 0.0_rp
+
+      call ctl%restore_to_default()
+      ctl%nsp = 2
+      ctl%txc = 108
+      functional = xc(ctl)
+      total_density = 0.6_rp
+      do iz = 1, size(zeta_values)
+         zeta = zeta_values(iz)
+         rho_up = 0.5_rp*total_density*(1.0_rp + zeta)
+         rho_down = 0.5_rp*total_density*(1.0_rp - zeta)
+         call functional%xcpot_libxc_gga_radial(a, b, rofi, rho_up, rho_down, zero, zero, vup, vdown, exc)
+         rho = [max(rho_up(1), LIBXC_DENSITY_FLOOR), max(rho_down(1), LIBXC_DENSITY_FLOOR)]
+         sigma = 0.0_rp
+         call direct_sum(functional%libxc_func_id, rho, sigma, direct_exc, direct_vrho, direct_vsigma)
+         expected_exc = 2.0_rp*direct_exc(1)
+         expected_up = 2.0_rp*direct_vrho(1)
+         expected_down = 2.0_rp*direct_vrho(2)
+         call require(ieee_is_finite(exc(nr/2)) .and. ieee_is_finite(vup(nr/2)) .and. &
+            ieee_is_finite(vdown(nr/2)), 'GGA polarized route remains finite through zeta=1')
+         call require_close(exc(nr/2), expected_exc, 'GGA polarized energy matches direct libXC')
+         call require_close(vup(nr/2), expected_up, 'GGA polarized up potential matches direct libXC')
+         call require_close(vdown(nr/2), expected_down, 'GGA polarized down potential matches direct libXC')
+      end do
+
+      ! A positive density below the floor is regularized only at the libXC
+      ! boundary and must still produce finite, direct-evaluator-equivalent
+      ! output on the radial route.
+      total_density = 1.0e-24_rp
+      rho_up = 0.5_rp*total_density
+      rho_down = 0.5_rp*total_density
+      call functional%xcpot_libxc_gga_radial(a, b, rofi, rho_up, rho_down, zero, zero, vup, vdown, exc)
+      rho = [LIBXC_DENSITY_FLOOR, LIBXC_DENSITY_FLOOR]
+      sigma = 0.0_rp
+      call direct_sum(functional%libxc_func_id, rho, sigma, direct_exc, direct_vrho, direct_vsigma)
+      call require(ieee_is_finite(exc(nr/2)) .and. ieee_is_finite(vup(nr/2)) .and. &
+         ieee_is_finite(vdown(nr/2)), 'GGA sub-floor positive density remains finite')
+      call require_close(exc(nr/2), 2.0_rp*direct_exc(1), 'GGA sub-floor energy uses the density floor')
+      call require_close(vup(nr/2), 2.0_rp*direct_vrho(1), 'GGA sub-floor up potential uses the density floor')
+      call require_close(vdown(nr/2), 2.0_rp*direct_vrho(2), 'GGA sub-floor down potential uses the density floor')
+
+      rho_up = 0.0_rp
+      rho_down = 0.0_rp
+      call functional%xcpot_libxc_gga_radial(a, b, rofi, rho_up, rho_down, zero, zero, vup, vdown, exc)
+      call require(all(exc == 0.0_rp) .and. all(vup == 0.0_rp) .and. all(vdown == 0.0_rp), &
+         'GGA exact zero density returns zero on the radial route')
+
+      deallocate(rofi, rho_up, rho_down, zero, vup, vdown, exc)
+   end subroutine check_gga_polarization_and_tail
 
    subroutine check_density_floor_and_zero_density()
       type(control) :: ctl

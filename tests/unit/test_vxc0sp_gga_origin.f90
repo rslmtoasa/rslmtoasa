@@ -49,7 +49,7 @@ contains
       real(rp), allocatable :: rho0(:), rhoeps(:), rhomu(:)
       type(xc_response_radial_projection) :: projection
       real(rp) :: expected_up, expected_down, expected_exc, wrong_up, wrong_down, wrong_exc
-      real(rp) :: n(2), nd(2), ndd(2), wrong_ndd(2), origin_nd(2), origin_ndd(2), density
+      real(rp) :: n(2), nd(2), ndd(2), wrong_ndd(2), origin_nd(2), origin_ndd(2), origin_rhopp(2), density
       real(rp) :: ob4pi, z
       integer :: ir, isp
 
@@ -84,8 +84,10 @@ contains
       call vxc0sp(production_path, functional, z, mesh_a, mesh_b, rofi, stored_rho, nr, potential, rho0, &
                   rhoeps, rhomu, nsp, 0.0_rp, projection)
 
-      call vxc0sp_pbe_origin_derivatives(nsp, [d2_rho(1, 1), merge(d2_rho(1, 2), 0.0_rp, nsp == 2)], &
-                                          origin_nd, origin_ndd)
+      origin_rhopp = 0.0_rp
+      origin_rhopp(1) = d2_rho(1, 1)
+      if (nsp == 2) origin_rhopp(2) = d2_rho(1, 2)
+      call vxc0sp_pbe_origin_derivatives(nsp, origin_rhopp, origin_nd, origin_ndd)
       call require_close(origin_nd(1), 0.0_rp, trim(label)//' origin dn/dr')
       call require_close(origin_nd(2), 0.0_rp, trim(label)//' origin dn/dr second slot')
       if (nsp == 1) then
