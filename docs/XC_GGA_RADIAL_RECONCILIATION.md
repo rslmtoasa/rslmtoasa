@@ -40,7 +40,13 @@ The historical `XCPOT_hybrid` interface has this ordering:
 | quantity | slot 1 | slot 2 |
 | --- | --- | --- |
 | input `RHO1/RHO2` | down | up |
-| output `V1/V2` | up | down |
+| output `V1/V2` from pointwise historical wrapper | down | up |
+
+The mesh-level `xcpot_libxc_gga_radial` helper instead has explicit
+`v_up/v_down` outputs.  `VXC0SP` maps those to its final potential-array
+channels (channel 1 up, channel 2 down).  The historical magnetic diagnostic
+uses `(V_down-V_up)/2`; the separate response-provider `bxc_energy` field is
+the `sigma_z` coefficient `(V_up-V_down)/2`.
 
 The new mesh-level libXC helper uses explicit up/down arguments and performs
 the conversion at the boundary.  libXC receives

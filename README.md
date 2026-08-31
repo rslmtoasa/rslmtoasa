@@ -4,28 +4,26 @@ Real-space Linearized Muffin-Tin Orbital method in the Atomic Sphere Approximati
 
 ## New Features
 
-### libXC Integration 🎉
+### libXC Integration
 
-RS-LMTO-ASA now supports integration with the [libXC library](https://libxc.gitlab.io/), providing access to over 600 exchange-correlation functionals while maintaining full backward compatibility.
+RS-LMTO-ASA provides an optional, validated [libXC](https://libxc.gitlab.io/)
+interface for spherical-ASA LDA and GGA functionals while preserving the
+historical XC implementation.  Meta-GGA, hybrid, orbital-dependent, and
+kinetic-density-dependent families are rejected explicitly because the ASA
+interface does not provide all of their required ingredients.
 
-**Key Benefits:**
-- Access to modern functionals (SCAN, B3LYP, PBE0, etc.)
-- Automatic updates as new functionals are added to libXC
-- Validation against standard implementations
-- Optional dependency - existing calculations remain unchanged
-
-**Quick Start:**
 ```bash
-# Build with libXC support
 cmake .. -DENABLE_LIBXC=ON
 make
 
-# Use libXC functionals (txc = 1000 + libXC_ID)
-echo "txc = 1135" > input.nml  # PBE via libXC
-echo "txc = 1402" > input.nml  # B3LYP hybrid
+# Predefined PBE alias, or a direct native libXC ID:
+echo "txc = 108" > input.nml
+echo "txc = 1101" > input.nml  # native libXC ID 101, exchange-only PBE GGA
 ```
 
-📖 **[Complete Integration Guide](LIBXC_INTEGRATION_GUIDE.md)**
+See [the production contract](docs/LIBXC_PRODUCTION_CONTRACT.md) for selector
+namespaces, spin and unit conventions, radial GGA evaluation, aliases, and
+validation evidence.
 
 ### TDB
 

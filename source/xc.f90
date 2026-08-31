@@ -45,6 +45,22 @@ module xc_mod
    !   -----------------
    !   native libXC functional IDs only; these are never RS-LMTO TXC values.
 
+   ! libXC's family values are bit flags in xc.h.  Keep the values local to
+   ! the interface so the family contract remains explicit even in a build
+   ! without libXC headers/modules.
+   integer, parameter, public :: LIBXC_FAMILY_LDA = 1
+   integer, parameter, public :: LIBXC_FAMILY_GGA = 2
+   integer, parameter, public :: LIBXC_FAMILY_MGGA = 4
+   integer, parameter, public :: LIBXC_FAMILY_LCA = 8
+   integer, parameter, public :: LIBXC_FAMILY_OEP = 16
+   integer, parameter, public :: LIBXC_FAMILY_HYB_GGA = 32
+   integer, parameter, public :: LIBXC_FAMILY_HYB_MGGA = 64
+   integer, parameter, public :: LIBXC_FAMILY_HYB_LDA = 128
+
+   ! This is a libXC input regularization only.  It is never applied to the
+   ! RS-LMTO density arrays or to radial quadratures.
+   real(rp), parameter, public :: LIBXC_DENSITY_FLOOR = 1.0d-20
+
    type, public :: xc
       real(rp) :: AA, ACA, ALPM, AW, BB, BCA, BLPM, BW, CCA, CW, DCA, &
                   FCA, FOURPI, FTH, OCA, OTH, PCA, QCA, RCA, SCA, TCA, &
@@ -59,7 +75,14 @@ module xc_mod
       ! libXC support fields
       logical :: use_libxc = .false.
       integer, dimension(:), allocatable :: libxc_func_id
+      ! Route family: LDA when every active component is LDA, GGA when at
+      ! least one active component is GGA.  Unsupported families never reach
+      ! this state because construction fails first.
       integer :: libxc_family = -1
+      logical :: libxc_has_lda = .false.
+      logical :: libxc_has_gga = .false.
+      integer, dimension(:), allocatable :: libxc_component_family
+      integer, dimension(:), allocatable :: libxc_component_kind
       integer :: libxc_nspin = -1  ! Store initialization nspin for consistency
    contains
       procedure :: PBEGGA
@@ -1208,16 +1231,16 @@ contains
       logical :: selector_is_libxc
 
 #ifdef HAVE_LIBXC
-      integer :: libxc_id, nspin, i_func, family
+      integer :: libxc_id, nspin, i_func, family, kind
       type(xc_f03_func_t) :: temp_func
       type(xc_f03_func_info_t) :: temp_info
       character(len=256) :: func_name
       character(len=1024) :: functional_names, functional_ids
 #endif
 
-      this%use_libxc = .false.
-      this%libxc_family = -1
-      this%libxc_nspin = -1
+      ! init_libxc is intentionally repeatable.  This is also the single
+      ! lifecycle boundary for selector metadata and native IDs.
+      call this%cleanup_libxc()
 
       selector_is_libxc = this%is_libxc_functional()
       call this%setup_libxc_functional_ids()
@@ -1258,16 +1281,25 @@ contains
          endif
       enddo
 
+      allocate(this%libxc_component_family(size(this%libxc_func_id)))
+      allocate(this%libxc_component_kind(size(this%libxc_func_id)))
+
       ! Query all metadata while each temporary functional is alive.  No
       ! xc_f03_func_t or related metadata is accessed after func_end().
       functional_names = ''
       functional_ids = ''
+      this%libxc_has_lda = .false.
+      this%libxc_has_gga = .false.
       do i_func = 1, size(this%libxc_func_id)
          call xc_f03_func_init(temp_func, this%libxc_func_id(i_func), nspin)
          temp_info = xc_f03_func_get_info(temp_func)
          family = xc_f03_func_info_get_family(temp_info)
+         kind = xc_f03_func_info_get_kind(temp_info)
          func_name = trim(xc_f03_func_info_get_name(temp_info))
-         if (i_func == 1) this%libxc_family = family
+         this%libxc_component_family(i_func) = family
+         this%libxc_component_kind(i_func) = kind
+         if (family == LIBXC_FAMILY_LDA) this%libxc_has_lda = .true.
+         if (family == LIBXC_FAMILY_GGA) this%libxc_has_gga = .true.
          if (i_func == 1) then
             functional_names = trim(func_name)
             functional_ids = trim(int2str(this%libxc_func_id(i_func)))
@@ -1277,6 +1309,19 @@ contains
          endif
          call xc_f03_func_end(temp_func)
       enddo
+
+      ! This is the dispatch family, not the family of the first component.
+      ! A mixed LDA+GGA combination therefore takes the complete radial GGA
+      ! path and retains the LDA contribution in its pointwise terms.
+      if (this%libxc_has_gga) then
+         this%libxc_family = LIBXC_FAMILY_GGA
+      else if (this%libxc_has_lda) then
+         this%libxc_family = LIBXC_FAMILY_LDA
+      else
+         call g_logger%fatal('libXC selector TXC='//int2str(this%txc)// &
+                             ' has no supported LDA/GGA component.', __FILE__, __LINE__)
+         return
+      endif
 
       this%libxc_nspin = nspin
       this%functional_name = trim(functional_names)
@@ -1288,6 +1333,11 @@ contains
       call g_logger%info('XC functional names: '//trim(functional_names), __FILE__, __LINE__)
       if (this%txc < 1000) then
          call g_logger%info('XC mapping quality: '//trim(this%mapping_quality), __FILE__, __LINE__)
+      else if (size(this%libxc_func_id) == 1 .and. &
+               (this%libxc_component_kind(1) == 0 .or. this%libxc_component_kind(1) == 1)) then
+         call g_logger%warning('TXC='//int2str(this%txc)//' selects the native component "'// &
+                               trim(functional_names)//'" exactly as requested; no implicit exchange/correlation partner is added.', &
+                               __FILE__, __LINE__)
       endif
 #endif
    end subroutine init_libxc
@@ -1301,8 +1351,12 @@ contains
       class(xc), intent(inout) :: this
       ! Clean up allocated arrays
       if (allocated(this%libxc_func_id)) deallocate(this%libxc_func_id)
+      if (allocated(this%libxc_component_family)) deallocate(this%libxc_component_family)
+      if (allocated(this%libxc_component_kind)) deallocate(this%libxc_component_kind)
       this%use_libxc = .false.
       this%libxc_family = -1
+      this%libxc_has_lda = .false.
+      this%libxc_has_gga = .false.
       this%libxc_nspin = -1
    end subroutine cleanup_libxc
 
@@ -1315,6 +1369,8 @@ contains
    !>--------------------------------------------------------------------------
    subroutine setup_libxc_functional_ids(this)
       class(xc), intent(inout) :: this
+
+      if (allocated(this%libxc_func_id)) deallocate(this%libxc_func_id)
       
 #ifdef HAVE_LIBXC
       ! Only explicit libXC aliases and direct native-ID selectors populate
@@ -1407,27 +1463,40 @@ contains
       func_name = trim(xc_f03_func_info_get_name(temp_info))  ! Copy the string immediately
       
       select case(family)
-      case(1)  ! XC_FAMILY_LDA = 1
+      case(LIBXC_FAMILY_LDA)
          family_name = "LDA"
          is_compatible = .true.
-      case(2)  ! XC_FAMILY_GGA = 2  
+      case(LIBXC_FAMILY_GGA)
          family_name = "GGA"
          is_compatible = .true.
-      case(3)  ! XC_FAMILY_MGGA = 3
+      case(LIBXC_FAMILY_MGGA)
          family_name = "meta-GGA"
          is_compatible = .false.
          call g_logger%warning('meta-GGA functional "'//trim(func_name)//'" not compatible with ASA spherical symmetry', __FILE__, __LINE__)
          call g_logger%warning('ASA lacks kinetic energy density (τ) needed for meta-GGA functionals', __FILE__, __LINE__)
-      case(4)  ! XC_FAMILY_HYB_GGA = 4
+      case(LIBXC_FAMILY_HYB_GGA)
          family_name = "hybrid GGA"
          is_compatible = .false.
          call g_logger%warning('Hybrid functional "'//trim(func_name)//'" not compatible with ASA implementation', __FILE__, __LINE__)
          call g_logger%warning('ASA lacks exact exchange implementation needed for hybrid functionals', __FILE__, __LINE__)
-      case(5)  ! XC_FAMILY_HYB_MGGA = 5
+      case(LIBXC_FAMILY_HYB_MGGA)
          family_name = "hybrid meta-GGA"
          is_compatible = .false.
          call g_logger%warning('Hybrid meta-GGA functional "'//trim(func_name)//'" not compatible with ASA', __FILE__, __LINE__)
          call g_logger%warning('ASA lacks both kinetic energy density and exact exchange', __FILE__, __LINE__)
+      case(LIBXC_FAMILY_HYB_LDA)
+         family_name = "hybrid LDA"
+         is_compatible = .false.
+         call g_logger%warning('Hybrid LDA functional "'//trim(func_name)//'" not compatible with ASA implementation', __FILE__, __LINE__)
+         call g_logger%warning('ASA lacks exact exchange implementation needed for hybrid functionals', __FILE__, __LINE__)
+      case(LIBXC_FAMILY_LCA)
+         family_name = "long-range corrected"
+         is_compatible = .false.
+         call g_logger%warning('Long-range-corrected functional "'//trim(func_name)//'" not compatible with ASA implementation', __FILE__, __LINE__)
+      case(LIBXC_FAMILY_OEP)
+         family_name = "orbital-dependent"
+         is_compatible = .false.
+         call g_logger%warning('Orbital-dependent functional "'//trim(func_name)//'" not compatible with ASA implementation', __FILE__, __LINE__)
       case default
          family_name = "unknown"
          is_compatible = .false.
@@ -1495,6 +1564,8 @@ contains
    !> Pointwise libXC wrapper for LDA exchange-correlation potentials.
    !> GGA selectors must use xcpot_libxc_gga_radial, because their
    !> multiplicative potential contains a radial flux divergence.
+   !> Historical boundary: RHO1/V1 are down and RHO2/V2 are up.  libXC
+   !> receives the authoritative standard order [up, down].
    !>--------------------------------------------------------------------------
    subroutine xcpot_libxc_wrapper(this, RHO1, RHO2, RHO, RHOP, RHOPP, RR, V1, V2, EXC)
       class(xc), intent(in) :: this
@@ -1503,9 +1574,6 @@ contains
       real(rp), dimension(2), intent(in) :: RHOP, RHOPP
 
 #ifdef HAVE_LIBXC
-      real(rp), parameter :: TOLD = 1.d-20
-      real(rp), parameter :: TOLDD = 1.d-20
-
       real(rp), dimension(2) :: rho_libxc
       real(rp), dimension(1) :: exc_libxc, exc_tmp
       real(rp), dimension(2) :: vrho_libxc, vrho_tmp
@@ -1517,11 +1585,23 @@ contains
       V2 = 0.0d0
       EXC = 0.0d0
 
-      ! Check for negligible densities
-      if (RHO < TOLD) then
+      if (.not. this%use_libxc) then
+         call g_logger%fatal('Pointwise libXC evaluation requested for an inactive libXC object.', __FILE__, __LINE__)
          return
       endif
-      if (RHO1 < TOLDD .and. RHO2 < TOLDD) then
+      if (this%libxc_family == LIBXC_FAMILY_GGA) then
+         call g_logger%fatal('Pointwise libXC GGA evaluation requested; use the radial GGA helper.', &
+                             __FILE__, __LINE__)
+         return
+      endif
+
+      ! Zero total density is handled exactly.  For any positive density the
+      ! floor regularizes only the libXC input and cannot alter an RS-LMTO
+      ! density or quadrature.
+      if (RHO <= 0.0_rp) then
+         return
+      endif
+      if (RHO1 <= 0.0_rp .and. RHO2 <= 0.0_rp) then
          return
       endif
 
@@ -1533,11 +1613,11 @@ contains
          ! Spin-polarized calculation
          ! In RS-LMTO: RHO1 = spin-down, RHO2 = spin-up
          ! In libXC: rho_libxc(1) = spin-up, rho_libxc(2) = spin-down
-         rho_libxc(1) = max(RHO2, TOLDD)  ! spin-up density
-         rho_libxc(2) = max(RHO1, TOLDD)  ! spin-down density
+         rho_libxc(1) = max(RHO2, LIBXC_DENSITY_FLOOR)  ! spin-up density
+         rho_libxc(2) = max(RHO1, LIBXC_DENSITY_FLOOR)  ! spin-down density
       else
          ! Unpolarized calculation
-         rho_libxc(1) = max(RHO, TOLD)   ! total density
+         rho_libxc(1) = max(RHO, LIBXC_DENSITY_FLOOR)   ! total density
       endif
 
       exc_libxc = 0.0d0
@@ -1549,11 +1629,11 @@ contains
          family = xc_f03_func_info_get_family(xc_f03_func_get_info(temp_func))
 
          select case(family)
-         case(1)  ! XC_FAMILY_LDA
+         case(LIBXC_FAMILY_LDA)
             call xc_f03_lda_exc_vxc(temp_func, 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
             exc_libxc(1) = exc_libxc(1) + exc_tmp(1)
             vrho_libxc = vrho_libxc + vrho_tmp
-         case(2)  ! XC_FAMILY_GGA
+         case(LIBXC_FAMILY_GGA)
             call xc_f03_func_end(temp_func)
             call g_logger%fatal('Pointwise libXC GGA potential requested; use the radial GGA helper.', &
                                 __FILE__, __LINE__)
@@ -1604,7 +1684,6 @@ contains
       real(rp), dimension(:), intent(out) :: v_up, v_down, exc
 
 #ifdef HAVE_LIBXC
-      real(rp), parameter :: TOLD = 1.d-20
       real(rp), dimension(2) :: rho_libxc, vrho_point, vrho_tmp
       real(rp), dimension(3) :: sigma_libxc, vsigma_point, vsigma_tmp
       real(rp), dimension(1) :: exc_point, exc_tmp
@@ -1629,6 +1708,14 @@ contains
          exc = 0.d0
          return
       end if
+      if (.not. this%use_libxc) then
+         call g_logger%fatal('Radial libXC GGA evaluation requested for an inactive libXC object.', &
+                             __FILE__, __LINE__)
+         v_up = 0.d0
+         v_down = 0.d0
+         exc = 0.d0
+         return
+      end if
 
       nspin = this%libxc_nspin
       if (nspin /= 2) then
@@ -1643,7 +1730,7 @@ contains
       do i_func = 1, size(this%libxc_func_id)
          call xc_f03_func_init(funcs(i_func), this%libxc_func_id(i_func), nspin)
          family_ids(i_func) = xc_f03_func_info_get_family(xc_f03_func_get_info(funcs(i_func)))
-         if (family_ids(i_func) /= 1 .and. family_ids(i_func) /= 2) then
+         if (family_ids(i_func) /= LIBXC_FAMILY_LDA .and. family_ids(i_func) /= LIBXC_FAMILY_GGA) then
             call g_logger%fatal('Radial libXC helper supports only LDA and GGA components.', __FILE__, __LINE__)
             do ir = 1, i_func
                call xc_f03_func_end(funcs(ir))
@@ -1656,14 +1743,30 @@ contains
       end do
 
       allocate (vrho_up(nr), vrho_down(nr), flux_up(nr), flux_down(nr), div_up(nr), div_down(nr))
-      any_gga = any(family_ids == 2)
+      any_gga = any(family_ids == LIBXC_FAMILY_GGA)
       if (.not. any_gga) then
          call g_logger%fatal('Radial libXC GGA helper received no GGA component.', __FILE__, __LINE__)
+         do ir = 1, size(funcs)
+            call xc_f03_func_end(funcs(ir))
+         end do
+         v_up = 0.d0
+         v_down = 0.d0
+         exc = 0.d0
+         return
       end if
 
+      vrho_up = 0.d0
+      vrho_down = 0.d0
+      flux_up = 0.d0
+      flux_down = 0.d0
+      exc = 0.d0
       do ir = 1, nr
-         rho_libxc(1) = max(rho_up(ir), TOLD)
-         rho_libxc(2) = max(rho_down(ir), TOLD)
+         ! Keep an exactly empty sphere empty.  For a positive total density,
+         ! the floor is applied only to the libXC input channel that needs
+         ! protection; it never changes the caller's density or derivative.
+         if (rho_up(ir) <= 0.0_rp .and. rho_down(ir) <= 0.0_rp) cycle
+         rho_libxc(1) = max(rho_up(ir), LIBXC_DENSITY_FLOOR)
+         rho_libxc(2) = max(rho_down(ir), LIBXC_DENSITY_FLOOR)
          if (ir == 1) then
             ! A regular spherical density has zero radial derivative at r=0.
             grad_up = 0.d0
@@ -1681,11 +1784,11 @@ contains
          vsigma_point = 0.d0
          do i_func = 1, size(funcs)
             select case (family_ids(i_func))
-            case (1)
+            case (LIBXC_FAMILY_LDA)
                call xc_f03_lda_exc_vxc(funcs(i_func), 1_c_size_t, rho_libxc, exc_tmp, vrho_tmp)
                exc_point(1) = exc_point(1) + exc_tmp(1)
                vrho_point = vrho_point + vrho_tmp
-            case (2)
+            case (LIBXC_FAMILY_GGA)
                call xc_f03_gga_exc_vxc(funcs(i_func), 1_c_size_t, rho_libxc, sigma_libxc, &
                                        exc_tmp, vrho_tmp, vsigma_tmp)
                exc_point(1) = exc_point(1) + exc_tmp(1)

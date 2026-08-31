@@ -3898,7 +3898,10 @@ contains
       PI = 4.d0*ATAN(1.d0)
       OB4PI = 1.d0/(4.d0*PI)
       IXC = xc_obj%txc
-      use_libxc_gga = xc_obj%use_libxc .and. xc_obj%libxc_family == 2
+      ! libxc_family is the aggregate route family: any active GGA component
+      ! requires the complete radial evaluator, even when an LDA component is
+      ! present in the same explicit combination.
+      use_libxc_gga = xc_obj%use_libxc .and. xc_obj%libxc_has_gga
       !
       ! Constraining field related hacks below
       Bxc_up = 0.0d0

@@ -175,7 +175,3 @@ population, not a site-moment magnitude.
   an adapter to a native RS Green-function provider.  Longitudinal response is
   unavailable pending a WR-04 real-static-limit calibration; it is not LLB
   ready.
-- The legacy SCF radial path currently calls `XCPOT` directly.  `XCPOT_hybrid`
-  (the libXC wrapper) is not called by `VXC0SP`; a future libXC-response change
-  must first reconcile that ground-state path rather than assume the wrapper
-  was active.

@@ -627,6 +627,12 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(UnitLibxcXcBaseline PROPERTIES LABELS "unit;libxc;xc")
     add_fortran_unit_test(UnitLibxcGgaRadial ${TestDIR}/unit/test_libxc_gga_radial.f90)
     set_tests_properties(UnitLibxcGgaRadial PROPERTIES LABELS "unit;libxc;xc;gga;radial;functional-derivative")
+    add_fortran_unit_test(UnitLibxcProductionContract ${TestDIR}/unit/test_libxc_production_contract.f90)
+    set_tests_properties(UnitLibxcProductionContract PROPERTIES LABELS "unit;libxc;xc;contract;selector;spin;units;floor;lifecycle")
+    add_fortran_unit_test(UnitXcUnsupportedFamilyRequiresFatal ${TestDIR}/unit/test_xc_unsupported_family_requires_fatal.f90)
+    set_tests_properties(UnitXcUnsupportedFamilyRequiresFatal PROPERTIES
+      LABELS "unit;libxc;xc;selector;negative;unsupported-family"
+      WILL_FAIL TRUE)
     add_fortran_unit_test(UnitPbeGgaComparison ${TestDIR}/unit/test_pbe_gga_comparison.f90)
     set_tests_properties(UnitPbeGgaComparison PROPERTIES LABELS "unit;libxc;xc;gga;comparison;pbe")
     add_fortran_unit_test(UnitXcLdaReconciliation ${TestDIR}/unit/test_xc_lda_reconciliation.f90)

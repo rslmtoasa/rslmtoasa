@@ -108,9 +108,11 @@ module xc_response_kernel_mod
 
 contains
 
-   !> Evaluate exactly the legacy XCPOT path called by self%VXC0SP.
+   !> Evaluate the pointwise XC path called by self%VXC0SP.
    !> No constraining field is included here: B_fsm is added by VXC0SP after
-   !> this functional call and is not an XC field.
+   !> this functional call and is not an XC field.  A libXC GGA request is
+   !> rejected by the pointwise wrapper; it must be evaluated by the complete
+   !> radial helper instead.
    function evaluate_ground_state_xc_sample(functional, rho_down, rho_up, rho_total, &
       rho_gradient, rho_laplacian, radius) result(sample)
       class(xc), intent(in) :: functional
@@ -119,7 +121,7 @@ contains
       type(xc_response_sample) :: sample
       real(rp) :: v_down, v_up
 
-      call functional%XCPOT(rho_down, rho_up, rho_total, rho_gradient, rho_laplacian, radius, &
+      call functional%XCPOT_hybrid(rho_down, rho_up, rho_total, rho_gradient, rho_laplacian, radius, &
          v_down, v_up, sample%exc)
       sample%rho_down = rho_down
       sample%rho_up = rho_up

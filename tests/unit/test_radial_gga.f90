@@ -9,6 +9,7 @@ program test_radial_gga
    failed = .false.
    call check_derivative_convergence()
    call check_regular_origin()
+   call check_outer_boundary()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -101,6 +102,40 @@ contains
       end do
       deallocate (rofi, f, fp, flux, flux_div)
    end subroutine check_regular_origin
+
+   subroutine check_outer_boundary()
+      real(rp) :: coarse_error, fine_error, convergence_ratio
+
+      call outer_boundary_error(80, coarse_error)
+      call outer_boundary_error(160, fine_error)
+      convergence_ratio = coarse_error/max(fine_error, tiny(1.0_rp))
+      write (*, '(a,3(es12.4,1x))') 'outer radial divergence errors/ratio: ', &
+         coarse_error, fine_error, convergence_ratio
+      call require(fine_error < coarse_error, 'outer radial divergence improves under mesh refinement')
+      call require(convergence_ratio > 6.0_rp, 'outer radial divergence has the expected high-order boundary stencil')
+      call require(fine_error < 2.0e-4_rp, 'outer radial divergence has no large endpoint artifact')
+   end subroutine check_outer_boundary
+
+   subroutine outer_boundary_error(nr, error_value)
+      integer, intent(in) :: nr
+      real(rp), intent(out) :: error_value
+      real(rp), parameter :: b = 0.02_rp, rmax = 5.0_rp, beta = 0.7_rp
+      real(rp) :: a, r
+      real(rp), allocatable :: rofi(:), flux(:), divergence(:)
+      integer :: i
+
+      a = log(1.0_rp + rmax/b)/real(nr - 1, rp)
+      allocate(rofi(nr), flux(nr), divergence(nr))
+      do i = 1, nr
+         rofi(i) = b*(exp(a*real(i - 1, rp)) - 1.0_rp)
+         r = rofi(i)
+         flux(i) = r*exp(-beta*r*r)
+      end do
+      call radial_flux_divergence(a, b, rofi, flux, divergence)
+      r = rofi(nr)
+      error_value = abs(divergence(nr) - (3.0_rp - 2.0_rp*beta*r*r)*exp(-beta*r*r))
+      deallocate(rofi, flux, divergence)
+   end subroutine outer_boundary_error
 
    subroutine require(condition, description)
       logical, intent(in) :: condition
