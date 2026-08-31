@@ -288,6 +288,7 @@ contains
    !>   orbital_torque
    !>   quadrupole
    !>   quadrupole_accumulation
+   !>   octupole_accumulation
    !>
    !> Notes:
    !>   - js_a, jso_a, jl_a, and jlo_a are used only as temporary containers.
@@ -537,6 +538,28 @@ contains
       case('quadrupole_accumulation', 'oap_accumulation')
 
          call this%hamiltonian%build_realspace_quadrupole_accumulation_operators(pol)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+         end select
+
+      !-----------------------------------------------------------------------
+      ! Orbital octupole accumulation:
+      !
+      !   local O_pol operator
+      !
+      ! This is a local on-site observable. Therefore only the m = 1 block is
+      ! filled for each atom type.
+      !-----------------------------------------------------------------------
+      case('octupole_accumulation')
+
+         call this%hamiltonian%build_realspace_octupole_accumulation_operators(pol)
 
          select case(trim(slot))
          case('a')
