@@ -52,7 +52,12 @@ module control_mod
       integer :: npold
       !> Number of random vectors to be used in the stochastic evaluation of traces for the Chebyshev momennts
       integer :: random_vec_num
-      !> Set calculation collinearity and relativistic type
+      !> Set calculation collinearity and relativistic type.
+      !>
+      !> This is a global electronic-structure mode, not the number of
+      !> spin-density channels passed to an XC kernel.  In particular,
+      !> `nsp=1` can still carry two local collinear spin densities in the
+      !> atomic/XC path.
       !>
       !> Set calculation collinearity and relativistic type
       !>
@@ -265,6 +270,11 @@ module control_mod
       procedure :: restore_to_default
       procedure :: print_state
       procedure :: print_state_formatted
+      procedure :: is_collinear
+      procedure :: is_noncollinear
+      procedure :: has_soc
+      procedure :: uses_spinor_representation
+      procedure :: is_spin_polarized_mode
       procedure, private :: check_all
       final :: destructor
    end type control
@@ -274,6 +284,40 @@ module control_mod
    end interface control
 
 contains
+
+   !> True for the two global collinear calculation modes.
+   pure logical function is_collinear(this)
+      class(control), intent(in) :: this
+      is_collinear = this%nsp == 1 .or. this%nsp == 2
+   end function is_collinear
+
+   !> True for the two global non-collinear calculation modes.
+   pure logical function is_noncollinear(this)
+      class(control), intent(in) :: this
+      is_noncollinear = this%nsp == 3 .or. this%nsp == 4
+   end function is_noncollinear
+
+   !> True when the global mode includes spin-orbit coupling.
+   pure logical function has_soc(this)
+      class(control), intent(in) :: this
+      has_soc = this%nsp == 2 .or. this%nsp == 4
+   end function has_soc
+
+   !> True when the global Hamiltonian uses the spinor representation.
+   pure logical function uses_spinor_representation(this)
+      class(control), intent(in) :: this
+      uses_spinor_representation = this%nsp >= 2 .and. this%nsp <= 4
+   end function uses_spinor_representation
+
+   !> True when the selected global mode permits a spin-polarized density.
+   !>
+   !> This is a capability query only.  It does not assert that the current
+   !> density is magnetized; the local density supplied to an unpolarized-only
+   !> XC kernel remains the authoritative physical test.
+   pure logical function is_spin_polarized_mode(this)
+      class(control), intent(in) :: this
+      is_spin_polarized_mode = this%nsp >= 1 .and. this%nsp <= 4
+   end function is_spin_polarized_mode
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

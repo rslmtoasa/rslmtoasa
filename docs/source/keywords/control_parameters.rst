@@ -25,6 +25,10 @@ nsp
 
 **Purpose:** Specifies calculation type (collinearity and relativistic treatment)
 
+This is the global electronic-structure mode, not the number of spin-density
+channels passed to an XC evaluator. The atomic radial/XC path keeps two local
+spin-density channels even when ``nsp=1``.
+
 **Allowed values:**
 
 .. list-table::
@@ -53,7 +57,7 @@ nsp
 
 .. code-block:: fortran
 
-   nsp = 1  ! Scalar relativistic, collinear (ferromagnetic)
+   nsp = 1  ! Scalar relativistic, collinear global mode
 
 **Related code:** ``source/control.f90``, ``source/self.f90::process()``
 

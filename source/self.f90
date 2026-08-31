@@ -67,6 +67,10 @@ module self_mod
    public :: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
    public :: vxc0sp_pbe_origin_derivatives
    public :: vxc0sp
+   ! The atomic/XC radial representation has two local spin eigenchannels.
+   ! This is independent of control%nsp, which selects the global Hamiltonian
+   ! mode (and is not a channel-count field).
+   integer, parameter, public :: RADIAL_XC_SPIN_CHANNELS = 2
 
    !> Module´s main structure
    type, public :: self
@@ -416,16 +420,17 @@ contains
       should_stop = drho_control < tolerance .or. iteration == niter - 1
    end function atomsc_should_stop
 
-   pure subroutine vxc0sp_pbe_origin_derivatives(nsp, rhopp, rhod, rhodd)
-      integer, intent(in) :: nsp
+   pure subroutine vxc0sp_pbe_origin_derivatives(n_radial_spin_channels, rhopp, rhod, rhodd)
+      integer, intent(in) :: n_radial_spin_channels
       real(rp), dimension(2), intent(in) :: rhopp
       real(rp), dimension(2), intent(out) :: rhod, rhodd
 
       ! RHOPP contains raw physical second radial derivatives.  PBEGGA owns
-      ! the regular spherical factor of three; only NSP=1's total-to-per-spin
+      ! the regular spherical factor of three; only one local radial channel's
+      ! total-to-per-spin
       ! conversion belongs at this VXC0SP boundary.
       rhod = 0.0_rp
-      if (nsp == 1) then
+      if (n_radial_spin_channels == 1) then
          rhodd = 0.5_rp*rhopp(1)
       else
          ! XCPOT/PBEGGA receives the historical down/up ordering.
@@ -1107,7 +1112,7 @@ contains
    subroutine restore_to_default(this, full)
       class(self), intent(inout):: this
       logical, intent(in), optional :: full
-      integer :: lmax, nsp, nfun_l
+      integer :: lmax, nfun_l
 
       ! Control variables
       ! if false force to read the original self file
@@ -1670,19 +1675,19 @@ contains
          do ia = 1, this%lattice%nrec
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
       case ('S')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
       case ('I')
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
          call this%hamiltonian%build_locham()
       case ('L')
@@ -1694,7 +1699,7 @@ contains
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
          end do
-         if (this%control%nsp == 2 .or. this%control%nsp == 4) call this%hamiltonian%build_lsham()
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
          call this%hamiltonian%build_bulkham()
       end select
 
@@ -1793,7 +1798,7 @@ contains
             energy_range=[this%en%energy_min, this%en%energy_max], &
             fermi_level=this%en%fermi, &
             auto_find_fermi=.true.)
-         if (this%control%nsp >= 2) then
+         if (this%control%uses_spinor_representation()) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call g_scf_benchmark_profile%start_stage('P_charge_spin_accumulate')
             call this%compute_kspace_spin_moments_spinor(this%reciprocal_scf_cache, kspace_spin_mom)
@@ -1821,14 +1826,15 @@ contains
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
             end do
 
-            if (this%control%nsp >= 2) then
+            if (this%control%uses_spinor_representation()) then
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mx = kspace_spin_mom(1, ia)
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%my = kspace_spin_mom(2, ia)
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mz = kspace_spin_mom(3, ia)
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom0(:) = kspace_spin_mom(:, ia)
                mtot = sqrt(sum(kspace_spin_mom(:, ia)**2)) + 1.0e-15_rp
             else
-               ! Collinear proxy from spin occupations (nsp=1 path).
+               ! Scalar-relativistic collinear proxy from spin occupations;
+               ! this is a global-mode branch, not an XC channel count.
                q_up = sum(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 0:lmax_site, 1))
                q_dn = sum(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 0:lmax_site, 2))
                mz = q_up - q_dn
@@ -2321,7 +2327,8 @@ contains
       this%VZT(1, 1) = this%VZT(2, 1)
       this%VZT(1, 2) = this%VZT(2, 2)
       LMAX = atom%potential%lmax
-      NSP = 2
+      ! Local radial/XC channel count; independent of control%nsp.
+      NSP = RADIAL_XC_SPIN_CHANNELS
 
       QSL(:) = 0.0_rp
       call this%RACSI(atom, ROFI, QSL)
@@ -2368,7 +2375,7 @@ contains
 
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
       real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO_CONTROL, DRHO_INTEGRATED, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
-      integer :: ISP, ncore, nval, l, nsp, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
+      integer :: ISP, ncore, nval, l, n_radial_spin_channels, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
       integer :: qn_default, site_id
       logical :: LAST
 
@@ -2383,9 +2390,11 @@ contains
       if (present(isite)) site_id = isite
 
       ipr = 0
-      nsp = 2
+      ! This is a local radial/XC channel count.  It intentionally remains
+      ! two for a scalar-relativistic collinear global mode (control%nsp=1).
+      n_radial_spin_channels = RADIAL_XC_SPIN_CHANNELS
       lmax = atom%potential%lmax
-      rho_in = atom%rho0(nsp)
+      rho_in = atom%rho0(n_radial_spin_channels)
 
       allocate (v, mold=rho_in)
       allocate (rho, mold=rho_in)
@@ -2415,7 +2424,7 @@ contains
       ! Backward-compatible guard: legacy spd potential files promoted to lmax=3
       ! may not provide valid f-channel PL. Seed invalid channels from element
       ! quantum numbers, otherwise enforce the minimum admissible n=l+1.
-      do isp = 1, nsp
+      do isp = 1, n_radial_spin_channels
          do l = 0, lmax
             if (atom%potential%pl(l, isp) < real(l + 1, rp)) then
                select case (l)
@@ -2444,8 +2453,8 @@ contains
       end do
 
       do l = 0, lmax
-         deg = (2*(2*l + 1))/nsp
-         do isp = 1, nsp
+         deg = (2*(2*l + 1))/n_radial_spin_channels
+         do isp = 1, n_radial_spin_channels
             if (atom%potential%pl(l, isp) /= atom%potential%pl(l, isp)) then
                call g_logger%fatal('Invalid PL before atomic core/valence setup: atom='//trim(atom%element%symbol)// &
                                    ' lmax='//int2str(lmax)//' l='//int2str(l)//' spin='//int2str(isp)// &
@@ -2482,11 +2491,11 @@ contains
       ! Only apply f-core treatment when lmax < 3 (f is not in valence basis)
       if (IFCORE /= 0 .and. lmax < 3) then
          LCORE = 3
-         DEG = (2*(2*LCORE + 1))/NSP
-         do ISP = 1, NSP
+         DEG = (2*(2*LCORE + 1))/n_radial_spin_channels
+         do ISP = 1, n_radial_spin_channels
             !------DEFINES DEGENERACY OF UP AND DW F-CORE--------------
             !------MAKES DEG=2*DEG se NAO MAGNETICO!!!-----------------
-            if (NSP == 1) then
+            if (n_radial_spin_channels == 1) then
                DEG = DFCORE
             elseif (IFCORE <= 7) then
                if (ISP == 1) then
@@ -2518,7 +2527,7 @@ contains
       if (NVAL > NVMX) stop "*** CHANGE NVMX IN ATOMSC"
       atom%dq = atom%qc + qval(1) + qval(2) - atom%element%atomic_number
       amgm = 0.d0
-      if (nsp == 2) then
+      if (n_radial_spin_channels == 2) then
          amgm = qval(1) - qval(2)
       end if
       ! Print statement, if ipr different than 0. Obsolete, therefore commented.
@@ -2546,7 +2555,7 @@ contains
          write (6, 10005)
       end if
       if (JOB == "POT") then
-         call this%newrho(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho_in, atom%potential%pl, atom%potential%ql, SEC, SEV, EC, EV, TOLRSQ, NSP, 0)
+         call this%newrho(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho_in, atom%potential%pl, atom%potential%ql, SEC, SEV, EC, EV, TOLRSQ, n_radial_spin_channels, 0)
       elseif (JOB /= "RHO") then
          stop "*** ATOMSC EXPECTS JOB=RHO OR JOB=POT"
       end if
@@ -2564,16 +2573,16 @@ contains
          if (LAST) then
             IPR1 = IPR
          end if
-         call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, NSP)
+         call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, n_radial_spin_channels)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
-         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP, B_fsm, xc_projection)
-         call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, NSP, IPR1)
+         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, n_radial_spin_channels, B_fsm, xc_projection)
+         call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
          DRHO_CONTROL = 0.d0
          DRHO_INTEGRATED = 0.d0
          SUM = 0.d0
          RHO0T = 0.d0
-         do ISP = 1, NSP
+         do ISP = 1, n_radial_spin_channels
             RHO0T = RHO0T + RHO0(ISP)
             do IR = 1, NR
                WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
@@ -2603,8 +2612,8 @@ contains
       atom%potential%SUMEV = 0.d0
       atom%potential%SUMEC = 0.d0
       RHOVH = 0.d0
-      do ISP = 1, NSP
-         if (NSP == 2 .and. IPR >= 1) then
+      do ISP = 1, n_radial_spin_channels
+         if (n_radial_spin_channels == 2 .and. IPR >= 1) then
             write (6, 10006) &
                ISP, V(NR, ISP) - 2*atom%element%atomic_number/atom%potential%ws_r, SEV(ISP), SEC(ISP), RVH(ISP), REPS(ISP), &
                RMU(ISP)
@@ -2626,11 +2635,11 @@ contains
             RHOMU, atom%potential%RHOEPS, atom%potential%EKIN, atom%potential%ETOT
       end if
       VRMAX(1) = -2.d0*atom%element%atomic_number/atom%potential%ws_r
-      do ISP = 1, NSP
-         VRMAX(1) = VRMAX(1) + V(NR, ISP)/NSP
+      do ISP = 1, n_radial_spin_channels
+         VRMAX(1) = VRMAX(1) + V(NR, ISP)/n_radial_spin_channels
       end do
 	      VRMAX(2) = 0.d0
-	      if (NSP == 2) then
+	      if (n_radial_spin_channels == 2) then
 	         VRMAX(2) = V(NR, 1) - V(NR, 2)
 	      end if
 	      atom%potential%vrmax(:) = VRMAX(:)
@@ -2698,6 +2707,8 @@ contains
       !integer, parameter :: NRMX = 501
       !
       !.. Formal Arguments ..
+      ! NSP is the number of local radial density channels, not control%nsp's
+      ! global electronic-structure mode.
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
       integer, intent(in) :: IPR, LMAX, NR, NSP
@@ -2903,6 +2914,8 @@ contains
       implicit none
       !
       !.. Formal Arguments ..
+      ! NSP is the number of local radial density channels, not control%nsp's
+      ! global electronic-structure mode.
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
       integer, intent(in) :: IPR, LMAX, NR, NSP
@@ -3737,6 +3750,7 @@ contains
       implicit none
       !
       !.. Formal Arguments ..
+      ! NSP is the local radial/XC channel count supplied by ATOMSC.
       integer, intent(in) :: NR, NSP
       real(rp), intent(in) :: A, B, VHRMAX, Z
       real(rp), intent(out) :: VSUM
@@ -3854,7 +3868,7 @@ contains
       end if
    end subroutine POISS0
 
-   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, NSP, B_fsm, xc_projection)
+   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, n_radial_spin_channels, B_fsm, xc_projection)
       !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
       !
       ! use xcdata
@@ -3866,14 +3880,16 @@ contains
       !.. Formal Arguments ..
       class(self), intent(inout) :: this
       type(xc), intent(in) :: xc_obj
-      integer, intent(in) :: NR, NSP
+      ! This argument is the number of local radial/XC spin channels, not
+      ! control%nsp's global collinear/noncollinear/SOC mode.
+      integer, intent(in) :: NR, n_radial_spin_channels
       real(rp), intent(in) :: A, B
       real(rp) :: Z
       real(rp), dimension(2), intent(inout) :: RHO0
       real(rp), dimension(NR), intent(in) :: rofi
-      real(rp), dimension(NSP), intent(inout) :: RHOEPS, RHOMU
-      real(rp), dimension(NR, NSP), intent(in) :: RHO
-      real(rp), dimension(NR, NSP), intent(inout) :: V
+      real(rp), dimension(n_radial_spin_channels), intent(inout) :: RHOEPS, RHOMU
+      real(rp), dimension(NR, n_radial_spin_channels), intent(in) :: RHO
+      real(rp), dimension(NR, n_radial_spin_channels), intent(inout) :: V
       real(rp), intent(in)  :: B_fsm
       type(xc_response_radial_projection), intent(out) :: xc_projection
       !
@@ -3882,11 +3898,11 @@ contains
       real(rp) :: DRDI, EXC, EXC1, EXC2, OB4PI, PI, RHO2, RHO3, RHOT1, &
                   RHOT2, RHOTRU, VXC, VXC1, VXC2, WGT, &
                   RHO1, R, RCE
-      real(rp), dimension(NR, NSP) :: RHOP, RHOPP, tRHO
+      real(rp), dimension(NR, n_radial_spin_channels) :: RHOP, RHOPP, tRHO
       real(rp), dimension(2) :: RHOD, RHODD
       real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
       real(rp), allocatable :: vxc_up_radial(:), vxc_down_radial(:), exc_radial(:)
-      logical :: use_libxc_gga
+      logical :: use_libxc_gga, use_legacy_gga
       !.. External Calls ..
       ! external EVXC
       !
@@ -3902,6 +3918,10 @@ contains
       ! requires the complete radial evaluator, even when an LDA component is
       ! present in the same explicit combination.
       use_libxc_gga = xc_obj%use_libxc .and. xc_obj%libxc_has_gga
+      ! Only these historical selectors own the legacy radial GGA machinery.
+      ! In particular, a direct/predefined libXC LDA selector must not enter a
+      ! legacy IXC>=8 branch merely because its TXC integer is large.
+      use_legacy_gga = IXC == 5 .or. IXC == 8 .or. IXC == 9
       !
       ! Constraining field related hacks below
       Bxc_up = 0.0d0
@@ -3909,7 +3929,7 @@ contains
       call xc_projection%clear()
       !
       ! Extrapolate density to core point
-      do ISP = 1, NSP
+      do ISP = 1, n_radial_spin_channels
          RHOEPS(ISP) = 0.d0
          RHOMU(ISP) = 0.d0
          RHO2 = RHO(2, ISP)/rofi(2)**2
@@ -3917,13 +3937,13 @@ contains
          RHO0(ISP) = OB4PI*(RHO2*rofi(3) - RHO3*rofi(2))/(rofi(3) - rofi(2))
       end do
       ! Calculate gradients in case of GGA
-      do ISP = 1, NSP
+      do ISP = 1, n_radial_spin_channels
          tRHO(1, ISP) = RHO0(ISP)
          do IR = 2, NR
             tRHO(IR, 1) = RHO(IR, 1)*OB4PI/rofi(IR)**2
             tRHO(IR, ISP) = RHO(IR, ISP)*OB4PI/rofi(IR)**2
          end do
-         if (IXC == 5 .or. IXC >= 8) then
+         if (use_libxc_gga .or. use_legacy_gga) then
             ! radgra returns d(tRHO)/dr; a second call returns d2(tRHO)/dr2.
             ! These are physical radial derivatives, not derivatives with
             ! respect to the logarithmic mesh coordinate.
@@ -3940,7 +3960,7 @@ contains
 
       if (use_libxc_gga) then
          allocate (vxc_up_radial(NR), vxc_down_radial(NR), exc_radial(NR))
-         if (NSP == 1) then
+         if (n_radial_spin_channels == 1) then
             call xc_obj%xcpot_libxc_gga_radial(A, B, rofi, 0.5d0*tRHO(:, 1), 0.5d0*tRHO(:, 1), &
                                                0.5d0*RHOP(:, 1), 0.5d0*RHOP(:, 1), &
                                                vxc_up_radial, vxc_down_radial, exc_radial)
@@ -3952,18 +3972,18 @@ contains
                                                vxc_up_radial, vxc_down_radial, exc_radial)
          end if
       end if
-      if (NSP == 1) then
+      if (n_radial_spin_channels == 1) then
          RHO1 = 0.5d0*tRHO(1, 1)
          RHO2 = RHO1
          if (use_libxc_gga) then
             VXC1 = vxc_up_radial(1)
             VXC2 = vxc_down_radial(1)
             EXC = exc_radial(1)
-         else if (IXC >= 8) then
+         else if (use_legacy_gga) then
             ! The VXC0SP RHO1/RHO2 contract is down/up.  radgra already
             ! returned d n/dr and d2 n/dr2; do not transform them again.
             ! At r=0 use zero slope and the regular limit laplacian=3*d2n/dr2.
-            call vxc0sp_pbe_origin_derivatives(NSP, [RHOPP(1, 1), 0.0_rp], RHOD, RHODD)
+            call vxc0sp_pbe_origin_derivatives(n_radial_spin_channels, [RHOPP(1, 1), 0.0_rp], RHOD, RHODD)
             if (IXC == 8) then
                R = 0.d0
             else
@@ -3984,7 +4004,7 @@ contains
                VXC1 = vxc_up_radial(IR)
                VXC2 = vxc_down_radial(IR)
                EXC1 = exc_radial(IR)
-            else if (IXC >= 8) then
+            else if (use_legacy_gga) then
                RHO1 = 0.5d0*tRHO(IR, 1)
                RHO2 = RHO1
                R = rofi(IR)
@@ -4017,10 +4037,10 @@ contains
             VXC1 = vxc_up_radial(1)
             VXC2 = vxc_down_radial(1)
             EXC1 = exc_radial(1)
-         else if (IXC >= 8) then
+         else if (use_legacy_gga) then
             ! The radial derivative producer supplies raw dn/dr and d2n/dr2.
             ! PBEGGA applies laplacian(n)=3*d2n/dr2 at the origin.
-            call vxc0sp_pbe_origin_derivatives(NSP, [RHOPP(1, 1), RHOPP(1, 2)], RHOD, RHODD)
+            call vxc0sp_pbe_origin_derivatives(n_radial_spin_channels, [RHOPP(1, 1), RHOPP(1, 2)], RHOD, RHODD)
             if (IXC == 8) then
                R = 0.d0
             else
@@ -4047,7 +4067,7 @@ contains
                VXC1 = vxc_up_radial(IR)
                VXC2 = vxc_down_radial(IR)
                EXC1 = exc_radial(IR)
-            else if (IXC >= 8) then
+            else if (use_legacy_gga) then
                ! RHOP/RHOPP are already dn/dr and d2n/dr2.  Passing a
                ! further 1/r or 1/r2 transform would differentiate in the
                ! logarithmic coordinate a second time.
@@ -4130,7 +4150,8 @@ contains
       NR = size(ROFI)
       B = atom%B()
       LMAX = atom%potential%lmax
-      NSP = 2
+      ! RACSI consumes two local spin eigenchannels even when control%nsp=1.
+      NSP = RADIAL_XC_SPIN_CHANNELS
       QSL(:) = 0.0_rp
       C2 = 274.074d0**2
       allocate (DVDR(NR, 2), DVM(NR, 2), DVP(NR, 2))
@@ -4292,7 +4313,9 @@ contains
       EB2 = 10.d0
       PI = 4.d0*ATAN(1.d0)
       B = atom%B()
-      nsp = 2
+      ! Potential parameters are built for the two local radial spin channels;
+      ! this is not a query of the global control%nsp mode.
+      nsp = RADIAL_XC_SPIN_CHANNELS
       rmax = atom%potential%ws_r
       nr = size(ROFI)
       lmax = atom%potential%lmax

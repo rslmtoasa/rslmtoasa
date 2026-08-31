@@ -22,6 +22,18 @@ Only LDA and GGA objects may become active.  A combination with at least one
 GGA component is routed as GGA; an all-LDA combination is routed as LDA.  The
 family of the first component is never used as a proxy for the combination.
 
+For each component, initialization also retains its native ID, name, kind,
+raw flags, 1D/2D/3D dimensionality, required ingredients, and EXC/VXC/FXC/KXC/LXC
+availability. Metadata are copied before the temporary `xc_f03_func_t` is
+ended; no native metadata pointer is used after that lifecycle boundary.
+
+The compatibility policy is explicit. Kinetic functionals, non-3D
+functionals, unsupported families, Laplacian/nonlocal requirements, invalid
+IDs, and components without both EXC and VXC fail before SCF. Exchange-only,
+correlation-only, multiple-X/C, combined-plus-additional, development-marked,
+and unconventional but valid compositions warn and proceed without adding or
+rewriting a component.
+
 ## Selector namespaces
 
 `TXC` is an RS-LMTO selector, while `libxc_func_id(:)` contains native libXC
@@ -30,7 +42,7 @@ IDs only:
 | Selector | Meaning |
 | --- | --- |
 | `1–99` | historical RS-LMTO implementation |
-| `100–199` | predefined explicit libXC alias |
+| `100–199` | predefined libXC XC bundle |
 | `>=1000` | direct native libXC ID `TXC-1000` |
 
 Examples:
@@ -49,9 +61,16 @@ evaluated exactly as requested.
 Legacy reference mappings are documentation and comparison metadata only.
 They are never inserted into `libxc_func_id(:)` for `TXC=1–99`.
 
-## Predefined aliases
+An arbitrary native component list is represented by `libxc_func_id(:)`; its
+length and ordering are not semantically constrained. The supported internal
+setter is `xc%set_libxc_component_ids([id1,id2,...])`, which revalidates and
+rebuilds all metadata, marks the selection as explicit, and uses
+`NO_EQUIVALENT` mapping quality. A user-facing namelist for this list remains
+a future input-layer extension rather than another encoded TXC range.
 
-The aliases below are explicit native-ID combinations.  At runtime the
+## Predefined libXC XC bundles
+
+The bundles below are explicit native-ID combinations.  At runtime the
 interface queries and reports each native libXC name, family, ID, and the
 mapping quality retained in the selector metadata.
 
@@ -70,7 +89,7 @@ mapping quality retained in the selector metadata.
 `REFERENCE_EQUIVALENT` means that the named parametrization is a controlled
 comparison reference; it does not assert bitwise identity with a legacy
 kernel. `APPROXIMATE_ANALOGUE` explicitly marks a related but non-identical
-choice.  In particular, aliases do not imply that historical BH, BHJ, ASW,
+choice.  In particular, bundles do not imply that historical BH, BHJ, ASW,
 or legacy GGA formulas have been replaced.
 
 ## Spin and density conventions
@@ -105,6 +124,22 @@ The response-provider field named `bxc_energy` is separately documented as
 the coefficient of `sigma_z` in its `H=v\,I+B\,sigma_z` convention, namely
 `(V_up-V_down)/2`.  These two named conventions must not be substituted for
 one another.
+
+`control%nsp` is not the number of XC channels. Its global modes are `1`
+(collinear SR), `2` (collinear FR/SOC), `3` (noncollinear SR), and `4`
+(noncollinear FR/SOC). The semantic queries in `control_mod` are
+`is_collinear()`, `is_noncollinear()`, `has_soc()`,
+`uses_spinor_representation()`, and `is_spin_polarized_mode()`.
+The atomic radial/XC path uses two local spin-density channels even for global
+`nsp=1`; noncollinear XC uses local eigenchannels
+`n_±=(n±|m|)/2`. The current density, not the global mode integer, determines
+whether a legacy unpolarized-only kernel is safe.
+
+Legacy `TXC=6` (Wigner) and `TXC=7` (Perdew–Zunger) are explicitly
+unpolarized-only. Equal local channels are accepted to the runtime tolerance;
+an appreciable `rho_up-rho_down` is fatal with a spin-capable-functional
+diagnostic. They are never silently evaluated with equal potentials for a
+polarized density.
 
 ## Energy and potential units
 
@@ -174,7 +209,7 @@ regularized.
 
 * A libXC selector in a build without libXC fails during XC construction; it
   never falls back to a legacy selector.
-* An undefined 100-series alias fails with a diagnostic directing the user to
+* An undefined 100-series bundle fails with a diagnostic directing the user to
   a direct native-ID selector.
 * An invalid native ID, MGGA, hybrid, orbital-dependent, kinetic-density-
   dependent, or otherwise unsupported family fails before atomic SCF.
@@ -194,7 +229,7 @@ The compact regression suite is registered in CMake as
 `UnitLibxcProductionContract` when libXC is enabled.  It independently
 initializes native libXC objects and checks:
 
-* every predefined alias, native ID, runtime name, component family, and
+* every predefined bundle, native ID, runtime name, component family, and
   aggregate route;
 * direct IDs `1`, `12`, `101`, and `130` without implicit pairing;
 * native LDA IDs `[1,5,7,9,12,17]` over unpolarized, polarized, near-full-
@@ -218,7 +253,10 @@ Additional registered tests provide the full radial evidence:
   outer-boundary refinement/no-artifact behavior;
 * `UnitXcLdaReconciliation` checks polarized LDA grids and the exchange oracle;
 * `UnitXcSelectorSemantics` enforces the disjoint selector namespaces; and
-  `UnitXcSelectorRequiresLibxc` is a negative test in a build without libXC.
+  `UnitXcSelectorRequiresLibxc` is a negative test in a build without libXC;
+* XCF-08 semantic tests cover all four `control%nsp` modes, the independent
+  two-channel radial contract, explicit list composition, TXC=6/7 density
+  guards, and kinetic/2D/MGGA/missing-VXC failures.
 
 Material calculations are smoke tests only.  No Fe moment, material-specific
 threshold, or legacy XC formula is used as the primary certification oracle.

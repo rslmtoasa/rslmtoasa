@@ -55,10 +55,13 @@ txc Parameter
 **Default:** 1 (Barth-Hedin)
 
 The selector namespace is intentionally separate from native libXC IDs.  Values
-``1-99`` remain historical RS-LMTO selectors, ``100-199`` are explicit libXC
-aliases, and ``1000+ID`` requests exactly native libXC ID ``ID``.  The complete
+``1-99`` remain historical RS-LMTO selectors, ``100-199`` are predefined libXC
+XC bundles, and ``1000+ID`` requests exactly native libXC ID ``ID``.  The complete
 mapping table, equivalence classifications, and backend diagnostics are in
 :download:`the XC selector and libXC mapping contract <../../XC_SELECTOR_AND_LIBXC_MAPPING.md>`.
+
+For the full capability and spin-channel contract, see
+:download:`XC semantics and capabilities <../../XC_SEMANTICS_AND_CAPABILITIES.md>`.
 
 **Example:**
 
@@ -192,11 +195,19 @@ Parameter: ``temperature`` in ``&energy`` namelist.
 Magnetic Moment Predictions
 ===========================
 
-For **magnetic systems** (nsp > 1):
+For **magnetic systems** (a density with unequal local spin channels; the
+global mode value alone is not a magnetization test):
 
 - LDA typically **underestimates** magnetic moments by 5-15%
 - GGA (PBE) often **closer** to experimental values
 - Spin-orbit coupling (nsp=2,4) reduces moments
+
+``control%nsp`` selects the global electronic-structure mode and is not the
+number of XC channels. The atomic radial/XC path uses two local channels,
+including for ``nsp=1``; non-collinear calculations use the two local spin
+eigenchannels :math:`n_\pm=(n\pm|\mathbf m|)/2`. TXC=6 (Wigner) and TXC=7
+(Perdew-Zunger) implement only unpolarized legacy kernels: equal local
+densities are accepted, but an appreciably polarized density is rejected.
 
 **Example:** Fe
 

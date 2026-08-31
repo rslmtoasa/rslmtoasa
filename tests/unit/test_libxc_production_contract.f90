@@ -21,7 +21,7 @@ program test_libxc_production_contract
 
    failed = .false.
    call g_logger%init()
-   call check_aliases()
+   call check_predefined_bundles()
    call check_direct_native_namespace()
    call check_lda_grid_and_exchange_oracle()
    call check_spin_and_units()
@@ -38,19 +38,19 @@ program test_libxc_production_contract
 
 contains
 
-   subroutine check_aliases()
-      call check_alias(101, [1, 17], LIBXC_FAMILY_LDA)
-      call check_alias(102, [1, 24], LIBXC_FAMILY_LDA)
-      call check_alias(103, [1], LIBXC_FAMILY_LDA)
-      call check_alias(104, [1, 9], LIBXC_FAMILY_LDA)
-      call check_alias(105, [1, 12], LIBXC_FAMILY_LDA)
-      call check_alias(106, [1, 7], LIBXC_FAMILY_LDA)
-      call check_alias(107, [1, 5], LIBXC_FAMILY_LDA)
-      call check_alias(108, [101, 130], LIBXC_FAMILY_GGA)
-      call check_alias(109, [117, 130], LIBXC_FAMILY_GGA)
-   end subroutine check_aliases
+   subroutine check_predefined_bundles()
+      call check_predefined_bundle(101, [1, 17], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(102, [1, 24], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(103, [1], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(104, [1, 9], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(105, [1, 12], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(106, [1, 7], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(107, [1, 5], LIBXC_FAMILY_LDA)
+      call check_predefined_bundle(108, [101, 130], LIBXC_FAMILY_GGA)
+      call check_predefined_bundle(109, [117, 130], LIBXC_FAMILY_GGA)
+   end subroutine check_predefined_bundles
 
-   subroutine check_alias(selector, expected_ids, expected_family)
+   subroutine check_predefined_bundle(selector, expected_ids, expected_family)
       integer, intent(in) :: selector, expected_ids(:), expected_family
       type(control) :: ctl
       type(xc) :: functional
@@ -64,23 +64,23 @@ contains
       functional = xc(ctl)
       ids = functional%get_libxc_functional_ids()
 
-      call require(functional%use_libxc, 'alias TXC='//int_string(selector)//' activates libXC')
-      call require(size(ids) == size(expected_ids), 'alias TXC='//int_string(selector)//' native ID count')
+      call require(functional%use_libxc, 'predefined bundle TXC='//int_string(selector)//' activates libXC')
+      call require(size(ids) == size(expected_ids), 'predefined bundle TXC='//int_string(selector)//' native ID count')
       if (size(ids) == size(expected_ids)) then
-         call require(all(ids == expected_ids), 'alias TXC='//int_string(selector)//' native IDs')
+         call require(all(ids == expected_ids), 'predefined bundle TXC='//int_string(selector)//' native IDs')
       end if
       call require(functional%libxc_family == expected_family, &
-         'alias TXC='//int_string(selector)//' aggregate family route')
+         'predefined bundle TXC='//int_string(selector)//' aggregate family route')
       call require(size(functional%libxc_component_family) == size(expected_ids), &
-         'alias TXC='//int_string(selector)//' stores all component families')
+         'predefined bundle TXC='//int_string(selector)//' stores all component families')
       do i = 1, size(expected_ids)
          call direct_metadata(expected_ids(i), family, kind, native_name)
          call require(functional%libxc_component_family(i) == family, &
-            'alias TXC='//int_string(selector)//' runtime family for component '//int_string(i))
+            'predefined bundle TXC='//int_string(selector)//' runtime family for component '//int_string(i))
          call require(index(functional%functional_name, trim(native_name)) > 0, &
-            'alias TXC='//int_string(selector)//' runtime name provenance')
+            'predefined bundle TXC='//int_string(selector)//' runtime name provenance')
       end do
-   end subroutine check_alias
+   end subroutine check_predefined_bundle
 
    subroutine check_direct_native_namespace()
       call check_direct(1001, 1, LIBXC_FAMILY_LDA)
@@ -259,7 +259,9 @@ contains
       ctl%nsp = 2
       ctl%txc = 108
       mixed = xc(ctl)
-      mixed%libxc_func_id = [1, 101, 130]
+      call mixed%set_libxc_component_ids([1, 101, 130])
+      call require(trim(mixed%libxc_composition_status) == 'WARNING', &
+         'multiple exchange components are reported as a warning')
 
       ! Non-zero gradients exercise the mixed GGA vsigma flux and its radial
       ! divergence, while the LDA component contributes only pointwise

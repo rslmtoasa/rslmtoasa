@@ -191,12 +191,15 @@ Collinear vs. Non-Collinear Magnetism
 - Spin-up and spin-down electrons handled separately
 - Simpler magnetic structures (ferromagnetism, antiferromagnetism)
 - Exchange splitting enters via different potentials for each spin
+- The radial/XC evaluator still uses two local spin-density channels; ``NSP``
+  is the global mode selector, not that channel count
 
 **Non-collinear (NSP = 3,4):**
 
 - Spins can point in arbitrary directions (canted, helical, etc.)
 - Requires vector spin density representation
 - More computationally expensive; richer physics
+- LSDA/GGA XC receives two local eigenchannels :math:`n_\pm=(n\pm|\mathbf m|)/2`
 
 Relativistic Effects
 --------------------

@@ -292,11 +292,16 @@ Computed via Hellmann-Feynman theorem (handled by ``force`` module if available)
 Magnetic Convergence
 ====================
 
-For **magnetic systems** (``nsp > 1``):
+For **magnetic systems** (when the local density has unequal spin channels;
+``control%nsp`` is a global mode, not a magnetization test):
 
 - Separate SCF loops for spin-up and spin-down
 - Or: fully magnetized iterative solution
 - Convergence checked on **magnetization** as well as charge
+
+The atomic/XC radial path uses two local spin-density channels even for the
+scalar-relativistic collinear mode ``nsp=1``. In non-collinear modes, these
+are local spin eigenchannels rather than globally collinear spin axes.
 
 **Constraints:**
 

@@ -610,12 +610,25 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitGreenLifecycle PROPERTIES LABELS "unit;green;lifecycle")
   add_fortran_unit_test(UnitXcSelectorSemantics ${TestDIR}/unit/test_xc_selector_semantics.f90)
   set_tests_properties(UnitXcSelectorSemantics PROPERTIES LABELS "unit;xc;selector;libxc")
+  add_fortran_unit_test(UnitControlSpinSemantics ${TestDIR}/unit/test_control_spin_semantics.f90)
+  set_tests_properties(UnitControlSpinSemantics PROPERTIES LABELS "unit;control;spin;semantics")
   add_fortran_unit_test(UnitXcUnknownSelectorRequiresFatal ${TestDIR}/unit/test_xc_unknown_selector_requires_fatal.f90)
   set_tests_properties(UnitXcUnknownSelectorRequiresFatal PROPERTIES
     LABELS "unit;xc;selector;negative;unsupported"
     WILL_FAIL TRUE)
   add_fortran_unit_test(UnitXcLdaLegacyKernel ${TestDIR}/unit/test_xc_lda_legacy_kernel.f90)
   set_tests_properties(UnitXcLdaLegacyKernel PROPERTIES LABELS "unit;xc;lda;legacy;polarization")
+  add_fortran_unit_test(UnitXcLegacyUnpolarizedDensity ${TestDIR}/unit/test_xc_legacy_unpolarized_density.f90)
+  set_tests_properties(UnitXcLegacyUnpolarizedDensity PROPERTIES LABELS "unit;xc;legacy;spin;semantics")
+  add_fortran_unit_test(UnitXcLegacyPolarizedRequiresFatal ${TestDIR}/unit/test_xc_legacy_polarized_requires_fatal.f90)
+  set_tests_properties(UnitXcLegacyPolarizedRequiresFatal PROPERTIES
+    LABELS "unit;xc;legacy;spin;negative"
+    WILL_FAIL TRUE)
+  add_test(NAME UnitXcLegacyPolarizedPzRequiresFatal
+    COMMAND $<TARGET_FILE:UnitXcLegacyPolarizedRequiresFatal> 7)
+  set_tests_properties(UnitXcLegacyPolarizedPzRequiresFatal PROPERTIES
+    LABELS "unit;xc;legacy;spin;negative;pz"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitRadialGga ${TestDIR}/unit/test_radial_gga.f90)
   set_tests_properties(UnitRadialGga PROPERTIES LABELS "unit;xc;gga;radial;derivatives")
   add_fortran_unit_test(UnitLegacyPbeGga ${TestDIR}/unit/test_legacy_pbe_gga.f90)
@@ -637,6 +650,27 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(UnitXcUnsupportedFamilyRequiresFatal PROPERTIES
       LABELS "unit;libxc;xc;selector;negative;unsupported-family"
       WILL_FAIL TRUE)
+    add_fortran_unit_test(UnitXcCapabilityRequiresFatal ${TestDIR}/unit/test_xc_capability_requires_fatal.f90)
+    set_tests_properties(UnitXcCapabilityRequiresFatal PROPERTIES
+      LABELS "unit;libxc;xc;selector;negative;capability"
+      WILL_FAIL TRUE)
+    add_test(NAME UnitXcKineticRequiresFatal
+      COMMAND $<TARGET_FILE:UnitXcCapabilityRequiresFatal> 1050)
+    set_tests_properties(UnitXcKineticRequiresFatal PROPERTIES
+      LABELS "unit;libxc;xc;selector;negative;kinetic"
+      WILL_FAIL TRUE)
+    add_test(NAME UnitXcWrongDimensionalityRequiresFatal
+      COMMAND $<TARGET_FILE:UnitXcCapabilityRequiresFatal> 1019)
+    set_tests_properties(UnitXcWrongDimensionalityRequiresFatal PROPERTIES
+      LABELS "unit;libxc;xc;selector;negative;dimensionality"
+      WILL_FAIL TRUE)
+    add_test(NAME UnitXcMissingVxcRequiresFatal
+      COMMAND $<TARGET_FILE:UnitXcCapabilityRequiresFatal> 1160)
+    set_tests_properties(UnitXcMissingVxcRequiresFatal PROPERTIES
+      LABELS "unit;libxc;xc;selector;negative;derivative"
+      WILL_FAIL TRUE)
+    add_fortran_unit_test(UnitXcCompositionSemantics ${TestDIR}/unit/test_xc_composition_semantics.f90)
+    set_tests_properties(UnitXcCompositionSemantics PROPERTIES LABELS "unit;libxc;xc;composition;spin;semantics")
     add_fortran_unit_test(UnitPbeGgaComparison ${TestDIR}/unit/test_pbe_gga_comparison.f90)
     set_tests_properties(UnitPbeGgaComparison PROPERTIES LABELS "unit;libxc;xc;gga;comparison;pbe")
     add_fortran_unit_test(UnitXcLdaReconciliation ${TestDIR}/unit/test_xc_lda_reconciliation.f90)

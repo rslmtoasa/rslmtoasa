@@ -11,24 +11,24 @@ any legacy XC formula.
 | TXC range | Meaning |
 | --- | --- |
 | `1–99` | Historical/internal RS-LMTO selectors |
-| `100–199` | Predefined explicit libXC aliases |
+| `100–199` | Predefined libXC XC bundles |
 | `>=1000` | Direct native libXC request, `libXC_ID = TXC - 1000` |
 
 `libxc_func_id(:)` contains native libXC identifiers only. Its value `17`, for
 example, means native libXC `XC_LDA_C_VBH`; it never means legacy `TXC=17`.
 Likewise, native libXC ID `101` is `XC_GGA_X_PBE`, while `TXC=101` is an
-RS-LMTO alias that expands to native IDs `[1,17]`.
+RS-LMTO bundle selector that expands to native IDs `[1,17]`.
 
 ## Backend dispatch
 
 The dispatch invariant is:
 
 * `TXC=1–99` uses the historical RS-LMTO implementation.
-* `TXC=100–199` uses the libXC backend when the alias is defined.
+* `TXC=100–199` uses the libXC backend when the bundle is defined.
 * `TXC>=1000` uses the libXC backend with exactly one native ID, `TXC-1000`.
 
 An explicit libXC selector is never passed to legacy `XCPOT`. Unsupported
-100-series aliases, invalid native IDs, and libXC selectors in a build without
+100-series bundles, invalid native IDs, and libXC selectors in a build without
 libXC terminate with a descriptive error. No historical functional is silently
 substituted.
 
@@ -55,9 +55,9 @@ The three Barth–Hedin-family rows are intentionally separate. TXC=1, TXC=3,
 and TXC=11 must not be collapsed into one claim merely because native
 libXC `XC_LDA_C_VBH` is a useful comparison reference.
 
-## Explicit libXC aliases
+## Predefined libXC XC bundles
 
-These aliases are the authoritative predefined entries in
+These bundles are the authoritative predefined entries in
 `setup_libxc_functional_ids`. Every number shown is a native libXC ID.
 
 | TXC | Backend | Functional names | Native libXC IDs | Mapping quality | Notes |
@@ -73,7 +73,7 @@ These aliases are the authoritative predefined entries in
 | 109 | libXC | RPBE exchange + PBE correlation | `[117,130]` | `APPROXIMATE_ANALOGUE` | No legacy RS-LMTO RPBE implementation is claimed |
 
 `TXC=100` and currently undefined values in the `100–199` range are still
-libXC-style selectors, but they fail as unsupported aliases instead of
+libXC-style selectors, but they fail as unsupported bundles instead of
 falling through to legacy code.
 
 ## Direct libXC selectors
@@ -81,7 +81,7 @@ falling through to legacy code.
 `TXC=1000+ID` selects exactly native libXC functional ID `ID`. For example,
 `TXC=1001` selects `[1]`, native `XC_LDA_X`, and remains exchange-only. The
 selector layer does not infer or add a correlation/exchange partner from a
-functional name. If a caller wants a pair, it must use a predefined alias or
+functional name. If a caller wants a pair, it must use a predefined bundle or
 an explicitly defined pair in the interface.
 
 Direct native requests do not claim a legacy-to-libXC equivalence; their
@@ -116,9 +116,9 @@ which backend produced a potential from the run log.
 Focused selector coverage is provided by:
 
 * `tests/unit/test_xc_selector_semantics.f90`, covering legacy selectors,
-  aliases 101/105/108, and direct selector 1001;
+  bundles 101/105/108, and direct selector 1001;
 * `tests/unit/test_xc_selector_requires_libxc.f90`, registered in a build
   without libXC and expecting a construction-time failure for a libXC-only
   selector; and
 * `tests/unit/test_libxc_xc_baseline.f90`, which compares legacy TXC=5 with
-  the explicitly selected libXC alias TXC=105 without changing either kernel.
+  the explicitly selected libXC bundle TXC=105 without changing either kernel.

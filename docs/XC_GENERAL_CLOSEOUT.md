@@ -6,7 +6,7 @@ The audited XC scope is accepted for production use:
 
 * legacy RS-LMTO LDA and GGA routes remain the selected implementation for
   TXC=1–9, subject to the selector's declared spin restrictions;
-* explicit libXC aliases TXC=101–109 and direct native selectors
+* predefined libXC XC bundles TXC=101–109 and direct native selectors
   TXC=1000+ID select only validated LDA/GGA functionals;
 * unsupported selectors, unsupported libXC families, and libXC requests in a
   no-libXC executable fail at construction/evaluation boundaries; and
@@ -48,7 +48,7 @@ xc constructor
     |
     +-- legacy TXC=1..99 ------------> XCPOT / PBEGGA / LAGGGA
     |
-    +-- alias TXC=101..199 ------------+
+    +-- bundle TXC=101..199 ------------+
     |                                   v
     +-- direct TXC=1000+ID -------> init_libxc
                                         |
@@ -79,7 +79,7 @@ are covered by `UnitVxc0spGgaOrigin`.
 | selector namespace | Meaning | Failure behavior |
 | --- | --- | --- |
 | `1–99` | historical RS-LMTO implementation | unknown values are fatal |
-| `100–199` | explicit predefined libXC alias | undefined aliases are fatal |
+| `100–199` | predefined libXC XC bundle | undefined bundles are fatal |
 | `>=1000` | exactly native libXC ID `TXC-1000` | incompatible/invalid family is fatal |
 | `200–999` | no defined namespace | fatal |
 
@@ -100,6 +100,12 @@ The validated predefined mappings are:
 Legacy-to-libXC labels describe controlled reference comparisons. They do not
 claim bitwise identity. Direct native requests select exactly one requested
 component; no exchange/correlation partner is inferred.
+
+XCF-08 also makes the global/local spin distinction explicit. `control%nsp`
+selects the global collinear/noncollinear and SR/FR(SOC) mode; it is not the
+number of XC channels. The atomic radial/XC path uses two local channels even
+when `control%nsp=1`. TXC=6/7 now inspect the actual density at `XCPOT`: equal
+channels are accepted, while an appreciably polarized density is fatal.
 
 ## Density, channel, unit, and radial conventions
 
@@ -155,7 +161,7 @@ gradient residuals are `8.45e-10` (BH), `9.48e-10` (PW), and `4.48e-9`
 | `UnitLibxcGgaRadial` radial functional derivative | PASS; final residual `9.05e-10` |
 | `UnitPbeGgaComparison` TXC=8 vs TXC=108 | PASS; energy-density difference `8.88e-16`, scalar-potential difference `5.06e-6` Ry, magnetic-potential difference `5.30e-6` Ry |
 | `UnitVxc0spGgaOrigin` | PASS for polarized and unpolarized production origin handoffs |
-| `UnitLibxcProductionContract` | PASS; aliases, direct IDs, metadata, lifecycle, units, mixed components, radial flux, floor, ζ matrix, and zero tail |
+| `UnitLibxcProductionContract` | PASS; bundles, direct IDs, metadata, lifecycle, units, mixed components, radial flux, floor, ζ matrix, and zero tail |
 
 The production-contract ζ matrix explicitly covers `0, .5, .9, .99, 1`, a
 positive sub-floor total density, and exact zero density.
@@ -200,7 +206,7 @@ The following are deliberately not acceptance blockers for this closeout:
 * GBT validation and noncollinear extensions;
 * unsupported libXC meta-GGA, hybrid, orbital-dependent, and
   long-range-corrected families; and
-* unvalidated mappings beyond the explicit aliases listed above.
+* unvalidated mappings beyond the explicit bundles listed above.
 
 No threshold retuning, material-specific XC tuning, implicit selector pairing,
 or fallback behavior was introduced.
@@ -222,6 +228,10 @@ or fallback behavior was introduced.
   legacy and production GGA coverage.
 * [`tests/unit/test_xc_unknown_selector_requires_fatal.f90`](../tests/unit/test_xc_unknown_selector_requires_fatal.f90):
   selector rejection coverage.
+* [`tests/unit/test_control_spin_semantics.f90`](../tests/unit/test_control_spin_semantics.f90),
+  [`tests/unit/test_xc_composition_semantics.f90`](../tests/unit/test_xc_composition_semantics.f90),
+  and the TXC=6/7/capability negative tests: XCF-08 semantic and
+  pre-SCF compatibility coverage.
 * [`docs/XC_LDA_RECONCILIATION.md`](XC_LDA_RECONCILIATION.md),
   [`docs/XC_GGA_RADIAL_RECONCILIATION.md`](XC_GGA_RADIAL_RECONCILIATION.md),
   and [`docs/LIBXC_PRODUCTION_CONTRACT.md`](LIBXC_PRODUCTION_CONTRACT.md):

@@ -16,14 +16,15 @@ interface does not provide all of their required ingredients.
 cmake .. -DENABLE_LIBXC=ON
 make
 
-# Predefined PBE alias, or a direct native libXC ID:
+# Predefined PBE XC bundle, or a direct native libXC ID:
 echo "txc = 108" > input.nml
 echo "txc = 1101" > input.nml  # native libXC ID 101, exchange-only PBE GGA
 ```
 
-See [the production contract](docs/LIBXC_PRODUCTION_CONTRACT.md) for selector
-namespaces, spin and unit conventions, radial GGA evaluation, aliases, and
-validation evidence.
+See [the XC semantics and capabilities](docs/XC_SEMANTICS_AND_CAPABILITIES.md)
+and [the production contract](docs/LIBXC_PRODUCTION_CONTRACT.md) for selector
+namespaces, bundles/compositions, spin and unit conventions, radial GGA
+evaluation, and validation evidence.
 
 ### TDB
 
