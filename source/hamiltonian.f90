@@ -101,6 +101,7 @@ module hamiltonian_mod
       procedure :: build_realspace_orbital_torque_operators
       procedure :: build_realspace_quadrupole_velocity_operators
       procedure :: build_realspace_quadrupole_accumulation_operators
+      procedure :: build_realspace_octupole_accumulation_operators
       procedure :: block_to_sparse
       procedure :: torque_operator_collinear
       procedure :: rs2pao
@@ -563,7 +564,125 @@ contains
       write(*,*) 'Selected Q component = ', trim(pol), ' norm = ', sqrt(real(sum(conjg(Q_op)*Q_op), rp))
       write(*,*) 'Hermiticity check Q = ', maxval(abs(Q_op - transpose(conjg(Q_op))))
 
-   end subroutine select_quadrupole_operator 
+   end subroutine select_quadrupole_operator
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select an orbital octupole operator from a component label.
+   !>
+   !> Definitions follow the symmetrized orbital-multipole convention:
+   !>
+   !>   Oxyz = (1/6) sum_perm Lx Ly Lz
+   !>
+   !>   O_a(3 b^2-r^2)
+   !>      = 1/2 {L_a,L_b^2} - 1/3 L_a L^2
+   !>
+   !> with L^2 = Lx^2 + Ly^2 + Lz^2. The second term is written below
+   !> as -(1/6){L_a,L^2}; this is identical because [L_a,L^2] = 0 and
+   !> keeps Hermiticity explicit in the numerical construction.
+   !---------------------------------------------------------------------------
+   subroutine select_octupole_operator(pol, O_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(18, 18), intent(out) :: O_op
+
+      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
+      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2, L2, O9
+
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      Lx2 = matmul(mLx, mLx)
+      Ly2 = matmul(mLy, mLy)
+      Lz2 = matmul(mLz, mLz)
+      L2  = Lx2 + Ly2 + Lz2
+
+      O9(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+
+      case('Oxyz', 'oxyz', 'xyz')
+         O9 = ( &
+              matmul(matmul(mLx, mLy), mLz) &
+            + matmul(matmul(mLx, mLz), mLy) &
+            + matmul(matmul(mLy, mLx), mLz) &
+            + matmul(matmul(mLy, mLz), mLx) &
+            + matmul(matmul(mLz, mLx), mLy) &
+            + matmul(matmul(mLz, mLy), mLx) ) / 6.0_rp
+
+      case('Ox3y2r2', 'ox3y2r2')
+         O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
+
+      case('Oy3z2r2', 'oy3z2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
+
+      case('Oz3x2r2', 'oz3x2r2')
+         O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
+
+      case('Ox3z2r2', 'ox3z2r2')
+         O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
+
+      case('Oy3x2r2', 'oy3x2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
+
+      case('Oz3y2r2', 'oz3y2r2')
+         O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
+
+      case default
+         call g_logger%fatal('Invalid octupole component: '//trim(pol), __FILE__, __LINE__)
+
+      end select
+
+      O9 = 0.5_rp * (O9 + transpose(conjg(O9)))
+
+      O_op(:, :) = (0.0_rp, 0.0_rp)
+      O_op(1:9, 1:9) = O9(:, :)
+      O_op(10:18, 10:18) = O9(:, :)
+
+   end subroutine select_octupole_operator
+
+   !**************************************************************************
+   !> @brief Build a local orbital-octupole accumulation operator.
+   !>
+   !> O_pol is a purely on-site observable, so only the m = 1 block is
+   !> filled for every atom type. jl_a / jlo_a are temporary Kubo containers,
+   !> as in the quadrupole-accumulation implementation.
+   !**************************************************************************
+   subroutine build_realspace_octupole_accumulation_operators(this, pol)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol
+
+      integer :: ntype
+      integer :: hblocksize
+      complex(rp), allocatable :: O_op(:, :)
+
+      hblocksize = size(this%v_a, 1)
+      allocate(O_op(hblocksize, hblocksize))
+
+      this%jl_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
+      this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
+
+      call select_octupole_operator(pol, O_op)
+
+      do ntype = 1, this%charge%lattice%ntype
+         this%jl_a(:, :, 1, ntype) = O_op(:, :)
+      end do
+
+      deallocate(O_op)
+
+   end subroutine build_realspace_octupole_accumulation_operators
+
 
    !**************************************************************************
    !> @brief Build local quadrupole/OAP accumulation operator.
