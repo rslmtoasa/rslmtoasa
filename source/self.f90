@@ -969,7 +969,7 @@ contains
          do ia = 1, this%lattice%nrec
             write (newunit, '(a,i4,a,f10.6)') 'Spin moment of atom', ia, ':', norm2(magmom(ia, :))
             write (newunit, '(a,i4,a,3f10.6)') 'Spin moment projections of atom', ia, ':', magmom(ia, :)
-            write (newunit, '(a,i4,a,3f16.6)') 'Magnetic force on atom', ia, ':', mag_for(:, ia)
+            write (newunit, '(a,i4,a,3f16.6)') 'Effective magnetic field (mRy/mu_B) on atom', ia, ':', mag_for(:, ia)
          end do
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                     Orbital moment                                      |'
