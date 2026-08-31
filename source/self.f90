@@ -61,6 +61,13 @@ module self_mod
 
    private
 
+   ! Historical ATOMSC control predicates are kept as small pure procedures
+   ! so the iteration policy can be tested independently of the physical
+   ! residual observables.  The thresholds are intentionally unchanged.
+   public :: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
+   public :: vxc0sp_pbe_origin_derivatives
+   public :: vxc0sp
+
    !> Module´s main structure
    type, public :: self
       !> Lattice
@@ -383,6 +390,50 @@ module self_mod
    end interface self
 
 contains
+   pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
+      integer, intent(in) :: iteration
+      real(rp), intent(in) :: drho_control, tolrsq
+      real(rp) :: tolerance
+
+      tolerance = tolrsq
+      if (iteration >= 2 .and. drho_control > 2.0_rp) tolerance = 1.0e-3_rp
+   end function atomsc_solver_tolerance
+
+   pure function atomsc_mixing_beta(iteration, drho_control, beta) result(beta1)
+      integer, intent(in) :: iteration
+      real(rp), intent(in) :: drho_control, beta
+      real(rp) :: beta1
+
+      beta1 = beta
+      if (mod(iteration, 3) == 2 .and. drho_control < 1.0_rp) beta1 = 0.5_rp
+   end function atomsc_mixing_beta
+
+   pure function atomsc_should_stop(iteration, niter, drho_control, tolerance) result(should_stop)
+      integer, intent(in) :: iteration, niter
+      real(rp), intent(in) :: drho_control, tolerance
+      logical :: should_stop
+
+      should_stop = drho_control < tolerance .or. iteration == niter - 1
+   end function atomsc_should_stop
+
+   pure subroutine vxc0sp_pbe_origin_derivatives(nsp, rhopp, rhod, rhodd)
+      integer, intent(in) :: nsp
+      real(rp), dimension(2), intent(in) :: rhopp
+      real(rp), dimension(2), intent(out) :: rhod, rhodd
+
+      ! RHOPP contains raw physical second radial derivatives.  PBEGGA owns
+      ! the regular spherical factor of three; only NSP=1's total-to-per-spin
+      ! conversion belongs at this VXC0SP boundary.
+      rhod = 0.0_rp
+      if (nsp == 1) then
+         rhodd = 0.5_rp*rhopp(1)
+      else
+         ! XCPOT/PBEGGA receives the historical down/up ordering.
+         rhodd(1) = rhopp(2)
+         rhodd(2) = rhopp(1)
+      end if
+   end subroutine vxc0sp_pbe_origin_derivatives
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
@@ -730,11 +781,11 @@ contains
    !> Record both the historical unweighted ATOMSC L1 residual and the
    !> radial-quadrature residual.  The stored RHO is r^2 times the physical
    !> spherical density, so DRDI=d r/d(log r) is required by the integral.
-   subroutine write_atomic_scf_residual(this, outer_iteration, site, inner_iteration, residual_unweighted, &
-                                        residual_integrated, beta, q_integrated)
+   subroutine write_atomic_scf_residual(this, outer_iteration, site, inner_iteration, drho_control, &
+                                        drho_integrated, beta, q_integrated)
       class(self), intent(inout) :: this
       integer, intent(in) :: outer_iteration, site, inner_iteration
-      real(rp), intent(in) :: residual_unweighted, residual_integrated, beta, q_integrated
+      real(rp), intent(in) :: drho_control, drho_integrated, beta, q_integrated
       integer :: unit, io_status
       character(len=sl) :: filename
 
@@ -747,11 +798,11 @@ contains
       open(newunit=unit, file=trim(filename), status='unknown', action='write', position='append', iostat=io_status)
       if (io_status /= 0) return
       if (.not. this%atomic_scf_residual_header_written) then
-         write(unit, '(a)') '# outer_iteration site inner_iteration residual_unweighted residual_integrated beta q_integrated'
+         write(unit, '(a)') '# outer_iteration site inner_iteration drho_control drho_integrated beta q_integrated'
          this%atomic_scf_residual_header_written = .true.
       end if
-      write(unit, '(3i8,4(1x,es20.12))') outer_iteration, site, inner_iteration, residual_unweighted, &
-         residual_integrated, beta, q_integrated
+      write(unit, '(3i8,4(1x,es20.12))') outer_iteration, site, inner_iteration, drho_control, &
+         drho_integrated, beta, q_integrated
       close(unit)
    end subroutine write_atomic_scf_residual
 
@@ -2316,7 +2367,7 @@ contains
       integer, parameter :: NVMX = 20
 
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
-      real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO, DRHO_OLD, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
+      real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO_CONTROL, DRHO_INTEGRATED, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
       integer :: ISP, ncore, nval, l, nsp, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
       integer :: qn_default, site_id
       logical :: LAST
@@ -2500,19 +2551,15 @@ contains
          stop "*** ATOMSC EXPECTS JOB=RHO OR JOB=POT"
       end if
       ! -------- START SELF-CONSISTENCY LOOP ------
-      DRHO = 100.d0
+      ! DRHO_CONTROL is the historical mesh-coordinate L1 metric.  Keep it
+      ! on the old nonlinear-control path; DRHO_INTEGRATED is an observable
+      ! physical electron-number residual and must not change that path.
+      DRHO_CONTROL = 100.d0
       LAST = .false.
       do ITER = 1, NITER
-         TL = TOLRSQ
-         if (ITER >= 2 .and. DRHO > 2d0) then
-            TL = 1.d-3
-         end if
-         BETA1 = BETA
-         if (MOD(ITER, 3) == 2 .and. DRHO < 1.d0) then
-            !BETA1 = 0.8d0
-            BETA1 = 0.5d0
-         end if
-       !!    IF(MOD(ITER, 3).EQ.2.AND.DRHO.LT.0.1D0) BETA1=1.0D0
+         TL = atomsc_solver_tolerance(ITER, DRHO_CONTROL, TOLRSQ)
+         BETA1 = atomsc_mixing_beta(ITER, DRHO_CONTROL, BETA)
+       !!    IF(MOD(ITER, 3).EQ.2.AND.DRHO_CONTROL.LT.0.1D0) BETA1=1.0D0
          IPR1 = 0
          if (LAST) then
             IPR1 = IPR
@@ -2522,8 +2569,8 @@ contains
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
          call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP, B_fsm, xc_projection)
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, NSP, IPR1)
-         DRHO = 0.d0
-         DRHO_OLD = 0.d0
+         DRHO_CONTROL = 0.d0
+         DRHO_INTEGRATED = 0.d0
          SUM = 0.d0
          RHO0T = 0.d0
          do ISP = 1, NSP
@@ -2534,18 +2581,19 @@ contains
                   WGT = 1.d0/3.d0
                end if
                DRDI = atom%a*(rofi(IR) + B)
-               DRHO_OLD = DRHO_OLD + WGT*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
-               DRHO = DRHO + WGT*DRDI*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
+               DRHO_CONTROL = DRHO_CONTROL + WGT*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
+               DRHO_INTEGRATED = DRHO_INTEGRATED + WGT*DRDI*ABS(RHO(IR, ISP) - rho_in(IR, ISP))
                rho_in(IR, ISP) = BETA1*RHO(IR, ISP) + (1.d0 - BETA1)*rho_in(IR, ISP)
                SUM = SUM + WGT*DRDI*RHO(IR, ISP)
             end do
          end do
-         call this%write_atomic_scf_residual(this%magnetic_scf_outer_iteration, site_id, ITER, DRHO_OLD, DRHO, BETA1, SUM)
+         call this%write_atomic_scf_residual(this%magnetic_scf_outer_iteration, site_id, ITER, DRHO_CONTROL, &
+                                             DRHO_INTEGRATED, BETA1, SUM)
          if (LAST) exit
-         if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
-            write (6, 10004) ITER, SUM, DRHO, VNUCL, RHO0T, VSUM, BETA1
+         if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO_CONTROL < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
+            write (6, 10004) ITER, SUM, DRHO_CONTROL, VNUCL, RHO0T, VSUM, BETA1
          end if
-         if (DRHO < TOL .or. ITER == NITER - 1) then
+         if (atomsc_should_stop(ITER, NITER, DRHO_CONTROL, TOL)) then
             LAST = .true.
          end if
       end do
@@ -2599,7 +2647,7 @@ contains
 10003 format(i4, 5f13.6)
 10004 format(i5, f12.6, 1p, d12.3, 0p, f14.4, d14.4, f14.4, f7.2)
 10005 format( &
-         /"  ITER     QINT", 9x, "DRHO", 10x, "VH0", 10x, "RHO0", 10x, "VSUM", 5x, "BETA" &
+         /"  ITER     QINT", 9x, "DRHO_CONTROL", 10x, "VH0", 10x, "RHO0", 10x, "VSUM", 5x, "BETA" &
          )
 10006 format( &
          " SPIN", i2, ":", /" VRM=", f12.5, "    SEV=", f12.5, "    SEC=", f12.5, / &
@@ -3912,8 +3960,7 @@ contains
             ! The VXC0SP RHO1/RHO2 contract is down/up.  radgra already
             ! returned d n/dr and d2 n/dr2; do not transform them again.
             ! At r=0 use zero slope and the regular limit laplacian=3*d2n/dr2.
-            RHOD = 0.d0
-            RHODD = 1.5d0*RHOPP(1, 1)
+            call vxc0sp_pbe_origin_derivatives(NSP, [RHOPP(1, 1), 0.0_rp], RHOD, RHODD)
             if (IXC == 8) then
                R = 0.d0
             else
@@ -3968,11 +4015,9 @@ contains
             VXC2 = vxc_down_radial(1)
             EXC1 = exc_radial(1)
          else if (IXC >= 8) then
-            ! The radial derivative producer supplies dn/dr and d2n/dr2.
-            ! At the extrapolated origin, use zero slope and laplacian(n)=3*d2n/dr2.
-            RHOD = 0.d0
-            RHODD(2) = 3.d0*RHOPP(1, 1)
-            RHODD(1) = 3.d0*RHOPP(1, 2)
+            ! The radial derivative producer supplies raw dn/dr and d2n/dr2.
+            ! PBEGGA applies laplacian(n)=3*d2n/dr2 at the origin.
+            call vxc0sp_pbe_origin_derivatives(NSP, [RHOPP(1, 1), RHOPP(1, 2)], RHOD, RHODD)
             if (IXC == 8) then
                R = 0.d0
             else
