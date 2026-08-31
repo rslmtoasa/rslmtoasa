@@ -18,9 +18,12 @@ program test_xc_legacy_polarization_tolerance
    call get_command_argument(1, selector_text)
    call get_command_argument(2, case_text)
    if (len_trim(selector_text) == 0 .and. len_trim(case_text) == 0) then
-      ! The default CTest registration covers all accepted threshold points.
+      ! The default run covers all accepted density cases.
       do selector = 6, 7
          do case_id = 0, 2
+            call check_accepted(selector, case_id)
+         end do
+         do case_id = 6, 8
             call check_accepted(selector, case_id)
          end do
       end do
@@ -29,7 +32,7 @@ program test_xc_legacy_polarization_tolerance
       if (ios /= 0) error stop 'missing or invalid TXC selector argument'
       read (case_text, *, iostat=ios) case_id
       if (ios /= 0) error stop 'missing or invalid tolerance case argument'
-      if (case_id <= 2) then
+      if (case_id <= 2 .or. (case_id >= 6 .and. case_id <= 8)) then
          call check_accepted(selector, case_id)
       else
          call check_rejected(selector, case_id)
@@ -70,6 +73,21 @@ contains
       case (5)
          difference = 0.10_rp
          description = 'clearly polarized density'
+      case (6)
+         rho_down = 0.0_rp
+         rho_up = 0.0_rp
+         description = 'zero density'
+         return
+      case (7)
+         rho_down = 1.0e-25_rp
+         rho_up = 0.0_rp
+         description = 'down-channel asymmetric tail'
+         return
+      case (8)
+         rho_down = 0.0_rp
+         rho_up = 1.0e-25_rp
+         description = 'up-channel asymmetric tail'
+         return
       case default
          error stop 'unknown tolerance case'
       end select
@@ -96,6 +114,10 @@ contains
          [0.0_rp, 0.0_rp], 1.0_rp, v_down, v_up, energy)
       call require(ieee_is_finite(energy) .and. ieee_is_finite(v_down) .and. ieee_is_finite(v_up), &
          'TXC='//int_string(selector)//' accepts '//trim(description))
+      if (case_id >= 6) then
+         call require(v_down == 0.0_rp .and. v_up == 0.0_rp .and. energy == 0.0_rp, &
+            'TXC='//int_string(selector)//' returns zero XC for '//trim(description))
+      end if
    end subroutine check_accepted
 
    subroutine check_rejected(selector, case_id)

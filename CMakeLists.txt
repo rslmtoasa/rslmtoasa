@@ -632,7 +632,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitXcLegacyPolarizationTolerance ${TestDIR}/unit/test_xc_legacy_polarization_tolerance.f90)
   set_tests_properties(UnitXcLegacyPolarizationTolerance PROPERTIES LABELS "unit;xc;legacy;spin;tolerance")
   foreach(_xc_selector IN ITEMS 6 7)
-    foreach(_xc_tolerance_case IN ITEMS 0 1 2)
+    foreach(_xc_tolerance_case IN ITEMS 0 1 2 6 7 8)
       add_test(NAME UnitXcLegacyPolarizationTolerance_txc${_xc_selector}_case${_xc_tolerance_case}
         COMMAND $<TARGET_FILE:UnitXcLegacyPolarizationTolerance> ${_xc_selector} ${_xc_tolerance_case})
       set_tests_properties(UnitXcLegacyPolarizationTolerance_txc${_xc_selector}_case${_xc_tolerance_case}

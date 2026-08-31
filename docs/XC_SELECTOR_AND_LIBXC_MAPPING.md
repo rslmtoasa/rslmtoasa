@@ -78,7 +78,8 @@ falling through to legacy code.
 
 ## Direct libXC selectors
 
-`TXC=1000+ID` selects exactly native libXC functional ID `ID`. For example,
+`TXC=1000+ID` selects exactly native libXC functional ID `ID`; here `ID` is a
+native libXC identifier, not another RS-LMTO `TXC` value. For example,
 `TXC=1001` selects `[1]`, native `XC_LDA_X`, and remains exchange-only. The
 selector layer does not infer or add a correlation/exchange partner from a
 functional name. If a caller wants a pair, it must use a predefined bundle or

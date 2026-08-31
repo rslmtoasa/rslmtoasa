@@ -475,6 +475,16 @@ contains
       ! ... Executable Statements ...
       !
       !
+      ! A vanishing spin channel is a valid fully polarized density.  Only
+      ! the total-density limit is singular; do not discard a finite-density
+      ! spin-polarized evaluation merely because one channel is zero.
+      if (RHO <= TOLD) then
+         V1 = 0.d0
+         V2 = 0.d0
+         EXC = 0.d0
+         return
+      end if
+
       if (.not. this%supports_spin_polarized_density) then
          ! Compare the absolute local-channel difference with a relative
          ! tolerance scaled by the supplied total density. TOLDD is only a
@@ -488,15 +498,6 @@ contains
          end if
       end if
 
-      ! A vanishing spin channel is a valid fully polarized density.  Only
-      ! the total-density limit is singular; do not discard a finite-density
-      ! spin-polarized evaluation merely because one channel is zero.
-      if (RHO <= TOLD) then
-         V1 = 0.d0
-         V2 = 0.d0
-         EXC = 0.d0
-         return
-      end if
       RS1 = ((4*pi)*RHO/3.)**this%OTH
       RS = 1.d0/MAX(RS1, TOLDD)
       IXC = this%TXC
