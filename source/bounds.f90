@@ -9,7 +9,7 @@
 !> Useful for KPM/Chebyshev polynomial expansion
 !> Implements Gershgorin circle theorem and Sturm/exact diagonalization
 !> Also provides an OO wrapper `bounds` type with constructor.
-!> Configuration is typically done via the parent object's namelist
+!> Configuration is typically done via the parent object’s namelist
 !> (e.g., hamiltonian reads bounds_algorithm and bounds_scaling from /hamiltonian/ namelist).
 !------------------------------------------------------------------------------
 
@@ -40,13 +40,13 @@ module spectrum_bounds_mod
       logical :: sturm_available = .false.
       logical :: use_sturm = .false.
 
-      ! User-configurable options (set via parent object's namelist)
+      ! User-configurable options (set via parent object’s namelist)
       character(len=16) :: algorithm = 'none'
       real(rp) :: scaling = default_scaling
 
    contains
       procedure :: restore_to_default
-      ! read_from_namelist is DEPRECATED - use parent object's namelist instead
+      ! read_from_namelist is DEPRECATED - use parent object’s namelist instead
       ! (e.g., hamiltonian reads bounds_algorithm/bounds_scaling from /hamiltonian/)
       procedure :: read_from_namelist
    end type bounds
@@ -330,7 +330,7 @@ contains
 
    !> @brief Read bounds configuration from namelist (DEPRECATED)
    !> @details This method is deprecated. Configuration should be done via
-   !>          the parent object's namelist (e.g., hamiltonian reads 
+   !>          the parent object’s namelist (e.g., hamiltonian reads
    !>          bounds_algorithm and bounds_scaling from /hamiltonian/ namelist).
    !>          This method is kept for backward compatibility but may be removed.
    subroutine read_from_namelist(this, fname)

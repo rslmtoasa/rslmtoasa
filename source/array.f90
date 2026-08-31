@@ -417,6 +417,8 @@ contains
       character(len=*), dimension(:), allocatable, intent(in) :: arr
       character(len=:), dimension(:), allocatable :: tmp
       call g_logger%fatal('There is no overload for this function consider using the subroutine.', __FILE__, __LINE__)
+      ! Keep the result defined if a non-terminating logger is configured.
+      allocate(character(len=1) :: tmp(0))
    end function funique_c
 
    !---------------------------------------------------------------------------

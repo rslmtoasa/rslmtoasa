@@ -8,7 +8,7 @@
 !> Anders Bergman
 !
 ! DESCRIPTION:
-!> Pure-math kernel for the direct-Dyson (backend D) k-space Green's function
+!> Pure-math kernel for the direct-Dyson (backend D) k-space Green’s function
 !> (milestone B2, `reciprocal_green`). Given the k-space Hamiltonian block
 !> H(k) and a self-energy block Sigma(z), it forms and inverts one Dyson matrix
 !>
@@ -17,10 +17,10 @@
 !> Overlap convention (pinned, B2.4). Backend E (strict Lehmann) diagonalizes
 !> the STANDARD Hermitian eigenproblem (`reciprocal%diagonalize_hamiltonian`
 !> calls `zheev`, not `zhegv`), i.e. it implicitly assumes an orthonormal basis
-!> S = I. The permanent CI invariant "backend D with Sigma = 0 == backend E"
+!> S = I. The permanent CI invariant ″backend D with Sigma = 0 == backend E″
 !> therefore holds ONLY when backend D also uses S = I. This kernel hard-codes
 !> S = I (the Dyson matrix is z*I - H - Sigma); the generalized-overlap case
-!> (`reciprocal_mode = 'generalized_overlap_proxy'`, `sk_overlap`) is deliberately
+!> (`reciprocal_mode = ’generalized_overlap_proxy’`, `sk_overlap`) is deliberately
 !> out of scope for B2.4 because it would break the D == E equivalence unless
 !> backend E is first re-cast as a generalized eigenproblem. Do not add S(k)
 !> here without also generalizing backend E and re-deriving the invariant.

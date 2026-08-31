@@ -8,7 +8,7 @@
 !> @brief
 !> Explicit per-site region bookkeeping for the embedding cluster (B7.1).
 !>
-!> Today's `charge%surfpot` locates the active/frozen boundary implicitly:
+!> Today’s `charge%surfpot` locates the active/frozen boundary implicitly:
 !> `init = 6` is a magic offset encoding the number of leading (vacuum-side)
 !> frozen rows, and `iq = init + ibas` maps a layer index onto a matrix row.
 !> That works only because the buildsurf layout is fixed (one vacuum side,
@@ -21,15 +21,15 @@
 !>   - `region_id`      which frozen/active region the site belongs to
 !>   - `active`         .true. for sites that relax self-consistently
 !>   - `layer_index`    physical atomic layer (1..nlay for active sites)
-!>   - `z`               the site's z coordinate, carried as DATA (not
+!>   - `z`               the site’s z coordinate, carried as DATA (not
 !>                        derived from layer_index) so relaxed-z is later a
 !>                        parameter change, not a rewrite (B7 §2.10)
 !>   - `w`               per-site Wigner-Seitz radius
 !>   - `reference_type`  which frozen parameter class a site reverts to when
-!>                        frozen (index into the region's reference-type
+!>                        frozen (index into the region’s reference-type
 !>                        table; mirrors lattice%chargetrf_type)
 !>
-!> `build_from_buildsurf` reproduces today's buildsurf index map exactly, as
+!> `build_from_buildsurf` reproduces today’s buildsurf index map exactly, as
 !> a registry instance, so it can be validated against the surface regression
 !> without touching `charge%surfpot` itself (which remains the permanent
 !> regression oracle -- B7 explicitly forbids changing its behaviour). Later
@@ -47,7 +47,7 @@ module region_registry_mod
 
    private
 
-   !> Region kinds. VACUUM and BULK are the two ends of today's buildsurf
+   !> Region kinds. VACUUM and BULK are the two ends of today’s buildsurf
    !> slab; LEAD_A/LEAD_B are reserved for the two-sided A|B interface
    !> geometry (B7.3+) so the registry does not need to grow a new field
    !> when that lands.
@@ -63,7 +63,7 @@ module region_registry_mod
       character(len=32) :: name = ''
       !> .true. if sites of this region are held frozen (never updated).
       logical :: frozen = .false.
-      !> B7.4: the region's own converged Fermi level, in the absolute energy
+      !> B7.4: the region’s own converged Fermi level, in the absolute energy
       !> scale its frozen parameter set was generated on (Ry). Used ONLY for
       !> the analytic initial guess V_r = E_F^(A) - E_F^(r) and for the
       !> consistency check against the converged fixed point (B7 §1.3) --
@@ -89,8 +89,8 @@ module region_registry_mod
       integer, dimension(:), allocatable :: region_id
       !> Per-site active/frozen mask. .true. = active (relaxes self-
       !> consistently); .false. = frozen (parameters imported, never
-      !> updated). This is the registry-explicit form of "the charge loop
-      !> fills only rows init+1..nbas": frozen sites are deliberately held
+      !> updated). This is the registry-explicit form of ″the charge loop
+      !> fills only rows init+1..nbas″: frozen sites are deliberately held
       !> at zero deviation charge, not accidentally skipped.
       logical, dimension(:), allocatable :: active
       !> Physical atomic layer index. Meaningful (1..nlay) for active
@@ -146,18 +146,18 @@ contains
    !> so the shifts are fixed only up to one overall gauge, and one region must
    !> be pinned or the fixed point has a flat direction.
    !>
-   !> The anchor is the **first frozen, non-vacuum region** -- "region A" in the
-   !> plan's notation. Both qualifiers are load-bearing:
+   !> The anchor is the **first frozen, non-vacuum region** -- ″region A″ in the
+   !> plan’s notation. Both qualifiers are load-bearing:
    !>
-   !>  - **Frozen.** The residual driving the fixed point is "deep inside region
-   !>    r the site must BE neutral bulk r", which is a statement about a
+   !>  - **Frozen.** The residual driving the fixed point is ″deep inside region
+   !>    r the site must BE neutral bulk r″, which is a statement about a
    !>    reference parameter set. An active region has no frozen reference to be
    !>    -- it is what relaxes -- so it cannot carry the gauge. For the
    !>    buildsurf layout (vacuum, active, bulk) this is what makes the anchor
    !>    the bulk region rather than the active layers that happen to precede
    !>    it in registry order.
-   !>  - **Non-vacuum.** Vacuum carries no states at E_F, so "deep vacuum is
-   !>    neutral bulk vacuum" is not a condition that can drive a residual;
+   !>  - **Non-vacuum.** Vacuum carries no states at E_F, so ″deep vacuum is
+   !>    neutral bulk vacuum″ is not a condition that can drive a residual;
    !>    anchoring there would pin the gauge to the one region that cannot
    !>    report on it.
    !>
@@ -191,8 +191,8 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> B7.4: the deep-probe site of a region -- the site at which "deep inside
-   !> region r the site must BE neutral bulk r" is evaluated (B7 §1.3).
+   !> B7.4: the deep-probe site of a region -- the site at which ″deep inside
+   !> region r the site must BE neutral bulk r″ is evaluated (B7 §1.3).
    !>
    !> @details
    !> `surfpot` probes `dss(1,.)` for deep vacuum and `dss(nbas,.)` for deep
@@ -205,7 +205,7 @@ contains
    !> Determining which side a region is on from z rather than from its index
    !> is deliberate -- registry order is a bookkeeping choice, z is physics, and
    !> the two need not agree once a genuinely two-sided builder (B7.5) exists.
-   !> The comparison is against the mean z of the region's own sites versus the
+   !> The comparison is against the mean z of the region’s own sites versus the
    !> mean z of the whole cluster.
    !>
    !> Returns 0 if the region has no sites.
@@ -323,7 +323,7 @@ contains
    !> @param[in]     vmix    SCF mixing parameter.
    !> @param[in,out] shift   region shifts V_r, updated in place.
    !> @param[out]    maxresid  largest |residual| over the non-anchor regions,
-   !>                          for the caller's convergence report.
+   !>                          for the caller’s convergence report.
    !---------------------------------------------------------------------------
    pure subroutine alignment_update(this, ianchor, probe, vmix, shift, maxresid)
       class(region_registry), intent(in) :: this
@@ -456,7 +456,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Build a registry that reproduces today's buildsurf/surfpot layout
+   !> Build a registry that reproduces today’s buildsurf/surfpot layout
    !> exactly, as an explicit instance, so it can be validated against the
    !> surface regression without touching surfpot itself.
    !>
@@ -469,7 +469,7 @@ contains
    !> The charge loop in surfpot only ever touches rows init+1..nbas, so the
    !> vacuum rows 1..init exist in the geometry but are deliberately held at
    !> exactly zero deviation charge (B7 §1.5). That is encoded here directly:
-   !> the vacuum region is frozen, not merely "not yet visited".
+   !> the vacuum region is frozen, not merely ″not yet visited″.
    !>
    !> @param[in] nbas   Total number of sites in the extended interaction
    !>                    zone (charge%lattice%nbas). User-sized; no width is
@@ -531,7 +531,7 @@ contains
 
       ! Rows 1..init: vacuum-side frozen. Held at exactly zero deviation
       ! charge deliberately (B7 §1.5) -- this is the explicit statement of
-      ! what today's surfpot does implicitly by never writing tdq() there.
+      ! what today’s surfpot does implicitly by never writing tdq() there.
       do i = 1, min(init_, nbas)
          this%region_id(i) = reg_vacuum
          this%active(i) = .false.
@@ -559,11 +559,11 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> B7.5: build a genuinely two-sided registry -- region A (frozen, low-z),
-   !> an active zone, region B (frozen, high-z) -- for the calctype='L'
+   !> an active zone, region B (frozen, high-z) -- for the calctype=’L’
    !> (layered/interface) path (B7 §1.2, §4 B7.5).
    !>
    !> @details
-   !> Generalizes `build_from_buildsurf`'s single-frozen-reference layout to
+   !> Generalizes `build_from_buildsurf`’s single-frozen-reference layout to
    !> two independent frozen regions, which is the one structural difference
    !> B7 §1.1-§1.3 requires: two potential zeros that must be aligned (B7.4),
    !> not one. The index map is analogous but symmetric:
@@ -578,8 +578,8 @@ contains
    !> in `interfacepot` only ever touches sites the registry marks active.
    !>
    !> `fermi_a`/`fermi_b` are OPTIONAL: passing a value <= `fermi_sentinel`
-   !> (the huge() default `charge%fermi_a`/`fermi_b` restore to) means "not
-   !> supplied", exactly as CONTRACT_FROZEN_REGION.md §2 requires -- E_F is
+   !> (the huge() default `charge%fermi_a`/`fermi_b` restore to) means ″not
+   !> supplied″, exactly as CONTRACT_FROZEN_REGION.md §2 requires -- E_F is
    !> the one quantity a frozen region may legitimately omit, and
    !> `region_descriptor%fermi_known` gates every use of it (initial guess,
    !> consistency check) so an absent value degrades gracefully rather than
@@ -593,7 +593,7 @@ contains
    !> @param[in] reference_type  Per-site frozen-reference class index,
    !>                    dimension(nbas) (lattice%chargetrf_type). Optional.
    !> @param[in] fermi_a      Region A source E_F (Ry). Optional; a value
-   !>                    <= fermi_sentinel means "not supplied".
+   !>                    <= fermi_sentinel means ″not supplied″.
    !> @param[in] fermi_b      Region B source E_F (Ry). Same convention.
    !> @param[in] fermi_sentinel  Threshold below which fermi_a/fermi_b count
    !>                    as supplied. Optional, default huge(1.0_rp)/2 (any
@@ -613,7 +613,7 @@ contains
       real(rp), intent(in), optional :: fermi_a
       real(rp), intent(in), optional :: fermi_b
       real(rp), intent(in), optional :: fermi_sentinel
-      !> Region B's kind. Optional; defaults to `region_kind_lead_b` (the
+      !> Region B’s kind. Optional; defaults to `region_kind_lead_b` (the
       !> metallic A | B geometry). Pass `region_kind_vacuum` for A | vacuum
       !> (B7.6): that is what makes `gauge_anchor` skip region B when choosing
       !> the alignment anchor, and what makes `charge%boundary_nef` return zero
@@ -635,7 +635,7 @@ contains
       ! Name region B for what it is. This string is what every alignment and
       ! diagnostic message prints, and it is also what `fix_fermi_to_region`
       ! matches on -- pinning E_F to vacuum is not meaningful, so calling the
-      ! region 'vacuum' rather than 'B' keeps that user-facing name honest.
+      ! region ’vacuum’ rather than ’B’ keeps that user-facing name honest.
       name_b = 'B'
       if (kind_b_ == region_kind_vacuum) name_b = 'vacuum'
 
@@ -725,7 +725,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Debug dump: one line per site, plus a region summary. Writes to the
-   !> given unit if open, otherwise to a fresh file 'region_registry.out'.
+   !> given unit if open, otherwise to a fresh file ’region_registry.out’.
    !---------------------------------------------------------------------------
    subroutine region_registry_dump(this, unit, fname)
       class(region_registry), intent(in) :: this

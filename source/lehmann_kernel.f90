@@ -8,7 +8,7 @@
 !> Anders Bergman
 !
 ! DESCRIPTION:
-!> Pure-math kernel for the strict Lehmann (backend E) k-space Green's function
+!> Pure-math kernel for the strict Lehmann (backend E) k-space Green’s function
 !> (milestone B2, `reciprocal_green`). Given the Hermitian eigenpairs of the
 !> k-space Hamiltonian H(k), it accumulates the intersite resolvent block
 !>
@@ -25,7 +25,7 @@
 !> exercise it against a closed form with no LMTO machinery. `reciprocal_green`
 !> wires the LMTO eigenpairs, the pair->site map, and the bond vectors around it.
 !>
-!> Sign/phase convention (gate G-B2-1, C3). H(k) is assembled in the "atomic"
+!> Sign/phase convention (gate G-B2-1, C3). H(k) is assembled in the ″atomic″
 !> Bloch gauge of `reciprocal_fourier`: H_ij(k) = sum_R h_{i0,jR} e^{i k.R} with
 !> R the true bond vector r_j - r_i (basis offset included), phase e^{+i 2pi
 !> k_frac.R_frac} through `ham_vec_type_direct`. The inverse transform of
@@ -47,7 +47,7 @@ module lehmann_kernel_mod
 
 contains
 
-   !> @brief Accumulate one strict-Lehmann intersite Green's-function block.
+   !> @brief Accumulate one strict-Lehmann intersite Green’s-function block.
    !> @details Streams over all k-points and bands, amortizing the eigenpairs
    !>          over every energy on the contour (design B2 §1.4). The result is
    !>          normalized by 1/N_k. See the module header for the phase
@@ -58,8 +58,8 @@ contains
    !> @param[in]  kfrac        k-points in fractional coordinates, shape (3, nk).
    !> @param[in]  z_contour    Complex energy contour, shape (ne).
    !> @param[in]  dr_direct    Bond vector R_i - R_j in fractional coordinates.
-   !> @param[in]  ioff         Zero-based row offset of site i's block in nmat.
-   !> @param[in]  joff         Zero-based row offset of site j's block in nmat.
+   !> @param[in]  ioff         Zero-based row offset of site i’s block in nmat.
+   !> @param[in]  joff         Zero-based row offset of site j’s block in nmat.
    !> @param[in]  nblk         Block size (nb = 2*norb).
    !> @param[out] gblk         Accumulated block, shape (nblk, nblk, ne).
    subroutine lehmann_pair_block(eigenvalues, eigenvectors, kfrac, z_contour, &
@@ -106,7 +106,7 @@ contains
    end subroutine lehmann_pair_block
 
    !> @brief Pauli (charge, x, y, z) decomposition of a spin-block resolvent.
-   !> @details Splits one pair's 2*norb x 2*norb block into the torque-resolved
+   !> @details Splits one pair’s 2*norb x 2*norb block into the torque-resolved
    !>          orbital sub-blocks the recursion route stores, using the exact
    !>          spin algebra of `green.f90::calculate_intersite_gf_core`:
    !>            gnmag = 0.5 (G_uu + G_dd)   (charge / non-magnetic)

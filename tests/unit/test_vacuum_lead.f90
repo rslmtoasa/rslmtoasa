@@ -5,12 +5,12 @@
 ! PROGRAM: test_vacuum_lead
 !
 !> @brief Validation-ladder rung B7 §5.5: the generated empty-lattice
-!>        ("vacuum lead") potential parameters versus the **analytic
+!>        (″vacuum lead″) potential parameters versus the **analytic
 !>        spherical-Bessel free-electron result**.
 !>
 !>        ## Why this test is shaped the way it is
 !>
-!>        B7 §1.6 is explicit that the generator must drive the code's own
+!>        B7 §1.6 is explicit that the generator must drive the code’s own
 !>        radial solver with V(r) = const, and that the analytic result is
 !>        the **oracle, not the implementation**. This file is therefore the
 !>        only place in the tree where spherical Bessel functions appear in
@@ -29,17 +29,17 @@
 !>        D_l = tan(pi*(0.5 - pnu)) at r = w. So the generated E_nu must
 !>        satisfy, exactly,
 !>
-!>            w * j_l'(kappa w) / j_l(kappa w) == D_l,   kappa = sqrt(E_nu - V0)
+!>            w * j_l’(kappa w) / j_l(kappa w) == D_l,   kappa = sqrt(E_nu - V0)
 !>
 !>        Note the oracle is evaluated *at the generated E_nu*. It is not a
 !>        root-find: D_l(E) has poles wherever j_l(kappa w) vanishes, and
 !>        bracketing across those poles is fragile. Substituting the
-!>        solver's own answer into the analytic log-derivative is both
+!>        solver’s own answer into the analytic log-derivative is both
 !>        exact and robust.
 !>
 !>        Tests:
 !>          1. Bessel oracle self-check: the closed forms used below
-!>             reproduce the standard recurrence j_l' = j_{l-1} - (l+1)/x
+!>             reproduce the standard recurrence j_l’ = j_{l-1} - (l+1)/x
 !>             j_l and the Rayleigh formulae, so a typo in the oracle fails
 !>             here rather than silently excusing the generator.
 !>          2. E_nu satisfies the analytic log-derivative condition, for
@@ -48,7 +48,7 @@
 !>          3. Rigid shift: V(r) = const shifted by dV shifts every energy
 !>             parameter (enu, C, VL) by exactly dV and leaves the
 !>             shift-invariant ones (srdel, qpar, ppar) unchanged. This is
-!>             what "rigidly shifted to the vacuum level" means and it is
+!>             what ″rigidly shifted to the vacuum level″ means and it is
 !>             the property the alignment machinery (B7.4) will lean on.
 !>          4. Geometry dependence: the generated set genuinely varies with
 !>             the empty-sphere radius w -- i.e. this is a generator, not a
@@ -119,8 +119,8 @@ contains
       end select
    end function sph_j
 
-   !> d j_l / dx via the standard recurrence j_l' = j_{l-1} - (l+1)/x * j_l,
-   !> with j_0' = -j_1.
+   !> d j_l / dx via the standard recurrence j_l’ = j_{l-1} - (l+1)/x * j_l,
+   !> with j_0’ = -j_1.
    pure function sph_jp(l, x) result(jp)
       integer, intent(in) :: l
       real(rp), intent(in) :: x
@@ -133,13 +133,13 @@ contains
       end if
    end function sph_jp
 
-   !> The dimensionless logarithmic derivative D_l = w * j_l'(kw) / j_l(kw)
-   !> = x * j_l'(x) / j_l(x) with x = kappa*w. This is exactly the quantity
-   !> potpar's boundary condition dnu = tan(pi*(0.5 - pnu)) prescribes.
+   !> The dimensionless logarithmic derivative D_l = w * j_l’(kw) / j_l(kw)
+   !> = x * j_l’(x) / j_l(x) with x = kappa*w. This is exactly the quantity
+   !> potpar’s boundary condition dnu = tan(pi*(0.5 - pnu)) prescribes.
    !>
    !> NON-relativistic: kappa = sqrt(E - V0). This is the textbook
    !> free-electron oracle named in B7 §1.6, and it is checked at a
-   !> correspondingly loose tolerance, because the code's solver is the
+   !> correspondingly loose tolerance, because the code’s solver is the
    !> *scalar-relativistic* one -- see `analytic_dnu_sr`.
    pure function analytic_dnu(l, energy, v0, w) result(d)
       integer, intent(in) :: l
@@ -159,7 +159,7 @@ contains
    !>
    !>     M(r) = 1 + (E - V(r)) / c^2
    !>
-   !> For an empty sphere V is constant, so M is constant, the `M'/M`
+   !> For an empty sphere V is constant, so M is constant, the `M’/M`
    !> (Darwin-like) term drops out, and the large component still solves a
    !> spherical Bessel equation -- but with the relativistically corrected
    !> wavenumber
@@ -220,7 +220,7 @@ contains
                bad = .true.
             end if
          end do
-         ! Derivative identity: (2l+1) j_l' = l j_{l-1} - (l+1) j_{l+1}.
+         ! Derivative identity: (2l+1) j_l’ = l j_{l-1} - (l+1) j_{l+1}.
          do l = 1, 2
             lhs = real(2*l + 1, rp)*sph_jp(l, x)
             rhs = real(l, rp)*sph_j(l - 1, x) - real(l + 1, rp)*sph_j(l + 1, x)
@@ -260,14 +260,14 @@ contains
       real(rp), parameter :: tol_nr = 1.0e-3_rp
       !> Scalar-relativistic oracle: the leading correction is removed, so
       !> the residual is higher-order SR only, ~3e-6 worst case. 1e-5 is a
-      !> genuinely tight bar -- an error in the generator's boundary
+      !> genuinely tight bar -- an error in the generator’s boundary
       !> condition, mesh or radius would blow straight through it.
       real(rp), parameter :: tol_sr = 1.0e-5_rp
       !> Sweep the boundary condition, which sweeps E_nu across the window
       !> where the ASA empty-lattice description is expected to hold. The
       !> admissible range is dnu < l (dnu = l is the band bottom), so the
       !> sweep is expressed as a step INSIDE the bottom, uniformly in l --
-      !> the same parametrisation the generator's default uses.
+      !> the same parametrisation the generator’s default uses.
       real(rp), dimension(4), parameter :: step = [0.25_rp, 0.5_rp, 1.0_rp, 2.0_rp]
       real(rp), dimension(0:lmax) :: pnu
       real(rp) :: d_nr, d_sr, d_req, err_nr, err_sr, x, pi

@@ -155,7 +155,7 @@ contains
       this%resident_lehmann_handoff_requested = .false.
 
       ! WP8: full BZ stays the default/oracle for finite-q GBT (WP0). Opt-in
-      ! to 'little_group' or 'little_group_common' via &reciprocal.
+      ! to ’little_group’ or ’little_group_common’ via &reciprocal.
       this%q_symmetry_policy = 'full_bz'
       this%mesh_cache_valid = .false.
       this%mesh_cache_dims = [0, 0, 0]
@@ -205,7 +205,7 @@ contains
       this%custom_kpath_spec = ''  ! Empty = use automatic
       this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default
 
-      ! k-space Green's-function engine (milestone B2, reciprocal_green).
+      ! k-space Green’s-function engine (milestone B2, reciprocal_green).
       ! green_eta is the retarded broadening for z = E + i*green_eta (namelist key
       ! in &reciprocal). Default set to 0.02 Ry by gate G-B2-2 (Anders, 2026-07-16):
       ! the documented working point where the Lehmann/Dyson exchange J k-converges
@@ -473,10 +473,10 @@ contains
                      __FILE__, __LINE__)
       
       ! if (sum(abs(this%k_offset)) > 1.0e-8_rp) then
-      !    call g_logger%info('reciprocal%build_from_file: k-offset = [' // &
-      !                      trim(real2str(k_offset_x, '(F8.4)')) // ', ' // &
-      !                      trim(real2str(k_offset_y, '(F8.4)')) // ', ' // &
-      !                      trim(real2str(k_offset_z, '(F8.4)')) // ']', &
+      !    call g_logger%info(’reciprocal%build_from_file: k-offset = [’ // &
+      !                      trim(real2str(k_offset_x, ’(F8.4)’)) // ’, ’ // &
+      !                      trim(real2str(k_offset_y, ’(F8.4)’)) // ’, ’ // &
+      !                      trim(real2str(k_offset_z, ’(F8.4)’)) // ’]’, &
       !                      __FILE__, __LINE__)
       ! end if
       
@@ -527,7 +527,7 @@ contains
    !> including q=0: WP6a widened the overlap rejection and none of these
    !> terms has an audited GBT form at q=0 either. has_nonzero_q_gbt is the
    !> genuinely q-scoped predicate; use that one when q matters. Renaming this
-   !> routine belongs to WP10's documentation pass.
+   !> routine belongs to WP10’s documentation pass.
    module subroutine validate_nonzero_q_gbt(this, context)
       class(reciprocal), intent(in) :: this
       character(len=*), intent(in) :: context
@@ -561,17 +561,17 @@ contains
    !> @details Called from build_kspace_hamiltonian on every probe, so this is
    !>          the actual per-Hamiltonian-build enforcement point -- the
    !>          calculation.f90 sweep-level mesh calls only prepare a mesh this
-   !>          routine must not silently discard. 'full_bz' (default)
+   !>          routine must not silently discard. ’full_bz’ (default)
    !>          reproduces the original WP0 behaviour exactly: force the full
-   !>          chemical BZ every call. 'little_group' delegates to
-   !>          ensure_kpoint_mesh, which is a no-op once the current q_ss's
+   !>          chemical BZ every call. ’little_group’ delegates to
+   !>          ensure_kpoint_mesh, which is a no-op once the current q_ss’s
    !>          mesh is already cached (set by the calculation.f90 per-q
    !>          rebuild) and only rebuilds on an actual q change.
-   !>          'little_group_common' must never rebuild a mesh a sweep already
+   !>          ’little_group_common’ must never rebuild a mesh a sweep already
    !>          proved valid for its whole q-list (WP8): if one is cached under
    !>          that policy for the current mesh dims, it is left untouched;
    !>          only a genuinely missing mesh (e.g. this routine invoked outside
-   !>          a sweep) falls back to the single current q_ss's little group.
+   !>          a sweep) falls back to the single current q_ss’s little group.
    module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context
@@ -824,7 +824,7 @@ contains
          nn_max_loc = nr
 
          ! Use clusba directly - no need for lattice%sbarvec storage here
-         ! We're building type-specific ham_vec_type arrays instead
+         ! We’re building type-specific ham_vec_type arrays instead
          call this%lattice%clusba(r2, cralat, ia, kk, kk, nn_max_loc, &
                                   this%ham_vec_type(:, 1:nr, ntype))
 
@@ -868,7 +868,7 @@ contains
       real(rp), allocatable :: unit_weights(:)
 
       ! Fortran does not require logical expressions to short-circuit.  Check
-      ! allocation before querying a compatibility array's shape: a band path
+      ! allocation before querying a compatibility array’s shape: a band path
       ! intentionally has no k_points array.
       have_k_points = .false.
       if (allocated(this%k_points)) have_k_points = size(this%k_points, 2) == nk_global

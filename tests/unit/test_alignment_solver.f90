@@ -12,7 +12,7 @@
 !>
 !>          That test is the ORACLE: it states, in closed form and with its own
 !>          independent arithmetic, what the right answer is -- a rigid offset
-!>          delta applied to region B's frozen parameters must come back as a
+!>          delta applied to region B’s frozen parameters must come back as a
 !>          step of exactly -delta. It deliberately reimplements the fixed point
 !>          inline, because an oracle that calls the code under test proves
 !>          nothing.
@@ -25,12 +25,12 @@
 !>             mixed fixed point must recover -delta to the same precision the
 !>             toy one did.
 !>          2. The gauge anchor is pinned EXACTLY, every iteration. Not
-!>             "skipped" -- pinned. A gauge that drifts by accumulated round-off
-!>             is the failure the oracle's negative control was built to catch,
+!>             ″skipped″ -- pinned. A gauge that drifts by accumulated round-off
+!>             is the failure the oracle’s negative control was built to catch,
 !>             and the production update re-pins rather than relying on never
 !>             touching the anchor.
 !>          3. The anchor is a FROZEN, NON-VACUUM region. Vacuum carries no
-!>             states at E_F, so "deep vacuum is neutral bulk vacuum" cannot
+!>             states at E_F, so ″deep vacuum is neutral bulk vacuum″ cannot
 !>             drive a residual; and an active region has no frozen reference to
 !>             BE, since it is what relaxes. The buildsurf registry order
 !>             (vacuum, active, bulk) tests both traps at once.
@@ -43,7 +43,7 @@
 !>          5. The consistency check fires when the converged fixed point
 !>             disagrees with the analytic contact potential, and stays silent
 !>             when they agree. This is the G-B7-2 alarm.
-!>          6. `deep_probe_site` picks each region's extreme site AWAY from the
+!>          6. `deep_probe_site` picks each region’s extreme site AWAY from the
 !>             interface, from z rather than from registry order.
 !>
 !>        Exits non-zero (error stop) on any failure so ctest registers a fail.
@@ -141,8 +141,8 @@ contains
          failed = .true.
       end if
 
-      ! Deep probes carry each region's own reference. Region A sits at its own
-      ! zero; region B's frozen set is rigidly shifted by delta.
+      ! Deep probes carry each region’s own reference. Region A sits at its own
+      ! zero; region B’s frozen set is rigidly shifted by delta.
       probe(1) = 0.0_rp
       probe(2) = 0.0_rp
       probe(3) = delta
@@ -211,10 +211,10 @@ contains
    !> Both qualifiers are load-bearing, and the buildsurf layout tests both at
    !> once because its registry order is (vacuum, active, bulk):
    !>
-   !>  - a naive "anchor = region 1" picks VACUUM, which carries no states at
-   !>    E_F, so the "deep region is neutral bulk" residual cannot be evaluated
+   !>  - a naive ″anchor = region 1″ picks VACUUM, which carries no states at
+   !>    E_F, so the ″deep region is neutral bulk″ residual cannot be evaluated
    !>    there at all;
-   !>  - a naive "anchor = first non-vacuum" picks the ACTIVE region, which has
+   !>  - a naive ″anchor = first non-vacuum″ picks the ACTIVE region, which has
    !>    no frozen reference to BE -- it is what relaxes.
    !>
    !> The only defensible answer for a surface is the bulk region.
@@ -377,7 +377,7 @@ contains
 
    !> 6. The deep probe of a region is its extreme site AWAY from the interface,
    !> decided from z rather than from registry order -- registry order is a
-   !> bookkeeping choice, z is physics, and B7.5's two-sided builder need not
+   !> bookkeeping choice, z is physics, and B7.5’s two-sided builder need not
    !> make them agree.
    subroutine test_deep_probe_site()
       type(region_registry) :: reg
@@ -434,7 +434,7 @@ contains
    !> is the same class of failure as the one this whole gate exists to prevent
    !> -- plausible, converged, and wrong -- so it is pinned here.
    !>
-   !> The property asserted: for the buildsurf layout the anchor's deep probe is
+   !> The property asserted: for the buildsurf layout the anchor’s deep probe is
    !> NOT site 1, so the two references genuinely differ and the distinction is
    !> not vacuous.
    subroutine test_writeback_reference_is_the_anchor()
@@ -458,7 +458,7 @@ contains
          return
       end if
 
-      ! The distinction must not be vacuous: if the anchor's probe WERE site 1,
+      ! The distinction must not be vacuous: if the anchor’s probe WERE site 1,
       ! referencing to v_lo would accidentally be right and this test would
       ! prove nothing.
       if (iprobe == 1) then

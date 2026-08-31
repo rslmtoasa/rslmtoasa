@@ -129,7 +129,7 @@ contains
 
    !> Diagnose Xi(0,0), and optionally construct an explicitly marked static
    !> sum-rule correction.  `bare_spectral_gap`, when present, must be the
-   !> caller's independently determined lowest bare spin-flip transition; it
+   !> caller’s independently determined lowest bare spin-flip transition; it
    !> is not inferred from one complex chi_KS matrix sample.
    subroutine evaluate_goldstone(chi_ks_static, provider, options, result, bare_spectral_gap)
       complex(rp), intent(in) :: chi_ks_static(:, :)

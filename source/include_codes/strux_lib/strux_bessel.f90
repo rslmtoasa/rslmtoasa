@@ -8,7 +8,7 @@
 !> - Bessel functions j_l(kr) are solutions of the free-particle Schrödinger equation
 !> - Hankel functions h_l(kr) = j_l(kr) + i*n_l(kr) represent outgoing spherical waves
 !> - Essential for describing electron wave functions in atomic sphere approximation
-!> - Used in KKR Green's functions and LMTO basis construction
+!> - Used in KKR Green’s functions and LMTO basis construction
 !>
 !> Key Conventions (controlled by loka parameter):
 !> - loka=0: Methfessel conventions (MSM) - real functions for bound states
@@ -70,12 +70,12 @@ subroutine besslr(y, loka, lmin, lmax, fi, gi)
 !r   - **Free particle wave functions**: Solutions for electrons in constant potential
 !r   - **Scattering states**: Asymptotic forms for electron scattering
 !r   - **Multiple scattering theory**: KKR and LMTO basis functions
-!r   - **Green's functions**: Resolvent operators for perturbation theory
+!r   - **Green’s functions**: Resolvent operators for perturbation theory
 !r   - **Partial wave expansion**: Angular momentum decomposition
 !r
 !r   **Multiple Scattering Applications:**
 !r   - Wave functions: ψ(r) = ∑_l [A_l j_l(kr) + B_l h_l(kr)] Y_lm(θ,φ)
-!r   - Structure constants: C_L(L') = ∑_R h_l(k|R|) e^{ik·R} Y_L^*(R) Y_L'(R)
+!r   - Structure constants: C_L(L’) = ∑_R h_l(k|R|) e^{ik·R} Y_L^*(R) Y_L’(R)
 !r   - T-matrices: Linear relations between regular/irregular solution coefficients
 !r   - Scattering path operator: τ = m - m τ m where m is single-site t-matrix
 !r
@@ -87,7 +87,7 @@ subroutine besslr(y, loka, lmin, lmax, fi, gi)
 !u Updates
 !u   03 Jan 18 Added loka=2 convention
 !u   22 Aug 17 Optionally calls dbesnu for high accuracy.  Especially important for y>100.
-!u   23 Jul 08 bug fix: besslr doesn't make fi/gi(lmax+1) when lmax=0
+!u   23 Jul 08 bug fix: besslr doesn’t make fi/gi(lmax+1) when lmax=0
 !u   19 May 04 Changed loka from logical to integer
 ! ----------------------------------------------------------------------
     implicit none
@@ -231,7 +231,7 @@ subroutine besslr(y, loka, lmin, lmax, fi, gi)
     end if
 
 100 continue
-    ! Scaling to Andersen's 2nd generation LMTO conventions
+    ! Scaling to Andersen’s 2nd generation LMTO conventions
     if (mod(loka, 10) == 1) then
         do l = lmin, lmax
             fi(l) = fi(l)*fac2l(l)*0.5d0
@@ -467,6 +467,10 @@ subroutine dbesnu(x, nu, opt, fr, fi, ierr)
     integer :: nb, opt0, opt1, opt2, nextra, i
     double precision :: alpha, b(1000), fac, fac2
 
+    ! The imaginary-part output is reserved by the historical interface.
+    ! Keep it deterministic even though all current callers pass a one-element
+    ! scratch array and do not consume it.
+    fi(1) = 0d0
     nb = int(nu) + 1
     alpha = nu + 1 - nb
     if (alpha >= 1d0) then
@@ -657,7 +661,7 @@ subroutine djbesl(x, alpha, nb, b, ncalc)
         end if
 
     else
-        ! Miller's backward recurrence
+        ! Miller’s backward recurrence
         nbmx = nb - magx
         n    = magx + 1
         en   = dble(n+n) + (alpha+alpha)
@@ -876,7 +880,7 @@ subroutine dybesl(x, alpha, nb, by, ncalc)
         ya1 = -p*cos(ex)
 
     else if (ex < three) then
-        ! Temme's scheme for small X
+        ! Temme’s scheme for small X
         d = half*ex
         d = -log(d)
         f = enu*d
@@ -947,7 +951,7 @@ subroutine dybesl(x, alpha, nb, by, ncalc)
         ya1 = -ya1/(half*ex)
 
     else if (ex < thresh_c) then
-        ! Temme's scheme for moderate X
+        ! Temme’s scheme for moderate X
         c  = (half-enu)*(half+enu)
         d  = ex + ex   ! used as b in original
         e  = (ex*onbpi*cos(enu*pi_c)/eps_c)**2
@@ -999,7 +1003,7 @@ subroutine dybesl(x, alpha, nb, by, ncalc)
         ya1 = d2*(qa1*s - pa1*c)
 
     else
-        ! Campbell's asymptotic scheme
+        ! Campbell’s asymptotic scheme
         na  = 0
         d1  = aint(ex/five_pi)
         i   = int(d1)
@@ -1337,7 +1341,7 @@ subroutine dkbesl(x, alpha, nb, ize, bk, ncalc)
         5.20583d1, 5.7607d0, 2.7782d0, 1.44303d1, 1.853004d2, 9.3715d0 ]
     double precision, parameter :: estf(7) = [ &
         4.18341d1, 7.1075d0, 6.4306d0, 4.25110d1, 1.35633d0, 8.45096d1, 2.0d1 ]
-    ! LOG(2) - Euler's constant; D = sqrt(2/pi)
+    ! LOG(2) - Euler’s constant; D = sqrt(2/pi)
     double precision, parameter :: a_c = 0.11593151565841244881d0
     double precision, parameter :: d_sqrt2pi = 0.797884560802865364d0
 

@@ -9,7 +9,7 @@
 !
 ! DESCRIPTION:
 !> Bloch spectral functions A(k,E) (milestone B3). A thin consumer of the B2
-!> k-space Green's-function engine: along a high-symmetry k-path it forms the
+!> k-space Green’s-function engine: along a high-symmetry k-path it forms the
 !> retarded resolvent G(k, E+i*eta) with the SAME `dyson_kspace_inverse` primitive
 !> backend D uses (Sigma=0 here, so it equals backend E), and reports the
 !> partial-trace spectral weight
@@ -44,10 +44,10 @@ contains
    !>          H(k) on it (the eigenvalues are kept for the band overlay), then for
    !>          every (k, E) inverts z*I - H(k) via `dyson_kspace_inverse` (Sigma=0)
    !>          and accumulates the total / spin-up / spin-down spectral weight. The
-   !>          resolvent is delivered by the B2 engine's primitive, so a non-zero
+   !>          resolvent is delivered by the B2 engine’s primitive, so a non-zero
    !>          Sigma later broadens A(k,E) through this same routine unchanged.
    !> @param[inout] this        Reciprocal object (H(k) machinery, k-path, grids).
-   !> @param[in]    output_file Optional base output filename (default 'bsf.dat').
+   !> @param[in]    output_file Optional base output filename (default ’bsf.dat’).
    module subroutine calculate_bsf(this, output_file)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in), optional :: output_file

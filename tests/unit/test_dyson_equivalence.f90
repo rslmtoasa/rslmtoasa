@@ -12,12 +12,12 @@
 !>          accumulation `fill_green_dyson`/`fill_green_lehmann` perform:
 !>
 !>          1. 1-band chain H(k) = -2t cos k: Dyson route vs the closed-form
-!>             lattice Green's function (on-site and intersite m=2) -- the same
+!>             lattice Green’s function (on-site and intersite m=2) -- the same
 !>             fixture test_lehmann_chain uses for backend E.
 !>          2. Small multiband H(k) (2 sites x 2 orbitals, nmat=4): the intersite
 !>             (ioff=0, joff=2) block with a nonzero bond phase, Dyson route vs
 !>             Lehmann route (eigenpairs from zheev), to 1e-9 elementwise -- the
-!>             D == E invariant on a nontrivial H(k) (the "small bcc-Fe H(k)"
+!>             D == E invariant on a nontrivial H(k) (the ″small bcc-Fe H(k)″
 !>             fixture of the B2.4 spec).
 !>          3. Sigma sign pin: a constant real shift Sigma = s0*I must give the
 !>             Dyson block at z equal to the Lehmann block at z - s0 (A = zI - H
@@ -256,7 +256,7 @@ contains
       deallocate (z_contour, z_shift, gle)
    end subroutine test_sigma_sign
 
-   !> Hermitian eigensolve wrapper (zheev, jobz='V'): columns of vecs are bands.
+   !> Hermitian eigensolve wrapper (zheev, jobz=’V’): columns of vecs are bands.
    subroutine hermitian_eig(a_in, n, w, vecs)
       integer, intent(in) :: n
       complex(rp), intent(in) :: a_in(n, n)
@@ -273,8 +273,8 @@ contains
       lwork = max(1, nint(real(work_q(1), rp)))
       allocate (work(lwork))
 
-      ! oneMKL's zheev implementation deliberately evaluates an intermediate
-      ! divide-by-zero in its scaling path.  Keep the test's FPE diagnostics
+      ! oneMKL’s zheev implementation deliberately evaluates an intermediate
+      ! divide-by-zero in its scaling path.  Keep the test’s FPE diagnostics
       ! enabled everywhere else, but mask that external-library exception only
       ! for the LAPACK call and clear its status flag before restoring the mode.
       call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
@@ -289,7 +289,7 @@ contains
       end if
    end subroutine hermitian_eig
 
-   !> Closed-form retarded lattice Green's function of the 1-band chain,
+   !> Closed-form retarded lattice Green’s function of the 1-band chain,
    !> G_0m(z) = x_in^|m| / (t (x_in - x_out)); for m=0, 1/sqrt(z^2 - 4t^2).
    function chain_gf_closed(z, m) result(g)
       complex(rp), intent(in) :: z

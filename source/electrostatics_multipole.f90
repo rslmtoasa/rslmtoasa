@@ -5,7 +5,7 @@
 !> electrostatics — RS-LMTO-ASA audit item B6.
 !>
 !> The ASA Madelung problem is extended from monopoles (q_R) to include the
-!> l=1 (z) dipole moment Q_{10} of each sphere's charge. The generalized
+!> l=1 (z) dipole moment Q_{10} of each sphere’s charge. The generalized
 !> Madelung matrices (dipole-monopole dsz, dipole-dipole dzz) are already
 !> built by charge%madl2d following Skriver-Rosengaard, Phys. Rev. B 43, 9538;
 !> this module supplies the missing charge-side moment Q_{10}, which
@@ -39,7 +39,7 @@ module electrostatics_multipole_mod
    real(rp), parameter :: pi = 3.14159265358979323846_rp
 
    !> Orbital indices in the SPHERICAL-harmonic basis that g0 lives in. The
-   !> Hamiltonian is transformed cartesian -> spherical via hcpx(...,'cart2sph')
+   !> Hamiltonian is transformed cartesian -> spherical via hcpx(...,’cart2sph’)
    !> on every on-site block (hamiltonian_build.f90 build_obarm/build_enim/hhmag),
    !> so g0 is ordered by m as (math.f90 hcpx, n=9):
    !>   (00)(1-1)(10)(11)(2-2)(2-1)(20)(21)(22)
@@ -141,8 +141,8 @@ contains
          q10_all(na_glob) = mix*q10_all(na_glob) + (1.0_rp - mix)*q10_old
          bnd%symbolic_atom(bnd%lattice%nbulk + na_glob)%potential%q10 = q10_all(na_glob)
          ! if (rank == 0) then
-         !    call g_logger%info('B6 dipole moment Q10 of atom'//fmt('i4', na_glob)// &
-         !                       ' = '//fmt('f12.8', q10_all(na_glob)), __FILE__, __LINE__)
+         !    call g_logger%info(’B6 dipole moment Q10 of atom’//fmt(’i4’, na_glob)// &
+         !                       ’ = ’//fmt(’f12.8’, q10_all(na_glob)), __FILE__, __LINE__)
          ! end if
       end do
 
@@ -156,7 +156,7 @@ contains
    !>   R_sp = int u_s(r) u_pz(r) r dr,   R_pd = int u_pz(r) u_dz2(r) r dr,
    !> where u_l(r) = r*phi_l(r) is the exported large-component amplitude
    !> phi_amp(:, l+1, spin). The mesh is reconstructed exactly as in self.f90
-   !> (logarithmic rofi, DRDI = a*(rofi+b)) and integrated with the code's
+   !> (logarithmic rofi, DRDI = a*(rofi+b)) and integrated with the code’s
    !> standard Simpson weights. The spin-averaged amplitude is used for the
    !> radial factor (spin dependence enters through the density matrix).
    !---------------------------------------------------------------------------

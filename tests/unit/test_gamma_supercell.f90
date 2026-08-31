@@ -5,11 +5,11 @@
 ! PROGRAM: test_gamma_supercell
 !
 !> @brief Gamma-only supercell identity + two-route DOS cross-validation (B2.5).
-!> @details The "beautiful self-contained identity" of the B2 blueprint
+!> @details The ″beautiful self-contained identity″ of the B2 blueprint
 !>          (validation item 2), with NO LMTO machinery: a periodic 1-band
 !>          tight-binding ring of Nsc sites is described two equivalent ways, and
 !>          the strict-Lehmann kernel (`lehmann_pair_block`, backend E) must give
-!>          the same Green's function both ways, to machine precision.
+!>          the same Green’s function both ways, to machine precision.
 !>
 !>          Route A -- PRIMITIVE cell (1 site), full BZ sampled at Nsc k-points
 !>            k_n = 2*pi*n/Nsc, eps(k) = -2t cos k. G^A_{0,m}(z) is the k-sum
@@ -219,7 +219,7 @@ contains
       if (max_dos_err > tol_dos) failed = .true.
    end subroutine test_two_route_dos
 
-   !> Hermitian eigensolve wrapper (zheev, jobz='V'): columns of vecs are bands.
+   !> Hermitian eigensolve wrapper (zheev, jobz=’V’): columns of vecs are bands.
    subroutine hermitian_eig(a_in, n, w, vecs)
       integer, intent(in) :: n
       complex(rp), intent(in) :: a_in(n, n)

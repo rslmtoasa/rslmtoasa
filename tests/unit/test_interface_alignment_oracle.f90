@@ -43,8 +43,8 @@
 !>
 !>          Also pinned: the compensation rule of §1.5 -- weight by the
 !>          side-resolved N(E_F) of the boundary buffer layers, which gives
-!>          ~50/50 for two similar metals and collapses to "everything into the
-!>          metal" for metal|vacuum, so the surface case needs NO separate
+!>          ~50/50 for two similar metals and collapses to ″everything into the
+!>          metal″ for metal|vacuum, so the surface case needs NO separate
 !>          branch. And that compensation must be LOCALIZED, not smeared as
 !>          imppot does: in layered geometry a smear has a nonzero first moment
 !>          and a long lever arm.
@@ -135,7 +135,7 @@ contains
          z(i) = 3.4_rp*real(i - 1, rp)
       end do
 
-      ! A deliberately CHARGED but homogeneous "material": every site carries
+      ! A deliberately CHARGED but homogeneous ″material″: every site carries
       ! the same absolute charge, as a non-homogeneous bulk legitimately can.
       q_abs = 0.234_rp
       q_ref = 0.234_rp
@@ -177,7 +177,7 @@ contains
    !>     V_B(out) = dV(deep-B) - dV(deep-A)
    !>
    !> mixed with vmix, exactly as surfpot mixes any other SCF quantity. With a
-   !> rigid offset delta applied to region B's input parameters, the converged
+   !> rigid offset delta applied to region B’s input parameters, the converged
    !> answer is known in closed form: V_B = -delta.
    subroutine test_offset_delta_oracle()
       integer, parameter :: n = 12, nhalf = 6
@@ -308,7 +308,7 @@ contains
    !> §1.5 -- the compensation rule. Weight by side-resolved N(E_F): metallic
    !> leads receive charge proportional to N(E_F); vacuum/insulating receives
    !> NOTHING. Two similar metals give ~50/50, and metal|vacuum collapses to
-   !> "everything into the metal" -- so the surface case needs NO separate
+   !> ″everything into the metal″ -- so the surface case needs NO separate
    !> branch. That is the physics, not a coincidence.
    subroutine test_compensation_weighting()
       real(rp) :: nef_a, nef_b, w_a, w_b, residual, comp_a, comp_b
@@ -396,7 +396,7 @@ contains
       dq_local = 0.0_rp
       dq_local(n) = -residual
 
-      ! Smeared: imppot's rule, spread over every frozen site.
+      ! Smeared: imppot’s rule, spread over every frozen site.
       dq_smear = 0.0_rp
       nfrozen = 6
       do i = n - nfrozen + 1, n

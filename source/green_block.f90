@@ -461,8 +461,8 @@ contains
          return
       end if
 
-      ! Gather this rank's local atoms into contiguous batch buffers (mirrors the
-      ! n = g2l_map(n_glob) indexing of block_green's bgreen loop).
+      ! Gather this rank’s local atoms into contiguous batch buffers (mirrors the
+      ! n = g2l_map(n_glob) indexing of block_green’s bgreen loop).
       n_loc = end_atom - start_atom + 1
       allocate (ab_loc(nb, nb, ll, n_loc), b2_loc(nb, nb, ll, n_loc), g0_loc(nb, nb, nv, n_loc))
       allocate (ainf_d(nb, n_loc), binf_d(nb, n_loc))

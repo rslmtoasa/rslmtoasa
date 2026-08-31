@@ -8,11 +8,11 @@
 !> Anders Bergman
 !
 ! DESCRIPTION:
-!> Self-energy provider abstraction for the k-space Green's-function engine
+!> Self-energy provider abstraction for the k-space Green’s-function engine
 !> (milestone B2, `reciprocal_green`). A `sigma_provider` supplies the
 !> retarded self-energy block Sigma(z) on an arbitrary complex energy z for a
 !> given unit-cell site, in the same (screened/auxiliary) LMTO representation
-!> and orbital ordering as the real-space Green's-function route.
+!> and orbital ordering as the real-space Green’s-function route.
 !>
 !> The abstract type is defined here (not in a submodule) so that the Dyson
 !> backend in `reciprocal_green` and future concrete providers can share one

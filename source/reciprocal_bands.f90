@@ -527,10 +527,10 @@ contains
       if (present(use_shift)) do_shift = use_shift
 
       if (this%has_nonzero_q_gbt()) then
-         ! WP0's full-BZ guard stays the default and the oracle every other
-         ! policy is checked against (WP8: "keep full BZ as the oracle").
+         ! WP0’s full-BZ guard stays the default and the oracle every other
+         ! policy is checked against (WP8: ″keep full BZ as the oracle″).
          ! q_symmetry_policy is an explicit opt-in to reduce by the little
-         ! group of q_ss instead; anything else (including the 'full_bz'
+         ! group of q_ss instead; anything else (including the ’full_bz’
          ! default) reproduces the WP0 behaviour bit-for-bit.
          if (trim(this%q_symmetry_policy) == 'little_group' .or. &
              trim(this%q_symmetry_policy) == 'little_group_common') then
@@ -683,7 +683,7 @@ contains
       ! q_ss is Cartesian in units of 2*pi/alat (source/hamiltonian_build.f90);
       ! convert to fractional reciprocal-lattice coordinates for spglib using
       ! the same, already-locked convention as the frozen_magnon
-      ! q_coordinates='direct' round trip (tests/unit/test_qss_theta_conventions.f90,
+      ! q_coordinates=’direct’ round trip (tests/unit/test_qss_theta_conventions.f90,
       ! source/calculation.f90): cart_to_direct = transpose(lattice%a).
       if (present(q_list_cart)) then
          num_q = size(q_list_cart, 2)
@@ -777,7 +777,7 @@ contains
 
    !> @brief Is this a GBT run with a nonzero q, either the current single
    !>        hamiltonian%q_ss (has_nonzero_q_gbt) or, if given, any column of
-   !>        an explicitly declared q_list_cart (the 'little_group_common'
+   !>        an explicitly declared q_list_cart (the ’little_group_common’
    !>        pre-loop case, called while q_ss is still the reference point).
    logical function is_declared_nonzero_q_gbt(this, q_list_cart) result(nonzero)
       class(reciprocal), intent(in) :: this
@@ -808,7 +808,7 @@ contains
       if (do_shift) offset = 0.5_rp
 
       ! The q-part of the key: the declared sweep list under
-      ! 'little_group_common', otherwise the single current q_ss (zero for
+      ! ’little_group_common’, otherwise the single current q_ss (zero for
       ! q=0/non-GBT runs, so ordinary callers get a key that only tracks
       ! mesh/offset/lattice/policy, matching their actual dependence).
       if (present(q_list_cart)) then
@@ -843,11 +843,11 @@ contains
       ! Cache key changed (or no mesh yet): rebuild through the ordinary
       ! dispatch, which itself honours q_symmetry_policy and has_nonzero_q_gbt.
       ! has_nonzero_q_gbt() alone only sees the single CURRENT hamiltonian%q_ss
-      ! -- for a pre-loop 'little_group_common' call the caller's q_list_cart
+      ! -- for a pre-loop ’little_group_common’ call the caller’s q_list_cart
       ! is nonzero while the reference q_ss is still (0,0,0), so a caller-
-      ! supplied nonzero q-set must also count as "nonzero q GBT" here or the
+      ! supplied nonzero q-set must also count as ″nonzero q GBT″ here or the
       ! sweep would silently fall through to the ordinary q=0 point-group mesh
-      ! (exactly the "wrong subgroup" failure mode WP8 exists to remove).
+      ! (exactly the ″wrong subgroup″ failure mode WP8 exists to remove).
       if (is_declared_nonzero_q_gbt(this, q_list_cart) .and. &
           (trim(this%q_symmetry_policy) == 'little_group' .or. &
            trim(this%q_symmetry_policy) == 'little_group_common')) then

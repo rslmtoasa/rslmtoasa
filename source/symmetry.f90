@@ -213,7 +213,7 @@ contains
    !---------------------------------------------------------------------------
    function determine_crystal_structure(this) result(crystal_type)
       class(symmetry), intent(in) :: this
-      character(len=10) :: crystal_type
+      character(len=12) :: crystal_type
       ! Local variables
       real(rp), dimension(3, 3) :: lattice_vectors
       real(rp) :: a, b, c, alpha, beta, gamma
@@ -233,7 +233,7 @@ contains
 #ifdef USE_SPGLIB
       ! If spglib already ran during initialization, prefer its result
       if (this%spglib%is_available()) then
-         ! space_group_symbol typically contains centering like 'Im-3m' or 'Fm-3m'
+         ! space_group_symbol typically contains centering like ’Im-3m’ or ’Fm-3m’
          if (index(this%space_group_symbol, 'I') /= 0) then
             crystal_type = 'bcc'
             return
@@ -276,7 +276,7 @@ contains
 
       if (abs(avg_diag) > 0.0_rp .and. maxd / abs(avg_diag) < tol_rel .and. &
           (abs(avg_off) > 0.0_rp .and. maxo / abs(avg_off) < tol_rel .or. abs(maxo) < tol_rel)) then
-         ! It's a cubic lattice (primitive vectors may be non-orthogonal)
+         ! It’s a cubic lattice (primitive vectors may be non-orthogonal)
          ! Distinguish BCC vs FCC by sign of off-diagonal metric elements in common primitive choices
          if (avg_off < 0.0_rp) then
             crystal_type = 'bcc'
@@ -513,7 +513,7 @@ contains
                                   real(j-1, rp) / real(npts_per_segment, rp) * kvec_diff
             this%k_distances(idx) = total_distance + &
                                    real(j-1, rp) / real(npts_per_segment, rp) * segment_length
-            this%k_labels(idx) = ''  ! Most points don't have labels
+            this%k_labels(idx) = ' '  ! Most points don’t have labels
             
             ! Log first few k-points for verification
             if (idx <= 3 .or. mod(idx, 25) == 0) then
@@ -577,7 +577,7 @@ contains
       class(symmetry), intent(inout) :: this
       integer, intent(in), optional :: nk_path_in
       integer :: npts
-      character(len=10) :: crystal_type
+      character(len=12) :: crystal_type
 
       npts = 50
       if (present(nk_path_in)) npts = nk_path_in
@@ -639,7 +639,7 @@ contains
       integer :: npts, spg_number
       character(len=20) :: international_symbol
       character(len=100) :: hall_symbol
-      character(len=10) :: crystal_type
+      character(len=12) :: crystal_type
       logical :: dataset_success
       
       npts = 50

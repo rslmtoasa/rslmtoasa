@@ -22,7 +22,7 @@
 !> `resolve_chebyshev_window` fixes for the recursion route and `gamma_nm`
 !> uses), T_p is the Chebyshev polynomial of the first kind, v_a/v_b are the
 !> velocity operators, and |r> is the reference block localized on one
-!> unit-cell site (the "per_type" reference of the recursion route). Index n is
+!> unit-cell site (the ″per_type″ reference of the recursion route). Index n is
 !> the INNER Chebyshev factor (between the two velocities), m the OUTER (leftmost)
 !> factor -- exactly the `mu_nm_stochastic(:,:,n,m,:)` storage order.
 !>
@@ -63,7 +63,7 @@ contains
    !> @brief Chebyshev polynomials T_0..T_{ll-1} of scaled scalars.
    !> @details T(:,1)=1, T(:,2)=x, T(:,p)=2 x T(:,p-1)-T(:,p-2), where the input
    !>          values are affinely scaled x = (e - b)/a. Column p holds T_{p-1},
-   !>          matching the recursion route's 1-based moment index (m=1 -> T_0).
+   !>          matching the recursion route’s 1-based moment index (m=1 -> T_0).
    !> @param[in]  e   Unscaled eigenvalues, shape (n).
    !> @param[in]  a   Scale of the affine map H -> (H-b)/a.
    !> @param[in]  b   Shift of the affine map.
@@ -102,7 +102,7 @@ contains
    !> @param[in]  vb_k         k-space velocity operator v_b(k), shape (nmat,nmat,nk).
    !> @param[in]  a            Chebyshev window scale (same as recursion route).
    !> @param[in]  b            Chebyshev window shift (same as recursion route).
-   !> @param[in]  ioff         Zero-based row offset of the reference site's block.
+   !> @param[in]  ioff         Zero-based row offset of the reference site’s block.
    !> @param[in]  nblk         Reference block size (nb = 2*norb).
    !> @param[in]  cond_ll      Number of Chebyshev moments per index.
    !> @param[out] mu           On-site moment block, shape (nblk,nblk,cond_ll,cond_ll);

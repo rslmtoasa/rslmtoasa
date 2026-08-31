@@ -209,6 +209,7 @@ contains
 
       include 'include_codes/namelists/element.f90'
 
+      newunit = -1
       symbol = this%symbol
       atomic_number = this%atomic_number
       core = this%core
@@ -250,6 +251,7 @@ contains
 
       include 'include_codes/namelists/element.f90'
 
+      newunit = -1
       symbol = this%symbol
       atomic_number = this%atomic_number
       core = this%core
@@ -287,7 +289,6 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
 
       character(len=10) :: symbol
       integer :: f_core, num_quant_s, num_quant_p, num_quant_d, num_quant_f

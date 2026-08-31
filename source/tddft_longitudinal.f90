@@ -8,7 +8,7 @@
 !> dynamic matrices and tddft_dyson_mod performs their enhancement.  Here we
 !> only turn independently converged +/- Bz calculations into chi_parallel(0),
 !> obtain U_parallel from inverse susceptibilities, and fit the resulting
-!> local response in the code's retarded (+i eta) convention.
+!> local response in the code’s retarded (+i eta) convention.
 module tddft_longitudinal_mod
    use precision_mod, only: rp
    implicit none
@@ -155,7 +155,7 @@ contains
 
    !> Calibrate U = chi_KS(0)^-1 - chi_static^-1, then fit each on-site
    !> response to chi(0)/(1 + i omega T).  The plus sign is the translation of
-   !> the requested relaxational form to this code's retarded +i*eta Kubo
+   !> the requested relaxational form to this code’s retarded +i*eta Kubo
    !> convention, where a positive-frequency absorptive diagonal has Im chi<0.
    subroutine calibrate_longitudinal_response(m0, chi_ks_static, chi_static, omega, chi_dynamic, options, result)
       real(rp), intent(in) :: m0(:), omega(:)

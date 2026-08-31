@@ -6,7 +6,7 @@
 !     ee/hall (lsham included), so the inner loop is psi2 = 2*Ht*psi1 - psi0
 !     with no scale/shift passes.
 !  2. psi is packed SITE-MAJOR as an (nb*kk, nb) matrix, so every block
-!     moment sum_k psi^H phi is one GEMM ('C','N', nb, nb, nb*kk) -- and
+!     moment sum_k psi^H phi is one GEMM (’C’,’N’, nb, nb, nb*kk) -- and
 !     mu(2ll+1) uses HERK (Hermitian, half flops). No per-atom scalar loop.
 !  3. The matvec is one fused OpenMP sweep over atoms; the lightcone
 !     (izero/idum) is dropped: zero psi contributes zero, results identical.
@@ -36,7 +36,7 @@ module chebyshev_fast_mod
    !> @brief Cache-validity fingerprint for one cheb_cache_t buffer group.
    !> @details A fingerprint records the problem size and scaling parameters an
    !>          fp32 buffer group was built for. Each ensure_* routine compares
-   !>          the current call's parameters against its stored fingerprint. A
+   !>          the current call’s parameters against its stored fingerprint. A
    !>          mismatch marks the group invalid and forces a rebuild. valid
    !>          starts false, so the first call always rebuilds.
    !> @note Not MPI-aware. The cache assumes a single rank owns and reuses it.
@@ -71,7 +71,7 @@ module chebyshev_fast_mod
    !>       process. It is not safe to share across ranks, and it is not safe
    !>       to use from two recursion objects with different problem sizes at
    !>       the same time: each ensure_* call rebuilds the cache for the
-   !>       CURRENT caller's shape.
+   !>       CURRENT caller’s shape.
    type :: cheb_cache_t
       complex(sp), pointer :: hee_cache(:, :, :, :) => null(), hha_cache(:, :, :, :) => null()
       complex(sp), pointer :: oee_cache(:, :, :, :) => null(), oha_cache(:, :, :, :) => null()
@@ -638,6 +638,50 @@ contains
       end do
       !$omp end parallel do
    end subroutine spmv_block_sp
+
+   !> In-place variant for the beta*x0 form when x0 and y are the same array.
+   subroutine spmv_block_sp_inplace(hee_op, hha_op, nn, iz, kk, nb, nnmax, ntype, nmax_op, &
+                                    ld, x1, y, alpha, beta, inva, bsc)
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax_op, ld
+      complex(sp), intent(in) :: hee_op(nb, nb, nnmax, ntype)
+      complex(sp), intent(in) :: hha_op(nb, nb, nnmax, *)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      complex(sp), intent(in) :: x1(ld, nb)
+      complex(sp), intent(inout) :: y(ld, nb)
+      real(sp), intent(in) :: alpha, beta, inva, bsc
+      complex(sp), parameter :: cone = (1.0_sp, 0.0_sp)
+      complex(sp) :: acc(nb, nb)
+      integer :: kk_, t_, s_, nbr, nr, r0
+      !$omp parallel do private(kk_, t_, s_, nbr, nr, r0, acc) schedule(dynamic, 32)
+      do kk_ = 1, kk
+         acc = (0.0_sp, 0.0_sp)
+         nr = nn(kk_, 1)
+         do s_ = 1, nr
+            if (s_ == 1) then
+               nbr = kk_
+            else
+               nbr = nn(kk_, s_)
+               if (nbr == 0) cycle
+            end if
+            r0 = nb*(nbr - 1)
+            if (kk_ <= nmax_op) then
+               call cgemm('N', 'N', nb, nb, nb, cone, hha_op(:, :, s_, kk_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+            else
+               t_ = iz(kk_)
+               call cgemm('N', 'N', nb, nb, nb, cone, hee_op(:, :, s_, t_), nb, x1(r0 + 1, 1), ld, cone, acc, nb)
+            end if
+         end do
+         r0 = nb*(kk_ - 1)
+         if (bsc /= 0.0_sp) acc = acc - bsc*x1(r0 + 1:r0 + nb, :)
+         if (inva /= 1.0_sp) acc = acc*inva
+         if (beta /= 0.0_sp) then
+            y(r0 + 1:r0 + nb, :) = alpha*acc + beta*y(r0 + 1:r0 + nb, :)
+         else
+            y(r0 + 1:r0 + nb, :) = alpha*acc
+         end if
+      end do
+      !$omp end parallel do
+   end subroutine spmv_block_sp_inplace
 
    !> hoh combine for the H~ apply: y = alpha*(wt - e + hons*x1) + beta*x0,
    !> with wt = (h/a)x1 and e = eeo*wt (both precomputed); hons applied on-site.
@@ -1437,7 +1481,7 @@ contains
          call spmv_block_sp(fv, fv, nn, iz, kk, nb, nnmax, ntype, 0, ld, x, x, y, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
          if (do_hoh) then
             call hsweep_sp(fvee, fvha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x, x, hwt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
-            call spmv_block_sp(fvo, fvo, nn, iz, kk, nb, nnmax, ntype, 0, ld, hwt, y, y, -1.0_sp, 1.0_sp, 1.0_sp, 0.0_sp)
+            call spmv_block_sp_inplace(fvo, fvo, nn, iz, kk, nb, nnmax, ntype, 0, ld, hwt, y, -1.0_sp, 1.0_sp, 1.0_sp, 0.0_sp)
          end if
       end subroutine vapply
 

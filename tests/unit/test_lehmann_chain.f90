@@ -6,7 +6,7 @@
 !
 !> @brief Known-answer test for the strict-Lehmann kernel (backend E, B2.2).
 !> @details Exercises `lehmann_pair_block` on a 1-band tight-binding chain
-!>          H(k) = -2t cos k, whose lattice Green's function has a closed form,
+!>          H(k) = -2t cos k, whose lattice Green’s function has a closed form,
 !>          with NO LMTO machinery involved. Pins three things:
 !>
 !>          1. On-site block G_00(z) vs the closed form 1/sqrt(z^2 - 4t^2)
@@ -137,7 +137,7 @@ program test_lehmann_chain
 
 contains
 
-   !> Closed-form retarded lattice Green's function of the 1-band chain,
+   !> Closed-form retarded lattice Green’s function of the 1-band chain,
    !> G_0m(z) = x_in^|m| / (t (x_in - x_out)), where x_in, x_out are the roots
    !> of x^2 + (z/t) x + 1 = 0 with |x_in| < 1 (residue inside the unit circle).
    !> For m = 0 this reduces to 1/sqrt(z^2 - 4t^2) on the retarded branch.

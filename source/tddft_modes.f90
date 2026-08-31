@@ -253,7 +253,7 @@ contains
    end subroutine order_frequency_branches
 
    !> Choose an actual unity crossing.  At q>q_1 candidates are scored with
-   !> the preceding selected mode's biorthogonal overlap and its interpolated
+   !> the preceding selected mode’s biorthogonal overlap and its interpolated
    !> crossing eigenvalue.  No candidate is invented when no crossing exists.
    subroutine select_unity_crossing(omega, result, iq, previous_mode, options, selected_mode, selected_iw)
       real(rp), intent(in) :: omega(:)

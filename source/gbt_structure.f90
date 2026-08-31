@@ -82,7 +82,7 @@ contains
    end subroutine gbt_frame_from_phase
 
    !> Construct the frame for a physical cell translation.
-   !> `q_cart_2pi_over_alat` is in the repository's Cartesian `2*pi/alat`
+   !> `q_cart_2pi_over_alat` is in the repository’s Cartesian `2*pi/alat`
    !> convention and `r_cart` is a Cartesian length.
    pure subroutine gbt_frame_for_cell(q_cart_2pi_over_alat, r_cart, alat, theta, phi, frame)
       real(rp), intent(in) :: q_cart_2pi_over_alat(3), r_cart(3), alat, theta, phi

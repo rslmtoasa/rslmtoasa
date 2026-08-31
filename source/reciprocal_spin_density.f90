@@ -15,13 +15,13 @@
 !> it fills the SAME `spin_density` object, per site and per angular channel,
 !> straight from the eigenvectors, k weights and Fermi-Dirac occupations --
 !>
-!>   rho_al(s,s') = sum_k w_k sum_n f(eps_nk) E_nk^p sum_{m in l}
-!>                  c_{a l m s, n k} conjg(c_{a l m s', n k}),
+!>   rho_al(s,s’) = sum_k w_k sum_n f(eps_nk) E_nk^p sum_{m in l}
+!>                  c_{a l m s, n k} conjg(c_{a l m s’, n k}),
 !>
 !> with p = 0, 1, 2 giving the three energy-moment orders the radial SCF
 !> consumes. There is no energy grid, no broadening and, crucially, no
 !> projection axis: the up/down channels are formed afterwards, in
-!> `fill_band_moments_from_spin_density`, from the object's own explicit axis.
+!> `fill_band_moments_from_spin_density`, from the object’s own explicit axis.
 !>
 !> Before WP7 the k-space route did the opposite: `project_dos_orbitals_*`
 !> projected each eigenstate onto `potential%mom` (via `get_site_spin_axis`)
@@ -31,7 +31,7 @@
 !> result with the real-space route. The projected DOS remains -- as DOS output
 !> -- but no longer defines the SCF density.
 !>
-!> Conventions: rho_{s s'} = psi_s conjg(psi_s'), so
+!> Conventions: rho_{s s’} = psi_s conjg(psi_s’), so
 !> m_x = 2 Re(conjg(u) d), m_y = 2 Im(conjg(u) d), m_z = |u|^2 - |d|^2, matching
 !> both the pre-WP7 spinor projections and the real-space producer. See the
 !> `spin_density_mod` header for the full contract.

@@ -101,9 +101,9 @@ contains
 !         this%r2 = this%ct(1)**2
       end if
 
-      ! B7.5: the two-sided (calctype='L') counterpart of the 'S' block above.
+      ! B7.5: the two-sided (calctype=’L’) counterpart of the ’S’ block above.
       ! Two FROZEN reference regions instead of one, so the frozen-type count is
-      ! the sum of both regions' bulk types rather than a single nbulk_bulk:
+      ! the sum of both regions’ bulk types rather than a single nbulk_bulk:
       !
       !   ntype = nbulk_A + nbulk_B + nlay     (A types, B types, active layers)
       !   nbulk = nbulk_A + nbulk_B            (all frozen reference types)
@@ -113,9 +113,9 @@ contains
       ! so it MUST cover both regions or the deviation bookkeeping in
       ! interfacepot indexes past the end of the reference table.
       !
-      ! Both regions draw from the SAME &atoms label(:) list -- region A's
-      ! types first, then region B's -- exactly as newclusurf/newclubulk
-      ! combine host + impurity labels. nbulk_bulk counts ONE region's types,
+      ! Both regions draw from the SAME &atoms label(:) list -- region A’s
+      ! types first, then region B’s -- exactly as newclusurf/newclubulk
+      ! combine host + impurity labels. nbulk_bulk counts ONE region’s types,
       ! so a symmetric A|B (same material both sides, two independently
       ! converged parameter sets) has 2*nbulk_bulk frozen types.
       if (this%control%calctype == 'L') then
@@ -361,7 +361,7 @@ contains
    end subroutine build_surf_full
 
    !> @brief Build the two-sided (region A | active | region B) interface cluster.
-   !> @details B7.5, calctype='L'. The two-sided counterpart of build_surf_full.
+   !> @details B7.5, calctype=’L’. The two-sided counterpart of build_surf_full.
    !>
    !> Layer selection is IDENTICAL to build_surf_full: atoms are binned into
    !> layers by projecting onto the surface normal [dx,dy,dz] and matching
@@ -392,7 +392,7 @@ contains
    !> `chargetrf_type(i)` is the frozen reference TYPE that site i reverts to.
    !> Region-A sites point into the region-A block, region-B sites into the
    !> region-B block. This is what charge%get_charge_transf/bulk_charge and
-   !> interfacepot's deviation bookkeeping consume (B7 §1.4): every charge is a
+   !> interfacepot’s deviation bookkeeping consume (B7 §1.4): every charge is a
    !> deviation from the LOCAL region reference, never an absolute charge, which
    !> is exactly what makes the two-sided Madelung sums truncate on both sides.
    !> @param[inout] this Lattice object receiving the interface cluster.
@@ -410,17 +410,17 @@ contains
       !> Closest-so-far distance PER TYPE. build_surf_full keeps a single
       !> per-layer scalar and relies on its frozen representatives coming from
       !> early (low-index) layers, so the last-wins behaviour is harmless
-      !> there. Here region B's representatives come from the DEEPEST layers,
+      !> there. Here region B’s representatives come from the DEEPEST layers,
       !> scanned last, so last-wins put the final site index into ib -- past
       !> this%kk after the nsurf parity truncation below, and geometrically far
       !> off-centre for the active type. Tracking the minimum per type makes
-      !> "representative" mean closest-to-origin, as intended.
+      !> ″representative″ mean closest-to-origin, as intended.
       real(rp), dimension(:), allocatable :: disi_min
       real(rp) :: new, one, ds, ds2, disi, cr_proj_min, cr_proj_max
       integer :: n, ilo, lower_layers, upper_layers, margin
       logical :: isUnique, isopen
       !> Extra layers of bulk-like margin below region A, mirroring
-      !> build_surf_full's 15-layer margin past its own frozen (bulk) side.
+      !> build_surf_full’s 15-layer margin past its own frozen (bulk) side.
       !> The lower margin is increased when the requested normal reaches
       !> farther into the source cluster than that fixed default. Without
       !> this geometry-derived guard, an oblique normal can clip valid source
@@ -433,17 +433,17 @@ contains
       ! Region type-block widths. Both regions are described by the same
       ! &lattice nbulk_bulk today (symmetric A|B, or A|B with equally many
       ! inequivalent sites per cell), so the frozen-type count is the sum of
-      ! both regions' bulk types. `build_clusup` is never actually called by
+      ! both regions’ bulk types. `build_clusup` is never actually called by
       ! any pre_processing_* path (verified: build_surf_full sets its own
       ! nbulk/ntype/nrec directly for the same reason, at lattice_cluster.f90
-      ! ~line 304, rather than relying on build_clusup's parallel 'S' block),
+      ! ~line 304, rather than relying on build_clusup’s parallel ’S’ block),
       ! so this MUST be set here rather than assumed from a prior step.
       nbulk_a = this%nbulk_bulk
       if (trim(this%region_b_kind) == 'vacuum') then
          ! B7.6, A | vacuum: vacuum is ONE empty-sphere type regardless of how
-         ! many inequivalent sites region A's cell has. An empty lattice has a
+         ! many inequivalent sites region A’s cell has. An empty lattice has a
          ! single site type by construction -- there is nothing to be
-         ! inequivalent about -- so nbulk_bulk, which describes region A's
+         ! inequivalent about -- so nbulk_bulk, which describes region A’s
          ! crystal, must not be applied to it. The type still occupies a slot
          ! in the frozen block exactly as a metallic reference would; only its
          ! parameters come from `vacuum_lead` instead of an &atoms label
@@ -502,7 +502,7 @@ contains
       allocate (uniqueTypes(this%kk), ichoicen(this%kk), ichoicetypen(this%kk))
       allocate (layer_of_site(this%kk))
       ! Per-type closest-so-far tracker, spanning ALL layers (not reset per
-      ! layer): a type's representative is the closest site anywhere in its
+      ! layer): a type’s representative is the closest site anywhere in its
       ! region. ichoicen/ichoicetypen are zeroed so an unclaimed type is
       ! detectable rather than holding allocation garbage.
       allocate (disi_min(this%kk))
@@ -582,7 +582,7 @@ contains
       nsurf = 0
       do i = 1, n
          nTypesForCurrentLayer(i) = 0
-         ! Layer index relative to region A's first layer. ilo <= 0 is the
+         ! Layer index relative to region A’s first layer. ilo <= 0 is the
          ! below-region-A margin: selected (for neighbor-shell depth) but
          ! assigned to no region, exactly mirroring the unused margin
          ! build_surf_full carries past its own frozen side.
@@ -605,7 +605,7 @@ contains
                   if (typesurf(nsurf) == 0) typesurf(nsurf) = 1
                else if (ilo <= this%nlay_a) then
                   ! ---- Region A: frozen. Reverts to a region-A reference type.
-                  ! Cycles through region A's inequivalent sites so a
+                  ! Cycles through region A’s inequivalent sites so a
                   ! multi-sublattice reference (B2, ordered alloy) keeps each
                   ! sublattice on its own frozen parameter set.
                   itype_a = mod(itype_a, nbulk_a) + 1
@@ -628,14 +628,14 @@ contains
                      maxType = maxType + 1
                      typesurf(nsurf) = maxType
                      ! chargetrf_type is TYPE-indexed (dimension nrec, mirroring
-                     ! build_surf_full's nbas-sized array): fill it once, when
+                     ! build_surf_full’s nbas-sized array): fill it once, when
                      ! this active type is first discovered.  For a metallic
                      ! A|B interface, the active zone is a contact region and
                      ! its lower/upper halves use the corresponding frozen
                      ! references.  A|vacuum is different: vacuum is a
                      ! boundary lead, not the reference material for the
                      ! metallic active layers.  Every active metallic layer
-                     ! must therefore use region A's reference, just as the
+                     ! must therefore use region A’s reference, just as the
                      ! one-sided buildsurf surface path does.  Using the
                      ! vacuum type for the upper active layers measures
                      ! metal-vacuum charge transfer as if it were a local
@@ -713,7 +713,7 @@ contains
       allocate (this%ib(this%nbulk), this%irec(this%nrec), this%iu(this%ntot))
 
       ! chargetrf_type: TYPE-indexed (dimension nrec), the frozen reference
-      ! type each ACTIVE TYPE reverts to -- mirroring build_surf_full's
+      ! type each ACTIVE TYPE reverts to -- mirroring build_surf_full’s
       ! nbas-sized array and matching how interfacepot/imppot actually index
       ! it: this%lattice%chargetrf_type(atomrec), where atomrec is the
       ! representative-type counter (1..nrec) interfacepot walks via
@@ -919,7 +919,7 @@ contains
       call g_safe_alloc%allocate('lattice.ib', this%ib, (/this%nbulk/))
       call g_safe_alloc%allocate('lattice.iu', this%iu, (/this%ntot/))
       call g_safe_alloc%allocate('lattice.irec', this%irec, (/this%nrec/))
-!      call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
+!      call g_safe_alloc%allocate(’lattice.ct’, this%ct, (/this%ntype/))
 #else
       allocate (this%ib(this%nbulk), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
@@ -1223,7 +1223,7 @@ contains
              atoms_in_volume(atom_count) = i
           end if
        end do
-       !write(*,*) 'atoms_in_volume', atoms_in_volume
+       !write(*,*) ’atoms_in_volume’, atoms_in_volume
        ! Resize atoms_in_volume array to the actual number of atoms found
        !if (atom_count > 0) then
        !   deallocate(atoms_in_volume); allocate(atoms_in_volume(atom_count))

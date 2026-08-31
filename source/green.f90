@@ -260,13 +260,13 @@ contains
    !>        (norb,norb,echan,atom) layout as the on-mesh arrays.
    !> @details Copies Ginmag_eta/Gjnmag_eta/Gi{x,y,z}_eta/Gj{x,y,z}_eta
    !>          (shape (echan,norb,norb,atoms_per_process), filled by
-   !>          calculate_intersite_gf_core's eta_mode) into freshly
+   !>          calculate_intersite_gf_core’s eta_mode) into freshly
    !>          (re)allocated Ginmag/Gjnmag/Gi{x,y,z}/Gj{x,y,z} arrays of shape
    !>          (norb,norb,64,atoms_per_process), transposing the orbital and
    !>          energy-channel index order. This lets
    !>          exchange%calculate_exchange_gauss_legendre reuse the same
    !>          orbital-indexed exchange kernels (dGdG and friends) that the
-   !>          on-mesh gf_route='recursion' path uses, without a separate
+   !>          on-mesh gf_route=’recursion’ path uses, without a separate
    !>          eta-indexed code path.
    subroutine gij_eta_to_gij(this)
       use mpi_mod

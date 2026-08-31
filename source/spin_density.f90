@@ -11,7 +11,7 @@
 !> The one rotating-frame density contract shared by both SCF solvers
 !> (GBT completion blueprint WP7 / gate G7, §2.5 and §4).
 !>
-!> Before WP7 the two routes disagreed about what "the density" is. The real-
+!> Before WP7 the two routes disagreed about what ″the density″ is. The real-
 !> space route reconstructed spin information from the full on-site Green
 !> function and projected it, per energy channel, onto whatever
 !> `potential%mom` happened to hold; the k-space route built projected spin
@@ -38,7 +38,7 @@
 !> read of `potential%mom` anywhere in this module.
 !>
 !> Conventions (do-not-get-this-wrong):
-!>   * rho_{s s'} = psi_s psi*_{s'}, i.e. the k-space producer accumulates
+!>   * rho_{s s’} = psi_s psi*_{s’}, i.e. the k-space producer accumulates
 !>     rho_uu = |u|^2, rho_dd = |d|^2, rho_ud = u conjg(d), which reproduces
 !>     m_x = 2 Re(conjg(u) d), m_y = 2 Im(conjg(u) d), m_z = |u|^2 - |d|^2 --
 !>     the same signs the pre-WP7 spinor projections used.
@@ -91,7 +91,7 @@ module spin_density_mod
       character(len=sd_name_len) :: policy = sd_constrained_spiral
       !> Which producer filled the object.
       character(len=sd_name_len) :: producer = sd_producer_none
-      !> rho(s, s', l, site, order) -- rotating-frame 2x2 spin density matrix.
+      !> rho(s, s’, l, site, order) -- rotating-frame 2x2 spin density matrix.
       complex(rp), dimension(:, :, :, :, :), allocatable :: rho
       !> Explicit per-site projection axis (unit vector). No default meaning.
       real(rp), dimension(:, :), allocatable :: axis

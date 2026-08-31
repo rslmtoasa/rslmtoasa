@@ -202,7 +202,7 @@ contains
    !> where M_site is the P_site sigma population supplied separately by
    !> set_site_spin_population.  Here B_xc is the *energy* coefficient
    !> (V_up-V_down)/2.  This is the
-   !> direct rotational ALSDA derivative in the code's m=n_up-n_down and
+   !> direct rotational ALSDA derivative in the code’s m=n_up-n_down and
    !> H=H0+Hvec.sigma convention.  Since the response vertices measure
    !> m^+/-=sigma_x +/- i sigma_y while delta H=(delta B^+m^- +
    !> delta B^-m^+)/2, the circular kernel includes the explicit half.
@@ -249,7 +249,7 @@ contains
       this%site(isite)%signed_spin_population = spin_population
    end subroutine xc_kernel_set_site_signed_spin_population
 
-   !> Record the direction of the ground-state magnetization for the site's
+   !> Record the direction of the ground-state magnetization for the site’s
    !> local ALSDA frame.  Its magnitude is deliberately not used here: the
    !> response projector population is stored separately as spin_population.
    subroutine xc_kernel_set_site_magnetization_direction(this, isite, direction)
@@ -271,7 +271,7 @@ contains
       type(xc_response_site), intent(inout) :: site
 
       ! A radial m=0 record cannot define a rotation profile.  Likewise the
-      ! stiffness cannot be normalized before the response projector's M_site
+      ! stiffness cannot be normalized before the response projector’s M_site
       ! is known.  This deliberately leaves the provider invalid in either
       ! case rather than replacing M_site with an unrelated quantity.
       if (abs(site%radial_spin_population) <= tiny(1.0_rp) .or. &

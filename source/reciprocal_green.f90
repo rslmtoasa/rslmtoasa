@@ -8,7 +8,7 @@
 !> Anders Bergman
 !
 ! DESCRIPTION:
-!> k-space Green's-function engine (milestone B2, flagship). One filler API,
+!> k-space Green’s-function engine (milestone B2, flagship). One filler API,
 !> two backends, populating the SAME arrays on the `green` object that the
 !> real-space recursion route fills (`gij/gji`, the `gij_eta` Fermi-point
 !> ladder, and the torque-resolved `ginmag`/`gi{x,y,z}` families). Downstream
@@ -31,7 +31,7 @@
 !> land in B2.2 (E) and B2.4 (D); the eta ladder + torque components in B2.3.
 !>
 !> Contour convention (gate G-B2-1): the backends deliver G on the SAME grid
-!> and contour the recursion route uses, so `exchange`'s Simpson integral
+!> and contour the recursion route uses, so `exchange`’s Simpson integral
 !> (`simpson_f(..., en%ene, en%fermi, en%nv1, ...)`) is valid without change:
 !>   * grid    : `en%ene(1:size(en%ene))`, the real-axis mesh from `e_mesh`
 !>               (energy_min .. above fermi; `en%channels_ldos + 10` points).
@@ -50,7 +50,7 @@ submodule(reciprocal_mod) reciprocal_green
 contains
 
    !> @brief Build the retarded complex-energy contour for the k-space filler.
-   !> @details Adopts the real-space route's energy grid verbatim (gate
+   !> @details Adopts the real-space route’s energy grid verbatim (gate
    !>          G-B2-1): z(ie) = en%ene(ie) + i*this%green_eta over the full
    !>          `en%ene` mesh. The grid must already be prepared by `en%e_mesh`;
    !>          `fill_green` guarantees this before calling.
@@ -125,7 +125,7 @@ contains
    !>          k-space eigenpairs via `lehmann_pair_block`:
    !>            G_ij(z) = (1/N_k) sum_{k,n} e^{i k.dR_ij} psi_i psi_j^dagger
    !>                                                       / (z - eps_nk),
-   !>          with dR_ij = R_i - R_j the bond vector between the pair's cluster
+   !>          with dR_ij = R_i - R_j the bond vector between the pair’s cluster
    !>          atoms and psi_i the site-i sub-block of the eigenvector (rows
    !>          (site-1)*nb+1 .. site*nb, matching the H(k) block layout in
    !>          `reciprocal_fourier`). No 4-phase machinery: backend E fills the
@@ -144,14 +144,14 @@ contains
    !>            rotated only the k-space block into the local frame broke the
    !>            match (m_z diff -> ~20). So backend E delivers the global-frame
    !>            block directly. NOTE (future): if a local-frame comparison is ever
-   !>            wanted, BOTH the RS and the k-space Green's functions must be
+   !>            wanted, BOTH the RS and the k-space Green’s functions must be
    !>            rotated (via the same `rotmag_loc` primitive `rotate_to_local_axis`
    !>            applies to the Hamiltonian) -- rotating only one side is wrong.
    !>            The intersite i/=j case (i and j moments in different directions)
    !>            is an open question and deliberately out of scope here.
    !>          * `gij_eta`/`gji_eta` ladder: the 64-point Gauss-Legendre Fermi
    !>            ladder evaluated at z = ene(fermi_point) + i*(1-x)/x, matching
-   !>            `bgreen`'s eta contour (z = e(ei) + eta) and the `x,w` roots of
+   !>            `bgreen`’s eta contour (z = e(ei) + eta) and the `x,w` roots of
    !>            `gauss_legendre(64, 0, 1)`. Stored with the eta index leading,
    !>            `(64, nb, nb, pair)`, as the recursion route stores it.
    !>          * Torque-resolved families `ginmag`/`gi{x,y,z}` (+ `gj*` and the
@@ -438,8 +438,8 @@ contains
    !>          build_neighbor_vectors.
    !> @param[in]  this      Reciprocal object (lattice pair/site maps).
    !> @param[in]  pair_glob Global pair index (start_atom..end_atom).
-   !> @param[out] ioff      Zero-based row offset of site i's block ((site_i-1)*nb).
-   !> @param[out] joff      Zero-based row offset of site j's block ((site_j-1)*nb).
+   !> @param[out] ioff      Zero-based row offset of site i’s block ((site_i-1)*nb).
+   !> @param[out] joff      Zero-based row offset of site j’s block ((site_j-1)*nb).
    !> @param[out] dr        Bond vector R_i - R_j in fractional coordinates.
    subroutine pair_geometry(this, pair_glob, ioff, joff, dr)
       class(reciprocal), intent(in) :: this
@@ -463,7 +463,7 @@ contains
    end subroutine pair_geometry
 
    !> @brief Build the 64-point Fermi-eta ladder both backends share.
-   !> @details The recursion route's Fermi-point continued-fraction ladder,
+   !> @details The recursion route’s Fermi-point continued-fraction ladder,
    !>          evaluated here at z = ene(fermi_point) + i*(1-x)/x with x the
    !>          gauss_legendre(64, 0, 1) roots -- the same `bgreen` eta contour
    !>          (z = e(ei) + eta). `fermi_point` is the last grid index at or below
@@ -489,7 +489,7 @@ contains
    end subroutine build_fermi_eta_contour
 
    !> @brief Assemble the block-diagonal self-energy Sigma(z) for backend D.
-   !> @details Places each unit-cell site's nb x nb retarded self-energy block on
+   !> @details Places each unit-cell site’s nb x nb retarded self-energy block on
    !>          the diagonal of the full nmat x nmat Dyson matrix, in the same site
    !>          order as the H(k) layout. Sigma depends only on z (not k), so this
    !>          is recomputed per energy; for sigma_zero every block is zero.
@@ -689,10 +689,10 @@ contains
    ! the GLOBAL spin frame, matching the RS intersite blocks -- the intersite
    ! recursion `recur_b_ij` never rotates to local axes (only the on-site DOS
    ! recursion `recursion_haydock` does). If a LOCAL-frame comparison is ever
-   ! wanted, rotate BOTH routes' Green's functions with the same primitive
+   ! wanted, rotate BOTH routes’ Green’s functions with the same primitive
    ! `rotate_to_local_axis` uses on the Hamiltonian, e.g. per block:
    !   call rotmag_loc(blk_rotated, blk_global, size(blk, 3), mom)   ! = R^dagger B R
-   ! with mom the block's central-atom moment. Rotating only the k-space side is
+   ! with mom the block’s central-atom moment. Rotating only the k-space side is
    ! wrong: an early Mn3Sn (120 deg NC) experiment that did so broke the m_z match
    ! (~4e-4 -> ~20). The intersite i/=j case (i, j moments differ) is open.
 

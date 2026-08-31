@@ -5,7 +5,7 @@
 ! PROGRAM: test_region_registry
 !
 !> @brief Pins the B7.1 region registry (source/region_registry.f90) against
-!>        today's charge%surfpot index map, documented in B7 §2.10 and
+!>        today’s charge%surfpot index map, documented in B7 §2.10 and
 !>        verified against the sources during B7.0:
 !>
 !>          - rows 1..init            vacuum-side frozen (init = 6, the
@@ -13,7 +13,7 @@
 !>          - rows init+1..init+nlay  active layers
 !>          - rows init+nlay+1..nbas  bulk-side frozen
 !>
-!>        and the deliberate-not-accidental fact that surfpot's charge loop
+!>        and the deliberate-not-accidental fact that surfpot’s charge loop
 !>        only ever fills rows init+1..nbas, so the vacuum rows exist in the
 !>        geometry but are held at exactly zero deviation charge (B7 §1.5).
 !>
@@ -22,7 +22,7 @@
 !>             representative (nbas, nlay, init) matching the fccCu001
 !>             surface regression case (nbas=49, nlay=6, init=6).
 !>          2. Vacuum and bulk regions are frozen; the active region is not.
-!>          3. z is carried as DATA -- the registry's z array is bit-identical
+!>          3. z is carried as DATA -- the registry’s z array is bit-identical
 !>             to the input z array, not recomputed from layer_index (B7
 !>             §2.10: this is what makes relaxed-z later a parameter change).
 !>          4. w (Wigner-Seitz radius) is carried per-site, not collapsed to
@@ -55,10 +55,10 @@ program test_region_registry
 
 contains
 
-   !> 1. Region id / active mask / layer_index reproduce surfpot's index map
+   !> 1. Region id / active mask / layer_index reproduce surfpot’s index map
    !> exactly for the fccCu001 surface regression geometry (nbas=49, nlay=6,
    !> init=6, per example/surface/fccCu001/Test/input.nml and
-   !> lattice_cluster.f90's build_surf_full).
+   !> lattice_cluster.f90’s build_surf_full).
    subroutine test_index_map_matches_surfpot()
       type(region_registry) :: reg
       integer, parameter :: nbas = 49, nlay = 6, init = 6
@@ -125,9 +125,9 @@ contains
 
    !> 2. Frozen/active mask: vacuum and bulk regions are frozen (parameters
    !> never updated); the active region is not. This is the registry-explicit
-   !> statement of "the charge loop fills only rows init+1..nbas, so the
+   !> statement of ″the charge loop fills only rows init+1..nbas, so the
    !> vacuum rows exist in the geometry but are held at exactly zero
-   !> deviation charge" (B7 §1.5) -- preserved DELIBERATELY, not by omission.
+   !> deviation charge″ (B7 §1.5) -- preserved DELIBERATELY, not by omission.
    subroutine test_frozen_active_mask()
       type(region_registry) :: reg
       integer, parameter :: nbas = 20, nlay = 4, init = 3
@@ -156,7 +156,7 @@ contains
          end select
       end do
 
-      ! Every frozen site's active() must be .false., matching region%frozen.
+      ! Every frozen site’s active() must be .false., matching region%frozen.
       do i = 1, nbas
          if (reg%region(reg%region_id(i))%frozen .eqv. reg%active(i)) then
             write (*, '(a,i0)') 'FAIL active(i) inconsistent with region%frozen at site=', i
@@ -170,7 +170,7 @@ contains
    !> 3. z is carried as DATA. Perturb z at a few sites (as a stand-in for a
    !> future relaxed-z geometry) and confirm the registry reproduces exactly
    !> the perturbed values, not a value derived from layer spacing/index --
-   !> this is what B7 §2.10 means by "relaxed-z later is a parameter change".
+   !> this is what B7 §2.10 means by ″relaxed-z later is a parameter change″.
    subroutine test_z_is_data_not_derived()
       type(region_registry) :: reg
       integer, parameter :: nbas = 12, nlay = 3, init = 4
@@ -181,7 +181,7 @@ contains
       do i = 1, nbas
          z(i) = real(i, rp)*1.5_rp
       end do
-      ! Perturb one active-layer site off its "regular" spacing, as relaxed-z
+      ! Perturb one active-layer site off its ″regular″ spacing, as relaxed-z
       ! would.
       z(init + 2) = z(init + 2) + 0.1234_rp
 
@@ -210,7 +210,7 @@ contains
          z(i) = real(i, rp)
       end do
       w = 2.66_rp
-      w(1) = 3.05_rp   ! a different region's w, e.g. a vacuum empty sphere
+      w(1) = 3.05_rp   ! a different region’s w, e.g. a vacuum empty sphere
 
       call reg%build_from_buildsurf(nbas, nlay, z, w, init=init)
 

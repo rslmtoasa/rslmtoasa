@@ -106,9 +106,9 @@ contains
             call charge_obj%impmad()
             if (present(preprocessing_route)) call charge_obj%get_charge_transf
          case ('L')
-            ! B7.5: same Madelung matrices as 'S' (no interfacemat exists, by
+            ! B7.5: same Madelung matrices as ’S’ (no interfacemat exists, by
             ! design), plus the region reference charges and the genuinely
-            ! two-sided registry that overwrites surfmat's one-sided one.
+            ! two-sided registry that overwrites surfmat’s one-sided one.
             ! Mirrors pre_processing_buildinterface.
             call charge_obj%get_charge_transf
             call charge_obj%build_alelay
@@ -156,7 +156,7 @@ contains
             call hamiltonian_obj%build_bulkham()
             call hamiltonian_obj%build_locham()
          case ('L')
-            ! B7.5: identical to 'S' -- see the same clause in self.f90's
+            ! B7.5: identical to ’S’ -- see the same clause in self.f90’s
             ! run_recursion for why the loop runs to ntype and there is no
             ! build_locham.
             do i = 1, lattice_obj%ntype
@@ -225,7 +225,7 @@ contains
 
    !> @brief Bloch spectral function A(k,E) post-processing (milestone B3).
    !> @details Builds the same stack as post_processing_band_structure (the BSF is a
-   !>          thin consumer of the B2 k-space Green's function on the band path),
+   !>          thin consumer of the B2 k-space Green’s function on the band path),
    !>          then delegates to reciprocal%calculate_bsf. Broadening is the
    !>          &reciprocal green_eta; the energy grid/range are n_energy_points /
    !>          dos_energy_range; the path density is nk_per_segment. With sigma=0 the
@@ -356,7 +356,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief B2 validation driver (C1/C3 + C2): cross-check the k-space Lehmann
-   !>        on-site Green's function against the real-space recursion route.
+   !>        on-site Green’s function against the real-space recursion route.
    !> @details Runs BOTH routes on the same converged potential and compares the
    !>        on-site density of states rho(E) = -1/pi * Im Tr G_ii(E), built from
    !>        the SAME green%gij on-site block for each route (convention 5: the
@@ -381,7 +381,7 @@ contains
    !>        recursion does), so the RS gij is stored in the GLOBAL spin frame.
    !>        Backend E therefore fills the global-frame block directly and m_z from
    !>        both routes agrees to ~4e-4 (for an in-plane moment both are ~0). If a
-   !>        LOCAL-frame comparison were wanted, BOTH routes' G would have to be
+   !>        LOCAL-frame comparison were wanted, BOTH routes’ G would have to be
    !>        rotated by the same rotmag_loc primitive -- rotating only one side is
    !>        wrong (it drove m_z diff to ~20). We still restore the global ee
    !>        before the k-space build (rotate_from_local_axis) as a safety net in
@@ -471,9 +471,9 @@ contains
       call onsite_dos_mz(blk_le, norb_h, dos_le, mz_le)
 
       ! --- Backend D (Dyson, Sigma=0) cross-check on the real H(k). ---------------
-      ! The permanent B2.4 invariant "D with Sigma=0 == E" over EVERY pair (the
+      ! The permanent B2.4 invariant ″D with Sigma=0 == E″ over EVERY pair (the
       ! full gij array, so the intersite e^{ik.dR} phase is exercised, not just
-      ! the on-site block). Both routes use S=I (backend E's zheev is orthonormal,
+      ! the on-site block). Both routes use S=I (backend E’s zheev is orthonormal,
       ! so backend D inverts z*I - H(k)); the difference is solver-tolerance ripple.
       gij_le = green_obj%gij
       reciprocal_obj%green_backend = 'dyson'

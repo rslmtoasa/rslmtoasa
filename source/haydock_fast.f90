@@ -64,7 +64,7 @@ contains
       logical :: halt_divide_by_zero
       external :: zheev, zgemm
       u = b2
-      ! oneMKL's zheev implementation deliberately evaluates an intermediate
+      ! oneMKL’s zheev implementation deliberately evaluates an intermediate
       ! divide-by-zero in its scaling path.  Keep FPE diagnostics active for
       ! all application code, masking this external-library exception only.
       call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)

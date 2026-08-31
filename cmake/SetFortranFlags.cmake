@@ -137,6 +137,30 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                           "/warn:all" # Intel Windows
                 )
 
+# The tab warning is formatting-only.
+# oneMKL's generated BIND(C) declarations are vendor code and are not
+# actionable in this project; suppress that diagnostic when the MKL kernels
+# are enabled.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                     Fortran "-Wno-tabs")
+    # The project deliberately builds a broad legacy/optional Fortran API.
+    # Unused entities in those interfaces are maintenance noise in Debug;
+    # keep numerical, initialization, and lifetime diagnostics enabled.
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                     Fortran "-Wno-unused-variable")
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                     Fortran "-Wno-unused-dummy-argument")
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                     Fortran "-Wno-unused-function")
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                     Fortran "-Wno-unused-label")
+    if(ENABLE_MKL_KERNELS)
+        SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
+                         Fortran "-Wno-c-binding-type")
+    endif()
+endif()
+
 # Traceback
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
                  Fortran "-traceback"   # Intel/Portland Group

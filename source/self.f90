@@ -337,14 +337,14 @@ module self_mod
       procedure, private :: vxc0sp
       procedure, private :: racsi
       !> @note B7.2: visibility widened from `private` to public. This is
-      !> an ACCESS SPECIFIER CHANGE ONLY -- not one character of POTPAR's
+      !> an ACCESS SPECIFIER CHANGE ONLY -- not one character of POTPAR’s
       !> body, nor of the radial solver it drives (RSEQSR/PHDFSR/RSQSR1/
       !> RSQSR2/FCTP/FCTP0/GINTSR), has been touched, so behaviour is
       !> bit-identical.
       !>
       !> Reason: B7 §1.6 requires the vacuum-lead parameter generator
       !> (source/vacuum_lead.f90) to produce empty-lattice parameters with
-      !> *the code's own radial solver driven at V(r) = const*, explicitly
+      !> *the code’s own radial solver driven at V(r) = const*, explicitly
       !> NOT by hand-coded spherical-Bessel expressions -- so that the
       !> representation, the gamma/o convention, the E_nu convention and
       !> the normalization come out automatically consistent with every
@@ -357,7 +357,7 @@ module self_mod
       !>
       !> POTPAR references no component of `self` whatsoever -- it reads
       !> only its `atom`, `V` and `ROFI` arguments -- so exposing it
-      !> implies no SCF context and grants no access to `self`'s state.
+      !> implies no SCF context and grants no access to `self`’s state.
       !> @endnote
       procedure :: potpar
       procedure, private :: write_kspace_scf_dos_outputs
@@ -426,7 +426,7 @@ contains
       real(rp), dimension(2), intent(out) :: rhod, rhodd
 
       ! RHOPP contains raw physical second radial derivatives.  PBEGGA owns
-      ! the regular spherical factor of three; only one local radial channel's
+      ! the regular spherical factor of three; only one local radial channel’s
       ! total-to-per-spin
       ! conversion belongs at this VXC0SP boundary.
       rhod = 0.0_rp
@@ -1691,10 +1691,10 @@ contains
          call this%hamiltonian%build_bulkham()
          call this%hamiltonian%build_locham()
       case ('L')
-         ! B7.5: identical to 'S'. The loop runs to ntype, not nrec, because the
-         ! frozen reference types need built potentials too -- for 'L' those are
-         ! both regions' types (ntype = 2*nbulk_bulk + nlay, lattice_cluster.f90).
-         ! No build_locham: nmax = 0 for 'L' (lattice_lifecycle.f90), so the
+         ! B7.5: identical to ’S’. The loop runs to ntype, not nrec, because the
+         ! frozen reference types need built potentials too -- for ’L’ those are
+         ! both regions’ types (ntype = 2*nbulk_bulk + nlay, lattice_cluster.f90).
+         ! No build_locham: nmax = 0 for ’L’ (lattice_lifecycle.f90), so the
          ! solver consumes ee, not hall.
          do ia = 1, this%lattice%ntype
             call this%symbolic_atom(ia)%build_pot()
@@ -2048,7 +2048,7 @@ contains
       ! legacy projected-DOS refresh is therefore both unnecessary and, under
       ! MPI, can dereference rank-local recursion storage that was never
       ! populated.  The reciprocal branch already supplies the band energy and
-      ! site moments; retain the report's zero-field convention instead.  The
+      ! site moments; retain the report’s zero-field convention instead.  The
       ! cache is the authoritative post-run marker too: it remains allocated
       ! through reporting even if a copied/stale self%use_kspace flag is not.
       reciprocal_scf_active = this%use_kspace .or. allocated(this%reciprocal_scf_cache)
@@ -2064,7 +2064,7 @@ contains
       lmom = 0.0d0
       do ia = start_atom, end_atom
          ia_loc = g2l_map(ia)
-         ! `potential%mom0` is the integrated moment in the solver's active
+         ! `potential%mom0` is the integrated moment in the solver’s active
          ! spin basis.  For gbt_single_q that basis is the primitive rotating
          ! frame; lab-cell phases are reconstructed only by an explicit GBT
          ! frame transformation for output/comparison.
@@ -2092,7 +2092,7 @@ contains
          write (newunit, '(A)') '==========================================================================='
          write (newunit, '(A)') '|                       Total Energy                                      |'
          write (newunit, '(A)') '==========================================================================='
-!         write (newunit, '(a,f20.10)') 'Total energy of system: ', sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
+!         write (newunit, ’(a,f20.10)’) ’Total energy of system: ’, sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
          write (newunit, '(a,f20.10)') 'Physical DFT total energy of system: ', this%physical_total_energy
          ! Keep the historical key for downstream parsers, but make the
@@ -2477,10 +2477,10 @@ contains
          end do
          ! Debug output for orbital initialization
          !if (lmax >= 3) then
-         !   write (6, '(A, I1, A, F8.4, F8.4, A, I2, A, 2(F10.6,2X))') &
-         !      "  L=", l, "  PL=", atom%potential%pl(l, 1), atom%potential%pl(l, 2), &
-         !      "  KONFIG=", int(atom%potential%pl(l, 1)), &
-         !      "  Q0(spin1,2)=", atom%potential%ql(1, l, 1), atom%potential%ql(1, l, 2)
+         !   write (6, ’(A, I1, A, F8.4, F8.4, A, I2, A, 2(F10.6,2X))’) &
+         !      ″  L=″, l, ″  PL=″, atom%potential%pl(l, 1), atom%potential%pl(l, 2), &
+         !      ″  KONFIG=″, int(atom%potential%pl(l, 1)), &
+         !      ″  Q0(spin1,2)=″, atom%potential%ql(1, l, 1), atom%potential%ql(1, l, 2)
          !end if
       end do
       !----MODIFICATIONS TO INCLUDE FRACTIONARY F OCCUPATION IN THE CORE------
@@ -2534,9 +2534,9 @@ contains
 !    if (IPR >= 1) then
 !       write (6, 10001) atom%element%atomic_number, atom%potential%ws_r, atom%a, NR, JOB, NCORE, atom%QC, QVAL, atom%DQ, AMGM
 !       do ISP = 1, NSP
-!          write (6, *) " "
+!          write (6, *) ″ ″
 !          if (NSP == 2) then
-!             write (6, *) "SPIN", ISP
+!             write (6, *) ″SPIN″, ISP
 !          end if
 !          write (6, 10002)
 !          do l = 1, LMAX
@@ -2707,7 +2707,7 @@ contains
       !integer, parameter :: NRMX = 501
       !
       !.. Formal Arguments ..
-      ! NSP is the number of local radial density channels, not control%nsp's
+      ! NSP is the number of local radial density channels, not control%nsp’s
       ! global electronic-structure mode.
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
@@ -2814,9 +2814,9 @@ contains
                end if
                ! Debug output for orbital radial equation
                ! if (L >= 2) then
-               !    write (6, '(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)') &
-               !       "NEWRHO: L=", L, " ISP=", ISP, " PL=", PL(LP1, ISP), &
-               !       " NN=", NN, " EVAL=", EVAL, " Q0=", Q0
+               !    write (6, ’(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)’) &
+               !       ″NEWRHO: L=″, L, ″ ISP=″, ISP, ″ PL=″, PL(LP1, ISP), &
+               !       ″ NN=″, NN, ″ EVAL=″, EVAL, ″ Q0=″, Q0
                ! end if
                call RSEQSR(EB1, EB2, EVAL, TOLVAL, Z, L, NN, VAL, SLO, V(1, ISP), G, SUM, A, B, &
                            rofi, NR, NRE, 0)
@@ -2891,7 +2891,7 @@ contains
                   HYP = 52.42_rp*(SH(1) - SH(2))
                   if (ISP == 2) then
                      !write(8, *) SH(1), SH(2), HYP
-                     !write(8, ´(a7, f10.6)´) "Hval:", HYP
+                     !write(8, ´(a7, f10.6)´) ″Hval:″, HYP
                      atom%potential%hyper_field(2) = hyp
                   end if
                end if
@@ -2914,7 +2914,7 @@ contains
       implicit none
       !
       !.. Formal Arguments ..
-      ! NSP is the number of local radial density channels, not control%nsp's
+      ! NSP is the number of local radial density channels, not control%nsp’s
       ! global electronic-structure mode.
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
@@ -3052,7 +3052,7 @@ contains
                END DO
                HCORE = 52.42_rp*HCORE
                atom%potential%hyper_field(1) = HCORE
-               !WRITE(8,´(a7,3f12.6)´)"Hcore: ",HCORE,(SH(1,1)-SH(1,2)) &
+               !WRITE(8,´(a7,3f12.6)´)″Hcore: ″,HCORE,(SH(1,1)-SH(1,2)) &
                !,(SH(1,1)-SH(1,2))*914.7744
             END IF
          end if
@@ -3881,7 +3881,7 @@ contains
       class(self), intent(inout) :: this
       type(xc), intent(in) :: xc_obj
       ! This argument is the number of local radial/XC spin channels, not
-      ! control%nsp's global collinear/noncollinear/SOC mode.
+      ! control%nsp’s global collinear/noncollinear/SOC mode.
       integer, intent(in) :: NR, n_radial_spin_channels
       real(rp), intent(in) :: A, B
       real(rp) :: Z
@@ -4095,7 +4095,7 @@ contains
             end if
             DRDI = A*(rofi(IR) + B)
             ! RHO(:,1)/VXC1 is spin-up in the same +z convention as the
-            ! response spinor's first block; channel 2 is spin down.
+            ! response spinor’s first block; channel 2 is spin down.
             ! Preserve that ordering in the radial B_xc*m projection.
             call xc_projection%accumulate(WGT*DRDI, RHO(IR, 2), RHO(IR, 1), VXC2, VXC1)
             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
@@ -4146,7 +4146,7 @@ contains
       !
       ! ... Executable Statements ...
       !
-      ! open (15, FILE = "dracsi")
+      ! open (15, FILE = ″dracsi″)
       NR = size(ROFI)
       B = atom%B()
       LMAX = atom%potential%lmax
@@ -4384,10 +4384,10 @@ contains
       !
       ! ... Format Declarations ...
       !
-      ! 10000 format (/" POTPAR:  INPUT LOG DERIVATIVES ARE"/" PNU=", 6f12.6)
-      ! 10001 format (" DNU=", 6f12.6)
+      ! 10000 format (/″ POTPAR:  INPUT LOG DERIVATIVES ARE″/″ PNU=″, 6f12.6)
+      ! 10001 format (″ DNU=″, 6f12.6)
       ! 10002 format (i3, 4f12.5, 2f12.4)
-      ! 10003 format (/"  L", 7x, "ENU", 9x, "V", 11x, "C", 10x, "SRDEL", 8x, "1/Q", 9x, "1/SRP")
+      ! 10003 format (/″  L″, 7x, ″ENU″, 9x, ″V″, 11x, ″C″, 10x, ″SRDEL″, 8x, ″1/Q″, 9x, ″1/SRP″)
    end subroutine POTPAR
 
 end module self_mod

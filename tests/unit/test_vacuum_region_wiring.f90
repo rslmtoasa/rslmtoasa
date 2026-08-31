@@ -5,12 +5,12 @@
 ! PROGRAM: test_vacuum_region_wiring
 !
 !> @brief B7.6: pins the *wiring* that makes `source/vacuum_lead.f90` reachable
-!>        from the `buildinterface` (calctype='L') path.
+!>        from the `buildinterface` (calctype=’L’) path.
 !>
 !>        ## Why this is a separate file from test_vacuum_lead.f90
 !>
 !>        `test_vacuum_lead` checks the GENERATOR: that empty-lattice
-!>        parameters produced by the code's own radial solver agree with the
+!>        parameters produced by the code’s own radial solver agree with the
 !>        analytic spherical-Bessel oracle. That test passed for the entire
 !>        period during which the generator had no caller anywhere in
 !>        production code -- a correct component wired to nothing.
@@ -28,14 +28,14 @@
 !>             when `kind_b` is not passed. Backwards compatibility is a
 !>             standing B7 requirement (G-B7-2).
 !>          2. Passing `kind_b = region_kind_vacuum` produces a vacuum region,
-!>             and names it 'vacuum' rather than 'B' -- the name is what every
+!>             and names it ’vacuum’ rather than ’B’ -- the name is what every
 !>             alignment diagnostic prints and what `fix_fermi_to_region`
 !>             matches on.
-!>          3. The vacuum region is FROZEN. "Frozen at a shifted value" is a
+!>          3. The vacuum region is FROZEN. ″Frozen at a shifted value″ is a
 !>             change of reference level, not a relaxation (B7 §1.3); vacuum
 !>             sites must never acquire self-consistent charge.
 !>          4. `gauge_anchor` skips the vacuum region. Vacuum carries no states
-!>             at E_F, so "deep vacuum is neutral bulk vacuum" cannot drive a
+!>             at E_F, so ″deep vacuum is neutral bulk vacuum″ cannot drive a
 !>             residual and must not be the gauge anchor (B7 §1.3). With region
 !>             B vacuum the anchor must come out region A.
 !>          5. The rigid-shift property the self-consistent vacuum level relies
@@ -113,7 +113,7 @@ contains
       if (.not. failed) write (*, '(a)') 'ok  default build_from_interface is still metallic A | B'
    end subroutine test_default_is_metallic
 
-   !> 2. kind_b = vacuum produces a vacuum region, named 'vacuum'.
+   !> 2. kind_b = vacuum produces a vacuum region, named ’vacuum’.
    subroutine test_vacuum_kind_and_name()
       type(region_registry) :: reg
 

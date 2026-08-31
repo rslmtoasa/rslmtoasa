@@ -760,7 +760,7 @@ contains
       arr_out(4) = a4
    end subroutine sort4
 
-   !> @brief Add one tetrahedron's integrated-state contribution to a grid.
+   !> @brief Add one tetrahedron’s integrated-state contribution to a grid.
    !> @param[in] volwgt Tetrahedron volume/weight factor.
    !> @param[in] ecorn_in Tetrahedron corner energies.
    !> @param[in] emin Lower grid energy.
@@ -839,7 +839,7 @@ contains
       end do
    end subroutine tetra_add_nos
 
-   !> @brief Add one tetrahedron's DOS contribution to a grid.
+   !> @brief Add one tetrahedron’s DOS contribution to a grid.
    !> @param[in] volwgt Tetrahedron volume/weight factor.
    !> @param[in] ecorn_in Tetrahedron corner energies.
    !> @param[in] emin Lower grid energy.
@@ -1438,10 +1438,10 @@ module function find_fermi_level_from_dos(this, total_electrons) result(fermi_le
 
       ! ! DEBUG: Print first few and last iterations
       ! if (ie <= 5 .or. ie >= max_iter-2) then
-      !    call g_logger%info('  Bisection iter ' // trim(int2str(ie)) // ': E=' // &
-      !                      trim(real2str(e_mid, '(F10.6)')) // ' Ry, electrons=' // &
-      !                      trim(real2str(electrons_at_e, '(F12.8)')) // ', target=' // &
-      !                      trim(real2str(total_electrons, '(F12.8)')), __FILE__, __LINE__)
+      !    call g_logger%info(’  Bisection iter ’ // trim(int2str(ie)) // ’: E=’ // &
+      !                      trim(real2str(e_mid, ’(F10.6)’)) // ’ Ry, electrons=’ // &
+      !                      trim(real2str(electrons_at_e, ’(F12.8)’)) // ’, target=’ // &
+      !                      trim(real2str(total_electrons, ’(F12.8)’)), __FILE__, __LINE__)
       ! end if
 
       if (abs(electrons_at_e - total_electrons) < 1.0e-6_rp) then

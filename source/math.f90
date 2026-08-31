@@ -10,7 +10,7 @@
 ! abiding by the rules of distribution of free software. You can use,
 ! modify and/ or redistribute the software under the terms of the CeCILL
 ! license as circulated by CEA, CNRS and inRIA at the following URL
-! "http://www.cecill.info".
+! ″http://www.cecill.info″.
 !
 ! As a counterpart to the access to the source code and rights to copy,
 ! modify and redistribute granted by the license, users are provided only
@@ -97,9 +97,9 @@ module math_mod
    real(rp), parameter :: gama = 1.76e11_rp
    !> Elementary charge (Coulombs)
    real(rp), parameter :: e_const    = 1.602176634e-19_rp
-   !> Planck's constant (J·s)
+   !> Planck’s constant (J·s)
    real(rp), parameter :: h_const    = 6.62607015e-34_rp
-   !> Reduced Planck's constant h-bar (J·s)
+   !> Reduced Planck’s constant h-bar (J·s)
    real(rp), parameter :: hbar_const = 1.054571817e-34_rp
    ! Angstrom to centimeter factor
    !> 1 Å = 1.0e-8 cm
@@ -885,8 +885,8 @@ contains
             end if
          end if
       end if
-      ! write(6, *) "v_cart=", v_cart(:)
-      ! write(6, *) "v_sph=", v_sph(:)
+      ! write(6, *) ″v_cart=″, v_cart(:)
+      ! write(6, *) ″v_sph=″, v_sph(:)
    end function cart2sph
 
    subroutine rho2nm(rho, n, m_cart)
@@ -1503,7 +1503,7 @@ contains
          !  h*Ux
          call zgemm("N", "N", ndim, ndim, ndim, cone_, MATs, ndim, RMAT, ndim, czero_, tmpMAT, &
                     ndim)
-         !  Ux'*(h*Ux)
+         !  Ux’*(h*Ux)
          call zgemm("C", "N", ndim, ndim, ndim, cone_, RMAT, ndim, tmpMAT, ndim, czero_, MATs, &
                     ndim)
          !
@@ -1775,7 +1775,7 @@ contains
    end function tabulated_slater_integrals
 
    ! --------------------------------------------------------------------------------------
-   !> Calculates a_k(m,m',m'',m''') for LDA+U(+J) matrix elements.
+   !> Calculates a_k(m,m’,m’’,m’’’) for LDA+U(+J) matrix elements.
    ! --------------------------------------------------------------------------------------
    function a_k(k, l, m1, m2, m3, m4) result(res)
       implicit none

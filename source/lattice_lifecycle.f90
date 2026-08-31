@@ -185,7 +185,7 @@ contains
       ! Surface initialization
       surftype = this%surftype
       nlay = this%nlay
-      ! B7.5: frozen-boundary layer counts for the two-sided (calctype='L')
+      ! B7.5: frozen-boundary layer counts for the two-sided (calctype=’L’)
       ! interface geometry. Zero for every other calctype.
       nlay_a = this%nlay_a
       nlay_b = this%nlay_b
@@ -445,10 +445,10 @@ contains
       this%nlay_a = nlay_a
       this%nlay_b = nlay_b
 
-      ! B7.6: region B's physical kind. A true input boundary, so the check
+      ! B7.6: region B’s physical kind. A true input boundary, so the check
       ! belongs here (Phase-1 rule 3) rather than at the call sites, which then
       ! only ever see one of the two valid values. A silent fallback would be
-      ! the worst option available: a misspelt 'vaccum' would run the metallic
+      ! the worst option available: a misspelt ’vaccum’ would run the metallic
       ! path and report a plausible wrong barrier, which is precisely the
       ! failure mode B7 §1.3 exists to prevent.
       region_b_kind = lower(region_b_kind)

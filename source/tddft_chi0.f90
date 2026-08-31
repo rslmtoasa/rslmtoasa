@@ -102,7 +102,7 @@ contains
 
    !> Stable Fermi occupation using the existing reciprocal-space temperature
    !> convention (temperature in K, energies in Ry).  It intentionally shares
-   !> reciprocal_occupations.f90's kT floor and exponential cutoffs.
+   !> reciprocal_occupations.f90’s kT floor and exponential cutoffs.
    pure real(rp) function tddft_fermi_occupation(eigenvalue, fermi_level, temperature) result(occupation)
       real(rp), intent(in) :: eigenvalue, fermi_level, temperature
       real(rp) :: argument, kT
@@ -120,7 +120,7 @@ contains
 
    !> Build the generalized bare KS response for batches of energy-valued
    !> frequencies.  `eigenvalues_k` and `eigenvalues_kq` hold the n and m
-   !> states, respectively; callers obtain the latter from TDDFT-01's exact
+   !> states, respectively; callers obtain the latter from TDDFT-01’s exact
    !> arbitrary-k service.  k weights may be normalized probabilities or raw
    !> multiplicities and are normalized by their explicit sum.
    subroutine build_chi_ks_from_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
@@ -290,7 +290,7 @@ contains
    !> Real q=0, omega=0 Lehmann response used only for static Ward
    !> diagnostics.  It deliberately has no eta argument: the n=m and nearly
    !> degenerate limit is the derivative of the same finite-temperature Fermi
-   !> function used by the dynamic response, (f_n-f_m)/(e_n-e_m) -> f'(e).
+   !> function used by the dynamic response, (f_n-f_m)/(e_n-e_m) -> f’(e).
    subroutine build_static_chi_ks_from_eigenpairs(k_weights, eigenvalues, eigenvectors, site_orbital_counts, &
       left_channels, right_channels, options, result)
       real(rp), target, intent(in) :: k_weights(:), eigenvalues(:, :)

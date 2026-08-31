@@ -11,7 +11,7 @@
 !> Bloch spectral function (BSF) numerical core (milestone B3). Dependency-free
 !> (only `precision_mod` + `math_mod`) so the sum-rule known-answer test needs no
 !> LMTO machinery. The Bloch spectral function is the partial trace of the
-!> retarded k-space Green's function,
+!> retarded k-space Green’s function,
 !>
 !>   A(k,E) = -(1/pi) Im Tr_sub G(k, E + i*eta),
 !>
@@ -20,7 +20,7 @@
 !> gives the disorder/correlation-broadened A(k,E) for CPA/DMFT through the SAME
 !> code path -- that is the B3 design point). `Tr_sub` is a partial trace over a
 !> chosen set of diagonal orbital channels: the full set (total A), the spin-up or
-!> spin-down sub-blocks, a single site's block, or one orbital -- all expressed as
+!> spin-down sub-blocks, a single site’s block, or one orbital -- all expressed as
 !> an index list into the nmat x nmat resolvent.
 !------------------------------------------------------------------------------
 module bsf_kernel_mod

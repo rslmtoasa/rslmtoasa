@@ -881,15 +881,15 @@ contains
 
       ! Build neighbor vectors for each atom type (required for multi-site H_k)
       call this%build_neighbor_vectors()
-      !!! print *,'KSPACE neighbours'
+      !!! print *,’KSPACE neighbours’
       !!! do i=1, this%lattice%ntype
-      !!!    print *,'Type ', i, ' nneigh ', this%lattice%nn(this%lattice%atlist(i),1)
+      !!!    print *,’Type ’, i, ’ nneigh ’, this%lattice%nn(this%lattice%atlist(i),1)
       !!!    do j=2, this%lattice%nn(this%lattice%atlist(i),1)
-      !!!       print '(a,2i4, a, 3f10.6)','  Neighbour ', this%lattice%nn(i, j), this%lattice%iz(this%lattice%nn(i,j)), ': ', this%ham_vec_type(1,j,i), &
+      !!!       print ’(a,2i4, a, 3f10.6)’,’  Neighbour ’, this%lattice%nn(i, j), this%lattice%iz(this%lattice%nn(i,j)), ’: ’, this%ham_vec_type(1,j,i), &
       !!!                this%ham_vec_type(2,j,i), this%ham_vec_type(3,j,i)
       !!!    end do
       !!! end do
-      !!! print *,'================================='
+      !!! print *,’=================================’
 
       ! Allocate k-space Hamiltonian for multi-site system
       ! Dimension: (n_orb * n_sites) x (n_orb * n_sites) x n_kpoints
@@ -920,7 +920,7 @@ contains
       end if
       call this%execute_normal_mesh_tiles(using_kpath, trim(this%reciprocal_mode) == 'generalized_overlap_proxy')
 #else
-      ! The fused path is disabled by default on macOS: the runner's
+      ! The fused path is disabled by default on macOS: the runner’s
       ! compiler/OpenBLAS combination can fault while returning the combined
       ! assembly/eigensolution tile.  Keep the public cache and solve
       ! semantics identical by crossing the backend twice, as in the

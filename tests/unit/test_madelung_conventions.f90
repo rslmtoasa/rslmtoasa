@@ -15,9 +15,9 @@
 !>            strx00 builds a BARE Ewald sum for 1/r (real-space term is
 !>            erfc(a*R)/R with no prefactor), so AMAD read from mad.mat is in
 !>            units of 1/r and needs an explicit 2 to give Rydberg per unit
-!>            charge (e^2 = 2 Ry*bohr). bulkpot's `2.d0*AMAD` is therefore
+!>            charge (e^2 = 2 Ry*bohr). bulkpot’s `2.d0*AMAD` is therefore
 !>            correct. impmad builds a DIFFERENT array, this%amad, with the 2
-!>            already folded in (`2_rp*dd`), so imppot's bare contraction is
+!>            already folded in (`2_rp*dd`), so imppot’s bare contraction is
 !>            also correct. Both conventions are pinned here against a direct
 !>            e^2/r Rydberg sum for a known charge distribution.
 !>

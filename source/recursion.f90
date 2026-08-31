@@ -470,7 +470,7 @@ module recursion_mod
 
    !> @brief Generate block-Lanczos coefficients for the selected recursion atoms.
    !> @details Computes the block tridiagonal Haydock coefficients A_n and B_n
-   !>          for each atom in lattice%irec. Real-space SCF and block Green's
+   !>          for each atom in lattice%irec. Real-space SCF and block Green’s
    !>          functions consume the resulting a_b/b2_b and diagonal a/b2 views.
    !> @param[inout] this Recursion object; fills local slices of a_b, b2_b, a, and b2.
    !> @note Work is partitioned over MPI ranks and may use CUDA or haydock_fast.
@@ -512,7 +512,7 @@ module recursion_mod
 
    !> @brief Replace stored block B^2 coefficients by their matrix square roots.
    !> @details Diagonalizes each Hermitian B2_b block and overwrites it with the
-   !>          positive square-root matrix B. Block Green's-function reconstruction
+   !>          positive square-root matrix B. Block Green’s-function reconstruction
    !>          calls this before continued-fraction evaluation.
    !> @param[inout] this Recursion object; overwrites local B2_b slices.
    !> @note Uses MPI partition sizes and LAPACK zheev; no collective communication occurs here.
@@ -800,7 +800,7 @@ module recursion_mod
    !>          the scalar Haydock recurrence.
    !> @param[inout] this Recursion object; mutates v, pmn, atemp, and izero.
    !> @param[in] ll Current recursion level whose alpha coefficient is produced.
-   !> @note This legacy scalar path is used by control%recur='lanczos'.
+   !> @note This legacy scalar path is used by control%recur=’lanczos’.
    module subroutine hop(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables

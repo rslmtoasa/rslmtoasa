@@ -66,7 +66,7 @@ module symbolic_atom_mod
       ! TODO
       ! From common_cnstr
       real(rp), dimension(3) :: mag_cfield, mag_cfield_diff
-      !> Fixed constraint target in the site's active spin frame.  For
+      !> Fixed constraint target in the site’s active spin frame.  For
       !> gbt_single_q this is the primitive rotating frame; an explicit
       !> supercell stores the corresponding lab-frame target per site/type.
       real(rp), dimension(3) :: constraint_target
@@ -901,9 +901,9 @@ contains
       !---------------------------------------------------------------------------
       ! DESCRIPTION:
       !> @brief
-      !> Shortcut for print_state_full with suffix="_out"
+      !> Shortcut for print_state_full with suffix=″_out″
       !>
-      !> Shortcut for print_state_full with suffix="_out"
+      !> Shortcut for print_state_full with suffix=″_out″
       !---------------------------------------------------------------------------
       subroutine save_state(array)
          type(symbolic_atom), dimension(:), intent(in) :: array
@@ -914,9 +914,9 @@ contains
       !---------------------------------------------------------------------------
       ! DESCRIPTION:
       !> @brief
-      !> Shortcut for print_state_full with suffix="_scf"
+      !> Shortcut for print_state_full with suffix=″_scf″
       !>
-      !> Shortcut for print_state_full with suffix="_scf"
+      !> Shortcut for print_state_full with suffix=″_scf″
       !---------------------------------------------------------------------------
       subroutine save_state_scf(array)
          type(symbolic_atom), dimension(:), intent(in) :: array
@@ -926,9 +926,9 @@ contains
       !---------------------------------------------------------------------------
       ! DESCRIPTION:
       !> @brief
-      !> Checks the existence of checkpoint files (those with fname = symbol//"_out.nml" )
+      !> Checks the existence of checkpoint files (those with fname = symbol//″_out.nml″ )
       !>
-      !> Checks the existence of checkpoint files (those with fname = symbol//"_out.nml" )
+      !> Checks the existence of checkpoint files (those with fname = symbol//″_out.nml″ )
       !---------------------------------------------------------------------------
       subroutine load_state(array)
          type(symbolic_atom), dimension(:), intent(inout) :: array

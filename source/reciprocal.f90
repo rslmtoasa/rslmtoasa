@@ -288,7 +288,7 @@ module reciprocal_mod
       final :: cuda_backend_destructor
    end type cuda_reciprocal_backend
 
-   !> Module's main procedure
+   !> Module’s main procedure
    type, public :: reciprocal
       !> Hamiltonian
       class(hamiltonian), pointer :: hamiltonian
@@ -300,7 +300,7 @@ module reciprocal_mod
       ! K-point mesh variables
       !> Number of k-points in each direction (nx, ny, nz)
       integer, dimension(3) :: nk_mesh
-      !> Dense mesh dimensions for post_processing='fermi_surface'.
+      !> Dense mesh dimensions for post_processing=’fermi_surface’.
       !> Non-positive values fall back to the regular nk_mesh dimensions.
       integer :: fs_nk1, fs_nk2, fs_nk3
       !> Requested symmetry reduction for FS post-processing. The export
@@ -351,16 +351,16 @@ module reciprocal_mod
       ! token is opaque to physics code and is invalidated by later backend
       ! solves or backend recreation.
       integer :: device_eigensystem_token = 0
-      !> Reciprocal solver mode: 'ham_only', 'generalized_overlap_proxy',
-      !> or 'generalized_overlap_kanpur'.
+      !> Reciprocal solver mode: ’ham_only’, ’generalized_overlap_proxy’,
+      !> or ’generalized_overlap_kanpur’.
       character(len=32) :: reciprocal_mode
-      !> Production normal-mesh backend: 'lapack' (default) or 'cuda'.
+      !> Production normal-mesh backend: ’lapack’ (default) or ’cuda’.
       character(len=16) :: reciprocal_backend
       !> K-space Hamiltonian order:
-      !>   'first'  -> H(k) = h(k)            (first-order, current behaviour)
-      !>   'second' -> H(k) = E_nu + h(k) - [hoh](k) + L.S   (second-order ASA)
+      !>   ’first’  -> H(k) = h(k)            (first-order, current behaviour)
+      !>   ’second’ -> H(k) = E_nu + h(k) - [hoh](k) + L.S   (second-order ASA)
       !> The second-order path is the seam where the combined correction (CCOR)
-      !> and the "proper" k-space second order (generalized_overlap_kanpur) plug in.
+      !> and the ″proper″ k-space second order (generalized_overlap_kanpur) plug in.
       character(len=16) :: kspace_ham_order
       !> Kanpur-alignment diagnostics toggle
       logical :: kanpur_diagnostics
@@ -442,7 +442,7 @@ module reciprocal_mod
       real(rp), dimension(:), allocatable :: dos_mz_tot
       !> Projected directional DOS [n_sites, n_orb_types, n_spin, 3(x/y/z), n_energy_points]
       real(rp), dimension(:, :, :, :, :), allocatable :: projected_dos_moments
-      !> DOS calculation method ('tetrahedron' or 'gaussian')
+      !> DOS calculation method (’tetrahedron’ or ’gaussian’)
       character(len=20) :: dos_method
       !> Gaussian smearing parameter (in energy units)
       real(rp) :: gaussian_sigma
@@ -492,7 +492,7 @@ module reciprocal_mod
       logical :: strict_symmetry_checks
       !> Dump symmetry k-point mapping diagnostics to file
       logical :: dump_symmetry_kmap
-      !> Tetra symmetry backend: 'irreducible_native' for scalar DOS or 'full_expand_ref'
+      !> Tetra symmetry backend: ’irreducible_native’ for scalar DOS or ’full_expand_ref’
       character(len=32) :: tetra_symmetry_mode
       !> Full-mesh to irreducible-k mapping (size = nk1*nk2*nk3)
       integer, dimension(:), allocatable :: full_to_irred_k
@@ -500,13 +500,13 @@ module reciprocal_mod
       integer, dimension(:), allocatable :: irred_to_full_k
 
       !> WP8: BZ-reduction policy for finite-q GBT (has_nonzero_q_gbt()).
-      !>   'full_bz'              -> always the full chemical-cell BZ; the WP0
+      !>   ’full_bz’              -> always the full chemical-cell BZ; the WP0
       !>                             default and the oracle every other policy
       !>                             is checked against.
-      !>   'little_group'         -> reduce by the little group of the current
+      !>   ’little_group’         -> reduce by the little group of the current
       !>                             hamiltonian%q_ss (rebuilt whenever q_ss
       !>                             changes; see ensure_kpoint_mesh).
-      !>   'little_group_common'  -> reduce by the subgroup common to every
+      !>   ’little_group_common’  -> reduce by the subgroup common to every
       !>                             q-point a caller declares in one
       !>                             ensure_kpoint_mesh(q_list_cart=...) call
       !>                             -- one mesh valid for an entire multi-q
@@ -515,7 +515,7 @@ module reciprocal_mod
       !> Cache key describing the (lattice, mesh, offset, q-set, policy) tuple
       !> the current k_points/k_weights were built for. ensure_kpoint_mesh
       !> compares against this before reusing the mesh, so a sweep can never
-      !> silently reuse one q's (or one policy's) mesh for another.
+      !> silently reuse one q’s (or one policy’s) mesh for another.
       logical :: mesh_cache_valid
       integer :: mesh_cache_dims(3)
       real(rp) :: mesh_cache_offset(3)
@@ -531,17 +531,17 @@ module reciprocal_mod
       !> Neighbor vectors in fractional coordinates [3, nn_max, ntype]
       real(rp), dimension(:, :, :), allocatable :: ham_vec_type_direct
 
-      ! k-space Green's-function engine (milestone B2, reciprocal_green)
+      ! k-space Green’s-function engine (milestone B2, reciprocal_green)
       !> Retarded broadening for the k-space Green contour z = E + i*green_eta (Ry)
       real(rp) :: green_eta
-      !> Backend selector for fill_green: 'lehmann' (E, Sigma=0) or 'dyson' (D)
+      !> Backend selector for fill_green: ’lehmann’ (E, Sigma=0) or ’dyson’ (D)
       character(len=16) :: green_backend
 
       ! Fermi-surface post-processing eigenpair export. The configured name is
-      ! a base name; '.bin' and '.meta' are appended.
+      ! a base name; ’.bin’ and ’.meta’ are appended.
       logical :: write_eigenpair_projections
       !> Write independently diagonalized global collinear spin sectors to a
-      !> separate '<base>.spin.bin' payload when H(k) and S(k) are spin-block
+      !> separate ’<base>.spin.bin’ payload when H(k) and S(k) are spin-block
       !> diagonal over the complete exported mesh.
       logical :: write_spin_resolved_eigenpairs
       character(len=256) :: eigenpair_output_file
@@ -619,7 +619,7 @@ module reciprocal_mod
       procedure :: ensure_tetra_symmetry_backend
       procedure :: ensure_full_mesh_for_spinor_integrations
       procedure :: build_irreducible_tetrahedra
-      ! k-space Green's-function engine (milestone B2)
+      ! k-space Green’s-function engine (milestone B2)
       procedure :: fill_green
       procedure :: fill_moments
       procedure :: build_green_contour
@@ -1552,7 +1552,7 @@ end subroutine print_hamiltonian_structure
    !>          q_list_cart absent, uses the single current hamiltonian%q_ss.
    !>          With q_list_cart present (Cartesian, 2*pi/alat units, one
    !>          column per q), reduces by the subgroup common to every column
-   !>          -- the "common subgroup" option a multi-q sweep can use to
+   !>          -- the ″common subgroup″ option a multi-q sweep can use to
    !>          build one mesh valid for the whole sweep. Falls back to the
    !>          full mesh, with a single logged info message, if spglib is
    !>          unavailable or the little group cannot be determined.
@@ -1589,7 +1589,7 @@ end subroutine print_hamiltonian_structure
    !> @param[in] mesh_dims Full mesh dimensions.
    !> @param[in] use_shift Optional flag selecting shifted-grid generation.
    !> @param[in] q_list_cart Optional explicit q-point set for the
-   !>            'little_group_common' policy (Cartesian, one column per q).
+   !>            ’little_group_common’ policy (Cartesian, one column per q).
    !>            Ignored by every other policy, which reads hamiltonian%q_ss.
    module subroutine ensure_kpoint_mesh(this, mesh_dims, use_shift, q_list_cart)
       class(reciprocal), intent(inout) :: this
@@ -1833,7 +1833,7 @@ end subroutine print_hamiltonian_structure
 
    end subroutine sort4
 
-   !> @brief Add one tetrahedron's integrated-state contribution to a grid.
+   !> @brief Add one tetrahedron’s integrated-state contribution to a grid.
    !> @param[in] volwgt Tetrahedron volume/weight factor.
    !> @param[in] ecorn_in Tetrahedron corner energies.
    !> @param[in] emin Lower grid energy.
@@ -1852,7 +1852,7 @@ end subroutine print_hamiltonian_structure
 
    end subroutine tetra_add_nos
 
-   !> @brief Add one tetrahedron's DOS contribution to a grid.
+   !> @brief Add one tetrahedron’s DOS contribution to a grid.
    !> @param[in] volwgt Tetrahedron volume/weight factor.
    !> @param[in] ecorn_in Tetrahedron corner energies.
    !> @param[in] emin Lower grid energy.
@@ -2297,7 +2297,7 @@ end function integrate_dos_up_to_energy
 
    end subroutine calculate_ldm_from_eigenvectors
 
-   ! k-space Green's-function engine (milestone B2, submodule reciprocal_green)
+   ! k-space Green’s-function engine (milestone B2, submodule reciprocal_green)
 
    !> @brief Build the retarded complex-energy contour z = E + i*green_eta.
    !> @param[in]  this      Reciprocal object (supplies green_eta broadening).
@@ -2322,7 +2322,7 @@ end function integrate_dos_up_to_energy
    !> @brief Fill mu_nm_stochastic from the k-space eigenpairs (exact moments).
    !> @param[inout] this Reciprocal object (H(k) machinery, k-mesh, velocities).
    !> @param[out]   mu   Allocated (nb,nb,cond_ll,cond_ll,ntype) moment array.
-   !> @param[in]    a    Chebyshev window scale (recursion route's window).
+   !> @param[in]    a    Chebyshev window scale (recursion route’s window).
    !> @param[in]    b    Chebyshev window shift.
    module subroutine fill_moments(this, mu, a, b)
       class(reciprocal), intent(inout) :: this
@@ -2332,7 +2332,7 @@ end function integrate_dos_up_to_energy
 
    !> @brief Compute and write the Bloch spectral function A(k,E) along the path.
    !> @param[inout] this        Reciprocal object (H(k) machinery, k-path, grids).
-   !> @param[in]    output_file Optional base output filename (default 'bsf.dat').
+   !> @param[in]    output_file Optional base output filename (default ’bsf.dat’).
    module subroutine calculate_bsf(this, output_file)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in), optional :: output_file

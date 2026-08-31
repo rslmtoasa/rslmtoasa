@@ -850,6 +850,7 @@ contains
 
       include 'include_codes/namelists/potential.f90'
 
+      newunit = -1
       mom = this%mom
       lmom = this%lmom
       !mom0 = this%mom0
@@ -909,6 +910,7 @@ contains
 
       include 'include_codes/namelists/potential.f90'
 
+      newunit = -1
       center_band_s_up = this%center_band(1, 1)
       center_band_s_dw = this%center_band(1, 2)
       center_band_p_up = this%center_band(2, 1)
@@ -970,7 +972,6 @@ contains
 
       integer, intent(in), optional :: unit
       character(len=*), intent(in), optional :: file
-      integer :: newunit
 
       type(namelist_generator) :: nml
 

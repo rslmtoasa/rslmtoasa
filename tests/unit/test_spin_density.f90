@@ -18,7 +18,7 @@
 !>   1. Cartesian <-> matrix round trip against an explicit sigma algebra.
 !>   2. Equivalent producers: Green-function accumulation vs eigenvector
 !>      accumulation fill the same object.
-!>   3. Radial projection follows the EXPLICIT axis, not the density's own
+!>   3. Radial projection follows the EXPLICIT axis, not the density’s own
 !>      direction and not any stored moment.
 !>   4. The two SCF policies are distinct objects.
 !>   5. Physicality assertions catch a broken density and pass a good one.

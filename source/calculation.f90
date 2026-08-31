@@ -86,11 +86,11 @@ module calculation_mod
    ! `charge%on_alignment_updated` is argument-free (see the abstract interface
    ! in charge.f90 for why), so the data the refresh needs is held here and the
    ! hook procedure closes over it. Module scope rather than procedure scope
-   ! because the hook outlives `pre_processing_buildinterface`'s stack frame:
+   ! because the hook outlives `pre_processing_buildinterface`’s stack frame:
    ! it fires from inside `self%run()`, per SCF iteration.
    !
    ! Only ever populated on the `buildinterface` path with region_b_kind =
-   ! 'vacuum'; a run that is not A | vacuum never installs the hook and never
+   ! ’vacuum’; a run that is not A | vacuum never installs the hook and never
    ! touches these.
    !---------------------------------------------------------------------------
    type(vacuum_lead), save :: vacuum_state
@@ -126,7 +126,7 @@ module calculation_mod
       !> ´newclubulk´ : Builds the imputiry clust from the bluk clust
       !> ´newclusurf´ : Builds the impurity clust from the surface clust
       !> ´buildinterface´ : Builds the two-sided (region A | active | region B)
-      !>   layered/interface clust (calctype='L', B7.5)
+      !>   layered/interface clust (calctype=’L’, B7.5)
       character(len=sl) :: pre_processing
 
       !> Processing. Options are
@@ -137,7 +137,7 @@ module calculation_mod
       !> ´none´ (default)
       character(len=sl) :: post_processing
 
-      !> Green's-function route for the intersite G_ij consumers (B2.5 dispatch).
+      !> Green’s-function route for the intersite G_ij consumers (B2.5 dispatch).
       !> Selects HOW green%gij (+ the torque/eta families) is filled before an
       !> intersite consumer (exchange) runs -- the same canonical arrays, either
       !> route, so consumers are untouched by construction. Options:
@@ -154,7 +154,7 @@ module calculation_mod
       !> from the same `green%gij` the J_ij consumer reads -- so it runs through
       !> whichever `gf_route` filled those arrays (recursion / lehmann / dyson),
       !> route-agnostic by construction. Requires SOC in the potential (xi_p/xi_d)
-      !> and, for the k-space routes, kspace_ham_order='second'. Default .false.
+      !> and, for the k-space routes, kspace_ham_order=’second’. Default .false.
       !> (bit-identical legacy: the damping routine is not invoked).
       logical :: do_damping
 
@@ -312,10 +312,10 @@ contains
       include 'include_codes/namelists/calculation.f90'
 
       verbose = this%verbose
-      pre_processing = this%pre_processing
-      processing = this%processing
-      post_processing = this%post_processing
-      gf_route = this%gf_route
+      pre_processing = this%pre_processing(:len(pre_processing))
+      processing = this%processing(:len(processing))
+      post_processing = this%post_processing(:len(post_processing))
+      gf_route = this%gf_route(:len(gf_route))
       do_damping = this%do_damping
       do_inertia = this%do_inertia
 
@@ -336,7 +336,7 @@ contains
       call check_processing(trim(processing))
       ! Post-processing
       call check_post_processing(trim(post_processing))
-      ! Green's-function route (B2.5 dispatch)
+      ! Green’s-function route (B2.5 dispatch)
       call check_gf_route(trim(gf_route))
 
       this%verbose = verbose
@@ -455,12 +455,12 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Pre-process for the layered/interface calculation (B7.5): region A |
-   !> active zone | region B, calctype='L'. Mirrors pre_processing_buildsurf;
+   !> active zone | region B, calctype=’L’. Mirrors pre_processing_buildsurf;
    !> buildsurf itself is untouched and remains the permanent regression
    !> oracle for the one-sided (vacuum|active|bulk) case (B7 §4 B7.5).
    !>
    !> Workflow chain: bulk-A -> bulk-B (-> vacuum generator) -> interface,
-   !> mirroring bulk -> surf -> imp. Region A's and region B's converged
+   !> mirroring bulk -> surf -> imp. Region A’s and region B’s converged
    !> parameter sets (potential%vmad included, CONTRACT_FROZEN_REGION.md) are
    !> loaded together through the existing &atoms database=/label(:)
    !> mechanism -- both sets of _out.nml files in one working directory,
@@ -507,7 +507,7 @@ contains
       ! Constructing the charge object
       charge_obj = charge(lattice_obj)
       ! Region reference charges (B7 §1.4, §2.4): bulk_charge per type, from
-      ! the loaded symbolic atoms' occupation vs valence -- imppot's
+      ! the loaded symbolic atoms’ occupation vs valence -- imppot’s
       ! definition, generalized to two regions instead of one host.
       call charge_obj%get_charge_transf
       call charge_obj%build_alelay
@@ -542,13 +542,13 @@ contains
       ! Creating the self object
       self_obj = self(bands_obj, mix_obj)
 
-      ! B7.6, A | vacuum: region B's frozen parameters are GENERATED, not read
+      ! B7.6, A | vacuum: region B’s frozen parameters are GENERATED, not read
       ! from an &atoms label. Install the refresh hook and run it once now, so
       ! the very first recursion sees real empty-lattice parameters rather than
       ! the defaults the unlabelled type was constructed with. The initial call
-      ! runs at region_shift = 0, i.e. the vacuum level is the anchor's zero;
+      ! runs at region_shift = 0, i.e. the vacuum level is the anchor’s zero;
       ! every later call, driven from interfacepot, uses the solved level. That
-      ! is the "generate once" behaviour arriving as iteration 0 of the
+      ! is the ″generate once″ behaviour arriving as iteration 0 of the
       ! self-consistent scheme rather than as a separate code path.
       if (trim(lattice_obj%region_b_kind) == 'vacuum') then
          vacuum_solver => self_obj
@@ -587,7 +587,7 @@ contains
    !> `interfacepot` once per SCF iteration, after the alignment solver has
    !> updated the vacuum level.
    !>
-   !> Argument-free by the hook's interface contract; the data it needs is the
+   !> Argument-free by the hook’s interface contract; the data it needs is the
    !> module state above, populated at installation time.
    !---------------------------------------------------------------------------
    subroutine vacuum_refresh_hook()
@@ -702,12 +702,12 @@ contains
 
    !> @brief Finish the Chebyshev DOS step and resolve the Fermi level.
    !> @details The routine calls green%chebyshev_dos_dispatch to turn the
-   !>          Chebyshev transport moments into a Green's function. It then
+   !>          Chebyshev transport moments into a Green’s function. It then
    !>          calls bands%calculate_fermi. Both conductivity drivers
    !>          (post_processing_conductivity and post_processing_conductivity_p2rs)
    !>          call this routine right before they build the conductivity tensor.
    !> @param[inout] green_obj Green object. The Chebyshev DOS dispatch fills its
-   !>               Green's-function arrays.
+   !>               Green’s-function arrays.
    !> @param[inout] bands_obj Bands object. calculate_fermi sets its Fermi level.
    subroutine finish_conductivity_moments(green_obj, bands_obj)
       type(green), intent(inout) :: green_obj
@@ -720,7 +720,7 @@ contains
    !> @brief Exchange (J_ij) post-processing for a PAOFLOW-imported Hamiltonian.
    !> @details The routine builds the post-processing stack with a PAOFLOW
    !>          Hamiltonian, runs the intersite recursion pass, fills the
-   !>          eta-broadened intersite Green's function, and evaluates J_ij
+   !>          eta-broadened intersite Green’s function, and evaluates J_ij
    !>          with the Gauss-Legendre exchange integrator. It always uses the
    !>          real-space recursion route; it has no gf_route dispatch.
    !> @param[in] this Calculation object. fname selects the namelist input.
@@ -755,8 +755,8 @@ contains
    !>        evaluation (B2.5/B5.3 dispatch).
    !> @details The routine builds the post-processing stack, then fills
    !>          green%gij (and the torque families) through the route named in
-   !>          this%gf_route. Route 'recursion' runs the real-space intersite
-   !>          recursion pass. Routes 'lehmann' and 'dyson' fill the same
+   !>          this%gf_route. Route ’recursion’ runs the real-space intersite
+   !>          recursion pass. Routes ’lehmann’ and ’dyson’ fill the same
    !>          arrays from the k-space engine (reciprocal%fill_green). Every
    !>          route fills the same canonical arrays, so
    !>          calculate_intersite_gf_twoindex and the exchange evaluation run
@@ -765,7 +765,7 @@ contains
    !>          Gilbert damping from the same green%gij.
    !> @param[in] this Calculation object. Reads fname, gf_route, and do_damping.
    !> @note The damping term needs SOC in the potential (xi_p/xi_d). The
-   !>       k-space routes also need kspace_ham_order='second'.
+   !>       k-space routes also need kspace_ham_order=’second’.
    subroutine post_processing_exchange(this)
       use sigma_provider_mod, only: sigma_zero
       class(calculation), intent(in) :: this
@@ -816,7 +816,7 @@ contains
          ! (Ginmag/Gj{x,y,z}) the recursion route fills, so calculate_exchange
          ! produces a physical J_ij (correct tensor structure: isotropic J, zero
          ! DMI on collinear bcc Fe). The intersite normalization is CORRECT -- the
-         ! former "1/sqrt2" worry is resolved: the fixed-broadening J difference vs
+         ! former ″1/sqrt2″ worry is resolved: the fixed-broadening J difference vs
          ! the recursion route is a broadening / metallic-Fermi-surface k-convergence
          ! artifact (shell- and eta-dependent, not a global factor), NOT a
          ! normalization error. The kernel is pinned at machine precision by
@@ -842,7 +842,7 @@ contains
       ! default. Consumes the same green%gij just filled by gf_route, so it is
       ! route-agnostic (recursion / lehmann / dyson) by construction. Needs SOC
       ! in the potential (xi_p/xi_d); the k-space routes additionally need
-      ! kspace_ham_order='second'.
+      ! kspace_ham_order=’second’.
       if (this%do_damping) then
          call exchange_obj%calculate_gilbert_damping()
       end if
@@ -854,9 +854,9 @@ contains
 
    !> @brief Conductivity-tensor post-processing (B5.1 dispatch).
    !> @details The routine picks the source of the Chebyshev transport moments
-   !>          (mu_nm_stochastic) from this%gf_route. Route 'recursion' runs
+   !>          (mu_nm_stochastic) from this%gf_route. Route ’recursion’ runs
    !>          the stochastic moment generator inside prepare_post_processing_stack.
-   !>          Routes 'lehmann' and 'dyson' fill the same array exactly from the
+   !>          Routes ’lehmann’ and ’dyson’ fill the same array exactly from the
    !>          k-space eigenpairs (reciprocal%fill_moments), on the same
    !>          Chebyshev scaling window the recursion route uses
    !>          (resolve_chebyshev_window). Either way, calculate_gamma_nm and
@@ -886,9 +886,9 @@ contains
       call g_kpm_profile%start('T_transport_total')
 
       ! Route the Chebyshev transport moments (mu_nm_stochastic) through the
-      ! selected producer (B5.1 dispatch). 'recursion' (default) fills them
+      ! selected producer (B5.1 dispatch). ’recursion’ (default) fills them
       ! stochastically inside the prepared stack -- the bit-identical legacy
-      ! path. 'lehmann'/'dyson' fill the SAME array EXACTLY from the k-space
+      ! path. ’lehmann’/’dyson’ fill the SAME array EXACTLY from the k-space
       ! eigenpairs (reciprocal%fill_moments), so calculate_conductivity_tensor
       ! runs unchanged. exact-vs-recursion on the same crystal is the direct KPM
       ! error bound (see docs/dev/route_agnostic_estimators.md).
@@ -903,7 +903,7 @@ contains
          ! Exact k-space moments on the SAME Chebyshev window the recursion route
          ! and gamma_nm use (resolve_chebyshev_window -> a, b). The reciprocal
          ! object is kept at subroutine scope (spglib-owning finalizer) like the
-         ! exchange/BSF drivers. Sigma=0: 'lehmann' and 'dyson' coincide here.
+         ! exchange/BSF drivers. Sigma=0: ’lehmann’ and ’dyson’ coincide here.
          call g_logger%info('[calculation.post_processing_conductivity]: gf_route='// &
                             trim(this%gf_route)//' -- filling mu_nm_stochastic from the '// &
                             'exact k-space moment generator (reciprocal%fill_moments); '// &
@@ -1026,7 +1026,7 @@ contains
          call lattice_obj%newclu()
          call lattice_obj%structb(.true.)
       case ('L')
-         ! B7.5: two-sided counterpart of 'S'.
+         ! B7.5: two-sided counterpart of ’S’.
          call lattice_obj%build_data()
          call lattice_obj%bravais()
          call lattice_obj%build_interface_full()
@@ -1050,8 +1050,8 @@ contains
       case ('I')
          call charge_obj%impmad()
       case ('L')
-         ! B7.5: 'S' matrices plus region reference charges and the two-sided
-         ! registry overwriting surfmat's one-sided one.
+         ! B7.5: ’S’ matrices plus region reference charges and the two-sided
+         ! registry overwriting surfmat’s one-sided one.
          call charge_obj%get_charge_transf
          call charge_obj%build_alelay
          call charge_obj%surfmat
@@ -1089,7 +1089,7 @@ contains
          call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
          call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
       case ('L')
-         ! B7.5: identical to 'S'; no build_locham (nmax = 0 for 'L').
+         ! B7.5: identical to ’S’; no build_locham (nmax = 0 for ’L’).
          do i = 1, lattice_obj%ntype
             call lattice_obj%symbolic_atoms(i)%build_pot() ! Build the potential matrix
          end do
@@ -1117,19 +1117,19 @@ contains
 
    ! DESCRIPTION:
    !> @brief
-   !> Frozen-magnon post-processing: sweeps &hamiltonian's q_ss over a
+   !> Frozen-magnon post-processing: sweeps &hamiltonian’s q_ss over a
    !> user-supplied list of points (see &frozen_magnon namelist) and reports
    !> the adiabatic magnon dispersion.
    !> @details For each q in the sweep, the Hamiltonian is rebuilt with that
-   !> q_ss and the potential is either fully re-converged (mode='scf') or, for
-   !> mode='mft' (the magnetic force theorem default), converged once at the
+   !> q_ss and the potential is either fully re-converged (mode=’scf’) or, for
+   !> mode=’mft’ (the magnetic force theorem default), converged once at the
    !> reference point q_ss_list(:,1) and then re-evaluated with a single
    !> band-energy pass (self%nstep=1) at every other q, reusing the reference
    !> potential unchanged. The dispersion omega(q) = 4*(E(q)-E(q_ref)) /
-   !> (M_tot*sin^2(theta_ss)) uses the band energy for mode='mft' and the
-   !> total energy for mode='scf'. This is the single-acoustic-branch
+   !> (M_tot*sin^2(theta_ss)) uses the band energy for mode=’mft’ and the
+   !> total energy for mode=’scf’. This is the single-acoustic-branch
    !> generalization of the Halilov frozen-magnon formula to multiple
-   !> sublattices: M_tot is the reference point's total moment summed over
+   !> sublattices: M_tot is the reference point’s total moment summed over
    !> sublattices, correct because
    !> every sublattice shares the same global (q_ss, theta_ss) cant (the
    !> uniform-cant ansatz already built into ham0m_nc/hamiltonian_ccor.f90).
@@ -2088,13 +2088,13 @@ contains
    end subroutine append_tddft_metadata
 
    !> @brief Single acoustic-branch frozen-magnon sweep (fm_obj%branch_mode
-   !>        /= 'auto' path of post_processing_frozen_magnon).
-   !> @details For mode='mft' the routine converges the reference potential
+   !>        /= ’auto’ path of post_processing_frozen_magnon).
+   !> @details For mode=’mft’ the routine converges the reference potential
    !>          once, at q_ss_list(:,1). It then reuses that fixed potential for
    !>          one force-theorem band-energy probe (frozen_magnon_probe_energy)
    !>          at every other q. A k-space run picks its q-mesh policy
    !>          (little_group, little_group_common, or full_bz) from
-   !>          reciprocal%q_symmetry_policy. For mode='scf' the routine fully
+   !>          reciprocal%q_symmetry_policy. For mode=’scf’ the routine fully
    !>          re-converges the potential at every q instead. Either way it
    !>          builds the Halilov-style dispersion
    !>          omega(q) = 4*(E(q)-E(q_ref)) / (M_tot*sin^2(theta_ss)), with
@@ -2110,7 +2110,7 @@ contains
    !> @param[inout] bands_obj Bands object used by the force-theorem probe.
    !> @param[inout] mix_obj Mixing object for the self-consistency runs.
    !> @param[inout] self_obj Self object; (re)constructed here and run once per
-   !>               q in mode='scf'.
+   !>               q in mode=’scf’.
    !> @param[inout] energy_obj Energy object used by the force-theorem probe.
    subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, energy_obj)
       type(frozen_magnon), intent(in) :: fm_obj
@@ -2205,14 +2205,14 @@ contains
          ! per q and take a band-energy probe at the fixed ordinary potential.
          if (use_kspace) then
             recip_obj = reciprocal(hamiltonian_obj)
-            ! WP8: the mesh must never be built once from row 1's q_ss and
+            ! WP8: the mesh must never be built once from row 1’s q_ss and
             ! reused blindly for every other q in the sweep -- each policy
             ! below either shares one mesh proven valid for the whole sweep,
             ! or rebuilds per q inside the loop.
             select case (trim(recip_obj%q_symmetry_policy))
             case ('little_group_common')
                ! One mesh, reduced by the little group common to every q in
-               ! the sweep (not just row 1's), valid for every probe below.
+               ! the sweep (not just row 1’s), valid for every probe below.
                call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
                                                  sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
                                                  q_list_cart=q_ss_cart)
@@ -2240,7 +2240,7 @@ contains
             hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
             if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
                ! Rebuild (or, via the cache key, reuse if unchanged) for this
-               ! specific q -- never reuse another q's little-group mesh.
+               ! specific q -- never reuse another q’s little-group mesh.
                call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
             end if
 
@@ -2530,7 +2530,7 @@ contains
    !>        sqrt(M_u M_v) Re[J~_uv^q] (Eq. 21). The energy surface is evaluated with the
    !>        magnetic force theorem: the band energy at the FIXED converged reference
    !>        potential, with the moment directions rotated to the spiral/tilt config
-   !>        (imposed through the GBT Hamiltonian's q_ss + per-sublattice theta/phi). The
+   !>        (imposed through the GBT Hamiltonian’s q_ss + per-sublattice theta/phi). The
    !>        q-dependence enters through the GBT bond phase already carried by the
    !>        Hamiltonian, so the matrix is real symmetric (no separate azimuthal-phase
    !>        probe) and the Goldstone/acoustic mode is exact at Gamma by construction
@@ -2617,7 +2617,7 @@ contains
          select case (trim(recip_obj%q_symmetry_policy))
          case ('little_group_common')
             ! One mesh, reduced by the little group common to every q in the
-            ! sweep (not just row 1's), valid for every probe below.
+            ! sweep (not just row 1’s), valid for every probe below.
             call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
                                               sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
                                               q_list_cart=q_ss_cart)
@@ -2661,7 +2661,7 @@ contains
          hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
          if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
             ! Rebuild (or, via the cache key, reuse if unchanged) for this
-            ! specific q -- never reuse another q's little-group mesh (WP8).
+            ! specific q -- never reuse another q’s little-group mesh (WP8).
             call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
          end if
          omega_mat(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
@@ -2688,7 +2688,7 @@ contains
          end do
 
          ! Off-diagonal: two-sublattice tilt at the NATURAL GBT spiral phase (the q-phase
-         ! is carried by the Hamiltonian's bond rotation, so no azimuthal-phase probe is
+         ! is carried by the Hamiltonian’s bond rotation, so no azimuthal-phase probe is
          ! needed). Cross second derivative d^2E/dtheta_i dtheta_j, real symmetric:
          !   omega_ij = (E_ij - E_i - E_j + E_ref) / [2 (1-cos theta) sqrt(M_i M_j)].
          do iact = 1, nactive - 1
@@ -2963,7 +2963,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Check availability for the intersite Green's-function route (B2.5)
+   !> Check availability for the intersite Green’s-function route (B2.5)
    !
    !> @param gf_route Route selector. Allowed: ´recursion´, ´lehmann´, ´dyson´
    !---------------------------------------------------------------------------

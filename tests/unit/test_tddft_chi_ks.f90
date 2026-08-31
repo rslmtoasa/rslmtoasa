@@ -187,7 +187,7 @@ contains
       type(tddft_chi0_options) :: low_eta, high_eta
       type(tddft_chi0_result) :: static_low_eta, static_high_eta
 
-      ! (f_n-f_m)/(e_n-e_m) has the sign f'(e)<0.  The exact and nearby
+      ! (f_n-f_m)/(e_n-e_m) has the sign f’(e)<0.  The exact and nearby
       ! degeneracy paths must agree with the analytic Fermi derivative.
       derivative = -0.25_rp/(300.0_rp*6.3336814e-6_rp)
       finite_difference = tddft_static_divided_difference(0.0_rp, 0.0_rp, 0.0_rp, 300.0_rp)

@@ -132,7 +132,7 @@ module charge_mod
 
       !> B7.6: optional per-iteration hook, invoked at the end of
       !> `interfacepot` once `region_shift` has been updated. Its one production
-      !> use is regenerating the vacuum region's frozen parameters at the newly
+      !> use is regenerating the vacuum region’s frozen parameters at the newly
       !> solved vacuum level (A | vacuum), which is what makes that level
       !> self-consistent instead of a hand-set knob.
       !>
@@ -145,7 +145,7 @@ module charge_mod
       !> back without knowing what it is calling.
       !>
       !> Null on every path except `buildinterface` with region_b_kind =
-      !> 'vacuum', where `pre_processing_buildinterface` installs it.
+      !> ’vacuum’, where `pre_processing_buildinterface` installs it.
       procedure(charge_iteration_hook), pointer, nopass :: on_alignment_updated => null()
 
       !> B7.4: .true. once the alignment solver has seeded region_shift from
@@ -158,7 +158,7 @@ module charge_mod
       !> B7.4: how far the converged fixed point may disagree with the analytic
       !> contact potential E_F(anchor) - E_F(region) before the run warns that
       !> the absolute-zero bookkeeping is broken (B7 §1.3, G-B7-2). Generous
-      !> by design: this is a "something is structurally wrong" alarm, not a
+      !> by design: this is a ″something is structurally wrong″ alarm, not a
       !> precision test.
       real(rp) :: alignment_check_tol = 5.0d-3
       !> B7.4: deviation charge at a frozen anchor-region site above which the
@@ -166,12 +166,12 @@ module charge_mod
       real(rp) :: deep_drift_tol = 1.0d-3
       !> B7.4: which region the Fermi level is pinned to, or empty for the
       !> default free E_F from cluster neutrality (B7 §1.3). Setting it to a
-      !> region name reduces the interface path exactly to today's surface
+      !> region name reduces the interface path exactly to today’s surface
       !> behaviour, and is the correct setting when reproducing `buildsurf`
       !> results.
       character(len=32) :: fix_fermi_to_region = ''
 
-      !> B7.5: layered/interface (calctype='L') region widths, in active
+      !> B7.5: layered/interface (calctype=’L’) region widths, in active
       !> layers, on the A side and the B side of the active zone.
       integer :: nlay_a = 0
       integer :: nlay_b = 0
@@ -640,8 +640,8 @@ contains
       this%fix_fermi_to_region = ''
       this%alignment_started = .false.
       ! B7.5: layered/interface defaults; nlay_a/nlay_b must be set by the
-      ! &charge namelist for calctype='L' -- there is no geometry-derived
-      ! fallback the way surfmat's nlay is (B7 §4 B7.5).
+      ! &charge namelist for calctype=’L’ -- there is no geometry-derived
+      ! fallback the way surfmat’s nlay is (B7 §4 B7.5).
       this%nlay_a = 0
       this%nlay_b = 0
       this%fermi_a = huge(1.0_rp)
@@ -672,7 +672,7 @@ contains
       do i = 1, this%lattice%nrec
          rmax(i) = this%symbolic_atom(this%lattice%nbulk + i)%potential%ws_r
       end do
-      !write (*, *) " NBAS=", NBAS, " NCLAS=", NCLAS
+      !write (*, *) ″ NBAS=″, NBAS, ″ NCLAS=″, NCLAS
       !print *, ´ Sum of electrons from recursion: ´, sum(DQ)
       do im = 1, this%lattice%nrec
          VMAD0(IM) = this%symbolic_atom(this%lattice%nbulk + im)%potential%vmad
@@ -689,7 +689,7 @@ contains
       tdq(:) = 0.0d0
       tdq(:) = this%dq(:)
       dif = sum(tdq(:))
-      !write (*, *) "DIF IN MAD PROGRAM = ", DIF
+      !write (*, *) ″DIF IN MAD PROGRAM = ″, DIF
 
       if (abs(dif) > 0.5) then
          if (rank == 0) call g_logger%warning('too much charge in the external atom! Careful', __FILE__, __LINE__)
@@ -801,11 +801,11 @@ contains
          totq(jj) = tdq(i)
       end do
 
-      ! Capture the previous iteration's vmad BEFORE the loop below overwrites
+      ! Capture the previous iteration’s vmad BEFORE the loop below overwrites
       ! it, mirroring bulkpot (which captures VMAD0 in its own separate loop).
       ! Reading it afterwards made the mixing below a no-op -- it reduced to
       ! x*vmix + x*(1-vmix) == x, with verr identically zero -- so impurity
-      ! runs converged unmixed. B7.4's alignment solver leans on this hook to
+      ! runs converged unmixed. B7.4’s alignment solver leans on this hook to
       ! damp the capacitor-like soft mode, so it must be live.
       ! This changes neither a matrix element nor a charge-scaling convention:
       ! at the default vmix = 1.0 the result is bit-identical.
@@ -846,7 +846,7 @@ contains
    !>
    !> where
    !>   * MONOPOLE term  M_ss = this%dss, driven by the layer charge transfer
-   !>     Q0(j) = tdq(j) = sum over the layer's atoms of dq (occupation-valence).
+   !>     Q0(j) = tdq(j) = sum over the layer’s atoms of dq (occupation-valence).
    !>     This is the standard ASA surface electrostatics and the only term
    !>     active in the monopole-only (default) mode.
    !>   * DIPOLE term (B6, optional) M_sz = this%dsz, driven by the layer l=1
@@ -1360,7 +1360,7 @@ contains
          this%bsz(3) = dot_product(new_bsz, z)
 
          do i = 1, this%nq3
-           ! Rotate the atom's coordinates
+           ! Rotate the atom’s coordinates
            atom_rot(1) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_x)
            atom_rot(2) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_y)
            atom_rot(3) = dot_product(this%lattice%cr(:, unique_atoms(i)), this%new_z)
@@ -1420,7 +1420,7 @@ contains
    !>                      `2/wsimp(ii)` = 2/w, both in 1/bohr. `imppot`
    !>                      contracts this%amad BARE -- there is no /wsms at
    !>                      the call site -- landing directly in Rydberg.
-   !>   surfmat          : the kernel's 1/S convention. On-site term is
+   !>   surfmat          : the kernel’s 1/S convention. On-site term is
    !>                      `2*(sws*alat*ang2au/wssurf(i))` = 2*(S/w_i), which
    !>                      is DIMENSIONLESS and equals exactly 2 for uniform w.
    !>                      `surfpot` restores Rydberg by dividing by wsms.
@@ -1430,8 +1430,8 @@ contains
    !>
    !> Two further reasons to prefer `surfmat` for interface work:
    !>   * `impmad` sets `wsimp(:) = lattice%wav`, a single system-wide average
-   !>     ("Set as if all the atoms have the same WS radius. Can be improved
-   !>     later."), whereas `surfmat`'s `wssurf` is genuinely PER-SITE. B7
+   !>     (″Set as if all the atoms have the same WS radius. Can be improved
+   !>     later.″), whereas `surfmat`’s `wssurf` is genuinely PER-SITE. B7
    !>     needs per-site w across two regions.
    !>   * `impmad` builds a real-space 3D cluster sum; the interface geometry
    !>     needs the 2D layer kernel that `surfmat`/`madl2d` provide.
@@ -1463,11 +1463,11 @@ contains
 !    END DO
 !    NRX=J
 !    if (self_obj%nbas>this%lattice%nrec) then
-!      write(*, *) "Too many shells in ´self´"
+!      write(*, *) ″Too many shells in ´self´″
 !      STOP
 !    end if
 !    if (NRX>NRLX) then
-!      write(*, *) "To many atoms in shells, increase NRLX"
+!      write(*, *) ″To many atoms in shells, increase NRLX″
 !      STOP
 !    end if
       !

@@ -144,7 +144,7 @@ contains
       is_root = this%rank == 0
    end function is_root
 
-   !> @brief Return whether a one-based item belongs to this context's range.
+   !> @brief Return whether a one-based item belongs to this context’s range.
    pure logical function owns_work(this, item_index, n_items)
       class(parallel_context), intent(in) :: this
       integer, intent(in) :: item_index, n_items
@@ -268,7 +268,7 @@ contains
             if (local_size > available_device_count) return
             device_index = local_rank
          else
-            ! Preserve the standalone helper's historical round-robin behavior
+            ! Preserve the standalone helper’s historical round-robin behavior
             ! for callers that do not provide a node-local size.
             device_index = mod(local_rank, available_device_count)
          end if
@@ -277,7 +277,7 @@ contains
    end subroutine map_local_rank_to_device
 
    !> @brief Read the optional process-local CUDA device override.
-   !> @details `RSLMTO_CUDA_DEVICE` is interpreted in CUDA's visible-device
+   !> @details `RSLMTO_CUDA_DEVICE` is interpreted in CUDA’s visible-device
    !> namespace (the same namespace as `CUDA_VISIBLE_DEVICES`).  A configured
    !> override is allowed to share a device intentionally; invalid text is
    !> reported separately from an unset variable so callers can fail clearly.

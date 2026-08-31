@@ -321,6 +321,7 @@ contains
          if (.not. allocated(this%list_of_array_integer_variables)) allocate (this%list_of_array_integer_variables(0))
          new_size = size(this%list_of_array_integer_variables) + 1
 
+         allocate (list_of_array_integer_variables(0))
          call move_alloc(this%list_of_array_integer_variables, list_of_array_integer_variables)
          allocate (this%list_of_array_integer_variables(new_size))
 
@@ -353,6 +354,7 @@ contains
          if (.not. allocated(this%list_of_array_real_variables)) allocate (this%list_of_array_real_variables(0))
          new_size = size(this%list_of_array_real_variables) + 1
 
+         allocate (list_of_array_real_variables(0))
          call move_alloc(this%list_of_array_real_variables, list_of_array_real_variables)
          allocate (this%list_of_array_real_variables(new_size))
 
@@ -385,6 +387,7 @@ contains
          if (.not. allocated(this%list_of_array_real_variables)) allocate (this%list_of_array_real_variables(0))
          new_size = size(this%list_of_array_real_variables) + 1
 
+         allocate (list_of_array_real_variables(0))
          call move_alloc(this%list_of_array_real_variables, list_of_array_real_variables)
          allocate (this%list_of_array_real_variables(new_size))
 
@@ -472,6 +475,8 @@ contains
       character(len=*), optional :: file
       integer, optional :: unit
       integer :: funit, i
+
+      funit = -1
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)

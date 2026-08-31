@@ -215,7 +215,7 @@ contains
    end subroutine chebyshev_green_gpu
 
    !---------------------------------------------------------------------------
-   !> @brief Dispatcher for the on-site Chebyshev Green's-function/DOS
+   !> @brief Dispatcher for the on-site Chebyshev Green’s-function/DOS
    !---------------------------------------------------------------------------
    module subroutine chebyshev_dos_dispatch(this)
       class(green), intent(inout) :: this
@@ -251,7 +251,7 @@ contains
       call chebyshev_green_core(this, eta, fermi_point, g_ef)
    end subroutine chebyshev_green_eta
 
-   !> @brief On-site Chebyshev Green's function, on-mesh or at a single
+   !> @brief On-site Chebyshev Green’s function, on-mesh or at a single
    !>        eta-shifted energy, CPU or GPU.
    module subroutine chebyshev_green_core(this, eta, fermi_point, g_ef, use_gpu)
       class(green), intent(inout) :: this

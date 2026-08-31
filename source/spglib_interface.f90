@@ -96,7 +96,7 @@ module spglib_interface_mod
       ! little group common to the whole q-point set. With num_q=1 this is the
       ! little group of a single q; with num_q>1 it is the subgroup common to
       ! every q, which is what a multi-q sweep needs to build one mesh valid
-      ! for all its points instead of reusing one point's mesh for the rest.
+      ! for all its points instead of reusing one point’s mesh for the rest.
       function spg_get_stabilized_reciprocal_mesh(grid_address, ir_mapping_table, mesh, is_shift, &
                                                   is_time_reversal, num_rot, rotations, num_q, qpoints) &
          bind(C, name="spg_get_stabilized_reciprocal_mesh")
@@ -141,7 +141,7 @@ module spglib_interface_mod
       logical :: initialized = .false.
       integer :: space_group_number = 0
       character(len=20) :: space_group_symbol = ''
-      character(len=10) :: crystal_system = ''
+      character(len=12) :: crystal_system = ''
       integer :: num_operations = 0
       real(rp), allocatable :: lattice_vectors(:,:)  ! (3,3)
       real(rp), allocatable :: atomic_positions(:,:) ! (3,num_atoms)
@@ -782,7 +782,7 @@ contains
    !---------------------------------------------------------------------------
    function get_crystal_system(this) result(crystal_system)
       class(spglib_interface), intent(in) :: this
-      character(len=10) :: crystal_system
+      character(len=12) :: crystal_system
 
       ! Classification based on space group number ranges
       ! Reference: International Tables for Crystallography
@@ -813,7 +813,7 @@ contains
       logical :: path_available
 
       ! This is a placeholder for band path generation
-      ! In a full implementation, this would use spglib's band path functionality
+      ! In a full implementation, this would use spglib’s band path functionality
       ! or implement custom logic based on the crystal system
       
       path_available = .false.
@@ -880,7 +880,7 @@ contains
    !---------------------------------------------------------------------------
    function get_crystal_system_name(this) result(system)
       class(spglib_interface), intent(in) :: this
-      character(len=10) :: system
+      character(len=12) :: system
       system = this%crystal_system
    end function get_crystal_system_name
 
@@ -919,7 +919,7 @@ contains
       if (c_associated(dataset_ptr)) then
          success = .true.
 
-         ! For simplicity, we'll just return the basic space group info that we already have
+         ! For simplicity, we’ll just return the basic space group info that we already have
          ! A full implementation would need to define C structures to extract all dataset fields
          if (present(space_group_number)) space_group_number = this%space_group_number
          if (present(international)) international = trim(this%space_group_symbol)

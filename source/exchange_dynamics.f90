@@ -76,7 +76,7 @@ contains
             end do
             ! Now calculate the damping value
             do nv = 1, size(this%en%ene)
-               ! Calculate the anti-Hermitian parts of the GF's Aij and Aji
+               ! Calculate the anti-Hermitian parts of the GF’s Aij and Aji
                Aij(:, :, nv) = this%green%gij(:, :, nv, njij) - transpose(conjg(this%green%gji(:, :, nv, njij)))
                Aji(:, :, nv) = this%green%gji(:, :, nv, njij) - transpose(conjg(this%green%gij(:, :, nv, njij)))
                m = 0

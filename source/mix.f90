@@ -53,7 +53,7 @@ module mix_mod
       !> Variables to save magnetic moments for mixing
       real(rp), dimension(:, :), allocatable :: mag_old, mag_new, mag_mix
       !> Variables to save LDA+U density matrices for optional linear mixing
-      !> Dimensions: (atom, l-channel, spin, flattened m,m')
+      !> Dimensions: (atom, l-channel, spin, flattened m,m’)
       real(rp), dimension(:, :, :, :), allocatable :: ldm_old, ldm_new, ldm_mix
       !> Mixing parameter
       real(rp) :: beta
@@ -197,7 +197,7 @@ contains
       close(funit)
       ! PATCH_MIX_NML_FIX:
       ! Persist parsed namelist values back to object state.
-      ! Without this, this%mixtype keeps restore_to_default() value ('linear').
+      ! Without this, this%mixtype keeps restore_to_default() value (’linear’).
       this%var = var
       this%mixtype = trim(mixtype)
       this%beta = beta
@@ -440,12 +440,12 @@ contains
       ! Quick diagnostic printout for the first few atoms to help debug mixing
       ! if (rank == 0) then
       !    do ia = 1, min(3, this%lattice%nrec)
-      !       call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": magbeta='"//fmt('f6.3', this%magbeta(ia)) &
-      !            //' mag_old='//fmt('f10.6', mag_old(ia,1))//' '//fmt('f10.6', mag_old(ia,2))//' '//fmt('f10.6', mag_old(ia,3)) &
+      !       call g_logger%info(’mix diagnostics atom ’//fmt(’i4’, ia)//″: magbeta=’″//fmt(’f6.3’, this%magbeta(ia)) &
+      !            //’ mag_old=’//fmt(’f10.6’, mag_old(ia,1))//’ ’//fmt(’f10.6’, mag_old(ia,2))//’ ’//fmt(’f10.6’, mag_old(ia,3)) &
       !            , __FILE__, __LINE__)
-      !       call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_new='"//fmt('f10.6', mag_new(ia,1))//' '//fmt('f10.6', mag_new(ia,2))//' '//fmt('f10.6', mag_new(ia,3)) &
+      !       call g_logger%info(’mix diagnostics atom ’//fmt(’i4’, ia)//″: mag_new=’″//fmt(’f10.6’, mag_new(ia,1))//’ ’//fmt(’f10.6’, mag_new(ia,2))//’ ’//fmt(’f10.6’, mag_new(ia,3)) &
       !            , __FILE__, __LINE__)
-      !       call g_logger%info('mix diagnostics atom '//fmt('i4', ia)//": mag_mix='"//fmt('f10.6', mag_mix(ia,1))//' '//fmt('f10.6', mag_mix(ia,2))//' '//fmt('f10.6', mag_mix(ia,3)) &
+      !       call g_logger%info(’mix diagnostics atom ’//fmt(’i4’, ia)//″: mag_mix=’″//fmt(’f10.6’, mag_mix(ia,1))//’ ’//fmt(’f10.6’, mag_mix(ia,2))//’ ’//fmt(’f10.6’, mag_mix(ia,3)) &
       !            , __FILE__, __LINE__)
       !    end do
       ! end if
@@ -508,25 +508,25 @@ contains
       ! if (rank == 0) then
       !    do ia = 1, min(3, this%lattice%nrec)
       !       nprint = min(6, size(qia_old, 2))
-      !       msg = ''
+      !       msg = ’’
       !       do k = 1, nprint
-      !          msg = msg // ' ' // fmt('f10.6', qia_old(ia, k))
+      !          msg = msg // ’ ’ // fmt(’f10.6’, qia_old(ia, k))
       !       end do
-      !       call g_logger%info('mixpq diagnostics atom '//fmt('i4', ia)//': qia_old='//trim(msg), __FILE__, __LINE__)
+      !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_old=’//trim(msg), __FILE__, __LINE__)
 
       !       nprint = min(6, size(qia_new, 2))
-      !       msg = ''
+      !       msg = ’’
       !       do k = 1, nprint
-      !          msg = msg // ' ' // fmt('f10.6', qia_new(ia, k))
+      !          msg = msg // ’ ’ // fmt(’f10.6’, qia_new(ia, k))
       !       end do
-      !       call g_logger%info('mixpq diagnostics atom '//fmt('i4', ia)//': qia_new='//trim(msg), __FILE__, __LINE__)
+      !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_new=’//trim(msg), __FILE__, __LINE__)
 
       !       nprint = min(6, size(this%qia, 2))
-      !       msg = ''
+      !       msg = ’’
       !       do k = 1, nprint
-      !          msg = msg // ' ' // fmt('f10.6', this%qia(ia, k))
+      !          msg = msg // ’ ’ // fmt(’f10.6’, this%qia(ia, k))
       !       end do
-      !       call g_logger%info('mixpq diagnostics atom '//fmt('i4', ia)//': qia_mixed='//trim(msg), __FILE__, __LINE__)
+      !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_mixed=’//trim(msg), __FILE__, __LINE__)
       !    end do
       ! end if
       this%charge%dq(:) = 0.0d0
@@ -696,15 +696,15 @@ contains
          df = fo
       end if
     !!! if (myid==0) then
-    !!!    write (6, "(/ a / a / 1x, i6, 1pe12.4, 2i12 /)") &
-    !!!         " Broydn:", "    itr         fsq      length        ierr", itr, fsq, &
+    !!!    write (6, ″(/ a / a / 1x, i6, 1pe12.4, 2i12 /)″) &
+    !!!         ″ Broydn:″, ″    itr         fsq      length        ierr″, itr, fsq, &
     !!!         n, ierr
-    !!!    write (0, "(/ a / a / 1x, i6, 1pe12.4, 2i12 /)") &
-    !!!         " Broydn:", "    itr         fsq      length        ierr", itr, fsq, &
+    !!!    write (0, ″(/ a / a / 1x, i6, 1pe12.4, 2i12 /)″) &
+    !!!         ″ Broydn:″, ″    itr         fsq      length        ierr″, itr, fsq, &
     !!!         n, ierr
     !!! end if
-      !write (876, "(/ a / a / 1x, i6, 1pe12.4, 2i12 /)") &
-      !      " Broydn:", "    itr         fsq      length        ierr", itr, fsq, &
+      !write (876, ″(/ a / a / 1x, i6, 1pe12.4, 2i12 /)″) &
+      !      ″ Broydn:″, ″    itr         fsq      length        ierr″, itr, fsq, &
       !      n, ierr
       if (wjac) then
          !

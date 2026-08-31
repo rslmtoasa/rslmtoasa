@@ -265,7 +265,7 @@ contains
 
    !> @brief Generate block-Lanczos coefficients for the selected recursion atoms.
    !> @details Computes the block tridiagonal Haydock coefficients A_n and B_n
-   !>          for each atom in lattice%irec. Real-space SCF and block Green's
+   !>          for each atom in lattice%irec. Real-space SCF and block Green’s
    !>          functions consume the resulting a_b/b2_b and diagonal a/b2 views.
    !> @param[inout] this Recursion object; fills local slices of a_b, b2_b, a, and b2.
    !> @note Work is partitioned over MPI ranks and may use CUDA or haydock_fast.
@@ -311,7 +311,7 @@ contains
       end if
 
       ! Fast CPU block-Lanczos kernels (haydock_fast). cheb_backend selects:
-      !   'fast'    -> fp32 working precision, 'fast_dp' -> fp64. local_axis is
+      !   ’fast’    -> fp32 working precision, ’fast_dp’ -> fp64. local_axis is
       ! not yet supported in the fast path -> fall through to legacy.
       if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. trim(this%control%cheb_backend) /= 'legacy') then
          call g_logger%warning('ccor_2c with hoh is not supported by fast block-Lanczos; falling back to legacy.', __FILE__, __LINE__)
@@ -522,7 +522,7 @@ contains
 
    !> @brief Replace stored block B^2 coefficients by their matrix square roots.
    !> @details Diagonalizes each Hermitian B2_b block and overwrites it with the
-   !>          positive square-root matrix B. Block Green's-function reconstruction
+   !>          positive square-root matrix B. Block Green’s-function reconstruction
    !>          calls this before continued-fraction evaluation.
    !> @param[inout] this Recursion object; overwrites local B2_b slices.
    !> @note Uses MPI partition sizes and LAPACK zheev; no collective communication occurs here.
@@ -560,7 +560,7 @@ contains
             end do
             ! replace sqrt with eigen solver to get lamda^2 and U
             ! get lamda^2 and U in lamda=U*BB´*U*
-            ! oneMKL's zheev can evaluate an intermediate divide-by-zero in
+            ! oneMKL’s zheev can evaluate an intermediate divide-by-zero in
             ! its scaling path; mask that external-library exception only.
             call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
             call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
@@ -707,7 +707,7 @@ contains
                end do
             end do
          end do
-         ! write(*,*) 'DEBUG:get_terminf INPUT n=', n, ' maxA=', maxA, ' maxB=', maxB, ' NaN_in=', foundNaN_in
+         ! write(*,*) ’DEBUG:get_terminf INPUT n=’, n, ’ maxA=’, maxA, ’ maxB=’, maxB, ’ NaN_in=’, foundNaN_in
          call this%get_cinf(Acoef_r, B2coef_r, ll_t, ldim*ldim, nw, a_inf(:, :, n), b_inf(:, :, n))
          do j = 1, ldim
             do i = 1, ldim
@@ -726,7 +726,7 @@ contains
                if (IsNaN(a_inf(i, j, n)) .or. IsNaN(b_inf(i, j, n))) foundNaN_out = .true.
             end do
          end do
-         ! write(*,*) 'DEBUG:get_terminf OUTPUT n=', n, ' a_inf0_avg=', a_inf0(n), ' maxAinf=', maxAinf, ' maxBinf=', maxBinf, ' NaN_out=', foundNaN_out
+         ! write(*,*) ’DEBUG:get_terminf OUTPUT n=’, n, ’ a_inf0_avg=’, a_inf0(n), ’ maxAinf=’, maxAinf, ’ maxBinf=’, maxBinf, ’ NaN_out=’, foundNaN_out
          a_inf0(n) = 0.0d0
          do i = 1, ldim
             a_inf0(n) = a_inf0(n) + a_inf(i, i, n)
@@ -783,7 +783,7 @@ contains
    !>          the scalar Haydock recurrence.
    !> @param[inout] this Recursion object; mutates v, pmn, atemp, and izero.
    !> @param[in] ll Current recursion level whose alpha coefficient is produced.
-   !> @note This legacy scalar path is used by control%recur='lanczos'.
+   !> @note This legacy scalar path is used by control%recur=’lanczos’.
    module subroutine hop(this, ll)
       class(recursion), intent(inout) :: this
       ! Local variables

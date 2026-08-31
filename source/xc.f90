@@ -2137,7 +2137,7 @@ contains
       do ir = 1, nr
          ! Keep an exactly empty sphere empty.  For a positive total density,
          ! the floor is applied only to the libXC input channel that needs
-         ! protection; it never changes the caller's density or derivative.
+         ! protection; it never changes the caller’s density or derivative.
          if (rho_up(ir) <= 0.0_rp .and. rho_down(ir) <= 0.0_rp) cycle
          rho_libxc(1) = max(rho_up(ir), LIBXC_DENSITY_FLOOR)
          rho_libxc(2) = max(rho_down(ir), LIBXC_DENSITY_FLOOR)

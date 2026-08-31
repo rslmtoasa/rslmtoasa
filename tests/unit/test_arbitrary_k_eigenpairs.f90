@@ -199,7 +199,7 @@ program test_arbitrary_k_eigenpairs
    call check_gauge('off-mesh direct Hamiltonian eigenvectors', evecs(:, :, 1), direct_vecs, failed)
 
    ! RF-04: one-point, partial, and multi-tile batches must agree while exact
-   ! duplicates still scatter back into the caller's original order.
+   ! duplicates still scatter back into the caller’s original order.
    recip%reciprocal_tile_size = 1
    call recip%calculate_eigenpairs_at_kpoints(reshape([k0, k_off, k0 + [1.0_rp, 0.0_rp, 0.0_rp], &
                                                          [0.0_rp, 0.125_rp, 0.0_rp]], [3, 4]), &

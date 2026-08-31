@@ -153,18 +153,18 @@ module lattice_mod
       !> TODO
       !> Clust coordinates (expanded cluster)
       !>
-      !> 'cr' holds the fully expanded cluster coordinates (cartesian coordinates)
-      !> after the Bravais/cluster build. Shape is (3, kk) where 'kk' is the
+      !> ’cr’ holds the fully expanded cluster coordinates (cartesian coordinates)
+      !> after the Bravais/cluster build. Shape is (3, kk) where ’kk’ is the
       !> actual number of atoms in the constructed cluster. During construction
       !> a temporary local array with capacity (3, ndim) is often used and then
-      !> moved into 'this%cr'. We shrink 'this%cr' to (3,kk) as soon as 'kk' is
+      !> moved into ’this%cr’. We shrink ’this%cr’ to (3,kk) as soon as ’kk’ is
       !> known to avoid holding a large buffer unnecessarily.
       real(rp), dimension(:, :), allocatable :: cr
 
       !> TODO
       !> Clust coordinates (primitive cell / basis)
       !>
-      !> 'crd' stores the primitive cell (basis) coordinates (3, ntot). It is
+      !> ’crd’ stores the primitive cell (basis) coordinates (3, ntot). It is
       !> used as the starting point when expanding to the cluster (cr).
       real(rp), dimension(:, :), allocatable :: crd
       !> Clust atom number
@@ -319,7 +319,7 @@ module lattice_mod
       !> Number of layers
       integer :: nlay
 
-      !> B7.5 (calctype='L'): number of FROZEN atomic layers of region A (the
+      !> B7.5 (calctype=’L’): number of FROZEN atomic layers of region A (the
       !> low-z semi-infinite reference) and of region B (the high-z one). The
       !> active zone is whatever lies between them, so the layer stack is
       !>     nlay_a  frozen A | nlay  active | nlay_b  frozen B
@@ -333,19 +333,19 @@ module lattice_mod
       !> them would silently mis-place the A/active boundary.
       integer :: nlay_a, nlay_b
 
-      !> B7.6 (calctype='L'): what region B physically IS. Two values:
+      !> B7.6 (calctype=’L’): what region B physically IS. Two values:
       !>
-      !>   'metal'  (default) region B is a second metallic reference, loaded
+      !>   ’metal’  (default) region B is a second metallic reference, loaded
       !>            from its own converged parameter set through &atoms
       !>            label(:), exactly as region A is. This is the A | B
       !>            geometry and the pre-B7.6 behaviour.
-      !>   'vacuum' region B is semi-infinite vacuum. Its frozen parameters
+      !>   ’vacuum’ region B is semi-infinite vacuum. Its frozen parameters
       !>            are NOT read from a label; they are generated per run by
       !>            `vacuum_lead` from the empty-sphere radius and the vacuum
       !>            level (B7 §1.6), and regenerated whenever the alignment
       !>            solver moves that level. This is the A | vacuum geometry.
       !>
-      !> The distinction is confined to where region B's frozen parameters
+      !> The distinction is confined to where region B’s frozen parameters
       !> COME FROM and to the region kind the registry records. Layer binning,
       !> structure constants and the recursion are unaware of it -- B7 §0.2 is
       !> explicit that the Green-function machinery is region-agnostic and
@@ -627,7 +627,7 @@ module lattice_mod
    end subroutine build_surf_full
 
    !> @brief Build the two-sided (region A | active | region B) interface cluster.
-   !> @details The calctype='L' counterpart of build_surf_full: instead of one
+   !> @details The calctype=’L’ counterpart of build_surf_full: instead of one
    !>          vacuum boundary and one bulk boundary, it places two independent
    !>          FROZEN semi-infinite references around a central active zone.
    !>          Layers are selected by projecting onto the surface normal exactly
@@ -842,7 +842,7 @@ module lattice_mod
       integer, intent(in) :: nl2, m, ii, jclus
       integer :: is, js
 
-      ! write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus, &
+      ! write (*, ’(″ SBAR neighbor center=″,i5,″ slot=″,i5,″ iclus=″,i5,″ vec=″,3f12.6)’) ii, m, iclus, &
       !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
    end subroutine write_strux_block
 

@@ -48,7 +48,7 @@ module bands_mod
    private
 
    !> Absolute tolerance of the WP7 density physicality assertions. Loose enough
-   !> to absorb the recursion terminator's DOS noise on the integrated density,
+   !> to absorb the recursion terminator’s DOS noise on the integrated density,
    !> tight enough that a genuinely wrong producer (wrong spin convention, wrong
    !> conjugation, missing 1/pi) cannot pass.
    real(rp), parameter :: density_physicality_tol = 1.0e-6_rp
@@ -532,8 +532,8 @@ contains
       ! Calculate the Fermi enery
       ef_mag = this%en%fermi
       this%en%chebfermi = this%en%fermi
-      ! B7 §1.3: 'L' (layered/interface) defaults to free E_F from cluster
-      ! neutrality, same determination as 'B', gated the same way on fix_fermi
+      ! B7 §1.3: ’L’ (layered/interface) defaults to free E_F from cluster
+      ! neutrality, same determination as ’B’, gated the same way on fix_fermi
       ! rather than being calctype-exclusive to bulk.
       if (.not. (this%en%fix_fermi) .and. &
           (this%control%calctype == 'B' .or. this%control%calctype == 'L')) then
@@ -697,7 +697,7 @@ contains
    !> which is exactly the four-channel combination the pre-WP7 `dspd`
    !> accumulation used -- the difference is that no projection axis appears
    !> here at all. Projection onto radial up/down happens afterwards, in
-   !> `calculate_moments`, against the object's own explicit axis.
+   !> `calculate_moments`, against the object’s own explicit axis.
    !>
    !> @param[inout] sd Density contract, sized (nrec, lmax_basis+1). Zeroed on
    !>                  entry and MPI-reduced on exit, so every rank holds the
@@ -773,7 +773,7 @@ contains
    !> Resolve and state the explicit radial projection axis of every site
    !> through the active WP7 SCF policy.
    !>
-   !> `potential%mom` enters here as the site's *reference direction* only --
+   !> `potential%mom` enters here as the site’s *reference direction* only --
    !> the imposed spiral/cone reference under `constrained_spiral`, the starting
    !> point under `relaxed_reference`. It is never read again as a projection
    !> definition: the axis handed to `set_axis` is what every later projection
@@ -895,10 +895,10 @@ contains
          mom_prev(:, na) = this%symbolic_atom(plusbulk)%potential%mom
       end do
 
-      !print *,'AB debug: Starting calculate_moments'
+      !print *,’AB debug: Starting calculate_moments’
       !call this%calculate_magnetic_moments()
       call this%calculate_orbital_moments()
-      !print *,'AB debug: Finished orbital moments, starting Hubbard U check'
+      !print *,’AB debug: Finished orbital moments, starting Hubbard U check’
       hubbard_active = this%recursion%hamiltonian%hubbard_u_general_check .or. &
                        this%recursion%hamiltonian%hubbard_u_sc_check .or. &
                        this%recursion%hamiltonian%hubbard_v_check
@@ -965,18 +965,18 @@ contains
             end if
          end do
          ! if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
-         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-         !                       ' ql_s_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
-         !                       ' ql_s_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 2)), __FILE__, __LINE__)
-         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-         !                       ' ql_p_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 1))// &
-         !                       ' ql_p_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 2)), __FILE__, __LINE__)
-         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-         !                       ' ql_d_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 1))// &
-         !                       ' ql_d_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 2)), __FILE__, __LINE__)
-         !    call g_logger%info('DEBUG:bands ql atom'//fmt('i4', na_glob)// &
-         !                       ' ql_f_up='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 1))// &
-         !                       ' ql_f_dn='//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
+         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
+         !                       ’ ql_s_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
+         !                       ’ ql_s_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 2)), __FILE__, __LINE__)
+         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
+         !                       ’ ql_p_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 1))// &
+         !                       ’ ql_p_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 1, 2)), __FILE__, __LINE__)
+         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
+         !                       ’ ql_d_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 1))// &
+         !                       ’ ql_d_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 2, 2)), __FILE__, __LINE__)
+         !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
+         !                       ’ ql_f_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 1))// &
+         !                       ’ ql_f_dn=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 3, 2)), __FILE__, __LINE__)
          ! end if
       end do
 
@@ -1808,7 +1808,7 @@ contains
 
       !do na=1, this%lattice%nrec
       do na = start_atom, end_atom
-         !print *,' AB debug: calculating orbital moment for atom ', na
+         !print *,’ AB debug: calculating orbital moment for atom ’, na
          na_loc = g2l_map(na)
          if (na_loc < 1 .or. na_loc > atoms_per_process) then
             if (rank == 0) call g_logger%error('calculate_orbital_moments: invalid na_loc='//fmt('i6', na_loc)//' for na='//fmt('i6', na), __FILE__, __LINE__)
@@ -1820,7 +1820,7 @@ contains
 
 
          do ie = 1, this%en%channels_ldos+10
-               ! Detect NaNs in the Green's function slice before tracing
+               ! Detect NaNs in the Green’s function slice before tracing
                if (any(this%green%g0(:, :, ie, na_loc) /= this%green%g0(:, :, ie, na_loc))) then
                   if (rank == 0) call g_logger%warning('NaN in g0 at atom '//fmt('i4', na)//' ie='//fmt('i6', ie), __FILE__, __LINE__)
                end if
@@ -1860,9 +1860,9 @@ contains
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(1) = lx
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(2) = ly
          this%symbolic_atom(this%lattice%nbulk + na)%potential%lmom(3) = lz
-         !print *,' AB debug: finished calculating orbital moment for atom ', na
+         !print *,’ AB debug: finished calculating orbital moment for atom ’, na
       end do
-      !print *,' AB debug: finished calculating orbital moments for all atoms'
+      !print *,’ AB debug: finished calculating orbital moments for all atoms’
    end subroutine calculate_orbital_moments
 
    subroutine calculate_projected_dos(this)
@@ -2039,13 +2039,13 @@ contains
          call g_logger%info('Magnetic field on atom'//fmt('i4', na)//' is '//fmt('f16.6', fx)//' '//fmt('f16.6', fy)//' '//fmt('f16.6', fz), __FILE__, __LINE__)
          call g_logger%info('Magnetic torque on atom'//fmt('i4', na)//' is '//fmt('f16.6', tx)//' '//fmt('f16.6', ty)//' '//fmt('f16.6', tz), __FILE__, __LINE__)
 
-         !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom0 for atom ", na, "=",this%symbolic_atom(plusbulk)%potential%mom0
-         !print ´(a,i4,a, 3f12.6)´ , "Magnetic mom1 for atom ", na, "=", this%symbolic_atom(plusbulk)%potential%mom1
-         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_0, pref_1
-         !print ´(a,i4,a, 3f12.6)´ , "Magnetic force for atom ", na, "=", I_loc
-         !print ´(a,i4,a, 3f12.6)´ , "Magnetic torque for atom ", na, "=", tau_loc
-         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
-         !print ´(a,i4,a, 3f12.6)´ , "Field prefactors for atom ", na, "=", pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
+         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic mom0 for atom ″, na, ″=″,this%symbolic_atom(plusbulk)%potential%mom0
+         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic mom1 for atom ″, na, ″=″, this%symbolic_atom(plusbulk)%potential%mom1
+         !print ´(a,i4,a, 3f12.6)´ , ″Field prefactors for atom ″, na, ″=″, pref_0, pref_1
+         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic force for atom ″, na, ″=″, I_loc
+         !print ´(a,i4,a, 3f12.6)´ , ″Magnetic torque for atom ″, na, ″=″, tau_loc
+         !print ´(a,i4,a, 3f12.6)´ , ″Field prefactors for atom ″, na, ″=″, pref_0 * this%symbolic_atom(plusbulk)%potential%mom0
+         !print ´(a,i4,a, 3f12.6)´ , ″Field prefactors for atom ″, na, ″=″, pref_1 * this%symbolic_atom(plusbulk)%potential%mom1
       end do
    end subroutine calculate_magnetic_torques
 

@@ -23,7 +23,7 @@ contains
 
    pure function response_component_name(component) result(name)
       integer, intent(in) :: component
-      character(len=6) :: name
+      character(len=7) :: name
 
       select case (component)
       case (RESPONSE_CHARGE)

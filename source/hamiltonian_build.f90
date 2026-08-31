@@ -211,8 +211,8 @@ contains
          call g_logger%fatal("Invalid magnetic_representation. Use 'periodic_nc', 'gbt_single_q', or 'explicit_texture'.", &
                              __FILE__, __LINE__)
       end select
-      this%js_alpha = js_alpha
-      this%jl_alpha = jl_alpha
+      this%js_alpha = js_alpha(:len(this%js_alpha))
+      this%jl_alpha = jl_alpha(:len(this%jl_alpha))
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
       if (this%hubbard_u_potential_form /= 'liechtenstein' .and. this%hubbard_u_potential_form /= 'acbn0') then
          call g_logger%fatal("Invalid hubbard_u_potential_form. Use 'liechtenstein' or 'acbn0'.", __FILE__, __LINE__)
@@ -653,10 +653,10 @@ contains
             end if
 
             ! Optional debugging output:
-            ! write(*,*) 'm=', m
-            ! write(*,'(18f10.6)') real(this%jo_a(:,:,m,ntype))
+            ! write(*,*) ’m=’, m
+            ! write(*,’(18f10.6)’) real(this%jo_a(:,:,m,ntype))
             ! write(*,*)
-            ! write(*,'(18f10.6)') aimag(this%jo_a(:,:,m,ntype))
+            ! write(*,’(18f10.6)’) aimag(this%jo_a(:,:,m,ntype))
          end do
       end do
    
@@ -694,7 +694,7 @@ contains
          S_op = S_y
       end select
 
-      !write(*,'(18f10.6)') real(S_op)
+      !write(*,’(18f10.6)’) real(S_op)
       ! Loop over each atom type
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
@@ -712,10 +712,10 @@ contains
 
             ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 + tmp2 )
             this%js_a(:,:,m,ntype) = 0.5_rp * ( tmp1 + tmp2 )
-            !write(*,*) 'm=', m
-            !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
+            !write(*,*) ’m=’, m
+            !write(*,’(18f10.6)’) real(this%js_a(:,:,m,ntype))
             !write(*,*)
-            !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
+            !write(*,’(18f10.6)’) aimag(this%js_a(:,:,m,ntype))
             if (this%hoh) then
                tmp1 = 0.0d0; tmp2 = 0.0d0
                ! tmp1 = js_a * v_a(:,:,m,ntype)
@@ -746,8 +746,8 @@ contains
       complex(rp), allocatable :: tmp1(:, :), tmp2(:, :), S_op(:, :)  ! Temp matrices for partial products
       complex(rp), dimension(nb, nb) :: locham
 
-      ! this%hxc is only populated by build_bulkham's ordinary periodic_nc/
-      ! explicit_texture branch (hamiltonian_build.f90, build_bulkham); GBT's
+      ! this%hxc is only populated by build_bulkham’s ordinary periodic_nc/
+      ! explicit_texture branch (hamiltonian_build.f90, build_bulkham); GBT’s
       ! own builder never fills it and returns before that code is reached.
       ! Under gbt_single_q the commutator below would therefore be built from
       ! an identically-zero array and silently report a zero spin-torque
@@ -779,7 +779,7 @@ contains
          S_op = S_y
       end select
 
-      !write(*,'(18f10.6)') real(S_op)
+      !write(*,’(18f10.6)’) real(S_op)
       ! Loop over each atom type
       do ntype = 1, this%charge%lattice%ntype
          ia = this%charge%lattice%atlist(ntype)
@@ -805,10 +805,10 @@ contains
 
             ! v_sza(:,:,m,ntype) = 0.5 * ( tmp1 - tmp2 )
             this%js_a(:,:,m,ntype) = (1 / i_unit) * ( tmp1 - tmp2 )
-            !write(*,*) 'm=', m
-            !write(*,'(18f10.6)') real(this%js_a(:,:,m,ntype))
+            !write(*,*) ’m=’, m
+            !write(*,’(18f10.6)’) real(this%js_a(:,:,m,ntype))
             !write(*,*)
-            !write(*,'(18f10.6)') aimag(this%js_a(:,:,m,ntype)) 
+            !write(*,’(18f10.6)’) aimag(this%js_a(:,:,m,ntype))
             if (this%hoh) then
 
                if (m==1) then
@@ -1249,7 +1249,7 @@ contains
          ino = this%charge%lattice%num(ia) ! Atom bravais type of ia
          nr = this%charge%lattice%nn(ia, 1) ! Number of neighbours considered
          !write(123, *)´bulkham´
-         ! call g_logger%info('Building Hamiltonian for atom type '//fmt('i5', ntype)//' with '//fmt('i5', nr)//' neighbours', __FILE__, __LINE__)
+         ! call g_logger%info(’Building Hamiltonian for atom type ’//fmt(’i5’, ntype)//’ with ’//fmt(’i5’, nr)//’ neighbours’, __FILE__, __LINE__)
          call this%chbar_nc(ia, nr, ino, ntype)
          call add_constraining_field_hmag(this, ntype)
          do m = 1, nr
@@ -1266,10 +1266,10 @@ contains
                   this%hxc(j +spin_off, i, m, ntype) = this%hmag(j, i, m, 1) + i_unit*this%hmag(j, i, m, 2) ! Hx+iHy
                end do ! end of orbital j loop
             end do ! end of orbital i loop
-            ! write(131,*) 'm=', m
-            ! write(131,'(18f10.6)') real(this%ee(:,:,m,ntype))
-            ! write(132,*) 'm=', m
-            ! write(132,'(18f10.6)') aimag(this%ee(:,:,m,ntype))
+            ! write(131,*) ’m=’, m
+            ! write(131,’(18f10.6)’) real(this%ee(:,:,m,ntype))
+            ! write(132,*) ’m=’, m
+            ! write(132,’(18f10.6)’) aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if (this%hubbard_u_general_check) then
             do i = 1, nb
@@ -1588,7 +1588,7 @@ contains
    !>
    !> Deliberately keyed on `q_ss` alone, not `theta_ss`. A cone angle at q=0 is
    !> a global spin rotation, which without SOC leaves every energy invariant,
-   !> so ignoring it is harmless -- and `post_processing='frozen_magnon'` decks
+   !> so ignoring it is harmless -- and `post_processing=’frozen_magnon’` decks
    !> legitimately carry `theta_ss` through the initial `periodic_nc` build
    !> before `calculation.f90` selects `gbt_single_q` for the sweep itself.
    !---------------------------------------------------------------------------

@@ -791,7 +791,7 @@ contains
          call assert_hermitian(this%workspace%h(:,:,ik), 'H(k)')
          if (request%generalized) call assert_overlap(this%workspace%s(:,:,ik), this%workspace%overlap_cholesky)
          this%workspace%eigenvector(:,:,ik) = this%workspace%h(:,:,ik)
-         ! oneMKL's Hermitian eigensolvers can evaluate an intermediate
+         ! oneMKL’s Hermitian eigensolvers can evaluate an intermediate
          ! divide-by-zero in their scaling path.  Keep application FPE
          ! diagnostics enabled, masking that external-library exception only.
          call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)

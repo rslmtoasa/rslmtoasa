@@ -371,7 +371,7 @@ subroutine scals_lmto47(iax, npr, nbas, nl2, nenv, ndimW, ldot, tral, trad, sc, 
 !>   Apply the LMTO47 `scals` transformation to one local cluster solve.
 !> Notes:
 !>   This is a standalone port of the one-kappa branch of TBSTR `scals.f`,
-!>   adapted to the package's explicit dense matrix storage.  The output keeps
+!>   adapted to the package’s explicit dense matrix storage.  The output keeps
 !>   only the physical head block columns (`nenv`), exactly matching how the
 !>   screened blocks are later scattered by `addtos`.
     implicit none

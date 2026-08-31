@@ -17,7 +17,7 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> Two-sided deviation-variable electrostatics for the interface geometry
-   !> (B7.3): `imppot`'s reference bookkeeping on `surfpot`'s 2D kernel.
+   !> (B7.3): `imppot`’s reference bookkeeping on `surfpot`’s 2D kernel.
    !>
    !> @details
    !> `surfpot` is the one-sided (surface) path and remains the permanent
@@ -31,7 +31,7 @@ contains
    !>
    !>        dq_i = q_i - q_bulk(region(i), type(i))
    !>
-   !>    i.e. `imppot`'s definition generalized from a single host to the region
+   !>    i.e. `imppot`’s definition generalized from a single host to the region
    !>    registry. This is what makes the two-sided sums truncate on BOTH sides
    !>    and be absolutely convergent, and what makes polar hosts and ordered
    !>    alloys correct: their built-in charge transfer lives in the reference,
@@ -58,15 +58,15 @@ contains
    !>    side-resolved N(E_F) of the boundary buffer layers: metallic leads
    !>    receive charge proportional to N(E_F); vacuum/insulating receives
    !>    NOTHING. This gives ~50/50 for two similar metals and collapses to
-   !>    "everything into the metal" for metal|vacuum, so the surface case needs
-   !>    no separate branch. It deliberately does NOT inherit `imppot`'s smear
+   !>    ″everything into the metal″ for metal|vacuum, so the surface case needs
+   !>    no separate branch. It deliberately does NOT inherit `imppot`’s smear
    !>    (`tdq(j) = -dif/nsum` over every frozen site): in a 3D impurity cluster
    !>    that is a roughly isotropic shell with sum dq*z = 0 by symmetry, but in
    !>    layered geometry the same smear has a nonzero first moment and a lever
    !>    arm of the full slab thickness, landing directly on the work function.
    !>
-   !> 5. **Per-site w** from the registry, following `surfmat`'s `wssurf`
-   !>    pattern. NOT `impmad`'s `wsimp`, which is a system-wide average AND in
+   !> 5. **Per-site w** from the registry, following `surfmat`’s `wssurf`
+   !>    pattern. NOT `impmad`’s `wsimp`, which is a system-wide average AND in
    !>    a different unit convention (see the @warning on `impmad`).
    !>
    !> The kernel itself is reused UNCHANGED: `dss`/`dsz` as built by `madl2d`
@@ -75,13 +75,13 @@ contains
    !> @note **There is deliberately no separate `interfacemat`.** The B7 plan
    !>       names one, and CONVENTIONS C8 requires that it mimic `surfmat`
    !>       rather than `impmad` (the two differ by exactly one factor of S).
-   !>       The strongest form of "mimic `surfmat`" is to *reuse* it: this
+   !>       The strongest form of ″mimic `surfmat`″ is to *reuse* it: this
    !>       routine consumes precisely what `build_alelay` + `surfmat` already
    !>       produce -- `dss`, `dsz`, `sws`, `qz`, `wssurf` and the region
    !>       registry -- all of which are geometry-general and already correct
    !>       two-sided. Writing a near-duplicate builder would add a second
    !>       copy of the kernel to keep in sync and a second chance to drift
-   !>       into `impmad`'s convention, for no capability gain. If a genuinely
+   !>       into `impmad`’s convention, for no capability gain. If a genuinely
    !>       two-sided geometry ever needs different STRUCTURE CONSTANTS, that
    !>       belongs in the cluster builder (B7.5), not in a parallel kernel.
    !>
@@ -135,9 +135,9 @@ contains
       !                     registry array (region_id, active, z, w).
       !
       ! They are not the same: the active zone starts at registry row
-      ! nlay_a+1, because rows 1..nlay_a are region A's frozen boundary
-      ! (region_registry.f90's build_from_interface index map). Writing the
-      ! first active site's charge to tdq(1) put it on a FROZEN row, which by
+      ! nlay_a+1, because rows 1..nlay_a are region A’s frozen boundary
+      ! (region_registry.f90’s build_from_interface index map). Writing the
+      ! first active site’s charge to tdq(1) put it on a FROZEN row, which by
       ! construction must carry exactly zero deviation (B7 §2.10) -- and then
       ! `compensation_sites` returned ideep_lo = 1, the same row, so step 2
       ! subtracted the whole residual from it and the two cancelled exactly.
@@ -238,7 +238,7 @@ contains
       ! --- 5b. Alignment solve (B7.4): one mixed fixed-point step on V_r ----
       call this%align_regions(vm, nsite)
 
-      ! The write-back below is referenced to the ANCHOR region's deep probe,
+      ! The write-back below is referenced to the ANCHOR region’s deep probe,
       ! not to `v_lo`. The two are different points in general: `v_lo` is site 1,
       ! which for the buildsurf layout is deep VACUUM, while the anchor is the
       ! first frozen non-vacuum region (bulk). Referencing the write-back to one
@@ -258,9 +258,9 @@ contains
       ! --- 6. Write back (B7 §1.3) ------------------------------------------
       !        vmad(i) = dV(i) + vmad_bulk(region(i), type(i)) + V_region(i)
       !
-      !        The three terms are the deviation potential, the region's own
+      !        The three terms are the deviation potential, the region’s own
       !        converged on-site reference, and the alignment shift. The middle
-      !        term is `imppot`'s per-class add-back generalized from a single
+      !        term is `imppot`’s per-class add-back generalized from a single
       !        host to the region registry -- without it, a polar host or an
       !        ordered alloy is silently treated as non-polar (B7 §2.1). The
       !        last term is what makes two independently converged parameter
@@ -319,8 +319,8 @@ contains
    !>
    !> @details
    !> **The problem.** Each bulk calculation carries its own potential zero.
-   !> Region A's frozen parameter set implicitly asserts one absolute energy
-   !> scale; region B's asserts another. Freezing both at their independently
+   !> Region A’s frozen parameter set implicitly asserts one absolute energy
+   !> scale; region B’s asserts another. Freezing both at their independently
    !> converged values with no relative shift imposes
    !>
    !>     contact potential == 0
@@ -372,11 +372,11 @@ contains
       if (this%regions%nregion < 1) return
       if (.not. allocated(this%region_shift)) return
 
-      ! With a free Fermi level the anchor is the registry's own choice (the
+      ! With a free Fermi level the anchor is the registry’s own choice (the
       ! first frozen, non-vacuum region -- see gauge_anchor for why both
       ! qualifiers matter). Pinning E_F to a region makes THAT region the
-      ! anchor: the two statements "E_F is region r's Fermi level" and "region r
-      ! carries no alignment shift" are the same statement, since E_F - V_r =
+      ! anchor: the two statements ″E_F is region r’s Fermi level″ and ″region r
+      ! carries no alignment shift″ are the same statement, since E_F - V_r =
       ! E_F^(r). Anchoring anywhere else would double-count the pin.
       ianchor = this%fermi_pinned_region()
       if (ianchor < 1) ianchor = this%regions%gauge_anchor()
@@ -401,8 +401,8 @@ contains
          end if
       end if
 
-      ! Deep probe of each region: dV at the region's extreme site away from
-      ! the interface, the registry generalization of surfpot's dss(1,.) /
+      ! Deep probe of each region: dV at the region’s extreme site away from
+      ! the interface, the registry generalization of surfpot’s dss(1,.) /
       ! dss(nbas,.) pair.
       allocate (probe(this%regions%nregion))
       probe(:) = 0.0d0
@@ -458,9 +458,9 @@ contains
    !> flat direction. That is the maintainer decision recorded in B7 §1.3, and
    !> it is why this returns 0 when the option is unset.
    !>
-   !> Setting it to a region name pins E_F to that region's own converged Fermi
-   !> level instead, which reduces the interface path exactly to today's
-   !> surface behaviour (`fix_fermi = .true.` for calctype 'S'), and is the
+   !> Setting it to a region name pins E_F to that region’s own converged Fermi
+   !> level instead, which reduces the interface path exactly to today’s
+   !> surface behaviour (`fix_fermi = .true.` for calctype ’S’), and is the
    !> correct setting when reproducing `buildsurf` results.
    !>
    !> Returns 0 for free E_F; otherwise the region id. Matching is
@@ -514,7 +514,7 @@ contains
    !> B7.4: deep-A charge-drift diagnostic (B7 §1.3).
    !>
    !> @details
-   !> With a free Fermi level, "deep-A is neutral bulk" is NOT imposed -- it is
+   !> With a free Fermi level, ″deep-A is neutral bulk″ is NOT imposed -- it is
    !> a consequence of the buffer being thick enough. The two unknowns (E_F and
    !> V_B) are determined by two conditions (cluster neutrality and the deep-B
    !> residual), which leaves nothing pinning the deep-A charge directly.
@@ -646,7 +646,7 @@ contains
          if (desc%kind == region_kind_vacuum) return
       end if
 
-      ! Otherwise use the site's valence as a stand-in density of states scale.
+      ! Otherwise use the site’s valence as a stand-in density of states scale.
       ! B7.7 replaces this with the recursion-supplied N(E_F) of the boundary
       ! buffer layer; the weighting rule and its normalization are unchanged by
       ! that substitution.
@@ -656,8 +656,8 @@ contains
       ! block (nbulk+1..ntype) and for a boundary row is simply out of range.
       ! It then returned 0 for BOTH sides, the caller fell into its 50/50
       ! fallback, and vacuum silently received half the compensation charge --
-      ! the exact error B7 §1.5 warns about ("compensation placed there does
-      ! not perturb the work function, it SETS it"). Frozen boundary rows carry
+      ! the exact error B7 §1.5 warns about (″compensation placed there does
+      ! not perturb the work function, it SETS it″). Frozen boundary rows carry
       ! a REFERENCE TYPE instead, which the registry records per site.
       ia = 0
       if (this%regions%nsite == this%lattice%nbas) then
@@ -720,11 +720,11 @@ contains
    !> @brief
    !> B7.1: construct this%regions, the explicit per-site region registry,
    !> from the cluster data surfmat/build_alelay already produced. Reproduces
-   !> today's buildsurf layout (init=6 leading vacuum-side frozen rows,
+   !> today’s buildsurf layout (init=6 leading vacuum-side frozen rows,
    !> nlay active layers, remaining rows bulk-side frozen) exactly, as
    !> documented in B7 §2.10 and verified against charge%surfpot.
    !>
-   !> This does not change surfpot's behaviour or consume the registry from
+   !> This does not change surfpot’s behaviour or consume the registry from
    !> it; it is the registry deliverable of B7.1, kept parallel to the
    !> existing offset arithmetic so the surface regression is unaffected.
    !---------------------------------------------------------------------------
@@ -734,13 +734,13 @@ contains
       integer, dimension(:), allocatable :: reference_type_site
       integer :: i, nrf
 
-      ! this%lattice%chargetrf_type is sized nbas for 'S' (build_surf_full),
-      ! which build_from_buildsurf's reference_type(1:nbas) copy assumes --
+      ! this%lattice%chargetrf_type is sized nbas for ’S’ (build_surf_full),
+      ! which build_from_buildsurf’s reference_type(1:nbas) copy assumes --
       ! but surfmat (and this routine) run unconditionally for EVERY calctype
-      ! that reaches it, including 'L', where chargetrf_type is TYPE-indexed
-      ! (dimension nrec, build_interface_full's convention) and can be smaller
+      ! that reaches it, including ’L’, where chargetrf_type is TYPE-indexed
+      ! (dimension nrec, build_interface_full’s convention) and can be smaller
       ! than nbas. build_interface_registry overwrites this%regions right
-      ! after for 'L', but only if this call doesn't crash first. Expand
+      ! after for ’L’, but only if this call doesn’t crash first. Expand
       ! defensively exactly as build_interface_registry does.
       allocate (reference_type_site(max(this%lattice%nbas, 1)))
       nrf = size(this%lattice%chargetrf_type)
@@ -767,9 +767,9 @@ contains
    ! DESCRIPTION:
    !> @brief
    !> B7.5: construct this%regions as a genuinely two-sided registry (region
-   !> A, active zone, region B) for the calctype='L' (layered/interface)
+   !> A, active zone, region B) for the calctype=’L’ (layered/interface)
    !> path, from the same 2D cluster data (qz, wssurf, nbas) `surfmat`
-   !> already produces -- the cluster builder for 'L' is geometry-general
+   !> already produces -- the cluster builder for ’L’ is geometry-general
    !> (B7 §2.10: madl2d runs off arbitrary QPPZ pairs) so no new Madelung
    !> setup is needed, only a different region partition of the same rows.
    !>
@@ -784,7 +784,7 @@ contains
 
       ! Geometry-derived default: CENTRE the active zone in the Madelung stack.
       !
-      ! The active layers' deviation charge lands on rows nlay_a+1 .. nlay_a+nlay
+      ! The active layers’ deviation charge lands on rows nlay_a+1 .. nlay_a+nlay
       ! (interfacepot step 1). The two deep probes are the extreme rows of the
       ! frozen regions, so an off-centre split puts one probe adjacent to the
       ! charge and the other ~nbas rows away -- and the alignment solver then
@@ -825,10 +825,10 @@ contains
       ! Per-site reference type, dimension nbas. Each row gets the frozen type
       ! it reverts to, which differs by region:
       !
-      !   rows 1..nlay_a          region A's own frozen types (1..nbulk_a)
+      !   rows 1..nlay_a          region A’s own frozen types (1..nbulk_a)
       !   active rows             lattice%chargetrf_type, the per-active-type
       !                           reference build_interface_full assigned
-      !   rows ..nbas             region B's frozen types (nbulk_a+1..nbulk)
+      !   rows ..nbas             region B’s frozen types (nbulk_a+1..nbulk)
       !
       ! The frozen rows matter beyond bookkeeping: `boundary_nef` reads this to
       ! weight the compensation split by side-resolved N(E_F) (B7 §1.5), so a

@@ -14,7 +14,7 @@
 !> recursion route fills in `recursion_transport::compute_moments_stochastic`,
 !> so `conductivity::calculate_conductivity_tensor` runs UNCHANGED -- filling the
 !> canonical moment array IS the route-agnosticism, exactly as `fill_green` does
-!> for the Green's-function consumers.
+!> for the Green’s-function consumers.
 !>
 !> The moment is computed EXACTLY from the k-space eigenpairs (no stochastic
 !> trace estimator, no Chebyshev truncation on the operator): in the eigenbasis
@@ -27,15 +27,15 @@
 !> residual max|mu_exact - mu_rec| is the direct KPM error bound (B5.1 acceptance).
 !>
 !> Scope / preconditions (B5.1):
-!>   * cond_type = 'charge' and cond_calctype = 'per_type'. The other velocity
+!>   * cond_type = ’charge’ and cond_calctype = ’per_type’. The other velocity
 !>     flavors (spin/orbital/torque) and the random-vector stochastic reference
-!>     are the recursion route's domain; the exact k-space generator resolves
+!>     are the recursion route’s domain; the exact k-space generator resolves
 !>     moments per atom type from the on-site cell block.
 !>   * first-order k-space velocity v_a(k) = sum_R v_a(R) e^{i k.R} (the strict
 !>     Lehmann / S=I regime backend E lives in); consistent with hoh=false.
 !>   * full, unreduced, undistributed BZ mesh (each rank holds all k), inherited
 !>     from backend E; k-parallel/symmetry reduction land with B4.
-!>   * a, b are the recursion route's Chebyshev window (passed in) so the moments
+!>   * a, b are the recursion route’s Chebyshev window (passed in) so the moments
 !>     scale identically to the ones `gamma_nm` weights.
 !------------------------------------------------------------------------------
 submodule(reciprocal_mod) reciprocal_moments
@@ -47,14 +47,14 @@ contains
    !> @brief Fill mu_nm_stochastic from the k-space eigenpairs (exact moments).
    !> @details Builds and diagonalizes H(k) on the full BZ mesh (if not already
    !>          done), forms the first-order k-space velocity operators from the
-   !>          recursion route's real-space velocity blocks, and fills the on-site
+   !>          recursion route’s real-space velocity blocks, and fills the on-site
    !>          double-Chebyshev moment block per atom type via
    !>          `moment_onsite_block`. The output array is allocated here with the
    !>          SAME shape `compute_moments_stochastic` uses, so the conductivity
    !>          consumer is untouched.
    !> @param[inout] this Reciprocal object (H(k) machinery, k-mesh, velocities).
    !> @param[out]   mu   Allocated (nb,nb,cond_ll,cond_ll,ntype) moment array.
-   !> @param[in]    a    Chebyshev window scale (recursion route's resolve_chebyshev_window).
+   !> @param[in]    a    Chebyshev window scale (recursion route’s resolve_chebyshev_window).
    !> @param[in]    b    Chebyshev window shift.
    module subroutine fill_moments(this, mu, a, b)
       class(reciprocal), intent(inout) :: this
@@ -96,7 +96,7 @@ contains
       nmat = size(this%eigenvectors, 1)
 
       ! --- First-order k-space velocity operators v_{a,b}(k) = FT[v_{a,b}(R)]. ---
-      ! The recursion route's real-space charge velocity blocks, Fourier-summed
+      ! The recursion route’s real-space charge velocity blocks, Fourier-summed
       ! with the SAME neighbor map/phase as H(k) = FT[ee(R)].
       call this%hamiltonian%build_realspace_velocity_operators()
       allocate (va_k(nmat, nmat, nk), vb_k(nmat, nmat, nk))
