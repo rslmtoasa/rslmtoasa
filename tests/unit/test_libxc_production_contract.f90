@@ -9,7 +9,13 @@ program test_libxc_production_contract
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
-   use xc_mod, only: xc, LIBXC_DENSITY_FLOOR, LIBXC_FAMILY_LDA, LIBXC_FAMILY_GGA
+   use xc_mod, only: xc, LIBXC_DENSITY_FLOOR, LIBXC_FAMILY_LDA, LIBXC_FAMILY_GGA, &
+      LIBXC_FAMILY_MGGA, LIBXC_FAMILY_LCA, LIBXC_FAMILY_OEP, LIBXC_FAMILY_HYB_GGA, &
+      LIBXC_FAMILY_HYB_MGGA, LIBXC_FAMILY_HYB_LDA, LIBXC_KIND_EXCHANGE, &
+      LIBXC_KIND_CORRELATION, LIBXC_KIND_EXCHANGE_CORRELATION, LIBXC_KIND_KINETIC, &
+      LIBXC_FLAG_HAVE_EXC, LIBXC_FLAG_HAVE_VXC, LIBXC_FLAG_HAVE_FXC, LIBXC_FLAG_HAVE_KXC, &
+      LIBXC_FLAG_HAVE_LXC, LIBXC_FLAG_1D, LIBXC_FLAG_2D, LIBXC_FLAG_3D, &
+      LIBXC_FLAG_DEVELOPMENT, LIBXC_FLAG_NEEDS_LAPLACIAN, LIBXC_FLAG_VV10
    use xc_radial_mod, only: radgra, radial_flux_divergence
    use xc_f03_lib_m
    implicit none
@@ -21,6 +27,7 @@ program test_libxc_production_contract
 
    failed = .false.
    call g_logger%init()
+   call check_libxc_symbol_bindings()
    call check_predefined_bundles()
    call check_direct_native_namespace()
    call check_lda_grid_and_exchange_oracle()
@@ -37,6 +44,36 @@ program test_libxc_production_contract
    write (*, '(a)') 'RESULT: PASS'
 
 contains
+
+   subroutine check_libxc_symbol_bindings()
+      ! The xc_mod names are compatibility aliases, not independently
+      ! maintained copies, in a libXC-enabled build.
+      call require(LIBXC_FAMILY_LDA == xc_family_lda, 'LDA family alias follows libXC')
+      call require(LIBXC_FAMILY_GGA == xc_family_gga, 'GGA family alias follows libXC')
+      call require(LIBXC_FAMILY_MGGA == xc_family_mgga, 'MGGA family alias follows libXC')
+      call require(LIBXC_FAMILY_LCA == xc_family_lca, 'LCA family alias follows libXC')
+      call require(LIBXC_FAMILY_OEP == xc_family_oep, 'OEP family alias follows libXC')
+      call require(LIBXC_FAMILY_HYB_GGA == xc_family_hyb_gga, 'HYB_GGA family alias follows libXC')
+      call require(LIBXC_FAMILY_HYB_MGGA == xc_family_hyb_mgga, 'HYB_MGGA family alias follows libXC')
+      call require(LIBXC_FAMILY_HYB_LDA == xc_family_hyb_lda, 'HYB_LDA family alias follows libXC')
+      call require(LIBXC_KIND_EXCHANGE == xc_exchange, 'exchange kind alias follows libXC')
+      call require(LIBXC_KIND_CORRELATION == xc_correlation, 'correlation kind alias follows libXC')
+      call require(LIBXC_KIND_EXCHANGE_CORRELATION == xc_exchange_correlation, &
+         'combined kind alias follows libXC')
+      call require(LIBXC_KIND_KINETIC == xc_kinetic, 'kinetic kind alias follows libXC')
+      call require(LIBXC_FLAG_HAVE_EXC == xc_flags_have_exc, 'EXC flag alias follows libXC')
+      call require(LIBXC_FLAG_HAVE_VXC == xc_flags_have_vxc, 'VXC flag alias follows libXC')
+      call require(LIBXC_FLAG_HAVE_FXC == xc_flags_have_fxc, 'FXC flag alias follows libXC')
+      call require(LIBXC_FLAG_HAVE_KXC == xc_flags_have_kxc, 'KXC flag alias follows libXC')
+      call require(LIBXC_FLAG_HAVE_LXC == xc_flags_have_lxc, 'LXC flag alias follows libXC')
+      call require(LIBXC_FLAG_1D == xc_flags_1d, '1D flag alias follows libXC')
+      call require(LIBXC_FLAG_2D == xc_flags_2d, '2D flag alias follows libXC')
+      call require(LIBXC_FLAG_3D == xc_flags_3d, '3D flag alias follows libXC')
+      call require(LIBXC_FLAG_DEVELOPMENT == xc_flags_development, 'development flag alias follows libXC')
+      call require(LIBXC_FLAG_NEEDS_LAPLACIAN == xc_flags_needs_laplacian, &
+         'Laplacian flag alias follows libXC')
+      call require(LIBXC_FLAG_VV10 == xc_flags_vv10, 'VV10 flag alias follows libXC')
+   end subroutine check_libxc_symbol_bindings
 
    subroutine check_predefined_bundles()
       call check_predefined_bundle(101, [1, 17], LIBXC_FAMILY_LDA)

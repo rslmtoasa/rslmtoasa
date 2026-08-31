@@ -14,11 +14,13 @@ program test_xc_selector_semantics
    call check_legacy(3, 'Barth-Hedin-Janak', 'APPROXIMATE_ANALOGUE')
    call check_legacy(4, 'Vosko-Wilk-Nusair', 'REFERENCE_EQUIVALENT')
    call check_legacy(5, 'Perdew-Burke-Enzerhof 96 LDA', 'REFERENCE_EQUIVALENT')
+   call check_legacy(7, 'Perdew-Zunger', 'REFERENCE_EQUIVALENT_UNPOLARIZED')
    call check_legacy(8, 'Perdew-Burke-Enzerhof 96 GGA', 'REFERENCE_EQUIVALENT')
    call check_legacy(11, 'Barth-Hedin ASW variant', 'APPROXIMATE_ANALOGUE')
 
 #ifdef HAVE_LIBXC
    call check_libxc(101, [1, 17], 'von Barth & Hedin', 'REFERENCE_EQUIVALENT')
+   call check_libxc(104, [1, 9], 'Perdew & Zunger', 'REFERENCE_EQUIVALENT_UNPOLARIZED')
    call check_libxc(105, [1, 12], 'Perdew & Wang', 'REFERENCE_EQUIVALENT')
    call check_libxc(108, [101, 130], 'Perdew, Burke & Ernzerhof', 'REFERENCE_EQUIVALENT')
    ! A direct request remains exactly one native ID; it is never auto-paired.

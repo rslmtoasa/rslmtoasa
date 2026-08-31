@@ -174,8 +174,8 @@ spin-density representation, including the `control%nsp=1` scalar-relativistic
 collinear mode. The explicit local count is named/documented as
 `n_radial_spin_channels`; it is not inferred from the global mode integer.
 
-For noncollinear calculations, the local XC treatment is not redesigned in
-this work. It uses the local eigenchannels of the spin-density matrix,
+For noncollinear calculations, the established production design uses the
+local eigenchannels of the spin-density matrix,
 
 \[
 n_\pm(r)=\frac{1}{2}\left[n(r)\pm|\mathbf m(r)|\right],
@@ -183,7 +183,18 @@ n_\pm(r)=\frac{1}{2}\left[n(r)\pm|\mathbf m(r)|\right],
 
 so a noncollinear global mode still supplies two local channels to LSDA/GGA.
 Two local XC channels do not imply global collinearity, and `nsp > 2` never
-means four XC channels.
+means four XC channels. XCF-08 verifies that these remain two local XC
+channels independent of the global `control%nsp` mode and removes the old
+global/local `nsp` confusion. It is not a complete new end-to-end validation
+of the reconstruction
+
+\[
+\rho_{\alpha\beta}\rightarrow n_\pm\rightarrow V^\pm_{\rm xc}
+\rightarrow V^{\rm xc}_{\alpha\beta}
+\]
+
+for arbitrary noncollinear densities; that remains part of the broader
+noncollinear magnetic validation suite.
 
 ## 7. Legacy TXC=6 and TXC=7
 
@@ -204,7 +215,10 @@ permits magnetism. An appreciably unequal density terminates with a diagnostic
 directing the user to a spin-capable functional or an unpolarized calculation.
 This prevents a global mode value from being mistaken for the current
 physical polarization and prevents silently using `V_up=V_down` for a
-polarized system.
+polarized system. The comparison is an absolute channel difference,
+`abs(RHO1-RHO2)`, against `1e-10*max(abs(RHO),1e-20)`: the supplied `RHO` is
+the total-density normalization and the second term only avoids a zero-scale
+comparison.
 
 ## 8. Tests and evidence
 
@@ -219,6 +233,10 @@ The focused XCF-08 coverage is:
   `control%nsp=1`;
 * `UnitXcLegacyPolarizedRequiresFatal` and its TXC=7 invocation:
   unequal-density rejection for TXC=6/7 with `control%nsp=1`;
+* `UnitXcLegacyPolarizationTolerance`: exact equality and `0.1*epsilon_spin`
+  and `0.9*epsilon_spin` noise are accepted, while `1.1*epsilon_spin`,
+  `10*epsilon_spin`, and a clearly polarized density are rejected for both
+  TXC=6 and TXC=7;
 * `UnitXcCapabilityRequiresFatal`, `UnitXcKineticRequiresFatal`,
   `UnitXcWrongDimensionalityRequiresFatal`, and
   `UnitXcMissingVxcRequiresFatal`: representative capability failures for
@@ -226,6 +244,11 @@ The focused XCF-08 coverage is:
 * `UnitLibxcProductionContract` and the established GGA/LDA tests: metadata
   lifecycle, exact component accumulation, units, radial flux, endpoint and
   origin behavior, and prior numerical formulas.
+
+For arbitrary valid user-defined native lists, the implementation preserves
+the supplied ordering and components, emits custom-composition provenance,
+and only warns for scientifically unusual combinations. Architecturally
+invalid components remain fatal.
 
 The existing validated numerical routes remain unchanged for previously valid
 legacy and libXC selections. Material-specific magnetic campaigns are outside

@@ -1,4 +1,4 @@
-# XCF-07 — General XC correctness closeout and production acceptance
+# XCF-09 — General XC correctness closeout and semantic hardening
 
 ## Decision
 
@@ -16,6 +16,17 @@ No failed or unexplained result remains in the acceptance matrix. Converged
 fcc-Fe physics and the GBT/Phase-II campaign are intentionally deferred; the
 bounded magnetic-SCF findings remain documented in
 [`XC_MAGNETIC_SCF_CLOSEOUT.md`](XC_MAGNETIC_SCF_CLOSEOUT.md).
+
+The general RS-LMTO XC layer is closed for the supported scope: legacy
+LDA/GGA paths at their documented validation level, and compatible 3D libXC
+LDA/GGA components and bundles providing the required EXC/VXC capabilities.
+This does not mean that every libXC functional is supported: the scope is
+limited to compatible 3D LDA/GGA components whose required ingredients and
+derivative capabilities are available to the ASA radial path.
+Unsupported functional families or ingredients fail explicitly. Scientifically
+unusual but mathematically valid libXC compositions are preserved exactly and
+reported to the user. Material-specific magnetic behavior is not part of this
+closeout.
 
 ## Interruption recovery
 
@@ -90,22 +101,53 @@ The validated predefined mappings are:
 | 101 | `[1,17]` | LDA X + VBH C | reference equivalent to TXC=1 |
 | 102 | `[1,24]` | LDA X + Gombas C | approximate analogue |
 | 103 | `[1]` | LDA X | approximate analogue |
-| 104 | `[1,9]` | LDA X + PZ C | reference equivalent to TXC=7 |
+| 104 | `[1,9]` | LDA X + PZ C | `REFERENCE_EQUIVALENT_UNPOLARIZED` to TXC=7 |
 | 105 | `[1,12]` | LDA X + PW C | reference equivalent to TXC=5 |
 | 106 | `[1,7]` | LDA X + VWN C | reference equivalent to TXC=4 |
 | 107 | `[1,5]` | LDA X + GL C | approximate analogue |
 | 108 | `[101,130]` | PBE X + PBE C | reference equivalent to TXC=8 |
 | 109 | `[117,130]` | RPBE X + PBE C | approximate analogue |
 
+The historical selectors do not all have the same evidence depth:
+
+| Functional/path | Status |
+| --- | --- |
+| TXC=1 Barth–Hedin | VALIDATED / REPAIRED |
+| TXC=2 Slater/X-alpha | RETAINED / analytic exchange-covered where applicable |
+| TXC=3 BHJ | RETAINED / historical variant |
+| TXC=4 VWN | CHARACTERIZED / VALIDATED TO HISTORICAL SCOPE |
+| TXC=5 PW/PBE-LDA | CHARACTERIZED / VALIDATED TO HISTORICAL SCOPE |
+| TXC=6 Wigner | LIMITED: UNPOLARIZED ONLY |
+| TXC=7 PZ | LIMITED: UNPOLARIZED ONLY |
+| TXC=8 PBE GGA | VALIDATED / REPAIRED |
+| TXC=9 LAG | LEGACY RETAINED / NOT COMPREHENSIVELY CERTIFIED |
+
+The rows above describe the historical RS-LMTO paths. The predefined
+libXC bundles TXC=101–109 are separate explicit native-ID lists; arbitrary
+compatible native libXC compositions are a third category and are preserved
+and reported exactly as requested, without being presented as predefined
+bundle validation.
+
 Legacy-to-libXC labels describe controlled reference comparisons. They do not
-claim bitwise identity. Direct native requests select exactly one requested
-component; no exchange/correlation partner is inferred.
+claim bitwise identity. TXC=104 is the libXC reference counterpart to the
+historical TXC=7 parametrization only in the unpolarized limit, subject to the
+established normalization and unit conventions; legacy TXC=7 does not provide
+a spin-polarized implementation. Direct native requests select exactly one
+requested component; no exchange/correlation partner is inferred.
 
 XCF-08 also makes the global/local spin distinction explicit. `control%nsp`
 selects the global collinear/noncollinear and SR/FR(SOC) mode; it is not the
 number of XC channels. The atomic radial/XC path uses two local channels even
 when `control%nsp=1`. TXC=6/7 now inspect the actual density at `XCPOT`: equal
 channels are accepted, while an appreciably polarized density is fatal.
+
+The production noncollinear XC path is designed around the local eigenchannels
+`n_±=(n±|m|)/2`. XCF-08 validates that these remain two local XC channels
+independent of the global `control%nsp` mode and validates the global/local
+semantic separation. It does not constitute a complete new end-to-end test of
+`rho_(alpha beta) -> n_± -> V_xc^± -> V_xc_(alpha beta)` for arbitrary
+noncollinear densities; that remains part of the broader noncollinear magnetic
+validation suite.
 
 ## Density, channel, unit, and radial conventions
 
@@ -162,6 +204,7 @@ gradient residuals are `8.45e-10` (BH), `9.48e-10` (PW), and `4.48e-9`
 | `UnitPbeGgaComparison` TXC=8 vs TXC=108 | PASS; energy-density difference `8.88e-16`, scalar-potential difference `5.06e-6` Ry, magnetic-potential difference `5.30e-6` Ry |
 | `UnitVxc0spGgaOrigin` | PASS for polarized and unpolarized production origin handoffs |
 | `UnitLibxcProductionContract` | PASS; bundles, direct IDs, metadata, lifecycle, units, mixed components, radial flux, floor, ζ matrix, and zero tail |
+| `UnitXcLegacyPolarizationTolerance` | PASS; exact equality, `0.1 epsilon_spin`, and `0.9 epsilon_spin` accepted; `1.1 epsilon_spin`, `10 epsilon_spin`, and clear polarization rejected for TXC=6 and TXC=7 |
 
 The production-contract ζ matrix explicitly covers `0, .5, .9, .99, 1`, a
 positive sub-floor total density, and exact zero density.
@@ -182,6 +225,52 @@ Results: libXC-enabled `12/12` passed; no-libXC `7/7` passed. The expected
 failure tests prove that unknown legacy selectors, unsupported native MGGA
 families, and libXC-only selectors in a no-libXC executable terminate rather
 than silently selecting a legacy path.
+
+Those earlier counts covered the pre-XCF-09 matrix. The authoritative XCF-09
+execution evidence is below; expected-fatal tests are counted as passed by
+CTest through their `WILL_FAIL` properties.
+
+### XCF-08/XCF-09 execution evidence
+
+Both builds used GNU Fortran 13.3.0, OpenMP enabled, MPI and CUDA disabled,
+and standalone unit tests enabled:
+
+```bash
+cmake -S . -B build-xcf06-debug -DENABLE_LIBXC=ON -DRUN_UNIT_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B build-xcf06-no-libxc -DENABLE_LIBXC=OFF -DRUN_UNIT_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+```
+
+The enabled build found libXC/libXCF03 version 5.2.3 from `/usr/include` and
+`/usr/lib/x86_64-linux-gnu`. The focused semantic/capability command was:
+
+```bash
+ctest --test-dir build-xcf06-debug --output-on-failure -j2 -R '^(UnitControlSpinSemantics|UnitXcSelectorSemantics|UnitXcCompositionSemantics|UnitXcLegacyUnpolarizedDensity|UnitXcLegacyPolarizedRequiresFatal|UnitXcLegacyPolarizedPzRequiresFatal|UnitLibxcProductionContract|UnitXcUnsupportedFamilyRequiresFatal|UnitXcCapabilityRequiresFatal|UnitXcKineticRequiresFatal|UnitXcWrongDimensionalityRequiresFatal|UnitXcMissingVxcRequiresFatal|UnitXcLegacyPolarizationTolerance(_txc[67]_case[0-5])?)$'
+```
+
+Result: `25` tests run, `25` passed, `0` failed. This includes the requested
+XCF-08 semantic/capability tests, the separate TXC=7 fatal variant, and the
+13 tolerance registrations (default accepted-case sweep plus six cases for
+each of TXC=6 and TXC=7).
+
+The corresponding no-libXC command was:
+
+```bash
+ctest --test-dir build-xcf06-no-libxc --output-on-failure -j2 -R '^(UnitControlSpinSemantics|UnitXcSelectorSemantics|UnitXcLegacyUnpolarizedDensity|UnitXcLegacyPolarizedRequiresFatal|UnitXcLegacyPolarizedPzRequiresFatal|UnitXcLegacyPolarizationTolerance(_txc[67]_case[0-5])?|UnitXcSelectorRequiresLibxc|UnitXcUnknownSelectorRequiresFatal|UnitXcLdaLegacyKernel|UnitRadialGga|UnitLegacyPbeGga|UnitVxc0spGgaOrigin)$'
+```
+
+Result: `24` tests run, `24` passed, `0` failed. The libXC-specific
+composition, metadata, and native capability tests are intentionally absent
+from this configuration; the no-libXC selector rejection and all applicable
+legacy/tolerance sentinels are executed.
+
+The broader enabled-build XC sentinel command was:
+
+```bash
+ctest --test-dir build-xcf06-debug --output-on-failure -j2 -R '^(UnitXcLdaLegacyKernel|UnitLibxcXcBaseline|UnitXcLdaReconciliation|UnitRadialGga|UnitLegacyPbeGga|UnitVxc0spGgaOrigin|UnitLibxcGgaRadial|UnitPbeGgaComparison|UnitLibxcProductionContract|UnitXcSelectorSemantics|UnitXcUnknownSelectorRequiresFatal|UnitXcUnsupportedFamilyRequiresFatal|UnitXcKineticRequiresFatal|UnitXcWrongDimensionalityRequiresFatal|UnitXcMissingVxcRequiresFatal|UnitXcCompositionSemantics|UnitControlSpinSemantics|UnitXcLegacyUnpolarizedDensity|UnitXcLegacyPolarizedRequiresFatal|UnitXcLegacyPolarizedPzRequiresFatal|UnitXcLegacyPolarizationTolerance(_txc[67]_case[0-5])?)$'
+```
+
+Result: `33` tests run, `33` passed, `0` failed. Previously valid XC
+selections remained numerically unchanged in this sentinel run.
 
 ### Full production smoke
 
@@ -206,7 +295,9 @@ The following are deliberately not acceptance blockers for this closeout:
 * GBT validation and noncollinear extensions;
 * unsupported libXC meta-GGA, hybrid, orbital-dependent, and
   long-range-corrected families; and
-* unvalidated mappings beyond the explicit bundles listed above.
+* unvalidated legacy-to-libXC mapping claims beyond the explicit bundles;
+  compatible arbitrary native compositions remain supported subject to the
+  capability contract.
 
 No threshold retuning, material-specific XC tuning, implicit selector pairing,
 or fallback behavior was introduced.

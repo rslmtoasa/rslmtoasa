@@ -79,7 +79,7 @@ mapping quality retained in the selector metadata.
 | 101 | `[1,17]` | Slater exchange + von Barth & Hedin | `REFERENCE_EQUIVALENT` |
 | 102 | `[1,24]` | Slater exchange + Gombas | `APPROXIMATE_ANALOGUE` |
 | 103 | `[1]` | Slater exchange | `APPROXIMATE_ANALOGUE` |
-| 104 | `[1,9]` | Slater exchange + Perdew & Zunger | `REFERENCE_EQUIVALENT` |
+| 104 | `[1,9]` | Slater exchange + Perdew & Zunger | `REFERENCE_EQUIVALENT_UNPOLARIZED` |
 | 105 | `[1,12]` | Slater exchange + Perdew & Wang | `REFERENCE_EQUIVALENT` |
 | 106 | `[1,7]` | Slater exchange + Vosko, Wilk & Nusair (VWN5) | `REFERENCE_EQUIVALENT` |
 | 107 | `[1,5]` | Slater exchange + Gunnarson & Lundqvist | `APPROXIMATE_ANALOGUE` |
@@ -88,9 +88,13 @@ mapping quality retained in the selector metadata.
 
 `REFERENCE_EQUIVALENT` means that the named parametrization is a controlled
 comparison reference; it does not assert bitwise identity with a legacy
-kernel. `APPROXIMATE_ANALOGUE` explicitly marks a related but non-identical
-choice.  In particular, bundles do not imply that historical BH, BHJ, ASW,
-or legacy GGA formulas have been replaced.
+kernel. `REFERENCE_EQUIVALENT_UNPOLARIZED` has the additional qualification
+that the historical counterpart is unpolarized-only: TXC=104 is the libXC
+reference counterpart to historical TXC=7 only in the unpolarized limit,
+subject to the established normalization and unit conventions.
+`APPROXIMATE_ANALOGUE` explicitly marks a related but non-identical choice.
+In particular, bundles do not imply that historical BH, BHJ, ASW, or legacy
+GGA formulas have been replaced.
 
 ## Spin and density conventions
 
@@ -140,6 +144,11 @@ unpolarized-only. Equal local channels are accepted to the runtime tolerance;
 an appreciable `rho_up-rho_down` is fatal with a spin-capable-functional
 diagnostic. They are never silently evaluated with equal potentials for a
 polarized density.
+
+For arbitrary valid user-defined lists, initialization reports
+`XC mode: custom libXC composition` and states that components are summed
+exactly as requested. Unusual but compatible lists remain warnings, while
+architecturally incompatible lists remain fatal.
 
 ## Energy and potential units
 

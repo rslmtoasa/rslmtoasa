@@ -28,7 +28,14 @@ module xc_mod
    use xc_radial_mod, only: radial_flux_divergence
    use iso_c_binding, only: c_size_t
 #ifdef HAVE_LIBXC
-   use xc_f03_lib_m
+   use xc_f03_lib_m, only : xc_correlation, xc_exchange, xc_exchange_correlation, xc_kinetic, &
+      xc_family_gga, xc_family_hyb_gga, xc_family_hyb_lda, xc_family_hyb_mgga, xc_family_lca, &
+      xc_family_lda, xc_family_mgga, xc_family_oep, xc_flags_1d, xc_flags_2d, xc_flags_3d, &
+      xc_flags_development, xc_flags_have_exc, xc_flags_have_fxc, xc_flags_have_kxc, &
+      xc_flags_have_lxc, xc_flags_have_vxc, xc_flags_needs_laplacian, xc_flags_vv10, &
+      xc_f03_family_from_id, xc_f03_func_end, xc_f03_func_get_info, xc_f03_func_info_get_family, &
+      xc_f03_func_info_get_flags, xc_f03_func_info_get_kind, xc_f03_func_info_get_name, &
+      xc_f03_func_init, xc_f03_func_t, xc_f03_func_info_t, xc_f03_gga_exc_vxc, xc_f03_lda_exc_vxc
 #endif
    implicit none
    private
@@ -45,9 +52,37 @@ module xc_mod
    !   -----------------
    !   native libXC functional IDs only; these are never RS-LMTO TXC values.
 
-   ! libXC's family values are bit flags in xc.h.  Keep the values local to
-   ! the interface so the family contract remains explicit even in a build
-   ! without libXC headers/modules.
+   ! Keep the existing project-facing names for callers and tests. In a
+   ! libXC-enabled build they are bound directly to the installed Fortran
+   ! module constants. The fallback values are needed only to keep the
+   ! no-libXC build self-contained.
+#ifdef HAVE_LIBXC
+   integer, parameter, public :: LIBXC_FAMILY_LDA = xc_family_lda
+   integer, parameter, public :: LIBXC_FAMILY_GGA = xc_family_gga
+   integer, parameter, public :: LIBXC_FAMILY_MGGA = xc_family_mgga
+   integer, parameter, public :: LIBXC_FAMILY_LCA = xc_family_lca
+   integer, parameter, public :: LIBXC_FAMILY_OEP = xc_family_oep
+   integer, parameter, public :: LIBXC_FAMILY_HYB_GGA = xc_family_hyb_gga
+   integer, parameter, public :: LIBXC_FAMILY_HYB_MGGA = xc_family_hyb_mgga
+   integer, parameter, public :: LIBXC_FAMILY_HYB_LDA = xc_family_hyb_lda
+
+   integer, parameter, public :: LIBXC_KIND_EXCHANGE = xc_exchange
+   integer, parameter, public :: LIBXC_KIND_CORRELATION = xc_correlation
+   integer, parameter, public :: LIBXC_KIND_EXCHANGE_CORRELATION = xc_exchange_correlation
+   integer, parameter, public :: LIBXC_KIND_KINETIC = xc_kinetic
+
+   integer, parameter, public :: LIBXC_FLAG_HAVE_EXC = xc_flags_have_exc
+   integer, parameter, public :: LIBXC_FLAG_HAVE_VXC = xc_flags_have_vxc
+   integer, parameter, public :: LIBXC_FLAG_HAVE_FXC = xc_flags_have_fxc
+   integer, parameter, public :: LIBXC_FLAG_HAVE_KXC = xc_flags_have_kxc
+   integer, parameter, public :: LIBXC_FLAG_HAVE_LXC = xc_flags_have_lxc
+   integer, parameter, public :: LIBXC_FLAG_1D = xc_flags_1d
+   integer, parameter, public :: LIBXC_FLAG_2D = xc_flags_2d
+   integer, parameter, public :: LIBXC_FLAG_3D = xc_flags_3d
+   integer, parameter, public :: LIBXC_FLAG_DEVELOPMENT = xc_flags_development
+   integer, parameter, public :: LIBXC_FLAG_NEEDS_LAPLACIAN = xc_flags_needs_laplacian
+   integer, parameter, public :: LIBXC_FLAG_VV10 = xc_flags_vv10
+#else
    integer, parameter, public :: LIBXC_FAMILY_LDA = 1
    integer, parameter, public :: LIBXC_FAMILY_GGA = 2
    integer, parameter, public :: LIBXC_FAMILY_MGGA = 4
@@ -73,6 +108,7 @@ module xc_mod
    integer, parameter, public :: LIBXC_FLAG_DEVELOPMENT = 16384
    integer, parameter, public :: LIBXC_FLAG_NEEDS_LAPLACIAN = 32768
    integer, parameter, public :: LIBXC_FLAG_VV10 = 1024
+#endif
 
    ! This is a libXC input regularization only.  It is never applied to the
    ! RS-LMTO density arrays or to radial quadratures.
@@ -294,7 +330,7 @@ contains
          !
          obj%TXCH = 'P-Z'
          obj%functional_name = 'Perdew-Zunger'
-         obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+         obj%mapping_quality = 'REFERENCE_EQUIVALENT_UNPOLARIZED'
          ! This legacy implementation is the unpolarized Perdew-Zunger
          ! formula.  Guard it against an actually polarized density in XCPOT.
          obj%supports_spin_polarized_density = .false.
@@ -337,7 +373,7 @@ contains
             obj%mapping_quality = 'APPROXIMATE_ANALOGUE'
          case (104)
             obj%functional_name = 'LDA exchange + Perdew-Zunger correlation'
-            obj%mapping_quality = 'REFERENCE_EQUIVALENT'
+            obj%mapping_quality = 'REFERENCE_EQUIVALENT_UNPOLARIZED'
          case (105)
             obj%functional_name = 'LDA exchange + Perdew-Wang correlation'
             obj%mapping_quality = 'REFERENCE_EQUIVALENT'
@@ -440,6 +476,9 @@ contains
       !
       !
       if (.not. this%supports_spin_polarized_density) then
+         ! Compare the absolute local-channel difference with a relative
+         ! tolerance scaled by the supplied total density. TOLDD is only a
+         ! zero-density scale floor; no density is divided by directly.
          if (ABS(RHO1 - RHO2) > LEGACY_UNPOLARIZED_REL_TOL*MAX(ABS(RHO), TOLDD)) then
             call g_logger%fatal('TXC='//int2str(this%txc)//' ('//trim(this%functional_name)//') implements only an '// &
                                 'unpolarized legacy kernel, but a spin-polarized density was supplied. '// &
@@ -1554,7 +1593,7 @@ contains
       call g_logger%info('XC selector: TXC='//int2str(this%txc), __FILE__, __LINE__)
       call g_logger%info('XC backend: libXC', __FILE__, __LINE__)
       if (this%libxc_explicit_composition) then
-         call g_logger%info('XC mode: explicit native libXC composition', __FILE__, __LINE__)
+         call g_logger%info('XC mode: custom libXC composition', __FILE__, __LINE__)
       else if (this%is_predefined_bundle()) then
          call g_logger%info('XC mode: predefined libXC XC bundle', __FILE__, __LINE__)
       else
@@ -1572,6 +1611,10 @@ contains
       call g_logger%info('XC evaluation route: '//trim(this%route_description()), __FILE__, __LINE__)
       call g_logger%info('XC mapping quality: '//trim(this%mapping_quality), __FILE__, __LINE__)
       call g_logger%info('XC functional IDs: '//trim(functional_ids), __FILE__, __LINE__)
+      if (this%libxc_explicit_composition) then
+         call g_logger%info('INFO: This is a user-defined libXC composition. '// &
+                            'Components will be summed exactly as requested.', __FILE__, __LINE__)
+      endif
       if (this%libxc_n_exchange == 0 .and. this%libxc_n_xc_combined == 0) then
          this%libxc_composition_status = 'WARNING'
          call g_logger%warning('XC composition is correlation-only; calculation proceeds exactly as requested and no exchange partner is added.', &
@@ -1660,6 +1703,7 @@ contains
       is_predefined = .false.
       expected = 0
       expected_size = 0
+      if (this%libxc_explicit_composition) return
       if (.not. allocated(this%libxc_func_id)) return
       select case (this%txc)
       case (101); expected_size = 2; expected = [1, 17]

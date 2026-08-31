@@ -47,6 +47,17 @@ program test_xc_composition_semantics
    call require(functional%libxc_n_exchange == 0 .and. functional%libxc_n_correlation == 1, &
       'direct correlation composition classification')
 
+   ! A valid, ordinary user-defined composition gets explicit provenance even
+   ! when it needs no scientific warning. It is not relabeled as a predefined
+   ! bundle merely because its component list happens to match one.
+   ctl%txc = 1001
+   functional = xc(ctl)
+   call functional%set_libxc_component_ids([101, 130])
+   call require(functional%libxc_explicit_composition .and. .not. functional%is_predefined_bundle(), &
+      'ordinary custom composition retains custom provenance')
+   call require(trim(functional%libxc_composition_status) == 'OK', &
+      'ordinary custom composition does not emit an unconventional warning')
+
    ! An explicitly supplied mixed composition is accepted, regardless of
    ! component ordering, and is routed by the complete list.
    ctl%txc = 1001

@@ -46,7 +46,7 @@ active `libxc_func_id(:)` array for a legacy selector.
 | 4 | legacy | Vosko–Wilk–Nusair | `[1,7]` | `REFERENCE_EQUIVALENT` | `XC_LDA_X + XC_LDA_C_VWN` reference |
 | 5 | legacy | Perdew–Burke–Ernzerhof 96 LDA | `[1,12]` | `REFERENCE_EQUIVALENT` | `XC_LDA_X + XC_LDA_C_PW` reference |
 | 6 | legacy | Wigner exchange | — | `NO_EQUIVALENT` | No validated ASA-equivalent libXC mapping is selected |
-| 7 | legacy | Perdew–Zunger | `[1,9]` | `REFERENCE_EQUIVALENT` | `XC_LDA_X + XC_LDA_C_PZ` reference |
+| 7 | legacy | Perdew–Zunger | `[1,9]` | `REFERENCE_EQUIVALENT_UNPOLARIZED` | `XC_LDA_X + XC_LDA_C_PZ` reference; historical TXC=7 is unpolarized-only |
 | 8 | legacy | Perdew–Burke–Ernzerhof 96 GGA | `[101,130]` | `REFERENCE_EQUIVALENT` | `XC_GGA_X_PBE + XC_GGA_C_PBE` reference |
 | 9 | legacy | Local Airy gas | — | `NO_EQUIVALENT` | No validated mapping is selected |
 | 11 | legacy | Barth–Hedin ASW variant | `[1,17]` | `APPROXIMATE_ANALOGUE` | ASW uses a distinct parameter set; the VBH reference is not mathematical identity |
@@ -65,7 +65,7 @@ These bundles are the authoritative predefined entries in
 | 101 | libXC | LDA exchange + von Barth–Hedin correlation | `[1,17]` | `REFERENCE_EQUIVALENT` | Explicit comparison route for legacy TXC=1 |
 | 102 | libXC | LDA exchange + Gombas correlation | `[1,24]` | `APPROXIMATE_ANALOGUE` | Native ID 24 is `XC_LDA_C_GOMBAS` |
 | 103 | libXC | LDA exchange | `[1]` | `APPROXIMATE_ANALOGUE` | Exchange-only route; it does not add correlation |
-| 104 | libXC | LDA exchange + Perdew–Zunger correlation | `[1,9]` | `REFERENCE_EQUIVALENT` | Explicit reference route for legacy TXC=7 |
+| 104 | libXC | LDA exchange + Perdew–Zunger correlation | `[1,9]` | `REFERENCE_EQUIVALENT_UNPOLARIZED` | Reference counterpart to TXC=7 in the unpolarized limit; libXC supports spin polarization |
 | 105 | libXC | LDA exchange + Perdew–Wang correlation | `[1,12]` | `REFERENCE_EQUIVALENT` | Explicit reference route for legacy TXC=5 |
 | 106 | libXC | LDA exchange + Vosko–Wilk–Nusair correlation | `[1,7]` | `REFERENCE_EQUIVALENT` | Explicit reference route for legacy TXC=4 |
 | 107 | libXC | LDA exchange + Gunnarsson–Lundqvist correlation | `[1,5]` | `APPROXIMATE_ANALOGUE` | Native `XC_LDA_C_GL` reference |
@@ -101,17 +101,30 @@ The quality labels mean:
 * `REFERENCE_EQUIVALENT`: same named/reference parametrization is useful for a
   controlled comparison; this does not promise bitwise or mathematical
   identity of legacy and libXC implementations.
+* `REFERENCE_EQUIVALENT_UNPOLARIZED`: the same named/reference parametrization
+  is a controlled counterpart only in the unpolarized limit. The historical
+  implementation does not provide the spin-polarized extension, even when the
+  libXC counterpart does.
 * `APPROXIMATE_ANALOGUE`: a related or nearest practical reference, with a
   known parameterization or functional distinction.
 * `NO_EQUIVALENT`: no validated mapping is available for this purpose.
 
 A reference mapping is not itself a physics validation result.
 
+In particular, TXC=104 is the libXC reference counterpart to the historical
+TXC=7 Perdew–Zunger parametrization in the unpolarized limit, subject to the
+established normalization and unit conventions. Legacy TXC=7 does not provide
+a spin-polarized implementation.
+
 ## Runtime provenance and tests
 
 XC initialization prints the selector, backend, native IDs when applicable,
 native libXC names, and mapping quality. This makes it possible to identify
-which backend produced a potential from the run log.
+which backend produced a potential from the run log. An explicit native-ID
+list is reported as `XC mode: custom libXC composition`, followed by an
+informational provenance message stating that the requested components are
+summed exactly as supplied. Valid but unusual lists retain their warning;
+valid ordinary custom lists remain non-fatal and informative.
 
 Focused selector coverage is provided by:
 
