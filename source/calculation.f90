@@ -1436,15 +1436,25 @@ contains
       green_options%energy_min = config%green_energy_min
       green_options%energy_max = config%green_energy_max
       green_options%energy_points = config%green_energy_points
+      green_options%energy_integration = config%gf_integration
+      green_options%contour_points = config%contour_points
+      green_options%contour_subdivisions = config%contour_subdivisions
+      green_options%near_fermi_points = config%near_fermi_points
+      green_options%contour_height = config%contour_height
       green_options%k_mesh_shape = reciprocal_obj%nk_mesh
       green_options%response_projection = config%response_projection
       realspace_options%eta = config%eta
       realspace_options%green_eta = config%green_eta
+      realspace_options%energy_integration = config%gf_integration
       realspace_options%electronic_temperature = config%electronic_temperature
       realspace_options%rmax = config%realspace_rmax
       realspace_options%tail_tolerance = config%realspace_tail_tolerance
       realspace_options%representation = config%realspace_representation
       realspace_options%fourier_axes = config%realspace_fourier_axes
+      if (canonical_chi0_backend == 'realspace_gf' .and. config%gf_integration /= 'direct') then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF currently exposes sampled real-axis blocks only; '// &
+            "gf_integration='mixed_contour' requires a complex-energy native source.", __FILE__, __LINE__)
+      end if
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
       if (is_longitudinal .and. has_soc) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &

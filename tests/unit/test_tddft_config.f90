@@ -109,12 +109,18 @@ contains
       write(unit, '(a)') '&tddft'
       write(unit, '(a)') " chi0_backend = 'green', green_eta = 0.003, green_energy_min = -1.2"
       write(unit, '(a)') ' green_energy_max = 0.8, green_energy_points = 4001'
+      write(unit, '(a)') " gf_integration = 'mixed_contour', contour_points = 32, contour_subdivisions = 4"
+      write(unit, '(a)') ' near_fermi_points = 96, contour_height = 0.01'
       write(unit, '(a)') '/'
       close(unit)
       config = tddft_config('unit_tddft_config.nml')
       call assert_true('Green chi0 backend is accepted', trim(config%chi0_backend) == 'green')
       call assert_real('Green eta is read', config%green_eta, 0.003_rp)
       call assert_true('Green energy mesh is read', config%green_energy_points == 4001)
+      call assert_true('mixed contour integration is read', trim(config%gf_integration) == 'mixed_contour')
+      call assert_true('contour quadrature controls are read', config%contour_points == 32 .and. &
+         config%contour_subdivisions == 4 .and. config%near_fermi_points == 96)
+      call assert_real('explicit contour height is read', config%contour_height, 0.01_rp)
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_green_input

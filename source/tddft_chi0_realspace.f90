@@ -25,6 +25,7 @@ module tddft_chi0_realspace_mod
    type, public :: tddft_realspace_chi0_options
       real(rp) :: eta = 0.01_rp
       real(rp) :: green_eta = 0.0_rp
+      character(len=24) :: energy_integration = 'direct'
       real(rp) :: fermi_level = 0.0_rp
       real(rp) :: electronic_temperature = 0.0_rp
       real(rp) :: rmax = huge(1.0_rp)
@@ -238,6 +239,9 @@ contains
          left_channels, right_channels)
       if (size(omega) < 1 .or. options%eta <= 0.0_rp .or. options%tail_tolerance < 0.0_rp) then
          error stop 'build_chi0_from_realspace_gf: invalid frequency or broadening options'
+      end if
+      if (trim(options%energy_integration) /= 'direct') then
+         error stop 'build_chi0_from_realspace_gf: mixed_contour requires a complex-energy native real-space source; sampled real-axis source is direct-only'
       end if
       nleft = size(left_channels); nright = size(right_channels); nw = size(omega)
       nblock = size(g_ab, 1)

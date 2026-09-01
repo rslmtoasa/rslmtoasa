@@ -53,7 +53,7 @@ module tddft_chi0_mod
       character(len=32) :: backend = 'eigenpairs'
       character(len=32) :: canonical_backend = 'eigenpairs'
       character(len=64) :: implementation = 'explicit eigenpair transitions'
-      character(len=32) :: energy_integration = 'not applicable'
+      character(len=96) :: energy_integration = 'not applicable'
       character(len=16) :: energy_unit = 'Rydberg'
       character(len=32) :: susceptibility_unit = '1/Rydberg'
       character(len=96) :: frequency_convention = 'retarded: omega is energy; denominator omega+en-em+i*eta'
@@ -80,10 +80,18 @@ module tddft_chi0_mod
       real(rp) :: accumulation_cpu_seconds = 0.0_rp
       real(rp) :: arbitrary_kq_cpu_seconds = 0.0_rp
       real(rp) :: green_energy_integration_cpu_seconds = 0.0_rp
+      integer :: green_function_evaluations = 0
       real(rp) :: green_eta = 0.0_rp
       real(rp) :: integration_energy_min = 0.0_rp
       real(rp) :: integration_energy_max = 0.0_rp
       integer :: integration_energy_points = 0
+      integer :: contour_points = 0
+      integer :: contour_subdivisions = 0
+      integer :: near_fermi_points = 0
+      real(rp) :: contour_height = 0.0_rp
+      real(rp) :: contour_max_imaginary_energy = 0.0_rp
+      integer :: contour_gf_evaluations = 0
+      logical :: contour_deformation = .false.
       real(rp) :: q_direct(3) = 0.0_rp
       real(rp) :: omega_min = 0.0_rp
       real(rp) :: omega_max = 0.0_rp
@@ -549,6 +557,14 @@ contains
       write(unit, '(a,es24.16)') '# profile_arbitrary_kq_eigensolve_cpu_s = ', result%metadata%arbitrary_kq_cpu_seconds
       write(unit, '(a,es24.16)') '# profile_gf_energy_integration_cpu_s = ', &
          result%metadata%green_energy_integration_cpu_seconds
+      write(unit, '(a,i0)') '# green_function_evaluations = ', result%metadata%green_function_evaluations
+      write(unit, '(a,i0)') '# contour_points_per_segment = ', result%metadata%contour_points
+      write(unit, '(a,i0)') '# contour_horizontal_subdivisions = ', result%metadata%contour_subdivisions
+      write(unit, '(a,i0)') '# near_fermi_points = ', result%metadata%near_fermi_points
+      write(unit, '(a,es24.16)') '# contour_height_Ry = ', result%metadata%contour_height
+      write(unit, '(a,es24.16)') '# contour_max_imaginary_energy_Ry = ', result%metadata%contour_max_imaginary_energy
+      write(unit, '(a,i0)') '# contour_gf_evaluations = ', result%metadata%contour_gf_evaluations
+      write(unit, '(a,l1)') '# contour_deformation = ', result%metadata%contour_deformation
       if (result%metadata%integration_energy_points > 0) then
          write(unit, '(a,es24.16)') '# green_eta_Ry = ', result%metadata%green_eta
          write(unit, '(a,2(1x,es24.16))') '# integration_energy_window_Ry = ', &

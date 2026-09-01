@@ -29,6 +29,7 @@ module tddft_config_mod
       character(len=16) :: response_projection
       character(len=16) :: q_mode
       character(len=16) :: q_coordinates
+      character(len=24) :: gf_integration
       character(len=16) :: goldstone_mode
       ! TDDFT-02 policy: diagnose is the only implicit/default action;
       ! sum_rule and projected are explicit, auditable repairs.
@@ -51,6 +52,8 @@ module tddft_config_mod
       !> reversed energy window requests a source-spectrum-derived window.
       real(rp) :: green_eta, green_energy_min, green_energy_max
       integer :: green_energy_points
+      integer :: contour_points, contour_subdivisions, near_fermi_points
+      real(rp) :: contour_height
       real(rp) :: realspace_rmax, realspace_tail_tolerance
       integer :: realspace_fourier_axes(3)
       character(len=16) :: realspace_representation
@@ -88,6 +91,7 @@ contains
       this%response_projection = 'site'
       this%q_mode = 'list'
       this%q_coordinates = 'direct'
+      this%gf_integration = 'direct'
       this%goldstone_mode = 'diagnose'
       this%goldstone_policy = 'diagnose'
       this%goldstone_mode_migrated_from_sum_rule = .false.
@@ -110,6 +114,10 @@ contains
       this%green_energy_min = huge(1.0_rp)
       this%green_energy_max = -huge(1.0_rp)
       this%green_energy_points = 2001
+      this%contour_points = 64
+      this%contour_subdivisions = 8
+      this%near_fermi_points = 128
+      this%contour_height = 0.0_rp
       this%realspace_rmax = huge(1.0_rp)
       this%realspace_tail_tolerance = 1.0e-3_rp
       this%realspace_fourier_axes = [1, 2, 3]
@@ -144,6 +152,7 @@ contains
       response_projection = this%response_projection
       q_mode = this%q_mode
       q_coordinates = this%q_coordinates
+      gf_integration = this%gf_integration
       goldstone_mode = this%goldstone_mode
       goldstone_policy = this%goldstone_policy
       output_prefix = this%output_prefix
@@ -162,6 +171,10 @@ contains
       green_eta = this%green_eta
       green_energy_min = this%green_energy_min; green_energy_max = this%green_energy_max
       green_energy_points = this%green_energy_points
+      contour_points = this%contour_points
+      contour_subdivisions = this%contour_subdivisions
+      near_fermi_points = this%near_fermi_points
+      contour_height = this%contour_height
       realspace_rmax = this%realspace_rmax
       realspace_tail_tolerance = this%realspace_tail_tolerance
       realspace_fourier_axes = this%realspace_fourier_axes
@@ -194,6 +207,7 @@ contains
       this%response_projection = lower(trim(response_projection))
       this%q_mode = lower(trim(q_mode))
       this%q_coordinates = lower(trim(q_coordinates))
+      this%gf_integration = lower(trim(gf_integration))
       this%goldstone_mode = lower(trim(goldstone_mode))
       this%goldstone_policy = lower(trim(goldstone_policy))
       this%goldstone_mode_migrated_from_sum_rule = this%goldstone_mode == 'sum_rule'
@@ -212,6 +226,10 @@ contains
       this%green_eta = green_eta
       this%green_energy_min = green_energy_min; this%green_energy_max = green_energy_max
       this%green_energy_points = green_energy_points
+      this%contour_points = contour_points
+      this%contour_subdivisions = contour_subdivisions
+      this%near_fermi_points = near_fermi_points
+      this%contour_height = contour_height
       this%realspace_rmax = realspace_rmax
       this%realspace_tail_tolerance = realspace_tail_tolerance
       this%realspace_fourier_axes = realspace_fourier_axes
@@ -328,6 +346,13 @@ contains
           (this%green_energy_min < huge(1.0_rp)/2.0_rp .and. &
            this%green_energy_max > -huge(1.0_rp)/2.0_rp .and. this%green_energy_max <= this%green_energy_min)) then
          call g_logger%fatal('[tddft_config]: invalid Green-function energy integration settings', __FILE__, __LINE__)
+      end if
+      if (this%gf_integration /= 'direct' .and. this%gf_integration /= 'mixed_contour') then
+         call g_logger%fatal("[tddft_config]: gf_integration must be 'direct' or 'mixed_contour'", __FILE__, __LINE__)
+      end if
+      if (this%contour_points < 8 .or. this%contour_subdivisions < 1 .or. this%near_fermi_points < 8 .or. &
+          this%contour_height < 0.0_rp) then
+         call g_logger%fatal('[tddft_config]: invalid mixed-contour quadrature settings', __FILE__, __LINE__)
       end if
       if (this%realspace_rmax <= 0.0_rp .or. this%realspace_tail_tolerance < 0.0_rp .or. &
           (this%realspace_representation /= 'bulk' .and. this%realspace_representation /= 'film' .and. &
