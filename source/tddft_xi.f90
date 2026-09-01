@@ -9,6 +9,7 @@
 !> LMTO representation until after its transition matrix elements are formed.
 module tddft_xi_mod
    use precision_mod, only: rp
+   use tddft_conventions_mod, only: tddft_retarded_denominator
    use response_vertices_mod, only: response_channel, response_transition_vertex, weighted_transition_vertex
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_metadata, tddft_fermi_occupation, &
       tddft_kB_Ry_per_K, tddft_occupation_kT_floor, tddft_static_divided_difference
@@ -278,7 +279,7 @@ contains
                   transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
                   do iw = 1, nw
                      call cpu_time(t_start)
-                     denominator = cmplx(omega(iw) + transition_energy, options%eta, rp)
+                     denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
                      call cpu_time(t_stop)
                      result%metadata%denominator_cpu_seconds = result%metadata%denominator_cpu_seconds + t_stop-t_start
                      call cpu_time(t_start)
@@ -398,7 +399,7 @@ contains
                   result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
                   transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
                   do iw = 1, nw
-                     denominator = cmplx(omega(iw) + transition_energy, options%eta, rp)
+                     denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
                      result%xi(:, :, iw) = result%xi(:, :, iw) + prefactor*occupation_difference* &
                         outer_product(left_vertex, right_vertex)/denominator
                   end do
@@ -438,7 +439,7 @@ contains
 
       do iw = 1, size(omega)
          call cpu_time(t_start)
-         denominators(1:npairs) = cmplx(omega(iw) + transition_energies(1:npairs), eta, rp)
+         denominators(1:npairs) = tddft_retarded_denominator(omega(iw), transition_energies(1:npairs), eta)
          call cpu_time(t_stop)
          metadata%denominator_cpu_seconds = metadata%denominator_cpu_seconds + t_stop-t_start
          weighted_left(:, 1:npairs) = left_vertices(:, 1:npairs)*spread( &

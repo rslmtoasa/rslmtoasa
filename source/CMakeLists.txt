@@ -81,6 +81,7 @@ add_library(${PROJECT_NAME} STATIC
     recursion_transport.f90
     sparse.f90
     report.f90
+    tddft_conventions.f90
     response_components.f90
     response_basis.f90
     response_vertices.f90

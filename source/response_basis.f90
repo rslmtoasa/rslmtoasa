@@ -10,13 +10,14 @@
 module response_basis_mod
    use precision_mod, only: rp
    use math_mod, only: i_unit
+   use tddft_conventions_mod, only: tddft_circular_operator_factor, tddft_circular_source_factor
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MX, RESPONSE_MY, RESPONSE_MZ, &
       RESPONSE_PLUS, RESPONSE_MINUS, is_response_component
    implicit none
 
    private
 
-   public :: response_operator, ladder_operator
+   public :: response_operator, ladder_operator, external_source_operator
 
 contains
 
@@ -49,9 +50,9 @@ contains
             op(orbital, orbital) = cmplx(1.0_rp, 0.0_rp, rp)
             op(orbital + orbital_count, orbital + orbital_count) = cmplx(-1.0_rp, 0.0_rp, rp)
          case (RESPONSE_PLUS)
-            op(orbital, orbital + orbital_count) = cmplx(2.0_rp, 0.0_rp, rp)
+            op(orbital, orbital + orbital_count) = cmplx(tddft_circular_operator_factor, 0.0_rp, rp)
          case (RESPONSE_MINUS)
-            op(orbital + orbital_count, orbital) = cmplx(2.0_rp, 0.0_rp, rp)
+            op(orbital + orbital_count, orbital) = cmplx(tddft_circular_operator_factor, 0.0_rp, rp)
          end select
       end do
    end function response_operator
@@ -65,7 +66,27 @@ contains
       if (component /= RESPONSE_PLUS .and. component /= RESPONSE_MINUS) then
          error stop 'ladder_operator: component must be PLUS or MINUS'
       end if
-      op = 0.5_rp*response_operator(component, orbital_count)
+      op = tddft_circular_source_factor*response_operator(component, orbital_count)
    end function ladder_operator
+
+   !> Return dH/dB for an external magnetic-field coordinate.
+   !>
+   !> Cartesian field coordinates use sigma_x/y directly.  A circular field
+   !> coordinate is paired with the opposite measured circular operator:
+   !> dH/dB+ = (sigma_x-i sigma_y)/2 and dH/dB- = (sigma_x+i sigma_y)/2.
+   !> This is a source vertex only; it is not the self-consistent XC kernel.
+   function external_source_operator(field_component, orbital_count) result(op)
+      integer, intent(in) :: field_component, orbital_count
+      complex(rp), allocatable :: op(:, :)
+
+      select case (field_component)
+      case (RESPONSE_PLUS)
+         op = tddft_circular_source_factor*response_operator(RESPONSE_MINUS, orbital_count)
+      case (RESPONSE_MINUS)
+         op = tddft_circular_source_factor*response_operator(RESPONSE_PLUS, orbital_count)
+      case default
+         op = response_operator(field_component, orbital_count)
+      end select
+   end function external_source_operator
 
 end module response_basis_mod

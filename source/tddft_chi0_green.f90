@@ -23,6 +23,7 @@
 module tddft_chi0_green_mod
    use precision_mod, only: rp
    use math_mod, only: pi, i_unit
+   use tddft_conventions_mod, only: tddft_retarded_green_denominator
    use response_vertices_mod, only: response_channel, site_projected_operator
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_fermi_occupation, &
       tddft_occupation_kT_floor
@@ -142,7 +143,8 @@ contains
             do j = 1, nmat
                do i = 1, nmat
                   green_matrix(i, j) = green_matrix(i, j) + this%eigenvectors_k(i, n, ik)* &
-                     conjg(this%eigenvectors_k(j, n, ik))/cmplx(energy-this%eigenvalues_k(n, ik), eta, rp)
+                     conjg(this%eigenvectors_k(j, n, ik))/tddft_retarded_green_denominator(energy, &
+                        this%eigenvalues_k(n, ik), eta)
                end do
             end do
          end do
@@ -151,7 +153,8 @@ contains
             do j = 1, nmat
                do i = 1, nmat
                   green_matrix(i, j) = green_matrix(i, j) + this%eigenvectors_kq(i, n, ik)* &
-                     conjg(this%eigenvectors_kq(j, n, ik))/cmplx(energy-this%eigenvalues_kq(n, ik), eta, rp)
+                     conjg(this%eigenvectors_kq(j, n, ik))/tddft_retarded_green_denominator(energy, &
+                        this%eigenvalues_kq(n, ik), eta)
                end do
             end do
          end do

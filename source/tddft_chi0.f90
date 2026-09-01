@@ -13,6 +13,7 @@ module tddft_chi0_mod
    use precision_mod, only: rp
    use math_mod, only: pi
    use response_vertices_mod, only: response_channel, response_transition_vertex
+   use tddft_conventions_mod, only: tddft_retarded_denominator
    use tddft_transition_engine_mod, only: tddft_transition_engine, site_channel_vertex_provider, &
       make_site_channel_vertex_provider
    implicit none
@@ -252,7 +253,7 @@ contains
                   transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
                   do iw = 1, nw
                      call cpu_time(t_start)
-                     denominator = cmplx(omega(iw) + transition_energy, options%eta, rp)
+                     denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
                      call cpu_time(t_stop)
                      result%metadata%denominator_cpu_seconds = result%metadata%denominator_cpu_seconds + t_stop-t_start
                      call cpu_time(t_start)
@@ -479,7 +480,7 @@ contains
       end if
       do iw = 1, size(omega)
          call cpu_time(t_start)
-         denominators(1:npairs) = cmplx(omega(iw) + transition_energy(1:npairs), eta, rp)
+         denominators(1:npairs) = tddft_retarded_denominator(omega(iw), transition_energy(1:npairs), eta)
          do ipair = 1, npairs
             weighted_left(:, ipair) = prefactor*occupation_difference(ipair)*left_vertices(:, ipair)/denominators(ipair)
          end do

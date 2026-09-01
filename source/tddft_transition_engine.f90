@@ -11,6 +11,7 @@
 !> no polymorphic call in the `(k,n,m,omega)` inner loop.
 module tddft_transition_engine_mod
    use precision_mod, only: rp
+   use tddft_conventions_mod, only: tddft_retarded_denominator
    use response_vertices_mod, only: response_channel, response_transition_vectors, weighted_transition_vectors
    implicit none
    private
@@ -443,7 +444,7 @@ contains
       class(tddft_vertex_provider), intent(inout) :: provider
       complex(rp), intent(inout) :: response(:, :, :)
       real(rp), intent(inout) :: vertex_seconds, preparation_seconds, denominator_seconds, accumulation_seconds
-      integer :: ik,n,m,npairs,capacity,ipair,iw,ncoefficient
+      integer :: ik,n,m,npairs,capacity,ncoefficient
       real(rp) :: weight_sum,prefactor,t0,t1
       if (eta <= 0.0_rp .or. batch_size < 1) error stop 'transition engine: invalid dynamic controls'
       weight_sum=sum(k_weights); capacity=merge(batch_size,1,use_batched)
@@ -518,7 +519,9 @@ contains
          this%workspace%bra,this%workspace%ket,this%workspace%left_vertices,this%workspace%right_vertices)
       call cpu_time(t1); vertex_seconds=vertex_seconds+t1-t0
       do iw=1,size(omega)
-         call cpu_time(t0); this%workspace%denominators(1:npairs)=cmplx(omega(iw)+this%workspace%transition_energies(1:npairs),eta,rp)
+         call cpu_time(t0)
+         this%workspace%denominators(1:npairs)=tddft_retarded_denominator(omega(iw), &
+            this%workspace%transition_energies(1:npairs), eta)
          do ipair=1,npairs
             this%workspace%weighted_left(:,ipair)=prefactor*this%workspace%occupations(ipair)*this%workspace%left_vertices(:,ipair)/this%workspace%denominators(ipair)
          end do

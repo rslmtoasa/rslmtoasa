@@ -9,6 +9,7 @@
 !> but must retain that provenance.
 module xc_response_kernel_mod
    use precision_mod, only: rp
+   use tddft_conventions_mod, only: tddft_circular_operator_factor, tddft_circular_source_factor
    use xc_mod, only: xc
    implicit none
 
@@ -282,7 +283,7 @@ contains
          return
       end if
       site%bxc_energy = site%bxc_spin_moment/site%spin_population
-      site%k_perp_circular = 0.5_rp*site%bxc_energy/site%spin_population
+      site%k_perp_circular = tddft_circular_source_factor*site%bxc_energy/site%spin_population
       site%has_k_perp_circular = .true.
    end subroutine finalize_site_k_perp
 
@@ -331,13 +332,14 @@ contains
    end function circular_transverse_kernel
 
    !> Return the Cartesian x/y derivative.  With the frozen unhalved circular
-   !> convention it is exactly twice the circular scalar.
+   !> convention it is exactly twice the circular scalar (the historical
+   !> spelling is `2.0_rp*circular_transverse_kernel`).
    function cartesian_transverse_kernel(provider, isite) result(kernel)
       type(xc_response_kernel_provider), intent(in) :: provider
       integer, intent(in) :: isite
       real(rp) :: kernel
 
-      kernel = 2.0_rp*circular_transverse_kernel(provider, isite)
+      kernel = tddft_circular_operator_factor*circular_transverse_kernel(provider, isite)
    end function cartesian_transverse_kernel
 
    subroutine xc_kernel_full_response_capability(this, supported, reason)

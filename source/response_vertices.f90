@@ -12,6 +12,7 @@
 module response_vertices_mod
    use precision_mod, only: rp
    use math_mod, only: i_unit
+   use tddft_conventions_mod, only: tddft_circular_operator_factor
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MX, RESPONSE_MY, RESPONSE_MZ, &
       RESPONSE_PLUS, RESPONSE_MINUS, is_response_component
    implicit none
@@ -100,9 +101,9 @@ contains
             vertex = vertex + conjg(bra_spinor(iup))*ket_spinor(iup) - &
                conjg(bra_spinor(idown))*ket_spinor(idown)
          case (RESPONSE_PLUS)
-            vertex = vertex + 2.0_rp*conjg(bra_spinor(iup))*ket_spinor(idown)
+            vertex = vertex + tddft_circular_operator_factor*conjg(bra_spinor(iup))*ket_spinor(idown)
          case (RESPONSE_MINUS)
-            vertex = vertex + 2.0_rp*conjg(bra_spinor(idown))*ket_spinor(iup)
+            vertex = vertex + tddft_circular_operator_factor*conjg(bra_spinor(idown))*ket_spinor(iup)
          end select
       end do
    end function response_transition_vertex
@@ -215,9 +216,9 @@ contains
          op(iup, iup) = cmplx(1.0_rp, 0.0_rp, rp)
          op(idown, idown) = cmplx(-1.0_rp, 0.0_rp, rp)
       case (RESPONSE_PLUS)
-         op(iup, idown) = cmplx(2.0_rp, 0.0_rp, rp)
+         op(iup, idown) = cmplx(tddft_circular_operator_factor, 0.0_rp, rp)
       case (RESPONSE_MINUS)
-         op(idown, iup) = cmplx(2.0_rp, 0.0_rp, rp)
+         op(idown, iup) = cmplx(tddft_circular_operator_factor, 0.0_rp, rp)
       end select
    end subroutine add_component_element
 

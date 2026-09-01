@@ -2,15 +2,17 @@
 ! RS-LMTO-ASA -- unit test
 !------------------------------------------------------------------------------
 !> @brief Pins response operators, circular normalization, and the XC-provider
-!> data contract without implementing chi_KS or a TDDFT Dyson solve.
+!> data contract together with a compact analytic chi_KS fixture.
 program test_response_conventions
    use precision_mod, only: rp
-   use math_mod, only: i_unit, rho2nm
+   use math_mod, only: i_unit, pi, rho2nm
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MX, RESPONSE_MY, RESPONSE_MZ, &
       RESPONSE_PLUS, RESPONSE_MINUS
-   use response_basis_mod, only: response_operator, ladder_operator
+   use response_basis_mod, only: response_operator, ladder_operator, external_source_operator
    use response_vertices_mod, only: response_channel
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
+   use tddft_conventions_mod, only: tddft_circular_source_factor, tddft_retarded_denominator, &
+      tddft_advanced_denominator
    use xc_response_kernel_mod, only: xc_response_sample, xc_response_kernel_provider, xc_response_radial_projection
    implicit none
 
@@ -23,6 +25,8 @@ program test_response_conventions
    call test_xc_provider_contract()
    call test_radial_alsda_projection()
    call test_transverse_goldstone_kernel_normalization()
+   call test_hamiltonian_rotation_source_vertex()
+   call test_two_level_response_identities()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -167,6 +171,96 @@ contains
       call assert_scalar('two-level transverse Goldstone identity', xi, cmplx(1.0_rp, 0.0_rp, rp))
    end subroutine test_transverse_goldstone_kernel_normalization
 
+   ! A local rotation of H = H0 I + b sigma_z is the response source used by
+   ! the LMTO Hvec.sigma assembly.  This catches a sign error in sigma_y or a
+   ! mismatch between the measured circular operator and dH/dB.
+   subroutine test_hamiltonian_rotation_source_vertex()
+      real(rp), parameter :: e0 = 0.17_rp, b = -0.23_rp, theta = 1.0e-6_rp
+      complex(rp), allocatable :: s0(:, :), sx(:, :), sy(:, :), sz(:, :), source(:, :)
+      complex(rp) :: h0(2, 2), hplus(2, 2), hminus(2, 2), uplus(2, 2), uminus(2, 2), derivative(2, 2)
+
+      s0 = response_operator(RESPONSE_CHARGE, 1)
+      sx = response_operator(RESPONSE_MX, 1)
+      sy = response_operator(RESPONSE_MY, 1)
+      sz = response_operator(RESPONSE_MZ, 1)
+      h0 = e0*s0 + b*sz
+      uplus = cos(0.5_rp*theta)*s0 - i_unit*sin(0.5_rp*theta)*sy
+      uminus = cos(0.5_rp*theta)*s0 + i_unit*sin(0.5_rp*theta)*sy
+      hplus = matmul(matmul(uplus, h0), transpose(conjg(uplus)))
+      hminus = matmul(matmul(uminus, h0), transpose(conjg(uminus)))
+      derivative = (hplus-hminus)/(2.0_rp*theta)
+      call assert_matrix('finite-difference local rotation dH/dtheta', derivative, b*sx)
+
+      source = external_source_operator(RESPONSE_MX, 1)
+      call assert_matrix('Cartesian external source is dH/dbx', source, sx)
+      source = external_source_operator(RESPONSE_PLUS, 1)
+      call assert_matrix('circular external source is Ominus/2', source, &
+         tddft_circular_source_factor*response_operator(RESPONSE_MINUS, 1))
+   end subroutine test_hamiltonian_rotation_source_vertex
+
+   ! Independent two-level response fixture.  The production chi_KS builder
+   ! must reproduce its pole, retarded/advanced conjugation, channel reversal,
+   ! and integrated circular commutator weight.
+   subroutine test_two_level_response_identities()
+      integer, parameter :: ngrid = 40001
+      integer :: i
+      real(rp), parameter :: delta = 0.10_rp, eta = 0.002_rp
+      real(rp) :: weights(1), eigenvalues(2, 1), eigenvalues_kq(2, 1), omega(1), omega_reversed(1), grid(ngrid)
+      real(rp) :: step, spectral_integral
+      complex(rp) :: eigenvectors(2, 2, 1), eigenvectors_kq(2, 2, 1), expected
+      type(response_channel) :: plus(1), minus(1)
+      type(tddft_chi0_options) :: options
+      type(tddft_chi0_result) :: plus_result, reverse_result, grid_result
+
+      weights = 1.0_rp
+      eigenvalues(:, 1) = [-0.5_rp*delta, 0.5_rp*delta]
+      eigenvalues_kq = eigenvalues
+      eigenvectors = cmplx(0.0_rp, 0.0_rp, rp)
+      eigenvectors(1, 1, 1) = cmplx(1.0_rp, 0.0_rp, rp)
+      eigenvectors(2, 2, 1) = cmplx(1.0_rp, 0.0_rp, rp)
+      eigenvectors_kq = eigenvectors
+      plus(1) = response_channel(1, RESPONSE_PLUS)
+      minus(1) = response_channel(1, RESPONSE_MINUS)
+      options%eta = eta
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 0.0_rp
+      options%k_mesh_shape = [1, 1, 1]
+
+      omega = [0.123_rp]
+      call assert_scalar('retarded denominator has positive eta', tddft_retarded_denominator(omega(1), &
+         eigenvalues(1, 1)-eigenvalues(2, 1), eta), cmplx(omega(1)+eigenvalues(1, 1)-eigenvalues(2, 1), eta, rp))
+      call assert_scalar('advanced denominator has negative eta', tddft_advanced_denominator(omega(1), &
+         eigenvalues(1, 1)-eigenvalues(2, 1), eta), cmplx(omega(1)+eigenvalues(1, 1)-eigenvalues(2, 1), -eta, rp))
+      call build_chi_ks_from_eigenpairs(weights, eigenvalues, eigenvectors, eigenvalues_kq, eigenvectors_kq, [1], &
+         plus, minus, omega, options, plus_result)
+      expected = 4.0_rp/tddft_retarded_denominator(omega(1), eigenvalues(1, 1)-eigenvalues(2, 1), eta)
+      call assert_scalar('analytic chi plus-minus pole', plus_result%chi(1, 1, 1), expected)
+      call assert_scalar('retarded Im chi is negative at positive excitation', &
+         cmplx(aimag(plus_result%chi(1, 1, 1)), 0.0_rp, rp), &
+         cmplx(aimag(expected), 0.0_rp, rp))
+
+      omega_reversed = [-omega(1)]
+      call build_chi_ks_from_eigenpairs(weights, eigenvalues, eigenvectors, eigenvalues_kq, eigenvectors_kq, [1], &
+         minus, plus, omega_reversed, options, reverse_result)
+      call assert_scalar('channel reversal and negative-frequency conjugation', plus_result%chi(1, 1, 1), &
+         conjg(reverse_result%chi(1, 1, 1)))
+      expected = 4.0_rp/tddft_advanced_denominator(omega(1), eigenvalues(1, 1)-eigenvalues(2, 1), eta)
+      call assert_scalar('retarded/advanced conjugation', conjg(plus_result%chi(1, 1, 1)), expected)
+
+      do i = 1, ngrid
+         grid(i) = -8.0_rp + 16.0_rp*real(i-1, rp)/real(ngrid-1, rp)
+      end do
+      call build_chi_ks_from_eigenpairs(weights, eigenvalues, eigenvectors, eigenvalues_kq, eigenvectors_kq, [1], &
+         plus, minus, grid, options, grid_result)
+      step = grid(2)-grid(1)
+      spectral_integral = 0.0_rp
+      do i = 1, ngrid-1
+         spectral_integral = spectral_integral + 0.5_rp*step*( &
+            -aimag(grid_result%chi(1, 1, i))/pi - aimag(grid_result%chi(1, 1, i+1))/pi)
+      end do
+      call assert_real_tolerance('unhalved circular spectral sum rule', spectral_integral, 4.0_rp, 2.0e-3_rp)
+   end subroutine test_two_level_response_identities
+
    subroutine assert_matrix(label, actual, expected)
       character(len=*), intent(in) :: label
       complex(rp), intent(in) :: actual(:, :), expected(:, :)
@@ -184,5 +278,14 @@ contains
          failed = .true.
       end if
    end subroutine assert_scalar
+
+   subroutine assert_real_tolerance(label, actual, expected, tolerance)
+      character(len=*), intent(in) :: label
+      real(rp), intent(in) :: actual, expected, tolerance
+      if (abs(actual-expected) > tolerance) then
+         write (*, '(a,1x,a,1x,es12.4)') 'FAIL', label, abs(actual-expected)
+         failed = .true.
+      end if
+   end subroutine assert_real_tolerance
 
 end program test_response_conventions
