@@ -30,6 +30,9 @@ module tddft_config_mod
       character(len=16) :: q_mode
       character(len=16) :: q_coordinates
       character(len=16) :: goldstone_mode
+      ! TDDFT-02 policy: diagnose is the only implicit/default action;
+      ! sum_rule and projected are explicit, auditable repairs.
+      character(len=16) :: goldstone_policy
       logical :: goldstone_mode_migrated_from_sum_rule
       character(len=sl) :: output_prefix
       integer :: nomega
@@ -83,6 +86,7 @@ contains
       this%q_mode = 'list'
       this%q_coordinates = 'direct'
       this%goldstone_mode = 'diagnose'
+      this%goldstone_policy = 'diagnose'
       this%goldstone_mode_migrated_from_sum_rule = .false.
       this%output_prefix = 'tddft'
       this%nomega = 201
@@ -134,6 +138,7 @@ contains
       q_mode = this%q_mode
       q_coordinates = this%q_coordinates
       goldstone_mode = this%goldstone_mode
+      goldstone_policy = this%goldstone_policy
       output_prefix = this%output_prefix
       q_file = ''
       n_q_points = 1
@@ -179,6 +184,7 @@ contains
       this%q_mode = lower(trim(q_mode))
       this%q_coordinates = lower(trim(q_coordinates))
       this%goldstone_mode = lower(trim(goldstone_mode))
+      this%goldstone_policy = lower(trim(goldstone_policy))
       this%goldstone_mode_migrated_from_sum_rule = this%goldstone_mode == 'sum_rule'
       if (this%goldstone_mode_migrated_from_sum_rule) then
          this%goldstone_mode = 'correct'
@@ -276,6 +282,10 @@ contains
       end if
       if (this%goldstone_mode /= 'off' .and. this%goldstone_mode /= 'diagnose' .and. this%goldstone_mode /= 'correct') then
          call g_logger%fatal("[tddft_config]: goldstone_mode must be 'off', 'diagnose', or 'correct' (deprecated 'sum_rule')", __FILE__, __LINE__)
+      end if
+      if (this%goldstone_policy /= 'diagnose' .and. this%goldstone_policy /= 'sum_rule' .and. &
+          this%goldstone_policy /= 'projected') then
+         call g_logger%fatal("[tddft_config]: goldstone_policy must be 'diagnose', 'sum_rule', or 'projected'", __FILE__, __LINE__)
       end if
       if (this%goldstone_mode == 'correct') then
          if (this%xi_backend /= 'pair_potential' .and. this%xi_backend /= 'compare') then

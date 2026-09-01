@@ -13,6 +13,9 @@
 module tddft_goldstone_mod
    use precision_mod, only: rp
    use xc_response_kernel_mod, only: xc_response_kernel_provider, circular_transverse_kernel
+   use tddft_ward_mod, only: tddft_ward_diagnostics, tddft_lounis_repair, tddft_goldstone_projection, &
+      evaluate_static_ward_identity, evaluate_ward_from_xi, reconstruct_lounis_kernel, project_goldstone_eigenvalue, &
+      derive_kernel_from_static_xi
    implicit none
 
    private
@@ -26,11 +29,13 @@ module tddft_goldstone_mod
    real(rp), parameter :: minimum_moment_relative = 1.0e-10_rp
    real(rp), parameter :: svd_rank_relative_tolerance = 1.0e-10_rp
    real(rp), parameter :: maximum_condition_number = 1.0e8_rp
-   real(rp), parameter :: maximum_scale_change = 0.25_rp
 
    type, public :: tddft_goldstone_options
       ! Development default: report the raw Goldstone quality, never repair it.
       character(len=16) :: goldstone_mode = 'diagnose'
+      ! Explicit TDDFT-02 cleanup policy.  The default only diagnoses; the
+      ! legacy goldstone_mode remains for compatibility with existing inputs.
+      character(len=16) :: goldstone_policy = 'diagnose'
       logical :: has_soc = .false.
       logical :: has_external_field = .false.
    end type tddft_goldstone_options
@@ -54,6 +59,9 @@ module tddft_goldstone_mod
       complex(rp), allocatable :: left_eigenvectors(:, :)
       complex(rp), allocatable :: closest_eigenvector(:)
       complex(rp), allocatable :: closest_left_eigenvector(:)
+      ! First-class raw Ward record.  The legacy fields above remain for
+      ! campaign compatibility; this component carries basis and provenance.
+      type(tddft_ward_diagnostics) :: ward
    end type tddft_goldstone_diagnostics
 
    type, public :: tddft_goldstone_result
@@ -66,6 +74,10 @@ module tddft_goldstone_mod
       logical :: sum_rule_requested = .false.
       logical :: sum_rule_applied = .false.
       logical :: sum_rule_disabled_by_symmetry_breaking = .false.
+      character(len=16) :: goldstone_policy = 'diagnose'
+      type(tddft_lounis_repair) :: lounis
+      type(tddft_goldstone_projection) :: projection
+      complex(rp), allocatable :: kernel_corrected(:, :)
    end type tddft_goldstone_result
 
    type, public :: tddft_goldstone_column_correction
@@ -77,6 +89,10 @@ module tddft_goldstone_mod
       integer :: effective_rank = 0
       real(rp) :: condition_number = -1.0_rp
       real(rp) :: maximum_change = -1.0_rp
+      real(rp) :: relative_kernel_change = -1.0_rp
+      real(rp) :: warning_threshold = -1.0_rp
+      real(rp) :: failure_threshold = -1.0_rp
+      logical :: large_correction = .false.
       type(tddft_goldstone_diagnostics) :: raw
       type(tddft_goldstone_diagnostics) :: corrected
    end type tddft_goldstone_column_correction
@@ -137,8 +153,9 @@ contains
       type(tddft_goldstone_options), intent(in) :: options
       type(tddft_goldstone_result), intent(out) :: result
       real(rp), intent(in), optional :: bare_spectral_gap
-      complex(rp), allocatable :: magnetization(:)
-      integer :: mode
+      complex(rp), allocatable :: magnetization(:), bxc(:), kernel(:, :), repaired_kernel(:, :), projected_xi(:, :)
+      integer :: mode, isite
+      character(len=16) :: policy
 
       call build_site_projected_k_perp(provider, result%k_perp)
       call require_square_response(chi_ks_static, result%k_perp, 'evaluate_goldstone')
@@ -149,11 +166,68 @@ contains
       end if
 
       result%xi_raw = construct_transverse_xi(chi_ks_static, result%k_perp)
+      policy = trim(adjustl(options%goldstone_policy))
+      result%goldstone_policy = policy
       mode = goldstone_mode_code(options%goldstone_mode)
       result%sum_rule_requested = mode == GOLDSTONE_SUM_RULE
       if (mode /= GOLDSTONE_OFF) then
          call calculate_diagnostics(result%xi_raw, magnetization, result%raw, bare_spectral_gap)
+         allocate(bxc(size(magnetization)), kernel(size(magnetization), size(magnetization)))
+         kernel = cmplx(0.0_rp, 0.0_rp, rp)
+         do isite = 1, size(magnetization)
+            bxc(isite) = result%k_perp(isite)*magnetization(isite)
+            kernel(isite, isite) = result%k_perp(isite)
+         end do
+         call evaluate_static_ward_identity(chi_ks_static, bxc, magnetization, result%raw%ward, kernel=kernel, &
+            response_basis='site', bxc_provenance='ground-state XC response provider', &
+            kernel_provenance='site-projected transverse ALSDA K_xc')
       end if
+
+      select case (policy)
+      case ('diagnose')
+         continue
+      case ('sum_rule')
+         result%sum_rule_requested = .true.
+         if (options%has_soc .or. options%has_external_field) then
+            result%lounis%requested = .true.
+            result%lounis%rejected = .true.
+            result%lounis%decision = 'Lounis reconstruction is unavailable with SOC or an external symmetry-breaking field'
+            return
+         end if
+         call reconstruct_lounis_kernel(chi_ks_static, magnetization, repaired_kernel, result%lounis, &
+            physical_kernel=result%k_perp)
+         if (result%lounis%applied) then
+            allocate(result%k_perp_sum_rule(size(result%k_perp)))
+            do isite = 1, size(result%k_perp)
+               result%k_perp_sum_rule(isite) = repaired_kernel(isite, isite)
+            end do
+            result%xi_corrected = matmul(chi_ks_static, repaired_kernel)
+            call calculate_diagnostics(result%xi_corrected, magnetization, result%corrected)
+            result%sum_rule_applied = .true.
+         end if
+         return
+      case ('projected')
+         if (options%has_soc .or. options%has_external_field) then
+            result%projection%requested = .true.
+            result%projection%rejected = .true.
+            result%projection%decision = 'Halle projection is unavailable with SOC or an external symmetry-breaking field'
+            return
+         end if
+         call project_goldstone_eigenvalue(result%xi_raw, magnetization, projected_xi, result%projection)
+         if (result%projection%applied) then
+            result%xi_corrected = projected_xi
+            call calculate_diagnostics(result%xi_corrected, magnetization, result%corrected)
+            call derive_kernel_from_static_xi(chi_ks_static, projected_xi, result%kernel_corrected, isite)
+            if (isite /= 0) then
+               result%projection%applied = .false.
+               result%projection%rejected = .true.
+               result%projection%decision = 'Halle projection could not be represented in the adiabatic kernel basis'
+            end if
+         end if
+         return
+      case default
+         error stop 'evaluate_goldstone: goldstone_policy must be diagnose, sum_rule, or projected'
+      end select
 
       ! The legacy site-scalar route is now diagnose-only.  The production
       ! `correct` path invokes build_goldstone_column_correction on direct
@@ -176,10 +250,12 @@ contains
    !> Diagnose an already assembled self-enhancement operator.  This keeps the
    !> pair-potential route out of the legacy site-scalar K interface while
    !> retaining exactly the same raw residual/eigenmode definitions.
-   subroutine evaluate_raw_xi_diagnostics(xi, magnetization, diagnostics, bare_spectral_gap)
+   subroutine evaluate_raw_xi_diagnostics(xi, magnetization, diagnostics, bare_spectral_gap, response_basis, &
+      kernel_provenance)
       complex(rp), intent(in) :: xi(:, :), magnetization(:)
       type(tddft_goldstone_diagnostics), intent(out) :: diagnostics
       real(rp), intent(in), optional :: bare_spectral_gap
+      character(len=*), intent(in), optional :: response_basis, kernel_provenance
 
       if (size(xi, 1) /= size(xi, 2) .or. size(magnetization) /= size(xi, 1)) then
          error stop 'evaluate_raw_xi_diagnostics: Xi and magnetization dimensions are incompatible'
@@ -187,26 +263,28 @@ contains
       if (sqrt(sum(abs(magnetization)**2)) <= tiny(1.0_rp)) then
          error stop 'evaluate_raw_xi_diagnostics: magnetization is zero'
       end if
-      if (present(bare_spectral_gap)) then
-         call calculate_diagnostics(xi, magnetization, diagnostics, bare_spectral_gap)
-      else
-         call calculate_diagnostics(xi, magnetization, diagnostics)
-      end if
+      call calculate_diagnostics(xi, magnetization, diagnostics, bare_spectral_gap)
+      if (present(response_basis)) diagnostics%ward%response_basis = trim(response_basis)
+      if (present(kernel_provenance)) diagnostics%ward%kernel_provenance = trim(kernel_provenance)
    end subroutine evaluate_raw_xi_diagnostics
 
    !> Compute real column scales for direct pair-potential Xi.  With W=I the
    !> constrained minimum-change problem is
    !> min ||s-1|| subject to Re[Xi diag(M)] s=M.  A rank-revealing SVD is used
    !> even though the accepted square full-rank case has a unique solution.
-   subroutine build_goldstone_column_correction(xi_static, magnetization, correction)
+   subroutine build_goldstone_column_correction(xi_static, magnetization, correction, maximum_allowed_change, warning_threshold)
       complex(rp), intent(in) :: xi_static(:, :), magnetization(:)
       type(tddft_goldstone_column_correction), intent(out) :: correction
+      real(rp), intent(in), optional :: maximum_allowed_change
+      real(rp), intent(in), optional :: warning_threshold
       real(rp), allocatable :: system(:, :), singular(:), u(:, :), vt(:, :), work(:), projected_rhs(:), scales(:)
       complex(rp), allocatable :: corrected_xi(:, :)
       real(rp) :: work_query(1), max_moment, max_singular, rank_cutoff
       integer :: n, i, info, lwork
 
       correction%requested = .true.
+      if (present(maximum_allowed_change)) correction%failure_threshold = maximum_allowed_change
+      if (present(warning_threshold)) correction%warning_threshold = warning_threshold
       n = size(magnetization)
       if (n < 1 .or. size(xi_static, 1) /= n .or. size(xi_static, 2) /= n) then
          call reject_correction(correction, 'static Xi and magnetization dimensions are incompatible')
@@ -269,10 +347,17 @@ contains
          return
       end if
       correction%maximum_change = maxval(abs(scales-1.0_rp))
-      if (correction%maximum_change > maximum_scale_change) then
-         call reject_correction(correction, 'requested column rescaling exceeds the 25 percent safety limit')
-         return
+      if (present(maximum_allowed_change)) then
+         if (maximum_allowed_change >= 0.0_rp .and. correction%maximum_change > maximum_allowed_change) then
+            call reject_correction(correction, 'requested column rescaling exceeds the explicitly supplied safety limit')
+            return
+         end if
       end if
+      correction%relative_kernel_change = correction%maximum_change
+      if (present(warning_threshold)) correction%large_correction = warning_threshold >= 0.0_rp .and. &
+         correction%maximum_change > warning_threshold
+      if (present(maximum_allowed_change)) correction%large_correction = correction%large_correction .or. &
+         (maximum_allowed_change >= 0.0_rp .and. correction%maximum_change > maximum_allowed_change)
       allocate(correction%scales(n), corrected_xi(n, n))
       correction%scales = scales
       call rescale_xi_columns(xi_static, correction%scales, corrected_xi)
@@ -352,6 +437,10 @@ contains
       write(unit, '(a,i0)') '# goldstone_correction_effective_rank = ', correction%effective_rank
       write(unit, '(a,es24.16)') '# goldstone_correction_condition_number = ', correction%condition_number
       write(unit, '(a,es24.16)') '# goldstone_correction_maximum_scale_change = ', correction%maximum_change
+      write(unit, '(a,es24.16)') '# goldstone_correction_relative_kernel_change = ', correction%relative_kernel_change
+      write(unit, '(a,es24.16)') '# goldstone_correction_warning_threshold = ', correction%warning_threshold
+      write(unit, '(a,es24.16)') '# goldstone_correction_failure_threshold = ', correction%failure_threshold
+      write(unit, '(a,l1)') '# goldstone_correction_large_change = ', correction%large_correction
       if (correction%raw%available) call write_one_diagnostics(unit, 'pair_correction_raw', correction%raw)
       if (correction%corrected%available) call write_one_diagnostics(unit, 'pair_correction_corrected', correction%corrected)
       if (allocated(correction%scales)) then
@@ -374,10 +463,31 @@ contains
       open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
       if (ios /= 0) error stop 'write_goldstone_diagnostics_text: cannot open output file'
       write(unit, '(a)') '# legacy Xi = chi_KS K_perp; K_perp provenance = xc_response_kernel'
+      write(unit, '(a)') '# Ward identity = chi_KS(0,0) B_xc - m; Dm = m-chi_KS K_xc m'
       write(unit, '(a)') '# raw Goldstone diagnostics are retained for every non-off mode'
+      write(unit, '(a,a)') '# goldstone_policy = ', trim(result%goldstone_policy)
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_requested = ', result%sum_rule_requested
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_applied = ', result%sum_rule_applied
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_disabled = ', result%sum_rule_disabled_by_symmetry_breaking
+      if (result%lounis%requested) then
+         write(unit, '(a,l1)') '# lounis_reconstruction_applied = ', result%lounis%applied
+         write(unit, '(a,l1)') '# lounis_reconstruction_rejected = ', result%lounis%rejected
+         write(unit, '(a,a)') '# lounis_reconstruction_decision = ', trim(result%lounis%decision)
+         write(unit, '(a,es24.16)') '# lounis_relative_kernel_change = ', result%lounis%relative_kernel_change
+         if (result%lounis%raw%available) call write_ward_record(unit, 'lounis_raw', result%lounis%raw)
+         if (result%lounis%corrected%available) call write_ward_record(unit, 'lounis_corrected', result%lounis%corrected)
+      end if
+      if (result%projection%requested) then
+         write(unit, '(a,l1)') '# halle_projection_applied = ', result%projection%applied
+         write(unit, '(a,l1)') '# halle_projection_rejected = ', result%projection%rejected
+         write(unit, '(a,a)') '# halle_projection_decision = ', trim(result%projection%decision)
+         write(unit, '(a,2(1x,es24.16))') '# halle_projection_eigenvalue_before = ', &
+            real(result%projection%eigenvalue_before, rp), aimag(result%projection%eigenvalue_before)
+         write(unit, '(a,es24.16)') '# halle_projection_relative_operator_change = ', &
+            result%projection%relative_operator_change
+         if (result%projection%raw%available) call write_ward_record(unit, 'halle_raw', result%projection%raw)
+         if (result%projection%corrected%available) call write_ward_record(unit, 'halle_corrected', result%projection%corrected)
+      end if
       call write_one_diagnostics(unit, 'raw', result%raw)
       if (result%sum_rule_applied) call write_one_diagnostics(unit, 'legacy_site_scalar_corrected', result%corrected)
       if (allocated(result%k_perp)) then
@@ -431,6 +541,8 @@ contains
       matrix_norm = sqrt(sum(abs(xi)**2))
       diagnostics%imaginary_norm = sqrt(sum(aimag(xi)**2))/max(1.0_rp, matrix_norm)
       diagnostics%available = .true.
+      call evaluate_ward_from_xi(xi, magnetization, diagnostics%ward, response_basis='active response basis', &
+         kernel_provenance='Xi = chi_KS K_xc; raw operator before any repair')
       if (present(bare_spectral_gap)) then
          diagnostics%has_bare_spectral_gap = .true.
          diagnostics%bare_spectral_gap = bare_spectral_gap
@@ -511,6 +623,17 @@ contains
       write(unit, '(a,a,a,es24.16)') trim(prefix), '_biorthogonal_magnetization_overlap', '', diagnostics%biorthogonal_magnetization_overlap
       write(unit, '(a,a,a,es24.16)') trim(prefix), '_imaginary_norm', '', diagnostics%imaginary_norm
       write(unit, '(a,a,a,es24.16)') trim(prefix), '_residual', '', diagnostics%residual
+      if (diagnostics%ward%available) then
+         write(unit, '(a,a,a,es24.16)') trim(prefix), '_ward_residual', '', diagnostics%ward%ward_residual
+         write(unit, '(a,a,a,es24.16)') trim(prefix), '_dm_residual', '', diagnostics%ward%dm_residual
+         write(unit, '(a,a,a,es24.16)') trim(prefix), '_bxc_kernel_residual', '', diagnostics%ward%bxc_kernel_residual
+         write(unit, '(a,a,a,es24.16)') trim(prefix), '_magnetization_norm', '', diagnostics%ward%magnetization_norm
+         write(unit, '(a,a,a,es24.16)') trim(prefix), '_bxc_norm', '', diagnostics%ward%bxc_norm
+         write(unit, '(a,a,a,l1)') trim(prefix), '_identity_consistent', '', diagnostics%ward%identity_consistent
+         write(unit, '(a,a,a)') trim(prefix), '_response_basis = ', trim(diagnostics%ward%response_basis)
+         write(unit, '(a,a,a)') trim(prefix), '_bxc_provenance = ', trim(diagnostics%ward%bxc_provenance)
+         write(unit, '(a,a,a)') trim(prefix), '_kernel_provenance = ', trim(diagnostics%ward%kernel_provenance)
+      end if
       if (diagnostics%has_bare_spectral_gap) then
          write(unit, '(a,a,a,es24.16)') trim(prefix), '_bare_spectral_gap', '', diagnostics%bare_spectral_gap
       end if
@@ -527,5 +650,18 @@ contains
             real(diagnostics%closest_left_eigenvector(i), rp), aimag(diagnostics%closest_left_eigenvector(i))
       end do
    end subroutine write_one_diagnostics
+
+   subroutine write_ward_record(unit, prefix, diagnostics)
+      integer, intent(in) :: unit
+      character(len=*), intent(in) :: prefix
+      type(tddft_ward_diagnostics), intent(in) :: diagnostics
+
+      write(unit, '(a,a,a,l1)') '# ', trim(prefix), '_available = ', diagnostics%available
+      if (.not. diagnostics%available) return
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_ward_residual = ', diagnostics%ward_residual
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_dm_residual = ', diagnostics%dm_residual
+      write(unit, '(a,a,a,a)') '# ', trim(prefix), '_response_basis = ', trim(diagnostics%response_basis)
+      write(unit, '(a,a,a,a)') '# ', trim(prefix), '_kernel_provenance = ', trim(diagnostics%kernel_provenance)
+   end subroutine write_ward_record
 
 end module tddft_goldstone_mod

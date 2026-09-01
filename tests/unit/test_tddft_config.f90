@@ -16,6 +16,7 @@ program test_tddft_config
    call test_green_input()
    call test_xi_backend_input()
    call test_goldstone_correction_modes()
+   call test_goldstone_policy_input()
    call test_ground_state_provenance_defaults()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
@@ -156,6 +157,21 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_goldstone_correction_modes
+
+   subroutine test_goldstone_policy_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " goldstone_policy = 'projected'"
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('explicit TDDFT-02 Goldstone policy is retained', trim(config%goldstone_policy) == 'projected')
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_goldstone_policy_input
 
    subroutine test_ground_state_provenance_defaults()
       type(tddft_config) :: inherited, temperature_overridden

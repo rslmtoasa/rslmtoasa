@@ -22,6 +22,7 @@ program test_tddft_goldstone
    call test_symmetry_breaking_disables_sum_rule()
    call test_raw_residual_convergence_controls()
    call test_signed_magnetization_diagnostics()
+   call test_explicit_goldstone_policies()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -203,6 +204,32 @@ contains
       call assert_real('two-site ferro signed moment is a zero mode', ferro%residual, 0.0_rp)
       call assert_real('two-site antiferro signed moment is a zero mode', antiferro%residual, 0.0_rp)
    end subroutine test_signed_magnetization_diagnostics
+
+   subroutine test_explicit_goldstone_policies()
+      type(xc_response_kernel_provider) :: provider
+      type(tddft_goldstone_options) :: options
+      type(tddft_goldstone_result) :: result
+      complex(rp) :: chi(2, 2)
+
+      chi = cmplx(0.0_rp, 0.0_rp, rp)
+      chi(1, 1) = 0.5_rp
+      chi(2, 2) = 0.25_rp
+      call make_provider(provider, [2.0_rp, 1.0_rp], [1.8_rp, 4.0_rp])
+      options%goldstone_policy = 'sum_rule'
+      call evaluate_goldstone(chi, provider, options, result)
+      call assert_true('explicit Lounis policy is applied by Goldstone driver', result%lounis%applied)
+      call assert_real('Goldstone driver Lounis kernel', real(result%k_perp_sum_rule(1), rp), 2.0_rp)
+      call assert_real('Goldstone driver Lounis residual', result%lounis%corrected%ward_residual, 0.0_rp)
+
+      chi = cmplx(0.0_rp, 0.0_rp, rp)
+      chi(1, 1) = 1.0_rp
+      chi(2, 2) = 1.0_rp
+      call make_provider(provider, [1.0_rp, 0.0_rp], [0.9_rp, 0.2_rp])
+      options%goldstone_policy = 'projected'
+      call evaluate_goldstone(chi, provider, options, result)
+      call assert_true('explicit Halle policy is applied by Goldstone driver', result%projection%applied)
+      call assert_real('Goldstone driver projected kernel', real(result%kernel_corrected(1, 1), rp), 1.0_rp)
+   end subroutine test_explicit_goldstone_policies
 
    subroutine make_provider(provider, moment, kernel)
       type(xc_response_kernel_provider), intent(out) :: provider

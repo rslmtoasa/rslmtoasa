@@ -1295,6 +1295,10 @@ contains
       is_full_response = config%channel == 'full'
       pair_backend = config%xi_backend == 'pair_potential' .or. config%xi_backend == 'compare'
       legacy_backend = config%xi_backend == 'legacy_site_scalar' .or. config%xi_backend == 'compare'
+      if (config%goldstone_policy /= 'diagnose' .and. (is_longitudinal .or. is_full_response .or. .not. legacy_backend)) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: goldstone_policy sum_rule/projected currently requires '// &
+            'the transverse legacy active response basis.', __FILE__, __LINE__)
+      end if
       if (pair_backend) then
          if (is_longitudinal .or. is_full_response .or. config%chi0_backend /= 'eigenpairs') then
             call g_logger%fatal('[calculation.post_processing_susceptibility]: xi_backend=pair_potential/compare is currently '// &
@@ -1461,7 +1465,8 @@ contains
          call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp])
          call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
             site_orbital_counts, left_channels, pair_operator_source, chi0_options, pair_xi_static)
-         call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone)
+         call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone, &
+            response_basis='site', kernel_provenance='direct LMTO ham_only transverse pair-potential Xi')
          if (config%goldstone_mode == 'correct') then
             if (has_soc .or. has_external_field) then
                pair_correction%requested = .true.
@@ -1516,18 +1521,33 @@ contains
          end if
       else
          goldstone_options%goldstone_mode = config%goldstone_mode
+         goldstone_options%goldstone_policy = config%goldstone_policy
          goldstone_options%has_soc = has_soc
          goldstone_options%has_external_field = has_external_field
          call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
-         ! The finite-eta static sum-rule inverse remains a diagnostic only.
-         ! It is generally complex; using it as a frequency-independent
-         ! adiabatic kernel forces an artificial Gamma singularity and can
-         ! produce negative spectral weight.  Production Dyson spectra use
-         ! the real, XC-derived kernel below.
+         ! A finite-eta inverse chi_KS remains diagnostic only.  It is generally
+         ! complex; using it as a frequency-independent adiabatic kernel forces
+         ! an artificial Gamma singularity.  An explicitly selected TDDFT-02
+         ! sum_rule/projected policy instead operates on the real static Ward
+         ! problem and records its raw and corrected residuals.
          if (legacy_backend) then
-            do isite = 1, lattice_obj%nrec
-               kernel(isite, isite) = goldstone_result%k_perp(isite)
-            end do
+         if (config%goldstone_policy == 'sum_rule' .and. goldstone_result%lounis%applied) then
+               kernel = goldstone_result%lounis%kernel
+            else if (config%goldstone_policy == 'projected' .and. goldstone_result%projection%applied) then
+               kernel = goldstone_result%kernel_corrected
+            else
+               do isite = 1, lattice_obj%nrec
+                  kernel(isite, isite) = goldstone_result%k_perp(isite)
+               end do
+            end if
+            if (config%goldstone_policy == 'sum_rule' .and. .not. goldstone_result%lounis%applied) then
+               call g_logger%fatal('[calculation.post_processing_susceptibility]: requested Lounis Ward reconstruction rejected: '// &
+                  trim(goldstone_result%lounis%decision), __FILE__, __LINE__)
+            end if
+            if (config%goldstone_policy == 'projected' .and. .not. goldstone_result%projection%applied) then
+               call g_logger%fatal('[calculation.post_processing_susceptibility]: requested Halle Goldstone projection rejected: '// &
+                  trim(goldstone_result%projection%decision), __FILE__, __LINE__)
+            end if
          end if
          if (rank == 0) then
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
@@ -2000,6 +2020,10 @@ contains
       write(unit, '(a,es24.16)') '# pair_potential_raw_biorthogonal_magnetization_overlap = ', &
          diagnostics%biorthogonal_magnetization_overlap
       write(unit, '(a,es24.16)') '# pair_potential_raw_imaginary_norm = ', diagnostics%imaginary_norm
+      write(unit, '(a,es24.16)') '# pair_potential_raw_ward_residual = ', diagnostics%ward%ward_residual
+      write(unit, '(a,es24.16)') '# pair_potential_raw_dm_residual = ', diagnostics%ward%dm_residual
+      write(unit, '(a,a)') '# pair_potential_raw_response_basis = ', trim(diagnostics%ward%response_basis)
+      write(unit, '(a,a)') '# pair_potential_raw_kernel_provenance = ', trim(diagnostics%ward%kernel_provenance)
       write(unit, '(a)') '# pair_potential_static_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded'
       write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
       write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
@@ -2075,6 +2099,7 @@ contains
       write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
       write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
       write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
+      write(unit, '(a,a)') '# goldstone_policy = ', trim(config%goldstone_policy)
       write(unit, '(a,l1)') '# goldstone_mode_migrated_from_sum_rule = ', config%goldstone_mode_migrated_from_sum_rule
       write(unit, '(a,l1)') '# goldstone_correction_requested = ', config%goldstone_mode == 'correct'
       write(unit, '(a,l1)') '# goldstone_correction_applied = ', index(xi_backend_label, 'corrected') > 0

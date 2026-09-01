@@ -92,6 +92,7 @@ add_library(${PROJECT_NAME} STATIC
     tddft_chi0_green.f90
     tddft_dyson.f90
     tddft_longitudinal.f90
+    tddft_ward.f90
     tddft_goldstone.f90
     tddft_four_component.f90
     tddft_modes.f90
