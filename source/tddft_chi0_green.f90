@@ -26,7 +26,7 @@ module tddft_chi0_green_mod
    use lehmann_kernel_mod, only: lehmann_kspace_resolvent
    use response_vertices_mod, only: response_channel, site_projected_operator
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_fermi_occupation, &
-      tddft_occupation_kT_floor
+      tddft_occupation_kT_floor, build_static_chi_ks_from_eigenpairs_at_q
    implicit none
 
    private
@@ -38,6 +38,7 @@ module tddft_chi0_green_mod
    contains
       procedure(green_retarded_matrix), deferred :: get_retarded
       procedure(green_spectral_bounds), deferred :: get_spectral_bounds
+      procedure :: get_static_chi0 => unsupported_green_static
    end type green_function_provider
 
    abstract interface
@@ -54,6 +55,7 @@ module tddft_chi0_green_mod
          class(green_function_provider), intent(in) :: this
          real(rp), intent(out) :: energy_min, energy_max
       end subroutine green_spectral_bounds
+
    end interface
 
    !> Controls for the validated real-axis path.  An unset energy window is
@@ -68,6 +70,8 @@ module tddft_chi0_green_mod
       real(rp) :: energy_max = -huge(1.0_rp)
       integer :: energy_points = 2001
       integer :: k_mesh_shape(3) = 0
+      real(rp) :: q_direct(3) = 0.0_rp
+      character(len=32) :: response_projection = 'site'
    end type green_chi0_options
 
    !> Canonical KS-response provider.  It is deliberately independent of
@@ -89,9 +93,12 @@ module tddft_chi0_green_mod
       procedure :: initialize => initialize_eigenpair_green_provider
       procedure :: get_retarded => eigenpair_retarded_green
       procedure :: get_spectral_bounds => eigenpair_spectral_bounds
+      procedure :: get_static_chi0 => eigenpair_static_chi0
    end type eigenpair_green_function_provider
 
    public :: build_chi_ks_from_green_functions
+   public :: build_static_chi_ks_from_green_functions
+   public :: build_static_four_component_chi_ks_from_green_functions
    public :: build_four_component_chi_ks_from_green_functions
 
 contains
@@ -159,6 +166,36 @@ contains
       energy_max = max(maxval(this%eigenvalues_k), maxval(this%eigenvalues_kq))
    end subroutine eigenpair_spectral_bounds
 
+   !> The static limit is an actual zero-frequency divided difference, not a
+   !> dynamic sample at finite eta.  The Lehmann GF provider owns the same
+   !> spectral endpoint data as the dynamic GF source, so it can provide this
+   !> exact static operation while retaining the common response vertices.
+   subroutine eigenpair_static_chi0(this, k_weights, site_orbital_counts, left_channels, right_channels, options, result)
+      class(eigenpair_green_function_provider), intent(in) :: this
+      real(rp), intent(in) :: k_weights(:)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+
+      if (.not. allocated(this%eigenvalues_k)) then
+         error stop 'eigenpair_static_chi0: provider is not initialized'
+      end if
+      call build_static_chi_ks_from_eigenpairs_at_q(k_weights, this%eigenvalues_k, this%eigenvectors_k, &
+         this%eigenvalues_kq, this%eigenvectors_kq, site_orbital_counts, left_channels, right_channels, options, result)
+   end subroutine eigenpair_static_chi0
+
+   subroutine unsupported_green_static(this, k_weights, site_orbital_counts, left_channels, right_channels, options, result)
+      class(green_function_provider), intent(in) :: this
+      real(rp), intent(in) :: k_weights(:)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+
+      error stop 'green_function_provider: exact static chi0 is unavailable for this Green-function source'
+   end subroutine unsupported_green_static
+
    !> Build chi_KS in the same `(left,right,omega)` basis and result type used
    !> by the eigenpair backend.
    subroutine build_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, left_channels, right_channels, &
@@ -175,6 +212,42 @@ contains
       call provider%build(k_weights, site_orbital_counts, left_channels, right_channels, omega, result)
    end subroutine build_chi_ks_from_green_functions
 
+   !> Build the exact static limit supported by the one-particle source.  A
+   !> source without a spectral/static implementation fails explicitly rather
+   !> than silently replacing the static response by a finite-eta dynamic one.
+   subroutine build_static_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, left_channels, &
+      right_channels, options, result)
+      class(green_function_provider), intent(in) :: one_particle
+      real(rp), intent(in) :: k_weights(:)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(green_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+      type(tddft_chi0_options) :: static_options
+
+      static_options%eta = 0.0_rp
+      static_options%fermi_level = options%fermi_level
+      static_options%electronic_temperature = options%electronic_temperature
+      static_options%k_mesh_shape = options%k_mesh_shape
+      static_options%q_direct = options%q_direct
+      static_options%response_projection = options%response_projection
+      call one_particle%get_static_chi0(k_weights, site_orbital_counts, left_channels, right_channels, static_options, result)
+      result%metadata%backend = 'green_static'
+      result%metadata%canonical_backend = 'kspace_lehmann'
+      result%metadata%implementation = 'K-space Lehmann GF exact static limit'
+      result%metadata%energy_integration = 'exact provider static limit'
+      result%metadata%endpoint_provenance = 'K and K+q Lehmann GF endpoint source; exact static limit'
+      result%metadata%q_direct = options%q_direct
+      result%metadata%response_projection = options%response_projection
+      result%metadata%green_eta = 0.0_rp
+      result%metadata%integration_energy_points = 0
+      result%metadata%omega_min = 0.0_rp
+      result%metadata%omega_max = 0.0_rp
+      result%metadata%omega_points = 1
+      result%metadata%q_batch_size = 1
+      result%metadata%omega_batch_size = 1
+   end subroutine build_static_chi_ks_from_green_functions
+
    subroutine build_green_chi0(this, k_weights, site_orbital_counts, left_channels, right_channels, omega, result)
       class(green_chi0_provider), intent(in) :: this
       real(rp), intent(in) :: k_weights(:), omega(:)
@@ -183,6 +256,8 @@ contains
       type(tddft_chi0_result), intent(out) :: result
       complex(rp), allocatable :: left_ops(:, :, :), right_ops(:, :, :)
       complex(rp), allocatable :: gr_k(:, :), ga_k(:, :), gr_q(:, :), ga_q(:, :), gr_shift(:, :), ga_shift(:, :)
+      complex(rp), allocatable :: trace_work1(:, :), trace_work2(:, :), trace_work3(:, :)
+      complex(rp) :: bubble_first, bubble_second
       real(rp) :: energy_min, energy_max, denergy, energy, weight_sum, green_eta, thermal_tail, omega_tail
       real(rp) :: quadrature_weight, prefactor, t_start, t_stop
       integer :: nmat, nk, nleft, nright, nw, ne, ik, ie, iw, ileft, iright
@@ -223,7 +298,8 @@ contains
       allocate(result%chi(nleft, nright, nw), result%re_chi(nleft, nright, nw), result%im_chi(nleft, nright, nw))
       result%chi = cmplx(0.0_rp, 0.0_rp, rp)
       allocate(gr_k(nmat, nmat), ga_k(nmat, nmat), gr_q(nmat, nmat), ga_q(nmat, nmat), &
-         gr_shift(nmat, nmat), ga_shift(nmat, nmat))
+         gr_shift(nmat, nmat), ga_shift(nmat, nmat), trace_work1(nmat, nmat), trace_work2(nmat, nmat), &
+         trace_work3(nmat, nmat))
 
       call cpu_time(t_start)
       do ik = 1, nk
@@ -242,10 +318,13 @@ contains
                ga_shift = transpose(conjg(ga_shift))
                do iright = 1, nright
                   do ileft = 1, nleft
+                     bubble_first = trace_four(left_ops(:, :, ileft), gr_shift, right_ops(:, :, iright), gr_k-ga_k, trace_work1, &
+                        trace_work2, trace_work3)
+                     bubble_second = trace_four(left_ops(:, :, ileft), gr_q-ga_q, right_ops(:, :, iright), ga_shift, trace_work1, &
+                        trace_work2, trace_work3)
                      result%chi(ileft, iright, iw) = result%chi(ileft, iright, iw) - prefactor*quadrature_weight* &
                         tddft_fermi_occupation(energy, this%options%fermi_level, this%options%electronic_temperature)* &
-                        (trace_four(left_ops(:, :, ileft), gr_shift, right_ops(:, :, iright), gr_k-ga_k) + &
-                         trace_four(left_ops(:, :, ileft), gr_q-ga_q, right_ops(:, :, iright), ga_shift))/(2.0_rp*pi*i_unit)
+                        (bubble_first+bubble_second)/(2.0_rp*pi*i_unit)
                   end do
                end do
             end do
@@ -259,6 +338,7 @@ contains
       result%metadata%canonical_backend = 'kspace_lehmann'
       result%metadata%implementation = 'K-space Lehmann GF bubble'
       result%metadata%energy_integration = 'real-axis trapezoid'
+      result%metadata%endpoint_provenance = 'K/K+q branches; exact folded endpoint supplied by caller'
       result%metadata%eta = 2.0_rp*green_eta
       result%metadata%green_eta = green_eta
       result%metadata%integration_energy_min = energy_min
@@ -278,6 +358,11 @@ contains
       result%metadata%converged = .false.
       result%metadata%q_batch_size = 1
       result%metadata%omega_batch_size = nw
+      result%metadata%q_direct = this%options%q_direct
+      result%metadata%response_projection = this%options%response_projection
+      result%metadata%omega_min = minval(omega)
+      result%metadata%omega_max = maxval(omega)
+      result%metadata%omega_points = nw
    end subroutine build_green_chi0
 
    subroutine build_four_component_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, omega, options, result)
@@ -298,17 +383,36 @@ contains
       call build_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, channels, channels, omega, options, result)
    end subroutine build_four_component_chi_ks_from_green_functions
 
-   function trace_four(a, b, c, d) result(value)
+   subroutine build_static_four_component_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, options, result)
+      class(green_function_provider), intent(in) :: one_particle
+      real(rp), intent(in) :: k_weights(:)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(green_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+      type(response_channel), allocatable :: channels(:)
+      integer :: isite, component
+
+      allocate(channels(4*size(site_orbital_counts)))
+      do isite = 1, size(site_orbital_counts)
+         do component = 0, 3
+            channels(4*(isite-1)+component+1) = response_channel(isite, component)
+         end do
+      end do
+      call build_static_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, channels, channels, &
+         options, result)
+   end subroutine build_static_four_component_chi_ks_from_green_functions
+
+   function trace_four(a, b, c, d, work1, work2, work3) result(value)
       complex(rp), intent(in) :: a(:, :), b(:, :), c(:, :), d(:, :)
+      complex(rp), intent(out) :: work1(:, :), work2(:, :), work3(:, :)
       complex(rp) :: value
-      complex(rp), allocatable :: work1(:, :), work2(:, :), work3(:, :)
       integer :: i, n
 
       n = size(a, 1)
-      if (size(a, 2) /= n .or. any(shape(b) /= [n, n]) .or. any(shape(c) /= [n, n]) .or. any(shape(d) /= [n, n])) then
+      if (size(a, 2) /= n .or. any(shape(b) /= [n, n]) .or. any(shape(c) /= [n, n]) .or. any(shape(d) /= [n, n]) .or. &
+          any(shape(work1) /= [n, n]) .or. any(shape(work2) /= [n, n]) .or. any(shape(work3) /= [n, n])) then
          error stop 'trace_four: incompatible matrix dimensions'
       end if
-      allocate(work1(n, n), work2(n, n), work3(n, n))
       work1 = matmul(a, b)
       work2 = matmul(work1, c)
       work3 = matmul(work2, d)

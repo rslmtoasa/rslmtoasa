@@ -413,6 +413,7 @@ contains
             error stop 'K-space Lehmann backend: q index is outside initialized endpoint data'
          end if
          result%q_indices(iq) = q_index
+         options%q_direct = request%q_points(:, iq)
          call source%initialize(this%eigenvalues_k, this%eigenvectors_k, this%eigenvalues_kq(:, :, q_index), &
             this%eigenvectors_kq(:, :, :, q_index))
          options%fermi_level = this%options%fermi_level

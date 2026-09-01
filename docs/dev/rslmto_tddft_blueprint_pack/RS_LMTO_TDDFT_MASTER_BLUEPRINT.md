@@ -582,7 +582,7 @@ The core TD-DFT campaign is complete only when:
 - [ ] the transverse kernel/vertices satisfy the static Ward identity under convergence without empirical tuning;
 - [ ] the existing eigenpair backend is stable and reproducible;
 - [x] `G(k,z)` Lehmann GF is independently validated;
-- [ ] a K-space GF chi0 backend exists;
+- [x] a K-space GF chi0 backend exists;
 - [ ] a native real-space GF chi0 backend exists without mandatory `G(k)` conversion;
 - [ ] direct and contour integration paths agree on controlled fixtures;
 - [ ] all three chi0 backends agree for Fe/Ni within converged numerical uncertainty;

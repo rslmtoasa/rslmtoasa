@@ -57,7 +57,8 @@ module calculation_mod
       build_static_direct_xi_from_operator_source
    use tddft_transition_engine_mod, only: pair_operator_tile_source
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
-      build_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
+      build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions, &
+      build_static_four_component_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use tddft_backend_mod, only: tddft_chi0_backend, tddft_eigenpair_backend, tddft_kspace_lehmann_backend, &
       canonical_tddft_backend_name, make_tddft_chi0_backend
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
@@ -1428,6 +1429,7 @@ contains
       green_options%energy_max = config%green_energy_max
       green_options%energy_points = config%green_energy_points
       green_options%k_mesh_shape = reciprocal_obj%nk_mesh
+      green_options%response_projection = config%response_projection
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
       if (is_longitudinal .and. has_soc) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &
@@ -1504,21 +1506,28 @@ contains
       allocate(omega_static(1))
       omega_static = 0.0_rp
       if (.not. is_longitudinal .and. .not. is_full_response) then
-         if (config%chi0_backend /= 'eigenpairs') then
+         if (canonical_chi0_backend /= 'eigenpairs' .and. canonical_chi0_backend /= 'kspace_lehmann') then
             call g_logger%fatal('[calculation.post_processing_susceptibility]: real static Ward diagnostics require '// &
-               'chi0_backend=eigenpairs; the eigenpair-resolvent backend has no static-limit solver.', __FILE__, __LINE__)
+               'an eigenpair or K-space Lehmann backend with an exact static-limit solver.', __FILE__, __LINE__)
          end if
          chi0_options%q_direct = 0.0_rp
-         call build_static_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
-            site_orbital_counts, left_channels, right_channels, chi0_options, chi0_static)
-      else if (config%chi0_backend == 'green') then
+         green_options%q_direct = 0.0_rp
+         if (canonical_chi0_backend == 'kspace_lehmann') then
+            call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
+            call build_static_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
+               left_channels, right_channels, green_options, chi0_static)
+         else
+            call build_static_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+               site_orbital_counts, left_channels, right_channels, chi0_options, chi0_static)
+         end if
+      else if (canonical_chi0_backend == 'kspace_lehmann') then
          call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
          if (is_full_response) then
-            call build_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
-               site_orbital_counts, omega_static, green_options, chi0_static)
+            call build_static_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
+               site_orbital_counts, green_options, chi0_static)
          else
-            call build_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
-               left_channels, right_channels, omega_static, green_options, chi0_static)
+            call build_static_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
+               left_channels, right_channels, green_options, chi0_static)
          end if
       else if (is_full_response) then
          call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
@@ -1669,6 +1678,7 @@ contains
          ! The workset folds k+q into the Hamiltonian BZ, while the requested
          ! direct-basis path coordinate is retained in output provenance.
          chi0_options%q_direct = config%q_points(:, iq)
+         green_options%q_direct = config%q_points(:, iq)
          if (is_full_response) then
             if (canonical_chi0_backend == 'kspace_lehmann') then
                call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)

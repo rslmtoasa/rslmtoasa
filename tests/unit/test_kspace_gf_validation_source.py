@@ -1,4 +1,4 @@
-"""TDDFT-05 source contracts for the orthogonal K-space Lehmann GF."""
+"""TDDFT-05/06 source contracts for the orthogonal K-space Lehmann GF."""
 
 from pathlib import Path
 
@@ -32,7 +32,24 @@ def test_orthogonal_metric_boundary_is_explicit() -> None:
     assert "This kernel hard-codes" in dyson and "S = I (the Dyson matrix" in dyson
 
 
+def test_kspace_chi0_uses_shared_vertices_and_has_an_exact_static_boundary() -> None:
+    provider = (ROOT / "source/tddft_chi0_green.f90").read_text(encoding="utf-8")
+    bubble = provider.split("subroutine build_green_chi0", 1)[1].split(
+        "end subroutine build_green_chi0", 1
+    )[0]
+
+    assert "site_projected_operator" in provider
+    assert "get_static_chi0" in provider
+    assert "build_static_chi_ks_from_green_functions" in provider
+    assert "exact static limit" in provider
+    assert "kernel" not in bubble.lower()
+    assert "endpoint_provenance" in bubble
+    assert "integration_energy_points" in bubble
+    assert "omega_points" in bubble
+
+
 if __name__ == "__main__":
     test_one_k_resolvent_is_the_shared_pure_kernel()
     test_orthogonal_metric_boundary_is_explicit()
-    print("TDDFT-05 K-space GF source contracts PASS")
+    test_kspace_chi0_uses_shared_vertices_and_has_an_exact_static_boundary()
+    print("TDDFT-05/06 K-space GF source contracts PASS")

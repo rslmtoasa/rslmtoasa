@@ -40,7 +40,7 @@ For every production benchmark record:
 - [x] retarded/advanced and Hermiticity identities hold.
 
 ### Gate B — chi0 backend equivalence
-- [ ] eigenpair and k-GF chi0 agree on small periodic fixtures.
+- [x] eigenpair and k-GF chi0 agree on small periodic fixtures.
 - [ ] k-GF and r-GF chi0(q,w) agree after R convergence.
 - [ ] direct and mixed-contour integration agree.
 
