@@ -41,8 +41,8 @@ For every production benchmark record:
 
 ### Gate B — chi0 backend equivalence
 - [x] eigenpair and k-GF chi0 agree on small periodic fixtures.
-- [ ] k-GF and r-GF chi0(q,w) agree after R convergence.
-- [ ] direct and mixed-contour integration agree.
+- [x] k-GF and r-GF chi0(q,w) agree after R convergence.
+- [x] direct and mixed-contour integration agree.
 
 ### Gate C — static physics
 - [ ] spectral-weight sum rule is satisfied to converged numerical tolerance.

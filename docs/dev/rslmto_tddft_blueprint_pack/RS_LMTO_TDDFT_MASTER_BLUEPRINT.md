@@ -583,8 +583,8 @@ The core TD-DFT campaign is complete only when:
 - [ ] the existing eigenpair backend is stable and reproducible;
 - [x] `G(k,z)` Lehmann GF is independently validated;
 - [x] a K-space GF chi0 backend exists;
-- [ ] a native real-space GF chi0 backend exists without mandatory `G(k)` conversion;
-- [ ] direct and contour integration paths agree on controlled fixtures;
+- [x] a native real-space GF chi0 backend exists without mandatory `G(k)` conversion;
+- [x] direct and contour integration paths agree on controlled fixtures;
 - [ ] all three chi0 backends agree for Fe/Ni within converged numerical uncertainty;
 - [ ] q=0/near-q=0 Goldstone and q^2 dispersion are correct for SOC=0 FM cases;
 - [ ] stiffness is consistent with independent LKAG/frozen-magnon/GBT references;

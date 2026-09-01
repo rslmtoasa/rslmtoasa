@@ -1,0 +1,50 @@
+{
+  "campaign": "TDDFT-09",
+  "fixture": {"kind": "periodic_one_site_spin_split", "response_basis": "site circular", "temperature_K": 0.0},
+  "settings": {"nk": 4, "energy_points": 8001, "q_points": 3, "omega_points": 2,
+    "eta":   2.0000000000000000E-02, "green_eta":   1.0000000000000000E-02,
+    "pointwise_relative_tolerance":   5.0000000000000003E-02, "kspace_realspace_tolerance":   1.0000000000000000E-03,
+    "energy_window": [ -4.5000000000000000E+00,   4.5000000000000000E+00], "energy_unit": "Rydberg", "eta_role": "numerical"},
+  "pointwise": [
+    {"q_index": 1, "omega_index": 1, "q_x":   0.0000000000000000E+00, "omega":   2.3999999999999999E-01, "eigenpair_vs_kspace":   8.5466170612610408E-03, "eigenpair_vs_realspace":   8.7333334379032096E-03, "kspace_vs_realspace":   3.4914162436801489E-04, "eigenvalue_vs_kspace":   6.7593443164282920E-03, "eigenvalue_vs_realspace":   6.9936588095496554E-03},
+    {"q_index": 1, "omega_index": 2, "q_x":   0.0000000000000000E+00, "omega":   5.9999999999999998E-01, "eigenpair_vs_kspace":   4.4099277853890076E-02, "eigenpair_vs_realspace":   4.4098135876927541E-02, "kspace_vs_realspace":   2.8306290460650709E-05, "eigenvalue_vs_kspace":   3.2229207407032903E-02, "eigenvalue_vs_realspace":   3.2246431727809451E-02},
+    {"q_index": 2, "omega_index": 1, "q_x":   2.5000000000000000E-01, "omega":   2.3999999999999999E-01, "eigenpair_vs_kspace":   8.8444961999901255E-03, "eigenpair_vs_realspace":   9.1127928091153040E-03, "kspace_vs_realspace":   4.2527734094258628E-04, "eigenvalue_vs_kspace":   6.9640296292365527E-03, "eigenvalue_vs_realspace":   7.3014619034310552E-03},
+    {"q_index": 2, "omega_index": 2, "q_x":   2.5000000000000000E-01, "omega":   5.9999999999999998E-01, "eigenpair_vs_kspace":   4.4033480318451897E-02, "eigenpair_vs_realspace":   4.4032380105912386E-02, "kspace_vs_realspace":   2.8277550610099589E-05, "eigenvalue_vs_kspace":   3.2238613876621872E-02, "eigenvalue_vs_realspace":   3.2255815880634420E-02},
+    {"q_index": 3, "omega_index": 1, "q_x":   5.0000000000000000E-01, "omega":   2.3999999999999999E-01, "eigenpair_vs_kspace":   1.1117587919535108E-02, "eigenpair_vs_realspace":   1.1052450124975860E-02, "kspace_vs_realspace":   1.5389363649423313E-04, "eigenvalue_vs_kspace":   8.7150975109845270E-03, "eigenvalue_vs_realspace":   8.6314569047285326E-03},
+    {"q_index": 3, "omega_index": 2, "q_x":   5.0000000000000000E-01, "omega":   5.9999999999999998E-01, "eigenpair_vs_kspace":   4.3968089660920057E-02, "eigenpair_vs_realspace":   4.3967030819425733E-02, "kspace_vs_realspace":   2.8248834157056923E-05, "eigenvalue_vs_kspace":   3.2247909669527786E-02, "eigenvalue_vs_realspace":   3.2265089214232476E-02}
+  ],
+  "summary": {"max_eigenpair_vs_kspace":   4.4099277853890076E-02, "max_eigenpair_vs_realspace":   4.4098135876927541E-02, "max_kspace_vs_realspace":   4.2527734094258628E-04, "max_eigenvalue_vs_kspace":   3.2247909669527786E-02, "max_eigenvalue_vs_realspace":   3.2265089214232476E-02},
+  "static": {"eigenpair_vs_kspace":   0.0000000000000000E+00, "eigenpair_ward_residual":   0.0000000000000000E+00, "kspace_ward_residual":   0.0000000000000000E+00, "native_static_supported": false},
+  "native_realspace": {"response_build_count": 1, "q_batch_reuse": true },
+  "zero_frequency_dynamic_ward_residual": [  9.0535746042518531E-02,  5.8306744333464833E-02,  5.8306744333464833E-02],
+  "spectral_sum_rule": {"target":   4.0000000000000000E+00, "values": [
+      3.8406704806703011E+00,  3.7272207294461439E+00,  3.7319139568859567E+00],
+    "relative_residuals": [  3.9832379832424714E-02,  6.8194817638464023E-02,  6.7021510778510818E-02]},
+  "convergence": {
+    "k_mesh": [
+      {"nk": 2, "eigenpair_vs_kspace":   4.4756763380133291E-02, "eigenpair_vs_realspace":   4.4648162064296421E-02},
+      {"nk": 4, "eigenpair_vs_kspace":   4.4084412736693293E-02, "eigenpair_vs_realspace":   4.4014472662840039E-02},
+      {"nk": 8, "eigenpair_vs_kspace":   4.4055344897520839E-02, "eigenpair_vs_realspace":   4.3990104031766571E-02}
+    ],
+    "r_cutoff": [
+      {"rmax":   0.0000000000000000E+00, "relative_to_full":   2.1513565082240288E-01, "tail_ratio":   1.8525500339967008E-01},
+      {"rmax":   1.0000000000000000E+00, "relative_to_full":   8.3261007810858143E-02, "tail_ratio":   4.9049494389522365E-02},
+      {"rmax":   2.0000000000000000E+00, "relative_to_full":   0.0000000000000000E+00, "tail_ratio":   0.0000000000000000E+00}
+    ],
+    "energy_resolution": [
+      {"energy_points": 1001, "kspace_change":   2.6074186463284160E-04, "realspace_change":   2.2882982246811751E-02},
+      {"energy_points": 2001, "kspace_change":   1.2297794469136045E-05, "realspace_change":   4.0052964242374943E-03},
+      {"energy_points": 4001, "kspace_change":   0.0000000000000000E+00, "realspace_change":   0.0000000000000000E+00}
+    ],
+    "contour": [
+      {"contour_points": 16, "absolute_error":   4.3945536335819791E-05, "relative_error":   3.1231247265019460E-07},
+      {"contour_points": 32, "absolute_error":   2.6016339612583904E-06, "relative_error":   1.8489312069427292E-08},
+      {"contour_points": 64, "absolute_error":   2.6026127590677856E-06, "relative_error":   1.8496268197160966E-08}
+    ],
+    "eta_gamma": [
+      {"eta":   4.0000000000000001E-02, "gamma":   2.0000000000000000E-02, "energy_points": 4001, "gamma_over_eta":   5.0000000000000000E-01, "kspace_vs_realspace":   5.7002744834792993E-04, "eigenpair_vs_kspace":   8.7521369640092120E-02},
+      {"eta":   2.0000000000000000E-02, "gamma":   1.0000000000000000E-02, "energy_points": 8001, "gamma_over_eta":   5.0000000000000000E-01, "kspace_vs_realspace":   3.4914162436801489E-04, "eigenpair_vs_kspace":   4.4099277853890076E-02},
+      {"eta":   1.0000000000000000E-02, "gamma":   5.0000000000000001E-03, "energy_points": 16001, "gamma_over_eta":   5.0000000000000000E-01, "kspace_vs_realspace":   3.4236533430686189E-04, "eigenpair_vs_kspace":   2.2102699425435666E-02}
+    ]},
+  "negative_controls": {"sign_flip_error":   1.9959947018957185E+00, "factor_two_error":   9.9208342660023952E-01, "sign_flip_detected": true , "factor_two_detected": true }
+}
