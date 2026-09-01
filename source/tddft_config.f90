@@ -51,6 +51,9 @@ module tddft_config_mod
       !> reversed energy window requests a source-spectrum-derived window.
       real(rp) :: green_eta, green_energy_min, green_energy_max
       integer :: green_energy_points
+      real(rp) :: realspace_rmax, realspace_tail_tolerance
+      integer :: realspace_fourier_axes(3)
+      character(len=16) :: realspace_representation
       character(len=sl) :: longitudinal_static_file
       real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance
       real(rp) :: longitudinal_static_agreement_tolerance, longitudinal_fit_omega_min, longitudinal_fit_omega_max
@@ -107,6 +110,10 @@ contains
       this%green_energy_min = huge(1.0_rp)
       this%green_energy_max = -huge(1.0_rp)
       this%green_energy_points = 2001
+      this%realspace_rmax = huge(1.0_rp)
+      this%realspace_tail_tolerance = 1.0e-3_rp
+      this%realspace_fourier_axes = [1, 2, 3]
+      this%realspace_representation = 'bulk'
       this%longitudinal_static_file = ''
       this%longitudinal_pair_tolerance = 1.0e-10_rp
       this%longitudinal_linearity_tolerance = 5.0e-2_rp
@@ -155,6 +162,10 @@ contains
       green_eta = this%green_eta
       green_energy_min = this%green_energy_min; green_energy_max = this%green_energy_max
       green_energy_points = this%green_energy_points
+      realspace_rmax = this%realspace_rmax
+      realspace_tail_tolerance = this%realspace_tail_tolerance
+      realspace_fourier_axes = this%realspace_fourier_axes
+      realspace_representation = this%realspace_representation
       longitudinal_static_file = this%longitudinal_static_file
       longitudinal_pair_tolerance = this%longitudinal_pair_tolerance
       longitudinal_linearity_tolerance = this%longitudinal_linearity_tolerance
@@ -201,6 +212,10 @@ contains
       this%green_eta = green_eta
       this%green_energy_min = green_energy_min; this%green_energy_max = green_energy_max
       this%green_energy_points = green_energy_points
+      this%realspace_rmax = realspace_rmax
+      this%realspace_tail_tolerance = realspace_tail_tolerance
+      this%realspace_fourier_axes = realspace_fourier_axes
+      this%realspace_representation = lower(trim(realspace_representation))
       this%longitudinal_static_file = trim(longitudinal_static_file)
       this%longitudinal_pair_tolerance = longitudinal_pair_tolerance
       this%longitudinal_linearity_tolerance = longitudinal_linearity_tolerance
@@ -261,6 +276,7 @@ contains
 
    subroutine validate_scalar_settings(this)
       class(tddft_config), intent(in) :: this
+      integer :: ix
 
       if (this%channel /= 'transverse' .and. this%channel /= 'longitudinal' .and. this%channel /= 'full') then
          call g_logger%fatal("[tddft_config]: channel must be 'transverse', 'longitudinal', or 'full'", __FILE__, __LINE__)
@@ -312,6 +328,21 @@ contains
           (this%green_energy_min < huge(1.0_rp)/2.0_rp .and. &
            this%green_energy_max > -huge(1.0_rp)/2.0_rp .and. this%green_energy_max <= this%green_energy_min)) then
          call g_logger%fatal('[tddft_config]: invalid Green-function energy integration settings', __FILE__, __LINE__)
+      end if
+      if (this%realspace_rmax <= 0.0_rp .or. this%realspace_tail_tolerance < 0.0_rp .or. &
+          (this%realspace_representation /= 'bulk' .and. this%realspace_representation /= 'film' .and. &
+           this%realspace_representation /= 'finite' .and. this%realspace_representation /= 'local') .or. &
+          any(this%realspace_fourier_axes < 0) .or. any(this%realspace_fourier_axes > 3)) then
+         call g_logger%fatal('[tddft_config]: invalid native real-space Green-function settings', __FILE__, __LINE__)
+      end if
+      if (this%realspace_representation == 'bulk' .and. any(this%realspace_fourier_axes == 0)) then
+         call g_logger%fatal('[tddft_config]: bulk real-space representation requires all three Fourier axes', __FILE__, __LINE__)
+      end if
+      if (this%realspace_representation == 'film') then
+         if (count(this%realspace_fourier_axes > 0) /= 2 .or. &
+             any([(count(this%realspace_fourier_axes == ix), ix=1, 3)] > 1)) then
+            call g_logger%fatal('[tddft_config]: film real-space representation requires two Fourier axes', __FILE__, __LINE__)
+         end if
       end if
       if (this%channel == 'longitudinal') then
          if (len_trim(this%longitudinal_static_file) == 0 .or. this%longitudinal_pair_tolerance <= 0.0_rp .or. &

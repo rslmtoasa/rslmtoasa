@@ -99,6 +99,15 @@ module tddft_chi0_mod
       logical :: real_space_reuse = .false.
       integer :: real_space_points = 0
       real(rp) :: real_space_cutoff = 0.0_rp
+      character(len=16) :: real_space_representation = 'bulk'
+      integer :: real_space_fourier_axes(3) = [1, 2, 3]
+      integer :: real_space_omitted_points = 0
+      integer :: real_space_shell_count = 0
+      real(rp) :: real_space_tail_norm = 0.0_rp
+      real(rp) :: real_space_tail_ratio = 0.0_rp
+      real(rp) :: real_space_last_shell_norm = 0.0_rp
+      real(rp) :: real_space_tail_tolerance = 0.0_rp
+      logical :: real_space_tail_assessed = .false.
    end type tddft_chi0_metadata
 
    !> Response and directly consumable KS/Stoner spectral products.  The
@@ -508,6 +517,15 @@ contains
       write(unit, '(a,l1)') '# real_space_reuse = ', result%metadata%real_space_reuse
       write(unit, '(a,i0)') '# real_space_points = ', result%metadata%real_space_points
       write(unit, '(a,es24.16)') '# real_space_cutoff = ', result%metadata%real_space_cutoff
+      write(unit, '(a,a)') '# real_space_representation = ', trim(result%metadata%real_space_representation)
+      write(unit, '(a,3(1x,i0))') '# real_space_fourier_axes =', result%metadata%real_space_fourier_axes
+      write(unit, '(a,i0)') '# real_space_omitted_points = ', result%metadata%real_space_omitted_points
+      write(unit, '(a,i0)') '# real_space_shell_count = ', result%metadata%real_space_shell_count
+      write(unit, '(a,es24.16)') '# real_space_tail_norm = ', result%metadata%real_space_tail_norm
+      write(unit, '(a,es24.16)') '# real_space_tail_ratio = ', result%metadata%real_space_tail_ratio
+      write(unit, '(a,es24.16)') '# real_space_last_shell_norm = ', result%metadata%real_space_last_shell_norm
+      write(unit, '(a,es24.16)') '# real_space_tail_tolerance = ', result%metadata%real_space_tail_tolerance
+      write(unit, '(a,l1)') '# real_space_tail_assessed = ', result%metadata%real_space_tail_assessed
       write(unit, '(a,a)') '# energy_integration = ', trim(result%metadata%energy_integration)
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', result%metadata%fermi_level

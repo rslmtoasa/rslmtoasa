@@ -51,7 +51,7 @@ module calculation_mod
    use basis_mod, only: basis_init, norb
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q
    use tddft_config_mod, only: tddft_config
-   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_batch_result, build_chi_ks_from_eigenpairs, &
       build_static_chi_ks_from_eigenpairs, write_chi_ks_text
    use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_operator_source, &
       build_static_direct_xi_from_operator_source
@@ -60,7 +60,8 @@ module calculation_mod
       build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions, &
       build_static_four_component_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use tddft_backend_mod, only: tddft_chi0_backend, tddft_eigenpair_backend, tddft_kspace_lehmann_backend, &
-      canonical_tddft_backend_name, make_tddft_chi0_backend
+      tddft_realspace_gf_backend, canonical_tddft_backend_name, make_tddft_chi0_backend
+   use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
@@ -1217,7 +1218,10 @@ contains
       type(tddft_chi0_options) :: chi0_options
       type(green_chi0_options) :: green_options
       type(eigenpair_green_function_provider), target :: green_source
+      type(tddft_realspace_chi0_options) :: realspace_options
+      type(tddft_native_realspace_gf_provider), target :: realspace_source
       type(tddft_chi0_result) :: chi0_result, chi0_static
+      type(tddft_chi0_batch_result) :: realspace_batch
       type(tddft_dyson_options) :: dyson_options
       type(tddft_dyson_result) :: dyson_result, dyson_pair_result, dyson_pair_corrected_result
       type(tddft_direct_xi_result) :: pair_xi_result, pair_xi_static, pair_xi_corrected_result
@@ -1266,10 +1270,6 @@ contains
       if (len_trim(canonical_chi0_backend) == 0) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: unknown chi0 backend '''// &
             trim(config%chi0_backend)//'''.', __FILE__, __LINE__)
-      end if
-      if (canonical_chi0_backend == 'realspace_gf') then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: chi0_backend=realspace_gf is selected, but '// &
-            'no native real-space TDDFT chi0 provider is attached to this production route yet.', __FILE__, __LINE__)
       end if
       call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
@@ -1362,6 +1362,14 @@ contains
       is_full_response = config%channel == 'full'
       pair_backend = config%xi_backend == 'pair_potential' .or. config%xi_backend == 'compare'
       legacy_backend = config%xi_backend == 'legacy_site_scalar' .or. config%xi_backend == 'compare'
+      if (canonical_chi0_backend == 'realspace_gf' .and. (is_longitudinal .or. is_full_response)) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF currently supports the '// &
+            'collinear transverse response only; longitudinal/full response combinations remain explicitly unsupported.', __FILE__, __LINE__)
+      end if
+      if (canonical_chi0_backend == 'realspace_gf' .and. control_obj%recur /= 'block' .and. control_obj%recur /= 'chebyshev') then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF requires block or chebyshev '// &
+            'intersite recursion storage; the lanczos route has no native G(R,z) source.', __FILE__, __LINE__)
+      end if
       if (config%goldstone_policy /= 'diagnose' .and. (is_longitudinal .or. is_full_response .or. .not. legacy_backend)) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: goldstone_policy sum_rule/projected currently requires '// &
             'the transverse legacy active response basis.', __FILE__, __LINE__)
@@ -1430,6 +1438,13 @@ contains
       green_options%energy_points = config%green_energy_points
       green_options%k_mesh_shape = reciprocal_obj%nk_mesh
       green_options%response_projection = config%response_projection
+      realspace_options%eta = config%eta
+      realspace_options%green_eta = config%green_eta
+      realspace_options%electronic_temperature = config%electronic_temperature
+      realspace_options%rmax = config%realspace_rmax
+      realspace_options%tail_tolerance = config%realspace_tail_tolerance
+      realspace_options%representation = config%realspace_representation
+      realspace_options%fourier_axes = config%realspace_fourier_axes
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
       if (is_longitudinal .and. has_soc) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &
@@ -1447,6 +1462,24 @@ contains
             __FILE__, __LINE__)
       end if
       if (.not. is_full_response) call make_tddft_chi0_backend(config%chi0_backend, chi0_backend)
+
+      if (canonical_chi0_backend == 'realspace_gf') then
+         if (numprocs /= 1) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space TDDFT currently requires '// &
+               'serial atom ownership; MPI reduction of chi0(R,omega) is not silently approximated.', __FILE__, __LINE__)
+         end if
+         call run_intersite_moments(control_obj, recursion_obj)
+         call green_obj%calculate_intersite_gf()
+         call realspace_source%initialize_from_green(green_obj, lattice_obj, site_orbital_counts, left_channels, &
+            right_channels, realspace_options)
+         select type (chi0_backend)
+         type is (tddft_realspace_gf_backend)
+            call chi0_backend%initialize(realspace_source)
+         class default
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space provider attachment failed.', &
+               __FILE__, __LINE__)
+         end select
+      end if
 
       ! k eigenpairs are independent of q and are therefore reused on each q
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
@@ -1469,6 +1502,20 @@ contains
       config%response_electron_count = response_electron_count
       chi0_options%fermi_level = config%fermi_level
       green_options%fermi_level = config%fermi_level
+      if (canonical_chi0_backend == 'realspace_gf') then
+         realspace_source%options%fermi_level = config%fermi_level
+         realspace_source%options%electronic_temperature = config%electronic_temperature
+         select type (chi0_backend)
+         type is (tddft_realspace_gf_backend)
+            ! The backend owns a provider copy.  Reattach after the response
+            ! mesh resolves EF so the native bubble uses the same occupations
+            ! as the ground-state response contract.
+            call chi0_backend%initialize(realspace_source)
+         class default
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space backend reattachment failed.', &
+               __FILE__, __LINE__)
+         end select
+      end if
       electron_count_tolerance = 1.0e-8_rp*max(1.0_rp, config%ground_state_electron_count)
       if (abs(response_electron_count-config%ground_state_electron_count) > electron_count_tolerance) then
          write(electron_count_message, '(a,es16.8,a,es16.8,a,es12.4,a,es16.8,a,es16.8,a)') &
@@ -1505,7 +1552,16 @@ contains
       ! kernel from independently converged symmetric +/- Bz calculations.
       allocate(omega_static(1))
       omega_static = 0.0_rp
-      if (.not. is_longitudinal .and. .not. is_full_response) then
+      ! A native real-space source is dynamic-first in TDDFT-07.  Do not
+      ! manufacture its static Ward input from reciprocal eigenpairs; the
+      ! enhanced/Dyson route remains an explicit future provider requirement.
+      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes .or. is_longitudinal .or. pair_backend
+      if (canonical_chi0_backend == 'realspace_gf') then
+         if (need_dyson) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF dynamic output currently '// &
+               'does not provide an exact static kernel for Xi/Dyson enhancement; request bare chi0 output only.', __FILE__, __LINE__)
+         end if
+      else if (.not. is_longitudinal .and. .not. is_full_response) then
          if (canonical_chi0_backend /= 'eigenpairs' .and. canonical_chi0_backend /= 'kspace_lehmann') then
             call g_logger%fatal('[calculation.post_processing_susceptibility]: real static Ward diagnostics require '// &
                'an eigenpair or K-space Lehmann backend with an exact static-limit solver.', __FILE__, __LINE__)
@@ -1556,7 +1612,11 @@ contains
       end if
       allocate(kernel(nresponse, nresponse))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
-      if (is_longitudinal) then
+      if (canonical_chi0_backend == 'realspace_gf') then
+         ! Bare native chi0 output does not invent a static kernel or
+         ! Goldstone diagnostic; those require the future native static-limit
+         ! provider documented in TDDFT-07.
+      else if (is_longitudinal) then
          longitudinal_options%pair_tolerance = config%longitudinal_pair_tolerance
          longitudinal_options%linearity_tolerance = config%longitudinal_linearity_tolerance
          longitudinal_options%static_agreement_tolerance = config%longitudinal_static_agreement_tolerance
@@ -1646,7 +1706,6 @@ contains
       ! Selecting a pair-potential backend is itself a request to construct
       ! the raw Xi shadow data at every requested (q,omega), even if the user
       ! has disabled the optional text products.
-      need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes .or. is_longitudinal .or. pair_backend
       dyson_options%diagonalize_xi = config%output_modes
       dyson_options%diagonalize_loss = config%output_modes
       if (config%output_modes) then
@@ -1666,20 +1725,40 @@ contains
       ! independently observed dynamic Gamma peaks below.
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
+      if (canonical_chi0_backend == 'realspace_gf') then
+         ! chi0(R,omega) is q independent.  Build it once for the complete
+         ! requested path, then consume only its cheap susceptibility FT in
+         ! the output loop below.
+         select type (chi0_backend)
+         type is (tddft_realspace_gf_backend)
+            call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch)
+         class default
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space batch adapter is absent.', &
+               __FILE__, __LINE__)
+         end select
+      end if
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
          bare_gamma_peak = -1.0_rp; legacy_gamma_peak = -1.0_rp; pair_gamma_peak = -1.0_rp
          pair_corrected_gamma_peak = -1.0_rp
-         kq_workset = reciprocal_obj%k_workset%shifted(config%q_points(:, iq))
-         call cpu_time(t_profile_start)
-         call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_workset%points, eigenvalues_kq, eigenvectors_kq)
-         call cpu_time(t_profile_stop)
-         kq_eigensolve_cpu_seconds = t_profile_stop-t_profile_start
+         if (canonical_chi0_backend == 'realspace_gf') then
+            kq_eigensolve_cpu_seconds = 0.0_rp
+            chi0_result = realspace_batch%q_response(iq)
+         else
+            kq_workset = reciprocal_obj%k_workset%shifted(config%q_points(:, iq))
+            call cpu_time(t_profile_start)
+            call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_workset%points, eigenvalues_kq, eigenvectors_kq)
+            call cpu_time(t_profile_stop)
+            kq_eigensolve_cpu_seconds = t_profile_stop-t_profile_start
+         end if
          ! The workset folds k+q into the Hamiltonian BZ, while the requested
          ! direct-basis path coordinate is retained in output provenance.
          chi0_options%q_direct = config%q_points(:, iq)
          green_options%q_direct = config%q_points(:, iq)
-         if (is_full_response) then
+         if (canonical_chi0_backend == 'realspace_gf') then
+            ! The complete q batch was evaluated above.  No G(k), k+q, or
+            ! per-q endpoint solve is used on the native path.
+         else if (is_full_response) then
             if (canonical_chi0_backend == 'kspace_lehmann') then
                call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
                call build_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
