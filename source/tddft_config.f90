@@ -265,8 +265,12 @@ contains
       if (this%channel /= 'transverse' .and. this%channel /= 'longitudinal' .and. this%channel /= 'full') then
          call g_logger%fatal("[tddft_config]: channel must be 'transverse', 'longitudinal', or 'full'", __FILE__, __LINE__)
       end if
-      if (this%chi0_backend /= 'eigenpairs' .and. this%chi0_backend /= 'green') then
-         call g_logger%fatal("[tddft_config]: chi0_backend must be 'eigenpairs' or 'green'", __FILE__, __LINE__)
+      if (this%chi0_backend /= 'eigenpairs' .and. this%chi0_backend /= 'green' .and. &
+          this%chi0_backend /= 'kspace_lehmann' .and. this%chi0_backend /= 'kspace_gf' .and. &
+          this%chi0_backend /= 'realspace_gf' .and. this%chi0_backend /= 'realspace' .and. &
+          this%chi0_backend /= 'rs_gf' .and. this%chi0_backend /= 'real_space_gf') then
+         call g_logger%fatal("[tddft_config]: chi0_backend must be 'eigenpairs', 'kspace_lehmann', or 'realspace_gf' "// &
+            "(compatibility aliases: 'green', 'kspace_gf', 'realspace', 'rs_gf')", __FILE__, __LINE__)
       end if
       if (this%xi_backend /= 'legacy_site_scalar' .and. this%xi_backend /= 'pair_potential' .and. &
           this%xi_backend /= 'compare') then

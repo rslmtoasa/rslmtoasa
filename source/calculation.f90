@@ -58,6 +58,8 @@ module calculation_mod
    use tddft_transition_engine_mod, only: pair_operator_tile_source
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
+   use tddft_backend_mod, only: tddft_chi0_backend, tddft_eigenpair_backend, tddft_kspace_lehmann_backend, &
+      canonical_tddft_backend_name, make_tddft_chi0_backend
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
@@ -1228,6 +1230,7 @@ contains
       type(tddft_longitudinal_static_result) :: longitudinal_static
       type(tddft_longitudinal_result) :: longitudinal_result
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
+      class(tddft_chi0_backend), allocatable :: chi0_backend
       type(lmto_pair_operator_tile_source), target :: pair_operator_source
       type(response_channel), allocatable :: left_channels(:), right_channels(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
@@ -1249,6 +1252,7 @@ contains
          correction_spectral_weight_ok, full_response_supported
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
       character(len=256) :: full_response_capability_reason
+      character(len=32) :: canonical_chi0_backend
       character(len=384) :: electron_count_message
       character(len=640) :: spectral_weight_message
 
@@ -1256,6 +1260,15 @@ contains
       if (.not. config%enabled) then
          if (rank == 0) call g_logger%info('TDDFT susceptibility route disabled by &tddft enabled=.false.', __FILE__, __LINE__)
          return
+      end if
+      canonical_chi0_backend = canonical_tddft_backend_name(config%chi0_backend)
+      if (len_trim(canonical_chi0_backend) == 0) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: unknown chi0 backend '''// &
+            trim(config%chi0_backend)//'''.', __FILE__, __LINE__)
+      end if
+      if (canonical_chi0_backend == 'realspace_gf') then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: chi0_backend=realspace_gf is selected, but '// &
+            'no native real-space TDDFT chi0 provider is attached to this production route yet.', __FILE__, __LINE__)
       end if
       call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
@@ -1425,10 +1438,13 @@ contains
             'unavailable until its static calibration is rebuilt on the WR-04 real static-limit machinery; no LLB claim is supported.', &
             __FILE__, __LINE__)
       end if
-      if (config%chi0_backend == 'green' .and. rank == 0) then
+      if (canonical_chi0_backend == 'kspace_lehmann' .and. config%chi0_backend == 'green' .and. rank == 0) then
          call g_logger%warning('[calculation.post_processing_susceptibility]: chi0_backend=''green'' currently selects the '// &
-            'eigenpair-resolvent reference, not a native RS Green-function provider.', __FILE__, __LINE__)
+            'K-space Lehmann backend backed by the eigenpair-resolvent reference, not a native RS Green-function provider; '// &
+            'native RS response is selected with chi0_backend=''realspace_gf''.', &
+            __FILE__, __LINE__)
       end if
+      if (.not. is_full_response) call make_tddft_chi0_backend(config%chi0_backend, chi0_backend)
 
       ! k eigenpairs are independent of q and are therefore reused on each q
       ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
@@ -1653,21 +1669,35 @@ contains
          ! The workset folds k+q into the Hamiltonian BZ, while the requested
          ! direct-basis path coordinate is retained in output provenance.
          chi0_options%q_direct = config%q_points(:, iq)
-         if (config%chi0_backend == 'green') then
-            call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
-            if (is_full_response) then
+         if (is_full_response) then
+            if (canonical_chi0_backend == 'kspace_lehmann') then
+               call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
                call build_four_component_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, &
                   site_orbital_counts, omega, green_options, chi0_result)
             else
-               call build_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
-                  left_channels, right_channels, omega, green_options, chi0_result)
+               call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+                  eigenvectors_kq, site_orbital_counts, omega, chi0_options, chi0_result)
             end if
-         else if (is_full_response) then
-            call build_four_component_chi_ks(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
-               eigenvectors_kq, site_orbital_counts, omega, chi0_options, chi0_result)
          else
-            call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
-               eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
+            select type (chi0_backend)
+            type is (tddft_eigenpair_backend)
+               call chi0_backend%initialize(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                  reshape(eigenvalues_kq, [size(eigenvalues_kq, 1), size(eigenvalues_kq, 2), 1]), &
+                  reshape(eigenvectors_kq, [size(eigenvectors_kq, 1), size(eigenvectors_kq, 2), &
+                  size(eigenvectors_kq, 3), 1]), reshape(config%q_points(:, iq), [3, 1]), site_orbital_counts, &
+                  left_channels, right_channels, chi0_options, green_options)
+               call chi0_backend%evaluate_frequency_batch(config%q_points(:, iq), omega, chi0_result, q_index=1)
+            type is (tddft_kspace_lehmann_backend)
+               call chi0_backend%initialize(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                  reshape(eigenvalues_kq, [size(eigenvalues_kq, 1), size(eigenvalues_kq, 2), 1]), &
+                  reshape(eigenvectors_kq, [size(eigenvectors_kq, 1), size(eigenvectors_kq, 2), &
+                  size(eigenvectors_kq, 3), 1]), reshape(config%q_points(:, iq), [3, 1]), site_orbital_counts, &
+                  left_channels, right_channels, chi0_options, green_options)
+               call chi0_backend%evaluate_frequency_batch(config%q_points(:, iq), omega, chi0_result, q_index=1)
+            class default
+               call g_logger%fatal('[calculation.post_processing_susceptibility]: selected chi0 backend has no '// &
+                  'initialized periodic endpoint adapter.', __FILE__, __LINE__)
+            end select
          end if
          ! Keep the public file metadata consistent across the reference and
          ! resolvent adapters.  The endpoint coordinates are the requested

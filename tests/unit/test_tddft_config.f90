@@ -14,6 +14,7 @@ program test_tddft_config
    call test_longitudinal_input()
    call test_full_input()
    call test_green_input()
+   call test_explicit_backend_names()
    call test_xi_backend_input()
    call test_goldstone_correction_modes()
    call test_goldstone_policy_input()
@@ -117,6 +118,29 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_green_input
+
+   subroutine test_explicit_backend_names()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " chi0_backend = 'kspace_lehmann'"
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('explicit K-space Lehmann backend is accepted', trim(config%chi0_backend) == 'kspace_lehmann')
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " chi0_backend = 'realspace_gf'"
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('explicit native real-space backend is accepted', trim(config%chi0_backend) == 'realspace_gf')
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_explicit_backend_names
 
    subroutine test_xi_backend_input()
       type(tddft_config) :: config

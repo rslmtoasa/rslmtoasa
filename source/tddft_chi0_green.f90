@@ -269,6 +269,8 @@ contains
       result%im_chi = aimag(result%chi)
       call build_spectral_products(left_channels, right_channels, result)
       result%metadata%backend = 'green'
+      result%metadata%canonical_backend = 'kspace_lehmann'
+      result%metadata%implementation = 'K-space Lehmann GF bubble'
       result%metadata%energy_integration = 'real-axis trapezoid'
       result%metadata%eta = 2.0_rp*green_eta
       result%metadata%green_eta = green_eta
@@ -285,6 +287,10 @@ contains
       result%metadata%band_first = 1
       result%metadata%band_last = nmat
       result%metadata%green_energy_integration_cpu_seconds = t_stop-t_start
+      result%metadata%convergence_status = 'not assessed by backend'
+      result%metadata%converged = .false.
+      result%metadata%q_batch_size = 1
+      result%metadata%omega_batch_size = nw
    end subroutine build_green_chi0
 
    subroutine build_four_component_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, omega, options, result)

@@ -51,6 +51,8 @@ module tddft_chi0_mod
    !> Reproducibility metadata written with every chi_KS output.
    type, public :: tddft_chi0_metadata
       character(len=32) :: backend = 'eigenpairs'
+      character(len=32) :: canonical_backend = 'eigenpairs'
+      character(len=64) :: implementation = 'explicit eigenpair transitions'
       character(len=32) :: energy_integration = 'not applicable'
       character(len=16) :: energy_unit = 'Rydberg'
       character(len=32) :: susceptibility_unit = '1/Rydberg'
@@ -88,6 +90,15 @@ module tddft_chi0_mod
       integer :: omega_points = 0
       logical :: static_limit = .false.
       logical :: eta_is_numerical = .true.
+      character(len=48) :: convergence_status = 'not evaluated'
+      logical :: converged = .false.
+      logical :: goldstone_correction_applied = .false.
+      character(len=96) :: goldstone_correction = 'none'
+      integer :: q_batch_size = 1
+      integer :: omega_batch_size = 0
+      logical :: real_space_reuse = .false.
+      integer :: real_space_points = 0
+      real(rp) :: real_space_cutoff = 0.0_rp
    end type tddft_chi0_metadata
 
    !> Response and directly consumable KS/Stoner spectral products.  The
@@ -103,6 +114,31 @@ module tddft_chi0_mod
       real(rp), allocatable :: stoner_spectral_map(:, :)
       type(tddft_chi0_metadata) :: metadata
    end type tddft_chi0_result
+
+   !> Common request envelope consumed by every chi0 backend.  `q_points`
+   !> uses the project-wide (3,nq) convention and may contain one point for a
+   !> scalar request.  `q_indices` is optional backend provenance: a caller
+   !> that has already built endpoint data can identify those points without
+   !> requiring a backend to reverse-map floating-point coordinates.
+   type, public :: tddft_chi0_request
+      real(rp), allocatable :: q_points(:, :)
+      integer, allocatable :: q_indices(:)
+      real(rp), allocatable :: omega(:)
+      character(len=24) :: batch_mode = 'q_and_omega'
+      logical :: allow_real_space_reuse = .true.
+   end type tddft_chi0_request
+
+   !> Batch envelope around the compatibility-preserving per-q result.  The
+   !> backend contract can therefore batch q points without changing existing
+   !> Dyson and output consumers, which continue to receive one
+   !> `tddft_chi0_result` at a time when appropriate.
+   type, public :: tddft_chi0_batch_result
+      type(tddft_chi0_result), allocatable :: q_response(:)
+      real(rp), allocatable :: q_points(:, :)
+      integer, allocatable :: q_indices(:)
+      real(rp), allocatable :: omega(:)
+      type(tddft_chi0_metadata) :: metadata
+   end type tddft_chi0_batch_result
 
    public :: build_chi_ks_from_eigenpairs
    public :: build_static_chi_ks_from_eigenpairs
@@ -305,6 +341,12 @@ contains
       result%metadata%static_limit = .false.
       result%metadata%eta_is_numerical = .true.
       result%metadata%response_projection = options%response_projection
+      result%metadata%canonical_backend = 'eigenpairs'
+      result%metadata%implementation = 'explicit eigenpair transitions'
+      result%metadata%convergence_status = 'not assessed by backend'
+      result%metadata%converged = .false.
+      result%metadata%q_batch_size = 1
+      result%metadata%omega_batch_size = nw
    end subroutine build_chi_ks_from_eigenpairs
 
    !> Real q=0, omega=0 Lehmann response used only for static Ward
@@ -377,6 +419,8 @@ contains
       result%im_chi = aimag(result%chi)
       call build_spectral_products(left_channels, right_channels, result)
       result%metadata%backend = 'static_eigenpairs'
+      result%metadata%canonical_backend = 'eigenpairs'
+      result%metadata%implementation = 'explicit eigenpair static divided difference'
       result%metadata%energy_integration = 'not applicable'
       result%metadata%frequency_convention = 'static omega=0 divided difference; no dynamical eta'
       result%metadata%eta_role = 'not used by static divided-difference response'
@@ -400,6 +444,10 @@ contains
       result%metadata%omega_max = 0.0_rp
       result%metadata%omega_points = 1
       result%metadata%response_projection = options%response_projection
+      result%metadata%convergence_status = 'not assessed by backend'
+      result%metadata%converged = .false.
+      result%metadata%q_batch_size = 1
+      result%metadata%omega_batch_size = 1
    end subroutine build_static_chi_ks_from_eigenpairs_at_q
 
    pure real(rp) function tddft_static_divided_difference(energy_n, energy_m, fermi_level, temperature) result(value)
@@ -449,6 +497,17 @@ contains
       write(unit, '(a,l1)') '# static_limit = ', result%metadata%static_limit
       write(unit, '(a,l1)') '# eta_is_numerical = ', result%metadata%eta_is_numerical
       write(unit, '(a,a)') '# chi0_backend = ', trim(result%metadata%backend)
+      write(unit, '(a,a)') '# chi0_backend_canonical = ', trim(result%metadata%canonical_backend)
+      write(unit, '(a,a)') '# chi0_backend_implementation = ', trim(result%metadata%implementation)
+      write(unit, '(a,a)') '# convergence_status = ', trim(result%metadata%convergence_status)
+      write(unit, '(a,l1)') '# converged = ', result%metadata%converged
+      write(unit, '(a,i0)') '# q_batch_size = ', result%metadata%q_batch_size
+      write(unit, '(a,i0)') '# omega_batch_size = ', result%metadata%omega_batch_size
+      write(unit, '(a,l1)') '# goldstone_correction_applied = ', result%metadata%goldstone_correction_applied
+      write(unit, '(a,a)') '# goldstone_correction = ', trim(result%metadata%goldstone_correction)
+      write(unit, '(a,l1)') '# real_space_reuse = ', result%metadata%real_space_reuse
+      write(unit, '(a,i0)') '# real_space_points = ', result%metadata%real_space_points
+      write(unit, '(a,es24.16)') '# real_space_cutoff = ', result%metadata%real_space_cutoff
       write(unit, '(a,a)') '# energy_integration = ', trim(result%metadata%energy_integration)
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', result%metadata%fermi_level
