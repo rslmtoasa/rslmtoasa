@@ -44,6 +44,8 @@ module tddft_chi0_mod
       integer :: k_mesh_shape(3) = 0
       logical :: use_batched_accumulation = .true.
       integer :: transition_batch_size = 128
+      real(rp) :: q_direct(3) = 0.0_rp
+      character(len=32) :: response_projection = 'site'
    end type tddft_chi0_options
 
    !> Reproducibility metadata written with every chi_KS output.
@@ -54,6 +56,9 @@ module tddft_chi0_mod
       character(len=32) :: susceptibility_unit = '1/Rydberg'
       character(len=96) :: frequency_convention = 'retarded: omega is energy; denominator omega+en-em+i*eta'
       character(len=96) :: spectral_convention = 'Stoner spectral weight = -Im chi_KS^{+-}/pi (positive excitation positive)'
+      character(len=64) :: endpoint_provenance = 'separate k and k+q eigenpair arrays'
+      character(len=32) :: response_projection = 'site'
+      character(len=80) :: eta_role = 'numerical broadening; not a physical linewidth'
       real(rp) :: eta = 0.0_rp
       real(rp) :: fermi_level = 0.0_rp
       real(rp) :: electronic_temperature = 0.0_rp
@@ -77,6 +82,12 @@ module tddft_chi0_mod
       real(rp) :: integration_energy_min = 0.0_rp
       real(rp) :: integration_energy_max = 0.0_rp
       integer :: integration_energy_points = 0
+      real(rp) :: q_direct(3) = 0.0_rp
+      real(rp) :: omega_min = 0.0_rp
+      real(rp) :: omega_max = 0.0_rp
+      integer :: omega_points = 0
+      logical :: static_limit = .false.
+      logical :: eta_is_numerical = .true.
    end type tddft_chi0_metadata
 
    !> Response and directly consumable KS/Stoner spectral products.  The
@@ -95,6 +106,7 @@ module tddft_chi0_mod
 
    public :: build_chi_ks_from_eigenpairs
    public :: build_static_chi_ks_from_eigenpairs
+   public :: build_static_chi_ks_from_eigenpairs_at_q
    public :: tddft_fermi_occupation
    public :: tddft_static_divided_difference
    public :: write_chi_ks_text
@@ -151,7 +163,7 @@ contains
       nw = size(omega)
       nspinor = 2*sum(site_orbital_counts)
       call validate_chi_ks_inputs(nk, nbands, nspinor, nleft, nright, nw, k_weights, eigenvalues_k, &
-         eigenvectors_k, eigenvalues_kq, eigenvectors_kq, options)
+         eigenvectors_k, eigenvalues_kq, eigenvectors_kq, options, require_eta=.true.)
 
       band_first = options%band_first
       band_last = options%band_last
@@ -286,6 +298,13 @@ contains
       result%metadata%occupation_prune_tolerance = options%occupation_prune_tolerance
       result%metadata%batched_accumulation = options%use_batched_accumulation
       if (options%use_batched_accumulation) result%metadata%transition_batch_size = batch_size
+      result%metadata%q_direct = options%q_direct
+      result%metadata%omega_min = minval(omega)
+      result%metadata%omega_max = maxval(omega)
+      result%metadata%omega_points = nw
+      result%metadata%static_limit = .false.
+      result%metadata%eta_is_numerical = .true.
+      result%metadata%response_projection = options%response_projection
    end subroutine build_chi_ks_from_eigenpairs
 
    !> Real q=0, omega=0 Lehmann response used only for static Ward
@@ -301,65 +320,87 @@ contains
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_chi0_result), intent(out) :: result
 
-      integer :: nk, nbands, nspinor, nleft, nright, ik, n, m, ileft, iright, band_first, band_last
-      real(rp) :: weight_sum, prefactor, factor
-      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+      type(tddft_chi0_options) :: static_options
+
+      static_options = options
+      static_options%q_direct = 0.0_rp
+      call build_static_chi_ks_from_eigenpairs_at_q(k_weights, eigenvalues, eigenvectors, eigenvalues, eigenvectors, &
+         site_orbital_counts, left_channels, right_channels, static_options, result)
+      result%metadata%endpoint_provenance = 'q=0: shared k endpoint eigenpair arrays'
+   end subroutine build_static_chi_ks_from_eigenpairs
+
+   !> Build the true static `chi_KS(q,0)` response from separate endpoint
+   !> eigenpairs.  The static factor is the finite-temperature divided
+   !> difference `(f_n(k)-f_m(k+q))/(e_n(k)-e_m(k+q))`; it is not obtained by
+   !> evaluating the dynamic response at a large broadening.  This path is the
+   !> static counterpart of the dynamic endpoint contract and is suitable for
+   !> finite-q Ward/convergence diagnostics as well as q=0.
+   subroutine build_static_chi_ks_from_eigenpairs_at_q(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
+      eigenvectors_kq, site_orbital_counts, left_channels, right_channels, options, result)
+      real(rp), target, intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
+      complex(rp), target, intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, target, intent(in) :: site_orbital_counts(:)
+      type(response_channel), target, intent(in) :: left_channels(:), right_channels(:)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+
+      integer :: nk, nbands, nspinor, nleft, nright, band_first, band_last, batch_size
+      real(rp) :: weight_sum
       type(tddft_transition_engine) :: engine
       type(site_channel_vertex_provider) :: provider
-      integer :: batch_size
 
-      nk = size(k_weights); nbands = size(eigenvalues, 1); nspinor = 2*sum(site_orbital_counts)
-      nleft = size(left_channels); nright = size(right_channels)
-      call validate_chi_ks_inputs(nk, nbands, nspinor, nleft, nright, 1, k_weights, eigenvalues, eigenvectors, &
-         eigenvalues, eigenvectors, options)
-      band_first = options%band_first; band_last = options%band_last
+      nk = size(k_weights)
+      nbands = size(eigenvalues_k, 1)
+      nleft = size(left_channels)
+      nright = size(right_channels)
+      nspinor = 2*sum(site_orbital_counts)
+      call validate_chi_ks_inputs(nk, nbands, nspinor, nleft, nright, 1, k_weights, eigenvalues_k, eigenvectors_k, &
+         eigenvalues_kq, eigenvectors_kq, options, require_eta=.false.)
+      if (options%eta < 0.0_rp) error stop 'build_static_chi_ks_from_eigenpairs_at_q: eta must be non-negative'
+      band_first = options%band_first
+      band_last = options%band_last
       if (band_last == 0) band_last = nbands
       if (band_first < 1 .or. band_last < band_first .or. band_last > nbands) then
-         error stop 'build_static_chi_ks_from_eigenpairs: invalid selected band window'
+         error stop 'build_static_chi_ks_from_eigenpairs_at_q: invalid selected band window'
       end if
       weight_sum = sum(k_weights)
       allocate(result%chi(nleft, nright, 1), result%re_chi(nleft, nright, 1), result%im_chi(nleft, nright, 1))
       result%chi = cmplx(0.0_rp, 0.0_rp, rp)
       batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
-      call make_site_channel_vertex_provider(provider, site_orbital_counts, left_channels, right_channels, eigenvectors, eigenvectors)
-      call engine%accumulate_static(k_weights, eigenvalues, options%fermi_level, options%electronic_temperature, &
-         band_first, band_last, options%occupation_prune_tolerance, batch_size, provider, result%chi, &
-         result%metadata%vertex_cpu_seconds, result%metadata%transition_preparation_cpu_seconds, &
+      call make_site_channel_vertex_provider(provider, site_orbital_counts, left_channels, right_channels, &
+         eigenvectors_k, eigenvectors_kq)
+      call engine%accumulate_static_shifted(k_weights, eigenvalues_k, eigenvalues_kq, options%fermi_level, &
+         options%electronic_temperature, band_first, band_last, options%occupation_prune_tolerance, batch_size, provider, &
+         result%chi, result%metadata%vertex_cpu_seconds, result%metadata%transition_preparation_cpu_seconds, &
          result%metadata%accumulation_cpu_seconds)
-      if (.false.) then
-      allocate(left_vertex(nleft), right_vertex(nright))
-      do ik = 1, nk
-         prefactor = k_weights(ik)/weight_sum
-         do n = band_first, band_last
-            do m = band_first, band_last
-               factor = tddft_static_divided_difference(eigenvalues(n, ik), eigenvalues(m, ik), options%fermi_level, &
-                  options%electronic_temperature)
-               if (options%occupation_prune_tolerance > 0.0_rp .and. abs(factor) <= options%occupation_prune_tolerance) cycle
-               do ileft = 1, size(left_channels)
-                  left_vertex(ileft) = response_transition_vertex(left_channels(ileft), site_orbital_counts, &
-                     eigenvectors(:, n, ik), eigenvectors(:, m, ik))
-               end do
-               do iright = 1, size(right_channels)
-                  right_vertex(iright) = response_transition_vertex(right_channels(iright), site_orbital_counts, &
-                     eigenvectors(:, m, ik), eigenvectors(:, n, ik))
-               end do
-               result%chi(:, :, 1) = result%chi(:, :, 1) + prefactor*factor*outer_product(left_vertex, right_vertex)
-            end do
-         end do
-      end do
-      deallocate(left_vertex, right_vertex)
-      end if
-      result%re_chi = real(result%chi, rp); result%im_chi = 0.0_rp
+      result%re_chi = real(result%chi, rp)
+      result%im_chi = aimag(result%chi)
       call build_spectral_products(left_channels, right_channels, result)
       result%metadata%backend = 'static_eigenpairs'
-      result%metadata%frequency_convention = 'static q=0 omega=0 divided difference; no dynamical eta'
-      result%metadata%eta = 0.0_rp; result%metadata%fermi_level = options%fermi_level
+      result%metadata%energy_integration = 'not applicable'
+      result%metadata%frequency_convention = 'static omega=0 divided difference; no dynamical eta'
+      result%metadata%eta_role = 'not used by static divided-difference response'
+      result%metadata%eta = 0.0_rp
+      result%metadata%eta_is_numerical = .false.
+      result%metadata%static_limit = .true.
+      result%metadata%fermi_level = options%fermi_level
       result%metadata%electronic_temperature = options%electronic_temperature
       result%metadata%electronic_kT = max(options%electronic_temperature*tddft_kB_Ry_per_K, tddft_occupation_kT_floor)
-      result%metadata%k_weight_sum = weight_sum; result%metadata%k_mesh_shape = options%k_mesh_shape; result%metadata%nk = nk
-      result%metadata%available_band_count = nbands; result%metadata%band_first = band_first; result%metadata%band_last = band_last
+      result%metadata%k_weight_sum = weight_sum
+      result%metadata%k_mesh_shape = options%k_mesh_shape
+      result%metadata%nk = nk
+      result%metadata%available_band_count = nbands
+      result%metadata%band_first = band_first
+      result%metadata%band_last = band_last
       result%metadata%occupation_prune_tolerance = options%occupation_prune_tolerance
-   end subroutine build_static_chi_ks_from_eigenpairs
+      result%metadata%batched_accumulation = .true.
+      result%metadata%transition_batch_size = batch_size
+      result%metadata%q_direct = options%q_direct
+      result%metadata%omega_min = 0.0_rp
+      result%metadata%omega_max = 0.0_rp
+      result%metadata%omega_points = 1
+      result%metadata%response_projection = options%response_projection
+   end subroutine build_static_chi_ks_from_eigenpairs_at_q
 
    pure real(rp) function tddft_static_divided_difference(energy_n, energy_m, fermi_level, temperature) result(value)
       real(rp), intent(in) :: energy_n, energy_m, fermi_level, temperature
@@ -396,11 +437,17 @@ contains
       end if
       open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
       if (ios /= 0) error stop 'write_chi_ks_text: cannot open output file'
-      write(unit, '(a)') '# quantity = bare chi_KS; no TDDFT enhancement; eta is numerical broadening'
+      write(unit, '(a)') '# quantity = bare chi_KS; no TDDFT enhancement; eta is numerical for dynamic response only'
       write(unit, '(a,a)') '# energy_unit = ', trim(result%metadata%energy_unit)
       write(unit, '(a,a)') '# susceptibility_unit = ', trim(result%metadata%susceptibility_unit)
       write(unit, '(a,a)') '# frequency_convention = ', trim(result%metadata%frequency_convention)
       write(unit, '(a,a)') '# spectral_convention = ', trim(result%metadata%spectral_convention)
+      write(unit, '(a,a)') '# endpoint_provenance = ', trim(result%metadata%endpoint_provenance)
+      write(unit, '(a,a)') '# response_projection = ', trim(result%metadata%response_projection)
+      write(unit, '(a,a)') '# eta_role = ', trim(result%metadata%eta_role)
+      write(unit, '(a,3(1x,es24.16))') '# q_direct = ', result%metadata%q_direct
+      write(unit, '(a,l1)') '# static_limit = ', result%metadata%static_limit
+      write(unit, '(a,l1)') '# eta_is_numerical = ', result%metadata%eta_is_numerical
       write(unit, '(a,a)') '# chi0_backend = ', trim(result%metadata%backend)
       write(unit, '(a,a)') '# energy_integration = ', trim(result%metadata%energy_integration)
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
@@ -409,6 +456,8 @@ contains
       write(unit, '(a,es24.16)') '# electronic_kT_Ry = ', result%metadata%electronic_kT
       write(unit, '(a,3(1x,i0))') '# k_mesh_shape =', result%metadata%k_mesh_shape
       write(unit, '(a,i0)') '# nk = ', result%metadata%nk
+      write(unit, '(a,2(1x,es24.16),1x,i0)') '# omega_grid_min_max_points = ', result%metadata%omega_min, &
+         result%metadata%omega_max, result%metadata%omega_points
       write(unit, '(a,es24.16)') '# raw_k_weight_sum = ', result%metadata%k_weight_sum
       write(unit, '(a,i0)') '# available_band_count = ', result%metadata%available_band_count
       write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', result%metadata%band_first, result%metadata%band_last
@@ -518,12 +567,16 @@ contains
    end subroutine build_spectral_products
 
    subroutine validate_chi_ks_inputs(nk, nbands, nspinor, nleft, nright, nw, k_weights, eigenvalues_k, &
-      eigenvectors_k, eigenvalues_kq, eigenvectors_kq, options)
+      eigenvectors_k, eigenvalues_kq, eigenvectors_kq, options, require_eta)
       integer, intent(in) :: nk, nbands, nspinor, nleft, nright, nw
       real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
       complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
       type(tddft_chi0_options), intent(in) :: options
+      logical, intent(in), optional :: require_eta
+      logical :: eta_required
 
+      eta_required = .true.
+      if (present(require_eta)) eta_required = require_eta
       if (nk <= 0 .or. nbands <= 0 .or. nspinor <= 0 .or. nleft <= 0 .or. nright <= 0 .or. nw <= 0) then
          error stop 'build_chi_ks_from_eigenpairs: empty input is not valid'
       end if
@@ -537,7 +590,13 @@ contains
       if (any(k_weights < 0.0_rp) .or. sum(k_weights) <= tiny(1.0_rp)) then
          error stop 'build_chi_ks_from_eigenpairs: k weights must have a positive sum'
       end if
-      if (options%eta <= 0.0_rp) error stop 'build_chi_ks_from_eigenpairs: eta must be positive'
+      if (options%eta < 0.0_rp .or. (eta_required .and. options%eta <= 0.0_rp)) then
+         if (eta_required) then
+            error stop 'build_chi_ks_from_eigenpairs: eta must be positive'
+         else
+            error stop 'build_chi_ks_from_eigenpairs: eta must be non-negative'
+         end if
+      end if
       if (options%electronic_temperature < 0.0_rp) then
          error stop 'build_chi_ks_from_eigenpairs: electronic temperature must be non-negative'
       end if

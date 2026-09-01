@@ -49,7 +49,7 @@ module calculation_mod
    use kpm_profile_mod, only: g_kpm_profile
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init, norb
-   use magnetic_representation_mod, only: gbt_single_q
+   use magnetic_representation_mod, only: periodic_nc, gbt_single_q
    use tddft_config_mod, only: tddft_config
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
       build_static_chi_ks_from_eigenpairs, write_chi_ks_text
@@ -1264,6 +1264,51 @@ contains
             __FILE__, __LINE__)
       end if
 
+      ! TDDFT-03 establishes one deliberately narrow response boundary.  The
+      ! transverse eigenpair formula below is derived for the collinear,
+      ! scalar-relativistic, orthogonal Hamiltonian only.  Reject every
+      ! branch whose response operator or metric derivative has not been
+      ! derived, before building eigenpairs or accepting a kernel.
+      if (control_obj%nsp /= 1) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline requires nsp=1 '// &
+            '(collinear, SOC-free); relativistic and noncollinear response is not silently approximated.', __FILE__, __LINE__)
+      end if
+      if (control_obj%do_comom .or. control_obj%constraints_enable) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects common-moment or '// &
+            'constrained external fields until their response derivatives are implemented.', __FILE__, __LINE__)
+      end if
+      if (trim(hamiltonian_obj%magnetic_representation) /= periodic_nc) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline requires magnetic_representation=periodic_nc; '// &
+            'GBT and explicit-texture response states are unsupported.', __FILE__, __LINE__)
+      end if
+      if (hamiltonian_obj%hoh) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects HOH/second-order Hamiltonians.', &
+            __FILE__, __LINE__)
+      end if
+      if (hamiltonian_obj%orb_pol) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects orbital-polarization Hamiltonians '// &
+            'until the response operator is differentiated.', __FILE__, __LINE__)
+      end if
+      if (hamiltonian_obj%ccor_2c .or. abs(hamiltonian_obj%ccor_elin) > tiny(1.0_rp)) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects CCOR-modified Hamiltonians '// &
+            'until the response derivative is implemented.', __FILE__, __LINE__)
+      end if
+      if (hamiltonian_obj%hubbard_u_general_check .or. hamiltonian_obj%hubbard_u_impurity_check .or. &
+          hamiltonian_obj%hubbard_u_sc_check .or. hamiltonian_obj%hubbard_v_check) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects Hubbard-corrected Hamiltonians '// &
+            'until the Hubbard response is implemented.', __FILE__, __LINE__)
+      end if
+
+      has_soc = .false.
+      do isite = 1, lattice_obj%ntype
+         has_soc = has_soc .or. any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_p) > tiny(1.0_rp)) .or. &
+            any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_d) > tiny(1.0_rp))
+      end do
+      if (has_soc) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects nonzero SOC '// &
+            'until the relativistic response and anisotropy terms are derived.', __FILE__, __LINE__)
+      end if
+
       ! The response driver may be invoked after a normal SCF object has gone
       ! out of scope.  Refresh the provider from the same VXC0SP route, then
       ! rebuild the normal-state Hamiltonian from that ground-state potential.
@@ -1273,6 +1318,14 @@ contains
       if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
       call hamiltonian_obj%build_bulkham()
       reciprocal_obj = reciprocal(hamiltonian_obj)
+      if (trim(reciprocal_obj%reciprocal_mode) /= 'ham_only') then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline requires reciprocal_mode=ham_only; '// &
+            'generalized-overlap response is unsupported.', __FILE__, __LINE__)
+      end if
+      if (trim(reciprocal_obj%kspace_ham_order) == 'second' .or. reciprocal_obj%include_so) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline requires first-order, SOC-free '// &
+            'Hamiltonian assembly.', __FILE__, __LINE__)
+      end if
       ! Response uses a complete reciprocal mesh.  A reduced mesh cannot in
       ! general be paired with k+q without response-specific symmetry weights.
       reciprocal_obj%use_symmetry_reduction = .false.
@@ -1354,6 +1407,7 @@ contains
       chi0_options%band_last = config%band_last
       chi0_options%occupation_prune_tolerance = config%occupation_tolerance
       chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
+      chi0_options%response_projection = config%response_projection
       green_options%eta = config%eta
       green_options%green_eta = config%green_eta
       green_options%electronic_temperature = config%electronic_temperature
@@ -1361,11 +1415,6 @@ contains
       green_options%energy_max = config%green_energy_max
       green_options%energy_points = config%green_energy_points
       green_options%k_mesh_shape = reciprocal_obj%nk_mesh
-      has_soc = .false.
-      do isite = 1, lattice_obj%ntype
-         has_soc = has_soc .or. any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_p) > tiny(1.0_rp)) .or. &
-            any(abs(lattice_obj%symbolic_atoms(isite)%potential%xi_d) > tiny(1.0_rp))
-      end do
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
       if (is_longitudinal .and. has_soc) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &
@@ -1443,6 +1492,7 @@ contains
             call g_logger%fatal('[calculation.post_processing_susceptibility]: real static Ward diagnostics require '// &
                'chi0_backend=eigenpairs; the eigenpair-resolvent backend has no static-limit solver.', __FILE__, __LINE__)
          end if
+         chi0_options%q_direct = 0.0_rp
          call build_static_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
             site_orbital_counts, left_channels, right_channels, chi0_options, chi0_static)
       else if (config%chi0_backend == 'green') then
@@ -1600,6 +1650,9 @@ contains
          call reciprocal_obj%calculate_eigenpairs_at_kpoints(kq_workset%points, eigenvalues_kq, eigenvectors_kq)
          call cpu_time(t_profile_stop)
          kq_eigensolve_cpu_seconds = t_profile_stop-t_profile_start
+         ! The workset folds k+q into the Hamiltonian BZ, while the requested
+         ! direct-basis path coordinate is retained in output provenance.
+         chi0_options%q_direct = config%q_points(:, iq)
          if (config%chi0_backend == 'green') then
             call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
             if (is_full_response) then
@@ -1616,6 +1669,12 @@ contains
             call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
                eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, chi0_options, chi0_result)
          end if
+         ! Keep the public file metadata consistent across the reference and
+         ! resolvent adapters.  The endpoint coordinates are the requested
+         ! direct-basis q; the folded k+q points remain an implementation
+         ! detail of the reciprocal workset.
+         chi0_result%metadata%q_direct = config%q_points(:, iq)
+         chi0_result%metadata%response_projection = config%response_projection
          chi0_result%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
          response_eta = chi0_result%metadata%eta
          if (is_gamma) bare_gamma_peak = observed_loss_peak(omega, chi0_result%trace_spectrum)

@@ -7,7 +7,8 @@ program test_tddft_chi_ks
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ, RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
-      build_static_chi_ks_from_eigenpairs, tddft_static_divided_difference
+      build_static_chi_ks_from_eigenpairs, build_static_chi_ks_from_eigenpairs_at_q, &
+      tddft_static_divided_difference, write_chi_ks_text
    implicit none
 
    real(rp), parameter :: machine_tol = 256.0_rp*epsilon(1.0_rp)
@@ -19,6 +20,7 @@ program test_tddft_chi_ks
    call test_positive_frequency_sign_and_products()
    call test_convergence_controls()
    call test_static_divided_difference_and_eta_independence()
+   call test_static_nonzero_q_and_provenance()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -131,6 +133,8 @@ contains
       call check_real('KS/Stoner map', result%stoner_spectral_map(1, 1), result%trace_spectrum(1))
       call check_real('real chi product', result%re_chi(1, 1, 1), real(result%chi(1, 1, 1), rp))
       call check_real('imag chi product', result%im_chi(1, 1, 1), aimag(result%chi(1, 1, 1)))
+      write (*, '(a,1x,es16.8,1x,es24.16,1x,es24.16,1x,es24.16)') 'BASELINE dynamic omega/ReChi/ImChi/Stoner', &
+         omega(1), result%re_chi(1, 1, 1), result%im_chi(1, 1, 1), result%trace_spectrum(1)
    end subroutine test_positive_frequency_sign_and_products
 
    subroutine test_convergence_controls()
@@ -210,6 +214,59 @@ contains
       call check_real('static metadata reports eta zero', static_low_eta%metadata%eta, 0.0_rp)
    end subroutine test_static_divided_difference_and_eta_independence
 
+   subroutine test_static_nonzero_q_and_provenance()
+      integer, parameter :: nk = 4
+      real(rp) :: weights(nk), eval(2, nk), evalq(2, nk), expected
+      complex(rp) :: evec(2, 2, nk), evecq(2, 2, nk)
+      real(rp) :: omega_static(1) = [0.0_rp]
+      type(tddft_chi0_options) :: options
+      type(tddft_chi0_result) :: result
+      type(response_channel) :: left(1), right(1)
+      integer :: unit, ios
+      character(len=256) :: line
+      logical :: found_q, found_endpoint, found_eta_role, found_grid
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      right(1) = response_channel(1, RESPONSE_MINUS)
+      weights = [1.0_rp, 2.0_rp, 1.0_rp, 3.0_rp]
+      call build_spin_split_fixture(1, 0.030_rp, eval, evalq, evec, evecq)
+      options%eta = 0.0_rp
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 700.0_rp
+      options%k_mesh_shape = [nk, 1, 1]
+      options%q_direct = [0.0_rp, 0.0_rp, 0.25_rp]
+      call build_static_chi_ks_from_eigenpairs_at_q(weights, eval, evec, evalq, evecq, [1], left, right, options, result)
+      call brute_force_static_pair_sum(weights, eval, evalq, options%fermi_level, options%electronic_temperature, expected)
+      call check_complex_vector('finite-q static endpoint pair sum', result%chi(1, 1, :), [cmplx(expected, 0.0_rp, rp)])
+      call check_true('finite-q static limit is explicit', result%metadata%static_limit .and. &
+         .not. result%metadata%eta_is_numerical)
+      call check_true('finite-q static endpoint provenance is explicit', index(result%metadata%endpoint_provenance, 'separate') > 0)
+      call check_real('finite-q static eta is unused', result%metadata%eta, 0.0_rp)
+      call check_complex_vector('finite-q static q provenance', cmplx(result%metadata%q_direct, 0.0_rp, rp), &
+         cmplx(options%q_direct, 0.0_rp, rp))
+
+      call write_chi_ks_text('unit_tddft_chi0_provenance.dat', omega_static, result)
+      found_q = .false.; found_endpoint = .false.; found_eta_role = .false.; found_grid = .false.
+      open(newunit=unit, file='unit_tddft_chi0_provenance.dat', status='old', action='read', iostat=ios)
+      if (ios == 0) then
+         do
+            read(unit, '(a)', iostat=ios) line
+            if (ios /= 0) exit
+            found_q = found_q .or. index(line, '# q_direct =') == 1
+            found_endpoint = found_endpoint .or. index(line, '# endpoint_provenance =') == 1
+            found_eta_role = found_eta_role .or. index(line, '# eta_role =') == 1
+            found_grid = found_grid .or. index(line, '# omega_grid_min_max_points =') == 1
+         end do
+         close(unit, status='delete')
+      end if
+      call check_true('chi0 text writes q provenance', found_q)
+      call check_true('chi0 text writes endpoint provenance', found_endpoint)
+      call check_true('chi0 text separates eta role', found_eta_role)
+      call check_true('chi0 text writes omega-grid provenance', found_grid)
+      write (*, '(a,1x,es24.16,1x,es24.16)') 'BASELINE static q=0.25/ReChi/Stoner', &
+         real(result%chi(1, 1, 1), rp), result%trace_spectrum(1)
+   end subroutine test_static_nonzero_q_and_provenance
+
    subroutine build_spin_split_fixture(q_shift, hopping, eval, evalq, evec, evecq)
       integer, intent(in) :: q_shift
       real(rp), intent(in) :: hopping
@@ -280,6 +337,26 @@ contains
          end do
       end do
    end subroutine brute_force_pair_sum
+
+   subroutine brute_force_static_pair_sum(weights, eval, evalq, fermi_level, temperature, chi)
+      real(rp), intent(in) :: weights(:), eval(:, :), evalq(:, :), fermi_level, temperature
+      real(rp), intent(out) :: chi
+      integer :: ik
+      real(rp) :: delta, fn, fm, factor
+
+      chi = 0.0_rp
+      do ik = 1, size(weights)
+         delta = eval(1, ik) - evalq(2, ik)
+         fn = independent_fermi(eval(1, ik), fermi_level, temperature)
+         fm = independent_fermi(evalq(2, ik), fermi_level, temperature)
+         if (abs(delta) > 1.0e-12_rp) then
+            factor = (fn - fm)/delta
+         else
+            factor = -0.25_rp/(temperature*6.3336814e-6_rp)
+         end if
+         chi = chi + weights(ik)/sum(weights)*4.0_rp*factor
+      end do
+   end subroutine brute_force_static_pair_sum
 
    pure real(rp) function independent_fermi(e, ef, temperature) result(f)
       real(rp), intent(in) :: e, ef, temperature

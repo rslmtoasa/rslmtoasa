@@ -355,7 +355,7 @@ module reciprocal_mod
       !> or ’generalized_overlap_kanpur’.
       character(len=32) :: reciprocal_mode
       !> Production normal-mesh backend: ’lapack’ (default) or ’cuda’.
-      character(len=16) :: reciprocal_backend
+      character(len=16) :: reciprocal_backend = 'lapack'
       !> K-space Hamiltonian order:
       !>   ’first’  -> H(k) = h(k)            (first-order, current behaviour)
       !>   ’second’ -> H(k) = E_nu + h(k) - [hoh](k) + L.S   (second-order ASA)

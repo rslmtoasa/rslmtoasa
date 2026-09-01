@@ -116,6 +116,29 @@ def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
     assert "fermi_level" not in namelist
 
 
+def test_eigenpair_baseline_boundary_rejects_unsupported_response_branches() -> None:
+    source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
+    assert "eigenpair TDDFT baseline requires nsp=1" in source
+    assert "requires magnetic_representation=periodic_nc" in source
+    assert "rejects HOH/second-order Hamiltonians" in source
+    assert "rejects CCOR-modified Hamiltonians" in source
+    assert "rejects Hubbard-corrected Hamiltonians" in source
+    assert "requires reciprocal_mode=ham_only" in source
+    assert "rejects nonzero SOC" in source
+
+
+def test_eigenpair_baseline_exposes_endpoint_aware_static_and_provenance_api() -> None:
+    root = Path(__file__).resolve().parents[2]
+    chi0 = (root / "source" / "tddft_chi0.f90").read_text()
+    engine = (root / "source" / "tddft_transition_engine.f90").read_text()
+    assert "build_static_chi_ks_from_eigenpairs_at_q" in chi0
+    assert "accumulate_static_shifted" in engine
+    assert "endpoint_provenance" in chi0
+    assert "eta_role" in chi0
+    assert "omega_grid_min_max_points" in chi0
+    assert "q_direct = config%q_points(:, iq)" in (root / "source" / "calculation.f90").read_text()
+
+
 def test_pair_correction_compares_corrected_loss_to_raw_pair_loss() -> None:
     root = Path(__file__).resolve().parents[2]
     source = (root / "source" / "calculation.f90").read_text()
@@ -137,5 +160,7 @@ if __name__ == "__main__":
     test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
     test_goldstone_correction_input_error_is_rejected_before_response_setup()
     test_response_mesh_resolves_inherited_fermi_after_eigenpairs()
+    test_eigenpair_baseline_boundary_rejects_unsupported_response_branches()
+    test_eigenpair_baseline_exposes_endpoint_aware_static_and_provenance_api()
     test_pair_correction_compares_corrected_loss_to_raw_pair_loss()
     print("RESULT: PASS")

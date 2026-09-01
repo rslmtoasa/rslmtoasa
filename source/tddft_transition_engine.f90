@@ -124,6 +124,7 @@ module tddft_transition_engine_mod
    contains
       procedure :: accumulate_dynamic => transition_engine_accumulate_dynamic
       procedure :: accumulate_static => transition_engine_accumulate_static
+      procedure :: accumulate_static_shifted => transition_engine_accumulate_static_shifted
       procedure :: restore_to_default => transition_engine_restore_to_default
       final :: transition_engine_destructor
    end type tddft_transition_engine
@@ -486,7 +487,36 @@ contains
       class(tddft_vertex_provider), intent(inout) :: provider
       complex(rp), intent(inout) :: response(:, :, :)
       real(rp), intent(inout) :: vertex_seconds, preparation_seconds, accumulation_seconds
+
+      ! Preserve the original q=0 API while routing it through the general
+      ! endpoint-aware implementation.  This is important for existing
+      ! direct engine users and makes the static endpoint relationship
+      ! explicit in one place.
+      call this%accumulate_static_shifted(k_weights, eigenvalues, eigenvalues, fermi_level, temperature, band_first, band_last, &
+         prune_tolerance, batch_size, provider, response, vertex_seconds, preparation_seconds, accumulation_seconds)
+   end subroutine transition_engine_accumulate_static
+
+   !> Accumulate the true static divided-difference response for separate
+   !> `(n,k)` and `(m,k+q)` endpoint eigenvalue arrays.  The provider already
+   !> owns the corresponding eigenvectors; keeping the energy endpoints
+   !> separate here prevents a q=0-only static approximation from leaking into
+   !> finite-q Ward and convergence tests.
+   subroutine transition_engine_accumulate_static_shifted(this, k_weights, eigenvalues_k, eigenvalues_kq, fermi_level, temperature, &
+      band_first, band_last, prune_tolerance, batch_size, provider, response, vertex_seconds, preparation_seconds, accumulation_seconds)
+      class(tddft_transition_engine), intent(inout) :: this
+      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), fermi_level, temperature, prune_tolerance
+      integer, intent(in) :: band_first, band_last, batch_size
+      class(tddft_vertex_provider), intent(inout) :: provider
+      complex(rp), intent(inout) :: response(:, :, :)
+      real(rp), intent(inout) :: vertex_seconds, preparation_seconds, accumulation_seconds
       integer :: ik,n,m,npairs,ncoefficient; real(rp)::weight_sum,prefactor,t0,t1,factor
+      if (size(eigenvalues_k, 2) /= size(k_weights) .or. any(shape(eigenvalues_kq) /= shape(eigenvalues_k))) then
+         error stop 'transition engine: incompatible static endpoint eigenvalues'
+      end if
+      if (band_first < 1 .or. band_last < band_first .or. band_last > size(eigenvalues_k, 1)) then
+         error stop 'transition engine: invalid static band window'
+      end if
+      if (batch_size < 1) error stop 'transition engine: invalid static batch size'
       weight_sum=sum(k_weights); ncoefficient=provider%coefficient_dimension()
       call this%workspace%ensure_capacity(size(response,1),size(response,2),ncoefficient,batch_size)
       call provider%begin_accumulation()
@@ -494,7 +524,7 @@ contains
          call provider%prepare_kpoint(ik)
          prefactor=k_weights(ik)/weight_sum; npairs=0
          do n=band_first,band_last; do m=band_first,band_last
-            call cpu_time(t0); factor=tddft_static_divided_difference(eigenvalues(n,ik),eigenvalues(m,ik),fermi_level,temperature)
+            call cpu_time(t0); factor=tddft_static_divided_difference(eigenvalues_k(n,ik),eigenvalues_kq(m,ik),fermi_level,temperature)
             if (prune_tolerance > 0.0_rp .and. abs(factor)<=prune_tolerance) then
                call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0; cycle
             end if
@@ -506,7 +536,7 @@ contains
          end do; end do
          if(npairs>0) call flush_static(this,ik,npairs,prefactor,provider,response,vertex_seconds,accumulation_seconds)
       end do
-   end subroutine transition_engine_accumulate_static
+   end subroutine transition_engine_accumulate_static_shifted
 
    subroutine flush_dynamic(this,ik,npairs,omega,eta,prefactor,use_batched,provider,response,vertex_seconds,denominator_seconds,accumulation_seconds)
       class(tddft_transition_engine),intent(inout)::this
