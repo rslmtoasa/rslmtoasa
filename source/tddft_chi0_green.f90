@@ -23,7 +23,7 @@
 module tddft_chi0_green_mod
    use precision_mod, only: rp
    use math_mod, only: pi, i_unit
-   use tddft_conventions_mod, only: tddft_retarded_green_denominator
+   use lehmann_kernel_mod, only: lehmann_kspace_resolvent
    use response_vertices_mod, only: response_channel, site_projected_operator
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_fermi_occupation, &
       tddft_occupation_kT_floor
@@ -129,35 +129,22 @@ contains
       integer, intent(in) :: branch, ik
       real(rp), intent(in) :: energy, eta
       complex(rp), intent(out) :: green_matrix(:, :)
-      integer :: n, nmat, i, j
+      integer :: nmat
+      complex(rp) :: z
 
       if (eta <= 0.0_rp) error stop 'eigenpair_retarded_green: eta must be positive'
       nmat = size(this%eigenvalues_k, 1)
       if (ik < 1 .or. ik > size(this%eigenvalues_k, 2) .or. any(shape(green_matrix) /= [nmat, nmat])) then
          error stop 'eigenpair_retarded_green: invalid Green-function request'
       end if
-      green_matrix = cmplx(0.0_rp, 0.0_rp, rp)
+      z = cmplx(energy, eta, rp)
       select case (branch)
       case (GREEN_BRANCH_K)
-         do n = 1, nmat
-            do j = 1, nmat
-               do i = 1, nmat
-                  green_matrix(i, j) = green_matrix(i, j) + this%eigenvectors_k(i, n, ik)* &
-                     conjg(this%eigenvectors_k(j, n, ik))/tddft_retarded_green_denominator(energy, &
-                        this%eigenvalues_k(n, ik), eta)
-               end do
-            end do
-         end do
+         call lehmann_kspace_resolvent(this%eigenvalues_k(:, ik), this%eigenvectors_k(:, :, ik), &
+            z, green_matrix)
       case (GREEN_BRANCH_KQ)
-         do n = 1, nmat
-            do j = 1, nmat
-               do i = 1, nmat
-                  green_matrix(i, j) = green_matrix(i, j) + this%eigenvectors_kq(i, n, ik)* &
-                     conjg(this%eigenvectors_kq(j, n, ik))/tddft_retarded_green_denominator(energy, &
-                        this%eigenvalues_kq(n, ik), eta)
-               end do
-            end do
-         end do
+         call lehmann_kspace_resolvent(this%eigenvalues_kq(:, ik), this%eigenvectors_kq(:, :, ik), &
+            z, green_matrix)
       case default
          error stop 'eigenpair_retarded_green: unknown Green-function branch'
       end select

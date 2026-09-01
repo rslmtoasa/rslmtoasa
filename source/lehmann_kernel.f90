@@ -8,9 +8,10 @@
 !> Anders Bergman
 !
 ! DESCRIPTION:
-!> Pure-math kernel for the strict Lehmann (backend E) k-space Green’s function
+!> Pure-math kernels for the strict Lehmann (backend E) k-space Green’s function
 !> (milestone B2, `reciprocal_green`). Given the Hermitian eigenpairs of the
-!> k-space Hamiltonian H(k), it accumulates the intersite resolvent block
+!> k-space Hamiltonian H(k), they evaluate a one-k resolvent or accumulate an
+!> intersite resolvent block
 !>
 !>   G_ij(z) = (1/N_k) sum_{k,n} e^{i k.dR_ij} psi_{i,n}(k) psi^dagger_{j,n}(k)
 !>                                              / (z - eps_{nk})
@@ -42,10 +43,50 @@ module lehmann_kernel_mod
    implicit none
 
    private
+   public :: lehmann_kspace_resolvent
    public :: lehmann_pair_block
    public :: pauli_decompose_block
 
 contains
+
+   !> @brief Evaluate one orthogonal-basis Lehmann resolvent G(k,z).
+   !> @details This is the one-electron K-space Green-function primitive:
+   !>          G(k,z) = sum_n |psi_n(k)><psi_n(k)|/(z-e_n(k)).  The
+   !>          eigenvectors are assumed Euclidean-orthonormal, which is the
+   !>          `reciprocal_mode='ham_only'` representation supported by this
+   !>          backend.  The routine intentionally accepts a general complex
+   !>          z so the same primitive covers retarded and advanced values.
+   !>          The caller owns the output storage; there are no heap
+   !>          allocations in the eigenpair/energy loop.
+   !> @param[in]  eigenvalues  Eigenvalues at one k point, shape (nmat).
+   !> @param[in]  eigenvectors Column eigenvectors, shape (nmat,nmat).
+   !> @param[in]  z            Complex energy.
+   !> @param[out] gk           Full resolvent, shape (nmat,nmat).
+   subroutine lehmann_kspace_resolvent(eigenvalues, eigenvectors, z, gk)
+      real(rp), intent(in) :: eigenvalues(:)
+      complex(rp), intent(in) :: eigenvectors(:, :)
+      complex(rp), intent(in) :: z
+      complex(rp), intent(out) :: gk(:, :)
+
+      integer :: nmat, n, i, j
+      complex(rp) :: weight, cjn
+
+      nmat = size(eigenvalues)
+      if (nmat < 1 .or. any(shape(eigenvectors) /= [nmat, nmat]) .or. any(shape(gk) /= [nmat, nmat])) then
+         error stop 'lehmann_kspace_resolvent: incompatible eigenpair or output dimensions'
+      end if
+
+      gk = (0.0_rp, 0.0_rp)
+      do n = 1, nmat
+         weight = 1.0_rp/(z-eigenvalues(n))
+         do j = 1, nmat
+            cjn = conjg(eigenvectors(j, n))
+            do i = 1, nmat
+               gk(i, j) = gk(i, j) + weight*eigenvectors(i, n)*cjn
+            end do
+         end do
+      end do
+   end subroutine lehmann_kspace_resolvent
 
    !> @brief Accumulate one strict-Lehmann intersite Green’s-function block.
    !> @details Streams over all k-points and bands, amortizing the eigenpairs

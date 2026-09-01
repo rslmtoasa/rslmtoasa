@@ -703,6 +703,8 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitLdaUHamiltonian ${TestDIR}/unit/test_lda_u_hamiltonian.f90)
   set_tests_properties(UnitLdaUHamiltonian PROPERTIES LABELS "unit;lda_u;hamiltonian")
   add_fortran_unit_test(UnitLehmannChain ${TestDIR}/unit/test_lehmann_chain.f90)
+  add_fortran_unit_test(UnitKspaceGFValidation ${TestDIR}/unit/test_kspace_gf_validation.f90)
+  set_tests_properties(UnitKspaceGFValidation PROPERTIES LABELS "unit;green;lehmann;kspace;resolvent;validation")
   add_fortran_unit_test(UnitDysonEquivalence ${TestDIR}/unit/test_dyson_equivalence.f90)
   add_fortran_unit_test(UnitGammaSupercell ${TestDIR}/unit/test_gamma_supercell.f90)
   add_fortran_unit_test(UnitBsfSumRule ${TestDIR}/unit/test_bsf_sumrule.f90)
@@ -924,6 +926,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitTddftDispatch
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_dispatch.py)
   set_tests_properties(UnitTddftDispatch PROPERTIES LABELS "tooling;tddft;dispatch")
+  add_test(NAME UnitKspaceGFValidationSource
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_kspace_gf_validation_source.py)
+  set_tests_properties(UnitKspaceGFValidationSource PROPERTIES LABELS "tooling;green;lehmann;kspace;validation")
   set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
     # Homebrew Open MPI on macOS runners may report only one available slot,

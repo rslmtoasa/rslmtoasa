@@ -94,6 +94,16 @@ contains
       class(sigma_provider), intent(in) :: sigma
       complex(rp), allocatable :: z_contour(:)
 
+      ! Backend E and the Sigma=0 form of backend D are orthogonal-basis
+      ! resolvents.  Generalized eigenvectors require the metric-consistent
+      ! object (z*S-H)^(-1) and corresponding spectral weights; accepting the
+      ! proxy eigenvectors here would silently label a different response.
+      if (trim(this%reciprocal_mode) /= 'ham_only') then
+         call g_logger%fatal('reciprocal%fill_green: K-space Lehmann/Dyson Green function requires '// &
+            "reciprocal_mode='ham_only'; generalized-overlap G=(z*S-H)^(-1) with metric-consistent spectral weights "// &
+            'is not implemented.', __FILE__, __LINE__)
+      end if
+
       ! Guarantee the real-axis grid (same call the recursion route makes).
       call green_obj%en%e_mesh()
 
