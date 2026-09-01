@@ -510,6 +510,7 @@ contains
       write(unit, '(a,a)') '# endpoint_provenance = ', trim(result%metadata%endpoint_provenance)
       write(unit, '(a,a)') '# response_projection = ', trim(result%metadata%response_projection)
       write(unit, '(a,a)') '# eta_role = ', trim(result%metadata%eta_role)
+      write(unit, '(a)') '# stoner_landau_map = site-diagonal KS loss; q resolution is supplied by the per-q output files'
       write(unit, '(a,3(1x,es24.16))') '# q_direct = ', result%metadata%q_direct
       write(unit, '(a,l1)') '# static_limit = ', result%metadata%static_limit
       write(unit, '(a,l1)') '# eta_is_numerical = ', result%metadata%eta_is_numerical
@@ -582,6 +583,8 @@ contains
          end do
          do idiag = 1, size(result%site_diagonal_spectrum, 1)
             write(unit, '(es24.16,1x,a,2(1x,i0),3(1x,es24.16))') omega(iw), 'site_diagonal', idiag, idiag, &
+               0.0_rp, 0.0_rp, result%stoner_spectral_map(idiag, iw)
+            write(unit, '(es24.16,1x,a,2(1x,i0),3(1x,es24.16))') omega(iw), 'stoner_landau', idiag, idiag, &
                0.0_rp, 0.0_rp, result%stoner_spectral_map(idiag, iw)
          end do
          write(unit, '(es24.16,1x,a,2(1x,i0),3(1x,es24.16))') omega(iw), 'trace', 0, 0, &

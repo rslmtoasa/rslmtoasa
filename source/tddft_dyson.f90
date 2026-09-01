@@ -49,6 +49,7 @@ module tddft_dyson_mod
       real(rp), allocatable :: chi_ks_site_spectral_weight(:, :)
       real(rp), allocatable :: chi_ks_trace_spectral_weight(:)
       integer, allocatable :: solve_info(:)
+      real(rp), allocatable :: loss_hermiticity_residual(:)
       real(rp), allocatable :: loss_eigenvalues(:, :)
       complex(rp), allocatable :: loss_eigenvectors(:, :, :)
       complex(rp), allocatable :: xi_eigenvalues(:, :)
@@ -60,6 +61,7 @@ module tddft_dyson_mod
    public :: enhance_tddft_susceptibility_from_xi
    public :: solve_tddft_dyson_frequency
    public :: tddft_loss_matrix
+   public :: loss_matrix_hermiticity_residual
    public :: diagonalize_nonhermitian_response
    public :: write_tddft_dyson_text
 
@@ -85,10 +87,12 @@ contains
 
       allocate(result%chi_ks(n, n, nw), result%chi_ks_loss(n, n, nw), result%xi(n, n, nw), result%chi(n, n, nw), &
          result%loss(n, n, nw), result%site_spectral_weight(n, nw), result%trace_spectral_weight(nw), &
-         result%chi_ks_site_spectral_weight(n, nw), result%chi_ks_trace_spectral_weight(nw), result%solve_info(nw))
+         result%chi_ks_site_spectral_weight(n, nw), result%chi_ks_trace_spectral_weight(nw), result%solve_info(nw), &
+         result%loss_hermiticity_residual(nw))
       result%chi_ks = chi_ks
       do iw = 1, nw
          result%chi_ks_loss(:, :, iw) = tddft_loss_matrix(chi_ks(:, :, iw))
+         result%loss_hermiticity_residual(iw) = loss_matrix_hermiticity_residual(result%chi_ks_loss(:, :, iw))
          result%chi_ks_site_spectral_weight(:, iw) = real([(result%chi_ks_loss(i, i, iw), i=1, n)], rp)
          result%chi_ks_trace_spectral_weight(iw) = sum(result%chi_ks_site_spectral_weight(:, iw))
          call cpu_time(t_start)
@@ -98,6 +102,8 @@ contains
          result%solve_info(iw) = info
          if (info /= 0) error stop 'enhance_tddft_susceptibility: LAPACK zgesv failed; I-chi_KS K is singular'
          result%loss(:, :, iw) = tddft_loss_matrix(result%chi(:, :, iw))
+         result%loss_hermiticity_residual(iw) = max(result%loss_hermiticity_residual(iw), &
+            loss_matrix_hermiticity_residual(result%loss(:, :, iw)))
          result%site_spectral_weight(:, iw) = real([(result%loss(i, i, iw), i=1, size(result%loss, 1))], rp)
          result%trace_spectral_weight(iw) = sum(result%site_spectral_weight(:, iw))
       end do
@@ -143,10 +149,12 @@ contains
       if (eta <= 0.0_rp) error stop 'enhance_tddft_susceptibility_from_xi: eta must be positive and numerical'
       allocate(result%chi_ks(n, n, nw), result%chi_ks_loss(n, n, nw), result%xi(n, n, nw), result%chi(n, n, nw), &
          result%loss(n, n, nw), result%site_spectral_weight(n, nw), result%trace_spectral_weight(nw), &
-         result%chi_ks_site_spectral_weight(n, nw), result%chi_ks_trace_spectral_weight(nw), result%solve_info(nw))
+         result%chi_ks_site_spectral_weight(n, nw), result%chi_ks_trace_spectral_weight(nw), result%solve_info(nw), &
+         result%loss_hermiticity_residual(nw))
       result%chi_ks = chi_ks; result%xi = xi
       do iw = 1, nw
          result%chi_ks_loss(:, :, iw) = tddft_loss_matrix(chi_ks(:, :, iw))
+         result%loss_hermiticity_residual(iw) = loss_matrix_hermiticity_residual(result%chi_ks_loss(:, :, iw))
          result%chi_ks_site_spectral_weight(:, iw) = real([(result%chi_ks_loss(i, i, iw), i=1, n)], rp)
          result%chi_ks_trace_spectral_weight(iw) = sum(result%chi_ks_site_spectral_weight(:, iw))
          call cpu_time(t_start)
@@ -156,6 +164,8 @@ contains
          result%solve_info(iw) = info
          if (info /= 0) error stop 'enhance_tddft_susceptibility_from_xi: LAPACK zgesv failed; I-Xi is singular'
          result%loss(:, :, iw) = tddft_loss_matrix(result%chi(:, :, iw))
+         result%loss_hermiticity_residual(iw) = max(result%loss_hermiticity_residual(iw), &
+            loss_matrix_hermiticity_residual(result%loss(:, :, iw)))
          result%site_spectral_weight(:, iw) = real([(result%loss(i, i, iw), i=1, n)], rp)
          result%trace_spectral_weight(iw) = sum(result%site_spectral_weight(:, iw))
       end do
@@ -243,6 +253,19 @@ contains
       end do
    end function tddft_loss_matrix
 
+   !> Maximum anti-Hermitian residual of a loss matrix.  The loss matrix is
+   !> formed from both chi(i,j) and chi(j,i), so this is a useful runtime
+   !> invariant rather than an elementwise -Im diagnostic.
+   pure real(rp) function loss_matrix_hermiticity_residual(loss) result(residual)
+      complex(rp), intent(in) :: loss(:, :)
+      integer :: n
+
+      n = size(loss, 1)
+      if (size(loss, 2) /= n) error stop 'loss_matrix_hermiticity_residual: loss must be square'
+      residual = 0.0_rp
+      if (n > 0) residual = maxval(abs(loss-conjg(transpose(loss))))
+   end function loss_matrix_hermiticity_residual
+
    subroutine diagonalize_hermitian_loss(loss, eigenvalues, eigenvectors)
       complex(rp), intent(in) :: loss(:, :)
       real(rp), intent(out) :: eigenvalues(:)
@@ -308,10 +331,14 @@ contains
       write(unit, '(a,a)') '# dyson_convention = ', trim(result%metadata%dyson_convention)
       write(unit, '(a,a)') '# loss_convention = ', trim(result%metadata%loss_convention)
       write(unit, '(a,a)') '# eta_convention = ', trim(result%metadata%eta_convention)
+      write(unit, '(a)') '# stoner_reference = chi_KS loss spectrum; enhanced loss is the dressed response'
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
       write(unit, '(a,es24.16)') '# profile_dyson_solves_cpu_s = ', result%metadata%solve_cpu_seconds
       write(unit, '(a,es24.16)') '# profile_dyson_diagonalizations_cpu_s = ', result%metadata%diagonalization_cpu_seconds
       write(unit, '(a)') '# record omega_Ry i j Re Im'
+      if (allocated(result%loss_hermiticity_residual)) then
+         write(unit, '(a)') '# loss_hermiticity_residual is max|L-L^H| at each frequency'
+      end if
       do iw = 1, size(omega)
          do j = 1, size(result%chi, 2)
             do i = 1, size(result%chi, 1)
@@ -332,6 +359,19 @@ contains
          end do
          write(unit, '(a,1x,es24.16,1x,es24.16)') 'chi_KS_trace_loss', omega(iw), result%chi_ks_trace_spectral_weight(iw)
          write(unit, '(a,1x,es24.16,1x,es24.16)') 'trace_loss', omega(iw), result%trace_spectral_weight(iw)
+         if (allocated(result%loss_hermiticity_residual)) then
+            write(unit, '(a,1x,es24.16,1x,es24.16)') 'loss_hermiticity_residual', omega(iw), &
+               result%loss_hermiticity_residual(iw)
+         end if
+         if (allocated(result%loss_eigenvalues)) then
+            do i = 1, size(result%loss_eigenvalues, 1)
+               write(unit, '(a,1x,es24.16,1x,i0,1x,es24.16)') 'loss_mode', omega(iw), i, result%loss_eigenvalues(i, iw)
+               do j = 1, size(result%loss_eigenvectors, 1)
+                  write(unit, '(a,1x,es24.16,2(1x,i0),2(1x,es24.16))') 'loss_mode_vector', omega(iw), i, j, &
+                     real(result%loss_eigenvectors(j, i, iw), rp), aimag(result%loss_eigenvectors(j, i, iw))
+               end do
+            end do
+         end if
       end do
       close(unit)
    end subroutine write_tddft_dyson_text

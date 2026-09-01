@@ -224,7 +224,7 @@ contains
       type(response_channel) :: left(1), right(1)
       integer :: unit, ios
       character(len=256) :: line
-      logical :: found_q, found_endpoint, found_eta_role, found_grid
+      logical :: found_q, found_endpoint, found_eta_role, found_grid, found_landau
 
       left(1) = response_channel(1, RESPONSE_PLUS)
       right(1) = response_channel(1, RESPONSE_MINUS)
@@ -246,7 +246,7 @@ contains
          cmplx(options%q_direct, 0.0_rp, rp))
 
       call write_chi_ks_text('unit_tddft_chi0_provenance.dat', omega_static, result)
-      found_q = .false.; found_endpoint = .false.; found_eta_role = .false.; found_grid = .false.
+      found_q = .false.; found_endpoint = .false.; found_eta_role = .false.; found_grid = .false.; found_landau = .false.
       open(newunit=unit, file='unit_tddft_chi0_provenance.dat', status='old', action='read', iostat=ios)
       if (ios == 0) then
          do
@@ -256,6 +256,7 @@ contains
             found_endpoint = found_endpoint .or. index(line, '# endpoint_provenance =') == 1
             found_eta_role = found_eta_role .or. index(line, '# eta_role =') == 1
             found_grid = found_grid .or. index(line, '# omega_grid_min_max_points =') == 1
+            found_landau = found_landau .or. index(line, 'stoner_landau') > 0
          end do
          close(unit, status='delete')
       end if
@@ -263,6 +264,7 @@ contains
       call check_true('chi0 text writes endpoint provenance', found_endpoint)
       call check_true('chi0 text separates eta role', found_eta_role)
       call check_true('chi0 text writes omega-grid provenance', found_grid)
+      call check_true('chi0 text writes optional Stoner Landau map', found_landau)
       write (*, '(a,1x,es24.16,1x,es24.16)') 'BASELINE static q=0.25/ReChi/Stoner', &
          real(result%chi(1, 1, 1), rp), result%trace_spectrum(1)
    end subroutine test_static_nonzero_q_and_provenance

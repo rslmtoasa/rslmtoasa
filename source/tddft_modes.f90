@@ -21,8 +21,8 @@ module tddft_modes_mod
    integer, parameter, public :: TDDFT_MODE_COHERENT = 3
 
    type, public :: tddft_mode_options
-      ! Retained for input/source compatibility only.  Classification no
-      ! longer uses distance from unity as a surrogate for a crossing.
+      ! Retained for input/source compatibility.  A unity distance alone is
+      ! never sufficient to call a feature collective.
       real(rp) :: unity_distance_threshold = 0.10_rp
       real(rp) :: maximum_fit_relative_residual = 0.10_rp
       integer :: minimum_points_per_fwhm = 2
@@ -30,6 +30,8 @@ module tddft_modes_mod
       real(rp) :: maximum_biorthogonal_condition = 1.0e8_rp
       real(rp) :: minimum_branch_overlap = 0.25_rp
       real(rp) :: maximum_crossing_imaginary_part = 0.05_rp
+      real(rp) :: maximum_peak_crossing_grid_steps = 2.0_rp
+      real(rp) :: minimum_mode_projected_weight = 0.0_rp
    end type tddft_mode_options
 
    type, public :: tddft_peak_fit
@@ -42,6 +44,7 @@ module tddft_modes_mod
       real(rp) :: fwhm = -1.0_rp
       real(rp) :: hwhm = -1.0_rp
       real(rp) :: relative_residual = huge(1.0_rp)
+      real(rp) :: crossing_distance = huge(1.0_rp)
       character(len=96) :: rejection_reason = 'not attempted'
    end type tddft_peak_fit
 
@@ -54,10 +57,13 @@ module tddft_modes_mod
       complex(rp), allocatable :: xi_left_eigenvectors(:, :, :, :)
       real(rp), allocatable :: biorthogonal_condition(:, :, :)
       logical, allocatable :: eigensystem_well_conditioned(:, :, :)
+      real(rp), allocatable :: loss_eigenvalues(:, :, :)
+      complex(rp), allocatable :: loss_eigenvectors(:, :, :, :)
       integer, allocatable :: candidate_frequency_index(:)
       integer, allocatable :: candidate_mode_index(:)
       real(rp), allocatable :: candidate_unity_distance(:)
       real(rp), allocatable :: branch_overlap(:)
+      real(rp), allocatable :: branch_character_overlap(:)
       real(rp), allocatable :: branch_eigenvalue_step(:)
       logical, allocatable :: crossing_present(:)
       real(rp), allocatable :: crossing_omega(:)
@@ -105,6 +111,10 @@ contains
           options%minimum_branch_overlap > 1.0_rp .or. options%maximum_crossing_imaginary_part < 0.0_rp) then
          error stop 'analyze_tddft_modes: invalid biorthogonal tracking tolerances'
       end if
+      if (options%maximum_peak_crossing_grid_steps < 0.0_rp .or. options%minimum_mode_projected_weight < 0.0_rp .or. &
+          options%minimum_points_per_fwhm < 1) then
+         error stop 'analyze_tddft_modes: invalid quasiparticle quality criteria'
+      end if
       if (any(omega(2:) <= omega(:size(omega)-1))) error stop 'analyze_tddft_modes: omega must increase strictly'
       if (present(dressed_loss)) then
          if (any(shape(dressed_loss) /= [n, n, nw, nq])) then
@@ -117,19 +127,36 @@ contains
          result%xi_left_eigenvectors(n, n, nw, nq), result%biorthogonal_condition(n, nw, nq), &
          result%eigensystem_well_conditioned(n, nw, nq), &
          result%candidate_frequency_index(nq), result%candidate_mode_index(nq), result%candidate_unity_distance(nq), &
-         result%branch_overlap(nq), result%branch_eigenvalue_step(nq), result%crossing_present(nq), &
+         result%branch_overlap(nq), result%branch_character_overlap(nq), result%branch_eigenvalue_step(nq), result%crossing_present(nq), &
          result%crossing_omega(nq), result%crossing_imaginary_part(nq), result%mode_projected_weight(nq), &
          result%exceptional_point_warning(nq), result%classification(nq), result%classification_label(nq), result%fit(nq))
+      if (present(dressed_loss)) then
+         allocate(result%loss_eigenvalues(n, nw, nq), result%loss_eigenvectors(n, n, nw, nq))
+      end if
       do iq = 1, nq
          do iw = 1, nw
             call diagonalize_biorthogonal(xi(:, :, iw, iq), result%xi_eigenvalues(:, iw, iq), &
                result%xi_eigenvectors(:, :, iw, iq), result%xi_left_eigenvectors(:, :, iw, iq), &
                result%biorthogonal_condition(:, iw, iq), result%eigensystem_well_conditioned(:, iw, iq), &
                options%maximum_biorthogonal_condition)
+            if (present(dressed_loss)) then
+               call diagonalize_hermitian_loss(dressed_loss(:, :, iw, iq), result%loss_eigenvalues(:, iw, iq), &
+                  result%loss_eigenvectors(:, :, iw, iq))
+            end if
          end do
          call order_frequency_branches(result%xi_eigenvalues(:, :, iq), result%xi_eigenvectors(:, :, :, iq), &
             result%xi_left_eigenvectors(:, :, :, iq), result%biorthogonal_condition(:, :, iq), &
             result%eigensystem_well_conditioned(:, :, iq))
+         if (present(dressed_loss)) call order_frequency_loss_branches(result%loss_eigenvalues(:, :, iq), &
+            result%loss_eigenvectors(:, :, :, iq))
+      end do
+      do iq = 2, nq
+         call order_q_branches(result%xi_eigenvalues(:, :, iq-1:iq), result%xi_eigenvectors(:, :, :, iq-1:iq), &
+            result%xi_left_eigenvectors(:, :, :, iq-1:iq), result%biorthogonal_condition(:, :, iq-1:iq), &
+            result%eigensystem_well_conditioned(:, :, iq-1:iq), options%minimum_branch_overlap, &
+            result%branch_overlap(iq), result%branch_character_overlap(iq))
+         if (present(dressed_loss)) call order_q_loss_branches(result%loss_eigenvalues(:, :, iq-1:iq), &
+            result%loss_eigenvectors(:, :, :, iq-1:iq))
       end do
 
       do iq = 1, nq
@@ -150,11 +177,9 @@ contains
          else
             result%mode_projected_weight(iq) = -1.0_rp
          end if
-         if (options%fit_isolated_peaks .and. result%crossing_present(iq)) then
-            call fit_isolated_lorentzian_peak(omega, trace_loss(:, iq), options, result%fit(iq))
-         else
-            result%fit(iq)%rejection_reason = 'no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence'
-         end if
+         call prepare_peak_fit(result%crossing_present(iq), result%exceptional_point_warning(iq), &
+            result%crossing_imaginary_part(iq), result%mode_projected_weight(iq), omega, options, trace_loss(:, iq), &
+            result%crossing_omega(iq), result%fit(iq))
          call classify_mode(result%crossing_present(iq), result%crossing_imaginary_part(iq), &
             result%exceptional_point_warning(iq), result%mode_projected_weight(iq), options, result%fit(iq), &
             result%classification(iq), result%classification_label(iq))
@@ -162,6 +187,47 @@ contains
       call cpu_time(t_stop)
       result%analysis_cpu_seconds = t_stop-t_start
    end subroutine analyze_tddft_modes
+
+   subroutine prepare_peak_fit(crossing_present, exceptional_warning, crossing_imaginary_part, projected_weight, omega, &
+      options, spectrum, crossing_omega, fit)
+      logical, intent(in) :: crossing_present, exceptional_warning
+      real(rp), intent(in) :: crossing_imaginary_part, projected_weight, omega(:), spectrum(:), crossing_omega
+      type(tddft_mode_options), intent(in) :: options
+      type(tddft_peak_fit), intent(out) :: fit
+      real(rp) :: grid_spacing
+
+      fit = tddft_peak_fit()
+      if (.not. options%fit_isolated_peaks) then
+         fit%rejection_reason = 'peak fitting disabled; loss spectrum retained'
+         return
+      end if
+      if (.not. crossing_present) then
+         fit%rejection_reason = 'no Re(lambda_Xi)=1 crossing; total loss retained as Stoner evidence'
+         return
+      end if
+      if (exceptional_warning) then
+         fit%rejection_reason = 'ill-conditioned Xi crossing fails quasiparticle quality gate'
+         return
+      end if
+      if (abs(crossing_imaginary_part) > options%maximum_crossing_imaginary_part) then
+         fit%rejection_reason = 'large Im(lambda_Xi) fails quasiparticle quality gate'
+         return
+      end if
+      if (projected_weight >= 0.0_rp .and. projected_weight <= options%minimum_mode_projected_weight) then
+         fit%rejection_reason = 'mode-projected enhanced loss fails quasiparticle quality gate'
+         return
+      end if
+      call fit_isolated_lorentzian_peak(omega, spectrum, options, fit)
+      if (.not. fit%attempted) return
+      if (crossing_omega >= 0.0_rp .and. fit%accepted) then
+         grid_spacing = minval(omega(2:)-omega(:size(omega)-1))
+         fit%crossing_distance = abs(fit%center-crossing_omega)
+         if (fit%crossing_distance > options%maximum_peak_crossing_grid_steps*grid_spacing) then
+            fit%accepted = .false.
+            fit%rejection_reason = 'loss peak is not colocated with Xi crossing'
+         end if
+      end if
+   end subroutine prepare_peak_fit
 
    !> LAPACK returns unit-norm left/right eigenvectors.  Rescale the left
    !> vector so l^H r=1 when it is safe to do so.  Its original reciprocal
@@ -202,18 +268,17 @@ contains
       end do
    end subroutine diagonalize_biorthogonal
 
-   !> Greedy frequency-local assignment.  The score has a biorthogonal
-   !> overlap factor and an eigenvalue-continuity factor, so a remote grid
-   !> point with a superficially larger right-vector overlap cannot relabel a
-   !> branch.  The response bases used here are small; a deterministic greedy
-   !> assignment also keeps branch IDs stable in degenerate synthetic tests.
+   !> Frequency-local assignment.  The global maximum-weight assignment uses
+   !> biorthogonal overlap, mode-character overlap, and eigenvalue continuity;
+   !> a greedy choice is unsafe at a crossing because it can consume the
+   !> partner needed by the next mode.
    subroutine order_frequency_branches(eigenvalues, right_vectors, left_vectors, condition, well_conditioned)
       complex(rp), intent(inout) :: eigenvalues(:, :), right_vectors(:, :, :), left_vectors(:, :, :)
       real(rp), intent(inout) :: condition(:, :)
       logical, intent(inout) :: well_conditioned(:, :)
-      integer :: n, nw, iw, imode, jmode, best, permutation(size(eigenvalues, 1))
-      logical :: used(size(eigenvalues, 1))
-      real(rp) :: best_score, score
+      integer :: n, nw, iw, imode, jmode
+      integer, allocatable :: permutation(:)
+      real(rp), allocatable :: scores(:, :)
       complex(rp) :: values_copy(size(eigenvalues, 1)), right_copy(size(right_vectors, 1), size(right_vectors, 2)), &
          left_copy(size(left_vectors, 1), size(left_vectors, 2))
       real(rp) :: condition_copy(size(condition, 1))
@@ -225,21 +290,17 @@ contains
           any(shape(condition) /= [n, nw]) .or. any(shape(well_conditioned) /= [n, nw])) then
          error stop 'order_frequency_branches: incompatible dimensions'
       end if
+      allocate(scores(n, n), permutation(n))
       do iw = 2, nw
-         used = .false.
          do imode = 1, n
-            best = 0; best_score = -huge(1.0_rp)
             do jmode = 1, n
-               if (used(jmode)) cycle
-               score = biorthogonal_overlap(left_vectors(:, imode, iw-1), right_vectors(:, imode, iw-1), &
-                  left_vectors(:, jmode, iw), right_vectors(:, jmode, iw))* &
-                  exp(-abs(eigenvalues(imode, iw-1)-eigenvalues(jmode, iw)))
-               if (score > best_score) then
-                  best_score = score; best = jmode
-               end if
+               scores(imode, jmode) = xi_branch_score(eigenvalues(imode, iw-1), eigenvalues(jmode, iw), &
+                  biorthogonal_overlap(left_vectors(:, imode, iw-1), right_vectors(:, imode, iw-1), &
+                  left_vectors(:, jmode, iw), right_vectors(:, jmode, iw)), &
+                  mode_character_overlap(right_vectors(:, imode, iw-1), right_vectors(:, jmode, iw)))
             end do
-            permutation(imode) = best; used(best) = .true.
          end do
+         call maximum_assignment(scores, permutation)
          values_copy = eigenvalues(:, iw); right_copy = right_vectors(:, :, iw); left_copy = left_vectors(:, :, iw)
          condition_copy = condition(:, iw); conditioned_copy = well_conditioned(:, iw)
          do imode = 1, n
@@ -252,6 +313,203 @@ contains
       end do
    end subroutine order_frequency_branches
 
+   subroutine order_frequency_loss_branches(eigenvalues, eigenvectors)
+      real(rp), intent(inout) :: eigenvalues(:, :)
+      complex(rp), intent(inout) :: eigenvectors(:, :, :)
+      integer :: n, nw, iw, imode, jmode
+      integer, allocatable :: permutation(:)
+      real(rp), allocatable :: scores(:, :)
+      real(rp) :: values_copy(size(eigenvalues, 1))
+      complex(rp) :: vectors_copy(size(eigenvectors, 1), size(eigenvectors, 2))
+
+      n = size(eigenvalues, 1); nw = size(eigenvalues, 2)
+      if (n <= 0 .or. any(shape(eigenvectors) /= [n, n, nw])) then
+         error stop 'order_frequency_loss_branches: incompatible dimensions'
+      end if
+      allocate(scores(n, n), permutation(n))
+      do iw = 2, nw
+         do imode = 1, n
+            do jmode = 1, n
+               scores(imode, jmode) = hermitian_branch_score(eigenvalues(imode, iw-1), eigenvalues(jmode, iw), &
+                  hermitian_mode_overlap(eigenvectors(:, imode, iw-1), eigenvectors(:, jmode, iw)), &
+                  mode_character_overlap(eigenvectors(:, imode, iw-1), eigenvectors(:, jmode, iw)))
+            end do
+         end do
+         call maximum_assignment(scores, permutation)
+         values_copy = eigenvalues(:, iw); vectors_copy = eigenvectors(:, :, iw)
+         do imode = 1, n
+            eigenvalues(imode, iw) = values_copy(permutation(imode))
+            eigenvectors(:, imode, iw) = vectors_copy(:, permutation(imode))
+         end do
+      end do
+   end subroutine order_frequency_loss_branches
+
+   !> Reorder every frequency slice at q(iq) against q(iq-1).  This is a
+   !> separate path from frequency continuation: at a mode crossing the
+   !> response-space character is what keeps acoustic/optical or sublattice
+   !> branches from being relabelled by their instantaneous eigenvalue.
+   subroutine order_q_branches(eigenvalues, right_vectors, left_vectors, condition, well_conditioned, minimum_overlap, &
+      overlap_report, character_report)
+      complex(rp), intent(inout) :: eigenvalues(:, :, :), right_vectors(:, :, :, :), left_vectors(:, :, :, :)
+      real(rp), intent(inout) :: condition(:, :, :)
+      logical, intent(inout) :: well_conditioned(:, :, :)
+      real(rp), intent(in) :: minimum_overlap
+      real(rp), intent(out) :: overlap_report, character_report
+      integer :: n, nw, imode, jmode, iw
+      integer, allocatable :: permutation(:)
+      real(rp), allocatable :: scores(:, :)
+      complex(rp) :: values_copy(size(eigenvalues, 1)), right_copy(size(right_vectors, 1), size(right_vectors, 2)), &
+         left_copy(size(left_vectors, 1), size(left_vectors, 2))
+      real(rp) :: condition_copy(size(condition, 1)), overlap, character
+      logical :: conditioned_copy(size(well_conditioned, 1))
+
+      n = size(eigenvalues, 1); nw = size(eigenvalues, 2)
+      if (size(eigenvalues, 3) /= 2 .or. any(shape(right_vectors) /= [n, n, nw, 2]) .or. &
+          any(shape(left_vectors) /= [n, n, nw, 2]) .or. any(shape(condition) /= [n, nw, 2]) .or. &
+          any(shape(well_conditioned) /= [n, nw, 2])) then
+         error stop 'order_q_branches: incompatible dimensions'
+      end if
+      if (minimum_overlap <= 0.0_rp .or. minimum_overlap > 1.0_rp) then
+         error stop 'order_q_branches: invalid minimum overlap'
+      end if
+      allocate(scores(n, n), permutation(n))
+      overlap_report = 1.0_rp; character_report = 1.0_rp
+      do iw = 1, nw
+         do imode = 1, n
+            do jmode = 1, n
+               overlap = biorthogonal_overlap(left_vectors(:, imode, iw, 1), right_vectors(:, imode, iw, 1), &
+                  left_vectors(:, jmode, iw, 2), right_vectors(:, jmode, iw, 2))
+               character = mode_character_overlap(right_vectors(:, imode, iw, 1), right_vectors(:, jmode, iw, 2))
+               scores(imode, jmode) = xi_branch_score(eigenvalues(imode, iw, 1), eigenvalues(jmode, iw, 2), overlap, character)
+            end do
+         end do
+         call maximum_assignment(scores, permutation)
+         values_copy = eigenvalues(:, iw, 2); right_copy = right_vectors(:, :, iw, 2); left_copy = left_vectors(:, :, iw, 2)
+         condition_copy = condition(:, iw, 2); conditioned_copy = well_conditioned(:, iw, 2)
+         do imode = 1, n
+            overlap = biorthogonal_overlap(left_vectors(:, imode, iw, 1), right_vectors(:, imode, iw, 1), &
+               left_copy(:, permutation(imode)), right_copy(:, permutation(imode)))
+            character = mode_character_overlap(right_vectors(:, imode, iw, 1), right_copy(:, permutation(imode)))
+            overlap_report = min(overlap_report, overlap)
+            character_report = min(character_report, character)
+            eigenvalues(imode, iw, 2) = values_copy(permutation(imode))
+            right_vectors(:, imode, iw, 2) = right_copy(:, permutation(imode))
+            left_vectors(:, imode, iw, 2) = left_copy(:, permutation(imode))
+            condition(imode, iw, 2) = condition_copy(permutation(imode))
+            well_conditioned(imode, iw, 2) = conditioned_copy(permutation(imode))
+         end do
+      end do
+   end subroutine order_q_branches
+
+   subroutine order_q_loss_branches(eigenvalues, eigenvectors)
+      real(rp), intent(inout) :: eigenvalues(:, :, :)
+      complex(rp), intent(inout) :: eigenvectors(:, :, :, :)
+      integer :: n, nw, imode, jmode, iw
+      integer, allocatable :: permutation(:)
+      real(rp), allocatable :: scores(:, :)
+      real(rp) :: values_copy(size(eigenvalues, 1))
+      complex(rp) :: vectors_copy(size(eigenvectors, 1), size(eigenvectors, 2))
+
+      n = size(eigenvalues, 1); nw = size(eigenvalues, 2)
+      if (size(eigenvalues, 3) /= 2 .or. any(shape(eigenvectors) /= [n, n, nw, 2])) then
+         error stop 'order_q_loss_branches: incompatible dimensions'
+      end if
+      allocate(scores(n, n), permutation(n))
+      do iw = 1, nw
+         do imode = 1, n
+            do jmode = 1, n
+               scores(imode, jmode) = hermitian_branch_score(eigenvalues(imode, iw, 1), eigenvalues(jmode, iw, 2), &
+                  hermitian_mode_overlap(eigenvectors(:, imode, iw, 1), eigenvectors(:, jmode, iw, 2)), &
+                  mode_character_overlap(eigenvectors(:, imode, iw, 1), eigenvectors(:, jmode, iw, 2)))
+            end do
+         end do
+         call maximum_assignment(scores, permutation)
+         values_copy = eigenvalues(:, iw, 2); vectors_copy = eigenvectors(:, :, iw, 2)
+         do imode = 1, n
+            eigenvalues(imode, iw, 2) = values_copy(permutation(imode))
+            eigenvectors(:, imode, iw, 2) = vectors_copy(:, permutation(imode))
+         end do
+      end do
+   end subroutine order_q_loss_branches
+
+   !> Solve the square maximum-weight assignment problem.  This is the
+   !> Hungarian algorithm written for scores rather than costs.  It keeps a
+   !> crossing from being resolved by whichever mode happens to be visited
+   !> first, which is the failure mode of a greedy relabeller.
+   subroutine maximum_assignment(scores, assignment)
+      real(rp), intent(in) :: scores(:, :)
+      integer, intent(out) :: assignment(:)
+      integer :: n, i, j, i0, j0, j1
+      integer, allocatable :: p(:), way(:)
+      real(rp), allocatable :: u(:), v(:), minv(:)
+      logical, allocatable :: used(:)
+      real(rp) :: delta, current
+
+      n = size(scores, 1)
+      if (n <= 0 .or. size(scores, 2) /= n .or. size(assignment) /= n) then
+         error stop 'maximum_assignment: incompatible dimensions'
+      end if
+      allocate(p(0:n), way(0:n), u(0:n), v(0:n), minv(0:n), used(0:n))
+      p = 0; way = 0; u = 0.0_rp; v = 0.0_rp
+      do i = 1, n
+         p(0) = i; j0 = 0; minv = huge(1.0_rp); used = .false.
+         do
+            used(j0) = .true.; i0 = p(j0); delta = huge(1.0_rp); j1 = 0
+            do j = 1, n
+               if (used(j)) cycle
+               current = -scores(i0, j)-u(i0)-v(j)
+               if (current < minv(j)) then
+                  minv(j) = current; way(j) = j0
+               end if
+               if (minv(j) < delta) then
+                  delta = minv(j); j1 = j
+               end if
+            end do
+            do j = 0, n
+               if (used(j)) then
+                  u(p(j)) = u(p(j))+delta; v(j) = v(j)-delta
+               else if (j > 0) then
+                  minv(j) = minv(j)-delta
+               end if
+            end do
+            j0 = j1
+            if (p(j0) == 0) exit
+         end do
+         do
+            j1 = way(j0); p(j0) = p(j1); j0 = j1
+            if (j0 == 0) exit
+         end do
+      end do
+      assignment = 0
+      do j = 1, n
+         if (p(j) > 0) assignment(p(j)) = j
+      end do
+   end subroutine maximum_assignment
+
+   subroutine diagonalize_hermitian_loss(loss, eigenvalues, eigenvectors)
+      complex(rp), intent(in) :: loss(:, :)
+      real(rp), intent(out) :: eigenvalues(:)
+      complex(rp), intent(out) :: eigenvectors(:, :)
+      complex(rp), allocatable :: work(:)
+      real(rp), allocatable :: rwork(:)
+      complex(rp) :: work_query(1)
+      integer :: n, lwork, info
+
+      n = size(loss, 1)
+      if (n <= 0 .or. size(loss, 2) /= n .or. size(eigenvalues) /= n .or. &
+          any(shape(eigenvectors) /= [n, n])) then
+         error stop 'diagonalize_hermitian_loss: incompatible dimensions'
+      end if
+      eigenvectors = loss
+      allocate(rwork(max(1, 3*n-2)))
+      call zheev('V', 'U', n, eigenvectors, n, eigenvalues, work_query, -1, rwork, info)
+      if (info /= 0) error stop 'diagonalize_hermitian_loss: LAPACK workspace query failed'
+      lwork = max(1, int(real(work_query(1), rp)))
+      allocate(work(lwork)); eigenvectors = loss
+      call zheev('V', 'U', n, eigenvectors, n, eigenvalues, work, lwork, rwork, info)
+      if (info /= 0) error stop 'diagonalize_hermitian_loss: LAPACK zheev failed'
+   end subroutine diagonalize_hermitian_loss
+
    !> Choose an actual unity crossing.  At q>q_1 candidates are scored with
    !> the preceding selected mode’s biorthogonal overlap and its interpolated
    !> crossing eigenvalue.  No candidate is invented when no crossing exists.
@@ -262,15 +520,21 @@ contains
       type(tddft_mode_options), intent(in) :: options
       integer, intent(out) :: selected_mode, selected_iw
       integer :: imode, iw, n, nw, best_mode, best_iw, nearest_iw
-      real(rp) :: fraction, crossing_imag, score, best_score, overlap, eigen_step, nearest_distance, distance
+      real(rp) :: fraction, crossing_imag, score, best_score, overlap, character, eigen_step, nearest_distance, distance
       complex(rp) :: crossing_value, previous_value
-      logical :: found, eligible
+      logical :: found, eligible, have_previous_crossing
 
       n = size(result%xi_eigenvalues, 1); nw = size(omega)
       found = .false.; best_score = -huge(1.0_rp); best_mode = 1; best_iw = 1
-      result%branch_overlap(iq) = 1.0_rp; result%branch_eigenvalue_step(iq) = 0.0_rp
+      if (iq == 1) then
+         result%branch_overlap(iq) = 1.0_rp
+         result%branch_character_overlap(iq) = 1.0_rp
+      end if
+      result%branch_eigenvalue_step(iq) = 0.0_rp
       result%crossing_present(iq) = .false.; result%crossing_omega(iq) = -1.0_rp
       result%crossing_imaginary_part(iq) = huge(1.0_rp)
+      have_previous_crossing = .false.
+      if (iq > 1) have_previous_crossing = result%crossing_present(iq-1)
       do imode = 1, n
          do iw = 1, nw-1
             if (.not. real_unity_crossing(real(result%xi_eigenvalues(imode, iw, iq), rp), &
@@ -285,24 +549,28 @@ contains
             crossing_imag = aimag(crossing_value)
             nearest_iw = iw
             if (fraction > 0.5_rp) nearest_iw = iw+1
-            if (previous_mode == 0) then
+            if (.not. have_previous_crossing .or. previous_mode == 0) then
                score = -abs(crossing_imag)
                overlap = 1.0_rp; eigen_step = 0.0_rp
+               character = 1.0_rp
             else
                previous_value = cmplx(1.0_rp, result%crossing_imaginary_part(iq-1), rp)
                overlap = biorthogonal_overlap(result%xi_left_eigenvectors(:, previous_mode, &
                   result%candidate_frequency_index(iq-1), iq-1), result%xi_eigenvectors(:, previous_mode, &
                   result%candidate_frequency_index(iq-1), iq-1), result%xi_left_eigenvectors(:, imode, nearest_iw, iq), &
                   result%xi_eigenvectors(:, imode, nearest_iw, iq))
+               character = mode_character_overlap(result%xi_eigenvectors(:, previous_mode, &
+                  result%candidate_frequency_index(iq-1), iq-1), result%xi_eigenvectors(:, imode, nearest_iw, iq))
                eigen_step = abs(crossing_value-previous_value)
                if (overlap < options%minimum_branch_overlap) cycle
-               score = overlap*exp(-eigen_step)
+               score = xi_branch_score(previous_value, crossing_value, overlap, character)
             end if
             if (.not. found .or. score > best_score) then
                found = .true.; best_score = score; best_mode = imode; best_iw = nearest_iw
                result%crossing_omega(iq) = omega(iw) + fraction*(omega(iw+1)-omega(iw))
                result%crossing_imaginary_part(iq) = crossing_imag
-               result%branch_overlap(iq) = overlap; result%branch_eigenvalue_step(iq) = eigen_step
+               result%branch_overlap(iq) = overlap; result%branch_character_overlap(iq) = character
+               result%branch_eigenvalue_step(iq) = eigen_step
             end if
          end do
       end do
@@ -334,6 +602,7 @@ contains
       real(rp) :: background, amplitude, half_height, left_cross, right_cross, gamma, model, sumsq, sumdata
 
       n = size(omega)
+      fit = tddft_peak_fit()
       fit%attempted = .true.
       fit%rejection_reason = 'no isolated local maximum'
       if (n < 5 .or. size(spectrum) /= n) return
@@ -444,28 +713,47 @@ contains
       character(len=*), intent(in) :: filename
       real(rp), intent(in) :: omega(:), eta
       type(tddft_mode_result), intent(in) :: result
-      integer :: unit, ios, iq
+      integer :: unit, ios, iq, iw, imode, icomponent
 
       if (.not. allocated(result%candidate_frequency_index)) error stop 'write_tddft_modes_text: no mode result'
       open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
       if (ios /= 0) error stop 'write_tddft_modes_text: cannot open output file'
       write(unit, '(a)') '# Xi branches are frequency-local biorthogonal continuations, then continued between adjacent q points.'
-      write(unit, '(a)') '# A collective candidate requires an interpolated Re(lambda_Xi)=1 crossing; Im(lambda), conditioning, and mode weight are retained.'
+      write(unit, '(a)') '# q branch assignment maximizes biorthogonal overlap, response-space character, and eigenvalue continuity.'
+      write(unit, '(a)') '# A collective candidate requires an interpolated Re(lambda_Xi)=1 crossing plus objective quality gates.'
       write(unit, '(a)') '# FWHM = 2*HWHM. Individual fits are observed widths; eta remains numerical broadening.'
       write(unit, '(a,es24.16)') '# eta_Ry = ', eta
       write(unit, '(a,es24.16)') '# profile_mode_analysis_cpu_s = ', result%analysis_cpu_seconds
+      write(unit, '(a,l1)') '# loss_matrix_modes_retained = ', allocated(result%loss_eigenvalues)
+      write(unit, '(a)') '# KS Stoner reference is emitted by the chi0/Dyson writers as chi_KS_site_loss and chi_KS_trace_loss.'
       do iq = 1, size(result%candidate_frequency_index)
          write(unit, '(a,1x,i0,1x,es24.16,1x,i0,1x,es24.16,1x,es24.16,1x,a)') 'candidate', iq, &
             omega(result%candidate_frequency_index(iq)), result%candidate_mode_index(iq), result%candidate_unity_distance(iq), &
             result%branch_overlap(iq), trim(result%classification_label(iq))
-         write(unit, '(a,1x,i0,1x,l1,6(1x,es24.16),1x,l1)') 'crossing', iq, result%crossing_present(iq), &
+         write(unit, '(a,1x,i0,1x,l1,6(1x,es24.16),1x,l1,1x,es24.16)') 'crossing', iq, result%crossing_present(iq), &
             result%crossing_omega(iq), result%crossing_imaginary_part(iq), result%branch_overlap(iq), &
             result%branch_eigenvalue_step(iq), result%mode_projected_weight(iq), &
             result%biorthogonal_condition(result%candidate_mode_index(iq), result%candidate_frequency_index(iq), iq), &
-            result%exceptional_point_warning(iq)
-         write(unit, '(a,1x,i0,1x,l1,4(1x,es24.16),1x,a)') 'fit', iq, result%fit(iq)%accepted, result%fit(iq)%center, &
-            result%fit(iq)%fwhm, result%fit(iq)%hwhm, result%fit(iq)%relative_residual, trim(result%fit(iq)%rejection_reason)
+            result%exceptional_point_warning(iq), result%branch_character_overlap(iq)
+         write(unit, '(a,1x,i0,1x,l1,5(1x,es24.16),1x,a)') 'fit', iq, result%fit(iq)%accepted, result%fit(iq)%center, &
+            result%fit(iq)%fwhm, result%fit(iq)%hwhm, result%fit(iq)%relative_residual, &
+            result%fit(iq)%crossing_distance, trim(result%fit(iq)%rejection_reason)
       end do
+      if (allocated(result%loss_eigenvalues)) then
+         do iq = 1, size(result%loss_eigenvalues, 3)
+            do iw = 1, size(result%loss_eigenvalues, 2)
+               do imode = 1, size(result%loss_eigenvalues, 1)
+                  write(unit, '(a,3(1x,i0),2(1x,es24.16))') 'loss_mode', iq, iw, imode, omega(iw), &
+                     result%loss_eigenvalues(imode, iw, iq)
+                  do icomponent = 1, size(result%loss_eigenvectors, 1)
+                     write(unit, '(a,4(1x,i0),2(1x,es24.16))') 'loss_mode_vector', iq, iw, imode, icomponent, &
+                        real(result%loss_eigenvectors(icomponent, imode, iw, iq), rp), &
+                        aimag(result%loss_eigenvectors(icomponent, imode, iw, iq))
+                  end do
+               end do
+            end do
+         end do
+      end if
       close(unit)
    end subroutine write_tddft_modes_text
 
@@ -480,18 +768,36 @@ contains
       if (.not. crossing_present) then
          code = TDDFT_MODE_STONER; label = 'noncollective Stoner feature'
       else if (exceptional_warning) then
-         code = TDDFT_MODE_INCOHERENT; label = 'ill-conditioned Xi crossing'
+         code = TDDFT_MODE_INCOHERENT; label = 'overdamped/continuum-like: ill-conditioned Xi crossing'
       else if (abs(crossing_imaginary_part) > options%maximum_crossing_imaginary_part) then
-         code = TDDFT_MODE_INCOHERENT; label = 'strongly damped Xi crossing'
-      else if (projected_weight == 0.0_rp) then
-         code = TDDFT_MODE_INCOHERENT; label = 'zero mode-projected enhanced weight'
+         code = TDDFT_MODE_INCOHERENT; label = 'overdamped/continuum-like: large Im(lambda_Xi)'
+      else if (projected_weight >= 0.0_rp .and. projected_weight <= options%minimum_mode_projected_weight) then
+         code = TDDFT_MODE_INCOHERENT; label = 'overdamped/continuum-like: negligible mode weight'
+      else if (.not. fit%accepted) then
+         code = TDDFT_MODE_INCOHERENT; label = 'overdamped/continuum-like enhanced mode'
       else
-         code = TDDFT_MODE_INCOHERENT; label = 'strongly Landau-damped/incoherent enhanced mode'
-         if (fit%accepted .or. projected_weight > 0.0_rp) then
-            code = TDDFT_MODE_COHERENT; label = 'collective Xi unity crossing'
-         end if
+         code = TDDFT_MODE_COHERENT; label = 'collective Xi unity crossing'
       end if
    end subroutine classify_mode
+
+   pure real(rp) function xi_branch_score(value_a, value_b, overlap, character) result(score)
+      complex(rp), intent(in) :: value_a, value_b
+      real(rp), intent(in) :: overlap, character
+      real(rp) :: continuity
+
+      continuity = 1.0_rp/(1.0_rp+abs(value_a-value_b))
+      score = 0.55_rp*min(1.0_rp, max(0.0_rp, overlap)) + &
+         0.20_rp*min(1.0_rp, max(0.0_rp, character)) + 0.25_rp*continuity
+   end function xi_branch_score
+
+   pure real(rp) function hermitian_branch_score(value_a, value_b, overlap, character) result(score)
+      real(rp), intent(in) :: value_a, value_b, overlap, character
+      real(rp) :: continuity
+
+      continuity = 1.0_rp/(1.0_rp+abs(value_a-value_b))
+      score = 0.55_rp*min(1.0_rp, max(0.0_rp, overlap)) + &
+         0.20_rp*min(1.0_rp, max(0.0_rp, character)) + 0.25_rp*continuity
+   end function hermitian_branch_score
 
    pure real(rp) function biorthogonal_overlap(left_a, right_a, left_b, right_b) result(overlap)
       complex(rp), intent(in) :: left_a(:), right_a(:), left_b(:), right_b(:)
@@ -503,6 +809,32 @@ contains
          overlap = sqrt(abs(dot_product(left_a, right_b))*abs(dot_product(left_b, right_a)))/denominator
       end if
    end function biorthogonal_overlap
+
+   pure real(rp) function hermitian_mode_overlap(vector_a, vector_b) result(overlap)
+      complex(rp), intent(in) :: vector_a(:), vector_b(:)
+      if (size(vector_a) /= size(vector_b)) then
+         overlap = 0.0_rp
+      else
+         overlap = min(1.0_rp, max(0.0_rp, abs(dot_product(vector_a, vector_b))))
+      end if
+   end function hermitian_mode_overlap
+
+   pure real(rp) function mode_character_overlap(vector_a, vector_b) result(overlap)
+      complex(rp), intent(in) :: vector_a(:), vector_b(:)
+      real(rp) :: norm_a, norm_b, weights_a(size(vector_a)), weights_b(size(vector_b))
+
+      if (size(vector_a) /= size(vector_b)) then
+         overlap = 0.0_rp
+         return
+      end if
+      weights_a = abs(vector_a)**2; weights_b = abs(vector_b)**2
+      norm_a = sqrt(sum(weights_a)); norm_b = sqrt(sum(weights_b))
+      if (norm_a <= tiny(1.0_rp) .or. norm_b <= tiny(1.0_rp)) then
+         overlap = 0.0_rp
+      else
+         overlap = min(1.0_rp, max(0.0_rp, sum(weights_a*weights_b)/(norm_a*norm_b)))
+      end if
+   end function mode_character_overlap
 
    pure logical function real_unity_crossing(left_value, right_value) result(crosses)
       real(rp), intent(in) :: left_value, right_value

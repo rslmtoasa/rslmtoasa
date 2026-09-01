@@ -4,23 +4,28 @@
 program test_tddft_dyson_modes
    use precision_mod, only: rp
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility, &
-      enhance_tddft_susceptibility_from_xi, solve_tddft_dyson_frequency, write_tddft_dyson_text
+      enhance_tddft_susceptibility_from_xi, solve_tddft_dyson_frequency, write_tddft_dyson_text, tddft_loss_matrix, &
+      loss_matrix_hermiticity_residual
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, &
-      extrapolate_linewidth_zero_eta, TDDFT_MODE_COHERENT, TDDFT_MODE_INCOHERENT, TDDFT_MODE_STONER
+      extrapolate_linewidth_zero_eta, write_tddft_modes_text, TDDFT_MODE_COHERENT, TDDFT_MODE_INCOHERENT, TDDFT_MODE_STONER
    implicit none
 
    real(rp), parameter :: tol = 2.0e-10_rp
    logical :: failed
 
    failed = .false.
+   call test_loss_matrix_convention()
    call test_dyson_collective_pole_and_loss()
    call test_direct_xi_dyson_equivalence()
    call test_overlap_branch_tracking_and_fit_policy()
    call test_two_mode_avoided_crossing()
+   call test_q_crossing_uses_mode_character()
    call test_biorthogonal_crossings_and_mode_projection()
+   call test_backend_independent_analysis()
    call test_stoner_peak_and_damped_crossing_controls()
    call test_frequency_refinement_crossing_stability()
    call test_multi_eta_extrapolation()
+   call test_broadened_lorentzian_quality_gate()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -29,6 +34,22 @@ program test_tddft_dyson_modes
    write (*, '(a)') 'RESULT: PASS'
 
 contains
+
+   subroutine test_loss_matrix_convention()
+      complex(rp) :: chi(2, 2), loss(2, 2)
+
+      chi = cmplx(0.0_rp, 0.0_rp, rp)
+      chi(1, 1) = cmplx(1.0_rp, -2.0_rp, rp)
+      chi(2, 2) = cmplx(2.0_rp, -1.0_rp, rp)
+      chi(1, 2) = cmplx(0.3_rp, 0.4_rp, rp)
+      chi(2, 1) = cmplx(-0.2_rp, 0.1_rp, rp)
+      loss = tddft_loss_matrix(chi)
+      call check_true('loss matrix is Hermitian', loss_matrix_hermiticity_residual(loss) < tol)
+      call check_true('positive-frequency diagonal loss has positive sign', real(loss(1, 1), rp) > 0.0_rp .and. &
+         real(loss(2, 2), rp) > 0.0_rp)
+      call check_complex_matrix('loss off-diagonal is conjugate paired', reshape([loss(1, 2)], [1, 1]), &
+         reshape([conjg(loss(2, 1))], [1, 1]))
+   end subroutine test_loss_matrix_convention
 
    subroutine test_dyson_collective_pole_and_loss()
       integer, parameter :: nw = 81
@@ -52,7 +73,12 @@ contains
       call check_true('enhanced chi contains collective pole', result%trace_spectral_weight(21) > 10.0_rp*result%trace_spectral_weight(1))
       call check_true('Xi has unity eigenvalue at collective pole', minval(abs(result%xi_eigenvalues(:, 21)-cmplx(1.0_rp, 0.0_rp, rp))) < 0.006_rp)
       call check_true('loss matrix was diagonalized when requested', allocated(result%loss_eigenvalues))
+      call check_true('loss eigenvectors were retained when requested', allocated(result%loss_eigenvectors))
       call check_true('loss eigenvalues are nonnegative in deterministic fixture', minval(result%loss_eigenvalues(:, 21)) > -tol)
+      call check_true('loss matrices remain Hermitian in the Dyson result', maxval(result%loss_hermiticity_residual) < tol)
+      call check_true('retained loss eigenvectors are orthonormal', maxval(abs(matmul( &
+         conjg(transpose(result%loss_eigenvectors(:, :, 21))), result%loss_eigenvectors(:, :, 21)) - &
+         identity_matrix(2))) < tol)
       imode = minloc(abs(result%xi_eigenvalues(:, 21)-cmplx(1.0_rp, 0.0_rp, rp)), dim=1)
       call check_complex_matrix('known response eigenvector projector', projector_from_mode(result%xi_eigenvectors(:, imode, 21)), &
          projector_from_mode(u))
@@ -61,6 +87,9 @@ contains
       call check_output_contains('unit_tddft_dyson.out', 'chi_KS')
       call check_output_contains('unit_tddft_dyson.out', 'Xi')
       call check_output_contains('unit_tddft_dyson.out', 'loss')
+      call check_output_contains('unit_tddft_dyson.out', 'loss_mode')
+      call check_output_contains('unit_tddft_dyson.out', 'chi_KS_trace_loss')
+      call check_output_contains('unit_tddft_dyson.out', 'trace_loss')
       call delete_output('unit_tddft_dyson.out')
    end subroutine test_dyson_collective_pole_and_loss
 
@@ -137,6 +166,63 @@ contains
       call check_true('avoided-crossing branch is not marked exceptional', .not. modes%exceptional_point_warning(1))
    end subroutine test_two_mode_avoided_crossing
 
+   subroutine test_q_crossing_uses_mode_character()
+      integer, parameter :: nw = 3, nq = 2
+      real(rp) :: omega(nw), trace_loss(nw, nq)
+      complex(rp) :: xi(2, 2, nw, nq)
+      type(tddft_mode_options) :: options
+      type(tddft_mode_result) :: modes
+      integer :: iw
+
+      omega = [0.0_rp, 0.1_rp, 0.2_rp]
+      trace_loss = 1.0_rp
+      do iw = 1, nw
+         xi(:, :, iw, 1) = cmplx(0.0_rp, 0.0_rp, rp)
+         xi(1, 1, iw, 1) = cmplx(0.85_rp + 0.1_rp*real(iw-1, rp), -0.01_rp, rp)
+         xi(2, 2, iw, 1) = cmplx(1.15_rp - 0.1_rp*real(iw-1, rp), -0.01_rp, rp)
+         ! At q_2 the eigenvalue ordering is reversed, while the response
+         ! character (site 1/site 2) is deliberately unchanged.
+         xi(:, :, iw, 2) = cmplx(0.0_rp, 0.0_rp, rp)
+         xi(1, 1, iw, 2) = cmplx(1.15_rp - 0.1_rp*real(iw-1, rp), -0.01_rp, rp)
+         xi(2, 2, iw, 2) = cmplx(0.85_rp + 0.1_rp*real(iw-1, rp), -0.01_rp, rp)
+      end do
+      call analyze_tddft_modes(omega, xi, trace_loss, 0.001_rp, options, modes)
+      call check_true('q crossing reports a mode-character overlap', modes%branch_character_overlap(2) > 0.99_rp)
+      call check_real('q crossing preserves site-1 mode character', real(modes%xi_eigenvalues(1, 1, 2), rp), 1.15_rp)
+   end subroutine test_q_crossing_uses_mode_character
+
+   subroutine test_backend_independent_analysis()
+      integer, parameter :: nw = 9, nq = 2
+      real(rp) :: omega(nw), trace_loss(nw, nq)
+      complex(rp) :: xi(2, 2, nw, nq), loss(2, 2, nw, nq)
+      type(tddft_mode_options) :: options
+      type(tddft_mode_result) :: eigenpair_analysis, green_analysis
+      integer :: iw, iq
+
+      omega = [(0.025_rp*real(iw-1, rp), iw=1,nw)]
+      loss = cmplx(0.0_rp, 0.0_rp, rp)
+      do iq = 1, nq
+         do iw = 1, nw
+            xi(:, :, iw, iq) = cmplx(0.0_rp, 0.0_rp, rp)
+            xi(1, 1, iw, iq) = cmplx(0.75_rp+0.08_rp*real(iw-1, rp), -0.01_rp, rp)
+            xi(2, 2, iw, iq) = cmplx(0.25_rp+0.01_rp*real(iw-1, rp), -0.02_rp, rp)
+            loss(1, 1, iw, iq) = cmplx(1.0_rp, 0.0_rp, rp)
+            loss(2, 2, iw, iq) = cmplx(0.2_rp, 0.0_rp, rp)
+            trace_loss(iw, iq) = 1.0_rp + 4.0_rp/((omega(iw)-0.075_rp)**2+0.02_rp**2)
+         end do
+      end do
+      call analyze_tddft_modes(omega, xi, trace_loss, 0.001_rp, options, eigenpair_analysis, loss)
+      ! The second call stands in for a different chi0 provider.  The common
+      ! post-processing layer receives exactly the same Xi/loss objects.
+      call analyze_tddft_modes(omega, xi, trace_loss, 0.001_rp, options, green_analysis, loss)
+      call check_complex_matrix('backend-independent Xi eigenvalues', reshape(eigenpair_analysis%xi_eigenvalues, [2, nw*nq]), &
+         reshape(green_analysis%xi_eigenvalues, [2, nw*nq]))
+      call check_complex_matrix('backend-independent loss eigenvectors', &
+         reshape(eigenpair_analysis%loss_eigenvectors, [2, 2*nw*nq]), &
+         reshape(green_analysis%loss_eigenvectors, [2, 2*nw*nq]))
+      call check_true('backend-independent classifications', all(eigenpair_analysis%classification == green_analysis%classification))
+   end subroutine test_backend_independent_analysis
+
    subroutine test_biorthogonal_crossings_and_mode_projection()
       integer, parameter :: nw = 5, nq = 2
       real(rp) :: omega(nw), trace_loss(nw, nq)
@@ -169,6 +255,10 @@ contains
       call check_real('q continuation preserves crossing branch', modes%crossing_omega(2), 0.2_rp)
       call check_true('biorthogonal q continuity is retained', modes%branch_overlap(2) > 0.99_rp)
       call check_true('dressed loss is projected onto selected Xi mode', all(modes%mode_projected_weight > 0.0_rp))
+      call write_tddft_modes_text('unit_tddft_modes.out', omega, 0.001_rp, modes)
+      call check_output_contains('unit_tddft_modes.out', 'loss_mode')
+      call check_output_contains('unit_tddft_modes.out', 'loss_mode_vector')
+      call delete_output('unit_tddft_modes.out')
    end subroutine test_biorthogonal_crossings_and_mode_projection
 
    subroutine test_stoner_peak_and_damped_crossing_controls()
@@ -192,6 +282,8 @@ contains
       call check_true('large Im lambda crossing is retained', modes%crossing_present(1) .and. &
          abs(modes%crossing_imaginary_part(1)) > options%maximum_crossing_imaginary_part)
       call check_true('large Im lambda crossing is incoherent', modes%classification(1) == TDDFT_MODE_INCOHERENT)
+      call check_true('overdamped crossing is not fitted', .not. modes%fit(1)%attempted)
+      call check_true('overdamped crossing is labelled continuum-like', index(modes%classification_label(1), 'continuum-like') > 0)
    end subroutine test_stoner_peak_and_damped_crossing_controls
 
    subroutine test_frequency_refinement_crossing_stability()
@@ -231,6 +323,27 @@ contains
       call check_real('multi-eta residual', residual, 0.0_rp)
    end subroutine test_multi_eta_extrapolation
 
+   subroutine test_broadened_lorentzian_quality_gate()
+      integer, parameter :: nw = 101
+      real(rp) :: omega(nw), trace_loss(nw, 1), gamma
+      complex(rp) :: xi(1, 1, nw, 1)
+      type(tddft_mode_options) :: options
+      type(tddft_mode_result) :: modes
+      integer :: iw
+
+      omega = [(0.002_rp*real(iw-1, rp), iw=1,nw)]
+      gamma = 0.010_rp
+      do iw = 1, nw
+         xi(1, 1, iw, 1) = cmplx(0.70_rp + 3.0_rp*omega(iw), -0.01_rp, rp)
+         trace_loss(iw, 1) = 1.0_rp + 8.0_rp*gamma**2/((omega(iw)-0.10_rp)**2+gamma**2)
+      end do
+      call analyze_tddft_modes(omega, xi, trace_loss, 0.001_rp, options, modes)
+      call check_true('resolved broadened resonance has a unity crossing', modes%crossing_present(1))
+      call check_true('resolved broadened resonance passes Lorentzian gate', modes%fit(1)%accepted)
+      call check_true('broadened resonance reports FWHM', abs(modes%fit(1)%fwhm-2.0_rp*gamma) < 5.0e-4_rp)
+      call check_true('broadened resonance reports HWHM', abs(modes%fit(1)%hwhm-gamma) < 2.5e-4_rp)
+   end subroutine test_broadened_lorentzian_quality_gate
+
    subroutine make_collective_fixture(omega, chi_ks, kernel, u)
       real(rp), intent(out) :: omega(:)
       complex(rp), intent(out) :: chi_ks(:, :, :), kernel(:, :), u(:)
@@ -260,6 +373,17 @@ contains
          end do
       end do
    end function projector_from_mode
+
+   function identity_matrix(n) result(identity)
+      integer, intent(in) :: n
+      complex(rp) :: identity(n, n)
+      integer :: i
+
+      identity = cmplx(0.0_rp, 0.0_rp, rp)
+      do i = 1, n
+         identity(i, i) = cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+   end function identity_matrix
 
    subroutine check_complex_matrix(label, actual, expected)
       character(len=*), intent(in) :: label
