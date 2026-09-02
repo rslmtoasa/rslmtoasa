@@ -42,6 +42,7 @@ program test_tddft_performance
    call check_true('R-GF preserves q amortization', plan%preserves_realspace_reuse .and. plan%q_fourier_is_batched .and. &
       plan%requires_collective_reduction, failed)
    call check_true('R-GF partitions R blocks first', index(trim(plan%strategy), 'R-blocks') > 0 .and. plan%r%count == 12, failed)
+   call plan%emit(label='plan_contract')
 #ifdef USE_MPI
    if (mpi_size > 1) then
       plan = make_tddft_mpi_plan('realspace_gf', 'direct', 12, 64, 256, 48, mpi_rank, mpi_size, .true., 1024)

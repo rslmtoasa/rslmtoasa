@@ -2,44 +2,58 @@
 # Ward identity = chi_KS(0,0) B_xc - m; Dm = m-chi_KS K_xc m
 # raw Goldstone diagnostics are retained for every non-off mode
 # goldstone_policy = diagnose
+# circular_channel = plus_minus
 # legacy_site_scalar_correction_requested = F
 # legacy_site_scalar_correction_applied = F
 # legacy_site_scalar_correction_disabled = F
 # raw_available = T
-raw_closest_eigenvalue   1.2570132937449610E+00   5.0499823254728333E-18
-raw_closest_eigenvalue_distance  2.5701329374496096E-01
+raw_closest_eigenvalue   1.2570132937625591E+00  -1.7392709091387733E-18
+raw_closest_eigenvalue_distance  2.5701329376255910E-01
 raw_magnetization_overlap  1.0000000000000000E+00
 raw_left_magnetization_overlap  1.0000000000000000E+00
 raw_biorthogonal_magnetization_overlap  1.0000000000000000E+00
-raw_imaginary_norm  4.0174454403959858E-18
-raw_residual  2.5701329374496090E-01
-raw_ward_residual  2.5701329374496090E-01
-raw_dm_residual  2.5701329374496090E-01
+raw_imaginary_norm  1.3836535522489941E-18
+raw_residual  2.5701329376255921E-01
+raw_ward_residual  2.5701329376255921E-01
+raw_dm_residual  2.5701329376255921E-01
 raw_bxc_kernel_residual  0.0000000000000000E+00
-raw_magnetization_norm  1.9868467463673953E+00
-raw_bxc_norm  4.5470532911415999E-02
+raw_magnetization_norm  1.9868467463673962E+00
+raw_bxc_norm  4.5470532912052629E-02
 raw_identity_consistentF
 raw_response_basis = site
 raw_bxc_provenance = ground-state XC response provider
 raw_kernel_provenance = site-projected transverse ALSDA K_xc
-raw_eigenvalue 1   1.2570132937449610E+00   5.0499823254728333E-18
+raw_eigenvalue 1   1.2570132937625591E+00  -1.7392709091387733E-18
 raw_closest_eigenvector 1   1.0000000000000000E+00   0.0000000000000000E+00
 raw_closest_left_eigenvector 1   1.0000000000000000E+00   0.0000000000000000E+00
-kernel_raw 1  -2.2885777674876526E-02   0.0000000000000000E+00
+kernel_raw 1  -2.2885777675196936E-02   0.0000000000000000E+00
 # production_metadata_begin
+# provenance_schema = rslmto.tddft.production.v1
 # channel = transverse
+# chi0_backend_requested = eigenpairs
 # chi0_backend = eigenpairs
-# chi0_backend_capability = eigenpair Lehmann response
+# chi0_backend_canonical = eigenpairs
+# chi0_backend_alias = F
+# chi0_backend_implementation = explicit eigenpair transition reference
+# chi0_backend_capability = transparent transition sums; exact k and k+q endpoint arrays
 # full_response_capability = not selected; production full response is capability-gated
 # longitudinal_capability = not selected; LLB readiness is not claimed
 # xi_backend_requested = legacy_site_scalar
 # xi_backend_output = goldstone_compare
+# circular_channel_requested = both
+# circular_channel_output = plus_minus
 # pair_potential_provenance = not used by this output
 # signed_moment_source = reconstructed occupied P_site sigma_z population
 # reciprocal_mode = ham_only
 # response_projection = site
+# response_basis = site-projected Pauli/circular response; site-orbital projection is unsupported
+# response_convention = Pauli sigma_x/y/z; O_plus_minus=sigma_x +/- i sigma_y; unhalved circular measurement vertices
+# source_vertex_provenance = external magnetic derivative is separate from measurement vertex and interaction kernel
+# interaction_kernel_provenance = ground-state XC response provider; pair-potential output is direct Xi when selected
+# source_hamiltonian_provenance = same ground-state first-order scalar-relativistic ham_only Hamiltonian as SCF
 # q_mode = list
 # q_coordinates = direct
+# q_coordinate_unit = fractional reciprocal-lattice coordinates; spatial phase is exp(-i q.R)
 # q_index = 0
 # q_direct =   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
 # k_mesh = 4 4 4
@@ -47,18 +61,35 @@ kernel_raw 1  -2.2885777674876526E-02   0.0000000000000000E+00
 # omega_max_Ry =   2.0000000000000000E-03
 # nomega = 3
 # eta_Ry =   5.0000000000000001E-04
+# eta_role = numerical response broadening; not a physical linewidth
+# physical_linewidth_policy = mode linewidth is observed at selected eta; eta is not subtracted automatically
 # ground_state_fermi_level_Ry =   0.0000000000000000E+00
 # electronic_temperature_K =   3.0000000000000000E+02
 # ground_state_electronic_temperature_K =   3.0000000000000000E+02
-# response_fermi_level_Ry =  -6.3593624407269428E-02
+# response_fermi_level_Ry =  -6.3593624407269372E-02
 # response_electronic_temperature_overridden = T
 # ground_state_response_electron_count =    8.0000000000000000E+00   7.9999999999706999E+00
 # static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
 # band_window_first_last =  1 0
 # occupation_prune_tolerance =   1.0000000000000000E-14
 # green_eta_Ry =   0.0000000000000000E+00
+# green_eta_effective_Ry = not applicable to explicit eigenpair transitions
+# green_eta_policy = Green-function controls are ignored by the eigenpair backend
 # green_energy_window_Ry =    1.7976931348623157+308  -1.7976931348623157+308
 # green_energy_points = 2001
+# energy_integration = direct
+# contour_points_per_segment = 64
+# contour_horizontal_subdivisions = 8
+# near_fermi_points = 128
+# contour_height_Ry =   0.0000000000000000E+00
+# realspace_rmax_request_Angstrom =   1.7976931348623157+308
+# realspace_source_rmax_request_Angstrom =   1.7976931348623157+308
+# realspace_tail_tolerance =   1.0000000000000000E-03
+# realspace_representation = bulk
+# realspace_truncation_mode = full_tail
+# realspace_fourier_axes = 1 2 3
+# realspace_convergence_policy = not applicable to this backend
+# realspace_q_reuse = not applicable to this backend
 # goldstone_mode = diagnose
 # goldstone_policy = diagnose
 # goldstone_mode_migrated_from_sum_rule = F
@@ -66,8 +97,12 @@ kernel_raw 1  -2.2885777674876526E-02   0.0000000000000000E+00
 # goldstone_correction_applied = F
 # spin_orbit_present = F
 # external_symmetry_breaking_field_present = F
+# unsupported_feature_policy = generalized overlap/HOH, SOC/noncollinear, Hubbard, GBT, CCOR, and site-orbital response fail explicitly
 # output_chi0 output_xi output_chi output_modes output_stoner = T F F F T
+# validation_status_policy = output completion is not a convergence claim; consult docs/TDDFT_RELEASE_STATUS.md
+# mpi_response_provenance = q-owned output with omega/k fallback decomposition as reported by TDDFT_PERF_PLAN
 # mpi_q_owner_rank = 0
 # production_metadata_end
 # dynamic_bare_gamma_loss_peak_Ry =   2.0000000000000000E-03
+# dynamic_minus_plus_bare_gamma_loss_peak_Ry =   2.0000000000000000E-03
 # dynamic Gamma peaks are observed loss-grid maxima; raw and corrected records remain distinct

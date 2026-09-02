@@ -4,14 +4,60 @@
   "materials": {
     "bccFe": {
       "backend_equivalence": {
-        "max_abs_matrix_difference": 46.362154468654985,
+        "max_abs_matrix_difference": 46.362154468655014,
+        "max_relative_matrix_norm": 0.7933524289492909,
+        "pairwise_aggregate_relative_matrix_norm": {
+          "eigenpairs_vs_kspace_lehmann": 0.670664156675067,
+          "eigenpairs_vs_realspace_gf": 0.08864588995766703,
+          "kspace_lehmann_vs_realspace_gf": 0.6416606606057822
+        },
         "pairwise_max_abs_matrix_difference": {
-          "eigenpairs_vs_kspace_lehmann": 46.362154468654985,
-          "eigenpairs_vs_realspace_gf": 5.452978285360707,
-          "kspace_lehmann_vs_realspace_gf": 41.09139825337254
+          "eigenpairs_vs_kspace_lehmann": 46.362154468655014,
+          "eigenpairs_vs_realspace_gf": 5.452984640907513,
+          "kspace_lehmann_vs_realspace_gf": 41.09139145919394
+        },
+        "pairwise_max_relative_matrix_norm": {
+          "eigenpairs_vs_kspace_lehmann": 0.7933524289492909,
+          "eigenpairs_vs_realspace_gf": 0.09697711089958076,
+          "kspace_lehmann_vs_realspace_gf": 0.7720834255312624
         },
         "pass": false,
-        "pointwise_tolerance": 1e-08
+        "pointwise_tolerance": 1e-08,
+        "representative_relative_matrix_norm": {
+          "eigenpairs_vs_kspace_lehmann": {
+            "q01_omega_0.0000": 0.5155737282408556,
+            "q01_omega_0.0010": 0.5308674750405484,
+            "q01_omega_0.0020": 0.5710256867786487,
+            "q02_omega_0.0000": 0.7740682732272719,
+            "q02_omega_0.0010": 0.777459991920299,
+            "q02_omega_0.0020": 0.8261594035979887,
+            "q03_omega_0.0000": 0.6256806630662229,
+            "q03_omega_0.0010": 0.6412273997534146,
+            "q03_omega_0.0020": 0.6924026261834325
+          },
+          "eigenpairs_vs_realspace_gf": {
+            "q01_omega_0.0000": 0.09722858977276674,
+            "q01_omega_0.0010": 0.09680070797584422,
+            "q01_omega_0.0020": 0.0969091370677331,
+            "q02_omega_0.0000": 0.09451034630435896,
+            "q02_omega_0.0010": 0.09421823838721814,
+            "q02_omega_0.0020": 0.09448318622566587,
+            "q03_omega_0.0000": 0.0717984686162469,
+            "q03_omega_0.0010": 0.07131167706645557,
+            "q03_omega_0.0020": 0.07143182267084558
+          },
+          "kspace_lehmann_vs_realspace_gf": {
+            "q01_omega_0.0000": 0.4634775910629956,
+            "q01_omega_0.0010": 0.48058479480857347,
+            "q01_omega_0.0020": 0.524918261614498,
+            "q02_omega_0.0000": 0.7504920155697625,
+            "q02_omega_0.0010": 0.7543548767245107,
+            "q02_omega_0.0020": 0.8085934600349677,
+            "q03_omega_0.0000": 0.5967314511836757,
+            "q03_omega_0.0010": 0.6235806078035266,
+            "q03_omega_0.0020": 0.6688184198406828
+          }
+        }
       },
       "deck_scope": {
         "bounded_probe": true,
@@ -43,25 +89,33 @@
       },
       "goldstone": {
         "gapless_tolerance": 1e-06,
-        "maximum_raw_residual": 0.2570132937449609,
-        "native_realspace_static_diagnostic": "not available: native provider is bare dynamic chi0 only",
+        "maximum_raw_residual": 0.2570132937625592,
+        "native_realspace_static_diagnostic": "available: exact native static real-space contour identity",
         "pass": false,
         "routes_with_static_diagnostic": {
           "eigenpairs": {
             "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_goldstone.dat",
-            "raw_closest_eigenvalue": 1.257013293744961,
-            "raw_dm_residual": 0.2570132937449609,
-            "raw_residual": 0.2570132937449609,
-            "raw_ward_residual": 0.2570132937449609,
-            "sha256": "f0ec1b06966f806111fc1a18534b4a50556d30eeec4c9b11ff7094ac7c01ecb0"
+            "raw_closest_eigenvalue": 1.257013293762559,
+            "raw_dm_residual": 0.2570132937625592,
+            "raw_residual": 0.2570132937625592,
+            "raw_ward_residual": 0.2570132937625592,
+            "sha256": "1acef7fb637f3c8f0bea5637c3d67900c805e5be67f8ef82585044ef7ae23717"
           },
           "kspace_lehmann": {
             "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_goldstone.dat",
-            "raw_closest_eigenvalue": 1.2570132937449598,
-            "raw_dm_residual": 0.2570132937449598,
-            "raw_residual": 0.2570132937449598,
-            "raw_ward_residual": 0.2570132937449598,
-            "sha256": "14d5ffc2df8b0082ed71ec71a9c66659df045266ffe828bfa095c4266c4026dc"
+            "raw_closest_eigenvalue": 1.257013293762558,
+            "raw_dm_residual": 0.2570132937625581,
+            "raw_residual": 0.2570132937625581,
+            "raw_ward_residual": 0.2570132937625581,
+            "sha256": "4f935d45cba06f0439ee9f010f36e90f27690a62c961694fa295be47b386b375"
+          },
+          "realspace_gf": {
+            "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_goldstone.dat",
+            "raw_closest_eigenvalue": 1.1349378124010496,
+            "raw_dm_residual": 0.13493781251993214,
+            "raw_residual": 0.13493781251993192,
+            "raw_ward_residual": 0.13493781251993214,
+            "sha256": "a6f684423bd581c66ff84c082fcadb92aa2bcec2f555dc53b1d4f7bd5fed0472"
           }
         }
       },
@@ -77,27 +131,27 @@
         "eigenpairs": {
           "backend": "eigenpairs",
           "manifest": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_manifest.dat",
-          "manifest_sha256": "f145f19fd2060369893df674d0e5c11e7928c1a01594d95a875a9a0e8a880af6",
+          "manifest_sha256": "a37564f14b21d3785e64631c91c815b1d70713f069aa91b839628bbc675a8cf1",
           "omega_count": 3,
           "q_count": 3,
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_q000001_chi0.dat",
-              "sha256": "651535b1bceff10456f02158738f507027cddf127c127bb343e24f778606e7c4"
+              "sha256": "f96dcd6a812f8079cd38de5eac6d7672871a8c93fc80877cdea88324bbea3d97"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_q000002_chi0.dat",
-              "sha256": "d2fca14f9b522cfae754f5aeafe029deec3dab648da22a875d2721920b9f15e9"
+              "sha256": "290289f5b2c6c6d75bf19e50436991af965dd1ea8be1986270927d5109e1ad49"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_q000003_chi0.dat",
-              "sha256": "ef84a6d92f4b4a2e185912ea164d28d0f68a25c33e6345420e9d7b66331c58a0"
+              "sha256": "c796cfa2c88e873c159aeb319fb1fd7d8dce65882acec9814f1c63b9274e6c3a"
             }
           ],
           "real_space_cutoff": 0.0,
           "real_space_points": 0,
           "real_space_tail_assessed": false,
-          "response_fermi_level_Ry": -0.06359362440726943,
+          "response_fermi_level_Ry": -0.06359362440726937,
           "response_k_mesh": [
             4,
             4,
@@ -107,27 +161,27 @@
         "kspace_lehmann": {
           "backend": "kspace_lehmann",
           "manifest": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_manifest.dat",
-          "manifest_sha256": "0e325fb5f20c1ad39ec773316a72c38966192036c3f7253ccd81a53eec030144",
+          "manifest_sha256": "036118b2834b3bf15c4aee8c47faa6d9617060d87e2bd8875d766a00913fa6a3",
           "omega_count": 3,
           "q_count": 3,
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_q000001_chi0.dat",
-              "sha256": "7e5fbc0e15e432abd4ec253ad5eb89e4189897b1f901443946970455ef530a0b"
+              "sha256": "e9eb2b60e73a7c0d6a9641c333dc8a92a282258c08c628d049830263147d7527"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_q000002_chi0.dat",
-              "sha256": "24441d4131b4af740bf64da94a26c791253549d62d5a4df70ba97210f22ae536"
+              "sha256": "ab35580a2f3130dddf801a9d937ddefb45978ff964d0937c5b5326dcc45a0089"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_q000003_chi0.dat",
-              "sha256": "0e8d90588b83cefff9d10eb68f2d362a6a57cbc7792abd6cbfa5ad17eeeb9f51"
+              "sha256": "9755b2fbd1886c19476214b73bb7fe6e0db326b5e0c516771bcd70080f3a82de"
             }
           ],
           "real_space_cutoff": 0.0,
           "real_space_points": 0,
           "real_space_tail_assessed": false,
-          "response_fermi_level_Ry": -0.06359362440726943,
+          "response_fermi_level_Ry": -0.06359362440726937,
           "response_k_mesh": [
             4,
             4,
@@ -137,27 +191,27 @@
         "realspace_gf": {
           "backend": "realspace_gf",
           "manifest": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_manifest.dat",
-          "manifest_sha256": "393b553beb640b14807676bc6521a539277274d909d03dc3ddfbb07cc13e89a4",
+          "manifest_sha256": "17caebe6b0279dd13393a6bdb0868c6406e17960a146de4ea30bb458657552de",
           "omega_count": 3,
           "q_count": 3,
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_q000001_chi0.dat",
-              "sha256": "dbb361f27d9866f88cc7ccd1f3c02450f22b539d95f96b221cbfb49455d61bda"
+              "sha256": "2cb7a893484c667f0a19afa3c81c13dba23a4fc98fb91104e975b299d2297033"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_q000002_chi0.dat",
-              "sha256": "7df32c8fed37b10520fd2df66b71d9115c49a9cbb3a8ef0fba7a11b60e447ad7"
+              "sha256": "a283c2666cce72213d704517c487d36bcc79ffd3e3995c9c658d911d99f018dc"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_q000003_chi0.dat",
-              "sha256": "c806c8150e50c1b2d4c86c7cb3a8523ed52e883b07c47a5077be7624f490ed3b"
+              "sha256": "9ad0fbcccd8d490188467c092e374f8cb50986f954150b02857199d1af60aa05"
             }
           ],
           "real_space_cutoff": 8.5836,
           "real_space_points": 258,
           "real_space_tail_assessed": false,
-          "response_fermi_level_Ry": -0.06359362440726943,
+          "response_fermi_level_Ry": -0.06359362440726937,
           "response_k_mesh": [
             0,
             0,
@@ -175,14 +229,60 @@
     },
     "fccNi": {
       "backend_equivalence": {
-        "max_abs_matrix_difference": 61.13543750157882,
+        "max_abs_matrix_difference": 61.135437501587596,
+        "max_relative_matrix_norm": 1.0,
+        "pairwise_aggregate_relative_matrix_norm": {
+          "eigenpairs_vs_kspace_lehmann": 0.7288402129622755,
+          "eigenpairs_vs_realspace_gf": 1.0,
+          "kspace_lehmann_vs_realspace_gf": 1.0
+        },
         "pairwise_max_abs_matrix_difference": {
-          "eigenpairs_vs_kspace_lehmann": 44.631528333264264,
-          "eigenpairs_vs_realspace_gf": 61.13543750157882,
-          "kspace_lehmann_vs_realspace_gf": 16.91914306092669
+          "eigenpairs_vs_kspace_lehmann": 44.63152833326222,
+          "eigenpairs_vs_realspace_gf": 61.135437501587596,
+          "kspace_lehmann_vs_realspace_gf": 16.919143060937426
+        },
+        "pairwise_max_relative_matrix_norm": {
+          "eigenpairs_vs_kspace_lehmann": 0.7288402129622755,
+          "eigenpairs_vs_realspace_gf": 1.0,
+          "kspace_lehmann_vs_realspace_gf": 1.0
         },
         "pass": false,
-        "pointwise_tolerance": 1e-08
+        "pointwise_tolerance": 1e-08,
+        "representative_relative_matrix_norm": {
+          "eigenpairs_vs_kspace_lehmann": {
+            "q01_omega_0.0000": 0.7232542668577108,
+            "q01_omega_0.0010": 0.7356354963091993,
+            "q01_omega_0.0020": 0.7276444265349091,
+            "q02_omega_0.0000": 0.7232542668577108,
+            "q02_omega_0.0010": 0.7356354963091993,
+            "q02_omega_0.0020": 0.7276444265349091,
+            "q03_omega_0.0000": 0.7232542668577108,
+            "q03_omega_0.0010": 0.7356354963091993,
+            "q03_omega_0.0020": 0.7276444265349091
+          },
+          "eigenpairs_vs_realspace_gf": {
+            "q01_omega_0.0000": 1.0,
+            "q01_omega_0.0010": 1.0,
+            "q01_omega_0.0020": 1.0,
+            "q02_omega_0.0000": 1.0,
+            "q02_omega_0.0010": 1.0,
+            "q02_omega_0.0020": 1.0,
+            "q03_omega_0.0000": 1.0,
+            "q03_omega_0.0010": 1.0,
+            "q03_omega_0.0020": 1.0
+          },
+          "kspace_lehmann_vs_realspace_gf": {
+            "q01_omega_0.0000": 1.0,
+            "q01_omega_0.0010": 1.0,
+            "q01_omega_0.0020": 1.0,
+            "q02_omega_0.0000": 1.0,
+            "q02_omega_0.0010": 1.0,
+            "q02_omega_0.0020": 1.0,
+            "q03_omega_0.0000": 1.0,
+            "q03_omega_0.0010": 1.0,
+            "q03_omega_0.0020": 1.0
+          }
+        }
       },
       "deck_scope": {
         "bounded_probe": true,
@@ -214,25 +314,33 @@
       },
       "goldstone": {
         "gapless_tolerance": 1e-06,
-        "maximum_raw_residual": 0.03214999414692409,
-        "native_realspace_static_diagnostic": "not available: native provider is bare dynamic chi0 only",
+        "maximum_raw_residual": 1.0,
+        "native_realspace_static_diagnostic": "available: exact native static real-space contour identity",
         "pass": false,
         "routes_with_static_diagnostic": {
           "eigenpairs": {
             "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_goldstone.dat",
-            "raw_closest_eigenvalue": 1.0321499941469237,
-            "raw_dm_residual": 0.03214999414692387,
-            "raw_residual": 0.03214999414692365,
-            "raw_ward_residual": 0.03214999414692387,
-            "sha256": "ba17e18ecd7a5d4ab496bcda4589de8dc9d761f73b49a6fcd0bfd7c30c0b3965"
+            "raw_closest_eigenvalue": 1.0321499941467491,
+            "raw_dm_residual": 0.032149994146749135,
+            "raw_residual": 0.032149994146749135,
+            "raw_ward_residual": 0.032149994146749135,
+            "sha256": "0d4bb62f236eae7da029e3424b21387569845d23f1763b2fb74c46eab65001aa"
           },
           "kspace_lehmann": {
             "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_goldstone.dat",
-            "raw_closest_eigenvalue": 1.032149994146924,
-            "raw_dm_residual": 0.032149994146924314,
-            "raw_residual": 0.03214999414692409,
-            "raw_ward_residual": 0.032149994146924314,
-            "sha256": "df5114917266fe3fdc0e8467f90c40cf5122ec4602932883eb2e955e8cb9e537"
+            "raw_closest_eigenvalue": 1.0321499941467518,
+            "raw_dm_residual": 0.0321499941467518,
+            "raw_residual": 0.0321499941467518,
+            "raw_ward_residual": 0.0321499941467518,
+            "sha256": "49215692fb9c76b1c3a79863602d1fd61ea1875fd8df82eb620b66692bf3e534"
+          },
+          "realspace_gf": {
+            "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_goldstone.dat",
+            "raw_closest_eigenvalue": -2.4366987748369747e-22,
+            "raw_dm_residual": 1.0,
+            "raw_residual": 1.0,
+            "raw_ward_residual": 1.0,
+            "sha256": "54410e969dbf02d8999eaa8031dca7fa3ff9135fce86a31269b5b2d7603f8a6d"
           }
         }
       },
@@ -248,27 +356,27 @@
         "eigenpairs": {
           "backend": "eigenpairs",
           "manifest": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_manifest.dat",
-          "manifest_sha256": "60576f2533e056283d4c873923c524c5ec7452c13fc28cf6ef596d9d4a28509b",
+          "manifest_sha256": "5b905f2f30ac66448a74924dafb777dc94cd8f9c4e2a2f7386f70020f3891b9b",
           "omega_count": 3,
           "q_count": 3,
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_q000001_chi0.dat",
-              "sha256": "240854ad5ee54654a2d7550c0d0d51a6c97b7497091684b11cbe1f32833825cc"
+              "sha256": "860ffe4c876386fd1e4e3f3d455a9b1ea69d2090d56deeaaf6ca31c9f3a5892d"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_q000002_chi0.dat",
-              "sha256": "249cfe560e8c35b306a23ae5a9ef2e9b22b127a397b140a594d70831252e4ce7"
+              "sha256": "3d737db3090a1d9dccfb62a2a2df07a0cf07ae4c23c3ce4d2605e915cfbe3e91"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_q000003_chi0.dat",
-              "sha256": "3fe5710f9e2282d17a3a6b6a7cce8a6749df6ed00486bdafc744f7244c420bdf"
+              "sha256": "bb251f46c8a2a800d12a515fc708846de308637d16d1d0346a896a4cad3cc77e"
             }
           ],
           "real_space_cutoff": 0.0,
           "real_space_points": 0,
           "real_space_tail_assessed": false,
-          "response_fermi_level_Ry": -0.045779767129329255,
+          "response_fermi_level_Ry": -0.04577976712932964,
           "response_k_mesh": [
             4,
             4,
@@ -278,27 +386,27 @@
         "kspace_lehmann": {
           "backend": "kspace_lehmann",
           "manifest": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_manifest.dat",
-          "manifest_sha256": "1163811b8954632430cd6d8f3d5df3ae196bbf0de17a1636f969bdd4605670b8",
+          "manifest_sha256": "6c6877a975eede62064b65f2514b0b72e5b51b1da0cd3eadbfa772defa0d2514",
           "omega_count": 3,
           "q_count": 3,
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_q000001_chi0.dat",
-              "sha256": "32b4e66ffa78386d1c008ed7a18a3cf4d1ea6e50ccbe6f51898a306135c80bfe"
+              "sha256": "0e608dfa6fcfb2545edbde1faf02d9f754aaae90a3ddcef01e6cf05ae60e4c80"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_q000002_chi0.dat",
-              "sha256": "3cd10d5efe059293539ad699f9abb014ee08c8706ba0bd3c290f05da42168c0b"
+              "sha256": "c3382a5a80653dffcd2a011ffe020543fa07a8cab1b5d6e6aaf7542318490219"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_q000003_chi0.dat",
-              "sha256": "f620c51c6aa0d04744ea915591bff223e631a2b20738e448a7fc05fe926c7fc9"
+              "sha256": "2a12d64c6eb9852e983abdf81028f6acdb21d5e7db6d2910e7c2a8f2b7326bbf"
             }
           ],
           "real_space_cutoff": 0.0,
           "real_space_points": 0,
           "real_space_tail_assessed": false,
-          "response_fermi_level_Ry": -0.045779767129329255,
+          "response_fermi_level_Ry": -0.04577976712932964,
           "response_k_mesh": [
             4,
             4,
@@ -308,27 +416,27 @@
         "realspace_gf": {
           "backend": "realspace_gf",
           "manifest": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_manifest.dat",
-          "manifest_sha256": "132e851fa35405dd85dc94924d14c55a222f9e7f4ae284f237669acaa372d908",
+          "manifest_sha256": "fc7049057aa4fd65d867f1212fe36d74d29e35ec7e80344f7bb2acf74dcd29c2",
           "omega_count": 3,
           "q_count": 3,
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_q000001_chi0.dat",
-              "sha256": "52802abaa64b048cb81eff10392b3c40053afb89508c8a78971dc61ab7d7b8b0"
+              "sha256": "a3be5056f4c628d55c6fcd7eb58e3bf51aa847c5b4556e4ca447a848de98b611"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_q000002_chi0.dat",
-              "sha256": "d3e5c2ed90e3af3160b09646a2a52023e9b96598dc49c78f55724bd30ee12c44"
+              "sha256": "9e9ddafb17fed1c4c96b7996dd4c3a4f57024e5ba8bf5921f592ecbe4cde1b14"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_q000003_chi0.dat",
-              "sha256": "b22e116c0eee261544db3896fecbb88c8e2d11c8695a567b62ae5bdba27b1ecf"
+              "sha256": "791f5f93b35c035376e3faa61f1171e04f3f37ebd327d883a00f68d4108fb910"
             }
           ],
           "real_space_cutoff": 23.03627574066607,
           "real_space_points": 64,
           "real_space_tail_assessed": false,
-          "response_fermi_level_Ry": -0.045779767129329255,
+          "response_fermi_level_Ry": -0.04577976712932964,
           "response_k_mesh": [
             0,
             0,
@@ -345,5 +453,5 @@
       }
     }
   },
-  "source_revision": "working tree after Gamma endpoint reuse and native cluster-to-site mapping fixes"
+  "source_revision": "bf91262 + local validation fixes"
 }

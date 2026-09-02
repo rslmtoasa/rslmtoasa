@@ -2,16 +2,16 @@
 # energy_unit = Rydberg
 # susceptibility_unit = 1/Rydberg
 # frequency_convention = retarded: omega is energy; denominator omega+en-em+i*eta
-# spectral_convention = Stoner spectral weight = -Im chi_KS^plus_minus/pi (positive excitation positive)
-# endpoint_provenance = K-space Lehmann resolvents at k and k+q endpoints
+# spectral_convention = Stoner spectral weight = -Im chi_KS^minus_plus/pi (positive excitation positive)
+# endpoint_provenance = K/K+q branches; exact folded endpoint supplied by caller
 # response_projection = site
-# circular_channel = plus_minus
+# circular_channel = minus_plus
 # eta_role = numerical broadening; not a physical linewidth
 # stoner_landau_map = site-diagonal KS loss; q resolution is supplied by the per-q output files
 # q_direct =    0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
 # static_limit = F
 # eta_is_numerical = T
-# chi0_backend = kspace_lehmann
+# chi0_backend = green
 # chi0_backend_canonical = kspace_lehmann
 # chi0_backend_implementation = K-space Lehmann GF bubble
 # convergence_status = not assessed by backend
@@ -45,7 +45,7 @@
 # profile_real_space_total_cpu_s =   0.0000000000000000E+00
 # energy_integration = real-axis trapezoid
 # eta_Ry =   5.0000000000000001E-04
-# fermi_level_Ry =  -4.5779767129329643E-02
+# fermi_level_Ry =   0.0000000000000000E+00
 # electronic_temperature_K =   3.0000000000000000E+02
 # electronic_kT_Ry =   1.9001044200000002E-03
 # k_mesh_shape = 4 4 4
@@ -62,7 +62,7 @@
 # profile_frequency_denominators_cpu_s =   0.0000000000000000E+00
 # profile_response_accumulation_cpu_s =   0.0000000000000000E+00
 # profile_arbitrary_kq_eigensolve_cpu_s =   0.0000000000000000E+00
-# profile_gf_energy_integration_cpu_s =   1.4275011000000001E+01
+# profile_gf_energy_integration_cpu_s =   1.4323569000000001E+01
 # green_function_evaluations = 1024512
 # contour_points_per_segment = 0
 # contour_horizontal_subdivisions = 0
@@ -75,18 +75,18 @@
 # integration_energy_window_Ry =   -2.0000000000000000E+00   1.5000000000000000E+00
 # integration_energy_points = 2001
 # record omega_Ry kind left_channel right_channel Re_chi_Ry^-1 Im_chi_Ry^-1 spectral_Ry^-1
-  0.0000000000000000E+00 matrix 1 1  -1.6919143060937426E+01   2.2615008079452737E-17  -7.1985806478161069E-18
-  0.0000000000000000E+00 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -7.1985806478161069E-18
-  0.0000000000000000E+00 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -7.1985806478161069E-18
-  0.0000000000000000E+00 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00  -7.1985806478161069E-18
-  1.0000000000000000E-03 matrix 1 1  -1.6038756867159165E+01   1.9684959545439082E-01  -6.2659172324412385E-02
-  1.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -6.2659172324412385E-02
-  1.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -6.2659172324412385E-02
-  1.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00  -6.2659172324412385E-02
-  2.0000000000000000E-03 matrix 1 1  -1.6402192100269982E+01  -3.0763747879493830E-01   9.7924050861085132E-02
-  2.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   9.7924050861085132E-02
-  2.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   9.7924050861085132E-02
-  2.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   9.7924050861085132E-02
+  0.0000000000000000E+00 matrix 1 1   2.4144470798588593E+01  -3.3709940027572478E-17   1.0730207173439005E-17
+  0.0000000000000000E+00 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   1.0730207173439005E-17
+  0.0000000000000000E+00 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   1.0730207173439005E-17
+  0.0000000000000000E+00 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   1.0730207173439005E-17
+  1.0000000000000000E-03 matrix 1 1   2.5448041546491126E+01   3.7341750473730950E-02  -1.1886248343196810E-02
+  1.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -1.1886248343196810E-02
+  1.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -1.1886248343196810E-02
+  1.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00  -1.1886248343196810E-02
+  2.0000000000000000E-03 matrix 1 1   2.4232678675172608E+01  -3.3744471190652792E-01   1.0741198784028894E-01
+  2.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   1.0741198784028894E-01
+  2.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   1.0741198784028894E-01
+  2.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   1.0741198784028894E-01
 # production_metadata_begin
 # provenance_schema = rslmto.tddft.production.v1
 # channel = transverse
@@ -99,9 +99,9 @@
 # full_response_capability = not selected; production full response is capability-gated
 # longitudinal_capability = not selected; LLB readiness is not claimed
 # xi_backend_requested = legacy_site_scalar
-# xi_backend_output = shared_chi_ks
+# xi_backend_output = shared_reverse_chi_ks
 # circular_channel_requested = both
-# circular_channel_output = plus_minus
+# circular_channel_output = minus_plus
 # pair_potential_provenance = not used by this output
 # signed_moment_source = reconstructed occupied P_site sigma_z population
 # reciprocal_mode = ham_only

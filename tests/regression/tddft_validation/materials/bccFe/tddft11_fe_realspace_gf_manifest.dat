@@ -1,4 +1,6 @@
 # TDDFT transverse chi_KS manifest; one self-describing output file per q point
+# primary_circular_channel = plus_minus
+# reverse_circular_channel = minus_plus; files carry the _minus_plus_ suffix
 # q_index q1 q2 q3 chi0_file legacy_raw_dyson_file
 1   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00 tddft11_fe_realspace_gf_q000001_chi0.dat tddft11_fe_realspace_gf_q000001_dyson.dat
 2   1.0000000000000000E-02   0.0000000000000000E+00   0.0000000000000000E+00 tddft11_fe_realspace_gf_q000002_chi0.dat tddft11_fe_realspace_gf_q000002_dyson.dat

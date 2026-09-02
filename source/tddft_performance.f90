@@ -210,7 +210,7 @@ contains
       if (present(unit)) output_unit = unit
       output_label = 'response'
       if (present(label)) output_label = trim(label)
-      write(output_unit, '(a,1x,a,1x,a,a,1x,a,a,1x,a,i0,1x,a,i0,1x,a,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,l1,1x,a,l1,1x,a,es12.4)') &
+      write(output_unit, '(a,1x,a,1x,a,a,1x,a,a,1x,a,i0,1x,a,i0,1x,a,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,l1,1x,a,l1,1x,a,es12.4)') &
          'TDDFT_PERF_PLAN', trim(output_label), 'backend=', trim(this%backend), 'integration=', trim(this%integration), &
          'rank=', this%rank, 'size=', this%size, 'strategy=', trim(this%strategy), 'q_first=', this%q%first, &
          'q_last=', this%q%last, 'q_count=', this%q%count, 'owner_q_first=', this%owner_q%first, &

@@ -2,58 +2,58 @@
 # energy_unit = Rydberg
 # susceptibility_unit = 1/Rydberg
 # frequency_convention = retarded: omega is energy; denominator omega+en-em+i*eta
-# spectral_convention = Stoner spectral weight = -Im chi_KS^plus_minus/pi (positive excitation positive)
-# endpoint_provenance = K-space Lehmann resolvents at k and k+q endpoints
+# spectral_convention = Stoner spectral weight = -Im chi_KS^minus_plus/pi (positive excitation positive)
+# endpoint_provenance = native G_ab(R,z), G_ba(-R,z); no G(k) endpoint
 # response_projection = site
-# circular_channel = plus_minus
+# circular_channel = minus_plus
 # eta_role = numerical broadening; not a physical linewidth
 # stoner_landau_map = site-diagonal KS loss; q resolution is supplied by the per-q output files
-# q_direct =    0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
+# q_direct =    1.0000000000000000E-02   0.0000000000000000E+00   0.0000000000000000E+00
 # static_limit = F
 # eta_is_numerical = T
-# chi0_backend = kspace_lehmann
-# chi0_backend_canonical = kspace_lehmann
-# chi0_backend_implementation = K-space Lehmann GF bubble
-# convergence_status = not assessed by backend
+# chi0_backend = realspace_gf
+# chi0_backend_canonical = realspace_gf
+# chi0_backend_implementation = native real-space GF -> chi0(R,w) -> requested representation
+# convergence_status = source radius does not extend beyond requested R
 # converged = F
-# q_batch_size = 1
+# q_batch_size = 3
 # omega_batch_size = 3
 # goldstone_correction_applied = F
 # goldstone_correction = none
-# real_space_reuse = F
-# real_space_points = 0
-# real_space_cutoff =   0.0000000000000000E+00
-# real_space_requested_cutoff =   0.0000000000000000E+00
-# real_space_source_radius =   0.0000000000000000E+00
+# real_space_reuse = T
+# real_space_points = 258
+# real_space_cutoff =   8.5836000000000006E+00
+# real_space_requested_cutoff =   3.0000000000000000E+01
+# real_space_source_radius =   8.5836000000000006E+00
 # real_space_representation = bulk
 # real_space_truncation_mode = full_tail
 # real_space_fourier_axes = 1 2 3
 # real_space_omitted_points = 0
-# real_space_shell_count = 0
-# real_space_selected_norm =   0.0000000000000000E+00
+# real_space_shell_count = 14
+# real_space_selected_norm =   1.8579972351999612E+02
 # real_space_tail_norm =   0.0000000000000000E+00
-# real_space_total_norm =   0.0000000000000000E+00
+# real_space_total_norm =   1.8579972351999612E+02
 # real_space_tail_ratio =   0.0000000000000000E+00
-# real_space_last_shell_norm =   0.0000000000000000E+00
-# real_space_tail_tolerance =   0.0000000000000000E+00
+# real_space_last_shell_norm =   8.7140426813712835E-01
+# real_space_tail_tolerance =   1.0000000000000000E-03
 # real_space_tail_assessed = F
 # real_space_source_covers_cutoff = F
-# profile_real_space_pair_response_integrations = 0
-# profile_real_space_green_cpu_s =   0.0000000000000000E+00
-# profile_real_space_pair_integration_cpu_s =   0.0000000000000000E+00
-# profile_real_space_fourier_cpu_s =   0.0000000000000000E+00
-# profile_real_space_total_cpu_s =   0.0000000000000000E+00
-# energy_integration = real-axis trapezoid
+# profile_real_space_pair_response_integrations = 774
+# profile_real_space_green_cpu_s =   1.1974021800000001E+02
+# profile_real_space_pair_integration_cpu_s =   1.5183028000000007E+01
+# profile_real_space_fourier_cpu_s =   3.3000000001948138E-05
+# profile_real_space_total_cpu_s =   1.3492329500000000E+02
+# energy_integration = direct near-real-axis trapezoid
 # eta_Ry =   5.0000000000000001E-04
-# fermi_level_Ry =  -4.5779767129329643E-02
+# fermi_level_Ry =  -6.3593624407269372E-02
 # electronic_temperature_K =   3.0000000000000000E+02
 # electronic_kT_Ry =   1.9001044200000002E-03
-# k_mesh_shape = 4 4 4
-# nk = 64
+# k_mesh_shape = 0 0 0
+# nk = 0
 # omega_grid_min_max_points =    0.0000000000000000E+00   2.0000000000000000E-03 3
-# raw_k_weight_sum =   1.0000000000000000E+00
-# available_band_count = 18
-# band_window_first_last =  1 18
+# raw_k_weight_sum =   0.0000000000000000E+00
+# available_band_count = 0
+# band_window_first_last =  0 0
 # occupation_prune_tolerance =   0.0000000000000000E+00
 # batched_accumulation = F
 # transition_batch_size = 0
@@ -62,46 +62,43 @@
 # profile_frequency_denominators_cpu_s =   0.0000000000000000E+00
 # profile_response_accumulation_cpu_s =   0.0000000000000000E+00
 # profile_arbitrary_kq_eigensolve_cpu_s =   0.0000000000000000E+00
-# profile_gf_energy_integration_cpu_s =   1.4275011000000001E+01
-# green_function_evaluations = 1024512
+# profile_gf_energy_integration_cpu_s =   0.0000000000000000E+00
+# green_function_evaluations = 0
 # contour_points_per_segment = 0
 # contour_horizontal_subdivisions = 0
 # near_fermi_points = 0
 # contour_height_Ry =   0.0000000000000000E+00
-# contour_max_imaginary_energy_Ry =   2.5000000000000001E-04
+# contour_max_imaginary_energy_Ry =   0.0000000000000000E+00
 # contour_gf_evaluations = 0
 # contour_deformation = F
-# green_eta_Ry =   2.5000000000000001E-04
-# integration_energy_window_Ry =   -2.0000000000000000E+00   1.5000000000000000E+00
-# integration_energy_points = 2001
 # record omega_Ry kind left_channel right_channel Re_chi_Ry^-1 Im_chi_Ry^-1 spectral_Ry^-1
-  0.0000000000000000E+00 matrix 1 1  -1.6919143060937426E+01   2.2615008079452737E-17  -7.1985806478161069E-18
-  0.0000000000000000E+00 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -7.1985806478161069E-18
-  0.0000000000000000E+00 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -7.1985806478161069E-18
-  0.0000000000000000E+00 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00  -7.1985806478161069E-18
-  1.0000000000000000E-03 matrix 1 1  -1.6038756867159165E+01   1.9684959545439082E-01  -6.2659172324412385E-02
-  1.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -6.2659172324412385E-02
-  1.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00  -6.2659172324412385E-02
-  1.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00  -6.2659172324412385E-02
-  2.0000000000000000E-03 matrix 1 1  -1.6402192100269982E+01  -3.0763747879493830E-01   9.7924050861085132E-02
-  2.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   9.7924050861085132E-02
-  2.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   9.7924050861085132E-02
-  2.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   9.7924050861085132E-02
+  0.0000000000000000E+00 matrix 1 1  -4.9586760966541561E+01  -1.6221492975770799E-01   5.1634615828487627E-02
+  0.0000000000000000E+00 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   5.1634615828487627E-02
+  0.0000000000000000E+00 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   5.1634615828487627E-02
+  0.0000000000000000E+00 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   5.1634615828487627E-02
+  1.0000000000000000E-03 matrix 1 1  -4.9311051303154187E+01  -1.8402462828112159E-01   5.8576858483178201E-02
+  1.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   5.8576858483178201E-02
+  1.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   5.8576858483178201E-02
+  1.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   5.8576858483178201E-02
+  2.0000000000000000E-03 matrix 1 1  -4.9035341639766742E+01  -2.0583432680429289E-01   6.5519101137791649E-02
+  2.0000000000000000E-03 site_diagonal 1 1   0.0000000000000000E+00   0.0000000000000000E+00   6.5519101137791649E-02
+  2.0000000000000000E-03 stoner_landau 1 1   0.0000000000000000E+00   0.0000000000000000E+00   6.5519101137791649E-02
+  2.0000000000000000E-03 trace 0 0   0.0000000000000000E+00   0.0000000000000000E+00   6.5519101137791649E-02
 # production_metadata_begin
 # provenance_schema = rslmto.tddft.production.v1
 # channel = transverse
-# chi0_backend_requested = kspace_lehmann
-# chi0_backend = kspace_lehmann
-# chi0_backend_canonical = kspace_lehmann
+# chi0_backend_requested = realspace_gf
+# chi0_backend = realspace_gf
+# chi0_backend_canonical = realspace_gf
 # chi0_backend_alias = F
-# chi0_backend_implementation = K-space Lehmann Green-function bubble
-# chi0_backend_capability = periodic K-space GF response; Lehmann resolvent source
+# chi0_backend_implementation = native real-space G(R,z) to chi0(R,omega) to q transform
+# chi0_backend_capability = native RS GF bare transverse response; no implicit G(R) to G(k) conversion
 # full_response_capability = not selected; production full response is capability-gated
 # longitudinal_capability = not selected; LLB readiness is not claimed
 # xi_backend_requested = legacy_site_scalar
-# xi_backend_output = shared_chi_ks
+# xi_backend_output = shared_reverse_chi_ks
 # circular_channel_requested = both
-# circular_channel_output = plus_minus
+# circular_channel_output = minus_plus
 # pair_potential_provenance = not used by this output
 # signed_moment_source = reconstructed occupied P_site sigma_z population
 # reciprocal_mode = ham_only
@@ -114,8 +111,8 @@
 # q_mode = list
 # q_coordinates = direct
 # q_coordinate_unit = fractional reciprocal-lattice coordinates; spatial phase is exp(-i q.R)
-# q_index = 1
-# q_direct =   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
+# q_index = 2
+# q_direct =   1.0000000000000000E-02   0.0000000000000000E+00   0.0000000000000000E+00
 # k_mesh = 4 4 4
 # omega_min_Ry =   0.0000000000000000E+00
 # omega_max_Ry =   2.0000000000000000E-03
@@ -126,30 +123,30 @@
 # ground_state_fermi_level_Ry =   0.0000000000000000E+00
 # electronic_temperature_K =   3.0000000000000000E+02
 # ground_state_electronic_temperature_K =   3.0000000000000000E+02
-# response_fermi_level_Ry =  -4.5779767129329643E-02
+# response_fermi_level_Ry =  -6.3593624407269372E-02
 # response_electronic_temperature_overridden = T
-# ground_state_response_electron_count =    1.0000000000000000E+01   1.0000000000005695E+01
+# ground_state_response_electron_count =    8.0000000000000000E+00   7.9999999999706999E+00
 # static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
 # band_window_first_last =  1 0
-# occupation_prune_tolerance =   1.0000000000000000E-14
+# occupation_prune_tolerance =   0.0000000000000000E+00
 # green_eta_Ry =   2.5000000000000001E-04
 # green_eta_effective_Ry =   2.5000000000000001E-04
 # green_eta_policy = zero input means response eta/2; one-particle half-width combines to response eta
-# green_energy_window_Ry =   -2.0000000000000000E+00   1.5000000000000000E+00
+# green_energy_window_Ry =    1.7976931348623157+308  -1.7976931348623157+308
 # green_energy_points = 2001
 # energy_integration = direct
 # contour_points_per_segment = 64
 # contour_horizontal_subdivisions = 8
 # near_fermi_points = 128
 # contour_height_Ry =   0.0000000000000000E+00
-# realspace_rmax_request_Angstrom =   1.7976931348623157+308
+# realspace_rmax_request_Angstrom =   3.0000000000000000E+01
 # realspace_source_rmax_request_Angstrom =   1.7976931348623157+308
 # realspace_tail_tolerance =   1.0000000000000000E-03
 # realspace_representation = bulk
 # realspace_truncation_mode = full_tail
 # realspace_fourier_axes = 1 2 3
-# realspace_convergence_policy = not applicable to this backend
-# realspace_q_reuse = not applicable to this backend
+# realspace_convergence_policy = full_tail validates chi0(R,omega); production skips omitted pairs and never claims tail convergence
+# realspace_q_reuse = chi0(R,omega) is built once per frequency batch and transformed to the requested q batch
 # goldstone_mode = diagnose
 # goldstone_policy = diagnose
 # goldstone_mode_migrated_from_sum_rule = F
@@ -160,6 +157,6 @@
 # unsupported_feature_policy = generalized overlap/HOH, SOC/noncollinear, Hubbard, GBT, CCOR, and site-orbital response fail explicitly
 # output_chi0 output_xi output_chi output_modes output_stoner = T F F F T
 # validation_status_policy = output completion is not a convergence claim; consult docs/TDDFT_RELEASE_STATUS.md
-# mpi_response_provenance = q-owned output with omega/k fallback decomposition as reported by TDDFT_PERF_PLAN
+# mpi_response_provenance = R/energy partials reduced collectively, then one q-batched real-space Fourier transform
 # mpi_q_owner_rank = 0
 # production_metadata_end

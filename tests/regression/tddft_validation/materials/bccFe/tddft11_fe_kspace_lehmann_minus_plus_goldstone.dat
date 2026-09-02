@@ -2,46 +2,46 @@
 # Ward identity = chi_KS(0,0) B_xc - m; Dm = m-chi_KS K_xc m
 # raw Goldstone diagnostics are retained for every non-off mode
 # goldstone_policy = diagnose
-# circular_channel = plus_minus
+# circular_channel = minus_plus
 # legacy_site_scalar_correction_requested = F
 # legacy_site_scalar_correction_applied = F
 # legacy_site_scalar_correction_disabled = F
 # raw_available = T
-raw_closest_eigenvalue   1.0321499941467491E+00  -7.8213002046580120E-18
-raw_closest_eigenvalue_distance  3.2149994146749128E-02
+raw_closest_eigenvalue   1.0525796051291554E+00   1.3678061021799179E-18
+raw_closest_eigenvalue_distance  5.2579605129155382E-02
 raw_magnetization_overlap  1.0000000000000000E+00
 raw_left_magnetization_overlap  1.0000000000000000E+00
 raw_biorthogonal_magnetization_overlap  1.0000000000000000E+00
-raw_imaginary_norm  7.5776779043860501E-18
-raw_residual  3.2149994146749135E-02
-raw_ward_residual  3.2149994146749135E-02
-raw_dm_residual  3.2149994146749135E-02
+raw_imaginary_norm  1.2994799590593274E-18
+raw_residual  5.2579605129155452E-02
+raw_ward_residual  5.2579605129155452E-02
+raw_dm_residual  5.2579605129155452E-02
 raw_bxc_kernel_residual  0.0000000000000000E+00
-raw_magnetization_norm  1.9999999999941980E+00
-raw_bxc_norm  3.3765762138135029E-02
+raw_magnetization_norm  1.9868467463673962E+00
+raw_bxc_norm  4.5470532912052629E-02
 raw_identity_consistentF
 raw_response_basis = site
 raw_bxc_provenance = ground-state XC response provider
 raw_kernel_provenance = site-projected transverse ALSDA K_xc
-raw_eigenvalue 1   1.0321499941467491E+00  -7.8213002046580120E-18
+raw_eigenvalue 1   1.0525796051291554E+00   1.3678061021799179E-18
 raw_closest_eigenvector 1   1.0000000000000000E+00   0.0000000000000000E+00
 raw_closest_left_eigenvector 1   1.0000000000000000E+00   0.0000000000000000E+00
-kernel_raw 1  -1.6882881069116493E-02   0.0000000000000000E+00
+kernel_raw 1  -2.2885777675196936E-02   0.0000000000000000E+00
 # production_metadata_begin
 # provenance_schema = rslmto.tddft.production.v1
 # channel = transverse
-# chi0_backend_requested = eigenpairs
-# chi0_backend = eigenpairs
-# chi0_backend_canonical = eigenpairs
+# chi0_backend_requested = kspace_lehmann
+# chi0_backend = kspace_lehmann
+# chi0_backend_canonical = kspace_lehmann
 # chi0_backend_alias = F
-# chi0_backend_implementation = explicit eigenpair transition reference
-# chi0_backend_capability = transparent transition sums; exact k and k+q endpoint arrays
+# chi0_backend_implementation = K-space Lehmann Green-function bubble
+# chi0_backend_capability = periodic K-space GF response; Lehmann resolvent source
 # full_response_capability = not selected; production full response is capability-gated
 # longitudinal_capability = not selected; LLB readiness is not claimed
 # xi_backend_requested = legacy_site_scalar
-# xi_backend_output = goldstone_compare
+# xi_backend_output = goldstone_reverse_compare
 # circular_channel_requested = both
-# circular_channel_output = plus_minus
+# circular_channel_output = minus_plus
 # pair_potential_provenance = not used by this output
 # signed_moment_source = reconstructed occupied P_site sigma_z population
 # reciprocal_mode = ham_only
@@ -66,16 +66,16 @@ kernel_raw 1  -1.6882881069116493E-02   0.0000000000000000E+00
 # ground_state_fermi_level_Ry =   0.0000000000000000E+00
 # electronic_temperature_K =   3.0000000000000000E+02
 # ground_state_electronic_temperature_K =   3.0000000000000000E+02
-# response_fermi_level_Ry =  -4.5779767129329643E-02
+# response_fermi_level_Ry =  -6.3593624407269372E-02
 # response_electronic_temperature_overridden = T
-# ground_state_response_electron_count =    1.0000000000000000E+01   1.0000000000005695E+01
+# ground_state_response_electron_count =    8.0000000000000000E+00   7.9999999999706999E+00
 # static_ward_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded
 # band_window_first_last =  1 0
 # occupation_prune_tolerance =   1.0000000000000000E-14
-# green_eta_Ry =   0.0000000000000000E+00
-# green_eta_effective_Ry = not applicable to explicit eigenpair transitions
-# green_eta_policy = Green-function controls are ignored by the eigenpair backend
-# green_energy_window_Ry =    1.7976931348623157+308  -1.7976931348623157+308
+# green_eta_Ry =   2.5000000000000001E-04
+# green_eta_effective_Ry =   2.5000000000000001E-04
+# green_eta_policy = zero input means response eta/2; one-particle half-width combines to response eta
+# green_energy_window_Ry =   -2.0000000000000000E+00   8.0000000000000004E-01
 # green_energy_points = 2001
 # energy_integration = direct
 # contour_points_per_segment = 64
@@ -103,6 +103,3 @@ kernel_raw 1  -1.6882881069116493E-02   0.0000000000000000E+00
 # mpi_response_provenance = q-owned output with omega/k fallback decomposition as reported by TDDFT_PERF_PLAN
 # mpi_q_owner_rank = 0
 # production_metadata_end
-# dynamic_bare_gamma_loss_peak_Ry =   2.0000000000000000E-03
-# dynamic_minus_plus_bare_gamma_loss_peak_Ry =   2.0000000000000000E-03
-# dynamic Gamma peaks are observed loss-grid maxima; raw and corrected records remain distinct
