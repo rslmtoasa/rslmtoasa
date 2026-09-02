@@ -251,7 +251,7 @@ module calculation_mod
                                                        energy_mesh_before_hamiltonian, stochastic_moments, &
                                                        control_obj, lattice_obj, charge_obj, mix_obj, energy_obj, &
                                                        hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-                                                       preprocessing_route, native_realspace_pairs)
+                                                       preprocessing_route, native_realspace_pairs, native_pair_rmax)
          class(calculation), intent(in) :: this
          logical, intent(in) :: use_paoflow, use_exchange_pairs
          logical, intent(in) :: energy_mesh_before_hamiltonian, stochastic_moments
@@ -267,6 +267,7 @@ module calculation_mod
          type(bands), target, intent(inout) :: bands_obj
          character(len=*), intent(in), optional :: preprocessing_route
          logical, intent(in), optional :: native_realspace_pairs
+         real(rp), intent(in), optional :: native_pair_rmax
       end subroutine prepare_post_processing_stack
 
       module subroutine run_intersite_moments(control_obj, recursion_obj)
@@ -1274,7 +1275,8 @@ contains
       end if
       call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-         native_realspace_pairs=(canonical_chi0_backend == 'realspace_gf'))
+         native_realspace_pairs=(canonical_chi0_backend == 'realspace_gf'), &
+         native_pair_rmax=config%realspace_rmax)
       if (control_obj%calctype /= 'B') then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT currently requires calctype=''B''.', &
             __FILE__, __LINE__)

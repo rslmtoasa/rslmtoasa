@@ -10,7 +10,7 @@ contains
    module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
                                                    stochastic_moments, control_obj, lattice_obj, charge_obj, mix_obj, &
                                                    energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-                                                   preprocessing_route, native_realspace_pairs)
+                                                   preprocessing_route, native_realspace_pairs, native_pair_rmax)
       class(calculation), intent(in) :: this
       logical, intent(in) :: use_paoflow
       logical, intent(in) :: use_exchange_pairs
@@ -28,9 +28,11 @@ contains
       type(bands), target, intent(inout) :: bands_obj
       character(len=*), intent(in), optional :: preprocessing_route
       logical, intent(in), optional :: native_realspace_pairs
+      real(rp), intent(in), optional :: native_pair_rmax
       character(len=sl) :: route
-      integer :: i, j, pair_index
-      logical :: build_native_pairs
+      integer :: i, j, pair_index, native_pair_count
+      real(rp) :: native_cutoff, displacement(3)
+      logical :: build_native_pairs, pair_is_selected
 
       control_obj = control(this%fname)
       lattice_obj = lattice(control_obj)
@@ -101,7 +103,29 @@ contains
             call g_logger%fatal('[calculation.prepare_post_processing_stack]: native real-space TDDFT cannot build '// &
                'automatic pairs before a valid bulk cluster is available.', __FILE__, __LINE__)
          end if
-         lattice_obj%njij = lattice_obj%nrec*lattice_obj%kk
+         native_cutoff = huge(1.0_rp)
+         if (present(native_pair_rmax)) then
+            if (native_pair_rmax <= 0.0_rp) then
+               call g_logger%fatal('[calculation.prepare_post_processing_stack]: native_pair_rmax must be positive.', &
+                  __FILE__, __LINE__)
+            end if
+            native_cutoff = native_pair_rmax
+         end if
+         native_pair_count = 0
+         do i = 1, lattice_obj%nrec
+            do j = 1, lattice_obj%kk
+               displacement = (lattice_obj%cr(:, i)-lattice_obj%cr(:, j))*lattice_obj%alat
+               pair_is_selected = .false.
+               if (sqrt(dot_product(displacement, displacement)) .le. native_cutoff + &
+                   1.0e-10_rp) pair_is_selected = .true.
+               if (pair_is_selected) native_pair_count = native_pair_count + 1
+            end do
+         end do
+         if (native_pair_count < 1) then
+            call g_logger%fatal('[calculation.prepare_post_processing_stack]: native_pair_rmax removes every '// &
+               'central-cell-to-cluster Green-function pair.', __FILE__, __LINE__)
+         end if
+         lattice_obj%njij = native_pair_count
 #ifdef USE_SAFE_ALLOC
          if (allocated(lattice_obj%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', lattice_obj%ijpair)
          call g_safe_alloc%allocate('lattice.ijpair', lattice_obj%ijpair, (/lattice_obj%njij, 2/))
@@ -112,12 +136,19 @@ contains
          pair_index = 0
          do i = 1, lattice_obj%nrec
             do j = 1, lattice_obj%kk
-               pair_index = pair_index + 1
-               lattice_obj%ijpair(pair_index, :) = [i, j]
+               displacement = (lattice_obj%cr(:, i)-lattice_obj%cr(:, j))*lattice_obj%alat
+               pair_is_selected = .false.
+               if (sqrt(dot_product(displacement, displacement)) .le. native_cutoff + &
+                   1.0e-10_rp) pair_is_selected = .true.
+               if (pair_is_selected) then
+                  pair_index = pair_index + 1
+                  lattice_obj%ijpair(pair_index, :) = [i, j]
+               end if
             end do
          end do
          call g_logger%info('[calculation.prepare_post_processing_stack]: native real-space TDDFT generated '// &
-            int2str(lattice_obj%njij)//' central-cell-to-cluster Green-function pairs.', __FILE__, __LINE__)
+            int2str(lattice_obj%njij)//' central-cell-to-cluster Green-function pairs within cutoff '// &
+            real2str(native_cutoff)//' Angstrom.', __FILE__, __LINE__)
       end if
       if (present(preprocessing_route)) then
          ! Spin dynamics consumes the active recursion atoms, matching the

@@ -67,14 +67,22 @@ The native production attachment had three integration defects exposed by this
 campaign and fixed on the current branch:
 
 1. A missing explicit `ijpair` list now causes the native bulk stack to build
-   the complete central-cell-to-cluster pair list before recursion and Green
-   storage are constructed. Explicit user pair lists remain untouched.
+   the central-cell-to-cluster pair list before recursion and Green storage are
+   constructed. When `njij=0`, the list is restricted by
+   `realspace_rmax` in physical Angstroms before allocation; a Fe `5 Å`
+   probe generated 59 pairs from the same embedding cluster. Explicit user
+   pair lists remain authoritative.
 2. The native branch restores pair ownership before intersite recursion and
    returns to response-site ownership afterward, so all generated pairs are
    actually evaluated.
 3. Native bare-`chi0` output no longer appends dynamic Gamma metadata to a
    Goldstone file it deliberately does not create; common q-loop deallocation
    is also guarded for the native path.
+
+The pre-recursion cutoff is a performance and locality control, not a tail
+convergence claim. A release run must sweep `realspace_rmax` (or provide an
+explicit, independently audited pair list) and report the omitted response
+tail before a local zone can replace the full embedding cluster.
 
 ## Release-gate checklist
 

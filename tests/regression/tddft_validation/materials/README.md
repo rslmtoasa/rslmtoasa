@@ -22,3 +22,13 @@ OMP_NUM_THREADS=1 ../../../../../build/bin/rslmto.x input_realspace_gf.nml
 The release report records the exact commands and resulting backend/evidence
 status. The checked-in `.dat` files are the raw outputs used by the machine
 readable collector.
+
+## Native local zones
+
+For `chi0_backend='realspace_gf'`, an automatic pair list is generated for
+each response site against the embedding cluster. `realspace_rmax` is applied
+in physical Angstroms before intersite recursion and Green-function storage,
+so a large embedding cluster can use a smaller response zone. If an explicit
+`ijpair` list is supplied, it remains authoritative. A local zone must still
+be converged by an `rmax`/shell sweep; the cutoff alone is not a release
+accuracy claim.
