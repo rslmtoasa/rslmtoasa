@@ -121,6 +121,63 @@ program test_tddft_realspace_mpi
       if (max_relative_difference > relative_tolerance) write(*, '(a,es16.8)') &
          'TDDFT_R2_01 relative tolerance exceeded: ', relative_tolerance
    end if
+
+   ! Also exercise the production cutoff with a rank that owns only omitted
+   ! pairs.  The serial reference is the same finite-radius production sum;
+   ! the collective result must match it while remaining explicitly
+   ! non-converged because its discarded tail was not evaluated.
+   options%rmax = 1.0_rp
+   options%truncation_mode = 'production'
+   reference_chi = cmplx(0.0_rp, 0.0_rp, rp)
+   if (mpi_rank == 0) then
+      call reference_provider%initialize(energy, g_ab_all, g_ba_all, r_vectors_all, pair_sites_all, [1, 1], &
+         left_channels, right_channels, options)
+      call reference_provider%evaluate_realspace(request, reference_batch)
+      do ip = 1, nq
+         reference_chi(:, :, :, ip) = reference_batch%q_response(ip)%chi
+      end do
+   end if
+#ifdef USE_MPI
+   call MPI_BCAST(reference_chi, size(reference_chi), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_ierr)
+#endif
+   call local_provider%initialize(energy, local_g_ab, local_g_ba, local_r_vectors, local_pair_sites, [1, 1], &
+      left_channels, right_channels, options)
+   call local_provider%evaluate_realspace(request, local_batch)
+   local_partial_difference = 0.0_rp
+   do ip = 1, nq
+      local_partial_difference = max(local_partial_difference, &
+         maxval(abs(local_batch%q_response(ip)%chi-reference_chi(:, :, :, ip))))
+   end do
+#ifdef USE_MPI
+   call MPI_ALLREDUCE(local_partial_difference, max_partial_difference, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpi_ierr)
+#else
+   max_partial_difference = local_partial_difference
+#endif
+   call reduce_realspace_chi0_batch(local_batch)
+   max_absolute_difference = 0.0_rp
+   max_relative_difference = 0.0_rp
+   max_reference_scale = maxval(abs(reference_chi))
+   do ip = 1, nq
+      difference = maxval(abs(local_batch%q_response(ip)%chi-reference_chi(:, :, :, ip)))
+      reference_scale = maxval(abs(reference_chi(:, :, :, ip)))
+      max_absolute_difference = max(max_absolute_difference, difference)
+      max_relative_difference = max(max_relative_difference, difference/max(1.0e-30_rp, reference_scale))
+   end do
+#ifdef USE_MPI
+   call MPI_ALLREDUCE(MPI_IN_PLACE, max_absolute_difference, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpi_ierr)
+   call MPI_ALLREDUCE(MPI_IN_PLACE, max_relative_difference, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpi_ierr)
+#endif
+   failed = failed .or. max_absolute_difference > absolute_tolerance .or. max_relative_difference > relative_tolerance
+   if (mpi_size > 1 .and. max_partial_difference <= 1.0e-8_rp) failed = .true.
+   if (local_batch%q_response(1)%metadata%real_space_points /= 5) failed = .true.
+   if (local_batch%q_response(1)%metadata%real_space_omitted_points /= 3) failed = .true.
+   if (local_batch%q_response(1)%metadata%real_space_tail_assessed) failed = .true.
+   if (local_batch%q_response(1)%metadata%converged) failed = .true.
+   if (local_batch%q_response(1)%metadata%real_space_pair_response_integrations /= 5*nw) failed = .true.
+   if (mpi_rank == 0) write(*, '(a,i0,a,es24.16,a,es24.16,a,es24.16)') 'TDDFT_R2_04 production ranks=', mpi_size, &
+      ' max_abs=', max_absolute_difference, ' max_rel=', max_relative_difference, &
+      ' pair_integrations=', real(local_batch%q_response(1)%metadata%real_space_pair_response_integrations, rp)
+
 #ifdef USE_MPI
    call MPI_ALLREDUCE(MPI_IN_PLACE, failed, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, mpi_ierr)
    call MPI_FINALIZE(mpi_ierr)

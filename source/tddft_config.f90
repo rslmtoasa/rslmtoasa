@@ -56,8 +56,10 @@ module tddft_config_mod
       integer :: contour_points, contour_subdivisions, near_fermi_points
       real(rp) :: contour_height
       real(rp) :: realspace_rmax, realspace_tail_tolerance
+      real(rp) :: realspace_source_rmax
       integer :: realspace_fourier_axes(3)
       character(len=16) :: realspace_representation
+      character(len=16) :: realspace_truncation_mode
       character(len=sl) :: longitudinal_static_file
       real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance
       real(rp) :: longitudinal_static_agreement_tolerance, longitudinal_fit_omega_min, longitudinal_fit_omega_max
@@ -122,8 +124,10 @@ contains
       this%contour_height = 0.0_rp
       this%realspace_rmax = huge(1.0_rp)
       this%realspace_tail_tolerance = 1.0e-3_rp
+      this%realspace_source_rmax = huge(1.0_rp)
       this%realspace_fourier_axes = [1, 2, 3]
       this%realspace_representation = 'bulk'
+      this%realspace_truncation_mode = 'full_tail'
       this%longitudinal_static_file = ''
       this%longitudinal_pair_tolerance = 1.0e-10_rp
       this%longitudinal_linearity_tolerance = 5.0e-2_rp
@@ -180,8 +184,10 @@ contains
       contour_height = this%contour_height
       realspace_rmax = this%realspace_rmax
       realspace_tail_tolerance = this%realspace_tail_tolerance
+      realspace_source_rmax = this%realspace_source_rmax
       realspace_fourier_axes = this%realspace_fourier_axes
       realspace_representation = this%realspace_representation
+      realspace_truncation_mode = this%realspace_truncation_mode
       longitudinal_static_file = this%longitudinal_static_file
       longitudinal_pair_tolerance = this%longitudinal_pair_tolerance
       longitudinal_linearity_tolerance = this%longitudinal_linearity_tolerance
@@ -236,8 +242,10 @@ contains
       this%contour_height = contour_height
       this%realspace_rmax = realspace_rmax
       this%realspace_tail_tolerance = realspace_tail_tolerance
+      this%realspace_source_rmax = realspace_source_rmax
       this%realspace_fourier_axes = realspace_fourier_axes
       this%realspace_representation = lower(trim(realspace_representation))
+      this%realspace_truncation_mode = lower(trim(realspace_truncation_mode))
       this%longitudinal_static_file = trim(longitudinal_static_file)
       this%longitudinal_pair_tolerance = longitudinal_pair_tolerance
       this%longitudinal_linearity_tolerance = longitudinal_linearity_tolerance
@@ -365,7 +373,10 @@ contains
           this%contour_height < 0.0_rp) then
          call g_logger%fatal('[tddft_config]: invalid mixed-contour quadrature settings', __FILE__, __LINE__)
       end if
-      if (this%realspace_rmax <= 0.0_rp .or. this%realspace_tail_tolerance < 0.0_rp .or. &
+      if (this%realspace_rmax <= 0.0_rp .or. this%realspace_source_rmax <= 0.0_rp .or. &
+          this%realspace_tail_tolerance < 0.0_rp .or. &
+          (this%realspace_truncation_mode /= 'full_tail' .and. this%realspace_truncation_mode /= 'validation' .and. &
+           this%realspace_truncation_mode /= 'production' .and. this%realspace_truncation_mode /= 'truncated') .or. &
           (this%realspace_representation /= 'bulk' .and. this%realspace_representation /= 'film' .and. &
            this%realspace_representation /= 'finite' .and. this%realspace_representation /= 'local') .or. &
           any(this%realspace_fourier_axes < 0) .or. any(this%realspace_fourier_axes > 3)) then

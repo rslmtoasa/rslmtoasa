@@ -186,11 +186,13 @@ input is zero, so the bubble has response broadening `eta`.
 
 ### Native real-space Green functions
 
-Converge the real-space response with `realspace_rmax` or an explicit audited
-pair list. The provider reports retained and omitted pair points, shell
-count, outer-shell norm, omitted-tail norm, tail ratio, and
-`real_space_tail_assessed`. A bounded local zone is a performance choice, not
-a convergence claim.
+Converge the real-space response with independent `realspace_source_rmax` and
+`realspace_rmax` controls (or an explicit audited pair list). Use
+`realspace_truncation_mode = 'full_tail'` to integrate the available source
+tail and assess `chi0(R,omega)` convergence. Use `'production'` only after
+that validation; it skips pairs outside `realspace_rmax` and reports no tail
+convergence. A bounded local zone is a performance choice, not a convergence
+claim.
 
 For bulk use all three Fourier axes. For films, set
 `realspace_representation = 'film'` and list the two in-plane axes in
@@ -198,9 +200,9 @@ For bulk use all three Fourier axes. For films, set
 native route amortizes the real-space build over a q batch, so dense q paths
 are attractive after the R-space tail is converged.
 
-The current native source is direct-only. A requested mixed contour is an
-explicit error, not a real-axis interpolation disguised as analytic
-continuation.
+The native source supports the direct real-axis reference and the mixed-contour
+route when an arbitrary-complex-energy source is attached. Both routes apply
+the same full-tail/production truncation semantics.
 
 ## Fe/Ni reproducible examples
 

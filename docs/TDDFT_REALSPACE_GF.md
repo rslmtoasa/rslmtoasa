@@ -96,20 +96,42 @@ capability-gated independently of the contour implementation.
 `&tddft` exposes:
 
 ```fortran
-realspace_rmax          = huge(1.0)
+realspace_rmax           = huge(1.0) ! TDDFT response cutoff, R_max
+realspace_source_rmax   = huge(1.0) ! pair/GF source radius, R_source request
 realspace_tail_tolerance = 1.0e-3
+realspace_truncation_mode = 'full_tail' ! or 'production'
 realspace_representation = 'bulk'
 realspace_fourier_axes   = 1, 2, 3
 ```
 
+`full_tail` is the validation/reference mode. It integrates every supplied
+pair, retains the pairs inside `realspace_rmax`, and computes the omitted-tail
+diagnostic from the resulting `chi0(R,omega)` contributions. This mode does
+not change the mathematical result relative to an untruncated source.
+
+`production` is the optimized mode. It selects pairs by `realspace_rmax`
+before response integration and skips every discarded pair. Its response is
+therefore the requested finite-radius approximation; it reports the discarded
+count but never reports a tail norm or claims convergence from the omitted
+pairs. Establish convergence in `full_tail` mode first.
+
+The two radii are deliberately independent. `realspace_source_rmax` controls
+how far the underlying native pair/GF source is built, while
+`realspace_rmax` controls the response sum. A source whose actual maximum
+available radius does not extend beyond `R_max` is marked as insufficient and
+cannot produce a convergence claim, even when all supplied pairs are retained.
 The cutoff is measured with the supplied lattice metric. The provider reports
-the number of input, retained, and omitted pair points; effective cutoff;
-distinct shell count; retained outer-shell norm; omitted-tail norm; tail
-ratio; tolerance; and whether convergence was assessed. The tail norm is
-computed from `chi0(R,w)` pair contributions, not from the magnitude of
-`G(R,z)`. When no pair is omitted, the status is “all supplied real-space
-pairs retained” and convergence is reported as not assessed, which avoids
-turning a finite source list into an unjustified convergence claim.
+the number of input, retained, and omitted pair points; both requested and
+effective cutoff; source radius; distinct shell count; retained outer-shell
+norm; omitted-tail norm; tail ratio; tolerance; and whether convergence was
+assessed. The tail norm is computed from `chi0(R,w)` pair contributions, not
+from the magnitude of `G(R,z)`.
+
+The response metadata also records GF, pair-response, Fourier, and total
+backend CPU times. For the direct reference route the GF arrays are already
+materialized, so the GF phase is timed by the production driver when it builds
+the native source. The pair-response counter makes the production speedup
+auditable independently of noisy wall-clock measurements.
 
 These fields are propagated into `tddft_chi0_metadata` and written by
 `write_chi_ks_text`, making every q/frequency product self-describing.
@@ -123,7 +145,9 @@ one susceptibility transform over all requested q points. The unit fixture
 * native response evaluation without a K-space source;
 * separate forward/reverse pair geometry and advanced-block conventions;
 * bulk phase sign and finite/local direct representation;
-* Rmax omission and chi0 tail metrics;
+* full-tail versus production truncation, including skipped pair-integration
+  counts and timing;
+* insufficient-source detection and nested source-radius `chi0(q,omega)` convergence;
 * equality of a converged one-site periodic native bubble and the K-space GF
   bubble on the same real-axis grid;
 * exact static native-RGF agreement with the eigenpair divided-difference

@@ -1252,6 +1252,7 @@ contains
       complex(rp), allocatable :: all_xi_reverse(:, :, :, :), all_loss_reverse(:, :, :, :)
       complex(rp), allocatable :: all_xi_pair_reverse(:, :, :, :), all_loss_pair_reverse(:, :, :, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
+      real(rp) :: t_realspace_gf_start, t_realspace_gf_stop
       real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
       real(rp) :: static_q(3, 1)
       real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, pair_corrected_gamma_peak
@@ -1285,7 +1286,7 @@ contains
       call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
          charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
          native_realspace_pairs=(canonical_chi0_backend == 'realspace_gf'), &
-         native_pair_rmax=config%realspace_rmax)
+         native_pair_rmax=config%realspace_source_rmax)
       if (control_obj%calctype /= 'B') then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT currently requires calctype=''B''.', &
             __FILE__, __LINE__)
@@ -1515,6 +1516,7 @@ contains
       realspace_options%contour_height = config%contour_height
       realspace_options%rmax = config%realspace_rmax
       realspace_options%tail_tolerance = config%realspace_tail_tolerance
+      realspace_options%truncation_mode = config%realspace_truncation_mode
       realspace_options%representation = config%realspace_representation
       realspace_options%fourier_axes = config%realspace_fourier_axes
       realspace_options%circular_channel = chi0_options%circular_channel
@@ -1539,12 +1541,16 @@ contains
          ! silently zero.
          call get_mpi_variables(rank, lattice_obj%njij)
          call run_intersite_moments(control_obj, recursion_obj)
+         call cpu_time(t_realspace_gf_start)
          call green_obj%calculate_intersite_gf()
+         call cpu_time(t_realspace_gf_stop)
          call realspace_source%initialize_from_green(green_obj, lattice_obj, site_orbital_counts, left_channels, &
             right_channels, realspace_options)
+         realspace_source%source_green_cpu_seconds = t_realspace_gf_stop-t_realspace_gf_start
          if (circular_reverse) then
             call realspace_source_reverse%initialize_from_green(green_obj, lattice_obj, site_orbital_counts, &
                left_channels_reverse, right_channels_reverse, realspace_options_reverse)
+            realspace_source_reverse%source_green_cpu_seconds = realspace_source%source_green_cpu_seconds
          end if
          select type (chi0_backend)
          type is (tddft_realspace_gf_backend)
@@ -2662,11 +2668,13 @@ contains
       write(unit, '(a,i0)') '# near_fermi_points = ', config%near_fermi_points
       write(unit, '(a,es24.16)') '# contour_height_Ry = ', config%contour_height
       write(unit, '(a,es24.16)') '# realspace_rmax_request_Angstrom = ', config%realspace_rmax
+      write(unit, '(a,es24.16)') '# realspace_source_rmax_request_Angstrom = ', config%realspace_source_rmax
       write(unit, '(a,es24.16)') '# realspace_tail_tolerance = ', config%realspace_tail_tolerance
       write(unit, '(a,a)') '# realspace_representation = ', trim(config%realspace_representation)
+      write(unit, '(a,a)') '# realspace_truncation_mode = ', trim(config%realspace_truncation_mode)
       write(unit, '(a,3(1x,i0))') '# realspace_fourier_axes =', config%realspace_fourier_axes
       if (trim(canonical_backend) == 'realspace_gf') then
-         write(unit, '(a)') '# realspace_convergence_policy = response chi0(R,omega) tail must be converged; cutoff alone is not a release claim'
+         write(unit, '(a)') '# realspace_convergence_policy = full_tail validates chi0(R,omega); production skips omitted pairs and never claims tail convergence'
          write(unit, '(a)') '# realspace_q_reuse = chi0(R,omega) is built once per frequency batch and transformed to the requested q batch'
       else
          write(unit, '(a)') '# realspace_convergence_policy = not applicable to this backend'

@@ -17,7 +17,7 @@ module tddft_chi0_realspace_mod
    use tddft_backend_mod, only: tddft_realspace_chi0_provider, tddft_backend_capabilities
    use green_mod, only: green
    use lattice_mod, only: lattice
-   use mpi_mod, only: ierr, start_atom, end_atom, g2l_map
+   use mpi_mod, only: ierr, start_atom, end_atom, g2l_map, numprocs
 #ifdef USE_MPI
    use mpi
 #endif
@@ -33,6 +33,10 @@ module tddft_chi0_realspace_mod
       real(rp) :: electronic_temperature = 0.0_rp
       real(rp) :: rmax = huge(1.0_rp)
       real(rp) :: tail_tolerance = 1.0e-3_rp
+      ! `full_tail` is the validation/reference mode.  `production` skips
+      ! pair response work outside rmax and therefore never infers a tail
+      ! estimate from the discarded pairs.
+      character(len=16) :: truncation_mode = 'full_tail'
       character(len=16) :: representation = 'bulk'
       character(len=16) :: circular_channel = 'plus_minus'
       integer :: fourier_axes(3) = [1, 2, 3]
@@ -50,12 +54,18 @@ module tddft_chi0_realspace_mod
       integer :: omitted_points = 0
       integer :: shell_count = 0
       real(rp) :: rmax = 0.0_rp
+      real(rp) :: requested_rmax = 0.0_rp
+      real(rp) :: source_radius = 0.0_rp
       real(rp) :: selected_norm = 0.0_rp
+      real(rp) :: total_norm = 0.0_rp
       real(rp) :: omitted_tail_norm = 0.0_rp
       real(rp) :: tail_ratio = 0.0_rp
       real(rp) :: last_shell_norm = 0.0_rp
       real(rp) :: pair_integration_cpu_seconds = 0.0_rp
       real(rp) :: fourier_cpu_seconds = 0.0_rp
+      real(rp) :: green_function_cpu_seconds = 0.0_rp
+      real(rp) :: total_cpu_seconds = 0.0_rp
+      integer :: pair_response_integrations = 0
       real(rp) :: integration_energy_min = 0.0_rp
       real(rp) :: integration_energy_max = 0.0_rp
       integer :: contour_points = 0
@@ -67,6 +77,7 @@ module tddft_chi0_realspace_mod
       logical :: contour_deformation = .false.
       logical :: tail_assessed = .false.
       logical :: converged = .false.
+      logical :: source_covers_requested_cutoff = .false.
       character(len=48) :: status = 'not assessed'
    end type tddft_realspace_chi0_diagnostics
 
@@ -117,6 +128,9 @@ module tddft_chi0_realspace_mod
       class(tddft_realspace_complex_green_source), allocatable :: complex_source
       type(tddft_realspace_chi0_options) :: options
       integer :: build_count = 0
+      ! Time spent by the caller constructing the sampled native source.  It
+      ! is set by the production driver; generic array providers leave it zero.
+      real(rp) :: source_green_cpu_seconds = 0.0_rp
       logical :: initialized = .false.
    contains
       procedure :: initialize => initialize_native_realspace_provider
@@ -160,6 +174,7 @@ contains
       this%options = tddft_realspace_chi0_options()
       if (present(options)) this%options = options
       this%build_count = 0
+      this%source_green_cpu_seconds = 0.0_rp
       this%initialized = .true.
    end subroutine initialize_native_realspace_provider
 
@@ -289,6 +304,10 @@ contains
             this%site_orbital_counts, this%left_channels, this%right_channels, request%omega, this%options, realspace_result, &
             q_points=request%q_points)
       end if
+      realspace_result%diagnostics%green_function_cpu_seconds = realspace_result%diagnostics%green_function_cpu_seconds + &
+         this%source_green_cpu_seconds
+      realspace_result%diagnostics%total_cpu_seconds = realspace_result%diagnostics%total_cpu_seconds + &
+         this%source_green_cpu_seconds
       this%build_count = this%build_count + 1
       allocate(result%q_response(nq), result%q_points(3, nq), result%q_indices(nq), result%omega(nw))
       result%q_points = request%q_points
@@ -328,6 +347,10 @@ contains
       call build_static_chi0_from_realspace_gf(this%energy_grid, this%g_ab, this%g_ba, this%r_vectors, this%pair_sites, &
          this%site_orbital_counts, this%left_channels, this%right_channels, this%options, realspace_result, &
          q_points=request%q_points)
+      realspace_result%diagnostics%green_function_cpu_seconds = realspace_result%diagnostics%green_function_cpu_seconds + &
+         this%source_green_cpu_seconds
+      realspace_result%diagnostics%total_cpu_seconds = realspace_result%diagnostics%total_cpu_seconds + &
+         this%source_green_cpu_seconds
       this%build_count = this%build_count + 1
       allocate(result%q_response(nq), result%q_points(3, nq), result%q_indices(nq), result%omega(1))
       result%q_points = request%q_points
@@ -369,8 +392,9 @@ contains
       complex(rp), allocatable :: f0(:, :), f1(:, :), gr0(:, :), gr1(:, :), grm(:, :), rev0(:, :), &
          adv_reverse0(:, :), adv_forward0(:, :), advm(:, :), work1(:, :), work2(:, :), work3(:, :)
       integer :: ip, iw, ikeep, nkeep, nleft, nright, nw, nblock
-      real(rp) :: effective_cutoff, selected_norm, omitted_norm, total_norm
-      real(rp) :: t_start, t_stop
+      real(rp) :: effective_cutoff, source_radius, selected_norm, omitted_norm, total_norm
+      real(rp) :: t_start, t_stop, total_start, total_stop
+      logical :: full_tail_mode
 
       call validate_realspace_source(energy_grid, g_ab, g_ba, r_vectors, pair_sites, site_orbital_counts, &
          left_channels, right_channels)
@@ -380,15 +404,19 @@ contains
       if (trim(options%energy_integration) /= 'direct') then
          error stop 'build_chi0_from_realspace_gf: mixed_contour requires a complex-energy native real-space source; sampled real-axis source is direct-only'
       end if
+      full_tail_mode = realspace_full_tail_mode(options%truncation_mode)
       nleft = size(left_channels); nright = size(right_channels); nw = size(omega)
       nblock = size(g_ab, 1)
+      call cpu_time(total_start)
       allocate(radii(size(r_vectors, 2)), keep(size(r_vectors, 2)))
       do ip = 1, size(r_vectors, 2)
          radii(ip) = metric_norm(options%metric, r_vectors(:, ip))
          keep(ip) = radii(ip) <= options%rmax + 16.0_rp*epsilon(1.0_rp)*max(1.0_rp, radii(ip))
       end do
       nkeep = count(keep)
-      if (nkeep < 1 .and. size(r_vectors, 2) > 0) error stop 'build_chi0_from_realspace_gf: Rmax removes every real-space pair'
+      if (nkeep < 1 .and. size(r_vectors, 2) > 0 .and. realspace_parallel_size() == 1) then
+         error stop 'build_chi0_from_realspace_gf: Rmax removes every real-space pair'
+      end if
       if (nkeep > 0) then
          effective_cutoff = maxval(pack(radii, keep))
       else
@@ -396,6 +424,11 @@ contains
          ! MPI-distributed native source.  Its zero contribution is reduced
          ! with the other ranks before the common q Fourier batch is used.
          effective_cutoff = 0.0_rp
+      end if
+      if (size(radii) > 0) then
+         source_radius = maxval(radii)
+      else
+         source_radius = 0.0_rp
       end if
       allocate(result%chi_r(nleft, nright, nw, nkeep), result%r_vectors(3, nkeep))
       result%chi_r = cmplx(0.0_rp, 0.0_rp, rp)
@@ -419,6 +452,7 @@ contains
       ikeep = 0
       call cpu_time(t_start)
       do ip = 1, size(keep)
+         if (.not. keep(ip) .and. .not. full_tail_mode) cycle
          pair_response = cmplx(0.0_rp, 0.0_rp, rp)
          do iw = 1, nw
             call integrate_pair_response(energy_grid, g_ab(:, :, :, ip), g_ba(:, :, :, ip), pair_sites(ip, :), &
@@ -453,13 +487,24 @@ contains
       result%diagnostics%selected_points = nkeep
       result%diagnostics%omitted_points = size(keep)-nkeep
       result%diagnostics%rmax = effective_cutoff
+      result%diagnostics%requested_rmax = options%rmax
+      result%diagnostics%source_radius = source_radius
+      result%diagnostics%source_covers_requested_cutoff = source_radius + &
+         16.0_rp*epsilon(1.0_rp)*max(1.0_rp, source_radius, abs(options%rmax)) >= options%rmax
       result%diagnostics%selected_norm = selected_norm
       result%diagnostics%omitted_tail_norm = omitted_norm
-      if (total_norm > tiny(1.0_rp)) result%diagnostics%tail_ratio = omitted_norm/total_norm
-      result%diagnostics%tail_assessed = result%diagnostics%omitted_points > 0
+      result%diagnostics%total_norm = total_norm
+      if (full_tail_mode .and. total_norm > tiny(1.0_rp)) result%diagnostics%tail_ratio = omitted_norm/total_norm
+      result%diagnostics%tail_assessed = full_tail_mode .and. result%diagnostics%omitted_points > 0
       result%diagnostics%converged = result%diagnostics%tail_assessed .and. &
          result%diagnostics%tail_ratio <= options%tail_tolerance
-      if (.not. result%diagnostics%tail_assessed) then
+      result%diagnostics%pair_response_integrations = nkeep*nw
+      if (full_tail_mode) result%diagnostics%pair_response_integrations = size(keep)*nw
+      if (.not. full_tail_mode .and. result%diagnostics%omitted_points > 0) then
+         result%diagnostics%status = 'production truncation; omitted tail not assessed'
+      else if (.not. result%diagnostics%source_covers_requested_cutoff) then
+         result%diagnostics%status = 'source radius does not extend beyond requested R_max; tail not assessed'
+      else if (.not. result%diagnostics%tail_assessed) then
          result%diagnostics%status = 'all supplied real-space pairs retained'
       else if (result%diagnostics%converged) then
          result%diagnostics%status = 'R-space tail below tolerance'
@@ -468,6 +513,8 @@ contains
       end if
       result%diagnostics%last_shell_norm = last_shell_norm(radii, keep, pair_norms)
       result%diagnostics%shell_count = count_realspace_shells(radii)
+      call cpu_time(total_stop)
+      result%diagnostics%total_cpu_seconds = total_stop-total_start
    end subroutine build_chi0_from_realspace_gf
 
    !> Native mixed-contour counterpart of build_chi0_from_realspace_gf.
@@ -486,17 +533,18 @@ contains
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       type(tddft_realspace_chi0_options), intent(in) :: options
       type(tddft_realspace_chi0_result), intent(out) :: result
-      logical, allocatable :: keep(:)
+      logical, allocatable :: keep(:), active(:)
       real(rp), allocatable :: radii(:), pair_norms(:)
       complex(rp), allocatable :: left_ops(:, :, :), right_ops(:, :, :), pair_response(:, :, :, :)
       complex(rp), allocatable :: rr_integral(:, :, :), ra_integral(:, :, :), aa_integral(:, :, :)
       integer :: ip, iw, iw_prev, ileft, iright, ikeep, nkeep, nleft, nright, nw, nblock
       real(rp) :: energy_min, energy_max, contour_height, same_min, same_max
-      real(rp) :: thermal_window, effective_cutoff, selected_norm, omitted_norm, total_norm
-      real(rp) :: t_pair_start, t_pair_stop, t_fourier_start, t_fourier_stop
+      real(rp) :: thermal_window, effective_cutoff, source_radius, selected_norm, omitted_norm, total_norm
+      real(rp) :: t_pair_start, t_pair_stop, t_fourier_start, t_fourier_stop, total_start, total_stop
+      real(rp) :: green_function_cpu_seconds
       integer :: contour_gf_evaluations
       real(rp) :: max_contour_imaginary_energy
-      logical :: repeated_frequency
+      logical :: repeated_frequency, full_tail_mode
 
       call validate_realspace_geometry(r_vectors, pair_sites, site_orbital_counts, left_channels, right_channels)
       if (size(omega) < 1 .or. options%eta <= 0.0_rp .or. options%tail_tolerance < 0.0_rp .or. &
@@ -506,8 +554,10 @@ contains
       if (size(energy_grid) < 2 .or. any(energy_grid(2:) <= energy_grid(:size(energy_grid)-1))) then
          error stop 'build_chi0_from_realspace_gf_mixed_contour: invalid real-axis reference grid'
       end if
+      full_tail_mode = realspace_full_tail_mode(options%truncation_mode)
       nleft = size(left_channels); nright = size(right_channels); nw = size(omega)
       nblock = 2*site_orbital_counts(1)
+      call cpu_time(total_start)
       ! The real-axis grid is retained by the native provider as the reference
       ! window.  The contour source itself is independent of that grid, but
       ! the finite-window identity must use exactly the same endpoints.
@@ -523,13 +573,24 @@ contains
          radii(ip) = metric_norm(options%metric, r_vectors(:, ip))
          keep(ip) = radii(ip) <= options%rmax + 16.0_rp*epsilon(1.0_rp)*max(1.0_rp, radii(ip))
       end do
+      allocate(active(size(keep)))
+      active = keep
+      if (full_tail_mode) active = .true.
       nkeep = count(keep)
+      if (nkeep < 1 .and. size(r_vectors, 2) > 0 .and. realspace_parallel_size() == 1) then
+         error stop 'build_chi0_from_realspace_gf_mixed_contour: Rmax removes every real-space pair'
+      end if
       if (nkeep > 0) then
          effective_cutoff = maxval(pack(radii, keep))
       else
          ! A rank with no selected local pairs contributes a correctly shaped
          ! zero tensor; the production driver reduces it with other ranks.
          effective_cutoff = 0.0_rp
+      end if
+      if (size(radii) > 0) then
+         source_radius = maxval(radii)
+      else
+         source_radius = 0.0_rp
       end if
       allocate(result%chi_r(nleft, nright, nw, nkeep), result%r_vectors(3, nkeep))
       result%chi_r = cmplx(0.0_rp, 0.0_rp, rp)
@@ -548,6 +609,7 @@ contains
          aa_integral(nleft, nright, size(keep)))
       pair_response = cmplx(0.0_rp, 0.0_rp, rp)
       contour_gf_evaluations = 0; max_contour_imaginary_energy = resolved_green_eta(options)
+      green_function_cpu_seconds = 0.0_rp
       call cpu_time(t_pair_start)
       do iw = 1, nw
          repeated_frequency = .false.
@@ -564,36 +626,36 @@ contains
          ra_integral = cmplx(0.0_rp, 0.0_rp, rp)
          aa_integral = cmplx(0.0_rp, 0.0_rp, rp)
          if (same_max > same_min) then
-            call integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
+            call integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
                omega(iw), resolved_green_eta(options), options, 1, cmplx(same_min, 0.0_rp, rp), &
                cmplx(same_min, contour_height, rp), rr_integral, aa_integral, contour_gf_evaluations, &
-               max_contour_imaginary_energy)
-            call integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
+               max_contour_imaginary_energy, green_function_cpu_seconds)
+            call integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
                omega(iw), resolved_green_eta(options), options, 1, cmplx(same_min, contour_height, rp), &
                cmplx(same_max, contour_height, rp), rr_integral, aa_integral, contour_gf_evaluations, &
-               max_contour_imaginary_energy)
-            call integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
+               max_contour_imaginary_energy, green_function_cpu_seconds)
+            call integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
                omega(iw), resolved_green_eta(options), options, 1, cmplx(same_max, contour_height, rp), &
                cmplx(same_max, 0.0_rp, rp), rr_integral, aa_integral, contour_gf_evaluations, &
-               max_contour_imaginary_energy)
-            call integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
+               max_contour_imaginary_energy, green_function_cpu_seconds)
+            call integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
                omega(iw), resolved_green_eta(options), options, -1, cmplx(same_min, 0.0_rp, rp), &
                cmplx(same_min, -contour_height, rp), rr_integral, aa_integral, contour_gf_evaluations, &
-               max_contour_imaginary_energy)
-            call integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
+               max_contour_imaginary_energy, green_function_cpu_seconds)
+            call integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
                omega(iw), resolved_green_eta(options), options, -1, cmplx(same_min, -contour_height, rp), &
                cmplx(same_max, -contour_height, rp), rr_integral, aa_integral, contour_gf_evaluations, &
-               max_contour_imaginary_energy)
-            call integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
+               max_contour_imaginary_energy, green_function_cpu_seconds)
+            call integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
                omega(iw), resolved_green_eta(options), options, -1, cmplx(same_max, -contour_height, rp), &
                cmplx(same_max, 0.0_rp, rp), rr_integral, aa_integral, contour_gf_evaluations, &
-               max_contour_imaginary_energy)
+               max_contour_imaginary_energy, green_function_cpu_seconds)
          end if
-         call integrate_native_cross_interval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega(iw), &
+         call integrate_native_cross_interval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega(iw), &
             resolved_green_eta(options), options, energy_min, energy_max, thermal_window, ra_integral, contour_gf_evaluations, &
-            max_contour_imaginary_energy)
+            max_contour_imaginary_energy, green_function_cpu_seconds)
          do ip = 1, size(keep)
-            pair_response(:, :, iw, ip) = -(rr_integral(:, :, ip)-ra_integral(:, :, ip)-aa_integral(:, :, ip))/ &
+            if (keep(ip)) pair_response(:, :, iw, ip) = -(rr_integral(:, :, ip)-ra_integral(:, :, ip)-aa_integral(:, :, ip))/ &
                (2.0_rp*pi*i_unit)
          end do
       end do
@@ -625,14 +687,25 @@ contains
       result%diagnostics%omitted_points = size(keep)-nkeep
       result%diagnostics%shell_count = count_realspace_shells(radii)
       result%diagnostics%rmax = effective_cutoff
+      result%diagnostics%requested_rmax = options%rmax
+      result%diagnostics%source_radius = source_radius
+      result%diagnostics%source_covers_requested_cutoff = source_radius + &
+         16.0_rp*epsilon(1.0_rp)*max(1.0_rp, source_radius, abs(options%rmax)) >= options%rmax
       result%diagnostics%integration_energy_min = energy_min
       result%diagnostics%integration_energy_max = energy_max
       result%diagnostics%selected_norm = selected_norm
       result%diagnostics%omitted_tail_norm = omitted_norm
-      if (total_norm > tiny(1.0_rp)) result%diagnostics%tail_ratio = omitted_norm/total_norm
-      result%diagnostics%tail_assessed = result%diagnostics%omitted_points > 0
+      result%diagnostics%total_norm = total_norm
+      if (full_tail_mode .and. total_norm > tiny(1.0_rp)) result%diagnostics%tail_ratio = omitted_norm/total_norm
+      result%diagnostics%tail_assessed = full_tail_mode .and. result%diagnostics%omitted_points > 0
       result%diagnostics%converged = result%diagnostics%tail_assessed .and. result%diagnostics%tail_ratio <= options%tail_tolerance
-      if (.not. result%diagnostics%tail_assessed) then
+      result%diagnostics%pair_response_integrations = nkeep*count_unique_frequencies(omega)
+      if (full_tail_mode) result%diagnostics%pair_response_integrations = size(keep)*count_unique_frequencies(omega)
+      if (.not. full_tail_mode .and. result%diagnostics%omitted_points > 0) then
+         result%diagnostics%status = 'mixed contour; production truncation; omitted tail not assessed'
+      else if (.not. result%diagnostics%source_covers_requested_cutoff) then
+         result%diagnostics%status = 'mixed contour; source radius does not extend beyond requested R_max; tail not assessed'
+      else if (.not. result%diagnostics%tail_assessed) then
          result%diagnostics%status = 'mixed contour; all real-space pairs retained'
       else if (result%diagnostics%converged) then
          result%diagnostics%status = 'mixed contour; R-space tail below tolerance'
@@ -641,6 +714,7 @@ contains
       end if
       result%diagnostics%pair_integration_cpu_seconds = t_pair_stop-t_pair_start
       result%diagnostics%fourier_cpu_seconds = t_fourier_stop-t_fourier_start
+      result%diagnostics%green_function_cpu_seconds = green_function_cpu_seconds
       result%diagnostics%contour_points = options%contour_points
       result%diagnostics%contour_subdivisions = options%contour_subdivisions
       result%diagnostics%near_fermi_points = options%near_fermi_points
@@ -648,12 +722,15 @@ contains
       result%diagnostics%contour_max_imaginary_energy = max_contour_imaginary_energy
       result%diagnostics%contour_gf_evaluations = contour_gf_evaluations
       result%diagnostics%contour_deformation = .true.
+      call cpu_time(total_stop)
+      result%diagnostics%total_cpu_seconds = total_stop-total_start
    end subroutine build_chi0_from_realspace_gf_mixed_contour
 
-   subroutine integrate_native_same_contour_segment(source, pair_sites, left_channels, right_channels, left_ops, right_ops, &
-      omega, green_eta, options, plane, z_start, z_end, rr_integral, aa_integral, gf_evaluations, max_imag)
+   subroutine integrate_native_same_contour_segment(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, &
+      omega, green_eta, options, plane, z_start, z_end, rr_integral, aa_integral, gf_evaluations, max_imag, gf_seconds)
       class(tddft_realspace_complex_green_source), intent(inout) :: source
       integer, intent(in) :: pair_sites(:, :), plane
+      logical, intent(in) :: active(:)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       complex(rp), intent(in) :: left_ops(:, :, :), right_ops(:, :, :)
       real(rp), intent(in) :: omega, green_eta
@@ -662,11 +739,13 @@ contains
       complex(rp), intent(inout) :: rr_integral(:, :, :), aa_integral(:, :, :)
       integer, intent(inout) :: gf_evaluations
       real(rp), intent(inout) :: max_imag
+      real(rp), intent(inout) :: gf_seconds
       real(rp) :: nodes(options%contour_points), weights(options%contour_points), parameter
       complex(rp) :: segment_start, segment_end, z, fermi, jacobian
       complex(rp), allocatable :: z_grid(:), g_ab_batch(:, :, :, :), g_ba_batch(:, :, :, :)
       complex(rp), allocatable :: work1(:, :), work2(:, :), work3(:, :)
       complex(rp) :: value
+      real(rp) :: gf_start, gf_stop
       integer :: nsub, isub, inode, ip, il, ir
 
       nsub = 1
@@ -689,7 +768,10 @@ contains
                z_grid(2*inode) = z - cmplx(omega, green_eta, rp)
             end if
          end do
+         call cpu_time(gf_start)
          call source%get_complex(z_grid, g_ab_batch, g_ba_batch)
+         call cpu_time(gf_stop)
+         gf_seconds = gf_seconds + gf_stop-gf_start
          if (size(g_ab_batch, 1) /= size(left_ops, 1) .or. size(g_ab_batch, 2) /= size(left_ops, 2) .or. &
              size(g_ba_batch, 1) /= size(left_ops, 1) .or. size(g_ba_batch, 2) /= size(left_ops, 2) .or. &
              size(g_ab_batch, 3) /= size(z_grid) .or. size(g_ba_batch, 3) /= size(z_grid) .or. &
@@ -711,6 +793,7 @@ contains
                fermi = cmplx(1.0_rp, 0.0_rp, rp)
             end if
             do ip = 1, size(pair_sites, 1)
+               if (.not. active(ip)) cycle
                do il = 1, size(left_channels)
                   if (left_channels(il)%site /= pair_sites(ip, 1)) cycle
                   do ir = 1, size(right_channels)
@@ -731,10 +814,11 @@ contains
       end do
    end subroutine integrate_native_same_contour_segment
 
-   subroutine integrate_native_cross_interval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-      green_eta, options, energy_min, energy_max, thermal_window, ra_integral, gf_evaluations, max_imag)
+   subroutine integrate_native_cross_interval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+      green_eta, options, energy_min, energy_max, thermal_window, ra_integral, gf_evaluations, max_imag, gf_seconds)
       class(tddft_realspace_complex_green_source), intent(inout) :: source
       integer, intent(in) :: pair_sites(:, :)
+      logical, intent(in) :: active(:)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       complex(rp), intent(in) :: left_ops(:, :, :), right_ops(:, :, :)
       real(rp), intent(in) :: omega, green_eta, energy_min, energy_max, thermal_window
@@ -742,34 +826,36 @@ contains
       complex(rp), intent(inout) :: ra_integral(:, :, :)
       integer, intent(inout) :: gf_evaluations
       real(rp), intent(inout) :: max_imag
+      real(rp), intent(inout) :: gf_seconds
       real(rp) :: lower, upper
 
       if (abs(omega) <= tiny(1.0_rp)) return
       if (omega > 0.0_rp) then
          lower = max(energy_min, min(options%fermi_level, options%fermi_level-omega)-thermal_window)
          upper = min(energy_max-omega, max(options%fermi_level, options%fermi_level-omega)+thermal_window)
-         call integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-            green_eta, options, energy_min-omega, energy_min, -1, ra_integral, gf_evaluations, max_imag)
-         call integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-            green_eta, options, lower, upper, 0, ra_integral, gf_evaluations, max_imag)
-         call integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-            green_eta, options, energy_max-omega, energy_max, 1, ra_integral, gf_evaluations, max_imag)
+         call integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+            green_eta, options, energy_min-omega, energy_min, -1, ra_integral, gf_evaluations, max_imag, gf_seconds)
+         call integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+            green_eta, options, lower, upper, 0, ra_integral, gf_evaluations, max_imag, gf_seconds)
+         call integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+            green_eta, options, energy_max-omega, energy_max, 1, ra_integral, gf_evaluations, max_imag, gf_seconds)
       else
          lower = max(energy_min-omega, min(options%fermi_level, options%fermi_level-omega)-thermal_window)
          upper = min(energy_max, max(options%fermi_level, options%fermi_level-omega)+thermal_window)
-         call integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-            green_eta, options, energy_min, energy_min-omega, 1, ra_integral, gf_evaluations, max_imag)
-         call integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-            green_eta, options, lower, upper, 0, ra_integral, gf_evaluations, max_imag)
-         call integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-            green_eta, options, energy_max, energy_max-omega, -1, ra_integral, gf_evaluations, max_imag)
+         call integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+            green_eta, options, energy_min, energy_min-omega, 1, ra_integral, gf_evaluations, max_imag, gf_seconds)
+         call integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+            green_eta, options, lower, upper, 0, ra_integral, gf_evaluations, max_imag, gf_seconds)
+         call integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+            green_eta, options, energy_max, energy_max-omega, -1, ra_integral, gf_evaluations, max_imag, gf_seconds)
       end if
    end subroutine integrate_native_cross_interval
 
-   subroutine integrate_native_cross_subinterval(source, pair_sites, left_channels, right_channels, left_ops, right_ops, omega, &
-      green_eta, options, lower, upper, coefficient, ra_integral, gf_evaluations, max_imag)
+   subroutine integrate_native_cross_subinterval(source, pair_sites, active, left_channels, right_channels, left_ops, right_ops, omega, &
+      green_eta, options, lower, upper, coefficient, ra_integral, gf_evaluations, max_imag, gf_seconds)
       class(tddft_realspace_complex_green_source), intent(inout) :: source
       integer, intent(in) :: pair_sites(:, :), coefficient
+      logical, intent(in) :: active(:)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       complex(rp), intent(in) :: left_ops(:, :, :), right_ops(:, :, :)
       real(rp), intent(in) :: omega, green_eta, lower, upper
@@ -777,12 +863,14 @@ contains
       complex(rp), intent(inout) :: ra_integral(:, :, :)
       integer, intent(inout) :: gf_evaluations
       real(rp), intent(inout) :: max_imag
+      real(rp), intent(inout) :: gf_seconds
       real(rp) :: nodes(options%near_fermi_points), weights(options%near_fermi_points)
       real(rp) :: energy, occupation_difference
       complex(rp), allocatable :: z_grid(:), g_ab_batch(:, :, :, :), g_ba_batch(:, :, :, :)
       complex(rp), allocatable :: work1(:, :), work2(:, :), work3(:, :)
       complex(rp) :: value
       integer :: inode, ip, il, ir
+      real(rp) :: gf_start, gf_stop
 
       if (upper <= lower) return
       call gauss_legendre(options%near_fermi_points, lower, upper, nodes, weights)
@@ -794,7 +882,10 @@ contains
          z_grid(2*inode-1) = cmplx(energy+omega, green_eta, rp)
          z_grid(2*inode) = cmplx(energy, -green_eta, rp)
       end do
+      call cpu_time(gf_start)
       call source%get_complex(z_grid, g_ab_batch, g_ba_batch)
+      call cpu_time(gf_stop)
+      gf_seconds = gf_seconds + gf_stop-gf_start
       if (size(g_ab_batch, 1) /= size(left_ops, 1) .or. size(g_ab_batch, 2) /= size(left_ops, 2) .or. &
           size(g_ba_batch, 1) /= size(left_ops, 1) .or. size(g_ba_batch, 2) /= size(left_ops, 2) .or. &
           size(g_ab_batch, 3) /= size(z_grid) .or. size(g_ba_batch, 3) /= size(z_grid) .or. &
@@ -818,6 +909,7 @@ contains
          end select
          if (abs(occupation_difference) <= tiny(1.0_rp)) cycle
          do ip = 1, size(pair_sites, 1)
+            if (.not. active(ip)) cycle
             do il = 1, size(left_channels)
                if (left_channels(il)%site /= pair_sites(ip, 1)) cycle
                do ir = 1, size(right_channels)
@@ -866,30 +958,38 @@ contains
       complex(rp), allocatable :: f0(:, :), f1(:, :), gr0(:, :), rev0(:, :), adv_reverse0(:, :), &
          adv_forward0(:, :), work1(:, :), work2(:, :), work3(:, :)
       integer :: ip, ikeep, nkeep, nleft, nright, nblock
-      real(rp) :: effective_cutoff, selected_norm, omitted_norm, total_norm
-      real(rp) :: t_start, t_stop
+      real(rp) :: effective_cutoff, source_radius, selected_norm, omitted_norm, total_norm
+      real(rp) :: t_start, t_stop, total_start, total_stop
+      logical :: full_tail_mode
 
       call validate_realspace_source(energy_grid, g_ab, g_ba, r_vectors, pair_sites, site_orbital_counts, &
          left_channels, right_channels)
       if (options%tail_tolerance < 0.0_rp .or. options%electronic_temperature < 0.0_rp) then
          error stop 'build_static_chi0_from_realspace_gf: invalid static options'
       end if
+      full_tail_mode = realspace_full_tail_mode(options%truncation_mode)
       ! The exact static route uses the sampled retarded/advanced source and is
       ! independent of the dynamic direct-versus-contour selection.
       nleft = size(left_channels); nright = size(right_channels); nblock = size(g_ab, 1)
+      call cpu_time(total_start)
       allocate(radii(size(r_vectors, 2)), keep(size(r_vectors, 2)))
       do ip = 1, size(r_vectors, 2)
          radii(ip) = metric_norm(options%metric, r_vectors(:, ip))
          keep(ip) = radii(ip) <= options%rmax + 16.0_rp*epsilon(1.0_rp)*max(1.0_rp, radii(ip))
       end do
       nkeep = count(keep)
-      if (nkeep < 1 .and. size(r_vectors, 2) > 0) then
+      if (nkeep < 1 .and. size(r_vectors, 2) > 0 .and. realspace_parallel_size() == 1) then
          error stop 'build_static_chi0_from_realspace_gf: Rmax removes every real-space pair'
       end if
       if (nkeep > 0) then
          effective_cutoff = maxval(pack(radii, keep))
       else
          effective_cutoff = 0.0_rp
+      end if
+      if (size(radii) > 0) then
+         source_radius = maxval(radii)
+      else
+         source_radius = 0.0_rp
       end if
       allocate(result%chi_r(nleft, nright, 1, nkeep), result%r_vectors(3, nkeep))
       result%chi_r = cmplx(0.0_rp, 0.0_rp, rp)
@@ -911,6 +1011,7 @@ contains
       ikeep = 0
       call cpu_time(t_start)
       do ip = 1, size(keep)
+         if (.not. keep(ip) .and. .not. full_tail_mode) cycle
          call integrate_static_pair_response(energy_grid, g_ab(:, :, :, ip), g_ba(:, :, :, ip), pair_sites(ip, :), &
             left_channels, right_channels, left_ops, right_ops, options, f0, f1, gr0, rev0, adv_reverse0, adv_forward0, &
             work1, work2, work3, pair_response)
@@ -941,13 +1042,24 @@ contains
       result%diagnostics%selected_points = nkeep
       result%diagnostics%omitted_points = size(keep)-nkeep
       result%diagnostics%rmax = effective_cutoff
+      result%diagnostics%requested_rmax = options%rmax
+      result%diagnostics%source_radius = source_radius
+      result%diagnostics%source_covers_requested_cutoff = source_radius + &
+         16.0_rp*epsilon(1.0_rp)*max(1.0_rp, source_radius, abs(options%rmax)) >= options%rmax
       result%diagnostics%selected_norm = selected_norm
       result%diagnostics%omitted_tail_norm = omitted_norm
-      if (total_norm > tiny(1.0_rp)) result%diagnostics%tail_ratio = omitted_norm/total_norm
-      result%diagnostics%tail_assessed = result%diagnostics%omitted_points > 0
+      result%diagnostics%total_norm = total_norm
+      if (full_tail_mode .and. total_norm > tiny(1.0_rp)) result%diagnostics%tail_ratio = omitted_norm/total_norm
+      result%diagnostics%tail_assessed = full_tail_mode .and. result%diagnostics%omitted_points > 0
       result%diagnostics%converged = result%diagnostics%tail_assessed .and. &
          result%diagnostics%tail_ratio <= options%tail_tolerance
-      if (.not. result%diagnostics%tail_assessed) then
+      result%diagnostics%pair_response_integrations = nkeep
+      if (full_tail_mode) result%diagnostics%pair_response_integrations = size(keep)
+      if (.not. full_tail_mode .and. result%diagnostics%omitted_points > 0) then
+         result%diagnostics%status = 'production truncation; omitted static tail not assessed'
+      else if (.not. result%diagnostics%source_covers_requested_cutoff) then
+         result%diagnostics%status = 'source radius does not extend beyond requested R_max; tail not assessed'
+      else if (.not. result%diagnostics%tail_assessed) then
          result%diagnostics%status = 'all supplied real-space pairs retained'
       else if (result%diagnostics%converged) then
          result%diagnostics%status = 'R-space static tail below tolerance'
@@ -956,6 +1068,8 @@ contains
       end if
       result%diagnostics%last_shell_norm = last_shell_norm(radii, keep, pair_norms)
       result%diagnostics%shell_count = count_realspace_shells(radii)
+      call cpu_time(total_stop)
+      result%diagnostics%total_cpu_seconds = total_stop-total_start
    end subroutine build_static_chi0_from_realspace_gf
 
    subroutine fourier_transform_realspace_chi0(chi_r, r_vectors, q_points, representation, fourier_axes, chi_q)
@@ -1034,8 +1148,15 @@ contains
       integer :: iq
       integer :: local_counts(2), global_counts(2)
       integer :: local_shell_count, global_shell_count
-      real(rp) :: local_tail, global_tail, local_cutoff, global_cutoff
+      integer :: local_pair_integrations, global_pair_integrations
+      integer :: local_tail_assessed, global_tail_assessed
+      real(rp) :: local_tail, global_tail, local_total, global_total
+      real(rp) :: local_selected, global_selected, local_cutoff, global_cutoff
+      real(rp) :: local_requested, global_requested, local_source, global_source
+      real(rp) :: local_green_time, global_green_time, local_pair_time, global_pair_time
+      real(rp) :: local_fourier_time, global_fourier_time, local_total_time, global_total_time
       real(rp) :: local_last_shell, global_last_shell
+      integer :: local_source_covers, global_source_covers
 
       if (.not. allocated(batch%q_response)) return
       do iq = 1, size(batch%q_response)
@@ -1072,9 +1193,67 @@ contains
          local_tail = batch%q_response(iq)%metadata%real_space_tail_norm
          call MPI_ALLREDUCE(local_tail, global_tail, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
          batch%q_response(iq)%metadata%real_space_tail_norm = global_tail
+         local_selected = batch%q_response(iq)%metadata%real_space_selected_norm
+         call MPI_ALLREDUCE(local_selected, global_selected, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_selected_norm = global_selected
+         local_total = batch%q_response(iq)%metadata%real_space_total_norm
+         call MPI_ALLREDUCE(local_total, global_total, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_total_norm = global_total
+         if (global_total > tiny(1.0_rp)) then
+            batch%q_response(iq)%metadata%real_space_tail_ratio = global_tail/global_total
+         else
+            batch%q_response(iq)%metadata%real_space_tail_ratio = 0.0_rp
+         end if
          local_cutoff = batch%q_response(iq)%metadata%real_space_cutoff
          call MPI_ALLREDUCE(local_cutoff, global_cutoff, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
          batch%q_response(iq)%metadata%real_space_cutoff = global_cutoff
+         local_requested = batch%q_response(iq)%metadata%real_space_requested_cutoff
+         call MPI_ALLREDUCE(local_requested, global_requested, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_requested_cutoff = global_requested
+         local_source = batch%q_response(iq)%metadata%real_space_source_radius
+         call MPI_ALLREDUCE(local_source, global_source, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_source_radius = global_source
+         local_source_covers = merge(1, 0, batch%q_response(iq)%metadata%real_space_source_covers_cutoff)
+         call MPI_ALLREDUCE(local_source_covers, global_source_covers, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_source_covers_cutoff = global_source_covers /= 0
+         local_pair_integrations = batch%q_response(iq)%metadata%real_space_pair_response_integrations
+         call MPI_ALLREDUCE(local_pair_integrations, global_pair_integrations, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_pair_response_integrations = global_pair_integrations
+         local_pair_time = batch%q_response(iq)%metadata%real_space_pair_integration_cpu_seconds
+         call MPI_ALLREDUCE(local_pair_time, global_pair_time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_pair_integration_cpu_seconds = global_pair_time
+         local_green_time = batch%q_response(iq)%metadata%real_space_green_cpu_seconds
+         call MPI_ALLREDUCE(local_green_time, global_green_time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_green_cpu_seconds = global_green_time
+         local_fourier_time = batch%q_response(iq)%metadata%real_space_fourier_cpu_seconds
+         call MPI_ALLREDUCE(local_fourier_time, global_fourier_time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_fourier_cpu_seconds = global_fourier_time
+         local_total_time = batch%q_response(iq)%metadata%real_space_total_cpu_seconds
+         call MPI_ALLREDUCE(local_total_time, global_total_time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_total_cpu_seconds = global_total_time
+         local_tail_assessed = merge(1, 0, batch%q_response(iq)%metadata%real_space_tail_assessed)
+         call MPI_ALLREDUCE(local_tail_assessed, global_tail_assessed, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_tail_assessed = global_tail_assessed /= 0
+         batch%q_response(iq)%metadata%converged = batch%q_response(iq)%metadata%real_space_tail_assessed .and. &
+            batch%q_response(iq)%metadata%real_space_tail_ratio <= batch%q_response(iq)%metadata%real_space_tail_tolerance
+         if (trim(batch%q_response(iq)%metadata%real_space_truncation_mode) == 'production' .or. &
+             trim(batch%q_response(iq)%metadata%real_space_truncation_mode) == 'truncated') then
+            if (global_counts(2) > 0) then
+               batch%q_response(iq)%metadata%convergence_status = 'production truncation; omitted tail not assessed'
+            else
+               batch%q_response(iq)%metadata%convergence_status = &
+                  'source radius does not extend beyond requested R_max; tail not assessed'
+            end if
+            batch%q_response(iq)%metadata%converged = .false.
+         else if (.not. batch%q_response(iq)%metadata%real_space_tail_assessed) then
+            batch%q_response(iq)%metadata%convergence_status = &
+               'source radius does not extend beyond requested R_max; tail not assessed'
+            batch%q_response(iq)%metadata%converged = .false.
+         else if (batch%q_response(iq)%metadata%converged) then
+            batch%q_response(iq)%metadata%convergence_status = 'R-space tail below tolerance'
+         else
+            batch%q_response(iq)%metadata%convergence_status = 'R-space tail exceeds tolerance'
+         end if
          local_shell_count = batch%q_response(iq)%metadata%real_space_shell_count
          call MPI_ALLREDUCE(local_shell_count, global_shell_count, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
          batch%q_response(iq)%metadata%real_space_shell_count = global_shell_count
@@ -1159,17 +1338,26 @@ contains
       result%metadata%real_space_reuse = .true.
       result%metadata%real_space_points = diagnostics%selected_points
       result%metadata%real_space_cutoff = diagnostics%rmax
+      result%metadata%real_space_requested_cutoff = diagnostics%requested_rmax
+      result%metadata%real_space_source_radius = diagnostics%source_radius
       result%metadata%real_space_representation = options%representation
+      result%metadata%real_space_truncation_mode = options%truncation_mode
       result%metadata%real_space_fourier_axes = options%fourier_axes
       result%metadata%real_space_omitted_points = diagnostics%omitted_points
       result%metadata%real_space_shell_count = diagnostics%shell_count
+      result%metadata%real_space_selected_norm = diagnostics%selected_norm
       result%metadata%real_space_tail_norm = diagnostics%omitted_tail_norm
+      result%metadata%real_space_total_norm = diagnostics%total_norm
       result%metadata%real_space_tail_ratio = diagnostics%tail_ratio
       result%metadata%real_space_last_shell_norm = diagnostics%last_shell_norm
       result%metadata%real_space_pair_integration_cpu_seconds = diagnostics%pair_integration_cpu_seconds
       result%metadata%real_space_fourier_cpu_seconds = diagnostics%fourier_cpu_seconds
+      result%metadata%real_space_green_cpu_seconds = diagnostics%green_function_cpu_seconds
+      result%metadata%real_space_total_cpu_seconds = diagnostics%total_cpu_seconds
+      result%metadata%real_space_pair_response_integrations = diagnostics%pair_response_integrations
       result%metadata%real_space_tail_tolerance = options%tail_tolerance
       result%metadata%real_space_tail_assessed = diagnostics%tail_assessed
+      result%metadata%real_space_source_covers_cutoff = diagnostics%source_covers_requested_cutoff
       result%metadata%convergence_status = diagnostics%status
       result%metadata%converged = diagnostics%converged
       result%metadata%integration_energy_min = diagnostics%integration_energy_min
@@ -1554,6 +1742,52 @@ contains
          value = 0.5_rp*options%eta
       end if
    end function resolved_green_eta
+
+   logical function realspace_full_tail_mode(mode) result(full_tail)
+      character(len=*), intent(in) :: mode
+
+      select case (trim(mode))
+      case ('full_tail', 'validation')
+         full_tail = .true.
+      case ('production', 'truncated')
+         full_tail = .false.
+      case default
+         error stop "native real-space provider: truncation_mode must be 'full_tail'/'validation' or 'production'/'truncated'"
+      end select
+   end function realspace_full_tail_mode
+
+   integer function count_unique_frequencies(omega) result(count)
+      real(rp), intent(in) :: omega(:)
+      integer :: iw, jw
+      logical :: repeated
+
+      count = 0
+      do iw = 1, size(omega)
+         repeated = .false.
+         do jw = 1, iw-1
+            if (abs(omega(iw)-omega(jw)) <= 32.0_rp*epsilon(1.0_rp)* &
+                max(1.0_rp, abs(omega(iw)), abs(omega(jw)))) then
+               repeated = .true.
+               exit
+            end if
+         end do
+         if (.not. repeated) count = count+1
+      end do
+   end function count_unique_frequencies
+
+   integer function realspace_parallel_size() result(nparallel)
+#ifdef USE_MPI
+      logical :: initialized
+      integer :: mpi_status
+
+      call MPI_INITIALIZED(initialized, mpi_status)
+      if (initialized) then
+         call MPI_COMM_SIZE(MPI_COMM_WORLD, nparallel, mpi_status)
+         return
+      end if
+#endif
+      nparallel = max(1, numprocs)
+   end function realspace_parallel_size
 
    function realspace_pair_vector(lattice_obj, iatom, jatom) result(vector)
       type(lattice), intent(in) :: lattice_obj

@@ -19,6 +19,7 @@ program test_tddft_config
    call test_goldstone_correction_modes()
    call test_goldstone_policy_input()
    call test_circular_channel_input()
+   call test_realspace_truncation_input()
    call test_ground_state_provenance_defaults()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
@@ -39,6 +40,24 @@ contains
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_circular_channel_input
+
+   subroutine test_realspace_truncation_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " chi0_backend = 'realspace_gf', realspace_truncation_mode = 'production'"
+      write(unit, '(a)') ' realspace_rmax = 4.0, realspace_source_rmax = 12.0, realspace_tail_tolerance = 1.0e-4'
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('native production truncation mode is read', trim(config%realspace_truncation_mode) == 'production')
+      call assert_real('TDDFT cutoff is separate from source cutoff', config%realspace_rmax, 4.0_rp)
+      call assert_real('native source cutoff is read separately', config%realspace_source_rmax, 12.0_rp)
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_realspace_truncation_input
 
    subroutine test_path_input()
       type(tddft_config) :: config
