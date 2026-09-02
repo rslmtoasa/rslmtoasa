@@ -83,6 +83,7 @@ add_library(${PROJECT_NAME} STATIC
     report.f90
     tddft_conventions.f90
     response_components.f90
+    tddft_circular.f90
     response_basis.f90
     response_vertices.f90
     tddft_config.f90

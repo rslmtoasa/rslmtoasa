@@ -478,6 +478,7 @@ contains
       metadata%available_band_count = nbands; metadata%band_first = band_first; metadata%band_last = band_last
       metadata%occupation_prune_tolerance = options%occupation_prune_tolerance
       metadata%batched_accumulation = options%use_batched_accumulation
+      metadata%circular_channel = options%circular_channel
       if (options%use_batched_accumulation) metadata%transition_batch_size = options%transition_batch_size
    end subroutine set_direct_xi_metadata
 

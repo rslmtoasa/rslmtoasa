@@ -38,6 +38,7 @@ module tddft_goldstone_mod
       character(len=16) :: goldstone_policy = 'diagnose'
       logical :: has_soc = .false.
       logical :: has_external_field = .false.
+      character(len=16) :: circular_channel = 'plus_minus'
    end type tddft_goldstone_options
 
    type, public :: tddft_goldstone_diagnostics
@@ -75,6 +76,7 @@ module tddft_goldstone_mod
       logical :: sum_rule_applied = .false.
       logical :: sum_rule_disabled_by_symmetry_breaking = .false.
       character(len=16) :: goldstone_policy = 'diagnose'
+      character(len=16) :: circular_channel = 'unspecified'
       type(tddft_lounis_repair) :: lounis
       type(tddft_goldstone_projection) :: projection
       complex(rp), allocatable :: kernel_corrected(:, :)
@@ -160,7 +162,7 @@ contains
       call build_site_projected_k_perp(provider, result%k_perp)
       call require_square_response(chi_ks_static, result%k_perp, 'evaluate_goldstone')
       allocate(magnetization(size(result%k_perp)))
-      magnetization = cmplx(provider%site(:)%spin_population, 0.0_rp, rp)
+      magnetization = cmplx(signed_site_populations(provider), 0.0_rp, rp)
       if (sqrt(sum(abs(magnetization)**2)) <= tiny(1.0_rp)) then
          error stop 'evaluate_goldstone: projected ground-state magnetization is zero'
       end if
@@ -168,6 +170,7 @@ contains
       result%xi_raw = construct_transverse_xi(chi_ks_static, result%k_perp)
       policy = trim(adjustl(options%goldstone_policy))
       result%goldstone_policy = policy
+      result%circular_channel = trim(options%circular_channel)
       mode = goldstone_mode_code(options%goldstone_mode)
       result%sum_rule_requested = mode == GOLDSTONE_SUM_RULE
       if (mode /= GOLDSTONE_OFF) then
@@ -246,6 +249,24 @@ contains
 
       result%sum_rule_disabled_by_symmetry_breaking = .true.
    end subroutine evaluate_goldstone
+
+   !> Return the signed z-population used by the transverse Goldstone vector.
+   !> The explicit field is preferred; the fallback preserves compatibility
+   !> with providers created before signed-spin provenance was added.
+   function signed_site_populations(provider) result(populations)
+      type(xc_response_kernel_provider), intent(in) :: provider
+      real(rp) :: populations(size(provider%site))
+      integer :: isite
+
+      if (.not. allocated(provider%site)) error stop 'signed_site_populations: XC response provider is not initialized'
+      do isite = 1, size(provider%site)
+         if (provider%site(isite)%has_signed_spin_population) then
+            populations(isite) = provider%site(isite)%signed_spin_population
+         else
+            populations(isite) = provider%site(isite)%spin_population
+         end if
+      end do
+   end function signed_site_populations
 
    !> Diagnose an already assembled self-enhancement operator.  This keeps the
    !> pair-potential route out of the legacy site-scalar K interface while
@@ -466,6 +487,7 @@ contains
       write(unit, '(a)') '# Ward identity = chi_KS(0,0) B_xc - m; Dm = m-chi_KS K_xc m'
       write(unit, '(a)') '# raw Goldstone diagnostics are retained for every non-off mode'
       write(unit, '(a,a)') '# goldstone_policy = ', trim(result%goldstone_policy)
+      write(unit, '(a,a)') '# circular_channel = ', trim(result%circular_channel)
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_requested = ', result%sum_rule_requested
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_applied = ', result%sum_rule_applied
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_disabled = ', result%sum_rule_disabled_by_symmetry_breaking

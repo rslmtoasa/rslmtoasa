@@ -21,6 +21,7 @@ module tddft_dyson_mod
    type, public :: tddft_dyson_options
       logical :: diagonalize_loss = .false.
       logical :: diagonalize_xi = .false.
+      character(len=16) :: circular_channel = 'plus_minus'
    end type tddft_dyson_options
 
    type, public :: tddft_dyson_metadata
@@ -32,6 +33,7 @@ module tddft_dyson_mod
       real(rp) :: eta = 0.0_rp
       real(rp) :: solve_cpu_seconds = 0.0_rp
       real(rp) :: diagonalization_cpu_seconds = 0.0_rp
+      character(len=16) :: circular_channel = 'unspecified'
    end type tddft_dyson_metadata
 
    !> Arrays are (response left, response right, frequency), except that the
@@ -108,6 +110,7 @@ contains
          result%trace_spectral_weight(iw) = sum(result%site_spectral_weight(:, iw))
       end do
       result%metadata%eta = eta
+      result%metadata%circular_channel = trim(options%circular_channel)
 
       if (options%diagonalize_loss) then
          allocate(result%loss_eigenvalues(n, nw), result%loss_eigenvectors(n, n, nw))
@@ -170,6 +173,7 @@ contains
          result%trace_spectral_weight(iw) = sum(result%site_spectral_weight(:, iw))
       end do
       result%metadata%eta = eta
+      result%metadata%circular_channel = trim(options%circular_channel)
       if (options%diagonalize_loss) then
          allocate(result%loss_eigenvalues(n, nw), result%loss_eigenvectors(n, n, nw))
          call cpu_time(t_start)
@@ -331,6 +335,7 @@ contains
       write(unit, '(a,a)') '# dyson_convention = ', trim(result%metadata%dyson_convention)
       write(unit, '(a,a)') '# loss_convention = ', trim(result%metadata%loss_convention)
       write(unit, '(a,a)') '# eta_convention = ', trim(result%metadata%eta_convention)
+      write(unit, '(a,a)') '# circular_channel = ', trim(result%metadata%circular_channel)
       write(unit, '(a)') '# stoner_reference = chi_KS loss spectrum; enhanced loss is the dressed response'
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
       write(unit, '(a,es24.16)') '# profile_dyson_solves_cpu_s = ', result%metadata%solve_cpu_seconds

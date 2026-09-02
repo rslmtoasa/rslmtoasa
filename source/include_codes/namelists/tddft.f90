@@ -4,7 +4,7 @@
 ! q_mode='mesh' builds a Gamma-centred uniform mesh.
 integer, parameter :: tddft_max_q = 2000
 logical :: enabled
-character(len=16) :: channel, chi0_backend, response_projection, q_mode, q_coordinates
+character(len=16) :: channel, chi0_backend, response_projection, q_mode, q_coordinates, circular_channel
 character(len=24) :: gf_integration
 character(len=24) :: xi_backend
 character(len=16) :: goldstone_mode, goldstone_policy
@@ -22,7 +22,7 @@ real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance, longi
 real(rp) :: longitudinal_fit_omega_min, longitudinal_fit_omega_max
 logical :: output_chi0, output_xi, output_chi, output_modes, output_stoner
 
-namelist /tddft/ enabled, channel, chi0_backend, xi_backend, response_projection, q_mode, q_coordinates, goldstone_mode, goldstone_policy, &
+namelist /tddft/ enabled, channel, chi0_backend, xi_backend, response_projection, circular_channel, q_mode, q_coordinates, goldstone_mode, goldstone_policy, &
    gf_integration, contour_points, contour_subdivisions, near_fermi_points, contour_height, &
    q_file, output_prefix, n_q_points, q_mesh1, q_mesh2, q_mesh3, q_start, q_end, q_list, &
    omega_min, omega_max, nomega, eta, electronic_temperature, band_first, band_last, &

@@ -113,6 +113,7 @@ module calculation_mod
       real(rp), allocatable :: signed_moments(:), column_scales(:)
       real(rp) :: q_point(3) = 0.0_rp
       complex(rp), allocatable :: qminus(:, :), qplus(:, :)
+      logical :: use_qplus = .false.
       integer :: fetch_count = 0
    contains
       procedure :: initialize => initialize_lmto_pair_operator_source
@@ -1217,19 +1218,21 @@ contains
       type(self) :: self_obj
       type(reciprocal), target :: reciprocal_obj
       type(tddft_config) :: config
-      type(tddft_chi0_options) :: chi0_options
-      type(green_chi0_options) :: green_options
+      type(tddft_chi0_options) :: chi0_options, chi0_options_reverse
+      type(green_chi0_options) :: green_options, green_options_reverse
       type(eigenpair_green_function_provider), target :: green_source
-      type(tddft_realspace_chi0_options) :: realspace_options
-      type(tddft_native_realspace_gf_provider), target :: realspace_source
-      type(tddft_chi0_result) :: chi0_result, chi0_static
-      type(tddft_chi0_batch_result) :: realspace_batch
-      type(tddft_dyson_options) :: dyson_options
+      type(tddft_realspace_chi0_options) :: realspace_options, realspace_options_reverse
+      type(tddft_native_realspace_gf_provider), target :: realspace_source, realspace_source_reverse
+      type(tddft_chi0_result) :: chi0_result, chi0_result_reverse, chi0_static, chi0_static_reverse
+      type(tddft_chi0_batch_result) :: realspace_batch, realspace_batch_reverse
+      type(tddft_dyson_options) :: dyson_options, dyson_options_reverse
       type(tddft_dyson_result) :: dyson_result, dyson_pair_result, dyson_pair_corrected_result
+      type(tddft_dyson_result) :: dyson_result_reverse, dyson_pair_result_reverse, dyson_pair_corrected_result_reverse
       type(tddft_direct_xi_result) :: pair_xi_result, pair_xi_static, pair_xi_corrected_result
+      type(tddft_direct_xi_result) :: pair_xi_result_reverse, pair_xi_static_reverse, pair_xi_corrected_result_reverse
       type(tddft_goldstone_options) :: goldstone_options
-      type(tddft_goldstone_result) :: goldstone_result
-      type(tddft_goldstone_diagnostics) :: pair_goldstone
+      type(tddft_goldstone_result) :: goldstone_result, goldstone_result_reverse
+      type(tddft_goldstone_diagnostics) :: pair_goldstone, pair_goldstone_reverse
       type(tddft_goldstone_column_correction) :: pair_correction
       type(tddft_mode_options) :: mode_options
       type(tddft_mode_result) :: mode_result
@@ -1239,24 +1242,29 @@ contains
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
       class(tddft_chi0_backend), allocatable :: chi0_backend
       type(lmto_pair_operator_tile_source), target :: pair_operator_source
-      type(response_channel), allocatable :: left_channels(:), right_channels(:)
+      type(response_channel), allocatable :: left_channels(:), right_channels(:), left_channels_reverse(:), right_channels_reverse(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
       type(kpoint_workset) :: kq_workset
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :), all_loss(:, :, :, :)
       complex(rp), allocatable :: all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
-      real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
+      real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), all_trace_loss_reverse(:, :), all_trace_loss_pair_reverse(:, :)
+      real(rp), allocatable :: coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
       real(rp), allocatable :: signed_moments(:)
+      complex(rp), allocatable :: all_xi_reverse(:, :, :, :), all_loss_reverse(:, :, :, :)
+      complex(rp), allocatable :: all_xi_pair_reverse(:, :, :, :), all_loss_pair_reverse(:, :, :, :)
       real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
       real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, pair_corrected_gamma_peak
+      real(rp) :: bare_gamma_peak_reverse, legacy_gamma_peak_reverse, pair_gamma_peak_reverse
+      real(rp) :: pair_corrected_gamma_peak_reverse
       real(rp) :: raw_pair_minimum_spectral_weight, corrected_pair_minimum_spectral_weight
       integer, allocatable :: site_orbital_counts(:), static_sources(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       integer :: corrected_minimum_location(2)
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
       logical :: pair_backend, legacy_backend, raw_pair_spectral_weight_ok, corrected_spectral_weight_ok, &
-         correction_spectral_weight_ok, full_response_supported
+         correction_spectral_weight_ok, full_response_supported, circular_reverse, primary_minus_plus
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
       character(len=256) :: full_response_capability_reason
       character(len=32) :: canonical_chi0_backend
@@ -1364,6 +1372,9 @@ contains
       reciprocal_obj%temperature = config%electronic_temperature
       is_longitudinal = config%channel == 'longitudinal'
       is_full_response = config%channel == 'full'
+      circular_reverse = .not. is_longitudinal .and. .not. is_full_response .and. &
+         trim(config%circular_channel) == 'both'
+      primary_minus_plus = trim(config%circular_channel) == 'minus_plus'
       pair_backend = config%xi_backend == 'pair_potential' .or. config%xi_backend == 'compare'
       legacy_backend = config%xi_backend == 'legacy_site_scalar' .or. config%xi_backend == 'compare'
       if (canonical_chi0_backend == 'realspace_gf' .and. (is_longitudinal .or. is_full_response)) then
@@ -1409,7 +1420,8 @@ contains
          end do
       end if
 
-      allocate(site_orbital_counts(lattice_obj%nrec), left_channels(lattice_obj%nrec), right_channels(lattice_obj%nrec))
+      allocate(site_orbital_counts(lattice_obj%nrec), left_channels(lattice_obj%nrec), right_channels(lattice_obj%nrec), &
+         left_channels_reverse(lattice_obj%nrec), right_channels_reverse(lattice_obj%nrec))
       site_orbital_counts = norb
       do iq = 1, lattice_obj%nrec
          if (is_longitudinal) then
@@ -1417,9 +1429,16 @@ contains
             ! vertex engine therefore retains same-spin electron-hole pairs.
             left_channels(iq) = response_channel(iq, RESPONSE_MZ)
             right_channels(iq) = response_channel(iq, RESPONSE_MZ)
+         else if (primary_minus_plus) then
+            left_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+            right_channels(iq) = response_channel(iq, RESPONSE_PLUS)
+            left_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
+            right_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
          else
             left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
             right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+            left_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
+            right_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
          end if
       end do
       if (is_full_response) then
@@ -1434,6 +1453,17 @@ contains
       chi0_options%occupation_prune_tolerance = config%occupation_tolerance
       chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
       chi0_options%response_projection = config%response_projection
+      if (primary_minus_plus) then
+         chi0_options%circular_channel = 'minus_plus'
+      else
+         chi0_options%circular_channel = 'plus_minus'
+      end if
+      chi0_options_reverse = chi0_options
+      if (primary_minus_plus) then
+         chi0_options_reverse%circular_channel = 'plus_minus'
+      else
+         chi0_options_reverse%circular_channel = 'minus_plus'
+      end if
       green_options%eta = config%eta
       green_options%green_eta = config%green_eta
       green_options%electronic_temperature = config%electronic_temperature
@@ -1447,6 +1477,9 @@ contains
       green_options%contour_height = config%contour_height
       green_options%k_mesh_shape = reciprocal_obj%nk_mesh
       green_options%response_projection = config%response_projection
+      green_options%circular_channel = chi0_options%circular_channel
+      green_options_reverse = green_options
+      green_options_reverse%circular_channel = chi0_options_reverse%circular_channel
       realspace_options%eta = config%eta
       realspace_options%green_eta = config%green_eta
       realspace_options%energy_integration = config%gf_integration
@@ -1455,6 +1488,9 @@ contains
       realspace_options%tail_tolerance = config%realspace_tail_tolerance
       realspace_options%representation = config%realspace_representation
       realspace_options%fourier_axes = config%realspace_fourier_axes
+      realspace_options%circular_channel = chi0_options%circular_channel
+      realspace_options_reverse = realspace_options
+      realspace_options_reverse%circular_channel = chi0_options_reverse%circular_channel
       if (canonical_chi0_backend == 'realspace_gf' .and. config%gf_integration /= 'direct') then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF currently exposes sampled real-axis blocks only; '// &
             "gf_integration='mixed_contour' requires a complex-energy native source.", __FILE__, __LINE__)
@@ -1494,6 +1530,10 @@ contains
          call green_obj%calculate_intersite_gf()
          call realspace_source%initialize_from_green(green_obj, lattice_obj, site_orbital_counts, left_channels, &
             right_channels, realspace_options)
+         if (circular_reverse) then
+            call realspace_source_reverse%initialize_from_green(green_obj, lattice_obj, site_orbital_counts, &
+               left_channels_reverse, right_channels_reverse, realspace_options_reverse)
+         end if
          select type (chi0_backend)
          type is (tddft_realspace_gf_backend)
             call chi0_backend%initialize(realspace_source)
@@ -1528,6 +1568,10 @@ contains
       if (canonical_chi0_backend == 'realspace_gf') then
          realspace_source%options%fermi_level = config%fermi_level
          realspace_source%options%electronic_temperature = config%electronic_temperature
+         if (circular_reverse) then
+            realspace_source_reverse%options%fermi_level = config%fermi_level
+            realspace_source_reverse%options%electronic_temperature = config%electronic_temperature
+         end if
          select type (chi0_backend)
          type is (tddft_realspace_gf_backend)
             ! The backend owns a provider copy.  Reattach after the response
@@ -1554,7 +1598,7 @@ contains
       do isite = 1, lattice_obj%nrec
          ! A transverse Goldstone vector is signed.  Replacing this by its
          ! magnitude breaks reversed and multi-sublattice reference states.
-         call self_obj%xc_response_provider%set_site_spin_population(isite, site_moments(3, isite))
+         call self_obj%xc_response_provider%set_site_spin_population(isite, abs(site_moments(3, isite)))
          call self_obj%xc_response_provider%set_site_signed_spin_population(isite, site_moments(3, isite))
          signed_moments(isite) = site_moments(3, isite)
          if (sqrt(sum(site_moments(:, isite)**2)) > tiny(1.0_rp)) then
@@ -1615,8 +1659,21 @@ contains
          call build_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, &
             eigenvectors_k, site_orbital_counts, left_channels, right_channels, omega_static, chi0_options, chi0_static)
       end if
+      if (circular_reverse) then
+         chi0_options_reverse%q_direct = 0.0_rp
+         green_options_reverse%q_direct = 0.0_rp
+         if (canonical_chi0_backend == 'kspace_lehmann') then
+            call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
+            call build_static_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
+               left_channels_reverse, right_channels_reverse, green_options_reverse, chi0_static_reverse)
+         else
+            call build_static_chi_ks_from_eigenpairs(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+               site_orbital_counts, left_channels_reverse, right_channels_reverse, chi0_options_reverse, chi0_static_reverse)
+         end if
+      end if
       if (pair_backend) then
-         call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp])
+         call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp], &
+            use_qplus=primary_minus_plus)
          call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
             site_orbital_counts, left_channels, pair_operator_source, chi0_options, pair_xi_static)
          call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone, &
@@ -1630,6 +1687,14 @@ contains
                call build_goldstone_column_correction(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), &
                   pair_correction)
             end if
+         end if
+         if (circular_reverse) then
+            call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp], &
+               use_qplus=.not. primary_minus_plus)
+            call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+               site_orbital_counts, left_channels_reverse, pair_operator_source, chi0_options_reverse, pair_xi_static_reverse)
+            call evaluate_raw_xi_diagnostics(pair_xi_static_reverse%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), &
+               pair_goldstone_reverse, response_basis='site', kernel_provenance='direct LMTO reverse circular pair-potential Xi')
          end if
          call pair_operator_source%clear()
       end if
@@ -1682,7 +1747,13 @@ contains
          goldstone_options%goldstone_policy = config%goldstone_policy
          goldstone_options%has_soc = has_soc
          goldstone_options%has_external_field = has_external_field
+         goldstone_options%circular_channel = chi0_options%circular_channel
          call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
+         if (circular_reverse) then
+            goldstone_options%circular_channel = chi0_options_reverse%circular_channel
+            call evaluate_goldstone(chi0_static_reverse%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, &
+               goldstone_result_reverse)
+         end if
          ! A finite-eta inverse chi_KS remains diagnostic only.  It is generally
          ! complex; using it as a frequency-independent adiabatic kernel forces
          ! an artificial Gamma singularity.  An explicitly selected TDDFT-02
@@ -1714,6 +1785,13 @@ contains
             if (config%goldstone_mode == 'correct') call append_goldstone_column_correction_text(trim(filename), pair_correction)
             call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
                rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_compare')
+            if (circular_reverse) then
+               write(filename, '(a,"_minus_plus_goldstone.dat")') trim(config%output_prefix)
+               call write_goldstone_diagnostics_text(trim(filename), goldstone_result_reverse)
+               if (pair_backend) call append_pair_goldstone_diagnostics(trim(filename), goldstone_result_reverse%raw, pair_goldstone_reverse)
+               call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_reverse_compare')
+            end if
          end if
          if (config%goldstone_mode == 'correct' .and. .not. pair_correction%applied) then
             call g_logger%fatal('[calculation.post_processing_susceptibility]: requested Goldstone correction rejected: '// &
@@ -1736,11 +1814,25 @@ contains
          all_xi = cmplx(0.0_rp, 0.0_rp, rp)
          all_loss = cmplx(0.0_rp, 0.0_rp, rp)
          all_trace_loss = 0.0_rp
+         if (circular_reverse) then
+            allocate(all_xi_reverse(nresponse, nresponse, nw, nq), all_loss_reverse(nresponse, nresponse, nw, nq), &
+               all_trace_loss_reverse(nw, nq))
+            all_xi_reverse = cmplx(0.0_rp, 0.0_rp, rp)
+            all_loss_reverse = cmplx(0.0_rp, 0.0_rp, rp)
+            all_trace_loss_reverse = 0.0_rp
+         end if
          if (pair_backend .and. legacy_backend) then
             allocate(all_xi_pair(nresponse, nresponse, nw, nq), all_loss_pair(nresponse, nresponse, nw, nq), all_trace_loss_pair(nw, nq))
             all_xi_pair = cmplx(0.0_rp, 0.0_rp, rp)
             all_loss_pair = cmplx(0.0_rp, 0.0_rp, rp)
             all_trace_loss_pair = 0.0_rp
+            if (circular_reverse) then
+               allocate(all_xi_pair_reverse(nresponse, nresponse, nw, nq), all_loss_pair_reverse(nresponse, nresponse, nw, nq), &
+                  all_trace_loss_pair_reverse(nw, nq))
+               all_xi_pair_reverse = cmplx(0.0_rp, 0.0_rp, rp)
+               all_loss_pair_reverse = cmplx(0.0_rp, 0.0_rp, rp)
+               all_trace_loss_pair_reverse = 0.0_rp
+            end if
          end if
       end if
 #ifdef USE_MPI
@@ -1755,6 +1847,11 @@ contains
          select type (chi0_backend)
          type is (tddft_realspace_gf_backend)
             call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch)
+            if (circular_reverse) then
+               call chi0_backend%initialize(realspace_source_reverse)
+               call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch_reverse)
+               call chi0_backend%initialize(realspace_source)
+            end if
          class default
             call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space batch adapter is absent.', &
                __FILE__, __LINE__)
@@ -1764,6 +1861,8 @@ contains
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
          bare_gamma_peak = -1.0_rp; legacy_gamma_peak = -1.0_rp; pair_gamma_peak = -1.0_rp
          pair_corrected_gamma_peak = -1.0_rp
+         bare_gamma_peak_reverse = -1.0_rp; legacy_gamma_peak_reverse = -1.0_rp; pair_gamma_peak_reverse = -1.0_rp
+         pair_corrected_gamma_peak_reverse = -1.0_rp
          if (canonical_chi0_backend == 'realspace_gf') then
             kq_eigensolve_cpu_seconds = 0.0_rp
             chi0_result = realspace_batch%q_response(iq)
@@ -1834,6 +1933,48 @@ contains
             call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
                has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_chi_ks')
          end if
+         if (circular_reverse) then
+            chi0_options_reverse%q_direct = config%q_points(:, iq)
+            green_options_reverse%q_direct = config%q_points(:, iq)
+            if (canonical_chi0_backend == 'realspace_gf') then
+               chi0_result_reverse = realspace_batch_reverse%q_response(iq)
+            else if (canonical_chi0_backend == 'kspace_lehmann') then
+               call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq)
+               call build_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
+                  left_channels_reverse, right_channels_reverse, omega, green_options_reverse, chi0_result_reverse)
+            else
+               select type (chi0_backend)
+               type is (tddft_eigenpair_backend)
+                  call chi0_backend%initialize(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                     reshape(eigenvalues_kq, [size(eigenvalues_kq, 1), size(eigenvalues_kq, 2), 1]), &
+                     reshape(eigenvectors_kq, [size(eigenvectors_kq, 1), size(eigenvectors_kq, 2), &
+                     size(eigenvectors_kq, 3), 1]), reshape(config%q_points(:, iq), [3, 1]), site_orbital_counts, &
+                     left_channels_reverse, right_channels_reverse, chi0_options_reverse, green_options_reverse)
+                  call chi0_backend%evaluate_frequency_batch(config%q_points(:, iq), omega, chi0_result_reverse, q_index=1)
+               type is (tddft_kspace_lehmann_backend)
+                  call chi0_backend%initialize(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                     reshape(eigenvalues_kq, [size(eigenvalues_kq, 1), size(eigenvalues_kq, 2), 1]), &
+                     reshape(eigenvectors_kq, [size(eigenvectors_kq, 1), size(eigenvectors_kq, 2), &
+                     size(eigenvectors_kq, 3), 1]), reshape(config%q_points(:, iq), [3, 1]), site_orbital_counts, &
+                     left_channels_reverse, right_channels_reverse, chi0_options_reverse, green_options_reverse)
+                  call chi0_backend%evaluate_frequency_batch(config%q_points(:, iq), omega, chi0_result_reverse, q_index=1)
+               class default
+                  call g_logger%fatal('[calculation.post_processing_susceptibility]: reverse circular backend adapter is absent.', &
+                     __FILE__, __LINE__)
+               end select
+            end if
+            chi0_result_reverse%metadata%q_direct = config%q_points(:, iq)
+            chi0_result_reverse%metadata%response_projection = config%response_projection
+            chi0_result_reverse%metadata%circular_channel = 'minus_plus'
+            chi0_result_reverse%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
+            if (is_gamma) bare_gamma_peak_reverse = observed_loss_peak(omega, chi0_result_reverse%trace_spectrum)
+            if (config%output_chi0 .or. config%output_stoner) then
+               write(filename, '(a,"_q",i6.6,"_minus_plus_chi0.dat")') trim(config%output_prefix), iq
+               call write_chi_ks_text(trim(filename), omega, chi0_result_reverse)
+               call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
+                  has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_reverse_chi_ks')
+            end if
+         end if
          if (need_dyson) then
             if (legacy_backend) then
                call enhance_tddft_susceptibility(chi0_result%chi, kernel, response_eta, dyson_options, dyson_result)
@@ -1850,7 +1991,8 @@ contains
                end if
             end if
             if (pair_backend) then
-               call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq))
+               call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                  use_qplus=primary_minus_plus)
                call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                   eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
                   chi0_options, pair_xi_result)
@@ -1870,7 +2012,7 @@ contains
                end if
                if (config%goldstone_mode == 'correct') then
                   call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
-                     pair_correction%scales)
+                     pair_correction%scales, use_qplus=primary_minus_plus)
                   call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                      eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
                      chi0_options, pair_xi_corrected_result)
@@ -1932,12 +2074,81 @@ contains
                   all_trace_loss_pair(:, iq) = dyson_pair_result%trace_spectral_weight
                end if
             end if
+            if (circular_reverse) then
+               response_eta = chi0_result_reverse%metadata%eta
+               dyson_options_reverse = dyson_options
+               dyson_options_reverse%circular_channel = 'minus_plus'
+               if (legacy_backend) then
+                  call enhance_tddft_susceptibility(chi0_result_reverse%chi, kernel, response_eta, dyson_options_reverse, &
+                     dyson_result_reverse)
+                  if (is_gamma) legacy_gamma_peak_reverse = observed_loss_peak(omega, &
+                     dyson_result_reverse%trace_spectral_weight)
+                  if (config%output_xi .or. config%output_chi) then
+                     write(filename, '(a,"_q",i6.6,"_minus_plus_legacy_dyson.dat")') trim(config%output_prefix), iq
+                     call write_tddft_dyson_text(trim(filename), omega, dyson_result_reverse)
+                     call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_reverse_site_scalar_raw')
+                  end if
+               end if
+               if (pair_backend) then
+                  call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                     use_qplus=.not. primary_minus_plus)
+                  call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                     eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels_reverse, pair_operator_source, omega, &
+                     chi0_options_reverse, pair_xi_result_reverse)
+                  call enhance_tddft_susceptibility_from_xi(chi0_result_reverse%chi, pair_xi_result_reverse%xi, response_eta, &
+                     dyson_options_reverse, dyson_pair_result_reverse)
+                  if (is_gamma) pair_gamma_peak_reverse = observed_loss_peak(omega, &
+                     dyson_pair_result_reverse%trace_spectral_weight)
+                  if (config%output_xi .or. config%output_chi) then
+                     write(filename, '(a,"_q",i6.6,"_minus_plus_pair_dyson.dat")') trim(config%output_prefix), iq
+                     call write_tddft_dyson_text(trim(filename), omega, dyson_pair_result_reverse)
+                     call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_raw')
+                  end if
+                  if (config%goldstone_mode == 'correct') then
+                     call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                        pair_correction%scales, use_qplus=.not. primary_minus_plus)
+                     call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                        eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels_reverse, pair_operator_source, omega, &
+                        chi0_options_reverse, pair_xi_corrected_result_reverse)
+                     call enhance_tddft_susceptibility_from_xi(chi0_result_reverse%chi, &
+                        pair_xi_corrected_result_reverse%xi, response_eta, dyson_options_reverse, &
+                        dyson_pair_corrected_result_reverse)
+                     if (config%output_xi .or. config%output_chi) then
+                        write(filename, '(a,"_q",i6.6,"_minus_plus_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+                        call write_tddft_dyson_text(trim(filename), omega, dyson_pair_corrected_result_reverse)
+                        call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
+                           rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_corrected')
+                        call append_goldstone_column_correction_text(trim(filename), pair_correction)
+                     end if
+                  end if
+                  call pair_operator_source%clear()
+               end if
+               if (config%output_modes) then
+                  if (legacy_backend) then
+                     all_xi_reverse(:, :, :, iq) = dyson_result_reverse%xi
+                     all_loss_reverse(:, :, :, iq) = dyson_result_reverse%loss
+                     all_trace_loss_reverse(:, iq) = dyson_result_reverse%trace_spectral_weight
+                  else
+                     all_xi_reverse(:, :, :, iq) = dyson_pair_result_reverse%xi
+                     all_loss_reverse(:, :, :, iq) = dyson_pair_result_reverse%loss
+                     all_trace_loss_reverse(:, iq) = dyson_pair_result_reverse%trace_spectral_weight
+                  end if
+                  if (pair_backend .and. legacy_backend) then
+                     all_xi_pair_reverse(:, :, :, iq) = dyson_pair_result_reverse%xi
+                     all_loss_pair_reverse(:, :, :, iq) = dyson_pair_result_reverse%loss
+                     all_trace_loss_pair_reverse(:, iq) = dyson_pair_result_reverse%trace_spectral_weight
+                  end if
+               end if
+            end if
          end if
          if (is_gamma .and. .not. is_longitudinal .and. .not. is_full_response .and. &
              canonical_chi0_backend /= 'realspace_gf') then
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
             call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, &
-               pair_corrected_gamma_peak)
+               pair_corrected_gamma_peak, bare_gamma_peak_reverse, legacy_gamma_peak_reverse, pair_gamma_peak_reverse, &
+               pair_corrected_gamma_peak_reverse)
          end if
          if (allocated(eigenvalues_kq)) deallocate(eigenvalues_kq)
          if (allocated(eigenvectors_kq)) deallocate(eigenvectors_kq)
@@ -1948,10 +2159,20 @@ contains
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi, size(all_xi), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_loss, size(all_loss), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss, size(all_trace_loss), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         if (circular_reverse) then
+            call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi_reverse, size(all_xi_reverse), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+            call MPI_ALLREDUCE(MPI_IN_PLACE, all_loss_reverse, size(all_loss_reverse), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+            call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss_reverse, size(all_trace_loss_reverse), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         end if
          if (pair_backend .and. legacy_backend) then
             call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi_pair, size(all_xi_pair), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
             call MPI_ALLREDUCE(MPI_IN_PLACE, all_loss_pair, size(all_loss_pair), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
             call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss_pair, size(all_trace_loss_pair), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+            if (circular_reverse) then
+               call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi_pair_reverse, size(all_xi_pair_reverse), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+               call MPI_ALLREDUCE(MPI_IN_PLACE, all_loss_pair_reverse, size(all_loss_pair_reverse), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+               call MPI_ALLREDUCE(MPI_IN_PLACE, all_trace_loss_pair_reverse, size(all_trace_loss_pair_reverse), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+            end if
          end if
 #endif
          if (rank == 0) then
@@ -1978,6 +2199,28 @@ contains
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
                   rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
             end if
+            if (circular_reverse) then
+               call analyze_tddft_modes(omega, all_xi_reverse, all_trace_loss_reverse, response_eta, mode_options, mode_result, &
+                  all_loss_reverse)
+               if (legacy_backend) then
+                  write(filename, '(a,"_minus_plus_legacy_modes.dat")') trim(config%output_prefix)
+               else if (pair_backend) then
+                  write(filename, '(a,"_minus_plus_pair_modes.dat")') trim(config%output_prefix)
+               else
+                  write(filename, '(a,"_minus_plus_modes.dat")') trim(config%output_prefix)
+               end if
+               call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
+               call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'reverse_circular_raw')
+               if (pair_backend .and. legacy_backend) then
+                  call analyze_tddft_modes(omega, all_xi_pair_reverse, all_trace_loss_pair_reverse, response_eta, mode_options, &
+                     mode_result, all_loss_pair_reverse)
+                  write(filename, '(a,"_minus_plus_pair_modes.dat")') trim(config%output_prefix)
+                  call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
+                  call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'reverse_pair_potential_raw')
+               end if
+            end if
          end if
       end if
 
@@ -1993,6 +2236,10 @@ contains
             write(unit, '(a)') '# TDDFT longitudinal chi_KS manifest; static calibration is reported at Gamma'
          else
             write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
+         end if
+         if (.not. is_longitudinal .and. .not. is_full_response) then
+            write(unit, '(a,a)') '# primary_circular_channel = ', trim(chi0_options%circular_channel)
+            if (circular_reverse) write(unit, '(a)') '# reverse_circular_channel = minus_plus; files carry the _minus_plus_ suffix'
          end if
          if (pair_backend .and. legacy_backend .and. config%goldstone_mode == 'correct') then
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file pair_raw_dyson_file pair_corrected_dyson_file'
@@ -2049,9 +2296,11 @@ contains
       peak = omega(index(1))
    end function observed_loss_peak
 
-   subroutine append_dynamic_gamma_peaks(filename, bare_peak, legacy_peak, pair_peak, pair_corrected_peak)
+   subroutine append_dynamic_gamma_peaks(filename, bare_peak, legacy_peak, pair_peak, pair_corrected_peak, &
+      bare_peak_reverse, legacy_peak_reverse, pair_peak_reverse, pair_corrected_peak_reverse)
       character(len=*), intent(in) :: filename
       real(rp), intent(in) :: bare_peak, legacy_peak, pair_peak, pair_corrected_peak
+      real(rp), intent(in), optional :: bare_peak_reverse, legacy_peak_reverse, pair_peak_reverse, pair_corrected_peak_reverse
       integer :: unit, ios
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
@@ -2061,6 +2310,13 @@ contains
       if (pair_peak >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_pair_raw_gamma_loss_peak_Ry = ', pair_peak
       if (pair_corrected_peak >= 0.0_rp) then
          write(unit, '(a,es24.16)') '# dynamic_pair_corrected_gamma_loss_peak_Ry = ', pair_corrected_peak
+      end if
+      if (present(bare_peak_reverse)) then
+         if (bare_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_bare_gamma_loss_peak_Ry = ', bare_peak_reverse
+         if (legacy_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_legacy_raw_gamma_loss_peak_Ry = ', legacy_peak_reverse
+         if (pair_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_pair_raw_gamma_loss_peak_Ry = ', pair_peak_reverse
+         if (pair_corrected_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_pair_corrected_gamma_loss_peak_Ry = ', &
+            pair_corrected_peak_reverse
       end if
       write(unit, '(a)') '# dynamic Gamma peaks are observed loss-grid maxima; raw and corrected records remain distinct'
       close(unit)
@@ -2093,12 +2349,13 @@ contains
       close(unit)
    end subroutine append_pair_correction_spectral_weight_diagnostic
 
-   subroutine initialize_lmto_pair_operator_source(this, reciprocal_obj, signed_moments, q_point, column_scales)
+   subroutine initialize_lmto_pair_operator_source(this, reciprocal_obj, signed_moments, q_point, column_scales, use_qplus)
       class(lmto_pair_operator_tile_source), intent(inout) :: this
       type(reciprocal), target, intent(inout) :: reciprocal_obj
       real(rp), intent(in) :: signed_moments(:)
       real(rp), intent(in) :: q_point(3)
       real(rp), intent(in), optional :: column_scales(:)
+      logical, intent(in), optional :: use_qplus
       integer :: nmat, nright
 
       call this%clear()
@@ -2121,6 +2378,7 @@ contains
       allocate(this%signed_moments(nright))
       this%signed_moments = signed_moments
       this%q_point = q_point
+      if (present(use_qplus)) this%use_qplus = use_qplus
       allocate(this%qminus(nmat, nmat), this%qplus(nmat, nmat))
    end subroutine initialize_lmto_pair_operator_source
 
@@ -2154,7 +2412,11 @@ contains
             call g_logger%fatal('[calculation.lmto_pair_operator_source]: pair-potential construction rejected: '// &
                trim(reason), __FILE__, __LINE__)
          end if
-         operator_tile(:, :, isite) = this%qminus
+         if (this%use_qplus) then
+            operator_tile(:, :, isite) = this%qplus
+         else
+            operator_tile(:, :, isite) = this%qminus
+         end if
          if (allocated(this%column_scales)) operator_tile(:, :, isite) = this%column_scales(isite)*operator_tile(:, :, isite)
       end do
       this%fetch_count = this%fetch_count + 1
@@ -2168,6 +2430,7 @@ contains
       if (allocated(this%column_scales)) deallocate(this%column_scales)
       nullify(this%reciprocal_obj)
       this%q_point = 0.0_rp
+      this%use_qplus = .false.
       this%fetch_count = 0
    end subroutine clear_lmto_pair_operator_source
 

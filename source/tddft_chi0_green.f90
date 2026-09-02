@@ -90,6 +90,7 @@ module tddft_chi0_green_mod
       integer :: k_mesh_shape(3) = 0
       real(rp) :: q_direct(3) = 0.0_rp
       character(len=32) :: response_projection = 'site'
+      character(len=16) :: circular_channel = 'plus_minus'
    end type green_chi0_options
 
    !> Canonical KS-response provider.  It is deliberately independent of
@@ -273,6 +274,7 @@ contains
       static_options%k_mesh_shape = options%k_mesh_shape
       static_options%q_direct = options%q_direct
       static_options%response_projection = options%response_projection
+      static_options%circular_channel = options%circular_channel
       call one_particle%get_static_chi0(k_weights, site_orbital_counts, left_channels, right_channels, static_options, result)
       result%metadata%backend = 'green_static'
       result%metadata%canonical_backend = 'kspace_lehmann'
@@ -281,6 +283,8 @@ contains
       result%metadata%endpoint_provenance = 'K and K+q Lehmann GF endpoint source; exact static limit'
       result%metadata%q_direct = options%q_direct
       result%metadata%response_projection = options%response_projection
+      result%metadata%circular_channel = options%circular_channel
+      result%metadata%spectral_convention = 'Stoner spectral weight = -Im chi_KS^'//trim(options%circular_channel)//'/pi (positive excitation positive)'
       result%metadata%green_eta = 0.0_rp
       result%metadata%integration_energy_points = 0
       result%metadata%omega_min = 0.0_rp
@@ -416,6 +420,8 @@ contains
       result%metadata%omega_batch_size = nw
       result%metadata%q_direct = this%options%q_direct
       result%metadata%response_projection = this%options%response_projection
+      result%metadata%circular_channel = this%options%circular_channel
+      result%metadata%spectral_convention = 'Stoner spectral weight = -Im chi_KS^'//trim(this%options%circular_channel)//'/pi (positive excitation positive)'
       result%metadata%omega_min = minval(omega)
       result%metadata%omega_max = maxval(omega)
       result%metadata%omega_points = nw
@@ -580,6 +586,8 @@ contains
       result%metadata%q_batch_size = 1; result%metadata%omega_batch_size = nw
       result%metadata%q_direct = this%options%q_direct
       result%metadata%response_projection = this%options%response_projection
+      result%metadata%circular_channel = this%options%circular_channel
+      result%metadata%spectral_convention = 'Stoner spectral weight = -Im chi_KS^'//trim(this%options%circular_channel)//'/pi (positive excitation positive)'
       result%metadata%omega_min = minval(omega); result%metadata%omega_max = maxval(omega); result%metadata%omega_points = nw
    end subroutine build_green_chi0_mixed_contour
 

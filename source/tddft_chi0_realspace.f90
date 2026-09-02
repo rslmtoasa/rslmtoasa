@@ -31,6 +31,7 @@ module tddft_chi0_realspace_mod
       real(rp) :: rmax = huge(1.0_rp)
       real(rp) :: tail_tolerance = 1.0e-3_rp
       character(len=16) :: representation = 'bulk'
+      character(len=16) :: circular_channel = 'plus_minus'
       integer :: fourier_axes(3) = [1, 2, 3]
       real(rp) :: metric(3, 3) = reshape([1.0_rp, 0.0_rp, 0.0_rp, &
          0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp], [3, 3])
@@ -430,6 +431,8 @@ contains
       result%metadata%energy_integration = 'direct near-real-axis trapezoid'
       result%metadata%endpoint_provenance = 'native G_ab(R,z), G_ba(-R,z); no G(k) endpoint'
       result%metadata%response_projection = 'site'
+      result%metadata%circular_channel = options%circular_channel
+      result%metadata%spectral_convention = 'Stoner spectral weight = -Im chi_KS^'//trim(options%circular_channel)//'/pi (positive excitation positive)'
       result%metadata%eta = options%eta
       result%metadata%green_eta = resolved_green_eta(options)
       result%metadata%fermi_level = options%fermi_level

@@ -34,6 +34,7 @@ module xc_response_kernel_mod
       ! Signed collinear P_site sigma_z population.  It is separate from the
       ! legacy magnitude-oriented field above and is the Q_a normalization.
       real(rp) :: signed_spin_population = 0.0_rp
+      logical :: has_signed_spin_population = .false.
       ! Radial ASA spin population used to define the projected ALSDA
       ! stiffness.  It is retained separately from spin_population, whose
       ! value is the response-projector population (P_site sigma).
@@ -189,6 +190,8 @@ contains
 
       call require_site(this, isite, 'record_ground_state_site')
       this%site(isite)%spin_population = spin_population
+      this%site(isite)%signed_spin_population = spin_population
+      this%site(isite)%has_signed_spin_population = .true.
       this%site(isite)%vxc_scalar = sample%vxc_scalar
       this%site(isite)%bxc_energy = sample%bxc_energy
    end subroutine xc_kernel_record_ground_state_site
@@ -239,6 +242,8 @@ contains
 
       call require_site(this, isite, 'set_site_spin_population')
       this%site(isite)%spin_population = spin_population
+      this%site(isite)%signed_spin_population = spin_population
+      this%site(isite)%has_signed_spin_population = .true.
       call finalize_site_k_perp(this%site(isite))
    end subroutine xc_kernel_set_site_spin_population
 
@@ -248,6 +253,7 @@ contains
       real(rp), intent(in) :: spin_population
       call require_site(this, isite, 'set_site_signed_spin_population')
       this%site(isite)%signed_spin_population = spin_population
+      this%site(isite)%has_signed_spin_population = .true.
    end subroutine xc_kernel_set_site_signed_spin_population
 
    !> Record the direction of the ground-state magnetization for the site’s

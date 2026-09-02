@@ -30,8 +30,22 @@ def test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel()
     assert "reciprocal_obj%eigenvalues = eigenvalues_k" in source
     assert "reciprocal_obj%eigenvectors = eigenvectors_k" in source
     assert "compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)" in source
-    assert "set_site_spin_population(isite, site_moments(3, isite))" in source
+    assert "set_site_spin_population(isite, abs(site_moments(3, isite)))" in source
     assert "set_site_spin_population(isite, sqrt(sum(site_moments(:, isite)**2)))" not in source
+
+
+def test_transverse_production_keeps_ordered_circular_channels_separate() -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "source" / "calculation.f90").read_text()
+    config = (root / "source" / "tddft_config.f90").read_text()
+    assert "circular_channel = 'both'" in config
+    assert "left_channels_reverse" in source
+    assert "right_channels_reverse" in source
+    assert "_minus_plus_chi0.dat" in source
+    assert "_minus_plus_legacy_dyson.dat" in source
+    assert "_minus_plus_pair_dyson.dat" in source
+    assert "use_qplus=.not. primary_minus_plus" in source
+    assert "signed_site_populations(provider)" in (root / "source" / "tddft_goldstone.f90").read_text()
 
 
 def test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults() -> None:
@@ -57,7 +71,7 @@ def test_controlled_goldstone_correction_rescales_only_pair_potential_columns() 
     assert "goldstone_mode=correct requires" in source
     assert "build_goldstone_column_correction(pair_xi_static%xi" in source
     assert "pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &" in source
-    assert "pair_correction%scales)" in source
+    assert "pair_correction%scales" in source
     assert "pair_operators_corrected" not in source
     assert "_pair_corrected_dyson.dat" in source
     assert "k_perp_sum_rule" not in source[source.index("post_processing_susceptibility"):source.index("append_dynamic_gamma_peaks")]

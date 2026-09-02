@@ -27,6 +27,7 @@ module tddft_config_mod
       !> results from the same response inputs.
       character(len=24) :: xi_backend
       character(len=16) :: response_projection
+      character(len=16) :: circular_channel
       character(len=16) :: q_mode
       character(len=16) :: q_coordinates
       character(len=24) :: gf_integration
@@ -89,6 +90,7 @@ contains
       this%chi0_backend = 'eigenpairs'
       this%xi_backend = 'legacy_site_scalar'
       this%response_projection = 'site'
+      this%circular_channel = 'both'
       this%q_mode = 'list'
       this%q_coordinates = 'direct'
       this%gf_integration = 'direct'
@@ -150,6 +152,7 @@ contains
       chi0_backend = this%chi0_backend
       xi_backend = this%xi_backend
       response_projection = this%response_projection
+      circular_channel = this%circular_channel
       q_mode = this%q_mode
       q_coordinates = this%q_coordinates
       gf_integration = this%gf_integration
@@ -205,6 +208,7 @@ contains
       this%chi0_backend = lower(trim(chi0_backend))
       this%xi_backend = lower(trim(xi_backend))
       this%response_projection = lower(trim(response_projection))
+      this%circular_channel = lower(trim(circular_channel))
       this%q_mode = lower(trim(q_mode))
       this%q_coordinates = lower(trim(q_coordinates))
       this%gf_integration = lower(trim(gf_integration))
@@ -313,6 +317,13 @@ contains
       end if
       if (this%response_projection /= 'site') then
          call g_logger%fatal("[tddft_config]: only response_projection='site' is currently implemented", __FILE__, __LINE__)
+      end if
+      if (this%channel /= 'transverse' .and. this%circular_channel /= 'both') then
+         call g_logger%fatal('[tddft_config]: circular_channel is only applicable to the transverse response', __FILE__, __LINE__)
+      end if
+      if (this%circular_channel /= 'both' .and. this%circular_channel /= 'plus_minus' .and. &
+          this%circular_channel /= 'minus_plus') then
+         call g_logger%fatal("[tddft_config]: circular_channel must be 'both', 'plus_minus', or 'minus_plus'", __FILE__, __LINE__)
       end if
       if (this%q_coordinates /= 'direct') then
          call g_logger%fatal("[tddft_config]: q_coordinates must be 'direct' (fractional reciprocal coordinates)", &

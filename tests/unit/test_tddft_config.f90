@@ -18,11 +18,27 @@ program test_tddft_config
    call test_xi_backend_input()
    call test_goldstone_correction_modes()
    call test_goldstone_policy_input()
+   call test_circular_channel_input()
    call test_ground_state_provenance_defaults()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
 contains
+
+   subroutine test_circular_channel_input()
+      type(tddft_config) :: config
+      integer :: unit
+
+      open(newunit=unit, file='unit_tddft_config.nml', status='replace', action='write')
+      write(unit, '(a)') '&tddft'
+      write(unit, '(a)') " channel = 'transverse', circular_channel = 'minus_plus'"
+      write(unit, '(a)') '/'
+      close(unit)
+      config = tddft_config('unit_tddft_config.nml')
+      call assert_true('ordered circular channel is read', trim(config%circular_channel) == 'minus_plus')
+      open(newunit=unit, file='unit_tddft_config.nml', status='old')
+      close(unit, status='delete')
+   end subroutine test_circular_channel_input
 
    subroutine test_path_input()
       type(tddft_config) :: config

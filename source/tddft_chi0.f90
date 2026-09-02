@@ -46,6 +46,7 @@ module tddft_chi0_mod
       integer :: transition_batch_size = 128
       real(rp) :: q_direct(3) = 0.0_rp
       character(len=32) :: response_projection = 'site'
+      character(len=16) :: circular_channel = 'plus_minus'
    end type tddft_chi0_options
 
    !> Reproducibility metadata written with every chi_KS output.
@@ -60,6 +61,7 @@ module tddft_chi0_mod
       character(len=96) :: spectral_convention = 'Stoner spectral weight = -Im chi_KS^{+-}/pi (positive excitation positive)'
       character(len=64) :: endpoint_provenance = 'separate k and k+q eigenpair arrays'
       character(len=32) :: response_projection = 'site'
+      character(len=16) :: circular_channel = 'unspecified'
       character(len=80) :: eta_role = 'numerical broadening; not a physical linewidth'
       real(rp) :: eta = 0.0_rp
       real(rp) :: fermi_level = 0.0_rp
@@ -358,6 +360,8 @@ contains
       result%metadata%static_limit = .false.
       result%metadata%eta_is_numerical = .true.
       result%metadata%response_projection = options%response_projection
+      result%metadata%circular_channel = trim(options%circular_channel)
+      result%metadata%spectral_convention = 'Stoner spectral weight = -Im chi_KS^'//trim(options%circular_channel)//'/pi (positive excitation positive)'
       result%metadata%canonical_backend = 'eigenpairs'
       result%metadata%implementation = 'explicit eigenpair transitions'
       result%metadata%convergence_status = 'not assessed by backend'
@@ -461,6 +465,8 @@ contains
       result%metadata%omega_max = 0.0_rp
       result%metadata%omega_points = 1
       result%metadata%response_projection = options%response_projection
+      result%metadata%circular_channel = trim(options%circular_channel)
+      result%metadata%spectral_convention = 'Stoner spectral weight = -Im chi_KS^'//trim(options%circular_channel)//'/pi (positive excitation positive)'
       result%metadata%convergence_status = 'not assessed by backend'
       result%metadata%converged = .false.
       result%metadata%q_batch_size = 1
@@ -509,6 +515,7 @@ contains
       write(unit, '(a,a)') '# spectral_convention = ', trim(result%metadata%spectral_convention)
       write(unit, '(a,a)') '# endpoint_provenance = ', trim(result%metadata%endpoint_provenance)
       write(unit, '(a,a)') '# response_projection = ', trim(result%metadata%response_projection)
+      write(unit, '(a,a)') '# circular_channel = ', trim(result%metadata%circular_channel)
       write(unit, '(a,a)') '# eta_role = ', trim(result%metadata%eta_role)
       write(unit, '(a)') '# stoner_landau_map = site-diagonal KS loss; q resolution is supplied by the per-q output files'
       write(unit, '(a,3(1x,es24.16))') '# q_direct = ', result%metadata%q_direct

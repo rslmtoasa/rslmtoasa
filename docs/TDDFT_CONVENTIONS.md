@@ -11,6 +11,12 @@ It is registered as `UnitResponseConventions` and is intended to fail when a
 circular factor, frequency sign, channel assignment, source vertex, or
 spectral-weight normalization changes.
 
+For multi-sublattice transverse runs, `&tddft circular_channel='both'`
+(the default) evaluates the ordered `+-` and `-+` responses independently.
+The primary `+-` files retain the historical names; reverse-channel products
+carry the `_minus_plus_` suffix and every response metadata record identifies
+its ordered channel.
+
 ## 1. Electronic basis and Pauli algebra
 
 The spin ordering of an electronic block is
