@@ -1,5 +1,10 @@
 # TDDFT chi0 backends
 
+For the user-facing backend choice, convergence controls, support matrix, and
+reproducible material decks, start with
+[TDDFT_USER_GUIDE.md](TDDFT_USER_GUIDE.md). The current release decision is in
+[TDDFT_RELEASE_STATUS.md](TDDFT_RELEASE_STATUS.md).
+
 The TD-DFT response layer consumes a common `tddft_chi0_batch_result`.  Each
 entry in `q_response(:)` is the compatibility-preserving
 `tddft_chi0_result` used by the Dyson, loss-matrix, and text-output code.  A
@@ -52,10 +57,11 @@ Dyson and output interfaces unchanged.
 `make_tddft_chi0_backend` allocates the selected contract.  Initialization is
 separate because the calculation owns the response mesh and endpoint data.
 The current production calculation attaches the periodic eigenpair endpoint
-adapter for `eigenpairs` and the K-space Lehmann adapter for `green` and
-`kspace_lehmann`.  `realspace_gf` is selectable and capability-visible, but
-the production driver rejects it until a native RS-LMTO response provider is
-attached; it cannot fall back to a k-space calculation.
+adapter for `eigenpairs`, the K-space Lehmann adapter for `green` and
+`kspace_lehmann`, and the native RS-LMTO provider for `realspace_gf`. The
+native route cannot fall back to a k-space calculation. Its current source is
+direct real-axis and bare-`chi0` only; exact static Ward input, mixed contour,
+and Dyson enhancement remain explicitly rejected.
 
 ## Provenance and ownership
 

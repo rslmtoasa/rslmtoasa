@@ -177,6 +177,31 @@ def test_eigenpair_baseline_exposes_endpoint_aware_static_and_provenance_api() -
     assert "q_direct = config%q_points(:, iq)" in (root / "source" / "calculation.f90").read_text()
 
 
+def test_production_output_metadata_carries_complete_backend_provenance() -> None:
+    root = Path(__file__).resolve().parents[2]
+    calculation = (root / "source" / "calculation.f90").read_text()
+    metadata = calculation[calculation.index("subroutine append_tddft_metadata") : calculation.index(
+        "end subroutine append_tddft_metadata"
+    )]
+    assert "provenance_schema = rslmto.tddft.production.v1" in metadata
+    assert "canonical_tddft_backend_name(config%chi0_backend)" in metadata
+    for field in (
+        "energy_integration",
+        "eta_role",
+        "green_eta_effective_Ry",
+        "contour_points_per_segment",
+        "realspace_rmax_request_Angstrom",
+        "realspace_tail_tolerance",
+        "response_convention",
+        "source_vertex_provenance",
+        "interaction_kernel_provenance",
+        "goldstone_policy",
+        "unsupported_feature_policy",
+        "mpi_response_provenance",
+    ):
+        assert field in metadata
+
+
 def test_pair_correction_compares_corrected_loss_to_raw_pair_loss() -> None:
     root = Path(__file__).resolve().parents[2]
     source = (root / "source" / "calculation.f90").read_text()
@@ -201,5 +226,6 @@ if __name__ == "__main__":
     test_eigenpair_baseline_boundary_rejects_unsupported_response_branches()
     test_relativistic_boundary_is_explicit_and_precedes_spinor_response_work()
     test_eigenpair_baseline_exposes_endpoint_aware_static_and_provenance_api()
+    test_production_output_metadata_carries_complete_backend_provenance()
     test_pair_correction_compares_corrected_loss_to_raw_pair_loss()
     print("RESULT: PASS")

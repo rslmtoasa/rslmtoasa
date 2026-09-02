@@ -2532,17 +2532,45 @@ contains
       character(len=*), intent(in) :: reciprocal_mode
       character(len=*), intent(in) :: xi_backend_label
       integer :: unit, ios
+      real(rp) :: effective_green_eta
+      character(len=32) :: canonical_backend, output_circular_channel
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
       if (ios /= 0) call g_logger%fatal('[calculation.append_tddft_metadata]: cannot append response metadata', __FILE__, __LINE__)
-      write(unit, '(a)') '# production_metadata_begin'
-      write(unit, '(a,a)') '# channel = ', trim(config%channel)
-      write(unit, '(a,a)') '# chi0_backend = ', trim(config%chi0_backend)
-      if (trim(config%chi0_backend) == 'green') then
-         write(unit, '(a)') '# chi0_backend_capability = eigenpair_resolvent reference; native RS Green-function provider unavailable'
-      else
-         write(unit, '(a)') '# chi0_backend_capability = eigenpair Lehmann response'
+      canonical_backend = canonical_tddft_backend_name(config%chi0_backend)
+      effective_green_eta = config%green_eta
+      if (effective_green_eta <= 0.0_rp) effective_green_eta = 0.5_rp*config%eta
+      output_circular_channel = 'not applicable'
+      if (trim(config%channel) == 'transverse') then
+         if (index(trim(xi_backend_label), 'reverse') > 0) then
+            output_circular_channel = 'minus_plus'
+         else if (trim(config%circular_channel) == 'minus_plus') then
+            output_circular_channel = 'minus_plus'
+         else
+            output_circular_channel = 'plus_minus'
+         end if
       end if
+      write(unit, '(a)') '# production_metadata_begin'
+      write(unit, '(a)') '# provenance_schema = rslmto.tddft.production.v1'
+      write(unit, '(a,a)') '# channel = ', trim(config%channel)
+      write(unit, '(a,a)') '# chi0_backend_requested = ', trim(config%chi0_backend)
+      write(unit, '(a,a)') '# chi0_backend = ', trim(config%chi0_backend)
+      write(unit, '(a,a)') '# chi0_backend_canonical = ', trim(canonical_backend)
+      write(unit, '(a,l1)') '# chi0_backend_alias = ', trim(config%chi0_backend) /= trim(canonical_backend)
+      select case (trim(canonical_backend))
+      case ('eigenpairs')
+         write(unit, '(a)') '# chi0_backend_implementation = explicit eigenpair transition reference'
+         write(unit, '(a)') '# chi0_backend_capability = transparent transition sums; exact k and k+q endpoint arrays'
+      case ('kspace_lehmann')
+         write(unit, '(a)') '# chi0_backend_implementation = K-space Lehmann Green-function bubble'
+         write(unit, '(a)') '# chi0_backend_capability = periodic K-space GF response; Lehmann resolvent source'
+      case ('realspace_gf')
+         write(unit, '(a)') '# chi0_backend_implementation = native real-space G(R,z) to chi0(R,omega) to q transform'
+         write(unit, '(a)') '# chi0_backend_capability = native RS GF bare transverse response; no implicit G(R) to G(k) conversion'
+      case default
+         write(unit, '(a)') '# chi0_backend_implementation = unknown or test-only backend'
+         write(unit, '(a)') '# chi0_backend_capability = consult the selected backend contract'
+      end select
       if (trim(config%channel) == 'full') then
          write(unit, '(a)') '# full_response_capability = validated selected-XC ALSDA derivatives'
       else
@@ -2558,6 +2586,8 @@ contains
       end if
       write(unit, '(a,a)') '# xi_backend_requested = ', trim(config%xi_backend)
       write(unit, '(a,a)') '# xi_backend_output = ', trim(xi_backend_label)
+      write(unit, '(a,a)') '# circular_channel_requested = ', trim(config%circular_channel)
+      write(unit, '(a,a)') '# circular_channel_output = ', trim(output_circular_channel)
       if (index(xi_backend_label, 'pair_potential') > 0) then
          write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
          write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
@@ -2569,8 +2599,18 @@ contains
          write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
       end if
       write(unit, '(a,a)') '# response_projection = ', trim(config%response_projection)
+      write(unit, '(a)') '# response_basis = site-projected Pauli/circular response; site-orbital projection is unsupported'
+      write(unit, '(a)') '# response_convention = Pauli sigma_x/y/z; O_plus_minus=sigma_x +/- i sigma_y; unhalved circular measurement vertices'
+      write(unit, '(a)') '# source_vertex_provenance = external magnetic derivative is separate from measurement vertex and interaction kernel'
+      if (trim(config%channel) == 'longitudinal') then
+         write(unit, '(a)') '# interaction_kernel_provenance = ground-state ALSDA charge/longitudinal derivative plus projected Hartree charge kernel'
+      else
+         write(unit, '(a)') '# interaction_kernel_provenance = ground-state XC response provider; pair-potential output is direct Xi when selected'
+      end if
+      write(unit, '(a)') '# source_hamiltonian_provenance = same ground-state first-order scalar-relativistic ham_only Hamiltonian as SCF'
       write(unit, '(a,a)') '# q_mode = ', trim(config%q_mode)
       write(unit, '(a,a)') '# q_coordinates = ', trim(config%q_coordinates)
+      write(unit, '(a)') '# q_coordinate_unit = fractional reciprocal-lattice coordinates; spatial phase is exp(-i q.R)'
       write(unit, '(a,i0)') '# q_index = ', iq
       write(unit, '(a,3(1x,es24.16))') '# q_direct =', q_point
       write(unit, '(a,3(1x,i0))') '# k_mesh =', k_mesh
@@ -2578,6 +2618,8 @@ contains
       write(unit, '(a,es24.16)') '# omega_max_Ry = ', config%omega_max
       write(unit, '(a,i0)') '# nomega = ', config%nomega
       write(unit, '(a,es24.16)') '# eta_Ry = ', config%eta
+      write(unit, '(a)') '# eta_role = numerical response broadening; not a physical linewidth'
+      write(unit, '(a)') '# physical_linewidth_policy = mode linewidth is observed at selected eta; eta is not subtracted automatically'
       write(unit, '(a,es24.16)') '# ground_state_fermi_level_Ry = ', config%ground_state_fermi_level
       write(unit, '(a,es24.16)') '# electronic_temperature_K = ', config%electronic_temperature
       write(unit, '(a,es24.16)') '# ground_state_electronic_temperature_K = ', config%ground_state_electronic_temperature
@@ -2589,8 +2631,31 @@ contains
       write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', config%band_first, config%band_last
       write(unit, '(a,es24.16)') '# occupation_prune_tolerance = ', config%occupation_tolerance
       write(unit, '(a,es24.16)') '# green_eta_Ry = ', config%green_eta
+      if (trim(canonical_backend) == 'kspace_lehmann' .or. trim(canonical_backend) == 'realspace_gf') then
+         write(unit, '(a,es24.16)') '# green_eta_effective_Ry = ', effective_green_eta
+         write(unit, '(a)') '# green_eta_policy = zero input means response eta/2; one-particle half-width combines to response eta'
+      else
+         write(unit, '(a)') '# green_eta_effective_Ry = not applicable to explicit eigenpair transitions'
+         write(unit, '(a)') '# green_eta_policy = Green-function controls are ignored by the eigenpair backend'
+      end if
       write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
       write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
+      write(unit, '(a,a)') '# energy_integration = ', trim(config%gf_integration)
+      write(unit, '(a,i0)') '# contour_points_per_segment = ', config%contour_points
+      write(unit, '(a,i0)') '# contour_horizontal_subdivisions = ', config%contour_subdivisions
+      write(unit, '(a,i0)') '# near_fermi_points = ', config%near_fermi_points
+      write(unit, '(a,es24.16)') '# contour_height_Ry = ', config%contour_height
+      write(unit, '(a,es24.16)') '# realspace_rmax_request_Angstrom = ', config%realspace_rmax
+      write(unit, '(a,es24.16)') '# realspace_tail_tolerance = ', config%realspace_tail_tolerance
+      write(unit, '(a,a)') '# realspace_representation = ', trim(config%realspace_representation)
+      write(unit, '(a,3(1x,i0))') '# realspace_fourier_axes =', config%realspace_fourier_axes
+      if (trim(canonical_backend) == 'realspace_gf') then
+         write(unit, '(a)') '# realspace_convergence_policy = response chi0(R,omega) tail must be converged; cutoff alone is not a release claim'
+         write(unit, '(a)') '# realspace_q_reuse = chi0(R,omega) is built once per frequency batch and transformed to the requested q batch'
+      else
+         write(unit, '(a)') '# realspace_convergence_policy = not applicable to this backend'
+         write(unit, '(a)') '# realspace_q_reuse = not applicable to this backend'
+      end if
       write(unit, '(a,a)') '# goldstone_mode = ', trim(config%goldstone_mode)
       write(unit, '(a,a)') '# goldstone_policy = ', trim(config%goldstone_policy)
       write(unit, '(a,l1)') '# goldstone_mode_migrated_from_sum_rule = ', config%goldstone_mode_migrated_from_sum_rule
@@ -2598,8 +2663,15 @@ contains
       write(unit, '(a,l1)') '# goldstone_correction_applied = ', index(xi_backend_label, 'corrected') > 0
       write(unit, '(a,l1)') '# spin_orbit_present = ', has_soc
       write(unit, '(a,l1)') '# external_symmetry_breaking_field_present = ', has_external_field
+      write(unit, '(a)') '# unsupported_feature_policy = generalized overlap/HOH, SOC/noncollinear, Hubbard, GBT, CCOR, and site-orbital response fail explicitly'
       write(unit, '(a,5(1x,l1))') '# output_chi0 output_xi output_chi output_modes output_stoner =', &
          config%output_chi0, config%output_xi, config%output_chi, config%output_modes, config%output_stoner
+      write(unit, '(a)') '# validation_status_policy = output completion is not a convergence claim; consult docs/TDDFT_RELEASE_STATUS.md'
+      if (trim(canonical_backend) == 'realspace_gf') then
+         write(unit, '(a)') '# mpi_response_provenance = R/energy partials reduced collectively, then one q-batched real-space Fourier transform'
+      else
+         write(unit, '(a)') '# mpi_response_provenance = q-owned output with omega/k fallback decomposition as reported by TDDFT_PERF_PLAN'
+      end if
       write(unit, '(a,i0)') '# mpi_q_owner_rank = ', mpi_rank
       write(unit, '(a)') '# production_metadata_end'
       close(unit)

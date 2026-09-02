@@ -4,6 +4,10 @@
 
 **Release-gate status:** **FAIL — not validated for production release**
 
+The consolidated run instructions and supported-feature matrix are in
+[TDDFT_USER_GUIDE.md](TDDFT_USER_GUIDE.md); the overall framework decision is
+summarized in [TDDFT_RELEASE_STATUS.md](TDDFT_RELEASE_STATUS.md).
+
 This report follows the release criteria in the TD-DFT master blueprint. It
 records a bounded current-branch probe, not a release waiver. No empirical
 frequency shift, spectral rescaling, or Goldstone cleanup was applied.
