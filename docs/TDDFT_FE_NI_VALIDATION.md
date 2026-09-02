@@ -26,7 +26,9 @@ probe uses `Fe rc=9` (258 generated central-cell-to-cluster pairs) and `Ni
 pbc=4x4x4` (64 pairs). Both materials use the same three direct q points
 `(0,0,0)`, `(0.01,0,0)`, `(0.02,0,0)` and the three-frequency grid
 `0, 0.001, 0.002 Ry`, with `eta=0.0005 Ry`. The native provider emits bare
-`chi0` only because its exact static kernel is not yet available.
+`chi0` only because an exact static kernel for Xi/Dyson enhancement is not yet
+available; the native bare static Ward input is implemented separately and is
+covered by the deterministic backend fixture.
 
 Run each material from its directory:
 

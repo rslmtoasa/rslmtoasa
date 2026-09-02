@@ -22,7 +22,7 @@ program test_tddft_backend_equivalence
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_batch_result, &
-      tddft_fermi_occupation, build_static_chi_ks_from_eigenpairs
+      tddft_fermi_occupation, build_static_chi_ks_from_eigenpairs, build_static_chi_ks_from_eigenpairs_at_q
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions
    use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider
@@ -38,6 +38,7 @@ program test_tddft_backend_equivalence
    real(rp), parameter :: pointwise_tolerance = 5.0e-2_rp
    real(rp), parameter :: kspace_realspace_tolerance = 1.0e-3_rp
    real(rp), parameter :: static_tolerance = 1.0e-11_rp
+   real(rp), parameter :: native_static_tolerance = 8.0e-2_rp
    real(rp), parameter :: contour_tolerance = 5.0e-3_rp
    real(rp), parameter :: energy_window_min = -4.5_rp, energy_window_max = 4.5_rp
    real(rp), parameter :: pi2 = 2.0_rp*pi
@@ -59,13 +60,14 @@ program test_tddft_backend_equivalence
       integer :: native_builds = 0
    end type campaign_result
 
-   real(rp) :: q_main(3, nq_main), omega_main(nw_main), q_zero(3, 1), omega_zero(1)
+   real(rp) :: q_main(3, nq_main), omega_main(nw_main), q_zero(3, 1), q_static(3, 2), omega_zero(1)
    real(rp) :: q_two(3, 2), omega_two(nw_main), omega_sum(nsum)
    real(rp) :: k_errors(3), r_errors(3), energy_k_errors(3), energy_r_errors(3)
    real(rp) :: contour_errors(3), contour_relative_errors(3), eta_kr_errors(3), eta_ek_errors(3)
    real(rp) :: r_cutoff_errors(3), r_tail_ratios(3), sum_rule_values(3), sum_rule_residuals(3)
    real(rp) :: main_ek_max, main_er_max, main_kr_max, main_ek_eigen_max, main_er_eigen_max
-   real(rp) :: static_error, spectral_target, negative_sign_error, negative_factor_error
+   real(rp) :: static_error, static_k_error_q0, static_k_error_qfinite, static_r_error_q0, static_r_error_qfinite
+   real(rp) :: static_ward_residuals(3), spectral_target, negative_sign_error, negative_factor_error
    complex(rp) :: bxc_static(2), magnetization(2)
    real(rp) :: zero_ward_residuals(3)
    logical :: negative_sign_detected, negative_factor_detected
@@ -74,8 +76,8 @@ program test_tddft_backend_equivalence
    character(len=512) :: evidence_path
    type(campaign_result) :: main_campaign, zero_campaign, sum_campaign, reference_campaign
    type(campaign_result) :: campaign
-   type(tddft_chi0_result) :: static_eigen, static_kspace
-   type(tddft_ward_diagnostics) :: static_eigen_ward, static_kspace_ward
+   type(tddft_chi0_result) :: static_eigen, static_kspace, static_realspace
+   type(tddft_ward_diagnostics) :: static_eigen_ward, static_kspace_ward, static_realspace_ward
    type(tddft_ward_diagnostics) :: zero_eigen_ward, zero_kspace_ward, zero_realspace_ward
    logical :: failed
    integer :: iomega, ilevel, ios, command_length
@@ -85,6 +87,8 @@ program test_tddft_backend_equivalence
    q_main(1, :) = [0.0_rp, 0.25_rp, 0.5_rp]
    omega_main = [0.24_rp, 0.60_rp]
    q_zero = 0.0_rp
+   q_static = 0.0_rp
+   q_static(1, 2) = 0.25_rp
    q_two = 0.0_rp
    q_two(1, :) = [0.0_rp, 0.5_rp]
    omega_two = omega_main
@@ -97,13 +101,19 @@ program test_tddft_backend_equivalence
    call compare_campaign(main_campaign, main_ek_max, main_er_max, main_kr_max, main_ek_eigen_max, main_er_eigen_max)
 
    ! Exact static is deliberately separate from finite-eta dynamic omega=0.
-   ! The sampled-real-axis R-GF provider has no exact static operation yet and
-   ! must advertise that boundary rather than being compared to a proxy.
+   ! Exercise all three independently: the R-GF source integrates its own
+   ! retarded/advanced static contour identity, while the two K-space routes
+   ! use their independent static divided-difference implementations.
    call make_static_fixture(static_eigen, static_kspace, q_zero, bxc_static, magnetization, static_error, &
       static_eigen_ward, static_kspace_ward)
+   call make_native_static_fixture(static_realspace, q_static, bxc_static, magnetization, static_k_error_q0, &
+      static_k_error_qfinite, static_r_error_q0, static_r_error_qfinite, static_realspace_ward)
    native_static_supported = main_campaign%native_static_supported
    static_passed = static_error <= static_tolerance .and. static_eigen_ward%ward_residual <= static_tolerance .and. &
-      static_kspace_ward%ward_residual <= static_tolerance
+      static_kspace_ward%ward_residual <= static_tolerance .and. static_k_error_q0 <= static_tolerance .and. &
+      static_k_error_qfinite <= static_tolerance
+   static_ward_residuals = [static_eigen_ward%ward_residual, static_kspace_ward%ward_residual, &
+      static_realspace_ward%ward_residual]
 
    ! Zero-frequency dynamic diagnostics remain useful for the all-backend
    ! finite-eta Ward audit, but are reported separately from exact static.
@@ -171,13 +181,18 @@ program test_tddft_backend_equivalence
    write (*, '(a,3(1x,es14.6))') 'TDDFT09 eta ek', eta_ek_errors
    write (*, '(a,3(1x,es14.6))') 'TDDFT09 contour rel', contour_relative_errors
    write (*, '(a,3(1x,es14.6))') 'TDDFT09 sum residual', sum_rule_residuals
+   write (*, '(a,2(1x,es14.6))') 'TDDFT09 static K q0 qfinite', static_k_error_q0, static_k_error_qfinite
+   write (*, '(a,2(1x,es14.6),a,3(1x,es14.6))') 'TDDFT09 static R q0 qfinite', static_r_error_q0, &
+      static_r_error_qfinite, ' wards', static_ward_residuals
 
    call get_command_argument(1, evidence_path, length=command_length, status=ios)
    if (ios /= 0 .or. command_length == 0) evidence_path = ''
    if (len_trim(evidence_path) > 0) then
       call write_evidence(trim(evidence_path), main_campaign, omega_main, q_main, main_ek_max, main_er_max, main_kr_max, &
-         main_ek_eigen_max, main_er_eigen_max, static_error, static_eigen_ward, static_kspace_ward, &
-         native_static_supported, zero_ward_residuals, sum_rule_values, sum_rule_residuals, spectral_target, &
+         main_ek_eigen_max, main_er_eigen_max, static_k_error_q0, static_k_error_qfinite, static_eigen_ward, &
+         static_kspace_ward, static_realspace_ward, static_r_error_q0, static_r_error_qfinite, &
+         native_static_supported, zero_ward_residuals, &
+         sum_rule_values, sum_rule_residuals, spectral_target, &
          k_errors, r_errors, nk_levels, r_cutoff_errors, r_tail_ratios, rmax_levels, energy_k_errors, energy_r_errors, &
          ne_levels, contour_errors, contour_relative_errors, contour_levels, eta_kr_errors, eta_ek_errors, eta_levels, &
          eta_ne_levels, &
@@ -191,7 +206,14 @@ program test_tddft_backend_equivalence
    call check_true('all main K-GF/R-GF comparisons pass', main_kr_max <= kspace_realspace_tolerance)
    call check_true('main matrix eigenvalue comparisons pass', max(main_ek_eigen_max, main_er_eigen_max) <= pointwise_tolerance)
    call check_true('exact static eigenpair/K-GF comparison passes', static_passed)
-   call check_true('real-space backend explicitly rejects exact static limit', .not. native_static_supported)
+   call check_true('all three backends advertise exact static support', native_static_supported)
+   call check_true('native static metadata excludes dynamic eta', static_realspace%metadata%static_limit .and. &
+      .not. static_realspace%metadata%eta_is_numerical .and. static_realspace%metadata%eta == 0.0_rp .and. &
+      index(static_realspace%metadata%implementation, 'static contour identity') > 0)
+   call check_true('exact static q=0 eigenpair/R-GF comparison passes', static_r_error_q0 <= native_static_tolerance)
+   call check_true('exact static finite-q eigenpair/R-GF comparison passes', static_r_error_qfinite <= native_static_tolerance)
+   call check_true('raw static Ward residuals agree across all three backends', &
+      maxval(static_ward_residuals)-minval(static_ward_residuals) <= native_static_tolerance)
    call check_true('spectral sum rule is within finite-grid envelope', sum_rule_passed)
    call check_true('negative sign control is detected', negative_sign_detected)
    call check_true('negative factor-of-two control is detected', negative_factor_detected)
@@ -403,6 +425,86 @@ contains
          kernel_provenance='static fixture Ward field')
    end subroutine make_static_fixture
 
+   subroutine make_native_static_fixture(native_result, q_points, bxc, magnetization, k_error_q0, k_error_qfinite, &
+      error_q0, error_qfinite, ward)
+      type(tddft_chi0_result), intent(out) :: native_result
+      real(rp), intent(in) :: q_points(:, :)
+      complex(rp), intent(in) :: bxc(:), magnetization(:)
+      real(rp), intent(out) :: k_error_q0, k_error_qfinite, error_q0, error_qfinite
+      type(tddft_ward_diagnostics), intent(out) :: ward
+      real(rp), allocatable :: weights(:), eval(:, :), evalq(:, :, :), energy(:), r_vectors(:, :)
+      complex(rp), allocatable :: evec(:, :, :), evecq(:, :, :, :), g_ab(:, :, :, :), g_ba(:, :, :, :)
+      integer, allocatable :: pair_sites(:, :)
+      type(response_channel) :: left(2), right(2)
+      type(tddft_chi0_options) :: static_options
+      type(tddft_realspace_chi0_options) :: realspace_options
+      type(tddft_native_realspace_gf_provider) :: native_provider
+      class(tddft_chi0_backend), allocatable :: realspace_backend, kspace_backend
+      type(tddft_chi0_batch_result) :: native_batch
+      type(tddft_chi0_batch_result) :: kspace_batch
+      type(green_chi0_options) :: green_options
+      type(tddft_chi0_result) :: reference_q0, reference_qfinite
+      integer :: iq
+
+      if (size(q_points, 2) /= 2) error stop 'TDDFT09: native static fixture requires q=0 and finite-q'
+      call make_fixture_arrays(4, q_points, weights, eval, evalq, evec, evecq)
+      call make_realspace_source(eval, 32001, 5.0e-4_rp, energy, r_vectors, pair_sites, g_ab, g_ba)
+      left = [response_channel(1, RESPONSE_PLUS), response_channel(1, RESPONSE_MINUS)]
+      right = [response_channel(1, RESPONSE_MINUS), response_channel(1, RESPONSE_PLUS)]
+
+      realspace_options%eta = main_eta
+      realspace_options%green_eta = 0.0_rp
+      realspace_options%fermi_level = 0.0_rp
+      realspace_options%rmax = huge(1.0_rp)
+      realspace_options%tail_tolerance = 1.0e-2_rp
+      realspace_options%representation = 'bulk'
+      call native_provider%initialize(energy, g_ab, g_ba, r_vectors, pair_sites, [1], left, right, realspace_options)
+      static_options%eta = 0.0_rp
+      static_options%fermi_level = 0.0_rp
+      static_options%k_mesh_shape = [4, 1, 1]
+      call make_tddft_chi0_backend('realspace_gf', realspace_backend)
+      select type (realspace_backend)
+      type is (tddft_realspace_gf_backend)
+         call realspace_backend%initialize(native_provider)
+         call realspace_backend%evaluate_static_grid(q_points, native_batch)
+      class default
+         error stop 'TDDFT09: R-GF static fixture factory returned wrong type'
+      end select
+      native_result = native_batch%q_response(1)
+
+      green_options%eta = main_eta
+      green_options%green_eta = 0.0_rp
+      green_options%fermi_level = 0.0_rp
+      green_options%k_mesh_shape = [4, 1, 1]
+      call make_tddft_chi0_backend('kspace_lehmann', kspace_backend)
+      select type (kspace_backend)
+      type is (tddft_kspace_lehmann_backend)
+         call kspace_backend%initialize(weights, eval, evec, evalq, evecq, q_points, [1], left, right, static_options, &
+            green_options)
+         call kspace_backend%evaluate_static_grid(q_points, kspace_batch)
+      class default
+         error stop 'TDDFT09: K-GF static fixture factory returned wrong type'
+      end select
+
+      do iq = 1, 2
+         static_options%q_direct = q_points(:, iq)
+         if (iq == 1) then
+            call build_static_chi_ks_from_eigenpairs_at_q(weights, eval, evec, evalq(:, :, iq), evecq(:, :, :, iq), [1], &
+               left, right, static_options, reference_q0)
+         else
+            call build_static_chi_ks_from_eigenpairs_at_q(weights, eval, evec, evalq(:, :, iq), evecq(:, :, :, iq), [1], &
+               left, right, static_options, reference_qfinite)
+         end if
+      end do
+      error_q0 = matrix_error(native_batch%q_response(1)%chi(:, :, 1), reference_q0%chi(:, :, 1))
+      error_qfinite = matrix_error(native_batch%q_response(2)%chi(:, :, 1), reference_qfinite%chi(:, :, 1))
+      k_error_q0 = matrix_error(kspace_batch%q_response(1)%chi(:, :, 1), reference_q0%chi(:, :, 1))
+      k_error_qfinite = matrix_error(kspace_batch%q_response(2)%chi(:, :, 1), reference_qfinite%chi(:, :, 1))
+      call evaluate_static_ward_identity(native_batch%q_response(1)%chi(:, :, 1), bxc, magnetization, ward, &
+         response_basis='site circular fixture', bxc_provenance='exact static eigenpair fixture field', &
+         kernel_provenance='unadjusted static fixture Ward field')
+   end subroutine make_native_static_fixture
+
    subroutine evaluate_zero_frequency_ward(campaign, bxc, magnetization, residuals, eigen_ward, kspace_ward, realspace_ward)
       type(campaign_result), intent(in) :: campaign
       complex(rp), intent(in) :: bxc(:), magnetization(:)
@@ -566,14 +668,18 @@ contains
    end subroutine check_true
 
    subroutine write_evidence(path, main, omega, q_points, max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen, &
-      static_error, static_eigen_ward, static_kspace_ward, native_static_supported, zero_ward, sum_values, sum_residuals, &
+      static_k_error_q0, static_k_error_qfinite, static_eigen_ward, static_kspace_ward, static_realspace_ward, &
+      static_r_error_q0, static_r_error_qfinite, &
+      native_static_supported, zero_ward, sum_values, sum_residuals, &
       sum_target, k_errors, r_errors, nk_values, r_errors_cutoff, r_tail, r_values, energy_k, energy_r, ne_values, &
       contour_errors_local, contour_relative, contour_values, eta_kr, eta_ek, eta_values, eta_energy_points, negative_sign, negative_factor, &
       sign_detected, factor_detected, comparison_tol, kr_tol)
       character(len=*), intent(in) :: path
       type(campaign_result), intent(in) :: main
-      real(rp), intent(in) :: omega(:), q_points(:, :), max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen, static_error
-      type(tddft_ward_diagnostics), intent(in) :: static_eigen_ward, static_kspace_ward
+      real(rp), intent(in) :: omega(:), q_points(:, :), max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen
+      real(rp), intent(in) :: static_k_error_q0, static_k_error_qfinite
+      type(tddft_ward_diagnostics), intent(in) :: static_eigen_ward, static_kspace_ward, static_realspace_ward
+      real(rp), intent(in) :: static_r_error_q0, static_r_error_qfinite
       logical, intent(in) :: native_static_supported
       real(rp), intent(in) :: zero_ward(:), sum_values(:), sum_residuals(:), sum_target, k_errors(:), r_errors(:)
       integer, intent(in) :: nk_values(:)
@@ -611,9 +717,13 @@ contains
          '  "summary": {"max_eigenpair_vs_kspace": ', max_ek, &
          ', "max_eigenpair_vs_realspace": ', max_er, ', "max_kspace_vs_realspace": ', max_kr, &
          ', "max_eigenvalue_vs_kspace": ', max_ek_eigen, ', "max_eigenvalue_vs_realspace": ', max_er_eigen, '},'
-      write(unit, '(a,es24.16,a,es24.16,a,es24.16,a,a,a)') '  "static": {"eigenpair_vs_kspace": ', static_error, &
-         ', "eigenpair_ward_residual": ', static_eigen_ward%ward_residual, ', "kspace_ward_residual": ', &
-         static_kspace_ward%ward_residual, ', "native_static_supported": ', bool_token(native_static_supported), '},'
+      write(unit, '(a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,a,a)') &
+         '  "static": {"eigenpair_vs_kspace": ', static_k_error_q0, ', "eigenpair_vs_kspace_finite_q": ', &
+         static_k_error_qfinite, ', "eigenpair_ward_residual": ', static_eigen_ward%ward_residual, &
+         ', "kspace_ward_residual": ', static_kspace_ward%ward_residual, ', "eigenpair_vs_native_rgf_q0": ', &
+         static_r_error_q0, ', "eigenpair_vs_native_rgf_finite_q": ', static_r_error_qfinite, &
+         ', "native_ward_residual": ', static_realspace_ward%ward_residual, &
+         ', "native_static_supported": ', bool_token(native_static_supported), '},'
       write(unit, '(a,i0,a,a,a)') '  "native_realspace": {"response_build_count": ', main%native_builds, &
          ', "q_batch_reuse": ', bool_token(main%native_builds == 1), '},'
       write(unit, '(a,es24.16,a,es24.16,a,es24.16,a)') '  "zero_frequency_dynamic_ward_residual": [', &

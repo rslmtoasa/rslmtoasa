@@ -93,10 +93,10 @@ once per frequency batch, and Fourier transforms `chi0(R,omega)` to the
 requested q batch. It never requires an intermediate `G(k,z)`.
 
 The current native source accepts sampled real-axis blocks, so it supports
-`gf_integration = 'direct'` and bare `chi0` output only. Mixed contour, exact
-static Ward input, Xi/Dyson enhancement, and longitudinal/full response are
-rejected until a complex-energy native source and matching static kernel are
-available.
+`gf_integration = 'direct'`, bare `chi0`, and the independently implemented
+exact static Ward input. Mixed contour and Xi/Dyson enhancement remain
+rejected because they require a complex-energy native source or a matching
+static kernel; longitudinal/full response is also outside this boundary.
 
 ## Support matrix
 
@@ -117,7 +117,7 @@ it does not silently use the collinear formula.
 | Site-orbital projection | Rejected | Rejected | Rejected | Requires orbital-resolved ground-state kernel/moment data |
 | Transverse bare `chi0` | Supported | Supported | Supported | Native RS uses direct real-axis integration |
 | Transverse Xi/Dyson | Supported | Supported with legacy site kernel | Rejected | Pair-potential Xi is currently eigenpair-only |
-| Exact static Ward diagnostic | Supported | Supported | Rejected | Native source is dynamic-first |
+| Exact static Ward diagnostic | Supported | Supported | Supported | Native source uses the separate static RGF contour path |
 | Mixed contour | Not applicable | Supported | Rejected | Native complex-energy source is not available |
 | Longitudinal `(0,z)` response | Limited | Limited | Rejected | Selected-XC/Hartree path is capability-gated; not part of transverse release |
 | Full `(0,x,y,z)` response | Limited | Limited | Rejected | Selected-XC derivative capability is required and remains experimental |

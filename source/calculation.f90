@@ -1253,6 +1253,7 @@ contains
       complex(rp), allocatable :: all_xi_pair_reverse(:, :, :, :), all_loss_pair_reverse(:, :, :, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
+      real(rp) :: static_q(3, 1)
       real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, pair_corrected_gamma_peak
       real(rp) :: bare_gamma_peak_reverse, legacy_gamma_peak_reverse, pair_gamma_peak_reverse
       real(rp) :: pair_corrected_gamma_peak_reverse
@@ -1629,23 +1630,28 @@ contains
       ! zero-frequency bare response reference for the common Dyson path.
       allocate(omega_static(1))
       omega_static = 0.0_rp
-      ! A native real-space source is dynamic-first in TDDFT-07.  Do not
-      ! manufacture its static Ward input from reciprocal eigenpairs; the
-      ! enhanced/Dyson route remains an explicit future provider requirement.
       need_dyson = config%output_xi .or. config%output_chi .or. config%output_modes .or. is_longitudinal .or. pair_backend
       if (canonical_chi0_backend == 'realspace_gf') then
          if (need_dyson) then
             call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF dynamic output currently '// &
                'does not provide an exact static kernel for Xi/Dyson enhancement; request bare chi0 output only.', __FILE__, __LINE__)
          end if
-      else if (.not. is_longitudinal .and. .not. is_full_response) then
+      end if
+      if (.not. is_longitudinal .and. .not. is_full_response) then
          if (canonical_chi0_backend /= 'eigenpairs' .and. canonical_chi0_backend /= 'kspace_lehmann') then
-            call g_logger%fatal('[calculation.post_processing_susceptibility]: real static Ward diagnostics require '// &
-               'an eigenpair or K-space Lehmann backend with an exact static-limit solver.', __FILE__, __LINE__)
+            if (canonical_chi0_backend /= 'realspace_gf') then
+               call g_logger%fatal('[calculation.post_processing_susceptibility]: real static Ward diagnostics require '// &
+                  'an eigenpair, K-space Lehmann, or validated native real-space static solver.', __FILE__, __LINE__)
+            end if
          end if
          chi0_options%q_direct = 0.0_rp
          green_options%q_direct = 0.0_rp
-         if (canonical_chi0_backend == 'kspace_lehmann') then
+         static_q = 0.0_rp
+         if (canonical_chi0_backend == 'realspace_gf') then
+            call chi0_backend%evaluate_static_grid(static_q, realspace_batch)
+            call reduce_realspace_chi0_batch(realspace_batch)
+            chi0_static = realspace_batch%q_response(1)
+         else if (canonical_chi0_backend == 'kspace_lehmann') then
             call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
             call build_static_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
                left_channels, right_channels, green_options, chi0_static)
@@ -1672,7 +1678,19 @@ contains
       if (circular_reverse) then
          chi0_options_reverse%q_direct = 0.0_rp
          green_options_reverse%q_direct = 0.0_rp
-         if (canonical_chi0_backend == 'kspace_lehmann') then
+         if (canonical_chi0_backend == 'realspace_gf') then
+            select type (chi0_backend)
+            type is (tddft_realspace_gf_backend)
+               call chi0_backend%initialize(realspace_source_reverse)
+               call chi0_backend%evaluate_static_grid(static_q, realspace_batch_reverse)
+               call reduce_realspace_chi0_batch(realspace_batch_reverse)
+               chi0_static_reverse = realspace_batch_reverse%q_response(1)
+               call chi0_backend%initialize(realspace_source)
+            class default
+               call g_logger%fatal('[calculation.post_processing_susceptibility]: native reverse static adapter is absent.', &
+                  __FILE__, __LINE__)
+            end select
+         else if (canonical_chi0_backend == 'kspace_lehmann') then
             call green_source%initialize(eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k)
             call build_static_chi_ks_from_green_functions(green_source, reciprocal_obj%k_weights, site_orbital_counts, &
                left_channels_reverse, right_channels_reverse, green_options_reverse, chi0_static_reverse)
@@ -1710,11 +1728,7 @@ contains
       end if
       allocate(kernel(nresponse, nresponse))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
-      if (canonical_chi0_backend == 'realspace_gf') then
-         ! Bare native chi0 output does not invent a static kernel or
-         ! Goldstone diagnostic; those require the future native static-limit
-         ! provider documented in TDDFT-07.
-      else if (is_longitudinal) then
+      if (is_longitudinal) then
          ! The coupled longitudinal kernel is derived from the converged
          ! ground-state XC route and the same projected charge metric used by
          ! the charge response.  No independently supplied static-field file

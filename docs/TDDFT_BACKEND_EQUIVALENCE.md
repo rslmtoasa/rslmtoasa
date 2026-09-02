@@ -28,12 +28,13 @@ support of the fixture; the higher frequency is outside it.  Each run compares
 the complete complex 2x2 response matrix, its Frobenius-norm error, and its
 eigenvalues.
 
-Exact static response is tested separately for the eigenpair and K-space GF
-routes using the analytic zero-frequency divided difference.  The sampled
-real-axis native R-GF provider does not claim an exact static operation and
-reports that capability as unsupported.  Its `omega=0` finite-eta result is
-still included in a separate dynamic Ward diagnostic, so it is not confused
-with the exact static limit.
+Exact static response is tested separately from the finite-eta dynamic
+`omega=0` diagnostic. The eigenpair and K-space GF routes use their analytic
+zero-frequency divided differences. The native R-GF route independently
+integrates the retarded/advanced static contour identity on its real-space
+Green-function source, then transforms `chi0(R,0)` over the q batch. No route
+defines static response by forwarding `omega=0` to the finite-eta dynamic
+routine.
 
 The campaign also measures k-mesh, R-cutoff, energy-resolution, contour-node,
 and eta/gamma convergence.  The native R-GF source is built once for the full
@@ -51,7 +52,10 @@ Ry, `eta=0.02` Ry, and `gamma=eta/2` for the main pointwise campaign.
 | K-GF vs native R-GF matrix | `4.2528e-4` | `1.0e-3` |
 | eigenvalue comparison, global matrix norm | `3.2266e-2` | `5.0e-2` |
 | exact static eigenpair vs K-GF | `0` | `1.0e-11` |
-| exact static Ward residuals | `0` for both supported routes | `1.0e-11` |
+| exact static eigenpair vs K-GF, finite q | `0` | `1.0e-11` |
+| exact static eigenpair vs native R-GF, q=0 | `2.9175e-3` | `8.0e-2` |
+| exact static eigenpair vs native R-GF, finite q | `2.9306e-3` | `8.0e-2` |
+| exact static raw Ward residuals, eigen/K/native | `0`, `0`, `2.9175e-3` | spread `8.0e-2` |
 | positive-frequency spectral sum residual | `6.8195e-2` | `8.0e-2` |
 | contour relative error | `3.1231e-7` | `5.0e-3` |
 
@@ -80,7 +84,7 @@ would accidentally accept sign or factor mistakes.
 ## Scope boundary
 
 TDDFT-09 proves backend equivalence on the deterministic periodic fixture and
-records the numerical uncertainty needed for subsequent work.  It does not
-close the master blueprint's Fe/Ni production gate, the SOC/noncollinear
-extension, or a fully validated exact static operation for sampled native
-real-space sources.
+records the numerical uncertainty needed for subsequent work. It does not
+close the master blueprint's Fe/Ni production gate or the SOC/noncollinear
+extension. The native static result is validated for this sampled real-axis
+fixture; a broader material convergence campaign remains a separate gate.

@@ -40,6 +40,26 @@ The circular vertex direction is retained: a left `PLUS` channel and a right
 factor, or spectral shift is applied. The output spectral convention remains
 `-Im chi0 / pi`.
 
+## Exact static contraction
+
+The native provider has a separate `evaluate_static_realspace` operation and
+the common backend exposes it through `evaluate_static_grid`. It does not call
+the dynamic routine at `omega = 0` with finite `eta`. For a directed pair its
+static definition is
+
+```text
+T^R(E) = Tr[A G^R_ab(R,E) B G^R_ba(-R,E)]
+T^A(E) = Tr[A G^A_ab(R,E) B G^A_ba(-R,E)]
+chi0_AB(R,0) = -1/(2*pi*i) integral dE f(E) [T^R(E) - T^A(E)]
+```
+
+The spectral representation of this retarded/advanced contour identity is the
+divided difference `(f_n-f_m)/(e_n-e_m)`, including its equal-energy Fermi
+derivative. The RGF implementation evaluates this identity directly on the
+native real-axis energy grid, keeps the `G_ab`/`G_ba` orientation, then
+Fourier-transforms `chi0(R,0)`. Static metadata records zero response
+broadening and the static contour implementation explicitly.
+
 ## Susceptibility Fourier transform
 
 For periodic bulk response the transform is
@@ -67,8 +87,10 @@ contraction can be used for finite, impurity, embedded, and future film
 sources. The current production susceptibility entry point intentionally
 enables the validated collinear, SOC-free transverse bulk path only. It
 rejects MPI atom ownership, Lanczos sources without native intersite blocks,
-longitudinal/full response, and Dyson/Xi requests that would need an exact
-static kernel not supplied by this milestone.
+and longitudinal/full response. Native RGF now supplies the exact static bare
+response needed by the transverse Ward diagnostic; mixed contour and Xi/Dyson
+enhancement remain separately capability-gated because they require additional
+native complex-energy or kernel support.
 
 ## R cutoff and tail diagnostics
 
@@ -105,6 +127,8 @@ one susceptibility transform over all requested q points. The unit fixture
 * Rmax omission and chi0 tail metrics;
 * equality of a converged one-site periodic native bubble and the K-space GF
   bubble on the same real-axis grid;
+* exact static native-RGF agreement with the eigenpair divided-difference
+  reference at q=0 and finite q, including the uncorrected raw Ward residual;
 * one real-space build reused for a three-q batch.
 
 The K-space Green transform test in that unit is deliberately isolated as a

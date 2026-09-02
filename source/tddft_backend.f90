@@ -11,9 +11,10 @@
 module tddft_backend_mod
    use precision_mod, only: rp
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_request, &
-      tddft_chi0_batch_result, tddft_chi0_metadata, build_chi_ks_from_eigenpairs
+      tddft_chi0_batch_result, tddft_chi0_metadata, build_chi_ks_from_eigenpairs, &
+      build_static_chi_ks_from_eigenpairs_at_q
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
-      build_chi_ks_from_green_functions
+      build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions
    use response_vertices_mod, only: response_channel
    implicit none
 
@@ -56,6 +57,9 @@ module tddft_backend_mod
       procedure :: evaluate_frequency_batch => backend_evaluate_frequency_batch
       procedure :: evaluate_q_batch => backend_evaluate_q_batch
       procedure :: evaluate_grid => backend_evaluate_grid
+      ! Static response is a separate operation.  Implementations must not
+      ! obtain it by calling evaluate with omega=0 and finite eta.
+      procedure :: evaluate_static_grid => backend_evaluate_static_grid
    end type tddft_chi0_backend
 
    !> Provider-side contract for native real-space response implementations.
@@ -65,6 +69,7 @@ module tddft_backend_mod
    type, abstract, public :: tddft_realspace_chi0_provider
    contains
       procedure(tddft_realspace_evaluate), deferred :: evaluate_realspace
+      procedure :: evaluate_static_realspace => unsupported_realspace_static
       procedure(tddft_realspace_describe), deferred :: describe
    end type tddft_realspace_chi0_provider
 
@@ -311,6 +316,132 @@ contains
       call require_batch_shape(result, size(q_points, 2), size(omega), 'backend_evaluate_grid')
    end subroutine backend_evaluate_grid
 
+   !> Evaluate the genuine zero-frequency response on a q batch.
+   !>
+   !> This entry point is intentionally separate from `evaluate`: a static
+   !> implementation uses either the divided-difference Lehmann expression or
+   !> the native real-space retarded/advanced contour identity.  In
+   !> particular, omega=0 is never forwarded to a finite-eta dynamic route.
+   subroutine backend_evaluate_static_grid(this, q_points, result, q_indices)
+      class(tddft_chi0_backend), intent(inout) :: this
+      real(rp), intent(in) :: q_points(:, :)
+      type(tddft_chi0_batch_result), intent(out) :: result
+      integer, intent(in), optional :: q_indices(:)
+      type(tddft_chi0_request) :: request
+      type(eigenpair_green_function_provider) :: source
+      type(tddft_chi0_options) :: static_options
+      type(green_chi0_options) :: green_options
+      integer :: iq, q_index, nq
+
+      if (size(q_points, 1) /= 3 .or. size(q_points, 2) < 1) then
+         error stop 'backend_evaluate_static_grid: q_points must have shape (3,nq)'
+      end if
+      nq = size(q_points, 2)
+      if (present(q_indices)) then
+         if (size(q_indices) /= nq) error stop 'backend_evaluate_static_grid: q index count mismatch'
+      end if
+      allocate(request%q_points(3, nq), request%q_indices(nq), request%omega(1))
+      request%q_points = q_points
+      request%omega(1) = 0.0_rp
+      do iq = 1, nq
+         if (present(q_indices)) then
+            request%q_indices(iq) = q_indices(iq)
+         else
+            request%q_indices(iq) = iq
+         end if
+      end do
+      request%batch_mode = 'static_q_batch'
+
+      ! The most-derived type must be selected first because the K-space
+      ! Lehmann backend extends the eigenpair backend.
+      select type (this)
+      type is (tddft_kspace_lehmann_backend)
+         if (.not. allocated(this%eigenvalues_k)) then
+            error stop 'backend_evaluate_static_grid: K-space backend is not initialized'
+         end if
+         allocate(result%q_response(nq), result%q_points(3, nq), result%q_indices(nq), result%omega(1))
+         result%q_points = q_points; result%q_indices = request%q_indices; result%omega = 0.0_rp
+         green_options = this%green_options
+         do iq = 1, nq
+            q_index = request%q_indices(iq)
+            if (q_index < 1 .or. q_index > size(this%q_points, 2)) then
+               error stop 'backend_evaluate_static_grid: K-space q index is outside initialized endpoint data'
+            end if
+            green_options%q_direct = q_points(:, iq)
+            green_options%fermi_level = this%options%fermi_level
+            green_options%electronic_temperature = this%options%electronic_temperature
+            green_options%k_mesh_shape = this%options%k_mesh_shape
+            call source%initialize(this%eigenvalues_k, this%eigenvectors_k, this%eigenvalues_kq(:, :, q_index), &
+               this%eigenvectors_kq(:, :, :, q_index))
+            call build_static_chi_ks_from_green_functions(source, this%k_weights, this%site_orbital_counts, &
+               this%left_channels, this%right_channels, green_options, result%q_response(iq))
+            call annotate_static_result(result%q_response(iq), 'kspace_lehmann', q_points(:, iq), nq)
+         end do
+      type is (tddft_eigenpair_backend)
+         if (.not. allocated(this%eigenvalues_k)) then
+            error stop 'backend_evaluate_static_grid: eigenpair backend is not initialized'
+         end if
+         allocate(result%q_response(nq), result%q_points(3, nq), result%q_indices(nq), result%omega(1))
+         result%q_points = q_points; result%q_indices = request%q_indices; result%omega = 0.0_rp
+         do iq = 1, nq
+            q_index = request%q_indices(iq)
+            if (q_index < 1 .or. q_index > size(this%q_points, 2)) then
+               error stop 'backend_evaluate_static_grid: eigenpair q index is outside initialized endpoint data'
+            end if
+            static_options = this%options
+            static_options%eta = 0.0_rp
+            static_options%q_direct = q_points(:, iq)
+            call build_static_chi_ks_from_eigenpairs_at_q(this%k_weights, this%eigenvalues_k, this%eigenvectors_k, &
+               this%eigenvalues_kq(:, :, q_index), this%eigenvectors_kq(:, :, :, q_index), this%site_orbital_counts, &
+               this%left_channels, this%right_channels, static_options, result%q_response(iq))
+            call annotate_static_result(result%q_response(iq), 'eigenpairs', q_points(:, iq), nq)
+         end do
+      type is (tddft_realspace_gf_backend)
+         if (.not. allocated(this%provider)) then
+            error stop 'backend_evaluate_static_grid: native real-space provider is absent'
+         end if
+         call this%provider%evaluate_static_realspace(request, result)
+      class default
+         error stop 'backend_evaluate_static_grid: selected backend has no exact static implementation'
+      end select
+
+      if (allocated(result%q_response) .and. size(result%q_response) > 0) then
+         result%metadata = result%q_response(1)%metadata
+         result%metadata%q_batch_size = nq
+         result%metadata%omega_batch_size = 1
+      end if
+   end subroutine backend_evaluate_static_grid
+
+   subroutine unsupported_realspace_static(this, request, result)
+      class(tddft_realspace_chi0_provider), intent(inout) :: this
+      type(tddft_chi0_request), intent(in) :: request
+      type(tddft_chi0_batch_result), intent(out) :: result
+
+      error stop 'native real-space provider: exact static chi0 is unavailable'
+   end subroutine unsupported_realspace_static
+
+   subroutine annotate_static_result(result, backend, q_point, nq)
+      type(tddft_chi0_result), intent(inout) :: result
+      character(len=*), intent(in) :: backend
+      real(rp), intent(in) :: q_point(3)
+      integer, intent(in) :: nq
+
+      result%metadata%backend = trim(backend)
+      result%metadata%canonical_backend = trim(backend)
+      result%metadata%q_direct = q_point
+      result%metadata%omega_min = 0.0_rp
+      result%metadata%omega_max = 0.0_rp
+      result%metadata%omega_points = 1
+      result%metadata%eta = 0.0_rp
+      result%metadata%green_eta = 0.0_rp
+      result%metadata%eta_role = 'not used by exact static response'
+      result%metadata%eta_is_numerical = .false.
+      result%metadata%frequency_convention = 'static omega=0 divided difference; no dynamical eta'
+      result%metadata%static_limit = .true.
+      result%metadata%q_batch_size = nq
+      result%metadata%omega_batch_size = 1
+   end subroutine annotate_static_result
+
    subroutine initialize_eigenpair_backend(this, k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, &
       eigenvectors_kq, q_points, site_orbital_counts, left_channels, right_channels, options, green_options)
       class(tddft_eigenpair_backend), intent(inout) :: this
@@ -388,8 +519,7 @@ contains
       class(tddft_eigenpair_backend), intent(in) :: this
       type(tddft_backend_capabilities), intent(out) :: capabilities
       capabilities = tddft_backend_capabilities()
-      capabilities%supports_static_limit = .false.
-      capabilities%unsupported_reason = 'static divided-difference evaluation uses the dedicated static reference API'
+      capabilities%supports_static_limit = .true.
    end subroutine eigenpair_backend_capabilities
 
    subroutine evaluate_kspace_lehmann_backend(this, request, result)
@@ -438,8 +568,7 @@ contains
       class(tddft_kspace_lehmann_backend), intent(in) :: this
       type(tddft_backend_capabilities), intent(out) :: capabilities
       capabilities = tddft_backend_capabilities()
-      capabilities%supports_static_limit = .false.
-      capabilities%unsupported_reason = 'static limit requires a separately validated K-space GF limit'
+      capabilities%supports_static_limit = .true.
    end subroutine kspace_lehmann_backend_capabilities
 
    subroutine initialize_realspace_gf_backend(this, provider)
@@ -488,11 +617,20 @@ contains
    subroutine realspace_gf_backend_capabilities(this, capabilities)
       class(tddft_realspace_gf_backend), intent(in) :: this
       type(tddft_backend_capabilities), intent(out) :: capabilities
+      type(tddft_backend_capabilities) :: provider_capabilities
+
       capabilities = tddft_backend_capabilities()
       capabilities%native_real_space = .true.
       capabilities%reuses_real_space_response = .true.
-      capabilities%supports_static_limit = .false.
-      capabilities%unsupported_reason = 'static limit must be provided by the native real-space response provider'
+      if (.not. allocated(this%provider)) then
+         capabilities%unsupported_reason = 'native real-space provider is not initialized'
+         return
+      end if
+      call this%provider%describe(provider_capabilities)
+      capabilities%supports_static_limit = provider_capabilities%supports_static_limit
+      if (.not. capabilities%supports_static_limit) then
+         capabilities%unsupported_reason = 'attached native real-space provider has no exact static operation'
+      end if
    end subroutine realspace_gf_backend_capabilities
 
    subroutine initialize_mock_backend(this, response_dimension, scale)
@@ -550,7 +688,7 @@ contains
       class(tddft_mock_chi0_backend), intent(in) :: this
       type(tddft_backend_capabilities), intent(out) :: capabilities
       capabilities = tddft_backend_capabilities()
-      capabilities%supports_static_limit = .true.
+      capabilities%unsupported_reason = 'mock backend has no exact static implementation'
    end subroutine mock_backend_capabilities
 
    subroutine validate_request(request)

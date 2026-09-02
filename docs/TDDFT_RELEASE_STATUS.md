@@ -18,7 +18,7 @@ production-validated. The open material gates are recorded in
 | Explicit eigenpair `chi0` reference | Validated on deterministic fixtures | `UnitTddftChiKS`, `UnitTddftTransitionWorkspace`, TDDFT-03 report |
 | K-space Lehmann GF and direct resolvent | Validated on deterministic fixtures | `UnitTddftGreenChiKS`, `UnitLehmannChain`, `KSPACE_GF_VALIDATION.md` |
 | Mixed contour vs direct K-GF integration | Validated on deterministic fixtures | `UnitTddftContour`, `TDDFT_GF_INTEGRATION.md` |
-| Native real-space `G(R)` response and q-batched Fourier transform | Validated on deterministic fixtures | `UnitTddftRealspaceGF`, `TDDFT_REALSPACE_GF.md` |
+| Native real-space `G(R)` response, exact static contour, and q-batched Fourier transform | Validated on deterministic fixtures | `UnitTddftRealspaceGF`, `UnitTddftBackendEquivalence`, `TDDFT_REALSPACE_GF.md` |
 | Common backend interface and fixture equivalence | Validated within recorded fixture envelopes | `UnitTddftBackend`, `UnitTddftBackendEquivalence`, `TDDFT_BACKEND_EQUIVALENCE.md` |
 | Ward/Goldstone diagnostics and controlled correction policies | Validated as algebraic/software behavior | `UnitTddftWard`, `UnitTddftGoldstone`, `TDDFT_GOLDSTONE_WARD.md` |
 | Loss-matrix modes, Stoner classification, and linewidth gates | Validated as post-processing behavior | `UnitTddftDysonModes`, `TDDFT_SPECTRAL_ANALYSIS.md` |
@@ -57,9 +57,9 @@ orthogonal `ham_only` response with site projection. The three backend
 choices and their current limitations are summarized in
 [TDDFT_USER_GUIDE.md](TDDFT_USER_GUIDE.md). Generalized overlap/HOH, SOC and
 noncollinear response, Hubbard U/V, GBT/explicit textures, CCOR, and
-site-orbital projection are rejected explicitly. Native RS currently provides
-direct bare `chi0`; its mixed-contour, exact static, and Dyson paths remain
-experimental/deferred.
+site-orbital projection are rejected explicitly. Native RS provides direct
+bare `chi0` and the validated exact static input for the transverse Ward
+diagnostic; its mixed-contour and Dyson paths remain experimental/deferred.
 
 The longitudinal and full charge-spin routes are capability-gated and
 fixture-tested, but are not part of this transverse production decision.

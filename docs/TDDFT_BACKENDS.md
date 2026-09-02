@@ -34,6 +34,7 @@ contains
    procedure :: evaluate_frequency_batch(q, omega(:), result)
    procedure :: evaluate_q_batch(q_points(:, :), omega, batch_result)
    procedure :: evaluate_grid(q_points(:, :), omega(:), batch_result)
+   procedure :: evaluate_static_grid(q_points(:, :), batch_result)
 end type
 ```
 
@@ -60,8 +61,9 @@ The current production calculation attaches the periodic eigenpair endpoint
 adapter for `eigenpairs`, the K-space Lehmann adapter for `green` and
 `kspace_lehmann`, and the native RS-LMTO provider for `realspace_gf`. The
 native route cannot fall back to a k-space calculation. Its current source is
-direct real-axis and bare-`chi0` only; exact static Ward input, mixed contour,
-and Dyson enhancement remain explicitly rejected.
+direct real-axis and supports both dynamic bare-`chi0` and the separate exact
+static Ward operation; mixed contour and Dyson enhancement remain explicitly
+rejected.
 
 ## Provenance and ownership
 

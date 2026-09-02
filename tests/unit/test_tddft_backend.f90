@@ -236,7 +236,12 @@ contains
       type is (tddft_realspace_gf_backend)
          call backend%capabilities(capabilities)
          call check_true('native real-space backend advertises real-space execution', capabilities%native_real_space)
+         call check_true('uninitialized native backend does not advertise static support', &
+            .not. capabilities%supports_static_limit)
          call backend%initialize(provider)
+         call backend%capabilities(capabilities)
+         call check_true('static support follows the attached provider capability', &
+            .not. capabilities%supports_static_limit)
          call backend%evaluate_grid(q_points, omega, result)
       class default
          call check_true('factory dynamic type is native real-space adapter', .false.)
