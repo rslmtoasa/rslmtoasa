@@ -61,7 +61,8 @@ module calculation_mod
       build_static_four_component_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
    use tddft_backend_mod, only: tddft_chi0_backend, tddft_eigenpair_backend, tddft_kspace_lehmann_backend, &
       tddft_realspace_gf_backend, canonical_tddft_backend_name, make_tddft_chi0_backend
-   use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider
+   use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider, &
+      reduce_realspace_chi0_batch
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
@@ -1860,11 +1861,11 @@ contains
          select type (chi0_backend)
          type is (tddft_realspace_gf_backend)
             call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch)
-            call reduce_native_realspace_batch(realspace_batch)
+            call reduce_realspace_chi0_batch(realspace_batch)
             if (circular_reverse) then
                call chi0_backend%initialize(realspace_source_reverse)
                call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch_reverse)
-               call reduce_native_realspace_batch(realspace_batch_reverse)
+               call reduce_realspace_chi0_batch(realspace_batch_reverse)
                call chi0_backend%initialize(realspace_source)
             end if
          class default
@@ -3519,45 +3520,6 @@ contains
       this%do_damping = .false.
       this%do_inertia = .false.
    end subroutine restore_to_default
-
-   !> Reduce locally owned R-block contributions while retaining the complete
-   !> q batch on every rank.  The native source is therefore parallel over its
-   !> expensive real-space/energy work, but q Fourier phases are evaluated once
-   !> per rank for the whole requested path and q-labelled files remain owned by
-   !> the normal output range.
-   subroutine reduce_native_realspace_batch(batch)
-      type(tddft_chi0_batch_result), intent(inout) :: batch
-#ifdef USE_MPI
-      integer :: local_counts(2), global_counts(2)
-      real(rp) :: local_tail, global_tail
-      integer :: iq
-
-      do iq = 1, size(batch%q_response)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%chi, size(batch%q_response(iq)%chi), &
-            MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
-         batch%q_response(iq)%re_chi = real(batch%q_response(iq)%chi, rp)
-         batch%q_response(iq)%im_chi = aimag(batch%q_response(iq)%chi)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%site_diagonal_spectrum, &
-            size(batch%q_response(iq)%site_diagonal_spectrum), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%stoner_spectral_map, &
-            size(batch%q_response(iq)%stoner_spectral_map), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%trace_spectrum, &
-            size(batch%q_response(iq)%trace_spectrum), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         local_counts = [batch%q_response(iq)%metadata%real_space_points, &
-            batch%q_response(iq)%metadata%real_space_omitted_points]
-         call MPI_ALLREDUCE(local_counts, global_counts, 2, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-         batch%q_response(iq)%metadata%real_space_points = global_counts(1)
-         batch%q_response(iq)%metadata%real_space_omitted_points = global_counts(2)
-         local_tail = batch%q_response(iq)%metadata%real_space_tail_norm
-         call MPI_ALLREDUCE(local_tail, global_tail, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         batch%q_response(iq)%metadata%real_space_tail_norm = global_tail
-      end do
-      if (size(batch%q_response) > 0) batch%metadata = batch%q_response(1)%metadata
-#else
-      ! Serial builds already hold the complete real-space source locally.
-      continue
-#endif
-   end subroutine reduce_native_realspace_batch
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

@@ -17,7 +17,10 @@ module tddft_chi0_realspace_mod
    use tddft_backend_mod, only: tddft_realspace_chi0_provider, tddft_backend_capabilities
    use green_mod, only: green
    use lattice_mod, only: lattice
-   use mpi_mod, only: start_atom, end_atom, g2l_map
+   use mpi_mod, only: ierr, start_atom, end_atom, g2l_map
+#ifdef USE_MPI
+   use mpi
+#endif
    implicit none
 
    private
@@ -86,6 +89,7 @@ module tddft_chi0_realspace_mod
    public :: fourier_transform_realspace_chi0
    public :: fourier_transform_realspace_green
    public :: check_realspace_pair_reversal
+   public :: reduce_realspace_chi0_batch
 
 contains
 
@@ -400,6 +404,80 @@ contains
          end do
       end do
    end subroutine fourier_transform_realspace_green
+
+   !> @brief Replicate the complete native-RGF susceptibility on every rank.
+   !> @details The native provider owns disjoint real-space pairs, so its
+   !> `chi_q` is a rank-local partial sum after the local R-space integration
+   !> and Fourier transform.  The Fourier phase is linear, hence reducing
+   !> `chi_q` after the phase factors is algebraically equivalent to reducing
+   !> `chi_r` first, without gathering variable-length R lists.  No division by
+   !> the number of ranks is performed: each pair is owned by exactly one rank
+   !> and contributes exactly once to the SUM.
+   !>
+   !> The derived spectral arrays are reduced alongside `chi` for consumers
+   !> that use them directly.  `re_chi` and `im_chi` are regenerated from the
+   !> reduced complex response so the complex susceptibility remains the sole
+   !> normalization source of truth.
+   subroutine reduce_realspace_chi0_batch(batch)
+      type(tddft_chi0_batch_result), intent(inout) :: batch
+#ifdef USE_MPI
+      integer :: iq
+      integer :: local_counts(2), global_counts(2)
+      integer :: local_shell_count, global_shell_count
+      real(rp) :: local_tail, global_tail, local_cutoff, global_cutoff
+      real(rp) :: local_last_shell, global_last_shell
+
+      if (.not. allocated(batch%q_response)) return
+      do iq = 1, size(batch%q_response)
+         if (allocated(batch%q_response(iq)%chi) .and. size(batch%q_response(iq)%chi) > 0) then
+            call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%chi, size(batch%q_response(iq)%chi), &
+               MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+            if (allocated(batch%q_response(iq)%re_chi)) batch%q_response(iq)%re_chi = real(batch%q_response(iq)%chi, rp)
+            if (allocated(batch%q_response(iq)%im_chi)) batch%q_response(iq)%im_chi = aimag(batch%q_response(iq)%chi)
+         end if
+         if (allocated(batch%q_response(iq)%site_diagonal_spectrum) .and. &
+             size(batch%q_response(iq)%site_diagonal_spectrum) > 0) then
+            call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%site_diagonal_spectrum, &
+               size(batch%q_response(iq)%site_diagonal_spectrum), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         end if
+         if (allocated(batch%q_response(iq)%stoner_spectral_map) .and. &
+             size(batch%q_response(iq)%stoner_spectral_map) > 0) then
+            call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%stoner_spectral_map, &
+               size(batch%q_response(iq)%stoner_spectral_map), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         end if
+         if (allocated(batch%q_response(iq)%trace_spectrum) .and. size(batch%q_response(iq)%trace_spectrum) > 0) then
+            call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%trace_spectrum, &
+               size(batch%q_response(iq)%trace_spectrum), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         end if
+
+         ! Pair counts and tail norms are additive over disjoint local pair
+         ! ownership.  The cutoff is a maximum, not a sum.  Shell counts and
+         ! last-shell norms are retained as conservative rank-wide summaries;
+         ! they are diagnostics only and do not enter chi0 normalization.
+         local_counts = [batch%q_response(iq)%metadata%real_space_points, &
+            batch%q_response(iq)%metadata%real_space_omitted_points]
+         call MPI_ALLREDUCE(local_counts, global_counts, 2, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_points = global_counts(1)
+         batch%q_response(iq)%metadata%real_space_omitted_points = global_counts(2)
+         local_tail = batch%q_response(iq)%metadata%real_space_tail_norm
+         call MPI_ALLREDUCE(local_tail, global_tail, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_tail_norm = global_tail
+         local_cutoff = batch%q_response(iq)%metadata%real_space_cutoff
+         call MPI_ALLREDUCE(local_cutoff, global_cutoff, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_cutoff = global_cutoff
+         local_shell_count = batch%q_response(iq)%metadata%real_space_shell_count
+         call MPI_ALLREDUCE(local_shell_count, global_shell_count, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_shell_count = global_shell_count
+         local_last_shell = batch%q_response(iq)%metadata%real_space_last_shell_norm
+         call MPI_ALLREDUCE(local_last_shell, global_last_shell, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_last_shell_norm = global_last_shell
+      end do
+      if (size(batch%q_response) > 0) batch%metadata = batch%q_response(1)%metadata
+#else
+      ! Serial builds already hold the complete real-space source locally.
+      continue
+#endif
+   end subroutine reduce_realspace_chi0_batch
 
    subroutine check_realspace_pair_reversal(pair_sites, r_vectors, tolerance, all_pairs_have_reverse, max_residual)
       integer, intent(in) :: pair_sites(:, :)

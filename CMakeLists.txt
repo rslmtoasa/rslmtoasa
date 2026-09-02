@@ -912,6 +912,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftBackend PROPERTIES LABELS "unit;tddft;backend;interface;batch")
   add_fortran_unit_test(UnitTddftRealspaceGF ${TestDIR}/unit/test_tddft_realspace_gf.f90)
   set_tests_properties(UnitTddftRealspaceGF PROPERTIES LABELS "unit;tddft;realspace;green;chi0;fourier")
+  add_fortran_unit_test(UnitTddftRealspaceMPICorrectness ${TestDIR}/unit/test_tddft_realspace_mpi.f90)
+  set_tests_properties(UnitTddftRealspaceMPICorrectness PROPERTIES LABELS "unit;tddft;realspace;green;chi0;mpi;R2-01")
   add_fortran_unit_test(UnitTddftGoldstone ${TestDIR}/unit/test_tddft_goldstone.f90)
   set_tests_properties(UnitTddftGoldstone PROPERTIES LABELS "unit;tddft;goldstone;alsda")
   add_fortran_unit_test(UnitTddftWard ${TestDIR}/unit/test_tddft_ward.f90)
@@ -966,6 +968,13 @@ if (RUN_UNIT_TESTS)
               $<TARGET_FILE:UnitTddftPerformance> ${MPIEXEC_POSTFLAGS})
     set_tests_properties(UnitTddftPerformance_mpi PROPERTIES
       LABELS "unit;tddft;performance;mpi;decomposition" PROCESSORS 4)
+    foreach(_realspace_mpi_ranks IN ITEMS 1 2 4)
+      add_test(NAME "UnitTddftRealspaceMPICorrectness_mpi_${_realspace_mpi_ranks}"
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_realspace_mpi_ranks} ${_rslmto_mpi_unit_preflags}
+                $<TARGET_FILE:UnitTddftRealspaceMPICorrectness> ${MPIEXEC_POSTFLAGS})
+      set_tests_properties("UnitTddftRealspaceMPICorrectness_mpi_${_realspace_mpi_ranks}" PROPERTIES
+        LABELS "unit;tddft;realspace;green;chi0;mpi;R2-01" PROCESSORS ${_realspace_mpi_ranks})
+    endforeach()
   endif()
   add_test(NAME UnitGbtOracles
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
