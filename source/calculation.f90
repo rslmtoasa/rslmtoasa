@@ -1294,6 +1294,14 @@ contains
       ! scalar-relativistic, orthogonal Hamiltonian only.  Reject every
       ! branch whose response operator or metric derivative has not been
       ! derived, before building eigenpairs or accepting a kernel.
+      if (control_obj%is_noncollinear()) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: noncollinear TDDFT is unsupported: '// &
+            'nsp=3/4 requires the full spinor response, torque terms, and a noncollinear kernel.', __FILE__, __LINE__)
+      end if
+      if (control_obj%has_soc()) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: relativistic TDDFT is unsupported: '// &
+            'nsp=2/4 requires SOC response, anisotropy, and torque terms.', __FILE__, __LINE__)
+      end if
       if (control_obj%nsp /= 1) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline requires nsp=1 '// &
             '(collinear, SOC-free); relativistic and noncollinear response is not silently approximated.', __FILE__, __LINE__)
@@ -1305,6 +1313,10 @@ contains
       if (trim(hamiltonian_obj%magnetic_representation) /= periodic_nc) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline requires magnetic_representation=periodic_nc; '// &
             'GBT and explicit-texture response states are unsupported.', __FILE__, __LINE__)
+      end if
+      if (hamiltonian_obj%local_axis) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: local-axis Hamiltonian response is unsupported; '// &
+            'the response basis must remain in the global spin frame.', __FILE__, __LINE__)
       end if
       if (hamiltonian_obj%hoh) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT baseline rejects HOH/second-order Hamiltonians.', &

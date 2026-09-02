@@ -11,7 +11,8 @@ def test_susceptibility_dispatch_is_registered() -> None:
 
 def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
-    assert "region_tag='tddft-q'" in source
+    assert "tddft_plan = make_tddft_mpi_plan" in source
+    assert "iq_start = tddft_plan%owner_q%first" in source
     assert "kq_workset = reciprocal_obj%k_workset%shifted" in source
     assert "calculate_eigenpairs_at_kpoints(kq_workset%points" in source
     assert "self_obj%refresh_xc_response_kernel()" in source
@@ -145,6 +146,25 @@ def test_eigenpair_baseline_boundary_rejects_unsupported_response_branches() -> 
     assert "rejects nonzero SOC" in source
 
 
+def test_relativistic_boundary_is_explicit_and_precedes_spinor_response_work() -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "source" / "calculation.f90").read_text()
+    four_component = (root / "source" / "tddft_four_component.f90").read_text()
+    noncollinear_guard = source.index("control_obj%is_noncollinear()")
+    soc_mode_guard = source.index("control_obj%has_soc()")
+    potential_soc_guard = source.index("if (has_soc) then")
+    eigenpair_setup = source.index(
+        "calculate_eigenpairs_at_kpoints(reciprocal_obj%k_workset%points"
+    )
+    assert noncollinear_guard < eigenpair_setup
+    assert soc_mode_guard < eigenpair_setup
+    assert potential_soc_guard < eigenpair_setup
+    assert "full spinor response, torque terms, and a noncollinear kernel" in source
+    assert "SOC response, anisotropy, and torque terms" in source
+    assert "not a production capability" in four_component
+    assert "build_four_component_kernel: full response unavailable" in four_component
+
+
 def test_eigenpair_baseline_exposes_endpoint_aware_static_and_provenance_api() -> None:
     root = Path(__file__).resolve().parents[2]
     chi0 = (root / "source" / "tddft_chi0.f90").read_text()
@@ -179,6 +199,7 @@ if __name__ == "__main__":
     test_goldstone_correction_input_error_is_rejected_before_response_setup()
     test_response_mesh_resolves_inherited_fermi_after_eigenpairs()
     test_eigenpair_baseline_boundary_rejects_unsupported_response_branches()
+    test_relativistic_boundary_is_explicit_and_precedes_spinor_response_work()
     test_eigenpair_baseline_exposes_endpoint_aware_static_and_provenance_api()
     test_pair_correction_compares_corrected_loss_to_raw_pair_loss()
     print("RESULT: PASS")

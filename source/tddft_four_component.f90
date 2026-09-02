@@ -43,8 +43,12 @@ contains
    end function four_component_index
 
    !> Build every chi_KS^{mu,nu} through the same generalized spinor vertices
-   !> as the validated transverse and longitudinal routes.  This accepts SOC
-   !> and non-collinear spinors without a collinearity-specific branch.
+   !> as the validated transverse and longitudinal routes.  This algebraic
+   !> helper accepts SOC and non-collinear spinors for fixtures and future
+   !> response-engine work; it is not a production capability.  The production
+   !> susceptibility entry point rejects those Hamiltonians before this helper
+   !> can be reached, because its kernel and relativistic sum rule are not yet
+   !> implemented.
    subroutine build_four_component_chi_ks(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq, &
       site_orbital_counts, omega, options, result)
       real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
