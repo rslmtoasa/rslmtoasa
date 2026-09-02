@@ -1507,7 +1507,12 @@ contains
       realspace_options%eta = config%eta
       realspace_options%green_eta = config%green_eta
       realspace_options%energy_integration = config%gf_integration
+      realspace_options%fermi_level = config%fermi_level
       realspace_options%electronic_temperature = config%electronic_temperature
+      realspace_options%contour_points = config%contour_points
+      realspace_options%contour_subdivisions = config%contour_subdivisions
+      realspace_options%near_fermi_points = config%near_fermi_points
+      realspace_options%contour_height = config%contour_height
       realspace_options%rmax = config%realspace_rmax
       realspace_options%tail_tolerance = config%realspace_tail_tolerance
       realspace_options%representation = config%realspace_representation
@@ -1515,10 +1520,6 @@ contains
       realspace_options%circular_channel = chi0_options%circular_channel
       realspace_options_reverse = realspace_options
       realspace_options_reverse%circular_channel = chi0_options_reverse%circular_channel
-      if (canonical_chi0_backend == 'realspace_gf' .and. config%gf_integration /= 'direct') then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space GF currently exposes sampled real-axis blocks only; '// &
-            "gf_integration='mixed_contour' requires a complex-energy native source.", __FILE__, __LINE__)
-      end if
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
       if (canonical_chi0_backend == 'kspace_lehmann' .and. config%chi0_backend == 'green' .and. rank == 0) then
          call g_logger%warning('[calculation.post_processing_susceptibility]: chi0_backend=''green'' currently selects the '// &

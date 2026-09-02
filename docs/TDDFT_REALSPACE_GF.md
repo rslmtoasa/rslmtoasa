@@ -84,13 +84,12 @@ The representation selector is explicit:
 
 The generic provider API accepts arbitrary pair tables, so the same response
 contraction can be used for finite, impurity, embedded, and future film
-sources. The current production susceptibility entry point intentionally
-enables the validated collinear, SOC-free transverse bulk path only. It
-rejects MPI atom ownership, Lanczos sources without native intersite blocks,
-and longitudinal/full response. Native RGF now supplies the exact static bare
-response needed by the transverse Ward diagnostic; mixed contour and Xi/Dyson
-enhancement remain separately capability-gated because they require additional
-native complex-energy or kernel support.
+sources. The validated collinear, SOC-free transverse bulk path supports both
+the direct real-axis reference and `gf_integration='mixed_contour'` when a
+native complex-energy source is attached. Native RGF also supplies the exact
+static bare response needed by the transverse Ward diagnostic. Unsupported
+longitudinal/full-response combinations and Xi/Dyson enhancement remain
+capability-gated independently of the contour implementation.
 
 ## R cutoff and tail diagnostics
 

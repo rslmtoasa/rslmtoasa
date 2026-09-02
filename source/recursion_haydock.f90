@@ -277,6 +277,8 @@ contains
       integer :: llmax ! Recursion steps
       real(rp) :: rng
 
+      this%b2_b_is_sqrt = .false.
+
       ! Determine how many atoms each process should handle
       call get_mpi_variables(rank, this%lattice%nrec)
 
@@ -540,6 +542,8 @@ contains
       complex(rp), dimension(nb, nb) :: B2t, U, DUM, lam
       logical :: halt_divide_by_zero
 
+      if (this%b2_b_is_sqrt) return
+
       !
       if (this%lattice%njij == 0) then
          na = atoms_per_process !this%lattice%nrec
@@ -578,6 +582,7 @@ contains
             call zgemm('n', 'c', LDIM, LDIM, LDIM, (1.0d0, 0.0d0), DUM, LDIM, U, LDIM, (0.0d0, 0.0d0), this%B2_b(1, 1, L, N), LDIM)
          end do
       end do
+      this%b2_b_is_sqrt = .true.
    end subroutine zsqr
 
    !> @brief Estimate scalar terminator coefficients for continued fractions.

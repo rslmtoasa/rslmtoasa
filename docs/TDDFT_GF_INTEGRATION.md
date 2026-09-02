@@ -114,20 +114,40 @@ material and frequency window.  The backend reports all of these settings,
 the maximum imaginary energy, evaluation count, integration window, and CPU
 time in `tddft_chi0_metadata` and in text output headers.
 
-## Real-space status
+## Native real-space status
 
-The native real-space GF backend currently receives sampled real-axis
-`G(R,E)` blocks.  It therefore remains on its direct near-real-axis trapezoid
-path for TDDFT-08.  Selecting `gf_integration='mixed_contour'` with that
-backend is rejected explicitly in both the production wiring and the
-real-space builder.  A future real-space contour implementation must first
-extend the native source with a genuine complex-energy evaluator; it must not
-interpolate sampled real-axis data and label it analytic.
+TDDFT-R2-03 extends the native provider with a genuine arbitrary-complex-energy
+source.  `tddft_native_green_source` is a thin adapter over the mature
+`green%calculate_intersite_gf_complex` API; recursion, terminators, block
+phase reconstruction, and Chebyshev reconstruction remain in `green_mod` and
+its submodules.  The production chain is still
 
-The existing `UnitTddftRealspaceGF` regression continues to cover the native
-real-space direct path.  There is no real-space contour timing table because
-that source contract is not yet available; the K-space table above is the
-applicable measured contour result for this milestone.
+```text
+G_ab(R,z), G_ba(-R,z) -> chi0_ab(R,omega) -> chi0_ab(q,omega).
+```
+
+With `gf_integration='mixed_contour'`, the native provider uses the same
+RR/AA polyline plus finite-window RA decomposition as the K-space provider.
+Each quadrature segment sends all required complex energies to the source in
+one batch, traces every requested response component from that batch, and
+Fourier-transforms the resulting `chi0(R,omega)` once for the complete q
+batch.  Identical frequencies in a request reuse the already integrated
+real-space response.  No `G(R,z)` to `G(k,z)` conversion or global analytic
+continuation is performed.  The direct near-real-axis trapezoid remains
+available as the reference route, and mixed integration without a complex
+source fails explicitly.
+
+The native mixed path reports the contour node counts, subdivisions,
+near-Fermi mesh, contour height, maximum imaginary energy, source GF
+evaluation count, and separate pair-integration/Fourier CPU samples in
+`tddft_chi0_metadata`.  `UnitTddftRealspaceGF` checks the zero-frequency and
+low-energy responses,
+the same two-level poles inside the Stoner continuum, direct/contour
+agreement, contour-node stability, complex-offset metadata, repeated-frequency
+reuse, and reuse over a two-q batch.  Its development fixture produced a
+direct/low/high contour pair-integration timing sample of approximately
+`1.59e-3 / 1.41e-4 / 2.60e-3 s`; these are diagnostic fixture timings, not a
+production benchmark.
 
 ## Analytic continuation and invariants
 

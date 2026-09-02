@@ -900,12 +900,15 @@ contains
    module subroutine recur_b_ij(this)
       use mpi_mod
       class(recursion), intent(inout) :: this
+
       ! Local variables
       integer :: i, ij, j, l, ll, kk, m, reci
       integer :: llmax ! Recursion steps
       complex(rp) :: asign, bsign
 
       integer :: ij_loc
+
+      this%b2_b_is_sqrt = .false.
 
       llmax = this%lattice%control%lld
       if (gpu_plugin_ready(this, 'recur_b_ij()', allow_hoh=.true.)) then

@@ -96,19 +96,42 @@ contains
    end subroutine sgreen
 
    module subroutine bgreen(this, g_out, i_site, ie_start, ie_len, a_inf, b_inf, eta)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: i_site, ie_start, ie_len
+      complex(rp), dimension(:, :, :), intent(inout) :: g_out
+      real(rp), dimension(nb, nb), intent(in) :: a_inf, b_inf
+      complex(rp), intent(in) :: eta
+      complex(rp), allocatable :: z_grid(:)
+      integer :: ie
+
+      if (ie_start < 1 .or. ie_len < 1 .or. ie_start+ie_len-1 > size(g_out, 3) .or. &
+          ie_start+ie_len-1 > size(this%en%ene)) then
+         error stop 'bgreen: requested energy range is outside the Green-function storage'
+      end if
+      allocate(z_grid(ie_len))
+      do ie = 1, ie_len
+         z_grid(ie) = cmplx(this%en%ene(ie_start+ie-1), 0.0_rp, rp) + eta
+      end do
+      g_out = cmplx(0.0_rp, 0.0_rp, rp)
+      call this%bgreen_complex(g_out(:, :, ie_start:ie_start+ie_len-1), i_site, z_grid, a_inf, b_inf, .true.)
+   end subroutine bgreen
+
+   !> Shared block-recursion core for the legacy energy mesh and arbitrary
+   !> complex energies.  The optional legacy flag preserves the historical
+   !> real-axis terminator and output spelling for existing consumers; the
+   !> public complex path evaluates the terminator analytically at every z.
+   module subroutine bgreen_complex(this, g_out, i_site, z_grid, a_inf, b_inf, legacy_real_axis)
       implicit none
       class(green), intent(inout) :: this
       integer, intent(in) :: i_site
-      integer, intent(in) :: ie_start
-      integer, intent(in) :: ie_len
-      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10), intent(inout) :: g_out
+      complex(rp), dimension(:, :, :), intent(inout) :: g_out
       real(rp), dimension(nb, nb), intent(in) :: a_inf
       real(rp), dimension(nb, nb), intent(in) :: b_inf
-      complex(rp), intent(in) :: eta
+      complex(rp), intent(in) :: z_grid(:)
+      logical, intent(in), optional :: legacy_real_axis
       !
       integer :: nv, ldim, ll, ll_t, llinf
       real(rp) :: factor_z
-      real(rp), dimension(this%en%channels_ldos + 10) :: e
       integer :: i, j, l, ei, info, ln, lwork
       integer :: ii, jj
       real(rp) :: recMaxA, recMaxB, valrec
@@ -129,6 +152,8 @@ contains
       real(rp), dimension(this%en%channels_ldos + 10) :: ene
       complex(rp), dimension(nb, nb) :: Dfac_mat, Cshi_mat
       real(rp) :: a_diag, b_diag
+      complex(rp) :: z_eval, eta_local
+      logical :: legacy_mode
       !
       integer, dimension(nb) :: m_tab
       !
@@ -143,8 +168,12 @@ contains
       ll = this%control%lld
       nv = this%en%channels_ldos
       ldim = nb
-      e = this%en%ene
       factor_z = 1.0d0
+      legacy_mode = .false.
+      if (present(legacy_real_axis)) legacy_mode = legacy_real_axis
+      if (size(g_out, 1) /= nb .or. size(g_out, 2) /= nb .or. size(g_out, 3) < size(z_grid)) then
+         error stop 'bgreen_complex: output and complex-energy batch dimensions are incompatible'
+      end if
 
       ! Lightweight runtime shapes/logging (once per green instance call)
       ! call g_logger%info('DEBUG:bgreen shapes nb='//int2str(nb)//' ldim='//int2str(ldim), __FILE__, __LINE__)
@@ -188,10 +217,18 @@ contains
       !$omp parallel do default(shared) &
       !$omp          private(ei, Z, Ze, Q, B2z, i, etop, ebot, ea, eb, det, zoff, l, ln, j, P, ipiv, info, work, lwork, W, &
       !$omp                  found_nan, qHasNaN, qMax, wMax, b2Max, qval, wval, b2val, ii, jj, &
-      !$omp                  recMaxA, recMaxB, recNaN, valrec, vv, maxQ, maxB2r)
-      do ei = ie_start, ie_start + ie_len - 1
-         Z = e(ei)*one
-         ze = e(ei)!-zoff
+      !$omp                  recMaxA, recMaxB, recNaN, valrec, vv, maxQ, maxB2r, z_eval, eta_local)
+      do ei = 1, size(z_grid)
+         z_eval = z_grid(ei)
+         if (legacy_mode) then
+            Z = real(z_eval, rp)*one
+            ze = cmplx(real(z_eval, rp), 0.0_rp, rp)
+            eta_local = z_eval-ze
+         else
+            Z = z_eval*one
+            ze = z_eval
+            eta_local = cmplx(0.0_rp, 0.0_rp, rp)
+         end if
          Q = (0.0d0, 0.0d0)
          B2z = 0.0d0
          found_nan = .false.
@@ -199,11 +236,16 @@ contains
             do i = 1, ldim !  Orbital-independent
                etop = a_diag + 2.0d0*b_diag
                ebot = a_diag - 2.0d0*b_diag
-               ea = e(ei) - etop
-               eb = e(ei) - ebot
+               if (legacy_mode) then
+                  ea = real(z_eval, rp) - etop
+                  eb = real(z_eval, rp) - ebot
+               else
+                  ea = z_eval - etop
+                  eb = z_eval - ebot
+               end if
                det = ea*eb
                zoff = sqrt(det)
-               Q(i, i) = (ze + eta - a_diag - zoff)*0.5d0
+               Q(i, i) = (ze + eta_local - a_diag - zoff)*0.5d0
             end do
          else
             do i = 1, ldim  ! Orbital-dependent
@@ -214,14 +256,24 @@ contains
                   etop = a_inf(i, i) - Cshi_mat(i, i) + 2*b_inf(i, i)!*1.01d0/Dfac_mat(i,i)
                   ebot = a_inf(i, i) - Cshi_mat(i, i) - 2*b_inf(i, i)!*1.01d0/Dfac_mat(i,i)
                end if
-               ea = e(ei)/Dfac_mat(i, i) - etop - 1.0d0*Cshi_mat(i, i)
-               eb = e(ei)/Dfac_mat(i, i) - ebot - 1.0d0*Cshi_mat(i, i)
+               if (legacy_mode) then
+                  ea = real(z_eval, rp)/Dfac_mat(i, i) - etop - 1.0d0*Cshi_mat(i, i)
+                  eb = real(z_eval, rp)/Dfac_mat(i, i) - ebot - 1.0d0*Cshi_mat(i, i)
+               else
+                  ea = z_eval/Dfac_mat(i, i) - etop - 1.0d0*Cshi_mat(i, i)
+                  eb = z_eval/Dfac_mat(i, i) - ebot - 1.0d0*Cshi_mat(i, i)
+               end if
                det = ea*eb
                zoff = sqrt(det)!*0.5d0
                zoff = zoff*(1.0)**ei
            !!! if(nv<=10) zoff=zoff*1.0d-3   ! Hack for Efermi evaluation
                ! Below for orbital dependent terminator
-               Q(i, i) = ((e(ei) + eta)/Dfac_mat(i, i) - 1.0d0*Cshi_mat(i, i) - a_inf(i, i) - real(zoff) - aimag(zoff)*factor_z*im)*0.5d0
+               if (legacy_mode) then
+                  Q(i, i) = ((real(z_eval, rp) + eta_local)/Dfac_mat(i, i) - 1.0d0*Cshi_mat(i, i) - &
+                     a_inf(i, i) - real(zoff) - aimag(zoff)*factor_z*im)*0.5d0
+               else
+                  Q(i, i) = (z_eval/Dfac_mat(i, i) - 1.0d0*Cshi_mat(i, i) - a_inf(i, i) - zoff)*0.5d0
+               end if
             end do
          end if
          do l = llinf - 1, 1, -1
@@ -229,7 +281,7 @@ contains
             do j = 1, ldim
                do i = 1, ldim
                   if (real(Z(i, j)) .ne. 0) then
-                     P(i, j) = (Z(i, j) + eta)
+                     P(i, j) = (Z(i, j) + eta_local)
                   else
                      P(i, j) = Z(i, j)
                   end if
@@ -416,7 +468,7 @@ contains
             do j = 1, ldim
                do i = 1, ldim
                   !bdos(ei,m_tab(i),m_tab(j),n)=bdos(ei,m_tab(i),m_tab(j),n) + abs(-aimag(Q(i,j))/3.14159265359d0)/Dfac_mat(i,j)
-                  if (aimag(eta) .eq. 0) then
+                  if (legacy_mode .and. aimag(eta_local) .eq. 0) then
                      g_out(m_tab(i), m_tab(j), ei) = g_out(m_tab(i), m_tab(j), ei) + &
                                                      real(Q(i, j)/Dfac_mat(i, j)) + aimag(Q(i, j)/Dfac_mat(i, j))*(1.0d0)**ei*(0.0d0, 1.0d0)
                   else
@@ -533,6 +585,6 @@ contains
       end do
       !$omp end parallel do
 
-   end subroutine bgreen
+   end subroutine bgreen_complex
 
 end submodule green_lanczos

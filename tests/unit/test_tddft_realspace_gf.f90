@@ -1,4 +1,36 @@
+module test_tddft_realspace_source_mod
+   use precision_mod, only: rp
+   use tddft_chi0_realspace_mod, only: tddft_realspace_complex_green_source
+   implicit none
+
+   type, extends(tddft_realspace_complex_green_source) :: rational_complex_source
+      integer :: calls = 0
+   contains
+      procedure :: get_complex => get_rational_complex
+   end type rational_complex_source
+
+contains
+
+   subroutine get_rational_complex(this, z_grid, g_ab, g_ba)
+      class(rational_complex_source), intent(inout) :: this
+      complex(rp), intent(in) :: z_grid(:)
+      complex(rp), allocatable, intent(out) :: g_ab(:, :, :, :), g_ba(:, :, :, :)
+      integer :: iz
+
+      allocate(g_ab(2, 2, size(z_grid), 1), g_ba(2, 2, size(z_grid), 1))
+      g_ab = cmplx(0.0_rp, 0.0_rp, rp)
+      do iz = 1, size(z_grid)
+         g_ab(1, 1, iz, 1) = 1.0_rp/(z_grid(iz)+0.2_rp)
+         g_ab(2, 2, iz, 1) = 1.0_rp/(z_grid(iz)-0.2_rp)
+      end do
+      g_ba = g_ab
+      this%calls = this%calls + 1
+   end subroutine get_rational_complex
+
+end module test_tddft_realspace_source_mod
+
 program test_tddft_realspace_gf
+   use test_tddft_realspace_source_mod, only: rational_complex_source
    use precision_mod, only: rp
    use math_mod, only: pi, i_unit
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
@@ -14,6 +46,7 @@ program test_tddft_realspace_gf
 
    call test_fourier_transforms()
    call test_native_provider_batch_and_cutoff()
+   call test_native_mixed_contour()
    call test_periodic_kspace_agreement()
    call test_direction_reversal()
    write(*, '(a)') 'TDDFT native real-space Green-function tests passed.'
@@ -94,6 +127,103 @@ contains
       call assert(direct%diagnostics%tail_assessed, 'Rmax enables tail assessment')
       call assert(direct%diagnostics%omitted_tail_norm > 0.0_rp, 'omitted real-space tail has a norm')
    end subroutine test_native_provider_batch_and_cutoff
+
+   subroutine test_native_mixed_contour()
+      type(tddft_native_realspace_gf_provider) :: direct_provider, contour_provider, low_contour_provider
+      type(tddft_native_realspace_gf_provider) :: offset_direct_provider, offset_contour_provider
+      type(tddft_realspace_chi0_options) :: direct_options, contour_options, low_options, offset_options
+      type(tddft_chi0_request) :: request
+      type(tddft_chi0_batch_result) :: direct_result, contour_result, low_contour_result
+      type(tddft_chi0_batch_result) :: offset_direct_result, offset_contour_result
+      type(rational_complex_source) :: complex_source
+      type(response_channel) :: left(1), right(1)
+      real(rp) :: energy(401), r_vectors(3, 1), q_points(3, 2), omega(4)
+      complex(rp) :: g_ab(2, 2, 401, 1), g_ba(2, 2, 401, 1)
+      complex(rp), allocatable :: g_ab_offset(:, :, :, :), g_ba_offset(:, :, :, :)
+      integer :: counts(1), pair_sites(1, 2), ie
+      real(rp) :: direct_error, low_error, high_error
+
+      do ie = 1, size(energy)
+         energy(ie) = -4.0_rp + 0.02_rp*real(ie-1, rp)
+         g_ab(:, :, ie, 1) = cmplx(0.0_rp, 0.0_rp, rp)
+         g_ab(1, 1, ie, 1) = 1.0_rp/cmplx(energy(ie)+0.2_rp, 0.05_rp, rp)
+         g_ab(2, 2, ie, 1) = 1.0_rp/cmplx(energy(ie)-0.2_rp, 0.05_rp, rp)
+      end do
+      g_ba = g_ab
+      r_vectors = 0.0_rp; pair_sites(1, :) = [1, 1]; counts = [1]
+      q_points = 0.0_rp; q_points(1, 2) = 0.25_rp; omega = [0.0_rp, 0.02_rp, 0.30_rp, 0.30_rp]
+      left(1)%site = 1; left(1)%component = RESPONSE_PLUS
+      right(1)%site = 1; right(1)%component = RESPONSE_MINUS
+      direct_options%eta = 0.1_rp; direct_options%green_eta = 0.05_rp; direct_options%fermi_level = 0.0_rp
+      direct_options%rmax = huge(1.0_rp); direct_options%tail_tolerance = 1.0e-8_rp
+      contour_options = direct_options; contour_options%energy_integration = 'mixed_contour'
+      contour_options%contour_points = 64; contour_options%contour_subdivisions = 8
+      contour_options%near_fermi_points = 128
+      call direct_provider%initialize(energy, g_ab, g_ba, r_vectors, pair_sites, counts, left, right, direct_options)
+      call contour_provider%initialize_complex(energy, g_ab, g_ba, r_vectors, pair_sites, counts, left, right, &
+         complex_source, contour_options)
+      direct_error = 0.0_rp; low_error = 0.0_rp; high_error = 0.0_rp
+      allocate(request%q_points(3, 2), request%omega(4))
+      request%q_points = q_points; request%omega = omega
+      call direct_provider%evaluate_realspace(request, direct_result)
+      call contour_provider%evaluate_realspace(request, contour_result)
+      low_options = direct_options; low_options%energy_integration = 'mixed_contour'
+      low_options%contour_points = 16; low_options%contour_subdivisions = 2; low_options%near_fermi_points = 32
+      call low_contour_provider%initialize_complex(energy, g_ab, g_ba, r_vectors, pair_sites, counts, left, right, &
+         complex_source, low_options)
+      call low_contour_provider%evaluate_realspace(request, low_contour_result)
+      call assert(contour_result%metadata%contour_deformation, 'native mixed contour advertises contour deformation')
+      call assert(contour_result%metadata%contour_gf_evaluations > 0, 'native mixed contour reports GF evaluations')
+      call assert(contour_result%metadata%integration_energy_points == 2*(2+8)*64+3*128, &
+         'native mixed contour reports its quadrature node count')
+      direct_error = abs(direct_result%q_response(1)%chi(1, 1, 2)-contour_result%q_response(1)%chi(1, 1, 2))
+      low_error = abs(direct_result%q_response(1)%chi(1, 1, 2)-low_contour_result%q_response(1)%chi(1, 1, 2))
+      high_error = direct_error
+      write(*, '(a,3(1x,es18.8))') 'native contour errors low/high/abs', low_error, high_error, &
+         abs(low_contour_result%q_response(1)%chi(1, 1, 2)-contour_result%q_response(1)%chi(1, 1, 2))
+      write(*, '(a,3(1x,es18.8))') 'native contour cpu direct/low/high', &
+         direct_result%metadata%real_space_pair_integration_cpu_seconds, &
+         low_contour_result%metadata%real_space_pair_integration_cpu_seconds, &
+         contour_result%metadata%real_space_pair_integration_cpu_seconds
+      write(*, '(a,2(1x,es18.8))') 'native Stoner error q0/qfinite', &
+         abs(contour_result%q_response(1)%chi(1, 1, 3)-direct_result%q_response(1)%chi(1, 1, 3)), &
+         abs(contour_result%q_response(2)%chi(1, 1, 3)-direct_result%q_response(2)%chi(1, 1, 3))
+      call assert_close(contour_result%q_response(1)%chi(1, 1, 1), direct_result%q_response(1)%chi(1, 1, 1), &
+         1.0e-2_rp, 'native zero-frequency direct and mixed-contour responses agree')
+      call assert_close(contour_result%q_response(1)%chi(1, 1, 2), direct_result%q_response(1)%chi(1, 1, 2), &
+         1.0e-2_rp, 'native low-energy direct and mixed-contour responses agree')
+      call assert_close(contour_result%q_response(2)%chi(1, 1, 2), direct_result%q_response(2)%chi(1, 1, 2), &
+         1.0e-2_rp, 'native low-energy mixed-contour q batch agrees')
+      call assert_close(contour_result%q_response(1)%chi(1, 1, 3), direct_result%q_response(1)%chi(1, 1, 3), &
+         5.0e-2_rp, 'native Stoner-continuum q=0 direct and mixed-contour responses agree')
+      call assert_close(contour_result%q_response(2)%chi(1, 1, 3), direct_result%q_response(2)%chi(1, 1, 3), &
+         5.0e-2_rp, 'native Stoner-continuum finite-q direct and mixed-contour responses agree')
+      call assert_close(contour_result%q_response(1)%chi(1, 1, 3), contour_result%q_response(1)%chi(1, 1, 4), &
+         1.0e-12_rp, 'native mixed contour reuses repeated frequencies')
+      call assert(abs(low_contour_result%q_response(1)%chi(1, 1, 2)-contour_result%q_response(1)%chi(1, 1, 2)) < 1.0e-3_rp, &
+         'native contour converges with contour nodes and near-Fermi mesh')
+
+      allocate(g_ab_offset(2, 2, size(energy), 1), g_ba_offset(2, 2, size(energy), 1))
+      g_ab_offset = cmplx(0.0_rp, 0.0_rp, rp)
+      do ie = 1, size(energy)
+         g_ab_offset(1, 1, ie, 1) = 1.0_rp/cmplx(energy(ie)+0.2_rp, 0.025_rp, rp)
+         g_ab_offset(2, 2, ie, 1) = 1.0_rp/cmplx(energy(ie)-0.2_rp, 0.025_rp, rp)
+      end do
+      g_ba_offset = g_ab_offset
+      offset_options = direct_options; offset_options%green_eta = 0.025_rp
+      call offset_direct_provider%initialize(energy, g_ab_offset, g_ba_offset, r_vectors, pair_sites, counts, left, right, &
+         offset_options)
+      offset_options%energy_integration = 'mixed_contour'; offset_options%contour_points = 64
+      offset_options%contour_subdivisions = 8; offset_options%near_fermi_points = 128
+      call offset_contour_provider%initialize_complex(energy, g_ab_offset, g_ba_offset, r_vectors, pair_sites, counts, left, right, &
+         complex_source, offset_options)
+      call offset_direct_provider%evaluate_realspace(request, offset_direct_result)
+      call offset_contour_provider%evaluate_realspace(request, offset_contour_result)
+      call assert(offset_contour_result%metadata%contour_max_imaginary_energy > 0.025_rp, &
+         'native mixed contour reports its imaginary offset')
+      call assert_close(offset_contour_result%q_response(1)%chi(1, 1, 2), offset_direct_result%q_response(1)%chi(1, 1, 2), &
+         1.0e-2_rp, 'native direct and mixed-contour responses converge under imaginary-offset change')
+   end subroutine test_native_mixed_contour
 
    subroutine test_periodic_kspace_agreement()
       type(tddft_native_realspace_gf_provider) :: native_provider

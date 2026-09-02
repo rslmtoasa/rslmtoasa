@@ -66,6 +66,7 @@ module recursion_mod
       real(rp), dimension(:), allocatable :: atemp, b2temp
       !> Block recursion coefficients
       complex(rp), dimension(:, :, :, :), allocatable :: a_b, b2_b
+      logical :: b2_b_is_sqrt = .false.
       complex(rp), dimension(:, :, :), allocatable :: atemp_b, b2temp_b
       !> Atom list in hopping region
       integer, dimension(:), allocatable :: izero, idum, irlist, nzero, mzero, ndum, mdum

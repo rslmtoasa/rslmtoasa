@@ -66,13 +66,16 @@ module green_mod
    contains
       procedure :: sgreen
       procedure :: bgreen
+      procedure :: bgreen_complex
       procedure :: block_green
       procedure :: block_green_gpu
       procedure :: block_green_eta
       procedure :: block_green_ij
+      procedure :: block_green_ij_complex
       procedure :: block_green_ij_gpu
       procedure :: block_green_ij_eta
       procedure :: calculate_intersite_gf
+      procedure :: calculate_intersite_gf_complex
       procedure :: calculate_intersite_gf_twoindex
       procedure :: calculate_intersite_gf_eta
       procedure :: calculate_intersite_gf_eta_gpu
@@ -80,6 +83,7 @@ module green_mod
       procedure :: chebyshev_green_gpu
       procedure :: chebyshev_green_eta
       procedure :: chebyshev_green_ij
+      procedure :: chebyshev_green_ij_complex
       procedure :: chebyshev_green_ij_gpu
       procedure :: chebyshev_green_ij_eta
       procedure :: chebyshev_dos_dispatch
@@ -131,6 +135,13 @@ module green_mod
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
    end subroutine chebyshev_green_ij
+
+   module subroutine chebyshev_green_ij_complex(this, istart, z_grid, g_ef)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), intent(in) :: z_grid(:)
+      complex(rp), intent(out) :: g_ef(:, :, :, :)
+   end subroutine chebyshev_green_ij_complex
 
    module subroutine chebyshev_green_ij_gpu(this, istart)
       class(green), intent(inout) :: this
@@ -188,6 +199,13 @@ module green_mod
       integer, intent(in) :: istart
    end subroutine block_green_ij
 
+   module subroutine block_green_ij_complex(this, istart, z_grid, g_ef)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), intent(in) :: z_grid(:)
+      complex(rp), intent(out) :: g_ef(:, :, :, :)
+   end subroutine block_green_ij_complex
+
    module subroutine block_green_ij_gpu(this, istart)
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
@@ -200,6 +218,16 @@ module green_mod
    module subroutine calculate_intersite_gf(this)
       class(green), intent(inout) :: this
    end subroutine calculate_intersite_gf
+
+   !> Build native intersite Green functions for a batch of arbitrary complex
+   !> energies.  The returned arrays retain the local pair ownership and
+   !> `(orbital,orbital,energy,pair)` layout of `green%gij/gji`.
+   module subroutine calculate_intersite_gf_complex(this, z, g_ab, g_ba)
+      use mpi_mod, only: atoms_per_process
+      class(green), intent(inout) :: this
+      complex(rp), intent(in) :: z(:)
+      complex(rp), allocatable, intent(out) :: g_ab(:, :, :, :), g_ba(:, :, :, :)
+   end subroutine calculate_intersite_gf_complex
 
    module subroutine calculate_intersite_gf_eta(this)
       class(green), intent(inout) :: this
@@ -247,11 +275,24 @@ module green_mod
       integer, intent(in) :: i_site
       integer, intent(in) :: ie_start
       integer, intent(in) :: ie_len
-      complex(rp), dimension(nb, nb, this%en%channels_ldos + 10), intent(inout) :: g_out
+      complex(rp), dimension(:, :, :), intent(inout) :: g_out
       real(rp), dimension(nb, nb), intent(in) :: a_inf
       real(rp), dimension(nb, nb), intent(in) :: b_inf
       complex(rp), intent(in) :: eta
    end subroutine bgreen
+
+   !> Evaluate one native block-recursion Green function for a complex-energy
+   !> batch.  `z_grid` is passed through the same core as the historical
+   !> real-axis routine; it is not an interpolation of the DOS energy mesh.
+   module subroutine bgreen_complex(this, g_out, i_site, z_grid, a_inf, b_inf, legacy_real_axis)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: i_site
+      complex(rp), intent(in) :: z_grid(:)
+      complex(rp), dimension(:, :, :), intent(inout) :: g_out
+      real(rp), dimension(nb, nb), intent(in) :: a_inf
+      real(rp), dimension(nb, nb), intent(in) :: b_inf
+      logical, intent(in), optional :: legacy_real_axis
+   end subroutine bgreen_complex
 
    end interface
 

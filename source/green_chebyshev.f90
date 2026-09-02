@@ -86,6 +86,51 @@ contains
       deallocate (kernel, polycheb, w, wscale)
    end subroutine chebyshev_green_ij
 
+   !> Reconstruct the four phase-combination Green functions directly at a
+   !> batch of complex energies.  The moments are the same ones used by the
+   !> real-axis path; only the analytic Chebyshev kernel is evaluated at z.
+   module subroutine chebyshev_green_ij_complex(this, istart, z_grid, g_ef)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), intent(in) :: z_grid(:)
+      complex(rp), intent(out) :: g_ef(:, :, :, :)
+      real(rp), allocatable :: kernel(:)
+      real(rp) :: a, b, emin_win, emax_win
+      complex(rp) :: zscaled, denominator, exp_factor
+      integer :: n, iz, i, l, m, n_mom
+
+      if (size(z_grid) < 1 .or. size(g_ef, 1) /= nb .or. size(g_ef, 2) /= nb .or. &
+          size(g_ef, 3) /= size(z_grid) .or. size(g_ef, 4) /= 4 .or. &
+          istart < 1 .or. istart+3 > size(this%recursion%mu_n, 4)) then
+         error stop 'chebyshev_green_ij_complex: incompatible batch or moment dimensions'
+      end if
+      n_mom = size(this%recursion%mu_n, 3)
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win-emin_win)/(2.0_rp-0.3_rp)
+      b = (emax_win+emin_win)/2.0_rp
+      allocate(kernel(n_mom))
+      call jackson_kernel(n_mom, kernel)
+      g_ef = cmplx(0.0_rp, 0.0_rp, rp)
+
+      do n = 1, 4
+         do iz = 1, size(z_grid)
+            zscaled = (z_grid(iz)-b)/a
+            denominator = sqrt(a*a-(z_grid(iz)-b)**2)
+            do i = 1, n_mom
+               exp_factor = -i_unit*exp(-i_unit*real(i-1, rp)*acos(zscaled))
+               if (i > 1) exp_factor = 2.0_rp*exp_factor
+               do l = 1, nb
+                  do m = 1, nb
+                     g_ef(l, m, iz, n) = g_ef(l, m, iz, n) + this%recursion%mu_n(l, m, i, n+istart-1)* &
+                        kernel(i)*exp_factor/denominator
+                  end do
+               end do
+            end do
+         end do
+      end do
+      deallocate(kernel)
+   end subroutine chebyshev_green_ij_complex
+
    !---------------------------------------------------------------------------
    !> @brief GPU drop-in for chebyshev_green_ij (intersite Chebyshev GF).
    !---------------------------------------------------------------------------

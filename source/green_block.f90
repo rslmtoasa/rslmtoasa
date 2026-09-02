@@ -76,6 +76,39 @@ contains
       end do
    end subroutine block_green_ij
 
+   !> Batch the four phase-combination block Green functions at arbitrary
+   !> complex energies.  This is the native RS provider entry point used by
+   !> TDDFT contour quadrature; no reciprocal-space representation is formed.
+   module subroutine block_green_ij_complex(this, istart, z_grid, g_ef)
+      implicit none
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), intent(in) :: z_grid(:)
+      complex(rp), intent(out) :: g_ef(:, :, :, :)
+      integer :: ll, n, nw, ldim, na
+      real(rp), dimension(4) :: a_inf0, b_inf0
+      real(rp), dimension(nb, nb, 4) :: a_inf, b_inf
+      complex(rp), allocatable :: block_values(:, :, :)
+
+      ll = this%control%lld
+      ldim = nb
+      na = 4
+      nw = 10*ll
+      if (size(z_grid) < 1 .or. size(g_ef, 1) /= nb .or. size(g_ef, 2) /= nb .or. &
+          size(g_ef, 3) /= size(z_grid) .or. size(g_ef, 4) /= na .or. &
+          istart < 1 .or. istart+na-1 > size(this%recursion%a_b, 4)) then
+         error stop 'block_green_ij_complex: incompatible batch or recursion dimensions'
+      end if
+
+      call this%recursion%get_terminf(this%recursion%a_b(:, :, :, istart), this%recursion%b2_b(:, :, :, istart), na, ll, ldim, nw, &
+         a_inf, b_inf, a_inf0, b_inf0)
+      allocate(block_values(nb, nb, size(z_grid)))
+      do n = 1, na
+         call this%bgreen_complex(block_values, n + istart - 1, z_grid, a_inf(:, :, n), b_inf(:, :, n))
+         g_ef(:, :, :, n) = block_values
+      end do
+   end subroutine block_green_ij_complex
+
    module subroutine block_green_ij_gpu(this, istart)
       implicit none
       class(green), intent(inout) :: this
@@ -163,6 +196,54 @@ contains
       ! Deprecated wrapper retained for type-bound callers; use calculate_intersite_gf_core.
       call calculate_intersite_gf_core(this, .false.)
    end subroutine calculate_intersite_gf
+
+   !> Evaluate the native pair Green functions for arbitrary complex energies.
+   !> Pair ownership follows the same `start_atom/end_atom/g2l_map` contract as
+   !> calculate_intersite_gf_core, so the TDDFT layer can reduce only its
+   !> susceptibility contribution and never needs a reciprocal-space GF.
+   module subroutine calculate_intersite_gf_complex(this, z, g_ab, g_ba)
+      use basis_mod, only: nb
+      use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
+      implicit none
+      class(green), intent(inout) :: this
+      complex(rp), intent(in) :: z(:)
+      complex(rp), allocatable, intent(out) :: g_ab(:, :, :, :), g_ba(:, :, :, :)
+      complex(rp), allocatable :: g0_complex(:, :, :, :)
+      integer :: ia, ia_glob, ja_temp
+
+      if (size(z) < 1 .or. ((.not. allocated(this%recursion%a_b)) .and. this%control%recur == 'block') .or. &
+          ((.not. allocated(this%recursion%mu_n)) .and. this%control%recur == 'chebyshev')) then
+         error stop 'calculate_intersite_gf_complex: recursion source is not initialized'
+      end if
+      allocate(g_ab(nb, nb, size(z), atoms_per_process), g_ba(nb, nb, size(z), atoms_per_process))
+      g_ab = cmplx(0.0_rp, 0.0_rp, rp); g_ba = cmplx(0.0_rp, 0.0_rp, rp)
+      allocate(g0_complex(nb, nb, size(z), 4))
+      if (this%control%recur == 'block') call this%recursion%zsqr()
+
+      do ia_glob = start_atom, end_atom
+         ia = g2l_map(ia_glob)
+         ja_temp = (ia-1)*4+1
+         select case (trim(this%control%recur))
+         case ('block')
+            call this%block_green_ij_complex(ja_temp, z, g0_complex)
+         case ('chebyshev')
+            call this%chebyshev_green_ij_complex(ja_temp, z, g0_complex)
+         case default
+            error stop 'calculate_intersite_gf_complex: unsupported recursion backend'
+         end select
+         if (this%lattice%ijpair(ia, 1) == this%lattice%ijpair(ia, 2)) then
+            g_ab(:, :, :, ia) = g0_complex(:, :, :, 1)
+            g_ba(:, :, :, ia) = g0_complex(:, :, :, 1)
+         else
+            g_ab(:, :, :, ia) = g0_complex(:, :, :, 1)-g0_complex(:, :, :, 2) + &
+               (g0_complex(:, :, :, 3)/i_unit-g0_complex(:, :, :, 4)/i_unit)
+            g_ba(:, :, :, ia) = g0_complex(:, :, :, 1)-g0_complex(:, :, :, 2) - &
+               (g0_complex(:, :, :, 3)/i_unit-g0_complex(:, :, :, 4)/i_unit)
+            g_ab(:, :, :, ia) = 0.5_rp*g_ab(:, :, :, ia)
+            g_ba(:, :, :, ia) = 0.5_rp*g_ba(:, :, :, ia)
+         end if
+      end do
+   end subroutine calculate_intersite_gf_complex
 
    module subroutine calculate_intersite_gf_eta(this)
       class(green), intent(inout) :: this

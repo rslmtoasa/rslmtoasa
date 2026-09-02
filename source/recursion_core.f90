@@ -363,6 +363,8 @@ contains
       logical, intent(in), optional :: full
       integer :: lmax
 
+      this%b2_b_is_sqrt = .false.
+
       lmax = lmax_basis
 
 #ifdef USE_SAFE_ALLOC
